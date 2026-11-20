@@ -4,12 +4,14 @@ import type { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   AntigravityAccountMutationParams,
   AntigravityAccountTargetParams,
+  AntigravityChatApiKeySaveParams,
   AntigravityChatSignInCompleteParams,
   AntigravityChatSignInFlowParams,
   AntigravityChatSignInStartParams
 } from '../../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
 import { AntigravityChatAuthConfigSchema } from '../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { getAntigravityAccountService } from '../../../../antigravity/native-account-host'
+import { restartIdleAgyChats, withAntigravityChatBackend } from './antigravity-chat-backend'
 import {
   cancelAntigravityChatSignIn,
   completeAntigravityChatSignIn,
@@ -18,13 +20,32 @@ import {
   subscribeAntigravityChatSignIn
 } from '../../../../antigravity/antigravity-chat-sign-in'
 import { bindStructuredAgentSessionStream } from '../structured-sessions/subscriptions/structured-agent-session-status-stream'
-import { structuredAgentHostLaunchSources } from '../../../agent-session/launch/structured-agent-launch-support'
+import {
+  resolveHostStructuredAgentLaunchEnvironment,
+  structuredAgentHostLaunchSources
+} from '../../../agent-session/launch/structured-agent-launch-support'
 import { stopStructuredAgentChats } from '../../../agent-session/lifecycle/structured-agent-chat-stop'
 
 import {
   readAntigravityChatAuthConfig,
   applyAntigravityChatAuthConfig
 } from '../../../../antigravity/antigravity-chat-auth-settings'
+import {
+  clearAntigravityChatApiKey,
+  readAntigravityChatApiKeyStatus,
+  storeAntigravityChatApiKey
+} from '../../../../antigravity/antigravity-chat-api-key'
+
+// Running chats hold the old key until they start again.
+const restartLiveChats = (runtime: OrcaRuntimeService): Promise<void> =>
+  chatSignInHost(runtime)
+    .stopLiveChats()
+    .catch((error: unknown) => console.warn('[antigravity] chats kept the previous key:', error))
+
+const apiKeyStatus = (runtime: OrcaRuntimeService) =>
+  readAntigravityChatApiKeyStatus(() =>
+    resolveHostStructuredAgentLaunchEnvironment('antigravity', runtime.requireStore().getSettings())
+  )
 
 const chatSignInHost = (runtime: OrcaRuntimeService) => ({
   launchSources: (signal: AbortSignal) =>
@@ -45,27 +66,44 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
     name: 'accounts.antigravityList',
     permission: 'workspace',
     params: AntigravityAccountTargetParams,
-    handler: async (target) => (await getAntigravityAccountService(target)).listAccounts()
+    handler: async (target, ctx) =>
+      withAntigravityChatBackend(
+        ctx.runtime,
+        target,
+        await (await getAntigravityAccountService(target)).listAccounts()
+      )
   }),
   defineMethod({
     name: 'accounts.antigravityAddCurrent',
     permission: 'accounts-admin',
     params: AntigravityAccountTargetParams,
-    handler: async (target) => (await getAntigravityAccountService(target)).addCurrentAccount()
+    handler: async (target, ctx) =>
+      withAntigravityChatBackend(
+        ctx.runtime,
+        target,
+        await (await getAntigravityAccountService(target)).addCurrentAccount()
+      )
   }),
   defineMethod({
     name: 'accounts.antigravitySelect',
     permission: 'accounts-admin',
     params: AntigravityAccountMutationParams,
-    handler: async ({ target, accountId }) =>
-      (await getAntigravityAccountService(target)).selectAccount(accountId)
+    handler: async ({ target, accountId }, ctx) => {
+      const state = await (await getAntigravityAccountService(target)).selectAccount(accountId)
+      restartIdleAgyChats(target)
+      return withAntigravityChatBackend(ctx.runtime, target, state)
+    }
   }),
   defineMethod({
     name: 'accounts.antigravityRemove',
     permission: 'accounts-admin',
     params: AntigravityAccountMutationParams,
-    handler: async ({ target, accountId }) =>
-      (await getAntigravityAccountService(target)).removeAccount(accountId)
+    handler: async ({ target, accountId }, ctx) =>
+      withAntigravityChatBackend(
+        ctx.runtime,
+        target,
+        await (await getAntigravityAccountService(target)).removeAccount(accountId)
+      )
   }),
   defineMethod({
     name: 'accounts.antigravityChatSignInStart',
@@ -121,5 +159,31 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
         config,
         chatSignInHost(ctx.runtime).stopLiveChats
       )
+  }),
+  defineMethod({
+    name: 'accounts.antigravityChatApiKeyStatus',
+    permission: 'accounts-admin',
+    params: null,
+    handler: (_, ctx) => apiKeyStatus(ctx.runtime)
+  }),
+  defineMethod({
+    name: 'accounts.antigravityChatApiKeySave',
+    permission: 'accounts-admin',
+    params: AntigravityChatApiKeySaveParams,
+    handler: async ({ apiKey }, ctx) => {
+      await storeAntigravityChatApiKey(apiKey)
+      await restartLiveChats(ctx.runtime)
+      return apiKeyStatus(ctx.runtime)
+    }
+  }),
+  defineMethod({
+    name: 'accounts.antigravityChatApiKeyClear',
+    permission: 'accounts-admin',
+    params: null,
+    handler: async (_, ctx) => {
+      await clearAntigravityChatApiKey()
+      await restartLiveChats(ctx.runtime)
+      return apiKeyStatus(ctx.runtime)
+    }
   })
 ] as const

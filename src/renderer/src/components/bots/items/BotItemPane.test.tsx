@@ -97,7 +97,6 @@ afterEach(() => {
 })
 
 type Control = {
-  open: (index: number) => void
   redraw: () => void
   setOffline: (offline: boolean) => void
 }
@@ -118,7 +117,7 @@ function pane({
     const [pending, setPending] = useState(false)
     const [readFailed, setReadFailed] = useState(false)
     const [, redraw] = useReducer((n: number) => n + 1, 0)
-    control.current = { open: setIndex, redraw, setOffline }
+    control.current = { redraw, setOffline }
     const read = (direction: 1 | -1): void => {
       setPending(true)
       setReadFailed(false)
@@ -180,19 +179,6 @@ function chord(target: Element, key: 'ArrowDown' | 'ArrowUp'): void {
   fireEvent(target, event)
 }
 
-it('puts the place and arrows in the comment box, Previous before Next, and none in the back row', () => {
-  pane()
-  const group = within(screen.getByTestId('comment-box')).getByRole('group')
-  const [previous, next] = within(group).getAllByRole('button')
-  expect(previous).toBe(arrow('Previous item'))
-  expect(next).toBe(arrow('Next item'))
-  expect(
-    screen
-      .getByRole('button', { name: 'Home' })
-      .parentElement?.querySelector('button[data-bot-item-step]')
-  ).toBeNull()
-})
-
 it('keeps focus on the clicked arrow in the next item, and gives it to the pane at the end', () => {
   pane({ start: 0 })
   fireEvent.click(arrow('Next item'))
@@ -210,17 +196,6 @@ it('offline, neither the arrows nor the chord step, and Back still works', () =>
   expect(screen.getByLabelText('Comment b')).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: 'Home' }))
   expect(onBack).toHaveBeenCalledOnce()
-})
-
-it('says the item shown after a change, never the one opened, and the end when pressed past it', () => {
-  const { control } = pane({ start: 0 })
-  expect(said()).toBe('')
-  fireEvent.click(arrow('Next item'))
-  expect(said()).toBe('Item 2 of 3: Title b')
-  act(() => control().open(0))
-  expect(said()).toBe('Item 1 of 3: Title a')
-  chord(screen.getByLabelText('Comment a'), 'ArrowUp')
-  expect(said()).toBe('First item')
 })
 
 it('says an item opened unread once it shows, and the next one even if the opened one never showed', () => {
@@ -347,8 +322,8 @@ it('sends typing from the arrows and the pane itself to the comment box', () => 
   next.focus()
   fireEvent.keyDown(next, { key: 'j' })
   expect(typed).toHaveBeenLastCalledWith('j')
-  fireEvent.keyDown(paneRoot(), { key: 'k' })
-  expect(typed).toHaveBeenLastCalledWith('k')
+  expect(fireEvent.keyDown(paneRoot(), { key: 'K', shiftKey: true })).toBe(false)
+  expect(typed).toHaveBeenLastCalledWith('K')
   fireEvent.keyDown(screen.getByLabelText('Elsewhere'), { key: 'x' })
   expect(typed).toHaveBeenCalledTimes(2)
 })

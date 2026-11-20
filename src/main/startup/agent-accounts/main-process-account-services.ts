@@ -23,10 +23,10 @@ export type DesktopAccountServiceDeps = {
   openExternal: (url: string) => Promise<void>
 }
 
-export function initializeMainProcessAccountServices(
+export async function initializeMainProcessAccountServices(
   core: DesktopCore,
   { store, homePath, isQuitting, openExternal }: DesktopAccountServiceDeps
-): void {
+): Promise<void> {
   if (!core.claudeUsage || !core.codexUsage) {
     throw new Error('Usage stores must be initialized before account services')
   }
@@ -63,7 +63,7 @@ export function initializeMainProcessAccountServices(
   // Defer shared-home migration; compatibility launches re-arm non-destructive scans for new rollouts (#4444, #8612, #12480).
   core.codexSessionMigration.scheduleInitialRun()
   installProviderAccountCatalogWarmup(store)
-  store.migrateLegacyOpenCodeGoApiKey({
+  await store.migrateLegacyOpenCodeGoApiKey({
     has: hasOpenCodeGoApiKey,
     read: readOpenCodeGoApiKey,
     save: saveOpenCodeGoApiKey

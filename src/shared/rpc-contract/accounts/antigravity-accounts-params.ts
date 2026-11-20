@@ -26,3 +26,10 @@ export const AntigravityChatSignInCompleteParams = z.strictObject({
   flowId: z.string().min(1).max(64),
   callbackUrl: z.string().min(1).max(16_384)
 })
+
+export const AntigravityChatApiKeySaveParams = z.strictObject({
+  apiKey: z.string().trim().min(1).max(512)
+})
+
+/** Where the chat's Gemini API key comes from; neither ever carries the key itself. */
+export type AntigravityChatApiKeyStatus = { saved: boolean; inEnvironment: boolean }

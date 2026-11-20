@@ -38,16 +38,7 @@ function runs(): string[] {
 const MISSING_TUI = "Cannot find package '@zcode/tui'"
 
 describe.skipIf(process.platform === 'win32')('readZCodeInteractiveCapability', () => {
-  it('finds zcode in an install directory the GUI PATH lacks', async () => {
-    const home = join(root, 'home')
-    writeZCode(join(home, '.local', 'bin'), MISSING_TUI)
-
-    await expect(
-      readZCodeInteractiveCapability(undefined, { pathEnv: join(root, 'empty'), homePath: home })
-    ).resolves.toBe('missing-tui')
-  })
-
-  it('runs a version-manager zcode with the node installed beside it', async () => {
+  it('finds zcode outside the GUI PATH and runs it with its sibling node', async () => {
     const bin = join(root, 'home', '.volta', 'bin')
     mkdirSync(bin, { recursive: true })
     // Any other node would run this script cleanly; only the sibling reports the missing TUI.

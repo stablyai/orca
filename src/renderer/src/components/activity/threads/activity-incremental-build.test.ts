@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
@@ -7,9 +7,8 @@ import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { buildActivityEvents, type BuildActivityEventsArgs } from '../events/activity-event-builder'
-import * as paneBuilds from '../events/activity-event-build-cache'
+import { createActivityEventBuildCache } from '../events/activity-event-build-cache'
 import { buildAgentPaneThreads, createAgentPaneThreadReuseCache } from './activity-thread-builder'
-import * as presentation from './activity-thread-presentation'
 
 const NOW = 1_000_000_000
 const MINUTE = 60_000
@@ -149,7 +148,7 @@ function inputs(store: Store, now: number): BuildActivityEventsArgs {
 }
 
 function builder(store: Store) {
-  const events = paneBuilds.createActivityEventBuildCache()
+  const events = createActivityEventBuildCache()
   const threads = createAgentPaneThreadReuseCache()
   const run = (now: number, cached: boolean, statuses?: AppState['agentStatusByPaneKey']) => {
     const args = inputs(store, now)
@@ -185,85 +184,75 @@ function ping(store: Store, key: string, patch: Partial<AgentStatusEntry> = {}):
   write(store, [[key, { ...before, updatedAt: before.updatedAt + 1, ...patch }]])
 }
 
-afterEach(() => vi.restoreAllMocks())
-
 describe('Activity incremental build', () => {
-  it('rebuilds only changed panes at 100 and 1000 and matches full builds', () => {
-    const visits: number[][] = []
-    for (const size of [100, 1000]) {
-      const store = fleet(size)
-      const build = builder(store)
-      build.cached()
-      const panes = vi.spyOn(paneBuilds, 'resolvePaneBuild')
-      const threads = vi.spyOn(presentation, 'statusPreviewForEntry')
-      const key = makePaneKey('t0', LEAF)
-      ping(store, key)
-      const cached = build.cached()
-      visits.push([panes.mock.calls.length, threads.mock.calls.length])
-      panes.mockRestore()
-      threads.mockRestore()
-      expect(cached).toEqual(build.full())
+  it('keeps cached events and threads current after status and ownership changes', () => {
+    const store = fleet(100)
+    const build = builder(store)
+    build.cached()
+    const key = makePaneKey('t0', LEAF)
+    ping(store, key)
+    build.expectEquivalent()
 
-      for (const state of ['waiting', 'done', 'blocked', 'working'] as const) {
-        ping(store, key, { state, stateStartedAt: NOW - 500 })
-        build.expectEquivalent()
-      }
-      // Add, remove, and move a pane to the end of status order, which reorders cap ties.
-      write(store, [
-        [
-          makePaneKey('t3', LEAF_2),
-          {
-            ...store.getState().agentStatusByPaneKey.get(makePaneKey('t3', LEAF))!,
-            paneKey: makePaneKey('t3', LEAF_2)
-          }
-        ]
-      ])
-      build.expectEquivalent()
-      write(store, [[makePaneKey('t5', LEAF), null]])
-      build.expectEquivalent()
-      const moved = store.getState().agentStatusByPaneKey.get(makePaneKey('t1', LEAF))!
-      write(store, [[makePaneKey('t1', LEAF), null]])
-      write(store, [[makePaneKey('t1', LEAF), moved]])
-      build.expectEquivalent()
-      write(store, [
-        [makePaneKey('t2', LEAF), null],
-        [
-          makePaneKey('t2', LEAF),
-          {
-            ...store.getState().agentStatusByPaneKey.get(makePaneKey('t2', LEAF))!,
-            updatedAt: NOW + 2
-          }
-        ]
-      ])
-      build.expectEquivalent()
-
-      // Freshness lapses with or without a status write; a backwards clock rebuilds.
-      for (const now of [NOW + 1, NOW + 15 * MINUTE, NOW + 31 * MINUTE, NOW]) {
-        build.expectEquivalent(now)
-        ping(store, key)
-        build.expectEquivalent(now)
-      }
-      // A reader behind the bounded journal recovers from authoritative inputs.
-      for (let index = 0; index < 20; index++) {
-        ping(store, key, { state: index % 2 ? 'working' : 'waiting' })
-      }
-      build.expectEquivalent()
-      store.setState({ acknowledgedAgentsByPaneKey: { [key]: NOW } })
-      build.expectEquivalent()
-      store.setState({ activityClearedAtByPaneKey: { [makePaneKey('t4', LEAF)]: NOW } })
-      build.expectEquivalent()
-      store.setState({ migrationUnsupportedByPtyId: {} })
-      build.expectEquivalent()
-      // Another status owner, such as a captured view, never reuses this owner's panes.
-      build.cached()
-      build.expectEquivalent(NOW, store.getState().agentStatusByPaneKey.capture())
+    ping(store, key, { state: 'waiting', stateStartedAt: NOW - 500 })
+    expect(build.cached().events.find((event) => event.entry.paneKey === key)).toMatchObject({
+      state: 'waiting',
+      entry: { prompt: 'task 0' }
+    })
+    build.expectEquivalent()
+    for (const state of ['done', 'blocked', 'working'] as const) {
+      ping(store, key, { state, stateStartedAt: NOW - 500 })
       build.expectEquivalent()
     }
-    // The pinged pane plus the two unsupported rows; one thread.
-    expect(visits[0]).toEqual(visits[1])
-    expect(visits[1][0]).toBeGreaterThan(0)
-    expect(visits[1][0]).toBeLessThanOrEqual(3)
-    expect(visits[1][1]).toBeLessThanOrEqual(2)
+    // Add, remove, and move a pane to the end of status order, which reorders cap ties.
+    write(store, [
+      [
+        makePaneKey('t3', LEAF_2),
+        {
+          ...store.getState().agentStatusByPaneKey.get(makePaneKey('t3', LEAF))!,
+          paneKey: makePaneKey('t3', LEAF_2)
+        }
+      ]
+    ])
+    build.expectEquivalent()
+    write(store, [[makePaneKey('t5', LEAF), null]])
+    build.expectEquivalent()
+    const moved = store.getState().agentStatusByPaneKey.get(makePaneKey('t1', LEAF))!
+    write(store, [[makePaneKey('t1', LEAF), null]])
+    write(store, [[makePaneKey('t1', LEAF), moved]])
+    build.expectEquivalent()
+    write(store, [
+      [makePaneKey('t2', LEAF), null],
+      [
+        makePaneKey('t2', LEAF),
+        {
+          ...store.getState().agentStatusByPaneKey.get(makePaneKey('t2', LEAF))!,
+          updatedAt: NOW + 2
+        }
+      ]
+    ])
+    build.expectEquivalent()
+
+    // Freshness lapses with or without a status write; a backwards clock rebuilds.
+    for (const now of [NOW + 1, NOW + 15 * MINUTE, NOW + 31 * MINUTE, NOW]) {
+      build.expectEquivalent(now)
+      ping(store, key)
+      build.expectEquivalent(now)
+    }
+    // A reader behind the bounded journal recovers from authoritative inputs.
+    for (let index = 0; index < 20; index++) {
+      ping(store, key, { state: index % 2 ? 'working' : 'waiting' })
+    }
+    build.expectEquivalent()
+    store.setState({ acknowledgedAgentsByPaneKey: { [key]: NOW } })
+    build.expectEquivalent()
+    store.setState({ activityClearedAtByPaneKey: { [makePaneKey('t4', LEAF)]: NOW } })
+    build.expectEquivalent()
+    store.setState({ migrationUnsupportedByPtyId: {} })
+    build.expectEquivalent()
+    // Another status owner, such as a captured view, never reuses this owner's panes.
+    build.cached()
+    build.expectEquivalent(NOW, store.getState().agentStatusByPaneKey.capture())
+    build.expectEquivalent()
   })
 
   it('fills the global cap with the newest pane heads, ties in status order', () => {

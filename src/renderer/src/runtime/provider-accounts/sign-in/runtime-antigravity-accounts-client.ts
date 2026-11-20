@@ -8,9 +8,11 @@ import {
   ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_SIGN_IN_INTENT_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_AUTH_CONFIG_RUNTIME_CAPABILITY,
+  ANTIGRAVITY_CHAT_KEY_AND_ADC_AUTH_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_SIGN_IN_RUNTIME_CAPABILITY
 } from '../../../../../shared/remote-runtime/protocol/account-runtime-capabilities'
 import type { RuntimeRpcSuccess } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { AntigravityChatApiKeyStatus } from '../../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { assertRuntimeEnvironmentCapability } from '../../rpc/compatibility/runtime-capability-proof'
 import { callRuntimeRpc, callRuntimeRpcResponse } from '../../rpc/calls/runtime-rpc-call'
@@ -99,4 +101,35 @@ export async function callAntigravityChatAuthConfig(
     config,
     { timeoutMs: 20_000 }
   )
+}
+
+/** Reads, saves or clears the Gemini API key the host's Antigravity chat uses; never returns the key. */
+export async function callAntigravityChatApiKey(
+  owner: RuntimeClientTarget,
+  action: { kind: 'status' } | { kind: 'save'; apiKey: string } | { kind: 'clear' }
+): Promise<AntigravityChatApiKeyStatus> {
+  if (owner.kind === 'environment') {
+    await assertRuntimeEnvironmentCapability(
+      owner.environmentId,
+      ANTIGRAVITY_CHAT_KEY_AND_ADC_AUTH_RUNTIME_CAPABILITY,
+      'Update Orca on this host to sign Antigravity chats in with a Gemini API key.'
+    )
+  }
+  return action.kind === 'save'
+    ? callRuntimeRpc(
+        owner,
+        'accounts.antigravityChatApiKeySave',
+        { apiKey: action.apiKey },
+        {
+          timeoutMs: 20_000
+        }
+      )
+    : callRuntimeRpc(
+        owner,
+        action.kind === 'clear'
+          ? 'accounts.antigravityChatApiKeyClear'
+          : 'accounts.antigravityChatApiKeyStatus',
+        undefined,
+        { timeoutMs: 20_000 }
+      )
 }

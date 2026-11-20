@@ -56,7 +56,7 @@ afterEach(() => {
 })
 
 describe('runtime terminal split IPC routing', () => {
-  it('queues an explicit split while tab ownership is still hydrating', () => {
+  it('preserves a blank split’s launch environment while tab ownership is hydrating', () => {
     const received: SplitTerminalPaneDetail[] = []
     mocks.hasRegisteredRuntimeTerminalTab.mockReturnValue(false)
     mocks.state.tabsByWorktree = {}
@@ -65,7 +65,8 @@ describe('runtime terminal split IPC routing', () => {
       tabId: 'tab-hydrating',
       worktreeId: 'repo::/folder',
       paneRuntimeId: 4,
-      direction: 'vertical'
+      direction: 'vertical',
+      env: { ORCA_TERMINAL_IMAGE_VIEWER: '0' }
     })
 
     expect(mocks.requestBackgroundTerminalWorktreeMount).toHaveBeenCalledWith({
@@ -84,7 +85,8 @@ describe('runtime terminal split IPC routing', () => {
         tabId: 'tab-hydrating',
         worktreeId: 'repo::/folder',
         paneRuntimeId: 4,
-        direction: 'vertical'
+        direction: 'vertical',
+        env: { ORCA_TERMINAL_IMAGE_VIEWER: '0' }
       })
     ])
     unregister()

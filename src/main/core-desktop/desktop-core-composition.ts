@@ -231,7 +231,7 @@ export async function composeDesktopCore(
   await prepareWorktreeRemovalsForStore(store)
   native.startObservers()
   startCoreObservers(core, store, deps)
-  initializeMainProcessAccountServices(core, {
+  await initializeMainProcessAccountServices(core, {
     store,
     homePath: paths.home,
     isQuitting: native.isQuitting,
