@@ -1,11 +1,14 @@
-// A bot's connectors as one list: each Slack workspace, Linear workspace and GitHub org it is in,
+// A bot's connectors as one list: each Slack workspace, Cliq organization, Linear workspace and
+// GitHub org it is in,
 // Google, Webhooks, the apps it signed in to through Composio, and the apps it has as tools. The
 // desktop and the phone both list these rows, each from what its own reads say of every service.
 import {
+  botCliqBots,
   botLinearWorkspaces,
   botMembersFrom,
   botSlackApps,
   type Bot,
+  type BotCliqBot,
   type BotLinear
 } from '../bot-types'
 import type { BotOwnTool, BotToolProblem } from '../bot-tools'
@@ -50,6 +53,7 @@ type UntitledEntry<Connection, Tool extends AppTool> = { key: string; needsOwner
       /** Its app is installed but needs Slack's update, not a sign-in. */ updateNeeded?: true
     }
   | { kind: 'linear'; linear: BotLinear }
+  | { kind: 'cliq'; cliq: BotCliqBot }
   | {
       kind: 'github'
       /** None: GitHub as a whole, until it is linked and installed. */ installation?: ConnectorGitHubInstallation
@@ -77,6 +81,8 @@ export type BotConnectorFacts<Connection extends ComposioSignIn, Tool extends Ap
     updateNeeded: boolean
   }
   linearNeedsOwner: (workspace: BotLinear) => boolean
+  /** Absent: this side has no Cliq page yet, so it lists no Cliq rows. */
+  cliqNeedsOwner?: (cliq: BotCliqBot) => boolean
   github: {
     /** The orgs Orca is installed in where the host is linked; none until read. */
     installations: readonly ConnectorGitHubInstallation[]
@@ -101,7 +107,7 @@ export type BotConnectorFacts<Connection extends ComposioSignIn, Tool extends Ap
 
 type ConnectorBot = Pick<
   Bot,
-  'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'members' | 'github' | 'google'
+  'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'members' | 'github' | 'google' | 'cliqBots'
 >
 
 /** URL servers other than Composio's own, which is drawn as its apps. */
@@ -161,6 +167,15 @@ export function botConnectorEntries<Connection extends ComposioSignIn, Tool exte
   // People added in Slack stay listed even after the app is removed, so they can be removed too.
   if (slackApps.length === 0 && botMembersFrom(bot.members, 'slack').length > 0) {
     add({ kind: 'slack', key: 'slack', needsOwner: false }, { service: 'Slack' })
+  }
+  const { cliqNeedsOwner } = facts
+  if (cliqNeedsOwner) {
+    for (const link of botCliqBots(bot)) {
+      add(
+        { kind: 'cliq', key: `cliq:${link.orgId}`, cliq: link, needsOwner: cliqNeedsOwner(link) },
+        { service: 'Zoho Cliq', place: link.orgName || link.orgId }
+      )
+    }
   }
   for (const workspace of botLinearWorkspaces(bot)) {
     add(

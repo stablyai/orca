@@ -1,4 +1,4 @@
-// `bots.connect.*`: "Connect Linear" / "Connect GitHub" in one trip, run on this host as its own Orca
+// `bots.connect.*`: "Connect Linear" / "Connect GitHub" / "Connect Zoho Cliq" in one trip, run on this host as its own Orca
 // account. The client opens the page this answers (for a server, in the server's own browser session,
 // so the return reaches this host's loopback), then waits here for the trip's end.
 import {

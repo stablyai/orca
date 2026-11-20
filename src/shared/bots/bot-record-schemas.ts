@@ -112,6 +112,16 @@ export const BotLinearSchema = lazyZodSchema(() =>
   })
 )
 
+/** The bot's own Cliq bot in one Zoho organization, once created; its state is read from the cloud. */
+export const BotCliqBotSchema = lazyZodSchema(() =>
+  z.object({
+    orgId: z.string().min(1),
+    orgName: z.string(),
+    /** Zoho's data center (us, eu, in…), which picks the Cliq host people open. */
+    dataCenter: z.string().min(1)
+  })
+)
+
 /** The bot answers on GitHub, in every installation of Orca's one shared GitHub app the owner's link can see but the removed ones. */
 export const BotGitHubSchema = lazyZodSchema(() =>
   z.object({
@@ -127,6 +137,7 @@ export const BOT_MAX_CONNECTOR_WORKSPACES = 8
 export const BOT_MAX_SKILL_PROJECTS = 20
 const BotSlackLinkSchema = lazyZodSchema(() => BotSlackAppSchema.extend(createBotLinkOwner()))
 const BotLinearLinkSchema = lazyZodSchema(() => BotLinearSchema.extend(createBotLinkOwner()))
+const BotCliqLinkSchema = lazyZodSchema(() => BotCliqBotSchema.extend(createBotLinkOwner()))
 
 /** Its choices in order, as Settings offers them. */
 export const BOT_ITEMS_STALE_CHOICES = [3, 5, 7, 14, 'never'] as const
@@ -175,6 +186,8 @@ export const BotSchema = lazyZodSchema(() =>
     linear: BotLinearLinkSchema.nullable().default(null),
     linearWorkspaces: z.array(BotLinearLinkSchema).max(BOT_MAX_CONNECTOR_WORKSPACES).optional(),
     github: BotGitHubSchema.extend(createBotLinkOwner()).nullable().default(null),
+    /** Every Zoho organization the bot has its own Cliq bot in, first one first; older hosts drop it. */
+    cliqBots: z.array(BotCliqLinkSchema).max(BOT_MAX_CONNECTOR_WORKSPACES).optional(),
     /** Whether a new Slack thread the owner starts posts the owner's Orca messages back to it; absent is on.
      *  Threads others start, and the owner's teammates' DMs, start off whatever this says. */
     slackMirror: z.boolean().optional().catch(undefined),
@@ -249,3 +262,5 @@ export type BotGitHub = z.infer<typeof BotGitHubSchema>
 export type Bot = z.infer<typeof BotSchema>
 export type BotSlackLink = z.infer<typeof BotSlackLinkSchema>
 export type BotLinearLink = z.infer<typeof BotLinearLinkSchema>
+export type BotCliqBot = z.infer<typeof BotCliqBotSchema>
+export type BotCliqLink = z.infer<typeof BotCliqLinkSchema>

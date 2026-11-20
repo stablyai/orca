@@ -46,7 +46,11 @@ export const CONNECTOR_PATHS = {
   // `…/<share id>/accept` (202 queued) and `…/<share id>/decline` (200 declined); POST and GET
   // `…/<share id>/messages` hold a message and read held states.
   // The messages routes also take a phone's `Bearer <share credential>` in place of a connector token.
-  shares: '/v1/shares'
+  shares: '/v1/shares',
+  // POST `${cliq}/connect` and `…/connect/redeem` (cliq-messages.ts); GET `…/state`; DELETE
+  // `…/orgs/<org id>`. A bot's own: POST `${bots}/<bot id>/cliq/bots`, GET and DELETE
+  // `${bots}/<bot id>/cliq?org=`, GET `${bots}/<bot id>/cliq/members?org=&q=`.
+  cliq: '/v1/connector/cliq'
 } as const
 
 export const CONNECTOR_ERROR_CODES = [
@@ -69,7 +73,12 @@ export const CONNECTOR_ERROR_CODES = [
   // The bot has no Slack install to read its workspace through.
   'not_installed',
   // A links DELETE named no link of the caller's.
-  'not_linked'
+  'not_linked',
+  // Zoho refused the account's refresh token for that organization: sign in again.
+  'cliq_grant_expired',
+  'cliq_unavailable',
+  // Cliq refused to create or configure the bot; the message says why.
+  'cliq_refused'
 ] as const
 export type ConnectorErrorCode = (typeof CONNECTOR_ERROR_CODES)[number]
 

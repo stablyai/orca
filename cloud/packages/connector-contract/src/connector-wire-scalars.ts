@@ -18,9 +18,9 @@ export const ConnectorHostDescription = {
 }
 
 // webhook: a hook's calls. orca: a teammate's message to a bot shared with them (share-messages.ts).
-export const CONNECTOR_SOURCES = ['slack', 'discord', 'linear', 'github', 'webhook', 'orca'] as const
+export const CONNECTOR_SOURCES = ['slack', 'discord', 'cliq', 'linear', 'github', 'webhook', 'orca'] as const
 // Sources with places a bot acts or listens in, and people who ask it there: neither a hook nor Orca has any.
-export const CONNECTOR_PLACE_SOURCES = ['slack', 'discord', 'linear', 'github'] as const
+export const CONNECTOR_PLACE_SOURCES = ['slack', 'discord', 'cliq', 'linear', 'github'] as const
 export type ConnectorPlaceSource = (typeof CONNECTOR_PLACE_SOURCES)[number]
 
 // A conversation a source's adapter serves. A share's is apart: it has no adapter, only its deliveries.

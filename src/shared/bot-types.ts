@@ -4,6 +4,7 @@ import {
   BotSchema,
   type Bot,
   type BotAgent,
+  type BotCliqLink,
   type BotLinearLink,
   type BotMember,
   type BotSlackLink
@@ -23,6 +24,7 @@ export {
   BotSlackAppSchema,
   BotLinearSchema,
   BotGitHubSchema,
+  BotCliqBotSchema,
   BOT_MAX_CONNECTOR_WORKSPACES,
   BOT_MAX_SKILL_PROJECTS,
   BotItemsStaleSchema,
@@ -37,33 +39,10 @@ export {
   type BotGitHub,
   type Bot,
   type BotSlackLink,
-  type BotLinearLink
+  type BotLinearLink,
+  type BotCliqBot,
+  type BotCliqLink
 } from './bots/bot-record-schemas'
-
-/** Agents the previous release's bot schema reads; it drops bots on any other agent when it loads. */
-const BOT_AGENTS_OLDER_BUILDS_READ: ReadonlySet<string> = new Set([
-  'claude',
-  'codex',
-  'grok',
-  'opencode',
-  'omp',
-  'pi',
-  'antigravity'
-])
-
-/** Bots saved where an older build, after a rollback, cannot drop them: it ignores keys it does not know. */
-export function splitBotsByOlderBuildSupport(bots: readonly Bot[]): {
-  readable: Bot[]
-  newer: Bot[]
-} {
-  const readable: Bot[] = []
-  const newer: Bot[] = []
-  for (const bot of bots) {
-    const side = BOT_AGENTS_OLDER_BUILDS_READ.has(bot.agent) ? readable : newer
-    side.push(bot)
-  }
-  return { readable, newer }
-}
 
 export function isBotAgent(agent: string): agent is BotAgent {
   return BOT_AGENTS.some((entry) => entry === agent)
@@ -101,11 +80,21 @@ export function botLinearWorkspaces(
   return bot.linearWorkspaces ?? (bot.linear ? [bot.linear] : [])
 }
 
-/** Whether the cloud can bring the bot work: a Slack app, a Linear workspace or a GitHub link. */
+/** Every Zoho organization the bot has its own Cliq bot in, first one first. */
+export function botCliqBots(bot: Pick<Bot, 'cliqBots'>): BotCliqLink[] {
+  return bot.cliqBots ?? []
+}
+
+/** Whether the cloud can bring the bot work: a Slack app, a Linear workspace, a GitHub link or a Cliq bot. */
 export function botHasConnector(
-  bot: Pick<Bot, 'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'github'>
+  bot: Pick<Bot, 'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'github' | 'cliqBots'>
 ): boolean {
-  return botSlackApps(bot).length > 0 || botLinearWorkspaces(bot).length > 0 || bot.github !== null
+  return (
+    botSlackApps(bot).length > 0 ||
+    botLinearWorkspaces(bot).length > 0 ||
+    bot.github !== null ||
+    botCliqBots(bot).length > 0
+  )
 }
 
 /**

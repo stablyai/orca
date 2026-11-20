@@ -165,6 +165,7 @@ function permissionWords(
 const CONNECTOR_ICON: Record<BotAccessConnector, React.ElementType> = {
   linear: SquarePen,
   slack: MessageSquare,
+  cliq: MessageSquare,
   github: GitPullRequest
 }
 

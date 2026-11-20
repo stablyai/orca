@@ -12,6 +12,7 @@ import {
 } from '../bot-types'
 import { botMembersFullError, planBotMemberAdds } from '../bots/bot-member-capacity'
 import { BotTakeOverSchema } from '../bots/bot-take-over'
+import { withCliqMembersIn } from '../bots/bot-cliq-members'
 import { botLookAround, patchLookAround } from '../bots/bot-look-around'
 import { withBotOfferAnswer } from '../bots/bot-offer-answers'
 import { type BotCancelledWait, withBotCancelledWait } from '../bots/bot-cancelled-waits'
@@ -247,5 +248,5 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
   } else if (launch === null || (rest.agent !== undefined && rest.agent !== bot.agent)) {
     delete next.launch
   }
-  return next
+  return withCliqMembersIn(next)
 }

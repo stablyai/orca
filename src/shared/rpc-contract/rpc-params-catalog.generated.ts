@@ -165,6 +165,10 @@ import {
   ComposioStartSetup
 } from './bots-composio-params'
 import {
+  BotCliqBotOrg,
+  BotCliqBotState,
+  BotCliqMembers,
+  BotCliqOrg,
   BotGitHubDefaultBot,
   BotGitHubUnlink,
   BotGitHubUsers,
@@ -1305,6 +1309,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.chats.search': BotChatSearch,
   'bots.chats.seen': BotChatsSeen,
   'bots.chats.unseen': null,
+  'bots.cliq.forgetOrg': BotCliqOrg,
+  'bots.cliq.members': BotCliqMembers,
+  'bots.cliq.orgs': null,
+  'bots.cliq.remove': BotCliqBotOrg,
+  'bots.cliq.setUp': BotCliqBotOrg,
+  'bots.cliq.state': BotCliqBotState,
   'bots.composio.add': ComposioBot,
   'bots.composio.app': ComposioApp,
   'bots.composio.apps': ComposioApps,

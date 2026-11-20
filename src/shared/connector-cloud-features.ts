@@ -13,6 +13,8 @@ export const CONNECTOR_CLOUD_FEATURES = [
   'triggers.people',
   // A bot's own Slack app in several workspaces; an older cloud refuses a second one.
   'slack.teams',
+  // Zoho Cliq: Cliq rows in a bot's hello, Cliq conversations and the cliq routes (connector-bot-cliq-contract.ts).
+  'cliq',
   // `connector.act` places, and a whole workspace (linear:<org>:workspace) as a rule's place.
   'places',
   // find's `search` (connector-action-contract.ts), on the sources whose find capability lists it.

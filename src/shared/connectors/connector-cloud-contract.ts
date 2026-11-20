@@ -34,7 +34,7 @@ export { CONNECTOR_PATHS } from './connector-cloud-paths'
 
 /** The services a person connects in one browser trip (connect-messages.ts in the cloud contract;
  *  connector-mirrored-constants.test.ts keeps them equal). */
-export const CONNECTOR_CONNECT_SOURCES = ['linear', 'github', 'slack'] as const
+export const CONNECTOR_CONNECT_SOURCES = ['linear', 'github', 'slack', 'cliq'] as const
 export type ConnectorConnectSource = (typeof CONNECTOR_CONNECT_SOURCES)[number]
 
 export const CONNECTOR_FEATURES = [

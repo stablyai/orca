@@ -6377,6 +6377,7 @@
       "moreMatches_other": "{{count}} more matches. Search for more of a name to narrow it.",
       "readFailedTitle": "Couldn’t load chats",
       "runningCount": "{{count}} running",
+      "kindCliq": "Cliq thread",
       "needsYouCount": "{{count}} needs you",
       "open": "Open",
       "delete": "Delete chat"

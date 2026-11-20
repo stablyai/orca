@@ -1,5 +1,6 @@
-// Tests' stand-in for this app's own host answering `bots.slack/linear/github/connect.*`: each method
-// goes to the matching fake on `api.botSlack`, `api.botLinear` or `api.botGitHub`, read at call time,
+// Tests' stand-in for this app's own host answering `bots.slack/linear/github/cliq/connect.*`: each
+// method goes to the matching fake on `api.botSlack`, `api.botLinear`, `api.botGitHub` or `api.botCliq`
+// (a cloud without Cliq unless given), read at call time,
 // so a test that re-mocks one later is followed. A trip's `connect` fake resolves with the trip's end.
 type Fake = (args?: unknown) => unknown
 type FakeService = Partial<Record<string, Fake>>
@@ -7,17 +8,20 @@ type FakeApi = {
   botSlack?: FakeService
   botLinear?: FakeService
   botGitHub?: FakeService
+  botCliq?: FakeService
   runtime?: { call?: (args: { method: string; params?: unknown }) => unknown }
   shell?: { openUrl?: (url: string) => unknown }
   // The rest of the window API a test fakes, kept as given.
   [other: string]: unknown
 }
 
+const CLIQ_OFF: FakeService = { orgs: () => ({ ok: false, error: 'cliq_off' }) }
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null
 
 const isConnectorMethod = (method: string): boolean =>
-  ['bots.slack.', 'bots.linear.', 'bots.github.', 'bots.connect.'].some((prefix) =>
+  ['bots.slack.', 'bots.linear.', 'bots.github.', 'bots.cliq.', 'bots.connect.'].some((prefix) =>
     method.startsWith(prefix)
   )
 
@@ -33,7 +37,9 @@ export function withBotConnectorRuntime<T extends FakeApi>(api: T): T {
         ? api.botLinear
         : name === 'github'
           ? api.botGitHub
-          : undefined
+          : name === 'cliq'
+            ? (api.botCliq ?? CLIQ_OFF)
+            : undefined
   const answer = async (method: string, params: unknown): Promise<unknown> => {
     const [, group, name] = method.split('.')
     const field = (key: string): unknown => (isRecord(params) ? params[key] : undefined)
