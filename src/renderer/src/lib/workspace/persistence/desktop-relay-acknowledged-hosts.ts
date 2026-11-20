@@ -6,6 +6,11 @@ import type {
 
 type AcknowledgedHost = { complete: boolean; relayIdsByTabId: Record<string, string> }
 
+/** Tabs whose rows this window holds parked for a host: their relay ids may be live though unsent. */
+export type HeldRelayTabs = (hostId: ExecutionHostId) => ReadonlySet<string>
+
+const NO_HELD_TABS: HeldRelayTabs = () => new Set()
+
 /** What main last accepted from this window, per host, so a save sends only the relay ids that
  *  changed. Any doubt (a failed, skipped or refused write, a full replacement) drops back to a baseline. */
 export class AcknowledgedDesktopRelays {
@@ -18,7 +23,10 @@ export class AcknowledgedDesktopRelays {
   }
 
   /** Narrow a full write to unacknowledged hosts and changed ids; `acknowledge` records main's answer. */
-  narrow(full: DesktopRelayWrite): {
+  narrow(
+    full: DesktopRelayWrite,
+    held: HeldRelayTabs = NO_HELD_TABS
+  ): {
     write: DesktopRelayWrite
     acknowledge: (result: DesktopRelayWriteResult) => void
   } {
@@ -27,7 +35,7 @@ export class AcknowledgedDesktopRelays {
     const wanted = new Map<ExecutionHostId, AcknowledgedHost>()
     for (const host of full.hosts) {
       wanted.set(host.hostId, { complete: host.complete, relayIdsByTabId: host.relayIdsByTabId })
-      const delta = this.deltaFor(host)
+      const delta = this.deltaFor(host, held)
       if (delta) {
         hosts.push(delta)
       }
@@ -58,12 +66,30 @@ export class AcknowledgedDesktopRelays {
     return { write: { version: full.version, hosts }, acknowledge }
   }
 
+  /** Ids main accepted from this window that an incomplete host's write now leaves out, except tabs
+   *  parked there: they ended, and only an explicit removal clears them (an omission doesn't). */
+  endedOnIncompleteHost(host: DesktopRelayWrite['hosts'][number], held: HeldRelayTabs): string[] {
+    const last = this.hosts.get(host.hostId)
+    if (!last || host.complete) {
+      return []
+    }
+    const parked = held(host.hostId)
+    return Object.keys(last.relayIdsByTabId).filter(
+      (tabId) => !Object.hasOwn(host.relayIdsByTabId, tabId) && !parked.has(tabId)
+    )
+  }
+
   private deltaFor(
-    host: DesktopRelayWrite['hosts'][number]
+    host: DesktopRelayWrite['hosts'][number],
+    held: HeldRelayTabs
   ): DesktopRelayWrite['hosts'][number] | null {
     const last = this.hosts.get(host.hostId)
-    if (!last || last.complete !== host.complete) {
+    if (!last) {
       return host
+    }
+    if (last.complete !== host.complete) {
+      const ended = this.endedOnIncompleteHost(host, held)
+      return ended.length > 0 ? { ...host, removedTabIds: ended } : host
     }
     const relayIdsByTabId: Record<string, string> = {}
     for (const [tabId, relayId] of Object.entries(host.relayIdsByTabId)) {
@@ -71,12 +97,11 @@ export class AcknowledgedDesktopRelays {
         relayIdsByTabId[tabId] = relayId
       }
     }
-    // Only a complete host's omission means an id ended; an incomplete host leaves omitted ids alone.
     const removedTabIds = host.complete
       ? Object.keys(last.relayIdsByTabId).filter(
           (tabId) => !Object.hasOwn(host.relayIdsByTabId, tabId)
         )
-      : []
+      : this.endedOnIncompleteHost(host, held)
     if (Object.keys(relayIdsByTabId).length === 0 && removedTabIds.length === 0) {
       return null
     }

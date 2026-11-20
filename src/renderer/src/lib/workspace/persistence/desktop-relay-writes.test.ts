@@ -54,6 +54,20 @@ describe('relay ids saved by ownership', () => {
     }
   })
 
+  it('clears an ended relay the window wrote on a host holding a parked workspace', async () => {
+    const main = inMemoryMain()
+    const { stop, endRelay } = await windowSavingTo(main, { parked: true })
+    try {
+      expect(main.stored(SSH_HOST).remoteSessionIdsByTabId).toEqual({ 'tab-a': 'relay-a' })
+
+      await endRelay()
+
+      expect(main.stored(SSH_HOST).remoteSessionIdsByTabId).toBeUndefined()
+    } finally {
+      stop()
+    }
+  })
+
   it('clears it after a fenced partition opens again', async () => {
     const main = inMemoryMain()
     const { stop, endRelay, renameTab } = await windowSavingTo(main)

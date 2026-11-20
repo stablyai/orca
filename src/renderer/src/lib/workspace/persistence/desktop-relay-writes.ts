@@ -13,7 +13,7 @@ import {
 import { nonLocalHostSessionEntries, type HostSessionSlices } from './workspace-session-host-split'
 import type { SessionRelevantField } from './workspace-session'
 import type { WorkspaceSessionPatch } from '../../../../../shared/workspace-session/workspace-session-state-types'
-import { AcknowledgedDesktopRelays } from './desktop-relay-acknowledged-hosts'
+import { AcknowledgedDesktopRelays, type HeldRelayTabs } from './desktop-relay-acknowledged-hosts'
 import type { CarriedRelayStatus } from './workspace-session-host-entries-write'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 
@@ -112,6 +112,28 @@ function completeRelayHostIds(state: RelayHostState): Set<ExecutionHostId> {
   return hostIds
 }
 
+// Per write: the tabs whose rows the window holds parked for each host (window-side only, never sent).
+const heldTabsByWrite = new WeakMap<DesktopRelayWrite, HeldRelayTabs>()
+
+function parkedTabIds(state: RelayHostState): HeldRelayTabs {
+  const byHost = new Map<ExecutionHostId, Set<string>>()
+  return (hostId) => {
+    let tabIds = byHost.get(hostId)
+    if (!tabIds) {
+      tabIds = new Set()
+      for (const tabs of Object.values(
+        state.contestedHostWorkspaceSessions?.[hostId]?.tabsByWorktree ?? {}
+      )) {
+        for (const tab of tabs) {
+          tabIds.add(tab.id)
+        }
+      }
+      byHost.set(hostId, tabIds)
+    }
+    return tabIds
+  }
+}
+
 /** Move the relay ids out of a split write into one write main applies by ownership. A host with no
  *  slice still goes when complete, so the last relay that ended there is removed. */
 export function takeDesktopRelayWrite(
@@ -129,16 +151,17 @@ export function takeDesktopRelayWrite(
     sliceHostIds.add(hostId)
     const relayIdsByTabId = slice.remoteSessionIdsByTabId ?? {}
     delete slice.remoteSessionIdsByTabId
-    if (complete.has(hostId) || Object.keys(relayIdsByTabId).length > 0) {
-      hosts.push({ hostId, relayIdsByTabId, complete: complete.has(hostId) })
-    }
+    // Every written host goes, empty or not: an id the window wrote there may have ended.
+    hosts.push({ hostId, relayIdsByTabId, complete: complete.has(hostId) })
   }
   for (const hostId of complete) {
     if (!sliceHostIds.has(hostId)) {
       hosts.push({ hostId, relayIdsByTabId: {}, complete: true })
     }
   }
-  return { version: DESKTOP_RELAY_WRITE_VERSION, hosts }
+  const write: DesktopRelayWrite = { version: DESKTOP_RELAY_WRITE_VERSION, hosts }
+  heldTabsByWrite.set(write, parkedTabIds(state))
+  return write
 }
 
 // A ptyIdsByTabId change rebuilds every host's relay ids on the next save; refused hosts retry then.
@@ -175,7 +198,7 @@ export function sendDesktopRelayWrite(
   if (!api.applyDesktopRelays) {
     return null
   }
-  const { write, acknowledge } = acknowledgedRelays.narrow(full)
+  const { write, acknowledge } = acknowledgedRelays.narrow(full, heldTabsByWrite.get(full))
   if (write.hosts.length === 0) {
     return null
   }
@@ -207,7 +230,7 @@ export function planDesktopRelayWrite(
   // The save's slices when its partition writes can carry relay ids (entries writes); else null.
   entrySlices: HostSessionSlices | null
 ): DesktopRelayPlan | null {
-  const { write, acknowledge } = acknowledgedRelays.narrow(full)
+  const { write, acknowledge } = acknowledgedRelays.narrow(full, heldTabsByWrite.get(full))
   if (write.hosts.length === 0 || !api.applyDesktopRelays) {
     return null
   }
@@ -302,6 +325,13 @@ export function replaceDesktopRelays(
   slices: HostSessionSlices,
   state: RelayHostState
 ): DesktopRelayWrite {
+  const write = takeDesktopRelayWrite(slices, state)
+  // An incomplete host's omission removes nothing, so ids the window wrote there that ended are named.
+  const held = heldTabsByWrite.get(write)
+  write.hosts = write.hosts.map((host) => {
+    const ended = held ? acknowledgedRelays.endedOnIncompleteHost(host, held) : []
+    return ended.length > 0 ? { ...host, removedTabIds: ended } : host
+  })
   acknowledgedRelays.forget()
-  return takeDesktopRelayWrite(slices, state)
+  return write
 }

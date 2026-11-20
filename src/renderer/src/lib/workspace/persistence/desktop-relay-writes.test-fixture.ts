@@ -101,13 +101,22 @@ export function inMemoryMain() {
   return { api, partitions, fenced, stored, sentHosts }
 }
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: relay completeness reads only the parked partition's presence and tab ids.
+const PARKED_PARTITION = {
+  tabsByWorktree: { 'other::/p': [makeTab({ id: 'tab-p', worktreeId: 'other::/p' })] }
+} as WorkspaceSessionState
+
 function sshState(status: 'connected' | 'disconnected') {
   return { targetId: 'conn-1', status, error: null, reconnectAttempt: 0 }
 }
 
 export async function windowSavingTo(
   main: ReturnType<typeof inMemoryMain>,
-  { listed = true, repo = SSH_REPO }: { listed?: boolean; repo?: Repo } = {}
+  {
+    listed = true,
+    repo = SSH_REPO,
+    parked = false
+  }: { listed?: boolean; repo?: Repo; parked?: boolean } = {}
 ) {
   probeDesktopRelays(main.api)
   await vi.advanceTimersByTimeAsync(0)
@@ -134,6 +143,12 @@ export async function windowSavingTo(
     },
     ptyIdsByTabId: { 'tab-a': ['relay-a'] },
     sshConnectionStates: new Map([['conn-1', sshState('connected')]]),
+    // Parked: the SSH partition also holds another host's workspace, so the window can't speak for it in full.
+    ...(parked
+      ? {
+          contestedHostWorkspaceSessions: { [SSH_HOST]: PARKED_PARTITION }
+        }
+      : {}),
     workspaceSessionReady: true,
     hydrationSucceeded: true
   })
