@@ -130,7 +130,14 @@ export default function TerminalSearch({
 
       if (e.key === 'Escape') {
         onClose()
-      } else if (e.key === 'Enter' && e.shiftKey) {
+        return
+      }
+      // Why: Enter on a toggle button must only activate that button, not also
+      // navigate matches with the options it is about to change.
+      if (!(e.target instanceof HTMLInputElement)) {
+        return
+      }
+      if (e.key === 'Enter' && e.shiftKey) {
         findPrevious()
       } else if (e.key === 'Enter') {
         findNext()

@@ -90,4 +90,24 @@ describe('TerminalSearch whole-word matching', () => {
       vi.mocked(addon.findNext).mock.invocationCallOrder[0]
     )
   })
+
+  it('navigates matches on Enter only from the search input', async () => {
+    const { addon } = createSearchAddon()
+    const view = renderSearch(addon, 'foo')
+    await waitFor(() => expect(addon.findNext).toHaveBeenCalled())
+    vi.mocked(addon.findNext).mockClear()
+    vi.mocked(addon.findPrevious).mockClear()
+
+    const toggle = view.getByTitle('Match Whole Word')
+    fireEvent.keyDown(toggle, { key: 'Enter' })
+    fireEvent.keyDown(toggle, { key: 'Enter', shiftKey: true })
+    expect(addon.findNext).not.toHaveBeenCalled()
+    expect(addon.findPrevious).not.toHaveBeenCalled()
+
+    const input = view.getByPlaceholderText('Search...')
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(addon.findNext).toHaveBeenCalledTimes(1)
+    fireEvent.keyDown(input, { key: 'Enter', shiftKey: true })
+    expect(addon.findPrevious).toHaveBeenCalledTimes(1)
+  })
 })
