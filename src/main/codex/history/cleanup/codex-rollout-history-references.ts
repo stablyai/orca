@@ -1,12 +1,12 @@
-import { readdir, readlink, realpath, stat } from 'node:fs/promises'
+import { readdir, realpath } from 'node:fs/promises'
 import type { Dirent } from 'node:fs'
-import { join, resolve, dirname } from 'node:path'
+import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
-import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { codexPhysicalRolloutId } from '../../../native-chat/transcript-history/codex/codex-rollout-history-source'
 import { readHistoryBase } from './codex-rollout-history-base-header'
 import { createCodexRolloutFolderStamps } from './codex-rollout-folder-stamps'
 import { isNamedOn, recentDates } from './codex-rollout-recent-dates'
+import { linksIntoWsl, lstatUnlessAbsent, statUnlessAbsent } from './codex-rollout-path-probes'
 import {
   loadCodexRolloutHistoryBaseCache,
   type CodexRolloutHistoryBaseCache
@@ -30,31 +30,11 @@ export type CodexRolloutHistoryReferences = {
   isReferenced(rolloutId: string): boolean
   /** Drops a deleted rollout; returns the parent it was the last fork of, if any. */
   forget(rolloutId: string): string | null
-  /** Unlinks a rollout name; this sweep's own deletions don't make its folder read as changed. */
-  unlink(path: string): Promise<void>
   save(): Promise<void>
 }
 
 /** A folder, rollout or link to read again: it couldn't be settled yet. */
 type Pending = { kind: 'folder' | 'rollout' | 'link'; rolloutId: string | null; recursive: boolean }
-
-/** Null when absent; undefined when it can't be told. */
-async function statUnlessAbsent(path: string) {
-  try {
-    return await stat(path)
-  } catch (error) {
-    return isDefinitiveAbsence(error) ? null : undefined
-  }
-}
-
-/** Whether a link points into a WSL distro, told from its text alone: touching it can start one. */
-async function linksIntoWsl(path: string): Promise<boolean> {
-  if (process.platform !== 'win32') {
-    return false
-  }
-  const target = await readlink(path).catch(() => null)
-  return target !== null && parseWslUncPath(resolve(dirname(path), target)) !== null
-}
 
 export function createCodexRolloutHistoryReferences(
   signal?: AbortSignal
@@ -62,12 +42,16 @@ export function createCodexRolloutHistoryReferences(
   let cache: CodexRolloutHistoryBaseCache | undefined
   let warned = false
   let pruned = false
+  // A rollout listed but gone when read was moved (archived, unarchived) or deleted meanwhile.
+  let moved = false
   const seen = new Set<string>()
   const childrenByBase = new Map<string, Set<string>>()
   const baseByChild = new Map<string, string>()
   // Real sessions/archived_sessions folders read in full.
   const walkedRoots = new Set<string>()
   const stamps = createCodexRolloutFolderStamps()
+  // Each archived_sessions folder's names when last listed.
+  const listedNames = new Map<string, Set<string>>()
   // Read again on every pass; while any is left, no rollout is proven unreferenced.
   const pending = new Map<string, Pending>()
   // Recently named rollout links with no target: a target can appear without a folder changing.
@@ -95,6 +79,10 @@ export function createCodexRolloutHistoryReferences(
       return true
     }
     const header = await readHistoryBase(path)
+    if (header === 'failed' || header === 'vanished') {
+      moved ||= header === 'vanished'
+      return header === 'vanished'
+    }
     if (header === 'unreadable' || !header.settled) {
       const modified = (await statUnlessAbsent(path))?.mtimeMs ?? 0
       // A header still being written may name a base. An old one never will, and Codex's own
@@ -183,29 +171,60 @@ export function createCodexRolloutHistoryReferences(
     return true
   }
 
-  /** Lists a folder again only when its entries changed since the last listing. */
-  const relist = async (folder: string, visited: Set<string>): Promise<boolean> => {
+  /** Lists a folder again only when its entries changed since the last listing; false: failed. */
+  const relist = async (folder: string, visited: Set<string>) => {
     const statAt = Date.now()
     const entry = await statUnlessAbsent(folder)
     if (entry === undefined || entry === null) {
-      return entry === null
+      return entry === null && 'current'
     }
     if (stamps.isCurrent(folder, entry.mtimeMs)) {
-      return true
+      return 'current'
     }
     const listed = await walk(folder, visited, false)
     if (listed) {
       stamps.listed(folder, entry.mtimeMs, statAt)
     }
-    return listed
+    return listed && 'listed'
+  }
+
+  /** Reads the names a flat folder gained since its last listing: names only, no stat per entry. */
+  const relistNames = async (folder: string, visited: Set<string>): Promise<boolean> => {
+    let names: string[]
+    try {
+      names = await readdir(folder)
+    } catch (error) {
+      return isDefinitiveAbsence(error)
+    }
+    const known = listedNames.get(folder)
+    for (const name of names) {
+      const rolloutId = codexPhysicalRolloutId(name)
+      if (known?.has(name) || (rolloutId && seen.has(rolloutId))) {
+        continue
+      }
+      signal?.throwIfAborted()
+      const path = join(folder, name)
+      const entry = await lstatUnlessAbsent(path)
+      if (entry === undefined) {
+        pending.set(path, { kind: 'link', rolloutId, recursive: false })
+      } else if (entry?.isFile() && rolloutId) {
+        await visit(path, { kind: 'rollout', rolloutId, recursive: false }, visited)
+      } else if (entry?.isSymbolicLink()) {
+        await visit(path, { kind: 'link', rolloutId, recursive: false }, visited)
+      }
+    }
+    listedNames.set(folder, new Set(names))
+    return true
   }
 
   const update = async (homes: readonly string[], recent: boolean): Promise<boolean> => {
     try {
+      signal?.throwIfAborted()
       cache ??= await loadCodexRolloutHistoryBaseCache()
       const visited = new Set<string>()
       const dates = recentDates()
       for (const [path, entry] of Array.from(pending)) {
+        signal?.throwIfAborted()
         await visit(path, entry, visited)
       }
       if (recent) {
@@ -218,9 +237,14 @@ export function createCodexRolloutHistoryReferences(
         }
       }
       let complete = true
+      // A rollout reaches archived_sessions only by moving out of a dated folder, which changes it.
+      let datedFolderChanged = false
       for (const home of homes) {
         for (const name of ['sessions', 'archived_sessions']) {
           let root: string
+          if (await linksIntoWsl(join(home, name))) {
+            continue
+          }
           try {
             root = await realpath(join(home, name))
           } catch (error) {
@@ -237,17 +261,25 @@ export function createCodexRolloutHistoryReferences(
             if (walked) {
               walkedRoots.add(root)
             }
-          } else if (recent) {
-            // New rollouts land in today's dated folders; archiving moves them to the flat folder.
-            const folders =
-              name === 'sessions' ? dates.map((parts) => join(root, ...parts)) : [root]
-            for (const folder of folders) {
-              complete = (await relist(folder, visited)) && complete
+          } else if (recent && name === 'sessions') {
+            // New rollouts land in today's dated folders.
+            for (const parts of dates) {
+              const relisted = await relist(join(root, ...parts), visited)
+              complete &&= relisted !== false
+              datedFolderChanged ||= relisted === 'listed'
             }
+          } else if (recent && datedFolderChanged) {
+            // Orca's own deletions change archived_sessions too: those never set this off.
+            complete = (await relistNames(root, visited)) && complete
           }
         }
       }
-      complete &&= pending.size === 0
+      complete &&= pending.size === 0 && !moved
+      if (moved) {
+        // It is somewhere this sweep may not look again: the next pass reads every folder anew.
+        moved = false
+        walkedRoots.clear()
+      }
       // Once every folder was read in full, cached rollouts no home has any more drop out.
       if (complete && !pruned) {
         pruned = true
@@ -279,7 +311,6 @@ export function createCodexRolloutHistoryReferences(
       children?.delete(rolloutId)
       return children?.size === 0 ? base : null
     },
-    unlink: stamps.unlink,
     save: async () => {
       await cache?.save()
     }

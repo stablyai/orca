@@ -3,6 +3,7 @@ import {
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  renameSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -260,6 +261,49 @@ describe('deleteCodexRolloutsPermanently with forked chats', () => {
     await sweep()
 
     expect(exists(nextParent)).toBe(true)
+  })
+})
+
+describe('deleteCodexRolloutsPermanently with a fork archived during the sweep', () => {
+  it('keeps the parent of a fork created and archived between two deletions', async () => {
+    root = mkdtempSync(join(tmpdir(), 'orca-codex-history-'))
+    vi.stubEnv('ORCA_USER_DATA_PATH', join(root, 'user-data'))
+    const home = join(root, 'codex')
+    mkdirSync(join(home, 'thread-writer-locks'), { recursive: true })
+    mkdirSync(join(home, 'archived_sessions'), { recursive: true })
+    const now = new Date()
+    const today = join(
+      home,
+      'sessions',
+      String(now.getFullYear()),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0')
+    )
+    mkdirSync(today, { recursive: true })
+    // Settled long ago, so a later listing of it isn't repeated unless it changes.
+    utimesSync(today, WRITTEN, WRITTEN)
+    utimesSync(join(home, 'archived_sessions'), WRITTEN, WRITTEN)
+    const first = write(join(home, ...DATED, NAME('d')), rollout('/gone'))
+    const parent = write(join(home, ...DATED, NAME('e')), rollout('/gone'))
+    const fork = `${JSON.stringify({
+      type: 'session_meta',
+      payload: { history_base: { thread_id: '0000000e-0000-4000-8000-000000000000' } }
+    })}\n`
+
+    await deleteCodexRolloutsPermanently(
+      [first, parent].map((filePath) => ({ agent: 'codex', filePath })),
+      async ({ filePath }) => {
+        if (filePath === parent) {
+          // Codex forks the parent into today's folder, then the user archives the fork.
+          const forked = write(join(today, NAME('f')), fork)
+          renameSync(forked, join(home, 'archived_sessions', NAME('f')))
+        }
+        return true
+      },
+      async () => ({ homes: [home], protectedRoots: [] })
+    )
+
+    expect([first, parent].filter(exists)).toEqual([parent])
   })
 })
 

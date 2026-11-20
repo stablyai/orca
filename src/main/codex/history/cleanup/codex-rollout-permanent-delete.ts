@@ -1,11 +1,11 @@
-import { lstat, realpath, rm, stat } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { rm, unlink } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { AiVaultAgent } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
 import { invalidateDeletedAiVaultSessionPaths } from '../../../ai-vault/deletion/host-session-delete'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { resolveOrcaManagedCodexHomePath } from '../../configuration/homes/codex-home-paths'
-import { rolloutNames, rolloutStem, type RolloutName } from './codex-rollout-names'
+import { rolloutNames, rolloutStem } from './codex-rollout-names'
+import { freedBytesOf, readName, readNames, type NameState } from './codex-rollout-name-states'
 import { holdCodexRolloutForDeletion } from '../rollouts/codex-rollout-deletion-guard'
 import { forgetCodexHistoryDiskUsage } from '../disk-usage/codex-history-disk-usage'
 import { isOpenInCodex } from './codex-rollout-writer-lock'
@@ -24,93 +24,16 @@ import {
 type RolloutTarget = { agent: AiVaultAgent; filePath: string }
 type DeleteResult = { deleted: number; failed: number; freedBytes: number }
 
-/** One name as found: what it reads (a link's target), and enough to tell if it changed. */
-type NameState = {
-  name: RolloutName
-  path: string
-  isHardLink: boolean
-  /** dev:ino of the file it reads; null for a dangling link. */
-  content: string | null
-  version: string
-  size: number
-  nlink: bigint
-}
-
-/** Null when absent; throws when it can't be proven absent, is no file, or leaves its home. */
-async function readName(name: RolloutName): Promise<NameState | null> {
-  let entry
-  try {
-    entry = await lstat(name.path, { bigint: true })
-  } catch (error) {
-    if (isDefinitiveAbsence(error)) {
-      return null
-    }
-    throw error
-  }
-  if (!entry.isFile() && !entry.isSymbolicLink()) {
-    throw new Error(`Not a rollout file: ${name.path}`)
-  }
-  // A dated folder linked elsewhere puts the name outside this home.
-  const [realFolder, realRoot] = await Promise.all([
-    realpath(dirname(name.path)),
-    realpath(name.root)
-  ])
-  if (!isPathInsideOrEqual(realRoot, realFolder)) {
-    throw new Error(`Rollout outside its Codex home: ${name.path}`)
-  }
-  const target = entry.isSymbolicLink()
-    ? await stat(name.path, { bigint: true }).catch((error: unknown) => {
-        if (isDefinitiveAbsence(error)) {
-          return null
-        }
-        throw error
-      })
-    : entry
-  return {
-    name,
-    path: name.path,
-    isHardLink: entry.isFile(),
-    // Some filesystems report inode 0 for every file: those names are checked one by one.
-    content: target
-      ? target.ino === 0n
-        ? `path:${name.path}`
-        : `${target.dev}:${target.ino}`
-      : null,
-    version: [
-      entry.ino,
-      entry.size,
-      entry.mtimeNs,
-      target?.ino,
-      target?.size,
-      target?.mtimeNs
-    ].join(':'),
-    size: Number(target?.size ?? 0n),
-    nlink: entry.nlink
-  }
-}
-
-async function readNames(names: readonly RolloutName[]): Promise<NameState[]> {
-  const states: NameState[] = []
-  for (const name of names) {
-    const state = await readName(name)
-    if (state) {
-      states.push(state)
-    }
-  }
-  return states
-}
-
 async function removeName(
   path: string,
-  protectedRoots: readonly ProtectedRoot[],
-  references: CodexRolloutHistoryReferences
+  protectedRoots: readonly ProtectedRoot[]
 ): Promise<boolean> {
   try {
     if (!(await isOutsideProtectedRoots(path, protectedRoots))) {
       return false
     }
     // Unlink only ever removes the name: never a folder, never a link's target.
-    await references.unlink(path)
+    await unlink(path)
     return true
   } catch (error) {
     if (isDefinitiveAbsence(error)) {
@@ -118,25 +41,6 @@ async function removeName(
     }
     throw error
   }
-}
-
-/** Space returns only when a file's last link goes, so each file counts once and only then. */
-function freedBytesOf(removed: readonly NameState[]): number {
-  const linksByContent = new Map<string, { state: NameState; removed: number }>()
-  for (const state of removed) {
-    if (state.isHardLink && state.content) {
-      const tally = linksByContent.get(state.content) ?? { state, removed: 0 }
-      tally.removed += 1
-      linksByContent.set(state.content, tally)
-    }
-  }
-  let bytes = 0
-  for (const { state, removed: count } of linksByContent.values()) {
-    if (BigInt(count) >= state.nlink) {
-      bytes += state.size
-    }
-  }
-  return bytes
 }
 
 async function removeCopyMarker(
@@ -149,6 +53,8 @@ async function removeCopyMarker(
 }
 
 type DeleteOutcome = 'done' | { referencedId: string }
+
+const SLOW_REFRESH_MS = 100
 
 async function deleteRollout(
   target: RolloutTarget,
@@ -190,17 +96,20 @@ async function deleteRollout(
     }
     const found = await readNames(names)
     // Every name, every extension: a chat resumed or still written anywhere keeps them all.
-    const checked = new Set<string>()
-    for (const state of found) {
-      if (state.content === null || checked.has(state.content)) {
-        continue
+    const stillEligible = async (): Promise<boolean> => {
+      const checked = new Set<string>()
+      for (const state of found) {
+        if (state.content === null || checked.has(state.content)) {
+          continue
+        }
+        checked.add(state.content)
+        if (!(await shouldDelete({ agent: 'codex', filePath: state.path }))) {
+          return false
+        }
       }
-      checked.add(state.content)
-      if (!(await shouldDelete({ agent: 'codex', filePath: state.path }))) {
-        return 'done'
-      }
+      return checked.size > 0
     }
-    if (checked.size === 0) {
+    if (!(await stillEligible())) {
       return 'done'
     }
     // Reading takes a while: a name that appeared or changed meanwhile means the chat is in use.
@@ -213,11 +122,17 @@ async function deleteRollout(
       return 'done'
     }
     // The checks above take a while: a fork Codex started meanwhile is in today's folders.
+    const refreshedAt = Date.now()
     if (!(await references.refresh(homes))) {
       return 'done'
     }
     if (references.isReferenced(rolloutId)) {
       return { referencedId: rolloutId }
+    }
+    // A slow refresh (folders re-read) leaves the eligibility above stale: the workspace or setting
+    // may have changed meanwhile.
+    if (Date.now() - refreshedAt > SLOW_REFRESH_MS && !(await stillEligible())) {
+      return 'done'
     }
     const removed: NameState[] = []
     // Links first: removing a link's target first would read as the link having changed.
@@ -233,7 +148,7 @@ async function deleteRollout(
           return 'done'
         }
         // A name reached into the import folder stays: the user's copy survives there anyway.
-        if (await removeName(state.path, protectedRoots, references)) {
+        if (await removeName(state.path, protectedRoots)) {
           removed.push(state)
           deletedPaths.push(state.path)
         }
@@ -286,9 +201,18 @@ export async function deleteCodexRolloutsPermanently(
   const deletedPaths: string[] = []
   const references = sweepReferences ?? createCodexRolloutHistoryReferences()
   try {
-    // The first full read happens here, before any rollout is held from a resume.
+    // The first full read happens here, before any rollout is held from a resume, and only when
+    // some target isn't open in Codex: those are skipped before anything else is read.
     await listHomes()
-      .then(({ homes }) => references.prepare(homes))
+      .then(async ({ homes }) => {
+        for (const target of targets) {
+          const stem = rolloutStem(homes, target.filePath)
+          if (stem && !(await isOpenInCodex(homes, stem))) {
+            await references.prepare(homes)
+            return
+          }
+        }
+      })
       .catch((error: unknown) => {
         if (error instanceof Error && error.name === 'AbortError') {
           throw error
