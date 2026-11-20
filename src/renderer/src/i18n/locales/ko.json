@@ -20563,7 +20563,8 @@
         "label": "이 기기의 브라우저",
         "destination": "{{host}}용 브라우저로 가져옵니다.",
         "hostAgents": "{{host}}의 에이전트는 이 로그인을 사용할 수 있지만 쿠키를 읽을 수는 없습니다.",
-        "stored": "{{host}}용 브라우저에 저장했습니다."
+        "stored": "{{host}}용 브라우저에 저장했습니다.",
+        "googleCookiesSkipped": "Google 쿠키는 가져오지 않았습니다. {{host}}를 통해 탐색하는 페이지를 열고 Google에 로그인하세요."
       }
     },
     "passwords": {

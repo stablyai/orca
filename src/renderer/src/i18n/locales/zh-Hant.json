@@ -481,7 +481,8 @@
         "label": "此裝置上的瀏覽器",
         "destination": "匯入到 {{host}} 的瀏覽器。",
         "hostAgents": "{{host}} 上的代理程式可以使用這些登入狀態，但無法讀取 Cookie。",
-        "stored": "已儲存到 {{host}} 的瀏覽器。"
+        "stored": "已儲存到 {{host}} 的瀏覽器。",
+        "googleCookiesSkipped": "未匯入 Google Cookie。請開啟一個透過 {{host}} 瀏覽的頁面，然後登入 Google。"
       }
     },
     "passwords": {

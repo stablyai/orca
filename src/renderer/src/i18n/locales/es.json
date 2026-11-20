@@ -21158,7 +21158,8 @@
         "label": "Navegadores en este dispositivo",
         "destination": "Importa al navegador de {{host}}.",
         "hostAgents": "Los agentes en {{host}} pueden usar estos inicios de sesión, pero no pueden leer las cookies.",
-        "stored": "Guardado en el navegador de {{host}}."
+        "stored": "Guardado en el navegador de {{host}}.",
+        "googleCookiesSkipped": "No se importaron las cookies de Google. Abre una página que navegue a través de {{host}} e inicia sesión en Google."
       }
     },
     "passwords": {

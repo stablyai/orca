@@ -21,7 +21,10 @@ import { useAppStore } from '@/store/index'
 import { isLinuxUserAgent, isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { getBrowserCookieImportSourceLabels } from '../../../../../../shared/browser/cookies/browser-cookie-import-sources'
 import { shouldShowBrowserImportHint } from './browser-import-hint-visibility'
-import { useBrowserPageSshCookieImportRoute } from './use-browser-page-ssh-cookie-import-route'
+import {
+  useBrowserPageCookieImportBrowsers,
+  useBrowserPageSshCookieImportRoute
+} from './use-browser-page-ssh-cookie-import-route'
 import { formatBrowserImportSummary } from './browser-detected-browsers-summary'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
@@ -43,9 +46,8 @@ export function BrowserImportHintButton({
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
   const browserImportHintHidden = useAppStore((s) => s.browserImportHintHidden)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
-  const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
-  const detectedBrowsersLoaded = useAppStore((s) => s.detectedBrowsersLoaded)
-  const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
+  const { detectedBrowsers, detectedBrowsersLoaded, fetchDetectedBrowsers } =
+    useBrowserPageCookieImportBrowsers(sshRoute)
   const importCookiesFromBrowser = useAppStore((s) => s.importCookiesFromBrowser)
   const importCookiesToProfile = useAppStore((s) => s.importCookiesToProfile)
   const setBrowserImportHintHidden = useAppStore((s) => s.setBrowserImportHintHidden)

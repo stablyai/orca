@@ -45,7 +45,11 @@ async function importIntoSshRoutePartition(
     return browserCookieImportFailure('sshHostDisconnected')
   }
   const imported = await importIntoRoutePartition(
-    { resolvePartition, routeChanged: () => browserCookieImportFailure('sshHostDisconnected') },
+    {
+      bindPartition: resolvePartition,
+      currentPartition: resolvePartition,
+      routeChanged: () => browserCookieImportFailure('sshHostDisconnected')
+    },
     resolveSource
   )
   // No profile badge: the profile's own jar is unchanged.

@@ -21,12 +21,14 @@ type RouteCookieImportSuccess = Extract<BrowserCookieImportResult, { ok: true }>
 
 /**
  * Route partitions (SSH and This-device pages) are the page's own jar, not the profile's.
- * `resolvePartition` names the jar now (null when the route is gone, throws when it can't
- * take cookies); it runs again after the import so a route that moved meanwhile fails.
+ * `bindPartition` names the jar the request was made for (null when the route is gone, throws
+ * when it can't take cookies); `currentPartition` names it after the import, so a route that
+ * moved meanwhile fails instead of reporting another jar's success.
  */
 export async function importIntoRoutePartition(
   destination: {
-    resolvePartition: () => string | null
+    bindPartition: () => string | null
+    currentPartition: () => string | null
     routeChanged: (settled: string | null) => BrowserCookieImportFailure
   },
   resolveSource: () => Promise<RouteCookieImportSource | BrowserCookieImportFailure>
@@ -45,7 +47,7 @@ export async function importIntoRoutePartition(
   }
   let partition: string | null
   try {
-    partition = destination.resolvePartition()
+    partition = destination.bindPartition()
   } catch (error) {
     return { ok: false, reason: error instanceof Error ? error.message : String(error) }
   }
@@ -57,7 +59,7 @@ export async function importIntoRoutePartition(
   const result = await source.importInto(partition)
   let settled: string | null
   try {
-    settled = destination.resolvePartition()
+    settled = destination.currentPartition()
   } catch {
     settled = null
   }

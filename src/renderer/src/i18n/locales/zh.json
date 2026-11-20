@@ -22602,7 +22602,8 @@
         "label": "此设备上的浏览器",
         "destination": "导入到 {{host}} 的浏览器。",
         "hostAgents": "{{host}} 上的智能体可以使用这些登录状态，但无法读取 Cookie。",
-        "stored": "已存储到 {{host}} 的浏览器。"
+        "stored": "已存储到 {{host}} 的浏览器。",
+        "googleCookiesSkipped": "未导入 Google Cookie。请打开一个通过 {{host}} 浏览的页面，然后登录 Google。"
       }
     },
     "googleCookieClear": {

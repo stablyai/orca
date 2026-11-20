@@ -265,7 +265,8 @@
         "label": "Navigateurs sur cet appareil",
         "destination": "Importe dans le navigateur de {{host}}.",
         "hostAgents": "Les agents sur {{host}} peuvent utiliser ces connexions, mais ne peuvent pas lire les cookies.",
-        "stored": "Enregistré dans le navigateur de {{host}}."
+        "stored": "Enregistré dans le navigateur de {{host}}.",
+        "googleCookiesSkipped": "Les cookies Google n’ont pas été importés. Ouvrez une page qui navigue via {{host}}, puis connectez-vous à Google."
       }
     },
     "passwords": {

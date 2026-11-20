@@ -23,7 +23,10 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { BrowserChromeOverflowMenuProps } from './browser-chrome-toolbar'
 import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
 import { applyBrowserViewportPreset } from '../viewport/browser-viewport-preset-apply'
-import { useBrowserPageSshCookieImportRoute } from '../profile-routing/use-browser-page-ssh-cookie-import-route'
+import {
+  useBrowserPageCookieImportBrowsers,
+  useBrowserPageSshCookieImportRoute
+} from '../profile-routing/use-browser-page-ssh-cookie-import-route'
 
 type BrowserToolbarMenuProps = {
   currentProfileId: string | null
@@ -60,12 +63,11 @@ export function BrowserToolbarMenu({
   const t = useTranslate()
   const sshRoute = useBrowserPageSshCookieImportRoute(worktreeId)
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
-  const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
   const switchBrowserTabProfile = useAppStore((s) => s.switchBrowserTabProfile)
   const createBrowserSessionProfile = useAppStore((s) => s.createBrowserSessionProfile)
   const importCookiesFromBrowser = useAppStore((s) => s.importCookiesFromBrowser)
   const importCookiesToProfile = useAppStore((s) => s.importCookiesToProfile)
-  const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
+  const { detectedBrowsers, fetchDetectedBrowsers } = useBrowserPageCookieImportBrowsers(sshRoute)
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
   const browserCookieTourStepActive = useAppStore(
     (s) => s.activeContextualTourId === 'browser' && s.activeContextualTourStepIndex === 1

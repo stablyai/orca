@@ -510,7 +510,8 @@
         "label": "Bu cihazdaki tarayıcılar",
         "destination": "{{host}} tarayıcısına içe aktarır.",
         "hostAgents": "{{host}} üzerindeki ajanlar bu oturumları kullanabilir ancak çerezleri okuyamaz.",
-        "stored": "{{host}} tarayıcısında saklandı."
+        "stored": "{{host}} tarayıcısında saklandı.",
+        "googleCookiesSkipped": "Google çerezleri içe aktarılmadı. {{host}} üzerinden gezinen bir sayfa açın, ardından Google'da oturum açın."
       }
     },
     "passwords": {

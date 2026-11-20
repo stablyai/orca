@@ -21922,8 +21922,9 @@
       "sshPage": {
         "label": "このデバイスのブラウザ",
         "destination": "{{host}} 用のブラウザにインポートします。",
-        "hostAgents": "{{host}} のエージェントはこれらのサインインを使用できますが、Cookie を読み取ることはできません。",
-        "stored": "{{host}} 用のブラウザに保存しました。"
+        "hostAgents": "{{host}} の Agent はこれらのサインインを使用できますが、Cookie を読み取ることはできません。",
+        "stored": "{{host}} 用のブラウザに保存しました。",
+        "googleCookiesSkipped": "Google の Cookie はインポートされませんでした。{{host}} 経由で閲覧するページを開き、Google にサインインしてください。"
       }
     },
     "passwords": {

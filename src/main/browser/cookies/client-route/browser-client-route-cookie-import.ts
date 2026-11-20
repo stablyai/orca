@@ -54,7 +54,9 @@ async function importIntoClientRoutePartition(
   }
   const imported = await importIntoRoutePartition(
     {
-      resolvePartition: () => settledRoutePartition(target),
+      // Bound to the pairing the request saw; a re-pair while picking must not redirect it.
+      bindPartition: () => bindRoutePartition(routeIdentity, target.browserProfileId),
+      currentPartition: () => settledRoutePartition(target),
       // Re-pairing while picking or importing changes the destination; reject a stale success.
       routeChanged: (settled) =>
         browserCookieImportFailure(settled === null ? 'connectionEnded' : 'serverRepaired')

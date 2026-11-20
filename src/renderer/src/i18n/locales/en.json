@@ -570,7 +570,8 @@
         "label": "Browsers on this device",
         "destination": "Imports into the browser for {{host}}.",
         "hostAgents": "Agents on {{host}} can use these sign-ins, but can’t read the cookies.",
-        "stored": "Stored in the browser for {{host}}."
+        "stored": "Stored in the browser for {{host}}.",
+        "googleCookiesSkipped": "Google cookies were not imported. Open a page that browses through {{host}}, then sign into Google."
       }
     },
     "passwords": {
