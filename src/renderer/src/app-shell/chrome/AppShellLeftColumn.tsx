@@ -79,7 +79,7 @@ export function AppShellLeftColumn({
           // One stable position across views so a page switch never remounts the rail and drops keyboard focus.
           <div key="app-rail" className="flex min-h-0 shrink-0 flex-col">
             {/* The left titlebar covers this gap so the traffic-light row spans rail and list. */}
-            {shouldMount ? <div className="h-[36px] shrink-0" /> : null}
+            {shouldMount ? <div className="h-(--app-header-height) shrink-0" /> : null}
             {rail}
           </div>
         ) : null}
@@ -89,7 +89,7 @@ export function AppShellLeftColumn({
             key="worktree-list"
             className={
               railOn
-                ? `flex min-h-0 shrink-0${layout.sidebarOpen ? ' mt-[36px]' : ' w-0'}`
+                ? `flex min-h-0 shrink-0${layout.sidebarOpen ? ' mt-(--app-header-height)' : ' w-0'}`
                 : 'flex min-h-0 flex-1'
             }
           >

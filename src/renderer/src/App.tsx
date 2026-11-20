@@ -22,7 +22,7 @@ import {
   WINDOW_CONTROLS_HEIGHT,
   WINDOW_CONTROLS_WIDTH,
   hasCustomTitleBar,
-  shortcutPlatform
+  supportsLinuxTilingWindowMode
 } from './app-shell/chrome/app-window-chrome'
 import { useAppChromeLayout } from './app-shell/chrome/use-app-chrome-layout'
 import { useAppSessionPersistence } from './app-shell/storage/use-app-session-persistence'
@@ -47,12 +47,17 @@ import { useAppStore } from './store'
 
 function App(): React.JSX.Element {
   const layout = useAppChromeLayout()
-  const tilingWindowModeEnabled = useAppStore((s) => s.settings?.linuxTilingWindowMode === true)
-  const tilingWindowMode =
-    hasCustomTitleBar && shortcutPlatform === 'linux' && tilingWindowModeEnabled
+  const tilingWindowMode = useAppStore(
+    (s) => supportsLinuxTilingWindowMode && s.settings?.linuxTilingWindowMode === true
+  )
   const windowControlsWidth = tilingWindowMode ? '46px' : WINDOW_CONTROLS_WIDTH
+  const compactWorkspaceChrome = tilingWindowMode && layout.workspaceChromeActive
+  const windowControlsHeight = compactWorkspaceChrome
+    ? 'var(--workspace-tab-row-height)'
+    : WINDOW_CONTROLS_HEIGHT
   const layoutStyle: React.CSSProperties & Record<`--${string}`, string> = {
-    '--collapsed-sidebar-header-width': `${layout.collapsedSidebarHeaderWidth}px`
+    '--collapsed-sidebar-header-width': `${layout.collapsedSidebarHeaderWidth}px`,
+    ...(compactWorkspaceChrome && { '--app-header-height': windowControlsHeight })
   }
   const floatingWorkspace = useFloatingWorkspacePanel()
   const onboardingGate = useOnboardingAndFeatureTips()
@@ -78,9 +83,9 @@ function App(): React.JSX.Element {
   useLayoutEffect(() => {
     const root = document.documentElement.style
     root.setProperty('--window-controls-width', windowControlsWidth)
-    root.setProperty('--window-controls-height', WINDOW_CONTROLS_HEIGHT)
+    root.setProperty('--window-controls-height', windowControlsHeight)
     root.setProperty('--mac-traffic-lights-width', MAC_TRAFFIC_LIGHTS_WIDTH)
-  }, [windowControlsWidth])
+  }, [windowControlsHeight, windowControlsWidth])
 
   const { cancelReturnFocusFrame } = floatingWorkspace
   const setAppRootNode = useCallback(

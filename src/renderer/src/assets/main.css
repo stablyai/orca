@@ -213,6 +213,8 @@
 }
 
 :root {
+  --workspace-tab-row-height: 32px;
+  --app-header-height: 36px;
   --app-font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-sans: var(--app-font-family);
   --font-mono:
@@ -1347,13 +1349,21 @@ html.native-shell .app-layout {
   background-color: var(--editor-surface);
 }
 
-/* Beside attached tab strips the gap continues the strip (fill, then its 1px bottom border), so no
-   off-color sliver sits between two tab bars. 32px matches the strip height in TabGroupPanel. */
+/* Beside attached tab strips the gap continues the strip fill and its 1px bottom border. */
 .tab-group-split-resize-handle.is-wide.has-tab-band {
   /* The border layer sits over the strip fill, as the strip's own translucent border does. */
   background-image:
-    linear-gradient(to bottom, transparent 31px, var(--border) 31px 32px, transparent 32px),
-    linear-gradient(to bottom, var(--tab-bar, var(--card)) 0 32px, transparent 32px);
+    linear-gradient(
+      to bottom,
+      transparent calc(var(--workspace-tab-row-height) - 1px),
+      var(--border) calc(var(--workspace-tab-row-height) - 1px) var(--workspace-tab-row-height),
+      transparent var(--workspace-tab-row-height)
+    ),
+    linear-gradient(
+      to bottom,
+      var(--tab-bar, var(--card)) 0 var(--workspace-tab-row-height),
+      transparent var(--workspace-tab-row-height)
+    );
 }
 
 /* Fractional pane edges can leave a 1px row unpainted next to the gap; fill it beneath the panes. */
@@ -1416,8 +1426,8 @@ html.native-shell .app-layout {
 
 /* Reserve the same 36px baseline (4px drag strip + 32px tabs) for macOS traffic lights and sidebar chrome. */
 .titlebar-left {
-  height: 36px;
-  min-height: 36px;
+  height: var(--app-header-height);
+  min-height: var(--app-header-height);
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -1470,7 +1480,7 @@ html.native-shell .app-layout {
   z-index: 9999;
   display: flex;
   flex-direction: row;
-  height: 36px;
+  height: var(--app-header-height);
   -webkit-app-region: no-drag;
 }
 
@@ -1479,7 +1489,7 @@ html.native-shell .app-layout {
   align-items: center;
   justify-content: center;
   width: 46px;
-  height: 36px;
+  height: 100%;
   background: transparent;
   border: none;
   color: var(--muted-foreground);
@@ -1552,7 +1562,7 @@ html.native-shell .app-layout {
   padding-right: var(--window-controls-width, 0px);
 }
 
-/* Offset the side activity strip below the 36px-high fixed window controls. */
+/* Offset the side activity strip below the fixed window controls. */
 .side-activity-bar-windows-inset {
   padding-top: var(--window-controls-height, 0px);
 }
