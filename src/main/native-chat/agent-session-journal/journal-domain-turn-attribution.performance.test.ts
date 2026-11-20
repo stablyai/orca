@@ -9,7 +9,6 @@ import { runJournalTransaction } from './database/journal-database'
 import { migrateJournalDomainSchema } from './journal-domain-schema'
 import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
 import { insertJournalDomainImportedSubmission } from './journal-domain-import-submissions'
-import { readJournalDomainOperationWindow } from './journal-domain-operation-window'
 import { readJournalDomainTurnAttribution } from './journal-domain-turn-attribution'
 import { JournalSqlScope } from './journal-sql-scope'
 
@@ -164,18 +163,4 @@ it('finds the steered sends through their index, without a scan or sort', () => 
     .map((step) => String(step.detail))
   expect(plan.join('\n')).toContain('USING INDEX journal_submission_steer')
   expect(plan.join('\n')).not.toMatch(/TEMP B-TREE|^SCAN journal_submission_attempts$/m)
-})
-
-it('contrast: the operation window it replaced reads more as the send history grows', () => {
-  const windowRows = (earlier: number) => {
-    const scope = new JournalSqlScope(chat(earlier), target.sessionId, target.epoch)
-    readJournalDomainOperationWindow(scope, {
-      turnIds: ['provider-turn-target'],
-      itemIds: ['provider-turn-target'],
-      anchorsOnly: true,
-      withoutToolOutput: true
-    })
-    return scope.work.rows
-  }
-  expect(windowRows(2000)).toBeGreaterThan(windowRows(200))
 })

@@ -145,21 +145,6 @@ it("stamps a turn with its opener's delivery and each send steered into it, not 
   expect(deliveryIds(attribution.stamps)).toEqual(['delivery-open', 'delivery-steered'])
 })
 
-it("stamps a turn with only its opener's delivery when nothing was steered into it", () => {
-  const f = chat()
-  f.item('orca:open', 10, user('open', 'delivery-open'))
-  f.item('turn-1', 11, {
-    kind: 'turn',
-    turnId: 'provider-turn-1',
-    state: 'completed',
-    userItemId: 'orca:open'
-  })
-
-  const attribution = f.read('provider-turn-1')
-  expect(attribution.opener?.itemId).toBe('orca:open')
-  expect(deliveryIds(attribution.stamps)).toEqual(['delivery-open'])
-})
-
 it('proves nothing for a turn the journal does not hold', () => {
   const f = chat()
   f.item('orca:open', 10, user('open', 'delivery-open'))
@@ -171,9 +156,9 @@ it('proves nothing for a turn the journal does not hold', () => {
   })
 })
 
-it('counts no send written after the turn ended, as the turn end read it', () => {
+it('stamps the opener and excludes steers newer than the read position', () => {
   const f = chat()
-  f.item('orca:open', 10, user('open'))
+  f.item('orca:open', 10, user('open', 'delivery-open'))
   f.item('turn-1', 11, {
     kind: 'turn',
     turnId: 'provider-turn-1',
@@ -185,6 +170,11 @@ it('counts no send written after the turn ended, as the turn end read it', () =>
     via: 'steer'
   })
 
-  expect(deliveryIds(f.read('provider-turn-1', 12).stamps)).toEqual([])
-  expect(deliveryIds(f.read('provider-turn-1', 20).stamps)).toEqual(['delivery-late'])
+  const ended = f.read('provider-turn-1', 12)
+  expect(ended.opener?.itemId).toBe('orca:open')
+  expect(deliveryIds(ended.stamps)).toEqual(['delivery-open'])
+  expect(deliveryIds(f.read('provider-turn-1', 20).stamps)).toEqual([
+    'delivery-open',
+    'delivery-late'
+  ])
 })
