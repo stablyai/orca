@@ -1,0 +1,94 @@
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+
+const host = vi.hoisted(() => ({ dataDirectory: '' }))
+vi.mock('../../../../orca-profiles/profile-storage-paths', () => ({
+  getProfileUserDataPath: () => host.dataDirectory
+}))
+
+// A fresh module per test: whether launch has read the releases is module state.
+async function detection() {
+  vi.resetModules()
+  const install = await import('./managed-copy-detection')
+  const { readInstalledManagedAgents } =
+    await import('../../../../preflight/managed-agent-detection')
+  const { rememberManagedAgentRelease } =
+    await import('../../../../managed-agent-cli/managed-agent-cli-registry')
+  return { ...install, readInstalledManagedAgents, rememberManagedAgentRelease }
+}
+
+const settingsOf = (settings: Record<string, unknown>) => ({
+  requireStore: () => ({ getSettings: () => settings })
+})
+
+async function installed(folder: string): Promise<void> {
+  const release = join(host.dataDirectory, 'agent-runtimes', folder, '1.0')
+  await mkdir(release, { recursive: true })
+  await writeFile(join(release, '.install-complete.json'), '{}')
+}
+
+beforeEach(async () => {
+  host.dataDirectory = await mkdtemp(join(tmpdir(), 'orca-detect-'))
+})
+afterEach(() => rm(host.dataDirectory, { recursive: true, force: true }))
+
+it("counts Orca's installed copies before launch has read its releases, without waiting for it", async () => {
+  await installed('grok')
+  const { provideManagedAgentDetection, readInstalledManagedAgents } = await detection()
+  provideManagedAgentDetection(settingsOf({}))
+
+  expect(await readInstalledManagedAgents()).toEqual(['grok'])
+})
+
+it("reads Orca's agy from its own folder, never the legacy server's", async () => {
+  await installed('antigravity')
+  const { provideManagedAgentDetection, readInstalledManagedAgents } = await detection()
+  provideManagedAgentDetection(settingsOf({}))
+  expect(await readInstalledManagedAgents()).toEqual([])
+
+  await installed('agy')
+  expect(await readInstalledManagedAgents()).toEqual(['antigravity'])
+})
+
+it("leaves out Orca's agy while it is switched off", async () => {
+  await installed('agy')
+  const { provideManagedAgentDetection, readInstalledManagedAgents } = await detection()
+  provideManagedAgentDetection(settingsOf({ antigravityManagedAgyEnabled: false }))
+
+  expect(await readInstalledManagedAgents()).toEqual([])
+})
+
+it('answers from the remembered releases once launch has read them, not the disk', async () => {
+  await installed('grok')
+  const {
+    provideManagedAgentDetection,
+    noteManagedReleasesRead,
+    readInstalledManagedAgents,
+    rememberManagedAgentRelease
+  } = await detection()
+  provideManagedAgentDetection(settingsOf({}))
+  rememberManagedAgentRelease('grok', join(host.dataDirectory, 'agent-runtimes', 'grok', '1.0'))
+  noteManagedReleasesRead()
+  expect(await readInstalledManagedAgents()).toEqual(['grok'])
+
+  // Removed: the receipt is still on disk, but the remembered release is gone.
+  rememberManagedAgentRelease('grok', null)
+  expect(await readInstalledManagedAgents()).toEqual([])
+})
+
+it('announces a copy the disk check counted that the launch read found unusable', async () => {
+  await installed('grok')
+  const { provideManagedAgentDetection, noteManagedReleasesRead, readInstalledManagedAgents } =
+    await detection()
+  const { onAgentsRefreshedOnHost } = await import('../../../../preflight/agents-refreshed-on-host')
+  const refreshed = vi.fn()
+  onAgentsRefreshedOnHost(refreshed)
+  provideManagedAgentDetection(settingsOf({}))
+  await readInstalledManagedAgents()
+
+  noteManagedReleasesRead()
+
+  expect(refreshed).toHaveBeenCalled()
+})
