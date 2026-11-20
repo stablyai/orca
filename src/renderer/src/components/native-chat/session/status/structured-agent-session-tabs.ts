@@ -1,7 +1,7 @@
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { readTabMapChanges } from '@/store/record-transitions/keyed-record-change-reads'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 export type StructuredTab = Tab & { contentType: 'agent-session' }
 
@@ -197,9 +197,7 @@ export function getStructuredAgentSessionTabsByPaneKey(
   if (cached) {
     return cached
   }
-  const result = new Map(
-    structuredTabs.map((tab) => [structuredAgentSessionPaneKey(tab.id, tab.entityId), tab])
-  )
+  const result = new Map(structuredTabs.map((tab) => [chatPaneKey(tab.entityId), tab]))
   paneTabs.set(structuredTabs, result)
   return result
 }

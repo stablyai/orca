@@ -1,7 +1,6 @@
 // A bot row's second line: what needs the owner, else what the bot is doing or did last across its
 // own chats and threads, else what it waits for; a wait is passive and can last days, so it never hides activity.
 // The desktop sidebar and the phone's Bots list both pick it here, each reading its own agent rows.
-import { structuredAgentSessionStatusPaneKey } from '../agent-session/view/structured-agent-session-tab'
 import {
   CONNECTOR_SOURCE_NAMES,
   type ConnectorSource,
@@ -10,6 +9,7 @@ import {
 import type { BotListWait } from './bot-list-waits'
 import { newestBotActivity } from './bot-row-activity'
 import type { BotWorkspaceLiveCounts } from './bot-sidebar-workspaces'
+import { chatPaneKey } from '../agent-session/view/structured-agent-session-projection'
 
 /** Where a turn is: a thread's service and place as people name it, or (no service) a side chat's title. */
 export type BotRowPlace = { source: ConnectorSource | null; label: string }
@@ -93,9 +93,7 @@ export function selectBotRowLine<R>(
   if (input.paused) {
     return { kind: 'paused' }
   }
-  const chatPaneKey = input.chatSessionId
-    ? structuredAgentSessionStatusPaneKey(input.chatSessionId)
-    : null
+  const chatKey = input.chatSessionId ? chatPaneKey(input.chatSessionId) : null
   const linkByPaneKey = new Map(input.links.map((link) => [link.paneKey, link]))
   const sideChatByPaneKey = new Map((input.chats ?? []).map((chat) => [chat.paneKey, chat]))
   const candidates: { row: R; place: BotRowPlace | null }[] = []
@@ -107,7 +105,7 @@ export function selectBotRowLine<R>(
     const paneKey = read.paneKey(row)
     const link = linkByPaneKey.get(paneKey)
     const sideChat = sideChatByPaneKey.get(paneKey)
-    if (paneKey === chatPaneKey) {
+    if (paneKey === chatKey) {
       // First, so Home Chat wins a tie.
       candidates.unshift({ row, place: null })
     } else if (link) {

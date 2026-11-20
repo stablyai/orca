@@ -4,7 +4,6 @@ import { defineFixture } from '../../component-fixtures/component-fixture'
 import { publishBots } from '@/lib/bot-catalog-snapshot'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import WorktreeCard from '@/components/sidebar/workspace-card/surface/WorktreeCard'
-import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { Bot } from '../../../../shared/bot-types'
 import type { ExternalConversationLink } from '../../../../shared/connectors/external-conversation-link'
@@ -14,6 +13,7 @@ import { folderWorkspaceKey } from '../../../../shared/workspace/identity/worksp
 import { ConfirmationDialogProvider } from '../dismiss/confirmation/confirmation-dialog'
 import { BotRow } from './BotRow'
 import { BOT_WORKSPACE_LINE_INDENT } from './BotSidebarEntry'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const now = Date.now()
 const MIN = 60_000
@@ -62,7 +62,7 @@ function session(
   fields: Partial<AgentStatusEntry> & Pick<AgentStatusEntry, 'state' | 'updatedAt'>
 ): AgentStatusEntry {
   return {
-    paneKey: structuredAgentSessionStatusPaneKey(sessionId),
+    paneKey: chatPaneKey(sessionId),
     worktreeId: folderWorkspaceKey(owner.folderWorkspaceId),
     agentType: 'claude',
     prompt: '',
@@ -84,7 +84,7 @@ function thread(
     externalId: `T1:${sessionId}`,
     sessionId,
     agent: 'claude',
-    paneKey: structuredAgentSessionStatusPaneKey(sessionId),
+    paneKey: chatPaneKey(sessionId),
     title,
     place,
     lastTurn,
@@ -190,7 +190,7 @@ const workerAgentRows: [string, string, string, AgentStatusEntry['state']][] = [
 ]
 const workerAgents: AgentStatusEntry[] = workerAgentRows.map(
   ([worktreeId, pane, agentType, state]) => ({
-    paneKey: structuredAgentSessionStatusPaneKey(`worker-${pane}`),
+    paneKey: chatPaneKey(`worker-${pane}`),
     worktreeId,
     agentType,
     state,

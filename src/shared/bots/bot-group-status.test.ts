@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../agent-status/contracts/agent-status-types'
 import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
+  structuredAgentSessionTabId,
+  chatPaneKey
 } from '../agent-session/view/structured-agent-session-projection'
 import { botGroupStatus } from './bot-group-status'
 
@@ -15,7 +15,7 @@ const group = {
 
 function entry(sessionId: string, over: Partial<AgentStatusEntry>): [string, AgentStatusEntry] {
   const tabId = structuredAgentSessionTabId(sessionId)
-  const paneKey = structuredAgentSessionPaneKey(tabId, sessionId)
+  const paneKey = chatPaneKey(sessionId)
   return [
     paneKey,
     {

@@ -19,6 +19,7 @@ type ActivityActions = Pick<
   | 'applyActivityClearedAt'
   | 'manuallyUnreadTurnsByPaneKey'
   | 'clearManuallyUnreadTurns'
+  | 'chatReadMarksCarriedFrom'
 >
 
 const ACKNOWLEDGEMENT_REFRESH_MS = 24 * 60 * 60 * 1000
@@ -157,6 +158,7 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
         }
         return next ? { manuallyUnreadTurnsByPaneKey: next } : s
       }),
+    chatReadMarksCarriedFrom: {},
     activityClearedAtByPaneKey: {},
     applyActivityClearedAt: (patch) =>
       set((s) => {

@@ -6,12 +6,9 @@ import { useAppStore } from '@/store'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import { publishBotGroups } from '@/lib/bot-group-catalog-snapshot'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { useBotGroupRoomRead } from './use-bot-group-room-read'
 import { makeUnifiedTab } from '../../store/slices/tabs/tab-group.test-fixture'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 vi.mock('@/attention/orca-window-foreground-focus', () => ({
   isOrcaWindowForegroundFocused: () => true
@@ -85,10 +82,7 @@ describe('useBotGroupRoomRead', () => {
     act(() =>
       useAppStore.getState().markAgentAttentionUnread({
         workspaceId: 'folder:group-home',
-        subjectKey: structuredAgentSessionPaneKey(
-          structuredAgentSessionTabId('bot-group-member-thread'),
-          'bot-group-member-thread'
-        ),
+        subjectKey: chatPaneKey('bot-group-member-thread'),
         groupId: null,
         reason: 'agent-completion'
       })

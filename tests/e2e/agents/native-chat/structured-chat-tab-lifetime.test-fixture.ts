@@ -69,11 +69,8 @@ export function resolveActiveSessionTab47713<T extends SessionTabLike>(
 }
 
 import { parsePaneKey } from '../../../../src/shared/workspace-layout/stable-pane-id'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../src/shared/agent-session/view/structured-agent-session-projection'
 import type { MobileSessionTab } from '../../../../mobile/src/session/tabs/mobile-session-tabs'
+import { chatPaneKey } from '../../../../src/shared/agent-session/view/structured-agent-session-projection'
 
 // Keep native/web navigation’s pane lookup separate: importing the native sibling by name on web resolves back to the web file itself.
 export function notificationPaneTab47713(tabs: readonly MobileSessionTab[], paneKey: string) {
@@ -85,10 +82,6 @@ export function notificationPaneTab47713(tabs: readonly MobileSessionTab[], pane
     tab.type === 'terminal'
       ? (tab.parentTabId ?? tab.id) === pane.tabId && tab.leafId === pane.leafId
       : tab.type === 'agent-session' &&
-        (tab.id === pane.tabId ||
-          structuredAgentSessionPaneKey(
-            structuredAgentSessionTabId(tab.sessionId),
-            tab.sessionId
-          ) === paneKey)
+        (tab.id === pane.tabId || chatPaneKey(tab.sessionId) === paneKey)
   )
 }

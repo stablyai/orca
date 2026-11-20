@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { buildWorktreeAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-agent-rows'
-import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { ExternalConversationLink } from '../../../../shared/connectors/external-conversation-link'
 import { selectBotRowLine, type BotRowLineInput } from './bot-row-activity-line'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const NOW = 1_000_000_000_000
 const MIN = 60_000
@@ -14,7 +14,7 @@ function session(
   fields: Partial<AgentStatusEntry> & Pick<AgentStatusEntry, 'state' | 'updatedAt'>
 ): AgentStatusEntry {
   return {
-    paneKey: structuredAgentSessionStatusPaneKey(sessionId),
+    paneKey: chatPaneKey(sessionId),
     worktreeId: HOME,
     agentType: 'claude',
     prompt: 'the ask',
@@ -34,7 +34,7 @@ function link(
     externalId: `T1:${sessionId}`,
     sessionId,
     agent: 'claude',
-    paneKey: structuredAgentSessionStatusPaneKey(sessionId),
+    paneKey: chatPaneKey(sessionId),
     lastTurn: 'conversation',
     ...fields,
     createdAt: NOW - 60 * MIN
@@ -60,9 +60,7 @@ function line(entries: AgentStatusEntry[], input: Partial<BotRowLineInput> = {})
 
 describe('selectBotRowLine', () => {
   // As the host lists them (`bots.chats.own`): automation runs are never among them.
-  const chats = [
-    { title: 'Plan the launch', paneKey: structuredAgentSessionStatusPaneKey('side-chat') }
-  ]
+  const chats = [{ title: 'Plan the launch', paneKey: chatPaneKey('side-chat') }]
 
   it('prefers Home Chat when a thread and side chat tie', () => {
     expect(

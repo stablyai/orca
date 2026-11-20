@@ -3,8 +3,8 @@ import type { OrchestrationSessionWorker } from '../../../../../../shared/orches
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 import { createOrchestrationWorkerReleaseHarness } from './testing/worker-release.test-support'
 import type { AgentStatusIpcPayload } from '../../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import { structuredAgentSessionStatusPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
 import { readConnectorWorkerActivity } from './connector-worker-activity'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   sessionWorkerActivity,
   sessionWorkerState,
@@ -213,7 +213,7 @@ describe('a worker on a paired server', () => {
 describe('sessionWorkerActivity', () => {
   const live = { verdict: 'live', observedAt: 1, source: 'agent_status' } as const
   const chatRows = (state: AgentStatusIpcPayload['state']) =>
-    new Map([[structuredAgentSessionStatusPaneKey('codex-chat'), { state }]])
+    new Map([[chatPaneKey('codex-chat'), { state }]])
   const stage = (activity: 'working' | 'done' | 'unknown') => ({
     worker: 'running',
     dispatch: 'dispatched',

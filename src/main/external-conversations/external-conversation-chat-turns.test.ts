@@ -2,11 +2,11 @@ import { mailStartedBot } from './external-conversation-prompt-turns.test-fixtur
 import { describe, expect, it, vi } from 'vitest'
 import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
-import { chatPaneKey } from './external-conversation-chat'
 import { ChatTurns } from './external-conversation-chat-turns'
 import { ChatDeliveries } from './external-conversation-chat-delivery'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { ConversationEvent } from './external-conversation-events'
+import { chatPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
 
 const SESSION = 'session-1'
 

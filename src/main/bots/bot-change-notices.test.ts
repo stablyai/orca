@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { AgentTransitionDetector } from '../agent-hooks/observations/agent-transition-detector'
-import { structuredAgentSessionStatusPaneKey } from '../../shared/agent-session/view/structured-agent-session-tab'
 import {
   botPhaseChangeScopes,
   BotChangeNotices,
@@ -9,6 +8,7 @@ import {
   followWorktreeLifecycleForBots
 } from './bot-change-notices'
 import { botChangeBotIds, botChangeConcerns } from '../../shared/bots/bot-change-scope'
+import { chatPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn(() => ({})) }))
@@ -196,7 +196,7 @@ describe('followAgentPhasesForBots', () => {
 })
 
 describe('botPhaseChangeScopes', () => {
-  const chat = structuredAgentSessionStatusPaneKey('session-1')
+  const chat = chatPaneKey('session-1')
   const facts = {
     botOfWorkspace: () => null,
     botOfPane: (paneKey: string) => (paneKey === chat ? 'bot-a' : null),
@@ -212,7 +212,7 @@ describe('botPhaseChangeScopes', () => {
         facts
       )
     ).toEqual([{ botIds: ['bot-a'], kinds: ['status'] }])
-    const elsewhere = structuredAgentSessionStatusPaneKey('session-2')
+    const elsewhere = chatPaneKey('session-2')
     expect(
       botPhaseChangeScopes(
         { kind: 'moved', paneKey: elsewhere, workspace: { worktreeId: 'repo-1::/x' } },
@@ -253,7 +253,7 @@ describe('botPhaseChangeScopes', () => {
   })
 
   it("tells the groups of a member's phase in a group room", () => {
-    const member = structuredAgentSessionStatusPaneKey('session-room')
+    const member = chatPaneKey('session-room')
     expect(
       botPhaseChangeScopes({ kind: 'moved', paneKey: member, workspace: null }, facts)
     ).toEqual([{ kinds: ['groups'] }])

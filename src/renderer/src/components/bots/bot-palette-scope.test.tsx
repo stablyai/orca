@@ -17,6 +17,7 @@ import { PALETTE_CLOSE_LINGER_MS } from '../worktree-jump/worktree-jump-palette-
 import type { BotListWait } from '../../../../shared/bots/bot-list-waits'
 import * as composerFocus from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import { stampBotHost } from '@/lib/bot-catalog-snapshot'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   makeFolderWorkspace,
   makeAgentEntry,
@@ -24,7 +25,6 @@ import {
   makeUnifiedTab,
   makeWorktree
 } from '../worktree-jump/worktree-jump-palette-test-fixtures'
-import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 
 const purposeMocks = vi.hoisted(() => ({ purposes: new Map<string, string>() }))
 const openMocks = vi.hoisted(() => {
@@ -472,7 +472,7 @@ describe('Cmd+K @ shows only bots', () => {
     const state = botState([{ id: 'b1', name: 'Support' }])
     mocks.bots[0] = { ...mocks.bots[0], chatSessionId: 'approval-chat' }
     const entry = makeAgentEntry('approval-chat', 'waiting', Date.now(), {
-      paneKey: structuredAgentSessionStatusPaneKey('approval-chat'),
+      paneKey: chatPaneKey('approval-chat'),
       worktreeId: 'folder:fw-b1',
       agentType: 'claude',
       lastAssistantMessage: 'Approve the release?'

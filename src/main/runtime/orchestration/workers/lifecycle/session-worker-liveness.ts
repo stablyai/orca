@@ -1,10 +1,6 @@
 import type { SessionPartyReader } from '../../addressing/session-party-reader'
 import type { FleetAgentStatusEvidence } from '../../../../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
 import type { FleetSessionObservation } from '../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isStructuredWorkerHandle } from '../../../../../shared/orchestration/workers/structured-worker-handle'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow } from '../../db/orchestration-records'
@@ -19,6 +15,7 @@ import {
 } from '../../terminal-authority/structured-sessions/structured-worker-authority'
 import { sessionIdFromStructuredWorkerIncarnation } from '../../terminal-authority/structured-sessions/structured-worker-identity'
 import { chatAssigneeSessionId, observeChatAssignee } from './chat-assignee'
+import { chatPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 export type SessionWorkerSubject = {
   agentTerminalHandle: string | null
@@ -38,9 +35,7 @@ export function createSessionWorkerLivenessReader(
   // A session's status row lives at its derived pane key, not the worker's minted one.
   const activityFor = (sessionId: string) => {
     statusByPane ??= new Map(statuses.map((status) => [status.activity.paneKey, status]))
-    return statusByPane.get(
-      structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId)
-    )
+    return statusByPane.get(chatPaneKey(sessionId))
   }
   const live = (sessionId: string): FleetSessionObservation => {
     const activity = activityFor(sessionId)

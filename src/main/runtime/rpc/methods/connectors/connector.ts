@@ -7,13 +7,13 @@ import {
 import { botReplyRefusal } from '../../../../external-conversations/external-conversation-bots'
 import { ConnectorReply } from '../../../../../shared/rpc-contract/connectors/connector-params'
 import type { ExternalConversationSeam } from '../../../../external-conversations/external-conversation-seam'
-import { chatPaneKey } from '../../../../external-conversations/external-conversation-chat'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { defineMethod } from '../../core'
 import { botTurnFor } from '../../../../bots/bot-turn-for'
 import { sessionCallerOf } from '../../../orchestration/addressing/orchestration-caller-identity'
 import { CONNECTOR_ACT_METHOD } from '../connector-act'
 import { CONNECTOR_REACT_METHOD } from '../connector-react'
+import { chatPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 export function requireSeam(
   runtime: Pick<OrcaRuntimeService, 'getExternalConversationSeam'>

@@ -10,12 +10,9 @@ import {
   parseRemoteRuntimePtyId
 } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parseAgentStatusPaneIdentity } from '../../../../shared/agent-status/identity/agent-status-worktree-attribution'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { orchestrationContextsEqual } from '@/store/slices/agent-status/orchestration/agent-status-orchestration-context'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   resolveStructuredAgentSessionOwner,
   structuredAgentSessionOwnerForTab,
@@ -80,16 +77,12 @@ function rowIdentities(state: VisibleOrchestrationState): RowIdentities {
     if (!tab.entityId) {
       continue
     }
-    const key = structuredAgentSessionPaneKey(
-      structuredAgentSessionTabId(tab.entityId),
-      tab.entityId
-    )
-    const actual = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+    const key = chatPaneKey(tab.entityId)
     const host = structuredAgentSessionOwnerForTab(state, tab)
-    canonical.set(actual, { key, host })
-    worktrees.set(actual, tab.worktreeId)
+    canonical.set(key, { key, host })
+    worktrees.set(key, tab.worktreeId)
     if (host && !aliases.has(aliasKey(host, key))) {
-      aliases.set(aliasKey(host, key), actual)
+      aliases.set(aliasKey(host, key), key)
     }
   }
   rowCache = { inputs, aliases, canonical, worktrees }

@@ -17,11 +17,8 @@ import { projectSourceControlActionLaunch } from '../../../../../src/shared/sour
 import { translate } from '../../../i18n/mobile-i18n'
 import { readAgentLaunchNotice } from '../../../session/agent-launch/agent-launch-request'
 import type { AgentLaunchResult } from '../../../../../src/shared/agent-launch/contracts/agent-launch-intent'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../../src/shared/agent-session/view/structured-agent-session-projection'
 import type { LaunchedAgentOpens } from '../../../session/agent-launch/launched-agent-opener'
+import { chatPaneKey } from '../../../../../src/shared/agent-session/view/structured-agent-session-projection'
 
 // Have the host launch and deliver AI prompts; mobile must never type them into a shell.
 
@@ -42,10 +39,7 @@ export function launchedAgentOpens(result: AgentLaunchResult): LaunchedAgentOpen
   return outcome.kind === 'structured'
     ? {
         worktreeId,
-        paneKey: structuredAgentSessionPaneKey(
-          outcome.tabId ?? structuredAgentSessionTabId(outcome.sessionId),
-          outcome.sessionId
-        )
+        paneKey: chatPaneKey(outcome.sessionId)
       }
     : { worktreeId, paneKey: outcome.paneKey ?? null }
 }

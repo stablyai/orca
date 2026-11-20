@@ -15,12 +15,13 @@ import {
   HOST_TEST_SESSION
 } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import type { ConversationBots } from './external-conversation-bots'
-import { chatPaneKey, type ConversationChatHost } from './external-conversation-chat'
+import type { ConversationChatHost } from './external-conversation-chat'
 import type { ConversationEvent, ConversationSnapshot } from './external-conversation-events'
 import { HOST_CLOCK, type ExternalConversationHost } from './external-conversation-host'
 import { agentReady, harness, installedChats } from './external-conversation-seam.test-fixture'
 import { WORKTREE } from './external-conversation.test-fixture'
 import { refused, type ConversationKey } from './external-conversation-types'
+import { chatPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
 
 // The seam over the real native-chat host: its own feed tells chat turns.
 const KEY: ConversationKey = { source: 'slack', externalId: 'T1:C9:1:U5' }

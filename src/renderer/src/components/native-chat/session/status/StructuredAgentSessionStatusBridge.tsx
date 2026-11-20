@@ -300,6 +300,10 @@ function installStatusProjection(): () => void {
     tabs = nextTabs
     return retiring
   }
+  // Cold path: only when a closed tab's conversation may still show in another workspace's tab.
+  const survivorsFromSnapshot = (
+    source: AppState['unifiedTabsByWorktree']
+  ): readonly StructuredTab[] => withBotSessions(source)
   const reconcile = (ownersChanged: boolean): void => {
     const state = useAppStore.getState()
     const source = state.unifiedTabsByWorktree
@@ -314,7 +318,11 @@ function installStatusProjection(): () => void {
         const listed = [...changes.workspaceIds].flatMap((workspaceId) => [
           ...getStructuredAgentSessionTabsInWorkspace(source, workspaceId)
         ])
-        retiring.push(...membership.reconcileTabs(listed, changes.tabIds, placeTab))
+        retiring.push(
+          ...membership.reconcileTabs(listed, changes.tabIds, placeTab, () =>
+            survivorsFromSnapshot(source)
+          )
+        )
         tabs = null
       } else {
         retiring.push(...reconcileFromSnapshot(source, placeTab))

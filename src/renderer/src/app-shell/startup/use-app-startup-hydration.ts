@@ -16,6 +16,7 @@ import {
   collectWorktreeHydrationRepoIdsFromSession
 } from '../../lib/workspace/persistence/workspace-session-hydration-keys'
 import { hydratePersistedUIAfterStartupRead } from './startup-ui-hydration'
+import { carryChatReadMarks } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-carry'
 import {
   logRendererStartupDiagnostic,
   timeRendererStartupStep,
@@ -210,6 +211,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
               sessionRead.session,
               useAppStore.getState().reconcileWorktreeTabModels
             )
+            carryChatReadMarks(useAppStore)
           })
           restoreStructuredLaunchSurfaces()
           recoverStrandedEditorDrafts()

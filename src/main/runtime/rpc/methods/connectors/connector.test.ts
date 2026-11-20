@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { chatPaneKey } from '../../../../external-conversations/external-conversation-chat'
 import { eraseRpcMethods, type RpcContext } from '../../core'
 import { CONNECTOR_METHODS } from './connector'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
+import { chatPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 // Whom the chat's turn acts for, as Orca's own record of that turn says (bot-turn-for.ts).
 vi.mock('../../../../bots/bot-turn-for', () => ({ botTurnFor: async () => 'owner' }))

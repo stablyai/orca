@@ -4,13 +4,13 @@ import type { Automation } from '../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import type { BotRecordedWorker } from '../../shared/bots/bot-activity-model'
 import type { OrchestrationSessionWorker } from '../../shared/orchestration-session-workers'
-import { structuredAgentSessionStatusPaneKey } from '../../shared/agent-session/view/structured-agent-session-tab'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { makeTestBot } from './bot.test-fixture'
 import { readBotActivity, readSharedBotActivity, type BotActivityHost } from './bot-activity-host'
+import { chatPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
 
 const bot = makeTestBot({ folderWorkspaceId: 'fw-1', chatSessionId: 'chat-1' })
-const chatPaneKey = structuredAgentSessionStatusPaneKey('chat-1')
+const CHAT_PANE_KEY = chatPaneKey('chat-1')
 const SENTINEL = 'SENTINEL-do-not-ship'
 
 function statusRow(
@@ -103,7 +103,7 @@ describe('readBotActivity', () => {
         statusRows: () => [
           statusRow('worker-pane', {
             prompt: 'Fix the flaky test',
-            orchestration: { taskId: 't1', dispatchId: 'd1', parentPaneKey: chatPaneKey }
+            orchestration: { taskId: 't1', dispatchId: 'd1', parentPaneKey: CHAT_PANE_KEY }
           }),
           statusRow('stranger-pane', {
             orchestration: { taskId: 't2', dispatchId: 'd2', parentPaneKey: 'elsewhere' }
@@ -148,7 +148,7 @@ describe('readBotActivity', () => {
 
     expect(recordedWorkers).toHaveBeenCalledWith({
       orcaSessionIds: ['chat-1'],
-      paneKeys: [chatPaneKey, 'run-term']
+      paneKeys: [CHAT_PANE_KEY, 'run-term']
     })
     expect(activity.completed).toEqual(
       expect.arrayContaining([
@@ -189,7 +189,7 @@ describe('readBotActivity', () => {
       host({
         statusRows: () => [
           statusRow('worker-pane', {
-            orchestration: { taskId: 't1', dispatchId: 'd1', parentPaneKey: chatPaneKey }
+            orchestration: { taskId: 't1', dispatchId: 'd1', parentPaneKey: CHAT_PANE_KEY }
           })
         ],
         automations: () => [automation('a1')],
@@ -222,7 +222,7 @@ describe('readSharedBotActivity', () => {
       statusRows: () => [
         statusRow('worker-pane', {
           prompt: seen,
-          orchestration: { taskId: 't1', dispatchId: 'd1', parentPaneKey: chatPaneKey }
+          orchestration: { taskId: 't1', dispatchId: 'd1', parentPaneKey: CHAT_PANE_KEY }
         })
       ]
     })

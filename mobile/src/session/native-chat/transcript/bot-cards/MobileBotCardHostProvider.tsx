@@ -4,7 +4,6 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../../../src/shared/execution-host/execution-host'
-import { structuredAgentSessionPaneKey } from '../../../../../../src/shared/agent-session/view/structured-agent-session-projection'
 import { botHomeWorktreeId, hostBotsKey } from '../../../../bots/host-bots-read'
 import { publishBotLink } from '../../../../bots/pending-bot-link'
 import { openMobileStructuredSession } from '../../agent-session/open-mobile-structured-session'
@@ -19,6 +18,7 @@ import {
   type MobileBotCardOfferEdit
 } from './mobile-bot-card-host'
 import { botCardChatOpener } from './mobile-bot-card-chat-open'
+import { chatPaneKey } from '../../../../../../src/shared/agent-session/view/structured-agent-session-projection'
 
 /** Gives a chat's bot cards their host, and holds New bot for an offer card's Edit: the computer is
  *  the one its proposer runs on, and the bot it makes answers that card. */
@@ -59,7 +59,7 @@ export function MobileBotCardHostProvider({
             hostId: pairedHostId,
             ...(executionHost ? { executionHost } : {}),
             worktreeId: opened.worktreeId,
-            paneKey: structuredAgentSessionPaneKey(opened.tabId, chatId),
+            paneKey: chatPaneKey(chatId),
             name: bot.name
           }),
         home: (bot) => publishBotLink({ kind: 'bot', botId: bot.id })

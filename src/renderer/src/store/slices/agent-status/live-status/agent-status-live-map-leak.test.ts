@@ -182,20 +182,27 @@ describe('agentStatusByPaneKey stays bounded (leak regression #9872)', () => {
         ]
       }
     })
-    setAgentAt(store, 'chat-tab:fa0095aa-0b8f-4e0b-a035-f6c949783135', {
-      state: 'done',
-      prompt: 'Finished',
-      agentType: 'claude'
-    })
+    setAgentAt(
+      store,
+      'structured-agent-session-chat-session:fa0095aa-0b8f-4e0b-a035-f6c949783135',
+      {
+        state: 'done',
+        prompt: 'Finished',
+        agentType: 'claude'
+      }
+    )
 
     churnFreshUnprovable(store, MAX_LIVE_AGENT_STATUSES + 1)
 
     expect(
-      store.getState().agentStatusByPaneKey.get('chat-tab:fa0095aa-0b8f-4e0b-a035-f6c949783135')
-        ?.state
+      store
+        .getState()
+        .agentStatusByPaneKey.get(
+          'structured-agent-session-chat-session:fa0095aa-0b8f-4e0b-a035-f6c949783135'
+        )?.state
     ).toBe('done')
     expect(store.getState().agentStatusByPaneKey.projection.keys('wt-1')).toContain(
-      'chat-tab:fa0095aa-0b8f-4e0b-a035-f6c949783135'
+      'structured-agent-session-chat-session:fa0095aa-0b8f-4e0b-a035-f6c949783135'
     )
     expect(store.getState().agentStatusByPaneKey.get('gone-0:leaf-0')).toBeUndefined()
   })

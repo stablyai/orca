@@ -13,17 +13,14 @@ import {
   ConversationEvents,
   type ConversationSnapshot
 } from '../external-conversations/external-conversation-events'
-import {
-  chatPaneKey,
-  type ChatNews,
-  type EndedChatTurn
-} from '../external-conversations/external-conversation-chat'
+import type { ChatNews, EndedChatTurn } from '../external-conversations/external-conversation-chat'
 import {
   fakeLinkStore,
   WORKTREE
 } from '../external-conversations/external-conversation.test-fixture'
 import { ConnectorTurnEvents } from './connector-turn-events'
 import { ConnectorAccountTransport } from './connector-transport'
+import { chatPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
 
 const P: PendingPrompt = {
   kind: 'question',

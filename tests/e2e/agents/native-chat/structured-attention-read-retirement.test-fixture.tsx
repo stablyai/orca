@@ -13,8 +13,8 @@ import type { AgentSessionHistoryPage } from '../../../../src/shared/agent-sessi
 import type { RuntimeRpcResponse } from '../../../../src/shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { createGlobalSettingsFixture } from '../../../../src/shared/settings/global-settings-test-fixture'
 import {
-  structuredAgentSessionPaneKey,
-  projectStructuredAgentSessionStatusState
+  projectStructuredAgentSessionStatusState,
+  chatPaneKey
 } from '../../../../src/shared/agent-session/view/structured-agent-session-projection'
 import { getStructuredAgentSessionHost } from '../../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { StructuredAgentSessionTurnCompletionFeed } from '../../../../src/main/native-chat/agent-session-wire/observations/structured-agent-session-turn-completion-feed'
@@ -46,7 +46,7 @@ import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/native
 
 export const WORKSPACE = 'repo1::/tmp/wt'
 export const TAB = 'chat'
-export const SUBJECT = structuredAgentSessionPaneKey(TAB, SESSION)
+export const SUBJECT = chatPaneKey(SESSION)
 export const TARGET = { kind: 'local' } as const
 export const REMOTE_TARGET = { kind: 'environment', environmentId: 'relay-host' } as const
 export const NOTIFICATION_SETTINGS: NotificationSettings = {

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { structuredAgentSessionStatusPaneKey } from '../../../../src/shared/agent-session/view/structured-agent-session-tab'
 import { normalizeBotSidebarView } from '../../../../src/shared/bots/bot-sidebar-view'
 import type { BotComputerAnswer } from '../../bots/bot-link-host-reads'
 import type { KeptComputerAnswer } from '../../bots/kept-computer-bots'
@@ -9,6 +8,7 @@ import { botHomeWorktreeId } from '../../bots/host-bots-read'
 import { pairedNewBotComputers } from '../../bots/new-bot-computers'
 import type { HostWorktreeInfo } from '../../worktree/catalog/home-worktree-info'
 import { homeBotRows, homeNewBotComputers, type HomeBotRowsInput } from './home-bot-rows'
+import { chatPaneKey } from '../../../../src/shared/agent-session/view/structured-agent-session-projection'
 
 const NOW = 1_800_000_000_000
 
@@ -138,7 +138,7 @@ describe('Home bots', () => {
                 ...uxHome,
                 agent: {
                   ...uxHome.agent,
-                  paneKey: structuredAgentSessionStatusPaneKey('ux-chat'),
+                  paneKey: chatPaneKey('ux-chat'),
                   lastAssistantMessage: 'Shared the plan'
                 }
               }

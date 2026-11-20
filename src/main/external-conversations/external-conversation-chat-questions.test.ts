@@ -10,8 +10,8 @@ import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION
 } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
-import { chatPaneKey } from './external-conversation-chat'
 import { answerChatPrompt, pendingChatPrompt } from './external-conversation-chat-prompts'
+import { chatPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
 
 // A native chat's question on the real host: asked with buttons, answered as a click in Orca would.
 const LINK: ExternalConversationLink = {

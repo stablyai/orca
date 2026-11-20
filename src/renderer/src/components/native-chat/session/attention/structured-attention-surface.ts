@@ -7,7 +7,6 @@ import type {
   AgentAttentionSurfaceSubject
 } from '@/attention/agent-attention-contract'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isTabOnScreen, isWorkspaceOnScreen } from '@/attention/agent-auto-ack-targets'
 import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'
 import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
@@ -17,6 +16,7 @@ import {
   isStructuredTab
 } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
 import { readBotBackgroundSessionTabs } from '../../../bots/bot-background-sessions'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
 
@@ -39,7 +39,7 @@ function findSubjectTab(
     return null
   }
   const tab = findTabByIdOrChatAlias(structuredTabsIn(state, workspaceId), parsed.tabId)
-  if (!tab || structuredAgentSessionPaneKey(tab.id, tab.entityId) !== surfaceKey) {
+  if (!tab || chatPaneKey(tab.entityId) !== surfaceKey) {
     return null
   }
   return tab
@@ -57,7 +57,7 @@ function admitStructuredSession(
   if (!tab) {
     return { admitted: false, cause: 'unknown-surface' }
   }
-  return structuredAgentSessionPaneKey(tab.id, tab.entityId) === subject.surfaceKey
+  return chatPaneKey(tab.entityId) === subject.surfaceKey
     ? { admitted: true, groupId: tab.id }
     : { admitted: false, cause: 'superseded-surface' }
 }
@@ -93,9 +93,7 @@ export function createStructuredAttentionSurface(state: StoreSnapshot): AgentAtt
         ...Object.values(state.unifiedTabsByWorktree).flat(),
         ...readBotBackgroundSessionTabs()
       ].find((candidate) => candidate.id === groupId)
-      return tab && isStructuredTab(tab)
-        ? structuredAgentSessionPaneKey(tab.id, tab.entityId)
-        : null
+      return tab && isStructuredTab(tab) ? chatPaneKey(tab.entityId) : null
     }
   }
 }

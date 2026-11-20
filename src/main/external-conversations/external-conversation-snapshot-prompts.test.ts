@@ -14,11 +14,7 @@ import {
   HOST_TEST_SESSION,
   HOST_TEST_THREAD
 } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
-import {
-  chatPaneKey,
-  type ConversationChat,
-  type ConversationChatHost
-} from './external-conversation-chat'
+import type { ConversationChat, ConversationChatHost } from './external-conversation-chat'
 import type { ConversationEvent, ConversationSnapshot } from './external-conversation-events'
 import type { ExternalConversationHost } from './external-conversation-host'
 import { finishTurn } from './external-conversation-provider-turn.test-fixture'
@@ -26,6 +22,7 @@ import { harness } from './external-conversation-seam.test-fixture'
 import { WORKTREE } from './external-conversation.test-fixture'
 import type { ConversationKey } from './external-conversation-types'
 import { ShownPrompts } from './external-conversation-snapshot-prompts'
+import { chatPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
 
 // A reconnect's snapshot keeps a prompt the cloud shows while the chat's journal still holds it.
 const KEY: ConversationKey = { source: 'slack', externalId: 'T1:C9:1:U5' }

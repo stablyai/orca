@@ -6,10 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AgentSessionStatusSummary } from '../../../../../shared/agent-session/agent-session-wire'
 import type { AgentChildWorkEvidence } from '../../../../../shared/agent-status/child-work/agent-status-child-work-evidence'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
 import { PANE } from '../server.test-fixtures'
 
@@ -36,8 +33,7 @@ const SUBJECT = makeStructuredAgentStatusSubject(
   },
   SESSION
 )
-const TAB = structuredAgentSessionTabId(SESSION)
-const STRUCTURED_PANE = structuredAgentSessionPaneKey(TAB, SESSION)
+const STRUCTURED_PANE = chatPaneKey(SESSION)
 const OBSERVED_AT = 1_757_030_400_000
 
 function liveChild(id: string, kind: 'agent' | 'command'): AgentChildWorkEvidence {

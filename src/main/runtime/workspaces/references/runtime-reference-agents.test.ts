@@ -4,15 +4,12 @@ import type { FleetAgentStatusEvidence } from '../../../../shared/orchestration/
 import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   createReferenceAgentIndex,
   referenceConnectionHosts,
   type ReferenceAgentSource
 } from './runtime-reference-agents'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const observations = vi.hoisted<{ status: 'live' | 'exited' | 'unverifiable'; reachable: boolean }>(
   () => ({
@@ -193,10 +190,7 @@ describe('reference agent discovery', () => {
       getVisibleSessionTabIndex: () => ({ present: true, sessionIds: [open.sessionId] })
     }
     const fleet = evidence()
-    fleet.activity.paneKey = structuredAgentSessionPaneKey(
-      structuredAgentSessionTabId(closed.sessionId),
-      closed.sessionId
-    )
+    fleet.activity.paneKey = chatPaneKey(closed.sessionId)
     const candidates = createReferenceAgentIndex(runtime([fleet]), null, store).get(
       'local|workspace-1'
     )

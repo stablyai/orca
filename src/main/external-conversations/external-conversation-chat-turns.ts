@@ -9,7 +9,7 @@ import type {
 import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import { isQuietBotResult } from '../../shared/bot-quiet-result'
-import { chatPaneKey, type ChatNews } from './external-conversation-chat'
+import type { ChatNews } from './external-conversation-chat'
 import { promptRaisedBy } from './external-conversation-prompt-audience'
 import { PromptTurns } from './external-conversation-prompt-turns'
 import { connectorFailure } from './external-conversation-failure'
@@ -29,6 +29,7 @@ import {
 } from './external-conversation-turn-ends'
 
 import { chatTurnFor, conversationOwnsTurn, leadOf } from './external-conversation-turn-state'
+import { chatPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
 export { conversationOwnsTurn, leadOf }
 export { conversationWorking } from './external-conversation-turn-state'
 

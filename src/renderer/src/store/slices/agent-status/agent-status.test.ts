@@ -4,8 +4,8 @@ import { makeTab } from '../../terminals/testing/terminal-tab.test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '../tabs/tab-group.test-fixture'
 import { createStoreSessionMockApi } from '../../testing/app-store-session-api.test-fixture'
 import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
+  structuredAgentSessionTabId,
+  chatPaneKey
 } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 import { drawTabsFromMain } from '../tabs/tabs-drawn-from-main.test-fixture'
@@ -168,11 +168,8 @@ afterEach(() => {
           worktreeId,
           groupId: 'group-1'
         })
-        const paneKey = structuredAgentSessionPaneKey(chat.id, sessionId)
-        const missingOwnerPaneKey = structuredAgentSessionPaneKey(
-          structuredAgentSessionTabId('missing-chat'),
-          'missing-chat'
-        )
+        const paneKey = chatPaneKey(sessionId)
+        const missingOwnerPaneKey = chatPaneKey('missing-chat')
         store.setState({
           tabsByWorktree: {
             [worktreeId]: [
