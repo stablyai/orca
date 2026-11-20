@@ -23,6 +23,8 @@ export type RecentSessionCardSnapshot = {
   tabType: MobileSessionTabType
   agentId?: string
   agentState?: AgentDotState
+  /** Transient host unread verdict projected from live `tab.unread`; never persisted to storage. */
+  unread?: boolean
   lastVisitedAt: number
 }
 
@@ -33,6 +35,7 @@ export type LiveRecentCardTab = {
   isActive?: boolean
   type?: MobileSessionTab['type']
   agentState?: AgentDotState | null
+  unread?: boolean
   agentStatus?: (AgentStatusEntry & { restoredUnconfirmed?: boolean }) | null
   chatStatus?: Extract<MobileSessionTab, { type: 'agent-session' }>['chatStatus'] | null
 }
@@ -95,11 +98,16 @@ export function syncRecentCardWithLiveTab(
   tab: LiveRecentCardTab | undefined
 ): RecentSessionCardSnapshot {
   const nextState = resolveLiveTabDotState(tab, card.agentState)
-  if (card.agentState === nextState) {
+  const nextUnread = tab ? (tab.unread === true ? true : undefined) : card.unread
+  if (card.agentState === nextState && card.unread === nextUnread) {
     return card
   }
-  const { agentState: _omit, ...rest } = card
-  return nextState ? { ...rest, agentState: nextState } : rest
+  const { agentState: _omitState, unread: _omitUnread, ...rest } = card
+  return {
+    ...rest,
+    ...(nextState ? { agentState: nextState } : {}),
+    ...(nextUnread ? { unread: true } : {})
+  }
 }
 
 function resolveSnapshotItemDotState(
@@ -149,6 +157,7 @@ export function recentCardSnapshotTabs(
       terminal?: string | null
       sessionId?: string | null
       agentState?: AgentDotState | null
+      unread?: boolean
     }[]
   | null {
   if (!isRecord(value) || !Array.isArray(value.tabs)) {
@@ -161,13 +170,16 @@ export function recentCardSnapshotTabs(
     const agentState = resolveSnapshotItemDotState(item, now)
     const sessionId =
       typeof item.sessionId === 'string' && item.sessionId.length > 0 ? item.sessionId : undefined
+    const unread =
+      (item.type === 'terminal' || item.type === 'agent-session') && item.unread === true
     return [
       {
         id: item.id,
         terminal:
           typeof item.terminal === 'string' || item.terminal === null ? item.terminal : undefined,
         ...(sessionId ? { sessionId } : {}),
-        agentState
+        agentState,
+        unread
       }
     ]
   })

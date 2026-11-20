@@ -1,6 +1,6 @@
 import { memo, useMemo } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
-import { File, FileText, Globe, Minus, Plus, SquareTerminal } from 'lucide-react-native'
+import { Bell, File, FileText, Globe, Minus, Plus, SquareTerminal } from 'lucide-react-native'
 import { AgentStateDot } from '../agents/presentation/AgentStateDot'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
@@ -97,14 +97,22 @@ const RecentSessionCardRow = memo(function RecentSessionCardRow({
   now: number
   onSelectCard: (card: RecentSessionCardRecord) => void
 }) {
+  const t = useMobileTranslation()
   const workspaceLabel = getWorktreeLabel(card.worktreeName, card.worktreeId)
   const badgeLabel = formatWorkspaceBadgeLabel(workspaceLabel)
   const timeAgo = formatTimeAgo(card.lastVisitedAt, now)
+  const unread = card.unread === true
   const stateWord =
     card.agentState && card.agentState !== 'idle' ? agentStateLabel(card.agentState) : null
-  const accessibilityLabel = stateWord
-    ? `${card.title}, ${stateWord}, ${workspaceLabel}, ${timeAgo}`
-    : `${card.title}, ${workspaceLabel}, ${timeAgo}`
+  const accessibilityLabel = [
+    card.title,
+    unread ? t('agents.list.unread', 'Unread') : null,
+    stateWord,
+    workspaceLabel,
+    timeAgo
+  ]
+    .filter(Boolean)
+    .join(', ')
   return (
     <View>
       {showSeparator ? <View style={styles.separator} /> : null}
@@ -121,7 +129,16 @@ const RecentSessionCardRow = memo(function RecentSessionCardRow({
             <AgentStateDot state={card.agentState} />
           </View>
         ) : null}
-        <RecentCardIcon card={card} />
+        {unread ? (
+          <Bell
+            size={16}
+            color={colors.statusAmber}
+            fill={colors.statusAmber}
+            accessibilityLabel={t('agents.list.unread', 'Unread')}
+          />
+        ) : (
+          <RecentCardIcon card={card} />
+        )}
         <View style={styles.textBlock}>
           <Text style={styles.cardTitle} numberOfLines={1}>
             {card.title}

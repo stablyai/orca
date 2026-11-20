@@ -176,11 +176,18 @@ export async function hydrateRecentSessionCards(): Promise<Cards> {
   return stored.slice()
 }
 
+const stripTransientCardFields = ({
+  unread: _unread,
+  ...rest
+}: RecentSessionCardRecord): RecentSessionCardRecord => rest
+
 function persistCards(next: Cards): Cards {
   const maxDisplay = getRecentSessionCardsMaxDisplaySync()
   const tabBarMode = getCachedMobileSessionTabBarMode()
   const tabsSheetScope = getCachedMobileSessionTabsSheetScope()
-  const dedicatedCards = next.slice()
+  // Keep live `unread` in memory only (K1); storage strips transient agent-attention verdicts.
+  const persistedCards = next.map(stripTransientCardFields)
+  const dedicatedCards = persistedCards.slice()
   const serialize = () =>
     serializeRecentSessionCardsPayload(
       dedicatedCards,
@@ -197,7 +204,7 @@ function persistCards(next: Cards): Cards {
     dRaw = serialize()
   }
   void persistMirrored(RECENT_SESSION_CARDS_STORAGE_KEY, dRaw).catch(() => {})
-  void writeRecentCardsToLastVisitedWorktree(next, {
+  void writeRecentCardsToLastVisitedWorktree(persistedCards, {
     ...(maxDisplay !== MAX_RECENT_SESSION_CARDS_DISPLAY
       ? { recentCardsMaxDisplay: maxDisplay }
       : {}),

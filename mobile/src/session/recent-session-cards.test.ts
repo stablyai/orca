@@ -8,6 +8,7 @@ import {
   resolveCrossWorktreePendingSelection,
   setPendingCrossWorktreeTabTarget
 } from './tabs/mobile-session-tab-activation'
+import { recentCardSnapshotTabs } from './recent-session-card-snapshot'
 import {
   MAX_RECENT_SESSION_CARDS_DISPLAY,
   MAX_RECENT_SESSION_CARDS_LIMIT,
@@ -151,6 +152,72 @@ describe('recordRecentSessionCardVisit and visibility filtering', () => {
       currentWorktreeTabs: [{ id: 'tab-1', terminal: 'term-1', agentState: 'blocked' }]
     })
     expect(visibleOtherActive.find((item) => item.tabId === 'tab-1')?.agentState).toBe('blocked')
+  })
+
+  it('projects host unread verdicts onto recent cards and strips transient unread from storage', async () => {
+    const unreadSnapshot = recentCardSnapshotTabs({
+      tabs: [
+        {
+          id: 'tab-1',
+          type: 'terminal',
+          terminal: 'term-1',
+          unread: true,
+          agentStatus: { state: 'done', updatedAt: 100 }
+        },
+        {
+          id: 'tab-2',
+          type: 'agent-session',
+          sessionId: 'sess-2',
+          unread: true,
+          chatStatus: { state: 'done', updatedAt: 100 }
+        },
+        { id: 'tab-3', type: 'markdown', unread: true }
+      ]
+    })
+    expect(unreadSnapshot).toEqual([
+      { id: 'tab-1', terminal: 'term-1', agentState: 'done', unread: true },
+      { id: 'tab-2', sessionId: 'sess-2', agentState: 'done', unread: true },
+      { id: 'tab-3', agentState: null, unread: false }
+    ])
+
+    recordRecentSessionCardVisit(
+      card({ tabId: 'tab-1', terminalHandle: 'term-1', lastVisitedAt: 10 })
+    )
+    reconcileRecentSessionCardsForWorktree({
+      hostId: 'host-1',
+      worktreeId: 'wt-1',
+      liveTabs: unreadSnapshot ?? []
+    })
+    expect(
+      getVisibleRecentSessionCards({
+        hostId: 'host-1',
+        currentWorktreeId: 'wt-1',
+        currentTabId: 'other',
+        currentWorktreeTabs: [{ id: 'tab-1', terminal: 'term-1', agentState: 'done', unread: true }]
+      })[0]?.unread
+    ).toBe(true)
+
+    await settleWrites()
+    const rawStored = storage.items.get(RECENT_SESSION_CARDS_STORAGE_KEY)
+    expect(parseRecentSessionCards(rawStored)[0]?.unread).toBeUndefined()
+
+    const clearedSnapshot = recentCardSnapshotTabs({
+      tabs: [
+        {
+          id: 'tab-1',
+          type: 'terminal',
+          terminal: 'term-1',
+          agentStatus: { state: 'done', updatedAt: 200 }
+        }
+      ]
+    })
+    expect(clearedSnapshot?.[0]?.unread).toBe(false)
+    const cleared = reconcileRecentSessionCardsForWorktree({
+      hostId: 'host-1',
+      worktreeId: 'wt-1',
+      liveTabs: clearedSnapshot ?? []
+    })
+    expect(cleared[0]?.unread).toBeUndefined()
   })
 })
 

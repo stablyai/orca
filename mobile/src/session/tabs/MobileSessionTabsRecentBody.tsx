@@ -1,6 +1,6 @@
 import { useMemo, useSyncExternalStore } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { File, FileText, Globe, Minus, Plus, SquareTerminal } from 'lucide-react-native'
+import { Bell, File, FileText, Globe, Minus, Plus, SquareTerminal } from 'lucide-react-native'
 import { AgentStateDot } from '../../agents/presentation/AgentStateDot'
 import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
 import { ListGroup } from '../../components/list/ListGroup'
@@ -148,9 +148,16 @@ export function MobileSessionTabsRecentBody({
             const badge =
               card.agentState && card.agentState !== 'idle' ? card.agentState : undefined
             const stateWord = badge ? agentStateLabel(badge) : null
-            const accessibilityLabel = stateWord
-              ? `${card.title}, ${stateWord}, ${workspaceLabel}, ${timeAgo}`
-              : `${card.title}, ${workspaceLabel}, ${timeAgo}`
+            const unread = card.unread === true
+            const accessibilityLabel = [
+              card.title,
+              unread ? t('agents.list.unread', 'Unread') : null,
+              stateWord,
+              workspaceLabel,
+              timeAgo
+            ]
+              .filter(Boolean)
+              .join(', ')
 
             return (
               <Pressable
@@ -163,7 +170,16 @@ export function MobileSessionTabsRecentBody({
                 onPress={() => void handleSelectRecentSessionCard(card)}
               >
                 <View style={styles.tile}>
-                  <RecentCardIcon card={card} />
+                  {unread ? (
+                    <Bell
+                      size={17}
+                      color={colors.statusAmber}
+                      fill={colors.statusAmber}
+                      accessibilityLabel={t('agents.list.unread', 'Unread')}
+                    />
+                  ) : (
+                    <RecentCardIcon card={card} />
+                  )}
                   {badge ? (
                     <View
                       testID={`recent-session-card-state-dot-${card.worktreeId}-${card.tabId}`}
