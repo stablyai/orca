@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { BrowserSessionProfile } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
@@ -44,7 +44,11 @@ export function BrowserProfileSiteList({
   const [text, setText] = useState('')
   const [saving, setSaving] = useState(false)
 
+  // The profile on screen; a save that finishes after it changed must not fill in another profile.
+  const shownProfileId = useRef(profileId)
+
   useEffect(() => {
+    shownProfileId.current = profileId
     let cancelled = false
     setSaved(null)
     setLoadFailed(false)
@@ -86,7 +90,11 @@ export function BrowserProfileSiteList({
     if (!parsed.ok) {
       return
     }
-    const result = await requestSiteListSave(profileId, parsed.entries, setSaving)
+    const savedFor = profileId
+    const result = await requestSiteListSave(savedFor, parsed.entries, setSaving)
+    if (shownProfileId.current !== savedFor) {
+      return
+    }
     if (result?.ok) {
       setSaved(result.hosts)
       setText(result.hosts.join('\n'))
