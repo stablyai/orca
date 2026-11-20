@@ -12,6 +12,7 @@ import {
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { pickHostTurnEnd } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
+  antigravityHookPollRow,
   museHookPollPane,
   museLogOffset,
   nextMusePollDelay,
@@ -179,6 +180,11 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
   }
 
   protected rearmIgnoredMuseHook(body: unknown): void {
+    const childRow = antigravityHookPollRow(this.state, body, this.env)
+    if (childRow) {
+      this.scheduleTranscriptPoll('antigravity', body, childRow)
+      return
+    }
     const paneKey = museHookPollPane(this.state, body, this.env)
     if (!paneKey) {
       return

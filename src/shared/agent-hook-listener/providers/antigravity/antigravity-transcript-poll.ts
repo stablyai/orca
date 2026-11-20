@@ -1,13 +1,19 @@
+import { join } from 'node:path'
 import type { AgentHookEventPayload } from '../../listener-event'
 import type { HookListenerState } from '../../listener-state'
 import { RolloutReadBatch } from '../codex/codex-rollout-async-reads'
 import { buildAntigravityFoldedStatusPayload } from './antigravity-parent-status'
 import {
-  readAntigravityBrainSubagents,
-  readAntigravitySwarmMembers
+  readAntigravityChildMetadata,
+  readAntigravitySwarmMembers,
+  type AntigravityChildMetadata
 } from './antigravity-brain-metadata'
 import { readAntigravityChildTranscriptTail } from './antigravity-child-transcript'
-import type { AntigravityPaneChildState } from './antigravity-pane-state'
+import {
+  retireAntigravityChild,
+  type AntigravityPaneChildState,
+  type TrackedAntigravityChild
+} from './antigravity-pane-state'
 
 export function hasAntigravityPollWork(
   state: HookListenerState,
@@ -15,122 +21,112 @@ export function hasAntigravityPollWork(
 ): boolean {
   const pane = state.antigravityChildWorkByPaneKey.get(event.paneKey)
   return Boolean(
-    pane?.rootBrainDir &&
-    (pane.discoversChildren ||
-      pane.awaitingInitialHelperDiscovery ||
-      event.payload.subagents?.length ||
-      (pane.leadModel === undefined && pane.leadState === 'working')) &&
-    event.payload.state !== 'done'
+    pane &&
+    (pane.dirty ||
+      (pane.rootBrainDir &&
+        (pane.children.size > 0 || (pane.leadModel === undefined && pane.leadState === 'working'))))
   )
 }
-
 export type AntigravityTranscriptPollReads = {
   pane: AntigravityPaneChildState
-  diskSubagents: NonNullable<AntigravityPaneChildState['diskSubagents']>
-  swarmMembers: NonNullable<AntigravityPaneChildState['swarmMembers']>
-  tails: AntigravityPaneChildState['transcriptTails']
+  cache: AntigravityPaneChildState['brainCache']
+  children: {
+    child: TrackedAntigravityChild
+    revision: number
+    metadata?: AntigravityChildMetadata
+    model?: string
+  }[]
   leadModel?: string
 }
-
 export async function readAntigravityTranscriptPoll(
   state: HookListenerState,
   paneKey: string
 ): Promise<AntigravityTranscriptPollReads | undefined> {
   const pane = state.antigravityChildWorkByPaneKey.get(paneKey)
-  if (!pane?.rootBrainDir) {
+  if (!pane) {
     return undefined
   }
   const cache = pane.brainCache
-  const batch = new RolloutReadBatch(
-    () => state.antigravityChildWorkByPaneKey.get(paneKey) === pane && pane.brainCache === cache
-  )
-  try {
-    const leadModel =
-      pane.leadModel === undefined && pane.rootConversationId
-        ? (
-            await readAntigravityChildTranscriptTail(
-              pane.rootBrainDir,
-              pane.rootConversationId,
-              cache,
-              batch
-            )
-          )?.model
-        : undefined
-    batch.unreserve(Number.MAX_SAFE_INTEGER)
-    const diskSubagents = (
-      await readAntigravityBrainSubagents(pane.rootBrainDir, cache, batch, pane.retiredChildren)
-    ).filter(
-      (child) =>
-        !pane.retiredBefore ||
-        child.mtimeMs > pane.retiredBefore ||
-        pane.children.has(child.conversationId)
-    )
-    const swarm = await readAntigravitySwarmMembers(pane.rootBrainDir, cache)
-    const swarmMembers =
-      swarm && (!pane.retiredBefore || swarm.mtimeMs > pane.retiredBefore)
-        ? swarm.members
-        : (pane.swarmMembers ?? [])
-    const ids = new Set([
-      ...diskSubagents
-        .filter((child) => child.state !== 'SUBAGENT_STATE_KILLED')
-        .map((child) => child.conversationId),
-      ...swarmMembers
-        .filter(
-          (member) => !member.killed && member.phase === 'RUNNING' && member.wakeMode !== 'mentions'
-        )
-        .map((member) => member.conversationId),
-      ...pane.children.keys()
-    ])
-    const tails: AntigravityPaneChildState['transcriptTails'] = new Map()
-    for (const id of ids) {
-      if (!batch.wanted()) {
-        return undefined
-      }
-      if (
-        id === pane.rootConversationId ||
-        pane.retiredChildren.has(id) ||
-        pane.children.get(id)?.hookState === 'done'
-      ) {
-        continue
-      }
-      const tail = await readAntigravityChildTranscriptTail(pane.rootBrainDir, id, cache, batch)
-      if (!batch.wanted()) {
-        return undefined
-      }
-      if (tail && !pane.retiredChildren.has(id)) {
-        tails.set(id, tail)
-      }
-      // Parsed records own their small projection now; release buffers before reading the next child.
-      batch.unreserve(Number.MAX_SAFE_INTEGER)
-    }
-    return batch.wanted() ? { pane, diskSubagents, swarmMembers, tails, leadModel } : undefined
-  } finally {
-    batch.release()
+  const wanted = (): boolean =>
+    state.antigravityChildWorkByPaneKey.get(paneKey) === pane && pane.brainCache === cache
+  const result: AntigravityTranscriptPollReads = { pane, cache, children: [] }
+  const brain = pane.rootBrainDir
+  if (!brain) {
+    return result
   }
+  const candidates = [...pane.children.values()].map((child) => ({
+    child,
+    revision: child.revision
+  }))
+  const members = candidates.length ? await readAntigravitySwarmMembers(brain, cache) : undefined
+  for (const { child, revision } of candidates) {
+    const current = (): boolean =>
+      wanted() && pane.children.get(child.id) === child && child.revision === revision
+    if (!wanted()) {
+      return undefined
+    }
+    if (!current()) {
+      continue
+    }
+    const metadata =
+      members?.get(child.id) ?? (await readAntigravityChildMetadata(brain, child.id, cache))
+    if (!current()) {
+      continue
+    }
+    const batch = new RolloutReadBatch(current)
+    try {
+      const model =
+        child.model === undefined && metadata && !metadata.killed
+          ? (await readAntigravityChildTranscriptTail(brain, child.id, cache, batch))?.model
+          : undefined
+      if (current()) {
+        result.children.push({ child, revision, metadata, model })
+      }
+      if (model) {
+        cache.transcripts.delete(
+          join(brain, '..', child.id, '.system_generated', 'logs', 'transcript.jsonl')
+        )
+      }
+    } finally {
+      batch.release()
+    }
+  }
+  if (pane.leadModel === undefined && pane.rootConversationId && wanted()) {
+    const batch = new RolloutReadBatch(wanted)
+    try {
+      result.leadModel = (
+        await readAntigravityChildTranscriptTail(brain, pane.rootConversationId, cache, batch)
+      )?.model
+    } finally {
+      batch.release()
+    }
+  }
+  return wanted() ? result : undefined
 }
-
 export function pollAntigravityTranscriptStatus(
   state: HookListenerState,
   original: AgentHookEventPayload,
   reads: AntigravityTranscriptPollReads | undefined
 ): AgentHookEventPayload | undefined {
   const pane = state.antigravityChildWorkByPaneKey.get(original.paneKey)
-  if (!reads || pane !== reads.pane) {
+  if (!reads || pane !== reads.pane || pane.brainCache !== reads.cache) {
     return undefined
   }
   pane.leadModel ??= reads.leadModel
-  pane.discoversChildren = false
-  pane.diskSubagents = reads.diskSubagents
-  pane.swarmMembers = reads.swarmMembers
-  pane.transcriptTails = reads.tails
-  const payload = buildAntigravityFoldedStatusPayload(state, original.paneKey, pane, Date.now())
-  if (!payload) {
-    return undefined
-  }
-  if (payload.state === 'done' && pane.leadState === 'done') {
-    if (pane.rootTranscriptPath) {
-      state.antigravityCompletedTranscriptByPaneKey.set(original.paneKey, pane.rootTranscriptPath)
+  for (const { child, revision, metadata, model } of reads.children) {
+    if (pane.children.get(child.id) !== child || child.revision !== revision) {
+      continue
+    }
+    if (metadata?.killed) {
+      retireAntigravityChild(pane, child.id)
+    } else if (metadata) {
+      child.verified = true
+      child.description = metadata.description
+      child.agentType = metadata.agentType
+      child.model = metadata.model ?? child.model ?? model
     }
   }
-  return { ...original, hookEventName: undefined, payload }
+  pane.dirty = false
+  const payload = buildAntigravityFoldedStatusPayload(state, original.paneKey, pane, Date.now())
+  return payload ? { ...original, hookEventName: undefined, payload } : undefined
 }

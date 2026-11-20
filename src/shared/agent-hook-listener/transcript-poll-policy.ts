@@ -137,3 +137,18 @@ export function transcriptPollUpdate<T extends AgentHookEventPayload>(
     hookEventName: replayedStop ? 'Stop' : undefined
   }
 }
+
+export function antigravityHookPollRow(
+  state: HookListenerState,
+  body: unknown,
+  env: string
+): AgentHookEventPayload | undefined {
+  const hook = parseHookEnvelope(state, 'antigravity', body, env)
+  if (!hook) {
+    return undefined
+  }
+  const row = state.lastStatusByPaneKey.get(hook.paneKey)
+  return row?.payload.agentType === 'antigravity' && hasAntigravityPollWork(state, row)
+    ? row
+    : undefined
+}

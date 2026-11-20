@@ -121,7 +121,7 @@ export async function handleRelayHookRequest(
         }
       }
     )
-    if (source === 'muse' && !event) {
+    if ((source === 'muse' || source === 'antigravity') && !event) {
       options.retryScheduler.rearmIgnoredMuseHook(hookBody)
     }
     if (event) {

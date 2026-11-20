@@ -110,6 +110,9 @@ export function applyJsonlCursorBytes(
     return 'stale'
   }
   const carry = read.from === read.offset ? read.carry : ''
+  if (read.from !== read.offset) {
+    cursor.discardingLine = false
+  }
   if (read.failed) {
     cursor.offset = read.from
     cursor.carry = carry

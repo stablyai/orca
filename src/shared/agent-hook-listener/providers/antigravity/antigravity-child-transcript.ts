@@ -1,40 +1,11 @@
 import { dirname, join } from 'node:path'
-import { isRecord } from '../../../agent-status/child-work/agent-status-child-work-value-guards'
-import { readFirstString } from '../../interactive-tool'
-import { parseAgentHookJson } from '../../request-body'
 import { readJsonlCursorBytes, type RolloutReadBatch } from '../codex/codex-rollout-async-reads'
 import { applyJsonlCursorBytes } from '../codex/codex-rollout-jsonl-format'
-import { extractAntigravityToolFields } from './antigravity-tool-fields'
 import {
   normalizeAntigravityModel,
   type AntigravityBrainCache,
   type AntigravityChildTranscriptTail
 } from './antigravity-brain-metadata'
-
-function unwrapCompactTranscriptArgs(rawArgs: unknown): unknown {
-  if (!isRecord(rawArgs)) {
-    return rawArgs
-  }
-  const unwrapped: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(rawArgs)) {
-    if (
-      typeof value === 'string' &&
-      value.length >= 2 &&
-      value.startsWith('"') &&
-      value.endsWith('"')
-    ) {
-      try {
-        const parsed = parseAgentHookJson(value)
-        unwrapped[key] = typeof parsed === 'string' ? parsed : value
-        continue
-      } catch {
-        // Keep raw string when not a JSON-quoted scalar.
-      }
-    }
-    unwrapped[key] = value
-  }
-  return unwrapped
-}
 
 function childTranscriptFilePath(rootBrainDir: string, childId: string): string | undefined {
   if (!childId || childId.includes('/') || childId.includes('\\') || childId.includes('..')) {
@@ -74,27 +45,7 @@ export async function readAntigravityChildTranscriptTail(
       previous.startedAt ??= createdAt
     }
     previous.model = normalizeAntigravityModel(parsed.model) ?? previous.model
-    const toolCalls = Array.isArray(parsed.tool_calls) ? parsed.tool_calls : []
-    const firstCall = isRecord(toolCalls[0]) ? toolCalls[0] : undefined
-    const tool = firstCall
-      ? extractAntigravityToolFields('PreToolUse', {
-          toolCall: {
-            name: readFirstString(firstCall, ['name', 'toolName', 'tool_name']),
-            args: unwrapCompactTranscriptArgs(firstCall.args)
-          }
-        })
-      : undefined
-    previous.tail = {
-      settled:
-        parsed.type === 'PLANNER_RESPONSE' &&
-        ['DONE', 'ERROR', 'CANCELLED'].includes(String(parsed.status)) &&
-        toolCalls.length === 0,
-      stepIndex: typeof parsed.step_index === 'number' ? parsed.step_index : undefined,
-      model: previous.model,
-      toolName: tool?.toolName,
-      toolInput: tool?.toolInput,
-      createdAtMs: previous.startedAt
-    }
+    previous.tail = { model: previous.model }
   }
   cache.transcripts.set(childTranscriptPath, previous)
   return previous.tail

@@ -15,6 +15,7 @@ import type { HookListenerState } from '../../../shared/agent-hook-listener/list
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { pickHostTurnEnd } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
+  antigravityHookPollRow,
   museHookPollPane,
   museLogOffset,
   nextMusePollDelay,
@@ -55,13 +56,11 @@ export type AgentHookResultRetryHost = {
 export class AgentHookResultRetryScheduler {
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private transcriptPollScheduler: AgentTranscriptPollScheduler<TranscriptPoll>
-  private host: AgentHookResultRetryHost
   private readonly claudeHelperKills: ClaudeHelperKillPoller
   private claudeOwedNotificationExpiry: ClaudeOwedNotificationExpiryTimers
   private readonly droidVerdictReads: AgentHookDroidVerdictReads
 
-  constructor(host: AgentHookResultRetryHost) {
-    this.host = host
+  constructor(private readonly host: AgentHookResultRetryHost) {
     this.droidVerdictReads = new AgentHookDroidVerdictReads(host, this.assistantMessageRetryTimers)
     this.claudeHelperKills = new ClaudeHelperKillPoller(host.state, {
       current: (paneKey) => host.state.lastStatusByPaneKey.get(paneKey),
@@ -160,6 +159,11 @@ export class AgentHookResultRetryScheduler {
   }
 
   rearmIgnoredMuseHook(body: unknown): void {
+    const childRow = antigravityHookPollRow(this.host.state, body, this.host.env)
+    if (childRow) {
+      this.scheduleTranscriptPoll('antigravity', body, childRow)
+      return
+    }
     const paneKey = museHookPollPane(this.host.state, body, this.host.env)
     if (!paneKey) {
       return
@@ -196,8 +200,7 @@ export class AgentHookResultRetryScheduler {
     })
   }
 
-  // Keep the identity check at callback time: a newer event supersedes this
-  // payload even when its pane still has transcript children.
+  // Newer rows supersede the poll, even while children remain.
   private ownsTranscriptPoll(paneKey: string, { original }: TranscriptPoll): boolean {
     return (
       paneKey === original.paneKey &&

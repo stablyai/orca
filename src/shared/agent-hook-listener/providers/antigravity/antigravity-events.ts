@@ -23,8 +23,8 @@ import {
   resolveSimpleAntigravityEventState
 } from './antigravity-event-rules'
 import {
-  normalizeAntigravityModel,
   createAntigravityBrainCache,
+  normalizeAntigravityModel,
   resolveAntigravityBrainDirectory
 } from './antigravity-brain-metadata'
 import {
@@ -107,46 +107,8 @@ export function normalizeAntigravityEvent(
     conversationId !== existingPaneState.rootConversationId &&
     isAntigravityInSessionChildHook(state, paneKey, hookPayload, origin)
   ) {
-    const known =
-      existingPaneState.children.has(conversationId) ||
-      (eventName === 'PreInvocation' &&
-        existingPaneState.brainCache.subagentFiles?.files.has(`${conversationId}.json`)) ||
-      existingPaneState.diskSubagents?.some((child) => child.conversationId === conversationId) ||
-      existingPaneState.swarmMembers?.some((member) => member.conversationId === conversationId)
-    if (!known && (transcriptPath || !existingPaneState.discoversChildren)) {
-      return null
-    }
-    if (existingPaneState.retiredChildren.has(conversationId) && eventName !== 'PreInvocation') {
-      return null
-    }
-    const commandChanged = trackAntigravityBackgroundCommand(
-      existingPaneState,
-      eventName,
-      conversationId,
-      hookPayload
-    )
-    const childChanged = recordAntigravityChildHook(
-      existingPaneState,
-      conversationId,
-      eventName,
-      hookPayload,
-      now
-    )
-    if (!childChanged && !commandChanged) {
-      return null
-    }
-    const subagents = reconcileAntigravityActiveSubagents(existingPaneState, now)
-    if (subagents.length === 0 && (existingPaneState.commands?.size ?? 0) === 0) {
-      existingPaneState.helpersIdleAt ??= now
-    } else {
-      existingPaneState.helpersIdleAt = undefined
-    }
-    if (!existingPaneState.rootBrainDir) {
-      return null
-    }
-    return buildAntigravityFoldedStatusPayload(state, paneKey, existingPaneState, now, {
-      subagents
-    })
+    recordAntigravityChildHook(existingPaneState, conversationId, eventName, hookPayload, now)
+    return null
   }
 
   if (
@@ -209,11 +171,7 @@ export function normalizeAntigravityEvent(
     paneState.discoversChildren = true
   }
   if (eventName === 'PreToolUse' && isAntigravityHelperSpawnTool(toolName)) {
-    paneState.awaitingInitialHelperDiscovery = new Set([
-      ...paneState.children.keys(),
-      ...(paneState.diskSubagents?.map((child) => child.conversationId) ?? []),
-      ...(paneState.swarmMembers?.map((member) => member.conversationId) ?? [])
-    ])
+    paneState.awaitingInitialHelperDiscovery = new Set(paneState.children.keys())
   }
   const finishedBackgroundCommand = trackAntigravityBackgroundCommand(
     paneState,
@@ -228,21 +186,14 @@ export function normalizeAntigravityEvent(
   }
 
   if (eventName === 'Stop' && !stopStillBusy) {
-    paneState.retiredBefore = now
     for (const id of paneState.children.keys()) {
       retireAntigravityChild(paneState, id)
     }
     paneState.children.clear()
-    paneState.transcriptTails.clear()
-    const inventory = paneState.brainCache.subagentFiles
     paneState.brainCache = createAntigravityBrainCache()
-    if (inventory) {
-      paneState.brainCache.subagentFiles = { ...inventory, active: new Map() }
-    }
     paneState.commands?.clear()
-    paneState.diskSubagents = []
-    paneState.swarmMembers = []
     paneState.discoversChildren = false
+    paneState.dirty = false
     paneState.helpersIdleAt = undefined
   }
   const subagents = reconcileAntigravityActiveSubagents(paneState, now)
