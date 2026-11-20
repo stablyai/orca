@@ -195,6 +195,7 @@ describe('CursorHookService', () => {
       const command = config.hooks.beforeShellExecution[1]?.command ?? ''
       expect(JSON.parse(runRegisteredCursorHook(command, '').stdout)).toEqual({})
     },
+    // Spawns the installed hook through cmd.exe on Windows, which can exceed the default budget.
     HOOK_CASE_TIMEOUT_MS
   )
 

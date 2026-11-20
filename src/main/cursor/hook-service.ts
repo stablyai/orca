@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
@@ -15,7 +16,10 @@ import {
   removeManagedCommands
 } from '../agent-hooks/installation/commands/managed-hook-command-matching'
 import { getSharedManagedScriptPath } from '../agent-hooks/installation/scripts/managed-hook-script-path'
-import { readHooksJson } from '../agent-hooks/installation/configuration/hooks-json-read'
+import {
+  parseHooksJsonText,
+  readHooksJson
+} from '../agent-hooks/installation/configuration/hooks-json-read'
 import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
 import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/installation/scripts/managed-hook-script-refresh'
@@ -42,10 +46,16 @@ function getManagedScriptPath(): string {
 type ManagedEntryScan = { events: CursorEvent[]; outdated: boolean }
 
 // Events holding Orca entries, and whether any entry differs from what this build writes.
-function scanManagedEntries(configPath: string, scriptPath: string): ManagedEntryScan {
+async function scanManagedEntries(
+  configPath: string,
+  scriptPath: string
+): Promise<ManagedEntryScan> {
   const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
   const scan: ManagedEntryScan = { events: [], outdated: false }
-  for (const [eventName, definitions] of Object.entries(readHooksJson(configPath)?.hooks ?? {})) {
+  // A missing or unreadable file has no Orca entries to repair.
+  const raw = await readFile(configPath, 'utf8').catch(() => null)
+  const hooks = raw === null ? {} : (parseHooksJsonText(raw)?.hooks ?? {})
+  for (const [eventName, definitions] of Object.entries(hooks)) {
     const managed = Array.isArray(definitions)
       ? definitions.filter((definition) =>
           hookDefinitionHasManagedCommand(definition, isManagedCommand)
@@ -72,7 +82,7 @@ export class CursorHookService {
   async refreshManagedScripts(): Promise<void> {
     await refreshManagedScriptIfPresent(getManagedScriptPath(), getManagedScript())
     // Cursor desktop runs these entries without the CLI that gates install(); update only what Orca already owns.
-    const scan = scanManagedEntries(getConfigPath(), getManagedScriptPath())
+    const scan = await scanManagedEntries(getConfigPath(), getManagedScriptPath())
     if (scan.outdated) {
       this.install(scan.events)
     }
