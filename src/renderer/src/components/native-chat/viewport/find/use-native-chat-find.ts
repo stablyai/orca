@@ -31,6 +31,8 @@ export type NativeChatFind = {
   inputRef: RefObject<HTMLInputElement | null>
   /** Whether the bar now mounting was opened here, so takes focus; a bar restored with its chat leaves focus be. */
   takeOpenFocus: () => boolean
+  /** Whether the bar now mounting was opened here; a restored one keeps the reader's place. */
+  isOpenedHere: () => boolean
   /** Brings a match into the transcript's view, clear of the bar, as a reader step would. */
   revealMatch: (match: Range) => void
 }
@@ -66,6 +68,7 @@ export function useNativeChatFind(
     openedHereRef.current = false
     return opened
   }, [])
+  const isOpenedHere = useCallback(() => openedHereRef.current, [])
 
   const close = useCallback(() => {
     const root = rootRef.current
@@ -174,6 +177,7 @@ export function useNativeChatFind(
     barRef,
     inputRef,
     takeOpenFocus,
+    isOpenedHere,
     revealMatch
   }
 }

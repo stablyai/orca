@@ -22,12 +22,21 @@ import { shownStructuredAgentSessionAsyncQuestions } from '../../../../../shared
 import type { StructuredAgentSessionAsyncQuestionSkip } from './use-structured-agent-session-async-question-skip'
 
 
-// Skips a released view left behind, by tab, so closing the tab sweeps them.
+// Skips a released view left behind, by tab, so closing the tab sweeps them; a rewind leaves old scopes, so few are kept.
+const KEPT_ASYNC_SCOPES_PER_TAB = 8
 const keptAsyncScopesByTab = new Map<string, Set<string>>()
 
 function keepAsyncScopeForTab(tabId: string, scopeKey: string): void {
+  if (dismissals.readAsync(scopeKey).size === 0) {
+    return
+  }
   const scopes = keptAsyncScopesByTab.get(tabId) ?? new Set<string>()
+  scopes.delete(scopeKey)
   scopes.add(scopeKey)
+  for (const stale of [...scopes].slice(0, Math.max(0, scopes.size - KEPT_ASYNC_SCOPES_PER_TAB))) {
+    scopes.delete(stale)
+    dismissals.forgetAsync(stale)
+  }
   keptAsyncScopesByTab.set(tabId, scopes)
 }
 
