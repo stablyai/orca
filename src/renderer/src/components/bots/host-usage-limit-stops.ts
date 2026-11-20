@@ -108,6 +108,9 @@ function createHostUsageLimitStops(
           stopFeed?.()
           stopFeed = null
           readThisTask = false
+          // Unwatched reads rebuild from the feed, so keep no summaries the feed has since replaced.
+          cut = new Map()
+          derived = null
         }
       }
     },
