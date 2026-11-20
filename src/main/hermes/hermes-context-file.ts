@@ -4,7 +4,7 @@
 // reads it (checked live on 0.23.3).
 
 import { randomUUID } from 'node:crypto'
-import { lstat, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { lstat, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 export const HERMES_CONTEXT_FILE = '.hermes.md'
@@ -16,7 +16,7 @@ const BLOCK_END = '<!-- orca:end -->'
 
 /** Orca's own file is replaced whole; a file the user wrote keeps their text and gets Orca's block. */
 function withOrcaText(existing: string | null, rawText: string): string {
-  const text = rawText.replaceAll(BLOCK_START, '').replaceAll(BLOCK_END, '')
+  const text = rawText.replace(/<!--\s*orca:(begin|end)\s*-->/g, '')
   if (existing === null || existing.startsWith(HEADER)) {
     return `${HEADER}\n\n${text}\n`
   }
@@ -34,23 +34,22 @@ function withOrcaText(existing: string | null, rawText: string): string {
 }
 
 /** Writes Orca's text into `cwd`'s `.hermes.md` whole, so a Hermes build never reads a half-written file.
- *  A file that cannot be read stays untouched, and a symlink keeps pointing at its target. */
+ *  A symlink or a file that cannot be read stays untouched. */
 export async function writeHermesContextFile(cwd: string, text: string): Promise<string> {
   const link = join(cwd, HERMES_CONTEXT_FILE)
-  let path = link
+  const path = link
   let existing: string | null = null
   let mode = 0o600
-  const linked = await lstat(link).then(
-    () => true,
-    () => false
-  )
-  if (linked) {
+  const info = await lstat(link).catch(() => null)
+  if (info) {
+    // A link may point outside the folder or into a tracked file, so it is left as the user's.
+    if (info.isSymbolicLink()) {
+      return link
+    }
     try {
-      path = await realpath(link)
-      existing = await readFile(path, 'utf8')
-      mode = (await stat(path)).mode & 0o777
+      existing = await readFile(link, 'utf8')
+      mode = info.mode & 0o777
     } catch {
-      // A link to nothing, or a file that cannot be read, is the user's.
       return link
     }
   }

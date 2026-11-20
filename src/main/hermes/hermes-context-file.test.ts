@@ -32,17 +32,13 @@ describe('Hermes context file', () => {
     expect(content).not.toContain('first text')
   })
 
-  it('writes through a symlink and keeps text that merely quotes the markers', async () => {
+  it('leaves a symlink and its target alone', async () => {
     const target = join(dir, 'AGENTS.md')
-    await writeFile(target, 'Note: <!-- orca:begin --> is a marker.\n\nImportant rules.\n')
+    await writeFile(target, 'Important rules.\n')
     await symlink(target, join(dir, HERMES_CONTEXT_FILE))
-    await writeHermesContextFile(dir, 'first text')
-    await writeHermesContextFile(dir, 'second text')
+    await writeHermesContextFile(dir, 'text')
     expect((await lstat(join(dir, HERMES_CONTEXT_FILE))).isSymbolicLink()).toBe(true)
-    const content = await readFile(target, 'utf8')
-    expect(content).toContain('Important rules.')
-    expect(content).toContain('second text')
-    expect(content).not.toContain('first text')
+    expect(await readFile(target, 'utf8')).toBe('Important rules.\n')
   })
 
   it('leaves a dangling symlink alone', async () => {

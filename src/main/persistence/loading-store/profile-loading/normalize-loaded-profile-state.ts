@@ -172,7 +172,12 @@ export function normalizeLoadedProfileState(
           bots,
           botsPermissionDefaultMigrated: true as const,
           ...(botsNewerAgents.length > 0 || parsed.botsNewerAgents !== undefined
-            ? { botsNewerAgents, botOrder: parsed.botOrder ?? allBots?.map((bot) => bot.id) }
+            ? {
+                botsNewerAgents,
+                botOrder: Array.isArray(parsed.botOrder)
+                  ? parsed.botOrder
+                  : allBots?.map((bot) => bot.id)
+              }
             : {})
         }),
     orcadMigrationImportReceipts: normalizeOrcadMigrationImportReceipts(
