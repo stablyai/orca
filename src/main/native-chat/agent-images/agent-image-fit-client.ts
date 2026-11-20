@@ -1,3 +1,4 @@
+import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../../shared/agent-session/agent-session-attachments'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { toLinuxPath, toWindowsWslDrivePath } from '../../../shared/file-access/wsl-paths'
 import { stat } from 'node:fs/promises'
@@ -19,6 +20,7 @@ import {
 import { nativeChatPasteFolder } from '../paste-files/native-chat-paste-files'
 import { getAgentSessionAttachmentStore } from '../agent-session-attachments/agent-session-attachment-store-registry'
 import { parseAgentSessionAttachmentStorePath } from '../agent-session-attachments/agent-session-attachment-references'
+import { publishAgentImage } from './agent-image-publication'
 import type { AgentImageFitRequest, AgentImageFitResponse } from './agent-image-fit-protocol'
 
 export class AgentImageFitError extends Error {}
@@ -32,7 +34,7 @@ export async function fitAgentImagePath(path: string, signal?: AbortSignal): Pro
       process.platform === 'win32' ? (toWindowsWslDrivePath(path) ?? path) : path
     )
     const info = await stat(readablePath).catch(() => null)
-    if (!info?.isFile()) {
+    if (!info?.isFile() || info.size > AGENT_SESSION_ATTACHMENT_MAX_BYTES) {
       return path
     }
     if (info.size <= AGENT_IMAGE_MAX_BYTES) {
@@ -83,9 +85,8 @@ export async function fitAgentImagePath(path: string, signal?: AbortSignal): Pro
     if (!response.ok) {
       throw new AgentImageFitError(response.error)
     }
-    return readablePath !== path && path.startsWith('/mnt/')
-      ? toLinuxPath(response.path)
-      : response.path
+    const prepared = await publishAgentImage(response, signal)
+    return readablePath !== path && path.startsWith('/mnt/') ? toLinuxPath(prepared) : prepared
   } catch (error) {
     signal?.throwIfAborted()
     throw new AgentImageFitError(error instanceof Error ? error.message : String(error))

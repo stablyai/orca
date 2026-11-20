@@ -11,6 +11,7 @@ import {
   HOST_TEST_SESSION as SESSION,
   hostTestOperationId
 } from './structured-agent-session-host-test-data.test-fixture'
+import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import { preparePiRpcPrompt, PiRpcPromptError } from '../../../../pi/rpc/prompts/rpc-prompt'
 import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -48,7 +49,9 @@ it('sends an old returned image card through fitting without editing its stored 
       Buffer.alloc(6 * 1024 * 1024)
     ])
     await writeFile(source, original)
-    await rig.workingSend()
+    const opener = await rig.workingSend()
+    await rig.settleAccepted(opener, 'opening')
+    await openRigTurnFor(rig, opener)
     const body: AgentJournalMessageItem = {
       kind: 'message',
       role: 'user',
@@ -68,7 +71,7 @@ it('sends an old returned image card through fitting without editing its stored 
     ).toMatchObject({ ok: true })
     await expect(preparePiRpcPrompt(body, false)).rejects.toBeInstanceOf(PiRpcPromptError)
     expect(await rig.sendNow(id)).toMatchObject({ ok: true })
-    await eventually(async () => expect(await rig.handoff(id)).toBeDefined())
+    await eventually(async () => expect((await rig.handoff(id))?.handedOverAt).toBeDefined())
     const refused = await rig.handoff(id)
     await rig.settleRejected(
       refused!.clientMessageId,

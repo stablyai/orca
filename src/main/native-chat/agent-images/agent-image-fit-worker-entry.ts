@@ -1,5 +1,5 @@
 import { parentPort } from 'node:worker_threads'
-import { fitAgentImageFile } from './agent-image-fit'
+import { prepareAgentImageFile } from './agent-image-fit'
 import type { AgentImageFitRequest, AgentImageFitResponse } from './agent-image-fit-protocol'
 import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
 
@@ -9,9 +9,9 @@ if (!parentPort) {
 }
 const port = parentPort
 port.on('message', (request: AgentImageFitRequest) => {
-  void fitAgentImageFile(request.path, request.outputDirectory).then(
-    (path) => {
-      const response: AgentImageFitResponse = { id: request.id, ok: true, path }
+  void prepareAgentImageFile(request.path, request.outputDirectory).then(
+    (result) => {
+      const response: AgentImageFitResponse = { id: request.id, ok: true, ...result }
       port.postMessage(response)
     },
     (error: unknown) => {

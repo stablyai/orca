@@ -1,8 +1,10 @@
 import { readRasterImageDimensions } from '../../../shared/file-preview/raster-image-dimensions'
-import { createHash, randomUUID } from 'node:crypto'
-import { access, mkdir, rename, rm, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { access } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Animation, Image } from 'imagescript'
+import type { AgentImageFitResult } from './agent-image-fit-protocol'
+import { publishAgentImage } from './agent-image-publication'
 import {
   AGENT_IMAGE_MAX_LONG_EDGE,
   clipboardImageSizeWithinEdge,
@@ -15,23 +17,30 @@ import { detectImageFileSignature } from '../../../shared/file-content/image-fil
 
 /** Worker-only: keep decoding, scaling and compression off the host event loop. */
 export async function fitAgentImageFile(path: string, outputDirectory: string): Promise<string> {
+  return publishAgentImage(await prepareAgentImageFile(path, outputDirectory))
+}
+
+export async function prepareAgentImageFile(
+  path: string,
+  outputDirectory: string
+): Promise<AgentImageFitResult> {
   const { buffer } = await readNodeFileWithinLimit(path, AGENT_SESSION_ATTACHMENT_MAX_BYTES, {
     regularFileOnly: true
   })
   const dimensions = readRasterImageDimensions(buffer)
   if (dimensions && !agentImageNeedsFitting(buffer.byteLength, dimensions)) {
-    return path
+    return { path }
   }
   const signature = detectImageFileSignature(buffer)
   if (!signature) {
-    return path
+    return { path }
   }
   const digest = createHash('sha256').update(buffer).digest('hex')
   const jpeg = signature.extension === 'jpg'
   const output = join(outputDirectory, `v2-${digest}.${jpeg ? 'jpg' : 'png'}`)
   try {
     await access(output)
-    return output
+    return { path: output }
   } catch {
     // The source digest makes each committed derivative immutable.
   }
@@ -44,10 +53,10 @@ export async function fitAgentImageFile(path: string, outputDirectory: string): 
         : await Image.decode(buffer, options)
   } catch {
     // Keep formats and large sources the provider can still read, as mobile does on decode failure.
-    return path
+    return { path }
   }
   if (!image) {
-    return path
+    return { path }
   }
   const decoded = image.resize(clipboardImageSizeWithinEdge(image, AGENT_IMAGE_MAX_LONG_EDGE))
   const encoded = await encodeAgentImageWithinLimit(
@@ -58,13 +67,5 @@ export async function fitAgentImageFile(path: string, outputDirectory: string): 
     },
     (bytes) => bytes.byteLength
   )
-  await mkdir(outputDirectory, { recursive: true })
-  const part = join(outputDirectory, `${digest}-${randomUUID()}.part`)
-  try {
-    await writeFile(part, encoded, { flag: 'wx' })
-    await rename(part, output)
-  } finally {
-    await rm(part, { force: true })
-  }
-  return output
+  return { path: output, bytes: encoded }
 }
