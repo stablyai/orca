@@ -38,6 +38,8 @@ export type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   /** Called once when the deadline — not an abort — is what ended the process. */
   onDeadlineKill?: () => void
   onStderr?: (chunk: string) => void
+  /** False keeps a Windows launch on main; true waits for a cold worker instead of spawning on main meanwhile. */
+  spawnOnWorkerThread?: boolean
   /** Native Git only: launch an owned group and retain it after abnormal stop until proof. */
   ownedPosixGroup?: boolean
   /** Rechecked synchronously at the spawn call, after any async executable resolution (so it keeps POSIX launches on main). */

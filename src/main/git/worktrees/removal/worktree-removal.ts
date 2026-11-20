@@ -39,7 +39,7 @@ export async function removeWorktree(
 ): Promise<RemoveWorktreeResult> {
   const writers: Promise<void>[] = []
   const observe = options.observeChildTermination
-  options = {
+  options = removalWorkerOptions({
     ...options,
     observeChildTermination: (terminated, writes) => {
       observe?.(terminated, writes)
@@ -47,7 +47,7 @@ export async function removeWorktree(
         writers.push(terminated)
       }
     }
-  }
+  })
   try {
     // Wait out ref packing before deleting branches; concurrent pruning can finish safely.
     return await withRepoRefMaintenancePaused('worktree-remove', () =>
@@ -159,7 +159,7 @@ export async function finishUnregisteredWorktreeRemoval(
 ): Promise<RemoveWorktreeResult> {
   const writers: Promise<void>[] = []
   const observe = options.observeChildTermination
-  options = {
+  options = removalWorkerOptions({
     ...options,
     observeChildTermination: (terminated, writes) => {
       observe?.(terminated, writes)
@@ -167,7 +167,7 @@ export async function finishUnregisteredWorktreeRemoval(
         writers.push(terminated)
       }
     }
-  }
+  })
   try {
     await assertCheckoutGone()
     await pruneGitWorktrees(gitExecOptions(repoPath, options)).catch((error: unknown) =>
@@ -188,7 +188,7 @@ export async function deleteBranchOfUnregisteredWorktree(
 ): Promise<RemoveWorktreeResult> {
   const writers: Promise<void>[] = []
   const observe = options.observeChildTermination
-  options = {
+  options = removalWorkerOptions({
     ...options,
     observeChildTermination: (terminated, writes) => {
       observe?.(terminated, writes)
@@ -196,7 +196,7 @@ export async function deleteBranchOfUnregisteredWorktree(
         writers.push(terminated)
       }
     }
-  }
+  })
   try {
     if (!branch?.name || !(await localBranchExists(repoPath, branch.name, options))) {
       return {}
@@ -209,6 +209,11 @@ export async function deleteBranchOfUnregisteredWorktree(
     invalidateSparseCheckoutState(repoPath, worktreePath)
     bumpWorktreeScanGeneration(repoPath)
   }
+}
+
+function removalWorkerOptions(options: RemoveWorktreeOptions): RemoveWorktreeOptions {
+  // uv_spawn can block even for async Git; keep native process creation off Electron's UI loop.
+  return process.platform === 'darwin' ? { ...options, spawnOnWorkerThread: true } : options
 }
 
 export async function localBranchExists(

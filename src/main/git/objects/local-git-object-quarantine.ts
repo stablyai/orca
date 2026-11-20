@@ -62,6 +62,7 @@ export function createLocalGitObjectQuarantine(
     wslDistro?: string
     signal?: AbortSignal
     admissionTier?: GitAdmissionTier
+    spawnOnWorkerThread?: boolean
   } = {}
 ): LocalGitObjectQuarantine {
   const wslDistro = parseWslPath(repoPath)?.distro ?? options.wslDistro
@@ -73,6 +74,7 @@ export function createLocalGitObjectQuarantine(
     const commonDir = await readRepoCommonDirFromGit(repoPath, {
       ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
       ...(options.signal ? { signal: options.signal } : {}),
+      ...(options.spawnOnWorkerThread ? { spawnOnWorkerThread: true } : {}),
       ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
     })
     // Probe first to settle linked-worktree routing; host Git may need a different object-store spelling.

@@ -31,13 +31,16 @@ type CaptureCallback = (
  * On POSIX, main keeps what only its launch does: canStart rechecked at creation, and a probed CLI selection run under its own name. */
 export async function capturesOnWorker(
   command: string,
-  options: { canStart?: () => boolean }
+  options: { canStart?: () => boolean; spawnOnWorkerThread?: boolean }
 ): Promise<boolean> {
   if (process.platform === 'win32') {
-    return whenSpawnWorkerReady()
+    return options.spawnOnWorkerThread !== false && whenSpawnWorkerReady()
   }
-  // A booting worker would delay this result; main spawns as before until it is ready.
-  return !options.canStart && !hasLocalCommandSelection(command) && spawnWorkerReadyNow()
+  if (options.canStart || hasLocalCommandSelection(command)) {
+    return false
+  }
+  // A booting worker would delay this result, so main spawns meanwhile unless the caller must stay off main.
+  return options.spawnOnWorkerThread === true ? whenSpawnWorkerReady() : spawnWorkerReadyNow()
 }
 
 /** A second, passive stderr listener: execFile still captures every byte. */
