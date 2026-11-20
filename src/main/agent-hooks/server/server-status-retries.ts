@@ -199,6 +199,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     return (
       paneKey === original.paneKey &&
       Boolean(this.server) &&
+      this.statusHooksEnabled &&
       this.state.lastStatusByPaneKey.get(original.paneKey) === original
     )
   }
