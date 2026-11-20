@@ -36,7 +36,7 @@ afterEach(async () => {
   }
 })
 
-it('retains uploads after interrupted reconciliation, then resumes cleanup after a successful reopen', async () => {
+it('retains enumerated custody when a chat stops reconciliation while orphan cleanup continues', async () => {
   const root = mkdtempSync(join(tmpdir(), 'orca-attachment-custody-'))
   cleanup.push(() => rmSync(root, { recursive: true, force: true }))
   const { db: source } = openJournalDatabase(journalDatabasePath(root))
@@ -83,8 +83,8 @@ it('retains uploads after interrupted reconciliation, then resumes cleanup after
     )
     expect([claimed, orphan, marked].map((id) => existsSync(join(attachments, id)))).toEqual([
       true,
-      true,
-      true
+      false,
+      false
     ])
   } finally {
     await interrupted.close()

@@ -54,7 +54,6 @@ let checkpoint: JournalCheckpointOwner | undefined
 let checkpointClosing: Promise<void> | undefined
 let destinationMain: string | undefined
 let readOnly = true
-let attachmentCustodyComplete = workerData.filename !== journalDomainDatabasePath(stateDirectory)
 let fault: unknown
 let closing = false
 let scheduled = false
@@ -67,9 +66,7 @@ async function open(): Promise<void> {
   try {
     mkdirSync(dirname(workerData.filename), { recursive: true })
     if (workerData.filename === journalDomainDatabasePath(stateDirectory)) {
-      await initializeJournalDomainDatabase(stateDirectory, (complete) => {
-        attachmentCustodyComplete = complete
-      })
+      await initializeJournalDomainDatabase(stateDirectory)
     }
     const opened = openJournalDomainDatabase(workerData.filename)
     db = opened.db
@@ -90,7 +87,7 @@ async function open(): Promise<void> {
       parking = new JournalSqlWalParking(checkpoint)
     }
     batch = new JournalSqlBatch(db, checkpoint && journalSqlTimedGate(checkpoint, gate))
-    reply({ type: 'ready', readOnly, attachmentCustodyComplete })
+    reply({ type: 'ready', readOnly })
   } catch (error) {
     fault = error
     reply({

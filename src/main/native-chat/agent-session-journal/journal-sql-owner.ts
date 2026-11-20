@@ -40,11 +40,6 @@ export class JournalSqlOwner {
   private failure: Error | undefined
   private closing = false
   private didExit = false
-  private custodyComplete = false
-
-  get attachmentCustodyComplete(): boolean {
-    return this.custodyComplete
-  }
   private recordInstallationRequired = false
   private recordInstallation: Promise<JournalSqlStoredRecords> | undefined
   private closed: Promise<void> | undefined
@@ -220,7 +215,6 @@ export class JournalSqlOwner {
 
   private receive(response: JournalSqlResponse): void {
     if (response.type === 'ready') {
-      this.custodyComplete = response.attachmentCustodyComplete === true
       this.ready.resolve(response.readOnly)
       return
     }

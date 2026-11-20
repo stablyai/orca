@@ -1,7 +1,8 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
+import Database from '../../../sqlite/sync-database'
 import { recoverJournalLegacyClaims } from './journal-legacy-claims'
 import { recordJournalLegacyFailure } from './journal-legacy-reconcile-marks'
 import {
@@ -14,10 +15,59 @@ import { reconcileJournalLegacySource } from './journal-legacy-reconcile'
 
 const cleanup: (() => void)[] = []
 afterEach(() => {
+  vi.restoreAllMocks()
   for (const close of cleanup.splice(0).toReversed()) {
     close()
   }
 })
+
+it.each([11, 10])(
+  'keeps every enumerated claim after a source record page fails with SQLite code %i',
+  async (errcode) => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+    const { db: source } = openJournalDatabase(journalDatabasePath(root))
+    cleanup.push(() => source.close())
+    await initializeJournalDomainDatabase(root)
+    const { db } = openJournalDomainDatabase(journalDomainDatabasePath(root))
+    cleanup.push(() => db.close())
+    const record = source.prepare('INSERT INTO agent_session_records VALUES(?,?)')
+    record.run('broken-page', '{}')
+    record.run('later-chat', '{}')
+    source
+      .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+      .run('later-upload', 'later-chat', 100)
+    const prepare = Database.prototype.prepare
+    vi.spyOn(Database.prototype, 'prepare').mockImplementation(function (sql) {
+      const statement = prepare.call(this, sql)
+      if (sql !== 'SELECT record_json FROM agent_session_records WHERE session_id=?') {
+        return statement
+      }
+      return {
+        get: (...parameters) => {
+          if (parameters[0] === 'broken-page') {
+            throw Object.assign(new Error('unreadable source page'), {
+              code: 'ERR_SQLITE_ERROR',
+              errcode
+            })
+          }
+          return statement.get(...parameters)
+        },
+        all: statement.all.bind(statement),
+        run: statement.run.bind(statement),
+        iterate: statement.iterate.bind(statement),
+        setReadBigInts: statement.setReadBigInts.bind(statement)
+      }
+    })
+    reconcileJournalLegacySource(root, db)
+    expect(
+      db.prepare('SELECT upload_id,session_id FROM agent_session_attachment_claims').all()
+    ).toEqual([{ upload_id: 'later-upload', session_id: 'later-chat' }])
+    expect(
+      db.prepare("SELECT 1 FROM agent_session_records WHERE session_id='later-chat'").get()
+    ).toBeUndefined()
+  }
+)
 
 it('never commits salvaged custody without its failure hold when a trigger rolls back', () => {
   const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))

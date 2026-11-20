@@ -53,8 +53,3 @@ export function assertSubmissionIdUnused(
 export class JournalOutcomeDecodeError extends Error {
   override readonly name = 'JournalOutcomeDecodeError'
 }
-export function assertJournalDatabaseOpen(closed: boolean): void {
-  if (closed) {
-    throw new AgentSessionJournalError('journal_closed', 'the chat journal database is closed')
-  }
-}

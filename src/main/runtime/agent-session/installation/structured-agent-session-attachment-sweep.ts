@@ -10,7 +10,6 @@ export function structuredAgentSessionAttachmentSweepFacts(
   const sweep = async (operation: Extract<JournalWriterEffect, { kind: 'sweep' }>['operation']) =>
     writable() ? (await database.effects([{ kind: 'sweep', operation }]))[0] : undefined
   return {
-    canSweep: () => database.attachmentCustodyComplete,
     listBeingSwept: async () => {
       const uploads: string[] = []
       let after: string | null = null

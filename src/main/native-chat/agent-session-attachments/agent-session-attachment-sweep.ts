@@ -11,7 +11,6 @@ export const ABANDONED_PART_MAX_AGE_MS = 60 * 60 * 1000
 export const UNCLAIMED_ATTACHMENT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
 export type AgentSessionAttachmentSweepFacts = {
-  canSweep?: () => boolean | Promise<boolean>
   listBeingSwept: () => readonly string[] | Promise<readonly string[]>
   markForSweep: (uploadId: string, now: number) => boolean | Promise<boolean>
   finishSweep: (uploadId: string) => void | Promise<void>
@@ -27,9 +26,6 @@ export async function sweepAgentSessionAttachments(
   now = Date.now()
 ): Promise<AgentSessionAttachmentSweepResult> {
   const removed: string[] = []
-  if (facts.canSweep && !(await facts.canSweep())) {
-    return { removed }
-  }
   const remove = async (uploadDir: string): Promise<void> => {
     await removeQuietly(uploadDir)
     facts.onUploadRemoved?.(uploadDir)

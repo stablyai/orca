@@ -53,17 +53,13 @@ export const JOURNAL_LEGACY_REVISIONS_KEPT = 'journal.legacy-revisions-kept.v1'
  * Terminal restore waits for this pass, so it reads no history: a copy's history converts later
  * like any unconverted chat's, and a chat needing a history compare is compared in the background.
  */
-export function reconcileJournalLegacySource(
-  stateDirectory: string,
-  db: Database.Database,
-  onCustodyTransfer?: (complete: boolean) => void
-): boolean {
+export function reconcileJournalLegacySource(stateDirectory: string, db: Database.Database): void {
   const sourcePath = journalDatabasePath(stateDirectory)
   // Captured before reading, so a write during this pass is never taken as absorbed. Until every
   // chat here carries its revision (files converted before revisions were kept), each launch reads.
   const captured = captureJournalLegacySourceReceipt(sourcePath)
   if (captured.disposition === 'no-source-at-initialization') {
-    return true
+    return
   }
   const saved = readMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT)
   const unchanged = sameJournalLegacySource(saved, captured)
@@ -75,10 +71,10 @@ export function reconcileJournalLegacySource(
     forced.set(id, { stranded: copy })
   }
   if (unchanged && kept && forced.size === 0) {
-    return true
+    return
   }
   const receipt = JSON.stringify(captured)
-  const pass: Pass = { kept, forced, baselines: [], compares: [], onCustodyTransfer }
+  const pass: Pass = { kept, forced, baselines: [], compares: [] }
   const source = openJournalLegacySource(sourcePath)
   let complete = true
   let gone: string[] = []
@@ -107,7 +103,7 @@ export function reconcileJournalLegacySource(
     captured.disposition === 'copied-source' &&
     !sameJournalLegacySource(receipt, captureJournalLegacySourceReceipt(sourcePath))
   ) {
-    return complete
+    return
   }
   runJournalTransaction(db, () => {
     for (const id of gone) {
@@ -125,12 +121,10 @@ export function reconcileJournalLegacySource(
       writeMeta(db, JOURNAL_LEGACY_REVISIONS_KEPT, '1')
     }
   })
-  return complete
 }
 
 /** What one pass knows about the original, and the chats it takes as already shown here. */
 type Pass = {
-  onCustodyTransfer?: (complete: boolean) => void
   /** Every chat in the original at the copy was given a revision here. */
   kept: boolean
   /** Chats that get a copy whatever their revision shows. */
@@ -178,15 +172,9 @@ function absorbChats(
   try {
     chats = walk ? originalChatIds(source, 'saved') : [...pass.forced.keys()]
   } catch (error) {
-    // A broken catalog keeps the pre-existing bulk-claim behavior; no chat can be visited.
-    runJournalTransaction(db, () => {
-      for (const [id, claims] of adoption.claims) {
-        insertJournalLegacyClaims(db, id, missingJournalLegacyClaims(db, id, claims))
-      }
-    })
+    retainEnumeratedClaims(db, adoption)
     throw error
   }
-  pass.onCustodyTransfer?.(false)
   for (const id of chats) {
     let revision: string | undefined
     const added = adoption.added.length
@@ -204,6 +192,7 @@ function absorbChats(
         (revision !== undefined && isSqliteCorruption(error)) ||
         db.isTransaction
       ) {
+        retainEnumeratedClaims(db, adoption)
         console.warn('[agent-session-journal] keeping chats an older Orca saved paused', error)
         return false
       }
@@ -227,6 +216,7 @@ function absorbChats(
           }
         })
       } catch (failureError) {
+        retainEnumeratedClaims(db, adoption)
         console.warn(
           '[agent-session-journal] keeping chats an older Orca saved paused',
           failureError
@@ -242,8 +232,20 @@ function absorbChats(
       Object.assign(adoption, { nextPosition, tabsRecorded })
     }
   }
-  pass.onCustodyTransfer?.(true)
   return true
+}
+
+/** A stopped walk keeps the custody the bulk pass took before visiting any chat. */
+function retainEnumeratedClaims(db: Database.Database, adoption: Adoption): void {
+  try {
+    runJournalTransaction(db, () => {
+      for (const [id, claims] of adoption.claims) {
+        insertJournalLegacyClaims(db, id, missingJournalLegacyClaims(db, id, claims))
+      }
+    })
+  } catch (error) {
+    console.warn('[agent-session-journal] keeping original upload custody failed', error)
+  }
 }
 
 function absorbChat(

@@ -30,10 +30,7 @@ import { JOURNAL_LEGACY_SOURCE_RECEIPT } from './journal-legacy-source-receipt'
 import { captureJournalLegacySourceReceipt } from './journal-legacy-source-capture'
 
 /** Run once on the writer worker, before opening its steady-state writable connection. */
-export async function initializeJournalDomainDatabase(
-  stateDirectory: string,
-  onReconciled?: (complete: boolean) => void
-): Promise<string> {
+export async function initializeJournalDomainDatabase(stateDirectory: string): Promise<string> {
   const destination = journalDomainDatabasePath(stateDirectory)
   mkdirSync(stateDirectory, { recursive: true })
   try {
@@ -42,8 +39,7 @@ export async function initializeJournalDomainDatabase(
     console.warn('[agent-session-journal] removing an abandoned initializer failed', error)
   }
   if (existsSync(destination)) {
-    const complete = absorbOlderOrcaWrites(stateDirectory, destination)
-    onReconciled?.(complete)
+    absorbOlderOrcaWrites(stateDirectory, destination)
     return destination
   }
   const temporary = mkdtempSync(join(stateDirectory, `.journal-domain-import-${process.pid}-`))
@@ -82,11 +78,7 @@ export async function initializeJournalDomainDatabase(
       if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) {
         throw error
       }
-      const complete = absorbOlderOrcaWrites(stateDirectory, destination)
-      onReconciled?.(complete)
-      return destination
     }
-    onReconciled?.(true)
     return destination
   } finally {
     rmSync(temporary, { recursive: true, force: true })
@@ -94,23 +86,18 @@ export async function initializeJournalDomainDatabase(
 }
 
 /** Best effort: a failure leaves the original unabsorbed for the next launch, never blocks chats. */
-function absorbOlderOrcaWrites(stateDirectory: string, destination: string): boolean {
-  let custodyComplete = true
+function absorbOlderOrcaWrites(stateDirectory: string, destination: string): void {
   try {
     const { db, readOnly } = openJournalDomainDatabase(destination)
     try {
-      return (
-        readOnly ||
-        reconcileJournalLegacySource(stateDirectory, db, (complete) => {
-          custodyComplete = complete
-        })
-      )
+      if (!readOnly) {
+        reconcileJournalLegacySource(stateDirectory, db)
+      }
     } finally {
       db.close()
     }
   } catch (error) {
     console.warn('[agent-session-journal] reading chats an older Orca saved failed', error)
-    return custodyComplete
   }
 }
 
