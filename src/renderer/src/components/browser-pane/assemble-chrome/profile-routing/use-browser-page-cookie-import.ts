@@ -3,7 +3,6 @@ import { useAppStore } from '@/store'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { resolveSshWorkspaceBrowserRouteEligibility } from '@/lib/browser/workspace/ssh-workspace-browser-route-eligibility'
 import { selectWorktreeHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
-import { getBrowserSettingsRuntimeEnvironmentId } from '@/store/slices/browser/hosts/browser-host-state'
 import type {
   BrowserSlice,
   BrowserSshPageCookieImportRoute
@@ -34,15 +33,13 @@ export function useBrowserPageCookieImport(worktreeId: string): BrowserPageCooki
   const hostLabel = useAppStore((s) =>
     sshTargetId ? (selectWorktreeHostDisplayLabel(s, worktreeId) ?? sshTargetId) : null
   )
-  const settingsHostIsDesktop = useAppStore(
-    (s) => getBrowserSettingsRuntimeEnvironmentId(s) === null
-  )
   const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
   const detectedBrowsersLoaded = useAppStore((s) => s.detectedBrowsersLoaded)
   const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
   const [desktopBrowsers, setDesktopBrowsers] = useState<BrowserSlice['detectedBrowsers'] | null>(
     null
   )
+  // Not the store's list: that follows the Settings host, which may be a paired server.
   const fetchDesktopBrowsers = useCallback(async (): Promise<void> => {
     if (desktopBrowsers !== null) {
       return
@@ -56,7 +53,7 @@ export function useBrowserPageCookieImport(worktreeId: string): BrowserPageCooki
     () => (sshTargetId && hostLabel ? { sshTargetId, hostLabel } : null),
     [sshTargetId, hostLabel]
   )
-  if (!sshRoute || settingsHostIsDesktop) {
+  if (!sshRoute) {
     return { sshRoute, detectedBrowsers, detectedBrowsersLoaded, fetchDetectedBrowsers }
   }
   return {
