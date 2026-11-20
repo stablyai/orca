@@ -98,13 +98,24 @@ export function deliveredUntakenMail(db: OrchestrationDb, dispatchId: string): s
     .flatMap((mail) => (mail.delivered_at ? [mail.id] : []))
 }
 
-/** Every pointer delivered before a restart has had its chance to wake the worker: none holds its rest. */
-export function forgetDeliveredWakes(db: OrchestrationDb, dispatchId: string): void {
+/** A pointer delivered before this Orca started has had its chance to wake the worker: it no longer
+ *  holds the rest. `startedAt` is in ms; delivery times have whole seconds, so its own second still holds. */
+export function forgetDeliveredWakes(
+  db: OrchestrationDb,
+  dispatchId: string,
+  startedAt: number
+): void {
   const row = readWorkerPresence(db, dispatchId)
+  const before = Math.floor(startedAt / 1000) * 1000
   try {
     const rest = row?.report ? JSON.parse(row.report) : null
     if (row && Array.isArray(rest?.mailDelivered)) {
-      const mailDelivered = deliveredUntakenMail(db, dispatchId)
+      const earlier = db
+        .getUnreadMessages(`dispatch:${dispatchId}`)
+        .flatMap((mail) =>
+          mail.delivered_at && Date.parse(mail.delivered_at) < before ? [mail.id] : []
+        )
+      const mailDelivered = [...new Set([...rest.mailDelivered, ...earlier])]
       writeWorkerPresence(db, dispatchId, {
         ...row,
         report: JSON.stringify({ ...rest, mailDelivered })

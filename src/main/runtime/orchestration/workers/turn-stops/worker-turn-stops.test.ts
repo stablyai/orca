@@ -325,7 +325,11 @@ describe('terminal worker turn stops', () => {
     ctx.db.markAsDelivered([mail.id], `dispatch:${ctx.dispatch.id}`)
     reconsiderWorkerRest(ctx.db, ctx.dispatch.id, ctx.deps)
     expect(ctx.mail()).toHaveLength(0)
-    forgetDeliveredWakes(ctx.db, ctx.dispatch.id)
+    // Delivered by this Orca, after it started: still on its way to the worker.
+    forgetDeliveredWakes(ctx.db, ctx.dispatch.id, 0)
+    reconsiderWorkerRest(ctx.db, ctx.dispatch.id, ctx.deps)
+    expect(ctx.mail()).toHaveLength(0)
+    forgetDeliveredWakes(ctx.db, ctx.dispatch.id, Date.now() + 60_000)
     reconsiderWorkerRest(ctx.db, ctx.dispatch.id, ctx.deps)
     expect(ctx.mail().map((m) => m.subject)).toEqual(['Worker stopped without reporting'])
   })

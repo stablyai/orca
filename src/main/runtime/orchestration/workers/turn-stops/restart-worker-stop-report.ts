@@ -223,7 +223,7 @@ export async function reportWorkerStopsAcrossRestart(
     const session = db.getDispatchContextById(dispatchId)?.assignee_orca_session_id
     if (!session || (awaitingDecision && !awaitingDecision.has(session))) {
       visit(dispatchId, () => {
-        forgetDeliveredWakes(db, dispatchId)
+        forgetDeliveredWakes(db, dispatchId, performance.timeOrigin)
         void reconsiderWorkerRest(db, dispatchId, deps.reportDeps)
       })
     }
