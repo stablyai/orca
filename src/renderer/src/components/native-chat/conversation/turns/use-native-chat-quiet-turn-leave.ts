@@ -31,7 +31,10 @@ export function useNativeChatQuietTurnLeave({
     if (key !== undefined && quietTurnKeys.has(key)) {
       watched.current = undefined
       if (!reduceMotion) {
-        setLeaving((turns) => (turns.has(key) ? turns : new Set([...turns, key])))
+        // Always a new Set, even if the key is still fading from an earlier settlement: the new
+        // identity restarts the leave timer below. This can't loop, since a turn is only watched
+        // while it isn't quiet, so each write needs a real not-quiet to quiet transition.
+        setLeaving((turns) => new Set([...turns, key]))
       }
     }
     // Why: never watch a turn that is already quiet. The chat can still read working over a turn

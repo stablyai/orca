@@ -131,4 +131,24 @@ describe('a quiet turn that settles while the chat shows it working', () => {
     act(() => vi.runAllTimers())
     expect(rows(hook.result.current.slots)).toEqual(GONE)
   })
+
+  it('restarts the fade when the turn reopens and settles again before the first fade ends', () => {
+    vi.useFakeTimers()
+    const running = input({
+      isWorking: true,
+      turnStatuses: { active: null, completedByTurn: RUNNING }
+    })
+    const hook = renderHook((props: Input) => useNativeChatTranscriptSlots(props), {
+      initialProps: running
+    })
+    hook.rerender(input({}))
+    act(() => vi.advanceTimersByTime(550))
+    hook.rerender(running)
+    hook.rerender(input({ isWorking: true }))
+    // Past the first fade's deadline, but only 100 ms into the second fade.
+    act(() => vi.advanceTimersByTime(100))
+    expect(rows(hook.result.current.slots)).toEqual(FADING)
+    act(() => vi.runAllTimers())
+    expect(rows(hook.result.current.slots)).toEqual(GONE)
+  })
 })
