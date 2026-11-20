@@ -45,7 +45,7 @@ export function rebuildAttachedWebgl(pane: ManagedPaneInternal): void {
 }
 
 /** Gives WebGL back to a pane an atlas rebuild left detached under a chat cover that is now closing. */
-export function restoreWebglAfterChatCover(terminal: unknown): void {
+export function restoreWebglAfterChatCover(terminal: ManagedPaneInternal['terminal']): void {
   const pane = takeCoveredDetachedPane(terminal)
   if (
     pane &&

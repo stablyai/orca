@@ -249,8 +249,8 @@ describe('terminal WebGL atlas-memory rebuild', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(rebuilds).toEqual([[shown.pane, covered.pane]])
     expect(reattached).toEqual([[shown.pane]])
-    expect(atlas.takeCoveredDetachedPane(covered.terminal)).toBe(covered.pane)
-    expect(atlas.takeCoveredDetachedPane(covered.terminal)).toBeUndefined()
+    expect(atlas.takeCoveredDetachedPane(covered.pane.terminal)).toBe(covered.pane)
+    expect(atlas.takeCoveredDetachedPane(covered.pane.terminal)).toBeUndefined()
   })
 
   it('reattaches nothing while the window is hidden', async () => {

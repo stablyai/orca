@@ -36,7 +36,7 @@ const paneAtlases = new WeakMap<ManagedPaneInternal, GlyphAtlas>()
 // Strong only until rebuilt or ownerless.
 const dueAtlases = new Set<GlyphAtlas>()
 // Chat-covered panes a rebuild left detached; the cover's unmount gives them WebGL back.
-const coveredDetachedPanes = new WeakMap<unknown, ManagedPaneInternal>()
+const coveredDetachedPanes = new WeakMap<ManagedPaneInternal['terminal'], ManagedPaneInternal>()
 
 function atlasOf(pane: ManagedPaneInternal): GlyphAtlas | undefined {
   const addon = pane.webglAddon
@@ -189,7 +189,9 @@ export function trackTerminalWebglAtlasPane(pane: ManagedPaneInternal): void {
 }
 
 /** The pane a rebuild left detached under this chat cover, if it is still shown and should get WebGL back now. */
-export function takeCoveredDetachedPane(terminal: unknown): ManagedPaneInternal | undefined {
+export function takeCoveredDetachedPane(
+  terminal: ManagedPaneInternal['terminal']
+): ManagedPaneInternal | undefined {
   const pane = coveredDetachedPanes.get(terminal)
   coveredDetachedPanes.delete(terminal)
   return pane && shownPaneFilter()(pane) ? pane : undefined
