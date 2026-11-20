@@ -29,6 +29,7 @@ export function eventWhen(source: string, event: string): string {
 }
 
 function SkillsList({ ctx }: { ctx: BotShareContext }): React.JSX.Element {
+  const t = useTranslate()
   const all = ctx.candidate.available.skills
   // A second copy of a shared skill's name, in another folder: shown so the owner sees which went.
   const duplicates = ctx.candidate.leftOut.filter(
@@ -68,7 +69,7 @@ function SkillsList({ ctx }: { ctx: BotShareContext }): React.JSX.Element {
           off
           lead={<Tick checked={false} label={entry.name} />}
           title={entry.name}
-          detail={translate('bots.share.duplicateSkill', 'Same name, in {{folder}} · not shared', {
+          detail={t('bots.share.duplicateSkill', 'Same name, in {{folder}} · not shared', {
             folder: entry.from ?? ''
           })}
         />
