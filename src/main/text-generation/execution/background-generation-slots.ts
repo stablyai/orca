@@ -16,40 +16,60 @@ export type GenerationAdmission = <E extends Execution>(
   start: () => E | Promise<E>
 ) => Promise<E | null>
 
-type Waiter = { grant: () => void; granted: boolean }
+type Waiter = {
+  grant: () => void
+  queue: WaiterQueue | null
+  prev: Waiter | null
+  next: Waiter | null
+}
 
-class FifoQueue {
-  private items: Waiter[] = []
-  private head = 0
+/** FIFO of waiters; each waiter sits in at most one queue, so promotion and grants are O(1). */
+class WaiterQueue {
+  private head: Waiter | null = null
+  private tail: Waiter | null = null
 
   push(waiter: Waiter): void {
-    this.items.push(waiter)
+    waiter.queue = this
+    waiter.prev = this.tail
+    waiter.next = null
+    if (this.tail) {
+      this.tail.next = waiter
+    } else {
+      this.head = waiter
+    }
+    this.tail = waiter
   }
 
-  /** Removes and returns the oldest waiter the other queue has not already granted. */
-  take(): Waiter | undefined {
-    while (this.head < this.items.length) {
-      const waiter = this.items[this.head++]
-      if (this.head > 64 && this.head * 2 > this.items.length) {
-        this.items = this.items.slice(this.head)
-        this.head = 0
-      }
-      if (!waiter.granted) {
-        return waiter
-      }
+  remove(waiter: Waiter): void {
+    if (waiter.prev) {
+      waiter.prev.next = waiter.next
+    } else {
+      this.head = waiter.next
     }
-    return undefined
+    if (waiter.next) {
+      waiter.next.prev = waiter.prev
+    } else {
+      this.tail = waiter.prev
+    }
+    waiter.queue = waiter.prev = waiter.next = null
+  }
+
+  shift(): Waiter | null {
+    const waiter = this.head
+    if (waiter) {
+      this.remove(waiter)
+    }
+    return waiter
   }
 }
 
 let running = 0
-const userRequests = new FifoQueue()
-const backgroundRuns = new FifoQueue()
+const userRequests = new WaiterQueue()
+const backgroundRuns = new WaiterQueue()
 
 function releaseSlot(): void {
-  const next = userRequests.take() ?? backgroundRuns.take()
+  const next = userRequests.shift() ?? backgroundRuns.shift()
   if (next) {
-    next.granted = true
     next.grant()
   } else {
     running--
@@ -58,7 +78,7 @@ function releaseSlot(): void {
 
 /**
  * One naming request's admissions, across its retries. User requests run before automatic ones,
- * each in arrival order; `promote` moves a queued automatic admission into the user queue.
+ * each in arrival order; `promote` moves a queued automatic admission to the user queue's tail.
  */
 export class BackgroundGenerationRequest {
   private userRequested: boolean
@@ -73,9 +93,10 @@ export class BackgroundGenerationRequest {
       return
     }
     this.userRequested = true
-    // A promoted waiter sits in both queues; whichever reaches it first grants it.
-    if (this.queued) {
-      userRequests.push(this.queued)
+    const waiter = this.queued
+    if (waiter?.queue === backgroundRuns) {
+      backgroundRuns.remove(waiter)
+      userRequests.push(waiter)
     }
   }
 
@@ -119,7 +140,9 @@ export class BackgroundGenerationRequest {
     }
     return new Promise((resolve) => {
       const waiter: Waiter = {
-        granted: false,
+        queue: null,
+        prev: null,
+        next: null,
         grant: () => {
           this.queued = null
           resolve()
