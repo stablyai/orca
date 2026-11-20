@@ -154,7 +154,10 @@ function restoreMovedFileWithoutOverwrite(
     if (isDefinitiveAbsence(error)) {
       return
     }
-    throw error
+    // Left held, a later recovery could put stale bytes back after a logout: drop it as before.
+    console.warn('[atomic-file] Could not keep an earlier version of', targetPath, error)
+    rmSync(sourcePath, { force: true })
+    return
   }
   console.warn('[atomic-file] Kept an earlier version beside', targetPath, keptPath)
 }
