@@ -229,6 +229,27 @@ describe('syncSystemCodexResourcesIntoManagedHome', () => {
 
   // Windows file symlinks require developer mode; the integration test still checks real copies.
 
+  it('keeps a skill added to a fallback copy when the copy is refreshed', () => {
+    fsMockState.failSymlink = true
+    mkdirSync(join(getSystemCodexHomePath(), 'skills'), { recursive: true })
+    writeFileSync(join(getSystemCodexHomePath(), 'skills', 'base.md'), 'base\n')
+    syncSystemCodexResourcesIntoManagedHome()
+    const managedSkills = join(getRuntimeCodexHomePath(), 'skills')
+    writeFileSync(join(managedSkills, 'mine.md'), 'installed here\n')
+    writeFileSync(join(getSystemCodexHomePath(), 'skills', 'base.md'), 'base v2\n')
+
+    syncSystemCodexResourcesIntoManagedHome()
+
+    const kept = readdirSync(getRuntimeCodexHomePath()).filter((name) =>
+      name.startsWith('skills.orca-kept-')
+    )
+    expect(kept).toHaveLength(1)
+    expect(readFileSync(join(getRuntimeCodexHomePath(), kept[0], 'mine.md'), 'utf-8')).toBe(
+      'installed here\n'
+    )
+    expect(readFileSync(join(managedSkills, 'base.md'), 'utf-8')).toBe('base v2\n')
+  })
+
   it('removes an unowned copy when recording copy ownership fails', () => {
     const systemHomePath = getSystemCodexHomePath()
     const managedHomePath = join(userDataDir, 'wsl-runtime-home')

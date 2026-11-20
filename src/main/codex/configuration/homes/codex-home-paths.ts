@@ -15,7 +15,9 @@ import { dirname, join } from 'node:path'
 import {
   clearCopiedResourceMarker,
   markCopiedResource,
-  targetIsOwnedFallbackCopy
+  targetIsOwnedFallbackCopy,
+  inspectCopiedResource,
+  removeCopiedResource
 } from './codex-managed-home-resource-copy-marker'
 import { syncSystemCodexRulesIntoManagedHome } from './codex-managed-home-rules'
 import { observe, observeResolvedPathEntry } from '../codex-path-observation'
@@ -157,7 +159,12 @@ function linkSystemCodexResource(
         return
       }
     }
-    rmSync(targetPath, { recursive: true, force: true })
+    const state = inspectCopiedResource(targetPath, sourcePath, managedHomePath, entryName)
+    // Unreadable copies stay; unchanged ones of an unchanged source need no recopy.
+    if (state === 'indeterminate' || state === 'current') {
+      return
+    }
+    removeCopiedResource(targetPath, entryName, state)
   }
 
   mkdirSync(dirname(targetPath), { recursive: true })
@@ -272,7 +279,11 @@ function removeCopiedResourceIfOwned(
   if (!targetIsOwnedFallbackCopy(targetPath, managedHomePath, entryName, sourcePath)) {
     return
   }
-  rmSync(targetPath, { recursive: true, force: true })
+  const state = inspectCopiedResource(targetPath, null, managedHomePath, entryName)
+  if (state === 'indeterminate') {
+    return
+  }
+  removeCopiedResource(targetPath, entryName, state)
   clearCopiedResourceMarker(managedHomePath, entryName)
 }
 
