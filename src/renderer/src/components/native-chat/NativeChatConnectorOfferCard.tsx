@@ -229,15 +229,30 @@ function SignInOffer({ bot, offer, messageId }: SignInOfferProps): React.JSX.Ele
 }
 
 /** The server the bot runs on signed out of Orca: Sign in on that server, as its Connectors notice does. */
-function ServerSignInOffer({
+function ServerSignInOffer(
+  props: SignInOfferProps & { host: string; fallback: string }
+): React.JSX.Element {
+  const answering = useNativeChatOffer(props.bot.id, props.messageId)
+  // An answered card reads nothing from the server.
+  return answering.sent ? (
+    <SignedInLine answering={answering} />
+  ) : (
+    <ServerSignInAsk {...props} answering={answering} />
+  )
+}
+
+function ServerSignInAsk({
   bot,
   offer,
-  messageId,
   host,
-  fallback
-}: SignInOfferProps & { host: string; fallback: string }): React.JSX.Element {
+  fallback,
+  answering
+}: SignInOfferProps & {
+  host: string
+  fallback: string
+  answering: ReturnType<typeof useNativeChatOffer>
+}): React.JSX.Element {
   const t = useTranslate()
-  const answering = useNativeChatOffer(bot.id, messageId)
   const account = useBotHostOrcaAccount(bot.hostId)
   // The host's own fact, as its CLI and the phone read it: events wait while its connector is signed out.
   const connector = useBotHostConnectorStatus(bot.hostId)
@@ -245,9 +260,11 @@ function ServerSignInOffer({
   if (!account || account.state === 'unconfigured') {
     return <p className="text-sm text-chat-foreground-faint">{fallback}</p>
   }
-  const signedIn =
-    account.state === 'signed-in' && connector !== 'signed-out' && connector !== 'needs-sign-in'
-  if (signedIn || answering.sent) {
+  if (
+    account.state === 'signed-in' &&
+    connector !== 'signed-out' &&
+    connector !== 'needs-sign-in'
+  ) {
     return <SignedInLine answering={answering} />
   }
   return (
