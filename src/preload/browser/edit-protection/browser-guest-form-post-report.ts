@@ -42,8 +42,12 @@ function postedFormAction(
   target: EventTarget | null,
   lastSubmitterByForm: WeakMap<HTMLFormElement, HTMLElement | null>
 ): string | null {
-  // `new FormData(form)` fires formdata too; only a submission's own entry list follows a submit.
-  if (!(target instanceof HTMLFormElement) || !lastSubmitterByForm.has(target)) {
+  // `new FormData(form)` fires formdata too; a submission's own entry list follows a submit event,
+  // except `form.submit()`, which only an embedded frame posting to the top page needs reported.
+  if (
+    !(target instanceof HTMLFormElement) ||
+    (!lastSubmitterByForm.has(target) && window === window.top)
+  ) {
     return null
   }
   const submitter = lastSubmitterByForm.get(target)

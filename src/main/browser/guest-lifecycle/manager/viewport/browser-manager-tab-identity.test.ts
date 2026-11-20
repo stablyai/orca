@@ -43,6 +43,7 @@ vi.mock('../../../identity/browser-process-user-agent', async (importOriginal) =
 
 import { browserManager } from '../browser-manager'
 import { hasBrowserSessionUserAgentDemand } from '../../../identity/requests/browser-session-ua-demand'
+import { BROWSER_GUEST_SUBFRAME_UNLOADED_CHANNEL } from '../../../../../shared/browser/identity/browser-subframe-unload'
 import { googleAuthUserAgent } from '../../../identity/browser-site-user-agent'
 import { resetBrowserManagerMocks, resetBrowserManagerState } from '../browser-manager-test-harness'
 import {
@@ -288,15 +289,17 @@ describe('tab identity ownership', () => {
     expect(observed.standingOverride).toBeNull()
     expect(observed.requestIdentity).toEqual({ kind: 'process', userAgent: GUEST_CLEAN_UA })
   })
-  it('turns the header policy off once the last site iframe in a page is gone', async () => {
+  it('turns the header policy off once a site iframe fails or is removed', async () => {
+    vi.useFakeTimers()
     mocks.processUserAgentMode = 'native'
     mocks.processUserAgent =
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) orca/1.0.0 Chrome/134.0.0.0 Electron/30.0.0 Safari/537.36'
     const { handle } = openTab(ORDINARY_URL)
-    await flushViewportOps()
-    const teamsFrame = { url: 'https://teams.microsoft.com/v2/' }
-    const mainFrame: { url: string; framesInSubtree: object[] } = {
+    const teamsUrl = 'https://teams.microsoft.com/v2/'
+    const teamsFrame = { url: teamsUrl, origin: 'https://teams.microsoft.com' }
+    const mainFrame: { url: string; origin: string; framesInSubtree: object[] } = {
       url: ORDINARY_URL,
+      origin: 'https://example.com',
       framesInSubtree: []
     }
     mainFrame.framesInSubtree = [mainFrame, teamsFrame]
@@ -310,13 +313,28 @@ describe('tab identity ownership', () => {
         }
       }
     }
-    fire('did-start-navigation', {}, teamsFrame.url, false, false)
-    expect(hasBrowserSessionUserAgentDemand(session)).toBe(true)
-    fire('did-stop-loading')
-    expect(hasBrowserSessionUserAgentDemand(session)).toBe(true)
-    // The page removes the Teams iframe.
-    mainFrame.framesInSubtree = [mainFrame]
-    fire('did-stop-loading')
-    expect(hasBrowserSessionUserAgentDemand(session)).toBe(false)
+    const subframeUnloaded = (): void => {
+      fire('ipc-message', { sender: handle.guest }, BROWSER_GUEST_SUBFRAME_UNLOADED_CHANNEL)
+      vi.advanceTimersByTime(1_000)
+    }
+    try {
+      fire('did-start-navigation', {}, teamsUrl, false, false)
+      expect(hasBrowserSessionUserAgentDemand(session)).toBe(true)
+      fire('did-stop-loading')
+      expect(hasBrowserSessionUserAgentDemand(session)).toBe(true)
+      // Blocked by the site's frame-ancestors: an error page that keeps the Teams URL.
+      teamsFrame.origin = 'null'
+      fire('did-stop-loading')
+      expect(hasBrowserSessionUserAgentDemand(session)).toBe(false)
+      // A working Teams iframe, removed after the page finished loading.
+      teamsFrame.origin = 'https://teams.microsoft.com'
+      fire('did-start-navigation', {}, teamsUrl, false, false)
+      expect(hasBrowserSessionUserAgentDemand(session)).toBe(true)
+      mainFrame.framesInSubtree = [mainFrame]
+      subframeUnloaded()
+      expect(hasBrowserSessionUserAgentDemand(session)).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

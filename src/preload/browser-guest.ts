@@ -7,6 +7,7 @@ import {
 import { installBrowserWindowPrompt } from './browser/window-controls/browser-window-prompt-installation'
 import { installNativeChatVisualGuestTheme } from './native-chat/native-chat-visual-guest-theme'
 import { installBrowserGuestEditProtection } from './browser/edit-protection/browser-guest-edit-protection'
+import { BROWSER_GUEST_SUBFRAME_UNLOADED_CHANNEL } from '../shared/browser/identity/browser-subframe-unload'
 import { installBrowserGuestFormPostReport } from './browser/edit-protection/browser-guest-form-post-report'
 import { installBrowserGuestPageVisibilityReport } from './browser/visibility/browser-guest-page-visibility-report'
 import { BROWSER_GUEST_PAGE_VISIBILITY_CHANNEL } from '../shared/browser/guest-lifecycle/browser-guest-page-visibility'
@@ -31,6 +32,12 @@ if (process.isMainFrame) {
     func: installBrowserWindowCloseGuard,
     args: [() => ipcRenderer.sendToHost(PRELOAD_BROWSER_GUEST_WINDOW_CLOSE_CHANNEL)]
   })
+}
+// Electron reports no frame removal; a site iframe's demand for header rewrites ends with it.
+if (!process.isMainFrame) {
+  window.addEventListener('pagehide', () =>
+    ipcRenderer.send(BROWSER_GUEST_SUBFRAME_UNLOADED_CHANNEL)
+  )
 }
 installBrowserGuestFormPostReport({
   send: (channel, payload) => ipcRenderer.send(channel, payload)

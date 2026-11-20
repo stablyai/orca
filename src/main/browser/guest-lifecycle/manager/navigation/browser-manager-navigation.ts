@@ -15,11 +15,7 @@ import type {
   CdpUserAgentOverrideState
 } from './browser-user-agent-override-state'
 import { BrowserManagerVisibility } from '../browser-manager-visibility'
-import {
-  hasBrowserGuestFrameUserAgentDemand,
-  setBrowserGuestFrameUserAgentDemand,
-  setBrowserGuestPageUserAgentDemand
-} from '../../../identity/requests/browser-session-ua-demand'
+import { setBrowserGuestPageUserAgentDemand } from '../../../identity/requests/browser-session-ua-demand'
 import { teamsRequestUserAgent } from '../../../identity/browser-site-user-agent'
 
 export abstract class BrowserManagerNavigation extends BrowserManagerVisibility {
@@ -127,29 +123,6 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
       rewritesRequestHeaders(url, this.resolveGuestTabIdentity(guest, url)),
       frames
     )
-  }
-
-  /** A site iframe (e.g. Teams inside another page) keeps the policy on while it is loaded. */
-  protected noteSubframeUserAgentDemand(guest: Electron.WebContents, url: string): void {
-    if (subframeRewritesRequestHeaders(url)) {
-      setBrowserGuestFrameUserAgentDemand(guest.session, guest.id, true)
-    }
-  }
-
-  /** Once the page stops loading, only site iframes still present keep the policy on. */
-  protected settleSubframeUserAgentDemand(guest: Electron.WebContents): void {
-    if (guest.isDestroyed() || !hasBrowserGuestFrameUserAgentDemand(guest.id)) {
-      return
-    }
-    try {
-      const { mainFrame } = guest
-      const demanding = mainFrame.framesInSubtree.some(
-        (frame) => frame !== mainFrame && subframeRewritesRequestHeaders(frame.url)
-      )
-      setBrowserGuestFrameUserAgentDemand(guest.session, guest.id, demanding)
-    } catch {
-      // A disposed frame tree can't prove the site iframe gone; keep the policy on.
-    }
   }
 
   protected hasTabIdentityOverrideWork(guest: Electron.WebContents, url: string): boolean {
@@ -322,18 +295,7 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
   }
 }
 
-function subframeRewritesRequestHeaders(url: string): boolean {
-  return rewritesRequestHeaders(
-    url,
-    resolveBrowserTabIdentity({
-      url,
-      mobile: false,
-      processIdentity: getBrowserProcessUserAgentIdentity()
-    })
-  )
-}
-
-function rewritesRequestHeaders(url: string, identity: BrowserTabIdentity): boolean {
+export function rewritesRequestHeaders(url: string, identity: BrowserTabIdentity): boolean {
   const processUserAgent = getBrowserProcessUserAgentIdentity().userAgent
   return (
     identity.kind === 'mobile' ||
