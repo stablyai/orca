@@ -59,11 +59,29 @@ async function readLedger(capsulePath: string): Promise<AutomaticRestartLedger |
   }
 }
 
+/** Offer keys carry up to 512-character ids; drop the oldest until the file fits well inside its read limit. */
+function fitLedgerToReadLimit(ledger: AutomaticRestartLedger): AutomaticRestartLedger {
+  const fitted = { ...ledger }
+  while (Buffer.byteLength(JSON.stringify(fitted)) > MAX_LEDGER_BYTES / 2) {
+    if (fitted.passed.length > 0) {
+      fitted.passed = fitted.passed.slice(Math.ceil(fitted.passed.length / 10))
+    } else if (fitted.dismissed.length > 0) {
+      fitted.dismissed = fitted.dismissed.slice(Math.ceil(fitted.dismissed.length / 10))
+    } else {
+      break
+    }
+  }
+  return fitted
+}
+
 export function writeAutomaticRestartLedger(
   capsulePath: string,
   ledger: AutomaticRestartLedger
 ): Promise<void> {
-  return writeRecoveryFileDurable(ledgerPath(capsulePath), JSON.stringify(ledger))
+  return writeRecoveryFileDurable(
+    ledgerPath(capsulePath),
+    JSON.stringify(fitLedgerToReadLimit(ledger))
+  )
 }
 
 /** Orca continues on its own only a cut from the run that just ended, whose agent was proven to
