@@ -70,11 +70,11 @@ worker, do not pass `--on`: ask your coordinator to place it.
 
    Match the project by `projectId` (such as `github:owner/repo`); a name must
    match one project id across every answer, or you ask. A `repo:<…>` id exists
-   on one host only. A row is usable when `setupState` is `ready`, `repoId` is
-   not empty, `kind` is not `folder`, and `hostId` is `local` (the machine that
-   answered). Another `local` row is registered but not usable. A row with any
-   other `hostId` describes an SSH target: a start cannot create a worktree
-   there.
+   on one host only. A row is usable for a new worktree when `setupState` is
+   `ready`, `repoId` is not empty, `kind` is not `folder`, and `hostId` is
+   `local` (the machine that answered). Another `local` row is registered but
+   not usable. A row with any other `hostId` describes an SSH target: a start
+   cannot create a worktree there.
 
    Only a complete, successful list shows the project is absent on that
    machine. A server whose read fails is unchecked, with its reason:
@@ -113,15 +113,16 @@ worker, do not pass `--on`: ask your coordinator to place it.
      have without this section, and say in your report that no machine has it
      set up.
 
-4. Selector. For a new worktree (`new-child` or `new-top-level`), take
-   `repoId` from the chosen machine's own row and pass `--repo id:<repoId>`.
-   Never reuse an id, path or name from another machine's row. If the user, or
-   an earlier start in this Run, already chose a repo on that machine, use that
-   exact repo while its row is still usable and do not ask again. Otherwise,
-   with several usable rows there, use the one whose `path` or `displayName`
-   the user named, else ask. To work in an existing workspace instead, pass
-   its exact worktree selector, or `current` for your own on this machine, and
-   omit `--repo`: creation flags are refused there. Every start here carries
+4. Selector. For a new worktree (`new-child` or `new-top-level`), take `repoId`
+   from the chosen machine's own row and pass `--repo id:<repoId>`. Never reuse
+   an id, path or name from another machine's row. If the user, or an earlier
+   start in this Run, already chose a repo on that machine, use that exact repo
+   while its row is still usable and do not ask again. Otherwise, with several
+   usable rows there, use the one whose `path` or `displayName` the user named,
+   else ask. To work in an existing workspace instead, a folder project's
+   included, pass its exact worktree selector, or `current` for your own on
+   this machine, and omit `--repo`: creation flags are refused there, and the
+   usable test in step 2 does not apply to it. Every start here carries
    `--environment local`, whichever line chose this machine; every start on a
    server carries `--on`.
 

@@ -10,8 +10,8 @@ Rules:
 - Give each start its own receipt file and error file, and collect each exit status.
 - Read every receipt, including after a failure: a receipt with `next`, `failedStage` or recovery
   steps is handled exactly as for a single start. A missing or cut-off receipt is an unknown
-  outcome: check `ORCA orchestration worker-list` before anything else, and never start that spec
-  again blindly.
+  outcome: check `ORCA orchestration worker-list --environment local` before anything else, and
+  never start that spec again blindly.
 - Use the form for the shell that runs the CLI. `ORCA` stands for the executable path you resolved;
   quote it if it contains spaces.
 

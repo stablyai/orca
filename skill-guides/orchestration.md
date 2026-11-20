@@ -35,10 +35,12 @@ place and use it for every command.
 ORCA orchestration worker-start --environment local --spec "<task>" --worktree current --agent <agent>
 ```
 
-`--environment local` keeps the start on this machine whatever
+`--environment local` keeps a command on this machine's Orca whatever
 `ORCA_ENVIRONMENT` or a pairing code in your shell selects. Put it on every
-start you mean to run here; a start on a paired server takes `--on <server>`
-instead.
+start you mean to run here, and on the commands that create or list that
+Run's Tasks and workers (`run-create`, `task-create`, `task-list`,
+`worker-list`) so they reach the same Orca; a start on a paired server takes
+`--on <server>` instead.
 
 `<agent>` is an Orca agent id: one the user named, else the agent you are
 running as when the worker shares your execution host. Otherwise, such as a
