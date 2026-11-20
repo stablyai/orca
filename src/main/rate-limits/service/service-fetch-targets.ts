@@ -1,4 +1,4 @@
-import { RateLimitServiceResultPolicy } from './service-result-policy'
+import { RateLimitServiceProviderAvailability } from './service-provider-availability'
 import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
 import { withCodexReadingAccount } from '../providers/codex/codex-reading-account'
 import { fetchKimiRateLimits } from '../providers/kimi/kimi-fetcher'
@@ -21,7 +21,6 @@ import type {
   CodexRateLimitResetOutcome,
   UsageReadingAccount
 } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
-import { disabledUsageSnapshot } from './disabled-usage-snapshot'
 import { ApiKeyFileUnreadableError } from '../../credentials/api-key-file-unreadable-error'
 
 const CODEX_RESET_REFRESH_RETRIES = 3
@@ -50,35 +49,7 @@ function codexResetUsageVisible(
   return sessionImproved || weeklyImproved
 }
 
-export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResultPolicy {
-  protected async usageProviderAllowed(
-    provider: ProviderRateLimits['provider'],
-    signal: AbortSignal
-  ): Promise<boolean> {
-    const target =
-      provider === 'claude'
-        ? this.claudeFetchTarget
-        : provider === 'codex'
-          ? this.codexFetchTarget
-          : provider === 'kimi' || provider === 'antigravity'
-            ? this.antigravityFetchTarget
-            : undefined
-    return (
-      !signal.aborted &&
-      ((await this.usageProviderAvailabilityResolver?.(provider, signal, target)) ?? true)
-    )
-  }
-
-  protected async fetchUsageIfAllowed(
-    provider: ProviderRateLimits['provider'],
-    signal: AbortSignal,
-    fetch: () => Promise<ProviderRateLimits>
-  ): Promise<ProviderRateLimits> {
-    return (await this.usageProviderAllowed(provider, signal))
-      ? fetch()
-      : disabledUsageSnapshot(provider)
-  }
-
+export abstract class RateLimitServiceFetchTargets extends RateLimitServiceProviderAvailability {
   protected async resolveClaudeAuthPreparation(
     target: NormalizedClaudeAccountSelectionTarget,
     signal: AbortSignal

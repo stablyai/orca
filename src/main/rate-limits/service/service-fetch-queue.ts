@@ -58,7 +58,7 @@ export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProvide
       let cycle: FetchCycle | null = first
       while (cycle) {
         const signal = await this.runWithFetchAbortSignal(cycle)
-        if (signal.aborted) {
+        if (signal.aborted && this.publicationStopped) {
           break
         }
         // Re-read every flag after each cycle: a request can queue while any cycle runs.

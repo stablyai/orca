@@ -20,7 +20,7 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
         codexGeneration === this.codexFetchGeneration &&
         this.state.codex?.status === 'fetching'
       ) {
-        this.updateState({ ...this.state, codex: null })
+        this.updateState({ ...this.state, codex: disabledUsageSnapshot('codex') })
       }
       return
     }

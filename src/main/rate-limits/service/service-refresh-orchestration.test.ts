@@ -3,6 +3,7 @@ import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits
 import { RateLimitService } from './rate-limit-service'
 import { parseClaudeStatusLineBody } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 import { fetchActiveClaudeRateLimits } from '../providers/claude/claude-active-usage-fetch'
+import { fetchMiniMaxRateLimits } from '../providers/minimax/minimax-fetcher'
 import { fetchInactiveClaudeAccountUsage } from '../providers/claude/claude-managed-account-usage'
 import {
   consumeCodexRateLimitResetCredit,
@@ -89,17 +90,44 @@ describe('RateLimitService', () => {
     service.setUsageProviderAvailabilityResolver(async () => false)
     await service.refresh()
     expect((await service.getState()).kimi).toMatchObject({
-      status: 'idle',
+      status: 'unavailable',
       session: null,
       weekly: null
     })
-    expect((await service.getState()).cursor).toMatchObject({ status: 'idle', session: null })
+    expect((await service.getState()).cursor).toMatchObject({
+      status: 'unavailable',
+      session: null
+    })
+    expect((await service.getState()).claude?.status).toBe('unavailable')
+    expect((await service.getState()).codex?.status).toBe('unavailable')
     await service.refreshClaudeForTarget()
     await service.refreshCodexForTarget()
     await service.refreshGrok()
-    expect((await service.getState()).claude).toMatchObject({ status: 'idle', session: null })
-    expect((await service.getState()).codex?.status ?? null).toBe(null)
-    expect((await service.getState()).grok).toMatchObject({ status: 'idle', session: null })
+    expect((await service.getState()).claude).toMatchObject({
+      status: 'unavailable',
+      session: null
+    })
+    expect((await service.getState()).codex?.status).toBe('unavailable')
+    expect((await service.getState()).grok).toMatchObject({ status: 'unavailable', session: null })
+  })
+
+  it('drains a manual refresh queued while an availability change cancels a slow cycle', async () => {
+    mockFreshBackgroundProviderFetches()
+    const service = new RateLimitService()
+    const started = deferred<void>()
+    const reply = deferred<ProviderRateLimits>()
+    vi.mocked(fetchMiniMaxRateLimits).mockImplementationOnce(() => {
+      started.resolve(undefined)
+      return reply.promise
+    })
+    const first = service.refresh()
+    await started.promise
+    service.agentAvailabilityChanged()
+    const followup = service.refresh()
+    reply.resolve(okProvider('minimax', 81))
+    await Promise.all([first, followup])
+    expect((await service.getState()).minimax?.session?.usedPercent).toBe(0)
+    service.stop()
   })
 
   it('reads the account picked by a second switch made during a refresh', async () => {

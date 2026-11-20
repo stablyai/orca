@@ -1,13 +1,12 @@
+import { settleSiblingProviderFetch } from './service-sibling-provider-result'
+import { disabledUsageSnapshot } from './disabled-usage-snapshot'
 import { fetchActiveClaudeRateLimits } from '../providers/claude/claude-active-usage-fetch'
 import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
 import { fetchGeminiRateLimits } from '../providers/gemini/gemini-usage-fetcher'
 import { fetchGrokRateLimits } from '../providers/grok/grok-fetcher'
 import { readGrokAuthSession } from '../providers/grok/grok-auth'
-import { fetchCursorRateLimits } from '../providers/cursor/cursor-fetcher'
-import { readCursorAuthSession } from '../providers/cursor/cursor-auth'
 import { fetchZcodeRateLimits } from '../providers/zcode/zcode-usage-fetcher'
 import { fetchAntigravityRateLimits } from '../providers/antigravity/antigravity-usage-fetcher'
-import { antigravityUsageDisabledSnapshot } from '../providers/antigravity/antigravity-usage-snapshot'
 import { ZCODE_PLAN_SITE_BASE_URLS } from '../../../shared/agent-accounts/usage-credentials/zcode-plan-sites'
 import { fetchMiniMaxRateLimits } from '../providers/minimax/minimax-fetcher'
 import { createHash } from 'node:crypto'
@@ -92,7 +91,15 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       return null
     }
     // Preserve live usage received while credentials were loading.
-    const previousState = this.state
+    const previousState = {
+      ...this.state,
+      ...(!(await this.usageProviderAllowed('claude', signal)) && {
+        claude: disabledUsageSnapshot('claude')
+      }),
+      ...(!(await this.usageProviderAllowed('codex', signal)) && {
+        codex: disabledUsageSnapshot('codex')
+      })
+    }
     const codexStateBeforeFetch =
       previousState.codex?.status === 'fetching' ? null : previousState.codex
     const geminiCliOAuthEnabled = this.geminiCliOAuthEnabledResolver?.() ?? false
@@ -148,7 +155,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       kimi: this.withFetchingStatus(previousState.kimi, 'kimi'),
       antigravity: antigravityFetchAllowed
         ? this.withFetchingStatus(previousState.antigravity, 'antigravity')
-        : (previousState.antigravity ?? antigravityUsageDisabledSnapshot()),
+        : (previousState.antigravity ?? disabledUsageSnapshot('antigravity')),
       minimax: miniMaxConfigChanged
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
@@ -159,44 +166,35 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         : this.withFetchingStatus(previousState.zcode, 'zcode')
     })
     // Async Keychain/worker DB reads must not delay other providers.
-    const cursorResultPromise = this.fetchUsageIfAllowed('cursor', signal, () =>
-      readCursorAuthSession().then((authReadResult) => {
-        this.cursorAuthConfigured = authReadResult.status === 'ok'
-        return fetchCursorRateLimits({ signal, authReadResult })
-      })
-    ).then(
-      (value) => ({ status: 'fulfilled', value }) as const,
-      (reason) => ({ status: 'rejected', reason }) as const
-    )
-    const zcodeResultPromise = this.fetchUsageIfAllowed('zcode', signal, () =>
-      zcodePlanConfigResult.error
-        ? Promise.resolve(this.getZcodePlanCredentialError(zcodePlanConfigResult.error))
-        : fetchZcodeRateLimits({ signal, planCredential: zcodePlanCredential })
-    ).then(
-      (value) => ({ status: 'fulfilled', value }) as const,
-      (reason) => ({ status: 'rejected', reason }) as const
+    const cursorResultPromise = settleSiblingProviderFetch(this.fetchCursorUsage(signal))
+    const zcodeResultPromise = settleSiblingProviderFetch(
+      this.fetchUsageIfAllowed(
+        'zcode',
+        signal,
+        () =>
+          zcodePlanConfigResult.error
+            ? Promise.resolve(this.getZcodePlanCredentialError(zcodePlanConfigResult.error))
+            : fetchZcodeRateLimits({ signal, planCredential: zcodePlanCredential }),
+        zcodePlanCredential !== null
+      )
     )
     // Hidden meters avoid the CLI spawn; the separate promise keeps other providers responsive.
-    const antigravityResultPromise = (
+    const antigravityResultPromise = settleSiblingProviderFetch(
       antigravityFetchAllowed
         ? fetchAntigravityRateLimits({ signal, target: antigravityTarget }).then((limits) =>
             this.attributeAntigravityReading(antigravityRead, antigravityGeneration, limits)
           )
-        : Promise.resolve(previousState.antigravity ?? antigravityUsageDisabledSnapshot())
-    ).then(
-      (value) => ({ status: 'fulfilled', value }) as const,
-      (reason) => ({ status: 'rejected', reason }) as const
+        : Promise.resolve(previousState.antigravity ?? disabledUsageSnapshot('antigravity'))
     )
     const missingWslCodexHome =
       codexFetchGated || codexHomePath ? null : this.getMissingWslCodexHomeResult(codexTarget)
-    const grokResultPromise = this.fetchUsageIfAllowed('grok', signal, () =>
-      fetchGrokRateLimits({
-        signal,
-        authReadResult: grokAuthReadResult
-      })
-    ).then(
-      (value) => ({ status: 'fulfilled', value }) as const,
-      (reason) => ({ status: 'rejected', reason }) as const
+    const grokResultPromise = settleSiblingProviderFetch(
+      this.fetchUsageIfAllowed('grok', signal, () =>
+        fetchGrokRateLimits({
+          signal,
+          authReadResult: grokAuthReadResult
+        })
+      )
     )
     // Live display does not waive automated Retry-After gates.
     const claudeFetchGated =
@@ -229,26 +227,30 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         this.fetchUsageIfAllowed('gemini', signal, () =>
           fetchGeminiRateLimits(geminiCliOAuthEnabled, signal)
         ),
-        this.fetchUsageIfAllowed('opencode-go', signal, () =>
-          fetchOpenCodeGoUsage({
-            settingsApiKey: openCodeGoApiKey,
-            // Store/env keys become known only when the fetch resolves them.
-            onApiKeyResolved: (resolution) => {
-              // A credential change invalidates stale in-flight presence results.
-              if (opencodeGeneration !== this.opencodeFetchGeneration) {
-                return
-              }
-              // An undecryptable or briefly unreadable saved key still counts, so the bar stays up.
-              this.openCodeGoApiKeyConfigured =
-                resolution.status === 'found' ||
-                openCodeGoApiKeyError !== null ||
-                openCodeGoApiKeyReadSkipped
-            },
-            cookie,
-            workspaceIdOverride: workspaceIdOverride || undefined,
-            networkProxySettings: this.networkProxySettingsResolver?.(),
-            signal
-          })
+        this.fetchUsageIfAllowed(
+          'opencode-go',
+          signal,
+          () =>
+            fetchOpenCodeGoUsage({
+              settingsApiKey: openCodeGoApiKey,
+              // Store/env keys become known only when the fetch resolves them.
+              onApiKeyResolved: (resolution) => {
+                // A credential change invalidates stale in-flight presence results.
+                if (opencodeGeneration !== this.opencodeFetchGeneration) {
+                  return
+                }
+                // An undecryptable or briefly unreadable saved key still counts, so the bar stays up.
+                this.openCodeGoApiKeyConfigured =
+                  resolution.status === 'found' ||
+                  openCodeGoApiKeyError !== null ||
+                  openCodeGoApiKeyReadSkipped
+              },
+              cookie,
+              workspaceIdOverride: workspaceIdOverride || undefined,
+              networkProxySettings: this.networkProxySettingsResolver?.(),
+              signal
+            }),
+          Boolean(openCodeGoApiKey || cookie)
         ),
         this.fetchUsageIfAllowed('kimi', signal, () => this.fetchKimiWithResolvedHome(signal)),
         this.fetchUsageIfAllowed('minimax', signal, () =>

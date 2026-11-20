@@ -5,6 +5,9 @@ import type {
 } from '../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgentEnabled } from '../../shared/agent-launch/catalog/tui-agent-selection'
+import { loginShellEnvironmentRevision } from '../startup/shell-environment/login-shell-environment'
+import { managedRuntimeReleasesRevision } from '../node-runtime/managed-runtime-installation'
+import { agentsRefreshedOnHostRevision } from '../preflight/agents-refreshed-on-host'
 import { detectInstalledAgents } from '../preflight/installed-agent-detection'
 import { isWslDistroRunningForBackgroundWork } from '../wsl/discovery/wsl-background-distro-gate'
 
@@ -12,7 +15,8 @@ type Provider = ProviderRateLimits['provider']
 export type UsageProviderAvailabilityResolver = (
   provider: Provider,
   signal: AbortSignal,
-  target?: RateLimitRuntimeTarget
+  target?: RateLimitRuntimeTarget,
+  accountConfigured?: boolean
 ) => Promise<boolean>
 
 const PROVIDER_AGENTS: Record<Provider, readonly TuiAgent[]> = {
@@ -30,12 +34,26 @@ const PROVIDER_AGENTS: Record<Provider, readonly TuiAgent[]> = {
   muse: ['muse']
 }
 
-/** One local inventory per execution target and fetch cycle; no timer or workspace scan. */
+/** Reuse each host inventory until its settings, shell PATH, installations, or explicit refresh change. */
 export function createUsageProviderAvailabilityResolver(
   getSettings: () => Pick<GlobalSettings, 'disabledTuiAgents' | 'agentCmdOverrides'>
 ): UsageProviderAvailabilityResolver {
-  const inventories = new WeakMap<AbortSignal, Map<string, Promise<readonly string[]>>>()
-  return async (provider, signal, target) => {
+  const inventories = new Map<string, Promise<readonly string[]>>()
+  const runningChecks = new WeakMap<AbortSignal, Map<string, Promise<boolean>>>()
+  const signature = () => {
+    const settings = getSettings()
+    return JSON.stringify([
+      settings.disabledTuiAgents,
+      settings.agentCmdOverrides,
+      process.env.PATH,
+      process.env.PATHEXT,
+      loginShellEnvironmentRevision(),
+      managedRuntimeReleasesRevision(),
+      agentsRefreshedOnHostRevision()
+    ])
+  }
+  let cachedSignature: string | undefined
+  return async (provider, signal, target, accountConfigured = false) => {
     const agents = PROVIDER_AGENTS[provider]
     if (agents.length === 0) {
       return !signal.aborted
@@ -45,30 +63,55 @@ export function createUsageProviderAvailabilityResolver(
     if (signal.aborted || enabled().length === 0) {
       return false
     }
+    if (accountConfigured) {
+      return true
+    }
+    const currentSignature = signature()
+    if (cachedSignature !== currentSignature) {
+      inventories.clear()
+      cachedSignature = currentSignature
+    }
     const wsl = process.platform === 'win32' && target?.runtime === 'wsl'
     const key = wsl ? `wsl:${target.wslDistro ?? ''}` : 'host'
-    let cycle = inventories.get(signal)
-    if (!cycle) {
-      cycle = new Map()
-      inventories.set(signal, cycle)
+    if (wsl) {
+      let checks = runningChecks.get(signal)
+      if (!checks) {
+        checks = new Map()
+        runningChecks.set(signal, checks)
+      }
+      let running = checks.get(key)
+      if (!running) {
+        running = isWslDistroRunningForBackgroundWork(target.wslDistro)
+        checks.set(key, running)
+      }
+      if (!(await running) || signal.aborted) {
+        return false
+      }
     }
-    let inventory = cycle.get(key)
+    let inventory = inventories.get(key)
     if (!inventory) {
       inventory = (async () => {
-        if (wsl && !(await isWslDistroRunningForBackgroundWork(target.wslDistro ?? undefined))) {
-          return []
-        }
         return detectInstalledAgents(
           wsl ? { wslDistro: target.wslDistro, wslDefault: !target.wslDistro } : undefined,
           getSettings()
         )
       })().catch((error: unknown) => {
+        if (inventories.get(key) === inventory) {
+          inventories.delete(key)
+        }
         console.warn('[rate-limits] Agent availability could not be verified:', error)
         return []
       })
-      cycle.set(key, inventory)
+      if (inventories.size >= 128) {
+        inventories.clear()
+      }
+      inventories.set(key, inventory)
     }
     const installed = await inventory
-    return !signal.aborted && enabled().some((agent) => installed.includes(agent))
+    return (
+      !signal.aborted &&
+      signature() === currentSignature &&
+      enabled().some((agent) => installed.includes(agent))
+    )
   }
 }

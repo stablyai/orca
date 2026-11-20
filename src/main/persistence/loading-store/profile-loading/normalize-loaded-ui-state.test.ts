@@ -1,3 +1,4 @@
+import { updatePersistedUI } from '../../applying-settings/ui-state-update'
 import { homedir } from 'node:os'
 import { expect, it } from 'vitest'
 import { getDefaultPersistedState } from '../../../../shared/orca-profiles/constants'
@@ -22,28 +23,20 @@ function loadUi(ui: Partial<PersistedState['ui']>) {
   )
 }
 
-it.each([undefined, true])('keeps Kimi removed across reloads with migration flag %s', (flag) => {
-  const ui = loadUi({ statusBarItems: ['ssh'], _kimiStatusBarDefaultAdded: flag })
-  expect(ui.statusBarItems).toEqual([
-    'ssh',
-    'ports',
-    'minimax',
-    'antigravity',
-    'grok',
-    'cursor',
-    'zcode',
-    'muse',
-    'git-blame'
-  ] satisfies StatusBarItem[])
-  expect(loadUi(ui).statusBarItems).toEqual([
-    'ssh',
-    'ports',
-    'minimax',
-    'antigravity',
-    'grok',
-    'cursor',
-    'zcode',
-    'muse',
-    'git-blame'
-  ] satisfies StatusBarItem[])
+it('keeps a saved status bar removal across reloads before default migrations have run', () => {
+  const state = getDefaultPersistedState(homedir())
+  updatePersistedUI(
+    {
+      state,
+      removeRetainedBlob: () => {},
+      setActiveView: () => false,
+      getUI: () => state.ui,
+      scheduleSave: () => {},
+      notifyUIChanged: () => {}
+    },
+    { statusBarItems: ['ssh'] }
+  )
+  const ui = loadUi(state.ui)
+  expect(ui.statusBarItems).toEqual(['ssh'] satisfies StatusBarItem[])
+  expect(loadUi(ui).statusBarItems).toEqual(['ssh'] satisfies StatusBarItem[])
 })

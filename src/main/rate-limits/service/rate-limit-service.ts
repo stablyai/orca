@@ -42,6 +42,11 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
   agentAvailabilityChanged(): void {
     this.abortActiveFetchCycle()
     this.clearQueuedFetches()
+    if (!this.publicationStopped) {
+      void this.fetchAll({ force: true }).catch((error: unknown) => {
+        console.warn('[rate-limits] Failed to refresh agent availability:', error)
+      })
+    }
   }
 
   setCodexHomePathResolver(resolver: CodexHomePathResolver): void {
