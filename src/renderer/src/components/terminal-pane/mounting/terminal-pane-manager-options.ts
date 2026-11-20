@@ -10,10 +10,10 @@ import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/ter
 import {
   normalizeTerminalFastScrollSensitivity,
   normalizeTerminalScrollSensitivity,
-  normalizeTerminalScrollbarWidth,
   resolveTerminalCursorInactiveStyle,
   resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
+import { normalizeTerminalScrollbarWidth } from '../../../../../shared/terminal/appearance/terminal-scroll-settings'
 import { buildFontFamily } from '../../../../../shared/styles/monospace-font-family'
 import { pluginFontFamilyWhenLoaded } from '@/store/plugins/appearance/plugin-fonts'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/terminal-protocol/windows-pty-compatibility'

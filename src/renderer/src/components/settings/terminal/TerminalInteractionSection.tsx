@@ -17,17 +17,19 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
   DEFAULT_TERMINAL_SCROLL_SENSITIVITY,
-  DEFAULT_TERMINAL_SCROLLBAR_WIDTH,
-  MAX_TERMINAL_SCROLLBAR_WIDTH,
   normalizeTerminalFastScrollSensitivity,
   normalizeTerminalScrollSensitivity,
-  normalizeTerminalScrollbarWidth,
   resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
 import {
   TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER,
   normalizeTerminalTuiMouseWheelMultiplier
 } from '@/lib/pane-manager/terminal-input/pane-terminal-tui-wheel-reports'
+import {
+  MAX_TERMINAL_SCROLLBAR_WIDTH,
+  MIN_TERMINAL_SCROLLBAR_WIDTH,
+  normalizeTerminalScrollbarWidth
+} from '../../../../../shared/terminal/appearance/terminal-scroll-settings'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 type TerminalInteractionSectionProps = {
@@ -42,6 +44,8 @@ export function TerminalInteractionSection({
   searchQuery
 }: TerminalInteractionSectionProps): React.JSX.Element {
   const t = useTranslate()
+  const { alwaysVisible: scrollbarAlwaysVisibleEntry, width: scrollbarWidthEntry } =
+    getTerminalScrollbarSearchEntries()
   // Context-menu escape always uses Control; call it Control-click on macOS and Ctrl+right-click elsewhere.
   const isMac = isMacPlatform()
   const rightClickPasteDescription = isMac
@@ -198,7 +202,7 @@ export function TerminalInteractionSection({
         />
       </SearchableSetting>
 
-      <SearchableSetting {...getTerminalScrollbarSearchEntries()[0]}>
+      <SearchableSetting {...scrollbarAlwaysVisibleEntry}>
         <SettingsSwitchRow
           label={t(
             'components.settings.TerminalInteraction.scrollbarAlwaysVisible',
@@ -217,7 +221,7 @@ export function TerminalInteractionSection({
         />
       </SearchableSetting>
 
-      <SearchableSetting {...getTerminalScrollbarSearchEntries()[1]}>
+      <SearchableSetting {...scrollbarWidthEntry}>
         <div className="py-3">
           <ScrollSpeedSlider
             label={t('components.settings.TerminalInteraction.scrollbarWidth', 'Scrollbar width')}
@@ -226,7 +230,7 @@ export function TerminalInteractionSection({
               'Width of the terminal scrollbar in pixels. A wider bar is easier to see and drag.'
             )}
             value={normalizeTerminalScrollbarWidth(settings.terminalScrollbarWidth)}
-            min={DEFAULT_TERMINAL_SCROLLBAR_WIDTH}
+            min={MIN_TERMINAL_SCROLLBAR_WIDTH}
             max={MAX_TERMINAL_SCROLLBAR_WIDTH}
             step={1}
             suffix="px"

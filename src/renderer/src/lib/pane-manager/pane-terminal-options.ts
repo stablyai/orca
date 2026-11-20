@@ -1,4 +1,5 @@
 import type { ITerminalInitOnlyOptions, ITerminalOptions } from '@xterm/xterm'
+import { DEFAULT_TERMINAL_SCROLLBAR_WIDTH } from '../../../../shared/terminal/appearance/terminal-scroll-settings'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { LIGHT_BG_MIN_CONTRAST } from '../../../../shared/terminal-themes/terminal-contrast-correction'
 
@@ -18,18 +19,6 @@ export function normalizeTerminalFastScrollSensitivity(value: number | undefined
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.min(20, Math.max(1, value))
     : DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY
-}
-
-export const DEFAULT_TERMINAL_SCROLLBAR_WIDTH = 7
-export const MAX_TERMINAL_SCROLLBAR_WIDTH = 20
-
-export function normalizeTerminalScrollbarWidth(value: number | undefined): number {
-  return typeof value === 'number' && Number.isFinite(value)
-    ? Math.min(
-        MAX_TERMINAL_SCROLLBAR_WIDTH,
-        Math.max(DEFAULT_TERMINAL_SCROLLBAR_WIDTH, Math.round(value))
-      )
-    : DEFAULT_TERMINAL_SCROLLBAR_WIDTH
 }
 
 export function resolveTerminalScrollOnUserInput(value: boolean | undefined): boolean {

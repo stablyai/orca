@@ -68,8 +68,8 @@ export const getTerminalScrollbarSearchEntries = createLocalizedCatalog(() => {
     ...translateSearchKeyword('components.settings.terminal.search.scrollbar', 'scrollbar'),
     ...translateSearchKeyword('components.settings.terminal.search.accessibility', 'accessibility')
   ]
-  return [
-    {
+  return {
+    alwaysVisible: {
       title: translate(
         'components.settings.TerminalInteraction.scrollbarAlwaysVisible',
         'Always show scrollbar'
@@ -80,7 +80,7 @@ export const getTerminalScrollbarSearchEntries = createLocalizedCatalog(() => {
       ),
       keywords
     },
-    {
+    width: {
       title: translate('components.settings.TerminalInteraction.scrollbarWidth', 'Scrollbar width'),
       description: translate(
         'components.settings.TerminalInteraction.scrollbarWidthDescription',
@@ -88,7 +88,7 @@ export const getTerminalScrollbarSearchEntries = createLocalizedCatalog(() => {
       ),
       keywords
     }
-  ]
+  }
 })
 
 export const getTerminalPaneInteractionSearchEntries = createLocalizedCatalog(() => [
@@ -113,7 +113,7 @@ export const getTerminalPaneInteractionSearchEntries = createLocalizedCatalog(()
     ]
   },
   ...getTerminalScrollOnUserInputSearchEntry(),
-  ...getTerminalScrollbarSearchEntries(),
+  ...Object.values(getTerminalScrollbarSearchEntries()),
   {
     title: translate(
       'auto.components.settings.terminal.search.1b00063795',
