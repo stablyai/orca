@@ -16,29 +16,35 @@ export function resolvePromotionWriteTarget(systemTomlPath: string): { path: str
   }
   try {
     if (lstatSync(systemTomlPath).isSymbolicLink()) {
-      const targetPath = resolveDanglingSymlinkTarget(systemTomlPath)
+      const targetPath = resolveThroughLinkedAncestor(resolveDanglingSymlinkTarget(systemTomlPath))
       return { path: observeResolvedFilePath('promotion-write', systemTomlPath, targetPath) }
     }
   } catch (error) {
     observeResolvedFilePathError('promotion-write', systemTomlPath, error)
-    // Missing non-link targets are created owner-only at the requested path.
+    // Missing non-link targets are created owner-only where the requested path resolves.
   }
   return {
     path: observeResolvedFilePath(
       'promotion-write',
       systemTomlPath,
-      resolveThroughLinkedParent(systemTomlPath)
+      resolveThroughLinkedAncestor(systemTomlPath)
     )
   }
 }
 
-/** A linked parent folder decides where a new file lands, e.g. a host ~/.codex linked into WSL. */
-function resolveThroughLinkedParent(path: string): string {
-  try {
-    return join(realpathSync(dirname(path)), basename(path))
-  } catch (error) {
-    observeResolvedFilePathError('promotion-write', path, error)
-    return path
+/** The nearest existing folder decides where a new file lands, e.g. a host ~/.codex linked into WSL. */
+function resolveThroughLinkedAncestor(path: string): string {
+  const missing = [basename(path)]
+  for (let dir = dirname(path); ; dir = dirname(dir)) {
+    try {
+      return join(realpathSync(dir), ...missing)
+    } catch (error) {
+      if (dirname(dir) === dir) {
+        observeResolvedFilePathError('promotion-write', path, error)
+        return path
+      }
+      missing.unshift(basename(dir))
+    }
   }
 }
 
