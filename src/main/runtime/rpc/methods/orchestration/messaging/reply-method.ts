@@ -160,8 +160,13 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
       caller: sessionCallerOf(orchestrationCaller),
       terminalRecipient
     })
+    const replyFrom = params.from ?? original.to_handle
     const reply = db.insertMessage({
-      from: params.from ?? original.to_handle,
+      from: replyFrom,
+      senderDispatchId: db.getActiveDispatchForIdentity(
+        replyFrom,
+        runtime.getTerminalPaneKey(replyFrom) ?? undefined
+      )?.id,
       to: recipient.to,
       subject: `Re: ${original.subject}`,
       body: params.body,

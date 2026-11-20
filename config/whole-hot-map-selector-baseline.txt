@@ -2,10 +2,6 @@
 # This is a RATCHET: counts may only go DOWN. Select a stable derived answer instead.
 # Prune after a fix: pnpm check:whole-hot-map-selector-ratchet --prune
 1 src/renderer/src/app-shell/storage/use-persisted-ui-writer.ts:acknowledgedAgentsByPaneKey
-1 src/renderer/src/components/activity/threads/use-agent-pane-thread-store-data.ts:acknowledgedAgentsByPaneKey
-1 src/renderer/src/components/activity/threads/use-agent-pane-thread-store-data.ts:agentStatusByPaneKey
-1 src/renderer/src/components/activity/threads/use-agent-pane-thread-store-data.ts:ptyIdsByTabId
-1 src/renderer/src/components/activity/threads/use-agent-pane-thread-store-data.ts:tabsByWorktree
 1 src/renderer/src/components/activity/threads/use-agent-pane-threads.ts:runtimeStatusByEnvironmentId
 1 src/renderer/src/components/automations/use-automations-page-store-state.ts:ptyIdsByTabId
 1 src/renderer/src/components/automations/use-automations-page-store-state.ts:terminalLayoutsByTabId

@@ -1,4 +1,5 @@
 import { editorTabRetirement } from '../editor/tabs/editor-tab-retirement'
+import { structuredAgentSessionAddressTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   landsOnEmptiedWorktree,
   emptiedWorktreeLandingPatch,
@@ -227,7 +228,14 @@ export function createTabsCloseActions(
                   settleAttentionRemovedBy(
                     set,
                     get,
-                    () => set((current) => removeTabsAttention(current, [tabId])),
+                    // The tab is gone by now, so its chat's pane address is named here.
+                    () =>
+                      set((current) =>
+                        removeTabsAttention(current, [
+                          tabId,
+                          structuredAgentSessionAddressTabId(tabId, tab.entityId)
+                        ])
+                      ),
                     { tabsBefore: state }
                   )
               }
