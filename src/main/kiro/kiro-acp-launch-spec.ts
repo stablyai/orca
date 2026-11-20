@@ -37,8 +37,8 @@ export const KIRO_LAUNCH_SPEC: AcpLaunchSpec = {
     join(homePath, '.local', 'bin'),
     ...(env.LOCALAPPDATA ? [join(env.LOCALAPPDATA, 'Kiro-Cli')] : [])
   ],
-  // Older V3 engines ignore KIRO_HOME and keep sessions in ~/.kiro.
-  minimumVersions: ['2.31.0'],
+  // The oldest release checked live; V3 before 2.31 ignores KIRO_HOME and keeps sessions in ~/.kiro.
+  minimumVersions: ['3.1.0'],
   // Lists the account's models without starting the V3 engine.
   modelDiscovery: {
     kind: 'command',
