@@ -17,7 +17,8 @@ import { ensureCodexDaemonSocketGuard } from '../../configuration/settings/codex
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import {
   getOrcaManagedCodexHomePath,
-  getSystemCodexHomePath
+  getSystemCodexHomePath,
+  resolveOrcaManagedCodexHomePath
 } from '../../configuration/homes/codex-home-paths'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import type { CodexRuntimeHomeService } from '../../../codex-accounts/runtime-home-service'
@@ -71,7 +72,7 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
     const selectedAccountCodexHome = runtimeHome.resolveSelectedHostAccountCodexHomePathForResume()
     await settleLegacySessionCopyBeforeResume(
       args.providerSession.transcriptPath,
-      getOrcaManagedCodexHomePath()
+      resolveOrcaManagedCodexHomePath()
     ).catch((error: unknown) => {
       console.warn('[codex-session-resume] Could not settle a legacy session copy:', error)
     })
