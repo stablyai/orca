@@ -1,0 +1,102 @@
+import { existsSync, mkdtempSync, mkdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, expect, it } from 'vitest'
+import { openJournalDatabase } from '../../../native-chat/agent-session-journal/database/journal-database'
+import {
+  initializeJournalDomainDatabase,
+  openJournalDomainDatabase
+} from '../../../native-chat/agent-session-journal/database/journal-domain-database'
+import {
+  journalDatabasePath,
+  journalDomainDatabasePath
+} from '../../../native-chat/agent-session-journal/database/journal-host-database'
+import { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
+import {
+  journalSqlReaderPath,
+  journalSqlWorkerPath
+} from '../../../native-chat/agent-session-journal/journal-sql-worker-bundle.test-fixture'
+import { agentSessionAttachmentStoreRoot } from '../../../native-chat/agent-session-attachments/agent-session-attachment-references'
+import { AgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store'
+import { sweepAgentSessionAttachments } from '../../../native-chat/agent-session-attachments/agent-session-attachment-sweep'
+import { structuredAgentSessionAttachmentSweepFacts } from './structured-agent-session-attachment-sweep'
+
+const cleanup: (() => Promise<void> | void)[] = []
+afterEach(async () => {
+  for (const close of cleanup.splice(0).toReversed()) {
+    await close()
+  }
+})
+
+it('retains uploads after interrupted reconciliation, then resumes cleanup after a successful reopen', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-attachment-custody-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: source } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => source.close())
+  await initializeJournalDomainDatabase(root)
+  const saved = source.prepare('INSERT INTO agent_session_records VALUES(?,?)')
+  saved.run('blocked-chat', JSON.stringify({ sessionId: 'blocked-chat' }))
+  saved.run('later-chat', JSON.stringify({ sessionId: 'later-chat' }))
+  const claimed = '00000000-0000-4000-8000-000000000001'
+  const orphan = '00000000-0000-4000-8000-000000000002'
+  const marked = '00000000-0000-4000-8000-000000000003'
+  source
+    .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+    .run(claimed, 'later-chat', 100)
+  const now = 2_000_000_000_000
+  const old = new Date(now - 8 * 24 * 60 * 60 * 1000)
+  const attachments = agentSessionAttachmentStoreRoot(root)
+  for (const upload of [claimed, orphan, marked]) {
+    const directory = join(attachments, upload)
+    mkdirSync(directory, { recursive: true })
+    writeFileSync(join(directory, 'saved.txt'), 'original upload')
+    utimesSync(directory, old, old)
+  }
+  const { db } = openJournalDomainDatabase(journalDomainDatabasePath(root))
+  db.exec(`CREATE TRIGGER blocked BEFORE INSERT ON agent_session_records
+    WHEN NEW.session_id='blocked-chat' BEGIN SELECT RAISE(ABORT,'database is locked'); END`)
+  db.prepare('INSERT INTO agent_session_attachment_sweeps VALUES(?,?)').run(marked, 100)
+  db.close()
+  const open = () =>
+    JournalSqlDatabase.open(root, {
+      writerPath: journalSqlWorkerPath(),
+      readerPath: journalSqlReaderPath(),
+      onMaintenanceError: (error) => {
+        throw error
+      }
+    })
+  const store = new AgentSessionAttachmentStore(attachments, { hasSession: () => true })
+  const interrupted = await open()
+  try {
+    await sweepAgentSessionAttachments(
+      store,
+      structuredAgentSessionAttachmentSweepFacts(interrupted),
+      now
+    )
+    expect([claimed, orphan, marked].map((id) => existsSync(join(attachments, id)))).toEqual([
+      true,
+      true,
+      true
+    ])
+  } finally {
+    await interrupted.close()
+  }
+  const reopened = openJournalDomainDatabase(journalDomainDatabasePath(root)).db
+  reopened.exec('DROP TRIGGER blocked')
+  reopened.close()
+  const recovered = await open()
+  try {
+    await sweepAgentSessionAttachments(
+      store,
+      structuredAgentSessionAttachmentSweepFacts(recovered),
+      now
+    )
+    expect([claimed, orphan, marked].map((id) => existsSync(join(attachments, id)))).toEqual([
+      true,
+      false,
+      false
+    ])
+  } finally {
+    await recovered.close()
+  }
+})

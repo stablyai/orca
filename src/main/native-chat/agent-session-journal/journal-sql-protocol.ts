@@ -31,7 +31,7 @@ export type JournalSqlTiming = {
 }
 
 export type JournalSqlResponse =
-  | { type: 'ready'; readOnly: boolean }
+  | { type: 'ready'; readOnly: boolean; attachmentCustodyComplete: boolean }
   | { type: 'committed'; id: number; commit: JournalWriterCommit; timing?: JournalSqlTiming }
   | {
       type: 'effects'

@@ -53,13 +53,16 @@ export const JOURNAL_LEGACY_REVISIONS_KEPT = 'journal.legacy-revisions-kept.v1'
  * Terminal restore waits for this pass, so it reads no history: a copy's history converts later
  * like any unconverted chat's, and a chat needing a history compare is compared in the background.
  */
-export function reconcileJournalLegacySource(stateDirectory: string, db: Database.Database): void {
+export function reconcileJournalLegacySource(
+  stateDirectory: string,
+  db: Database.Database
+): boolean {
   const sourcePath = journalDatabasePath(stateDirectory)
   // Captured before reading, so a write during this pass is never taken as absorbed. Until every
   // chat here carries its revision (files converted before revisions were kept), each launch reads.
   const captured = captureJournalLegacySourceReceipt(sourcePath)
   if (captured.disposition === 'no-source-at-initialization') {
-    return
+    return true
   }
   const saved = readMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT)
   const unchanged = sameJournalLegacySource(saved, captured)
@@ -71,7 +74,7 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
     forced.set(id, { stranded: copy })
   }
   if (unchanged && kept && forced.size === 0) {
-    return
+    return true
   }
   const receipt = JSON.stringify(captured)
   const pass: Pass = { kept, forced, baselines: [], compares: [] }
@@ -103,7 +106,7 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
     captured.disposition === 'copied-source' &&
     !sameJournalLegacySource(receipt, captureJournalLegacySourceReceipt(sourcePath))
   ) {
-    return
+    return false
   }
   runJournalTransaction(db, () => {
     for (const id of gone) {
@@ -121,6 +124,7 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
       writeMeta(db, JOURNAL_LEGACY_REVISIONS_KEPT, '1')
     }
   })
+  return complete && captured.disposition !== 'uncertifiable'
 }
 
 /** What one pass knows about the original, and the chats it takes as already shown here. */

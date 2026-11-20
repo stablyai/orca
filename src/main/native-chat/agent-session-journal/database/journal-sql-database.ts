@@ -14,7 +14,7 @@ import type { JournalWriterCommand } from '../journal-writer-command'
 import type { JournalWriterCommit } from '../journal-writer-changes'
 import type { JournalWriterEffect, JournalWriterEffectResult } from '../journal-writer-effects'
 import type { CommandReceiptScope } from '../writing/command-receipt-schema'
-import { AgentSessionJournalError } from '../writing/journal-write-guards'
+import { assertJournalDatabaseOpen } from '../writing/journal-write-guards'
 import { assertJournalChatReadable } from '../replay/journal-open-failure'
 import { journalDatabasePath, journalDomainDatabasePath } from './journal-host-database'
 import type { JournalSqlStoredRecords } from '../journal-sql-database-read'
@@ -28,6 +28,9 @@ type JournalSqlDatabaseOptions = {
 }
 
 export class JournalSqlDatabase {
+  get attachmentCustodyComplete(): boolean {
+    return this.writer.attachmentCustodyComplete
+  }
   readonly readers: JournalSqlReaderPool
   private readonly conversions: JournalSqlConversions
   private readonly activity = new JournalSqlActivity()
@@ -124,7 +127,7 @@ export class JournalSqlDatabase {
     input: JournalForkPreparationInput,
     signal?: AbortSignal
   ): Promise<JournalSqlForkCopy> {
-    this.assertOpen()
+    assertJournalDatabaseOpen(this.closed)
     const held = await this.writer.maintain({
       kind: 'fork-source-hold',
       sessionId: input.source.sessionId
@@ -150,7 +153,7 @@ export class JournalSqlDatabase {
 
   /** One installation transaction owns both invalidation and the rows exposed to this host. */
   async installRecords(): Promise<AgentSessionStoreState> {
-    this.assertOpen()
+    assertJournalDatabaseOpen(this.closed)
     if (this.readOnly) {
       return this.observeRecords(true)
     }
@@ -163,7 +166,7 @@ export class JournalSqlDatabase {
   }
 
   private async observeRecords(unreconciled: boolean): Promise<AgentSessionStoreState> {
-    this.assertOpen()
+    assertJournalDatabaseOpen(this.closed)
     const result = await this.readers.database({
       kind: 'records',
       ...(unreconciled ? { unreconciled: true } : {})
@@ -183,7 +186,7 @@ export class JournalSqlDatabase {
   }
 
   async readCommandReceipt(scope: CommandReceiptScope, operationId: string) {
-    this.assertOpen()
+    assertJournalDatabaseOpen(this.closed)
     const result = await this.readers.database({ kind: 'receipt', scope, operationId })
     if (result.kind !== 'receipt') {
       throw new Error('journal reader returned no receipt')
@@ -192,7 +195,7 @@ export class JournalSqlDatabase {
   }
 
   async sessionEpoch(sessionId: string): Promise<string | null> {
-    this.assertOpen()
+    assertJournalDatabaseOpen(this.closed)
     const result = await this.readers.database({ kind: 'epoch', sessionId })
     if (result.kind !== 'epoch') {
       throw new Error('journal reader returned no epoch')
@@ -289,7 +292,7 @@ export class JournalSqlDatabase {
   }
 
   effects(effects: readonly JournalWriterEffect[]): Promise<JournalWriterEffectResult[]> {
-    this.assertOpen()
+    assertJournalDatabaseOpen(this.closed)
     const release = this.activity.hold()
     return this.writer.effects(effects).finally(release)
   }
@@ -299,7 +302,7 @@ export class JournalSqlDatabase {
     sessionId: string,
     run: (writer: Pick<JournalSqlOwner, 'write' | 'effects' | 'maintain'>) => T | Promise<T>
   ): Promise<T> {
-    this.assertOpen()
+    assertJournalDatabaseOpen(this.closed)
     const release = this.activity.hold()
     const result = (this.sessions.get(sessionId) ?? Promise.resolve()).then(() => run(this.writer))
     const settled = result
@@ -320,12 +323,6 @@ export class JournalSqlDatabase {
       throw error
     })
     return this.closing
-  }
-
-  private assertOpen(): void {
-    if (this.closed) {
-      throw new AgentSessionJournalError('journal_closed', 'the chat journal database is closed')
-    }
   }
 
   private async finishClose(): Promise<void> {
