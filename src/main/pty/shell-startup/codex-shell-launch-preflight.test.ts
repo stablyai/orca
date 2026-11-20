@@ -202,6 +202,41 @@ describe.skipIf(process.platform === 'win32')('Codex shell launch preflight', ()
     expectNamedAliasSurvives('/bin/bash', 'shopt -s expand_aliases')
   })
 
+  it.skipIf(!bashAvailable)('exports the wrapped user Codex function to child Bash shells', () => {
+    const output = execFileSync(
+      '/bin/bash',
+      [
+        '--noprofile',
+        '--norc',
+        '-c',
+        `codex() { printf 'user:%s' "$1"; }
+export -f codex
+${getPosixCodexShellLaunchPreflight()}
+bash --noprofile --norc -c 'codex child'`
+      ],
+      { encoding: 'utf-8' }
+    )
+
+    expect(output).toBe('user:child')
+  })
+
+  it.skipIf(!bashAvailable)('keeps an unexported user Codex function unexported', () => {
+    const output = execFileSync(
+      '/bin/bash',
+      [
+        '--noprofile',
+        '--norc',
+        '-c',
+        `codex() { __codex_helper; }
+__codex_helper() { printf user; }
+${getPosixCodexShellLaunchPreflight()}
+if [[ "$(export -pf)" == *"declare -fx codex ()"* ]]; then printf exported; else printf unexported; fi`
+      ],
+      { encoding: 'utf-8' }
+    )
+
+    expect(output).toBe('unexported')
+  })
   // skipIf exposes missing shells; an early return would report an unexercised test as passing.
   for (const [shell, strict] of [
     ['/bin/bash', 'set -e'],

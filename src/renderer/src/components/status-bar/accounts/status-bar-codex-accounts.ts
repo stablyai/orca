@@ -24,7 +24,7 @@ function getSingleConcreteCodexWslDistro(state: CodexRateLimitAccountsState): st
   const keys = new Set<string>()
   for (const [key, accountId] of Object.entries(state.activeAccountIdsByRuntime?.wsl ?? {})) {
     if (accountId && key !== '__default__') {
-      keys.add(key)
+      keys.add(getCodexStatusWslKey(key))
     }
   }
   for (const account of state.accounts) {
@@ -55,7 +55,10 @@ export function getCodexStatusActiveId(
   if (target.runtime === 'host') {
     return selection ? selection.host : (state.activeAccountId ?? null)
   }
-  const distroSelection = selection?.wsl?.[getCodexStatusWslKey(target.wslDistro)]
+  const distroKey = getCodexStatusWslKey(target.wslDistro)
+  const distroSelection = Object.entries(selection?.wsl ?? {}).find(
+    ([key]) => getCodexStatusWslKey(key) === distroKey
+  )?.[1]
   if (target.wslDistro || distroSelection) {
     return distroSelection ?? null
   }
@@ -129,7 +132,9 @@ export function buildCodexStatusSwitchGroups(
 
   groups.push(makeGroup({ runtime: 'host', wslDistro: null }))
 
-  const wslKeys = new Set<string>(Object.keys(state.activeAccountIdsByRuntime?.wsl ?? {}))
+  const wslKeys = new Set<string>(
+    Object.keys(state.activeAccountIdsByRuntime?.wsl ?? {}).map(getCodexStatusWslKey)
+  )
   if (normalizedCurrentTarget.runtime === 'wsl') {
     wslKeys.add(getCodexStatusWslKey(normalizedCurrentTarget.wslDistro))
   }

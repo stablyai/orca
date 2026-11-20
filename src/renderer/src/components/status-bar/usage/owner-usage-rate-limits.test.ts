@@ -18,6 +18,32 @@ it('marks absent and unavailable account-owned slots unverifiable when their hos
     reason: 'unreachable',
     lastKnown: state
   })
-  expect(unresolved.codex?.usageMetadata?.unverifiableOwner).toBe(true)
+  expect(unresolved.codex).toBeNull()
+  expect(unresolved.claude).toMatchObject({
+    status: 'unavailable',
+    session: null,
+    weekly: null,
+    usageMetadata: { unverifiableOwner: true }
+  })
+})
+
+it('marks account-owned slots with quota unverifiable when their host is unreachable', () => {
+  const state = createEmptyRateLimitState({
+    claude: {
+      provider: 'claude',
+      session: { usedPercent: 40, windowMinutes: 300, resetsAt: null, resetDescription: null },
+      weekly: null,
+      updatedAt: 1,
+      error: null,
+      status: 'ok'
+    }
+  })
+  const unresolved = resolveOwnerUsageRateLimits(createEmptyRateLimitState(), {
+    kind: 'remote-unverifiable',
+    ownerLabel: 'Remote',
+    reason: 'unreachable',
+    lastKnown: state
+  })
+  expect(unresolved.claude?.session).toBeNull()
   expect(unresolved.claude?.usageMetadata?.unverifiableOwner).toBe(true)
 })
