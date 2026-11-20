@@ -6,7 +6,8 @@ import { ConcurrentFileEditError } from '../../../filesystem/concurrent-file-edi
 import { writeTomlConfigAtomically } from '../toml/config-toml-atomic-write'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../homes/codex-home-paths'
-import { upsertPromotedSettingsInContent } from './codex-config-settings-upsert'
+import { tableStructuredKey, upsertPromotedSettingsInContent } from './codex-config-settings-upsert'
+import { CODEX_DAEMON_OVERRIDE_MARKER } from '../shared-server/codex-daemon-socket-path-guard'
 import {
   PROMOTED_STRUCTURED_KEYS,
   readPromotedSettingValues,
@@ -124,6 +125,9 @@ export function promoteCodexRuntimeSettingsToSystem(
 }
 
 const PUBLISH_ATTEMPTS = 3
+const DAEMON_OVERRIDE_KEYS: ReadonlySet<string> = new Set([
+  tableStructuredKey('features', 'daemon_auto_start')
+])
 
 /** Null when the user saved the source config after Orca read it; the caller redoes the pass. */
 function promoteCodexRuntimeSettingsToSystemUnsafe(
@@ -163,7 +167,10 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
       systemValues,
       updates,
       conflicts,
-      runtimeValuesToPreserve
+      runtimeValuesToPreserve,
+      maskedRuntimeKeys: runtimeTomlObservation.value.includes(CODEX_DAEMON_OVERRIDE_MARKER)
+        ? DAEMON_OVERRIDE_KEYS
+        : new Set()
     })
   }
   // Orca never writes a WSL guest's own Codex config; runtime edits stay in the managed home.
@@ -261,6 +268,8 @@ type PromotionCollectionContext = {
   updates: Map<string, string>
   conflicts: Map<string, CodexSettingsConflict>
   runtimeValuesToPreserve: Map<string, string | null>
+  /** Keys Orca's daemon override currently replaces in the runtime config. */
+  maskedRuntimeKeys: ReadonlySet<string>
 }
 
 function collectPromotionChanges(context: PromotionCollectionContext): void {
@@ -272,6 +281,14 @@ function collectPromotionChanges(context: PromotionCollectionContext): void {
     }
 
     const existingConflict = context.baseline.conflicts.get(key)
+    if (existingConflict && runtimeRaw === null && context.maskedRuntimeKeys.has(key)) {
+      // The override hides the kept value, not a user deletion; a canonical edit still wins.
+      if (systemRaw === existingConflict.system) {
+        context.conflicts.set(key, existingConflict)
+        context.runtimeValuesToPreserve.set(key, existingConflict.runtime)
+      }
+      continue
+    }
     if (existingConflict || !context.baseline.settings.has(key)) {
       const resolution = resolveUntrackedCodexSetting(runtimeRaw, systemRaw, existingConflict)
       if (resolution.action === 'promote-runtime') {

@@ -21,13 +21,18 @@ import type * as WslPaths from '../../../../shared/file-access/wsl-paths'
 // Bypass platform-specific socket paths so asserted config bytes stay host-independent.
 vi.mock('../shared-server/codex-daemon-socket-path-guard', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  codexDaemonSocketPathExceedsLimit: () => false
+  codexDaemonSocketPathExceedsLimit: () => promotionTestState.daemonGuard
 }))
 
 const { homedirMock, promotionTestState } = vi.hoisted(() => {
-  const state: { failAtomicWrite: boolean; wslSystemConfigPath: string | null } = {
+  const state: {
+    failAtomicWrite: boolean
+    wslSystemConfigPath: string | null
+    daemonGuard: boolean
+  } = {
     failAtomicWrite: false,
-    wslSystemConfigPath: null
+    wslSystemConfigPath: null,
+    daemonGuard: false
   }
   return { homedirMock: vi.fn<() => string>(), promotionTestState: state }
 })
@@ -78,6 +83,7 @@ beforeEach(() => {
   homedirMock.mockReturnValue(tmpHome)
   promotionTestState.failAtomicWrite = false
   promotionTestState.wslSystemConfigPath = null
+  promotionTestState.daemonGuard = false
   if (homedir() !== tmpHome) {
     throw new Error('node:os homedir mock is not active; refusing to touch the real ~/.codex')
   }
@@ -226,6 +232,27 @@ describe('codex settings write-back promotion', () => {
       expect(readFileSync(realConfigPath, 'utf-8')).toBe('model = "o4"\n')
     }
   )
+
+  it('keeps a WSL pane daemon preference while the daemon override hides it', () => {
+    const original = 'model = "gpt-5"\n'
+    writeSystemConfig(original)
+    promotionTestState.wslSystemConfigPath = systemConfigPath()
+    promotionTestState.daemonGuard = true
+    syncSystemConfigIntoManagedCodexHome()
+    writeFileSync(
+      runtimeConfigPath(),
+      `${readRuntimeConfig().replace(/^daemon_auto_start = .*$/m, 'daemon_auto_start = true')}`,
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+    syncSystemConfigIntoManagedCodexHome()
+    promotionTestState.daemonGuard = false
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readSystemConfig()).toBe(original)
+    expect(readRuntimeConfig()).toMatch(/^daemon_auto_start = true$/m)
+  })
 
   it.skipIf(process.platform === 'win32')(
     'does not write through a config.toml symlink into a WSL guest',
