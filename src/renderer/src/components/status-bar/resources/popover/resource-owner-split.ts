@@ -38,6 +38,25 @@ export function splitSnapshotByOwner(
   return { orca: { memory: snapshot.app.memory }, agents, yourProcesses }
 }
 
+/** Agent processes no single chat owns: the agent total less every chat listed under a workspace. */
+export function sharedAgentProcessUsage(
+  snapshot: MemorySnapshot
+): { cpu: number; memory: number } | null {
+  const total = snapshot.agentProcesses
+  if (!total) {
+    return null
+  }
+  let cpu = total.cpu
+  let memory = total.memory
+  for (const worktree of snapshot.worktrees) {
+    for (const chat of worktree.chats ?? []) {
+      cpu -= chat.cpu
+      memory -= chat.memory
+    }
+  }
+  return memory > 0 ? { cpu: Math.max(0, cpu), memory } : null
+}
+
 /** Panes with a real agent; a finished program's kept result row is not one. */
 export function readAgentPaneKeys(): { has(paneKey: string): boolean } {
   const statuses = useAppStore.getState().agentStatusByPaneKey

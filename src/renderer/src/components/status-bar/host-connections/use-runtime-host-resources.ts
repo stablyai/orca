@@ -37,6 +37,7 @@ export function useRuntimeHostResources(
     }
     let cancelled = false
     const inFlight = new Set<string>()
+    const misses = new Map<string, number>()
     const poll = (): void => {
       for (const environmentId of sessionKey.split('\n')) {
         // Why: a slow server must not stack requests or delay another server's sample.
@@ -46,7 +47,10 @@ export function useRuntimeHostResources(
         inFlight.add(environmentId)
         void readRuntimeHostResources(environmentId, callDiagnosticsMemory).then((result) => {
           inFlight.delete(environmentId)
-          if (!cancelled) {
+          const missed = result.status === 'unreachable' ? (misses.get(environmentId) ?? 0) + 1 : 0
+          misses.set(environmentId, missed)
+          // One slow answer keeps the last result; a server is unreachable only after two misses in a row.
+          if (!cancelled && missed !== 1) {
             setState((prev) => ({
               key: sessionKey,
               results: { ...(prev.key === sessionKey ? prev.results : {}), [environmentId]: result }

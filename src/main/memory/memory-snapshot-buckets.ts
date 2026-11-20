@@ -1,6 +1,6 @@
 import { basename } from 'node:path'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
-import type { SessionMemory } from '../../shared/diagnostics/process-stats-types'
+import type { ChatAgentMemory, SessionMemory } from '../../shared/diagnostics/process-stats-types'
 import type { Store } from '../persistence/loading-store/store'
 import { parseWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { folderWorkspaceRepoId } from '../../shared/folder-workspaces/folder-workspace-worktree'
@@ -64,6 +64,7 @@ export type WorktreeMemoryBucket = {
   memory: number
   privateMemory: number
   sessions: SessionMemory[]
+  chats: ChatAgentMemory[]
 }
 
 /** Project-group names read once per snapshot, not once per folder bucket. */
@@ -127,6 +128,7 @@ export function createEmptyWorktreeMemoryBucket(
     cpu: 0,
     memory: 0,
     privateMemory: 0,
-    sessions: []
+    sessions: [],
+    chats: []
   }
 }

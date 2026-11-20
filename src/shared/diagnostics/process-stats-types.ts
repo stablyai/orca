@@ -38,13 +38,24 @@ export type SessionMemory = UsageValues & {
   pid: number
 }
 
-/** The top-level cpu/memory are the sum of sessions. */
+/** A chat agent's whole process tree (its CLI and everything it started), in its workspace. */
+export type ChatAgentMemory = UsageValues & {
+  agentSessionId: string
+  /** Agent id such as `claude`; clients name it. */
+  agent: string
+  /** The conversation's name; null until it has one. */
+  name: string | null
+}
+
+/** The top-level cpu/memory are the sum of sessions and chats. */
 export type WorktreeMemory = UsageValues & {
   worktreeId: string
   worktreeName: string
   repoId: string
   repoName: string
   sessions: SessionMemory[]
+  /** Absent from older hosts. */
+  chats?: ChatAgentMemory[]
   /** Oldest-first memory samples (bytes) for this worktree's tracked subtrees. */
   history: number[]
 }
@@ -66,7 +77,7 @@ export type HostMemory = {
 export type MemorySnapshot = {
   app: AppMemory
   worktrees: WorktreeMemory[]
-  /** Native agent processes outside terminals (chat providers, app servers); absent from older hosts. */
+  /** Every agent process outside terminals, including the chats listed under worktrees; absent from older hosts. */
   agentProcesses?: UsageValues
   host: HostMemory
   /** Per-process byte metric used by app, session, worktree, history, and totalMemory values. */
