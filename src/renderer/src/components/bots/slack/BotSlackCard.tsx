@@ -153,6 +153,9 @@ export function BotSlackCard({
   const people = useSlackWhoCanAsk(bot, teamId)
   const team = view.status === 'ready' ? slackTeamState(view.slack, teamId) : null
   const installed = team?.state === 'installed' ? team : null
+  // The workspace this row is for, in any state: an app made but never installed, or one deleted in
+  // Slack, is still a connection the owner must be able to drop.
+  const rowTeamId = (team && 'teamId' in team ? team.teamId : undefined) ?? teamId
 
   const remove = async (): Promise<void> => {
     const confirmed = await confirm({
@@ -173,7 +176,7 @@ export function BotSlackCard({
     setRemoving(true)
     const result = await botSlackCalls(bot.hostId).remove({
       botId: bot.id,
-      teamId: installed?.teamId
+      teamId: rowTeamId
     })
     setRemoving(false)
     if (!result.ok) {
@@ -230,7 +233,7 @@ export function BotSlackCard({
           : null
       }
       remove={
-        installed
+        rowTeamId
           ? {
               label: t('bots.connector.removeFrom', 'Remove from {{place}}…', {
                 place: face.workspace ?? 'Slack'

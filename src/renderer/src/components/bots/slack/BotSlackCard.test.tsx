@@ -138,9 +138,16 @@ describe('BotSlackCard', () => {
     renderCard({ state: 'created', teamId: 'T05', appId: 'A1' })
     expect(await screen.findByText('Waiting for the install in Slack.')).toBeDefined()
     expect(screen.getByRole('button', { name: 'Finish setup' })).toBeDefined()
-    // Nothing to open or remove yet, so the row has no ⋯ menu.
-    expect(screen.queryByRole('button', { name: 'Slack actions' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Add' })).toHaveProperty('disabled', true)
+  })
+
+  it('lets a connection that never finished, or whose app is gone, be removed', async () => {
+    renderCard({ state: 'created', teamId: 'T05', appId: 'A1' })
+    await screen.findByText('Waiting for the install in Slack.')
+    confirm.mockResolvedValueOnce(true)
+    openActions()
+    fireEvent.click(await screen.findByRole('menuitem', { name: /^Remove from / }))
+    await waitFor(() => expect(api.remove).toHaveBeenCalledWith({ botId: 'bot-1', teamId: 'T05' }))
   })
 
   it('opens and closes the row from its name', async () => {
