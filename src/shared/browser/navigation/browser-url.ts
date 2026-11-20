@@ -33,8 +33,8 @@ const SEARCH_ENGINE_URLS: Record<SearchEngine, string> = {
 
 export const DEFAULT_SEARCH_ENGINE: SearchEngine = 'google'
 
-// Lone surrogates make encodeURIComponent throw; the phone's Android WebViews before Chromium 111 lack toWellFormed().
-const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g
+// Lone surrogates make encodeURIComponent throw. Not toWellFormed() (Android WebView <111) and no lookbehind (WebKit <16.4).
+const LONE_SURROGATE = /[\uD800-\uDFFF]/gu
 
 export function classifySchemeLessLocalDevAddress(rawInput: string): URL | null {
   const trimmed = rawInput.trim()

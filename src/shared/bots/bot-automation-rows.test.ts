@@ -18,7 +18,7 @@ function run(
 }
 
 describe('buildBotAutomationRows', () => {
-  it('lists failing automations first, then by next run, then paused ones by name', () => {
+  it('sorts automations by failure and schedule and carries their newest run', () => {
     const rows = buildBotAutomationRows(
       [
         automation('soon', { nextRunAt: 10 }),
@@ -28,9 +28,10 @@ describe('buildBotAutomationRows', () => {
         automation('a paused', { enabled: false })
       ],
       [
-        run('soon', 'dispatch_failed', 1),
-        run('soon', 'completed', 2),
-        run('failing', 'dispatch_failed', 3)
+        { ...run('soon', 'dispatch_failed', 1), dispatchedAt: 5, startedAt: null },
+        { ...run('soon', 'completed', 2), dispatchedAt: 9, startedAt: 8 },
+        run('failing', 'dispatch_failed', 3),
+        { ...run('zed paused', 'completed', 4), dispatchedAt: null, startedAt: 4 }
       ]
     )
 
@@ -41,24 +42,11 @@ describe('buildBotAutomationRows', () => {
       ['a paused', false],
       ['zed paused', false]
     ])
-  })
-})
-
-describe('buildBotAutomationRows lastRun', () => {
-  it("carries each automation's newest run and when it ran, paused ones too", () => {
-    const rows = buildBotAutomationRows(
-      [automation('daily'), automation('paused', { enabled: false }), automation('never')],
-      [
-        { ...run('daily', 'dispatch_failed', 1), dispatchedAt: 5, startedAt: null },
-        { ...run('daily', 'completed', 2), dispatchedAt: 9, startedAt: 8 },
-        { ...run('paused', 'completed', 3), dispatchedAt: null, startedAt: 4 }
-      ]
-    )
     const lastRun = new Map(rows.map((row) => [row.automation.id, row.lastRun]))
 
-    expect(lastRun.get('daily')).toEqual({ status: 'completed', at: 9 })
-    expect(lastRun.get('paused')).toEqual({ status: 'completed', at: 4 })
-    expect(lastRun.get('never')).toBeUndefined()
+    expect(lastRun.get('soon')).toEqual({ status: 'completed', at: 9 })
+    expect(lastRun.get('zed paused')).toEqual({ status: 'completed', at: 4 })
+    expect(lastRun.get('later')).toBeUndefined()
   })
 })
 

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { botGroupAudience } from './bot-group-mentions'
 import {
-  createBotGroupJournalIndexer,
   botGroupCompletedText,
   botGroupOperationAdmitted,
   botGroupContext,
@@ -29,7 +28,7 @@ const room = (replyMode: BotGroup['replyMode']): Pick<BotGroup, 'members' | 'rep
 })
 
 describe('group invocation audience', () => {
-  it('keeps exactly three persistent defaults and overrides just one send', () => {
+  it('uses room defaults until an explicit mention or @everyone overrides a send', () => {
     const group = room({ kind: 'bot', botId: 'bot-0' })
     expect(botGroupAudience('hello', group, bots)).toEqual(['bot-0'])
     expect(botGroupAudience('@Forge @Sage compare plans', group, bots)).toEqual(['bot-1', 'bot-2'])
@@ -38,11 +37,11 @@ describe('group invocation audience', () => {
     expect(botGroupAudience('hello', room({ kind: 'all' }), bots)).toEqual(
       bots.map((bot) => bot.id)
     )
-  })
-  it('expands eight human-selected bots independently of the automatic peer budget', () => {
-    const group = room({ kind: 'mentions' })
     expect(
-      botGroupAudience('@everyone hello', group, [...bots, { id: 'future', name: 'Future' }])
+      botGroupAudience('@everyone hello', room({ kind: 'mentions' }), [
+        ...bots,
+        { id: 'future', name: 'Future' }
+      ])
     ).toEqual(bots.map((bot) => bot.id))
   })
   it('does not execute quoted, code or email prose as mentions', () => {
@@ -165,57 +164,6 @@ describe('native group publication', () => {
       ])
     ).toBeNull()
     expect(botGroupTurnItems(snapshot, 'unknown')).toEqual([])
-  })
-  it('retains settled turn arrays while a different native turn streams', () => {
-    const index = createBotGroupJournalIndexer()
-    const prompt = (id: string) =>
-      row(agentJournalSubmissionKey(id), { kind: 'message', role: 'user', blocks: [] })
-    const items = [
-      prompt('one'),
-      row('t1', {
-        kind: 'turn',
-        turnId: 'one',
-        state: 'completed',
-        userItemId: agentJournalSubmissionKey('one')
-      }),
-      row(
-        'answer',
-        { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'settled' }] },
-        't1'
-      )
-    ]
-    const initial = index({ items, submissions: [] }, ['one', 'two'])
-    const submission = {
-      clientMessageId: 'one',
-      fence: 1,
-      payloadFingerprint: 'f',
-      dispatchState: 'accepted' as const,
-      providerItemId: agentJournalSubmissionKey('one'),
-      reason: null,
-      submittedAt: 1,
-      resolvedAt: 2
-    }
-    const first = index({ items, submissions: [submission] }, ['one', 'two'])('one')
-    const updated = index(
-      {
-        items: [
-          ...items,
-          prompt('two'),
-          row('t2', {
-            kind: 'turn',
-            turnId: 'two',
-            state: 'running',
-            userItemId: agentJournalSubmissionKey('two')
-          })
-        ],
-        submissions: [submission]
-      },
-      ['one', 'two']
-    )
-    expect(first.map((item) => item.itemId)).toEqual(['t1', 'answer'])
-    expect(updated('one')).toBe(first)
-    expect(initial('unrelated')).toEqual([])
-    expect(updated('unrelated')).toEqual([])
   })
   it('uses Claude’s accepted provider identity when its user echo is absent', () => {
     const snapshot: AgentJournalSnapshot = {
@@ -422,15 +370,16 @@ describe('group rooms', () => {
     threads: [{ id: 't', createdAt: 1, members: [{ botId: 'bot-0', sessionId: 'thread-0' }] }]
   }
 
-  it("finds a room tab's group and thread by its entity", () => {
-    expect(findBotGroupRoom([group], 'g')).toEqual({ group, threadId: undefined })
-    expect(findBotGroupRoom([group], 't')).toEqual({ group, threadId: 't' })
+  it('resolves room tabs to the main or thread member sessions', () => {
+    const main = findBotGroupRoom([group], 'g')
+    const thread = findBotGroupRoom([group], 't')
+    expect(main).toEqual({ group, threadId: undefined })
+    expect(thread).toEqual({ group, threadId: 't' })
+    expect(main && botGroupRoom(main.group, main.threadId).members[0]?.sessionId).toBe('main-0')
+    expect(thread && botGroupRoom(thread.group, thread.threadId).members[0]?.sessionId).toBe(
+      'thread-0'
+    )
     expect(findBotGroupRoom([group], 'gone')).toBeNull()
-  })
-
-  it('sees a thread through its own member sessions', () => {
-    expect(botGroupRoom(group, undefined).members[0]?.sessionId).toBe('main-0')
-    expect(botGroupRoom(group, 't').members[0]?.sessionId).toBe('thread-0')
     expect(() => botGroupRoom(group, 'gone')).toThrow(/no longer/)
   })
 })

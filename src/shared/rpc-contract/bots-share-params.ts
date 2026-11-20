@@ -17,7 +17,9 @@ export const BotSharePrepare = z.object({
   /** Built in, so the candidate digests as a version published with this note would. */
   setupNote: z.string().max(2000).optional(),
   /** Build from the picks and note the bot was last published with, and return them. */
-  last: z.boolean().optional()
+  last: z.boolean().optional(),
+  /** Build a review without waiting for the cloud package lookup. */
+  localOnly: z.boolean().optional()
 })
 
 export const BotShareCandidate = z.object({

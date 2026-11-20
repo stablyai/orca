@@ -16,7 +16,7 @@ export type DurableFilePayload =
   | AsyncIterable<string | Uint8Array>
 
 /** Persist directory changes where supported; Windows and some filesystems reject directory fsync. */
-async function syncDirectory(directory: string): Promise<void> {
+export async function syncDirectory(directory: string): Promise<void> {
   let handle: Awaited<ReturnType<typeof open>> | null = null
   try {
     handle = await open(directory, 'r')

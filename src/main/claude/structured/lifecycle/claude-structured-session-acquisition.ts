@@ -2,7 +2,7 @@ import type { AgentSessionAcquisition } from '../../../native-chat/agent-session
 import { openClaudeStreamJsonConnection } from '../../claude-stream-json-connection'
 import { claudeLaunchPermissions } from '../permissions/claude-structured-inbound-control'
 import * as replay from '../turns/claude-replay-turn-resolution'
-import { claudeStartedUnechoedSend } from '../turns/claude-command-lifecycle'
+import { claudeFrameSendFacts } from '../turns/claude-command-lifecycle'
 import { claudeSessionStateEndsTurn } from '../turns/claude-session-state-turn-over'
 import { settleClaudeTurnEndWaiters } from '../turns/claude-request-end-wait'
 import * as proof from '../startup/claude-structured-init-proof'
@@ -137,7 +137,7 @@ export async function acquireClaudeSession({
     const observedAt =
       startsTurn || message.type === 'result' ? { observedAt: deps.now?.() ?? Date.now() } : {}
     const requestedAt = turnOrigin?.requestedAt
-    const startedSend = !startsTurn && liveSession ? claudeStartedUnechoedSend(liveSession) : null
+    const sendFacts = claudeFrameSendFacts(liveSession, message, startsTurn)
     replay.withClaudeReplaySettlements(
       liveSession,
       settlements,
@@ -162,7 +162,7 @@ export async function acquireClaudeSession({
             ...(startsTurn ? { startsTurn: true } : {}),
             ...(requestedAt === null || requestedAt === undefined ? {} : { requestedAt }),
             ...(turnOrigin?.clientMessageId ? { clientMessageId: turnOrigin.clientMessageId } : {}),
-            ...(startedSend ? { startedSend } : {}),
+            ...sendFacts,
             ...observedAt
           })
           // Final snapshots and the turn settlement must reach the journal before its leaf can move.

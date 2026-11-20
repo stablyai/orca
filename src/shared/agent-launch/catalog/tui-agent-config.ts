@@ -322,7 +322,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'stdin-after-start',
     // Its banner animates indefinitely; wait for the input box corner instead of render quiet.
     draftPasteReadySignal: 'zcode-composer-prompt',
-    composerReadyCaptures: ['zcode-composer-ready']
+    composerReadyCaptures: ['zcode-composer-ready', 'zcode-app-cli-composer-ready']
   },
   // Why: stdin-after-start's follow-up wrote before Devin's input loop existed (#26302); `devin -- <prompt>` submits reliably.
   // prettier-ignore

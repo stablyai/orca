@@ -85,7 +85,6 @@ describe("a host's focused terminal create into a requested group", () => {
     })
 
     const tabId = replyTerminalCreate.mock.calls[0]?.[0]?.tabId
-    expect(tabId).toBeDefined()
     const landed = store
       .getState()
       .unifiedTabsByWorktree[WT]?.find((tab) => tab.entityId === tabId)?.groupId

@@ -1,15 +1,21 @@
 import React, { useRef } from 'react'
 import { Trans } from 'react-i18next'
-import { ChevronLeft, ChevronRight, ImageUp } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ImageUp, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ColorPicker } from '@/components/ui/color-picker'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
-import { PICKABLE_BOT_MASCOT_IDS } from '../../../../shared/bot-avatar'
+import { PICKABLE_BOT_MASCOT_IDS, type BotMascotId } from '../../../../shared/bot-avatar'
+import {
+  BOT_AVATAR_COLORS,
+  DEFAULT_BOT_AVATAR_COLOR
+} from '../../../../shared/bots/bot-avatar-color'
 import { BotAvatarTile } from './BotAvatar'
 import { BOT_AVATAR_ACCEPT } from './bot-avatar-intake'
-import { BOT_MASCOT_URLS } from './bot-mascots'
+import { botMascotSrcs } from './bot-mascot-color'
 import { BotPictureIntakeLine, BotPictureVeil, LineAction } from './BotPictureIntakeLine'
 import { useBotAvatarIntake } from './use-bot-avatar-intake'
 
@@ -150,18 +156,94 @@ export type BotPictureCustom = {
 }
 
 const CUSTOM_KEY = 'custom'
-const MASCOT_FACES: BotPictureFace[] = PICKABLE_BOT_MASCOT_IDS.map((id) => ({
-  key: id,
-  src: BOT_MASCOT_URLS[id],
-  fallback: ''
-}))
 
-function pictureFaces(custom: BotPictureCustom | null): BotPictureFace[] {
+function pictureFaces(
+  srcs: Record<BotMascotId, string>,
+  custom: BotPictureCustom | null
+): BotPictureFace[] {
+  const mascots = PICKABLE_BOT_MASCOT_IDS.map((id) => ({ key: id, src: srcs[id], fallback: '' }))
   if (!custom) {
-    return MASCOT_FACES
+    return mascots
   }
   const face = { key: CUSTOM_KEY, src: custom.src, fallback: custom.fallback }
-  return [...MASCOT_FACES.slice(0, custom.after + 1), face, ...MASCOT_FACES.slice(custom.after + 1)]
+  return [...mascots.slice(0, custom.after + 1), face, ...mascots.slice(custom.after + 1)]
+}
+
+/** The mascot's tile color: the swatches, then any color. */
+function BotPictureColors({
+  color,
+  onChange
+}: {
+  color: string | null
+  onChange: (color: string | null) => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const current = color ?? DEFAULT_BOT_AVATAR_COLOR
+  const isCustom = !BOT_AVATAR_COLORS.some((swatch) => swatch === current)
+  const names: Record<(typeof BOT_AVATAR_COLORS)[number], string> = {
+    '#b3dbf4': t('bots.new.colorSky', 'Sky'),
+    '#ffffff': t('bots.new.colorWhite', 'White'),
+    '#c9b8e8': t('bots.new.colorLavender', 'Lavender'),
+    '#f4c4cf': t('bots.new.colorPink', 'Pink'),
+    '#f8cfa8': t('bots.new.colorPeach', 'Peach'),
+    '#f6e3a1': t('bots.new.colorButter', 'Butter'),
+    '#c5dfb5': t('bots.new.colorSage', 'Sage'),
+    '#b5e3d8': t('bots.new.colorMint', 'Mint'),
+    '#8fa3b8': t('bots.new.colorSlate', 'Slate'),
+    '#3a3f4b': t('bots.new.colorGraphite', 'Graphite'),
+    '#1f2126': t('bots.new.colorInk', 'Ink')
+  }
+  return (
+    <div
+      role="group"
+      aria-label={t('bots.new.pictureColor', 'Background color')}
+      className="mt-2 flex flex-wrap items-center justify-center gap-1"
+    >
+      {BOT_AVATAR_COLORS.map((swatch) => (
+        <button
+          key={swatch}
+          type="button"
+          aria-label={names[swatch]}
+          aria-pressed={swatch === current}
+          style={{ backgroundColor: swatch }}
+          onClick={() => onChange(swatch === DEFAULT_BOT_AVATAR_COLOR ? null : swatch)}
+          className={cn(
+            'size-4 cursor-pointer rounded-full border border-black/10 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:border-white/15',
+            swatch === current && 'ring-2 ring-foreground ring-offset-2 ring-offset-popover'
+          )}
+        />
+      ))}
+      {isCustom ? (
+        <span
+          aria-hidden
+          style={{ backgroundColor: current }}
+          className="size-4 rounded-full border border-black/10 ring-2 ring-foreground ring-offset-2 ring-offset-popover dark:border-white/15"
+        />
+      ) : null}
+      <Tooltip>
+        <ColorPicker
+          value={current}
+          onChange={(next) => onChange(next.toLowerCase())}
+          label={t('bots.new.pictureColorCustom', 'Custom color')}
+          selected={isCustom}
+          trigger={
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={t('bots.new.pictureColorCustom', 'Custom color')}
+                className="flex size-4 cursor-pointer items-center justify-center rounded-full border border-border bg-muted text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                <Plus className="size-3" />
+              </button>
+            </TooltipTrigger>
+          }
+        />
+        <TooltipContent side="bottom" sideOffset={4}>
+          {t('bots.new.pictureColorCustom', 'Custom color')}
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  )
 }
 
 /** The mascot a value stands on; a custom picture stands on the mascot before it. */
@@ -179,7 +261,9 @@ export function BotPicturePicker({
   onChange,
   onUpload,
   onUndo,
-  uploadLink = false
+  uploadLink = false,
+  color = null,
+  onColorChange
 }: {
   value: BotPictureValue
   custom: BotPictureCustom | null
@@ -190,11 +274,14 @@ export function BotPicturePicker({
   onUndo?: () => void
   /** The hint as one caption line with an inline Upload (New bot), not the upload button. */
   uploadLink?: boolean
+  color?: string | null
+  /** Shows the color swatches under a mascot. */
+  onColorChange?: (color: string | null) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const rootRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
-  const faces = pictureFaces(custom)
+  const faces = pictureFaces(botMascotSrcs(PICKABLE_BOT_MASCOT_IDS, color), custom)
   const showingCustom = value.kind === 'custom' && custom !== null
   const mascotIndex = pictureMascotIndex(value, custom)
   const faceIndex = showingCustom
@@ -237,6 +324,9 @@ export function BotPicturePicker({
           }
         }}
       />
+      {onColorChange && !showingCustom ? (
+        <BotPictureColors color={color} onChange={onColorChange} />
+      ) : null}
       <BotPictureIntakeLine
         line={line}
         onUndo={() => {

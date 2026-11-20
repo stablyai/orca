@@ -141,10 +141,13 @@ export function createBrowserPageConversionActions(
           get,
           sentPlan.workspace.worktreeId,
           {
-            type: 'replaceBrowserPage',
-            browserTabId: sentPlan.workspace.id,
-            pageId,
-            newPageId: sentPlan.newPage.id
+            type: 'replaceTabContent',
+            replacement: {
+              kind: 'browser-page',
+              browserTabId: sentPlan.workspace.id,
+              pageId,
+              newPageId: sentPlan.newPage.id
+            }
           },
           {
             here: () => convertHere(sentPlan.newPage.id),

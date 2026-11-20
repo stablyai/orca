@@ -47,7 +47,11 @@ export function useBotAutomations({
       mark(id, true)
       try {
         const { automation } = automationSetEnabled.interpret(
-          await automationSetEnabled.request(client, { id, updates: { enabled: next } })
+          await automationSetEnabled.request(
+            client,
+            { id, updates: { enabled: next } },
+            { failWhenDisconnected: true }
+          )
         )
         setSaved((previous) => new Map(previous).set(automation.id, automation))
       } catch (error) {
@@ -69,7 +73,9 @@ export function useBotAutomations({
       }
       mark(id, true)
       try {
-        automationRunNow.interpret(await automationRunNow.request(client, { id }))
+        automationRunNow.interpret(
+          await automationRunNow.request(client, { id }, { failWhenDisconnected: true })
+        )
         showToast(t('bots.automations.runQueued', 'Automation run queued.'))
       } catch (error) {
         showToast(

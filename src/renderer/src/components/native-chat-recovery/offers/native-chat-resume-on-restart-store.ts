@@ -76,15 +76,10 @@ export async function loadNativeChatLaunchOffer(
   if (offered.length === 0) {
     return
   }
-  if (!autoResume) {
-    requestNativeChatResumeOnRestartDialog()
-    return
-  }
-  const working = launchResumeSessionIds(offered)
-  await store.continueNativeChatRestartOffer(working, 'launch')
-  // Chats left waiting on the person need them, so show the list instead of only a status-bar count.
-  if (working.length < offered.length) {
-    requestNativeChatResumeOnRestartDialog()
+  // One toast reports the launch: a Resume button when the preference is off, the outcome when on.
+  requestNativeChatResumeOnRestartDialog()
+  if (autoResume) {
+    await store.continueNativeChatRestartOffer(launchResumeSessionIds(offered), 'launch')
   }
 }
 

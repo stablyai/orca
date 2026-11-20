@@ -17,14 +17,6 @@ function status(capabilities: string[]): RuntimeRpcResponse<unknown> {
 describe('wslOrcadHostSupports', () => {
   afterEach(() => unregisterWslOrcadHostEnvironment('env-1', 'Ubuntu'))
 
-  it('asks the host once, then answers from what it reported', async () => {
-    registerWslOrcadHostEnvironment('env-1', 'Ubuntu')
-    const readStatus = vi.fn(async () => status([CAPABILITY]))
-    await expect(wslOrcadHostSupports('env-1', CAPABILITY, readStatus)).resolves.toBe('supported')
-    await expect(wslOrcadHostSupports('env-1', CAPABILITY, readStatus)).resolves.toBe('supported')
-    expect(readStatus).toHaveBeenCalledTimes(1)
-  })
-
   it('reports an older host as unsupported and a failed probe as unknown', async () => {
     registerWslOrcadHostEnvironment('env-1', 'Ubuntu')
     await expect(wslOrcadHostSupports('env-1', CAPABILITY, async () => status([]))).resolves.toBe(

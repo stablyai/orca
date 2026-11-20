@@ -146,20 +146,6 @@ describe("a bot automation's events in the editor", () => {
     expect(screen.getByText('Never')).toBeTruthy()
   })
 
-  it('lists each event read-only and edits them in the bot’s chat', () => {
-    const { onClose } = renderSidebar(buildAutomationEditDraft(EVENT_AUTOMATION))
-
-    expect(
-      screen.getByText('When you’re mentioned in Slack · in 2 Slack channels · containing “deploy”')
-    ).toBeTruthy()
-    fireEvent.click(screen.getByText('Edit in chat'))
-
-    expect(onClose).toHaveBeenCalled()
-    expect(openBotHomeTab).toHaveBeenCalledWith(BOT, {
-      draft: 'Change the automation “Deploy pings”: '
-    })
-  })
-
   it('opens the bot’s chat from the When menu to set up an event', () => {
     renderSidebar(buildAutomationEditDraft(EVENT_AUTOMATION))
 
@@ -212,11 +198,12 @@ describe("a bot automation's events in the editor", () => {
 
   it('names the saved automation in the chat, not an unsaved rename, and hides Edit in chat without its bot', () => {
     const draft = { ...buildAutomationEditDraft(EVENT_AUTOMATION), name: 'Renamed' }
-    renderSidebar(draft)
+    const { onClose } = renderSidebar(draft)
     fireEvent.click(screen.getByText('Edit in chat'))
     expect(openBotHomeTab).toHaveBeenCalledWith(BOT, {
       draft: 'Change the automation “Deploy pings”: '
     })
+    expect(onClose).toHaveBeenCalled()
     cleanup()
 
     renderSidebar({

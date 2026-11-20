@@ -106,13 +106,14 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   // Lazy: the database can open, and arm relays, while the runtime is still constructing.
   declare private peerMailRelay: PeerMailRelay | undefined
 
-  override ensureOrchestrationFederationRelay(
-    runId?: string,
-    options?: { keepAwake?: boolean }
-  ): void {
-    super.ensureOrchestrationFederationRelay(runId, options)
+  override ensureOrchestrationFederationRelay(runId?: string, opt?: { keepAwake?: boolean }): void {
+    super.ensureOrchestrationFederationRelay(runId, opt)
+    this.ensureOrchestrationPeerMailRelay()
+  }
+
+  ensureOrchestrationPeerMailRelay(environmentId?: string): void {
     this.peerMailRelay ??= new PeerMailRelay(this, () => this.orchestrationEnvironmentTransport)
-    this.peerMailRelay.ensure()
+    this.peerMailRelay.ensure(environmentId)
   }
 
   /** What the pull loop last heard from a paired server, without asking it. */
@@ -296,8 +297,8 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     ...this.paneFactSources()
   })
 
-  protected markPaneLiveTitlesDirty(): void {
-    this.workspaceLayoutStream.markLiveTitlesDirty()
+  protected markPaneLiveTitlesDirty(ref: string): void {
+    this.workspaceLayoutStream.markLiveTitlesDirty(ref)
   }
 
   protected continueRestoredWorkerMail(db: OrchestrationDb): void {

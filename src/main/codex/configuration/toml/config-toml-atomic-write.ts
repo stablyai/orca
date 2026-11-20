@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 import '../../../filesystem/atomic-file-publication'
 import { renameFileWithWindowsRetry } from '../../../../shared/file-write/windows-retry-file-operations'
 import { writeRollingFileBackup } from '../../../filesystem/rolling-file-backup'
+import { assertGuardedFileCurrent } from '../../../filesystem/concurrent-file-edit-guard'
 import {
   observeFilePublication,
   observedExistsSync as existsSync,
@@ -11,7 +12,15 @@ import {
   observeResolvedFilePath
 } from '../../../filesystem/file-content-observation'
 
-export function writeTomlConfigAtomically(configPath: string, contents: string): void {
+/**
+ * Returns false without publishing when `stillCurrent` says the file changed since the caller read
+ * it, so a writer on another thread can redo its edit instead of clobbering a newer one.
+ */
+export function writeTomlConfigAtomically(
+  configPath: string,
+  contents: string,
+  options?: { stillCurrent: (writePath: string) => boolean }
+): boolean {
   const writePath = resolveTomlWritePath(configPath)
   const directory = dirname(writePath)
   mkdirSync(directory, { recursive: true })
@@ -22,12 +31,22 @@ export function writeTomlConfigAtomically(configPath: string, contents: string):
       encoding: 'utf-8',
       mode: resolveCodexConfigTomlFileMode(writePath)
     })
+    // A rejected update must not rotate the backup first.
+    assertGuardedFileCurrent(writePath)
     if (existsSync(writePath)) {
       writeRollingFileBackup(writePath, `${writePath}.bak`)
     }
-    renameFileWithWindowsRetry(temporaryPath, writePath)
+    // Checked before every rename attempt, so only the re-read is left between check and rename.
+    const stillCurrent = (): boolean => {
+      assertGuardedFileCurrent(writePath)
+      return options ? options.stillCurrent(writePath) : true
+    }
+    if (!renameFileWithWindowsRetry(temporaryPath, writePath, stillCurrent)) {
+      return false
+    }
     observeFilePublication(writePath, contents)
     renamed = true
+    return true
   } finally {
     if (!renamed && existsSync(temporaryPath)) {
       try {

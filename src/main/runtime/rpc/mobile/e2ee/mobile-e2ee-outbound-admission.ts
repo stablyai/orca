@@ -1,7 +1,8 @@
 import type { WebSocket } from 'ws'
 import {
   createWsOutboundBackpressureQueue,
-  type WsOutboundBackpressureQueue
+  type WsOutboundBackpressureQueue,
+  type WsOutboundOverflowEvidence
 } from '../../../../../shared/network/websocket/ws-outbound-backpressure-queue'
 import {
   REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES,
@@ -13,12 +14,24 @@ import type {
 } from './mobile-e2ee-outbound-memory-budget'
 import type { EventProps } from '../../../../../shared/telemetry/telemetry-event-classification'
 import { track } from '../../../../telemetry/client'
+import { MOBILE_RPC_METHOD_ALLOWLIST } from '../../server/runtime-rpc-mobile-method-allowlist'
+import { classifyJsonRpcPrefix } from '../../../../../shared/json-stream/json-rpc-record-prefix'
 
-export type MobileE2EEOutboundBudgetEmitter = EventProps<'remote_outbound_budget_close'>['emitter']
+export type MobileE2EEOutboundBudgetClose = EventProps<'remote_outbound_budget_close'>
+export type MobileE2EEOutboundBudgetEmitter = MobileE2EEOutboundBudgetClose['emitter']
+export type MobileE2EEOutboundCap = NonNullable<MobileE2EEOutboundBudgetClose['cap']>
 
-export function trackMobileE2EEOutboundBudgetClose(emitter: MobileE2EEOutboundBudgetEmitter): void {
+/** The phone request a reply answers, as a known method name so telemetry stays bounded. */
+export function mobileE2EEReplyMethod(request: string): string {
+  // Top-level keys only, so a nested params.method can't stand in for the request's.
+  const envelope = classifyJsonRpcPrefix(request.slice(0, 512))
+  const method = 'method' in envelope ? envelope.method : undefined
+  return method && MOBILE_RPC_METHOD_ALLOWLIST.has(method) ? method : 'other'
+}
+
+export function trackMobileE2EEOutboundBudgetClose(close: MobileE2EEOutboundBudgetClose): void {
   try {
-    track('remote_outbound_budget_close', { emitter })
+    track('remote_outbound_budget_close', close)
   } catch {
     // Telemetry is best-effort; closing the unsafe socket remains authoritative.
   }
@@ -56,7 +69,7 @@ export function isMobileE2EEOutboundItemWithinLimit(
 export function createLegacyMobileE2EEReplyQueue(args: {
   ws: WebSocket
   isKeyed: () => boolean
-  onOverflow: () => void
+  onOverflow: (evidence: WsOutboundOverflowEvidence) => void
   memoryBudget: MobileE2EEOutboundMemoryBudget
   socketMemory: MobileE2EEOutboundSocketMemory
 }): WsOutboundBackpressureQueue<string | Buffer> {

@@ -13,6 +13,11 @@ export const SESSION_TABS_EMPTY_WORKTREE_ANSWER_RUNTIME_CAPABILITY =
 export const SESSION_TABS_CREATE_TERMINAL_SHELL_RUNTIME_CAPABILITY =
   'session-tabs.create-terminal-shell.v1' as const
 
+// Why: a host with this answers session.tabs.terminalShellChoices with the Windows shells it would
+// start for a workspace; older hosts lack the method, so clients keep their single Terminal action.
+export const SESSION_TABS_TERMINAL_SHELL_CHOICES_RUNTIME_CAPABILITY =
+  'session-tabs.terminal-shell-choices.v1' as const
+
 // Why: a host with this commits a client's pane-to-new-tab move (session.tabs.movePaneToNewTab).
 // An older host keeps the pane where it was, so a client moves it only in its own window there.
 export const SESSION_TABS_MOVE_PANE_TO_NEW_TAB_RUNTIME_CAPABILITY =
@@ -54,6 +59,7 @@ export const SESSION_TABS_RUNTIME_CAPABILITIES = [
   SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY,
   SESSION_TABS_EMPTY_WORKTREE_ANSWER_RUNTIME_CAPABILITY,
   SESSION_TABS_CREATE_TERMINAL_SHELL_RUNTIME_CAPABILITY,
+  SESSION_TABS_TERMINAL_SHELL_CHOICES_RUNTIME_CAPABILITY,
   SESSION_TABS_MOVE_PANE_TO_NEW_TAB_RUNTIME_CAPABILITY,
   TERMINAL_AGENT_ID_RUNTIME_CAPABILITY
 ] as const
