@@ -366,8 +366,9 @@ export function WorkspaceCleanupRuleChangeDialog({
             <Button variant="ghost" onClick={onCancel} disabled={confirming}>
               {t('components.settings.workspaceCleanup.enable.cancel', 'Cancel')}
             </Button>
+            {/* Red whenever confirming deletes at least one workspace; nothing deleted, normal. */}
             <Button
-              variant={disablingProtection ? 'destructive' : 'default'}
+              variant={deletedCount > 0 ? 'destructive' : 'default'}
               onClick={() => void onConfirm()}
               disabled={confirming || settling}
             >

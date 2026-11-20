@@ -190,6 +190,15 @@ async function open() {
   fireEvent.click(screen.getByRole('button', { name: 'Enable' }))
   await screen.findByRole('dialog')
 }
+it('shows a red confirm while it deletes anything, and a normal one once everything is kept', async () => {
+  await open()
+  const confirm = screen.getByRole('button', { name: 'Turn on' })
+  expect(confirm.getAttribute('data-variant')).toBe('destructive')
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Keep existing' }))
+  expect(confirm.getAttribute('data-variant')).toBe('destructive')
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Keep added' }))
+  await waitFor(() => expect(confirm.getAttribute('data-variant')).toBe('default'))
+})
 it('offers Keep for the complete proposed set and does not activate on cancel', async () => {
   await open()
   expect(screen.getByRole('checkbox', { name: 'Keep existing' })).toBeTruthy()
