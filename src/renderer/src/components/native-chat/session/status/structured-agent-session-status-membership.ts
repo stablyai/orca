@@ -202,11 +202,16 @@ export function createStructuredSessionMembership() {
     placeTab: (tab: StructuredTab, paneKey: string) => void
   ): Member[] => {
     const listed = new Set<string>()
-    for (const tab of listedTabs) {
+    const tabs = [...listedTabs]
+    for (const tab of tabs) {
       if (tabIds && !tabIds.has(tab.id)) {
         continue
       }
       const paneKey = chatPaneKey(tab.entityId)
+      // One member per conversation: the first listed tab holds it, so passes don't flip it.
+      if (listed.has(paneKey)) {
+        continue
+      }
       listed.add(paneKey)
       if (members.get(paneKey)?.tab !== tab) {
         placeTab(tab, paneKey)
@@ -214,8 +219,21 @@ export function createStructuredSessionMembership() {
     }
     const candidates = tabIds
       ? [...tabIds].flatMap((tabId) => [...(membersByTabId.get(tabId) ?? [])])
-      : members.values()
-    return [...candidates].filter((member) => !listed.has(member.paneKey))
+      : [...members.values()]
+    const orphaned = new Set(
+      candidates.filter((member) => !listed.has(member.paneKey)).map((m) => m.paneKey)
+    )
+    // A closed tab's conversation that another listed tab still shows moves there instead of retiring.
+    if (tabIds && orphaned.size > 0) {
+      for (const tab of tabs) {
+        const paneKey = tabIds.has(tab.id) ? null : chatPaneKey(tab.entityId)
+        if (paneKey && orphaned.delete(paneKey)) {
+          listed.add(paneKey)
+          placeTab(tab, paneKey)
+        }
+      }
+    }
+    return candidates.filter((member) => !listed.has(member.paneKey))
   }
   const clear = (): void => {
     members.clear()

@@ -81,6 +81,7 @@ export function stageProjectionTopology(
             ...Object.keys(previous?.unifiedTabsByWorktree ?? {}),
             ...Object.keys(state.unifiedTabsByWorktree ?? {})
           ])
+    const removedKeys = new Set<string>()
     for (const owner of owners) {
       for (const tab of previous?.unifiedTabsByWorktree[owner] ?? []) {
         if (
@@ -91,6 +92,7 @@ export function stageProjectionTopology(
           const key = chatPaneKey(tab.entityId)
           changedKeys.add(key)
           represented.delete(key)
+          removedKeys.add(key)
           nextTabOwners.set(tab.id, null)
         }
       }
@@ -109,6 +111,12 @@ export function stageProjectionTopology(
             represented.set(key, tab)
           }
           nextTabOwners.set(tab.id, owner)
+        } else if (removedKeys.size > 0 && isStructuredTab(tab)) {
+          // Another tab on a removed tab's conversation keeps representing it.
+          const key = chatPaneKey(tab.entityId)
+          if (removedKeys.has(key) && !represented.has(key)) {
+            represented.set(key, tab)
+          }
         }
       }
     }
