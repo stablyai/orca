@@ -7,6 +7,11 @@ import {
   useWslHostChatOfferSettingUp
 } from '@/lib/agent-session/launch/structured-chat-wsl-host-offer'
 import { useNativeChatHostSetup } from '../../host-access/native-chat-host-setup'
+import {
+  nativeChatAgySignedOutBeforeSend,
+  nativeChatSignInAccount
+} from '../../host-access/native-chat-sign-in-account'
+import { useAntigravityChatAuthDetection } from '@/runtime/provider-accounts/sign-in/antigravity-chat-auth-detection'
 import { useNativeChatAvailabilityNotice } from './use-native-chat-availability-notice'
 import { structuredSessionNotices } from './native-chat-structured-session-notices'
 import { structuredAgentSessionHostPlace } from '../../pane/ownership/use-structured-agent-session-host-label'
@@ -82,16 +87,23 @@ export function useNativeChatStructuredPaneNotices({
       retryLaunch()
     }
   }, [demandModelCatalog, launchFailed, retryLaunch])
+  // A chat on agy's own login hears agy is signed out before its first send; advisory, as the
+  // host's other verdicts: Send isn't held, since a sign-in in the terminal isn't seen at once.
+  const agyHost = install.antigravityAuth?.backend === 'agy' ? install.antigravityAuth.host : null
+  const agySignedOut = useAntigravityChatAuthDetection(agyHost)?.agySignedOut
+  const unavailable =
+    controller.unavailable ?? nativeChatAgySignedOutBeforeSend(agySignedOut, controller.submissions)
   const setup = useNativeChatHostSetup({
     ...props,
     worktreeId: ownerWorktreeId,
     // The host names which account is signed out; a managed-account sign-in can't fix the system one.
-    account:
-      controller.unavailable?.reason === 'notSignedIn'
-        ? controller.unavailable.account
-        : details && 'account' in details
-          ? details.account
-          : kickoffSignIn?.account,
+    account: nativeChatSignInAccount({
+      unavailable,
+      launchDetails: details,
+      items: controller.journalItems,
+      submissions: controller.submissions,
+      kickoff: kickoffSignIn
+    }),
     failure: provisionalLaunch.failure,
     startFailures,
     journalItems: controller.journalItems,
@@ -99,7 +111,7 @@ export function useNativeChatStructuredPaneNotices({
   })
   const availability = useNativeChatAvailabilityNotice({
     // While Install shows, it already says the agent is missing and offers the one fix.
-    unavailable: installing ? null : controller.unavailable,
+    unavailable: installing ? null : unavailable,
     setup,
     agent: props.agent,
     wslDistro: continuation.view.wslDistro,

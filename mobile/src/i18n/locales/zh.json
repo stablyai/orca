@@ -2444,6 +2444,9 @@
       "sendFailed": "发送恢复命令失败"
     },
     "aiVaultResumePreparation": {
+      "openInChat": "此 {{agent}} 会话已在聊天中打开，请刷新会话历史以打开它",
+      "ownershipUnknown": "Orca 无法确认此 {{agent}} 会话的归属，请刷新会话历史并重试",
+      "preparationRefused": "Orca 无法准备此 {{agent}} 对话。请开启新聊天继续",
       "prepareFailed": "无法准备此旧版 Codex 会话。请重试恢复"
     },
     "backgroundTask": {

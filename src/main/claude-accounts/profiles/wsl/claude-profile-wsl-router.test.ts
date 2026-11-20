@@ -114,14 +114,6 @@ function fixture() {
 }
 
 describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
-  it('lists no running distros without a WSL account', async () => {
-    const f = fixture()
-    f.settings.claudeManagedAccounts = [{ ...f.account('h'), managedAuthRuntime: 'host' }]
-    listRunning.mockClear()
-    await expect(f.router.runningDistros()).resolves.toEqual([])
-    expect(listRunning).not.toHaveBeenCalled()
-  })
-
   it('writes the guest pointer per build, sets up even a missing folder, and removes it with the last account', async () => {
     const f = fixture()
     await f.router.publish('Ubuntu')
@@ -135,6 +127,11 @@ describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
     f.settings.claudeManagedAccounts = []
     await f.router.publish('Ubuntu')
     expect(existsSync(f.pointer)).toBe(false)
+
+    f.settings.claudeManagedAccounts = [{ ...f.account('h'), managedAuthRuntime: 'host' }]
+    listRunning.mockClear()
+    await expect(f.router.runningDistros()).resolves.toEqual([])
+    expect(listRunning).not.toHaveBeenCalled()
   })
 
   it('a launch waiting on setup leaves a selection made meanwhile in the pointer', async () => {

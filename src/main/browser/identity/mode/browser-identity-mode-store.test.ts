@@ -30,15 +30,15 @@ import {
   setBrowserIdentityMode
 } from './browser-identity-mode-store'
 
-function makeUserData(mode: 'clean' | 'native' = 'clean', explicitSelection = false): string {
+function makeUserData(): string {
   const userDataPath = mkdtempSync(join(tmpdir(), 'orca-browser-identity-store-'))
   writeFileSync(
     join(userDataPath, BROWSER_IDENTITY_MODE_FILE),
     JSON.stringify({
       version: BROWSER_IDENTITY_MODE_VERSION,
-      mode,
-      explicitSelection,
-      migrationNoticePending: !explicitSelection
+      mode: 'clean',
+      explicitSelection: false,
+      migrationNoticePending: true
     }),
     'utf8'
   )
@@ -56,7 +56,7 @@ describe('browser identity mode store', () => {
       label: 'no record',
       userDataPath: () => mkdtempSync(join(tmpdir(), 'orca-browser-identity-store-'))
     },
-    { label: 'a Cleaned record nobody chose', userDataPath: () => makeUserData('clean') }
+    { label: 'a Cleaned record nobody chose', userDataPath: makeUserData }
   ])('applies Native when there is $label', ({ userDataPath }) => {
     expect(initializeBrowserIdentityModeStore(userDataPath())).toMatchObject({
       appliedMode: 'native',
@@ -65,15 +65,7 @@ describe('browser identity mode store', () => {
     })
   })
 
-  it('keeps an explicit Cleaned choice', () => {
-    expect(initializeBrowserIdentityModeStore(makeUserData('clean', true))).toMatchObject({
-      appliedMode: 'clean',
-      configuredMode: 'clean',
-      explicitSelection: true
-    })
-  })
-
-  it('durably commits an explicit selection before reporting restart state', async () => {
+  it('persists an explicit selection and applies it after restart', async () => {
     const userDataPath = makeUserData()
     initializeBrowserIdentityModeStore(userDataPath)
 
@@ -95,6 +87,13 @@ describe('browser identity mode store', () => {
       mode: 'clean',
       explicitSelection: true,
       migrationNoticePending: false
+    })
+    resetBrowserIdentityModeStoreForTests()
+    expect(initializeBrowserIdentityModeStore(userDataPath)).toMatchObject({
+      appliedMode: 'clean',
+      configuredMode: 'clean',
+      explicitSelection: true,
+      restartRequired: false
     })
   })
 
@@ -123,19 +122,6 @@ describe('browser identity mode store', () => {
     })
   })
 
-  it('refuses ordinary updates while the record is unhealthy', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-browser-identity-store-'))
-    writeFileSync(join(userDataPath, BROWSER_IDENTITY_MODE_FILE), '{bad json', 'utf8')
-    initializeBrowserIdentityModeStore(userDataPath)
-
-    await expect(setBrowserIdentityMode('native')).resolves.toMatchObject({
-      ok: false,
-      error: { code: 'browser_identity_reset_required' },
-      identity: { state: 'corrupt', configuredMode: null, appliedMode: 'native' }
-    })
-    expect(readFileSync(join(userDataPath, BROWSER_IDENTITY_MODE_FILE), 'utf8')).toBe('{bad json')
-  })
-
   it.each([
     { label: 'corrupt', bytes: '{bad json' },
     {
@@ -147,10 +133,18 @@ describe('browser identity mode store', () => {
         migrationNoticePending: false
       })
     }
-  ])('backs $label bytes up verbatim before publishing a fresh record', async ({ bytes }) => {
+  ])('requires a backed-up reset before replacing $label bytes', async ({ label, bytes }) => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-browser-identity-store-'))
-    writeFileSync(join(userDataPath, BROWSER_IDENTITY_MODE_FILE), bytes, 'utf8')
+    const recordPath = join(userDataPath, BROWSER_IDENTITY_MODE_FILE)
+    writeFileSync(recordPath, bytes, 'utf8')
     initializeBrowserIdentityModeStore(userDataPath)
+
+    await expect(setBrowserIdentityMode('native')).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'browser_identity_reset_required' },
+      identity: { state: label, configuredMode: null, appliedMode: 'native' }
+    })
+    expect(readFileSync(recordPath, 'utf8')).toBe(bytes)
 
     await expect(setBrowserIdentityMode('native', { reset: true })).resolves.toMatchObject({
       ok: true,
@@ -160,9 +154,10 @@ describe('browser identity mode store', () => {
     const backups = readdirSync(userDataPath).filter((name) => name.endsWith('.bak'))
     expect(backups).toHaveLength(1)
     expect(readFileSync(join(userDataPath, backups[0]), 'utf8')).toBe(bytes)
-    expect(
-      JSON.parse(readFileSync(join(userDataPath, BROWSER_IDENTITY_MODE_FILE), 'utf8'))
-    ).toMatchObject({ version: BROWSER_IDENTITY_MODE_VERSION, mode: 'native' })
+    expect(JSON.parse(readFileSync(recordPath, 'utf8'))).toMatchObject({
+      version: BROWSER_IDENTITY_MODE_VERSION,
+      mode: 'native'
+    })
   })
 
   it('never reuses a backup path across repeated resets', async () => {

@@ -148,7 +148,9 @@ export async function registerCoreHandlers(
     registerCodexAccountHandlers(codexAccounts, () => store.getSettings())
     registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
     registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)
-    registerClaudeAccountHandlers(claudeAccounts)
+    registerClaudeAccountHandlers(claudeAccounts, (change, held) =>
+      runtime.moveRunningClaudePanes(change, held)
+    )
     registerOpenCodeGoCredentialsHandlers(rateLimits)
     registerMiniMaxCredentialsHandlers(rateLimits)
     registerZcodePlanCredentialsHandlers(rateLimits)

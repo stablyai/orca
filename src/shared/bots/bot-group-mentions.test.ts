@@ -53,6 +53,21 @@ describe('group draft audience', () => {
   })
 })
 
+describe('attached files', () => {
+  it('reads a leading file reference as data, not an unknown bot', () => {
+    const mentions = room({ kind: 'mentions' })
+    expect(botGroupAudience('@/tmp/shot.avif @Sage what is this?', mentions, bots)).toEqual([
+      'sage'
+    ])
+    expect(botGroupAudience('@"C:\\My Shots\\a.avif" hi', room({ kind: 'all' }), bots)).toEqual([
+      'scout',
+      'sage',
+      'code-scout'
+    ])
+    expect(() => botGroupAudience('@Scuot hi', mentions, bots)).toThrow(/unavailable/)
+  })
+})
+
 describe('group mention segments', () => {
   const names = bots.map((bot) => bot.name)
   const mentions = (text: string) =>
