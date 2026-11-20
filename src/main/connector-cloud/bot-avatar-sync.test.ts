@@ -79,25 +79,38 @@ describe('BotAvatarSync', () => {
     await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(2))
   })
 
-  it('waits for the next bot write after the cloud says it doesn’t know the bot', async () => {
+  it('asks less and less often while the cloud doesn’t know the bot, and at once after a write', async () => {
     vi.useFakeTimers()
     try {
       const { sync, call } = harness([{ avatar: 'mascot:K2', github: {} }])
-      call.mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-        error: 'unknown_bot',
-        retryAfterMs: null
-      })
+      call.mockResolvedValue({ ok: false, status: 404, error: 'unknown_bot', retryAfterMs: null })
       sync.changed()
-      await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(1))
-      await vi.advanceTimersByTimeAsync(5 * 60_000)
+      await vi.advanceTimersByTimeAsync(0)
       expect(call).toHaveBeenCalledTimes(1)
+      // Then after 1, 2 and 4 more minutes: 7 minutes in, four asks in all.
+      await vi.advanceTimersByTimeAsync(7 * 60_000)
+      expect(call).toHaveBeenCalledTimes(4)
+      await vi.advanceTimersByTimeAsync(7 * 60_000)
+      expect(call).toHaveBeenCalledTimes(4)
+      // A write may be what registered it: asked again at once.
       sync.changed()
-      await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(2))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(call).toHaveBeenCalledTimes(5)
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('sends a picture chosen while a refused one was on its way', async () => {
+    const { sync, call, list } = harness([{ avatar: 'mascot:K2', github: {} }])
+    let answer!: (value: unknown) => void
+    call.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)))
+    sync.changed()
+    list[0] = { id: 'bot-1', slack: null, github: {}, avatar: 'mascot:A1' }
+    sync.changed()
+    answer({ ok: false, status: 404, error: 'unknown_bot', retryAfterMs: null })
+    await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(2))
+    expect(call.mock.calls[1]?.[1]).toEqual({ v: 1, kind: 'mascot', id: 'A1' })
   })
 
   it('sends one picture at a time per bot, ending on the latest', async () => {
