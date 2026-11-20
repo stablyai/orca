@@ -91,17 +91,23 @@ export function BotSidebarVirtualRows<Entry extends { id: string }>({
     }
   }, [indexById, listRef, virtualizer])
 
+  // Rendered entries sit in normal flow, with spacers standing in for the rows not rendered. A
+  // bot's entry grows after its first measure (its chats load, it unfolds); placed at a measured
+  // offset, a stale measure drew the next entry over those lines. In flow, the next entry always
+  // starts below it, and a stale measure can only misjudge the spacers.
+  const { gaps, tail } = flowSpacers(virtualRows, totalSize)
   return (
-    <div className="relative shrink-0" style={{ height: totalSize }}>
-      {virtualRows.map(({ key, index, start }) => {
+    <div className="shrink-0">
+      {/* flatMap, not map: nested arrays would key rows by window position and remount them on scroll. */}
+      {virtualRows.flatMap(({ key, index }, position) => {
         const entry = entries[index]!
-        return (
+        const gap = gaps[position]!
+        return [
+          gap > 0 ? <div key={`gap:${key}`} aria-hidden style={{ height: gap }} /> : null,
           <div
             key={key}
             ref={virtualizer.measureElement}
             data-index={index}
-            className="absolute inset-x-0"
-            style={{ top: start }}
             onFocus={(event) => {
               if (event.currentTarget.contains(event.target)) {
                 setFocusedId(entry.id)
@@ -115,8 +121,23 @@ export function BotSidebarVirtualRows<Entry extends { id: string }>({
           >
             {renderEntry(entry, index)}
           </div>
-        )
+        ]
       })}
+      {tail > 0 ? <div aria-hidden style={{ height: tail }} /> : null}
     </div>
   )
+}
+
+/** Before each rendered row, the height of the rows skipped since the previous one; then the rest. */
+export function flowSpacers(
+  rows: readonly { start: number; end: number }[],
+  totalSize: number
+): { gaps: number[]; tail: number } {
+  const gaps: number[] = []
+  let end = 0
+  for (const row of rows) {
+    gaps.push(Math.max(0, row.start - end))
+    end = row.end
+  }
+  return { gaps, tail: Math.max(0, totalSize - end) }
 }
