@@ -1,5 +1,4 @@
 import { retireRemovedNativeChatTabs } from '@/components/native-chat/session/native-chat-removed-tab-retirement'
-import { carryChatReadMarks } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-carry'
 import {
   markStructuredAgentSessionLaunchesPublished,
   publishedStructuredSessions
@@ -207,7 +206,6 @@ export function applyWebSessionTabsStorePatch(
   }
 
   useAppStore.getState().updateAgentStatusState(runStorePatch)
-  carryChatReadMarks(useAppStore, new Set(affectedWorkspaces))
 
   for (const { environmentId, source, decision } of hostMirrorVerdict.frames) {
     if (decision.apply && source) {

@@ -59,16 +59,13 @@ it('moves a reopened chat tab’s saved read marks too', () => {
     activityClearedAtByPaneKey: { [`agent-chat-tab-v1-abc:${LEAF}`]: 300 },
     manuallyUnreadTurnsByPaneKey: {}
   }
-  carryChatReadMarks(
-    {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the carry reads only these four fields.
-      getState: () => state as AppState,
-      setState: (patch) => {
-        state = { ...state, ...patch }
-      }
-    },
-    ['wt']
-  )
+  carryChatReadMarks({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the carry reads only these four fields.
+    getState: () => state as AppState,
+    setState: (patch) => {
+      state = { ...state, ...patch }
+    }
+  })
   expect(state.activityClearedAtByPaneKey).toEqual({
     [`structured-agent-session-sess-2:${LEAF}`]: 300
   })
