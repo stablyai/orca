@@ -91,16 +91,63 @@ describe('background naming admission under the Codex home lock', () => {
     })
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    let foregroundRan = false
-    await withCodexHomeProcessLock(
-      resolveCodexHomeProcessLockKeyForSpawnEnv(env, null),
-      async () => {
-        foregroundRan = true
-      }
-    )
+    const foregroundRan = await Promise.race([
+      withCodexHomeProcessLock(
+        resolveCodexHomeProcessLockKeyForSpawnEnv(env, null),
+        async () => true
+      ),
+      new Promise<false>((resolve) => setTimeout(() => resolve(false), 1_000))
+    ])
     expect(foregroundRan).toBe(true)
     for (const close of closers) {
       close()
     }
   })
+
+  it.each([100, 1000])(
+    'admits each of %i same-account naming runs once while they wait their turn',
+    async (runs) => {
+      vi.resetModules()
+      const { BackgroundGenerationRequest } = await import('./background-generation-slots')
+      const lock = await import('../../codex-cli/codex-home-process-lock')
+      const { admitUnderFreeCodexHome } = await import('./codex-home-generation-admission')
+      const lockKey = '/orca-test/codex-home-shared'
+      const running: (() => void)[] = []
+      let admissions = 0
+      let finished = 0
+      const all = Array.from({ length: runs }, () => {
+        const request = new BackgroundGenerationRequest()
+        const admit = request.admitWhile(() => true)
+        return admitUnderFreeCodexHome(
+          (start, options) => {
+            admissions++
+            return admit(start, options)
+          },
+          lockKey,
+          () => {
+            const closed = Promise.withResolvers<void>()
+            const held = lock.withCodexHomeProcessLock(lockKey, () => closed.promise)
+            running.push(closed.resolve)
+            return {
+              result: Promise.resolve({ success: true as const, rawOutput: 'name' }),
+              processClosed: held
+            }
+          }
+        ).then(() => {
+          finished++
+        })
+      })
+      const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
+      await tick()
+      for (let step = 0; finished < runs && step < runs * 4; step++) {
+        running.shift()?.()
+        await tick()
+      }
+      await Promise.all(all)
+      for (const close of running) {
+        close()
+      }
+      expect(admissions).toBe(runs)
+    }
+  )
 })

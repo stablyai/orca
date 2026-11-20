@@ -3,10 +3,10 @@ import { wslDistroForCommand } from '../../../shared/file-access/wsl-paths'
 import { mergeCommandEnvironment } from '../../../shared/shell/launch/command-environment'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
 import {
-  codexHomeProcessLockBusy,
   resolveCodexHomeProcessLockKeyForSpawnEnv,
   withCodexHomeProcessLock
 } from '../../codex-cli/codex-home-process-lock'
+import { admitUnderFreeCodexHome } from './codex-home-generation-admission'
 import {
   CANCELED_GENERATION_RESULT,
   clearLocalGenerationCancelToken,
@@ -160,45 +160,6 @@ export function runLocalPlanForAgent(input: {
     input.plan.env,
     !!input.shouldExecute
   )
-}
-
-/**
- * Takes a background slot and the Codex home lock together, never holding one while waiting for
- * the other: a run that finds the account busy gives its slot back, waits for the account, then
- * returns to the front of the queue.
- */
-async function admitUnderFreeCodexHome(
-  admit: GenerationAdmission,
-  lockKey: string,
-  startUnderLock: () => LocalProcessExecution<InternalTextGenerationResult>
-): Promise<LocalProcessExecution<InternalTextGenerationResult> | null> {
-  let returning = false
-  for (;;) {
-    const busy = codexHomeProcessLockBusy(lockKey)
-    if (busy) {
-      await busy
-      returning = true
-      continue
-    }
-    let accountBusy = false
-    const execution = await admit(
-      () => {
-        if (codexHomeProcessLockBusy(lockKey)) {
-          accountBusy = true
-          return {
-            result: Promise.resolve(CANCELED_GENERATION_RESULT),
-            processClosed: Promise.resolve()
-          }
-        }
-        return startUnderLock()
-      },
-      { returning }
-    )
-    if (!accountBusy) {
-      return execution
-    }
-    returning = true
-  }
 }
 
 function runCodexLocalPlanUnderHomeLock(
