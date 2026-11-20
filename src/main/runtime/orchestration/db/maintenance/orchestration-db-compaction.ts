@@ -1,10 +1,11 @@
 import type { ChildProcess } from 'node:child_process'
 import { watch, type FSWatcher } from 'node:fs'
-import { link, readFile, rename, writeFile } from 'node:fs/promises'
+import { link, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import type Database from '../../../../sqlite/sync-database'
 import type { OrchestrationDb } from '../orchestration-db'
+import { refuseOrchestrationDbWritesForReplacement } from '../orchestration-db-file'
 import { compactionChildSource } from './orchestration-db-compaction-child-source'
 import {
   availableBytesIn,
@@ -120,10 +121,17 @@ export class OrchestrationDbCompaction {
     if (this.finished || this.stopped || this.copying || !this.isEnabled()) {
       return
     }
+    if (!this.leftoversRemoved) {
+      // From a session that quit or crashed part-way, a swapped file included.
+      this.leftoversRemoved = true
+      await Promise.all([removeQuietly(this.copyPath), removeQuietly(this.replacedPath)])
+      this.pastAttempts = Number(await readFile(this.attemptsPath, 'utf8').catch(() => '0')) || 0
+    }
     const { db } = this.orchestrationDb
     const state = readFileState(db)
     if (!state.legacy) {
       this.finished = true
+      await removeQuietly(this.attemptsPath)
       return
     }
     const { fingerprint } = state
@@ -136,12 +144,6 @@ export class OrchestrationDbCompaction {
       }
       this.ready = undefined
       await removeQuietly(this.copyPath)
-    }
-    if (!this.leftoversRemoved) {
-      // From a session that quit or crashed part-way.
-      this.leftoversRemoved = true
-      await Promise.all([removeQuietly(this.copyPath), removeQuietly(this.replacedPath)])
-      this.pastAttempts = Number(await readFile(this.attemptsPath, 'utf8').catch(() => '0')) || 0
     }
     if (this.pastAttempts + this.attempts >= ATTEMPTS_PER_FILE) {
       this.finished = true
@@ -259,6 +261,10 @@ export class OrchestrationDbCompaction {
    * At the end of a clean quit: swaps the copy in when the file is unchanged since it was taken. `close`
    * closes the runtime's connection for good, which checkpoints its small WAL.
    */
+  get hasCopy(): boolean {
+    return this.ready !== undefined
+  }
+
   async swapAtQuit(close: () => void): Promise<OrchestrationDbSwap> {
     const ready = this.ready
     this.ready = undefined
@@ -274,28 +280,36 @@ export class OrchestrationDbCompaction {
         await removeQuietly(copy)
         return { kind: 'busy' }
       }
-      // Synchronously before the close, so nothing can write in between.
+      // Synchronously through the close: this process's other writer refuses from here on.
+      refuseOrchestrationDbWritesForReplacement(this.filename)
       if (readFileState(this.orchestrationDb.db).fingerprint !== ready.fingerprint) {
         await removeQuietly(copy)
         return { kind: 'stale' }
       }
       close()
+      const closed = await stat(this.filename)
       // The last connection's close removes the WAL; one left means another still has the file open.
       if ((await sizeOf(`${this.filename}-wal`)) !== null) {
         await removeQuietly(copy)
         return { kind: 'busy' }
       }
-      // A second name keeps the old file's blocks alive, so the rename doesn't wait for them to be freed.
-      const kept = await link(this.filename, this.replacedPath).then(
-        () => true,
-        () => false
-      )
+      // The second name keeps the old file to put back, and its blocks alive so the rename doesn't
+      // wait for them to be freed.
+      await link(this.filename, this.replacedPath)
       await rename(copy, this.filename)
+      // Anything that opened or wrote the old file since the close: put it back, the copy is stale.
+      const old = await stat(this.replacedPath)
+      if (
+        old.mtimeMs !== closed.mtimeMs ||
+        old.size !== closed.size ||
+        (await sizeOf(`${this.filename}-wal`)) !== null
+      ) {
+        await rename(this.replacedPath, this.filename)
+        return { kind: 'stale' }
+      }
       await syncDirectory(dirname(this.filename))
       await removeQuietly(this.attemptsPath)
-      if (kept) {
-        await settlesWithin(removeQuietly(this.replacedPath), UNLINK_WAIT_MS)
-      }
+      await settlesWithin(removeQuietly(this.replacedPath), UNLINK_WAIT_MS)
       return {
         kind: 'compacted',
         beforeBytes,

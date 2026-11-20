@@ -68,6 +68,8 @@ export class OrchestrationDbMaintenance {
     if (this.pruneIsDue() && !(await this.prune())) {
       return
     }
+    // Converts a file made before incremental auto-vacuum, and clears what a past conversion left.
+    await this.compaction?.tick()
     // Only incremental files can return pages; others reuse them as they are freed.
     if (Number(this.orchestrationDb.db.pragma('auto_vacuum', { simple: true })) === 2) {
       for (let page = 0; page < RECLAIM_PAGES_PER_PASS; page += RECLAIM_PAGES_PER_STEP) {
@@ -75,10 +77,7 @@ export class OrchestrationDbMaintenance {
           return
         }
       }
-      return
     }
-    // Only files made before incremental auto-vacuum need the one-time copy.
-    await this.compaction?.tick()
   }
 
   /** False when stopped mid-way. */

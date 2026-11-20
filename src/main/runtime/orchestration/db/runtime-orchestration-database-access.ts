@@ -2,6 +2,7 @@ import type { TerminalIdentityReadContext } from '../../terminal/query/terminal-
 import { getWorkerTerminalAutoReleaseScheduler } from '../terminal-authority/release/worker-terminal-auto-release-scheduler'
 import { OrchestrationDb } from './orchestration-db'
 import { OrchestrationDbMaintenance } from './maintenance/orchestration-db-maintenance'
+import { closeOrchestrationReader } from './reader-worker/orchestration-reader-client'
 import {
   OrchestrationDbCompaction,
   type OrchestrationDbSwap
@@ -91,11 +92,14 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
   }
 
   /** At the end of a clean quit: swaps in a compacted copy taken while the file sat unwritten. */
-  swapCompactedOrchestrationDbForQuit(): Promise<OrchestrationDbSwap> {
-    return (
-      this.orchestrationDbCompaction?.swapAtQuit(() => this.closeOrchestrationDbForQuit()) ??
-      Promise.resolve({ kind: 'none' })
-    )
+  async swapCompactedOrchestrationDbForQuit(): Promise<OrchestrationDbSwap> {
+    const compaction = this.orchestrationDbCompaction
+    if (!compaction?.hasCopy) {
+      return { kind: 'none' }
+    }
+    // Its idle connection would hold the file open and make every swap busy.
+    await closeOrchestrationReader()
+    return compaction.swapAtQuit(() => this.closeOrchestrationDbForQuit())
   }
 
   /** At the end of a clean quit, before swapping in a compacted copy: closes the database for good. */
