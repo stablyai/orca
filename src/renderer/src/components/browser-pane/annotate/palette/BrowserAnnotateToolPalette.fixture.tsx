@@ -7,6 +7,7 @@ import { BrowserAnnotatePaletteNotes } from './browser-annotate-palette-send'
 import { BrowserAnnotateToolPalette } from './BrowserAnnotateToolPalette'
 import { setAnnotatePaletteRatio } from './annotate-palette-position-store'
 import type { BrowserAnnotateTool } from './use-browser-annotate-tool-switch'
+import BrowserFind from '../../assemble-chrome/find/BrowserFind'
 
 const noop = (): void => {}
 
@@ -17,7 +18,8 @@ function PalettePage({
   picked = false,
   ratio = 0.5,
   hint = 'Click an element to add feedback for the agent.',
-  waiting = false
+  waiting = false,
+  findOpen = false
 }: {
   initialTool: BrowserAnnotateTool
   notes?: number
@@ -25,8 +27,10 @@ function PalettePage({
   ratio?: number
   hint?: string
   waiting?: boolean
+  findOpen?: boolean
 }): React.JSX.Element {
   const boundsRef = useRef<HTMLDivElement>(null)
+  const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const [tool, setTool] = useState(initialTool)
   // The palette reads the app-wide saved position; seed it before the palette mounts.
   useState(() => setAnnotatePaletteRatio(ratio))
@@ -44,6 +48,9 @@ function PalettePage({
         <span>Blog</span>
       </div>
       <div className="p-4 text-sm text-muted-foreground">Page content</div>
+      {findOpen ? (
+        <BrowserFind browserPageId="sample-page" isOpen onClose={noop} webviewRef={webviewRef} />
+      ) : null}
       <BrowserAnnotateToolPalette
         boundsRef={boundsRef}
         pageId={null}
@@ -175,4 +182,9 @@ export const waitingForPage = defineFixture({
 export const waitingForPageCompact = defineFixture({
   width: 240,
   render: () => <PalettePage initialTool="draw" waiting />
+})
+
+export const findGeometry = defineFixture({
+  width: 650,
+  render: () => <PalettePage initialTool="annotate" ratio={0} findOpen />
 })

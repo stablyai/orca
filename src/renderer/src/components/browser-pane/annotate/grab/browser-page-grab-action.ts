@@ -7,6 +7,7 @@ import type {
 import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
 import type { GrabModeHook } from './useGrabMode'
 import type { BrowserPageGrabToastState } from '../../describe-page/browser-page-types'
+import { translate } from '@/i18n/i18n'
 
 /** Snapshot of the picker's target at action start; true while the same Grab session on the same page is on. */
 export function grabHoverStillCurrent(
@@ -66,20 +67,37 @@ export function runBrowserGrabActionShortcut({
   }
 
   if (grab.state === 'confirming') {
-    // Why: right-click (contextMenu) skips the left-click auto-copy, so C must still work here.
-    if (grab.contextMenu && key === 'c') {
-      const currentPayload = grabPayloadRef.current
-      if (currentPayload) {
-        copyFromPayload(currentPayload)
-      }
-      grab.rearm()
-    } else if (key === 's') {
-      const currentPayload = grabPayloadRef.current
-      if (currentPayload) {
-        copyFromPayload(currentPayload)
-      }
-      grab.rearm()
+    if (!(grab.contextMenu && key === 'c') && key !== 's') {
+      return
     }
+    const payload = grabPayloadRef.current
+    if (!payload) {
+      return
+    }
+    void window.api.browser
+      .grabPickedElementPresent({
+        browserPageId: toolTargetIdRef.current,
+        selectionId: payload.page.capturedAt,
+        interactive: true
+      })
+      .then((present) => {
+        if (!isStillCurrent() || grabPayloadRef.current !== payload) {
+          return
+        }
+        if (present !== true) {
+          if (present === null) {
+            showGrabToast(translate('components.ui.dialog.tryAgain', 'Try again'), 'error', payload)
+          }
+          return
+        }
+        copyFromPayload(payload)
+        grab.rearm()
+      })
+      .catch(() => {
+        if (isStillCurrent()) {
+          showGrabToast(translate('components.ui.dialog.tryAgain', 'Try again'), 'error', payload)
+        }
+      })
   } else {
     // armed/awaiting — extract hovered element via IPC without clicking
     void (async () => {

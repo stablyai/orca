@@ -10,15 +10,7 @@ import { useNotesTrayPlacement } from './palette/use-notes-tray-placement'
 import { returnFocusAfterNotesClose } from './palette/palette-focus-and-fit'
 import { createPortal } from 'react-dom'
 import type { MutableRefObject, RefObject } from 'react'
-import { Copy, Image } from 'lucide-react'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuShortcut,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
+import { GrabConfirmationMenu } from './grab/grab-confirmation-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import { MarkupOverlay } from './MarkupOverlay'
 import type { MarkupModeController } from './capture/useMarkupMode'
@@ -165,11 +157,7 @@ export function BrowserGuestAnnotateOverlays({
     pageId: toolSwitch.toolTargetId,
     currentUrl
   })
-  const runPaletteGrabAction = useHeldGrabAction(
-    heldPayload,
-    toolSwitch.toolTargetId,
-    grabMenuActionTakenRef
-  )
+  const runPaletteGrabAction = useHeldGrabAction(heldPayload, toolSwitch.toolTargetId)
   // Leaving the mode with the Send menu open must not leave its agent-target mode behind.
   const { annotationBannerSendOpen, handleAnnotationBannerSendOpenChange } = annotationSend
   useEffect(() => {
@@ -248,12 +236,18 @@ export function BrowserGuestAnnotateOverlays({
           )}
           onGrabCopy={() => {
             if (heldPayload) {
-              runPaletteGrabAction(() => handleGrabCopy(heldPayload))
+              runPaletteGrabAction(() => {
+                handleGrabCopy(heldPayload)
+                grabMenuActionTakenRef.current = false
+              })
             }
           }}
           onGrabScreenshot={() => {
             if (heldPayload) {
-              runPaletteGrabAction(() => handleGrabCopyScreenshot(heldPayload))
+              runPaletteGrabAction(() => {
+                handleGrabCopyScreenshot(heldPayload)
+                grabMenuActionTakenRef.current = false
+              })
             }
           }}
           onDrawSlotChange={setDrawSlot}
@@ -339,66 +333,23 @@ export function BrowserGuestAnnotateOverlays({
           handleUpdateBrowserAnnotation={handleUpdateBrowserAnnotation}
         />
       ) : null}
-      {/* Right-click context dropdown, positioned at the grabbed element's center. */}
-      <DropdownMenu
-        open={grab.state === 'confirming' && grab.contextMenu && grabIntent === 'copy'}
-        onOpenChange={(open) => {
-          if (!open && grab.state === 'confirming') {
-            // Why: skip rearm if a menu action already handled it — see grabMenuActionTakenRef.
-            if (grabMenuActionTakenRef.current) {
-              grabMenuActionTakenRef.current = false
-              return
-            }
-            grab.rearm()
+      <GrabConfirmationMenu
+        grab={grab}
+        payload={heldPayload}
+        menuActionTakenRef={grabMenuActionTakenRef}
+        containerRef={containerRef}
+        webviewRef={webviewRef}
+        onCopy={() => {
+          if (heldPayload) {
+            runPaletteGrabAction(() => handleGrabCopy(heldPayload))
           }
         }}
-      >
-        <DropdownMenuTrigger asChild>
-          <button
-            aria-hidden
-            tabIndex={-1}
-            className="pointer-events-none absolute size-px opacity-0"
-            style={(() => {
-              if (!grab.payload) {
-                return { left: 0, top: 0 }
-              }
-              const rect = grab.payload.target.rectViewport
-              const webview = webviewRef.current
-              const webviewRect = webview?.getBoundingClientRect()
-              const cRect = containerRef.current?.getBoundingClientRect()
-              const offsetX = (webviewRect?.left ?? 0) - (cRect?.left ?? 0)
-              const offsetY = (webviewRect?.top ?? 0) - (cRect?.top ?? 0)
-              return {
-                left: offsetX + rect.x + rect.width / 2,
-                top: offsetY + rect.y + rect.height / 2
-              }
-            })()}
-          />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" sideOffset={4}>
-          <DropdownMenuItem onSelect={() => handleGrabCopy()}>
-            <Copy className="size-3.5" />
-            {t('auto.components.browser.pane.BrowserPane.c2ef0359b9', 'Copy Contents')}
-            <DropdownMenuShortcut>C</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          {grab.payload?.screenshot?.dataUrl?.startsWith('data:image/png;base64,') ? (
-            <DropdownMenuItem onSelect={() => handleGrabCopyScreenshot()}>
-              <Image className="size-3.5" />
-              {t('auto.components.browser.pane.BrowserPane.1ded0d3168', 'Copy Screenshot')}
-              <DropdownMenuShortcut>S</DropdownMenuShortcut>
-            </DropdownMenuItem>
-          ) : null}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onSelect={() => {
-              grabMenuActionTakenRef.current = true
-              grab.cancel()
-            }}
-          >
-            {t('auto.components.browser.pane.BrowserPane.fa6ea61de3', 'Cancel')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+        onScreenshot={() => {
+          if (heldPayload) {
+            runPaletteGrabAction(() => handleGrabCopyScreenshot(heldPayload))
+          }
+        }}
+      />
 
       {/* Inline toast bubble; flips above the element when near the viewport bottom so it doesn't occlude it. */}
       {grabToast ? (

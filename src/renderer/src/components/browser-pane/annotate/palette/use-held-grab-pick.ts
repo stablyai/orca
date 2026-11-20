@@ -64,12 +64,12 @@ export function useHeldGrabPick({
           browserPageId: pageId,
           selectionId: heldPayload.page.capturedAt
         })
-        .catch(() => false)
+        .catch(() => null)
       checking = false
       if (!current) {
         return
       }
-      if (!present) {
+      if (present === false) {
         setHeld((pick) => (pick?.payload === heldPayload ? null : pick))
       }
     }

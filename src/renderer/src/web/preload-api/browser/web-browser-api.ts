@@ -67,7 +67,7 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
       }),
     cancelGrab: () => Promise.resolve(false),
     setGrabLabelAvoidArea: () => Promise.resolve(false),
-    grabPickedElementPresent: () => Promise.resolve(false),
+    grabPickedElementPresent: () => Promise.resolve(null),
     captureSelectionScreenshot: () =>
       Promise.resolve({
         ok: false,

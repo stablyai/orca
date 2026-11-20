@@ -1,60 +1,69 @@
 import { useLayoutEffect, useState, type RefObject } from 'react'
 
-/** Marks the find-in-page bar so the palette can sit below it when they would overlap. */
 export const BROWSER_FIND_BAR_ATTRIBUTE = 'data-browser-find-bar'
 const PALETTE_TOP_PX = 8
 
-/** 8px from the top, or 8px below the find bar while the two would overlap horizontally. */
+function observePaletteFindGeometry(
+  bounds: HTMLElement,
+  palette: HTMLElement,
+  updateTop: (top: number) => void
+): () => void {
+  const measure = (): void => {
+    const findBar = bounds.querySelector<HTMLElement>(`[${BROWSER_FIND_BAR_ATTRIBUTE}]`)
+    if (!findBar) {
+      updateTop(PALETTE_TOP_PX)
+      return
+    }
+    const boundsRect = bounds.getBoundingClientRect()
+    const findRect = findBar.getBoundingClientRect()
+    const paletteRect = palette.getBoundingClientRect()
+    const overlaps = paletteRect.left < findRect.right && paletteRect.right > findRect.left
+    updateTop(overlaps ? findRect.bottom - boundsRect.top + PALETTE_TOP_PX : PALETTE_TOP_PX)
+  }
+  const resize = new ResizeObserver(measure)
+  resize.observe(bounds)
+  resize.observe(palette)
+  const styles = new MutationObserver(measure)
+  let observedFind: HTMLElement | null | undefined
+  const refresh = (): void => {
+    const find = bounds.querySelector<HTMLElement>(`[${BROWSER_FIND_BAR_ATTRIBUTE}]`)
+    if (find !== observedFind) {
+      if (observedFind) {
+        resize.unobserve(observedFind)
+      }
+      observedFind = find
+      styles.disconnect()
+      styles.observe(palette, { attributes: true, attributeFilter: ['style'] })
+      if (find) {
+        resize.observe(find)
+        styles.observe(find, { attributes: true, attributeFilter: ['style', 'class'] })
+      }
+    }
+    measure()
+  }
+  refresh()
+  const observer = new MutationObserver(refresh)
+  observer.observe(bounds, { childList: true })
+  return () => {
+    resize.disconnect()
+    observer.disconnect()
+    styles.disconnect()
+  }
+}
+
+/** Keep the palette below an overlapping find bar as either surface moves or resizes. */
 export function usePaletteTopOffset(
   bounds: HTMLElement | null,
   paletteRef: RefObject<HTMLElement | null>,
   left: number | null
 ): number {
   const [top, setTop] = useState(PALETTE_TOP_PX)
-
   useLayoutEffect(() => {
     const palette = paletteRef.current
     if (!bounds || !palette) {
       return
     }
-    const measure = (): void => {
-      const findBar = bounds.querySelector<HTMLElement>(`[${BROWSER_FIND_BAR_ATTRIBUTE}]`)
-      if (!findBar) {
-        setTop(PALETTE_TOP_PX)
-        return
-      }
-      const boundsRect = bounds.getBoundingClientRect()
-      const findRect = findBar.getBoundingClientRect()
-      const paletteLeft = boundsRect.left + (left ?? 0)
-      const paletteRight = paletteLeft + palette.offsetWidth
-      const overlaps = paletteLeft < findRect.right && paletteRight > findRect.left
-      setTop(overlaps ? findRect.bottom - boundsRect.top + PALETTE_TOP_PX : PALETTE_TOP_PX)
-    }
-    const resize = new ResizeObserver(measure)
-    resize.observe(bounds)
-    resize.observe(palette)
-    let observedFind: HTMLElement | null = null
-    const refresh = (): void => {
-      const find = bounds.querySelector<HTMLElement>(`[${BROWSER_FIND_BAR_ATTRIBUTE}]`)
-      if (find !== observedFind) {
-        if (observedFind) {
-          resize.unobserve(observedFind)
-        }
-        observedFind = find
-        if (find) {
-          resize.observe(find)
-        }
-      }
-      measure()
-    }
-    refresh()
-    const observer = new MutationObserver(refresh)
-    observer.observe(bounds, { childList: true })
-    return () => {
-      resize.disconnect()
-      observer.disconnect()
-    }
+    return observePaletteFindGeometry(bounds, palette, setTop)
   }, [bounds, left, paletteRef])
-
   return top
 }
