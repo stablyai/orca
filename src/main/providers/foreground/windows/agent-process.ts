@@ -15,6 +15,7 @@ import {
   type WindowsProcessCandidate,
   type WindowsProcessRow
 } from './process-rows'
+import { findOrphanOnInheritedConsole } from './exited-root-orphans'
 
 export type AgentForegroundResolutionOptions = {
   contextPaths?: readonly string[]
@@ -73,21 +74,26 @@ export async function resolveWindowsAgentForegroundProcessWithAvailability(
     fallbackProcess,
     options.contextPaths
   )
-  // Orphans of an exited root may only prove an agent; without one the scan proves nothing.
-  if (inventory.rootExited && !hasRecognizedCandidate) {
+  // Orphans of an exited root may only prove an agent, read through a member of the pane console.
+  const memberPid = inventory.rootExited ? findOrphanOnInheritedConsole(candidates) : undefined
+  if (inventory.rootExited && (!hasRecognizedCandidate || memberPid === undefined)) {
     return { available: false, processName: null }
   }
   let filteredCandidates = candidates
   if (hasRecognizedCandidate && options.readWindowsConsoleAttachedProcessIds) {
     // Job membership retains detached descendants; only console attachment can exclude their byte authority.
-    // With the root gone, attach through a direct orphan: it is still a member of this console.
-    const consoleProcessIds = await options.readWindowsConsoleAttachedProcessIds(
-      inventory.rootExited ? candidates.find((candidate) => candidate.depth === 1)?.pid : undefined
-    )
+    const consoleProcessIds = await options.readWindowsConsoleAttachedProcessIds(memberPid)
     if (!consoleProcessIds) {
       return { available: false, processName: null }
     }
     filteredCandidates = candidates.filter((candidate) => consoleProcessIds.has(candidate.pid))
+    const { contextPaths } = options
+    if (
+      inventory.rootExited &&
+      !windowsCandidatesContainRecognizedAgent(filteredCandidates, fallbackProcess, contextPaths)
+    ) {
+      return { available: false, processName: null }
+    }
   }
   // Orphaned job members can hold recycled PIDs outside the descendant walk; inspect the full-table anchor.
   const anchorRow = inventory.anchorRow

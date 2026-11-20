@@ -82,15 +82,48 @@ describe('resolveWindowsAgentForegroundProcessWithAvailability when the pane roo
     ).resolves.toEqual({ available: false, processName: null })
   })
 
-  it('does not credit an agent attached to another console', async () => {
+  it('does not report a shell when the console filter removes the only agent', async () => {
     // A plain shell orphan stays on this console; the agent below it has detached.
     tableRows.current = [{ ...ORPHAN_SH, command: 'sh.exe' }, ORPHAN_CLAUDE]
-    const result = await resolveWindowsAgentForegroundProcessWithAvailability(
-      DEAD_ROOT,
-      'bash.exe',
-      { fresh: true, readWindowsConsoleAttachedProcessIds: async () => new Set([5656]) }
-    )
-    expect(result.processName).not.toBe('claude')
+    await expect(
+      resolveWindowsAgentForegroundProcessWithAvailability(DEAD_ROOT, 'bash.exe', {
+        fresh: true,
+        readWindowsConsoleAttachedProcessIds: async () => new Set([5656])
+      })
+    ).resolves.toEqual({ available: false, processName: null })
+  })
+
+  it('never reads membership through an orphan that opened its own console', async () => {
+    tableRows.current = [
+      ORPHAN_SH,
+      { pid: 6000, ppid: 5656, name: 'conhost.exe', command: 'conhost.exe 0x4' },
+      ORPHAN_CLAUDE
+    ]
+    const readConsole = vi.fn(async () => new Set([5656, 15864]))
+    await expect(
+      resolveWindowsAgentForegroundProcessWithAvailability(DEAD_ROOT, 'bash.exe', {
+        fresh: true,
+        readWindowsConsoleAttachedProcessIds: readConsole
+      })
+    ).resolves.toEqual({ available: false, processName: null })
+    expect(readConsole).not.toHaveBeenCalled()
+  })
+
+  it('reads membership through the orphan that kept the pane console', async () => {
+    tableRows.current = [
+      { pid: 7000, ppid: DEAD_ROOT, name: 'cmd.exe', command: 'cmd.exe /c start' },
+      { pid: 7001, ppid: 7000, name: 'conhost.exe', command: 'conhost.exe 0x4' },
+      ORPHAN_SH,
+      ORPHAN_CLAUDE
+    ]
+    const readConsole = vi.fn(async () => new Set([5656, 15864]))
+    await expect(
+      resolveWindowsAgentForegroundProcessWithAvailability(DEAD_ROOT, 'bash.exe', {
+        fresh: true,
+        readWindowsConsoleAttachedProcessIds: readConsole
+      })
+    ).resolves.toMatchObject({ available: true, processName: 'claude' })
+    expect(readConsole).toHaveBeenCalledWith(5656)
   })
 
   it('keeps attaching through a live root', async () => {
