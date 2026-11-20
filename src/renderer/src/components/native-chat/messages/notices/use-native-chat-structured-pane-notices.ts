@@ -89,7 +89,7 @@ export function useNativeChatStructuredPaneNotices({
   }, [demandModelCatalog, launchFailed, retryLaunch])
   // A chat on agy's own login hears agy is signed out before its first send; advisory, as the
   // host's other verdicts: Send isn't held, since a sign-in in the terminal isn't seen at once.
-  const agyHost = install.antigravityAuth?.backend === 'agy' ? install.antigravityAuth.host : null
+  const agyHost = install.antigravityAuth?.ownHome ? install.antigravityAuth.host : null
   const agySignedOut = useAntigravityChatAuthDetection(agyHost)?.agySignedOut
   const unavailable =
     controller.unavailable ?? nativeChatAgySignedOutBeforeSend(agySignedOut, controller.submissions)
@@ -150,10 +150,9 @@ export function useNativeChatStructuredPaneNotices({
   if (hostNotice) {
     notices.push(hostNotice)
   }
-  // One Sign in on screen: while the composer's notice or Antigravity's sign-in strip has it,
-  // transcript rows only say what wasn't sent.
-  const signInInComposer =
-    install.signIn !== null || notices.some((notice) => notice.signIn !== undefined)
+  // One Sign in on screen: while the composer's notice has it, transcript rows only say what
+  // wasn't sent.
+  const signInInComposer = notices.some((notice) => notice.signIn !== undefined)
   // A new bot's setup card offers the kickoff's sign-in, so the composer doesn't repeat it.
   const shown = kickoffOwed ? notices.filter((notice) => notice.signIn === undefined) : notices
   const rowSetup = useMemo(() => ({ ...setup, signInInComposer }), [setup, signInInComposer])

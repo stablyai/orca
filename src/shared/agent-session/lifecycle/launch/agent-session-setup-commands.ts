@@ -57,7 +57,7 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     loginCommand: ['hermes', 'model'],
     installCommand: 'curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash'
   },
-  // An `agy` login signs in only chats on agy (`system`); chats on Orca's server keep their own.
+  // Antigravity chats sign in with agy's own login (`system`).
   {
     agent: 'antigravity',
     loginCommand: [],

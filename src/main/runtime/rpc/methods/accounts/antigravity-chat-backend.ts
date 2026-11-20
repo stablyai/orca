@@ -10,27 +10,37 @@ import {
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { resolveHostStructuredAgentLaunchEnvironment } from '../../../agent-session/launch/structured-agent-launch-support'
 import { acpHostBackendInput } from '../../../../acp/launch/acp-launch-command'
+import { ANTIGRAVITY_LAUNCH_SPEC } from '../../../../antigravity/antigravity-acp-launch-spec'
 import {
-  ANTIGRAVITY_LAUNCH_SPEC,
-  antigravityHostChatRoute
-} from '../../../../antigravity/antigravity-acp-launch-spec'
+  antigravityAgySignIn,
+  antigravityChatUsesOrcaHome
+} from '../../../../antigravity/antigravity-chat-route'
 import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storage-paths'
+import { syncAgyLoginCopy } from '../../../../antigravity/antigravity-chat-agy-login-copy'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { withTimeout } from '../../../../../shared/concurrency/promise-timeout-fallback'
 
 const CHAT_BACKEND_WAIT_MS = 1_500
 
-/** Where new chats on this host run; an unreadable answer reads as Orca's server. */
-async function hostChatRoute(runtime: OrcaRuntimeService) {
+/** agy's sign-in where new chats on this host run on agy's own home; false where they run on
+ *  Orca's chat home, whose key or gcloud Orca holds. */
+async function hostChatAgySignIn(runtime: OrcaRuntimeService) {
   const settings = runtime.requireStore().getSettings()
+  if (antigravityChatUsesOrcaHome(settings.antigravityChatAuth)) {
+    return false
+  }
   const env = await resolveHostStructuredAgentLaunchEnvironment('antigravity', settings)
+  // Someone opened Antigravity's accounts, so agy may be started to say whether it can sign in;
+  // without a login to find, that is the initialize-only check, which never reads the keyring.
   const input = await acpHostBackendInput(
     ANTIGRAVITY_LAUNCH_SPEC,
     env,
     getProfileUserDataPath(),
-    settings
+    settings,
+    { startsProgram: true }
   )
-  return input ? (await antigravityHostChatRoute(input)).agy : false
+  return input ? antigravityAgySignIn(input) : false
 }
 
 /** Adds whether new chats on this host run on agy, and so on the account these rows switch. */
@@ -45,7 +55,7 @@ export async function withAntigravityChatBackend(
   }
   // A cold agy check takes seconds; the rows don't wait for it, and a later refresh shows it.
   const agy = await withTimeout(
-    hostChatRoute(runtime).catch(() => false as const),
+    hostChatAgySignIn(runtime).catch(() => false as const),
     CHAT_BACKEND_WAIT_MS,
     null
   )
@@ -61,22 +71,31 @@ export async function withAntigravityChatBackend(
   }
 }
 
-/** A running `agy acp` may keep the login it started with, so idle chats on agy stop and resume on
- *  the newly selected account at their next send; busy ones keep their turn (#43375). */
-export function restartIdleAgyChats(target: AntigravityAccountTarget): void {
+/** A running `agy acp` may keep the login it started with, so idle chats signed in with agy's
+ *  login stop and resume on the newly selected account (or none) at their next send: chats on
+ *  agy's home, and with the Google method also those on Orca's chat home, whose copy of agy's login
+ *  the next start refreshes. Busy ones keep their turn (#43375). */
+export function restartIdleAgyChats(
+  target: AntigravityAccountTarget,
+  runtime: { requireStore(): { getSettings(): Pick<GlobalSettings, 'antigravityChatAuth'> } }
+): void {
   if (target.runtime !== 'host') {
     return
   }
   // The cached answer vouched for the previous login.
   forgetAntigravityHostAcpChecks()
+  const saved = runtime.requireStore().getSettings().antigravityChatAuth
+  // The chat home's copy of agy's login follows the switch now, not at the next old-chat resume.
+  void syncAgyLoginCopy(saved, getProfileUserDataPath())
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return
   }
+  const google = !antigravityChatUsesOrcaHome(saved)
   for (const id of host.loadedSessionIds()) {
     const home =
       host.sessionAgent(id) === 'antigravity' ? host.childAccountHome(id, true) : undefined
-    if (home && isAntigravityHostAccountHome(home)) {
+    if (home && (google || isAntigravityHostAccountHome(home))) {
       void host.releaseIdleSession(id, true).catch((error: unknown) => {
         console.warn('[antigravity] an idle chat kept the previous account:', error)
       })

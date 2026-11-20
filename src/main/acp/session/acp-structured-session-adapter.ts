@@ -63,8 +63,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     this.copies.copy(input)
 
   supportsLocation = (location: AgentSessionExecutionLocation): boolean => {
-    const { spec, isWindowsProcessStartTimeAvailable } = this.deps
-    return supportsAcpStructuredLocation(spec, location, isWindowsProcessStartTimeAvailable)
+    return supportsAcpStructuredLocation(location, this.deps.isWindowsProcessStartTimeAvailable)
   }
 
   async acquire(input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> {

@@ -6,10 +6,11 @@ export const AntigravityChatAuthConfigSchema = z.discriminatedUnion('method', [
     gcpProject: z.string().trim().max(255).optional(),
     gcpLocation: z.string().trim().max(255).optional()
   }),
+  // Older Orca versions saved Gemini Enterprise apart; agy's own sign-in now picks it.
   z.strictObject({
     method: z.literal('oauth-business'),
-    gcpProject: z.string().trim().min(1).max(255),
-    gcpLocation: z.string().trim().min(1).max(255)
+    gcpProject: z.string().trim().max(255).optional(),
+    gcpLocation: z.string().trim().max(255).optional()
   }),
   // A key saved in Settings, else GEMINI_API_KEY from the chat's launch environment.
   z.strictObject({
@@ -31,6 +32,7 @@ export type AntigravityChatAuthSettings = { antigravityChatAuth?: AntigravityCha
 
 export class AntigravityChatAuthConfigError extends Error {}
 
+/** The saved choice, with an older Gemini Enterprise one read as the Google sign-in it now is. */
 export function resolveAntigravityChatAuthConfig(value: unknown): AntigravityChatAuthConfig {
   if (value === undefined) {
     return { method: 'oauth-personal' }
@@ -38,8 +40,8 @@ export function resolveAntigravityChatAuthConfig(value: unknown): AntigravityCha
   const parsed = AntigravityChatAuthConfigSchema.safeParse(value)
   if (!parsed.success) {
     throw new AntigravityChatAuthConfigError(
-      'Antigravity account settings are incomplete. Choose an account type and enter a Google Cloud project and location for Gemini Enterprise.'
+      'Antigravity account settings are incomplete. Choose how Antigravity signs in.'
     )
   }
-  return parsed.data
+  return parsed.data.method === 'oauth-business' ? { method: 'oauth-personal' } : parsed.data
 }

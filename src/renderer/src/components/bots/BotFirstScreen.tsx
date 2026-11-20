@@ -28,7 +28,6 @@ import { NativeChatDetailsDisclosure } from '../native-chat/messages/diagnostics
 import { openAgentSettingsAction } from '../settings/navigation/open-agent-settings'
 import { useStructuredAgentSessionHostExecutionPhase } from '../native-chat/session/status/structured-agent-session-status-hooks'
 import { NativeChatInstallStrip } from '../native-chat/host-access/NativeChatInstallStrip'
-import { NativeChatSignInStrip } from '../native-chat/host-access/NativeChatSignInStrip'
 import { useBotSetupInstall } from './BotSetupInstall'
 
 /** Shown by name; more are counted. */
@@ -269,11 +268,11 @@ function BotSetupSteps({
   ]
   const failed = start.state === 'failed' || reply.state === 'failed'
   const retry = useCallback(() => void tryAgain(bot), [bot])
-  const { install, signIn } = useBotSetupInstall(bot, failed && isVisible, retry)
+  const { install } = useBotSetupInstall(bot, failed && isVisible, retry)
   const setup = useNativeChatHostSetupView()
   const owed = nativeChatFirstScreenSignIn(firstScreen)
   const signInView =
-    owed && !install && !signIn
+    owed && !install
       ? nativeChatSignInNoticeView(
           { kind: 'notSignedIn', agent: bot.agent, account: owed.account, setup },
           t
@@ -297,7 +296,7 @@ function BotSetupSteps({
               </span>
             </div>
             {/* Install says what is missing; the host's sentence points at a chat this card covers. */}
-            {step.detail && !((install || signIn) && id === 'start') ? (
+            {step.detail && !(install && id === 'start') ? (
               <p className="ml-5.5 line-clamp-3 break-words text-xs text-muted-foreground">
                 {step.detail}
               </p>
@@ -314,13 +313,9 @@ function BotSetupSteps({
           </li>
         ))}
       </ol>
-      {install || signIn ? (
+      {install ? (
         <div className="mt-1 border-t border-border pt-2 pb-1">
-          {install ? (
-            <NativeChatInstallStrip slot={install} agentLabel={agent} />
-          ) : signIn ? (
-            <NativeChatSignInStrip state={signIn} agentLabel={agent} />
-          ) : null}
+          <NativeChatInstallStrip slot={install} agentLabel={agent} />
         </div>
       ) : failed ? (
         <TryAgain

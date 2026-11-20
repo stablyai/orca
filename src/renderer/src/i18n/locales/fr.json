@@ -314,7 +314,6 @@
       },
       "providers": {
         "title": "Fournisseurs",
-        "antigravityAccount": "Compte",
         "searchTerminal": "Terminal",
         "searchAgents": "agents",
         "searchCli": "CLI"
@@ -22132,23 +22131,7 @@
       "cancel": "Annuler"
     },
     "antigravity": {
-      "chatSignIn": "Se connecter",
-      "chatChangeAccount": "Changer de compte",
-      "chatRetry": "Réessayer la connexion",
       "chatCancel": "Annuler",
-      "chatCopyLink": "Copier le lien de connexion",
-      "chatCopyFailed": "Impossible de copier le lien.",
-      "chatStarting": "Démarrage de la connexion…",
-      "chatWaiting": "Terminez la connexion dans votre navigateur.",
-      "chatOpenFailed": "Copiez le lien et ouvrez-le dans votre navigateur.",
-      "chatVerifying": "Finalisation de la connexion…",
-      "chatPasteHelp": "Si la dernière page après la connexion ne se charge pas, copiez son adresse complète depuis votre navigateur et collez-la ici.",
-      "chatContinue": "Continuer",
-      "chatCancelled": "Connexion annulée.",
-      "chatExpired": "La connexion a expiré. Réessayez.",
-      "chatFailed": "La connexion a échoué. Réessayez.",
-      "chatOtherClient": "Une connexion est en cours dans un autre client.",
-      "chatReadFailed": "Impossible de vérifier la connexion sur {{host}}.",
       "retry": "Réessayer",
       "changed": "Le compte natif a changé. Sélectionnez à nouveau un compte enregistré avant de lancer agy.",
       "refresh": "Actualiser les comptes",
@@ -22165,9 +22148,7 @@
         "accounts": "comptes"
       },
       "authMethod": "Se connecter avec",
-      "personal": "Compte Google",
       "gcpProject": "Projet Google Cloud",
-      "settingsIncomplete": "Choisissez un type de compte Antigravity et saisissez son projet et son emplacement Google Cloud.",
       "settingsLoadFailed": "Orca n’a pas pu charger vos paramètres de connexion Antigravity. Réessayez.",
       "settingsSaveFailed": "Orca n’a pas pu enregistrer vos paramètres de connexion Antigravity. Réessayez.",
       "lastReading": "{{reading}} · Relevé {{time}}",

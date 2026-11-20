@@ -99,14 +99,7 @@ export async function openAcpAdapterRig(
   let opened: StructuredAgentSessionProviderOpenResult | null = null
   const startListeners = new Set<() => void>()
   const spec = options.spec ?? GROK
-  const dataDirectory =
-    options.deps?.dataDirectory ??
-    (spec.privateTempDirectory
-      ? await mkdtemp(process.platform === 'win32' ? join(tmpdir(), 'orca-acp-') : '/tmp/o')
-      : join(tmpdir(), 'orca-acp-adapter-rig'))
-  if (spec.privateTempDirectory && !options.deps?.dataDirectory) {
-    onTestFinished(() => rm(dataDirectory, { recursive: true, force: true }))
-  }
+  const dataDirectory = options.deps?.dataDirectory ?? join(tmpdir(), 'orca-acp-adapter-rig')
   // Use a scratch account folder for agents that prepare one.
   const { prepare, resolve, environment } = spec.account
   const stateDirectory = prepare ? await mkdtemp(join(tmpdir(), 'orca-acp-account-')) : tmpdir()

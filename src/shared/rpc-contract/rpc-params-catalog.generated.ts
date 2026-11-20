@@ -88,10 +88,7 @@ import { PrepareCodexForWslPaneParams } from './accounts/agent-hooks-params'
 import {
   AntigravityAccountMutationParams,
   AntigravityAccountTargetParams,
-  AntigravityChatApiKeySaveParams,
-  AntigravityChatSignInCompleteParams,
-  AntigravityChatSignInFlowParams,
-  AntigravityChatSignInStartParams
+  AntigravityChatApiKeySaveParams
 } from './accounts/antigravity-accounts-params'
 import {
   UsageCredentialApiKeyParams,
@@ -1052,10 +1049,6 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.antigravityChatAuthApply': AntigravityChatAuthConfigSchema,
   'accounts.antigravityChatAuthDetect': null,
   'accounts.antigravityChatAuthGet': null,
-  'accounts.antigravityChatSignInCancel': AntigravityChatSignInFlowParams,
-  'accounts.antigravityChatSignInComplete': AntigravityChatSignInCompleteParams,
-  'accounts.antigravityChatSignInStart': AntigravityChatSignInStartParams,
-  'accounts.antigravityChatSignInSubscribe': null,
   'accounts.antigravityList': AntigravityAccountTargetParams,
   'accounts.antigravityRemove': AntigravityAccountMutationParams,
   'accounts.antigravitySelect': AntigravityAccountMutationParams,

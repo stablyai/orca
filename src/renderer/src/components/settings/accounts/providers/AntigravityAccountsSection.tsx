@@ -18,15 +18,18 @@ import { localAccountRuntimeTargetKey } from '../../../../../../shared/agent-acc
 import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import { ManagedRuntimeInstallRow } from '../../../managed-runtime/ManagedRuntimeInstallRow'
-import { antigravityChatSignInRunning } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
-import { AntigravityChatSignInRow } from '../../../provider-accounts/AntigravityChatSignInRow'
+import { AntigravityChatAuthForm } from '../../../provider-accounts/AntigravityChatAuthForm'
 import {
   antigravityChatDescription,
-  antigravityChatSignInBlocked,
-  antigravityProviderSignInShown,
-  type AntigravityChatDescription
-} from '../../../provider-accounts/antigravity-chat-runtime-sign-in-policy'
-import { useAntigravityChatSignIn } from '../../../provider-accounts/use-antigravity-chat-sign-in'
+  antigravityChatDescriptionText
+} from '../../../provider-accounts/antigravity-chat-description'
+import { useRecheckOnce } from './use-recheck-once'
+import { AntigravityAgySignInButton } from '../../../provider-accounts/AntigravityAgySignInButton'
+import { useOlderAntigravityHost } from '../../../provider-accounts/use-older-antigravity-host'
+
+// A cold `agy acp` initialize can take several seconds, longer on Windows.
+const AGY_CHECK_SETTLE_MS = 8_000
+import type { AntigravityChatAuthConfig } from '../../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/AgentChatChoiceControls'
 import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/capabilities/structured-chat-platform-support'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
@@ -53,7 +56,6 @@ function usageMatchesTarget(provenance: string, target: AntigravityAccountTarget
 export function AntigravityAccountsSection({
   owner,
   target,
-  label,
   ownerPlatform
 }: {
   owner: RuntimeClientTarget
@@ -66,6 +68,7 @@ export function AntigravityAccountsSection({
   const [usage, setUsage] = useState<ProviderRateLimits | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [chatMethod, setChatMethod] = useState<AntigravityChatAuthConfig['method'] | null>(null)
   const pending = useRef(false)
   const mounted = useRef(true)
   const ownerKind = owner.kind
@@ -82,9 +85,6 @@ export function AntigravityAccountsSection({
     chatRuntime.snapshot.state.source === 'managed'
       ? chatRuntime.snapshot.state.installedVersion
       : null
-  // A remote host's sign-in finishes from the address pasted back into its row.
-  const chatSignIn = chats && chatRuntime.kind === 'active'
-  const signIn = useAntigravityChatSignIn(chatSignIn ? owner : null)
 
   useEffect(() => {
     mounted.current = true
@@ -113,14 +113,42 @@ export function AntigravityAccountsSection({
     }
   }, [ownerKind, environmentId, runtime, wslDistro])
 
-  async function run(action: AntigravityAccountAction, accountId?: string) {
+  const olderHost = useOlderAntigravityHost(owner)
+  // The rows don't wait for a cold agy check; once it has had time to answer, they read it again.
+  const agyUnanswered =
+    chats &&
+    state !== null &&
+    state.chatUsesAgy === undefined &&
+    state.chatAgySignedOut === undefined &&
+    (chatMethod === 'oauth-personal' || chatMethod === 'oauth-business')
+  useRecheckOnce(agyUnanswered, AGY_CHECK_SETTLE_MS, () => {
+    if (pending.current) {
+      return false
+    }
+    void run('List', undefined, true)
+    return true
+  })
+  // A method change moves new chats between agy's home and Orca's, which the rows' status follows.
+  const seenMethod = useRef<AntigravityChatAuthConfig['method'] | null>(null)
+  useEffect(() => {
+    const previous = seenMethod.current
+    seenMethod.current = chatMethod
+    if (previous !== null && chatMethod !== null && previous !== chatMethod) {
+      void run('List')
+    }
+  })
+
+  /** `keepShown`: a background re-read, which leaves a Usage reading or error on screen. */
+  async function run(action: AntigravityAccountAction, accountId?: string, keepShown = false) {
     if (pending.current) {
       return
     }
     pending.current = true
     setBusy(true)
-    setError(null)
-    setUsage(null)
+    if (!keepShown) {
+      setError(null)
+      setUsage(null)
+    }
     try {
       if (action === 'Usage') {
         const before = await callAntigravityAccounts(owner, target, 'List')
@@ -195,7 +223,6 @@ export function AntigravityAccountsSection({
       <ManagedRuntimeInstallRow
         observation={chatRuntime}
         agentLabel={t('accounts.antigravity.title', 'Antigravity')}
-        signInRunning={antigravityChatSignInRunning(signIn.flow)}
       >
         {(line, actions) => (
           <div data-settings-row="" className="flex items-center justify-between gap-4 py-3">
@@ -209,70 +236,31 @@ export function AntigravityAccountsSection({
       </ManagedRuntimeInstallRow>
     ) : null
 
-  const agyVersion = state?.chatAgyVersion
-  const chatDescriptions: Record<AntigravityChatDescription, string> = {
-    agySignedOut: t(
-      'accounts.antigravity.chatDescriptionAgySignedOut',
-      "New chats use agy, which isn't signed in yet. Run agy on this host to sign in."
-    ),
-    orcasAgy: managedVersion
-      ? t(
-          'accounts.antigravity.chatDescriptionOrcaAgyVersion',
-          "Chats run on Orca's agy (v{{version}}) and use agy's own sign-in.",
-          { version: managedVersion }
-        )
-      : t(
-          'accounts.antigravity.chatDescriptionOrcaAgy',
-          "Chats run on Orca's copy of agy and use agy's own sign-in."
-        ),
-    agy: agyVersion
-      ? t(
-          'accounts.antigravity.chatDescriptionAgyOwnSignInVersion',
-          "Chats run on your agy (v{{version}}) and use agy's own sign-in.",
-          { version: agyVersion }
-        )
-      : t(
-          'accounts.antigravity.chatDescriptionAgyOwnSignIn',
-          "Chats run on agy and use agy's own sign-in."
-        ),
-    installAgy: t(
-      'accounts.antigravity.chatDescriptionInstallAgy',
-      'Install agy below to use Chat. It signs in with its own account.'
-    ),
-    agySignedIn: agyVersion
-      ? t(
-          'accounts.antigravity.chatDescriptionAgyVersion',
-          "New chats run on your agy (v{{version}}) and its account below. This sign-in is used when agy isn't.",
-          { version: agyVersion }
-        )
-      : t(
-          'accounts.antigravity.chatDescriptionAgy',
-          "agy is signed in here, so new chats use agy's account below. This sign-in is used when agy isn't."
-        ),
-    orcaSignIn:
-      managedVersion && state?.chatUsesAgy === false
-        ? t(
-            'accounts.antigravity.chatDescriptionManagedVersion',
-            "New chats run on Orca's copy (v{{version}}), so Chat works without agy installed.",
-            { version: managedVersion }
-          )
-        : t(
-            'accounts.antigravity.chatDescription',
-            'Signs in through your browser, so Chat works without agy installed.'
-          )
-  }
+  // Chats on agy's own home share this login; a saved key or gcloud keeps new chats apart.
+  const chatsUseAgyLogin = !chats
+    ? null
+    : chatMethod !== null
+      ? chatMethod === 'oauth-personal' || chatMethod === 'oauth-business'
+      : state?.chatUsesAgy === undefined && state?.chatAgySignedOut === undefined
+        ? null
+        : Boolean(state?.chatUsesAgy || state?.chatAgySignedOut)
 
+  const chatDescription = antigravityChatDescription(state, chatRuntime, chatMethod, olderHost)
+  const installed =
+    chatRuntime.kind === 'active' &&
+    chatRuntime.snapshot.kind === 'known' &&
+    chatRuntime.snapshot.state.source !== null
+  // An older host still runs Orca's server, whose saved choices this client would misread.
   const chatRows =
     chats && chatRuntime.kind === 'active' ? (
-      antigravityProviderSignInShown(chatRuntime) ? (
-        <AntigravityChatSignInRow
-          owner={owner}
-          label={label}
-          disabled={antigravityChatSignInBlocked(chatRuntime)}
-          runtime={runtimeRow}
-        />
+      chatDescription === 'olderHost' ? (
+        <div />
       ) : (
-        runtimeRow
+        <>
+          <AntigravityChatAuthForm owner={owner} disabled={busy} onMethod={setChatMethod} />
+          {/* Switched off, Orca's copy is never installed for chats; one already there can go. */}
+          {chatDescription === 'orcasAgyOff' && !installed ? null : runtimeRow}
+        </>
       )
     ) : null
 
@@ -281,7 +269,16 @@ export function AntigravityAccountsSection({
       {chatRows ? (
         <SettingsGroup
           title={logoTitle(t('accounts.antigravity.chatTitle', 'Antigravity Chat'))}
-          description={chatDescriptions[antigravityChatDescription(state, chatRuntime)]}
+          description={antigravityChatDescriptionText(chatDescription, {
+            managedVersion,
+            agyVersion: state?.chatAgyVersion,
+            t
+          })}
+          action={
+            chatDescription === 'agySignedOut' ? (
+              <AntigravityAgySignInButton owner={owner} />
+            ) : undefined
+          }
         >
           {chatRows}
         </SettingsGroup>
@@ -294,12 +291,12 @@ export function AntigravityAccountsSection({
                 'accounts.antigravity.terminalDescriptionWindows',
                 "Uses agy's own saved accounts. Switching applies to the host default agy credential."
               )
-            : state?.chatUsesAgy === undefined && state?.chatAgySignedOut === undefined
+            : chatsUseAgyLogin === null
               ? t(
                   'accounts.antigravity.terminalDescription',
                   "Uses agy's own saved accounts. Switching applies to new agy sessions."
                 )
-              : state?.chatUsesAgy || state?.chatAgySignedOut
+              : chatsUseAgyLogin
                 ? t(
                     'accounts.antigravity.terminalDescriptionChats',
                     "Uses agy's own saved accounts. Switching applies to new agy sessions and to Antigravity chats."

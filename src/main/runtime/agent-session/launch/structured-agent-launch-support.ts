@@ -78,41 +78,33 @@ export async function observeStructuredAgentLaunch(
     refreshShellOnMiss ? refreshHostAgentBaseEnvironmentAfterMiss : undefined,
     { env: ({ env }) => env, cwd: once }
   )
-  return checkAgentCliVersion(
-    {
-      program: launch.command,
-      prefixArgs: [...launch.prefixArgs, ...(check.versionArgs ?? [])],
-      cwd: await once(),
-      env: launch.env
-    },
-    check.minimumVersions
-  )
-}
-
-/** Whether a new chat would start on the host's own program, as its account home selects one. */
-export async function structuredAgentHostAlternativeReady(
-  agent: string,
-  runtime: LaunchSettingsRuntime
-): Promise<boolean> {
-  const program = structuredAgentRuntimeMetadata(agent)?.chatProgram
-  if (!program?.hostAlternative) {
-    return false
+  const read = async (program: string, prefixArgs: readonly string[]) =>
+    checkAgentCliVersion(
+      {
+        program,
+        prefixArgs: [...prefixArgs, ...(check.versionArgs ?? [])],
+        cwd: await once(),
+        env: launch.env
+      },
+      check.minimumVersions
+    )
+  const found = await read(launch.command, launch.prefixArgs)
+  // The launch itself runs Orca's copy for a too-old own program, so admission asks the copy too.
+  const copy = found.status === 'tooOld' ? check.standIn?.(launch.command, settings) : null
+  if (!copy) {
+    return found
   }
-  const settings = runtime.requireStore().getSettings()
-  const env = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
-  return program.hostAlternative(env, settings).catch(() => false)
+  const copyCheck = await read(copy, [])
+  return copyCheck.status === 'tooOld' ? found : copyCheck
 }
 
 /** Admission's answer in the workspace `cwd` names: only a too-old or unstartable binary keeps the
- *  terminal, or, where Orca installs no release, a host program that cannot serve the chat. */
+ *  terminal. */
 export async function structuredAgentSupportsLaunch(
   agent: string,
   cwd: () => Promise<string>,
   runtime: LaunchSettingsRuntime
 ): Promise<boolean> {
-  if (structuredAgentRuntimeMetadata(agent)?.chatProgram?.onlyHostAlternative?.()) {
-    return structuredAgentHostAlternativeReady(agent, runtime)
-  }
   try {
     const release = await observeStructuredAgentLaunch(agent, cwd, runtime, true)
     return release === null || launchableRelease(release)

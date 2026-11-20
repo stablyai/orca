@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { callAntigravityChatApiKey } from '@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client'
+import { refreshAntigravityChatAuthDetection } from '@/runtime/provider-accounts/sign-in/antigravity-chat-auth-detection'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AntigravityChatApiKeyStatus } from '../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
@@ -14,18 +15,10 @@ const GET_KEY_URL = 'https://aistudio.google.com/apikey'
 type Props = {
   owner: RuntimeClientTarget
   disabled: boolean
-  onStatus: (status: AntigravityChatApiKeyStatus | null) => void
-  /** A newly saved key signs the chat in right away. */
-  onSaved: () => void
 }
 
 /** Paste a Gemini API key, kept encrypted on the chat's host; GEMINI_API_KEY is the fallback. */
-export function AntigravityChatApiKeyField({
-  owner,
-  disabled,
-  onStatus,
-  onSaved
-}: Props): React.JSX.Element {
+export function AntigravityChatApiKeyField({ owner, disabled }: Props): React.JSX.Element {
   const t = useTranslate()
   const id = useId()
   const [status, setStatus] = useState<AntigravityChatApiKeyStatus | null>(null)
@@ -47,7 +40,6 @@ export function AntigravityChatApiKeyField({
       current = false
     }
   }, [environmentId])
-  useEffect(() => onStatus(status), [status, onStatus])
 
   const run = (action: { kind: 'save'; apiKey: string } | { kind: 'clear' }): void => {
     setPending(true)
@@ -57,9 +49,8 @@ export function AntigravityChatApiKeyField({
         setStatus(next)
         setDraft('')
         setReplacing(false)
-        if (action.kind === 'save') {
-          onSaved()
-        }
+        // Open chats offer a detected key; they read the change now, not at next focus.
+        void refreshAntigravityChatAuthDetection(owner, { force: true })
       })
       .catch((cause: unknown) =>
         setError(
@@ -79,7 +70,12 @@ export function AntigravityChatApiKeyField({
           'accounts.antigravity.apiKeyFromEnvironment',
           'Using GEMINI_API_KEY from your environment. Paste a key to use a different one.'
         )
-      : null
+      : status
+        ? t(
+            'accounts.antigravity.apiKeyMissing',
+            "No key yet. Chats signing in with a key won't start until you add one."
+          )
+        : null
 
   return (
     <div className="space-y-1.5">

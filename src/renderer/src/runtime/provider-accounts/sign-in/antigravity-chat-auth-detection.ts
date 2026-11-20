@@ -13,8 +13,6 @@ type Entry = {
   detection: AntigravityChatAuthDetection | null
   fetchedAt: number
   inFlight: Promise<boolean> | null
-  /** The host's sign-in revision the last read saw; a newer one forces a read. */
-  revision: number
   /** The one read queued behind `inFlight` for every forced caller. */
   forced: Promise<boolean> | null
   observers: number
@@ -38,7 +36,6 @@ function entryFor(owner: RuntimeClientTarget): Entry {
       owner,
       detection: null,
       fetchedAt: 0,
-      revision: -1,
       inFlight: null,
       forced: null,
       observers: 0
@@ -92,23 +89,6 @@ export function refreshAntigravityChatAuthDetection(
     })
   entry.inFlight = read
   return read
-}
-
-/** Re-reads once per new sign-in revision: every apply and sign-in answer bumps it. */
-export function refreshAntigravityChatAuthDetectionAt(
-  owner: RuntimeClientTarget,
-  revision: number
-): void {
-  const entry = entryFor(owner)
-  if (revision < 0 || entry.revision === revision) {
-    return
-  }
-  // The first revision seen only records where this client starts; mount already reads.
-  const first = entry.revision < 0
-  entry.revision = revision
-  if (!first) {
-    void refreshAntigravityChatAuthDetection(owner, { force: true })
-  }
 }
 
 function refreshObservedHosts(): void {

@@ -5,7 +5,6 @@ import type { AcpDialect } from '../acp-dialects/acp-dialect'
 import type { AcpAccountBinding } from './acp-account-binding'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentChatPermissionMode } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import type { ManagedRuntime } from '../../node-runtime/managed-runtime-release'
 import type { AcpSkillRootsLoader } from './acp-skill-roots'
 import type { AcpInstructionsDelivery } from './acp-instructions'
 import type {
@@ -13,15 +12,10 @@ import type {
   StructuredAgentTranscriptImport
 } from '../../native-chat/conversation-adoption/structured-agent-cli-conversations'
 
-import type { AcpSignInWatch } from '../process/acp-agent-connection'
 import type { AcpLaunchGate } from './acp-launch-gate'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AcpModelDiscovery } from '../discovery/acp-model-discovery-policy'
-import type {
-  Implementation,
-  InitializeResponse,
-  McpServer
-} from '../generated/acp-protocol.generated'
+import type { InitializeResponse, McpServer } from '../generated/acp-protocol.generated'
 
 export type AcpLaunchSpec = {
   agent: TuiAgent
@@ -42,9 +36,6 @@ export type AcpLaunchSpec = {
     antigravityChatAuth?: AntigravityChatAuthConfig
   ): string[]
   dialect: AcpDialect
-  /** Initialize's identity for the launched version (null when unknown), for agents that grant
-   *  features by client name; absent sends Orca's. */
-  clientInfo?(version: string | null): Implementation
   loginCommand: readonly string[]
   /** Selects authentication from the execution host's resolved launch inputs. */
   authMethod?(input: {
@@ -52,18 +43,17 @@ export type AcpLaunchSpec = {
     antigravityChatAuth?: AntigravityChatAuthConfig
     env: Readonly<Record<string, string>>
   }): string | undefined
-  authMethodUnavailableMessage?: string
-  /** A valid sign-in output line closes the chat signed out. */
-  signIn?: Omit<AcpSignInWatch, 'link'>
   account: AcpAccountBinding
+  /** Arguments after `args` that point the program at the chat's pinned account home. */
+  accountArgs?(home: AgentSessionAccountHome): string[]
+  /** Orca's saved Antigravity account type configures this launch's credentials and settings. */
+  readsAntigravityChatAuth?: true
   /** Ascending release-line minimums, checked before creation and at every launch. */
   minimumVersions?: readonly string[]
   /** Arguments before `--version` when the bare flag is slow or not the chat server's version. */
   versionArgs?: readonly string[]
   /** Searched after PATH. */
   installDirectories(input: { env: Readonly<Record<string, string>>; homePath: string }): string[]
-  /** Installed only on request; takes precedence over PATH and excludes `minimumVersions`. */
-  managedRuntime?: ManagedRuntime
   /** Agent-enforced modes; Orca does not answer its permission requests. */
   permissionModeConfig?: {
     values: { ask: string } & Partial<Record<AgentChatPermissionMode, string>>
@@ -97,8 +87,6 @@ export type AcpLaunchSpec = {
   /** Tools run in a process other chats share, which keeps the environment of the chat that
    *  started it; such chats carry no caller identity, so Orca's CLI there refuses to guess one. */
   sharedToolProcess?: true
-  /** Isolate processes whose agent temp files collide. */
-  privateTempDirectory?: true
   /** Prefer session/resume even when loading is supported. */
   resumePreference?: 'resume'
   /** Extra ACP session metadata required by this provider's protocol implementation. */
@@ -150,13 +138,6 @@ export type AcpHostBackend = {
   /** The account home pinning a new chat to `spec`, or null when the host should not run it. It
    *  may pin a program `input.command` didn't find, which an Install then provides. */
   select(input: AcpHostBackendInput): Promise<AgentSessionAccountHome | null>
-  /** Changes whenever a sign-in that `select` weighs changes, so remembered answers are retired. */
-  selectionRevision?(): number
-  /** Tells when a fact `select` weighs changes apart from settings and Orca's installs. */
-  onSelectionChanged?(listener: () => void): () => void
-  /** Where Orca also keeps its own copy of the host program: whether Install, its status and
-   *  removal act on the outer spec's `managedRuntime` instead of that copy. */
-  installsManagedRuntime?(input: AcpHostBackendInput): Promise<boolean>
 }
 
 /** The settings a host backend weighs; a change to any of them can change its answers. */

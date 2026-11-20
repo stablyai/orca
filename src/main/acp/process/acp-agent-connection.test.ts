@@ -266,12 +266,7 @@ it('keeps cached startup usable without advertising the configured method, but r
       authMethods: [{ id: 'oauth-personal', name: 'Google account' }]
     })
   )
-  const configured = {
-    ...start,
-    authMethodId: 'oauth-business',
-    authMethodUnavailableMessage:
-      'Antigravity account type is unavailable. Update Antigravity or change account settings.'
-  }
+  const configured = { ...start, authMethodId: 'oauth-business' }
   await expect(connection.start(configured)).resolves.toMatchObject({ sessionId: 'session-1' })
   const required = fixture()
   required.agent.on('initialize', (frame) =>
@@ -283,9 +278,7 @@ it('keeps cached startup usable without advertising the configured method, but r
   required.agent.on('session/new', (frame) =>
     required.agent.fail(frame, -32000, 'Authentication required')
   )
-  await expect(required.connection.start(configured)).rejects.toThrow(
-    'Antigravity account type is unavailable'
-  )
+  await expect(required.connection.start(configured)).rejects.toThrow('Authentication required')
   expect(required.agent.frames.filter((frame) => frame.method === 'authenticate')).toEqual([])
 })
 

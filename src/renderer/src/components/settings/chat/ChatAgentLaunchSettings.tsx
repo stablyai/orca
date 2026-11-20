@@ -124,17 +124,12 @@ function ChatAgentRow({
 
 /** Offers the agent's chat runtime install in its row until this computer has a current copy. */
 function ManagedChatAgentRow(props: ChatAgentRowProps): React.JSX.Element {
-  const { runtime, signInRunning } = useAgentChatRuntimeInstall(props.agent)
+  const runtime = useAgentChatRuntimeInstall(props.agent)
   if (runtime.kind !== 'active' || !managedRuntimeInstallPending(runtime.snapshot)) {
     return <ChatAgentRow {...props} />
   }
   return (
-    <ManagedRuntimeInstallRow
-      observation={runtime}
-      agentLabel={props.label}
-      signInRunning={signInRunning}
-      menu={false}
-    >
+    <ManagedRuntimeInstallRow observation={runtime} agentLabel={props.label} menu={false}>
       {(line, actions) => <ChatAgentRow {...props} line={line} actions={actions} />}
     </ManagedRuntimeInstallRow>
   )

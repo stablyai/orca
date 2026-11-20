@@ -63,7 +63,8 @@ export function nativeChatSignInNoticeView(
     return null
   }
   const entry = agentSessionSetupFor(input.agent)
-  // Antigravity chats keep Orca's own sign-in; chats on the host's agy (`system`) use agy's.
+  // An older host's chats on Orca's retired server sign in from Settings there; agy's (`system`)
+  // sign in by running agy.
   if (entry?.agent === 'antigravity' && input.account !== 'system') {
     const host = input.setup?.host
     return {

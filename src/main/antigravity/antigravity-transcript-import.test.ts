@@ -115,7 +115,7 @@ it('recognizes agy terminal resumes of a conversation', () => {
   expect(parse(['-i', 'hello'])).toBeNull()
 })
 
-it('offers agy terminal conversations to chats, except from an agy set up with an API key', async () => {
+it('offers agy terminal conversations to chats, also from an agy set up with an API key', async () => {
   expect(adoptsCliConversations('antigravity')).toBe(true)
   expect(conversationFamily('antigravity')).toBe('antigravity')
 
@@ -132,5 +132,5 @@ it('offers agy terminal conversations to chats, except from an agy set up with a
     join(agyHome.path, 'antigravity-cli', 'settings.json'),
     '{"modelProvider":"gemini-api-key"}'
   )
-  expect(await candidates()).not.toContainEqual(agyHome)
+  expect(await candidates()).toContainEqual(agyHome)
 })

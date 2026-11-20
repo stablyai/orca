@@ -6,20 +6,16 @@ import { join } from 'node:path'
 import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import type { StructuredAgentSessionAdapter } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { ProviderAcquisitionStarts } from '../../provider-process/provider-acquisition-starts'
-import { removeAntigravitySignInSessionFiles } from '../../antigravity/antigravity-sign-in-session-files'
 import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from '../../text-generation/execution/source-control-generation-limits'
 import { resolveAcpLaunchInvocation } from '../launch/acp-structured-launch-resolution'
 import { acpLaunchSpecForAccount } from '../launch/acp-launch-command'
 import { prepareAcpLaunch } from '../launch/acp-structured-launch-preparation'
-import { acpPrivateTempConnect } from '../launch/acp-private-temp'
-import { acpClientInfo } from '../launch/acp-client-info'
 import {
   acpTextTaskCompletion,
   acpTextTaskArgs,
   acpTextTaskEnv,
   cleanupAcpTextTaskProtocol,
   cleanupGrokTextTaskSession,
-  denyAcpTextTaskPermission,
   rejectAcpTextTaskWork,
   TASK_ENV_TO_DELETE
 } from './acp-text-task-policy'
@@ -89,7 +85,6 @@ export class AcpTextTasks {
     }
     let connection: AcpStructuredConnection | undefined
     let cwd: string | undefined
-    let home = ''
     let sessionId = ''
     let modeConfigId = 'mode'
     let completed = false
@@ -104,9 +99,6 @@ export class AcpTextTasks {
       }
       disposed = true
       try {
-        if (spec.agent === 'antigravity') {
-          await removeAntigravitySignInSessionFiles(home, sessionId, cwd)
-        }
         await rm(cwd, { recursive: true, force: true })
       } catch (error) {
         this.deps.logger?.warn('Naming helper files could not be removed', {
@@ -132,7 +124,6 @@ export class AcpTextTasks {
         ),
         signal
       )
-      home = launch.env.GEMINI_HOME ?? ''
       cwd = await mkdtemp(join(tmpdir(), 'orca-chat-name-'))
       if (spec.agent === 'grok') {
         cwd = await realpath(cwd)
@@ -159,10 +150,8 @@ export class AcpTextTasks {
             envToDelete: [...launch.envToDelete, ...TASK_ENV_TO_DELETE]
           },
           {
-            clientInfo: acpClientInfo(launch.spec, launch.version ?? null, NAMING_CLIENT_INFO),
-            signIn: spec.signIn,
-            onPermission: (request) =>
-              spec.agent === 'antigravity' ? denyAcpTextTaskPermission(request) : reject(),
+            clientInfo: NAMING_CLIENT_INFO,
+            onPermission: reject,
             onRequest: reject,
             onExtensionNotification: notification
           }
@@ -176,12 +165,10 @@ export class AcpTextTasks {
         return connection
       }
       const server = await waitForPromiseWithSignal(
-        spec.privateTempDirectory
-          ? acpPrivateTempConnect(this.deps, checkCurrent).then(spawn)
-          : Promise.resolve().then(() => {
-              checkCurrent()
-              return spawn(this.deps.connect)
-            }),
+        Promise.resolve().then(() => {
+          checkCurrent()
+          return spawn(this.deps.connect)
+        }),
         signal
       )
       let output = ''
@@ -243,7 +230,6 @@ export class AcpTextTasks {
             cwd,
             mcpServers: [],
             authMethodId,
-            authMethodUnavailableMessage: spec.authMethodUnavailableMessage,
             ...(spec.agent === 'grok' ? { _meta: { yoloMode: false, autoMode: false } } : {})
           })
           .then((started) => {

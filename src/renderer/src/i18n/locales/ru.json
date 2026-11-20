@@ -641,8 +641,7 @@
         "title": "Провайдеры",
         "searchAgents": "агенты",
         "searchCli": "командная строка",
-        "searchTerminal": "терминал",
-        "antigravityAccount": "Учётная запись"
+        "searchTerminal": "терминал"
       },
       "permissionsDescriptionOwnAgents": "Новые чаты используют разрешения каждого агента из раздела «Настройки → Агенты».",
       "launch": {
@@ -22556,23 +22555,7 @@
       "description": "Агенты там используют учётные записи Claude и Codex дистрибутива по умолчанию до обновления Orca в WSL."
     },
     "antigravity": {
-      "chatSignIn": "Войти",
-      "chatChangeAccount": "Сменить учётную запись",
-      "chatRetry": "Повторить вход",
       "chatCancel": "Отмена",
-      "chatCopyLink": "Копировать ссылку входа",
-      "chatCopyFailed": "Не удалось скопировать ссылку.",
-      "chatStarting": "Начало входа…",
-      "chatWaiting": "Завершите вход в браузере.",
-      "chatOpenFailed": "Скопируйте ссылку и откройте её в браузере.",
-      "chatVerifying": "Завершение входа…",
-      "chatPasteHelp": "Если последняя страница после входа не загружается, скопируйте её полный адрес из браузера и вставьте здесь.",
-      "chatContinue": "Продолжить",
-      "chatCancelled": "Вход отменён.",
-      "chatExpired": "Время входа истекло. Повторите попытку.",
-      "chatFailed": "Не удалось войти. Повторите попытку.",
-      "chatOtherClient": "В другом клиенте уже выполняется вход.",
-      "chatReadFailed": "Не удалось проверить вход на {{host}}.",
       "retry": "Повторить",
       "changed": "Учётная запись agy изменилась. Снова выберите сохранённую учётную запись перед запуском agy.",
       "refresh": "Обновить учётные записи",
@@ -22589,9 +22572,7 @@
         "accounts": "учётные записи"
       },
       "authMethod": "Войти через",
-      "personal": "Аккаунт Google",
       "gcpProject": "Проект Google Cloud",
-      "settingsIncomplete": "Выберите тип аккаунта Antigravity и укажите проект и регион Google Cloud.",
       "settingsLoadFailed": "Orca не удалось загрузить настройки входа в Antigravity. Попробуйте ещё раз.",
       "settingsSaveFailed": "Orca не удалось сохранить настройки входа в Antigravity. Попробуйте ещё раз.",
       "lastReading": "{{reading}} · Считано {{time}}",

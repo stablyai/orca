@@ -1,9 +1,7 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { AntigravityChatAuthDetection } from '../../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
-import { ANTIGRAVITY_SUBSCRIPTION_REQUIRED } from '../../../../../shared/agent-accounts/antigravity/antigravity-sign-in-sentences'
 import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
-import { NativeChatSignInStrip } from '../host-access/NativeChatSignInStrip'
 import { NativeChatNoticeRow } from '../messages/notices/NativeChatNoticeRow'
 import {
   NativeChatAntigravityAuthContext,
@@ -19,70 +17,21 @@ const FOUND: AntigravityChatAuthDetection = {
   liveChats: 0,
   agyVersion: '1.5.13'
 }
-const NOTHING: AntigravityChatAuthDetection = {
-  ...FOUND,
-  apiKey: { available: false, source: null },
-  adc: { available: false, project: null }
-}
-
 const auth = (
   detection: AntigravityChatAuthDetection,
-  backend: NativeChatAntigravityAuth['backend'] = 'managed'
+  ownHome = false
 ): NativeChatAntigravityAuth => ({
   host: { kind: 'local' },
-  backend,
-  managedVersion: '1.5.0',
+  ownHome,
+  managedVersion: '1.5.13',
   orcasAgy: false,
   programPending: false,
   detection,
   keyAndAdc: true,
   switching: null,
   switchTo: () => undefined,
-  signInWithGoogle: () => undefined,
   openSettings: () => undefined,
   refresh: () => undefined
-})
-
-const view = (error: string | null = null) => ({
-  status: 'known' as const,
-  flow: null,
-  auth: 'signedOut' as const,
-  error,
-  openFailed: false,
-  retryIntent: 'signIn' as const
-})
-
-function Strip(props: { detection: AntigravityChatAuthDetection; error?: string }) {
-  return (
-    <NativeChatAntigravityAuthContext value={auth(props.detection)}>
-      <div className="p-4">
-        <NativeChatSignInStrip
-          agentLabel="Antigravity"
-          state={{
-            prompt: props.error ? 'failed' : 'signedOut',
-            view: view(props.error ?? null),
-            agent: 'antigravity',
-            host: { kind: 'local' }
-          }}
-        />
-      </div>
-    </NativeChatAntigravityAuthContext>
-  )
-}
-
-export const stripDetected = defineFixture({
-  width: 720,
-  render: () => <Strip detection={FOUND} />
-})
-
-export const stripNothingDetected = defineFixture({
-  width: 720,
-  render: () => <Strip detection={NOTHING} />
-})
-
-export const stripNoSubscription = defineFixture({
-  width: 720,
-  render: () => <Strip detection={FOUND} error={ANTIGRAVITY_SUBSCRIPTION_REQUIRED} />
 })
 
 function ChipMenu(props: { auth: NativeChatAntigravityAuth }) {
@@ -104,21 +53,13 @@ async function openChip(frame: HTMLElement): Promise<void> {
 export const chipMenu = defineFixture({
   width: 720,
   interact: openChip,
-  render: () => (
-    <ChipMenu
-      auth={auth({
-        ...FOUND,
-        method: 'gemini-api-key',
-        googleSignIn: { personal: true, business: false }
-      })}
-    />
-  )
+  render: () => <ChipMenu auth={auth({ ...FOUND, method: 'gemini-api-key' })} />
 })
 
 export const chipMenuOnAgy = defineFixture({
   width: 720,
   interact: openChip,
-  render: () => <ChipMenu auth={auth(FOUND, 'agy')} />
+  render: () => <ChipMenu auth={auth(FOUND, true)} />
 })
 
 export const failureNotice = defineFixture({
@@ -140,7 +81,7 @@ export const failureNotice = defineFixture({
             type: 'text',
             tone: 'error',
             ...agentSessionFailureWords(
-              agentSessionFailureFact('notSignedIn', { account: 'managed' }),
+              agentSessionFailureFact('notSignedIn', { account: 'system' }),
               { agentName: 'Antigravity', surface: 'row' }
             )
           }}

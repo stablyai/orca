@@ -15,19 +15,6 @@ export const AntigravityAccountMutationParams = z
   })
   .strict()
 
-export const AntigravityChatSignInStartParams = z.strictObject({
-  intent: z.enum(['signIn', 'changeAccount']).optional()
-})
-
-export const AntigravityChatSignInFlowParams = z.strictObject({
-  flowId: z.string().min(1).max(64)
-})
-
-export const AntigravityChatSignInCompleteParams = z.strictObject({
-  flowId: z.string().min(1).max(64),
-  callbackUrl: z.string().min(1).max(16_384)
-})
-
 export const AntigravityChatApiKeySaveParams = z.strictObject({
   apiKey: z.string().trim().min(1).max(512)
 })
@@ -39,7 +26,7 @@ export type AntigravityChatApiKeyStatus = { saved: boolean; inEnvironment: boole
 export type AntigravityChatAuthDetection = {
   /** The saved sign-in method; null while it is malformed or being saved. */
   method: AntigravityChatAuthConfig['method'] | null
-  /** Saved Google sign-ins of Orca's managed server, one per Google method. */
+  /** Always false: Orca keeps no Google sign-in of its own. Sent for older clients, which read it. */
   googleSignIn: { personal: boolean; business: boolean }
   /** A pasted key wins over GEMINI_API_KEY, as the chat's launch does. */
   apiKey: { available: boolean; source: 'saved' | 'environment' | null }

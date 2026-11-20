@@ -300,7 +300,7 @@
 1 src/main/native-chat/transcript-discovery/host-readable-transcript-path.ts
 2 src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-spawn.ts
 2 src/main/node-runtime/managed-runtime-release-install.ts
-7 src/main/node-runtime/managed-runtime-release.ts
+5 src/main/node-runtime/managed-runtime-release.ts
 11 src/main/notebook/python-environments.ts
 1 src/main/observability/bounded-log-file-writer.ts
 2 src/main/observability/bundle.ts

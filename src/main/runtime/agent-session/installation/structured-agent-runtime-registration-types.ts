@@ -107,6 +107,8 @@ export type StructuredAgentLaunchCheck = {
   minimumVersions: readonly string[]
   /** Arguments before `--version`. */
   versionArgs?: readonly string[]
+  /** Orca's copy that a launch runs when `command` is too old; absent or null keeps `command`. */
+  standIn?: (command: string, commandSettings: StructuredAgentCommandSettings) => string | null
 }
 
 export type StructuredAgentChatProgram = {
@@ -119,8 +121,6 @@ export type StructuredAgentChatProgram = {
     env: Record<string, string>,
     settings: AcpHostBackendSettings
   ) => Promise<boolean>
-  /** Whether no release Orca can install runs here, so chats start only on `hostAlternative`. */
-  onlyHostAlternative?: () => boolean
 }
 
 export type StructuredAgentRuntimeMetadata = StructuredAgentCliConversations & {

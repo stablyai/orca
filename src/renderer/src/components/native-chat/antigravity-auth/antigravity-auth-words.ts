@@ -7,7 +7,7 @@ import type {
 
 /** Which program a chat runs and its version, so its models and account are no surprise. */
 export function antigravityProgramLabel(
-  program: 'managed' | 'agy' | 'orcasAgy',
+  program: 'agy' | 'orcasAgy',
   version: string | null | undefined,
   t: Translate = translate
 ): string {
@@ -18,18 +18,11 @@ export function antigravityProgramLabel(
         })
       : t('components.native-chat.antigravityAuth.orcasAgy', "Orca's agy")
   }
-  if (program === 'agy') {
-    return version
-      ? t('components.native-chat.antigravityAuth.yourAgyVersion', 'Your agy · v{{version}}', {
-          version
-        })
-      : t('components.native-chat.antigravityAuth.yourAgy', 'Your agy')
-  }
   return version
-    ? t('components.native-chat.antigravityAuth.orcaCopyVersion', "Orca's copy · v{{version}}", {
+    ? t('components.native-chat.antigravityAuth.yourAgyVersion', 'Your agy · v{{version}}', {
         version
       })
-    : t('components.native-chat.antigravityAuth.orcaCopy', "Orca's copy")
+    : t('components.native-chat.antigravityAuth.yourAgy', 'Your agy')
 }
 
 export function antigravityAlternativeLabel(
@@ -43,8 +36,6 @@ export function antigravityAlternativeLabel(
       return t('components.native-chat.antigravityAuth.useGcloud', 'Use gcloud ({{project}})', {
         project: option.project
       })
-    case 'oauth-personal':
-      return t('components.native-chat.antigravityAuth.useGoogle', 'Use your Google sign-in')
   }
 }
 
@@ -65,11 +56,6 @@ export function antigravityAlternativeHint(
       return t(
         'components.native-chat.antigravityAuth.gcloudFound',
         'Found your gcloud login (Application Default Credentials)'
-      )
-    case 'oauth-personal':
-      return t(
-        'components.native-chat.antigravityAuth.googleFound',
-        'You signed in with Google on this host before'
       )
   }
 }
@@ -95,11 +81,6 @@ export function antigravityAlternativeQuestion(
         'components.native-chat.antigravityAuth.askGcloud',
         'Use your gcloud login (project {{project}}) instead?',
         { project: option.project }
-      )
-    case 'oauth-personal':
-      return t(
-        'components.native-chat.antigravityAuth.askGoogle',
-        'Use your Google sign-in instead?'
       )
   }
 }

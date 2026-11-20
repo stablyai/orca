@@ -1,6 +1,6 @@
-// The execution host's own `agy acp`: preferred for new chats when it answers as a compatible server.
+// Checks of the host's `agy acp`: whether it is a compatible server, and whether it is signed in.
 
-import { readFile, stat } from 'node:fs/promises'
+import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { InitializeResponse } from '../acp/generated/acp-protocol.generated'
 import { AcpAgentError, AcpConnectionClosedError } from '../acp/transport/acp-errors'
@@ -15,8 +15,9 @@ import {
 import { initializeAntigravityAcp } from './antigravity-acp-runtime-probe'
 import { antigravityTakesSystemPrompt } from '../acp/launch/acp-instructions'
 
-/** First release verified with Orca chats; it also leaves the chat's folder untouched. */
-export const ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION = '1.5.2'
+/** Oldest release verified with Orca chats: it reads Orca's chat home through `--gemini-dir`, and
+ *  ignores an inherited GEMINI_API_KEY/GOOGLE_API_KEY unless its own settings pick a key provider. */
+export const ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION = '1.5.5'
 /** agy keeps its sign-in and conversations here and ignores GEMINI_HOME, so this only pins the chat. */
 const AGY_HOME_FOLDER = '.gemini'
 /** Approves tools, not plans; the check launches with it, so a build without it stays managed. */
@@ -72,19 +73,10 @@ const checks = new Map<string, HostCheck>()
 
 class IncompatibleHostAcp extends Error {}
 
-let answersRevision = 0
-const answerListeners = new Set<() => void>()
-
-function answersChanged(): void {
-  answersRevision += 1
-  answerListeners.forEach((listener) => listener())
-}
-
 /** After agy's login changes, the next check asks again instead of trusting the last answer. */
 export function forgetAntigravityHostAcpChecks(): void {
   checks.clear()
   latestAsked = null
-  answersChanged()
 }
 
 // The check behind the latest answer, cached or not, so the version is never another binary's.
@@ -94,26 +86,6 @@ let latestAsked: HostCheck | null = null
  *  did not pass. Reads the cache only, so it never starts agy. */
 export function readyAntigravityHostAcpVersion(): string | null {
   return latestAsked?.version ?? null
-}
-
-/** Rises when checks are forgotten or a recheck answers differently, so remembered choices retire. */
-export function antigravityHostAcpChecksRevision(): number {
-  return answersRevision
-}
-
-export function onAntigravityHostAcpAnswersChanged(listener: () => void): () => void {
-  answerListeners.add(listener)
-  return () => answerListeners.delete(listener)
-}
-
-/** Whether `command acp` initializes as a compatible server that serves session requests. */
-export async function antigravityHostAcpReady(
-  command: string,
-  env: Record<string, string>,
-  envToDelete: string[],
-  now = Date.now
-): Promise<boolean> {
-  return (await checkAntigravityHostAcp(command, env, envToDelete, now)) === 'ready'
 }
 
 /** One check answers every question about `command acp`. An incompatible binary is not asked
@@ -213,32 +185,5 @@ async function askAntigravityHostAcp(
   if (sessions) {
     latestAsked = check
   }
-  // A first answer or a changed one retires choices made without it.
-  const previous = cached?.answer ?? Promise.resolve(null)
-  void Promise.all([previous, check.answer]).then(([before, after]) => {
-    if (before !== after) {
-      answersChanged()
-    }
-  })
   return check.answer
-}
-
-/** Whether agy's settings select an API-key model provider; host chats drop inherited keys. */
-export async function agyUsesApiKey(homePath: string): Promise<boolean> {
-  const text = await readFile(
-    join(homePath, AGY_HOME_FOLDER, 'antigravity-cli', 'settings.json'),
-    'utf8'
-  ).catch(() => null)
-  if (text === null) {
-    return false
-  }
-  try {
-    const settings: unknown = JSON.parse(text)
-    return typeof settings === 'object' && settings !== null && 'modelProvider' in settings
-      ? Boolean(settings.modelProvider)
-      : false
-  } catch {
-    // Settings agy may read differently than JSON.parse could select a provider.
-    return true
-  }
 }

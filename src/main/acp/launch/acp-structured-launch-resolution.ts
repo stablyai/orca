@@ -1,5 +1,5 @@
 import { antigravityChatAuthEnvironment } from '../../antigravity/antigravity-chat-auth-environment'
-import { checkAcpLaunchVersion } from './acp-launch-version'
+import { checkAcpLaunchVersionOrCopy } from './acp-launch-version'
 import type { McpServer } from '../generated/acp-protocol.generated'
 import { withBotLaunchToolsEnv } from '../../bots/bot-launch-tools'
 import { acpBotMcpServers } from '../../bots/bot-tools-acp'
@@ -20,7 +20,6 @@ import {
 } from '../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { assertAntigravityChatAuthPublished } from '../../antigravity/antigravity-chat-auth-publication'
-import { prepareAntigravityAcpProxyEnvironment } from '../../antigravity/antigravity-acp-proxy-environment'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { agentSessionProviderHandleKey } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
@@ -120,8 +119,6 @@ export type AcpLaunchInvocationDeps = {
 
 /** What a launch runs, and the spec of the backend the account home pins. */
 export type AcpLaunchInvocation = StructuredAgentCommand & {
-  /** The managed release's version, when the launch runs one. */
-  version?: string
   env: Record<string, string>
   envToDelete: string[]
   spec: AcpLaunchSpec
@@ -156,8 +153,8 @@ async function readAcpLaunchInvocation(
     overlayEnvironmentVariables(base, deps.resolveLaunchEnv?.(spec.agent), process.platform)
   )
   const commandSettings = deps.resolveCommandSettings?.()
-  // Orca's account-type setting selects only the managed server's sign-in.
-  const usesChatAuth = spec.agent === 'antigravity' && spec.authMethod !== undefined
+  // Orca's account type configures only launches on Orca's own chat home.
+  const usesChatAuth = spec.readsAntigravityChatAuth === true
   if (usesChatAuth) {
     assertAntigravityChatAuthPublished(commandSettings?.antigravityChatAuth)
   }
@@ -166,16 +163,16 @@ async function readAcpLaunchInvocation(
     : undefined
   const envToDelete =
     spec.scrubEnvironment?.(env, deps.inheritedEnv ?? process.env, antigravityChatAuth) ?? []
-  if (spec.agent === 'antigravity' && spec.managedRuntime) {
-    await prepareAntigravityAcpProxyEnvironment(env, deps.inheritedEnv ?? process.env)
-    assertStructuredAgentResolutionCurrent(deps.operation)
-  }
   if (antigravityChatAuth) {
     Object.assign(env, await antigravityChatAuthEnvironment(antigravityChatAuth, env))
     assertStructuredAgentResolutionCurrent(deps.operation)
   }
   Object.assign(env, spec.env)
-  const invocation = resolveAcpLaunchCommand(spec, env, { ...deps, commandSettings })
+  const invocation = resolveAcpLaunchCommand(spec, env, {
+    commandSettings,
+    ...(deps.resolveCommand ? { resolveCommand: deps.resolveCommand } : {}),
+    ...(deps.homePath ? { homePath: deps.homePath } : {})
+  })
   return {
     ...invocation,
     env,
@@ -191,18 +188,18 @@ export function acpStructuredLaunchPart(
 ): StructuredAgentLaunchPartResolver<AcpStructuredLaunch> {
   return async (basis, identity) => {
     const { record } = basis
-    const { env, envToDelete, command, prefixArgs, spec, antigravityChatAuth, version } =
-      await resolveAcpLaunchInvocation(agentSpec, record.accountHome, {
-        resolveEnvironment: basis.baseEnvironment,
-        resolveLaunchEnv: () => basis.launchEnv(),
-        resolveCommandSettings: basis.commandSettings,
-        refreshEnvironmentAfterMiss: basis.refreshAfterMissingProgram,
-        resolveWorkingDirectory: basis.launchDirectory,
-        ...(deps.resolveCommand ? { resolveCommand: deps.resolveCommand } : {}),
-        ...(deps.homePath ? { homePath: deps.homePath } : {}),
-        ...(deps.inheritedEnv ? { inheritedEnv: deps.inheritedEnv } : {}),
-        dataDirectory: deps.dataDirectory
-      })
+    const resolved = await resolveAcpLaunchInvocation(agentSpec, record.accountHome, {
+      resolveEnvironment: basis.baseEnvironment,
+      resolveLaunchEnv: () => basis.launchEnv(),
+      resolveCommandSettings: basis.commandSettings,
+      refreshEnvironmentAfterMiss: basis.refreshAfterMissingProgram,
+      resolveWorkingDirectory: basis.launchDirectory,
+      ...(deps.resolveCommand ? { resolveCommand: deps.resolveCommand } : {}),
+      ...(deps.homePath ? { homePath: deps.homePath } : {}),
+      ...(deps.inheritedEnv ? { inheritedEnv: deps.inheritedEnv } : {}),
+      dataDirectory: deps.dataDirectory
+    })
+    const { env, envToDelete, spec, antigravityChatAuth } = resolved
     const cwd = await basis.launchDirectory()
     const visuals = spec.skillRoots || visualsByInstructions(spec) ? await basis.visuals() : null
     const linked = await basis.linkedSkills()
@@ -210,12 +207,14 @@ export function acpStructuredLaunchPart(
     const linkedRoot = linked.projects.length > 0 ? linked.root : null
     const roots = [...(visuals ? [visuals.skill] : []), ...(linkedRoot ? [linkedRoot] : [])]
     // PATH may have changed since chat creation.
-    const launchVersion = await checkAcpLaunchVersion(
+    const settled = await checkAcpLaunchVersionOrCopy(
       spec,
-      { command, prefixArgs, cwd, env },
+      { command: resolved.command, prefixArgs: resolved.prefixArgs, cwd, env },
       roots.length > 0,
-      deps.probeVersion
+      deps.probeVersion,
+      basis.commandSettings?.()
     )
+    const { command, prefixArgs, check: launchVersion } = settled
     if (launchVersion.status === 'tooOld') {
       throw AgentCliInstallationError.tooOld(spec.agent, launchVersion)
     }
@@ -255,8 +254,7 @@ export function acpStructuredLaunchPart(
       await instructions?.release?.().catch(() => undefined)
       throw error
     })
-    // A managed release's receipt names its version; other programs answer the check.
-    const launchedVersion = version ?? launchVersion.version
+    const launchedVersion = launchVersion.version
     const botServers = acpBotMcpServers(tools)
     // Like its bot tools, a read-only session gets none of the agent's own servers.
     const ownServers = basis.readOnly

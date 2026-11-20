@@ -51,15 +51,16 @@ it("fails the turn on agy's streamed 401 notice, shown as an error row and not a
   ])
 })
 
-it.each([
-  'API key not valid. Please pass a valid API key.',
-  'Agent execution error: failed to create Gemini client: failed to configure default GCP credentials for Vertex AI: credentials: could not find default credentials.'
-])("fails the turn on the server's own credential notice: %s", async (notice) => {
+// agy 1.5.13 on a rejected Gemini API key.
+const KEY_REJECTED =
+  '⚠ agent executor error: generating and executing: Error 400, Message: API key not valid. Please pass a valid API key., Status: INVALID_ARGUMENT, Details: [map[@type:type.googleapis.com/google.rpc.ErrorInfo domain:googleapis.com metadata:map[service:generativelanguage.googleapis.com] reason:API_KEY_INVALID]]'
+
+it.each([KEY_REJECTED])("fails the turn on agy's executor error notice: %s", async (notice) => {
   const rig = await openAcpAdapterRig({
     spec: ANTIGRAVITY,
     script: (agent) =>
       agent.on('session/prompt', (frame) => {
-        agent.notify('session/update', chunk(notice))
+        agent.notify('session/update', chunk(`\n${notice}\n`))
         agent.reply(frame, { stopReason: 'end_turn' })
       })
   })
