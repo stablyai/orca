@@ -61,8 +61,8 @@ export function getPendingMailboxPointerHandles(this: OrchestrationDb): string[]
 /** Whether the mailbox `handleSql` names owes pointer work: unread mail that is undelivered or held
  * by a reservation. Why two indexed probes: one OR over the inbox walks delivered-unread history. */
 export function pointerWorkExistsSql(handleSql: string): string {
-  return `(EXISTS (SELECT 1 FROM messages INDEXED BY idx_messages_undelivered_current_inbox
-      WHERE to_handle = ${handleSql} AND read = 0 AND delivered_at IS NULL
+  return `(EXISTS (SELECT 1 FROM messages INDEXED BY idx_messages_eligible_pointer_inbox
+      WHERE to_handle = ${handleSql} AND read = 0 AND delivered_at IS NULL AND pointer_enter_pending = 0
         AND delivery_contract = 'current_delivery')
     OR EXISTS (SELECT 1 FROM messages INDEXED BY idx_messages_pending_pointer_enter
       WHERE to_handle = ${handleSql} AND read = 0 AND pointer_enter_pending > 0

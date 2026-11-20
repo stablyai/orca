@@ -76,8 +76,25 @@ export function createMailboxDeliveryIndexesIfPossible(this: OrchestrationDb): v
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_messages_pending_pointer_pty
           ON messages(pointer_pty_id) WHERE pointer_enter_pending > 0;
+        CREATE INDEX IF NOT EXISTS idx_messages_uncertain_pointer_claims
+          ON messages(pointer_pty_id, to_handle, pointer_process_incarnation)
+          WHERE read = 0 AND pointer_enter_pending > 1;
       `)
     }
+  }
+
+  if (
+    hasDeliveredAt &&
+    this.hasColumn('messages', 'pointer_enter_pending') &&
+    this.hasColumn('messages', 'delivery_contract')
+  ) {
+    // Mail a pointer may announce now; retained uncertain claims stay out, so they cost later deliveries nothing.
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_messages_eligible_pointer_inbox
+        ON messages(to_handle, sequence)
+        WHERE read = 0 AND delivered_at IS NULL AND pointer_enter_pending = 0
+          AND delivery_contract = 'current_delivery';
+    `)
   }
 
   if (
@@ -90,10 +107,6 @@ export function createMailboxDeliveryIndexesIfPossible(this: OrchestrationDb): v
   this.db.exec(`
     CREATE INDEX IF NOT EXISTS idx_messages_undelivered_direct_run
       ON messages(run_id, to_handle, sequence)
-      WHERE read = 0 AND delivered_at IS NULL
-        AND delivery_contract = 'current_delivery';
-    CREATE INDEX IF NOT EXISTS idx_messages_undelivered_current_inbox
-      ON messages(to_handle, sequence)
       WHERE read = 0 AND delivered_at IS NULL
         AND delivery_contract = 'current_delivery';
     CREATE INDEX IF NOT EXISTS idx_messages_unread_current_inbox

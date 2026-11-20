@@ -102,7 +102,8 @@ export function getUndeliveredUnreadMessages(
   return exposeMessageListTimestamps(
     this.db
       .prepare(
-        `SELECT * FROM messages
+        // Why INDEXED BY: retained uncertain claims share the inbox; this index leaves them out.
+        `SELECT * FROM messages INDEXED BY idx_messages_eligible_pointer_inbox
          WHERE ${conditions.join(' AND ')}
          ORDER BY sequence${limitSql}`
       )
