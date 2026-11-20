@@ -6,7 +6,6 @@ import {
 } from '../agent-status/pane-authority/agent-status-pane-keyed-records'
 import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
 import { paneKeyTabId } from './workspace-live-markers'
-import { structuredAgentSessionAddressTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 // Marker removals that ride inside another slice's `set()`. Unchanged records keep their
 // reference. Removal never touches the workspace flag.
@@ -27,38 +26,18 @@ function paneKeysOfTabs(record: MarkerRecord, tabIds: ReadonlySet<string>): Set<
   )
 }
 
-/** A minted chat tab's pane keys name its session's address, not its own id. */
-function withChatPaneAddresses(
-  s: Partial<Pick<AppState, 'unifiedTabsByWorktree'>>,
-  tabIds: ReadonlySet<string>
-): Set<string> {
-  const ids = new Set(tabIds)
-  for (const tabs of Object.values(s.unifiedTabsByWorktree ?? {})) {
-    for (const tab of tabs) {
-      if (tab.contentType === 'agent-session' && tabIds.has(tab.id)) {
-        ids.add(structuredAgentSessionAddressTabId(tab.id, tab.entityId))
-      }
-    }
-  }
-  return ids
-}
-
 /** Closed, slept or purged tabs drop every layer. */
-export function removeTabsAttention(
-  s: Markers & Partial<Pick<AppState, 'unifiedTabsByWorktree'>>,
-  tabIds: Iterable<string>
-): Markers {
+export function removeTabsAttention(s: Markers, tabIds: Iterable<string>): Markers {
   const removed = new Set(tabIds)
-  const panesOf = withChatPaneAddresses(s, removed)
   return {
     unreadTerminalTabs: omitRecordKeys(s.unreadTerminalTabs, removed),
     unreadTerminalPanes: removePaneKeys(
       s.unreadTerminalPanes,
-      paneKeysOfTabs(s.unreadTerminalPanes, panesOf)
+      paneKeysOfTabs(s.unreadTerminalPanes, removed)
     ),
     unreadAgentCompletionPanes: removePaneKeys(
       s.unreadAgentCompletionPanes,
-      paneKeysOfTabs(s.unreadAgentCompletionPanes, panesOf)
+      paneKeysOfTabs(s.unreadAgentCompletionPanes, removed)
     )
   }
 }

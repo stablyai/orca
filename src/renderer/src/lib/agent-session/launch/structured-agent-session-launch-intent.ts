@@ -20,7 +20,6 @@ import {
   structuredAgentSessionTargetForHost
 } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
-import { mintAgentSessionSlotTabId } from '../../../../../shared/agent-session/view/agent-session-slot-tab-id'
 import { StructuredAgentSessionOwnerUnresolvedError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import type { StructuredAgentSessionCreateGate } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import './structured-agent-session-launch-abandon'
@@ -118,10 +117,8 @@ export function createStructuredAgentSessionLaunchIntent(
     resumeFrom,
     hostSeedOptions,
     forkFrom,
-    // Only this computer is told a minted id; a paired host keeps deriving the legacy one.
-    owner.target.kind === 'local'
-      ? mintAgentSessionSlotTabId(createNonSecureContextUuid)
-      : undefined
+    // New chats keep the legacy id until pane keys address the tab by its own id.
+    undefined
   )
 }
 
