@@ -283,10 +283,11 @@ export function createServerSession({
       if (SESSION_STATE.has(method)) {
         // The next server is given the current documents, settings and folders when it starts.
         track(message)
-        // A held request about a document edited since would run against text it never saw.
-        const uri = message.params?.textDocument?.uri
+        // Held requests would run against text they never saw (positions can sit anywhere in params), so any edit
+        // sends them back to be asked again.
+        const edited = method === 'textDocument/didChange' || method === 'textDocument/didClose'
         for (const [id, queued] of queue) {
-          if (uri !== undefined && queued.params?.textDocument?.uri === uri) {
+          if (edited && queued.method !== 'shutdown' && queued !== queue.get(QUEUED_EXIT)) {
             queue.delete(id)
             toClient({
               jsonrpc: '2.0',
