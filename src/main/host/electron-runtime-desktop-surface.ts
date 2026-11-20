@@ -1,4 +1,5 @@
-import { BrowserWindow, Notification, powerMonitor } from 'electron'
+import { BrowserWindow, Notification, powerMonitor, webContents } from 'electron'
+import { isResourceWindowVisible } from '../window/visibility/resource-view-admission'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import type { RuntimeDesktopSurface } from '../runtime/construction/runtime-desktop-surface'
 import { electronRendererWindows } from './electron-renderer-windows'
@@ -30,6 +31,10 @@ export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
     }
   },
   ...electronRendererWindows,
+  isResourceViewVisible: (rendererId) => {
+    const renderer = webContents.fromId(rendererId)
+    return isResourceWindowVisible(renderer ? BrowserWindow.fromWebContents(renderer) : null)
+  },
   // Only the phone icon source needs these codecs and fetcher.
   ...(ORCA_SIDEBAR_INPUTS_IS_MAIN
     ? { encodeRepoIconPng, fetchRepoIcon: fetchWithElectronManualRedirects }

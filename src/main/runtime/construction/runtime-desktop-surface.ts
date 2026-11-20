@@ -36,6 +36,8 @@ export type RuntimeDesktopSurface = {
   holdRendererPublication?(windowId: number): () => void
   /** The window's renderer id, which browser page retention records as a page's creator. */
   rendererIdOfWindow?(windowId: number): number | null
+  /** Whether the window holding this renderer is shown; absent on Node hosts, which have no resource view. */
+  isResourceViewVisible?(rendererId: number): boolean
   /** Re-encodes as a PNG fitting `maxEdge`; null if undecodable. Absent on Node hosts. */
   encodeRepoIconPng?(bytes: Uint8Array, maxEdge: number): Uint8Array | null
   /** A GET answering redirects with the 3xx, without proxy login; absent where fetch already does. */
