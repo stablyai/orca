@@ -39,15 +39,12 @@ runs:
         delay=2
         sightings=0
         last='no response yet'
-        # Stop a stalled reader without ever blocking on it: TERM, short grace, then KILL plus a
-        # detached taskkill on Windows (MSYS signals may not reach native gh.exe). A survivor is abandoned.
+        # Stop a stalled reader without ever blocking on it: TERM, short grace, KILL. A native
+        # child that outlives this is a read-only GET; the runner terminates orphans at job end.
         stop_reader() {
           kill "$1" 2>/dev/null
           for _ in 1 2 3 4; do kill -0 "$1" 2>/dev/null || break; nap 0.5; done
           if kill -0 "$1" 2>/dev/null; then
-            if [ -r "/proc/$1/winpid" ] && command -v taskkill >/dev/null; then
-              taskkill //F //T //PID "$(cat "/proc/$1/winpid")" >/dev/null 2>&1 </dev/null &
-            fi
             kill -KILL "$1" 2>/dev/null
             nap 0.5
           fi
