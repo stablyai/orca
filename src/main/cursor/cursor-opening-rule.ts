@@ -3,7 +3,17 @@
 // (checked live on 2026.06.02 and 2026.11.19). So the rule exists only while a session opens.
 
 import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, rename, rm, rmdir, stat, writeFile } from 'node:fs/promises'
+import {
+  lstat,
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  rmdir,
+  stat,
+  writeFile
+} from 'node:fs/promises'
 import { join } from 'node:path'
 
 export const CURSOR_OPENING_RULE_FILE = 'orca-standing-instructions.mdc'
@@ -20,9 +30,32 @@ async function exists(path: string): Promise<boolean> {
   )
 }
 
+/** Only a missing file is free; a link or a file that cannot be read is the user's. */
 async function isUserFile(path: string): Promise<boolean> {
-  const existing = await readFile(path, 'utf8').catch(() => null)
-  return existing !== null && !existing.includes(RULE_MARKER)
+  try {
+    if ((await lstat(path)).isSymbolicLink()) {
+      return true
+    }
+    return !(await readFile(path, 'utf8')).includes(RULE_MARKER)
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== 'ENOENT'
+  }
+}
+
+const SIBLING_PREFIX = 'orca-standing-instructions-'
+
+/** Rules a crashed open left beside a user's file; every open of the folder holds the lock. */
+async function sweepLeftoverRules(rulesDir: string): Promise<void> {
+  for (const name of await readdir(rulesDir).catch(() => [])) {
+    if (!name.startsWith(SIBLING_PREFIX) || !name.endsWith('.mdc')) {
+      continue
+    }
+    const file = join(rulesDir, name)
+    const text = await readFile(file, 'utf8').catch(() => '')
+    if (text.includes(RULE_MARKER)) {
+      await rm(file, { force: true }).catch(() => undefined)
+    }
+  }
 }
 
 /** Writes `text` as an always-applied rule in `cwd` and returns what removes it, along with any
@@ -53,7 +86,8 @@ export async function placeCursorOpeningRule(
     await mkdir(rulesDir, { recursive: true })
     // A file the user wrote under this name is theirs: this chat's rule goes beside it.
     if (await isUserFile(path)) {
-      path = join(rulesDir, `orca-standing-instructions-${randomUUID()}.mdc`)
+      await sweepLeftoverRules(rulesDir)
+      path = join(rulesDir, `${SIBLING_PREFIX}${randomUUID()}.mdc`)
     }
     const staged = `${path}.${randomUUID()}`
     await writeFile(staged, `---\n${RULE_MARKER}\nalwaysApply: true\n---\n${text}\n`, {

@@ -50,7 +50,10 @@ export function normalizeLoadedProfileState(
   const allBots =
     parsed.bots === undefined && parsed.botsNewerAgents === undefined
       ? undefined
-      : normalizePersistedBots([...(parsed.bots ?? []), ...(parsed.botsNewerAgents ?? [])])
+      : normalizePersistedBots([
+          ...(Array.isArray(parsed.bots) ? parsed.bots : []),
+          ...(Array.isArray(parsed.botsNewerAgents) ? parsed.botsNewerAgents : [])
+        ])
   const { readable: bots, newer: botsNewerAgents } = allBots
     ? splitBotsByOlderBuildSupport(allBots)
     : { readable: undefined, newer: [] }
@@ -168,7 +171,9 @@ export function normalizeLoadedProfileState(
       : {
           bots,
           botsPermissionDefaultMigrated: true as const,
-          ...(botsNewerAgents.length > 0 ? { botsNewerAgents } : {})
+          ...(botsNewerAgents.length > 0 || parsed.botsNewerAgents !== undefined
+            ? { botsNewerAgents }
+            : {})
         }),
     orcadMigrationImportReceipts: normalizeOrcadMigrationImportReceipts(
       parsed.orcadMigrationImportReceipts
