@@ -106,13 +106,17 @@ function finish(port: NativePort): void {
 }
 
 /** Ends matching ports without telling their (gone) contexts; their hosts are killed. */
-export function closeNativePortsWhere(matches: (port: NativePort) => boolean): void {
+/** Returns how many ports it closed. */
+export function closeNativePortsWhere(matches: (port: NativePort) => boolean): number {
+  let closed = 0
   for (const port of ports.values()) {
     if (matches(port)) {
       finish(port)
       port.onEvent({ type: 'disconnect', error: 'The port owner went away', teardown: true })
+      closed++
     }
   }
+  return closed
 }
 
 function frameStillOwns(port: NativePort): boolean {
@@ -135,13 +139,13 @@ function observeSession(sess: Electron.Session): void {
   // Disable, removal, reload and profile deletion all unload the extension from the session.
   sess.extensions.on('extension-unloaded', (_event, extension) => {
     const profileId = getHostSessionState(sess)?.browserProfileId
-    const owned = (port: NativePort): boolean =>
-      port.session === sess && port.extensionId === extension.id
+    const closed = closeNativePortsWhere(
+      (port) => port.session === sess && port.extensionId === extension.id
+    )
     // Why: the extension gets no disconnect event, so only a clean start reconnects it.
-    if (profileId && [...ports.values()].some(owned)) {
+    if (profileId && closed > 0) {
       noteBrowserExtensionNeedsCleanStart(profileId, extension.id)
     }
-    closeNativePortsWhere(owned)
   })
   sess.serviceWorkers.on('running-status-changed', ({ versionId, runningStatus }) => {
     if (runningStatus === 'stopped') {
