@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { renameFileWithWindowsRetryAsync } from '../../../../shared/file-write/windows-retry-file-operations'
@@ -74,6 +74,12 @@ export function readImportLedger(path: string): Promise<ImportLedger> {
 }
 
 async function loadImportLedger(path: string): Promise<ImportLedger> {
+  const ledger = await loadImportLedgerFile(path)
+  await replayHandledJournal(path, ledger)
+  return ledger
+}
+
+async function loadImportLedgerFile(path: string): Promise<ImportLedger> {
   let text: string
   try {
     text = await readFile(path, 'utf8')
@@ -130,5 +136,94 @@ export async function replaceImportFile(path: string, contents: string): Promise
 export async function writeImportLedger(path: string, ledger: ImportLedger): Promise<void> {
   unsaved.add(path)
   await replaceImportFile(path, JSON.stringify(ledger))
+  // The ledger now holds every name the journal did; a crash before this only replays them again.
+  await rm(handledJournalPath(path), { force: true })
   unsaved.delete(path)
+}
+
+// Names handled since the ledger was last written, one line per append, so progress costs only what changed.
+function handledJournalPath(ledgerPath: string): string {
+  return `${ledgerPath}.handled.jsonl`
+}
+
+type HandledJournalLine = { source: string; identity: string; handled: string[] }
+
+function isHandledJournalLine(value: unknown): value is HandledJournalLine {
+  return (
+    isRecord(value) &&
+    typeof value.source === 'string' &&
+    typeof value.identity === 'string' &&
+    Array.isArray(value.handled) &&
+    value.handled.every((name) => typeof name === 'string')
+  )
+}
+
+/**
+ * Records names handled since the last ledger write. A failed append leaves the ledger unsaved,
+ * so the pass's closing write keeps them instead.
+ */
+export async function appendHandledNames(
+  path: string,
+  source: { key: string; identity: string },
+  names: string[]
+): Promise<void> {
+  if (names.length === 0) {
+    return
+  }
+  const line: HandledJournalLine = { source: source.key, identity: source.identity, handled: names }
+  try {
+    await mkdir(dirname(path), { recursive: true })
+    // Leading newline: a line a crash cut short never swallows the next one.
+    await appendFile(handledJournalPath(path), `\n${JSON.stringify(line)}\n`)
+  } catch (error) {
+    unsaved.add(path)
+    console.warn('[codex-history-import] Could not record imported conversations:', error)
+  }
+}
+
+async function replayHandledJournal(path: string, ledger: ImportLedger): Promise<void> {
+  let text: string
+  try {
+    text = await readFile(handledJournalPath(path), 'utf8')
+  } catch (error) {
+    if (isDefinitiveAbsence(error)) {
+      return
+    }
+    throw error
+  }
+  const replayed = new Map<string, Set<string>>()
+  for (const raw of text.split('\n')) {
+    let line: unknown
+    try {
+      line = raw.trim() ? JSON.parse(raw) : null
+    } catch {
+      continue
+    }
+    if (!isHandledJournalLine(line)) {
+      continue
+    }
+    let source = ledger.sources[line.source]
+    if (!source) {
+      source = {
+        identity: line.identity,
+        handled: [],
+        folders: {},
+        ...(ledger.recovered ? { seeding: true as const } : {})
+      }
+      ledger.sources[line.source] = source
+    }
+    let names = replayed.get(line.source)
+    if (!names) {
+      names = new Set(source.handled)
+      replayed.set(line.source, names)
+    }
+    for (const name of line.handled) {
+      names.add(name)
+    }
+  }
+  for (const [key, names] of replayed) {
+    ledger.sources[key].handled = [...names]
+  }
+  // The file is behind the journal until the next write folds it in.
+  unsaved.add(path)
 }

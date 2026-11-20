@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { BigIntStats } from 'node:fs'
-import { link, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, link, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { lstatIfPresent } from '../../../filesystem/merged-directory-link'
 import { COMPRESSED_ROLLOUT_SUFFIX, plainWins } from '../rollouts/codex-rollout-compressed-twin'
@@ -71,6 +71,8 @@ export async function canHardLinkIn(folder: string, runId: string): Promise<bool
   }
 }
 
+const OWNER_READ_WRITE = 0o600n
+
 function sameSource(before: BigIntStats, after: BigIntStats): boolean {
   return (
     before.dev === after.dev &&
@@ -107,6 +109,10 @@ export async function stageImportRollout(
   let kept = false
   try {
     await stageRolloutCopy(source, from, staged)
+    // A copy keeps its source's mode, and Codex appends to the conversation it resumes.
+    if ((source.mode & OWNER_READ_WRITE) !== OWNER_READ_WRITE) {
+      await chmod(staged, Number((source.mode & 0o777n) | OWNER_READ_WRITE))
+    }
     if (!sameSource(source, await readSource())) {
       return 'source-changed'
     }
