@@ -162,7 +162,10 @@ export function useEmulatorScreenKeyboard({
       if (physicalKeys) {
         const frames = buildServeSimKeyboardFramesForCode(event.code, {
           alt: event.altKey,
-          shift: event.shiftKey
+          // The guest has no Caps Lock state of its own, so a capitalized letter carries Shift.
+          shift:
+            event.shiftKey ||
+            (event.getModifierState('CapsLock') && event.key !== event.key.toLowerCase())
         })
         if (!frames || !sendKeyboardFrames(frames)) {
           return
@@ -212,6 +215,7 @@ export function useEmulatorScreenKeyboard({
         : pasteTextIntoSimulator({
             insertText: (value) =>
               callRuntimeRpc({ kind: 'local' }, 'emulator.type', {
+                paste: true,
                 text: value,
                 worktree: worktreeId
               })

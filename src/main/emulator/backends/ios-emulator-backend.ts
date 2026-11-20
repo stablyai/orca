@@ -150,10 +150,18 @@ export class IosEmulatorBackend implements EmulatorBackend {
     await sendEmulatorGestureSequence(wsUrl, points)
   }
 
-  async type(deviceId: string, text: string, wsUrl: string | null): Promise<void> {
+  async type(deviceId: string, text: string, wsUrl: string | null, paste = false): Promise<void> {
     const udid = await this.resolveDeviceId(deviceId)
     await assertSimulatorInputNotShadowedByDeviceHub(udid)
-    await typeSimulatorText(udid, text, wsUrl, () => this.execServeSim(['type', text, '-d', udid]))
+    await typeSimulatorText({
+      udid,
+      text,
+      paste,
+      wsUrl,
+      // `--` keeps text such as "--help" from being read as a serve-sim option.
+      typeKeys: () => this.execServeSim(['type', '-d', udid, '--', text]),
+      pasteKeyCode: () => this.hardwareKeyboardSync.pasteKeyCode(udid)
+    })
   }
 
   async syncHardwareKeyboardLayout(deviceId: string): Promise<boolean> {

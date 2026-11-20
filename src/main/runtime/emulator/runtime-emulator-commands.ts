@@ -86,13 +86,15 @@ export class RuntimeEmulatorCommands {
 
   async emulatorType(params: {
     text: string
+    paste?: boolean
     device?: string
     emulator?: string
     worktree?: string
   }): Promise<{ ok: true }> {
     const bridge = this.requireEmulatorBridge()
     const worktreeId = await this.resolveWorktreeId(params.worktree)
-    await bridge.type(params.text, { device: params.device ?? params.emulator, worktreeId })
+    const target = { device: params.device ?? params.emulator, worktreeId }
+    await bridge.type(params.text, target, params.paste === true)
     return RuntimeEmulatorCommands.OK
   }
 

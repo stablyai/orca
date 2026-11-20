@@ -117,6 +117,7 @@ function keyEvent(
   type: string,
   init: {
     altKey?: boolean
+    capsLock?: boolean
     code?: string
     ctrlKey?: boolean
     key: string
@@ -128,6 +129,7 @@ function keyEvent(
   Object.defineProperties(event, {
     altKey: { value: init.altKey ?? false },
     code: { value: init.code ?? '' },
+    getModifierState: { value: (key: string) => key === 'CapsLock' && init.capsLock === true },
     ctrlKey: { value: init.ctrlKey ?? false },
     isComposing: { value: false },
     key: { value: init.key },
@@ -225,11 +227,13 @@ describe('EmulatorDeviceFrame input', () => {
       screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
     })
 
-    // Turkish Q: the key right of L types "ş", Option+Q types "@".
+    // Turkish Q: the key right of L types "ş" ("Ş" with Caps Lock), Option+Q types "@".
     act(() => {
       screen.dispatchEvent(keyEvent('keydown', { code: 'Semicolon', key: 'ş' }))
       vi.runAllTimers()
       screen.dispatchEvent(keyEvent('keydown', { altKey: true, code: 'KeyQ', key: '@' }))
+      vi.runAllTimers()
+      screen.dispatchEvent(keyEvent('keydown', { capsLock: true, code: 'Semicolon', key: 'Ş' }))
       vi.runAllTimers()
     })
 
@@ -242,7 +246,11 @@ describe('EmulatorDeviceFrame input', () => {
       { type: 'down', usage: 0xe2 },
       { type: 'down', usage: 0x14 },
       { type: 'up', usage: 0x14 },
-      { type: 'up', usage: 0xe2 }
+      { type: 'up', usage: 0xe2 },
+      { type: 'down', usage: 0xe1 },
+      { type: 'down', usage: 0x33 },
+      { type: 'up', usage: 0x33 },
+      { type: 'up', usage: 0xe1 }
     ])
   })
 })

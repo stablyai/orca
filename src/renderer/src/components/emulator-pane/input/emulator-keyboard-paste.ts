@@ -52,7 +52,7 @@ function validateEmulatorKeyboardPasteText(
     : { byteLength, reason: 'empty', status: 'rejected' }
 }
 
-// Main types US keyboard text as keys and pastes the rest through the simulator pasteboard.
+// Main inserts the whole text with one simulator pasteboard paste, whatever the guest layout.
 export async function pasteTextIntoSimulator({
   insertText,
   maxBytes,

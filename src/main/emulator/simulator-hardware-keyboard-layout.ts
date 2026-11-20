@@ -1,5 +1,6 @@
 import { runProcess } from '@orca/process-host'
 import { readCurrentKeyboardLayoutSourceId } from '../ipc/keyboard/macos-keyboard-input-source'
+import { readMacKeyboardLayoutSnapshot } from '../ipc/keyboard/macos-keyboard-layout-snapshot'
 
 const SIMCTL_TIMEOUT_MS = 10_000
 const MAC_APPLE_LAYOUT_PREFIX = 'com.apple.keylayout.'
@@ -62,29 +63,44 @@ export function isUSHardwareKeyboard(entries: string[] | null): boolean {
   })
 }
 
-async function simctl(args: string[]): Promise<{ code: number | null; stdout: string }> {
-  const result = await runProcess({ program: 'xcrun', args, timeoutMs: SIMCTL_TIMEOUT_MS })
-  return { code: result.code, stdout: result.stdout }
+async function simctl(
+  args: string[]
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  return runProcess({ program: 'xcrun', args, timeoutMs: SIMCTL_TIMEOUT_MS })
 }
 
+async function simctlOrThrow(args: string[]): Promise<string> {
+  const result = await simctl(args)
+  if (result.code !== 0) {
+    throw new Error(`xcrun ${args.join(' ')} exited with code ${result.code}`)
+  }
+  return result.stdout
+}
+
+/** Null when AppleKeyboards is unset (iOS then uses its default keyboard); throws when it cannot be read. */
 export async function readSimulatorKeyboards(udid: string): Promise<string[] | null> {
   const result = await simctl(['simctl', 'spawn', udid, 'defaults', 'read', '-g', 'AppleKeyboards'])
-  // A missing key exits 1; iOS then uses its default keyboard.
-  return result.code === 0 ? parseAppleKeyboardsDefaults(result.stdout) : null
+  if (result.code === 0) {
+    return parseAppleKeyboardsDefaults(result.stdout)
+  }
+  if (/Could not find key|does not exist/.test(result.stderr + result.stdout)) {
+    return null
+  }
+  throw new Error(`Could not read the simulator keyboards (exit ${result.code})`)
 }
 
 async function writeSimulatorKeyboards(udid: string, entries: string[] | null): Promise<void> {
   const write = entries
     ? ['defaults', 'write', '-g', 'AppleKeyboards', '-array', ...entries]
     : ['defaults', 'delete', '-g', 'AppleKeyboards']
-  await simctl(['simctl', 'spawn', udid, ...write])
-  await simctl(['simctl', 'spawn', udid, 'notifyutil', '-p', KEYBOARDS_CHANGED_NOTIFICATION])
+  await simctlOrThrow(['simctl', 'spawn', udid, ...write])
+  await simctlOrThrow(['simctl', 'spawn', udid, 'notifyutil', '-p', KEYBOARDS_CHANGED_NOTIFICATION])
 }
 
 const iosLayoutsByRuntimeRoot = new Map<string, Promise<IosKeyboardLayouts>>()
 
 async function readIosKeyboardLayouts(udid: string): Promise<IosKeyboardLayouts> {
-  const root = (await simctl(['simctl', 'getenv', udid, 'SIMULATOR_ROOT'])).stdout.trim()
+  const root = (await simctlOrThrow(['simctl', 'getenv', udid, 'SIMULATOR_ROOT'])).trim()
   let layouts = iosLayoutsByRuntimeRoot.get(root)
   if (!layouts) {
     layouts = runProcess({
@@ -126,14 +142,30 @@ export class SimulatorHardwareKeyboardSync {
 
   /** Resolves true when the simulator now uses the Mac's layout, so the pane can send physical keys. */
   sync(udid: string): Promise<boolean> {
-    let pending = this.inFlight.get(udid)
-    if (!pending) {
-      pending = this.syncNow(udid)
-        .catch(() => false)
-        .finally(() => this.inFlight.delete(udid))
-      this.inFlight.set(udid, pending)
-    }
+    // Each request reads the Mac layout after the one before it settles, so a switch mid-sync is not lost.
+    const pending = (this.inFlight.get(udid) ?? Promise.resolve(false))
+      .then(() => this.syncNow(udid))
+      .catch(() => false)
+    this.inFlight.set(udid, pending)
+    void pending.finally(() => {
+      if (this.inFlight.get(udid) === pending) {
+        this.inFlight.delete(udid)
+      }
+    })
     return pending
+  }
+
+  /** Cmd+V must press the key that types "v" in the guest's layout (it is "." on Dvorak). */
+  async pasteKeyCode(udid: string): Promise<string> {
+    await this.inFlight.get(udid)
+    if (!this.devices.get(udid)?.synced) {
+      return 'KeyV'
+    }
+    const snapshot = await readMacKeyboardLayoutSnapshot()
+    const entry = Object.entries(snapshot?.keyCharacters ?? {}).find(
+      ([, characters]) => characters.unmodified === 'v'
+    )
+    return entry?.[0] ?? 'KeyV'
   }
 
   private async syncNow(udid: string): Promise<boolean> {
@@ -170,9 +202,16 @@ export class SimulatorHardwareKeyboardSync {
     if (!known) {
       return
     }
-    this.devices.delete(udid)
     if (known.rewritten) {
-      await writeSimulatorKeyboards(udid, known.original).catch(() => {})
+      // A shut-down simulator rejects the write; keep the original so the next attach still restores it.
+      const restored = await writeSimulatorKeyboards(udid, known.original).then(
+        () => true,
+        () => false
+      )
+      if (!restored) {
+        return
+      }
     }
+    this.devices.delete(udid)
   }
 }

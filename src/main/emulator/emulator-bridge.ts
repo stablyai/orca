@@ -166,9 +166,10 @@ export class EmulatorBridge {
     await backend.gesture(udid, points, this.sessionRegistry.getSession(udid)?.wsUrl ?? null)
   }
 
-  async type(text: string, opts?: EmulatorTargetOpts): Promise<void> {
+  async type(text: string, opts?: EmulatorTargetOpts, paste = false): Promise<void> {
     const { backend, udid } = await this.resolveTargetUdid(opts)
-    await backend.type(udid, text, this.sessionRegistry.getSession(udid)?.wsUrl ?? null)
+    const wsUrl = this.sessionRegistry.getSession(udid)?.wsUrl ?? null
+    await backend.type(udid, text, wsUrl, paste)
   }
 
   async button(name: string, opts?: EmulatorTargetOpts): Promise<void> {
