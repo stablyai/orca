@@ -20,9 +20,13 @@ type AdoptionStore = Pick<Store, 'getRepos' | 'getWorkspaceSession' | 'getWorksp
 export type LegacyRelayBaseline = {
   /** Partitions still awaiting adoption, with their saved ids. */
   relaysByHost: Map<ExecutionHostId, Record<string, string>>
+  /** Released once no partition awaits adoption. */
   tabHosts: ReadonlyMap<string, ExecutionHostId>
   relaysAtStart: ReadonlyMap<ExecutionHostId, Record<string, string> | undefined>
 }
+
+const NO_TAB_HOSTS: ReadonlyMap<string, ExecutionHostId> = new Map()
+const NO_RELAYS: ReadonlyMap<ExecutionHostId, Record<string, string> | undefined> = new Map()
 
 export function captureLegacyRelayBaseline(store: AdoptionStore): LegacyRelayBaseline {
   const relaysByHost = new Map<ExecutionHostId, Record<string, string>>()
@@ -37,7 +41,7 @@ export function captureLegacyRelayBaseline(store: AdoptionStore): LegacyRelayBas
   }
   // Nothing to adopt (every launch after the first upgrade): read no rows.
   if (relaysByHost.size === 0) {
-    return { relaysByHost, tabHosts: new Map(), relaysAtStart: new Map() }
+    return { relaysByHost, tabHosts: NO_TAB_HOSTS, relaysAtStart: NO_RELAYS }
   }
   return {
     relaysByHost,
@@ -101,6 +105,10 @@ export function legacyRelayAdoptionBatch(
     ) {
       baseline.relaysByHost.delete(hostId)
     }
+  }
+  if (baseline.relaysByHost.size === 0) {
+    baseline.tabHosts = NO_TAB_HOSTS
+    baseline.relaysAtStart = NO_RELAYS
   }
   const { tabHosts, relaysAtStart } = baseline
   return (hostId) => () => {
