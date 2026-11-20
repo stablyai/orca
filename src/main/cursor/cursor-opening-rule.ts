@@ -38,7 +38,7 @@ async function isUserFile(path: string): Promise<boolean> {
     }
     return !(await readFile(path, 'utf8')).startsWith(RULE_HEAD)
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code !== 'ENOENT'
+    return !(error instanceof Error && 'code' in error && error.code === 'ENOENT')
   }
 }
 
