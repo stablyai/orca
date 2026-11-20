@@ -2128,6 +2128,7 @@
     "failure": {
       "accountSwitchInProgress": "{{agent}}: Die Einrichtung auf diesem Host wird geändert. Nach Abschluss erneut versuchen.",
       "agentCommandNotRunnable": "Der Befehl für {{agent}} unter Einstellungen → Agenten muss ein Programmpfad oder -name sein, den Orca finden kann, ohne Argumente oder Variablen. Den Befehl ändern oder zurücksetzen.",
+      "agentCommandFailed": "Der Befehl für {{agent}} unter Einstellungen → Agenten hat {{agent}} nicht gestartet: {{detail}}. Den Befehl ändern oder zurücksetzen.",
       "agentCommandNotSignedIn": "Auf dem Computer, auf dem dieser Chat läuft, mit `{{loginCommand}}` bei {{agent}} anmelden.",
       "agentNotSignedIn": "Bei {{agent}} anmelden.",
       "agentStarting": "Der Agent wird noch gestartet.",

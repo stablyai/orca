@@ -566,7 +566,6 @@
 1 src/renderer/src/components/status-bar/accounts/provider-icons.tsx
 1 src/renderer/src/components/status-bar/accounts/use-codex-switcher-controller.ts
 1 src/renderer/src/components/status-bar/accounts/use-provider-account-list.ts
-3 src/renderer/src/components/status-bar/composition/status-bar-density.ts
 1 src/renderer/src/components/status-bar/composition/use-status-bar-controller.ts
 1 src/renderer/src/components/status-bar/host-connections/PortsStatusSegment.tsx
 1 src/renderer/src/components/status-bar/host-connections/RuntimeHostStatusRow.tsx

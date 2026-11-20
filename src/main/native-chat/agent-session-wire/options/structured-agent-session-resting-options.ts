@@ -131,7 +131,9 @@ export async function readStructuredAgentSessionOptionsAtRest(
   return {
     inventory: catalog,
     fallback: catalog.origin === 'unknown' ? models : [],
-    models: listed ? structuredAgentSessionOptionModels(models, model, (row) => row) : [],
+    models: listed
+      ? structuredAgentSessionOptionModels(record.provider, models, model, (row) => row)
+      : [],
     ...(catalog.origin !== 'unknown' && catalog.fastModeSupport
       ? { fastModeSupport: catalog.fastModeSupport }
       : {}),

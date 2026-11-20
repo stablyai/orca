@@ -223,8 +223,9 @@ export function useBotSlackSetup(
     const slack = slackTeamState(view.slack, teamId)
     switch (slack.state) {
       // An app whose manifest is out of date gets the new one, then Slack's page for the new scopes.
+      // One that only predates optional permissions is opened here for nothing else: the same path.
       case 'installed':
-        return slack.updateNeeded
+        return slack.updateNeeded || slack.updateAvailable
           ? await setUp(slack.teamId, mount)
           : setStep({ kind: 'installed', teamId: slack.teamId })
       // The dialog opens on the owner's own click, so an app made earlier (or kept by a removal)
@@ -311,7 +312,8 @@ export function useBotSlackSetup(
     step.kind === 'waiting' && view.status === 'ready'
       ? slackTeamState(view.slack, step.teamId)
       : null
-  const installed = waited?.state === 'installed' && !waited.updateNeeded
+  // Still behind, on required or optional permissions: the approval this flow waits for isn't in.
+  const installed = waited?.state === 'installed' && !waited.updateNeeded && !waited.updateAvailable
   const otherUser = waited?.state === 'created' && waited.oauthFailure === 'other_user'
   const shown: BotSlackSetupStep = (() => {
     if (step.kind !== 'waiting' && step.kind !== 'ready') {

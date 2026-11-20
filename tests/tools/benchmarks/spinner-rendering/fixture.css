@@ -2,4 +2,3 @@
 @source './fixture.tsx';
 @source '../../../../src/renderer/src/components/agent/status/AgentWorkingSpinner.tsx';
 @source '../../../../src/renderer/src/components/agent/status/AgentStateDot.tsx';
-@source '../../../../src/renderer/src/components/ui/LoadingSpinner.tsx';

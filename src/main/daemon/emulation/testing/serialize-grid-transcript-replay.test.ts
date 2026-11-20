@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { mulberry32 } from '../../../../shared/terminal/testing/agent-tui-ansi-fuzz-stream'
-import type { SerializeFuzzCase, SerializeFuzzStep } from './serialize-grid-fuzz-stream'
+import type { SerializeFuzzCase, SerializeFuzzStep } from './serialize-grid-replay-case'
 import {
   loadOldSerializer,
   NEW_SERIALIZER,
@@ -13,7 +13,7 @@ import {
 } from './serialize-grid-roundtrip'
 
 // Replay captured PTY streams with synthetic resizes and random snapshot boundaries.
-// ORCA_OLD_SERIALIZE_ADDON enables baseline comparisons; see serialize-grid.differential.fuzz.test.ts.
+// ORCA_OLD_SERIALIZE_ADDON enables baseline comparisons with a build from build-serialize-addon-at-ref.mjs.
 // SERIALIZE_TRANSCRIPT_DIR adds local captures (<name>.txt + .meta.json); SERIALIZE_TRANSCRIPT_SEEDS defaults to 2.
 
 const FIXTURE_DIRS = [

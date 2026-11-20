@@ -13,9 +13,11 @@ import { createTabsSplitRatioActions } from './tabs-split-ratio-actions'
 import { createTabsDragPreviewActions } from './tabs-drag-preview-actions'
 import { createTabsSessionActions } from './tabs-session-actions'
 import { pruneSplitLandingGroupsOnGroupRemoval } from './split-landing-groups'
+import { refusingBotSideChats } from './bot-side-chat-pin-rule'
 
 export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, get, api) => {
   pruneSplitLandingGroupsOnGroupRemoval(api)
+  const labelActions = createTabsLabelActions(set, get)
   return {
     unifiedTabsByWorktree: {},
     groupsByWorktree: {},
@@ -26,7 +28,8 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     ...createTabsFocusActions(set, get),
     ...createTabsCloseActions(set, get),
     ...createTabsBulkCloseActions(set, get),
-    ...createTabsLabelActions(set, get),
+    ...labelActions,
+    pinTab: refusingBotSideChats(get, labelActions.pinTab),
     ...createTabsGroupActions(set, get),
     ...createTabsMoveActions(set, get),
     ...createTabsDropActions(set, get),
