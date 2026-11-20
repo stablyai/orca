@@ -23,6 +23,13 @@ export const list = defineFixture({
   render: () => <Panel bot={base} />
 })
 
+/** The side panel at its narrowest: every row's logo is one 20 px bare mark, in line with the header. */
+export const listNarrow = defineFixture({
+  width: 300,
+  setup: () => stub({ linearLinked: true, composio: true }),
+  render: () => <Panel bot={base} />
+})
+
 export const composioRowOpen = defineFixture({
   width: 372,
   setup: () => stub({ linearLinked: true, composio: true }),

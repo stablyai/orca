@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useContext } from 'react'
 import { cn } from '@/lib/class-names'
 import { composioLogoUrl } from '../../../../../shared/composio/composio-apps'
 import { LOGO_TILES } from './brand-logo-tiles'
@@ -19,6 +19,39 @@ export function composioLogo(
     src: (slug && LOGO_TILES.filled[slug]) || logo || composioLogoUrl(slug ?? ''),
     fill: slug ? LOGO_TILES.composio[slug] : undefined
   }
+}
+
+/**
+ * Inside a connector list's row: every logo is its bare mark in one 20 px box, with no tile, so the rows' icons read
+ * as one size. A logo that is a full square of colour (LOGO_TILES.composio) is that square at 20 px.
+ */
+export const BotLogoBare = React.createContext(false)
+
+/** A bare logo's box; see BotLogoBare. */
+export const BARE_LOGO_BOX = 'flex size-5 shrink-0 items-center justify-center'
+
+/**
+ * A logo Composio serves, bare (see BotLogoBare): its square at 20 px, else its mark. Those marks are drawn for a white
+ * tile in any colour, black included, so a dark theme keeps a small white one behind them.
+ */
+export function BareComposioLogo({ src, fill }: { src: string; fill?: string }): React.JSX.Element {
+  return (
+    <span
+      style={{ backgroundColor: fill }}
+      className={cn(
+        BARE_LOGO_BOX,
+        'overflow-hidden rounded-[5px]',
+        fill ? 'dark:outline-1 dark:-outline-offset-1 dark:outline-white/14' : 'dark:bg-brand-mark'
+      )}
+    >
+      <img
+        src={src}
+        alt=""
+        draggable={false}
+        className={cn('object-contain', fill ? 'size-full' : 'size-5 dark:size-3.5')}
+      />
+    </span>
+  )
 }
 
 /** An app's mark on its tile: the colour its brand sits on (white unless LOGO_TILES says), plain icons on muted. */
@@ -42,9 +75,19 @@ export function BotAppLogo({
   /** md: a list row; lg: a setup step's heading. */
   size?: 'sm' | 'md' | 'lg'
 }): React.JSX.Element {
+  const bare = useContext(BotLogoBare)
   const image = icon || !(slug || logo) ? undefined : composioLogo(slug, logo)
   const fill = image?.fill
   const background = fill ?? tile
+  if (bare) {
+    return image ? (
+      <BareComposioLogo src={image.src} fill={fill} />
+    ) : (
+      <span className={cn(BARE_LOGO_BOX, plain ? 'text-muted-foreground' : 'text-foreground')}>
+        {icon}
+      </span>
+    )
+  }
   return (
     <span
       data-size={size}
