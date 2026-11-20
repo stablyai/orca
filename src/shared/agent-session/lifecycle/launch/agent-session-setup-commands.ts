@@ -57,8 +57,13 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     loginCommand: ['hermes', 'model'],
     installCommand: 'curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash'
   },
-  // An `agy` login does not sign its chats in: they keep their own sign-in.
-  { agent: 'antigravity', loginCommand: [] }
+  // An `agy` login signs in only chats on agy (`system`); chats on Orca's server keep their own.
+  {
+    agent: 'antigravity',
+    loginCommand: [],
+    systemLoginCommand: ['agy'],
+    loginEnv: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' }
+  }
 ] as const
 
 export function agentSessionSetupFor(agent: string | undefined) {
@@ -81,9 +86,21 @@ export function agentSessionSignInCommand(
     return options.shell === null ? null : claudeSystemSignInCommand(options.shell ?? 'posix')
   }
   const argv =
-    options.remote && 'remoteLoginCommand' in entry ? entry.remoteLoginCommand : entry.loginCommand
+    options.account === 'system' && 'systemLoginCommand' in entry
+      ? entry.systemLoginCommand
+      : options.remote && 'remoteLoginCommand' in entry
+        ? entry.remoteLoginCommand
+        : entry.loginCommand
   // Why a plain join: every word is a bare token, which POSIX, PowerShell and cmd all read alike.
   return argv.length > 0 ? argv.join(' ') : null
+}
+
+/** What the sign-in terminal adds to its environment, e.g. so a self-updating CLI doesn't update. */
+export function agentSessionSignInEnv(
+  agent: string | undefined
+): Record<string, string> | undefined {
+  const entry = agentSessionSetupFor(agent)
+  return entry && 'loginEnv' in entry ? { ...entry.loginEnv } : undefined
 }
 
 /** Bypass the selected-profile function and restore the config Orca replaced for this login. */

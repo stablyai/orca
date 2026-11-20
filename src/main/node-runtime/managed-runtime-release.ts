@@ -22,8 +22,9 @@ export type ManagedRuntimePin = {
         members: readonly ManagedRuntimeMember[]
       }
     | {
-        /** Only the archive's hash is published; it vouches for every file, and these must be executable. */
-        format: 'tar.gz' | 'zip'
+        /** Only the archive's hash is published; it vouches for every file, and these must be executable.
+         *  `file`: the download is the one executable itself. */
+        format: 'tar.gz' | 'zip' | 'file'
         executables: readonly string[]
       }
   )
@@ -46,6 +47,8 @@ export type ManagedAgentCli = {
   /** Whether this host has a build to download. */
   available: () => boolean
   executable: (folder: string) => string
+  /** The one stock command it stands in for, when the agent's launches name other programs too. */
+  standsInFor?: string
 }
 
 /** The download's digest names the release, so a republished build is never mistaken for it. */
@@ -124,6 +127,27 @@ export function resolveInstalledRuntimeRelease(
     broken: reads.filter(({ read }) => read === 'broken').map(({ name }) => name),
     unreadable: reads.some(({ read }) => read === 'unreadable')
   }
+}
+
+/** Whether `root` may hold a published release; an unreadable one may, so callers fail closed. */
+export async function runtimeReleaseMayBePublished(root: string): Promise<boolean> {
+  let names: string[]
+  try {
+    names = await readdir(root)
+  } catch (error) {
+    return !isDefinitiveAbsence(error)
+  }
+  const receipts = await Promise.all(
+    names
+      .filter((name) => !name.startsWith('.'))
+      .map((name) =>
+        lstat(join(root, name, RUNTIME_RELEASE_RECEIPT)).then(
+          (receipt) => receipt.isFile(),
+          (error: unknown) => !isDefinitiveAbsence(error)
+        )
+      )
+  )
+  return receipts.some(Boolean)
 }
 
 /** Require every pinned companion beside the resolved executable; never launch an isolated server file. */
