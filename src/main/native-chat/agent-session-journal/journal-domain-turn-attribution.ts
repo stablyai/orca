@@ -22,9 +22,8 @@ export type JournalTurnAttribution = {
 }
 
 /** A turn's row, opener and steered sends, each found by index: work is the turn's own rows (every
- *  send steered into it, all needed to prove none was a delivery), never the chat's send history (an
- *  operation window scans every current send). `through`: the sequence its end was read at; a row
- *  written later is not the ended turn's. */
+ *  send steered into it, all needed to prove none was a delivery), never the chat's send history.
+ *  `through`: the sequence its end was read at; a row written later is not the ended turn's. */
 export function readJournalDomainTurnAttribution(
   scope: JournalSqlScope,
   turnId: string,

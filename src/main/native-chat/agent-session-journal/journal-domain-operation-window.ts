@@ -9,6 +9,11 @@ import { journalDomainContextHead } from './journal-sql-continuation-context'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import { readOperationWindowItems } from './journal-operation-window-rows'
+import {
+  JOURNAL_SEND_ANSWERED_TURN,
+  JOURNAL_SEND_QUEUED_CARD,
+  journalSendAnsweredTurn
+} from './database/journal-submission-placement-indexes'
 
 /** Where a reader's interest starts; the window runs from a turn ahead of the earliest to the head. */
 export type JournalOperationWindowAnchors = {
@@ -70,10 +75,12 @@ export function readJournalDomainOperationWindow(
   scope: JournalSqlScope,
   anchors: JournalOperationWindowAnchors
 ): JournalOperationWindow {
-  const sends = sendHeads(scope)
-  const operations = resolveOperations(scope, sends, anchors)
+  const consumed = consumedCards(scope, anchors)
+  const sends = new WindowSends(scope)
+  sends.load(seedSends(scope, anchors, consumed))
+  const operations = resolveOperations(sends.list(), anchors, consumed)
   const anchored = [
-    ...sends.flatMap((send) => {
+    ...sends.list().flatMap((send) => {
       if (operations.has(send.messageId)) {
         const turns = openedTurnPositions(scope, send)
         const at = [...send.positions, ...turns]
@@ -91,7 +98,8 @@ export function readJournalDomainOperationWindow(
   // A held send's own rows, and the head it was sent at, are held too: a turn may claim a send by
   // that position. No margin here, so the window never walks back a turn per held send.
   for (;;) {
-    kept = keptSends(sends, operations, start, anchors.anchorsOnly === true)
+    sends.placeFrom(start)
+    kept = keptSends(sends.list(), operations, start, anchors.anchorsOnly === true)
     const reach = kept.flatMap((send) => [
       ...send.positions,
       ...(send.submittedSequence !== null ? [send.submittedSequence] : [])
@@ -118,18 +126,155 @@ export function readJournalDomainOperationWindow(
   }
 }
 
-/** Every current send's selectors and where its rows sit; payloads are decoded only for those kept. */
-function sendHeads(scope: JournalSqlScope): Send[] {
+/**
+ * Every send the window can hold, found by index rather than by reading the chat's every send: the
+ * anchored and unanswered ones, those with a row at or after the window's start, and every send
+ * sharing a provider id or queued card with one of those. keptSends over them equals keptSends over
+ * all the chat's sends, since it keeps no other.
+ */
+class WindowSends {
+  private readonly known = new Map<string, Send>()
+  private readonly askedProviders = new Set<string>()
+  private readonly askedCards = new Set<string>()
+  private placedFrom: number | null = null
+
+  constructor(private readonly scope: JournalSqlScope) {}
+
+  /** The sends found so far, as the chat orders them. */
+  list(): Send[] {
+    return [...this.known.values()].sort((a, b) => a.ordinal - b.ordinal)
+  }
+
+  load(messageIds: readonly string[]): void {
+    const missing = [...new Set(messageIds)].filter((id) => !this.known.has(id))
+    for (const send of missing.length > 0 ? sendHeads(this.scope, missing) : []) {
+      this.known.set(send.messageId, send)
+    }
+    this.addSharers()
+  }
+
+  /** Adds the sends with a row at or after `start`. */
+  placeFrom(start: number | null): void {
+    if (start === null || (this.placedFrom !== null && start >= this.placedFrom)) {
+      return
+    }
+    const until = this.placedFrom ?? Number.MAX_SAFE_INTEGER
+    this.placedFrom = start
+    this.load(placedSends(this.scope, start, until))
+  }
+
+  /** Every send sharing a provider id or queued card with a found one, until none is new. */
+  private addSharers(): void {
+    const fresh = (values: (string | null)[], asked: Set<string>) =>
+      [...new Set(values)].filter((value): value is string => {
+        if (value === null || asked.has(value)) {
+          return false
+        }
+        asked.add(value)
+        return true
+      })
+    const sends = [...this.known.values()]
+    const providers = fresh(
+      sends.map((send) => send.providerItemId),
+      this.askedProviders
+    )
+    const cards = fresh(
+      sends.map((send) => send.queuedMessageId),
+      this.askedCards
+    )
+    if (providers.length > 0 || cards.length > 0) {
+      this.load(sharingSends(this.scope, providers, cards))
+    }
+  }
+}
+
+const SEND_IDS = `SELECT message_id FROM journal_submission_attempts
+  WHERE session_id=? AND epoch=? AND current=1`
+
+function messageIds(scope: JournalSqlScope, rows: SqliteRow[]): string[] {
+  return rows.map((row) => String(scope.examined(row).message_id))
+}
+
+/** The anchored sends (by row or provider id, by id, card or the card's consumption) and every
+ *  send still unanswered. */
+function seedSends(
+  scope: JournalSqlScope,
+  anchors: JournalOperationWindowAnchors,
+  consumed: readonly string[]
+): string[] {
+  const rows = JSON.stringify(anchors.itemIds ?? [])
+  const operations = JSON.stringify(anchors.operationIds ?? [])
+  return messageIds(
+    scope,
+    scope.db
+      .prepare(`${SEND_IDS} AND item_id IN (SELECT value FROM json_each(?))
+      UNION ${SEND_IDS} AND provider_item_id IN (SELECT value FROM json_each(?))
+      UNION ${SEND_IDS} AND message_id IN (SELECT value FROM json_each(?))
+      UNION ${SEND_IDS} AND ${JOURNAL_SEND_QUEUED_CARD} IN (SELECT value FROM json_each(?))
+      UNION ${SEND_IDS} AND (dispatch_state='pending' OR (dispatch_state='unknown' AND recovered=0))`)
+      .all(
+        ...scope.prefix,
+        rows,
+        ...scope.prefix,
+        rows,
+        ...scope.prefix,
+        JSON.stringify([...(anchors.operationIds ?? []), ...consumed]),
+        ...scope.prefix,
+        operations,
+        ...scope.prefix
+      )
+  )
+}
+
+/** The sends whose opener, provider row or answering turn sits in [start, until). */
+function placedSends(scope: JournalSqlScope, start: number, until: number): string[] {
+  const placed = `(SELECT item_id FROM journal_items INDEXED BY journal_items_visible_position
+    WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>=? AND sequence<?)`
+  const range = [...scope.prefix, start, until]
+  return messageIds(
+    scope,
+    scope.db
+      .prepare(`${SEND_IDS} AND item_id IN ${placed}
+      UNION ${SEND_IDS} AND provider_item_id IN ${placed}
+      UNION ${SEND_IDS} AND ${JOURNAL_SEND_ANSWERED_TURN} IN ${placed}`)
+      .all(
+        ...scope.prefix,
+        ...range,
+        ...scope.prefix,
+        ...range,
+        ...scope.prefix,
+        ...range
+      )
+  )
+}
+
+function sharingSends(
+  scope: JournalSqlScope,
+  providers: readonly string[],
+  cards: readonly string[]
+): string[] {
+  return messageIds(
+    scope,
+    scope.db
+      .prepare(`${SEND_IDS} AND provider_item_id IN (SELECT value FROM json_each(?))
+      UNION ${SEND_IDS} AND ${JOURNAL_SEND_QUEUED_CARD} IN (SELECT value FROM json_each(?))`)
+      .all(...scope.prefix, JSON.stringify(providers), ...scope.prefix, JSON.stringify(cards))
+  )
+}
+
+/** The named sends' selectors and where their rows sit; payloads are decoded only for those kept. */
+function sendHeads(scope: JournalSqlScope, ids: readonly string[]): Send[] {
   const at = (column: string) => `(SELECT sequence FROM journal_items item
     WHERE item.session_id=send.session_id AND item.epoch=send.epoch AND item.item_id=${column}
     AND item.hidden=0)`
   return scope.db
     .prepare(`SELECT message_id,item_id,ordinal,dispatch_state,recovered,provider_item_id,submitted_sequence,
-    (CASE WHEN json_valid(payload_json) THEN json_extract(payload_json,'$.queuedMessageId') END) AS queued_message_id,
+    ${JOURNAL_SEND_QUEUED_CARD} AS queued_message_id,
     ${at('send.item_id')} AS opener_sequence,${at('send.provider_item_id')} AS provider_sequence,
-    ${at("(CASE WHEN json_valid(send.payload_json) THEN json_extract(send.payload_json,'$.answeredInTurn.turnItemId') END)")} AS answered_sequence
-    FROM journal_submission_attempts send WHERE session_id=? AND epoch=? AND current=1 ORDER BY ordinal`)
-    .all(...scope.prefix)
+    ${at(journalSendAnsweredTurn('send.payload_json'))} AS answered_sequence
+    FROM journal_submission_attempts send WHERE session_id=? AND epoch=? AND current=1
+    AND message_id IN (SELECT value FROM json_each(?))`)
+    .all(...scope.prefix, JSON.stringify(ids))
     .map((row) => {
       const read = scope.examined(row)
       return {
@@ -200,34 +345,34 @@ function keptSends(
   return sends.filter((send) => kept.has(send))
 }
 
+/** The latest consumption of each anchored operation's queued card. */
+function consumedCards(scope: JournalSqlScope, anchors: JournalOperationWindowAnchors): string[] {
+  return (anchors.operationIds ?? []).flatMap(
+    (operationId) => journalDomainQueueRow(scope.db, scope, operationId)?.card.consumedAs ?? []
+  )
+}
+
 /** Each operation's sends (its own id, every send that carried it as a queued card, and the card's
  *  latest consumption), and the sends an anchored row is the opener or provider row of. */
 function resolveOperations(
-  scope: JournalSqlScope,
   sends: readonly Send[],
-  anchors: JournalOperationWindowAnchors
+  anchors: JournalOperationWindowAnchors,
+  consumed: readonly string[]
 ): Set<string> {
   const rows = new Set(anchors.itemIds)
-  const ids = new Set(
+  const operations = new Set(anchors.operationIds)
+  const consumedAs = new Set(consumed)
+  return new Set(
     sends.flatMap((send) =>
-      rows.has(send.itemId) || (send.providerItemId !== null && rows.has(send.providerItemId))
+      rows.has(send.itemId) ||
+      (send.providerItemId !== null && rows.has(send.providerItemId)) ||
+      operations.has(send.messageId) ||
+      (send.queuedMessageId !== null && operations.has(send.queuedMessageId)) ||
+      consumedAs.has(send.messageId)
         ? [send.messageId]
         : []
     )
   )
-  for (const operationId of anchors.operationIds ?? []) {
-    const consumedAs = journalDomainQueueRow(scope.db, scope, operationId)?.card.consumedAs
-    for (const send of sends) {
-      if (
-        send.messageId === operationId ||
-        send.queuedMessageId === operationId ||
-        send.messageId === consumedAs
-      ) {
-        ids.add(send.messageId)
-      }
-    }
-  }
-  return ids
 }
 
 /** Root turn rows that name the send's opener or provider id as theirs. */

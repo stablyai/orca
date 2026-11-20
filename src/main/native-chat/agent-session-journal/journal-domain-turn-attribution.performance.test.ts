@@ -13,8 +13,9 @@ import { readJournalDomainOperationWindow } from './journal-domain-operation-win
 import { readJournalDomainTurnAttribution } from './journal-domain-turn-attribution'
 import { JournalSqlScope } from './journal-sql-scope'
 
-// Perf contract for PR #45040 / STA-16280: a turn end's attribution read examines only the ended
-// turn's rows, never the chat's send history.
+// Perf contract for STA-16280 and STA-16396: a turn end's reads (its attribution, and the operation
+// window the replied, mirrored and failed ends read) examine only the ended turn's rows and the turn
+// before it, never the chat's send history.
 
 const target = { sessionId: 'chat', epoch: 'epoch' }
 const databases: Database.Database[] = []
@@ -113,6 +114,14 @@ function chat(earlier: number) {
       })
     }
     const base = TARGET_SEQUENCE
+    // The turn the window's margin holds, at fixed positions so its rows are the same at any N.
+    send('previous', base - 10, { turnItemId: 'turn-previous', via: 'start' })
+    item('turn-previous', base - 9, {
+      kind: 'turn',
+      turnId: 'provider-turn-previous',
+      state: 'completed',
+      userItemId: 'orca:previous'
+    })
     send('open', base, { turnItemId: 'turn-target', via: 'start' })
     item('turn-target', base + 1, {
       kind: 'turn',
@@ -166,16 +175,74 @@ it('finds the steered sends through their index, without a scan or sort', () => 
   expect(plan.join('\n')).not.toMatch(/TEMP B-TREE|^SCAN journal_submission_attempts$/m)
 })
 
-it('contrast: the operation window it replaced reads more as the send history grows', () => {
-  const windowRows = (earlier: number) => {
-    const scope = new JournalSqlScope(chat(earlier), target.sessionId, target.epoch)
-    readJournalDomainOperationWindow(scope, {
-      turnIds: ['provider-turn-target'],
-      itemIds: ['provider-turn-target'],
-      anchorsOnly: true,
-      withoutToolOutput: true
+/** The operation window a turn end reads (endedTurn), with every plan that touches a send. */
+function windowWork(earlier: number) {
+  const db = chat(earlier)
+  const prepare = db.prepare.bind(db)
+  const plans: string[] = []
+  vi.spyOn(db, 'prepare').mockImplementation((sql: string) => {
+    const statement = prepare(sql)
+    if (!sql.includes('journal_submission_attempts') || sql.startsWith('EXPLAIN')) {
+      return statement
+    }
+    return new Proxy(statement, {
+      get: (statement, key) => {
+        const value = Reflect.get(statement, key, statement)
+        if (typeof value !== 'function') {
+          return value
+        }
+        return (...params: never[]) => {
+          if (key === 'all' || key === 'get') {
+            plans.push(
+              prepare(`EXPLAIN QUERY PLAN ${sql}`)
+                .all(...params)
+                .map((step) => String(step.detail))
+                .join('\n')
+            )
+          }
+          return value.apply(statement, params)
+        }
+      }
     })
-    return scope.work.rows
+  })
+  const scope = new JournalSqlScope(db, target.sessionId, target.epoch)
+  const { snapshot } = readJournalDomainOperationWindow(scope, {
+    turnIds: ['provider-turn-target'],
+    itemIds: ['provider-turn-target'],
+    anchorsOnly: true,
+    withoutToolOutput: true
+  })
+  expect(snapshot.items.map((item) => item.itemId)).toEqual([
+    'orca:previous',
+    'turn-previous',
+    'orca:open',
+    'turn-target',
+    'orca:steered'
+  ])
+  expect(snapshot.submissions.map((send) => send.clientMessageId)).toEqual([
+    'previous',
+    'open',
+    'steered'
+  ])
+  return { work: { ...scope.work }, plans }
+}
+
+it("reads the same rows for a turn end's operation window whether the chat holds 200 or 2000 earlier sends", () => {
+  const small = windowWork(200)
+  const large = windowWork(2000)
+  expect(large.work).toEqual(small.work)
+})
+
+it("finds a turn end's sends through their indexes, never by reading every send", () => {
+  const plans = windowWork(200).plans.join('\n')
+  for (const index of [
+    'journal_submission_item',
+    'journal_submission_provider_item',
+    'journal_submission_answered_turn',
+    'journal_submission_queued_card',
+    'journal_submission_head'
+  ]) {
+    expect(plans).toContain(`USING INDEX ${index}`)
   }
-  expect(windowRows(2000)).toBeGreaterThan(windowRows(200))
+  expect(plans).not.toMatch(/^SCAN (journal_submission_attempts|send)\b/m)
 })

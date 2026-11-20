@@ -77,7 +77,7 @@ export async function endedTurn(
   }
 }
 
-/** Whom an ended turn acts for, from its own rows by index (STA-16396 moves the other ends here).
+/** Whom an ended turn acts for, from its own rows by index, without the rest of its window.
  *  Empty, so nothing is proven, while the journal hasn't reached the turn's end or can't say. */
 export async function endedTurnAttribution(
   chat: ConversationChat,
