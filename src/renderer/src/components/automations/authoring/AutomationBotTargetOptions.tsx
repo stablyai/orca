@@ -1,6 +1,7 @@
 import { Check } from 'lucide-react'
 import { BotAvatar } from '@/components/bots/BotAvatar'
 import { BotMentionHostBadge } from '@/components/bots/BotMentionHostBadge'
+import { useBotHostLabels } from '@/components/bots/use-bot-host-label'
 import { cn } from '@/lib/class-names'
 import type { Bot } from '../../../../../shared/bot-types'
 import { botTargetLabel } from './automation-bot-target-label'
@@ -19,6 +20,7 @@ export function AutomationBotTargetOptions({
   onHighlight: (botId: string) => void
   onSelect: (botId: string) => void
 }): React.JSX.Element {
+  const hostLabels = useBotHostLabels(bots.map((bot) => bot.hostId))
   return (
     <>
       {bots.map((bot) => (
@@ -41,7 +43,7 @@ export function AutomationBotTargetOptions({
           />
           <BotAvatar bot={bot} className="size-4 rounded-[4px] text-3xs" />
           <span className="truncate">{botTargetLabel(bot.name)}</span>
-          <BotMentionHostBadge hostId={bot.hostId} />
+          <BotMentionHostBadge label={hostLabels.get(bot.hostId)} />
         </button>
       ))}
     </>
