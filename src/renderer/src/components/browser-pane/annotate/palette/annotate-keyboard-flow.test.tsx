@@ -53,9 +53,9 @@ beforeEach(() => {
         setGrabMode: ({ enabled }: { enabled: boolean }) =>
           !enabled && holdTeardown
             ? new Promise((resolve) => {
-                releaseTeardown = () => resolve({ ok: true })
+                releaseTeardown = () => resolve({ ok: true, clean: true })
               })
-            : Promise.resolve({ ok: true }),
+            : Promise.resolve({ ok: true, clean: true }),
         onGuestEscape: () => () => {},
         onGrabModeToggle: () => () => {},
         onGrabActionShortcut: () => () => {},

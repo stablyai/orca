@@ -25,15 +25,16 @@ export const AWAIT_CLICK_SCRIPT = `(async function() {
       var el = grab.getCurrentElement();
       if (!el) {
         grab.cleanup();
-        reject(new Error('cancelled'));
+        resolve({ __orcaCancelled: true });
         return;
       }
       var payload = extractSelectedPayload(el);
       if (!payload) return;
       // Keep the selected element outlined while the renderer shows its copy menu.
+      var control = grab.pickControl(el, payload, e.type === 'contextmenu');
       grab.freezeHighlight(payload.page.capturedAt);
       // The marker opens the action menu instead of auto-copying.
-      resolve(e.type === 'contextmenu' ? { __orcaContextMenu: true, payload: payload } : payload);
+      resolve(control);
     };
 
     grab.cancelAwait = function(removeOverlay) {
@@ -71,7 +72,7 @@ export const EXTRACT_HOVER_SCRIPT = `(function() {
   var el = grab.getCurrentElement();
   if (!el) return null;
   try {
-    return grab.extractPayload(el);
+    return grab.pickControl(el, grab.extractPayload(el), false);
   } catch (e) {
     return null;
   }

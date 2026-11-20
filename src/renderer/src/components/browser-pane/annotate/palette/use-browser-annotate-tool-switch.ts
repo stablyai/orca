@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { useGrabCleanCapture } from './use-grab-clean-capture'
 import { translate } from '@/i18n/i18n'
 import { INLINE_ACTION_CLASS_NAMES } from '@/components/ui/sonner'
 import type {
@@ -57,9 +58,7 @@ export function useBrowserAnnotateToolSwitch({
   /** False while the document is (re)loading; each fall starts a new document generation, even at the same key. */
   documentReady?: boolean
 }): BrowserAnnotateToolSwitch {
-  // Why a generation and not just the key: A → B → A, or a reload of the same URL, brings the key back while the
-  // document under it is new. Every key change or loss of readiness starts a new generation, so state held for an
-  // older document (pending Draw, held pick, Undo) never matches again.
+  // A→B→A and same-URL reloads must not revive a prior document's pending capture or Undo.
   const cancelMarkup = markup.cancel
   const documentBase = `${toolTargetId}\n${documentKey}`
   const usable = documentReady && canPickElements
@@ -70,19 +69,15 @@ export function useBrowserAnnotateToolSwitch({
   })
   let generation = documentGeneration.generation
   if (documentGeneration.base !== documentBase || documentGeneration.ready !== usable) {
-    const newDocument = documentGeneration.base !== documentBase || !usable
-    generation += newDocument ? 1 : 0
+    generation += documentGeneration.base !== documentBase || !usable ? 1 : 0
     setDocumentGeneration({ base: documentBase, ready: usable, generation })
   }
-  // Why: between stopping the picker and Draw's capture starting, neither is on; keep the palette on Draw meanwhile.
   const drawOwner = `${documentBase}\n${generation}`
   const [drawStartingFor, setDrawStartingFor] = useState<string | null>(null)
-  // A pending Draw for an older document is dropped outright, so it can't come back if the owner string recurs.
   if (drawStartingFor !== null && drawStartingFor !== drawOwner) {
     setDrawStartingFor(null)
   }
   const drawStarting = canPickElements && drawStartingFor === drawOwner
-  // A new editor per drawing session, so a reopened drawing never inherits another session's strokes.
   const [drawSession, setDrawSession] = useState(0)
   const activeTool = getBrowserAnnotateActiveTool(
     grab.state,
@@ -90,27 +85,19 @@ export function useBrowserAnnotateToolSwitch({
     markup.isActive,
     drawStarting
   )
-  // Fences a Draw start still waiting for teardown: any later transition, a page change or unmount supersedes it.
   const transitionRef = useRef(0)
+  const { waitForCleanPage, cancelClean } = useGrabCleanCapture()
   const shapesRef = useRef<readonly MarkupShape[]>([])
   const markupActiveRef = useRef(markup.isActive)
-  // Live owner and capability, read when the overlay teardown resolves, a few frames after Draw was asked for.
-  const liveOwnerRef = useRef(drawOwner)
-  const canPickRef = useRef(canPickElements)
-  const documentReadyRef = useRef(documentReady)
-  // A Draw start whose teardown finished while the page was still loading: it captures once the load ends.
+  const liveDocumentRef = useRef({ drawOwner, canPickElements, documentReady })
   const captureWhenReadyRef = useRef<{ owner: string; transition: number } | null>(null)
-  // Which document's Draw is waiting for its load, for the palette to say so.
   const [waitingForPageOwner, setWaitingForPageOwner] = useState<string | null>(null)
   useLayoutEffect(() => {
     markupActiveRef.current = markup.isActive
-    liveOwnerRef.current = drawOwner
-    canPickRef.current = canPickElements
-    documentReadyRef.current = documentReady
+    liveDocumentRef.current = { drawOwner, canPickElements, documentReady }
   }, [canPickElements, documentReady, drawOwner, markup.isActive])
   const [restoredShapes, setRestoredShapes] = useState<readonly MarkupShape[] | undefined>()
   const undoToastRef = useRef<string | number | null>(null)
-  // The discarded drawing while its Undo is on offer: entering Draw again in that window restores it.
   const discardedRef = useRef<{
     saved: MarkupResumeSnapshot
     shapes: readonly MarkupShape[]
@@ -126,11 +113,12 @@ export function useBrowserAnnotateToolSwitch({
   useLayoutEffect(() => {
     return () => {
       transitionRef.current += 1
+      cancelClean()
       cancelMarkup()
       // An Undo from another page or document would reopen a stale screenshot.
       dismissUndo()
     }
-  }, [cancelMarkup, dismissUndo, drawOwner])
+  }, [cancelClean, cancelMarkup, dismissUndo, drawOwner])
 
   const reportShapes = useCallback((shapes: readonly MarkupShape[]): void => {
     shapesRef.current = shapes
@@ -157,7 +145,6 @@ export function useBrowserAnnotateToolSwitch({
     [cancelPendingBrowserCapture, markup]
   )
 
-  // Leaving Draw drops the drawing; if it had strokes, offer them back for a few seconds.
   const leaveDraw = useCallback((): void => {
     const saved = markup.snapshot()
     const shapes = shapesRef.current
@@ -205,56 +192,54 @@ export function useBrowserAnnotateToolSwitch({
         return
       }
       const owner = drawOwner
-      setWaitingForPageOwner(documentReadyRef.current ? null : owner)
+      setWaitingForPageOwner(liveDocumentRef.current.documentReady ? null : owner)
       setDrawStartingFor(owner)
       cancelPendingBrowserCapture()
-      // Why a second, awaited disable: with the pick already cancelled it awaits the overlay teardown script, which
-      // the page runs after the cancelled pick's own teardown, so the frozen screenshot carries no highlight.
-      void window.api.browser
-        .setGrabMode({ browserPageId: toolTargetId, enabled: false })
-        .then(
-          (result) => result.ok,
-          () => false
-        )
-        .then((tornDown) => {
-          // Anything since (another tool, exit, a new document, the page becoming unusable) supersedes this start.
-          if (
-            transitionRef.current !== transition ||
-            liveOwnerRef.current !== owner ||
-            !canPickRef.current
-          ) {
-            return
-          }
-          // Still loading: capture the finished page, not a half-painted one. A new load before then is a new
-          // document generation, which drops this start.
-          if (tornDown && !documentReadyRef.current) {
-            setRestoredShapes(undefined)
-            setDrawSession((session) => session + 1)
-            captureWhenReadyRef.current = { owner, transition }
-            setWaitingForPageOwner(owner)
-            return
-          }
-          setDrawStartingFor(null)
+      void waitForCleanPage(toolTargetId).then((tornDown) => {
+        // Anything since (another tool, exit, a new document, the page becoming unusable) supersedes this start.
+        if (
+          transitionRef.current !== transition ||
+          liveDocumentRef.current.drawOwner !== owner ||
+          !liveDocumentRef.current.canPickElements
+        ) {
+          return
+        }
+        // Still loading: capture the finished page, not a half-painted one. A new load before then is a new
+        // document generation, which drops this start.
+        if (tornDown && !liveDocumentRef.current.documentReady) {
           setRestoredShapes(undefined)
           setDrawSession((session) => session + 1)
-          if (!tornDown) {
-            // No clean page to freeze; leave the mode rather than draw over the picker's overlay.
-            toast.error(
-              translate(
-                'auto.components.browser-pane.markup.errorCapture',
-                'Could not capture the page to draw on.'
-              )
+          captureWhenReadyRef.current = { owner, transition }
+          setWaitingForPageOwner(owner)
+          return
+        }
+        setDrawStartingFor(null)
+        setRestoredShapes(undefined)
+        setDrawSession((session) => session + 1)
+        if (!tornDown) {
+          // No clean page to freeze; leave the mode rather than draw over the picker's overlay.
+          toast.error(
+            translate(
+              'auto.components.browser-pane.markup.errorCapture',
+              'Could not capture the page to draw on.'
             )
-            return
-          }
-          void markup.start()
-        })
+          )
+          return
+        }
+        void markup.start()
+      })
     },
-    [cancelPendingBrowserCapture, dismissUndo, drawOwner, markup, reopenDrawing, toolTargetId]
+    [
+      cancelPendingBrowserCapture,
+      dismissUndo,
+      drawOwner,
+      markup,
+      reopenDrawing,
+      toolTargetId,
+      waitForCleanPage
+    ]
   )
 
-  // The load ended for a Draw that waited on it: capture now, unless anything since superseded that start. The
-  // palette shows Draw until the capture settles (the drawing then owns it, or a failed capture leaves the mode).
   useEffect(() => {
     const waiting = captureWhenReadyRef.current
     if (!waiting || !usable) {
@@ -278,6 +263,7 @@ export function useBrowserAnnotateToolSwitch({
       if (tool === activeTool || !canPickElements) {
         return
       }
+      cancelClean()
       const transition = (transitionRef.current += 1)
       setDrawStartingFor(null)
       setWaitingForPageOwner(null)
@@ -295,6 +281,7 @@ export function useBrowserAnnotateToolSwitch({
     },
     [
       activeTool,
+      cancelClean,
       cancelMarkup,
       canPickElements,
       leaveDraw,
@@ -306,6 +293,7 @@ export function useBrowserAnnotateToolSwitch({
 
   const exit = useCallback((): void => {
     transitionRef.current += 1
+    cancelClean()
     setDrawStartingFor(null)
     setWaitingForPageOwner(null)
     captureWhenReadyRef.current = null
@@ -314,7 +302,7 @@ export function useBrowserAnnotateToolSwitch({
       return
     }
     cancelPendingBrowserCapture()
-  }, [cancelPendingBrowserCapture, leaveDraw, markup.isActive])
+  }, [cancelClean, cancelPendingBrowserCapture, leaveDraw, markup.isActive])
 
   const toggleTool = useCallback(
     (tool: BrowserAnnotateTool): void => {

@@ -1,5 +1,5 @@
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type {
   BrowserGrabPayload,
   GrabIntent
@@ -31,7 +31,7 @@ export function useHeldGrabPick({
   pageId: string
   /** The page's URL; a change within the same document triggers the presence check. Undefined where unknown. */
   currentUrl: string | undefined
-}): BrowserGrabPayload | null {
+}): { payload: BrowserGrabPayload | null; retire: (payload: BrowserGrabPayload) => void } {
   const [held, setHeld] = useState<HeldPick | null>(null)
   const [lastPickerPick, setLastPickerPick] = useState<BrowserGrabPayload | null>(null)
   const pickerPick = grab.state === 'confirming' && grabIntent === 'copy' ? grab.payload : null
@@ -44,12 +44,8 @@ export function useHeldGrabPick({
   }
   const heldPayload = held && activeTool === 'copy' && held.owner === owner ? held.payload : null
 
-  const [route, setRoute] = useState({ url: currentUrl, changed: false })
-  if (route.url !== currentUrl) {
-    setRoute({ url: currentUrl, changed: true })
-  }
   useEffect(() => {
-    if (!route.changed || !heldPayload) {
+    if (!heldPayload) {
       return
     }
     let current = true
@@ -62,7 +58,7 @@ export function useHeldGrabPick({
       const present = await window.api.browser
         .grabPickedElementPresent({
           browserPageId: pageId,
-          selectionId: heldPayload.page.capturedAt
+          selectionId: heldPayload.page.selectionId ?? heldPayload.page.capturedAt
         })
         .catch(() => null)
       checking = false
@@ -84,7 +80,10 @@ export function useHeldGrabPick({
       current = false
       stopChecking()
     }
-  }, [currentUrl, heldPayload, pageId, route.changed])
+  }, [currentUrl, heldPayload, pageId])
 
-  return heldPayload
+  const retire = useCallback((payload: BrowserGrabPayload) => {
+    setHeld((pick) => (pick?.payload === payload ? null : pick))
+  }, [])
+  return { payload: heldPayload, retire }
 }

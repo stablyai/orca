@@ -97,7 +97,7 @@ async function armGuest(
       }
     }
   }
-  expect(runInNewContext(buildGuestOverlayScript('arm'), context)).toBe(true)
+  runInNewContext(buildGuestOverlayScript('arm'), context)
   if (labelAvoidArea) {
     expect(runInNewContext(buildGrabLabelAvoidScript(labelAvoidArea), context)).toBe(true)
   }

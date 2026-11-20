@@ -3,7 +3,12 @@ import type {
   BrowserGrabResult
 } from '../../../shared/browser/element-grab/browser-grab-types'
 import { retainPickedElement } from './grab-picked-element'
-import { executeGrabScript, requestGrabExecution } from './grab-guest-execution'
+import {
+  executeGrabScript,
+  requestGrabExecution,
+  grabDocumentScope,
+  retireGrabOverlay
+} from './grab-guest-execution'
 import { buildGuestOverlayScript } from './grab-guest-script'
 import { clampGrabPayload } from './browser-grab-payload'
 import { readDocPreviewGuestDocumentUrl } from '../document-preview/doc-preview-guest-policy'
@@ -29,11 +34,7 @@ function isGuestCancellationPayload(rawPayload: unknown): boolean {
   if (payload.__orcaCancelled === true) {
     return true
   }
-  // Accept legacy cancellation errors without misclassifying page-authored payload fields.
-  if (payload.message !== 'cancelled') {
-    return false
-  }
-  return !('page' in payload) && !('target' in payload) && !('payload' in payload)
+  return false
 }
 
 function getGuestErrorMessage(err: unknown): string {
@@ -91,6 +92,7 @@ export class BrowserGrabSessionController {
     }
 
     return new Promise<BrowserGrabResult>((resolve) => {
+      const scope = grabDocumentScope(guest)
       const abort = new AbortController()
       const guestWebContentsId = guest.id
       let settled = false
@@ -116,7 +118,7 @@ export class BrowserGrabSessionController {
               const cancelled = await executeGrabScript(
                 guest,
                 '(function(){const grab=window.__orcaGrab;if(grab?.cancelAwait)grab.cancelAwait(false);return true})()',
-                { signal: abort.signal }
+                { signal: abort.signal, scope }
               )
               if (cancelled !== true || settled) {
                 settleOnce({ opId, kind: 'cancelled', reason: 'user' })
@@ -131,7 +133,9 @@ export class BrowserGrabSessionController {
             buildGuestOverlayScript('awaitClick'),
             {
               selection: true,
-              signal: abort.signal
+              signal: abort.signal,
+              scope,
+              capturePick: 'held'
             }
           )
           if (settled) {
@@ -166,7 +170,11 @@ export class BrowserGrabSessionController {
           if (settled) {
             return
           }
-          const retained = await retainPickedElement(guest, payload.page.capturedAt)
+          const retained = await retainPickedElement(
+            guest,
+            payload.page.selectionId ?? payload.page.capturedAt,
+            scope
+          )
           if (retained !== true) {
             settleOnce(
               retained === false
@@ -181,12 +189,7 @@ export class BrowserGrabSessionController {
             payload
           })
         } catch (err) {
-          const message = getGuestErrorMessage(err)
-          if (message.includes('cancelled')) {
-            settleOnce({ opId, kind: 'cancelled', reason: 'user' })
-          } else {
-            settleOnce({ opId, kind: 'error', reason: message })
-          }
+          settleOnce({ opId, kind: 'error', reason: getGuestErrorMessage(err) })
         }
       }
 
@@ -230,7 +233,7 @@ export class BrowserGrabSessionController {
         }
         try {
           if (!guest.isDestroyed()) {
-            void executeGrabScript(guest, buildGuestOverlayScript('teardown'))
+            retireGrabOverlay(scope)
           }
         } catch {
           // Best-effort overlay removal

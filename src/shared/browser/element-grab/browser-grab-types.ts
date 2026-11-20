@@ -10,6 +10,7 @@ export type BrowserGrabPageContext = {
   scrollY: number
   devicePixelRatio: number
   capturedAt: string
+  selectionId?: string
 }
 
 /** Accessibility metadata for the selected element. */
@@ -151,6 +152,7 @@ export type BrowserGrabResult =
 
 export type BrowserSetGrabModeArgs = {
   browserPageId: string
+  requestId?: string
   enabled: boolean
 }
 
@@ -161,7 +163,9 @@ export type BrowserGrabRejectReason =
   | 'already-active'
   | 'injection-failed'
 
-export type BrowserSetGrabModeResult = { ok: true } | { ok: false; reason: BrowserGrabRejectReason }
+export type BrowserSetGrabModeResult =
+  | { ok: true; clean?: boolean }
+  | { ok: false; reason: BrowserGrabRejectReason }
 
 /**
  * Where Orca's annotate palette and its hint cover a page, in Orca's pixels relative to the page frame's top-left,
@@ -232,15 +236,18 @@ export type BrowserGrabPickedElementPresentArgs = {
 
 export type BrowserAwaitGrabSelectionArgs = {
   browserPageId: string
+  requestId?: string
   opId: string
 }
 
 export type BrowserCancelGrabArgs = {
   browserPageId: string
+  requestId?: string
 }
 
 export type BrowserCaptureSelectionScreenshotArgs = {
   browserPageId: string
+  selectionId?: string
   rect: BrowserGrabRect
 }
 

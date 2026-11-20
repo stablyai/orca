@@ -149,7 +149,7 @@ export function BrowserGuestAnnotateOverlays({
     },
     [pendingDraftKey, setDraft]
   )
-  const heldPayload = useHeldGrabPick({
+  const { payload: heldPayload, retire: retireHeldPick } = useHeldGrabPick({
     grab,
     grabIntent,
     activeTool,
@@ -157,7 +157,11 @@ export function BrowserGuestAnnotateOverlays({
     pageId: toolSwitch.toolTargetId,
     currentUrl
   })
-  const runPaletteGrabAction = useHeldGrabAction(heldPayload, toolSwitch.toolTargetId)
+  const runPaletteGrabAction = useHeldGrabAction(
+    heldPayload,
+    toolSwitch.toolTargetId,
+    retireHeldPick
+  )
   // Leaving the mode with the Send menu open must not leave its agent-target mode behind.
   const { annotationBannerSendOpen, handleAnnotationBannerSendOpenChange } = annotationSend
   useEffect(() => {

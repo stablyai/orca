@@ -152,7 +152,10 @@ export function clampGrabPayload(raw: unknown, documentUrl = ''): BrowserGrabPay
       scrollX: safeNum(page.scrollX),
       scrollY: safeNum(page.scrollY),
       devicePixelRatio: safeNum(page.devicePixelRatio, 1),
-      capturedAt: safeStr(page.capturedAt, 100)
+      capturedAt: safeStr(page.capturedAt, 100),
+      ...(typeof page.selectionId === 'string'
+        ? { selectionId: safeStr(page.selectionId, 200) }
+        : {})
     },
     target: {
       tagName: safeStr(target.tagName, 50),

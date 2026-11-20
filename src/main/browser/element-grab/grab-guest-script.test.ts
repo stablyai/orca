@@ -77,6 +77,7 @@ describe('awaitClick under a Zone.js-patched global Promise', () => {
     const grab: Record<string, unknown> = {
       extractPayload: options?.extractPayload ?? validPayload,
       getCurrentElement: options?.getCurrentElement ?? ((): unknown => ({})),
+      pickControl: (_element: unknown, payload: unknown) => () => ({ payload, contextMenu: false }),
       freezeHighlight(): void {},
       cleanup(): void {}
     }
@@ -110,7 +111,10 @@ describe('awaitClick under a Zone.js-patched global Promise', () => {
     expect(types.isPromise(completion)).toBe(true)
 
     harness.click()
-    const received = await crossExecuteJavaScriptBoundary(completion)
+    const control = (await crossExecuteJavaScriptBoundary(completion)) as (action: string) => {
+      payload: unknown
+    }
+    const received = control('payload').payload
 
     expect(received).toHaveProperty('page')
     expect(received).toHaveProperty('target')

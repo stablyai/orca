@@ -6,7 +6,8 @@ import type { BrowserGrabPayload } from '../../../../../../shared/browser/elemen
 /** Revalidate the original pick before acting, including the gap before a route-removal report arrives. */
 export function useHeldGrabAction(
   payload: BrowserGrabPayload | null,
-  pageId: string
+  pageId: string,
+  onAbsent: (payload: BrowserGrabPayload) => void
 ): (action: () => void) => void {
   const t = useTranslate()
   const livePayloadRef = useRef(payload)
@@ -20,7 +21,7 @@ export function useHeldGrabAction(
     void window.api.browser
       .grabPickedElementPresent({
         browserPageId: pageId,
-        selectionId: payload.page.capturedAt,
+        selectionId: payload.page.selectionId ?? payload.page.capturedAt,
         interactive: true
       })
       .then(
@@ -29,6 +30,9 @@ export function useHeldGrabAction(
             return
           }
           if (present !== true) {
+            if (present === false) {
+              onAbsent(payload)
+            }
             if (present === null) {
               toast.error(t('components.ui.dialog.tryAgain', 'Try again'))
             }

@@ -28,5 +28,8 @@ export type BrowserGrabApi = {
   ) => Promise<BrowserCaptureSelectionScreenshotResult>
   extractHoverPayload: (args: BrowserExtractHoverArgs) => Promise<BrowserExtractHoverResult>
   onGrabModeToggle: (callback: (browserPageId: string, intent: GrabIntent) => void) => () => void
+  onGrabPolicyRetired: (
+    callback: (args: { browserPageId: string; requestId?: string }) => void
+  ) => () => void
   onGrabActionShortcut: (callback: (args: BrowserGrabActionShortcutArgs) => void) => () => void
 }

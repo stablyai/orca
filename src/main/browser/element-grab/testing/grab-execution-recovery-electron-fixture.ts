@@ -50,11 +50,13 @@ export async function verifyGrabExecutionRecovery(
     const slow = await startLoad('/slow')
     const loadingObserved = guest.isLoadingMainFrame()
     const teardown = manager.setGrabMode('page-1', false, guest)
+    const contended = manager.setGrabMode('page-1', false, guest)
     // Network delivery outlasts the old execution cap; assert the operation's outcome, not elapsed time.
     await new Promise((resolve) => setTimeout(resolve, 2_300))
     slow.release()
     await slow.loaded
     const slowLoadFinished = await teardown
+    const contendedLoadFinished = await contended
 
     const cancelled = await startLoad('/cancel')
     const abort = new AbortController()
@@ -92,6 +94,7 @@ export async function verifyGrabExecutionRecovery(
     return {
       loadingObserved,
       slowLoadFinished,
+      contendedLoadFinished,
       cancelledLoad,
       obsoleteCodeAbsent,
       processLoss,

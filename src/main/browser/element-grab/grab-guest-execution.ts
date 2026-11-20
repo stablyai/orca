@@ -1,12 +1,27 @@
+import { sendPrivate, retireGrabOverlay, type GrabDocumentScope } from './grab-document-scope'
+export { retireGrabOverlay, restoreGrabCapture } from './grab-document-scope'
+export type { GrabDocumentScope } from './grab-document-scope'
 import { randomUUID } from 'node:crypto'
 import type { WebContents, WebFrameMain } from 'electron'
 import {
   GRAB_EXECUTION_REQUEST,
   GRAB_EXECUTION_REPORT,
-  type GrabExecutionResult
+  type GrabExecutionResult,
+  type GrabPickOperation
 } from '../../../shared/browser/element-grab/grab-execution-protocol'
 
-type Options = { worldId?: number; background?: boolean; signal?: AbortSignal; selection?: boolean }
+type Options = {
+  worldId?: number
+  background?: boolean
+  loadedOnly?: boolean
+  signal?: AbortSignal
+  selection?: boolean
+  scope?: GrabDocumentScope
+  clean?: boolean
+  overlayControl?: boolean
+  capturePick?: 'held' | 'hover'
+  pick?: { selectionId: string; operation: GrabPickOperation; captureId?: string }
+}
 type Task = {
   id: string
   code: string
@@ -24,6 +39,7 @@ const sessions = new WeakMap<WebContents, GrabGuestExecution>()
 
 /** At most one active and one waiting request per lane; background checks never queue. */
 class GrabGuestExecution {
+  scope: GrabDocumentScope = { current: true, frame: null, documentId: null, overlayId: null }
   private script: Task | null = null
   private selection: Task | null = null
   private waiting: Task | null = null
@@ -37,10 +53,20 @@ class GrabGuestExecution {
   }
 
   run(code: string, options: Options): Promise<GrabExecutionResult> {
-    if (this.guest.isDestroyed() || options.signal?.aborted) {
+    const scope = options.scope ?? this.scope
+    options = { ...options, scope }
+    if (
+      this.guest.isDestroyed() ||
+      options.signal?.aborted ||
+      scope !== this.scope ||
+      !scope.current
+    ) {
       return Promise.resolve({ ok: false })
     }
-    if (options.background && (this.guest.isLoadingMainFrame() || !this.guest.getURL())) {
+    if (
+      (options.background || options.loadedOnly) &&
+      (this.guest.isLoadingMainFrame() || !this.guest.getURL())
+    ) {
       return Promise.resolve({ ok: false })
     }
     const occupied = options.selection ? this.selection : this.script
@@ -60,7 +86,16 @@ class GrabGuestExecution {
         resolve,
         stopWaiting: () => {}
       }
-      const abort = (): void => this.finish(task, { ok: false }, !task.started)
+      const abort = (): void => {
+        if (task.started && task.options.overlayControl && task.documentId) {
+          sendPrivate(task.frame, {
+            kind: 'retire',
+            documentId: task.documentId,
+            overlayId: task.id
+          })
+        }
+        this.finish(task, { ok: false }, !task.started)
+      }
       options.signal?.addEventListener('abort', abort, { once: true })
       task.stopWaiting = () => options.signal?.removeEventListener('abort', abort)
       if (occupied) {
@@ -69,7 +104,19 @@ class GrabGuestExecution {
         } else {
           this.waiting = task
         }
-        task.timer = setTimeout(abort, 2_000)
+        const ready = (): void => {
+          if (!this.guest.isLoadingMainFrame() && this.guest.getURL() && task.live) {
+            this.guest.off('did-stop-loading', ready)
+            task.timer = setTimeout(abort, 2_000)
+          }
+        }
+        const stop = task.stopWaiting
+        task.stopWaiting = () => {
+          stop()
+          this.guest.off('did-stop-loading', ready)
+        }
+        this.guest.on('did-stop-loading', ready)
+        ready()
       } else {
         this.begin(task)
       }
@@ -84,7 +131,7 @@ class GrabGuestExecution {
     }
     const loaded = (): void => {
       this.guest.off('did-stop-loading', loaded)
-      if (!task.live || this.guest.isDestroyed()) {
+      if (!task.live || this.guest.isDestroyed() || task.options.scope !== this.scope) {
         return
       }
       try {
@@ -159,10 +206,19 @@ class GrabGuestExecution {
     }
     if (payload.ready && task.live && !task.started) {
       task.documentId = payload.documentId
+      this.scope.documentId = payload.documentId
+      this.scope.frame = task.frame
+      if (task.options.overlayControl) {
+        this.scope.overlayId = task.id
+      }
       task.started = true
       clearTimeout(task.timer)
       task.timer = setTimeout(
-        () => this.finish(task, { ok: false }, false),
+        () => {
+          this.finish(task, { ok: false }, false)
+          // Recover an already-completed private result if only its reply was lost.
+          sendPrivate(task.frame, { kind: 'hello', id: task.id })
+        },
         task.options.selection ? 120_000 : 2_000
       )
       try {
@@ -173,7 +229,11 @@ class GrabGuestExecution {
           code: task.code,
           worldId: task.options.worldId ?? 0,
           lane: task.options.selection ? 'selection' : 'script',
-          expiresAt: Date.now() + 2_000
+          expiresAt: Date.now() + 2_000,
+          clean: task.options.clean,
+          overlayControl: task.options.overlayControl,
+          capturePick: task.options.capturePick,
+          pick: task.options.pick
         })
       } catch {
         this.finish(task, { ok: false }, true)
@@ -196,6 +256,9 @@ class GrabGuestExecution {
   }
 
   private readonly retire = (): void => {
+    retireGrabOverlay(this.scope)
+    this.scope.current = false
+    this.scope = { current: true, frame: null, documentId: null, overlayId: null }
     const tasks = [this.script, this.selection, this.waiting, this.waitingSelection]
     this.script = this.selection = this.waiting = this.waitingSelection = null
     for (const task of tasks) {
@@ -222,12 +285,7 @@ export function requestGrabExecution(
   if (guest.isDestroyed()) {
     return Promise.resolve({ ok: false })
   }
-  let session = sessions.get(guest)
-  if (!session) {
-    session = new GrabGuestExecution(guest)
-    sessions.set(guest, session)
-  }
-  return session.run(code, options)
+  return getSession(guest).run(code, options)
 }
 
 export async function executeGrabScript(
@@ -237,4 +295,17 @@ export async function executeGrabScript(
 ): Promise<boolean | null> {
   const result = await requestGrabExecution(guest, code, options)
   return result.ok && typeof result.value === 'boolean' ? result.value : null
+}
+
+function getSession(guest: WebContents): GrabGuestExecution {
+  let session = sessions.get(guest)
+  if (!session) {
+    session = new GrabGuestExecution(guest)
+    sessions.set(guest, session)
+  }
+  return session
+}
+
+export function grabDocumentScope(guest: WebContents): GrabDocumentScope {
+  return getSession(guest).scope
 }

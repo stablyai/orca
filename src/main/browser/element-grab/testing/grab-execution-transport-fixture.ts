@@ -1,9 +1,6 @@
 import type { EventEmitter } from 'node:events'
-import {
-  GRAB_EXECUTION_REQUEST,
-  GRAB_EXECUTION_REPORT,
-  type GrabExecutionRequest
-} from '../../../../shared/browser/element-grab/grab-execution-protocol'
+import { installBrowserGuestExecution } from '../../../../preload/browser/element-grab/browser-guest-execution'
+import type { GrabExecutionRequest } from '../../../../shared/browser/element-grab/grab-execution-protocol'
 
 /** Only replaces the IPC transport; supplied guest script implementations produce the real result. */
 export function attachGrabExecutionTransport<
@@ -16,49 +13,32 @@ export function attachGrabExecutionTransport<
     ) => Promise<unknown>
   }
 >(guest: T): T & { mainFrame: Electron.WebFrameMain; isLoadingMainFrame: () => boolean } {
-  let documentId = 'fixture-document'
-  guest.on('did-start-navigation', (_event, _url, inPlace, main) => {
-    if (main && !inPlace) {
-      documentId += '-next'
-    }
-  })
+  const listeners = new Map<string, (request: GrabExecutionRequest) => void>()
+  const install = (): void => {
+    installBrowserGuestExecution(
+      {
+        on: (channel, listener) => listeners.set(channel, listener),
+        send: (channel, payload) =>
+          queueMicrotask(() => guest.emit('ipc-message', { senderFrame: frame }, channel, payload))
+      },
+      {
+        executeJavaScript: (code) => guest.executeJavaScript?.(code) ?? Promise.resolve(undefined),
+        executeJavaScriptInIsolatedWorld: (world, scripts) =>
+          guest.executeJavaScriptInIsolatedWorld?.(world, scripts) ?? Promise.resolve(undefined)
+      }
+    )
+  }
   const frame = {
     send: (channel: string, request: GrabExecutionRequest): void => {
-      if (channel !== GRAB_EXECUTION_REQUEST) {
-        return
-      }
-      const originalDocument = documentId
-      queueMicrotask(async () => {
-        if (request.kind === 'hello') {
-          guest.emit('ipc-message', { senderFrame: frame }, GRAB_EXECUTION_REPORT, {
-            id: request.id,
-            documentId: originalDocument,
-            ready: true
-          })
-          return
-        }
-        if (request.documentId !== documentId) {
-          return
-        }
-        try {
-          const value = await (request.worldId === 0
-            ? guest.executeJavaScript?.(request.code)
-            : guest.executeJavaScriptInIsolatedWorld?.(request.worldId, [{ code: request.code }]))
-          guest.emit('ipc-message', { senderFrame: frame }, GRAB_EXECUTION_REPORT, {
-            id: request.id,
-            documentId: originalDocument,
-            result: { ok: true, value }
-          })
-        } catch {
-          guest.emit('ipc-message', { senderFrame: frame }, GRAB_EXECUTION_REPORT, {
-            id: request.id,
-            documentId: originalDocument,
-            result: { ok: false }
-          })
-        }
-      })
+      queueMicrotask(() => listeners.get(channel)?.(request))
     }
   }
+  guest.on('did-start-navigation', (_event, _url, inPlace, main) => {
+    if (main && !inPlace) {
+      install()
+    }
+  })
+  install()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the execution transport uses only frame.send and sender-frame object identity.
   const senderFrame = frame as unknown as Electron.WebFrameMain
   return Object.assign(guest, {

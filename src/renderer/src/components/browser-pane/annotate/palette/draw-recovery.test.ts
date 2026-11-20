@@ -53,7 +53,7 @@ beforeEach(() => {
     configurable: true,
     value: {
       browser: {
-        setGrabMode: async () => ({ ok: true }),
+        setGrabMode: async () => ({ ok: true, clean: true }),
         onGuestEscape: () => () => {},
         cancelGrab: async () => true,
         captureSelectionScreenshot: async () => ({ ok: false }),

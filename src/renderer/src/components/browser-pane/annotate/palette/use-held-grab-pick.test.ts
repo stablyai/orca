@@ -23,7 +23,7 @@ it('retains a live pick on an unavailable check and drops it only when a later c
       browser: { grabPickedElementPresent: () => query() }
     }
   })
-  const { result, rerender } = renderHook(
+  const { result } = renderHook(
     ({ url }) =>
       useHeldGrabPick({
         grab: { state: 'confirming', payload },
@@ -35,13 +35,11 @@ it('retains a live pick on an unavailable check and drops it only when a later c
       }),
     { initialProps: { url: 'https://synthetic.test/' } }
   )
-  expect(result.current).toBe(payload)
-  rerender({ url: 'https://synthetic.test/#route' })
+  expect(result.current.payload).toBe(payload)
   await act(async () => {
     finish?.(null)
   })
-  expect(result.current).toBe(payload)
+  expect(result.current.payload).toBe(payload)
   query = () => Promise.resolve(false)
-  rerender({ url: 'https://synthetic.test/#later' })
-  await waitFor(() => expect(result.current).toBeNull())
+  await waitFor(() => expect(result.current.payload).toBeNull())
 })

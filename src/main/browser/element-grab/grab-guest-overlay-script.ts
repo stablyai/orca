@@ -155,9 +155,41 @@ ${GRAB_GUEST_LABEL_PLACEMENT_SCRIPT}
     previousSelectedValue = null;
   }
 
+  function pickControl(element, payload, contextMenu) {
+    var original = new WeakRef(element);
+    var response = { payload: payload, contextMenu: contextMenu };
+    var hidden = null;
+    function snapshot() {
+      var target = original.deref();
+      if (!target || !target.isConnected) return false;
+      var rect = target.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, viewportWidth: window.innerWidth };
+    }
+    return function(action, id) {
+      if (action === 'payload') { var result = response; response = null; return result; }
+      if (action === 'present') { var target = original.deref(); return Boolean(target && target.isConnected); }
+      if (action === 'snapshot') return snapshot();
+      if (action === 'hide') {
+        var rect = snapshot();
+        if (!rect || hidden) return false;
+        var nodes = [host].concat(Array.from(document.querySelectorAll('[data-orca-browser-annotation-overlay]')));
+        hidden = { id: id, nodes: nodes.map(function(node) { return { node: node, display: node.style.display }; }) };
+        hidden.nodes.forEach(function(item) { item.node.style.display = 'none'; });
+        return rect;
+      }
+      if (action === 'restore' && hidden && hidden.id === id) {
+        hidden.nodes.forEach(function(item) { item.node.style.display = item.display; });
+        hidden = null;
+        return true;
+      }
+      return false;
+    };
+  }
+
   var grab = window.__orcaGrab = {
     host: host,
     extractPayload: extractPayload,
+    pickControl: pickControl,
     getCurrentElement: function() { return currentEl; },
     // Orca's palette moved, resized or closed: re-place the label for the hovered element.
     setLabelAvoidArea: function(area) {
@@ -204,5 +236,12 @@ ${GRAB_GUEST_LABEL_PLACEMENT_SCRIPT}
     }
   };
 
-  return true;
+  return function(action) {
+    if (action === 'teardown') {
+      if (grab.cancelAwait) grab.cancelAwait();
+      else grab.cleanup();
+      return true;
+    }
+    return false;
+  };
 })()`

@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BrowserManager } from '../browser-manager'
 import { attachGrabExecutionTransport } from '../../../element-grab/testing/grab-execution-transport-fixture'
 
@@ -14,30 +14,25 @@ vi.mock('electron', () => ({
   webContents: { fromId: () => null }
 }))
 
-/** A page whose main-world scripts finish only when the test says so; isolated-world replies are queued too. */
+afterEach(() => vi.unstubAllGlobals())
+
+/** The private preload must wait for the painted frame before it grants a clean capture. */
 function heldGuest() {
-  const mainWorld: (() => void)[] = []
-  const isolatedReplies: ((value: boolean | null) => void)[] = []
+  const frames: FrameRequestCallback[] = []
+  vi.stubGlobal('requestAnimationFrame', (frame: FrameRequestCallback) => {
+    frames.push(frame)
+    return frames.length
+  })
   const guest = attachGrabExecutionTransport(
     Object.assign(new EventEmitter(), {
       id: 7,
       isDestroyed: () => false,
-      // Overlay scripts wait for the test; the painted-frame wait answers at once (proven in real Electron).
-      executeJavaScript: (script: string) =>
-        script.includes('requestAnimationFrame')
-          ? Promise.resolve(true)
-          : new Promise<unknown>((resolve) => {
-              mainWorld.push(() => resolve(true))
-            }),
-      executeJavaScriptInIsolatedWorld: (_world: number, scripts: { code: string }[]) =>
-        scripts[0]?.code.includes('current.await(')
-          ? new Promise<boolean | null>((resolve) => isolatedReplies.push(resolve))
-          : Promise.resolve(true)
+      executeJavaScript: () => Promise.resolve(true)
     })
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: setGrabMode and the watch only call executeJavaScript, executeJavaScriptInIsolatedWorld, on/off/once and isDestroyed, which this fixture implements.
   const page = guest as unknown as Electron.WebContents
-  return { guest, page, mainWorld, isolatedReplies }
+  return { guest, page, frames }
 }
 
 const flush = async (): Promise<void> => {
@@ -47,9 +42,9 @@ const flush = async (): Promise<void> => {
 }
 
 describe('turning the picker off before Draw captures', () => {
-  it('settles only after the page has finished the teardown script', async () => {
+  it('grants clean capture only after the private painted-frame wait', async () => {
     const manager = new BrowserManager()
-    const { page, mainWorld } = heldGuest()
+    const { page, frames } = heldGuest()
     let settled = false
     const off = manager.setGrabMode('page-1', false, page).then((ok) => {
       settled = true
@@ -58,20 +53,26 @@ describe('turning the picker off before Draw captures', () => {
     await flush()
     expect(settled).toBe(false)
 
-    for (const finish of mainWorld.splice(0)) {
-      finish()
+    for (const frame of frames.splice(0)) {
+      frame(0)
+    }
+    for (const frame of frames.splice(0)) {
+      frame(0)
     }
 
     await expect(off).resolves.toBe(true)
   })
   it('rejects a teardown superseded by a new document, including its late completion', async () => {
     const manager = new BrowserManager()
-    const { page, guest, mainWorld } = heldGuest()
+    const { page, guest, frames } = heldGuest()
     const off = manager.setGrabMode('page-1', false, page)
     guest.emit('did-start-navigation', {}, 'https://example.test/new', false, true)
     await expect(off).resolves.toBe(false)
-    for (const finish of mainWorld.splice(0)) {
-      finish()
+    for (const frame of frames.splice(0)) {
+      frame(0)
+    }
+    for (const frame of frames.splice(0)) {
+      frame(0)
     }
   })
 })

@@ -77,7 +77,7 @@ export function runBrowserGrabActionShortcut({
     void window.api.browser
       .grabPickedElementPresent({
         browserPageId: toolTargetIdRef.current,
-        selectionId: payload.page.capturedAt,
+        selectionId: payload.page.selectionId ?? payload.page.capturedAt,
         interactive: true
       })
       .then((present) => {
@@ -85,6 +85,9 @@ export function runBrowserGrabActionShortcut({
           return
         }
         if (present !== true) {
+          if (present === false) {
+            grab.cancel()
+          }
           if (present === null) {
             showGrabToast(translate('components.ui.dialog.tryAgain', 'Try again'), 'error', payload)
           }
@@ -126,7 +129,8 @@ export function runBrowserGrabActionShortcut({
         try {
           const ssResult = await window.api.browser.captureSelectionScreenshot({
             browserPageId: toolTargetIdRef.current,
-            rect: payload.target.rectViewport
+            rect: payload.target.rectViewport,
+            selectionId: payload.page.selectionId
           })
           if (ssResult.ok) {
             payload.screenshot = ssResult.screenshot as BrowserGrabScreenshot

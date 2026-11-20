@@ -6,6 +6,7 @@ import type {
   BrowserGrabScreenshot,
   BrowserSetGrabModeResult
 } from '../../../../../../shared/browser/element-grab/browser-grab-types'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { isEditableKeyboardTarget } from '../../host-guest/input/browser-keyboard'
@@ -65,6 +66,7 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
   const [payload, setPayload] = useState<BrowserGrabPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState(false)
+  const activeRequestIdRef = useRef<string | null>(null)
   const activeOpIdRef = useRef<string | null>(null)
   const grabTabIdRef = useRef<string | null>(null)
   const armGenerationRef = useRef(0)
@@ -81,8 +83,13 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
       const grabTabId = grabTabIdRef.current
       if (grabTabId) {
         armGenerationRef.current += 1
-        void window.api.browser.setGrabMode({ browserPageId: grabTabId, enabled: false })
-        void window.api.browser.cancelGrab({ browserPageId: grabTabId })
+        void window.api.browser
+          .cancelGrab({
+            browserPageId: grabTabId,
+            requestId: activeRequestIdRef.current ?? undefined
+          })
+          .catch(() => {})
+        activeRequestIdRef.current = null
         grabTabIdRef.current = null
         activeOpIdRef.current = null
       }
@@ -94,10 +101,12 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     const armGeneration = (armGenerationRef.current += 1)
     grabTabIdRef.current = tabId
     setState('armed')
+    const requestId = nextOpId()
+    activeRequestIdRef.current = requestId
 
     // A rejected invoke (lost reply) must end in the error state, not a stuck 'armed'.
     const setResult = await window.api.browser
-      .setGrabMode({ browserPageId: tabId, enabled: true })
+      .setGrabMode({ browserPageId: tabId, enabled: true, requestId })
       .catch((): BrowserSetGrabModeResult => ({ ok: false, reason: 'injection-failed' }))
     if (
       !mountedRef.current ||
@@ -108,8 +117,7 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
       const supersededBySameTab =
         armGenerationRef.current !== armGeneration && grabTabIdRef.current === tabId
       if (!supersededBySameTab) {
-        void window.api.browser.setGrabMode({ browserPageId: tabId, enabled: false })
-        void window.api.browser.cancelGrab({ browserPageId: tabId })
+        void window.api.browser.cancelGrab({ browserPageId: tabId, requestId }).catch(() => {})
         if (grabTabIdRef.current === tabId) {
           grabTabIdRef.current = null
         }
@@ -117,6 +125,8 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
       return
     }
     if (!setResult.ok) {
+      void window.api.browser.cancelGrab({ browserPageId: tabId, requestId }).catch(() => {})
+      activeRequestIdRef.current = null
       grabTabIdRef.current = null
       setState('error')
       setError(getGrabEnableError(setResult.reason))
@@ -128,7 +138,7 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
 
     setState('awaiting')
     const result = await window.api.browser
-      .awaitGrabSelection({ browserPageId: tabId, opId })
+      .awaitGrabSelection({ browserPageId: tabId, opId, requestId })
       .catch((): BrowserGrabResult => ({ opId, kind: 'error', reason: 'Selection failed' }))
 
     if (!mountedRef.current || activeOpIdRef.current !== opId || grabTabIdRef.current !== tabId) {
@@ -142,7 +152,8 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
       try {
         const ssResult = await window.api.browser.captureSelectionScreenshot({
           browserPageId: tabId,
-          rect: result.payload.target.rectViewport
+          rect: result.payload.target.rectViewport,
+          selectionId: result.payload.page.selectionId
         })
         if (ssResult.ok) {
           screenshot = ssResult.screenshot as BrowserGrabScreenshot
@@ -177,16 +188,14 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     armGenerationRef.current += 1
     // Navigation cancels every page's capture; an idle page has nothing in main to tear down.
     if (targetTabId !== null) {
-      void window.api.browser.setGrabMode({
-        browserPageId: targetTabId,
-        enabled: false
-      })
-      if (activeOpIdRef.current) {
-        void window.api.browser.cancelGrab({
-          browserPageId: targetTabId
+      void window.api.browser
+        .cancelGrab({
+          browserPageId: targetTabId,
+          requestId: activeRequestIdRef.current ?? undefined
         })
-      }
+        .catch(() => {})
     }
+    activeRequestIdRef.current = null
     activeOpIdRef.current = null
     grabTabIdRef.current = null
     setState('idle')
@@ -194,6 +203,52 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     setError(null)
     setContextMenu(false)
   }, [])
+
+  useEffect(() => {
+    if (state !== 'confirming' || !payload) {
+      return
+    }
+    let live = true
+    let checking = false
+    const stop = installWindowVisibilityInterval({
+      intervalMs: 300,
+      slowWhileUnfocused: true,
+      run: () => {
+        if (checking) {
+          return
+        }
+        checking = true
+        void window.api.browser
+          .grabPickedElementPresent({
+            browserPageId,
+            selectionId: payload.page.selectionId ?? payload.page.capturedAt
+          })
+          .catch(() => null)
+          .then((present) => {
+            checking = false
+            if (live && present === false) {
+              cancel()
+            }
+          })
+      }
+    })
+    return () => {
+      live = false
+      stop()
+    }
+  }, [browserPageId, cancel, payload, state])
+
+  useEffect(
+    () =>
+      window.api.browser.onGrabPolicyRetired?.((args) => {
+        if (args.browserPageId === browserPageId && args.requestId === activeRequestIdRef.current) {
+          cancel()
+          setState('error')
+          setError(getGrabEnableError('injection-failed'))
+        }
+      }),
+    [browserPageId, cancel]
+  )
 
   const toggle = useCallback(() => {
     if ((state === 'idle' || state === 'error') && grabTabIdRef.current === null) {
@@ -216,21 +271,7 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     void armAndAwait()
   }, [armAndAwait])
 
-  const exit = useCallback(() => {
-    const targetTabId = grabTabIdRef.current ?? browserTabIdRef.current
-    armGenerationRef.current += 1
-    void window.api.browser.setGrabMode({
-      browserPageId: targetTabId,
-      enabled: false
-    })
-    // Invalidate prior in-flight selections before exiting.
-    activeOpIdRef.current = null
-    grabTabIdRef.current = null
-    setState('idle')
-    setPayload(null)
-    setError(null)
-    setContextMenu(false)
-  }, [])
+  const exit = cancel
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {

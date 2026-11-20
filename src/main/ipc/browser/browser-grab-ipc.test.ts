@@ -1,6 +1,8 @@
+import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
+  guest: null as (EventEmitter & { id: number; isDestroyed: () => boolean }) | null,
   handlers: new Map<string, (event: unknown, args: unknown) => unknown>(),
   run: async (_enabled: boolean, _signal: AbortSignal): Promise<boolean> => true
 }))
@@ -14,7 +16,8 @@ vi.mock('electron', () => ({
 }))
 vi.mock('../../browser/guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
-    getAuthorizedGuest: () => ({ id: 7 }),
+    getAuthorizedGuest: () => mocks.guest,
+    cancelGrabOp: () => {},
     setGrabMode: (
       _page: string,
       enabled: boolean,
@@ -31,6 +34,7 @@ import { registerBrowserGrabHandlers, resetGrabModeState } from './browser-grab-
 
 beforeEach(() => {
   resetGrabModeState()
+  mocks.guest = Object.assign(new EventEmitter(), { id: 7, isDestroyed: () => false })
   mocks.handlers.clear()
   registerBrowserGrabHandlers()
 })
@@ -68,6 +72,46 @@ it('reports superseded mode requests truthfully and completes the latest request
   await expect(superseded).resolves.toEqual({ ok: false, reason: 'not-ready' })
   release?.()
   await expect(first).resolves.toEqual({ ok: false, reason: 'not-ready' })
-  await expect(latest).resolves.toEqual({ ok: true })
+  await expect(latest).resolves.toMatchObject({ ok: true, clean: true })
   expect(enabled).toBe(false)
+})
+
+it('cancels only the matching pending mode request, leaving its successor usable', async () => {
+  let enter: (() => void) | undefined
+  const entered = new Promise<void>((resolve) => {
+    enter = resolve
+  })
+  mocks.run = async (_enabled, signal) => {
+    enter?.()
+    return new Promise<boolean>((resolve) =>
+      signal.addEventListener('abort', () => resolve(false), { once: true })
+    )
+  }
+  const sender = { id: 17 }
+  const mode = (requestId: string) =>
+    Promise.resolve(
+      mocks.handlers.get('browser:setGrabMode')?.(
+        { sender },
+        { browserPageId: 'page', enabled: false, requestId }
+      )
+    )
+  const cancel = (requestId: string) =>
+    mocks.handlers.get('browser:cancelGrab')?.({ sender }, { browserPageId: 'page', requestId })
+  const pending = mode('pending')
+  await entered
+  expect(cancel('obsolete')).toBe(false)
+  expect(cancel('pending')).toBe(true)
+  await expect(pending).resolves.toEqual({ ok: false, reason: 'not-ready' })
+  mocks.run = async () => true
+  await expect(mode('successor')).resolves.toEqual({ ok: true, clean: true })
+  expect(cancel('pending')).toBe(false)
+})
+
+it('distinguishes missing-guest cleanup from a positive clean capture permit', async () => {
+  mocks.guest = null
+  const result = mocks.handlers.get('browser:setGrabMode')?.(
+    { sender: { id: 17 } },
+    { browserPageId: 'gone', enabled: false, requestId: 'cleanup' }
+  )
+  await expect(result).resolves.toEqual({ ok: true, clean: false })
 })

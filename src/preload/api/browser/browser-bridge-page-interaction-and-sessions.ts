@@ -14,6 +14,10 @@ import type { BrowserUserAgentMode } from '../../../shared/browser/identity/brow
 import type { ManagedBrowserProfileOwner } from '../../../shared/browser/profiles/browser-profile-scope'
 import type {
   BrowserGrabActionShortcutArgs,
+  BrowserSetGrabModeArgs,
+  BrowserAwaitGrabSelectionArgs,
+  BrowserCancelGrabArgs,
+  BrowserCaptureSelectionScreenshotArgs,
   GrabIntent
 } from '../../../shared/browser/element-grab/browser-grab-types'
 import type {
@@ -132,11 +136,10 @@ export const browserPageInteractionAndSessionsApi = {
   },
   cancelDownload: (args: { downloadId: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:cancelDownload', args),
-  setGrabMode: (args: { browserPageId: string; enabled: boolean }) =>
-    ipcRenderer.invoke('browser:setGrabMode', args),
-  awaitGrabSelection: (args: { browserPageId: string; opId: string }) =>
+  setGrabMode: (args: BrowserSetGrabModeArgs) => ipcRenderer.invoke('browser:setGrabMode', args),
+  awaitGrabSelection: (args: BrowserAwaitGrabSelectionArgs) =>
     ipcRenderer.invoke('browser:awaitGrabSelection', args),
-  cancelGrab: (args: { browserPageId: string }): Promise<boolean> =>
+  cancelGrab: (args: BrowserCancelGrabArgs): Promise<boolean> =>
     ipcRenderer.invoke('browser:cancelGrab', args),
   setGrabLabelAvoidArea: (args: {
     browserPageId: string
@@ -154,10 +157,8 @@ export const browserPageInteractionAndSessionsApi = {
     selectionId: string
     interactive?: boolean
   }): Promise<boolean | null> => ipcRenderer.invoke('browser:grabPickedElementPresent', args),
-  captureSelectionScreenshot: (args: {
-    browserPageId: string
-    rect: { x: number; y: number; width: number; height: number }
-  }) => ipcRenderer.invoke('browser:captureSelectionScreenshot', args),
+  captureSelectionScreenshot: (args: BrowserCaptureSelectionScreenshotArgs) =>
+    ipcRenderer.invoke('browser:captureSelectionScreenshot', args),
   extractHoverPayload: (args: { browserPageId: string }) =>
     ipcRenderer.invoke('browser:extractHoverPayload', args),
   onGrabModeToggle: (
@@ -170,6 +171,16 @@ export const browserPageInteractionAndSessionsApi = {
     ) => callback(browserPageId, intent)
     ipcRenderer.on('browser:grabModeToggle', listener)
     return () => ipcRenderer.removeListener('browser:grabModeToggle', listener)
+  },
+  onGrabPolicyRetired: (
+    callback: (args: { browserPageId: string; requestId?: string }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      args: { browserPageId: string; requestId?: string }
+    ): void => callback(args)
+    ipcRenderer.on('browser:grabPolicyRetired', listener)
+    return () => ipcRenderer.removeListener('browser:grabPolicyRetired', listener)
   },
   onGrabActionShortcut: (callback: (args: BrowserGrabActionShortcutArgs) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: BrowserGrabActionShortcutArgs) =>

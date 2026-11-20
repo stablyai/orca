@@ -37,7 +37,7 @@ const writeClipboardImage = vi.fn(
     })
 )
 type SetGrabModeArgs = { browserPageId: string; enabled: boolean }
-type SetGrabModeResult = { ok: true } | { ok: false; reason: 'injection-failed' }
+type SetGrabModeResult = { ok: true; clean: true } | { ok: false; reason: 'injection-failed' }
 // Arming resolves at once; a disable can be held open so a test controls when the page acknowledges teardown.
 let heldDisable: ((result: SetGrabModeResult) => void) | null = null
 let holdDisables = false
@@ -46,7 +46,7 @@ const setGrabMode = vi.fn((args: SetGrabModeArgs): Promise<SetGrabModeResult> =>
     ? new Promise((resolve) => {
         heldDisable = resolve
       })
-    : Promise.resolve({ ok: true })
+    : Promise.resolve({ ok: true, clean: true })
 )
 
 beforeEach(() => {
@@ -63,6 +63,7 @@ beforeEach(() => {
         setGrabMode,
         onGuestEscape: () => () => {},
         cancelGrab: vi.fn(async () => true),
+        grabPickedElementPresent: async () => true,
         captureSelectionScreenshot: vi.fn(async () => ({ ok: false })),
         // Each arm waits for the next pick; the test decides when the user clicks an element.
         awaitGrabSelection: vi.fn(
@@ -208,7 +209,7 @@ describe('switching annotate tools', () => {
     await waitFor(() => expect(heldDisable).not.toBeNull())
     expect(markup.start).not.toHaveBeenCalled()
 
-    await act(async () => heldDisable?.({ ok: true }))
+    await act(async () => heldDisable?.({ ok: true, clean: true }))
   })
 
   it('does not capture for Draw when the page cannot confirm teardown', async () => {
@@ -238,7 +239,7 @@ describe('switching annotate tools', () => {
     const releaseTeardown = heldDisable
     holdDisables = false
     act(() => result.current.tools.selectTool('copy'))
-    await act(async () => releaseTeardown?.({ ok: true }))
+    await act(async () => releaseTeardown?.({ ok: true, clean: true }))
 
     expect(markup.start).not.toHaveBeenCalled()
     expect(result.current.tools.activeTool).toBe('copy')
@@ -270,7 +271,7 @@ describe('switching annotate tools', () => {
       expect(result.current.grab.state).toBe('idle')
       expect(markup.start).not.toHaveBeenCalled()
 
-      await act(async () => heldDisable?.({ ok: true }))
+      await act(async () => heldDisable?.({ ok: true, clean: true }))
       expect(
         Math.max(...setGrabMode.mock.invocationCallOrder, ...cancelGrab.mock.invocationCallOrder)
       ).toBeLessThan(vi.mocked(markup.start).mock.invocationCallOrder[0])
@@ -285,7 +286,7 @@ describe('switching annotate tools', () => {
     rerender({ ...FIRST_PAGE, documentKey: 'http://acme.test/other' })
     rerender(FIRST_PAGE)
     expect(result.current.tools.activeTool).toBeNull()
-    await act(async () => release({ ok: true }))
+    await act(async () => release({ ok: true, clean: true }))
 
     expect(markup.start).not.toHaveBeenCalled()
     expect(result.current.tools.activeTool).toBeNull()
@@ -298,7 +299,7 @@ describe('switching annotate tools', () => {
 
     rerender({ ...FIRST_PAGE, documentReady: false })
     rerender(FIRST_PAGE)
-    await act(async () => release({ ok: true }))
+    await act(async () => release({ ok: true, clean: true }))
 
     expect(markup.start).not.toHaveBeenCalled()
     expect(result.current.tools.activeTool).toBeNull()
@@ -314,7 +315,7 @@ describe('switching annotate tools', () => {
     expect(result.current.tools.drawWaitingForPage).toBe(true)
     expect(markup.start).not.toHaveBeenCalled()
     rerender(FIRST_PAGE)
-    await act(async () => release({ ok: true }))
+    await act(async () => release({ ok: true, clean: true }))
     await act(async () => {})
     await waitFor(() => expect(result.current.tools.drawWaitingForPage).toBe(false))
   })
@@ -328,7 +329,7 @@ describe('switching annotate tools', () => {
     rerender({ ...FIRST_PAGE, documentReady: false })
     const release = await startDrawWithTeardownHeld(result)
     holdDisables = false
-    await act(async () => release({ ok: true }))
+    await act(async () => release({ ok: true, clean: true }))
     expect(result.current.tools.drawWaitingForPage).toBe(true)
 
     act(() =>
@@ -350,7 +351,7 @@ describe('switching annotate tools', () => {
     rerender({ ...FIRST_PAGE, canPickElements: false })
     expect(result.current.tools.activeTool).toBeNull()
     rerender(FIRST_PAGE)
-    await act(async () => release({ ok: true }))
+    await act(async () => release({ ok: true, clean: true }))
 
     expect(markup.start).not.toHaveBeenCalled()
     // Not stuck showing Draw for a start that will never finish.

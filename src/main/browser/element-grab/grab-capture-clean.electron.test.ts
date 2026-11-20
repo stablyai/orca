@@ -45,10 +45,18 @@ describe("Draw's capture after the picker turns off", () => {
       recovery: {
         loadingObserved: true,
         slowLoadFinished: true,
+        contendedLoadFinished: true,
         cancelledLoad: null,
         obsoleteCodeAbsent: true,
         processLoss: null,
         recovered: true
+      },
+      pickLifetime: {
+        handoff: 'cancelled',
+        heldAfterRoute: true,
+        screenshotBeforeReplacement: true,
+        presentAfterReplacement: false,
+        screenshotAfterReplacement: false
       },
       'awaiting-idle': states,
       'confirming-idle': states,
