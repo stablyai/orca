@@ -235,6 +235,8 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
     guest.on('page-title-updated', offscreenStateChangedHandler)
     guest.on('did-start-loading', offscreenStateChangedHandler)
     guest.on('did-stop-loading', offscreenStateChangedHandler)
+    const settleFrames = (): void => this.settleSubframeUserAgentDemand(guest)
+    guest.on('did-stop-loading', settleFrames)
     guest.on('did-fail-load', didFailLoadHandler)
     // Why emit: an extension-blocked guest main frame commits no error page, so Electron reports
     // nothing; every did-fail-load reader (this policy, the pane, webNavigation) needs the failure.
@@ -271,6 +273,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
         guest.off('page-title-updated', offscreenStateChangedHandler)
         guest.off('did-start-loading', offscreenStateChangedHandler)
         guest.off('did-stop-loading', offscreenStateChangedHandler)
+        guest.off('did-stop-loading', settleFrames)
         guest.off('did-fail-load', didFailLoadHandler)
         guest.off('will-prevent-unload', allowPageUnload)
       }

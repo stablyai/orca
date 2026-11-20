@@ -16,7 +16,8 @@ import type {
 } from './browser-user-agent-override-state'
 import { BrowserManagerVisibility } from '../browser-manager-visibility'
 import {
-  markBrowserGuestFrameUserAgentDemand,
+  hasBrowserGuestFrameUserAgentDemand,
+  setBrowserGuestFrameUserAgentDemand,
   setBrowserGuestPageUserAgentDemand
 } from '../../../identity/requests/browser-session-ua-demand'
 import { teamsRequestUserAgent } from '../../../identity/browser-site-user-agent'
@@ -128,15 +129,26 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     )
   }
 
-  /** A site iframe (e.g. Teams inside another page) keeps the policy on until the next page. */
+  /** A site iframe (e.g. Teams inside another page) keeps the policy on while it is loaded. */
   protected noteSubframeUserAgentDemand(guest: Electron.WebContents, url: string): void {
-    const identity = resolveBrowserTabIdentity({
-      url,
-      mobile: false,
-      processIdentity: getBrowserProcessUserAgentIdentity()
-    })
-    if (rewritesRequestHeaders(url, identity)) {
-      markBrowserGuestFrameUserAgentDemand(guest.session, guest.id)
+    if (subframeRewritesRequestHeaders(url)) {
+      setBrowserGuestFrameUserAgentDemand(guest.session, guest.id, true)
+    }
+  }
+
+  /** Once the page stops loading, only site iframes still present keep the policy on. */
+  protected settleSubframeUserAgentDemand(guest: Electron.WebContents): void {
+    if (guest.isDestroyed() || !hasBrowserGuestFrameUserAgentDemand(guest.id)) {
+      return
+    }
+    try {
+      const { mainFrame } = guest
+      const demanding = mainFrame.framesInSubtree.some(
+        (frame) => frame !== mainFrame && subframeRewritesRequestHeaders(frame.url)
+      )
+      setBrowserGuestFrameUserAgentDemand(guest.session, guest.id, demanding)
+    } catch {
+      // A disposed frame tree can't prove the site iframe gone; keep the policy on.
     }
   }
 
@@ -308,6 +320,17 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
   protected resolveTabNavigationUrl(guest: Electron.WebContents): string {
     return this.pendingNavigationByGuestId.get(guest.id)?.currentUrl ?? guest.getURL()
   }
+}
+
+function subframeRewritesRequestHeaders(url: string): boolean {
+  return rewritesRequestHeaders(
+    url,
+    resolveBrowserTabIdentity({
+      url,
+      mobile: false,
+      processIdentity: getBrowserProcessUserAgentIdentity()
+    })
+  )
 }
 
 function rewritesRequestHeaders(url: string, identity: BrowserTabIdentity): boolean {

@@ -55,10 +55,18 @@ export function setBrowserGuestPageUserAgentDemand(
   write(guestId, { session, page, frame })
 }
 
-/** A site iframe keeps the policy on until the next document commits. */
-export function markBrowserGuestFrameUserAgentDemand(session: Session, guestId: number): void {
+/** Whether a site iframe in the guest (e.g. Teams inside another page) needs header rewrites. */
+export function setBrowserGuestFrameUserAgentDemand(
+  session: Session,
+  guestId: number,
+  frame: boolean
+): void {
   const previous = guests.get(guestId)
-  write(guestId, { session, page: previous?.session === session && previous.page, frame: true })
+  write(guestId, { session, page: previous?.session === session && previous.page, frame })
+}
+
+export function hasBrowserGuestFrameUserAgentDemand(guestId: number): boolean {
+  return guests.get(guestId)?.frame === true
 }
 
 export function clearBrowserGuestUserAgentDemand(guestId: number): void {

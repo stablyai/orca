@@ -42,7 +42,8 @@ function postedFormAction(
   target: EventTarget | null,
   lastSubmitterByForm: WeakMap<HTMLFormElement, HTMLElement | null>
 ): string | null {
-  if (!(target instanceof HTMLFormElement)) {
+  // `new FormData(form)` fires formdata too; only a submission's own entry list follows a submit.
+  if (!(target instanceof HTMLFormElement) || !lastSubmitterByForm.has(target)) {
     return null
   }
   const submitter = lastSubmitterByForm.get(target)

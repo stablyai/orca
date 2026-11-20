@@ -42,6 +42,7 @@ vi.mock('../../../identity/browser-process-user-agent', async (importOriginal) =
 }))
 
 import { browserManager } from '../browser-manager'
+import { hasBrowserSessionUserAgentDemand } from '../../../identity/requests/browser-session-ua-demand'
 import { googleAuthUserAgent } from '../../../identity/browser-site-user-agent'
 import { resetBrowserManagerMocks, resetBrowserManagerState } from '../browser-manager-test-harness'
 import {
@@ -286,5 +287,36 @@ describe('tab identity ownership', () => {
     expect(observed.presented).toBe(GUEST_CLEAN_UA)
     expect(observed.standingOverride).toBeNull()
     expect(observed.requestIdentity).toEqual({ kind: 'process', userAgent: GUEST_CLEAN_UA })
+  })
+  it('turns the header policy off once the last site iframe in a page is gone', async () => {
+    mocks.processUserAgentMode = 'native'
+    mocks.processUserAgent =
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) orca/1.0.0 Chrome/134.0.0.0 Electron/30.0.0 Safari/537.36'
+    const { handle } = openTab(ORDINARY_URL)
+    await flushViewportOps()
+    const teamsFrame = { url: 'https://teams.microsoft.com/v2/' }
+    const mainFrame: { url: string; framesInSubtree: object[] } = {
+      url: ORDINARY_URL,
+      framesInSubtree: []
+    }
+    mainFrame.framesInSubtree = [mainFrame, teamsFrame]
+    Object.assign(handle.guest, { mainFrame })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: demand keys on session identity only.
+    const session = handle.guest.session as Electron.Session
+    const fire = (event: string, ...args: unknown[]): void => {
+      for (const [name, listener] of mocks.guestOnMock.mock.calls) {
+        if (name === event) {
+          listener(...args)
+        }
+      }
+    }
+    fire('did-start-navigation', {}, teamsFrame.url, false, false)
+    expect(hasBrowserSessionUserAgentDemand(session)).toBe(true)
+    fire('did-stop-loading')
+    expect(hasBrowserSessionUserAgentDemand(session)).toBe(true)
+    // The page removes the Teams iframe.
+    mainFrame.framesInSubtree = [mainFrame]
+    fire('did-stop-loading')
+    expect(hasBrowserSessionUserAgentDemand(session)).toBe(false)
   })
 })
