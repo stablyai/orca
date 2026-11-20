@@ -8,7 +8,10 @@ import type { AppState } from '../../../types'
 
 type ReadMarks = Pick<
   AppState,
-  'acknowledgedAgentsByPaneKey' | 'activityClearedAtByPaneKey' | 'manuallyUnreadTurnsByPaneKey'
+  | 'acknowledgedAgentsByPaneKey'
+  | 'activityClearedAtByPaneKey'
+  | 'manuallyUnreadTurnsByPaneKey'
+  | 'chatReadMarksCarriedFrom'
 >
 const RECORDS = [
   'acknowledgedAgentsByPaneKey',
@@ -18,9 +21,11 @@ const RECORDS = [
 
 /**
  * COMPAT(2026-11, remove after 2027-05): a chat in a tab whose id isn't its conversation address
- * (a replaced conversation, a `:history-N` duplicate) saved its read marks under the tab's key
- * before pane keys followed the conversation. Move each to the conversation key, keeping the larger
- * value on collision as the saved pane-key remap does, so a later clear is never undone.
+ * (a replaced conversation, a reopened tab) saved its read marks under the tab's key before pane
+ * keys followed the conversation. Copy each to the conversation key, keeping the larger value on
+ * collision as the saved pane-key remap does. Originals stay for older desktops and downgrades;
+ * `chatReadMarksCarriedFrom` records each carried value, so only a changed one is carried again and
+ * a later Mark unread is never undone.
  */
 export function carriedChatReadMarks(
   marks: ReadMarks,
@@ -38,16 +43,19 @@ export function carriedChatReadMarks(
     const key = chatPaneKey(tab.entityId)
     const tabKey = `${tab.id}${key.slice(address.length)}`
     for (const record of RECORDS) {
-      const carried = (patch?.[record] ?? marks[record])[tabKey]
-      if (carried === undefined) {
+      const value = marks[record][tabKey]
+      const carriedKey = `${record} ${tabKey}`
+      const carried = patch?.chatReadMarksCarriedFrom ?? marks.chatReadMarksCarriedFrom
+      if (value === undefined || carried[carriedKey] === value) {
         continue
       }
       patch ??= {}
-      // One clone per record per batch; later moves write into it.
+      // One clone per record per batch; later carries write into it.
       const next = (patch[record] ??= { ...marks[record] })
-      delete next[tabKey]
       const existing = next[key]
-      next[key] = existing === undefined ? carried : Math.max(existing, carried)
+      next[key] = existing === undefined ? value : Math.max(existing, value)
+      ;(patch.chatReadMarksCarriedFrom ??= { ...marks.chatReadMarksCarriedFrom })[carriedKey] =
+        value
     }
   }
   return patch
@@ -59,8 +67,20 @@ export function carryChatReadMarks(store: {
   setState: (patch: Partial<AppState>) => void
 }): void {
   const state = store.getState()
-  const patch = carriedChatReadMarks(state, Object.values(state.unifiedTabsByWorktree).flat())
-  if (patch) {
+  const patch = carriedChatReadMarks(state, Object.values(state.unifiedTabsByWorktree).flat()) ?? {}
+  // Forget carries whose saved tab-keyed mark is gone, so the record stays bounded.
+  let carried = patch.chatReadMarksCarriedFrom
+  for (const carriedKey in state.chatReadMarksCarriedFrom) {
+    const record = RECORDS.find((name) => carriedKey.startsWith(`${name} `))
+    if (record === undefined || state[record][carriedKey.slice(record.length + 1)] === undefined) {
+      carried ??= { ...state.chatReadMarksCarriedFrom }
+      delete carried[carriedKey]
+    }
+  }
+  if (carried) {
+    patch.chatReadMarksCarriedFrom = carried
+  }
+  if (Object.keys(patch).length > 0) {
     store.setState(patch)
   }
 }

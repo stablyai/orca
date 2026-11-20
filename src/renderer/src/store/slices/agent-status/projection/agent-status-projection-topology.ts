@@ -107,16 +107,19 @@ export function stageProjectionTopology(
           changedTabs.add(tab.id)
           const key = chatPaneKey(tab.entityId)
           changedKeys.add(key)
+          removedKeys.delete(key)
           if (isStructuredTab(tab)) {
             represented.set(key, tab)
           }
           nextTabOwners.set(tab.id, owner)
-        } else if (removedKeys.size > 0 && isStructuredTab(tab)) {
-          // Another tab on a removed tab's conversation keeps representing it.
-          const key = chatPaneKey(tab.entityId)
-          if (removedKeys.has(key) && !represented.has(key)) {
-            represented.set(key, tab)
-          }
+        }
+      }
+    }
+    // A closed tab's conversation that another open tab, in any workspace, still shows stays represented.
+    if (removedKeys.size > 0) {
+      for (const tab of Object.values(state.unifiedTabsByWorktree).flat()) {
+        if (isStructuredTab(tab) && removedKeys.delete(chatPaneKey(tab.entityId))) {
+          represented.set(chatPaneKey(tab.entityId), tab)
         }
       }
     }

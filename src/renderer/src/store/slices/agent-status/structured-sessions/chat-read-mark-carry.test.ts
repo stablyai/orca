@@ -7,46 +7,23 @@ import {
 } from './chat-read-mark-carry'
 
 const LEAF = '2b8ea975-8113-41ae-a25c-feb50cbe084a'
+const CONVERSATION_KEY = `structured-agent-session-sess-2:${LEAF}`
 
-it('moves a replaced chat’s saved read marks to its conversation key, once', () => {
-  const tabKey = `structured-agent-session-old:${LEAF}`
-  const patch = carriedChatReadMarks(
-    {
-      acknowledgedAgentsByPaneKey: { [tabKey]: 100 },
-      activityClearedAtByPaneKey: { [tabKey]: 200 },
-      manuallyUnreadTurnsByPaneKey: {}
-    },
-    [{ id: 'structured-agent-session-old', contentType: 'agent-session', entityId: 'sess-2' }]
-  )
-  expect(patch).toEqual({
-    acknowledgedAgentsByPaneKey: { [`structured-agent-session-sess-2:${LEAF}`]: 100 },
-    activityClearedAtByPaneKey: { [`structured-agent-session-sess-2:${LEAF}`]: 200 }
-  })
-  // Marking it unread later deletes the conversation key; nothing is left to carry back.
-  expect(
-    carriedChatReadMarks(
-      {
-        acknowledgedAgentsByPaneKey: {},
-        activityClearedAtByPaneKey: patch?.activityClearedAtByPaneKey ?? {},
-        manuallyUnreadTurnsByPaneKey: {}
-      },
-      [{ id: 'structured-agent-session-old', contentType: 'agent-session', entityId: 'sess-2' }]
-    )
-  ).toBeNull()
-})
+type CarryState = Pick<
+  AppState,
+  | 'unifiedTabsByWorktree'
+  | 'acknowledgedAgentsByPaneKey'
+  | 'activityClearedAtByPaneKey'
+  | 'manuallyUnreadTurnsByPaneKey'
+  | 'chatReadMarksCarriedFrom'
+>
 
-it('moves a reopened chat tab’s saved read marks too', () => {
-  let state: Pick<
-    AppState,
-    | 'unifiedTabsByWorktree'
-    | 'acknowledgedAgentsByPaneKey'
-    | 'activityClearedAtByPaneKey'
-    | 'manuallyUnreadTurnsByPaneKey'
-  > = {
+function chatTabState(tabId: string, marks: Partial<CarryState>): CarryState {
+  return {
     unifiedTabsByWorktree: {
       wt: [
         {
-          id: 'agent-chat-tab-v1-abc',
+          id: tabId,
           entityId: 'sess-2',
           groupId: 'g',
           worktreeId: 'wt',
@@ -60,60 +37,71 @@ it('moves a reopened chat tab’s saved read marks too', () => {
       ]
     },
     acknowledgedAgentsByPaneKey: {},
-    activityClearedAtByPaneKey: { [`agent-chat-tab-v1-abc:${LEAF}`]: 300 },
-    manuallyUnreadTurnsByPaneKey: {}
+    activityClearedAtByPaneKey: {},
+    manuallyUnreadTurnsByPaneKey: {},
+    chatReadMarksCarriedFrom: {},
+    ...marks
   }
-  carryChatReadMarks({
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the carry reads only these four fields.
-    getState: () => state as AppState,
+}
+
+function storeOver(state: { current: CarryState }): Parameters<typeof carryChatReadMarks>[0] {
+  return {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the carry reads only these fields.
+    getState: () => state.current as AppState,
     setState: (patch) => {
-      state = { ...state, ...patch }
+      state.current = { ...state.current, ...patch }
     }
-  })
-  expect(state.activityClearedAtByPaneKey).toEqual({
-    [`structured-agent-session-sess-2:${LEAF}`]: 300
+  }
+}
+
+it('copies a replaced chat’s saved read marks to its conversation key and keeps the originals', () => {
+  const tabKey = `structured-agent-session-old:${LEAF}`
+  const patch = carriedChatReadMarks(
+    chatTabState('structured-agent-session-old', {
+      acknowledgedAgentsByPaneKey: { [tabKey]: 100 },
+      activityClearedAtByPaneKey: { [tabKey]: 200 }
+    }),
+    [{ id: 'structured-agent-session-old', contentType: 'agent-session', entityId: 'sess-2' }]
+  )
+  expect(patch).toEqual({
+    acknowledgedAgentsByPaneKey: { [tabKey]: 100, [CONVERSATION_KEY]: 100 },
+    activityClearedAtByPaneKey: { [tabKey]: 200, [CONVERSATION_KEY]: 200 },
+    chatReadMarksCarriedFrom: {
+      [`acknowledgedAgentsByPaneKey ${tabKey}`]: 100,
+      [`activityClearedAtByPaneKey ${tabKey}`]: 200
+    }
   })
 })
 
-it('moves an acknowledgement an older paired client syncs later under a replaced chat’s tab key', () => {
-  let state: Pick<
-    AppState,
-    | 'unifiedTabsByWorktree'
-    | 'acknowledgedAgentsByPaneKey'
-    | 'activityClearedAtByPaneKey'
-    | 'manuallyUnreadTurnsByPaneKey'
-  > = {
-    unifiedTabsByWorktree: {
-      wt: [
-        {
-          id: 'structured-agent-session-old',
-          entityId: 'sess-2',
-          groupId: 'g',
-          worktreeId: 'wt',
-          contentType: 'agent-session',
-          label: 'Chat',
-          customLabel: null,
-          color: null,
-          sortOrder: 0,
-          createdAt: 0
-        }
-      ]
-    },
-    acknowledgedAgentsByPaneKey: { [`structured-agent-session-old:${LEAF}`]: 400 },
-    activityClearedAtByPaneKey: {},
-    manuallyUnreadTurnsByPaneKey: {}
+it('does not carry a mark back after the chat is marked unread', () => {
+  const tabKey = `agent-chat-tab-v1-abc:${LEAF}`
+  const state = {
+    current: chatTabState('agent-chat-tab-v1-abc', {
+      acknowledgedAgentsByPaneKey: { [tabKey]: 300 }
+    })
   }
-  carryChatAcknowledgementsAfterSync(
-    {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the carry reads only these four fields.
-      getState: () => state as AppState,
-      setState: (patch) => {
-        state = { ...state, ...patch }
-      }
-    },
-    {}
-  )
-  expect(state.acknowledgedAgentsByPaneKey).toEqual({
-    [`structured-agent-session-sess-2:${LEAF}`]: 400
+  carryChatReadMarks(storeOver(state))
+  expect(state.current.acknowledgedAgentsByPaneKey).toEqual({
+    [tabKey]: 300,
+    [CONVERSATION_KEY]: 300
+  })
+  // Mark unread deletes the conversation key; the next start must not restore it.
+  state.current = { ...state.current, acknowledgedAgentsByPaneKey: { [tabKey]: 300 } }
+  carryChatReadMarks(storeOver(state))
+  expect(state.current.acknowledgedAgentsByPaneKey).toEqual({ [tabKey]: 300 })
+})
+
+it('carries an acknowledgement an older paired client later changes under a replaced chat’s tab key', () => {
+  const tabKey = `structured-agent-session-old:${LEAF}`
+  const state = {
+    current: chatTabState('structured-agent-session-old', {
+      acknowledgedAgentsByPaneKey: { [tabKey]: 400, [CONVERSATION_KEY]: 300 },
+      chatReadMarksCarriedFrom: { [`acknowledgedAgentsByPaneKey ${tabKey}`]: 300 }
+    })
+  }
+  carryChatAcknowledgementsAfterSync(storeOver(state), { [tabKey]: 300, [CONVERSATION_KEY]: 300 })
+  expect(state.current.acknowledgedAgentsByPaneKey).toEqual({
+    [tabKey]: 400,
+    [CONVERSATION_KEY]: 400
   })
 })

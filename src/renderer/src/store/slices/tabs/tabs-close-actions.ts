@@ -1,5 +1,6 @@
 import { editorTabRetirement } from '../editor/tabs/editor-tab-retirement'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import type { AppState } from '../../types'
 import { chatPaneAddressTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   landsOnEmptiedWorktree,
@@ -39,6 +40,26 @@ import {
   replaceRecordEntries,
   replaceTabBuckets
 } from '../../record-transitions/keyed-record-transitions'
+
+/** A closed chat tab's pane markers sit under its conversation address, which another open tab
+ *  showing the same conversation still owns. */
+function closedChatPaneTabIds(
+  state: Pick<AppState, 'unifiedTabsByWorktree'>,
+  closed: Pick<Tab, 'id' | 'entityId'>
+): string[] {
+  for (const tabs of Object.values(state.unifiedTabsByWorktree)) {
+    for (const tab of tabs) {
+      if (
+        tab.id !== closed.id &&
+        tab.contentType === 'agent-session' &&
+        tab.entityId === closed.entityId
+      ) {
+        return []
+      }
+    }
+  }
+  return [chatPaneAddressTabId(closed.entityId)]
+}
 
 export function createTabsCloseActions(
   set: TabsSliceSet,
@@ -148,7 +169,7 @@ export function createTabsCloseActions(
             // Why: a structured chat tab owns its markers directly; nothing else retires them.
             const structuredAttention =
               tab.contentType === 'agent-session'
-                ? removeTabsAttention(current, [tabId, chatPaneAddressTabId(tab.entityId)])
+                ? removeTabsAttention(current, [tabId], closedChatPaneTabIds(current, tab))
                 : null
             let nextGroups = (current.groupsByWorktree[worktreeId] ?? []).map((candidate) =>
               candidate.id === group?.id
@@ -239,7 +260,7 @@ export function createTabsCloseActions(
                     // The tab is gone by now, so its chat's pane address is named here.
                     () =>
                       set((current) =>
-                        removeTabsAttention(current, [tabId, chatPaneAddressTabId(tab.entityId)])
+                        removeTabsAttention(current, [tabId], closedChatPaneTabIds(current, tab))
                       ),
                     { tabsBefore: state }
                   )
