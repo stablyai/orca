@@ -73,20 +73,23 @@ describe('emulator:scrcpyKeyboard', () => {
       sendKeyboard({ deviceId: 'serial-1', text: 'ğ' }),
       sendKeyboard({ deviceId: 'serial-1', key: 'backspace', shift: false }),
       sendKeyboard({ deviceId: 'serial-1', text: 'a;' }),
-      sendKeyboard({ deviceId: 'serial-1', text: 'Grüße\n中文', paste: true })
+      sendKeyboard({ deviceId: 'serial-1', text: 'Grüße\n中文', paste: true }),
+      sendKeyboard({ deviceId: 'serial-1', text: 'one\ntwo', paste: true })
     ]
     await vi.advanceTimersByTimeAsync(0)
     expect(sendControl).toHaveBeenCalledTimes(4)
     // The next clipboard write waits until the app has had time to read the last one.
-    await vi.advanceTimersByTimeAsync(200)
-    await expect(Promise.all(typed)).resolves.toEqual([true, true, true, true, true])
+    await vi.advanceTimersByTimeAsync(400)
+    await expect(Promise.all(typed)).resolves.toEqual([true, true, true, true, true, true])
 
     expect(sendControl.mock.calls.map(([message]) => decode(message))).toEqual([
       { type: 9, text: 'şğ' }, // SET_CLIPBOARD with paste
       { type: 0, keycode: 67, action: 0 }, // KEYCODE_DEL down
       { type: 0, keycode: 67, action: 1 },
       { type: 1, text: 'a;' }, // US text stays INJECT_TEXT
-      { type: 9, text: 'Grüße\n中文' }
+      { type: 9, text: 'Grüße\n中文' },
+      // A multi-line paste keeps its newlines as text instead of pressing Enter.
+      { type: 9, text: 'one\ntwo' }
     ])
     const paste = sendControl.mock.calls[0][0]
     expect(paste.readBigUInt64BE(1)).toBe(0n) // no clipboard acknowledgement requested

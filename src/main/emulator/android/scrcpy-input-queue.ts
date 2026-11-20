@@ -46,7 +46,8 @@ class ScrcpyInputQueue {
           item.done(runSafely(item.send))
           continue
         }
-        if (isUSKeyboardText(item.text)) {
+        // A pasted newline is text; INJECT_TEXT would press Enter and could submit the field.
+        if (isUSKeyboardText(item.text) && !(item.paste && /[\r\n]/.test(item.text))) {
           item.done(runSafely(() => this.inject(item.text)))
           continue
         }
