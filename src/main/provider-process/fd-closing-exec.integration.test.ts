@@ -99,6 +99,14 @@ describe.runIf(process.platform === 'linux')('fd-closing exec', () => {
         // A noexec tmpdir makes the direct spawn report EACCES; either way it's an error, not 127.
         expect(['ENOENT', 'EACCES']).toContain((error as NodeJS.ErrnoException).code)
       }
+      // A program that will run is wrapped.
+      const wrapped = spawnProcess({
+        program: '/bin/true',
+        closeInheritedFds: true,
+        stdio: 'ignore'
+      })
+      expect(wrapped.spawnfile).toBe(helper)
+      expect((await once(wrapped, 'close'))[0]).toBe(0)
     } finally {
       setFdClosingExec(undefined)
       await rm(dir, { recursive: true, force: true })
