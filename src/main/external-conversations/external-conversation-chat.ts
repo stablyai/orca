@@ -28,6 +28,7 @@ import { refusalOf } from './external-conversation-chain'
 import { storedConnectorAsker } from '../../shared/connector-message-asker'
 import { connectorFailure } from './external-conversation-failure'
 import { refused, type ConnectorMessage, type Delivery } from './external-conversation-types'
+import { botWakeGate, notePersonWrote } from './external-conversation-bot-wakes'
 
 /** What the seam reads of the native-chat host. */
 export type ConversationChat = StructuredAgentTurnHost &
@@ -176,10 +177,6 @@ export async function deliverToChat(
   }
 ): Promise<Delivery> {
   const { asker } = delivery
-  const { note } = delivery
-  const text = asker
-    ? connectorAskerPrompt(link.source, asker, note, delivery)
-    : connectorPlainMessages([delivery, ...(delivery.later ?? [])], note)
   // Kept beside the message for the chat's tag, with only the links a tag may open or fetch.
   const stored = asker ? storedConnectorAsker(link.source, asker) : undefined
   const { signal } = delivery
@@ -191,6 +188,14 @@ export async function deliverToChat(
   if (!record) {
     return refused(CHAT_GONE_REFUSAL)
   }
+  const gate = await botWakeGate(chat, link, asker, delivery.deliveryId)
+  if (gate.kind === 'stop') {
+    return refused('bot_chain_limit')
+  }
+  const note = [delivery.note, gate.note].filter(Boolean).join('\n\n') || undefined
+  const text = asker
+    ? connectorAskerPrompt(link.source, asker, note, delivery)
+    : connectorPlainMessages([delivery, ...(delivery.later ?? [])], note)
   const fence = record.currentFence
   let admitted = false
   try {
@@ -256,9 +261,11 @@ export async function deliverToChat(
       )
       return refused('agent_not_reachable', fact && connectorFailure(fact, link.agent))
     }
-    return dispatched === 'unknown'
-      ? { outcome: 'unknown', reason: 'writer_failed' }
-      : { outcome: 'accepted' }
+    if (dispatched === 'unknown') {
+      return { outcome: 'unknown', reason: 'writer_failed' }
+    }
+    notePersonWrote(link, asker)
+    return { outcome: 'accepted' }
   } catch {
     if (admitted) {
       return { outcome: 'unknown', reason: 'writer_failed' }

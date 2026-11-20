@@ -7,11 +7,15 @@ import type {
 } from '../../../../../../shared/bots/bot-acts-for'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
+import { mapRuntimeError } from '../../../responses/rpc-response'
 import { makeTestBot } from '../../../../../bots/bot.test-fixture'
 import type * as RecipientRouting from './recipient-routing'
 import {
   askedBy,
   DOCS_CHAT,
+  DOCS_REQUEST,
+  noteChats,
+  notes,
   DOCS_THREAD,
   journals,
   message,
@@ -78,6 +82,7 @@ describe('a bot request chain', () => {
   const h = createOrchestrationRpcHarness()
   let db: OrchestrationDb
   let bots: Bot[]
+  let send: ReturnType<typeof setupBotMail>['send']
   let sent: ReturnType<typeof setupBotMail>['sent']
   let conversationTurn: ReturnType<typeof setupBotMail>['conversationTurn']
 
@@ -87,7 +92,7 @@ describe('a bot request chain', () => {
   }
 
   beforeEach(() => {
-    ;({ db, bots, sent, conversationTurn } = setupBotMail(h))
+    ;({ db, bots, send, sent, conversationTurn } = setupBotMail(h))
     bots.push(
       makeTestBot({ id: 'three', name: 'Three', members: [DANA] }),
       makeTestBot({ id: 'four', name: 'Four' })
@@ -214,6 +219,119 @@ describe('a bot request chain', () => {
     wake(RANGER_THREAD, receipt.message.id)
     const fifth = await sent(RANGER_THREAD, { to: 'bot:Docs', type: 'question' })
     expect(record(fifth).depth).toBe(5)
+  })
+  it('stops a chain at its 13th hand-off, tells the sender and the owner why, and a reply starts it fresh', async () => {
+    journals[RANGER_THREAD] = [message('ask')]
+    let receipt = await sent(RANGER_THREAD, { to: 'bot:Docs', type: 'question', subject: 'hop 1' })
+    for (let hop = 2; hop <= 12; hop += 1) {
+      const from = hop % 2 === 0 ? DOCS_CHAT : RANGER_THREAD
+      wake(from, receipt.message.id)
+      const to = from === DOCS_CHAT ? 'bot:Ranger' : 'bot:Docs'
+      receipt = await sent(from, { to, type: 'question', subject: `hop ${hop}` })
+    }
+    expect(record(receipt).depth).toBe(12)
+    wake(RANGER_THREAD, receipt.message.id)
+    const thirteenth = { to: 'bot:Docs', type: 'question', subject: 'hop 13' }
+    const refused = await send(RANGER_THREAD, thirteenth).catch((error: unknown) => error)
+    // Callers read the code, not just the words.
+    expect(mapRuntimeError('r1', { runtimeId: 'rt' }, refused).error).toMatchObject({
+      code: 'bot_request_chain_limit'
+    })
+    expect(noteChats.at(-1)).toBe(RANGER_THREAD)
+    // The owner's reply is a new turn: one send goes on, as a fresh chain.
+    journals[RANGER_THREAD]!.push(message('go on'))
+    const resumed = await sent(RANGER_THREAD, thirteenth)
+    expect(record(resumed).depth).toBe(1)
+  })
+
+  it('holds one bot to 30 requests to another in 10 minutes, whatever the chain', async () => {
+    journals[RANGER_THREAD] = [message('ask')]
+    for (let request = 1; request <= 30; request += 1) {
+      await sent(RANGER_THREAD, { to: 'bot:Docs', type: 'status', subject: `note ${request}` })
+    }
+    const next = { to: 'bot:Docs', type: 'question', subject: 'one more' }
+    await expect(send(RANGER_THREAD, next)).rejects.toMatchObject({
+      code: 'bot_request_rate_limit'
+    })
+    expect(noteChats.at(-1)).toBe(RANGER_THREAD)
+    // Another pair is its own.
+    expect((await sent(RANGER_THREAD, { to: 'bot:Three', type: 'question' })).message).toBeDefined()
+  })
+
+  /** Ranger's requests to Docs already in this window. */
+  const alreadySent = (count: number) => {
+    for (let request = 0; request < count; request += 1) {
+      db.reserveBotRequest({
+        messageId: `msg_earlier_${request}`,
+        rootKey: 'earlier',
+        fromBotId: 'ranger',
+        toBotId: 'docs',
+        purpose: 'status',
+        depth: 1,
+        record: '{}'
+      })
+    }
+  }
+  const toDocs = () => db.botRequestsSentWithin({ fromBotId: 'ranger', toBotId: 'docs' }, 10).count
+
+  it('lets only one of two racing sends take the last place in the quota', async () => {
+    journals[RANGER_THREAD] = [message('ask')]
+    alreadySent(29)
+    withChat.mockClear()
+    const racing = await Promise.allSettled([
+      send(RANGER_THREAD, { to: 'bot:Docs', type: 'question', subject: 'first' }),
+      send(RANGER_THREAD, { to: 'bot:Docs', type: 'question', subject: 'second' })
+    ])
+    expect(racing.map((result) => result.status).toSorted()).toEqual(['fulfilled', 'rejected'])
+    expect(racing.find((result) => result.status === 'rejected')).toMatchObject({
+      reason: { code: 'bot_request_rate_limit' }
+    })
+    expect(toDocs()).toBe(30)
+    // The refused one never reached Docs' Home Chat.
+    expect(withChat).toHaveBeenCalledTimes(1)
+  })
+
+  it('counts a send its quota place once while it is both held and reserved', async () => {
+    journals[RANGER_THREAD] = [message('ask')]
+    alreadySent(28)
+    // The new chat for the first send is still being made: it is reserved and still held.
+    let chatMade: (sessionId: string) => void = () => {}
+    startBotSession.mockImplementationOnce(() => new Promise((made) => (chatMade = made)))
+    const first = send(RANGER_THREAD, { to: 'bot:Docs', type: 'question', chat: 'new' })
+    await vi.waitFor(() => expect(toDocs()).toBe(29))
+    const second = await sent(RANGER_THREAD, { to: 'bot:Docs', type: 'question', subject: 'next' })
+    expect(second.message).toBeDefined()
+    chatMade(DOCS_REQUEST)
+    await first
+    expect(toDocs()).toBe(30)
+  })
+
+  it("never makes or shows the target's Home Chat for a send past the quota", async () => {
+    journals[RANGER_THREAD] = [message('ask')]
+    alreadySent(30)
+    withChat.mockClear()
+    await expect(
+      send(RANGER_THREAD, { to: 'bot:Docs', type: 'question', subject: 'over' })
+    ).rejects.toMatchObject({ code: 'bot_request_rate_limit' })
+    expect(withChat).not.toHaveBeenCalled()
+  })
+
+  it('answers a retry at the quota as the same send, and tells the owner of one refusal once', async () => {
+    journals[RANGER_THREAD] = [message('ask')]
+    alreadySent(29)
+    const last = { to: 'bot:Docs', type: 'question', subject: 'the 30th' }
+    const first = await sent(RANGER_THREAD, last)
+    expect(await sent(RANGER_THREAD, last)).toMatchObject({
+      duplicate: true,
+      message: { id: first.message.id }
+    })
+    const over = { to: 'bot:Docs', type: 'question', subject: 'the 31st' }
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await expect(send(RANGER_THREAD, over)).rejects.toMatchObject({
+        code: 'bot_request_rate_limit'
+      })
+    }
+    expect(notes).toHaveLength(1)
   })
 })
 

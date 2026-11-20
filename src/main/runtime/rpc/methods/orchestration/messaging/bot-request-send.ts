@@ -39,6 +39,7 @@ import { exposeMessage } from './mailbox-message-receipt'
 import { recordReceiptForPostCommitNudge } from './mutation-replay-nudge'
 import { botRequestChain, botRequestSendKey } from './bot-request-chain'
 import { askedInConversation } from './bot-request-record'
+import * as limits from '../../../../../bots/bot-request-limits'
 import { resolveBareOrchestrationRecipient } from './recipient-routing'
 import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
 
@@ -134,17 +135,20 @@ type SendBotRequestArgs = {
 /** Every refusal, from the first check to a blocked admission, leaves the owner's card. */
 async function sendBotRequest(args: SendBotRequestArgs): Promise<unknown> {
   const card = ownerChatCard(args.acting, args.receiving, args.params)
-  try {
-    return await admitBotRequestMail(args, card)
-  } catch (error) {
-    card.refused(error)
-    throw error
-  }
+  // What the send holds until it settles: its place in the pair's quota.
+  const settled: (() => void)[] = []
+  return admitBotRequestMail(args, card, settled)
+    .catch((error: unknown) => {
+      card.refused(error)
+      throw error
+    })
+    .finally(() => settled.forEach((release) => release()))
 }
 
 async function admitBotRequestMail(
   args: SendBotRequestArgs,
-  card: ReturnType<typeof ownerChatCard>
+  card: ReturnType<typeof ownerChatCard>,
+  settled: (() => void)[]
 ): Promise<unknown> {
   const { runtime, db, params, receiving, acting } = args
   const chain = botRequestChain(db, acting.sessionId, acting.turn)
@@ -203,9 +207,6 @@ async function admitBotRequestMail(
     ...(acting.turn.origin ? { origin: acting.turn.origin } : {}),
     ...askedInConversation(runtime, acting)
   }
-  // A teammate's request never enters the owner's Chat, whatever address it was sent to.
-  const ownConversation =
-    !groupScope && (receiving.newChat === true || (!args.keepChat && !actsForOwner(record.askers)))
   // A worker's send is its own: another worker asking the same still gets an answer.
   const sendTurn = acting.worker ? `dispatch:${acting.worker}` : chain.turnKey
   const key = {
@@ -215,9 +216,7 @@ async function admitBotRequestMail(
     toBotId: target.id,
     purpose
   }
-  const blockedReceipt = (
-    blocked: Exclude<BotRequestAdmission, { kind: 'sent' }>
-  ): { sent: false; receipt: unknown } => {
+  const blockedReceipt = (blocked: { messageId: string }): { sent: false; receipt: unknown } => {
     const earlier = db.getMessageById(blocked.messageId)
     return {
       sent: false,
@@ -234,13 +233,15 @@ async function admitBotRequestMail(
   if (blocked) {
     return blockedReceipt(blocked).receipt
   }
+  settled.push(limits.holdUnderLimits(db, acting, target, chain.depth, { ...key, messageId }))
   // The whole payload is Orca's, so the receiving bot never reads the sender's own fields as these.
   const payload = botRequestPayload(record, messageId, args.images)
   const request = {
     ...key,
     fromBotId: record.fromBotId,
     depth: record.depth,
-    record: JSON.stringify(record)
+    record: JSON.stringify(record),
+    pairLimit: limits.botPairLimitOf(acting, target, key.sendKey)
   }
   /** `reserved`: the request's place is already held, so only its mail is stored. */
   /** `held`: the chat a failed turn holds that this request was kept out of, named to the sender. */
@@ -311,7 +312,8 @@ async function admitBotRequestMail(
   if (groupScope) {
     return admit(sessionAddress(groupScope.target.sessionId)).receipt
   }
-  if (ownConversation) {
+  // A teammate's request never enters the owner's Chat, whatever address it was sent to.
+  if (receiving.newChat === true || (!args.keepChat && !actsForOwner(record.askers))) {
     // Only a teammate's request Orca kept out of the Chat is noted there; `--chat new` was the sender's choice.
     return inOwnConversation(receiving.newChat === true ? null : { chat: target.chatSessionId })
   }

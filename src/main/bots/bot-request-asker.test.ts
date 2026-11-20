@@ -6,6 +6,7 @@ import type {
   AgentJournalSubmission
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
+import { botWakesInARow } from './bot-chain-messages'
 import {
   firstMessageActsFor,
   readBotActingTurn,
@@ -379,6 +380,31 @@ describe('readBotActingTurn', () => {
       lookups({ isBotRequest: (id) => id === 'msg_request' })
     )
     expect(turnRead.actingOnRequestId).toBe('msg_request')
+    // The owner's words joined it, so what it sends starts a new chain.
+    expect(turnRead.personJoined).toBe(true)
+  })
+
+  it("never starts a new chain for another Orca bot's post that joins a request's turn", () => {
+    const scope: AgentJournalTurnScope = { kind: 'turn', turnItemId: 'turn_1' }
+    const botPost = {
+      origin: 'connector' as const,
+      asker: { ...nora, via: { userId: 'UB', name: 'Docs' } }
+    }
+    const turnRead = readBotActingTurn(
+      [item('woken', mail('msg_request')), turn('turn_1', 'woken'), item('post', botPost, scope)],
+      lookups({ isBotRequest: (id) => id === 'msg_request' })
+    )
+    expect(turnRead.personJoined).toBeUndefined()
+  })
+
+  it('never starts a new chain for an agent typing through the orca CLI', () => {
+    const scope: AgentJournalTurnScope = { kind: 'turn', turnItemId: 'turn_1' }
+    const typed = { typedBy: { by: 'agent' as const } }
+    const turnRead = readBotActingTurn(
+      [item('woken', mail('msg_request')), turn('turn_1', 'woken'), item('typed', typed, scope)],
+      lookups({ isBotRequest: (id) => id === 'msg_request' })
+    )
+    expect(turnRead.personJoined).toBeUndefined()
   })
 
   it('never reads a message still queued as the running turn', () => {
@@ -451,5 +477,31 @@ describe('readBotActingTurn', () => {
       [sent('2-typed', `${CLAUDE}:b`)]
     )
     expect(read.askers).toEqual([{ kind: 'owner' }, { kind: 'unknown' }])
+  })
+})
+
+describe('botWakesInARow', () => {
+  const botPost = (id: string) =>
+    item(id, { origin: 'connector', asker: { ...nora, via: { userId: 'UB', name: 'Docs' } } })
+
+  it("counts other bots' posts back to a person's own message, past mail and automation prompts", () => {
+    const items = [
+      botPost('old'),
+      item('owner', {}),
+      botPost('b1'),
+      item('mail', mail('m1')),
+      item('run', { memorySource: 'Automation Nightly' }),
+      botPost('b2')
+    ]
+    expect(botWakesInARow(items, 12)).toEqual({ wakes: 2, decided: true })
+  })
+
+  it("resets on a person's Slack message, and stops counting at the limit", () => {
+    expect(
+      botWakesInARow([botPost('b1'), item('nora', { origin: 'connector', asker: nora })], 12)
+    ).toEqual({ wakes: 0, decided: true })
+    const posts = Array.from({ length: 14 }, (_, index) => botPost(`b${index}`))
+    expect(botWakesInARow(posts, 12)).toEqual({ wakes: 12, decided: true })
+    expect(botWakesInARow(posts.slice(0, 3), 12)).toEqual({ wakes: 3, decided: false })
   })
 })

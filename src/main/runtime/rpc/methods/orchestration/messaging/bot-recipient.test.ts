@@ -439,6 +439,32 @@ describe('mail to a bot', () => {
     })
   })
 
+  it("holds a bot's worker to its chat's chain, so a stopped chain doesn't start over", async () => {
+    rangerWorker()
+    // Ranger's turn was woken by the chain's 12th hand-off.
+    db.reserveBotRequest({
+      messageId: 'msg_twelfth',
+      rootKey: 'root',
+      fromBotId: 'docs',
+      toBotId: 'ranger',
+      purpose: 'question',
+      depth: 12,
+      record: JSON.stringify({ askers: [{ kind: 'owner' }] })
+    })
+    const notice = {
+      message: 'mail-notice',
+      mailbox: `orca_session_id:${RANGER_THREAD}`,
+      dispatchId: null,
+      messages: [{ messageId: 'msg_twelfth', runId: 'run', from: 'x' }]
+    }
+    journals[RANGER_THREAD]!.push(
+      message('woken', { from: { kind: 'agent', senders: [], orchestration: notice } })
+    )
+    await expect(workerSend({ to: 'bot:Docs', type: 'question' })).rejects.toMatchObject({
+      code: 'bot_request_chain_limit'
+    })
+  })
+
   it("refuses a bot's worker handing its job to another bot", async () => {
     rangerWorker()
     await expect(workerSend({ to: 'bot:Docs', type: 'handoff' })).rejects.toThrow(
