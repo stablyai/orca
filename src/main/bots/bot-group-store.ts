@@ -205,6 +205,16 @@ export class BotGroupStore {
       .map((row) => this.messageRow(row))
   }
 
+  /** The lines that continue one post: its peer mail, hand-offs and paused line. */
+  continuing(groupId: string, rootRequestId: string): BotGroupMessage[] {
+    return this.db
+      .prepare(
+        `SELECT sequence, record FROM bot_group_messages WHERE group_id = ? AND json_extract(record, '$.rootRequestId') = ? ORDER BY sequence`
+      )
+      .all(groupId, rootRequestId)
+      .map((row) => this.messageRow(row))
+  }
+
   message(id: string): BotGroupMessage | null {
     const row = this.db
       .prepare('SELECT sequence, record FROM bot_group_messages WHERE id = ?')

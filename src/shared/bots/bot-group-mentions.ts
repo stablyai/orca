@@ -19,6 +19,9 @@ const EVERYONE = '@everyone'
 const MENTION_START = /(^|[^\p{L}\p{N}_.@])@/gu
 const MENTION_END = /^(?:$|[\s,:;!?)]|\.(?:\s|$))/u
 const LEADING_GAP = /^[\s,:!?]*$/u
+// A member's reply addresses `@Name` wherever the name is not run into more word characters.
+const REPLY_MENTION_END = /^(?![\p{L}\p{N}_])/u
+const QUOTED_ROOM_HISTORY = /<quoted_room_history>[\s\S]*?(?:<\/quoted_room_history>|(?![\s\S]))/gu
 // Code and quoted prose is data, never an address; blanked to keep every offset in place.
 const UNADDRESSED_PROSE =
   /```[\s\S]*?(?:```|(?![\s\S]))|`[^`\n]*`|^[ \t]*>.*$|\u201c[^\u201d]*\u201d|"[^"\n]*"/gmu
@@ -33,7 +36,8 @@ const FILE_REFERENCE = new RegExp(
 export function botGroupMentions(
   text: string,
   members: readonly Named[],
-  everyone: readonly string[]
+  everyone: readonly string[],
+  nameEnd = MENTION_END
 ): BotGroupMention[] {
   const mentions: BotGroupMention[] = []
   let leadingEnd: number | null = 0
@@ -48,7 +52,7 @@ export function botGroupMentions(
     const named = members.filter(
       (bot) =>
         rest.slice(1, 1 + bot.name.length).toLocaleLowerCase() === bot.name.toLocaleLowerCase() &&
-        MENTION_END.test(rest.slice(1 + bot.name.length))
+        nameEnd.test(rest.slice(1 + bot.name.length))
     )
     const longest = Math.max(0, ...named.map((bot) => bot.name.length))
     const best = named.filter((bot) => bot.name.length === longest)
@@ -79,14 +83,36 @@ export function botGroupMentions(
   return mentions
 }
 
-function roomMentions(text: string, group: Room, bots: readonly Named[]): BotGroupMention[] {
+function roomMentions(
+  text: string,
+  group: Pick<Room, 'members'>,
+  bots: readonly Named[],
+  nameEnd?: RegExp
+): BotGroupMention[] {
   return botGroupMentions(
     text
       .replace(FILE_REFERENCE, (file) => ' '.repeat(file.length))
       .replace(UNADDRESSED_PROSE, (prose) => ' '.repeat(prose.length)),
     bots.filter((bot) => group.members.some((member) => member.botId === bot.id)),
-    group.members.map((member) => member.botId)
+    group.members.map((member) => member.botId),
+    nameEnd
   )
+}
+
+/** The other members a member's reply hands off to: each `@Name` it spells outside code and quoted
+ *  history, in order. `@everyone` and an ambiguous name reach no one; the speaker never itself. */
+export function botGroupReplyMentions(
+  reply: string,
+  group: Pick<Room, 'members'>,
+  bots: readonly Named[],
+  speakerId: string
+): string[] {
+  const prose = reply.replace(QUOTED_ROOM_HISTORY, (quoted) => ' '.repeat(quoted.length))
+  return unique(
+    roomMentions(prose, group, bots, REPLY_MENTION_END).filter(
+      (mention) => mention.match === 'member'
+    )
+  ).filter((id) => id !== speakerId)
 }
 
 /** Who the room's reply mode reaches when no one is mentioned; a default that left reaches no one. */

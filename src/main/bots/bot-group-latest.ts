@@ -8,6 +8,7 @@ import {
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { requireStructuredHost } from './bot-chat-session'
 import { runtimeBotGroups } from './bot-group-runtime'
+import { handOffGroupMentions } from './bot-group-mention-handoffs'
 
 /** A member's turn ended: if it finished with a reply, that reply is the room's newest post,
  *  unless a post saved after the turn ended is newer. */
@@ -68,4 +69,5 @@ export async function noteBotGroupMemberReply(
   if (kept) {
     groups.changed()
   }
+  await handOffGroupMentions(groups, message, turn, finished.text)
 }

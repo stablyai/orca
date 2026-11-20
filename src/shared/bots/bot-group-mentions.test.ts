@@ -4,6 +4,7 @@ import {
   botGroupAudience,
   botGroupDraftAudience,
   botGroupMentionSegments,
+  botGroupReplyMentions,
   botGroupSingleRecipient,
   botGroupReplyDraft
 } from './bot-group-mentions'
@@ -156,5 +157,46 @@ describe('reply to a turn', () => {
       botGroupAudience(botGroupReplyDraft('scout', 'go', group, renamed), group, renamed)
     ).toEqual(['scout'])
     expect(botGroupReplyDraft('gone', 'please continue', group, renamed)).toBe('please continue')
+  })
+})
+
+describe("a member's reply hand-offs", () => {
+  const members = [...bots, { id: 'ops', name: 'Ops' }, { id: 'ops-lead', name: 'Ops Lead' }]
+  const group = { members: members.map((bot) => ({ botId: bot.id, sessionId: bot.id })) }
+  const wakes = (reply: string, speaker = 'speaker') =>
+    botGroupReplyMentions(reply, group, members, speaker)
+
+  it('wakes whole member names anywhere in the reply, case-insensitively, in order', () => {
+    expect(wakes('Done. @sage can you check, then @SCOUT ship it?')).toEqual(['sage', 'scout'])
+    expect(wakes("I agree with @Sage's plan (@Scout).")).toEqual(['sage', 'scout'])
+  })
+
+  it('never matches inside a longer word or an address', () => {
+    expect(wakes('Page @Opsgenie, mail jo@sage.com or j.@Sage, see @Scouting')).toEqual([])
+  })
+
+  it('takes the longest name at an @', () => {
+    expect(wakes('@Ops Lead please, not @Ops.')).toEqual(['ops-lead', 'ops'])
+    expect(wakes('@Code Scout review')).toEqual(['code-scout'])
+  })
+
+  it('never wakes the speaker itself', () => {
+    expect(wakes('@Sage and @Scout', 'sage')).toEqual(['scout'])
+  })
+
+  it('ignores code, quoted lines and quoted room history', () => {
+    expect(
+      wakes(
+        'Run `@Sage` or\n```\n@Scout go\n```\n> @Ops said\n<quoted_room_history>@Ops Lead</quoted_room_history>'
+      )
+    ).toEqual([])
+  })
+
+  it('reaches no one for an ambiguous name or @everyone', () => {
+    const twins = [...members, { id: 'sage-2', name: 'sage' }]
+    const room = { members: twins.map((bot) => ({ botId: bot.id, sessionId: bot.id })) }
+    expect(botGroupReplyMentions('@Sage and @everyone, @Scout', room, twins, 'x')).toEqual([
+      'scout'
+    ])
   })
 })
