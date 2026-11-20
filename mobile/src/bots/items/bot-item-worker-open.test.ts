@@ -65,7 +65,7 @@ describe('openBotItemWorker', () => {
     expect(open).toHaveBeenCalledWith({
       ...chatWorker,
       worktreeId: 'wt-bot',
-      paneKey: 'tab-chat:2b8ea975-8113-41ae-a25c-feb50cbe084a'
+      paneKey: 'structured-agent-session-sess-2:2b8ea975-8113-41ae-a25c-feb50cbe084a'
     })
   })
 
