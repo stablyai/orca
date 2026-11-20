@@ -23510,7 +23510,6 @@
       "chip": "봇",
       "chipLabel": "봇, 모두 표시",
       "searchEverything": "전체에서 \"{{text}}\" 검색",
-      "searchBotsFor": "\"{{text}}\"(으)로 봇 검색",
       "noMatch": "\"{{text}}\"와(과) 일치하는 봇이 없습니다",
       "noBotsYet": "아직 봇이 없습니다",
       "filtersPaused": "필터는 봇이 아닌 워크스페이스에 적용됩니다",

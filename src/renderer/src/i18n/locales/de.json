@@ -23649,7 +23649,6 @@
       "chip": "Bots",
       "chipLabel": "Bots, alles anzeigen",
       "searchEverything": "Überall nach „{{text}}“ suchen",
-      "searchBotsFor": "Bots nach „{{text}}“ durchsuchen",
       "noMatch": "Keine Bots passen zu „{{text}}“",
       "noBotsYet": "Noch keine Bots",
       "filtersPaused": "Filter gelten für Arbeitsbereiche, nicht für Bots",

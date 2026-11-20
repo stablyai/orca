@@ -25483,7 +25483,6 @@
       "chip": "机器人",
       "chipLabel": "机器人，显示全部",
       "searchEverything": "在全部内容中搜索“{{text}}”",
-      "searchBotsFor": "在机器人中搜索“{{text}}”",
       "noMatch": "没有与“{{text}}”匹配的机器人",
       "noBotsYet": "还没有机器人",
       "filtersPaused": "筛选仅适用于工作区，不适用于机器人",

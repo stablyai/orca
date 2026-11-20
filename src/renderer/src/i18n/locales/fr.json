@@ -24230,7 +24230,6 @@
       "chip": "Bots",
       "chipLabel": "Bots, tout afficher",
       "searchEverything": "Tout rechercher pour « {{text}} »",
-      "searchBotsFor": "Rechercher des bots pour « {{text}} »",
       "noMatch": "Aucun bot ne correspond à « {{text}} »",
       "noBotsYet": "Aucun bot pour l’instant",
       "filtersPaused": "Les filtres s’appliquent aux espaces de travail, pas aux bots",

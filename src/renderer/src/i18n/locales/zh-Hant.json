@@ -23310,7 +23310,6 @@
       "chip": "機器人",
       "chipLabel": "機器人，顯示全部",
       "searchEverything": "在全部內容中搜尋「{{text}}」",
-      "searchBotsFor": "在機器人中搜尋「{{text}}」",
       "noMatch": "沒有符合「{{text}}」的機器人",
       "noBotsYet": "還沒有機器人",
       "filtersPaused": "篩選僅適用於工作區，不適用於機器人",
