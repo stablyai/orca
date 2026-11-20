@@ -158,7 +158,7 @@ function installStatusProjection(): () => void {
       useAppStore.getState().transactAgentStatuses((transaction) => {
         for (const old of removed) {
           if (!members.has(old.paneKey)) {
-            transaction.getState().removeAgentStatus(old.paneKey)
+            transaction.getState().removeAgentStatus(old.paneKey, { preserveActivityState: true })
           }
         }
         for (const input of dirty) {
@@ -311,9 +311,12 @@ function installStatusProjection(): () => void {
       const changes =
         tabsSource && botTabs === botTabsSource ? readTabMapChanges(source, tabsSource) : null
       if (changes?.kind === 'addressed') {
-        const listed = [...changes.workspaceIds].flatMap((workspaceId) => [
-          ...getStructuredAgentSessionTabsInWorkspace(source, workspaceId)
-        ])
+        const listed = [
+          ...botTabs.filter((tab) => changes.workspaceIds.has(tab.worktreeId)),
+          ...[...changes.workspaceIds].flatMap((workspaceId) => [
+            ...getStructuredAgentSessionTabsInWorkspace(source, workspaceId)
+          ])
+        ]
         retiring.push(...membership.reconcileTabs(listed, changes.tabIds, placeTab))
         tabs = null
       } else {
@@ -348,6 +351,10 @@ function installStatusProjection(): () => void {
       })
     }
   }
+  // Subscribe bot stand-ins before store tabs so closing a bot chat never transiently retires its pane.
+  const unsubscribeBackground = subscribeBotBackgroundSessionTabs(() =>
+    boundary(() => !disposed && reconcile(false))
+  )
   const unsubscribeApp = useAppStore.subscribe((state: AppState, previous: AppState) => {
     if (disposed) {
       return
@@ -357,9 +364,6 @@ function installStatusProjection(): () => void {
       boundary(() => reconcile(ownersChanged))
     }
   })
-  const unsubscribeBackground = subscribeBotBackgroundSessionTabs(() =>
-    boundary(() => !disposed && reconcile(false))
-  )
   const unsubscribeLaunch = subscribeStructuredAgentLaunchStatus((sessionIds) =>
     boundary(() => {
       if (disposed) {

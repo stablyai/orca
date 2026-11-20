@@ -36,6 +36,11 @@ export type DropAgentStatusByTabPrefixOptions = {
   preserveActivityClearedState?: boolean
 }
 
+export type RemoveAgentStatusOptions = {
+  /** Keep read/clear cutoffs when a deterministic structured pane can reopen or replay its last turn. */
+  preserveActivityState?: boolean
+}
+
 export type AgentLaunchConfigRegistrationMetadata = {
   agentType?: AgentType
   launchToken?: string

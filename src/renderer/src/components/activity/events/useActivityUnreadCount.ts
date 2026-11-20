@@ -1,5 +1,7 @@
 import { useState } from 'react'
 
+import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
+import { parseAgentStatusPaneIdentity } from '../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../../shared/agent-status/presentation/migration-unsupported-agent-entry'
 import { useAppStore } from '@/store'
 import { createAgentStatusEpochSelector } from '@/lib/agent-status/evidence/agent-status-epoch-selector'
@@ -14,12 +16,41 @@ type ActivityUnreadCountSource = Pick<
 > & {
   /** Per-pane "Clear completed" cutoffs; hidden events must not count as unread. */
   activityClearedAtByPaneKey?: Record<string, number>
+  tabsByWorktree?: AppState['tabsByWorktree']
+  unifiedTabsByWorktree?: AppState['unifiedTabsByWorktree']
+}
+
+function collectOpenActivityTabIds(
+  tabsByWorktree?: AppState['tabsByWorktree'],
+  unifiedTabsByWorktree?: AppState['unifiedTabsByWorktree']
+): Set<string> | null {
+  if (tabsByWorktree === undefined && unifiedTabsByWorktree === undefined) {
+    return null
+  }
+  const openTabIds = new Set<string>()
+  for (const tabs of Object.values(tabsByWorktree ?? {})) {
+    for (const tab of tabs) {
+      openTabIds.add(tab.id)
+    }
+  }
+  for (const tabs of Object.values(unifiedTabsByWorktree ?? {})) {
+    for (const tab of tabs) {
+      if (tab.contentType === 'agent-session') {
+        openTabIds.add(tab.id)
+      }
+    }
+  }
+  return openTabIds
 }
 
 /** Counts unread historical activity and fresh current turns. */
 export function countActivityUnread(source: ActivityUnreadCountSource, now = Date.now()): number {
   let count = 0
   const seenPaneKeys = new Set<string>()
+  const openTabIds = collectOpenActivityTabIds(source.tabsByWorktree, source.unifiedTabsByWorktree)
+  const representedTabs = openTabIds
+    ? getStructuredAgentSessionTabsByPaneKey(source.unifiedTabsByWorktree)
+    : null
 
   // Workspace unread flags have no Activity row to clear and must not light this badge.
   const countEntry = (entry: AgentStatusEntry, ackAt: number, live = false): void => {
@@ -44,6 +75,18 @@ export function countActivityUnread(source: ActivityUnreadCountSource, now = Dat
   }
 
   for (const [paneKey, entry] of Array.from(source.agentStatusByPaneKey.entries())) {
+    if (openTabIds) {
+      const parsed = parseAgentStatusPaneIdentity(paneKey, representedTabs?.get(paneKey))
+      const hasOpenTab = parsed !== null && openTabIds.has(parsed.tabId)
+      if (
+        !hasOpenTab &&
+        freshActivityLiveAgentState(entry, now) === null &&
+        entry.state !== 'blocked' &&
+        entry.state !== 'waiting'
+      ) {
+        continue
+      }
+    }
     seenPaneKeys.add(paneKey)
     countEntry(entry, source.acknowledgedAgentsByPaneKey[paneKey] ?? 0, true)
   }
@@ -65,13 +108,17 @@ const createActivityUnreadCountSelector = () =>
       state: AppState,
       migrationUnsupportedByPtyId: AppState['migrationUnsupportedByPtyId'],
       acknowledgedAgentsByPaneKey: AppState['acknowledgedAgentsByPaneKey'],
-      activityClearedAtByPaneKey: AppState['activityClearedAtByPaneKey']
+      activityClearedAtByPaneKey: AppState['activityClearedAtByPaneKey'],
+      tabsByWorktree: AppState['tabsByWorktree'],
+      unifiedTabsByWorktree: AppState['unifiedTabsByWorktree']
     ) =>
       countActivityUnread({
         agentStatusByPaneKey: state.agentStatusByPaneKey,
         migrationUnsupportedByPtyId,
         acknowledgedAgentsByPaneKey,
-        activityClearedAtByPaneKey
+        activityClearedAtByPaneKey,
+        tabsByWorktree,
+        unifiedTabsByWorktree
       })
   )
 
@@ -82,7 +129,9 @@ export function useActivityUnreadCount(): number {
       state,
       state.migrationUnsupportedByPtyId,
       state.acknowledgedAgentsByPaneKey,
-      state.activityClearedAtByPaneKey
+      state.activityClearedAtByPaneKey,
+      state.tabsByWorktree,
+      state.unifiedTabsByWorktree
     )
   )
 }

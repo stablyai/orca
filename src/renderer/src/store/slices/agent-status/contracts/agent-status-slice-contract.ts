@@ -17,6 +17,7 @@ import type {
   DropAgentStatusByTabPrefixOptions,
   DropAgentStatusByWorktreeOptions,
   DropAgentStatusOptions,
+  RemoveAgentStatusOptions,
   AllAgentSessionCaptureMode
 } from './agent-status-contract'
 import type {
@@ -128,7 +129,7 @@ export type AgentStatusSlice = {
   setMigrationUnsupportedPty: (entry: MigrationUnsupportedPtyEntry) => void
   clearMigrationUnsupportedPty: (ptyId: string) => void
 
-  removeAgentStatus: (paneKey: string) => void
+  removeAgentStatus: (paneKey: string, opts?: RemoveAgentStatusOptions) => void
 
   /** End process occupancy while a source-approved sleeping pane still owns its Done. */
   retireAgentStatusProcess: (paneKey: string, ptyId?: string) => void

@@ -53,7 +53,7 @@ export function createAgentStatusCleanupActions(
       })
     },
 
-    removeAgentStatus: (paneKey) => {
+    removeAgentStatus: (paneKey, opts) => {
       const current = get()
       // Transient PTY loss removes occupancy; conversation identity survives until explicit pane retirement.
       if (
@@ -75,9 +75,15 @@ export function createAgentStatusCleanupActions(
         }
         const processRetirement = agentProcessRetirementPatch(s, paneKey)
         const paneKeys = new Set([paneKey])
-        const nextAck = removePaneKeys(s.acknowledgedAgentsByPaneKey, paneKeys)
-        const nextClearedAt = removePaneKeys(s.activityClearedAtByPaneKey, paneKeys)
-        const nextManualUnread = removePaneKeys(s.manuallyUnreadTurnsByPaneKey, paneKeys)
+        const nextAck = opts?.preserveActivityState
+          ? s.acknowledgedAgentsByPaneKey
+          : removePaneKeys(s.acknowledgedAgentsByPaneKey, paneKeys)
+        const nextClearedAt = opts?.preserveActivityState
+          ? s.activityClearedAtByPaneKey
+          : removePaneKeys(s.activityClearedAtByPaneKey, paneKeys)
+        const nextManualUnread = opts?.preserveActivityState
+          ? s.manuallyUnreadTurnsByPaneKey
+          : removePaneKeys(s.manuallyUnreadTurnsByPaneKey, paneKeys)
         return {
           agentStatusByPaneKey: next,
           ...processRetirement.patch,

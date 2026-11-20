@@ -128,8 +128,19 @@ export function buildActivityEvents(
     if (!parsed) {
       return null
     }
-    const context = tabContext.get(parsed.tabId) ?? attributedActivityTabContext(entry)
+    const openTab = tabContext.get(parsed.tabId)
+    const context = openTab ?? attributedActivityTabContext(entry)
     if (!context) {
+      return null
+    }
+    // Only fresh raw live state proves working; history and orchestration enrichment cannot establish liveness.
+    const liveState = activityLiveAgentState(
+      entry,
+      args.now,
+      tabHasLivePty(args.ptyIdsByTabId ?? {}, context.tab.id)
+    )
+    // Closed bot chats and released workers have no open tab; only live or attention rows belong in Activity.
+    if (!openTab && liveState === null && entry.state !== 'blocked' && entry.state !== 'waiting') {
       return null
     }
     const owner = resolveActivityEventOwner(
@@ -142,12 +153,6 @@ export function buildActivityEvents(
       t
     )
     const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
-    // Only fresh raw live state proves working; history and orchestration enrichment cannot establish liveness.
-    const liveState = activityLiveAgentState(
-      entry,
-      args.now,
-      tabHasLivePty(args.ptyIdsByTabId ?? {}, context.tab.id)
-    )
     return resolvePaneBuild(
       {
         cacheKey: `live:${paneKey}`,

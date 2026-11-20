@@ -127,3 +127,72 @@ it.each([
     expect(store.getState().sleepingAgentSessionsByPaneKey[paneKey]?.state).toBe('working')
   }
 )
+
+it('removes a done status row on clear when its terminal tab is already closed, but preserves open panes', () => {
+  store = createTestStore()
+  const openPaneKey = 'tab-open:11111111-1111-4111-8111-111111111111'
+  const closedPaneKey = 'tab-released:22222222-2222-4222-8222-222222222222'
+  store.setState({
+    tabsByWorktree: {
+      'wt-1': [
+        {
+          id: 'tab-open',
+          worktreeId: 'wt-1',
+          ptyId: 'pty-open',
+          title: 'Agent',
+          customTitle: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1
+        }
+      ]
+    }
+  })
+  store
+    .getState()
+    .setAgentStatus(
+      openPaneKey,
+      { state: 'done', prompt: 'open worker', agentType: 'claude' },
+      undefined,
+      { updatedAt: 200, stateStartedAt: 150 },
+      { tabId: 'tab-open', worktreeId: 'wt-1' }
+    )
+  store
+    .getState()
+    .setAgentStatus(
+      closedPaneKey,
+      { state: 'done', prompt: 'released worker', agentType: 'codex' },
+      undefined,
+      { updatedAt: 200, stateStartedAt: 150 },
+      { tabId: 'tab-released', worktreeId: 'wt-1' }
+    )
+
+  let clear: (data: AgentStatusClearIpcPayload) => void = () => {
+    throw new Error('No clear listener')
+  }
+  vi.stubGlobal('window', {
+    api: {
+      agentStatus: {
+        onSet: () => () => {},
+        onClear: (listener: typeof clear) => {
+          clear = listener
+          return () => {}
+        }
+      }
+    }
+  })
+  registerAgentStatusListeners({
+    unsubs: [],
+    enqueueLiveAgentStatus: () => {},
+    drainQueuedLiveAgentStatusesForPane: () => {},
+    pendingAgentStatusEvents: [],
+    liveAgentStatusBurstQueue: [],
+    transientClearWatermarkByConnectionId: new Map()
+  })
+
+  clear({ paneKey: openPaneKey })
+  clear({ paneKey: closedPaneKey })
+
+  expect(store.getState().agentStatusByPaneKey.get(openPaneKey)?.state).toBe('done')
+  expect(store.getState().agentStatusByPaneKey.get(closedPaneKey)).toBeUndefined()
+})

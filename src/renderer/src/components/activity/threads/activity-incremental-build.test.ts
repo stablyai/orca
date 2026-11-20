@@ -8,6 +8,7 @@ import type { AgentStatusEntry } from '../../../../../shared/agent-status/contra
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { buildActivityEvents, type BuildActivityEventsArgs } from '../events/activity-event-builder'
 import { createActivityEventBuildCache } from '../events/activity-event-build-cache'
+import { countActivityUnread } from '../events/useActivityUnreadCount'
 import { buildAgentPaneThreads, createAgentPaneThreadReuseCache } from './activity-thread-builder'
 
 const NOW = 1_000_000_000
@@ -284,5 +285,117 @@ describe('Activity incremental build', () => {
       .map((event) => event.entry.paneKey)
     expect(kept).toEqual(historical.slice(0, 80))
     expect(kept).not.toContain(first)
+  })
+
+  it('excludes closed tabless completed sessions while keeping open completed and live tabless sessions', () => {
+    const store = fleet(1)
+    const openDoneKey = makePaneKey('t0', LEAF)
+    const closedDoneKey = makePaneKey('closed-bot-tab', LEAF)
+    const releasedWorkerKey = makePaneKey('released-worker-tab', LEAF)
+    const tablessWorkingKey = makePaneKey('bg-working-tab', LEAF)
+    const tablessWaitingKey = makePaneKey('bg-waiting-tab', LEAF)
+    store.setState({
+      agentStatusByPaneKey: acceptedAgentStatuses([
+        [
+          openDoneKey,
+          {
+            paneKey: openDoneKey,
+            tabId: 't0',
+            worktreeId: 'w0',
+            state: 'done',
+            prompt: 'open done',
+            updatedAt: NOW - 1000,
+            stateStartedAt: NOW - 1000,
+            stateHistory: [],
+            agentType: 'claude'
+          }
+        ],
+        [
+          closedDoneKey,
+          {
+            paneKey: closedDoneKey,
+            tabId: 'closed-bot-tab',
+            worktreeId: 'w0',
+            state: 'done',
+            prompt: 'closed bot chat',
+            updatedAt: NOW - 1500,
+            stateStartedAt: NOW - 1500,
+            stateHistory: [],
+            agentType: 'omp'
+          }
+        ],
+        [
+          releasedWorkerKey,
+          {
+            paneKey: releasedWorkerKey,
+            tabId: 'released-worker-tab',
+            worktreeId: 'w0',
+            state: 'done',
+            prompt: 'auto-closed worker',
+            updatedAt: NOW - 2000,
+            stateStartedAt: NOW - 2000,
+            stateHistory: [],
+            agentType: 'codex'
+          }
+        ],
+        [
+          tablessWorkingKey,
+          {
+            paneKey: tablessWorkingKey,
+            tabId: 'bg-working-tab',
+            worktreeId: 'w0',
+            state: 'working',
+            prompt: 'background bot working',
+            updatedAt: NOW - 2500,
+            stateStartedAt: NOW - 2500,
+            stateHistory: [],
+            agentType: 'omp'
+          }
+        ],
+        [
+          tablessWaitingKey,
+          {
+            paneKey: tablessWaitingKey,
+            tabId: 'bg-waiting-tab',
+            worktreeId: 'w0',
+            state: 'waiting',
+            prompt: 'background bot waiting',
+            updatedAt: NOW - 3000,
+            stateStartedAt: NOW - 3000,
+            stateHistory: [],
+            agentType: 'omp'
+          }
+        ]
+      ]),
+      migrationUnsupportedByPtyId: {}
+    })
+    const build = builder(store)
+    const initial = build.cached()
+    expect(initial.threads.map((thread) => thread.paneKey)).toEqual([
+      openDoneKey,
+      tablessWorkingKey,
+      tablessWaitingKey
+    ])
+    build.expectEquivalent()
+    expect(
+      countActivityUnread(
+        {
+          agentStatusByPaneKey: store.getState().agentStatusByPaneKey,
+          acknowledgedAgentsByPaneKey: {},
+          migrationUnsupportedByPtyId: {},
+          tabsByWorktree: store.getState().tabsByWorktree,
+          unifiedTabsByWorktree: store.getState().unifiedTabsByWorktree
+        },
+        NOW
+      )
+    ).toBe(3)
+
+    // When a tabless working session finishes, it leaves Activity too.
+    ping(store, tablessWorkingKey, { state: 'done', stateStartedAt: NOW })
+    expect(build.cached().threads.map((thread) => thread.paneKey)).toEqual([
+      openDoneKey,
+      tablessWaitingKey
+    ])
+    build.expectEquivalent()
   })
 })

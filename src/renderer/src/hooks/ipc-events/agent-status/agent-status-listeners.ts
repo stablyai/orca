@@ -131,11 +131,13 @@ export function registerAgentStatusListeners(args: {
         }
       }
       const store = useAppStore.getState()
+      const existing = store.agentStatusByPaneKey.get(data.paneKey)
       if (
         data.statusUnavailable !== true &&
         data.programStatusRemoved !== true &&
-        !store.agentStatusByPaneKey.get(data.paneKey)?.paneSleep &&
-        store.agentStatusByPaneKey.get(data.paneKey)?.state === 'done'
+        !existing?.paneSleep &&
+        existing?.state === 'done' &&
+        resolvePaneKey(store, data.paneKey).exists
       ) {
         return
       }
