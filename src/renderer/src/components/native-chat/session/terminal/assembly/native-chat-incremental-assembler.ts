@@ -33,38 +33,43 @@ export function reset(
   return assembler.messages
 }
 
-/** Rewind to what a reset over `applied.slice(0, keep)` builds, or return false (changing nothing)
- *  when the dropped rows could have changed how kept rows merged, grouped or sorted. */
+/** A copy rewound to what a reset over `applied.slice(0, keep)` builds, or null when the dropped
+ *  rows could have changed how kept rows merged, grouped or sorted. Never mutates `committed`. */
 export function rewind(
-  assembler: IncrementalChatAssembler,
+  committed: IncrementalChatAssembler,
   applied: readonly NativeChatMessage[],
   keep: number
-): boolean {
+): IncrementalChatAssembler | null {
   const removed = applied.length - keep
-  const at = assembler.messages.length - removed
+  const at = committed.messages.length - removed
   // Any merge means a dropped row may have displaced or outranked a kept one.
-  if (assembler.byId.size !== applied.length || at < 0) {
-    return false
+  if (committed.byId.size !== applied.length || at < 0) {
+    return null
   }
   const dropped = new Set(applied.slice(keep))
-  const last = assembler.messages[at - 1]
+  const last = committed.messages[at - 1]
   if (last && isImageRow(last)) {
-    return false
+    return null
   }
-  for (let index = at; index < assembler.messages.length; index += 1) {
-    const message = assembler.messages[index]!
+  for (let index = at; index < committed.messages.length; index += 1) {
+    const message = committed.messages[index]!
     // Dropped rows must be the sorted tail, after the kept rows and outside any image unit.
     if (
       !dropped.has(message) ||
       isImageRow(message) ||
       (last !== undefined && compareMessages(message, last) <= 0)
     ) {
-      return false
+      return null
     }
   }
   // A kept window without source positions is not resorted, so it would not keep this order.
   if (hasSourcePosition(applied, keep, applied.length) && !hasSourcePosition(applied, 0, keep)) {
-    return false
+    return null
+  }
+  const assembler: IncrementalChatAssembler = {
+    byId: new Map(committed.byId),
+    byTurn: new Map(committed.byTurn),
+    messages: committed.messages.slice(0, at)
   }
   const lostKeys = new Set<string>()
   for (const message of dropped) {
@@ -82,8 +87,7 @@ export function rewind(
       assembler.byTurn.set(key, applied[index]!)
     }
   }
-  assembler.messages = assembler.messages.slice(0, at)
-  return true
+  return assembler
 }
 
 function hasSourcePosition(

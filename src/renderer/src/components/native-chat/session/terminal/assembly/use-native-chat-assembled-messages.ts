@@ -68,25 +68,24 @@ function assembleTranscript(
     return { assembler, baseSignature, baseMessages, transcript, assembledMessages }
   }
   const applied = committed.transcript
-  // A discarded render must not mutate the last committed assembler.
-  const assembler = cloneAssembler(committed.assembler)
   if (baseMessages === committed.baseMessages) {
-    if (transcript.length >= applied.length && sharesPrefix(transcript, applied, applied.length)) {
-      const assembledMessages =
-        transcript.length > applied.length
+    // A discarded render must not mutate the last committed assembler.
+    const assembler = cloneAssembler(committed.assembler)
+    const assembledMessages =
+      transcript.length >= applied.length && sharesPrefix(transcript, applied, applied.length)
+        ? transcript.length > applied.length
           ? applyAppends(assembler, transcript.slice(applied.length))
           : assembler.messages
-      return { assembler, baseSignature, baseMessages, transcript, assembledMessages }
-    }
-  } else {
-    // A re-sent latest window keeps the held rows before it, so only the rows after them re-merge.
-    const keep = sharedPrefixLength(transcript, applied)
-    if (keep > 0 && rewindAssembler(assembler, applied, keep)) {
-      const assembledMessages = applyAppends(assembler, transcript.slice(keep))
-      return { assembler, baseSignature, baseMessages, transcript, assembledMessages }
-    }
+        : resetAssembler(assembler, transcript)
+    return { assembler, baseSignature, baseMessages, transcript, assembledMessages }
   }
-  const assembledMessages = resetAssembler(assembler, transcript)
+  // A re-sent latest window keeps the held rows before it, so only the rows after them re-merge.
+  const keep = sharedPrefixLength(transcript, applied)
+  const rewound = keep > 0 ? rewindAssembler(committed.assembler, applied, keep) : null
+  const assembler = rewound ?? createIncrementalAssembler()
+  const assembledMessages = rewound
+    ? applyAppends(rewound, transcript.slice(keep))
+    : resetAssembler(assembler, transcript)
   return { assembler, baseSignature, baseMessages, transcript, assembledMessages }
 }
 
