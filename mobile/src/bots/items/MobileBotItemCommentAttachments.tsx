@@ -199,7 +199,7 @@ export function MobileBotItemCommentAttachments({
         >
           {cell > 0
             ? shown.map((image, index) => (
-                <View key={`${index}-${image.path}`} style={{ width: cell }}>
+                <View key={image.path} style={{ width: cell }}>
                   <Tile
                     image={image}
                     reads={reads}

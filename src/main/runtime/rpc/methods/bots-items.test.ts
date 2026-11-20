@@ -10,6 +10,7 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
 import { BotItemsHost, type BotItemsHostDeps } from '../../../bots/bot-items-runtime'
 import type { BotItemMail } from '../../../bots/bot-items-schema'
+import type { BotItemEvent } from '../../../../shared/bots/bot-items'
 import { BotsDbWorkerClient } from '../../../bots/db-worker/bots-db-worker-client'
 import { closeBotsDbStores } from '../../../bots/db-worker/bots-db-worker-entry'
 import { inProcessBotsDbWorker } from '../../../bots/db-worker/bots-db-worker.test-fixture'
@@ -509,9 +510,9 @@ describe('bot items over RPC', () => {
       const shown = await dispatcher.dispatch(
         request('bots.items.show', { callerSessionId: RANGER_CHAT, item: '1' })
       )
-      const comments = (
-        shown as { result: { events: { kind: string; data: Record<string, unknown> }[] } }
-      ).result.events.filter((event) => event.kind === 'commented')
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a successful bots.items.show reply carries its events, which the matcher below checks.
+      const { events } = (shown as { result: { events: BotItemEvent[] } }).result
+      const comments = events.filter((event) => event.kind === 'commented')
       expect(comments).toHaveLength(2)
       expect(comments[0]?.data.images).toMatchObject([{ name: 'after.png', bytes: 4 }])
       expect(comments[0]?.data.text).toMatch(/^@\S+agent-session-attachments\S+run\.log$/)

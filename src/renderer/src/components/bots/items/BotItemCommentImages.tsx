@@ -21,12 +21,12 @@ const LAYOUT = {
   },
   two: {
     grid: 'grid-cols-2',
-    tile: 'aspect-[4/3] w-full',
+    tile: 'aspect-[4/3] w-full overflow-hidden',
     image: 'size-full object-cover object-left-top'
   },
   many: {
     grid: 'grid-cols-3',
-    tile: 'aspect-square w-full',
+    tile: 'aspect-square w-full overflow-hidden',
     image: 'size-full object-cover object-left-top'
   }
 } as const
@@ -55,7 +55,7 @@ export function BotItemCommentImages({
   return (
     <div className={cn('mb-2 grid gap-1.5', layout.grid)} data-bot-item-comment-images="">
       {(folded ? blocks.slice(0, SHOWN) : blocks).map((block, index) => (
-        <div key={`${index}-${block.path}`} className="flex min-w-0 max-w-full flex-col gap-0.5">
+        <div key={block.path} className="flex min-w-0 max-w-full flex-col gap-0.5">
           <NativeChatImageTile
             block={block}
             runtimeContext={runtimeContext}

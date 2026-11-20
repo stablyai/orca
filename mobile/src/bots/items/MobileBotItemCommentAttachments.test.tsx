@@ -75,7 +75,7 @@ it('folds images past six to five and "+N", steps the viewer through them, and o
   ).toHaveLength(1)
 
   await act(async () => tiles[4]!.props.onPress())
-  const viewer = () => tree.root.findByType('Viewer' as never)
+  const viewer = () => tree.root.find((node) => node.type === 'Viewer')
   expect(viewer().props.label).toBe('shot-5.png')
   await act(async () => viewer().props.onNext())
   expect(viewer().props.label).toBe('shot-6.png')
