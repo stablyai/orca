@@ -31,10 +31,10 @@ export const BotLogoBare = React.createContext(false)
 export const BARE_LOGO_BOX = 'flex size-5 shrink-0 items-center justify-center'
 
 /**
- * A logo Composio serves, bare (see BotLogoBare): its square at 20 px, else its mark. Those marks are drawn for a white
- * tile in any colour, black included, so a dark theme keeps a small white one behind them.
+ * A logo image drawn for a white tile, bare (see BotLogoBare): a full square of colour at 20 px, else its mark. Such
+ * marks come in any colour, black included, so a dark theme keeps a small white tile behind them.
  */
-export function BareComposioLogo({ src, fill }: { src: string; fill?: string }): React.JSX.Element {
+export function BareImageLogo({ src, fill }: { src: string; fill?: string }): React.JSX.Element {
   return (
     <span
       style={{ backgroundColor: fill }}
@@ -81,7 +81,7 @@ export function BotAppLogo({
   const background = fill ?? tile
   if (bare) {
     return image ? (
-      <BareComposioLogo src={image.src} fill={fill} />
+      <BareImageLogo src={image.src} fill={fill} />
     ) : (
       <span className={cn(BARE_LOGO_BOX, plain ? 'text-muted-foreground' : 'text-foreground')}>
         {icon}

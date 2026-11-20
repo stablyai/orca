@@ -1,6 +1,6 @@
 import React, { useContext } from 'react'
 import { cn } from '@/lib/class-names'
-import { BareComposioLogo, BotLogoBare, brandTileClass, composioLogo } from '../apps/BotAppRow'
+import { BareImageLogo, BotLogoBare, brandTileClass, composioLogo } from '../apps/BotAppRow'
 
 /** An app's own logo from Composio (no key needed) on its brand's tile; a full-square logo fills it. */
 export function ComposioAppLogo({
@@ -16,7 +16,7 @@ export function ComposioAppLogo({
   const bare = useContext(BotLogoBare)
   const { src, fill: tile } = composioLogo(slug, logo)
   if (bare) {
-    return <BareComposioLogo src={src} fill={tile} />
+    return <BareImageLogo src={src} fill={tile} />
   }
   return (
     <span

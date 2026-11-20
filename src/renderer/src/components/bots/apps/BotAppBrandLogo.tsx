@@ -21,7 +21,7 @@ import { GitHubIcon } from '../../icons/GitHubIcon'
 import { GoogleIcon } from '../../icons/GoogleIcon'
 import { SlackIcon } from '../../icons/SlackIcon'
 import { LinearIcon } from '../../icons/LinearIcon'
-import { BARE_LOGO_BOX, BotAppLogo, BotLogoBare } from './BotAppRow'
+import { BARE_LOGO_BOX, BareImageLogo, BotAppLogo, BotLogoBare } from './BotAppRow'
 import { cn } from '@/lib/class-names'
 import { LOGO_TILES } from './brand-logo-tiles'
 
@@ -32,6 +32,8 @@ type BotAppBrand = {
   Icon?: ComponentType<{ className?: string }>
   /** The logo is a white mark for a dark tile: bare, a light theme draws it black. */
   whiteMark?: true
+  /** The logo has near-black ink: bare, a dark theme keeps a small white tile behind it. */
+  darkInk?: true
 }
 
 /** By connector id or BOT_MCP_APPS id; a new MCP app adds its logo here, and its tile to LOGO_TILES.brand. */
@@ -43,11 +45,11 @@ const BRANDS: Readonly<Record<string, BotAppBrand>> = {
   vercel: { logo: vercelLogo, whiteMark: true },
   sentry: { logo: sentryLogo, whiteMark: true },
   datadog: { logo: datadogLogo },
-  posthog: { logo: posthogLogo },
+  posthog: { logo: posthogLogo, darkInk: true },
   cloudflare: { logo: cloudflareLogo },
   supabase: { logo: supabaseLogo },
   neon: { logo: neonLogo },
-  netlify: { logo: netlifyLogo },
+  netlify: { logo: netlifyLogo, darkInk: true },
   gitlab: { logo: gitlabLogo },
   context7: { logo: context7Logo, whiteMark: true },
   atlassian: { logo: atlassianLogo },
@@ -88,6 +90,9 @@ export function BotAppBrandLogo({
   const bare = useContext(BotLogoBare)
   const brand = BRANDS[app.id]
   const Icon = app.Icon ?? brand?.Icon
+  if (bare && brand?.darkInk && brand.logo) {
+    return <BareImageLogo src={brand.logo} />
+  }
   if (size === 'xs' || bare) {
     const box = size === 'xs' ? 'size-3.5' : 'size-5'
     const mark = brand?.logo ? (
