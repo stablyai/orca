@@ -1,13 +1,37 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { lstatSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  lstatSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import type * as NodeFs from 'node:fs'
 import type * as NodeOs from 'node:os'
+import type * as SessionLink from '../rollouts/codex-session-link'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
 const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
 }))
+
+const { linkMockState } = vi.hoisted(() => ({
+  linkMockState: { beforeLink: null as null | (() => void) }
+}))
+
+vi.mock('../rollouts/codex-session-link', async () => {
+  const actual = await vi.importActual<typeof SessionLink>('../rollouts/codex-session-link')
+  return {
+    ...actual,
+    linkCodexSessionFile: (sourcePath: string, targetPath: string) => {
+      linkMockState.beforeLink?.()
+      return actual.linkCodexSessionFile(sourcePath, targetPath)
+    }
+  }
+})
 
 const { fsMockState } = vi.hoisted(() => ({
   fsMockState: {
@@ -92,7 +116,7 @@ vi.mock('node:os', async () => {
     homedir: homedirMock
   }
 })
-import { syncSystemCodexSessionsIntoManagedHome } from './codex-session-bridge'
+import { syncSystemCodexSessionsIntoManagedHomeIncrementally } from './codex-session-bridge'
 
 let fakeHomeDir: string
 let userDataDir: string
@@ -129,6 +153,7 @@ function writeLegacyCopyMarker(relativePath: string, sourcePath: string, targetP
 }
 
 beforeEach(() => {
+  linkMockState.beforeLink = null
   fsMockState.failLink = false
   fsMockState.failSymlink = false
   fsMockState.fakeSymlinks.clear()
@@ -151,8 +176,8 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('syncSystemCodexSessionsIntoManagedHome', () => {
-  it('does not overwrite runtime-owned session files', () => {
+describe('syncSystemCodexSessionsIntoManagedHomeIncrementally', () => {
+  it('does not overwrite runtime-owned session files', async () => {
     const relativeSessionPath = join('sessions', '2026', '05', '26', 'rollout-conflict.jsonl')
     const systemSessionPath = join(getSystemCodexHomePath(), relativeSessionPath)
     const runtimeSessionPath = join(getRuntimeCodexHomePath(), relativeSessionPath)
@@ -161,12 +186,12 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
     writeFileSync(systemSessionPath, '{"id":"system"}\n', 'utf-8')
     writeFileSync(runtimeSessionPath, '{"id":"runtime"}\n', 'utf-8')
 
-    syncSystemCodexSessionsIntoManagedHome()
+    await syncSystemCodexSessionsIntoManagedHomeIncrementally()
 
     expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"runtime"}\n')
   })
 
-  it('preserves unchanged legacy copied sessions when relinking fails', () => {
+  it('preserves unchanged legacy copied sessions when relinking fails', async () => {
     const relativeSessionPath = join('2026', '05', '26', 'rollout-legacy-unlinked.jsonl')
     const systemSessionPath = join(getSystemCodexHomePath(), 'sessions', relativeSessionPath)
     const runtimeSessionPath = join(getRuntimeCodexHomePath(), 'sessions', relativeSessionPath)
@@ -178,9 +203,61 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
     fsMockState.failLink = true
     fsMockState.failSymlink = true
 
-    syncSystemCodexSessionsIntoManagedHome()
+    await syncSystemCodexSessionsIntoManagedHomeIncrementally()
 
     expect(lstatSync(runtimeSessionPath).isSymbolicLink()).toBe(false)
     expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"legacy"}\n')
+  })
+
+  // A legacy copy Orca made earlier, in a runtime home whose Codex keeps thread locks.
+  function legacyCopy(sourceText: string, copyText: string) {
+    const relativeSessionPath = join(
+      '2026',
+      '05',
+      '26',
+      'rollout-2026-05-26T10-00-00-0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b.jsonl'
+    )
+    const source = join(getSystemCodexHomePath(), 'sessions', relativeSessionPath)
+    const copy = join(getRuntimeCodexHomePath(), 'sessions', relativeSessionPath)
+    mkdirSync(dirname(source), { recursive: true })
+    mkdirSync(dirname(copy), { recursive: true })
+    mkdirSync(join(getRuntimeCodexHomePath(), 'thread-writer-locks'), { recursive: true })
+    writeFileSync(source, sourceText, 'utf-8')
+    writeFileSync(copy, copyText, 'utf-8')
+    writeLegacyCopyMarker(relativeSessionPath, source, copy)
+    return { source, copy }
+  }
+
+  it('keeps a legacy copy holding lines its source lacks', async () => {
+    const { copy } = legacyCopy('{"turn":1}\n', '{"turn":1}\n{"turn":2}\n')
+
+    await syncSystemCodexSessionsIntoManagedHomeIncrementally()
+
+    expect(readFileSync(copy, 'utf-8')).toBe('{"turn":1}\n{"turn":2}\n')
+  })
+
+  it('keeps a legacy copy written to while it is being replaced', async () => {
+    const { copy } = legacyCopy('{"turn":1}\n{"turn":2}\n', '{"turn":1}\n')
+    linkMockState.beforeLink = () => appendFileSync(copy, '{"turn":"late"}\n')
+
+    await syncSystemCodexSessionsIntoManagedHomeIncrementally()
+
+    expect(readFileSync(copy, 'utf-8')).toBe('{"turn":1}\n{"turn":"late"}\n')
+  })
+
+  it('keeps a legacy copy while Codex has its thread open', async () => {
+    const { copy } = legacyCopy('{"turn":1}\n{"turn":2}\n', '{"turn":1}\n')
+    writeFileSync(
+      join(
+        getRuntimeCodexHomePath(),
+        'thread-writer-locks',
+        '0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b.lock'
+      ),
+      ''
+    )
+
+    await syncSystemCodexSessionsIntoManagedHomeIncrementally()
+
+    expect(readFileSync(copy, 'utf-8')).toBe('{"turn":1}\n')
   })
 })
