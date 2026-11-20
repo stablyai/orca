@@ -1,6 +1,7 @@
 import { posix } from 'node:path'
 import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 import { runProcess } from '@orca/process-host'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { lstat, stat, readFile, realpath } from 'node:fs/promises'
 import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
 import { removeHostTree, removeUnregisteredHostCheckout } from '../../filesystem/host-tree-removal'
@@ -26,7 +27,7 @@ function shouldUseWslFilesystem(options: LocalWorktreeFilesystemOptions): boolea
 // Coreutils need no login shell; rc/motd output would corrupt parsed stdout.
 async function runWslCommand(distro: string, command: string): Promise<string> {
   const result = await runProcess({
-    program: 'wsl.exe',
+    program: windowsSystem32Binary('wsl.exe'),
     args: buildWslExecArgs(distro, ['sh', '-c', command]),
     // An inherited cwd may be the worktree currently being deleted (#16463).
     cwd: resolveWslInteropSpawnCwd(),

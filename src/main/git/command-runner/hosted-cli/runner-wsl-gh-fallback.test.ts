@@ -202,13 +202,18 @@ describe('ghExecFileAsync WSL fallback', () => {
     })
 
     expect(spawnMock).toHaveBeenCalledTimes(3)
-    expect(spawnMock.mock.calls.map(([binary]) => binary)).toEqual(['gh', 'wsl.exe', 'gh'])
+    // WSL resolves through windowsSystem32Binary, never a bare PATH lookup.
+    expect(spawnMock.mock.calls.map(([binary]) => binary)).toEqual([
+      'gh',
+      'C:\\Windows\\System32\\wsl.exe',
+      'gh'
+    ])
   })
 
   it('checks a blocked native scope before repeating a WSL-to-native fallback', async () => {
     spawnMock.mockImplementation(
       fakeSpawnDispatch((program) =>
-        program === 'wsl.exe'
+        program === 'C:\\Windows\\System32\\wsl.exe'
           ? { stderr: WSL_GH_MISSING, code: 1 }
           : { stderr: PRIMARY_RATE_LIMIT_STDERR, code: 1 }
       )
@@ -225,7 +230,12 @@ describe('ghExecFileAsync WSL fallback', () => {
     ).rejects.toMatchObject({ ghRateLimitBlocked: true })
 
     expect(spawnMock).toHaveBeenCalledTimes(3)
-    expect(spawnMock.mock.calls.map(([binary]) => binary)).toEqual(['wsl.exe', 'gh', 'wsl.exe'])
+    // WSL resolves through windowsSystem32Binary, never a bare PATH lookup.
+    expect(spawnMock.mock.calls.map(([binary]) => binary)).toEqual([
+      'C:\\Windows\\System32\\wsl.exe',
+      'gh',
+      'C:\\Windows\\System32\\wsl.exe'
+    ])
   })
 
   it('does not retry non-idempotent glab transient failures', async () => {

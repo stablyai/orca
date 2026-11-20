@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import {
   buildWslCapturedLoginShellCommand,
@@ -90,7 +91,7 @@ function probeWslGitReadEnvironment(distro: string): Promise<ProbeOutcome> {
       return
     }
     execFile(
-      'wsl.exe',
+      windowsSystem32Binary('wsl.exe'),
       args,
       {
         encoding: 'utf8',
