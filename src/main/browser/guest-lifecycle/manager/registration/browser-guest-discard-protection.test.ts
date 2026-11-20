@@ -15,11 +15,7 @@ it('protects only the current document, never earlier history', () => {
   let audible = false
   let crashed = false
   let url = 'about:blank'
-  const mainFrame = {
-    frameTreeNodeId: 1,
-    frames,
-    send: vi.fn<(channel: string, generation: string) => void>()
-  }
+  const mainFrame = { frames, send: vi.fn<(channel: string, generation: string) => void>() }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: event fixture implements this policy's native surface.
   const guest = Object.assign(new EventEmitter(), {
     id: 7,
@@ -75,17 +71,12 @@ it('protects only the current document, never earlier history', () => {
       { generation: firstGeneration, dirty: false, pictureInPicture: false, contentType: '' }
     )
     expect(readBrowserGuestDiscardProtection(guest).protection).toBe('unknown')
-    guest.emit(
-      'ipc-message',
-      { sender: guest, senderFrame: { frameTreeNodeId: 2 } },
-      BROWSER_GUEST_PROTECTION_REPORT,
-      {
-        generation: mainFrame.send.mock.lastCall?.[1],
-        dirty: false,
-        pictureInPicture: false,
-        contentType: 'text/html'
-      }
-    )
+    guest.emit('ipc-message', { sender: guest, senderFrame: {} }, BROWSER_GUEST_PROTECTION_REPORT, {
+      generation: mainFrame.send.mock.lastCall?.[1],
+      dirty: false,
+      pictureInPicture: false,
+      contentType: 'text/html'
+    })
     expect(readBrowserGuestDiscardProtection(guest).protection).toBe('unknown')
     report(false)
     audible = true
@@ -168,11 +159,7 @@ it('protects only the current document, never earlier history', () => {
 
 it('protects active page features from the private observer and at idle admission', () => {
   vi.useFakeTimers({ toFake: ['performance'] })
-  const mainFrame = {
-    frameTreeNodeId: 1,
-    frames: [],
-    send: vi.fn<(channel: string, generation: string) => void>()
-  }
+  const mainFrame = { frames: [], send: vi.fn<(channel: string, generation: string) => void>() }
   let url = 'https://example.test/'
   let audible = false
   let captured = false
@@ -278,11 +265,7 @@ it('protects active page features from the private observer and at idle admissio
 
 it('keeps a page an embedded form POSTed to the top from being discarded', () => {
   let url = 'https://example.test/embed'
-  const mainFrame = {
-    frameTreeNodeId: 1,
-    frames: [],
-    send: vi.fn<(channel: string, generation: string) => void>()
-  }
+  const mainFrame = { frames: [], send: vi.fn<(channel: string, generation: string) => void>() }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: event fixture implements this policy's native surface.
   const guest = Object.assign(new EventEmitter(), {
     id: 8,
@@ -294,13 +277,8 @@ it('keeps a page an embedded form POSTed to the top from being discarded', () =>
     isCurrentlyAudible: () => false
   }) as unknown as Electron.WebContents
   const stop = installBrowserGuestDiscardProtection(guest, vi.fn())
-  const load = (next: string, initiator: unknown = mainFrame): void => {
-    guest.emit('did-start-navigation', {
-      url: next,
-      isMainFrame: true,
-      isSameDocument: false,
-      initiator
-    })
+  const load = (next: string): void => {
+    guest.emit('did-start-navigation', { url: next, isMainFrame: true, isSameDocument: false })
     url = next
     guest.emit('did-navigate', {}, next, 200, 'OK')
     guest.emit('dom-ready')
@@ -320,15 +298,10 @@ it('keeps a page an embedded form POSTed to the top from being discarded', () =>
     load('https://example.test/embed')
     expect(readBrowserGuestDiscardProtection(guest).protection).toBe('discardable')
     // A child frame's `<form method="post" target="_top">` reports itself, then the top navigates.
-    guest.emit(
-      'ipc-message',
-      { sender: guest, senderFrame: { frameTreeNodeId: 2 } },
-      BROWSER_GUEST_PROTECTION_REPORT,
-      {
-        formPost: 'https://example.test/report'
-      }
-    )
-    load('https://example.test/report', { frameTreeNodeId: 2 })
+    guest.emit('ipc-message', { sender: guest, senderFrame: {} }, BROWSER_GUEST_PROTECTION_REPORT, {
+      formPost: 'https://example.test/report'
+    })
+    load('https://example.test/report')
     expect(readBrowserGuestDiscardProtection(guest).reason).toBe('post')
   } finally {
     stop()
@@ -337,11 +310,7 @@ it('keeps a page an embedded form POSTed to the top from being discarded', () =>
 
 it('keeps protecting the page a form POST redirects to', () => {
   let url = 'https://example.test/login'
-  const mainFrame = {
-    frameTreeNodeId: 1,
-    frames: [],
-    send: vi.fn<(channel: string, generation: string) => void>()
-  }
+  const mainFrame = { frames: [], send: vi.fn<(channel: string, generation: string) => void>() }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: event fixture implements this policy's native surface.
   const guest = Object.assign(new EventEmitter(), {
     id: 9,
@@ -381,8 +350,7 @@ it('keeps protecting the page a form POST redirects to', () => {
     guest.emit('did-start-navigation', {
       url: 'https://example.test/session',
       isMainFrame: true,
-      isSameDocument: false,
-      initiator: mainFrame
+      isSameDocument: false
     })
     url = 'https://example.test/dashboard'
     guest.emit('did-navigate', {}, url, 200, 'OK')
@@ -395,11 +363,7 @@ it('keeps protecting the page a form POST redirects to', () => {
 
 it('keeps protecting a POST result reached again with Back', () => {
   let url = 'https://example.test/form'
-  const mainFrame = {
-    frameTreeNodeId: 1,
-    frames: [],
-    send: vi.fn<(channel: string, generation: string) => void>()
-  }
+  const mainFrame = { frames: [], send: vi.fn<(channel: string, generation: string) => void>() }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: event fixture implements this policy's native surface.
   const guest = Object.assign(new EventEmitter(), {
     id: 10,
@@ -411,13 +375,8 @@ it('keeps protecting a POST result reached again with Back', () => {
     isCurrentlyAudible: () => false
   }) as unknown as Electron.WebContents
   const stop = installBrowserGuestDiscardProtection(guest, vi.fn())
-  const load = (next: string, initiator: unknown = mainFrame): void => {
-    guest.emit('did-start-navigation', {
-      url: next,
-      isMainFrame: true,
-      isSameDocument: false,
-      initiator
-    })
+  const load = (next: string): void => {
+    guest.emit('did-start-navigation', { url: next, isMainFrame: true, isSameDocument: false })
     url = next
     guest.emit('did-navigate', {}, next, 200, 'OK')
     guest.emit('dom-ready')
@@ -457,11 +416,7 @@ it('keeps protecting a POST result reached again with Back', () => {
 
 it('lets a plain link to an earlier POST result be discarded', () => {
   let url = 'https://example.test/form'
-  const mainFrame = {
-    frameTreeNodeId: 1,
-    frames: [],
-    send: vi.fn<(channel: string, generation: string) => void>()
-  }
+  const mainFrame = { frames: [], send: vi.fn<(channel: string, generation: string) => void>() }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: event fixture implements this policy's native surface.
   const guest = Object.assign(new EventEmitter(), {
     id: 11,
@@ -482,12 +437,7 @@ it('lets a plain link to an earlier POST result be discarded', () => {
     )
   }
   const load = (next: string, loadType: string): void => {
-    guest.emit('did-start-navigation', {
-      url: next,
-      isMainFrame: true,
-      isSameDocument: false,
-      initiator: mainFrame
-    })
+    guest.emit('did-start-navigation', { url: next, isMainFrame: true, isSameDocument: false })
     url = next
     guest.emit('did-navigate', {}, next, 200, 'OK')
     report({ ready: true, loadType })

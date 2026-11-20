@@ -19,20 +19,16 @@ function withoutHash(rawUrl: string): string {
  * status, and a 307/308 keeps the POST.
  */
 export function createFormPostNavigationTracker(): {
-  /** `frame` is the reporting frame's tree node id. */
-  submitted: (actionUrl: string, frame: number) => void
+  submitted: (actionUrl: string) => void
   /** The page cancelled, intercepted or aborted the navigation of the submission to this URL. */
   cancelled: (actionUrl: string) => void
-  /** `initiator` is the tree node id of the frame that started it, null for the browser itself. */
-  started: (url: string, initiator: number | null) => void
+  started: (url: string) => void
   /** `method` is the request's own method when a request listener saw it. */
   committed: (url: string, method: string | null) => boolean
   /** The committed document was a fresh navigation; true if that drops a remembered POST mark. */
   freshlyNavigated: () => boolean
 } {
-  // Each frame's latest report; only a navigation that frame starts can be its submission, so a
-  // report whose navigation never came can't mark a link or address-bar visit.
-  const submitted = new Map<number, string>()
+  let submitted: string | null = null
   let post = false
   // The mark came only from a remembered POST result, which a fresh GET navigation disproves.
   let fromMemory = false
@@ -49,28 +45,25 @@ export function createFormPostNavigationTracker(): {
     }
   }
   return {
-    submitted: (actionUrl, frame) => {
-      submitted.set(frame, withoutHash(actionUrl))
+    submitted: (actionUrl) => {
+      submitted = withoutHash(actionUrl)
     },
     cancelled: (actionUrl) => {
-      const url = withoutHash(actionUrl)
-      for (const [frame, reported] of submitted) {
-        if (reported === url) {
-          submitted.delete(frame)
-        }
+      if (submitted === withoutHash(actionUrl)) {
+        submitted = null
       }
     },
-    started: (url, initiator) => {
+    started: (url) => {
       if (provisionalUrl !== null) {
         remember(provisionalUrl)
         provisionalUrl = null
       }
       const target = withoutHash(url)
       startTarget = target
-      const submission = initiator !== null && submitted.get(initiator) === target
+      const submission = submitted === target
       fromMemory = !submission && postResultUrls.has(target)
       post = submission || fromMemory
-      submitted.clear()
+      submitted = null
     },
     committed: (url, method) => {
       const isPost = method !== null ? method !== 'GET' : post

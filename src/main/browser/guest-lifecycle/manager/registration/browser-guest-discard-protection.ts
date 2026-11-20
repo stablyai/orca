@@ -171,10 +171,7 @@ export function installBrowserGuestDiscardProtection(
     // Any frame may report: an embedded form can POST to the top page, and a false report only
     // keeps a page from being discarded.
     if ('formPost' in payload && typeof payload.formPost === 'string') {
-      const frame = event.senderFrame?.frameTreeNodeId
-      if (frame !== undefined) {
-        formPost.submitted(payload.formPost, frame)
-      }
+      formPost.submitted(payload.formPost)
       return
     }
     if ('formPostCancelled' in payload && typeof payload.formPostCancelled === 'string') {
@@ -236,7 +233,7 @@ export function installBrowserGuestDiscardProtection(
   ): void => {
     if (details.isMainFrame && !details.isSameDocument) {
       pendingMethod = null
-      formPost.started(details.url, details.initiator?.frameTreeNodeId ?? null)
+      formPost.started(details.url)
       owner.navigating = true
       invalidate()
     } else if (!details.isMainFrame) {
