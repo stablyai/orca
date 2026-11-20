@@ -82,13 +82,16 @@ function agentArgs(agent: AvatarImageAgent, cwd: string, prompt: string): string
       '230s'
     ]
   }
-  // The image tool is the only tool, and dontAsk refuses anything else whatever the user's config.
+  // The image tool is the only tool and the only one allowed; dontAsk refuses anything else,
+  // and with Grok's default config it refuses the image tool too unless allowed by name.
   return [
     '--prompt-file',
     join(cwd, PROMPT_FILE),
     '--permission-mode',
     'dontAsk',
     '--tools',
+    'image_gen',
+    '--allow',
     'image_gen',
     '--disable-web-search',
     '--output-format',
