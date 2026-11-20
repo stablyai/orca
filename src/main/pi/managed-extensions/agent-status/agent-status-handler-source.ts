@@ -21,7 +21,13 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
       ? [
           "  onStatus('session_start', (event, ctx) => {",
           '    updateSessionMetadata(ctx)',
-          ...(kind === 'pi' ? ['    piUiPromptDepth = 0', '    captureNativeChatUi(ctx)'] : []),
+          ...(kind === 'pi'
+            ? [
+                '    piUiPromptDepth = 0',
+                '    captureNativeChatUi(ctx)',
+                '    watchComposerDraft(ctx)'
+              ]
+            : []),
           '    // Reload replaces registration without ending the turn; preserve status and unread state.',
           "    if (event.reason === 'reload') return",
           "    post('session_start')",

@@ -5,6 +5,7 @@ import { getPiAgentStatusHandlerSourceLines } from './agent-status-handler-sourc
 import { getPiAgentStatusRuntimeDetectionSourceLines } from './agent-status-runtime-detection-source'
 import { getPiAgentStatusWslCurlSourceLines } from './agent-status-wsl-curl-source'
 import { getPiSubagentSnapshotSourceLines } from './agent-status-subagent-roster-source'
+import { getPiAgentStatusComposerDraftSourceLines } from './agent-status-composer-draft-source'
 
 export const ORCA_PI_AGENT_STATUS_EXTENSION_FILE = 'orca-agent-status.ts'
 
@@ -104,9 +105,14 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
   ]
 
   // Pi resumes by transcript; OMP resumes by session ID (#8962).
+  // Pi reads its input box when the body is built, so a queued post carries the latest reading.
+  const composerDraftField =
+    kind === 'pi'
+      ? ' ...(!ompRuntime && composerDraft !== undefined ? { composer_draft: composerDraft } : {}),'
+      : ''
   const payloadLine =
     kind !== 'omp'
-      ? '    payload: { hook_event_name: hookEventName, ...(ompRuntime ? metadata : getPersistedSessionMetadata(metadata)), ...subagents, ...extra },'
+      ? `    payload: { hook_event_name: hookEventName, ...(ompRuntime ? metadata : getPersistedSessionMetadata(metadata)), ...subagents,${composerDraftField} ...extra },`
       : '    payload: { hook_event_name: hookEventName, ...metadata, ...subagents, ...extra },'
 
   // Read endpoint files after Orca restarts because PTY-spawn environment stays frozen.
@@ -118,6 +124,7 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     'const HOOK_POST_TIMEOUT_MS = 1000',
     ...getPiAgentStatusPostQueueSourceLines(kind),
     ...(kind === 'pi' ? ['let piUiPromptDepth = 0', 'let piTurnInFlight = false'] : []),
+    ...getPiAgentStatusComposerDraftSourceLines(kind),
     ...modelMetadataSourceLines,
     '',
     ...getPiSubagentSnapshotSourceLines(),

@@ -13,6 +13,7 @@ export type HookContext = {
     notify?: (message: string, level: string) => void
     setStatus?: (key: string, text: string | undefined) => void
     onTerminalInput?: (handler: (data: string) => { consume?: boolean } | undefined) => () => void
+    getEditorText?: () => string
   }
   isIdle?: () => boolean
   getAsyncJobSnapshot?: () => { running: { type: string; agentId?: string; label: string }[] }

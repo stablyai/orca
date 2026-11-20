@@ -1,0 +1,17 @@
+{
+  "capturedAt": "2026-11-20T21:11:10.519Z",
+  "platform": "darwin",
+  "command": [
+    "<pi-1.6.0>",
+    "--no-session",
+    "--no-extensions",
+    "--no-skills",
+    "--offline",
+    "-e",
+    "<pi-zentui-0.33.0>"
+  ],
+  "cols": 100,
+  "rows": 30,
+  "note": "pi 1.6.0 with only pi-zentui 0.33.0 (-e), macOS, isolated HOME, no credentials; typed a one-line draft without Enter",
+  "exitCode": 0
+}

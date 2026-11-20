@@ -46,7 +46,10 @@ describe('piComposerHoldsDraft', () => {
   it.each([
     ['pi-1-6-composer-empty', false],
     ['pi-1-6-composer-draft', true],
-    ['pi-1-6-composer-draft-wrapped', true]
+    ['pi-1-6-composer-draft-wrapped', true],
+    // zentui's rail puts a model row inside the rules; its draft comes from Orca's Pi extension.
+    ['pi-1-6-zentui-0-33-composer-empty', false],
+    ['pi-1-6-zentui-0-33-composer-draft', false]
   ])('reads recorded %s as a draft: %s', async (fixture, held) => {
     const context = await fixtureContext(fixture)
     // The generic reader needs a prompt glyph, which Pi never draws (#45901).
