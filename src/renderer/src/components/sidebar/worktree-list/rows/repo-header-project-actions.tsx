@@ -30,6 +30,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { getRepositoryIconSectionId } from '@/components/settings/repository/repository-settings-targets'
 import { WslMoveProjectMenuItem } from '@/components/wsl-move/WslMoveProjectMenuItem'
+import { OpenOnHostMenuItems } from '@/components/open-on-host/OpenOnHostMenuItems'
 import { WslMovedRepoUseHereMenuItem } from '@/components/wsl-move/WslMovedUseHereMenuItem'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type {
@@ -189,6 +190,7 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
           </DropdownMenuItem>
         ) : null}
         <WslMoveProjectMenuItem repo={repo} />
+        <OpenOnHostMenuItems repo={repo} />
         <WslMovedRepoUseHereMenuItem repo={repo} />
         <DropdownMenuSeparator />
         <DropdownMenuItem

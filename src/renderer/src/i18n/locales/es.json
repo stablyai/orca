@@ -24278,5 +24278,31 @@
     "dontSend": "No enviar",
     "sending": "Enviando…",
     "sendReport": "Enviar informe"
+  },
+  "openOnHost": {
+    "menuItem": "Abrir en {{host}}…",
+    "checking": "Comprobando {{host}}…",
+    "title": "Abrir {{name}} en {{host}}",
+    "existingLocation": "Se abre en {{path}}",
+    "cloneLocation": "Clonar desde {{url}} en {{path}}",
+    "branch": "Rama {{branch}}",
+    "pushFirst": "Hacer push de {{branch}} primero",
+    "publishFirst": "Publicar {{branch}} primero",
+    "unpublishedBlocked": "{{branch}} aún no está en un remoto, así que {{host}} no puede obtenerla. Publícala primero",
+    "detached": "Cambia a una rama para abrir este espacio de trabajo en {{host}}",
+    "primary": "Abrir en {{host}}",
+    "opening": "Abriendo…",
+    "cancel": "Cancelar",
+    "noRemote": "Añade un remoto de git para abrir este proyecto en otra máquina",
+    "updateOrca": "Actualiza Orca en {{host}} para usar esto",
+    "cloneFolderTaken": "{{path}} ya está en uso en {{host}}. Define la ubicación de este proyecto en {{host}} en la configuración del proyecto",
+    "sourceUnavailable": "No se puede acceder al host de este espacio de trabajo",
+    "noRemoteBranch": "Esta rama no tiene una rama remota que {{host}} pueda abrir",
+    "missingRemote": "El clon de {{host}} no tiene el remoto {{remote}}",
+    "headMismatch": "La copia de {{branch}} en {{host}} está en un commit distinto al de {{source}}",
+    "hostCopyNotLoaded": "La copia de este proyecto en {{host}} aún no se ha cargado",
+    "localCommitsStay_one": "Tu {{count}} commit local se queda en {{source}}",
+    "localCommitsStay_other": "Tus {{count}} commits locales se quedan en {{source}}",
+    "localCommitsStay_many": "Tus {{count}} commits locales se quedan en {{source}}"
   }
 }

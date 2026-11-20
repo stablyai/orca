@@ -29685,5 +29685,30 @@
     "toolsLabel": "App tools",
     "workspaces": "Workspaces",
     "more": "More"
+  },
+  "openOnHost": {
+    "menuItem": "Open on {{host}}…",
+    "checking": "Checking {{host}}…",
+    "title": "Open {{name}} on {{host}}",
+    "existingLocation": "Opens in {{path}}",
+    "cloneLocation": "Clone from {{url}} into {{path}}",
+    "branch": "Branch {{branch}}",
+    "pushFirst": "Push {{branch}} first",
+    "publishFirst": "Publish {{branch}} first",
+    "unpublishedBlocked": "{{branch}} is not on a remote yet, so {{host}} can't fetch it. Publish it first",
+    "detached": "Check out a branch to open this workspace on {{host}}",
+    "primary": "Open on {{host}}",
+    "opening": "Opening…",
+    "cancel": "Cancel",
+    "noRemote": "Add a git remote to open this project on another machine",
+    "updateOrca": "Update Orca on {{host}} to use this",
+    "cloneFolderTaken": "{{path}} is already used on {{host}}. Set this project's location on {{host}} in Project Settings",
+    "sourceUnavailable": "Can't reach the host of this workspace",
+    "noRemoteBranch": "This branch has no remote branch {{host}} can open",
+    "missingRemote": "{{host}}'s clone has no remote {{remote}}",
+    "headMismatch": "{{host}}'s copy of {{branch}} is at a different commit than {{source}}",
+    "hostCopyNotLoaded": "{{host}}'s copy of this project isn't loaded yet",
+    "localCommitsStay_one": "Your {{count}} local commit stays on {{source}}",
+    "localCommitsStay_other": "Your {{count}} local commits stay on {{source}}"
   }
 }

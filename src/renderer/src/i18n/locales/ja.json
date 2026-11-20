@@ -25196,5 +25196,29 @@
     "dontSend": "送信しない",
     "sending": "送信中…",
     "sendReport": "レポートを送信"
+  },
+  "openOnHost": {
+    "menuItem": "{{host}} で開く…",
+    "checking": "{{host}} を確認しています…",
+    "title": "{{name}} を {{host}} で開く",
+    "existingLocation": "{{path}} で開きます",
+    "cloneLocation": "{{url}} から {{path}} にクローン",
+    "branch": "ブランチ {{branch}}",
+    "pushFirst": "先に {{branch}} をプッシュ",
+    "publishFirst": "先に {{branch}} を公開",
+    "unpublishedBlocked": "{{branch}} はまだリモートにないため、{{host}} から取得できません。先に公開してください",
+    "detached": "{{host}} でこのワークスペースを開くには、ブランチをチェックアウトしてください",
+    "primary": "{{host}} で開く",
+    "opening": "開いています…",
+    "cancel": "キャンセル",
+    "noRemote": "別のマシンでこのプロジェクトを開くには、Git リモートを追加してください",
+    "updateOrca": "これを使うには {{host}} の Orca を更新してください",
+    "cloneFolderTaken": "{{path}} は {{host}} ですでに使われています。プロジェクト設定で {{host}} 上のこのプロジェクトの場所を設定してください",
+    "sourceUnavailable": "このワークスペースのホストに接続できません",
+    "noRemoteBranch": "このブランチには {{host}} が開けるリモートブランチがありません",
+    "missingRemote": "{{host}} のクローンにはリモート {{remote}} がありません",
+    "headMismatch": "{{host}} 上の {{branch}} のコピーは、{{source}} とは別のコミットにあります",
+    "hostCopyNotLoaded": "{{host}} 上のこのプロジェクトのコピーはまだ読み込まれていません",
+    "localCommitsStay_other": "{{count}} 件のローカルコミットは {{source}} に残ります"
   }
 }
