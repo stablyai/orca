@@ -24,16 +24,16 @@ import { openWorkspaceLayoutFrameSync } from '../frames/workspace-layout-frame-s
 import { releaseHeldBrowserTabsTheServerLists } from '../../browser/creation/web-runtime-browser-tab-staging'
 import { provideServerLayoutApplyRoutes } from './server-layout-apply-routes'
 import { createServerEditorHandover } from './server-layout-editor-handover'
-import { mirroredRuntimeEnvironmentIdForWorkspace } from '../../web-session-tabs-sync/mirrored-workspace-owner'
+import { mirroredRuntimeEnvironmentIdForWorkspace } from '../../web-session-tabs-sync/workspace-selection/mirrored-workspace-owner'
 import {
   isFrameDrawnServerWorkspace,
   setFrameDrawnServerWorkspaces
-} from '../../web-session-tabs-sync/frame-drawn-server-workspace-set'
+} from '../../web-session-tabs-sync/frame-drawn/frame-drawn-server-workspace-set'
 import {
   mirroredTerminalHandle,
   onMirroredTerminalHandlesChanged
-} from '../../web-session-tabs-sync/mirrored-terminal-handle-index'
-import { resyncMirroredServerWorkspace } from '../../web-session-tabs-sync/frame-drawn-server-workspaces'
+} from '../../web-session-tabs-sync/terminal-handles/mirrored-terminal-handle-index'
+import { resyncMirroredServerWorkspace } from '../../web-session-tabs-sync/frame-drawn/frame-drawn-server-workspaces'
 
 type FramesStore = {
   getState: () => AppState

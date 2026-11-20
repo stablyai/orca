@@ -1,6 +1,6 @@
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
-import { getSettingsFocusedExecutionHostId } from '../../../../../../shared/execution-host'
+import { getSettingsFocusedExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getWorktreeIdsWithLiveAgent } from '@/lib/workspace/activity/worktree-activity-state'
 import type { useAppStore } from '@/store/index'
 import { getWorktreeIdsWithStructuredChat } from './visible-worktree-activity-inputs'

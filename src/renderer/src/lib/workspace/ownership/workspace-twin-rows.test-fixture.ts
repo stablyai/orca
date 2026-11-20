@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 type TwinRepoRow = { id: string; connectionId?: string; executionHostId: ExecutionHostId }
 type TwinWorktreeRow = { id: string; repoId: string; hostId: ExecutionHostId }

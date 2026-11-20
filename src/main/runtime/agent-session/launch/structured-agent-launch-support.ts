@@ -1,12 +1,9 @@
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { overlayEnvironmentVariables } from '../../../../shared/shell/launch/environment-overlay'
-import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import {
-  resolveTuiAgentLaunchEnv,
-  type AgentLaunchProfileSettings
-} from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import type { AgentLaunchProfileSettings } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { structuredAgentSettingsEnv } from '../environment/structured-agent-launch-env'
 import {
   checkAgentCliVersion,
   launchableRelease,
@@ -30,13 +27,17 @@ import {
   createStructuredAgentEnvironmentResolvers
 } from '../environment/structured-agent-shell-environment'
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/native-chat-shell-environment'
+import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/settings/native-chat-shell-environment'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
-import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/structured-chat-platform-support'
+import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/capabilities/structured-chat-platform-support'
 
 export type LaunchEnvironmentSettings = Pick<
   GlobalSettings,
-  'agentDefaultEnv' | 'nativeChatInheritShellEnvironment' | 'nativeChatShellEnvironmentVariables'
+  | 'agentDefaultEnv'
+  | 'nativeChatInheritShellEnvironment'
+  | 'nativeChatShellEnvironmentVariables'
+  | 'httpProxyUrl'
+  | 'httpProxyBypassRules'
 > &
   Partial<Pick<GlobalSettings, 'agentCmdOverrides' | 'antigravityChatAuth'>> &
   AgentLaunchProfileSettings
@@ -73,7 +74,12 @@ export async function observeStructuredAgentLaunch(
     { env: ({ env }) => env, cwd: once }
   )
   return checkAgentCliVersion(
-    { program: launch.command, prefixArgs: launch.prefixArgs, cwd: await once(), env: launch.env },
+    {
+      program: launch.command,
+      prefixArgs: [...launch.prefixArgs, ...(check.versionArgs ?? [])],
+      cwd: await once(),
+      env: launch.env
+    },
     check.minimumVersions
   )
 }
@@ -121,7 +127,7 @@ export async function resolveHostStructuredAgentLaunchEnvironment(
 ): Promise<Record<string, string>> {
   return overlayEnvironmentVariables(
     await resolveHostAgentBaseEnvironment(settings),
-    isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : undefined,
+    structuredAgentSettingsEnv(agent, settings),
     process.platform
   )
 }
@@ -141,7 +147,7 @@ export async function structuredAgentHostLaunchSources(
 }> {
   const settings = runtime.requireStore().getSettings()
   const policy = nativeChatShellEnvironmentPolicy(settings)
-  const overlay = isTuiAgent(agent) ? { ...resolveTuiAgentLaunchEnv(agent, settings) } : {}
+  const overlay = structuredAgentSettingsEnv(agent, settings)
   const environment = createStructuredAgentEnvironmentResolvers({
     prewarm: false,
     processEnvironment: { ...process.env },

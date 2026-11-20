@@ -37,8 +37,8 @@ const hostSignIns = new WeakMap<OrcaRuntimeService, HostAccountSignInFlows>()
 function hostSignInFlows(runtime: OrcaRuntimeService): HostAccountSignInFlows {
   let flows = hostSignIns.get(runtime)
   if (!flows) {
-    flows = new HostAccountSignInFlows((provider, channel) =>
-      runtime.runHostAccountSignIn(provider, channel)
+    flows = new HostAccountSignInFlows((provider, channel, accountId) =>
+      runtime.runHostAccountSignIn(provider, channel, accountId)
     )
     hostSignIns.set(runtime, flows)
   }
@@ -156,10 +156,8 @@ const ACCOUNT_METHOD_DEFINITIONS = [
     name: 'accounts.selectClaude',
     permission: 'accounts-admin',
     params: SelectClaudeAccountParams,
-    handler: async (params, { runtime }) =>
-      runtime.selectClaudeAccount(params.accountId, {
-        movesRunningSessions: params.movesRunningSessions
-      })
+    handler: async ({ accountId, ...options }, { runtime }) =>
+      runtime.selectClaudeAccount(accountId, options)
   }),
   defineMethod({
     name: 'accounts.selectCodex',
@@ -224,8 +222,8 @@ const ACCOUNT_METHOD_DEFINITIONS = [
     name: 'accounts.hostSignInStart',
     permission: 'accounts-admin',
     params: HostAccountSignInStartParams,
-    handler: async ({ provider }, ctx) =>
-      hostSignInFlows(ctx.runtime).start(signInOwner(ctx), provider)
+    handler: async ({ provider, accountId }, ctx) =>
+      hostSignInFlows(ctx.runtime).start(signInOwner(ctx), provider, accountId)
   }),
   defineMethod({
     name: 'accounts.hostSignInWait',

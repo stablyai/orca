@@ -20,7 +20,10 @@ import {
   storedTestAgentSessionRecord
 } from '../../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import { CommandReceiptExistsError } from '../writing/command-receipt-transaction'
-import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 
 const roots: string[] = []
 const databases: JournalSqlDatabase[] = []
@@ -67,7 +70,7 @@ const identity = (sessionId: string) => ({
 })
 const history = (sessionId: string) => ({ sessionId, direction: 'tail' as const })
 
-it('marks only readable pending authority and preserves saved metadata without normalizing it', async () => {
+it('marks only readable leases that may be held and preserves saved metadata without normalizing it', async () => {
   const { root, database } = await fixture()
   const saved = {
     ...storedTestAgentSessionRecord(agentSessionRecordFixture()),
@@ -84,6 +87,18 @@ it('marks only readable pending authority and preserves saved metadata without n
     }
   }
   const alreadyJson = JSON.stringify(already, null, 2)
+  const released = {
+    ...saved,
+    sessionId: 'released',
+    lease: {
+      ...saved.lease,
+      sessionId: 'released',
+      claimStatus: 'released',
+      ownerProcess: null,
+      reservedSpawnToken: null
+    }
+  }
+  const releasedJson = JSON.stringify(released, null, 2)
   const unreadable = '{ "schemaVersion": 999 }'
   await withTestAgentSessionDatabase(root, (db) => {
     const insert = db.prepare(
@@ -91,6 +106,7 @@ it('marks only readable pending authority and preserves saved metadata without n
     )
     insert.run(saved.sessionId, JSON.stringify(saved))
     insert.run('already', alreadyJson)
+    insert.run('released', releasedJson)
     insert.run('unreadable', unreadable)
   })
   await database.installRecords()
@@ -99,6 +115,7 @@ it('marks only readable pending authority and preserves saved metadata without n
       .prepare('SELECT session_id,record_json FROM agent_session_records ORDER BY session_id')
       .all()
     expect(rows.find((row) => row.session_id === 'already')?.record_json).toBe(alreadyJson)
+    expect(rows.find((row) => row.session_id === 'released')?.record_json).toBe(releasedJson)
     expect(rows.find((row) => row.session_id === 'unreadable')?.record_json).toBe(unreadable)
     const marked = rows.find((row) => row.session_id === saved.sessionId)
     expect(JSON.parse(String(marked?.record_json))).toEqual({
@@ -113,16 +130,30 @@ it('keeps saved history readable after startup rollback and retries before the n
   const sessionId = record.sessionId
   const { root, database } = await fixture([sessionId])
   await database.openSession(identity(sessionId))
-  await withTestAgentSessionDatabase(root, (db) => {
-    db.prepare('INSERT INTO agent_session_records(session_id,record_json) VALUES(?,?)').run(
-      sessionId,
-      JSON.stringify(record)
+  const released = storedTestAgentSessionRecord(
+    agentSessionRecordFixture(
+      agentSessionLeaseFixture({
+        sessionId: 'released',
+        claimStatus: 'released',
+        ownerProcess: null,
+        reservedSpawnToken: null
+      })
     )
+  )
+  await withTestAgentSessionDatabase(root, (db) => {
+    const insert = db.prepare(
+      'INSERT INTO agent_session_records(session_id,record_json) VALUES(?,?)'
+    )
+    insert.run(sessionId, JSON.stringify(record))
+    // The retried installation leaves this lease unmarked, so the fallback view must too.
+    insert.run('released', JSON.stringify(released))
     db.exec(
       "CREATE TRIGGER fail_install BEFORE UPDATE ON agent_session_records BEGIN SELECT RAISE(ABORT, 'disk I/O error'); END"
     )
   })
-  expect((await database.installRecords()).records.get(sessionId)?.lease.unreconciled).toBe(true)
+  const fallback = (await database.installRecords()).records
+  expect(fallback.get(sessionId)?.lease.unreconciled).toBe(true)
+  expect(fallback.get('released')?.lease.unreconciled).toBe(false)
   expect(await database.openSession(identity(sessionId))).toMatchObject({ target: { sessionId } })
   expect(await database.readers.domainHistory(history(sessionId))).toMatchObject({ ok: true })
   await expect(

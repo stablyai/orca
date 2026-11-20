@@ -1,7 +1,7 @@
 import type {
   AgentSessionMcpServer,
   AgentSessionMcpSignIn
-} from '../../../../../shared/agent-session/agent-session-mcp'
+} from '../../../../../shared/agent-session/options/protocol/agent-session-mcp'
 import { agentSessionMcpServerDisplayName } from '../../../../../shared/agent-session/view/agent-session-mcp-server-presentation'
 import type { Translate } from '@/i18n/use-translate'
 
@@ -51,6 +51,8 @@ export function mcpServerStatusLine(server: AgentSessionMcpServer, t: Translate)
         : t('components.native-chat.mcp.status.failed', 'Failed')
     case 'disabled':
       return t('components.native-chat.mcp.status.disabled', 'Disabled')
+    case 'not-started':
+      return t('components.native-chat.mcp.status.notStarted', 'Not started')
   }
 }
 

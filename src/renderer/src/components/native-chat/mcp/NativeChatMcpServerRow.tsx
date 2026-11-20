@@ -3,8 +3,8 @@ import type {
   AgentSessionMcpOperation,
   AgentSessionMcpServer,
   AgentSessionMcpSignIn
-} from '../../../../../shared/agent-session/agent-session-mcp'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+} from '../../../../../shared/agent-session/options/protocol/agent-session-mcp'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
@@ -23,7 +23,8 @@ const DOT_CLASS: Record<Exclude<AgentSessionMcpServer['status'], 'pending'>, str
   connected: 'bg-status-success',
   'needs-auth': 'bg-status-warning',
   failed: 'bg-destructive',
-  disabled: 'bg-muted-foreground/40'
+  disabled: 'bg-muted-foreground/40',
+  'not-started': 'bg-muted-foreground/40'
 }
 
 /** The label keeps its width while a spinner stands in for it. */

@@ -1,6 +1,8 @@
 // Share single-line previews and multiline bodies with surrogate-safe cuts; agent-status-types.ts owns payload shapes and caps.
 
-import { compactDispatchPromptForStatus } from '../../orca-dispatch-status-prompt'
+import { compactDispatchPromptForStatus } from '../../orchestration/workers/orca-dispatch-status-prompt'
+import { BOT_CREATED_STATUS_LABEL, isBotCreatedKickoff } from '../../bot-created-kickoff'
+import { tookOverStatusLabel } from '../../native-chat/took-over-notice'
 
 /** Maximum character length for the prompt field. Truncated on parse. */
 export const AGENT_STATUS_MAX_FIELD_LENGTH = 200
@@ -38,6 +40,13 @@ function normalizeField(value: unknown, maxLength: number = AGENT_STATUS_MAX_FIE
 export function normalizePromptField(value: unknown): string {
   if (typeof value !== 'string') {
     return ''
+  }
+  if (isBotCreatedKickoff(value)) {
+    return BOT_CREATED_STATUS_LABEL
+  }
+  const tookOver = tookOverStatusLabel(value)
+  if (tookOver !== null) {
+    return normalizeSingleLinePreview(tookOver, AGENT_STATUS_MAX_FIELD_LENGTH)
   }
   return (
     compactDispatchPromptForStatus(

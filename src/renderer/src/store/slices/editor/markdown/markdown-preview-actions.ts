@@ -8,7 +8,7 @@ import { resolveEditorFileIdForOwner } from '../file-ids/editor-file-ids'
 import { buildEditorActiveResult } from '../tabs/editor-open-target-group'
 import { openWorkspaceEditorItem } from '../tabs/workspace-editor-item'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import { withPreviewEnded } from '../../tabs/tab-preview-flag'
 import { previewEditorTabsOf } from '../tabs/editor-tab-layout-owner'
 import {
@@ -19,7 +19,7 @@ import {
   endsPreviewHere,
   promotePreviewTabsThroughLayoutOwner
 } from '../../tabs/preview-tab-promotion'
-import { replaceTabBuckets } from '../../../keyed-record-transitions'
+import { replaceTabBuckets } from '../../../record-transitions/keyed-record-transitions'
 
 type FileReadAuthority = Pick<
   OpenFile,

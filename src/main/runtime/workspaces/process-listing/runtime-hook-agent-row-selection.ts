@@ -1,3 +1,4 @@
+import { paneAgentIdentity } from '../../../agent-hooks/server/pane-agent-identity'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import {
   pickHostTurnEnd,
@@ -32,8 +33,15 @@ export type RuntimeAgentRowSnapshot = {
 }
 
 function isLiveObservation(row: AgentStatusIpcPayload): boolean {
+  if (row.structuredHost) {
+    return row.restoredUnconfirmed !== true
+  }
   // Restored rows cannot prove current liveness; resume-identity rows carry no status.
-  return row.restoredUnconfirmed !== true && row.providerSessionOnly !== true
+  if (row.restoredUnconfirmed === true || row.providerSessionOnly === true) {
+    return false
+  }
+  const identity = paneAgentIdentity({ paneKey: row.paneKey, row })
+  return identity !== null && !identity.ended
 }
 
 type HookRowJoin = {
@@ -86,6 +94,27 @@ export function selectFreshExplicitAgentStatusRow(args: HookRowJoin): AgentStatu
     }
   }
   return best
+}
+
+/** The terminal's latest hook row of any age: a turn end stays true until the agent's next report. A row bound to another terminal handle is not this one's. */
+export function selectLatestAgentStatusRow(args: {
+  handles: ReadonlySet<string>
+  paneKey: string | null
+  hookRows: readonly AgentStatusIpcPayload[]
+}): AgentStatusIpcPayload | null {
+  let latest: AgentStatusIpcPayload | null = null
+  for (const row of args.hookRows) {
+    const ownsTerminal = row.terminalHandle
+      ? args.handles.has(row.terminalHandle)
+      : row.paneKey === args.paneKey
+    if (!ownsTerminal || !row.state || row.providerSessionOnly === true) {
+      continue
+    }
+    if (!latest || row.receivedAt > latest.receivedAt) {
+      latest = row
+    }
+  }
+  return latest
 }
 
 /** The freshest explicit state for a terminal, matched on its handle or its pane key. */

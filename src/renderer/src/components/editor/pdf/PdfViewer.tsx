@@ -8,7 +8,7 @@ import type {
 } from 'pdfjs-dist/web/pdf_viewer.mjs'
 import 'pdfjs-dist/web/pdf_viewer.css'
 import PdfFind from './PdfFind'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useAppStore } from '@/store/index'
 import { usePdfViewerFindShortcut } from './use-pdf-viewer-find-shortcut'
 

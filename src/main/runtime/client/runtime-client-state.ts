@@ -9,14 +9,15 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session/wo
 
 import {
   type ExecutionHostId,
+  getSettingsFocusedExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import type { IPtyProvider } from '../../providers/pty/provider-contract'
 import { killAllProcessesForWorktree } from '../workspaces/removal/worktree-teardown'
 import type { MemorySnapshot, StatsSummary } from '../../../shared/diagnostics/process-stats-types'
 import { collectMemorySnapshot } from '../../memory/collector'
-import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../shared/orca-profiles/persisted-ui-state-types'
 import { isDeepStrictEqual } from 'node:util'
 import type {
   AgentListPublication,
@@ -235,6 +236,11 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
 
   getClientTerminalQuickCommands(): TerminalQuickCommand[] {
     return this.clientSettings.getTerminalQuickCommands()
+  }
+
+  /** The "New projects open on" host, which desktop's Linear and Jira pages read from. */
+  getClientDefaultScopeHost(): ExecutionHostId {
+    return getSettingsFocusedExecutionHostId(this.store?.getSettings?.())
   }
 
   getClientAgentLaunchSettings() {

@@ -14,6 +14,7 @@ import type { QueuedMessageRow } from '../queued-messages/queued-message-table'
 import { JournalInputEvidence } from './journal-input-evidence'
 import { LegacyQueueOrderReader } from './legacy-queue-order-reader'
 import { JournalInputCardIndex } from './journal-input-card-index'
+import { JournalEchoClaimIndex } from './journal-echo-claim-index'
 
 /** Delivery evidence and the current hand-off; every other waiting input has a queue row. */
 export class JournalInputOrder extends JournalInputEvidence {
@@ -25,6 +26,7 @@ export class JournalInputOrder extends JournalInputEvidence {
   private readonly sending: JournalSubmissionStorage
   readonly newestTurn: JournalNewestTurn
   readonly cards: JournalInputCardIndex
+  readonly echoClaims: JournalEchoClaimIndex
 
   constructor(
     state: JournalReducerState,
@@ -37,6 +39,7 @@ export class JournalInputOrder extends JournalInputEvidence {
     this.unsettled = indexes.submissions('unsettled')
     this.sending = indexes.submissions('sending')
     this.cards = new JournalInputCardIndex(journalInputOrder, indexes)
+    this.echoClaims = new JournalEchoClaimIndex(this.evidenceFacts, indexes)
   }
 
   beforeRow(state: JournalReducerState, row: JournalRow): void {
@@ -176,6 +179,11 @@ export class JournalInputOrder extends JournalInputEvidence {
     }
   }
 
+  /** Item folds report each write; the owner's own key map names the send it belongs to. */
+  noteItem(state: JournalReducerState, itemId: string): void {
+    this.echoClaims.noteItem(state, itemId, this.observationFacts.inputIds.get(itemId))
+  }
+
   private refreshItem(state: JournalReducerState, itemId: string): void {
     const id = this.observationFacts.inputIds.get(itemId)
     if (id !== undefined) {
@@ -186,6 +194,7 @@ export class JournalInputOrder extends JournalInputEvidence {
   private refresh(state: JournalReducerState, id: string): void {
     const entry = state.submissions.get(id)
     this.refreshInputEvidence(state, id, entry)
+    this.echoClaims.refresh(state, id, entry)
     this.refreshLink(id)
     const dispatch = entry?.dispatchState
     if (this.unsettled.keep(id, entry, dispatch === 'pending' || dispatch === 'unknown')) {

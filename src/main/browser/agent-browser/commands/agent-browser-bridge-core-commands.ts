@@ -13,7 +13,8 @@ import { FILL_ELEMENT_FUNCTION } from '../../cdp/input/browser-element-functions
 import {
   EMBEDDED_NAVIGATION_TIMEOUT_MS,
   isAbortedNavigationError,
-  waitForAbortedNavigationReplacement
+  isWaitingForMainFrameResponse,
+  waitForInFlightNavigation
 } from './agent-browser-navigation-settle'
 import { AgentBrowserBridgeQueue } from '../command-queue/agent-browser-bridge-queue'
 import { assertRemoteCliPageAccess } from '../../routing/input-ownership/remote-cli-page-admission'
@@ -148,23 +149,41 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
             )
           }
           navigationAborted = true
-          // A superseding navigation can still be loading when the first load rejects.
-          await waitForAbortedNavigationReplacement(
-            wc,
-            target.browserPageId,
-            Math.max(0, navigationDeadline - Date.now())
-          )
         } finally {
           wc.removeListener('will-prevent-unload', onWillPreventUnload)
           if (navigationTimeout) {
             clearTimeout(navigationTimeout)
           }
         }
+        // A superseding navigation can still be loading when the first load rejects. The outgoing
+        // page (its own load ending, a beforeunload replaceState) can also settle loadURL while
+        // the requested navigation is pending, so getURL() still names the outgoing document.
+        const committedUrl = wc.getURL()
+        const pendingUrl = this.browserManager.getInFlightNavigationUrl(wc)
+        const settledBeforeCommit =
+          !navigationAborted &&
+          committedUrl !== navigationUrl &&
+          (isWaitingForMainFrameResponse(wc) ||
+            (pendingUrl !== null && pendingUrl !== committedUrl))
+        const navigationInFlight = navigationAborted || settledBeforeCommit
+        if (navigationInFlight) {
+          const outcome = await waitForInFlightNavigation(
+            wc,
+            Math.max(0, navigationDeadline - Date.now())
+          )
+          // Only an aborted load fails at the deadline; an early-settled one reports the current page.
+          if (navigationAborted && outcome === 'timed-out') {
+            throw new BrowserError(
+              'browser_error',
+              `Failed to navigate browser page ${target.browserPageId}: Browser navigation timed out after ${EMBEDDED_NAVIGATION_TIMEOUT_MS}ms`
+            )
+          }
+        }
 
         // Process swaps can replace the guest while retaining the page ID.
         const navigatedTarget = this.resolveCommandTarget(worktreeId, target.browserPageId)
         const navigatedWebContents = this.requireTargetWebContents(navigatedTarget)
-        const loadError = navigationAborted
+        const loadError = navigationInFlight
           ? this.browserManager.getBrowserPageLoadError(target.browserPageId)
           : null
         if (loadError) {
@@ -192,7 +211,10 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
       worktreeId,
       browserPageId,
       async (sessionName) => {
-        await this.actOnElement(sessionName, element, 'fill', FILL_ELEMENT_FUNCTION, [value])
+        await this.actOnElement(sessionName, element, 'fill', FILL_ELEMENT_FUNCTION, {
+          args: [value],
+          movesFocus: true
+        })
         return { filled: element }
       },
       { requireScopedTarget: true, elements: [element] }

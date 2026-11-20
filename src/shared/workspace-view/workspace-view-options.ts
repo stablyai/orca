@@ -1,9 +1,9 @@
-import type { PersistedUIState } from '../persisted-ui-state-types'
+import type { PersistedUIState } from '../orca-profiles/persisted-ui-state-types'
 import type {
   AgentActivityDisplayMode,
   ProjectOrderBy,
   WorktreeCardProperty
-} from '../ui-chrome-types'
+} from '../ui-chrome/ui-chrome-types'
 
 // Every surface renders an exhaustive option-key table. Desktop localizes these English labels; tests check parity.
 

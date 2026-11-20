@@ -9,6 +9,7 @@ import { createDeferredCommits } from './generation-deferred-commits'
 import { adoptLegacyRoot } from './generation-legacy-root'
 import { MANIFEST_FILE_NAME } from './generation-asset-path'
 import { parseGenerationManifest, readWaitingStage } from './generation-manifest-read'
+import { dropKeptAssets, keepingAssets } from './generation-kept-assets'
 import { reusableAssetsOf, reusableAssetsOfHosts } from './generation-reuse'
 import { stagingAssetsOf } from './generation-staging-assets'
 import type { GenerationFileSystem } from './generation-store-file-system'
@@ -45,7 +46,11 @@ export type StagedGeneration = {
 
 export type GenerationStore = {
   readActiveGeneration(hostKey: string): Promise<ActiveGeneration | null>
-  openReusableAssets(hostKey: string): Promise<MobileWebBundleReusableAssets>
+  // Name the build about to be fetched to reuse, and keep, its own assets from an earlier cut-off fetch.
+  openReusableAssets(
+    hostKey: string,
+    fetching?: MobileWebBundleManifestRead
+  ): Promise<MobileWebBundleReusableAssets>
   stageGeneration(
     hostKey: string,
     result: MobileWebBundleFetchResult,
@@ -56,7 +61,7 @@ export type GenerationStore = {
   // Commit later: the next readActiveGeneration for this host with no readers commits it, because commit deletes the old build.
   deferCommit(staged: StagedGeneration): void
   // A mounted page reading this host's active build; release when it stops reading it.
-  holdGeneration(hostKey: string): () => void
+  holdGeneration: ReturnType<typeof createDeferredCommits>['hold']
   // A release once this page may fetch the build for a deferred commit, after any page already fetching it; null when it already waits.
   claimUpdate(hostKey: string, buildId: string): Promise<(() => void) | null>
   abortStagedGeneration(staged: StagedGeneration): Promise<void>
@@ -202,6 +207,8 @@ export function createGenerationStore(options: {
 
   async function commit(staged: StagedGeneration): Promise<ActiveGeneration> {
     requireIssuedHandle(staged)
+    // The stage holds every asset; a kept copy left behind costs only space.
+    await dropKeptAssets(fs, hostRoot(staged.hostKey), staged.buildId).catch(() => undefined)
     // Any other stage waiting for this host is older than the build committed now.
     const waiting = deferred.drop(staged.hostKey)
     if (waiting !== null && waiting.directory !== staged.directory) {
@@ -247,17 +254,11 @@ export function createGenerationStore(options: {
     return active
   }
 
-  async function commitDeferred(hostKey: string): Promise<void> {
-    const waiting = deferred.takeUnread(hostKey)
-    if (waiting === null) {
-      return
-    }
-    // A stage that cannot commit is only a missed update; the active build stays and the next entry downloads again.
-    await commit(waiting).catch(() => fs.delete(waiting.directory).catch(() => undefined))
-  }
-
   async function openActive(hostKey: string): Promise<ActiveGeneration | null> {
-    await commitDeferred(hostKey)
+    // A stage that cannot commit is only a missed update; the active build stays and the next entry downloads again.
+    await deferred.commitUnread(hostKey, commit, (failed) =>
+      fs.delete(failed.directory).catch(() => undefined)
+    )
     const active = activeMemo.get(hostKey) ?? (await readActive(hostKey))
     // Opening counts as use even if the host’s bundle was downloaded long ago.
     if (active !== null) {
@@ -267,15 +268,11 @@ export function createGenerationStore(options: {
     return active
   }
 
-  async function openReusable(hostKey: string): Promise<MobileWebBundleReusableAssets> {
-    const hosts = [
-      hostKey,
-      ...(await listGenerationHostDirectories(fs))
-        .map((host) => host.name)
-        .filter((key) => key !== hostKey)
-    ]
+  async function openReusable(hostKey: string, fetching?: MobileWebBundleManifestRead) {
     // Reuse discovery must not clean up another shell's active or staged files.
-    const reusable = await reusableAssetsOfHosts(fs, hosts, (key) => readActive(key, false))
+    const reusable = await keepingAssets(fs, hostRoot(hostKey), fetching, serialize, (kept) =>
+      reusableAssetsOfHosts(fs, hostKey, (key) => readActive(key, false), kept)
+    )
     reuseSources.set(reusable, reusable)
     return reusable
   }
@@ -323,7 +320,7 @@ export function createGenerationStore(options: {
 
   return {
     readActiveGeneration: (hostKey) => serialize(() => sweep().then(() => openActive(hostKey))),
-    openReusableAssets: (hostKey) => serialize(() => openReusable(hostKey)),
+    openReusableAssets: (hostKey, fetching) => serialize(() => openReusable(hostKey, fetching)),
     stageGeneration: (hostKey, result, signal, reusable) =>
       serialize(() => stage(hostKey, result, signal, reusable)),
     commitGeneration: (staged) => serialize(() => commit(staged)),

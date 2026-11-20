@@ -1,7 +1,7 @@
 import type {
   AgentSessionMcpServer,
   AgentSessionMcpSignIn
-} from '../../../../../src/shared/agent-session/agent-session-mcp'
+} from '../../../../../src/shared/agent-session/options/protocol/agent-session-mcp'
 import { agentSessionMcpServerDisplayName } from '../../../../../src/shared/agent-session/view/agent-session-mcp-server-presentation'
 import type { Translate } from '../../../i18n/mobile-i18n'
 
@@ -45,6 +45,8 @@ export function mobileMcpServerStatusLine(server: AgentSessionMcpServer, t: Tran
         : t('chat.mcp.status.failed', 'Failed')
     case 'disabled':
       return t('chat.mcp.status.off', 'Off')
+    case 'not-started':
+      return t('chat.mcp.status.notStarted', 'Not started')
   }
 }
 

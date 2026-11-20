@@ -1,7 +1,7 @@
 import type {
   AgentSessionMcpServer,
   AgentSessionMcpServerStatus
-} from '../../../../shared/agent-session/agent-session-mcp'
+} from '../../../../shared/agent-session/options/protocol/agent-session-mcp'
 import type { CodexAppServerRpc } from '../../app-server/codex-app-server-session'
 
 export type CodexMcpRequest = CodexAppServerRpc['request']
@@ -34,6 +34,8 @@ type CodexMcpConfig = {
   disabled: ReadonlySet<string>
   /** Only servers in the home's own config.toml take an `enabled` write. */
   userDeclared: ReadonlySet<string>
+  /** Every server the chat's effective config names, project layer included. */
+  configured: readonly string[]
 }
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -69,7 +71,15 @@ export async function listCodexMcpServers(
       break
     }
   }
-  return entries.map((entry) => codexMcpServerRow(entry, config, scope.threadId !== null))
+  const rows = entries.map((entry) => codexMcpServerRow(entry, config, scope.threadId !== null))
+  const seen = new Set(rows.map((row) => row.name))
+  // A threadless status read skips the project's config, so its servers come from config/read.
+  for (const name of config.configured) {
+    if (!seen.has(name)) {
+      rows.push(configuredCodexMcpServer(name, config))
+    }
+  }
+  return rows
 }
 
 async function readCodexMcpConfig(
@@ -96,7 +106,26 @@ async function readCodexMcpConfig(
   )
   const userConfig = user?.config
   const userServers = isRecord(userConfig) ? userConfig.mcp_servers : null
-  return { disabled, userDeclared: new Set(isRecord(userServers) ? Object.keys(userServers) : []) }
+  return {
+    disabled,
+    userDeclared: new Set(isRecord(userServers) ? Object.keys(userServers) : []),
+    configured: isRecord(servers) ? Object.keys(servers) : []
+  }
+}
+
+function configuredCodexMcpServer(name: string, config: CodexMcpConfig): AgentSessionMcpServer {
+  // Not 'pending': nothing connects it before the chat starts, so polling would never settle.
+  const status: AgentSessionMcpServerStatus = config.disabled.has(name) ? 'disabled' : 'not-started'
+  return {
+    name,
+    status,
+    source: null,
+    toolCount: null,
+    error: null,
+    canSignIn: false,
+    canReconnect: false,
+    canToggle: config.userDeclared.has(name) && CODEX_MCP_TOML_KEY.test(name)
+  }
 }
 
 function codexMcpServerRow(

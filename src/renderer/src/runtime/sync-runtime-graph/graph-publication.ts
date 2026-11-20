@@ -15,6 +15,7 @@ import { withAcknowledgedBrowserPageInventory } from './browser-page-inventory'
 import { isWebOnlyMirroredTerminalTab } from './mobile-session-surfaces'
 import { resolveRuntimeTerminalTitle } from './sync-projections'
 import { measureTerminalGroupGridSizes } from './terminal-group-grid-sizes'
+import { deliveredAgentSenderRevision } from '../native-chat/agent-senders/agent-sender-publication-patch'
 import { getProjectSectionCatalogFromState } from './project-section-catalog'
 import {
   addMountedPanes,
@@ -24,6 +25,7 @@ import {
 import {
   collectAmbiguousTerminalTabIds,
   graphState,
+  indexTerminalTabsByWorktree,
   mobilePublicationEpoch,
   NO_TRANSPORT_GRACE_MS
 } from './graph-state'
@@ -32,15 +34,18 @@ import {
   getMountedTerminalTabRegisteredAt,
   mountedTerminalTabEntries
 } from '../hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { changedActiveGroups } from './active-group-publication'
+import {
+  appliedOrchestrationRevision,
+  applyOrchestrationReply
+} from './orchestration-graph-revision'
 import type {
   RuntimeMobileSessionTabsPublication,
   RuntimeMobileSessionTabsSnapshot,
   RuntimeRendererSyncWindowGraph
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 export async function syncRuntimeGraph(): Promise<void> {
   if (!graphState.syncEnabled || !graphState.getStoreState) {
@@ -50,19 +55,7 @@ export async function syncRuntimeGraph(): Promise<void> {
   const state = graphState.getStoreState()
   const systemPrefersDark = getSystemPrefersDark()
   const ambiguousTerminalTabIds = collectAmbiguousTerminalTabIds(state.tabsByWorktree)
-  const terminalTabsByWorktree = new Map<string, Map<string, TerminalTab>>()
-  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
-    const tabsById = new Map<string, TerminalTab>()
-    for (const tab of tabs) {
-      // Duplicate persisted tab IDs cannot prove mounted PTY ownership.
-      if (tabsById.has(tab.id)) {
-        tabsById.delete(tab.id)
-        continue
-      }
-      tabsById.set(tab.id, tab)
-    }
-    terminalTabsByWorktree.set(worktreeId, tabsById)
-  }
+  const terminalTabsByWorktree = indexTerminalTabsByWorktree(state.tabsByWorktree)
   const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
   const mobileSessionTabs = buildMobileSessionTabSnapshots(
     state,
@@ -79,7 +72,9 @@ export async function syncRuntimeGraph(): Promise<void> {
   const activeGroupByWorkspace = ORCA_LAYOUT_OWNER_IS_MAIN
     ? changedActiveGroups(state.activeGroupIdByWorktree, graphState.publishedActiveGroups)
     : undefined
-  const senderBase = state.agentSenderPublicationsByHost?.local?.['*']?.revision
+  const senderWhole = state.agentSenderPublicationsByHost?.local?.['*']
+  const senderBase = senderWhole && deliveredAgentSenderRevision(senderWhole)
+  const orchestrationBase = appliedOrchestrationRevision(state)
   const graph: RuntimeRendererSyncWindowGraph = {
     tabs: [],
     leaves: [],
@@ -95,7 +90,8 @@ export async function syncRuntimeGraph(): Promise<void> {
       : {}),
     ...(activeGroupByWorkspace ? { activeGroupByWorkspace } : {}),
     // Only what this window applied: main then answers "unchanged" instead of resending rows.
-    ...(senderBase ? { agentSenderBase: senderBase } : {})
+    ...(senderBase ? { agentSenderBase: senderBase } : {}),
+    ...(orchestrationBase !== undefined ? { agentOrchestrationBase: orchestrationBase } : {})
   }
 
   for (const [registrationKey, registeredTab] of mountedTerminalTabEntries()) {
@@ -244,7 +240,7 @@ export async function syncRuntimeGraph(): Promise<void> {
     if (!result?.agentSenderRevision) {
       currentState?.setAgentSenderPublication?.('local', result?.agentSenderAssociations)
     }
-    currentState?.setRuntimeAgentOrchestrationByPaneKey?.(result?.agentOrchestrationByPaneKey ?? {})
+    applyOrchestrationReply(currentState, state, orchestrationBase, result)
     for (const resolution of result?.nativeChatLaunchDraftResolutions ?? []) {
       if (currentState) {
         applyNativeChatLaunchDraftResolved(currentState, {

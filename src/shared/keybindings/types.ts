@@ -11,6 +11,7 @@ export type KeybindingScope =
   | 'composer'
   | 'chat'
   | 'settings'
+  | 'botItem'
 
 export type KeybindingContext = 'app' | 'terminal' | 'browser'
 
@@ -128,6 +129,9 @@ export type KeybindingActionId =
   | 'terminal.splitDown'
   | 'terminal.switchInputSource'
   | 'terminal.toggleNativeChat'
+  | 'botItem.back'
+  | 'botItem.previous'
+  | 'botItem.next'
   | PluginKeybindingActionId
 
 export type KeybindingOverrides = Partial<Record<KeybindingActionId, string[]>>

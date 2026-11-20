@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
+import { reconcileTabOrder } from '@/lib/workspace/tabs/order/reconcile-tab-order'
 import { workspaceEditorFiles } from '@/store/slices/editor/tabs/workspace-editor-files'
 
 export function persistAgentLaunchTabOrder(worktreeId: string, tabId: string): void {

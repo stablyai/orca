@@ -9,6 +9,15 @@ export const ORCAD_WINDOWS_PROCESS_TREE_FILENAME = 'windows-process-tree.node'
 export const ORCAD_WINDOWS_SECURITY_FILENAME = 'windows-security.node'
 /** native/windows-cli-launcher: cmd.exe and .ps1 shims cannot carry every argv intact. */
 export const ORCAD_WINDOWS_CLI_LAUNCHER_FILENAME = 'bin/orca.exe'
+/** native/provider-exec: POSIX provider CLIs launch through it; there is no fallback launcher. */
+export const ORCAD_PROVIDER_EXEC_FILENAME = 'bin/orca-provider-exec'
+/** Its path in a POSIX prebuild slot, compiled by the slot's own toolchain at its libc floor. */
+export const ORCAD_PROVIDER_EXEC_SLOT_FILE = 'provider-exec/orca-provider-exec'
+
+/** Files every install path must mark executable; SFTP and plain copies drop the mode. */
+export function isOrcadExecutableArtifact(filename: string): boolean {
+  return /(?:^|\/)(?:rg|spawn-helper|orca-provider-exec|journal-file-lock)$/.test(filename)
+}
 
 export function orcadBunRuntimeFilename(target: string): string {
   return isWindowsTarget(target) ? ORCAD_WINDOWS_BUN_RUNTIME_FILENAME : ORCAD_BUN_RUNTIME_FILENAME
@@ -75,6 +84,7 @@ export const ORCAD_NODE_PTY_JS_ARTIFACTS = [
 export function orcadNodePtySlotFiles(target: string): string[] {
   if (isWindowsTarget(target)) {
     return [
+      'journal-file-lock.exe',
       'conpty.node',
       'conpty_console_list.node',
       'conpty/conpty.dll',
@@ -85,7 +95,9 @@ export function orcadNodePtySlotFiles(target: string): string[] {
       'winpty-agent.exe'
     ]
   }
-  return target.startsWith('darwin-') ? ['pty.node', 'spawn-helper'] : ['pty.node']
+  return target.startsWith('darwin-')
+    ? ['journal-file-lock', 'pty.node', 'spawn-helper']
+    : ['journal-file-lock', 'pty.node']
 }
 
 export function orcadNodePtyNativeArtifacts(target: string): string[] {
@@ -245,6 +257,12 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   { filename: 'journal-sql-reader-entry.js' },
   // Terminal agent identity SQL runs in this worker thread, off the hook server's loop.
   { filename: 'agent-identity-worker-entry.js' },
+  // Bot stores' SQL (items) runs in this worker thread, off the event loop.
+  { filename: 'bots-db-worker-entry.js' },
+  // Codex launch trust grants edit configs and the ownership ledger in this worker thread.
+  { filename: 'codex-project-trust-worker-entry.js' },
+  // Orchestration read queries (connector worker activity) run in this worker thread, off the event loop.
+  { filename: 'orchestration-reader-entry.js' },
   { filename: ORCAD_PORT_SCAN_COMMAND_WORKER_ENTRY },
   // Forked so transcript parsing stays off the server's event loop.
   { filename: ORCAD_SESSION_SCANNER_SERVICE_ENTRY },
@@ -255,8 +273,12 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   { filename: 'claude-profile-setup-worker-entry.js' },
   // Claude fork and rewind copy a transcript in a worker thread, off the event loop.
   { filename: 'claude-conversation-fork-worker-entry.js' },
+  // Stats & Usage scans this host's agent transcripts in a worker thread, off the event loop.
+  { filename: 'usage-scan-worker-entry.js' },
   // Dictation loads the recognizer named by orca serve (#31174).
   { filename: 'stt-worker.js' },
+  // Reads a Drive PDF's text off the event loop for `orca drive read`.
+  { filename: 'google-pdf-text-worker-entry.js' },
   // The forked computer sidecar finds platform runtimes beside itself (#31777).
   { filename: ORCAD_COMPUTER_SIDECAR_ENTRY },
   ...ORCAD_COMPUTER_USE_RUNTIME_ARTIFACTS.map((filename) => ({ filename })),
@@ -298,6 +320,8 @@ export function orcadArtifactFilenames(
       ORCAD_WINDOWS_SECURITY_FILENAME,
       ORCAD_WINDOWS_CLI_LAUNCHER_FILENAME
     )
+  } else {
+    filenames.push(ORCAD_PROVIDER_EXEC_FILENAME)
   }
   filenames.push(...mobileWebAssets)
   return filenames

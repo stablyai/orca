@@ -1,4 +1,5 @@
 import { useMemo, useRef } from 'react'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store/index'
 import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import type { DashboardSnapshot } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
@@ -38,7 +39,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshStateByEnvironment = useAppStore((s) => s.sshStateByEnvironment)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const restoredRuntimeHostIdByWorkspaceSessionKey = useAppStore(
     (s) => s.restoredRuntimeHostIdByWorkspaceSessionKey
   )

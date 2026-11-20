@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { FeatureInteractionId } from '../../../../../shared/feature-education/interactions/feature-interaction-catalog'
 import type {
@@ -181,7 +181,7 @@ export function createClaudeAccountActionRunner(
     const previousActiveAccountId = getProviderAccountActiveIdForView(claudeAccounts, actionRuntime)
     setClaudeAction(action)
     try {
-      const next = await operation()
+      const { runningSessions, ...next } = await operation()
       await syncClaudeAccounts(next)
       recordFeatureInteraction('claude-account-switching')
       const nextActiveAccountId = getProviderAccountActiveIdForView(next, actionRuntime)
@@ -206,14 +206,16 @@ export function createClaudeAccountActionRunner(
           }
         )
       }
-      if (switched) {
+      // A server's report counts even when this view already showed the account it switched to.
+      if (switched || runningSessions) {
         void handleRunningClaudeSessionsAfterSwitch({
           owner: accountOwner,
           target: actionRuntime,
           before: { state: claudeAccounts, accountId: previousActiveAccountId },
-          after: { state: next, accountId: nextActiveAccountId }
+          after: { state: next, accountId: nextActiveAccountId },
+          ...(runningSessions ? { hostMove: runningSessions } : {})
         }).then((outcome) => {
-          if (outcome === 'show-confirmation') {
+          if (outcome === 'show-confirmation' && switched) {
             showUpdatedToast()
           }
         })

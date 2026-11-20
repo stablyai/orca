@@ -75,7 +75,9 @@ export function shouldRouteSubscriptionBySupport(method: string): boolean {
     method === 'session.tabs.subscribeAll' ||
     method === 'accounts.subscribe' ||
     method === 'notifications.subscribe' ||
-    method === 'files.watch'
+    method === 'files.watch' ||
+    // Every remote chat holds one; share the control socket rather than open a socket per pane.
+    method === 'orchestration.workerApprovalsSubscribe'
   )
 }
 
@@ -85,6 +87,7 @@ export function executeSupportRoutedCall(args: {
   method: string
   params: unknown
   timeoutMs: number
+  responseTimeoutMs?: number
   expectedPairingRevision?: number
   expectedRuntimeId?: string
   envelope?: RuntimeOrchestrationEnvelope
@@ -112,7 +115,8 @@ export function executeSupportRoutedCall(args: {
             args.envelope,
             args.signal,
             args.prepareRequest,
-            args.prepareGuard
+            args.prepareGuard,
+            args.responseTimeoutMs
           ),
     unsupported: (route) =>
       args.expectedRuntimeId !== undefined
@@ -126,7 +130,8 @@ export function executeSupportRoutedCall(args: {
             args.signal,
             ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
             args.prepareRequest,
-            args.prepareGuard
+            args.prepareGuard,
+            args.responseTimeoutMs
           ),
     markUsed: (environmentId, response) => {
       if (response.ok) {

@@ -1,7 +1,8 @@
 import type { ObservedAccountPlans } from '@/lib/provider-accounts/observed-account-plans'
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type {
+  ClaudeAccountSelectResult,
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../../../../shared/agent-accounts/managed-account-types'
@@ -65,7 +66,8 @@ export type CodexAccountActionRunner = (
 
 export type ClaudeAccountActionRunner = (
   action: ProviderAccountAction,
-  operation: () => Promise<ClaudeRateLimitAccountsState>,
+  /** A switch on a server also reports what it did with its running sessions. */
+  operation: () => Promise<ClaudeAccountSelectResult>,
   actionRuntime?: ProviderAccountRuntimeView
 ) => Promise<void>
 
