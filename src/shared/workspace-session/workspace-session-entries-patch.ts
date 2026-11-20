@@ -8,9 +8,9 @@ type SessionField = keyof WorkspaceSessionState
 export type WorkspaceSessionFieldEntryChanges = {
   set: Record<string, unknown>
   remove: string[]
-  /** Per removed key, the value the window last wrote: main keeps a key another writer has since
-   *  replaced. Keys without one are removed unconditionally. */
-  removeIfStored?: Record<string, unknown>
+  /** Per removed key, the values the window may have left there: main keeps a key another writer has
+   *  since replaced. Keys without any are removed unconditionally. */
+  removeIfStored?: Record<string, unknown[]>
 }
 
 /** A window save that carries whole values only for fields that aren't keyed records (or that main
@@ -44,9 +44,9 @@ function removalApplies(
   changes: WorkspaceSessionFieldEntryChanges,
   key: string
 ): boolean {
-  const expected = changes.removeIfStored
+  const expected = changes.removeIfStored?.[key]
   return (
-    !expected || !Object.hasOwn(expected, key) || structuralValuesEqual(record[key], expected[key])
+    !Array.isArray(expected) || expected.some((value) => structuralValuesEqual(record[key], value))
   )
 }
 

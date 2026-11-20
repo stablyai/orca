@@ -259,7 +259,8 @@ export function patchWorkspaceSessionByHost(
   acknowledged?: AcknowledgedWorkspaceSessionEntries
 ): { localWrite: Promise<void>; written: Promise<void> } {
   const slices = splitWorkspaceSessionForWrite(patch as WorkspaceSessionState, state, 'patch')
-  if (acknowledged) {
+  // Without entries writes nothing removes keys, so an emptied field would be resent on every save.
+  if (acknowledged && api.patchEntries) {
     clearEndedSshReconnectFacts(slices, patch, state, acknowledged)
   }
   acknowledged?.retainHosts(routedSessionHostIds(state, slices))
@@ -305,12 +306,14 @@ export function buildWorkspaceSessionHostSnapshots(
   const slices = splitWorkspaceSessionForWrite(payload, state, 'replace')
   // They replace main's copy, including when the unload is vetoed and the window stays.
   acknowledged.forget()
+  const local = slices[LOCAL_EXECUTION_HOST_ID] ?? payload
   const remote = nonLocalHostSessionEntries(slices)
+  acknowledged.ownSavedKeys(LOCAL_EXECUTION_HOST_ID, local, 'possible')
   for (const [hostId, hostState] of remote) {
-    acknowledged.ownSavedKeys(hostId, hostState)
+    acknowledged.ownSavedKeys(hostId, hostState, 'possible')
   }
   return [
-    { state: slices[LOCAL_EXECUTION_HOST_ID] ?? payload },
+    { state: local },
     ...remote.map(([hostId, hostState]) => ({
       state: hostState,
       hostId

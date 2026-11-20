@@ -28,10 +28,11 @@ export class AcknowledgedWorkspaceSessionEntries {
   private readonly byHost = new Map<ExecutionHostId, Map<string, unknown>>()
   // A whole-session write replaces main's copy; an acknowledgement that started before it is stale.
   private generation = 0
-  // Per key-scoped field and host, the keys this window speaks for and the value main should hold for
-  // each: hydrated, sent (a new key) or acknowledged, dropped only when main acknowledges their removal.
-  // Failed and whole-session writes keep them. Removals carry that value, so main keeps a replaced key.
-  private readonly ownedKeys = new Map<string, Map<ExecutionHostId, Map<string, unknown>>>()
+  // Per key-scoped field and host, the keys this window speaks for and every value it may have left
+  // there: hydrated or acknowledged (one, certain) or sent and snapshotted (added, unconfirmed). A key is
+  // dropped only when main acknowledges its removal; failed and whole-session writes keep it all. Removals
+  // carry the values, so main keeps a key another writer has since replaced.
+  private readonly ownedKeys = new Map<string, Map<ExecutionHostId, Map<string, unknown[]>>>()
 
   constructor(private readonly keyScopedFields: ReadonlySet<string> = KEY_SCOPED_FIELDS) {}
 
@@ -55,7 +56,7 @@ export class AcknowledgedWorkspaceSessionEntries {
             field,
             this.scopedChanges(field, hostId, { ...record }, remove)
           )
-          this.own(field, hostId, record, false)
+          this.own(field, hostId, record, 'possible')
         } else {
           Reflect.set(patch.fields, field, value)
         }
@@ -75,7 +76,7 @@ export class AcknowledgedWorkspaceSessionEntries {
         if (changed || remove.length > 0) {
           if (record) {
             Reflect.set(patch.entries, field, this.scopedChanges(field, hostId, set, remove))
-            this.own(field, hostId, set, false)
+            this.own(field, hostId, set, 'possible')
           } else {
             Reflect.set(patch.entries, field, { set, remove })
           }
@@ -104,7 +105,7 @@ export class AcknowledgedWorkspaceSessionEntries {
           if (!changes || !this.keyScopedFields.has(field)) {
             continue
           }
-          this.own(field, hostId, changes.set, true)
+          this.own(field, hostId, changes.set, 'stored')
           const owned = this.ownedKeys.get(field)?.get(hostId)
           for (const key of changes.remove) {
             owned?.delete(key)
@@ -124,21 +125,22 @@ export class AcknowledgedWorkspaceSessionEntries {
     if (!owned || remove.length === 0) {
       return { set, remove }
     }
-    const removeIfStored: Record<string, unknown> = {}
+    const removeIfStored: Record<string, unknown[]> = {}
     for (const key of remove) {
-      if (owned.has(key)) {
-        removeIfStored[key] = owned.get(key)
+      const values = owned.get(key)
+      if (values) {
+        removeIfStored[key] = [...values]
       }
     }
     return { set, remove, removeIfStored }
   }
 
-  /** Record `record`'s keys as this window's; `latest` also replaces the values of keys already owned. */
+  /** Record `record`'s keys as this window's: 'stored' when main is known to hold these values. */
   private own(
     field: string,
     hostId: ExecutionHostId,
     record: Record<string, unknown>,
-    latest: boolean
+    certainty: 'stored' | 'possible'
   ): void {
     let byHost = this.ownedKeys.get(field)
     if (!byHost) {
@@ -151,19 +153,27 @@ export class AcknowledgedWorkspaceSessionEntries {
       byHost.set(hostId, owned)
     }
     for (const key in record) {
-      if (latest || !owned.has(key)) {
-        owned.set(key, record[key])
+      const value = record[key]
+      const values = owned.get(key)
+      if (certainty === 'stored' || !values) {
+        owned.set(key, [value])
+      } else if (!values.some((known) => sameValue(known, value))) {
+        values.push(value)
       }
     }
   }
 
-  /** Keys hydrated from a partition, or carried by a whole-session snapshot that may be vetoed. */
-  ownSavedKeys(hostId: ExecutionHostId, slice: WorkspaceSessionPatch): void {
+  /** Keys read from a partition (`stored`), or carried by a whole-session snapshot main may not get. */
+  ownSavedKeys(
+    hostId: ExecutionHostId,
+    slice: WorkspaceSessionPatch,
+    certainty: 'stored' | 'possible'
+  ): void {
     const sliceFields: Record<string, unknown> = slice
     for (const field of this.keyScopedFields) {
       const value = sliceFields[field]
       if (isWorkspaceSessionRecord(value)) {
-        this.own(field, hostId, value, true)
+        this.own(field, hostId, value, certainty)
       }
     }
   }

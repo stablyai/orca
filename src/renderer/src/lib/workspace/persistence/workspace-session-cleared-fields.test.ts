@@ -172,7 +172,7 @@ describe('session fields a window clears', () => {
     const acknowledged = new AcknowledgedWorkspaceSessionEntries()
     const read = await fetchWorkspaceSessionWithRuntimeHostOwners(main.api, [SSH_REPO])
     for (const [readHostId, partition] of read.wholeReadPartitions) {
-      acknowledged.ownSavedKeys(readHostId, partition)
+      acknowledged.ownSavedKeys(readHostId, partition, 'stored')
     }
     // A pane move in main saves a relay for another tab before this window's first save.
     const saved = main.partitions.get(hostId)!
@@ -237,6 +237,28 @@ describe('session fields a window clears', () => {
         'tab-a': 'relay-c',
         'tab-b': 'relay-b'
       })
+    } finally {
+      stop()
+    }
+  })
+
+  it('a relay saved before a reload snapshot main never got still clears after a newer one ends', async () => {
+    const acknowledged = new AcknowledgedWorkspaceSessionEntries()
+    const { store, main, stop } = dormantRelaySaved(acknowledged)
+    try {
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+      // The tab moves to a new relay; reload snapshots it, then staging fails and the window stays.
+      store.setState({ lastKnownRelayPtyIdByTabId: { 'tab-a': 'relay-b' } })
+      buildWorkspaceSessionHostSnapshots(
+        buildWorkspaceSessionPayload(store.getState()),
+        store.getState(),
+        acknowledged
+      )
+
+      store.setState({ lastKnownRelayPtyIdByTabId: {} })
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+
+      expect(main.holding(WORKTREE_ID).remoteSessionIdsByTabId).toEqual({})
     } finally {
       stop()
     }
