@@ -4,6 +4,10 @@ import { agentSessionThreadGoalReport } from '../../../../shared/agent-session/t
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import { omitNativeChatThreadGoalRows } from '../../../../shared/native-chat/transcript/turns/native-chat-thread-goal-rows'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import {
+  nativeChatTurnFold,
+  nativeChatTurnFoldRow
+} from '../../../../shared/native-chat/transcript/folding/native-chat-turn-fold'
 
 it.each(['Finish the task', 'a'.repeat(510)])(
   'groups checks for %s without changing provider completion or other hooks',
@@ -131,5 +135,65 @@ it.each(['Finish the task', 'a'.repeat(510)])(
     } finally {
       translator.dispose()
     }
+  }
+)
+
+it.each(['complete', 'replaced', 'clear'])(
+  'keeps rejected answers and the latest goal check visible after %s',
+  (ending) => {
+    const row = (
+      id: string,
+      role: NativeChatMessage['role'],
+      text: string,
+      presentation?: string
+    ): NativeChatMessage => ({
+      id,
+      role,
+      source: 'transcript',
+      timestamp: 1_000,
+      blocks: [{ type: 'text', text, presentation }]
+    })
+    const boundary =
+      ending === 'clear'
+        ? {
+            ...row('end', 'system', 'Context cleared', 'context-cleared'),
+            blocks: [
+              {
+                type: 'text' as const,
+                text: 'Context cleared',
+                presentation: 'context-cleared',
+                contextClear: { operationId: 'clear', afterFence: 0, clearedAt: 1_000 }
+              }
+            ]
+          }
+        : row(
+            'end',
+            'system',
+            ending === 'complete' ? 'Goal complete: Task' : 'Goal set: Next',
+            'thread-goal'
+          )
+    const messages = omitNativeChatThreadGoalRows([
+      row('goal', 'system', 'Goal set: Task', 'thread-goal'),
+      row('first', 'assistant', 'First answer'),
+      row('check1', 'system', 'Stop hook feedback: First check', 'goal-check'),
+      row('work', 'system', 'Running checks'),
+      row('second', 'assistant', 'Revised answer'),
+      row('check2', 'system', 'Stop hook feedback: Latest check', 'goal-check'),
+      boundary
+    ])
+    const fold = nativeChatTurnFold({
+      rows: messages.map((message) => nativeChatTurnFoldRow(message, 'turn', undefined)),
+      settledTurnKeys: new Set(['turn']),
+      expandedTurnKeys: new Set()
+    })
+    const visible = messages
+      .filter((_message, index) => !fold.foldedRows.has(index))
+      .map((message) => message.id)
+    expect(visible).toContain('first')
+    expect(visible).toContain('second')
+    expect(visible).toContain('check2')
+    expect(messages.find((message) => message.id === 'check2')?.blocks[0]).toMatchObject({
+      text: '2\nLatest check'
+    })
   }
 )

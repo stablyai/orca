@@ -4,15 +4,19 @@ import {
 } from '../../../agent-session/thread-goals/agent-session-thread-goal'
 import type { NativeChatMessage } from '../../native-chat-types'
 import { AGENT_SESSION_GOAL_CHECK_PRESENTATION } from '../../../agent-session/thread-goals/agent-session-goal-check-display'
+import { isNativeChatContextClear } from '../../../agent-session/conversation-context/agent-session-context-clear'
+import { nativeChatRowRendersProse } from '../folding/native-chat-trailing-run'
 
 export const NATIVE_CHAT_GOAL_CHECK_SUMMARY = 'goal-check-summary'
 const summaries = new WeakMap<NativeChatMessage, { count: number; message: NativeChatMessage }>()
+const checkedAnswers = new WeakMap<NativeChatMessage, NativeChatMessage>()
 
 /** Keep ended goals' latest check readable through the existing notice disclosure. */
 export class NativeChatGoalRows {
   readonly messages: NativeChatMessage[] = []
   private count = 0
   private last: NativeChatMessage | null = null
+  private answer: number | null = null
 
   append(message: NativeChatMessage, hideGoals = true): void {
     const check =
@@ -22,11 +26,21 @@ export class NativeChatGoalRows {
           block.type === 'text' && block.presentation === AGENT_SESSION_GOAL_CHECK_PRESENTATION
       )
     if (hideGoals && check) {
+      if (this.answer !== null) {
+        const answer = this.messages[this.answer]!
+        let checked = checkedAnswers.get(answer)
+        if (!checked) {
+          checked = { ...answer, goalCheckAnswer: true }
+          checkedAnswers.set(answer, checked)
+        }
+        this.messages[this.answer] = checked
+        this.answer = null
+      }
       this.count++
       this.last = message
       return
     }
-    if (isNativeChatThreadGoalRow(message) && this.last) {
+    if ((isNativeChatThreadGoalRow(message) || isNativeChatContextClear(message)) && this.last) {
       const cached = summaries.get(this.last)
       const summary =
         cached?.count === this.count
@@ -50,6 +64,11 @@ export class NativeChatGoalRows {
       this.last = null
     }
     if (!hideGoals || !isNativeChatThreadGoalRow(message)) {
+      if (message.role === 'assistant' && nativeChatRowRendersProse(message)) {
+        this.answer = this.messages.length
+      } else if (message.role === 'user' || isNativeChatContextClear(message)) {
+        this.answer = null
+      }
       this.messages.push(message)
     }
   }
