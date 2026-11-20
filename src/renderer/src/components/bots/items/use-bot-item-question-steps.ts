@@ -13,7 +13,10 @@ import {
   botItemAnswerWords,
   botItemNamedAnswers
 } from '../../../../../shared/bots/bot-item-answer-lines'
-import { botItemQuestionPairing } from '../../../../../shared/bots/bot-item-question-answers'
+import {
+  botItemQuestionPairing,
+  type BotItemQuestionAnswers
+} from '../../../../../shared/bots/bot-item-question-answers'
 import { useNativeChatDraft } from '../../native-chat/drafts/use-native-chat-draft'
 
 const NOT_COMPOSING = (): boolean => false
@@ -35,6 +38,18 @@ export function useBotItemHeldAnswers(
     [setDraft, shape]
   )
   return { held, hold }
+}
+
+function waitingAsk(
+  item: BotItem,
+  events: readonly BotItemEvent[]
+): ({ askId: string } & BotItemQuestionAnswers) | null {
+  for (const [askId, entry] of botItemQuestionPairing(item, events).questions) {
+    if (entry.waiting) {
+      return { askId, ...entry }
+    }
+  }
+  return null
 }
 
 export type BotItemQuestionSteps = {
@@ -75,14 +90,8 @@ export function useBotItemQuestionSteps(
   /** A quick reply of one question, posted at once as it always has. */
   quick: (text: string) => void
 } {
-  const asked = useMemo(() => {
-    for (const [askId, entry] of botItemQuestionPairing(item, events).questions) {
-      if (entry.waiting) {
-        return { askId, ...entry }
-      }
-    }
-    return null
-  }, [item, events])
+  // As cheap as the box's own waiting-line read, on each render.
+  const asked = waitingAsk(item, events)
   const waiting = asked && asked.shape.decisions.length > 1 ? asked : null
   const askId = waiting?.askId ?? ''
   const shape = waiting?.shape ?? NO_ASK
