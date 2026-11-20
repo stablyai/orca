@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { chmod, lstat, mkdir, rename, rm, statfs } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import {
   excerptAgentFailureOutput,
   sanitizeAgentFailureDetail,
@@ -106,7 +106,9 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
       {
         label,
         url: pin.url,
-        archiveSha256: pin.archiveSha256,
+        ...('archiveSha512' in pin
+          ? { archiveSha512: pin.archiveSha512 }
+          : { archiveSha256: pin.archiveSha256 }),
         maxArchiveBytes: pin.archiveBytes
       },
       archive,
@@ -130,11 +132,12 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
     await (!('members' in pin)
       ? extractWholeArchive(archive, release, label, signal)
       : pin.format === 'file'
-        ? rename(archive, join(release, onlyMember(pin.members).path))
+        ? placeOnlyMember(archive, release, pin.members)
         : extractPinnedZipMembers(archive, release, pin.members, label, signal))
     publish({ phase: 'verifying' })
-    await verifyMembers(release, pin, label, signal)
+    // Before the check, so a command prepare unpacks is checked like a downloaded one.
     await input.runtime.prepare?.(release, pin)
+    await verifyMembers(release, pin, label, signal)
     await validate(input, release)
     await writeRuntimeReleaseReceipt(release, pin)
     signal.throwIfAborted()
@@ -148,14 +151,19 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
   }
 }
 
-function onlyMember(members: readonly ManagedRuntimeMember[]): ManagedRuntimeMember {
+async function placeOnlyMember(
+  archive: string,
+  release: string,
+  members: readonly ManagedRuntimeMember[]
+): Promise<void> {
   const [member, ...rest] = members
-  if (!member || rest.length > 0 || member.path.includes('/')) {
-    throw new Error(
-      `A single-file release needs exactly one top-level member, not ${members.length}.`
-    )
+  const segments = member?.path.split('/') ?? []
+  if (!member || rest.length > 0 || segments.some((s) => !s || s === '.' || s === '..')) {
+    throw new Error(`A single-file release needs exactly one member, not ${members.length}.`)
   }
-  return member
+  const path = join(release, ...segments)
+  await mkdir(dirname(path), { recursive: true })
+  await rename(archive, path)
 }
 
 async function extractWholeArchive(
