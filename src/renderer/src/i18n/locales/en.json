@@ -29672,5 +29672,9 @@
     "toolsLabel": "App tools",
     "workspaces": "Workspaces",
     "more": "More"
+  },
+  "openOnHost": {
+    "noRemote": "Add a git remote to open this project on another machine",
+    "updateOrca": "Update Orca on {{host}} to use this"
   }
 }
