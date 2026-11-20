@@ -654,6 +654,7 @@
     "credentialVault": {
       "addEntry": "Add entry",
       "authFailed": "Could not confirm it was you.",
+      "botAdd": "Add with credential",
       "botChooseKey": "Choose a key",
       "botFailed": "Could not change the vault link. Reopen the tool and check its URL, existing credentials, and the vault entry.",
       "botHeader": "Authentication header",

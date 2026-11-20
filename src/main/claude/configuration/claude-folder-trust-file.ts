@@ -9,7 +9,7 @@ import {
   statSync,
   writeFileSync
 } from 'node:fs'
-import { dirname, join, posix, resolve, win32 } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { homedir } from 'node:os'
 import { lock } from 'proper-lockfile'
 import '../../filesystem/atomic-file-publication'
@@ -18,8 +18,13 @@ import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-s
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
+import {
+  resolveClaudeGlobalConfigFile,
+  toClaudeTrustKey,
+  type ClaudeTrustPathStyle
+} from './claude-config-paths'
 
-export type ClaudeTrustPathStyle = 'posix' | 'win32'
+export { resolveClaudeGlobalConfigFile, toClaudeTrustKey, type ClaudeTrustPathStyle }
 
 export type ClaudeFolderTrustOutcome =
   | 'granted'
@@ -28,43 +33,11 @@ export type ClaudeFolderTrustOutcome =
   | 'locked'
   | 'unreadable'
 
-type ClaudeConfigEnv = {
-  CLAUDE_CONFIG_DIR?: string
-  CLAUDE_CODE_CUSTOM_OAUTH_URL?: string
-}
-
 // Defer held locks to Claude; keep the long stale window's refresh timer within setTimeout range.
 const NEVER_STALE_MS = 2 ** 30
 const LOCK_RETRIES = { retries: 4, factor: 2, minTimeout: 50, maxTimeout: 250 }
 // Serialize local updates to avoid exhausting file-lock retries during launch bursts.
 const updateQueueByConfigFile = new Map<string, Promise<void>>()
-
-function pathApi(style: ClaudeTrustPathStyle): typeof posix {
-  return style === 'win32' ? win32 : posix
-}
-
-/** Claude looks up NFC `path.normalize` output, with `/` separators on Windows. */
-export function toClaudeTrustKey(folderPath: string, style: ClaudeTrustPathStyle): string {
-  const normalized = pathApi(style).normalize(folderPath.normalize('NFC'))
-  return style === 'win32' ? normalized.replaceAll('\\', '/') : normalized
-}
-
-/** Claude prefers legacy .config.json, then .claude.json under CLAUDE_CONFIG_DIR or home. */
-export function resolveClaudeGlobalConfigFile(args: {
-  env: ClaudeConfigEnv
-  homeDir: string
-  style: ClaudeTrustPathStyle
-  exists: (filePath: string) => boolean
-}): string {
-  const { join } = pathApi(args.style)
-  const legacyDir = (args.env.CLAUDE_CONFIG_DIR ?? join(args.homeDir, '.claude')).normalize('NFC')
-  const legacyFile = join(legacyDir, '.config.json')
-  if (args.exists(legacyFile)) {
-    return legacyFile
-  }
-  const suffix = args.env.CLAUDE_CODE_CUSTOM_OAUTH_URL ? '-custom-oauth' : ''
-  return join(args.env.CLAUDE_CONFIG_DIR || args.homeDir, `.claude${suffix}.json`)
-}
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)

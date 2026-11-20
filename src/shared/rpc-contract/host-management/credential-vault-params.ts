@@ -17,13 +17,24 @@ export const vaultDraftSchema = fields.extend({
   value: vaultValueSchema.optional()
 })
 
-export const botToolVaultChangeSchema = z.object({
+const botToolVaultDestination = z.object({
   botId: z.string().min(1).max(128),
   name: z.string().regex(BOT_TOOL_NAME_PATTERN),
-  url: BotToolUrl,
-  version: z.string().regex(/^[a-f0-9]{64}$/),
-  binding: z.object({ id: vaultIdSchema, scheme: z.enum(['bearer', 'api-key']) }).optional()
+  url: BotToolUrl
 })
+const botToolVaultBinding = z.object({ id: vaultIdSchema, scheme: z.enum(['bearer', 'api-key']) })
+export const botToolVaultChangeSchema = z.union([
+  botToolVaultDestination.extend({
+    create: z.literal(true),
+    version: z.never().optional(),
+    binding: botToolVaultBinding
+  }),
+  botToolVaultDestination.extend({
+    create: z.never().optional(),
+    version: z.string().regex(/^[a-f0-9]{64}$/),
+    binding: botToolVaultBinding.optional()
+  })
+])
 
 export const CredentialVaultOperation = z.discriminatedUnion('op', [
   z.object({ op: z.literal('list') }),

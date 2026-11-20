@@ -26,13 +26,17 @@ export type VaultResult<T> =
   | { ok: false; reason: (typeof VAULT_FAILURE_REASONS)[number] }
 
 export type ServerVaultTarget = { environmentId: string; pairingRevision: number }
-export type BotToolVaultChange = {
-  botId: string
-  name: string
-  url: string
+export type BotToolVaultDestination = { botId: string; name: string; url: string }
+export type BotToolVaultBinding = { id: string; scheme: 'bearer' | 'api-key' }
+export type BotToolVaultEdit = BotToolVaultDestination & {
   version: string
-  binding?: { id: string; scheme: 'bearer' | 'api-key' }
+  binding?: BotToolVaultBinding
 }
+export type BotToolVaultCreate = BotToolVaultDestination & {
+  create: true
+  binding: BotToolVaultBinding
+}
+export type BotToolVaultChange = BotToolVaultEdit | BotToolVaultCreate
 
 export type CredentialVaultApi = {
   list: (target?: ServerVaultTarget) => Promise<VaultResult<VaultEntry[]>>

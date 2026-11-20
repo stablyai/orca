@@ -13,23 +13,25 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { botTarget, type BotRef } from '@/lib/bot-hosts'
 import type {
-  BotToolVaultChange,
+  BotToolVaultDestination,
   ServerVaultTarget,
   VaultEntry
 } from '../../../../shared/secure-storage/credential-vault'
 import { changed } from './bot-tools-revision'
 
-type Tool = Omit<BotToolVaultChange, 'binding'> & { linked: boolean }
+type Tool = BotToolVaultDestination & ({ version: string; linked: boolean } | { create: true })
+
+type ToolControlProps = {
+  tool: Tool
+  disabled?: boolean
+  onSavingChange?: (saving: boolean) => void
+  onChanged: () => void
+}
 
 export function ServerVaultBotTool({
   bot,
-  tool,
-  onChanged
-}: {
-  bot: BotRef
-  tool: Tool
-  onChanged: () => void
-}): React.JSX.Element | null {
+  ...control
+}: ToolControlProps & { bot: BotRef }): React.JSX.Element | null {
   const target = botTarget(bot)
   const environment = useAppStore((state) =>
     target.kind === 'environment'
@@ -43,9 +45,8 @@ export function ServerVaultBotTool({
   return (
     <ServerVaultBotToolControl
       key={`${environment.id}:${revision}`}
+      {...control}
       target={{ environmentId: environment.id, pairingRevision: revision }}
-      tool={tool}
-      onChanged={onChanged}
     />
   )
 }
@@ -53,13 +54,13 @@ export function ServerVaultBotTool({
 function ServerVaultBotToolControl({
   target,
   tool,
+  disabled,
+  onSavingChange,
   onChanged
-}: {
-  target: ServerVaultTarget
-  tool: Tool
-  onChanged: () => void
-}): React.JSX.Element {
+}: ToolControlProps & { target: ServerVaultTarget }): React.JSX.Element {
   const t = useTranslate()
+  const creating = 'create' in tool
+  const linked = !creating && tool.linked
   const [entries, setEntries] = useState<VaultEntry[] | null>(null)
   const [id, setId] = useState('')
   const [scheme, setScheme] = useState<'bearer' | 'api-key'>('bearer')
@@ -72,7 +73,7 @@ function ServerVaultBotToolControl({
     setId('')
     setError(false)
     setRestricted(false)
-    if (tool.linked) {
+    if (linked) {
       return
     }
     try {
@@ -88,13 +89,20 @@ function ServerVaultBotToolControl({
     }
   }
   const apply = async (): Promise<void> => {
+    if (busy || disabled) {
+      return
+    }
     setBusy(true)
+    onSavingChange?.(true)
     setError(false)
     setRestricted(false)
     try {
-      const { linked, ...destination } = tool
+      const { botId, name, url } = tool
+      const binding = { id, scheme }
       const result = await api.changeBotTool(
-        { ...destination, binding: linked ? undefined : { id, scheme } },
+        creating
+          ? { botId, name, url, create: true, binding }
+          : { botId, name, url, version: tool.version, binding: linked ? undefined : binding },
         target
       )
       if (result.ok) {
@@ -108,6 +116,7 @@ function ServerVaultBotToolControl({
       setError(true)
     }
     setBusy(false)
+    onSavingChange?.(false)
   }
   return (
     <Popover
@@ -118,16 +127,28 @@ function ServerVaultBotToolControl({
       }}
     >
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline" size="sm">
-          {tool.linked
+        <Button
+          type="button"
+          variant={creating ? 'secondary' : 'outline'}
+          size="sm"
+          className={creating ? undefined : 'justify-self-start'}
+          disabled={disabled}
+        >
+          {linked
             ? t('settings.credentialVault.botLinked', 'Vault credential linked')
             : t('settings.credentialVault.botUseVault', 'Use server vault')}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-80">
-        <div className="space-y-3">
+      <PopoverContent
+        align={creating ? 'end' : 'start'}
+        sideOffset={8}
+        collisionPadding={12}
+        wheelScroll
+        className="flex w-80 max-w-(--radix-popover-content-available-width) flex-col"
+      >
+        <div className="grid min-h-0 grid-cols-1 gap-3 overflow-y-auto overscroll-contain p-4 scrollbar-sleek">
           <p className="text-sm text-muted-foreground">
-            {tool.linked
+            {linked
               ? t(
                   'settings.credentialVault.botUnlinkHint',
                   'Unlinking stops this tool from receiving the vault credential.'
@@ -138,12 +159,12 @@ function ServerVaultBotToolControl({
                 )}
           </p>
           <p className="break-all font-mono text-xs text-muted-foreground">{tool.url}</p>
-          {!tool.linked && !error && entries === null ? (
+          {!linked && !error && entries === null ? (
             <p role="status" className="text-sm text-muted-foreground">
               {t('settings.credentialVault.loading', 'Loading vault…')}
             </p>
           ) : null}
-          {!tool.linked && entries?.length === 0 ? (
+          {!linked && entries?.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               {t(
                 'settings.credentialVault.botNoKeys',
@@ -151,20 +172,27 @@ function ServerVaultBotToolControl({
               )}
             </p>
           ) : null}
-          {!tool.linked && entries && entries.length > 0 ? (
+          {!linked && entries && entries.length > 0 ? (
             <>
               <div className="space-y-2">
                 <Label>{t('settings.credentialVault.botKey', 'Vault entry')}</Label>
                 <Select value={id} onValueChange={setId} disabled={busy}>
-                  <SelectTrigger aria-label={t('settings.credentialVault.botKey', 'Vault entry')}>
+                  <SelectTrigger
+                    className="w-full *:data-[slot=select-value]:min-w-0"
+                    aria-label={t('settings.credentialVault.botKey', 'Vault entry')}
+                  >
                     <SelectValue
                       placeholder={t('settings.credentialVault.botChooseKey', 'Choose a key')}
-                    />
+                    >
+                      <span className="min-w-0 truncate">
+                        {entries.find((entry) => entry.id === id)?.name}
+                      </span>
+                    </SelectValue>
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" className="w-(--radix-select-trigger-width)">
                     {entries.map((entry) => (
                       <SelectItem key={entry.id} value={entry.id}>
-                        {entry.name}
+                        <span className="min-w-0 wrap-anywhere">{entry.name}</span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -178,11 +206,12 @@ function ServerVaultBotToolControl({
                   disabled={busy}
                 >
                   <SelectTrigger
+                    className="w-full"
                     aria-label={t('settings.credentialVault.botHeader', 'Authentication header')}
                   >
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" className="w-(--radix-select-trigger-width)">
                     <SelectItem value="bearer">
                       {t('settings.credentialVault.botHeaderBearer', 'Authorization: Bearer')}
                     </SelectItem>
@@ -210,13 +239,16 @@ function ServerVaultBotToolControl({
           <Button
             type="button"
             size="sm"
-            variant={tool.linked ? 'outline' : 'default'}
-            disabled={busy || (!tool.linked && !id)}
+            variant={linked ? 'outline' : 'default'}
+            className="justify-self-end"
+            disabled={disabled || busy || (!linked && !id)}
             onClick={() => void apply()}
           >
-            {tool.linked
+            {linked
               ? t('settings.credentialVault.botUnlink', 'Unlink credential')
-              : t('settings.credentialVault.botLink', 'Link credential')}
+              : creating
+                ? t('settings.credentialVault.botAdd', 'Add with credential')
+                : t('settings.credentialVault.botLink', 'Link credential')}
           </Button>
         </div>
       </PopoverContent>

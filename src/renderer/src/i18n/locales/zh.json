@@ -40,6 +40,7 @@
     "credentialVault": {
       "addEntry": "添加条目",
       "authFailed": "无法验证你的身份。",
+      "botAdd": "使用凭据添加工具",
       "botChooseKey": "选择密钥",
       "botFailed": "无法更改保险库关联。请重新打开工具，并检查其网址、现有凭据和保险库条目。",
       "botHeader": "身份验证请求头",

@@ -21,6 +21,8 @@ import {
   emptyBotToolDraft
 } from './bot-tool-draft'
 import { BotToolDetailsFields } from './BotToolDetailsFields'
+import { ServerVaultBotTool } from './ServerVaultBotTool'
+import type { BotRef } from '@/lib/bot-hosts'
 
 export function BotToolEditor({
   context,
@@ -29,7 +31,8 @@ export function BotToolEditor({
   taken,
   onSave,
   onCancel,
-  onSavingChange
+  onSavingChange,
+  vault
 }: {
   context: BotToolContext
   /** The bot's computer when it is a paired server; null for this one. */
@@ -39,6 +42,7 @@ export function BotToolEditor({
   onSave: (input: BotToolInput) => Promise<void>
   onCancel: () => void
   onSavingChange?: (saving: boolean) => void
+  vault?: { bot: BotRef; onAdded: (name: string) => void }
 }): React.JSX.Element {
   const t = useTranslate()
   const [draft, setDraft] = useState(() =>
@@ -53,6 +57,16 @@ export function BotToolEditor({
   const [pasteError, setPasteError] = useState<string | null>(null)
   const collision = taken.has(draft.name)
   const invalid = botToolDraftError(draft, context.platform, saved)
+  const canSubmit = !pending && !pasteError && !invalid && !collision
+  const canAddWithVault =
+    canSubmit &&
+    draft.mode === 'url' &&
+    /^https:\/\//i.test(draft.url) &&
+    draft.headers.length === 0
+  const setSaving = (saving: boolean) => {
+    setBusy(saving)
+    onSavingChange?.(saving)
+  }
   const apply = (text: string) => {
     setPending(false)
     setManual(false)
@@ -70,18 +84,14 @@ export function BotToolEditor({
       className="space-y-4"
       onSubmit={(event) => {
         event.preventDefault()
-        if (busy || pending || pasteError || invalid || collision) {
+        if (busy || !canSubmit) {
           return
         }
-        setBusy(true)
-        onSavingChange?.(true)
+        setSaving(true)
         setError(null)
         void onSave(botToolDraftInput(draft))
           .catch((caught: unknown) => setError(botToolErrorMessage(caught)))
-          .finally(() => {
-            setBusy(false)
-            onSavingChange?.(false)
-          })
+          .finally(() => setSaving(false))
       }}
     >
       <fieldset disabled={busy} className="space-y-4">
@@ -232,15 +242,21 @@ export function BotToolEditor({
           </p>
         ) : null}
       </fieldset>
-      <div className="flex justify-end gap-2 border-t border-border pt-3">
+      <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
         <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={onCancel}>
           {t('settings.bots.tools.details.cancel', 'Cancel')}
         </Button>
-        <Button
-          type="submit"
-          size="sm"
-          disabled={busy || pending || Boolean(pasteError) || Boolean(invalid) || collision}
-        >
+        {vault && canAddWithVault ? (
+          <ServerVaultBotTool
+            key={`${draft.name}:${draft.url}`}
+            bot={vault.bot}
+            tool={{ botId: vault.bot.id, name: draft.name, url: draft.url, create: true }}
+            disabled={busy}
+            onSavingChange={setSaving}
+            onChanged={() => vault.onAdded(draft.name)}
+          />
+        ) : null}
+        <Button type="submit" size="sm" disabled={busy || !canSubmit}>
           {busy
             ? t('settings.bots.tools.details.saving', 'Saving…')
             : saved

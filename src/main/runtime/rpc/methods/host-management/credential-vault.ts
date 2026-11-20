@@ -4,8 +4,12 @@ import {
   CredentialVaultOperation
 } from '../../../../../shared/rpc-contract/host-management/credential-vault-params'
 import { botHomeFolder } from '../../../../bots/bot-home'
-import { setBotToolVaultCredential } from '../../../../bots/bot-tool-vault-grant'
+import {
+  addVaultBackedBotTool,
+  setBotToolVaultCredential
+} from '../../../../bots/bot-tool-vault-grant'
 import { defineMethod } from '../../core'
+import { botToolsHome } from '../bots-tools'
 import { targetBot } from '../bots-tools-target'
 
 export const CREDENTIAL_VAULT_METHODS = [
@@ -36,8 +40,11 @@ export const CREDENTIAL_VAULT_METHODS = [
           return vault.readValue(request.id)
         case 'bot-tool': {
           try {
-            const bot = targetBot({ botId: request.change.botId }, ctx)
-            await setBotToolVaultCredential(botHomeFolder(bot), server, request.change)
+            const { change } = request
+            const bot = targetBot({ botId: change.botId }, ctx)
+            await (change.create
+              ? addVaultBackedBotTool(await botToolsHome(ctx.runtime, bot), server, change)
+              : setBotToolVaultCredential(botHomeFolder(bot), server, change))
             return { ok: true, value: true }
           } catch {
             return { ok: false, reason: 'invalid' }

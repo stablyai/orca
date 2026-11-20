@@ -31,8 +31,8 @@ export function LoadedEditor({
   bot: Bot
   name?: string
   close: () => void
-  /** After a save, with the tool as the host keeps it; defaults to close. */
-  onSaved?: (tool: BotOwnTool) => void
+  /** After a save, with the tool's name and optional sign-in state; defaults to close. */
+  onSaved?: (tool: Pick<BotOwnTool, 'name' | 'signIn'>) => void
   onSavingChange: (saving: boolean) => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -106,6 +106,13 @@ export function LoadedEditor({
   if (remoteTool?.vaultBacked && vaultControls) {
     return vaultControls
   }
+  const finishSave = (tool: Pick<BotOwnTool, 'name' | 'signIn'>) => {
+    if (onSaved) {
+      onSaved(tool)
+    } else {
+      close()
+    }
+  }
   return (
     <>
       {vaultControls}
@@ -115,17 +122,14 @@ export function LoadedEditor({
         taken={taken}
         onCancel={close}
         onSavingChange={onSavingChange}
+        vault={!saved ? { bot, onAdded: (name) => finishSave({ name }) } : undefined}
         onSave={async (config) => {
           const tool = await saveBotTool(
             bot,
             config,
             loaded.saved && name ? { name, version: loaded.saved.version } : undefined
           )
-          if (onSaved) {
-            onSaved(tool)
-          } else {
-            close()
-          }
+          finishSave(tool)
         }}
       />
     </>

@@ -32,7 +32,6 @@
 1 src/main/bots/bot-look-around-store.ts
 1 src/main/bots/bot-tool-credentials.ts
 1 src/main/bots/bot-tool-secret-scrub.ts
-1 src/main/bots/bot-tools-claude.ts
 1 src/main/bots/bot-tools-host.ts
 2 src/main/bots/bot-work-runtime.ts
 1 src/main/bots/bot-work-store.ts

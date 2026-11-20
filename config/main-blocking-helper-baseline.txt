@@ -101,10 +101,9 @@
 1 src/main/bots/bot-look-around-store.ts
 1 src/main/bots/bot-memory-history.ts
 5 src/main/bots/bot-tool-credentials.ts
-2 src/main/bots/bot-tool-secret-scrub.ts
-2 src/main/bots/bot-tools-claude.ts
+1 src/main/bots/bot-tool-secret-scrub.ts
 1 src/main/bots/bot-tools-file.ts
-7 src/main/bots/bot-tools-host.ts
+1 src/main/bots/bot-tools-host.ts
 4 src/main/bots/bot-tools-sign-in.ts
 3 src/main/bots/bot-work-runtime.ts
 1 src/main/bots/bot-work-store.ts
@@ -114,7 +113,7 @@
 3 src/main/bots/tool-oauth/bot-tool-credential-source.ts
 1 src/main/bots/tool-oauth/bot-tool-oauth-sign-in.ts
 9 src/main/bots/tool-oauth/bot-tool-oauth-tokens.ts
-5 src/main/bots/tool-oauth/bot-tool-owned-sign-in.ts
+4 src/main/bots/tool-oauth/bot-tool-owned-sign-in.ts
 1 src/main/bots/tool-oauth/bot-tool-sign-in-attempts.ts
 2 src/main/bots/tool-oauth/bot-tool-sign-in-flows.ts
 4 src/main/browser-passwords/browser-password-chromium-import.ts
@@ -368,7 +367,7 @@
 1 src/main/codex/trust/toml/config-toml-project-trust.ts
 23 src/main/codex/trust/toml/config-toml-trust.ts
 6 src/main/command-code/hook-service.ts
-4 src/main/composio/composio-bot-tool.ts
+2 src/main/composio/composio-bot-tool.ts
 1 src/main/composio/composio-bots.ts
 1 src/main/computer/macos-native/macos-native-provider-paths.ts
 1 src/main/computer/macos-permissions/macos-computer-use-permission-status-gate.ts
@@ -1235,7 +1234,7 @@
 4 src/main/runtime/rpc/methods/accounts/antigravity-accounts.ts
 3 src/main/runtime/rpc/methods/accounts/usage-credentials.ts
 2 src/main/runtime/rpc/methods/bots-tools-owned-sign-in.ts
-8 src/main/runtime/rpc/methods/bots-tools.ts
+6 src/main/runtime/rpc/methods/bots-tools.ts
 1 src/main/runtime/rpc/methods/browser/browser-identity-rpc.ts
 15 src/main/runtime/rpc/methods/computer/computer.ts
 1 src/main/runtime/rpc/methods/google-files.ts

@@ -537,6 +537,7 @@
     "credentialVault": {
       "addEntry": "新增項目",
       "authFailed": "無法驗證你的身分。",
+      "botAdd": "使用憑證新增工具",
       "botChooseKey": "選擇金鑰",
       "botFailed": "無法變更保險庫連結。請重新開啟工具，並檢查網址、現有憑證及保險庫項目。",
       "botHeader": "驗證標頭",

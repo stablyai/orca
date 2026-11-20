@@ -1501,6 +1501,7 @@
     "settings.browser.sitePermissions.search.notifications",
     "settings.browser.sitePermissions.search.permissions",
     "settings.browser.sitePermissions.title",
+    "settings.credentialVault.botAdd",
     "settings.credentialVault.botChooseKey",
     "settings.credentialVault.botFailed",
     "settings.credentialVault.botHeader",

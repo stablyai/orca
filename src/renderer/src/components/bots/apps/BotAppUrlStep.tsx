@@ -91,7 +91,7 @@ export function CustomAppStep({
   )
   // A new address that needs a sign-in is one Orca signs in to; any other is ready as added.
   const added = useCallback(
-    (tool: BotOwnTool) =>
+    (tool: Pick<BotOwnTool, 'name' | 'signIn'>) =>
       tool.signIn ? signIn(tool.name, true) : setPhase({ kind: 'done', name: tool.name }),
     [signIn]
   )

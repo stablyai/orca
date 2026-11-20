@@ -5,8 +5,7 @@
 // keeps a token by server name and URL, so the chats' launch config finds it.
 import type { BotLaunchTools } from './bot-launch-tools'
 import type { McpHttpServerConfig, McpStdioServerConfig } from '@anthropic-ai/claude-agent-sdk'
-import { readFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { access, readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -16,9 +15,9 @@ import {
   type BotToolServer
 } from '../../shared/bot-tools'
 import {
-  resolveClaudeGlobalConfigFile,
+  claudeGlobalConfigCandidates,
   toClaudeTrustKey
-} from '../claude/configuration/claude-folder-trust-file'
+} from '../claude/configuration/claude-config-paths'
 
 const style = process.platform === 'win32' ? 'win32' : 'posix'
 
@@ -37,20 +36,25 @@ async function readJson(path: string): Promise<Record<string, unknown>> {
 }
 
 /** Claude's global config file for the account whose config dir is `configDir` (null: the default). */
-export function claudeAccountConfigFile(configDir: string | null): string {
-  return resolveClaudeGlobalConfigFile({
+async function claudeAccountConfigFile(configDir: string | null): Promise<string> {
+  const { legacyFile, currentFile } = claudeGlobalConfigCandidates({
     env: configDir ? { CLAUDE_CONFIG_DIR: configDir } : {},
     homeDir: homedir(),
-    style,
-    exists: existsSync
+    style
   })
+  try {
+    await access(legacyFile)
+    return legacyFile
+  } catch {
+    return currentFile
+  }
 }
 
 /** The owner's user servers and enabled plugins, which every one of their Claude sessions loads. */
 export async function readClaudeInheritedTools(
   configDir: string | null
 ): Promise<BotInheritedTool[]> {
-  const config = await readJson(claudeAccountConfigFile(configDir))
+  const config = await readJson(await claudeAccountConfigFile(configDir))
   const settings = await readJson(join(configDir ?? join(homedir(), '.claude'), 'settings.json'))
   const plugins = Object.entries(record(settings.enabledPlugins)).flatMap(([key, on]) =>
     on === true ? [{ name: key.split('@')[0] ?? key, plugin: true as const }] : []
@@ -107,7 +111,7 @@ export async function readClaudeMirror(
   configDir: string | null,
   folder: string
 ): Promise<Record<string, unknown>> {
-  const config = await readJson(claudeAccountConfigFile(configDir))
+  const config = await readJson(await claudeAccountConfigFile(configDir))
   return record(record(record(config.projects)[toClaudeTrustKey(folder, style)]).mcpServers)
 }
 
