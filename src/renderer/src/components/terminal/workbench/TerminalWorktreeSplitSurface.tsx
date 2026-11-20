@@ -10,6 +10,7 @@ import {
   shouldMountRetainedBrowserOverlay
 } from '../../browser-pane/host-guest/retention/browser-worktree-surface-paintability'
 import TabGroupSplitLayout from '../../tab-group/TabGroupSplitLayout'
+import { useAppStore } from '../../../store/index'
 import { WorkspacePaneOverlayLayers } from './WorkspacePaneOverlayLayers'
 import type { TerminalPrewarmStage } from '../worktree-prewarm/terminal-worktree-prewarm'
 
@@ -43,6 +44,12 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
 }): React.JSX.Element {
   const browserPageIds = useWorktreeBrowserPageIds(worktreeId)
   const needsBrowserGuestPaint = useBrowserGuestPaintRetention(browserPageIds)
+  const hasSimulatorTab = useAppStore((state) =>
+    (state.unifiedTabsByWorktree[worktreeId] ?? []).some((tab) => tab.contentType === 'simulator')
+  )
+  // Parked means every terminal restores from its snapshot; browser guests and simulators would lose live state.
+  const surfaceReleased =
+    shouldColdParkTerminalPanes && !isForceParked && browserPageIds.length === 0 && !hasSimulatorTab
   const shouldKeepPaintable = shouldKeepHiddenWorktreeSurfacePaintable({
     // A mount-stage prewarm stays display:none so its style/layout cost lands in a later task.
     shouldMeasureHiddenWorktree: shouldMeasureHiddenWorktree && prewarmStage !== 'mount',
@@ -62,12 +69,14 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
       aria-hidden={!isVisible}
       data-workspace-surface-id={worktreeId}
     >
-      <TabGroupSplitLayout
-        layout={layout}
-        worktreeId={worktreeId}
-        focusedGroupId={focusedGroupId}
-        isWorktreeActive={isVisible}
-      />
+      {surfaceReleased ? null : (
+        <TabGroupSplitLayout
+          layout={layout}
+          worktreeId={worktreeId}
+          focusedGroupId={focusedGroupId}
+          isWorktreeActive={isVisible}
+        />
+      )}
       <WorkspacePaneOverlayLayers
         worktreeId={worktreeId}
         worktreePath={worktreePath}
@@ -79,6 +88,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
         activityTerminalPortals={activityTerminalPortals}
         backgroundMountTabIds={backgroundMountTabIds}
         activationDeferredMountTabIds={activationDeferredMountTabIds}
+        surfaceReleased={surfaceReleased}
         mountRetainedBrowserOverlay={shouldMountRetainedBrowserOverlay({
           isWorktreeVisible: isVisible,
           hasDeferredBackgroundMounts: backgroundMountTabIds !== null,

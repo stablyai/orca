@@ -20,6 +20,7 @@ export function WorkspacePaneOverlayLayers({
   activationDeferredMountTabIds,
   mountRetainedBrowserOverlay,
   mountEmulatorOverlay,
+  surfaceReleased = false,
   ownsNativeChatToggleShortcut = true
 }: {
   worktreeId: string
@@ -34,6 +35,8 @@ export function WorkspacePaneOverlayLayers({
   activationDeferredMountTabIds: ReadonlySet<string> | null
   mountRetainedBrowserOverlay: boolean
   mountEmulatorOverlay: boolean
+  /** Parked hidden workspace: keep only pane-less terminal watchers; chats and drop targets remount on return. */
+  surfaceReleased?: boolean
   /** Floating overlays leave the toggle chord to the active workspace; duplicate listeners would both toggle. */
   ownsNativeChatToggleShortcut?: boolean
 }): React.JSX.Element {
@@ -60,11 +63,15 @@ export function WorkspacePaneOverlayLayers({
       {mountEmulatorOverlay ? (
         <EmulatorPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
       ) : null}
-      <StructuredAgentSessionPaneOverlayLayer
-        worktreeId={worktreeId}
-        isWorktreeActive={isVisible}
-      />
-      <AiVaultSessionDropLayer worktreeId={worktreeId} enabled={isVisible} />
+      {surfaceReleased ? null : (
+        <StructuredAgentSessionPaneOverlayLayer
+          worktreeId={worktreeId}
+          isWorktreeActive={isVisible}
+        />
+      )}
+      {surfaceReleased ? null : (
+        <AiVaultSessionDropLayer worktreeId={worktreeId} enabled={isVisible} />
+      )}
     </>
   )
 }
