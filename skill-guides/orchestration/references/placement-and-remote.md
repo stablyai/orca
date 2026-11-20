@@ -42,8 +42,14 @@ handle.
 Use this when the user named a machine for this project, now or earlier in
 this Run, when the work is for another project, or from a workspace with no
 project. Otherwise skip it: `current` and `new-child` already run where you
-are. When the machine the user named is this one and the work is in your
-current workspace, nothing needs listing: go to steps 4 and 5.
+are.
+
+Steps 1 to 4 choose where a new worktree goes. Work in an existing workspace
+skips them, whatever its project's kind, a folder project included. Use your
+own with `--worktree current`, or the one the user picked with its exact
+worktree selector. Add `--environment local` here or `--on <server>` on a
+server, and pass no `--repo`. If that selector does not resolve on that
+machine, stop and tell the user. Then record it (step 5).
 
 Only a coordinator places work on another machine. If you are a dispatched
 worker, do not pass `--on`: ask your coordinator to place it.
@@ -119,12 +125,8 @@ worker, do not pass `--on`: ask your coordinator to place it.
    start in this Run, already chose a repo on that machine, use that exact repo
    while its row is still usable and do not ask again. Otherwise, with several
    usable rows there, use the one whose `path` or `displayName` the user named,
-   else ask. To work in an existing workspace instead, a folder project's
-   included, pass its exact worktree selector, or `current` for your own on
-   this machine, and omit `--repo`: creation flags are refused there, and the
-   usable test in step 2 does not apply to it. Every start here carries
-   `--environment local`, whichever line chose this machine; every start on a
-   server carries `--on`.
+   else ask. Every start here carries `--environment local`, whichever line
+   chose this machine; every start on a server carries `--on`.
 
 5. Record it. For a new Task (`--spec`), write the task first, because the
    spec's first line becomes its title, then end the spec with a line of its
