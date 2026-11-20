@@ -18,14 +18,15 @@ when requesting a child of the current workspace.
 ORCA orchestration worker-start --task <task_id> --worktree new-child --agent <agent> --setup run
 
 # On a connected server, nested under your workspace; the Run stays on yours.
-ORCA orchestration worker-start --task <task_id> --on <server> --worktree new-child --repo <exact_remote_repo_selector> --name <name> --agent <agent> --setup run
+ORCA orchestration worker-start --task <task_id> --on <server> --worktree new-child --repo id:<repoId> --name <name> --agent <agent> --setup run
 
 # On a connected server, with no parent.
-ORCA orchestration worker-start --task <task_id> --on <server> --worktree new-top-level --repo <exact_remote_repo_selector> --name <name> --agent <agent> --setup run
+ORCA orchestration worker-start --task <task_id> --on <server> --worktree new-top-level --repo id:<repoId> --name <name> --agent <agent> --setup run
 ```
 
 With `--on`, both `new-child` and `new-top-level` need `--repo` naming a
-project on that server. `new-child` nests the server's worktree under your
+project on that server: `id:<repoId>` from that server's `project setups` row
+(see "Which machine" below). `new-child` nests the server's worktree under your
 workspace on this machine. A server whose Orca is too old to nest across
 machines still starts the worker, top-level, and the receipt's `warning` says
 so; the worker is fine to use. `current` is not valid with `--on`.
@@ -35,6 +36,93 @@ workspace, and the start output names the workspace it created.
 
 After start, address a remote worker only by Dispatch ID, never by a terminal
 handle.
+
+## Which machine
+
+If the user named a machine for this project, now or earlier in this Run,
+resolve that machine first. Otherwise skip this for your current workspace's
+project: `current` and `new-child` already run where you are. Use it for
+another project, or from a workspace with no project.
+
+Only a coordinator places work on another machine. If you are a dispatched
+worker, do not pass `--on`: ask your coordinator to place it.
+
+1. Hosts. `ORCA host list --json`: `kind: local` is the machine your CLI runs
+   on, `kind: environment` is a paired server (`--on <name>`, or its id when
+   two servers share a name). A name the user gave that matches more than one
+   row, such as an SSH target and a server, is not resolved: ask which.
+
+2. Where the project is. A listing covers only the Orca that answers it, so ask
+   each one, the servers together in one shell command:
+
+   ```text
+   ORCA project setups --json                         # this machine
+   ORCA project setups --host runtime:<id> --json     # once per paired server
+   ```
+
+   Match the project by `projectId` (such as `github:owner/repo`); a name must
+   match one project id across every answer, or you ask. A `repo:<…>` id exists
+   on one host only. A row is usable when `setupState` is `ready`, `repoId` is
+   not empty, `kind` is not `folder`, and `hostId` is `local` (the machine that
+   answered). Another `local` row is registered but not usable. A row with any
+   other `hostId` describes an SSH target: a start cannot create a worktree
+   there. A server that answers `remote_runtime_unavailable`, `runtime_timeout`
+   or `incompatible_runtime` is unchecked, not without the project.
+
+3. Decide. The first line that applies wins.
+   - The user named a machine, now or earlier in this Run for this project:
+     use it, and the repo chosen with it. If that is no longer usable there,
+     or the machine does not answer, stop and tell the user. Never substitute
+     another machine or repo.
+   - You are retrying an attempt that ran on a server: only this machine and
+     that server are allowed. If the project is usable on this machine and
+     that attempt is settled, the lines below decide, and you may retry here.
+     Otherwise retry on that server with that attempt's repo and `--on`. Never
+     use another server.
+   - Your Run already placed this project, that machine and repo are still
+     usable, and this machine has not become usable since: use the same
+     machine and repo.
+   - Usable on this machine: stay here, as before, with no `--on`.
+   - Registered on this machine but not usable: stop and tell the user. Do not
+     move it to a server.
+   - Usable on exactly one paired server: start there with `--on`; do not wait
+     for the user to name it.
+   - Usable on several paired servers: ask the user once, naming each; keep
+     the answer for the Run.
+   - Usable nowhere, but registered somewhere (not ready, no checkout, or only
+     on an SSH target): do not start it. Tell the user where it is registered
+     and why it cannot be used.
+   - Usable nowhere, and a server was unchecked: do not treat it as absent.
+     Tell the user which servers you could not check and ask whether to go
+     ahead here.
+   - Registered nowhere, and every machine answered: place it as you would
+     have without this section, and say in your report that no machine has it
+     set up.
+
+4. Selector. Take `repoId` from the chosen machine's own row and pass
+   `--repo id:<repoId>`. Never reuse an id, path or name from another
+   machine's row. If the user, or an earlier start in this Run, already chose
+   a repo on that machine, use that exact repo while its row is still usable
+   and do not ask again. Otherwise, with several usable rows there, use the one
+   whose `path` or `displayName` the user named, else ask.
+
+5. Record it. Add one line to the spec, not as its first line:
+
+   ```text
+   Placement: <machine name> (<kind> <id>), <reason>.
+   ```
+
+   `<reason>` is one of: the user named it; set up on this machine; the only
+   ready candidate; the only known ready candidate (a server was unchecked);
+   this Run already works there; retrying where it ran; no machine has it set
+   up; the user chose to go ahead here with a server unchecked. Put what you
+   checked on the other machines in your report to the user, not in the spec.
+
+A worker on another machine has that machine's checkout, credentials and agents,
+not yours. Push the branch or name the commit it needs; keep secrets, and paths
+of files that exist only here, out of the spec. The listing cannot prove a
+worker can start there. If the start is refused or the server does not answer,
+report it; do not try another machine.
 
 ## Agents on another server
 

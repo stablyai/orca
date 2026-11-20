@@ -15,6 +15,7 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca project setups [--project <id>] [--host <host>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'project', 'host'],
     notes: [
+      'Lists only the Orca that answers: a project set up only on a paired server is not listed until you ask that server with --host runtime:<environment-id>, and its rows then carry hostId local, meaning that server.',
       'A setup means a project is available on a host at a concrete filesystem path.',
       '--host runtime:<environment-id> runs the command on that paired Orca server instead of filtering this runtime; unknown environment ids are rejected rather than answered with an empty list.',
       'Run `orca environment list` to see the environment ids that runtime:<environment-id> accepts. It matches ids only, never environment names.',

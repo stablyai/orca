@@ -57,6 +57,11 @@ that the CLI is installed; a missing one fails as an `agent_readiness` timeout.
   (the user will work in those chats), don't start workers; per workspace run
   `ORCA worktree create --name <name> --no-parent --agent <agent> --prompt "<brief>" --json`
   and end your turn.
+- If the user named a machine for this project, now or earlier in this Run,
+  resolve that machine first. Otherwise skip host discovery for your current
+  workspace's project. For another project, or from a workspace with no
+  project, load `references/placement-and-remote.md` ("Which machine") before
+  you start.
 - Add `--model` only if the user named one.
 - If `worker-start` fails, do not rerun it; read `failedStage` and load
   `references/recovery-and-cleanup.md`.
@@ -121,11 +126,11 @@ assignment does not prove its agent stopped.
 
 `ORCA skills get orchestration --reference references/<file>.md`
 
-| Situation                                      | Reference                            |
-| ---------------------------------------------- | ------------------------------------ |
-| Task DAGs, several Runs                        | `references/coordinator-loop.md`     |
-| Child worktrees, SSH, WSL, a connected server  | `references/placement-and-remote.md` |
-| Group messages                                 | `references/messaging-and-gates.md`  |
-| A failed or unknown worker; retry, stop, reset | `references/recovery-and-cleanup.md` |
-| Several independent workers at once            | `references/parallel-start.md`       |
-| Custom argv or terminal layout                 | `references/low-level-topology.md`   |
+| Situation                                                                 | Reference                            |
+| ------------------------------------------------------------------------- | ------------------------------------ |
+| Task DAGs, several Runs                                                   | `references/coordinator-loop.md`     |
+| Another project or machine, child worktrees, SSH, WSL, a connected server | `references/placement-and-remote.md` |
+| Group messages                                                            | `references/messaging-and-gates.md`  |
+| A failed or unknown worker; retry, stop, reset                            | `references/recovery-and-cleanup.md` |
+| Several independent workers at once                                       | `references/parallel-start.md`       |
+| Custom argv or terminal layout                                            | `references/low-level-topology.md`   |
