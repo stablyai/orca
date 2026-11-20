@@ -12,10 +12,6 @@ export const COPILOT_EVENTS = [
   'PreToolUse',
   'PostToolUse',
   'PostToolUseFailure',
-  // This event is documented only in camelCase; the wrapper supplies its name for normalization.
-  'subagentStart',
-  'SubagentStop',
-  'PreCompact',
   'Stop',
   'ErrorOccurred',
   'PermissionRequest',

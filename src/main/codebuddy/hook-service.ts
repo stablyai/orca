@@ -8,7 +8,6 @@ export const CODEBUDDY_HOOK_EVENTS = [
   'PreToolUse',
   'PostToolUse',
   'PostToolUseFailure',
-  'PermissionRequest',
   'Stop',
   'StopFailure',
   'Notification'
@@ -16,7 +15,8 @@ export const CODEBUDDY_HOOK_EVENTS = [
 
 export const CODEBUDDY_MANAGED_HOOK_PLAN: ClaudeManagedHookPlan = {
   install: CODEBUDDY_HOOK_EVENTS.map((eventName) => ({ eventName, definition: {} })),
-  retire: [],
+  // Its normalizer drops PermissionRequest, so earlier installs' entries are retired.
+  retire: [{ eventName: 'PermissionRequest', definition: {} }],
   statusLine: 'leave'
 }
 

@@ -39,8 +39,6 @@ const DROID_EVENTS = [
   { eventName: 'SessionStart', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'UserPromptSubmit', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } },
-  // SubagentStop reports mission progress; the listener must not treat it as parent completion.
-  { eventName: 'SubagentStop', definition: { hooks: [{ type: 'command', command: '' }] } },
   {
     eventName: 'PreToolUse',
     definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }

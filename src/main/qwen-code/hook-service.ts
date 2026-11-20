@@ -4,7 +4,6 @@ import type { ClaudeManagedHookPlan } from '../claude/hooks/claude-managed-hook-
 // Qwen's hook enum is authoritative; Claude's version table and statusline do not apply.
 export const QWEN_CODE_HOOK_EVENTS = [
   'SessionStart',
-  'SessionEnd',
   'UserPromptSubmit',
   'PreToolUse',
   'PostToolUse',
@@ -12,14 +11,17 @@ export const QWEN_CODE_HOOK_EVENTS = [
   'PermissionRequest',
   'Stop',
   'StopFailure',
-  'Notification',
   'SubagentStart',
   'SubagentStop'
 ] as const
 
 export const QWEN_CODE_MANAGED_HOOK_PLAN: ClaudeManagedHookPlan = {
   install: QWEN_CODE_HOOK_EVENTS.map((eventName) => ({ eventName, definition: {} })),
-  retire: [],
+  // Their Claude-path normalizer drops both, so earlier installs' entries are retired.
+  retire: [
+    { eventName: 'SessionEnd', definition: {} },
+    { eventName: 'Notification', definition: {} }
+  ],
   statusLine: 'leave'
 }
 
