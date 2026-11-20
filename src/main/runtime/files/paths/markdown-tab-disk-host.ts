@@ -18,6 +18,7 @@ import { utf8ByteLength } from '../../../../shared/editor/markdown/mobile-markdo
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 import { assertFileMutationOwnershipCapability } from '../../../../shared/file-write/file-mutation-ownership'
 import type { PersistedOpenFile } from '../../../../shared/workspace-session/workspace-session-state-types'
+import { extraRootsForPersistedOpenFile } from '../chat-scratch-file-root'
 import { readLocalRuntimeFilePrefix } from '../file-reads'
 import {
   requireLocalRuntimeFileRoute,
@@ -87,7 +88,8 @@ export function createMarkdownTabDiskHost(runtime: MarkdownTabDiskRuntime): Mark
       const { bytes, size } = await readLocalRuntimeFilePrefix(
         file.filePath,
         runtime.requireStore(),
-        maxBytes
+        maxBytes,
+        { extraRoots: extraRootsForPersistedOpenFile(file.filePath) }
       )
       if (isBinaryBuffer(bytes)) {
         throw new Error('binary_file')
@@ -107,7 +109,9 @@ export function createMarkdownTabDiskHost(runtime: MarkdownTabDiskRuntime): Mark
           precondition
         )
       }
-      return requireRuntimeFileProvider(route.target, runtime).writeFileWithDiskPrecondition(
+      return requireRuntimeFileProvider(route.target, runtime, {
+        extraRoots: extraRootsForPersistedOpenFile(file.filePath)
+      }).writeFileWithDiskPrecondition(
         file.filePath,
         content,
         precondition

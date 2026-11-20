@@ -6,10 +6,10 @@ export type HardWrappedPathFragmentRow = {
   lineLength: number
 }
 
-const HARD_WRAPPED_PATH_FRAGMENT_PATTERN = /^[A-Za-z0-9._~@%+=:,/\\-]+$/
+const HARD_WRAPPED_PATH_FRAGMENT_PATTERN = /^[\p{L}\p{N}\p{M}._~@%+=:,/\\-]+$/u
 
 export function isHardWrappedPathFragment(text: string): boolean {
-  return HARD_WRAPPED_PATH_FRAGMENT_PATTERN.test(text) && /[A-Za-z0-9]/.test(text)
+  return HARD_WRAPPED_PATH_FRAGMENT_PATTERN.test(text) && /[\p{L}\p{N}]/u.test(text)
 }
 
 export function isIncompleteHardWrappedPathStart(text: string): boolean {
@@ -23,7 +23,9 @@ export function isHardWrappedPathContinuation(text: string): boolean {
 
 export function canStartHardWrappedPath(text: string): boolean {
   if (!isHardWrappedPathFragment(text)) {
-    return /(?:^|[\s•*>-])(?:\/|\.{1,2}\/|[A-Za-z0-9._-]+\/)[A-Za-z0-9._~@%+=:,/\\-]*$/.test(text)
+    return /(?:^|[\s•*>\-：:（(])(?:\/|\.{1,2}\/|[A-Za-z]:[\\/]|[\p{L}\p{N}\p{M}._-]+[\\/])[\p{L}\p{N}\p{M}._~@%+=:,/\\-]*$/u.test(
+      text
+    )
   }
 
   return /(?:\/|\\)/.test(text)
