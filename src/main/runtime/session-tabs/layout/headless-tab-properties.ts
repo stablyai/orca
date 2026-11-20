@@ -56,7 +56,7 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithHeadle
     if (ORCA_LAYOUT_OWNER_IS_MAIN && (await this.setMainTabProps(worktreeId, hostTabId, args))) {
       return { updated: true }
     }
-    const authoritativeWindow = this.getAvailableAuthoritativeWindow()
+    const authoritativeWindow = this.hasAuthoritativeWindow()
     if (
       authoritativeWindow &&
       (args.color !== undefined || args.isPinned !== undefined || args.viewMode !== undefined)

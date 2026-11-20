@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useAppStore } from '@/store/index'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { selectNativeChatForkSourceOpenable } from './native-chat-fork-source-openable'
 import { openDesktopStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import {
@@ -31,8 +31,9 @@ export function NativeChatRowActionsProvider({
   const worktreeId = useNativeChatTabOwnerWorktreeId(pane.tabId)
   const { agent, target } = pane
   // An unreachable host cannot open the source, so its divider shows plain words until it returns.
-  const sourceOpenable = useAppStore(
-    (state) => worktreeId !== null && selectNativeChatForkSourceOpenable(state, worktreeId, target)
+  const sourceOpenable = useAppStoreWithHostStatuses(
+    (state, statuses) =>
+      worktreeId !== null && selectNativeChatForkSourceOpenable(state, statuses, worktreeId, target)
   )
   // A fork and its source share a workspace and host.
   const openSource = useMemo(

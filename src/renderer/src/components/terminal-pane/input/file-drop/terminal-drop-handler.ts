@@ -6,6 +6,7 @@ import {
   toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
 import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
+import { recordRecentTerminalImage } from '../recent-terminal-images'
 import {
   isResolvedWorkspaceFileDragExecutionHost,
   readWorkspaceFileDragPaths,
@@ -127,6 +128,11 @@ export async function handleInternalTerminalFileDrop({
   showTerminalDropWriteFailure(writeResult.failureReason)
   if (writeResult.sentAnyPath) {
     recordTerminalUserInputForLeaf(tabId, pane.leafId)
+    if (!runtimeEnvironmentId && connectionId === null && host?.kind === 'local') {
+      for (const path of paths.slice(0, writeResult.pathsWritten)) {
+        recordRecentTerminalImage(pane.terminal, path)
+      }
+    }
   }
   if (writeResult.targetCurrent) {
     pane.terminal.focus()

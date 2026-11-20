@@ -20,6 +20,8 @@ export type NativeChatRoomMention = {
   detail?: string
   /** A second line shown as written, in place of "For: …" (the chat's own bot: "Your other chats"). */
   note?: string
+  /** Shown before the note, such as an agent's status. */
+  noteIcon?: React.ReactNode
   /** Shown but not pickable, with this tag (a paused bot). */
   unavailable?: string
   /** The computer it runs on, as a pill on its second line, for a bot on another computer. */

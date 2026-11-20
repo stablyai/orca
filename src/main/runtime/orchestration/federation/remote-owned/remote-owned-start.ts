@@ -197,8 +197,7 @@ export async function startRemoteOwnedWorker(
       dispatchId: started.data.dispatchId,
       taskId: task.id,
       workerAddress: `dispatch:${started.data.dispatchId}`,
-      task: task.spec,
-      agent
+      task: task.spec
     })
   }
   const answer = inServerTerms(receipt, { server: server.name, forward })

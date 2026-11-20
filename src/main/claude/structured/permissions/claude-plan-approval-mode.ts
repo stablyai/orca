@@ -7,7 +7,7 @@ import {
   setClaudeAllowedPermissionMode
 } from './claude-permission-mode-ladder'
 
-/** This process's requested mode, else its first init's; anything else asks for each edit. */
+/** This process's requested mode, else the mode it opened in; anything else asks for each edit. */
 export function claudePlanApprovalMode(
   session: Pick<ClaudeSession, 'launchIntent' | 'firstRootInit'>
 ): PermissionMode {

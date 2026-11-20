@@ -191,6 +191,7 @@ export const EXECUTION_HOST_METHODS = [
   'host.wsl.listDistros',
   'preflight.check',
   'preflight.detectAgents',
+  'preflight.installedAgents',
   'preflight.detectRemoteAgents',
   'preflight.refreshAgents',
   'hostedReview.create',
@@ -206,6 +207,10 @@ export const EXECUTION_HOST_METHODS = [
   // Sender cards resolve on the host that owns the orchestration records.
   'orchestration.partyLocation',
   'orchestration.partyOpen',
+  // A coordinator chat's worker prompts wait on the host that runs its workers.
+  'orchestration.workerApprovalsSubscribe',
+  'orchestration.workerApprovalsUnsubscribe',
+  'orchestration.approvalAnswer',
   // The worker's own host keeps it open and owns its countdown; older phones still report typing and viewing.
   'orchestration.workerTerminalUserInput',
   'orchestration.workerChatTouch',

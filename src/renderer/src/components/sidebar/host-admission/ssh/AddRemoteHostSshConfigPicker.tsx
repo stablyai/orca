@@ -242,7 +242,7 @@ export function AddRemoteHostSshConfigPicker({
             : newHostCount > 0
               ? t(
                   'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerAddAll',
-                  'Add all {{value0}} to Orca',
+                  'Add all ({{value0}})',
                   { value0: newHostCount }
                 )
               : // Remaining hosts may be saved or tombstoned; copy must not assume either.

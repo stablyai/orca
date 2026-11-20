@@ -250,7 +250,7 @@ export function observeClaudeRootInit(
   if (!session) {
     return
   }
-  session.firstRootInit = firstRootInit
+  session.firstRootInit ??= firstRootInit
   if (!claudeBypassRefused(session) || !claudeOwesFullAccessFallback(session)) {
     return
   }

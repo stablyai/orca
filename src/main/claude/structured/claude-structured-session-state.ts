@@ -151,11 +151,13 @@ export type ClaudeSession = {
   fastModePerSessionOptIn?: boolean
   /** Mutation sequence of the last model report; newer writes outrank it. */
   reportedModelMutation: number
+  /** A session-scope refusal fallback this process runs until an accepted model write; a pick awaits its turn. */
+  modelFallback?: { model: string; replaced: string; picked?: true }
   /** Options whose recorded value the provider reported, not merely accepted. */
   confirmedOptions: Set<string>
   /** Inputs carried by launch or accepted controls, independent of provider reports. */
   appliedInputOptions: Map<string, string>
-  /** What Orca put on this process's command line, and the first root init's answer; this process only. */
+  /** What Orca put on this process's command line, and the mode it opened in; this process only. */
   launchIntent?: { permissionMode?: string; model?: string }
   firstRootInit?: { permissionMode: string | null }
   /** Claude's own effective settings turn bypass off for this process (startup `get_settings`). */
@@ -252,8 +254,11 @@ export type ClaudeAcquisitionAttempt = {
   exitProven: boolean
   finished: Promise<void>
   finish: () => void
-  /** The resolved launch's account, read by the translator to word a sign-in failure. */
-  account?: ClaudeStructuredLaunch['account']
+  /** The resolved launch: its account words a sign-in failure, its Command a start that exited. */
+  launch?: Pick<
+    ClaudeStructuredLaunch,
+    'account' | 'pathToClaudeCodeExecutable' | 'configuredCommand'
+  >
 }
 
 export function createClaudeAcquisitionAttempt(

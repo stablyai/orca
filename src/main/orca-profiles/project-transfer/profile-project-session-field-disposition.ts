@@ -186,6 +186,16 @@ export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
     onTransfer: 'notTransferred',
     onWorkspaceRemoval: 'ownerTabKey'
   },
+  desktopRelayOwnerByTabId: {
+    onRepoRemoval: 'notRepoScoped',
+    onTransfer: 'notTransferred',
+    onWorkspaceRemoval: 'ownerTabKey'
+  },
+  desktopRelayAdoptionVersion: {
+    onRepoRemoval: 'notRepoScoped',
+    onTransfer: 'notTransferred',
+    onWorkspaceRemoval: 'kept'
+  },
   lastVisitedAtByWorktreeId: {
     onRepoRemoval: 'prunedByOwnerKey',
     onTransfer: 'copiedByOwnerKey',

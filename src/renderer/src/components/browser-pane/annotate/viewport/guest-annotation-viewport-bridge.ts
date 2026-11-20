@@ -3,6 +3,10 @@ import type {
   BrowserPageAnnotation
 } from '../../../../../../shared/browser/element-grab/browser-grab-types'
 import { browserAnnotationMatchesPageUrl } from './browser-annotation-page-url'
+import {
+  ipcBrowserGuestToolsTransport,
+  type BrowserGuestToolsTransport
+} from '../browser-guest-tools-transport'
 
 // Guest-rendered badges track scrolling without a renderer message per frame.
 export function syncGuestAnnotationViewportBridge({
@@ -11,7 +15,8 @@ export function syncGuestAnnotationViewportBridge({
   currentDocument,
   pendingPayload,
   surfaceActive,
-  token
+  token,
+  transport = ipcBrowserGuestToolsTransport
 }: {
   toolTargetId: string
   annotations: BrowserPageAnnotation[]
@@ -19,6 +24,7 @@ export function syncGuestAnnotationViewportBridge({
   pendingPayload: BrowserGrabPayload | null
   surfaceActive: boolean
   token: string
+  transport?: BrowserGuestToolsTransport
 }): void {
   // Why: existing badges render in-guest for smooth scroll; only the pending dialog needs viewport messages.
   const eligibleIds = currentDocument ? new Set(currentDocument.markerIds) : null
@@ -38,7 +44,7 @@ export function syncGuestAnnotationViewportBridge({
           }
         ]
   )
-  void window.api.browser
+  void transport
     .setAnnotationViewportBridge({
       browserPageId: toolTargetId,
       emitViewport: pendingPayload !== null,

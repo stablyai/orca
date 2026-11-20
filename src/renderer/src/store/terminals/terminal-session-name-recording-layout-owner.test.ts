@@ -61,5 +61,22 @@ describe('tab rename when main owns the layout', () => {
     expect(record.mock.invocationCallOrder[0]).toBeLessThan(
       sendLayoutApply.mock.invocationCallOrder[0]
     )
+
+    sendLayoutApply.mockClear()
+    record.mockImplementation(() => {
+      throw new Error('recording failed')
+    })
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      useAppStore.getState().setTabCustomTitle('tab-1', 'Still renames')
+      expect(sendLayoutApply).toHaveBeenCalledWith(
+        expect.anything(),
+        'wt-1',
+        expect.objectContaining({ type: 'renameTab', kind: 'custom', title: 'Still renames' }),
+        expect.anything()
+      )
+    } finally {
+      warning.mockRestore()
+    }
   })
 })
