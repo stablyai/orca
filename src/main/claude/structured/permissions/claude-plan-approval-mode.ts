@@ -2,13 +2,16 @@ import type { PermissionMode, PermissionResult } from '@anthropic-ai/claude-agen
 import type { ClaudePendingPrompt } from './claude-prompt-registry'
 import type { ClaudeSession } from '../claude-structured-session-state'
 
-/** This process's requested mode, else its first init's; anything else asks for each edit. */
+/** This process's requested mode, else its first init's; anything else asks for each edit.
+ *  Undefined when the chat opened in Plan: no mode was seen before it, so Claude restores its own. */
 export function claudePlanApprovalMode(
   session: Pick<ClaudeSession, 'launchIntent' | 'firstRootInit'>
-): PermissionMode {
+): PermissionMode | undefined {
   const mode =
     session.launchIntent?.permissionMode ?? session.firstRootInit?.permissionMode ?? 'default'
   switch (mode) {
+    case 'plan':
+      return undefined
     case 'default':
     case 'acceptEdits':
     case 'dontAsk':
@@ -23,9 +26,10 @@ export function claudePlanApprovalMode(
 /** Keep a provider's startup restriction until an approved plan successfully restores the requested policy. */
 export function claudeBuildPermissionMode(
   session: Pick<ClaudeSession, 'launchIntent' | 'firstRootInit' | 'appliedInputOptions'>
-): PermissionMode {
+): PermissionMode | undefined {
   const opened = session.firstRootInit?.permissionMode
   return claudePlanApprovalMode({
+    firstRootInit: session.firstRootInit,
     launchIntent: {
       permissionMode:
         session.appliedInputOptions.get('buildPermissionMode') ??
@@ -65,6 +69,9 @@ export function leaveClaudePlanModeOnApproval(
   }
   try {
     const restored = claudePlanApprovalMode(session)
+    if (!restored) {
+      return
+    }
     session.connection.setPermissionMode(restored).then(() => {
       session.appliedInputOptions?.set('interactionMode', 'default')
       session.appliedInputOptions?.set('buildPermissionMode', restored)

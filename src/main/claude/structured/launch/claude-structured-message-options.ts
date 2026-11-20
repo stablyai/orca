@@ -61,13 +61,19 @@ export async function applyClaudeMessageOptions(
   }
   throwIfSignalAborted(signal)
   if (options.interactionMode !== undefined) {
-    const mode = options.interactionMode === 'plan' ? 'plan' : claudeBuildPermissionMode(session)
-    await waitForPromiseWithSignal(
-      session.connection.setPermissionMode(mode, { timeoutMs }),
-      signal
-    )
+    const mode =
+      options.interactionMode === 'plan'
+        ? 'plan'
+        : (claudeBuildPermissionMode(session) ??
+          (session.reportedOptions.reportedPermissionMode === 'plan' ? 'default' : undefined))
+    if (mode) {
+      await waitForPromiseWithSignal(
+        session.connection.setPermissionMode(mode, { timeoutMs }),
+        signal
+      )
+    }
     session.appliedInputOptions.set('interactionMode', options.interactionMode)
-    if (options.interactionMode === 'default') {
+    if (options.interactionMode === 'default' && mode) {
       session.appliedInputOptions.set('buildPermissionMode', mode)
     }
   }
