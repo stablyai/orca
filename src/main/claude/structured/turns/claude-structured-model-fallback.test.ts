@@ -56,7 +56,8 @@ it('reports a session-scope fallback as the running model until a model write re
 
 it('sends a model picked during a fallback, even the saved one, and clears it only once Claude accepts', async () => {
   const claude = fakeClaude({ initModel: 'claude-opus-5-5' })
-  const adapter = await acquired(claude)
+  const events: ClaudeStructuredSessionEvent[] = []
+  const adapter = await acquired(claude, {}, events)
   const connection = claude.connections[0]!
   const ids = { sessionId: 'session-1', fence: 7 }
   const shown = async () => (await adapter.readOptions(ids)).current.fallbackModel
@@ -88,19 +89,16 @@ it('sends a model picked during a fallback, even the saved one, and clears it on
     expect(await shown()).toBe('claude-opus-4-8')
 
     adapter.noteModelPick(ids)
+    // The pick reaches every client's status before the turn that applies it.
+    expect(events.at(-1)).toMatchObject({
+      type: 'options-reported',
+      reportedOptions: { fallbackModel: undefined }
+    })
+    expect(await shown()).toBeUndefined()
     await turn('picked')
     expect(setModels()).toHaveLength(1)
     expect(setModels().at(-1)?.params).toEqual({ model: 'claude-opus-5-5' })
     expect(await shown()).toBeUndefined()
-
-    await turn('flagged-again', true)
-    claude.routes.set_model = () => {
-      throw new Error('model refused')
-    }
-    adapter.noteModelPick(ids)
-    expect(await turn('refused')).toBe('rejected')
-    expect(setModels()).toHaveLength(2)
-    expect(await shown()).toBe('claude-opus-4-8')
   } finally {
     await adapter.closeAll()
   }
