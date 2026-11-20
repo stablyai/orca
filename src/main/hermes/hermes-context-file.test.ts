@@ -44,4 +44,10 @@ describe('Hermes context file', () => {
     expect(content).toContain('second text')
     expect(content).not.toContain('first text')
   })
+
+  it('leaves a dangling symlink alone', async () => {
+    await symlink(join(dir, 'missing.md'), join(dir, HERMES_CONTEXT_FILE))
+    await writeHermesContextFile(dir, 'text')
+    expect((await lstat(join(dir, HERMES_CONTEXT_FILE))).isSymbolicLink()).toBe(true)
+  })
 })

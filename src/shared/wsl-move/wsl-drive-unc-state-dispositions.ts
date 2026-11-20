@@ -62,5 +62,6 @@ export const WSL_DRIVE_UNC_STATE_DISPOSITIONS = {
   // A bot's home is an Orca-owned folder, never a converted project.
   bots: 'keep',
   botsNewerAgents: 'keep',
+  botOrder: 'keep',
   botsPermissionDefaultMigrated: 'keep'
 } as const satisfies Record<keyof PersistedState, Disposition>

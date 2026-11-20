@@ -4,7 +4,7 @@
 // reads it (checked live on 0.23.3).
 
 import { randomUUID } from 'node:crypto'
-import { readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { lstat, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 export const HERMES_CONTEXT_FILE = '.hermes.md'
@@ -15,16 +15,16 @@ const BLOCK_START = '<!-- orca:begin -->'
 const BLOCK_END = '<!-- orca:end -->'
 
 /** Orca's own file is replaced whole; a file the user wrote keeps their text and gets Orca's block. */
-function withOrcaText(existing: string | null, text: string): string {
+function withOrcaText(existing: string | null, rawText: string): string {
+  const text = rawText.replaceAll(BLOCK_START, '').replaceAll(BLOCK_END, '')
   if (existing === null || existing.startsWith(HEADER)) {
     return `${HEADER}\n\n${text}\n`
   }
   const block = `${BLOCK_START}\n${text}\n${BLOCK_END}`
-  // The last pair wins, so marker text the user quotes earlier in their file is left alone.
-  const end = existing.lastIndexOf(BLOCK_END)
-  const start = end === -1 ? -1 : existing.lastIndexOf(BLOCK_START, end)
-  if (start !== -1) {
-    return existing.slice(0, start) + block + existing.slice(end + BLOCK_END.length)
+  // Only markers alone on their lines count, so text that quotes them is left alone.
+  const found = /^<!-- orca:begin -->\n[\s\S]*?\n<!-- orca:end -->$/m.exec(existing)
+  if (found) {
+    return existing.slice(0, found.index) + block + existing.slice(found.index + found[0].length)
   }
   return `${existing.trimEnd()}\n\n${block}\n`
 }
@@ -37,7 +37,18 @@ export async function writeHermesContextFile(cwd: string, text: string): Promise
   let existing: string | null = null
   let mode = 0o600
   try {
-    path = await realpath(link)
+    path = await realpath(link).catch(async (error) => {
+      // A link to nothing is the user's; only a missing file is free to create.
+      if (
+        await lstat(link).then(
+          () => true,
+          () => false
+        )
+      ) {
+        throw error
+      }
+      return link
+    })
     existing = await readFile(path, 'utf8')
     mode = (await stat(path)).mode & 0o777
   } catch (error) {

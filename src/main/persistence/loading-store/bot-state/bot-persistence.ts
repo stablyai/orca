@@ -7,7 +7,12 @@ import { revokeAgentSessionPublicationFences } from '../../../runtime/agent-sess
 type BotRuntime = Pick<StoreRuntimeState, 'state'>
 
 /** The profile domains a bot write changes. */
-const BOT_SAVE_DOMAINS = ['bots', 'botsNewerAgents', 'botsPermissionDefaultMigrated'] as const
+const BOT_SAVE_DOMAINS = [
+  'bots',
+  'botsNewerAgents',
+  'botOrder',
+  'botsPermissionDefaultMigrated'
+] as const
 
 const botPersistenceContext = Symbol('BotPersistence')
 type BotPersistenceContext = {
@@ -24,7 +29,16 @@ export class BotPersistence {
 
   getBots(): Bot[] {
     const { state } = this[botPersistenceContext].runtime
-    return [...(state.bots ?? []), ...(state.botsNewerAgents ?? [])]
+    const all = [...(state.bots ?? []), ...(state.botsNewerAgents ?? [])]
+    const order = state.botOrder
+    if (!order) {
+      return all
+    }
+    const rank = (id: string): number => {
+      const index = order.indexOf(id)
+      return index === -1 ? order.length : index
+    }
+    return all.sort((a, b) => rank(a.id) - rank(b.id))
   }
 
   private setBots(bots: Bot[]): void {
@@ -33,6 +47,7 @@ export class BotPersistence {
     state.bots = readable
     if (newer.length > 0 || state.botsNewerAgents !== undefined) {
       state.botsNewerAgents = newer
+      state.botOrder = bots.map((bot) => bot.id)
     }
   }
 

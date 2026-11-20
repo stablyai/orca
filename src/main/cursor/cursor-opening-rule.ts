@@ -36,23 +36,29 @@ async function isUserFile(path: string): Promise<boolean> {
     if ((await lstat(path)).isSymbolicLink()) {
       return true
     }
-    return !(await readFile(path, 'utf8')).includes(RULE_MARKER)
+    return !(await readFile(path, 'utf8')).startsWith(RULE_HEAD)
   } catch (error) {
     return (error as NodeJS.ErrnoException).code !== 'ENOENT'
   }
 }
 
+const RULE_HEAD = `---\n${RULE_MARKER}\n`
+const LEFTOVER_NAME = /^orca-standing-instructions-[0-9a-f-]{36}\.mdc$/
 const SIBLING_PREFIX = 'orca-standing-instructions-'
 
 /** Rules a crashed open left beside a user's file; every open of the folder holds the lock. */
 async function sweepLeftoverRules(rulesDir: string): Promise<void> {
   for (const name of await readdir(rulesDir).catch(() => [])) {
-    if (!name.startsWith(SIBLING_PREFIX) || !name.endsWith('.mdc')) {
+    if (!LEFTOVER_NAME.test(name)) {
       continue
     }
     const file = join(rulesDir, name)
-    const text = await readFile(file, 'utf8').catch(() => '')
-    if (text.includes(RULE_MARKER)) {
+    const isLink = await lstat(file).then(
+      (info) => info.isSymbolicLink(),
+      () => true
+    )
+    const text = isLink ? '' : await readFile(file, 'utf8').catch(() => '')
+    if (text.startsWith(RULE_HEAD)) {
       await rm(file, { force: true }).catch(() => undefined)
     }
   }
@@ -96,7 +102,9 @@ export async function placeCursorOpeningRule(
     await rename(staged, path)
     return async () => {
       try {
-        await rm(path, { force: true })
+        if (!(await isUserFile(path))) {
+          await rm(path, { force: true })
+        }
         // Innermost first; a folder that gained the user's own files stays.
         for (const dir of made.toReversed()) {
           await rmdir(dir).catch(() => undefined)
