@@ -20,7 +20,7 @@ function store(workspaceDir: string, worktreePaths: string[] = []) {
   return {
     getSettings: () => ({ workspaceDir, nestWorkspaces: true }),
     getRepos: () => [repo],
-    getAllWorktreeMeta: () =>
+    getAllWorktreeMetaForHost: () =>
       Object.fromEntries(worktreePaths.map((path) => [`${repo.id}::${path}`, {}]))
   }
 }

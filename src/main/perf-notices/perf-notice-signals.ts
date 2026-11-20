@@ -41,7 +41,9 @@ type PerfNoticeSignalStore = Omit<ProjectRuntimeResolutionStore, 'getSettings'> 
   getSettings: () => Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces'> &
     ReturnType<NonNullable<ProjectRuntimeResolutionStore['getSettings']>>
   getRepos: () => Repo[]
-  getAllWorktreeMeta: () => Record<string, unknown>
+  getAllWorktreeMetaForHost: (
+    executionHostId: typeof LOCAL_EXECUTION_HOST_ID
+  ) => Record<string, { archivedCheckout?: unknown }>
 }
 
 /** A filesystem call still running. While one is, no other starts: a dead mount then holds one
@@ -85,19 +87,22 @@ function localWorktreeRoots(store: PerfNoticeSignalStore): string[] {
     const mirrorDistro = runtimes
       ? getWorktreeMirrorDistroForRuntime(runtimes.get(repo.id))
       : undefined
-    const pathSettings = getWorktreePathSettings(repo, settings, mirrorDistro)
-    if (workspaceRootMirrorsIntoWsl(repo.path, pathSettings)) {
-      continue
-    }
-    add(computeWorkspaceRoot(repo.path, pathSettings))
+    // Why: workspaces made before a switch to WSL stay on the Windows disk.
     checkoutByRepoId.set(repo.id, normalizeRuntimePathForComparison(repo.path))
+    const pathSettings = getWorktreePathSettings(repo, settings, mirrorDistro)
+    if (!workspaceRootMirrorsIntoWsl(repo.path, pathSettings)) {
+      add(computeWorkspaceRoot(repo.path, pathSettings))
+    }
   }
-  for (const worktreeId of Object.keys(store.getAllWorktreeMeta())) {
+  // Why: this machine's rows only; remote hosts can reuse a repo id for their own paths.
+  const metaById = store.getAllWorktreeMetaForHost(LOCAL_EXECUTION_HOST_ID)
+  for (const [worktreeId, meta] of Object.entries(metaById)) {
     const parsed = splitWorktreeId(worktreeId)
     const checkout = parsed ? checkoutByRepoId.get(parsed.repoId) : undefined
     if (
       parsed &&
       checkout !== undefined &&
+      !meta.archivedCheckout &&
       normalizeRuntimePathForComparison(parsed.worktreePath) !== checkout
     ) {
       add(parentFolder(parsed.worktreePath))
@@ -155,9 +160,16 @@ export function readPerfNoticeSignals(store: PerfNoticeSignalStore): Promise<Per
   let current = disk
   const stale = !current || current.key !== key || now - current.readAt >= DISK_READ_INTERVAL_MS
   if (!current || (stale && current.settled)) {
-    const read = { key, readAt: now, settled: false, bounded: withDeadline(readFullestDisk(roots)) }
+    const value = readFullestDisk(roots)
+    const read = { key, readAt: now, settled: false, bounded: withDeadline(value) }
     void read.bounded.finally(() => {
       read.settled = true
+    })
+    // Why: a read slower than the deadline still lands in the cache, so the next check uses it.
+    void value.then((result) => {
+      if (disk?.key === key) {
+        disk = { key, readAt: Date.now(), settled: true, bounded: Promise.resolve(result) }
+      }
     })
     current = disk = read
   }
