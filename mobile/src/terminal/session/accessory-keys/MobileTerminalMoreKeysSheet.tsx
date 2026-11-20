@@ -57,7 +57,7 @@ export function MobileTerminalMoreKeysSheet({
       builtInKeys={visibleBuiltInAccessoryKeys}
       customKeys={customKeys}
       onPaste={() => void handlePaste()}
-      onAttachImage={() => void attachImage('library')}
+      onAttachImage={() => void attachImage('gallery')}
       onAttachFile={() => void attachImage('files')}
       onToggleDisplay={() => {
         if (activeHandle) {

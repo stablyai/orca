@@ -5,9 +5,14 @@ import type { ConnectionState } from '../../transport/connection/connection-stat
 import { useMediaPicker } from '../../platform/media-picking/media-picker'
 import {
   ImageLibraryPermissionError,
+  MobileFileTooLargeError,
   type MobileImageSource
 } from '../../platform/media-picking/media-picker-contract'
-import { attachMobileImageToTerminal } from './mobile-image-attachment'
+import {
+  attachMobileFilesToTerminal,
+  attachMobileGalleryToTerminal,
+  attachMobileImageToTerminal
+} from './mobile-image-attachment'
 import { fitMobileAgentImage } from './mobile-agent-image-fit'
 
 type CurrentRef<T> = {
@@ -31,7 +36,7 @@ type UseMobileImageAttachmentArgs = {
 }
 
 type MobileImageAttachment = {
-  readonly attachImage: (source: MobileImageSource) => Promise<void>
+  readonly attachImage: (source: MobileImageSource | 'gallery') => Promise<void>
   // Show upload progress after picker completion so the host transfer cannot look like a no-op.
   readonly isAttaching: boolean
 }
@@ -56,22 +61,30 @@ export function useMobileImageAttachment({
   const [isAttaching, setIsAttaching] = useState(false)
   const picker = useMediaPicker()
   const attachImage = useCallback(
-    async (source: MobileImageSource): Promise<void> => {
+    async (source: MobileImageSource | 'gallery'): Promise<void> => {
       if (!client || !activeHandle || !canSend) {
         return
       }
       try {
-        const sent = await attachMobileImageToTerminal(source, {
+        const common = {
           client,
           agent,
           terminal: activeHandle,
           deviceToken: deviceTokenRef.current,
           getConnectionId: getActiveWorktreeConnectionId,
-          pickImage: picker.pickImage,
           onUploadStart: () => setIsAttaching(true),
           fitImage: fitMobileAgentImage,
           beforeTerminalSend
-        })
+        }
+        const sent =
+          source === 'files'
+            ? await attachMobileFilesToTerminal({ ...common, pickFiles: picker.pickFiles })
+            : source === 'gallery'
+              ? await attachMobileGalleryToTerminal({ ...common, pickGallery: picker.pickGallery })
+              : await attachMobileImageToTerminal(source, {
+                  ...common,
+                  pickImage: picker.pickImage
+                })
         if (sent) {
           onSuccess()
         }
@@ -89,6 +102,10 @@ export function useMobileImageAttachment({
             translate('session.useImageAttachment.permissionDenied', 'Photo permission denied'),
             1500
           )
+          return
+        }
+        if (error instanceof MobileFileTooLargeError) {
+          showToast(error.message, 1500)
           return
         }
         if (getErrorMessage(error) === 'Clipboard image is too large') {

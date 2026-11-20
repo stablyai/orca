@@ -636,13 +636,10 @@
       "connectionChanged": "Die Verbindung hat sich geändert. Versuche erneut, den Anhang zu öffnen.",
       "hostChanged": "Der Host des Anhangs hat sich geändert. Schließe den Anhang und öffne ihn erneut.",
       "readFailed": "Anhang konnte nicht gelesen werden. Stelle die Verbindung wieder her und versuche es erneut. Die Datei wurde möglicherweise entfernt oder geändert.",
-      "copyFrame": "Für „Vollständig kopieren“ bei diesem Anhang ist das kommende Smartphone-Update erforderlich.",
       "copyFailed": "Anhang konnte nicht kopiert werden. Erneut versuchen.",
       "pastedText": "Eingefügter Text",
       "textAttachment": "Textanhang",
-      "byteSize": "{{size}} Byte",
-      "saveUpdate": "Speichern wird mit einem Smartphone-Update verfügbar sein.",
-      "fullCopySaveUpdate": "„Vollständig kopieren“ und Speichern werden für diesen Anhang mit einem Smartphone-Update verfügbar sein."
+      "byteSize": "{{size}} Byte"
     },
     "hostOutage": {
       "offlineAsOf": "{{host}} ist offline · Stand {{time}}",
@@ -2373,7 +2370,6 @@
       "commands": "Befehle",
       "fileTypes": "PDF, Text, Code…",
       "files": "Dateien",
-      "photos": "Fotos",
       "skills": "Skills",
       "workspaceFile": "Datei im Arbeitsbereich"
     },
@@ -2572,8 +2568,6 @@
       "switchToPhone": "Zum Smartphone-Modus wechseln"
     },
     "terminalInputActions": {
-      "attachFileHint": "Lange drücken, um stattdessen eine Datei anzuhängen",
-      "attachPhoto": "Foto anhängen",
       "sendingImage": "Bild wird gesendet"
     },
     "terminalLiveInputStatus": {

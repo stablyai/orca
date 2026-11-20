@@ -10,7 +10,7 @@ import {
   Text,
   View
 } from 'react-native'
-import { FileText, Image as ImageIcon, X } from 'lucide-react-native'
+import { X } from 'lucide-react-native'
 import {
   colors,
   concentricRadius,
@@ -20,6 +20,8 @@ import {
 } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { mobileAttachmentExtension } from '../../../../files/attachments/mobile-attachment-file-kind'
+import { MobileAttachmentFileIcon } from '../../../../files/attachments/MobileAttachmentFileIcon'
 import { formatPreviewByteLength } from '../../../../files/preview/mobile-file-preview-response'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
@@ -31,16 +33,21 @@ const THUMB_SIZE = 58
 const ITEM_RADIUS = concentricRadius(radii.floating, 12)
 
 function composerFileMeta(
-  file: Pick<PendingNativeChatFile, 'name' | 'mime' | 'byteLength'>,
+  file: Pick<PendingNativeChatFile, 'name' | 'mime' | 'byteLength' | 'path' | 'sentBytes'>,
   t: Translate
 ) {
   const extension = /\.([a-z0-9]{1,8})$/i.exec(file.name)?.[1]
   const subtype = /^[^/]+\/([a-z0-9]{1,8})$/i.exec(file.mime)?.[1]
   const type = (extension ?? subtype ?? t('chat.composerAttachments.file', 'File')).toUpperCase()
-  return t('chat.composerAttachments.fileMeta', '{{type}} · {{size}}', {
-    type,
-    size: formatPreviewByteLength(file.byteLength)
-  })
+  const size = formatPreviewByteLength(file.byteLength)
+  if (file.path === null && file.sentBytes !== undefined && file.byteLength > 0) {
+    return t('chat.composerAttachments.uploadMeta', '{{type}} · {{percent}}% of {{size}}', {
+      type,
+      size,
+      percent: Math.min(100, Math.floor((file.sentBytes / file.byteLength) * 100))
+    })
+  }
+  return t('chat.composerAttachments.fileMeta', '{{type}} · {{size}}', { type, size })
 }
 
 export function MobileNativeChatComposerAttachments({
@@ -73,87 +80,115 @@ export function MobileNativeChatComposerAttachments({
       style={styles.strip}
       contentContainerStyle={styles.stripContent}
     >
-      {images.map((image, index) => (
-        <View key={image.id} style={styles.thumb}>
-          {isRenderableImageUri(image.previewUri) ? (
-            <Image
-              source={{ uri: image.previewUri }}
-              style={styles.thumbImage}
-              resizeMode="cover"
-            />
-          ) : (
-            <View
-              style={styles.fileIcon}
-              accessible
-              accessibilityLabel={
-                image.path.split(/[\\/]/).at(-1) ||
-                t('chat.composerAttachments.attachedImage', 'Attached image')
-              }
-            >
-              <ImageIcon size={17} color={colors.textSecondary} strokeWidth={2} />
-            </View>
-          )}
-          {image.path ? null : (
-            <View
-              style={styles.uploading}
-              accessibilityLabel={t('chat.composerAttachments.uploadingImage', 'Uploading image')}
-            >
-              <ActivityIndicator size="small" color={colors.onAccent} />
-            </View>
-          )}
-          {numbered ? (
-            <View style={styles.number}>
-              <Text style={styles.numberText}>{index + 1}</Text>
-            </View>
-          ) : null}
-          {onRemoveImage ? (
-            <RemoveBadge
-              label={t('chat.composerAttachments.removeImage', 'Remove image')}
-              onPress={() => onRemoveImage(image.id)}
-            />
-          ) : null}
-        </View>
-      ))}
-      {files.map((file) => (
-        <View key={file.id} style={styles.fileCard}>
-          <View style={styles.fileIcon}>
-            <FileText size={17} color={colors.textSecondary} strokeWidth={2} />
+      {images.map((image, index) => {
+        const removeImage = onRemoveImage ? (
+          <RemoveBadge
+            label={t('chat.composerAttachments.removeImage', 'Remove image')}
+            onPress={() => onRemoveImage(image.id)}
+          />
+        ) : null
+        const number = numbered ? (
+          <View style={styles.number}>
+            <Text style={styles.numberText}>{index + 1}</Text>
           </View>
-          <Pressable
-            style={styles.fileText}
-            disabled={!file.path || !onOpenFile}
-            accessibilityRole="button"
-            onPress={() => file.path && onOpenFile?.(file.path)}
+        ) : null
+        const uploading = image.path ? null : (
+          <View
+            style={styles.uploading}
+            accessibilityLabel={t('chat.composerAttachments.uploadingImage', 'Uploading image')}
           >
-            <Text style={styles.fileName} numberOfLines={1}>
-              {chatTextAttachmentName(file.name, pastedText)}
-            </Text>
-            <Text style={styles.fileMeta} numberOfLines={1}>
-              {composerFileMeta(file, t)}
-            </Text>
-          </Pressable>
-          {file.path === null ? (
-            <View
-              style={styles.uploading}
-              accessibilityLabel={t(
-                'chat.composerAttachments.uploadingFile',
-                'Uploading {{name}}',
-                { name: chatTextAttachmentName(file.name, pastedText) }
-              )}
-            >
-              <ActivityIndicator size="small" color={colors.onAccent} />
+            <ActivityIndicator size="small" color={colors.onAccent} />
+          </View>
+        )
+        if (isRenderableImageUri(image.previewUri)) {
+          return (
+            <View key={image.id} style={styles.thumb}>
+              <Image
+                source={{ uri: image.previewUri }}
+                style={styles.thumbImage}
+                resizeMode="cover"
+              />
+              {uploading}
+              {number}
+              {removeImage}
             </View>
-          ) : null}
-          {onRemoveFile ? (
-            <RemoveBadge
-              label={t('chat.composerAttachments.removeFile', 'Remove {{name}}', {
-                name: chatTextAttachmentName(file.name, pastedText)
-              })}
-              onPress={() => onRemoveFile(file.id)}
-            />
-          ) : null}
-        </View>
-      ))}
+          )
+        }
+        // No thumbnail (a video, archive or document): show it as a named file card, not a bare square.
+        const name =
+          image.upload?.name ||
+          image.path.split(/[\\/]/).at(-1) ||
+          t('chat.composerAttachments.attachedImage', 'Attached image')
+        return (
+          <View key={image.id} style={styles.fileCard}>
+            <View style={styles.fileIcon}>
+              <MobileAttachmentFileIcon name={name} size={17} color={colors.textSecondary} />
+            </View>
+            <View style={styles.fileText}>
+              <Text style={styles.fileName} numberOfLines={1}>
+                {name}
+              </Text>
+              <Text style={styles.fileMeta} numberOfLines={1}>
+                {image.upload
+                  ? composerFileMeta({ ...image.upload, path: null }, t)
+                  : (
+                      mobileAttachmentExtension(name) ?? t('chat.composerAttachments.file', 'File')
+                    ).toUpperCase()}
+              </Text>
+            </View>
+            {uploading}
+            {number}
+            {removeImage}
+          </View>
+        )
+      })}
+      {files.map((file) => {
+        return (
+          <View key={file.id} style={styles.fileCard}>
+            <View style={styles.fileIcon}>
+              <MobileAttachmentFileIcon
+                name={file.name}
+                mime={file.mime}
+                size={17}
+                color={colors.textSecondary}
+              />
+            </View>
+            <Pressable
+              style={styles.fileText}
+              disabled={!file.path || !onOpenFile}
+              accessibilityRole="button"
+              onPress={() => file.path && onOpenFile?.(file.path)}
+            >
+              <Text style={styles.fileName} numberOfLines={1}>
+                {chatTextAttachmentName(file.name, pastedText)}
+              </Text>
+              <Text style={styles.fileMeta} numberOfLines={1}>
+                {composerFileMeta(file, t)}
+              </Text>
+            </Pressable>
+            {file.path === null ? (
+              <View
+                style={styles.uploading}
+                accessibilityLabel={t(
+                  'chat.composerAttachments.uploadingFile',
+                  'Uploading {{name}}',
+                  { name: chatTextAttachmentName(file.name, pastedText) }
+                )}
+              >
+                <ActivityIndicator size="small" color={colors.onAccent} />
+              </View>
+            ) : null}
+            {onRemoveFile ? (
+              <RemoveBadge
+                label={t('chat.composerAttachments.removeFile', 'Remove {{name}}', {
+                  name: chatTextAttachmentName(file.name, pastedText)
+                })}
+                onPress={() => onRemoveFile(file.id)}
+              />
+            ) : null}
+          </View>
+        )
+      })}
     </ScrollView>
   )
 }
@@ -234,6 +269,7 @@ const styles = themedStyleSheet(() => ({
     borderRadius: ITEM_RADIUS,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 2,
     backgroundColor: 'rgba(0, 0, 0, 0.45)'
   },
   number: {

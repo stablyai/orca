@@ -632,13 +632,10 @@
       "connectionChanged": "連線已變更。請重試以重新開啟附件。",
       "hostChanged": "附件所在的主機已變更。請關閉附件並重新開啟。",
       "readFailed": "無法讀取附件。請重新連線後重試。檔案可能已被移除或變更。",
-      "copyFrame": "完整複製此附件需要即將推出的手機更新。",
       "copyFailed": "無法複製附件。請重試。",
       "pastedText": "貼上的文字",
       "textAttachment": "文字附件",
-      "byteSize": "{{size}} 位元組",
-      "saveUpdate": "儲存功能將在手機更新中提供。",
-      "fullCopySaveUpdate": "完整複製和儲存此附件的功能將在手機更新中提供。"
+      "byteSize": "{{size}} 位元組"
     },
     "hostOutage": {
       "offlineAsOf": "{{host}} 已離線 · 截至 {{time}}",
@@ -2367,7 +2364,6 @@
       "commands": "命令",
       "fileTypes": "PDF、文字、程式碼…",
       "files": "檔案",
-      "photos": "照片",
       "skills": "技能",
       "workspaceFile": "工作區檔案"
     },
@@ -2566,8 +2562,6 @@
       "switchToPhone": "切換為手機模式"
     },
     "terminalInputActions": {
-      "attachFileHint": "長按可改為附加檔案",
-      "attachPhoto": "附加照片",
       "sendingImage": "正在傳送圖片"
     },
     "terminalLiveInputStatus": {

@@ -738,13 +738,10 @@
       "connectionChanged": "连接已更改。请重试以重新打开附件。",
       "hostChanged": "附件所在的主机已更改。请关闭附件并重新打开。",
       "readFailed": "无法读取附件。请重新连接后重试。文件可能已被删除或更改。",
-      "copyFrame": "完整复制此附件需要即将发布的手机更新。",
       "copyFailed": "无法复制附件。请重试。",
       "pastedText": "粘贴的文本",
       "textAttachment": "文本附件",
-      "byteSize": "{{size}} 字节",
-      "saveUpdate": "保存功能将在手机更新中提供。",
-      "fullCopySaveUpdate": "完整复制和保存此附件的功能将在手机更新中提供。"
+      "byteSize": "{{size}} 字节"
     },
     "agentMessage": {
       "open": "打开 {{name}}",
@@ -3293,7 +3290,6 @@
       "commands": "命令",
       "fileTypes": "PDF、文本、代码…",
       "files": "文件",
-      "photos": "照片",
       "skills": "技能",
       "workspaceFile": "工作区文件"
     },
@@ -3496,8 +3492,6 @@
       "switchToPhone": "切换到手机模式"
     },
     "terminalInputActions": {
-      "attachFileHint": "长按可改为附加文件",
-      "attachPhoto": "附加照片",
       "sendingImage": "正在发送图片"
     },
     "terminalLiveInputStatus": {

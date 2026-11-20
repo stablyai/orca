@@ -1,12 +1,12 @@
 import * as z from 'zod'
-import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../../src/shared/clipboard/clipboard-image'
+import { AGENT_SESSION_ATTACHMENT_UPLOAD_MAX_BYTES } from '../../../../../src/shared/agent-session/agent-session-attachments'
 import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../../files/attachments/mobile-clipboard-image-upload-chunk'
 
 // Picked media exceeds frame/reply ceilings, especially after base64; stage behind a handle and read chunks before release.
 // Keep grant segments lowercase: media.readChunk would fail manifest grammar and reject the whole bundle.
 
 // Clipboard images use the same pick/stage/read path; keep clipboard.read text-only rather than returning oversized inline images.
-export const BRIDGE_MEDIA_SOURCES = ['library', 'files', 'clipboard'] as const
+export const BRIDGE_MEDIA_SOURCES = ['library', 'gallery', 'files', 'clipboard'] as const
 
 export type BridgeMediaSource = (typeof BRIDGE_MEDIA_SOURCES)[number]
 
@@ -26,7 +26,8 @@ const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
 
 const handleSchema = z.string().min(1).max(BRIDGE_MEDIA_HANDLE_MAX_CHARS)
 
-const byteOffsetSchema = z.number().int().min(0).max(CLIPBOARD_IMAGE_MAX_SOURCE_BYTES)
+// Files-app picks stream in chunks, so the wire bound is the upload ceiling; the shell still refuses images over its own staging cap.
+const byteOffsetSchema = z.number().int().min(0).max(AGENT_SESSION_ATTACHMENT_UPLOAD_MAX_BYTES)
 
 // Dimensions are optional because document pickers may report files without raster metadata; only pre-read preview sizing uses them.
 export const mediaItemSchema = z.strictObject({

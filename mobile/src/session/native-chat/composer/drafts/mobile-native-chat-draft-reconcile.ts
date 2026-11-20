@@ -3,6 +3,10 @@ import {
   type NativeChatMessage
 } from '../../../../../../src/shared/native-chat/native-chat-types'
 import {
+  nativeChatTextWithoutUploadedFiles,
+  nativeChatUploadedFilePaths
+} from '../../../../../../src/shared/native-chat/attachments/native-chat-text-attachment-references'
+import {
   hasImagePromptMarker,
   imageTranscriptUnitPrompt,
   isImageSourceUserTurn,
@@ -118,6 +122,19 @@ function foldedBoundaryIndex(
   return promptId ? normalizedIndexById.get(promptId) : undefined
 }
 
+// A file send's row carries the stored paths as typed text; the echo's text is only what was typed beside them.
+function textWithoutUploadedFiles(message: NativeChatMessage): string | null {
+  const text = normalizedNativeChatUserMessageText(message)
+  return text === null
+    ? null
+    : normalizeNativeChatUserText(nativeChatTextWithoutUploadedFiles(text))
+}
+
+function uploadedFileCount(message: NativeChatMessage): number {
+  const text = normalizedNativeChatUserMessageText(message)
+  return text === null ? 0 : nativeChatUploadedFilePaths(text).length
+}
+
 // Carry phone-local preview URIs onto authoritative rows because host paths/marker-only turns cannot display those photos.
 export function findLandedImagePreviewEchoes(
   messages: readonly NativeChatMessage[],
@@ -151,18 +168,24 @@ export function findLandedImagePreviewEchoes(
       if (message.role !== 'user') {
         return false
       }
+      const uploadedCount = uploadedFileCount(message)
       if (targetText) {
-        const text = normalizedNativeChatUserMessageText(message)
+        const text = textWithoutUploadedFiles(message)
         if (text === null) {
           return false
         }
         // Adjacent TUI sends may concatenate; allow prefix matches only for proven image rows or image echoes can never retire.
         return (
-          text === targetText || (imageMessageIds.has(message.id) && text.startsWith(targetText))
+          text === targetText ||
+          ((imageMessageIds.has(message.id) || uploadedCount > 0) && text.startsWith(targetText))
         )
       }
       const imageCount = message.blocks.filter(isImageRefBlock).length
-      return message.blocks.length === 0 || imageCount >= entry.images!.length
+      return (
+        message.blocks.length === 0 ||
+        imageCount >= entry.images!.length ||
+        uploadedCount >= entry.images!.length
+      )
     })
     const tailIndex = foldedBoundaryIndex(readFoldTargets, messageIndexById, entry.afterMessageId)
     // Same boundary-relative occurrence as the shared pending rule, so older identical rows cannot bind.
