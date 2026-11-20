@@ -90,7 +90,7 @@ async function verifyCachedOwners(
     }
     let sockets = socketsByPid.get(pid)
     if (!sockets) {
-      sockets = await readPidSockets(pid)
+      sockets = await readPidListenerSockets(pid, inodes)
       socketsByPid.set(pid, sockets)
     }
     if (sockets.has(inode)) {
@@ -127,15 +127,17 @@ async function walkProcForOwners(
       }
     }
     const pid = Number.parseInt(entry, 10)
-    for (const inode of alreadyRead.get(pid) ?? (await readPidSockets(pid))) {
-      if (wanted.has(inode)) {
-        owners.set(inode, pid)
-      }
+    for (const inode of alreadyRead.get(pid) ?? (await readPidListenerSockets(pid, wanted))) {
+      owners.set(inode, pid)
     }
   }
 }
 
-async function readPidSockets(pid: number): Promise<Set<number>> {
+/** Keeps only listener inodes, not every connection the process holds. */
+async function readPidListenerSockets(
+  pid: number,
+  listenerInodes: ReadonlySet<number>
+): Promise<Set<number>> {
   let fds: string[]
   try {
     fds = await readdir(`/proc/${pid}/fd`)
@@ -151,8 +153,9 @@ async function readPidSockets(pid: number): Promise<Set<number>> {
       continue
     }
     const match = SOCKET_LINK.exec(link)
-    if (match) {
-      inodes.add(Number.parseInt(match[1], 10))
+    const inode = match ? Number.parseInt(match[1], 10) : undefined
+    if (inode !== undefined && listenerInodes.has(inode)) {
+      inodes.add(inode)
     }
   }
   return inodes
