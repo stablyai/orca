@@ -30,19 +30,11 @@ export async function withAntigravityChatBackend(
     CHAT_BACKEND_WAIT_MS,
     null
   )
-  return chatUsesAgy === null ? state : { ...state, chatUsesAgy }
-}
-
-/** The version of the host's agy when new chats run on it, else null. */
-export async function antigravityChatAgyVersion(
-  runtime: OrcaRuntimeService
-): Promise<string | null> {
-  const usesAgy = await withTimeout<boolean | null>(
-    structuredAgentHostAlternativeReady('antigravity', runtime),
-    CHAT_BACKEND_WAIT_MS,
-    null
-  )
-  return usesAgy ? readyAntigravityHostAcpVersion() : null
+  if (chatUsesAgy === null) {
+    return state
+  }
+  const version = chatUsesAgy ? readyAntigravityHostAcpVersion() : null
+  return { ...state, chatUsesAgy, ...(version ? { chatAgyVersion: version } : {}) }
 }
 
 /** A running `agy acp` may keep the login it started with, so idle chats on agy stop and resume on

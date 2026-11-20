@@ -47,6 +47,7 @@ export function NativeChatAntigravityAuthChip({
   const items = antigravityChatAuthMenuItems(auth.detection, auth.keyAndAdc).filter(
     (item) => !onAgy || item.method !== 'oauth-personal'
   )
+  // The host's current version; a chat started before an upgrade runs the older one until it restarts.
   const program = antigravityProgramLabel(
     auth.backend,
     onAgy ? auth.detection?.agyVersion : auth.managedVersion,

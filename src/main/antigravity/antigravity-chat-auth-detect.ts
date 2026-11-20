@@ -1,4 +1,5 @@
-// What credentials the host's Antigravity chat could use, read from files only: no server, no gcloud.
+// What credentials the host's Antigravity chat could use, read from files and caches only: no server,
+// no gcloud, no agy.
 
 import { stat } from 'node:fs/promises'
 import type { AntigravityChatAuthConfig } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
@@ -19,7 +20,8 @@ type DetectSources = {
   apiKeyStatus: () => Promise<AntigravityChatApiKeyStatus>
   googleSignIn?: (method: AntigravityChatAuthConfig['method']) => Promise<boolean>
   liveChats: () => number
-  agyVersion?: () => Promise<string | null>
+  /** Already known, never looked up here. */
+  agyVersion?: () => string | null
 }
 
 async function isFile(path: string): Promise<boolean> {
@@ -37,12 +39,11 @@ export async function detectAntigravityChatAuth(
   }
   const method = config?.method ?? null
   const readGoogle = sources.googleSignIn ?? hasSavedAntigravityGoogleSignIn
-  const [env, key, personal, business, agyVersion] = await Promise.all([
+  const [env, key, personal, business] = await Promise.all([
     sources.launchEnv(),
     sources.apiKeyStatus(),
     readGoogle('oauth-personal'),
-    readGoogle('oauth-business'),
-    sources.agyVersion?.()
+    readGoogle('oauth-business')
   ])
   const adcAvailable = await isFile(agentPlatformCredentialsFile(env))
   // A switch to gcloud keeps a saved project, as the apply does; Enterprise's is its own.
@@ -57,6 +58,6 @@ export async function detectAntigravityChatAuth(
     },
     adc: { available: adcAvailable, project },
     liveChats: sources.liveChats(),
-    ...(agyVersion === undefined ? {} : { agyVersion })
+    ...(sources.agyVersion ? { agyVersion: sources.agyVersion() } : {})
   }
 }
