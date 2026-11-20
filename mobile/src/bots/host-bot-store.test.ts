@@ -60,4 +60,24 @@ describe('host bot store', () => {
     act(() => publishHostBotStatuses(key, new Map([['atlas', 'working']])))
     expect(result.current).toBe(before)
   })
+
+  it('keeps each host’s Orca Cloud status on that host', () => {
+    const signedOut = 'paired\nserver-a'
+    const signedIn = 'paired\nserver-b'
+    publishHostBots(signedOut, {
+      bots: [bot({ id: 'atlas' })],
+      hideBotCreated: false,
+      connectorStatus: 'signed-out'
+    })
+    publishHostBots(signedIn, {
+      bots: [bot({ id: 'atlas' })],
+      hideBotCreated: false,
+      connectorStatus: 'ok'
+    })
+
+    const out = renderHook(() => useHostBotsEntry(signedOut))
+    const inn = renderHook(() => useHostBotsEntry(signedIn))
+    expect(out.result.current?.connectorStatus).toBe('signed-out')
+    expect(inn.result.current?.connectorStatus).toBe('ok')
+  })
 })

@@ -5,8 +5,10 @@ import {
   type ConnectorOffer,
   type ConnectorOfferSource
 } from '../../../../../src/shared/bots/bot-connector-offer'
-import { useHostBotById } from '../../../bots/host-bot-store'
+import { useHostBotById, useHostBotsEntry } from '../../../bots/host-bot-store'
 import type { PhoneBot } from '../../../bots/host-bots-operations'
+import { useMobileBotCardHost } from './bot-cards/mobile-bot-card-host'
+import { connectorOfferCloudPaused } from './connector-offer-cloud-pause'
 import {
   MobileGoogleMark,
   MobileConnectorSourceIcon
@@ -47,7 +49,7 @@ export function connectorOfferConnected(bot: PhoneBot | null, offer: ConnectorCa
 }
 
 /** A bot's Connect card. Connecting happens on the computer, so the phone says where; once the bot has
- *  the connector, it says so. */
+ *  the connector, it says so. A host signed out of Orca Cloud says Paused instead, for this chat's host. */
 export function MobileNativeChatConnectorOfferRow({
   offer,
   fontScale
@@ -57,9 +59,18 @@ export function MobileNativeChatConnectorOfferRow({
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const bot = useHostBotById(offer.botId)
+  const host = useMobileBotCardHost()
+  const entry = useHostBotsEntry(host?.hostKey ?? null)
+  const listedBot = host
+    ? (entry?.bots.find((candidate) => candidate.id === offer.botId) ?? null)
+    : null
+  const anyHostBot = useHostBotById(offer.botId)
+  // Inside a chat, only that host's list counts. Another host's bot of the same id does not.
+  const bot = host ? listedBot : anyHostBot
   const name = CONNECTOR_OFFER_NAMES[offer.source]
   const connected = connectorOfferConnected(bot, offer)
+  const paused =
+    connected && connectorOfferCloudPaused(offer.source, host ? entry?.connectorStatus : undefined)
   return (
     <View style={styles.card} accessibilityRole="text">
       <View style={styles.icon}>
@@ -73,7 +84,11 @@ export function MobileNativeChatConnectorOfferRow({
         <Text style={[styles.title, scaledType(typography.bodySize, fontScale)]}>
           {offer.workspace ? `${name} · ${offer.workspace}` : name}
         </Text>
-        {connected ? (
+        {paused ? (
+          <Text style={[styles.detail, scaledType(typography.metaSize, fontScale)]}>
+            {t('bots.connectorOffer.paused', 'Paused until this computer signs in to Orca.')}
+          </Text>
+        ) : connected ? (
           <>
             <View style={styles.connected}>
               <Check size={12} color={colors.textMuted} />

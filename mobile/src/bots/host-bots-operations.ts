@@ -41,6 +41,26 @@ export const phoneBotSchema = z.looseObject({
 
 export type PhoneBot = z.output<typeof phoneBotSchema>
 
+/** `bots.list` `connectorStatus`, the host's link to Orca Cloud. Absent on an older host. */
+export const LISTED_CONNECTOR_STATUSES = [
+  'signed-out',
+  'needs-sign-in',
+  'unreachable',
+  'refused',
+  'ok'
+] as const
+
+export type ListedConnectorStatus = (typeof LISTED_CONNECTOR_STATUSES)[number]
+
+/** A status this build names; anything else, including an older host's omission, is absent. */
+export function readListedConnectorStatus(value: unknown): ListedConnectorStatus | undefined {
+  return typeof value === 'string' &&
+    (LISTED_CONNECTOR_STATUSES as readonly string[]).includes(value)
+    ? // The includes check above is the predicate for this union.
+      (value as ListedConnectorStatus)
+    : undefined
+}
+
 /** What the host list draws of a bot. */
 export type ListedBot = Pick<
   PhoneBot,
@@ -78,7 +98,9 @@ export const botsListRead = bindDeferredRpcOperation(
           // Each bot's Needs you items that aren't stale; hosts before items on phones send none.
           needsYou: z.unknown().optional(),
           // When those counts next change (an item goes stale or a snoozed one comes back).
-          needsYouStaleInMs: z.number().optional().catch(undefined)
+          needsYouStaleInMs: z.number().optional().catch(undefined),
+          // The host's Orca Cloud link. Unknown is dropped, so one new value cannot fail the list.
+          connectorStatus: z.unknown().optional()
         })
         // Off, the host's own sidebar lists its bot homes as ordinary folders, so the phone does too.
         .transform((listing) => ({
@@ -88,6 +110,7 @@ export const botsListRead = bindDeferredRpcOperation(
           view: normalizeBotSidebarView(listing.botSidebarView),
           waits: botWaitsSchema.catch({}).parse(listing.waits ?? {}),
           needsYou: botNeedsYouSchema.catch({}).parse(listing.needsYou ?? {}),
+          connectorStatus: readListedConnectorStatus(listing.connectorStatus),
           ...(listing.needsYouStaleInMs !== undefined
             ? { needsYouChangeInMs: listing.needsYouStaleInMs }
             : {})

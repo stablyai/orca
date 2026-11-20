@@ -15,7 +15,7 @@ import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import { publishHostBots } from './host-bot-store'
-import { botsListRead, type PhoneBot } from './host-bots-operations'
+import { botsListRead, type ListedConnectorStatus, type PhoneBot } from './host-bots-operations'
 import type { BotSidebarView } from '../../../src/shared/bots/bot-sidebar-view'
 import type { BotListWaits } from '../../../src/shared/bots/bot-list-waits'
 
@@ -47,6 +47,8 @@ export type HostBotsRead =
       needsYou: Readonly<Record<string, number>>
       /** When those counts next change, as one goes stale or a snoozed one comes back. */
       needsYouChangeInMs?: number
+      /** The host's Orca Cloud link; absent from an older host, which keeps today's card line. */
+      connectorStatus?: ListedConnectorStatus
     }
   | { kind: 'no-capability' }
   | { kind: 'unreadable' }

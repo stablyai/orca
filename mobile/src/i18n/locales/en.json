@@ -5226,6 +5226,7 @@
     },
     "connectorOffer": {
       "connected": "Connected",
+      "paused": "Paused until this computer signs in to Orca.",
       "onComputer": "Connect it in Orca on your computer, from the card in this chat.",
       "addGitHubAccess": "Add repositories or organizations in Orca on your computer, from the card in this chat.",
       "addWorkspace": "Add another workspace in Orca on your computer, from the card in this chat."
