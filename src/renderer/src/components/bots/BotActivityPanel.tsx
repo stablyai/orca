@@ -21,14 +21,15 @@ import {
 } from './bot-automation-card'
 import type { BotNeedsYouAsks } from './BotNeedsYouSection'
 import { BotUpcomingSection } from './BotUpcomingSection'
-import { BotRecentSection, BotWorkingSection } from './BotWorkingRecentSections'
-import { useBotForWorkspace } from './bot-workspace'
+import { useBotForWorkspace, useBotGroupForWorkspace } from './bot-workspace'
+import { BotGroupItemsPanel } from './BotGroupItemsPanel'
 import { setBotSettingsPlace, useBotSettingsPlace } from './settings-view/bot-settings-place'
 import { BotSettingsView } from './settings-view/BotSettingsView'
 import {
   BOT_ITEM_GROUP_IDS,
   BOT_ITEM_NO_FILTER,
   botItemChats,
+  botItemFilterChat,
   botItemsByDispatch,
   botNeedChat,
   filterBotNeeds,
@@ -49,10 +50,15 @@ function focusGearAfterClose(panel: HTMLElement | null): void {
   requestAnimationFrame(() => panel?.querySelector<HTMLElement>('[data-bot-panel-gear]')?.focus())
 }
 
-/** The right sidebar's Activity panel: a bot's header and Activity list or its settings, or the focused chat's workers. */
+/** The right sidebar's Activity panel: a bot's header and Activity list or its settings, a group's
+ *  members' items, or the focused chat's workers. */
 export default function BotActivityPanel(): React.JSX.Element | null {
   const workspaceId = useAppStore((s) => s.activeWorktreeId)
   const bot = useBotForWorkspace(workspaceId)
+  const group = useBotGroupForWorkspace(bot ? null : workspaceId)
+  if (group) {
+    return <BotGroupItemsPanel key={group.id} group={group} />
+  }
   if (!bot) {
     return <ChatWorkersActivity />
   }
@@ -93,9 +99,8 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
   const activity = useBotActivity(bot)
   const now = useBotNow(bot)
   const tree = useBotChatTree(bot)
-  const chatsRead = tree.chats.length > 0
   const items = useBotItems(bot)
-  const read = items.state === 'unsupported' ? null : items.read
+  const read = items.read
   const seenAtOpen = useBotItemsSeenAtOpen(bot, read)
   const [filter, setFilterState] = useState<BotItemFilter>(BOT_ITEM_NO_FILTER)
   // The row Back returns focus to; another filter shows other rows.
@@ -139,7 +144,7 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
     const homeChatId = itemChats.find((chat) => chat.kind === 'home')?.chatId ?? bot.chatSessionId
     return {
       needs: filterBotNeeds(now.needs, filter, (need) => botNeedChat(need, homeChatId, itemOf)),
-      stoppedForSignIn: filter.chatId === null ? now.stoppedForSignIn : [],
+      stoppedForSignIn: filter.chatIds === null ? now.stoppedForSignIn : [],
       itemOf
     }
   }, [read, itemChats, bot.chatSessionId, now.needs, now.stoppedForSignIn, filter])
@@ -162,12 +167,24 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
     next: nextRow ? { name: rowName(nextRow), at: nextRow.nextAt ?? 0 } : null
   }
   if (walk.uid) {
-    return <BotItemPane bot={bot} uid={walk.uid} walk={walk} offline={offline} onBack={back} />
+    const uid = walk.uid
+    return (
+      <BotItemPane
+        bot={bot}
+        uid={uid}
+        listed={read?.items.find((item) => item.uid === uid)}
+        walk={walk}
+        offline={offline}
+        onBack={back}
+      />
+    )
   }
   return (
     <div
       ref={scroll}
       tabIndex={-1}
+      // The bot row's hover card moves focus here when it opens the bot's Home.
+      data-bot-home-panel=""
       className="@container scrollbar-sleek flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-2 py-3 outline-none"
     >
       {/* Outside the fieldset, so its settings open offline too and say what's unavailable. */}
@@ -193,9 +210,9 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
           <BotItemsFilterChips chats={itemChats} filter={filter} onFilter={setFilter} />
         ) : null}
         {read && items.refreshFailed ? <BotItemsReadFailed stale onRetry={items.retry} /> : null}
-        {/* Asks lead Needs you in every item-read state: loading, failed, empty or unsupported. */}
+        {/* Asks lead Needs you in every item-read state: loading, failed or empty. */}
         <BotItemsSection
-          key={filter.chatId ?? ''}
+          key={botItemFilterChat(filter) ?? ''}
           bot={bot}
           list={list}
           chats={itemChats}
@@ -210,10 +227,6 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
           offline={offline}
           focusFallback={scroll}
         />
-        {items.state === 'unsupported' ? (
-          // A host without items keeps what's running here.
-          <BotWorkingSection bot={bot} work={now.work} />
-        ) : null}
         <BotUpcomingSection
           bot={bot}
           rows={automationRows}
@@ -225,7 +238,6 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
         {activity.upNext ? (
           <BotUpNextSection key={bot.id} bot={bot} upNext={activity.upNext} />
         ) : null}
-        {chatsRead || read ? null : <BotRecentSection bot={bot} completed={activity.completed} />}
       </fieldset>
     </div>
   )

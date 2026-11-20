@@ -259,7 +259,26 @@ describe('Composio apps for a bot', () => {
               },
               { slug: 'tavily', name: 'Tavily', auth_schemes: ['API_KEY'] },
               { slug: 'shopify', name: 'Shopify', auth_schemes: ['OAUTH2'] },
-              { slug: 'hackernews', name: 'Hacker News', no_auth: true }
+              { slug: 'hackernews', name: 'Hacker News', no_auth: true },
+              {
+                slug: 'notion',
+                name: 'Notion',
+                composio_managed_auth_schemes: ['OAUTH2'],
+                auth_config_details: [{ mode: 'OAUTH2' }, { mode: 'API_KEY' }]
+              },
+              { slug: 'twitter', name: 'Twitter', auth_config_details: [{ mode: 'OAUTH2' }] },
+              {
+                slug: 'posthog',
+                name: 'PostHog',
+                auth_schemes: [],
+                auth_config_details: [{ mode: 'api_key' }]
+              },
+              {
+                slug: 'reddit',
+                name: 'Reddit',
+                auth_config_details: [{ mode: 'NO_AUTH' }]
+              },
+              { slug: 'public-api', name: 'Public API', auth_schemes: ['no_auth'] }
             ],
             next_cursor: 'c2'
           }
@@ -272,7 +291,12 @@ describe('Composio apps for a bot', () => {
       ['outlook', 'composio'],
       ['tavily', 'key'],
       ['shopify', 'own'],
-      ['hackernews', 'none']
+      ['hackernews', 'none'],
+      ['notion', 'composio'],
+      ['twitter', 'own'],
+      ['posthog', 'key'],
+      ['reddit', 'none'],
+      ['public-api', 'none']
     ])
   })
 

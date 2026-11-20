@@ -40,6 +40,8 @@ const BROWSER_COMMAND_NAMES = [
   'browserScroll',
   'browserBack',
   'browserReload',
+  'browserZoom',
+  'browserStop',
   'browserScreenshot',
   'browserScreencast',
   'browserEval',

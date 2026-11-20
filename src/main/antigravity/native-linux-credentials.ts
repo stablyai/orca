@@ -1,3 +1,4 @@
+import { stat } from 'node:fs/promises'
 import { runProcess } from '@orca/process-host'
 import {
   decodeAntigravityKeychainValue,
@@ -19,12 +20,30 @@ function requireLinux(): void {
   }
 }
 
+/** godbus finds /run/user/<uid>/bus without XDG_RUNTIME_DIR, so agy reaches the bus where GLib would autolaunch. */
+async function agyBusEnvironment(): Promise<NodeJS.ProcessEnv> {
+  // English stderr keeps the timeout check below locale-independent.
+  const env: NodeJS.ProcessEnv = { ...process.env, LC_ALL: 'C', LANG: 'C' }
+  const bus = `/run/user/${process.getuid?.()}/bus`
+  if (
+    [undefined, '', 'autolaunch:'].includes(env.DBUS_SESSION_BUS_ADDRESS) &&
+    (await stat(bus).then(
+      () => true,
+      () => false
+    ))
+  ) {
+    env.DBUS_SESSION_BUS_ADDRESS = `unix:path=${bus}`
+  }
+  return env
+}
+
 async function run(program: 'gdbus' | 'secret-tool', args: string[], input?: string) {
   try {
     return await runProcess({
       program,
       args,
       input,
+      env: await agyBusEnvironment(),
       timeoutMs: 10_000,
       maxOutputBytes: 64 * 1024
     })
@@ -56,16 +75,19 @@ async function getSecretServiceProperty(objectPath: string, iface: string, prope
     iface,
     property
   ])
-  if (result.timedOut || result.signal || result.outputTruncated) {
+  if (
+    result.timedOut ||
+    result.signal ||
+    result.outputTruncated ||
+    /Timeout was reached|DBus\.Error\.(NoReply|Timeout|TimedOut)/.test(result.stderr)
+  ) {
     throw new Error('The Antigravity Linux keyring did not respond.')
   }
   if (result.code === 0) {
     return { value: result.stdout }
   }
-  if (/ServiceUnknown|NameHasNoOwner|UnknownObject|NoSuchObject/.test(result.stderr)) {
-    return null
-  }
-  throw new Error('The Antigravity Linux keyring could not be accessed.')
+  // agy reads its token file after any keyring error but a timeout, e.g. no bus or no collection.
+  return null
 }
 
 /** Mirrors go-keyring's GetLoginCollection; null means agy falls back to its credential file. */

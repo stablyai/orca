@@ -83,6 +83,10 @@ export function memoryJournalInputEvidenceFacts(): JournalInputEvidenceFacts {
     stoppedCandidates: new Set(),
     carrierCoverage: new Map(),
     coveredBy: new Map(),
+    echoCandidates: new Map(),
+    openEchoCandidates: new Map(),
+    echoFingerprints: new Map(),
+    clearDividers: undefined,
     recoverableSubmissions() {
       return memoryJournalMap(this.recoverable).values()
     },

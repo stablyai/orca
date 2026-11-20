@@ -335,10 +335,10 @@ describe('usage-limit row More menu', () => {
       truncated: true
     }
   }
-  let writeClipboardText: ReturnType<typeof vi.fn>
+  const writeClipboardText = vi.fn<(text: string) => Promise<void>>()
 
   beforeEach(() => {
-    writeClipboardText = vi.fn().mockResolvedValue(undefined)
+    writeClipboardText.mockReset().mockResolvedValue(undefined)
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { ui: { writeClipboardText } }
@@ -369,19 +369,39 @@ describe('usage-limit row More menu', () => {
     expect(screen.getByRole('button', { name: 'More actions' })).toHaveFocus()
   })
 
-  it('copies the sentence with the frame identity, payload and truncation', async () => {
+  it('copies a bounded error with the detail and provider frame intact at the start', async () => {
     const user = userEvent.setup()
+    const resetsAt = Date.now() + HOUR
     render(
       row({
-        resetsAt: Date.now() + HOUR,
-        block: limitBlock(Date.now() + HOUR, { providerFrame: frame })
+        resetsAt,
+        block: limitBlock(resetsAt, {
+          failure: {
+            kind: 'usageLimitReached',
+            usageLimit: { window: 'session', resetsAt },
+            detail: { audience: 'log', text: 'Session quota exhausted.' }
+          },
+          providerFrame: {
+            ...frame,
+            payload: {
+              ...frame.payload,
+              head: `PAYLOAD_SENTINEL${'😀'.repeat(33_000)}`,
+              byteLength: 132_016
+            }
+          }
+        })
       })
     )
     await user.click(screen.getByRole('button', { name: 'More actions' }))
     await user.click(await screen.findByRole('menuitem', { name: 'Copy error' }))
-    for (const part of ['codex · notification:error', 'PAYLOAD_SENTINEL', '9999']) {
-      expect(writeClipboardText).toHaveBeenCalledWith(expect.stringContaining(part))
-    }
+    const copied = writeClipboardText.mock.lastCall?.[0] ?? ''
+    expect(copied.length).toBeLessThanOrEqual(64_000)
+    expect(copied).toContain('Session quota exhausted.')
+    expect(copied).toContain('codex · notification:error\nPAYLOAD_SENTINEL😀')
+    expect(copied).toContain('132016')
+    expect(copied).toContain('Copied text was shortened')
+    expect(copied).not.toContain('\uFFFD')
+    expect(Buffer.from(copied).toString('utf8')).toBe(copied)
     expect(toastError).not.toHaveBeenCalled()
   })
 })

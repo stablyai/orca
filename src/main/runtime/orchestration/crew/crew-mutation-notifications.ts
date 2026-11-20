@@ -39,7 +39,6 @@ const mutations = [
   'reconcileFederatedWorkerStart',
   'reconcileMissingWorkerTerminal',
   'promoteReadyTasks',
-  'bindRun',
   'createRun',
   'createQuestion',
   'answerQuestion',
@@ -54,8 +53,8 @@ const mutations = [
   'markWorkerStartUnknown',
   'beginWorkerStop',
   'settleWorkerStop',
+  'settleDeadWorkerTerminalReleases',
   'markWorkerStopUnknown',
-  'unbindOtherRunsForCoordinator',
   'recordAttemptObservation',
   'resetAll',
   'resetTasks',
@@ -76,6 +75,48 @@ const trafficMutations: ReadonlySet<keyof OrchestrationDb> = new Set([
   'resolveGate',
   'timeoutGate'
 ])
+
+type MailboxScope = (args: unknown[], result: unknown) => string[] | undefined
+
+const idOf = (value: unknown): string | undefined =>
+  typeof value === 'object' && value !== null && 'id' in value && typeof value.id === 'string'
+    ? value.id
+    : undefined
+const createdRun: MailboxScope = (_args, result) => {
+  const id = idOf(result)
+  return id ? [`run:${id}`] : undefined
+}
+const createdDispatch: MailboxScope = (_args, result) => {
+  const id = idOf(result)
+  return id ? [`dispatch:${id}`] : undefined
+}
+const namedDispatch: MailboxScope = ([id]) =>
+  typeof id === 'string' ? [`dispatch:${id}`] : undefined
+
+/** The mailboxes whose owner a mutation can change, named by the mutation itself; progress records
+ *  touch none. Mutations without an entry leave their scope unknown, which consumers treat as all. */
+const mailboxScopes: Partial<Record<(typeof mutations)[number], MailboxScope>> = {
+  createRun: createdRun,
+  createDispatchContext: createdDispatch,
+  markWorkerDispatchReady: namedDispatch,
+  completeDispatch: namedDispatch,
+  failDispatch: namedDispatch,
+  abandonWorkerDispatch: namedDispatch,
+  failWorkerStart: namedDispatch,
+  transitionLifecycle: ([params]) => {
+    if (typeof params !== 'object' || params === null) {
+      return undefined
+    }
+    const id = 'id' in params ? params.id : undefined
+    const entity = 'entity' in params ? params.entity : undefined
+    // A worker row is keyed by its dispatch id; a task's mailboxes are unknown here.
+    return typeof id === 'string' && (entity === 'dispatch' || entity === 'worker')
+      ? [`dispatch:${id}`]
+      : undefined
+  },
+  recordWorkerStage: () => [],
+  recordAttemptObservation: () => []
+}
 
 /** Wake after the synchronous outer mutation; nested writes coalesce and rolled-back reads compare equal. */
 export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationPrototype }): void {
@@ -160,7 +201,11 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
         ) {
           return result
         }
-        this.crewChanges.notify(new Set([trafficMutations.has(name) ? 'traffic' : 'topology']))
+        const facets = new Set([trafficMutations.has(name) ? 'traffic' : 'topology'] as const)
+        const mailboxes = mailboxScopes[name]?.(args, result)
+        this.crewChanges.notify(
+          mailboxes ? Object.assign(facets, { trafficAddresses: new Set(mailboxes) }) : facets
+        )
         return result
       }
     })

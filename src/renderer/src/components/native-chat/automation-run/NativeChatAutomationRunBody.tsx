@@ -17,12 +17,13 @@ import {
   type AutomationRunRowState,
   type AutomationRunWording
 } from '../../../../../shared/automations/automation-run-row-words'
-import { NativeChatMessageTimestamp } from '../messages/rows/NativeChatMessageTimestamp'
 import { useNativeChatVisualOwner } from '../media/visuals/native-chat-visual-owner'
 import { useNativeChatLinkClick } from '../links/actions/native-chat-link-click-context'
 import { NativeChatAutomationRunInstructions } from './NativeChatAutomationRunInstructions'
 import { RUN_LINK_BUTTON } from './automation-run-link-button'
 import { ROW_HEADING, ROW_NOTE } from './NativeChatAutomationRowFrame'
+import { NativeChatMessageTimestamp } from '../messages/rows/NativeChatMessageTimestamp'
+import type { MergedRunFailure } from '../../../../../shared/native-chat/transcript/events/native-chat-event-plan'
 
 const HEADING = ROW_HEADING
 const NOTE = ROW_NOTE
@@ -42,17 +43,62 @@ function CopyTextButton({ text, label }: { text: string; label: string }): React
   )
 }
 
+/** Sends a run that couldn't start once more; a wait is deleted once its run starts, so only a wait's
+ *  run offers it. Says Sent again after. */
+export function NativeChatAutomationSendAgain({
+  run,
+  resend,
+  wording
+}: {
+  run: AutomationRunMessage
+  resend: AutomationRunResend
+  wording: AutomationRunWording
+}): React.JSX.Element | null {
+  const { say } = wording
+  const owner = useNativeChatVisualOwner()
+  const bot = useBotForWorkspace(owner?.worktreeId ?? null)
+  const [sending, setSending] = useState<'idle' | 'busy' | 'sent'>(
+    resend === 'sent' ? 'sent' : 'idle'
+  )
+  if (resend === 'none' || run.wait === undefined || !bot || !owner) {
+    return null
+  }
+  if (sending === 'sent' || resend === 'sent') {
+    return <span className="text-xs text-chat-foreground-faint">{say('sentAgain')}</span>
+  }
+  return (
+    <button
+      type="button"
+      className={RUN_LINK_BUTTON}
+      disabled={sending === 'busy'}
+      onClick={() => {
+        setSending('busy')
+        void callBotRpc(bot, 'bots.sendRunAgain', {
+          botId: bot.id,
+          sessionId: owner.sessionId,
+          runId: run.runId
+        })
+          .then(() => setSending('sent'))
+          .catch((error: unknown) => {
+            setSending('idle')
+            toast.error(botErrorMessage(error))
+          })
+      }}
+    >
+      {say('sendAgain')}
+    </button>
+  )
+}
+
 function RunActions({
   run,
   state,
   instructions,
   copyEvent,
-  wording,
-  resend
+  wording
 }: {
   run: AutomationRunMessage
   state: AutomationRunRowState
-  resend: AutomationRunResend
   instructions: string
   copyEvent: string | null
   wording: AutomationRunWording
@@ -63,14 +109,8 @@ function RunActions({
   const exists = useBotActivity(bot).automations.some(
     (row) => row.automation.id === run.automation.id
   )
-  const [sending, setSending] = useState<'idle' | 'busy' | 'sent'>(
-    resend === 'sent' ? 'sent' : 'idle'
-  )
-  // A wait is deleted once its run starts, so a wait that couldn't start is sent again from here.
-  const sendAgain =
-    state === 'not-started' && resend !== 'none' && run.wait !== undefined && bot && owner
   const openAutomation = state === 'not-started' && exists
-  if (!sendAgain && !openAutomation && !copyEvent) {
+  if (!openAutomation && !instructions && !copyEvent) {
     return null
   }
   return (
@@ -84,33 +124,7 @@ function RunActions({
           {say('openAutomation')}
         </button>
       ) : null}
-      {sendAgain && (sending === 'sent' || resend === 'sent') ? (
-        <span className="text-xs text-muted-foreground">{say('sentAgain')}</span>
-      ) : sendAgain ? (
-        <button
-          type="button"
-          className={RUN_LINK_BUTTON}
-          disabled={sending === 'busy'}
-          onClick={() => {
-            setSending('busy')
-            void callBotRpc(bot, 'bots.sendRunAgain', {
-              botId: bot.id,
-              sessionId: owner.sessionId,
-              runId: run.runId
-            })
-              .then(() => setSending('sent'))
-              .catch((error: unknown) => {
-                setSending('idle')
-                toast.error(botErrorMessage(error))
-              })
-          }}
-        >
-          {say('sendAgain')}
-        </button>
-      ) : null}
-      {sendAgain && instructions ? (
-        <CopyTextButton text={instructions} label={say('copyInstructions')} />
-      ) : null}
+      {instructions ? <CopyTextButton text={instructions} label={say('copyInstructions')} /> : null}
       {copyEvent ? <CopyTextButton text={copyEvent} label={say('copyEvent')} /> : null}
     </div>
   )
@@ -158,7 +172,7 @@ function RunEvent({
         <>
           {/* Provenance first, so a long quote can't push it out of view. */}
           <p className={cn(NOTE, 'mt-2 mb-0.5')}>{say('external')}</p>
-          <blockquote className="my-0.5 border-l-2 border-border py-0.5 pl-2.5 whitespace-pre-wrap text-card-foreground [overflow-wrap:anywhere] select-text">
+          <blockquote className="my-0.5 border-l-2 border-border py-0.5 pl-2.5 whitespace-pre-wrap text-chat-foreground [overflow-wrap:anywhere] select-text">
             <cite className={cn(NOTE, 'mb-0.5 block not-italic whitespace-normal')}>
               {automationRunQuoteAuthor(event, say)}
             </cite>
@@ -172,45 +186,46 @@ function RunEvent({
   )
 }
 
+function StartError({ error }: { error: string }): React.JSX.Element {
+  return (
+    <div className="rounded-md border border-chat-inline-code-border bg-chat-inline-code-surface px-2 py-1 font-mono text-xs text-chat-foreground [overflow-wrap:anywhere] select-text">
+      {error}
+    </div>
+  )
+}
+
 /** The opened run: the recorded error, the saved instructions, the event, and what to do next. */
 export function NativeChatAutomationRunBody({
-  id,
-  labelledBy,
   messageId,
   run,
   state,
   instructions,
   facts,
   error,
-  resend,
-  timestamp,
+  earlierFailures,
   wording,
   findQuery
 }: {
-  id: string
-  labelledBy: string
   messageId: string
   run: AutomationRunMessage
   state: AutomationRunRowState
   instructions: string
   facts: string
   error?: string
-  resend: AutomationRunResend
-  timestamp: number | null
+  /** Earlier tries of this run that couldn't start, newest first. */
+  earlierFailures?: readonly MergedRunFailure[]
   wording: AutomationRunWording
-  /** The Find bar's query when this run holds it, so its instructions show whole. */
+  /** The Find bar's query: instructions holding it show whole. */
   findQuery: string
 }): React.JSX.Element {
   const { say } = wording
   const copyEvent = run.event?.text ? automationRunEventCopyText(facts, run.event, say) : null
   return (
-    <section id={id} role="region" aria-labelledby={labelledBy} className="px-3 pb-3">
+    <div>
       {error ? (
         <>
           <h4 className={HEADING}>{say('startError')}</h4>
-          <div className="rounded-md border border-chat-inline-code-border bg-chat-inline-code-surface px-2 py-1 font-mono text-xs text-card-foreground [overflow-wrap:anywhere] select-text">
-            {error}
-          </div>
+          <StartError error={error} />
         </>
       ) : null}
       {instructions ? (
@@ -226,17 +241,22 @@ export function NativeChatAutomationRunBody({
         </>
       ) : null}
       <RunEvent run={run} facts={facts} wording={wording} />
+      {earlierFailures?.map((failure) => (
+        <div key={failure.id}>
+          <h4 className={cn(HEADING, 'flex items-center gap-1')}>
+            {say('couldNotStart')}
+            <NativeChatMessageTimestamp timestamp={failure.timestamp} />
+          </h4>
+          <StartError error={failure.error} />
+        </div>
+      ))}
       <RunActions
         run={run}
         state={state}
         instructions={instructions}
-        resend={resend}
         copyEvent={copyEvent}
         wording={wording}
       />
-      <div className="mt-1.5 @sm:hidden">
-        <NativeChatMessageTimestamp timestamp={timestamp} className="text-muted-foreground" />
-      </div>
-    </section>
+    </div>
   )
 }

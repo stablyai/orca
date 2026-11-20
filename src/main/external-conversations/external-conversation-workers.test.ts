@@ -8,7 +8,7 @@ import {
   CONVERSATION_WORKERS_MAX_UNVERIFIABLE_MS,
   CONVERSATION_WORKERS_POLL_MS,
   ConversationWorkers,
-  conversationWorkerActivity,
+  conversationWorkerActivities,
   type ConversationWorkerActivity
 } from './external-conversation-workers'
 
@@ -29,12 +29,19 @@ function tracker(initial: ConversationWorkerActivity | null) {
   let linked = true
   const timers: { run: () => void; at: number }[] = []
   const told: boolean[] = []
+  // Reads held here answer only when released.
+  let held: (() => void)[] | null = null
   const workers = new ConversationWorkers({
-    workerActivity: async () => {
-      if (activity instanceof Error) {
-        throw activity
+    workerActivities: async (links) => {
+      // A read answers with the state when it began, however long it then waits.
+      const answer = activity
+      if (held) {
+        await new Promise<void>((resolve) => held!.push(resolve))
       }
-      return activity
+      if (answer instanceof Error) {
+        throw answer
+      }
+      return answer === null ? null : new Map(links.map((link) => [link.sessionId, answer]))
     },
     linkedFor: (paneKey): LinkedConversation | null =>
       paneKey === PANE && linked
@@ -61,6 +68,18 @@ function tracker(initial: ConversationWorkerActivity | null) {
     },
     unlink: () => {
       linked = false
+    },
+    hold: () => {
+      held = []
+    },
+    /** Answers the held reads, then reads freely. */
+    release: async () => {
+      const waiting = held ?? []
+      held = null
+      for (const resolve of waiting) {
+        resolve()
+      }
+      await new Promise((resolve) => setImmediate(resolve))
     },
     /** Moves the clock and runs the poll if it is due. */
     advance: async (ms: number) => {
@@ -171,6 +190,35 @@ describe('a chat conversation’s workers', () => {
     expect(t.timers).toEqual([])
   })
 
+  it('answer a check made during a read with a read begun after it', async () => {
+    const t = tracker('working')
+    t.hold()
+    const first = t.workers.check(PANE, 'turn-ended')
+    await new Promise((resolve) => setImmediate(resolve))
+    // A worker ends while the first read waits on the database.
+    t.set('none')
+    const second = t.workers.check(PANE, 'poll')
+    await t.release()
+    await Promise.all([first, second])
+    expect(t.workers.runningOf(PANE)).toBe(false)
+  })
+
+  it('keep a turn end’s running bound when a newer read answers it', async () => {
+    const t = tracker('working')
+    await t.workers.check(PANE, 'turn-ended')
+    await t.advance(CONVERSATION_WORKERS_MAX_RUNNING_MS - CONVERSATION_WORKERS_POLL_MS)
+    t.hold()
+    const ended = t.workers.check(PANE, 'turn-ended')
+    await new Promise((resolve) => setImmediate(resolve))
+    const polled = t.workers.check(PANE, 'poll')
+    await t.release()
+    await Promise.all([ended, polled])
+
+    await t.advance(CONVERSATION_WORKERS_POLL_MS * 2)
+    expect(t.told).toEqual([true])
+    expect(t.workers.runningOf(PANE)).toBe(true)
+  })
+
   it('apply only the newest read', async () => {
     const t = tracker('working')
     const first = t.workers.check(PANE, 'turn-ended')
@@ -187,29 +235,52 @@ describe('what a conversation’s workers are doing', () => {
     states: OrchestrationSessionWorkerState[],
     refusal: 'bot_paused' | null = null
   ) => ({
-    workers: { read: async () => states.map((state) => ({ state })) },
+    workers: {
+      read: async (sessionIds: readonly string[]) =>
+        new Map(sessionIds.map((id) => [id, states.map((state) => ({ state }))]))
+    },
     bots: { refusal: () => refusal, open: vi.fn(), workLinks: async () => [] }
   })
+  const activity = async (h: Parameters<typeof conversationWorkerActivities>[0]) =>
+    (await conversationWorkerActivities(h, [LINK]))?.get(LINK.sessionId) ?? null
 
   it('is working while any works, else unverifiable while any is out of contact', async () => {
-    await expect(
-      conversationWorkerActivity(host(['completed', 'unverifiable', 'working']), LINK)
-    ).resolves.toBe('working')
-    await expect(
-      conversationWorkerActivity(host(['completed', 'unverifiable']), LINK)
-    ).resolves.toBe('unverifiable')
-    await expect(conversationWorkerActivity(host(['completed', 'failed']), LINK)).resolves.toBe(
-      'none'
-    )
+    await expect(activity(host(['completed', 'unverifiable', 'working']))).resolves.toBe('working')
+    await expect(activity(host(['completed', 'unverifiable']))).resolves.toBe('unverifiable')
+    await expect(activity(host(['completed', 'failed']))).resolves.toBe('none')
   })
 
   it('is none once the bot is paused', async () => {
-    await expect(conversationWorkerActivity(host(['working'], 'bot_paused'), LINK)).resolves.toBe(
-      'none'
-    )
+    await expect(activity(host(['working'], 'bot_paused'))).resolves.toBe('none')
   })
 
   it('cannot be read without a workers host', async () => {
-    await expect(conversationWorkerActivity({}, LINK)).resolves.toBeNull()
+    await expect(activity({})).resolves.toBeNull()
+  })
+
+  it('is none for a paused bot even when the other conversations’ read fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const paused: ExternalConversationLink = {
+      ...LINK,
+      sessionId: 's2',
+      bot: { kind: 'bot', botId: 'paused' }
+    }
+    const read = await conversationWorkerActivities(
+      {
+        workers: {
+          read: async () => {
+            throw new Error('database locked')
+          }
+        },
+        bots: {
+          refusal: (botId: string) => (botId === 'paused' ? 'bot_paused' : null),
+          open: vi.fn(),
+          workLinks: async () => []
+        }
+      },
+      [LINK, paused]
+    )
+    expect(Object.fromEntries(read ?? [])).toEqual({ s1: 'unread', s2: 'none' })
+    warn.mockRestore()
   })
 })

@@ -25,6 +25,7 @@ import {
 } from '../../mobile-web-app/mobile-web-app-route-manifest.mjs'
 import { MOBILE_WEB_PAGE_ROUTES } from './mobile-web-page-routes.mjs'
 import { reactNativeSvgWebPlugin } from './react-native-svg-web-plugin.mjs'
+import { packageBuildPlugin } from './one-package-build-plugin.mjs'
 import {
   ROUTE_ENTRY_NAMESPACE,
   entryStaticClosure,
@@ -95,6 +96,11 @@ export const MOBILE_WEB_APP_SHIMS = [
     name: 'hairline-device-pixel',
     appliesTo: (options) =>
       options.plugins?.some((plugin) => plugin.name === HAIRLINE_PLUGIN_NAME) === true
+  },
+  {
+    // Point imports that would ship a second build (or an unused part) of a package at what the page already loads.
+    name: 'one-package-build',
+    appliesTo: (options) => options.plugins?.includes(packageBuildPlugin) === true
   },
   {
     // esbuild has no require.context, so the route tree is generated and injected.
@@ -316,7 +322,8 @@ export function mobileWebAppBuildOptions(
       ),
       lucideBarrelPlugin,
       reactNativeSvgWebPlugin,
-      hairlineDevicePixelPlugin
+      hairlineDevicePixelPlugin,
+      packageBuildPlugin
     ],
     resolveExtensions: [
       '.web.tsx',
