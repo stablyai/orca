@@ -6,6 +6,8 @@ const DOT = 8
 const RING = 10
 const ROW_MIN_HEIGHT = 44
 const CLOSE_SIZE = 32
+/** Long action labels (German "Abschließen") would otherwise take the status's whole width at 320px. */
+const STATUS_MIN_WIDTH = 48
 /** Where a row's name starts, so the lines under it line up with the name. */
 const NAME_INSET = spacing.md + RING + spacing.sm
 
@@ -108,7 +110,7 @@ export const mcpPanelStyles = themedStyleSheet(() => ({
   },
   statusLine: {
     flex: 1,
-    minWidth: 0,
+    minWidth: STATUS_MIN_WIDTH,
     fontSize: 13,
     color: colors.textMuted
   },
