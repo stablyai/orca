@@ -1,5 +1,5 @@
 import { lstat, realpath, rm, stat, unlink } from 'node:fs/promises'
-import { basename, dirname, join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { AiVaultAgent } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
 import { invalidateDeletedAiVaultSessionPaths } from '../../../ai-vault/deletion/host-session-delete'
@@ -8,6 +8,12 @@ import { resolveOrcaManagedCodexHomePath } from '../../configuration/homes/codex
 import { codexDatedRolloutRelativePath } from '../resume/codex-session-resume-home'
 import { holdCodexRolloutForDeletion } from '../rollouts/codex-rollout-deletion-guard'
 import { forgetCodexHistoryDiskUsage } from '../disk-usage/codex-history-disk-usage'
+import { isOpenInCodex } from './codex-rollout-writer-lock'
+import { codexPhysicalRolloutId } from '../../../native-chat/transcript-history/codex/codex-rollout-history-source'
+import {
+  scanCodexRolloutHistoryReferences,
+  type CodexRolloutHistoryReferences
+} from './codex-rollout-history-references'
 import {
   isOutsideProtectedRoots,
   resolveProtectedRoots,
@@ -19,8 +25,6 @@ type RolloutTarget = { agent: AiVaultAgent; filePath: string }
 type DeleteResult = { deleted: number; failed: number; freedBytes: number }
 
 type RolloutName = { path: string; root: string }
-
-const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
 
 /** One name as found: what it reads (a link's target), and enough to tell if it changed. */
 type NameState = {
@@ -163,38 +167,6 @@ function freedBytesOf(removed: readonly NameState[]): number {
   return bytes
 }
 
-/**
- * Codex holds `thread-writer-locks/<thread id>.lock` while a process has the thread open, also
- * after a resume that hasn't written a turn yet; deleting then would cut off every later turn.
- * Codex versions that keep no locks give no such proof, so their rollouts are kept.
- */
-async function isOpenInCodex(homes: readonly string[], stem: string): Promise<boolean> {
-  // A reverted thread's name carries its thread id and its rollout id: either can be the lock's.
-  const ids = basename(stem).toLowerCase().match(UUID_PATTERN) ?? []
-  if (ids.length === 0) {
-    return true
-  }
-  let keepsLocks = false
-  for (const home of homes) {
-    const locks = join(home, 'thread-writer-locks')
-    for (const id of ids) {
-      try {
-        await lstat(join(locks, `${id}.lock`))
-        return true
-      } catch (error) {
-        if (!isDefinitiveAbsence(error)) {
-          return true
-        }
-      }
-    }
-    keepsLocks ||= await lstat(locks).then(
-      (entry) => entry.isDirectory(),
-      () => false
-    )
-  }
-  return !keepsLocks
-}
-
 async function removeCopyMarker(
   path: string,
   protectedRoots: readonly ProtectedRoot[]
@@ -204,13 +176,16 @@ async function removeCopyMarker(
   }
 }
 
+type DeleteOutcome = 'done' | 'referenced'
+
 async function deleteRollout(
   target: RolloutTarget,
   listHomes: () => Promise<RolloutHomes>,
   shouldDelete: (target: RolloutTarget) => Promise<boolean>,
+  references: (homes: readonly string[]) => Promise<CodexRolloutHistoryReferences>,
   result: DeleteResult,
   deletedPaths: string[]
-): Promise<void> {
+): Promise<DeleteOutcome> {
   const release = await holdCodexRolloutForDeletion(target.filePath)
   try {
     // Listed under the hold: an account added since the sweep began may already hold a link.
@@ -219,11 +194,11 @@ async function deleteRollout(
     const stem = rolloutStem(homes, target.filePath)
     if (!stem) {
       result.failed += 1
-      return
+      return 'done'
     }
     const names = rolloutNames(homes, stem)
     if (await isOpenInCodex(homes, stem)) {
-      return
+      return 'done'
     }
     // After the open check: a chat still open never reads the import folder (which can start WSL).
     const protectedRoots = await resolveProtectedRoots(listed, stem)
@@ -236,11 +211,20 @@ async function deleteRollout(
       }
       checked.add(state.content)
       if (!(await shouldDelete({ agent: 'codex', filePath: state.path }))) {
-        return
+        return 'done'
       }
     }
     if (checked.size === 0) {
-      return
+      return 'done'
+    }
+    // A forked chat reads its earlier turns from this file: deleting it would empty that chat.
+    const rolloutId = codexPhysicalRolloutId(stem)
+    if (!rolloutId) {
+      return 'done'
+    }
+    const index = await references(homes)
+    if (index.isReferenced(rolloutId)) {
+      return 'referenced'
     }
     // Reading takes a while: a name that appeared or changed meanwhile means the chat is in use.
     const current = await readNames(names)
@@ -249,7 +233,7 @@ async function deleteRollout(
       current.length !== found.length ||
       current.some((state) => versions.get(state.path) !== state.version)
     ) {
-      return
+      return 'done'
     }
     const removed: NameState[] = []
     // Links first: removing a link's target first would read as the link having changed.
@@ -262,7 +246,7 @@ async function deleteRollout(
         }
         // Checked once more right before its own unlink: a resume opens or writes one name.
         if (state.version !== versions.get(name.path) || (await isOpenInCodex(homes, stem))) {
-          return
+          return 'done'
         }
         // A name reached into the import folder stays: the user's copy survives there anyway.
         if (await removeName(state.path, protectedRoots)) {
@@ -274,9 +258,13 @@ async function deleteRollout(
       result.freedBytes += freedBytesOf(removed)
     }
     if (removed.length === 0) {
-      return
+      return 'done'
     }
     result.deleted += 1
+    // A name left in the import folder still reads its own parent.
+    if (removed.length === found.length) {
+      index.forget(rolloutId)
+    }
     // A name another process links meanwhile is a fresh candidate for the next sweep's full checks.
     await removeCopyMarker(
       join(resolveOrcaManagedCodexHomePath(), '.orca-session-copies', `${stem}.json`),
@@ -288,6 +276,7 @@ async function deleteRollout(
   } finally {
     release()
   }
+  return 'done'
 }
 
 /**
@@ -301,8 +290,31 @@ export async function deleteCodexRolloutsPermanently(
 ): Promise<DeleteResult> {
   const result: DeleteResult = { deleted: 0, failed: 0, freedBytes: 0 }
   const deletedPaths: string[] = []
-  for (const target of targets) {
-    await deleteRollout(target, listHomes, shouldDelete, result, deletedPaths)
+  let scan: Promise<CodexRolloutHistoryReferences> | undefined
+  // Scanned once, and only once a rollout is otherwise ready to go.
+  const references = (homes: readonly string[]) =>
+    (scan ??= scanCodexRolloutHistoryReferences(homes))
+  let pending = [...targets]
+  // A parent goes only after every fork reading it went first, so retry the ones kept for that.
+  while (pending.length > 0) {
+    const referenced: RolloutTarget[] = []
+    for (const target of pending) {
+      const outcome = await deleteRollout(
+        target,
+        listHomes,
+        shouldDelete,
+        references,
+        result,
+        deletedPaths
+      )
+      if (outcome === 'referenced') {
+        referenced.push(target)
+      }
+    }
+    if (referenced.length === pending.length) {
+      break
+    }
+    pending = referenced
   }
   await invalidateDeletedAiVaultSessionPaths(deletedPaths)
   if (deletedPaths.length > 0) {

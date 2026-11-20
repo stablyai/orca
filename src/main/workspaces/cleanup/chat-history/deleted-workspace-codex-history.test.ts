@@ -201,6 +201,50 @@ describe('sweepDeletedWorkspaceChatHistory with Codex rollouts', () => {
   )
 })
 
+describe('deleteCodexRolloutsPermanently with forked chats', () => {
+  it('keeps a rollout while a surviving fork reads its history, and deletes it after its forks', async () => {
+    root = mkdtempSync(join(tmpdir(), 'orca-codex-history-'))
+    vi.stubEnv('ORCA_USER_DATA_PATH', join(root, 'user-data'))
+    const home = join(root, 'codex')
+    mkdirSync(join(home, 'thread-writer-locks'), { recursive: true })
+    const fork = (cwd: string, parentId: string): string =>
+      `${JSON.stringify({
+        type: 'session_meta',
+        payload: {
+          id: 'fork',
+          cwd,
+          history_mode: 'paginated',
+          history_base: { thread_id: parentId, end_ordinal_exclusive: 1, end_byte_offset: 10 }
+        }
+      })}\n`
+    // A fork continued in a live folder reads its earlier turns from the gone folder's parent.
+    const keptParent = write(join(home, ...DATED, NAME('7')), rollout('/gone'))
+    const liveFork = write(
+      join(home, ...DATED, NAME('8')),
+      fork('/live', '00000007-0000-4000-8000-000000000000')
+    )
+    // Both ran only in the gone folder; the parent is listed first.
+    const goneParent = write(join(home, ...DATED, NAME('9')), rollout('/gone'))
+    const goneFork = write(
+      join(home, ...DATED, NAME('a')),
+      fork('/gone', '00000009-0000-4000-8000-000000000000')
+    )
+
+    const result = await deleteCodexRolloutsPermanently(
+      [keptParent, goneParent, goneFork].map((filePath) => ({ agent: 'codex', filePath })),
+      async () => true,
+      async () => ({ homes: [home], protectedRoots: [] })
+    )
+
+    expect([keptParent, liveFork, goneParent, goneFork].filter(exists)).toEqual([
+      keptParent,
+      liveFork
+    ])
+    expect(result.deleted).toBe(2)
+    expect(result.failed).toBe(0)
+  })
+})
+
 /** Dangling links count: they block the name for later links. */
 function exists(path: string): boolean {
   try {
