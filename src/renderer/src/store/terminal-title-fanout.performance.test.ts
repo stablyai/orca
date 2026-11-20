@@ -7,6 +7,7 @@ import { shouldSyncAgentHookCompletionForStoreUpdate } from '@/components/termin
 import { whenAgentTerminalAppears } from '@/components/terminal-pane/provider-notices/agent-presence/agent-terminal-presence'
 import { aiVaultTitleSyncInputsChanged } from '@/lib/agent-session/history/title-sync/ai-vault-tab-title-sync-inputs'
 import { changedOwningPaneTitleRequests } from '@/lib/agent-session/history/title-sync/ai-vault-tab-title-freshness'
+import { readRuntimeStatuses } from './slices/runtime-status/views/runtime-status-owner'
 import { getRuntimeMobileSessionSyncKey } from '@/runtime/sync-runtime-graph/sync-key'
 import { getTerminalTabOwners } from './terminals/ownership/terminal-tab-owner-index'
 import { selectVisibleAgentOrchestration } from '@/runtime/agent-orchestration/visible-agent-orchestration'
@@ -130,7 +131,7 @@ function scannedRowsPerTitleChange(workspaceCount: number): number {
   const stopPresence = whenAgentTerminalAppears('codex', () => {})
   const stopSubscribers = store.subscribe((state, previous) => {
     shouldSyncAgentHookCompletionForStoreUpdate(state, previous)
-    changedOwningPaneTitleRequests(state, previous)
+    changedOwningPaneTitleRequests(state, previous, readRuntimeStatuses())
     aiVaultTitleSyncInputsChanged(state, previous)
     syncKey = getRuntimeMobileSessionSyncKey(state, previous, syncKey)
     selectVisibleAgentOrchestration(state)

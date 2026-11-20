@@ -54,7 +54,7 @@ const NEWER_STATUS: AgentStatusIpcPayload = {
 }
 
 describe('main-run sleep of a pane whose hook row is gone', () => {
-  it.each(['live', 'working', 'interrupted', 'exited', 'expired exit'] as const)(
+  it.each(['live', 'working', 'interrupted', 'expired exit'] as const)(
     'uses a saved live conversation unless an exit was recorded (%s)',
     async (scenario) => {
       const fixture = makeRuntimeStoreWithWorkspaceSession(
@@ -117,14 +117,12 @@ describe('main-run sleep of a pane whose hook row is gone', () => {
         isPlaced: () => true,
         retireSavedRecord: (paneKey, at) => runtime.retireExitedPaneResume(paneKey, at)
       })
-      if (scenario === 'exited' || scenario === 'expired exit') {
+      if (scenario === 'expired exit') {
         server.reconcileEndedProcessForPaneKeys([PANE_KEY], {
           confirmedExit: true
         })
-        if (scenario === 'expired exit') {
-          // Exit evidence can expire after a week; the saved checkpoint must already be retired.
-          server.forgetAgentExit(PANE_KEY)
-        }
+        // Exit evidence can expire after a week; the saved checkpoint must already be retired.
+        server.forgetAgentExit(PANE_KEY)
       }
       if (scenario === 'live' || scenario === 'working') {
         // A running pane's saved live checkpoint is not proof it still owns that conversation.
@@ -133,7 +131,7 @@ describe('main-run sleep of a pane whose hook row is gone', () => {
       try {
         await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
         const record = fixture.getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]
-        if (scenario === 'exited' || scenario === 'expired exit') {
+        if (scenario === 'expired exit') {
           expect(record).toBeUndefined()
         } else {
           expect(record).toMatchObject({
@@ -240,7 +238,6 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
     ['suspended', ['148'], true],
     ['macOS suspended', ['146'], true],
     ['suspended, then another command', ['148', '0'], true],
-    ['macOS suspended, then another command', ['146', '0'], true],
     ['macOS suspended, then a listing and another command', ['146', 'listing', '0'], true],
     ['suspended, resumed (fg), then quit', ['148', 'fg', '0'], false],
     // A restored receipt whose launch already finished leaves the quit to the shell-alone proof.

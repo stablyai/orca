@@ -18,10 +18,7 @@ import {
   mergeGitConfigEnvProtocol
 } from '../../../shared/git/commands/git-credential-prompt-env'
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../../shared/shell/launch/terminal-git-credential-guard'
-import {
-  ORCA_IMAGE_PROTOCOL_ENV,
-  ORCA_IMAGE_PROTOCOL_VALUE
-} from '../../../shared/terminal/images/terminal-image-protocol'
+import { ORCA_IMAGE_PROTOCOL_ENV } from '../../../shared/terminal/images/terminal-image-protocol'
 import {
   expandWindowsEnvironmentVariables,
   expandWindowsPathEnvironmentVariables
@@ -184,9 +181,11 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
     COLORTERM: 'truecolor',
     TERM_PROGRAM: 'Orca',
     TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev',
-    FORCE_HYPERLINK: '1',
-    [ORCA_IMAGE_PROTOCOL_ENV]: ORCA_IMAGE_PROTOCOL_VALUE
+    FORCE_HYPERLINK: '1'
   } satisfies Record<string, string>
+  if (opts.env?.[ORCA_IMAGE_PROTOCOL_ENV] === undefined) {
+    delete env[ORCA_IMAGE_PROTOCOL_ENV]
+  }
   stripLegacyTerminalShimEnv(env, process.platform)
   stripInheritedAgentSessionEnv(env, { launchEnv: opts.env, envToDelete: opts.envToDelete })
   composeGuardedDaemonGitConfigEnv(env, opts.env, opts.launchAgent)

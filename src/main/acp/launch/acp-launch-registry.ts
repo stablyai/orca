@@ -25,6 +25,7 @@ import { GROK_TRANSCRIPT_IMPORT } from '../../grok/grok-transcript-import'
 import { OPENCODE_SESSION_HISTORY } from '../../opencode/transcripts/opencode-session-history'
 import { OPENCODE_TRANSCRIPT_IMPORT } from '../../opencode/transcripts/opencode-transcript-import'
 import { assertOpenCodeCopyUsesLocalStore } from '../../../shared/agent-launch/startup/opencode-launch-command'
+import { readOmpMcpServers } from '../../omp/omp-mcp-servers'
 import { OMP_SESSION_HISTORY } from '../../omp/omp-session-history'
 import { OMP_TRANSCRIPT_IMPORT } from '../../omp/omp-transcript-import'
 import { ANTIGRAVITY_LAUNCH_SPEC } from '../../antigravity/antigravity-acp-launch-spec'
@@ -80,7 +81,7 @@ function openCodeLaunchSpec(
     args: () => ['acp'],
     // 1.x cannot answer ACP questions; 2.x ignores this guard and negotiates form support.
     env: { OPENCODE_CLIENT: 'acp', OPENCODE_ENABLE_QUESTION_TOOL: 'false' },
-    scrubEnvironment: scrubOpenCodeAcpEnvironment,
+    scrubEnvironment: (env, inherited) => scrubOpenCodeAcpEnvironment(env, inherited),
     dialect: OPENCODE_ACP_DIALECT,
     historyCatchUp: 'user-message-id',
     loginCommand: agentSessionSetupFor(row.agent)?.loginCommand ?? [],
@@ -148,6 +149,7 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
     sessionFolderArgs: (folder) => ['--session-dir', folder]
   },
   skillRoots: loadOmpSkillRoots,
+  ownMcpServers: readOmpMcpServers,
   instructions: deliverOmpInstructions,
   compaction: true,
   compactionInstructions: true,

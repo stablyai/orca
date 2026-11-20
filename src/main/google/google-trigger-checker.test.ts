@@ -61,7 +61,8 @@ async function checkerWith(
     ],
     bots: () => [{ id: 'bot-1', google: options.google ?? true }],
     accounts: () => accounts,
-    api: (account) => google.client.googleApi(account, { http: fake.http, now: () => now }),
+    api: async (account) =>
+      await google.client.googleApi(account, { http: fake.http, now: () => now }),
     runForEvent: async (automationId, event) => {
       if ((failRuns -= 1) >= 0) {
         throw new Error('runtime_unavailable')

@@ -1,9 +1,7 @@
+import { NativeChatGoalCheckNotice } from './NativeChatGoalCheckNotice'
 import { BotTidyUpLine } from '@/components/bots/BotTidyUpLine'
 import { nativeChatBotCard } from '../../native-chat-bot-cards'
-import {
-  CLAUDE_MODEL_FALLBACK_COPY,
-  claudeModelFallbackLabels
-} from '../../../../../../shared/native-chat/transcript/notices/claude-model-fallback'
+import * as Fallback from '../../../../../../shared/native-chat/transcript/notices/claude-model-fallback'
 import { NativeChatUsageLimitRow } from '../../usage/NativeChatUsageLimitRow'
 import { agentSessionGoalControlWords } from '../../session/goals/agent-session-goal-control-words'
 import { AlertCircle, AlertTriangle, Info, Notebook } from 'lucide-react'
@@ -40,10 +38,7 @@ import {
 } from '../../../../../../shared/bots/bot-context-note'
 import { NativeChatDividerRow } from '../../NativeChatDividerRow'
 import { agentSessionRestartNoteText } from './agent-session-restart-note-text'
-import {
-  NativeChatDetailsDisclosure,
-  ProviderFrameRow
-} from '../diagnostics/NativeChatProviderDetails'
+import * as Details from '../diagnostics/NativeChatProviderDetails'
 import { NativeChatSetupButton } from '../../host-access/NativeChatSetupButton'
 import {
   isNativeChatFailureRowResolved,
@@ -61,6 +56,8 @@ import { structuredAgentSessionHostPlace } from '../../pane/ownership/use-struct
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { NativeChatTranscriptSignInNotice } from '../../host-access/NativeChatSignInRow'
 import { nativeChatSignInHostWords } from '../../host-access/native-chat-sign-in-notice'
+import { NativeChatNoticeAuthRecovery } from '../../antigravity-auth/NativeChatAntigravityAuthRecovery'
+import { NATIVE_CHAT_GOAL_CHECK_SUMMARY } from '../../../../../../shared/native-chat/transcript/turns/native-chat-thread-goal-rows'
 
 const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string> = {
   'history-repaired': () =>
@@ -113,6 +110,10 @@ export function NativeChatNoticeRow({
   const t = useTranslate()
   useTranslation()
   const orcaStopView = useNativeChatOrcaStopView()
+
+  if (block.presentation === NATIVE_CHAT_GOAL_CHECK_SUMMARY) {
+    return <NativeChatGoalCheckNotice text={block.text} />
+  }
 
   if (block.presentation === PULL_REQUEST_EVENT_PRESENTATION) {
     return (
@@ -175,8 +176,8 @@ export function NativeChatNoticeRow({
       <p className="min-w-0 max-w-full select-text text-sm text-chat-foreground-faint [overflow-wrap:anywhere]">
         {t(
           'components.native-chat.notices.modelFallback',
-          CLAUDE_MODEL_FALLBACK_COPY,
-          claudeModelFallbackLabels(look)
+          Fallback.CLAUDE_MODEL_FALLBACK_COPY,
+          Fallback.claudeModelFallbackLabels(look)
         )}
       </p>
     )
@@ -233,7 +234,7 @@ export function NativeChatNoticeRow({
             )
     const payload = block.providerFrame?.payload
     return (
-      <NativeChatDetailsDisclosure summary={summary} bodyClassName={toneClass(look.tone)}>
+      <Details.NativeChatDetailsDisclosure summary={summary} bodyClassName={toneClass(look.tone)}>
         {block.text}
         {payload ? '\n\n' : ''}
         {payload?.truncated
@@ -244,7 +245,7 @@ export function NativeChatNoticeRow({
             )}\n`
           : ''}
         {payload?.head}
-      </NativeChatDetailsDisclosure>
+      </Details.NativeChatDetailsDisclosure>
     )
   }
   // Name Orca and its host as the stop cause; without host context, preserve the original words.
@@ -344,7 +345,7 @@ export function NativeChatNoticeRow({
           : null
   const details =
     block.providerFrame || detail ? (
-      <ProviderFrameRow
+      <Details.ProviderFrameRow
         block={block}
         detail={detail}
         summary={t('components.native-chat.notices.details', 'Details')}
@@ -366,6 +367,7 @@ export function NativeChatNoticeRow({
         ) : null}
       </div>
       <NativeChatSetupButton failureKind={block.failure?.kind} rowId={messageId} />
+      {resolved ? null : <NativeChatNoticeAuthRecovery block={block} agentName={agentName} />}
       {details}
     </div>
   )
@@ -385,7 +387,7 @@ export function NativeChatNoticeRow({
         fallback={row}
         details={
           block.providerFrame || signInDetail ? (
-            <ProviderFrameRow
+            <Details.ProviderFrameRow
               block={block}
               detail={signInDetail}
               summary={t('components.native-chat.notices.details', 'Details')}

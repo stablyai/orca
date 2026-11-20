@@ -20,7 +20,8 @@ import {
   assertGroupQueuedMessageAllowed,
   readBotGroup,
   resumePendingGroupDeliveries,
-  sendBotGroupMessage
+  sendBotGroupMessage,
+  type SendBotGroupMessageOptions
 } from './bot-group-delivery'
 import { stopBotGroup } from './bot-group-stop'
 import { pausedBotChatHoldsMail } from './bot-paused-mail'
@@ -120,6 +121,11 @@ export class BotGroupRuntime {
   readonly queues = new Map<string, Promise<void>>()
   /** Operations whose native admission is in flight. */
   readonly deliveries = new Set<string>()
+  /** Mail turns being checked for a dead attempt, last found open, or whose chat answers for them now. */
+  readonly mailTurnChecks = new Map<
+    string,
+    { state: 'checking' | 'answered' | 'open'; at: number }
+  >()
 
   constructor(readonly runtime: OrcaRuntimeService) {
     this.store = new BotGroupStore(runtime.getOrchestrationDb().db)
@@ -133,7 +139,8 @@ export class BotGroupRuntime {
   update = (input: z.infer<typeof BotGroupUpdate>) => updateBotGroup(this, input)
   delete = (groupId: string) => deleteBotGroup(this, groupId)
   removeBot = (botId: string) => removeBotFromGroups(this, botId)
-  send = (input: z.infer<typeof BotGroupSend>) => sendBotGroupMessage(this, input)
+  send = (input: z.infer<typeof BotGroupSend>, options?: SendBotGroupMessageOptions) =>
+    sendBotGroupMessage(this, input, options)
   newThread = (groupId: string) => createBotGroupThread(this, groupId)
   read = (groupId: string, beforeSequence?: number, threadId?: string) =>
     readBotGroup(this, groupId, beforeSequence, threadId)

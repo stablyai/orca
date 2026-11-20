@@ -182,7 +182,7 @@ export function getWorkerDispatch(
   const row = this.db
     .prepare(`SELECT ${WORKER_DISPATCH_COLUMN_LIST} FROM worker_dispatches WHERE dispatch_id = ?`)
     .get(dispatchId)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of WorkerDispatchRow, a missing one fails compilation, and projected-row-getters.test.ts pins it to the migrated schema.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list is checked against WorkerDispatchRow, and projected-row-getters.test.ts verifies the returned row.
   return row as WorkerDispatchRow | undefined
 }
 

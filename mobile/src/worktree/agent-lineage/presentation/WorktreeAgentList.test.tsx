@@ -39,6 +39,7 @@ function agent(
     prompt: '',
     taskTitle: null,
     displayName: null,
+    conversationName: paneKey,
     lastAssistantMessage: null,
     toolName: null,
     toolInput: null,
@@ -61,7 +62,7 @@ describe('collapsed agent groups', () => {
     vi.useRealTimers()
   })
 
-  it('rings a collapsed idle group under an expanded parent when a child it hides is unread', () => {
+  it('marks the collapsed idle group unread and keeps unrelated cyclic agents visible', () => {
     toggleDisclosure('parent:root')
     act(() => {
       renderer = create(
@@ -71,7 +72,9 @@ describe('collapsed agent groups', () => {
           agents: [
             agent('root', null, 'working'),
             agent('idle-a', 'root', 'idle', true),
-            agent('idle-b', 'root', 'idle')
+            agent('idle-b', 'root', 'idle'),
+            agent('loop-a', 'loop-b', 'working'),
+            agent('loop-b', 'loop-a', 'working')
           ]
         })
       )
@@ -83,6 +86,10 @@ describe('collapsed agent groups', () => {
     )
     expect(idleGroup.props.accessibilityLabel).toContain('Unread')
     expect(idleGroup.findAll((node) => String(node.type) === 'Bell')).toHaveLength(1)
+    const labels = renderer!.root
+      .findAll((node) => String(node.type) === 'Text')
+      .map((node) => node.props.children)
+    expect(labels).toEqual(expect.arrayContaining(['loop-a', 'loop-b']))
     toggleDisclosure('parent:root')
   })
 })

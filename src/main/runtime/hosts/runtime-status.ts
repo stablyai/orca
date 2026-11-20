@@ -4,6 +4,7 @@ import {
   BROWSER_PAGE_ZOOM_RUNTIME_CAPABILITY,
   BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+  BROWSER_GRAB_RUNTIME_CAPABILITY,
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_IDENTITY_RUNTIME_CAPABILITY,
   BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
@@ -69,7 +70,7 @@ import { RuntimeWorkspaceChangeEvents } from '../workspaces/catalog/runtime-work
 export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEvents {
   getStatus(): RuntimeStatus {
     // Advertise screencast for renderer/offscreen backends; headless ownership prevents client-local fallback.
-    const hasRenderer = Boolean(this.getAvailableAuthoritativeWindow())
+    const hasRenderer = Boolean(this.hasAuthoritativeWindow())
     const hasOffscreen = !hasRenderer && Boolean(this.offscreenBrowserBackend)
     const hasHeadlessCommands = runtimeBrowserCommandsFactoryIsHeadless()
     const canBrowse = hasRenderer || hasOffscreen
@@ -118,7 +119,8 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
       capabilities.push(
         BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
         BROWSER_PAGE_ZOOM_RUNTIME_CAPABILITY,
-        BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY
+        BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY,
+        BROWSER_GRAB_RUNTIME_CAPABILITY
       )
     }
     capabilities.push(...orcaAccountRuntimeCapabilities())

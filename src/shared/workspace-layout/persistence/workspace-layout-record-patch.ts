@@ -27,21 +27,26 @@ const LIST_FIELDS: Record<string, (record: Json) => unknown> = {
 // Patch session maps to record depth; changed record fields are replaced whole, matching diffStoredSession.
 const MAP_RECORD_DEPTH = 2
 
-/** Write touched records as after has them, including whole records supplied by load and touched folded legacy rows in loaded form. Preserve untouched stored records and return stored for a no-op. */
+/** Field → the keys of its map the patch wrote; null when it wrote the field whole. */
+export type TouchedSessionRecords = Map<string, Set<string> | null>
+
+/** Write touched records as after has them, including whole records supplied by load and touched folded legacy rows in loaded form. Preserve untouched stored records and return stored for a no-op. `touched` collects what it wrote. */
 export function patchStoredSession(
   stored: WorkspaceSessionState,
   before: WorkspaceSessionState,
-  after: WorkspaceSessionState
+  after: WorkspaceSessionState,
+  touched?: TouchedSessionRecords
 ): WorkspaceSessionState {
-  const patched = patchRecords(stored, before, after)
+  const patched = patchRecords(stored, before, after, touched)
   const adopted = adoptTouchedFoldedRows(stored, patched, before)
-  return adopted === stored ? patched : patchRecords(adopted, before, after)
+  return adopted === stored ? patched : patchRecords(adopted, before, after, touched)
 }
 
 function patchRecords(
   stored: WorkspaceSessionState,
   before: WorkspaceSessionState,
-  after: WorkspaceSessionState
+  after: WorkspaceSessionState,
+  touched: TouchedSessionRecords | undefined
 ): WorkspaceSessionState {
   const beforeFields = toJson(before)
   const afterFields = toJson(after)
@@ -53,22 +58,32 @@ function patchRecords(
   const patched: Json = { ...storedFields }
   for (const field of changed) {
     const idOf = LIST_FIELDS[field]
+    const beforeField = beforeFields[field]
+    const afterField = afterFields[field]
     // The command dropped the field: stored records the load never read go with it.
-    if (afterFields[field] === undefined) {
+    if (afterField === undefined) {
+      touched?.set(field, null)
       delete patched[field]
     } else if (idOf) {
+      const keys = changedKeys(asJson(beforeField), asJson(afterField))
+      touched?.set(field, new Set(keys))
       patched[field] = patchLists(
         asJson(storedFields[field]),
-        asJson(beforeFields[field]),
-        asJson(afterFields[field]),
-        idOf
+        asJson(beforeField),
+        asJson(afterField),
+        idOf,
+        keys
       )
     } else {
+      const keys =
+        isRecord(beforeField) && isRecord(afterField) ? changedKeys(beforeField, afterField) : null
+      touched?.set(field, keys && new Set(keys))
       patched[field] = patchValue(
         storedFields[field],
-        beforeFields[field],
-        afterFields[field],
-        MAP_RECORD_DEPTH
+        beforeField,
+        afterField,
+        MAP_RECORD_DEPTH,
+        keys ?? undefined
       )
     }
   }
@@ -80,10 +95,11 @@ function patchLists(
   stored: Json,
   before: Json,
   after: Json,
-  idOf: (record: Json) => unknown
+  idOf: (record: Json) => unknown,
+  keys: readonly string[]
 ): Json {
   const patched: Json = { ...stored }
-  for (const key of changedKeys(before, after)) {
+  for (const key of keys) {
     const list = patchList(asList(stored[key]), asList(before[key]), asList(after[key]), idOf)
     if (list.length === 0 && (after[key] === undefined || stored[key] === undefined)) {
       delete patched[key]
@@ -174,7 +190,14 @@ function insertionIndex(
   return position === 0 ? 0 : result.length
 }
 
-function patchValue(stored: unknown, before: unknown, after: unknown, depth: number): unknown {
+/** `keys`: before's and after's differing keys, when the caller already has them. */
+function patchValue(
+  stored: unknown,
+  before: unknown,
+  after: unknown,
+  depth: number,
+  keys?: readonly string[]
+): unknown {
   // A record the stored partition lacks is written whole; a missing map is patched key by key.
   if (
     depth === 0 ||
@@ -186,7 +209,7 @@ function patchValue(stored: unknown, before: unknown, after: unknown, depth: num
   }
   const base = asJson(stored)
   const patched: Json = { ...base }
-  for (const key of changedKeys(before, after)) {
+  for (const key of keys ?? changedKeys(before, after)) {
     if (after[key] === undefined) {
       delete patched[key]
     } else {

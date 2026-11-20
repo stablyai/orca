@@ -1,8 +1,9 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
 
-const { existsSyncMock, spawnMock } = vi.hoisted(() => ({
+const { accessMock, existsSyncMock, spawnMock } = vi.hoisted(() => ({
+  accessMock: vi.fn(),
   existsSyncMock: vi.fn(),
   spawnMock: vi.fn()
 }))
@@ -12,6 +13,14 @@ vi.mock('fs', async (importOriginal) => {
   return {
     ...actual,
     existsSync: existsSyncMock
+  }
+})
+
+vi.mock('fs/promises', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return {
+    ...actual,
+    access: accessMock
   }
 })
 
@@ -155,4 +164,57 @@ describe('system SSH operation aborts', () => {
     expect(outcome).toBe('AbortError')
     expect(sshProcess.kill).toHaveBeenCalledTimes(1)
   })
+})
+
+describe('system SSH directory upload tar binary', () => {
+  const originalPlatform = process.platform
+
+  beforeEach(() => {
+    accessMock.mockReset()
+    spawnMock.mockReset()
+  })
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: originalPlatform })
+    vi.unstubAllEnvs()
+  })
+
+  it.each([
+    { systemTarExists: true, expected: 'D:\\Windows\\System32\\tar.exe' },
+    { systemTarExists: false, expected: 'tar' }
+  ])(
+    'spawns $expected on Windows when System32 tar.exe exists=$systemTarExists',
+    async ({ systemTarExists, expected }) => {
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+      vi.stubEnv('SystemRoot', 'D:\\Windows')
+      vi.stubEnv('ORCA_SYSTEM_SSH_PATH', 'D:\\Windows\\System32\\OpenSSH\\ssh.exe')
+      accessMock.mockImplementation(async () => {
+        if (!systemTarExists) {
+          throw new Error('ENOENT')
+        }
+      })
+      const tarCreate = createMockChildProcess()
+      const sshExtract = createMockChildProcess()
+      spawnMock.mockReturnValueOnce(tarCreate).mockReturnValueOnce(sshExtract)
+
+      const uploadPromise = uploadDirectoryViaSystemSsh(
+        createTarget(),
+        'C:\\local-relay',
+        '/tmp/remote-relay'
+      )
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+      tarCreate.stdout.end()
+      tarCreate.emit('close', 0, null)
+      sshExtract.emit('close', 0, null)
+      await uploadPromise
+
+      expect(accessMock).toHaveBeenCalledWith('D:\\Windows\\System32\\tar.exe')
+      expect(spawnMock).toHaveBeenNthCalledWith(
+        1,
+        expected,
+        ['-czf', '-', '.'],
+        expect.objectContaining({ cwd: 'C:\\local-relay', windowsHide: true })
+      )
+    }
+  )
 })

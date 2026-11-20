@@ -3,6 +3,11 @@ import { useCallback, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import {
+  readRuntimeStatuses,
+  type RuntimeStatuses
+} from '@/store/slices/runtime-status/views/runtime-status-owner'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
@@ -92,13 +97,14 @@ function ownerEntries(
 // Hide bot workspaces on (the Projects list's own rule, useBotListedWorktreeIdentities).
 function workerOwners(
   state: AppState,
+  statuses: RuntimeStatuses,
   entries: readonly OwnerEntry[],
   routed: boolean
 ): ReadonlyMap<string, BotWorkerOwnership> {
   if (!routed || !entries.some((entry) => entry.kind === 'bot')) {
     return NO_WORKER_OWNERS
   }
-  const childrenByParent = selectSidebarChildrenByParentIdentity(state)
+  const childrenByParent = selectSidebarChildrenByParentIdentity(state, statuses)
   const inputs = [entries, childrenByParent]
   if (lastWorkerOwners && sameInputs(lastWorkerOwners.inputs, inputs)) {
     return lastWorkerOwners.owners
@@ -113,6 +119,7 @@ function workerOwners(
 
 function ownerInputs(
   state: AppState,
+  statuses: RuntimeStatuses,
   bots: readonly Bot[],
   groups: readonly BotGroup[]
 ): SidebarWorkspaceOwnerInputs {
@@ -131,7 +138,7 @@ function ownerInputs(
     botsEnabled,
     hideBotCreatedWorkspaces,
     owners,
-    workerOwners: workerOwners(state, entries, botsEnabled && hideBotCreatedWorkspaces)
+    workerOwners: workerOwners(state, statuses, entries, botsEnabled && hideBotCreatedWorkspaces)
   }
 }
 
@@ -150,6 +157,7 @@ function activeIsArchived(state: AppState, workspaceId: string): boolean {
 
 function targetFrom(
   state: AppState,
+  statuses: RuntimeStatuses,
   bots: readonly Bot[],
   groups: readonly BotGroup[]
 ): SidebarRevealTarget {
@@ -158,7 +166,7 @@ function targetFrom(
     state.activeWorktreeId
   )
   return resolveSidebarRevealTarget({
-    ...ownerInputs(state, bots, groups),
+    ...ownerInputs(state, statuses, bots, groups),
     activeView: state.activeView,
     activeWorkspaceId,
     activeHostId: state.activeWorkspaceExecutionHostId ?? null,
@@ -169,7 +177,7 @@ function targetFrom(
 
 /** What "Reveal current" points at right now, for a click or a command. */
 export function readSidebarRevealTarget(): SidebarRevealTarget {
-  return targetFrom(useAppStore.getState(), readBots(), readBotGroups())
+  return targetFrom(useAppStore.getState(), readRuntimeStatuses(), readBots(), readBotGroups())
 }
 
 /** Which section lists a workspace, for reveals that name one (activation, rename). */
@@ -178,7 +186,7 @@ export function readSidebarWorkspaceOwner(
   hostId: ExecutionHostId | null | undefined
 ): SidebarWorkspaceOwner {
   return resolveSidebarWorkspaceOwner(
-    ownerInputs(useAppStore.getState(), readBots(), readBotGroups()),
+    ownerInputs(useAppStore.getState(), readRuntimeStatuses(), readBots(), readBotGroups()),
     workspaceId,
     hostId ?? null
   )
@@ -212,11 +220,11 @@ export function useSidebarRevealUnavailableReason(): SidebarRevealNoneReason | n
     readBotListsVersion
   )
   const select = useCallback(
-    (state: AppState): SidebarRevealNoneReason | null => {
-      const target = targetFrom(state, bots, groups)
+    (state: AppState, statuses: RuntimeStatuses): SidebarRevealNoneReason | null => {
+      const target = targetFrom(state, statuses, bots, groups)
       return target.section === 'none' ? target.reason : null
     },
     [bots, groups]
   )
-  return useAppStore(select)
+  return useAppStoreWithHostStatuses(select)
 }

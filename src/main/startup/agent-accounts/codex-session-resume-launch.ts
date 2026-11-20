@@ -2,7 +2,7 @@ import { createCodexSessionResumeLaunchPreparation } from '../../codex/history/r
 import { mainProcessState as state } from '../main-process-state'
 
 const desktopResumeLaunch = createCodexSessionResumeLaunchPreparation({
-  getRuntimeHome: () => state.codexRuntimeHome,
+  getRuntimeHome: () => state.core.codexRuntimeHome,
   getSettings: () => state.store?.getSettings()
 })
 

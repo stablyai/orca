@@ -5,8 +5,9 @@ import {
   type ConnectorOffer,
   type ConnectorOfferSource
 } from '../../../../../src/shared/bots/bot-connector-offer'
-import { useHostBotById } from '../../../bots/host-bot-store'
+import { useHostBotById, useHostBotsEntry } from '../../../bots/host-bot-store'
 import type { PhoneBot } from '../../../bots/host-bots-operations'
+import { useMobileBotCardHost } from './bot-cards/mobile-bot-card-host'
 import {
   MobileGoogleMark,
   MobileConnectorSourceIcon
@@ -47,7 +48,7 @@ export function connectorOfferConnected(bot: PhoneBot | null, offer: ConnectorCa
 }
 
 /** A bot's Connect card. Connecting happens on the computer, so the phone says where; once the bot has
- *  the connector, it says so. */
+ *  the connector, it says so, or that it's paused while its host is signed out of Orca. */
 export function MobileNativeChatConnectorOfferRow({
   offer,
   fontScale
@@ -60,6 +61,10 @@ export function MobileNativeChatConnectorOfferRow({
   const bot = useHostBotById(offer.botId)
   const name = CONNECTOR_OFFER_NAMES[offer.source]
   const connected = connectorOfferConnected(bot, offer)
+  // The offer is in the bot's own chat, so the chat's host runs it. Google events don't go through Orca Cloud.
+  const host = useMobileBotCardHost()
+  const cloudStatus = useHostBotsEntry(host?.hostKey ?? null)?.connectorStatus
+  const paused = connected && offer.source !== 'google' && cloudStatus === 'signed-out'
   return (
     <View style={styles.card} accessibilityRole="text">
       <View style={styles.icon}>
@@ -73,7 +78,13 @@ export function MobileNativeChatConnectorOfferRow({
         <Text style={[styles.title, scaledType(typography.bodySize, fontScale)]}>
           {offer.workspace ? `${name} · ${offer.workspace}` : name}
         </Text>
-        {connected ? (
+        {paused ? (
+          <Text style={[styles.detail, scaledType(typography.metaSize, fontScale)]}>
+            {t('bots.connectorOffer.paused', 'Paused until {{host}} signs in to Orca.', {
+              host: host?.hostLabel
+            })}
+          </Text>
+        ) : connected ? (
           <>
             <View style={styles.connected}>
               <Check size={12} color={colors.textMuted} />
