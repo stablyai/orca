@@ -1,6 +1,5 @@
 import { LEGACY_JOURNAL_RETIREMENT_REASONS } from '../../../shared/telemetry/schemas/telemetry-legacy-journal-retirement-schema'
 import { isSqliteCorruption } from '../../sqlite/sqlite-read-failure'
-import type Database from '../../sqlite/sync-database'
 
 /** Shared with telemetry, which reports a refusal by this reason alone. */
 export const LEGACY_SOURCE_REFUSALS = LEGACY_JOURNAL_RETIREMENT_REASONS
@@ -25,27 +24,6 @@ export class JournalLegacyRetentionError extends Error {
  */
 export const LEGACY_SOURCE_ARTIFACTS = ['none', 'source_json', 'pause_table', 'both'] as const
 export type LegacySourceArtifact = (typeof LEGACY_SOURCE_ARTIFACTS)[number]
-
-/** Both shapes, not only the one that refused: a journal can carry both. */
-export function legacySourceArtifacts(
-  db: Database.Database,
-  tables: ReadonlySet<string>
-): LegacySourceArtifact {
-  const pauses = tables.has('queued_message_pauses')
-  const sourceJson =
-    tables.has('queued_messages') &&
-    db
-      .prepare('PRAGMA table_info(queued_messages)')
-      .all()
-      .some((column) => column.name === 'source_json')
-  return pauses && sourceJson
-    ? 'both'
-    : pauses
-      ? 'pause_table'
-      : sourceJson
-        ? 'source_json'
-        : 'none'
-}
 
 /** Unsupported storage is stable for this owner/descriptor, not across opens. */
 export class JournalLegacyIneligibleError extends JournalLegacyRetentionError {}

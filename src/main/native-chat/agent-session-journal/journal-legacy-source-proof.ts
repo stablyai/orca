@@ -4,9 +4,9 @@ import {
   legacyInventoryRefusal,
   legacyRecoveryRefusal,
   readJournalLegacySource,
-  legacySourceArtifacts,
   type LegacySourceRefusalReason
 } from './journal-legacy-retention-error'
+import { legacySourceArtifacts } from './journal-legacy-source-artifacts'
 import { readStoredQueuedMessageRow } from './queued-messages/queued-message-stored-row'
 import {
   readLegacyClaimsPage,
