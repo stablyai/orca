@@ -7,7 +7,7 @@ import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
 import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
 import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
-import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
+import tsWorker from './typescript-worker/orca-typescript.worker?worker'
 import { registerAstroLanguage } from '../../monaco-languages/register-astro'
 import { registerCMakeLanguage } from '../../monaco-languages/register-cmake'
 import { registerCudaLanguage } from '../../monaco-languages/register-cuda'
@@ -31,6 +31,7 @@ import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview
 import { installMonacoContextMenuPaste } from '@/components/editor/monaco/install-monaco-context-menu-paste'
 import { runMonacoSetupSteps } from './monaco-setup-steps'
 import { installMonacoTsWorkerIdleStop } from './monaco-ts-worker-idle-stop'
+import { installMonacoJsxLinkedEditing } from './monaco-jsx-linked-editing'
 import { onPluginFontLoadsChanged } from '@/store/plugins/appearance/plugin-fonts'
 
 globalThis.MonacoEnvironment = {
@@ -98,6 +99,7 @@ runMonacoSetupSteps([
   // Sandboxed navigator.clipboard blocks Monaco Paste; use trusted IPC as native Cmd+V does.
   ['context-menu paste', () => installMonacoContextMenuPaste(monaco)],
   ['TS worker idle stop', () => installMonacoTsWorkerIdleStop(monaco)],
+  ['JSX linked editing', () => installMonacoJsxLinkedEditing(monaco)],
   // Monaco caches glyph widths, so a plugin font that loads after first paint must re-measure.
   ['plugin font remeasure', () => onPluginFontLoadsChanged(() => monaco.editor.remeasureFonts())]
 ])

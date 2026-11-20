@@ -20,6 +20,7 @@ import { EditorWordWrapSetting } from './EditorWordWrapSetting'
 import { EditorFontFamilySetting } from './EditorFontFamilySetting'
 import { EditorFormatOnSaveSetting } from './EditorFormatOnSaveSetting'
 import { EditorInsertFinalNewlineSetting } from './EditorInsertFinalNewlineSetting'
+import { EditorLinkedEditingSetting } from './EditorLinkedEditingSetting'
 import { EditorEndOfLineSetting } from './EditorEndOfLineSetting'
 import { EditorTypographySettings } from './EditorTypographySettings'
 import {
@@ -202,6 +203,7 @@ export function GeneralEditorSettingsSection({
             onChange={() => updateSettings({ editorInlineBlame: !settings.editorInlineBlame })}
           />
         </SearchableSetting>
+        <EditorLinkedEditingSetting settings={settings} updateSettings={updateSettings} />
       </SettingsGroup>
       <SettingsGroup title={t('settings.general.editorGroups.diffs', 'Diffs')}>
         <SearchableSetting

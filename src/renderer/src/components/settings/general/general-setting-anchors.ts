@@ -21,6 +21,7 @@ export const GENERAL_SETTING_ANCHORS = {
   editorWrap: 'general-editor-word-wrap',
   minimap: 'general-editor-minimap',
   inlineBlame: 'general-editor-inline-blame',
+  linkedEditing: 'general-editor-linked-editing',
   diffView: 'general-editor-diff-view',
   diffWhitespace: 'general-editor-diff-whitespace',
   collapseUnchanged: 'general-editor-collapse-unchanged',
