@@ -1,9 +1,12 @@
 import type * as fs from 'node:fs'
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { resolveAppImageRuntimeIdentity } from './appimage-runtime-identity'
+import {
+  resolveAppImageRelaunchPath,
+  resolveAppImageRuntimeIdentity
+} from './appimage-runtime-identity'
 
 const realFs = vi.hoisted((): { closeSync: typeof fs.closeSync } => ({
   closeSync: () => {
@@ -28,7 +31,7 @@ function appImageHeader(machine: number): Buffer {
 }
 
 function createFixture(appDirName = '.mount_Orca123', machine = 0x3e) {
-  const root = mkdtempSync(join(tmpdir(), 'orca-appimage-identity-'))
+  const root = mkdtempSync(join(realpathSync(tmpdir()), 'orca-appimage-identity-'))
   const appImagePath = join(root, 'Applications', 'Orca.AppImage')
   const appDirPath = join(root, appDirName)
   const execPath = join(appDirPath, 'orca-ide')
@@ -70,6 +73,20 @@ afterEach(() => {
 })
 
 describe.skipIf(process.platform === 'win32')('resolveAppImageRuntimeIdentity', () => {
+  it('uses the outer artifact through a symlink and declines it once the target disappears', async () => {
+    const fixture = createFixture()
+    const link = join(fixture.root, 'Orca Nightly.AppImage')
+    symlinkSync(fixture.appImagePath, link)
+    const identity = {
+      ...fixture.identity,
+      environment: { ...fixture.identity.environment, APPIMAGE: link }
+    }
+
+    expect(await resolveAppImageRelaunchPath(identity)).toBe(fixture.appImagePath)
+    rmSync(fixture.appImagePath)
+    expect(await resolveAppImageRelaunchPath(identity)).toBeNull()
+  })
+
   it.each([
     ['x64', 0x3e, '.mount_Orca123'],
     ['ARM64 extract-and-run', 0xb7, 'appimage_extracted_123']

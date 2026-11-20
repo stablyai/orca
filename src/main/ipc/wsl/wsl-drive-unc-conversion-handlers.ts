@@ -81,8 +81,7 @@ export function registerWslDriveUncConversionHandlers(
             }
             // Quit, not exit: the window and the store flush the slept panes on the way out.
             setTimeout(() => {
-              relaunchApp('wsl-drive-conversion')
-              quitProcess()
+              void relaunchApp('wsl-drive-conversion').then(() => quitProcess())
             }, 150)
           },
           newMigrationId: () => randomUUID(),

@@ -132,9 +132,8 @@ function scheduleProfileRelaunch(reason: ProfileRelaunchReason, sender: WebConte
     sender.send('app:restart-committed')
   }
   setTimeout(() => {
-    relaunchApp(reason)
     // Normal quit preserves renderer scrollback, PTY teardown, stats flush and final daemon checkpoints.
-    quitProcess()
+    void relaunchApp(reason).then(() => quitProcess())
   }, 150)
 }
 

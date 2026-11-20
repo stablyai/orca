@@ -1,13 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { appRelaunchMock, hasSwitchMock, recordDurableCrashBreadcrumbMock } = vi.hoisted(() => ({
+const { appRelaunchMock, hasSwitchMock, resolveAppImageMock, spawnMock } = vi.hoisted(() => ({
   appRelaunchMock: vi.fn(),
   hasSwitchMock: vi.fn<(name: string) => boolean>(() => false),
-  recordDurableCrashBreadcrumbMock: vi.fn()
+  resolveAppImageMock: vi.fn(),
+  spawnMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
-  app: { relaunch: appRelaunchMock, commandLine: { hasSwitch: hasSwitchMock } }
+  app: { isPackaged: true, relaunch: appRelaunchMock, commandLine: { hasSwitch: hasSwitchMock } }
+}))
+vi.mock('@orca/process-host', () => ({ spawnProcess: spawnMock }))
+vi.mock('../../updater/linux-package/appimage-runtime-identity', () => ({
+  resolveAppImageRelaunchPath: resolveAppImageMock
 }))
 vi.mock('../../windows/windows-administrator-status', () => ({
   getWindowsAdministratorStatus: vi.fn(async () => true)
@@ -16,7 +21,7 @@ vi.mock('../../daemon/providers/lifecycle/daemon-provider-restart', () => ({
   restartDaemon: vi.fn(async () => {})
 }))
 vi.mock('../../crash-reporting/breadcrumbs/durable-crash-breadcrumb', () => ({
-  recordDurableCrashBreadcrumb: recordDurableCrashBreadcrumbMock
+  recordDurableCrashBreadcrumb: vi.fn()
 }))
 
 import { relaunchApp } from './app-relaunch'
@@ -26,7 +31,8 @@ import { _resetHydrateShellPathCache } from '../shell-environment/hydrate-shell-
 beforeEach(() => {
   appRelaunchMock.mockReset()
   hasSwitchMock.mockReset().mockReturnValue(false)
-  recordDurableCrashBreadcrumbMock.mockReset()
+  resolveAppImageMock.mockReset().mockResolvedValue(null)
+  spawnMock.mockReset()
 })
 
 const originalPath = process.env.PATH
@@ -35,6 +41,7 @@ const originalArgv = process.argv
 afterEach(() => {
   process.argv = originalArgv
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
   _resetHydrateShellPathCache()
   if (originalPath === undefined) {
     delete process.env.PATH
@@ -44,6 +51,25 @@ afterEach(() => {
 })
 
 describe('relaunchApp', () => {
+  it('passes desktop arguments intact to the outer AppImage with host search paths', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+    const mount = '/tmp/.mount_Orca'
+    process.argv = [`${mount}/orca-ide`, '--orca-background-open', '--', "file 'name' $d", '']
+    vi.stubEnv('APPDIR', mount)
+    vi.stubEnv('APPIMAGE', '/opt/Orca Nightly.AppImage')
+    vi.stubEnv('LD_LIBRARY_PATH', `${mount}/usr/lib:/usr/local/lib`)
+    resolveAppImageMock.mockResolvedValue('/opt/Orca Nightly.AppImage')
+    spawnMock.mockReturnValue({ pid: 123, on: vi.fn(), unref: vi.fn() })
+
+    await relaunchApp('renderer-request')
+
+    const { args, env } = spawnMock.mock.calls[0][0]
+    expect(args.slice(5)).toEqual(['/opt/Orca Nightly.AppImage', '--', "file 'name' $d", ''])
+    expect(env.LD_LIBRARY_PATH).toBe('/usr/local/lib')
+    expect(env.APPDIR).toBeUndefined()
+    expect(appRelaunchMock).not.toHaveBeenCalled()
+  })
+
   it('does not replay native administrator restart arguments before or after consumption', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     const flag = '--orca-restart-local-terminals-as-administrator'
@@ -55,16 +81,16 @@ describe('relaunchApp', () => {
       nextArgs = options?.args ?? nativeArgv.slice(1)
     })
 
-    relaunchApp('renderer-request')
+    await relaunchApp('renderer-request')
     expect(nextArgs).toEqual(['--user-data-dir=C:\\Orca profile'])
     await restartLocalTerminalsAfterElevation(new AbortController().signal)
     expect(process.argv).not.toContain(flag)
     expect(nativeArgv).toContain(flag)
-    relaunchApp('profile-switch')
+    await relaunchApp('profile-switch')
     expect(nextArgs).toEqual(['--user-data-dir=C:\\Orca profile'])
 
     const custom = { execPath: 'administrator-launcher.exe', args: ['restart', flag] }
-    relaunchApp('windows-administrator', undefined, custom)
+    await relaunchApp('windows-administrator', undefined, custom)
     expect(appRelaunchMock).toHaveBeenLastCalledWith(custom)
   })
 })

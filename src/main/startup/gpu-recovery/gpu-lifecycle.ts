@@ -130,12 +130,13 @@ export async function presentGpuFallbackRecoveredLaunchPrompt(
       }),
     restartWithHardware: () => {
       state.isQuitting = true
-      relaunchApp('gpu-fallback', {
+      void relaunchApp('gpu-fallback', {
         mode: 'hardware-retry',
         crashesInWindow: marker.crashesInWindow
+      }).then(() => {
+        destroySystemTray()
+        app.exit(0)
       })
-      destroySystemTray()
-      app.exit(0)
     }
   })
 }
@@ -232,9 +233,10 @@ export async function handleGpuChildCrash(
         recordDurableCrashBreadcrumb('gpu_fallback_restart_deferred', fallbackData),
       restartIntoSafeGraphics: () => {
         state.isQuitting = true
-        relaunchApp('gpu-fallback', fallbackData)
-        destroySystemTray()
-        app.exit(0)
+        void relaunchApp('gpu-fallback', fallbackData).then(() => {
+          destroySystemTray()
+          app.exit(0)
+        })
       }
     }
   )

@@ -8,7 +8,9 @@ import {
   statSync,
   type Stats
 } from 'node:fs'
+import { access, open, realpath } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { appImageEphemeralRootOf } from '../../../shared/desktop-distribution/appimage/appimage-ephemeral-root'
 
 const APPIMAGE_HEADER_LENGTH = 11
 const ORCA_PACKAGE_MARKER_MAX_BYTES = 1_024
@@ -67,13 +69,15 @@ function inspectRegularFile<T>(
 function hasAppImageHeader(appImagePath: string): boolean {
   return (
     inspectRegularFile(appImagePath, (fd, stats) => {
-      const header = readExact(fd, APPIMAGE_HEADER_LENGTH)
-      return (
-        (stats.mode & 0o111) !== 0 &&
-        header?.subarray(0, 4).equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46])) === true &&
-        header.subarray(8, 11).equals(Buffer.from([0x41, 0x49, 0x02]))
-      )
+      return (stats.mode & 0o111) !== 0 && isAppImageHeader(readExact(fd, APPIMAGE_HEADER_LENGTH))
     }) === true
+  )
+}
+
+function isAppImageHeader(header: Buffer | null): boolean {
+  return (
+    header?.subarray(0, 4).equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46])) === true &&
+    header.subarray(8, 11).equals(Buffer.from([0x41, 0x49, 0x02]))
   )
 }
 
@@ -151,9 +155,7 @@ export function hasAppImagePathEnvironment(environment: NodeJS.ProcessEnv = proc
   return Boolean(environment.APPIMAGE)
 }
 
-export function resolveAppImageRuntimeIdentity(
-  input: AppImageRuntimeIdentityInput = {}
-): AppImageRuntimeIdentity | null {
+function appImageRuntimePaths(input: AppImageRuntimeIdentityInput) {
   if ((input.platform ?? process.platform) !== 'linux') {
     return null
   }
@@ -175,11 +177,53 @@ export function resolveAppImageRuntimeIdentity(
   const runtimeRoot = resolve(appDirPath)
   if (
     resolve(dirname(execPath)) !== runtimeRoot ||
-    resolve(resourcesPath) !== resolve(join(runtimeRoot, 'resources')) ||
-    !hasAppImageHeader(appImagePath)
+    resolve(resourcesPath) !== resolve(join(runtimeRoot, 'resources'))
   ) {
     return null
   }
+  return { appImagePath, runtimeRoot, execPath, resourcesPath }
+}
+
+export async function resolveAppImageRelaunchPath(
+  input: AppImageRuntimeIdentityInput = {}
+): Promise<string | null> {
+  const paths = appImageRuntimePaths(input)
+  if (!paths || appImageEphemeralRootOf(paths.execPath)?.path !== paths.runtimeRoot) {
+    return null
+  }
+  try {
+    const [artifact, runtimeRoot] = await Promise.all([
+      realpath(paths.appImagePath),
+      realpath(paths.runtimeRoot)
+    ])
+    if (artifact === runtimeRoot || isInside(runtimeRoot, artifact)) {
+      return null
+    }
+    await access(artifact, constants.X_OK)
+    const file = await open(artifact, constants.O_RDONLY | constants.O_NONBLOCK)
+    try {
+      if (!(await file.stat()).isFile()) {
+        return null
+      }
+      const header = Buffer.alloc(APPIMAGE_HEADER_LENGTH)
+      const { bytesRead } = await file.read(header, 0, header.length, 0)
+      return bytesRead === header.length && isAppImageHeader(header) ? artifact : null
+    } finally {
+      await file.close()
+    }
+  } catch {
+    return null
+  }
+}
+
+export function resolveAppImageRuntimeIdentity(
+  input: AppImageRuntimeIdentityInput = {}
+): AppImageRuntimeIdentity | null {
+  const paths = appImageRuntimePaths(input)
+  if (!paths || !hasAppImageHeader(paths.appImagePath)) {
+    return null
+  }
+  const { appImagePath, runtimeRoot, execPath, resourcesPath } = paths
 
   try {
     const realRuntimeRoot = realpathSync(runtimeRoot)

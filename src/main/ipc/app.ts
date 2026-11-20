@@ -214,8 +214,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     setTimeout(() => {
       // app.exit skips before-quit; remove the Windows tray to avoid a stale icon.
       destroySystemTray()
-      relaunchApp('renderer-request')
-      app.exit(0)
+      void relaunchApp('renderer-request').then(() => app.exit(0))
     }, 150)
   })
 
@@ -223,8 +222,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     // Normal quit flushes daemon checkpoints and telemetry.
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
     setTimeout(() => {
-      relaunchApp('admin-restart')
-      quitProcess()
+      void relaunchApp('admin-restart').then(() => quitProcess())
     }, 150)
   })
 
@@ -232,8 +230,9 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     const relaunchOptions = prepareWindowsAdministratorRestart()
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
     setTimeout(() => {
-      relaunchApp('windows-administrator', undefined, relaunchOptions)
-      quitProcess()
+      void relaunchApp('windows-administrator', undefined, relaunchOptions).then(() =>
+        quitProcess()
+      )
     }, 150)
   })
 

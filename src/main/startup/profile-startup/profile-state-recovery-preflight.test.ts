@@ -247,9 +247,10 @@ describe('Electron recovery preflight', () => {
       ]
     }
 
-    it('applies the choice without writing a CLI response, then relaunches ordinary startup', () => {
+    it('applies the choice without writing a CLI response, then relaunches ordinary startup', async () => {
       const item = fixture()
       expect(runProfileStateRecoveryPreflight(desktopArgv(item))).toBe(true)
+      await Promise.resolve()
       expect(JSON.parse(readFileSync(item.dataFile, 'utf8'))).toEqual(item.restored)
       expect(existsSync(item.databaseFile)).toBe(false)
       expect(mocks.output).not.toHaveBeenCalled()
