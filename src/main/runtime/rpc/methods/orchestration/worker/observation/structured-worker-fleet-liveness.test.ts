@@ -8,14 +8,11 @@ import {
 } from '../../../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import type { AgentSessionRecord } from '../../../../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { FleetAgentStatusEvidence } from '../../../../../../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import '../../../../../orchestration/db/contract-constants'
 import '../../../../../orchestration/db/dispatch-row-writer'
 import '../../../../../orchestration/db/attempt-outcome-projection'
+import { chatPaneKey } from '../../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -73,7 +70,7 @@ function sessionStatus(
     clock: { kind: 'observed', at },
     deliveredAt: at,
     activity: {
-      paneKey: structuredAgentSessionPaneKey(structuredAgentSessionTabId(SESSION), SESSION),
+      paneKey: chatPaneKey(SESSION),
       connectionId: null,
       state,
       agentType: 'codex',

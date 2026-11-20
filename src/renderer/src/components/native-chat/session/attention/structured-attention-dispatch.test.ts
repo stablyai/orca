@@ -7,7 +7,6 @@ import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { AgentSessionTurnCompletion } from '../../../../../../shared/agent-session/view/agent-session-turn-completion-wire'
 
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
@@ -20,6 +19,7 @@ import { botBackgroundSessionTabs } from '../../../bots/bot-background-sessions'
 import { publishBotGroups } from '@/lib/bot-group-catalog-snapshot'
 import type { BotGroup } from '../../../../../../shared/bots/bot-group'
 import type { AgentSessionStatusSummary } from '../../../../../../shared/agent-session/agent-session-wire'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 beforeEach(() => setPresenceGated(false))
 afterEach(() => setPresenceGated(true))
@@ -154,7 +154,7 @@ function structuredTab(workspaceId = WORKSPACE): StructuredTab {
 
 function indicators(workspaceId = WORKSPACE): Record<string, unknown> {
   const state = store.getState()
-  const subject = structuredAgentSessionPaneKey(CHAT_TAB, SESSION)
+  const subject = chatPaneKey(SESSION)
   return {
     workspaceBold:
       workspaceId === WORKSPACE

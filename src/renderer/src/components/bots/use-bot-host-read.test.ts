@@ -152,8 +152,8 @@ describe('a botsChanged notice and a bot view', () => {
     const { useAppStore } = await import('@/store')
     const { acceptedAgentStatuses } =
       await import('@/store/slices/agent-status/status-ownership/accepted-agent-statuses')
-    const { structuredAgentSessionStatusPaneKey } =
-      await import('../../../../shared/agent-session/view/structured-agent-session-tab')
+    const { chatPaneKey } =
+      await import('../../../../shared/agent-session/view/structured-agent-session-projection')
     const views = [
       { id: 'bot-chats', kinds: BOT_WORK_KINDS },
       { id: 'bot-items', kinds: ['items', 'workers'] as const }
@@ -178,7 +178,7 @@ describe('a botsChanged notice and a bot view', () => {
         useAppStore.setState({
           agentStatusByPaneKey: acceptedAgentStatuses(
             views.map(({ id }) => {
-              const paneKey = structuredAgentSessionStatusPaneKey(`s-${id}`)
+              const paneKey = chatPaneKey(`s-${id}`)
               const entry: AgentStatusEntry = {
                 paneKey,
                 state,

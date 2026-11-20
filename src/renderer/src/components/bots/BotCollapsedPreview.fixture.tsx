@@ -4,13 +4,13 @@ import { publishBots } from '@/lib/bot-catalog-snapshot'
 import { publishBotGroups } from '@/lib/bot-group-catalog-snapshot'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
-import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { Bot } from '../../../../shared/bot-types'
 import { mascotAvatar, type BotMascotId } from '../../../../shared/bot-avatar'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { ConfirmationDialogProvider } from '../dismiss/confirmation/confirmation-dialog'
 import { SidebarBotsSection } from './SidebarBotsSection'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 function bot(
   id: string,
@@ -52,7 +52,7 @@ const BOTS = [
 
 function chat(owner: Bot, state: AgentStatusEntry['state']): AgentStatusEntry {
   return {
-    paneKey: structuredAgentSessionStatusPaneKey(`chat-${owner.id}`),
+    paneKey: chatPaneKey(`chat-${owner.id}`),
     worktreeId: folderWorkspaceKey(owner.folderWorkspaceId),
     agentType: 'claude',
     prompt: '',

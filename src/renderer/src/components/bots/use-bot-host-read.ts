@@ -13,7 +13,7 @@ import type { Bot } from '../../../../shared/bot-types'
 import { reuseEqualJson } from '../../../../shared/reuse-equal-json'
 import type { BotChangeKind } from '../../../../shared/bots/bot-change-scope'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
-import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 type BotReadEntry<T> = {
   bot: BotRef
@@ -222,8 +222,8 @@ export function useBotHostRead<T>(read: BotHostRead<T>, bot: Bot | null): T | nu
   const key = bot ? botRefKey(bot) : null
   const workspaceId = bot ? folderWorkspaceKey(bot.folderWorkspaceId) : null
   const chatSessionId = bot?.chatSessionId ?? null
-  const chatPaneKey = useMemo(
-    () => (chatSessionId ? structuredAgentSessionStatusPaneKey(chatSessionId) : null),
+  const statusPaneKey = useMemo(
+    () => (chatSessionId ? chatPaneKey(chatSessionId) : null),
     [chatSessionId]
   )
   // A new chat, thread or turn of the Home chat re-reads at once, for a read that shows them.
@@ -246,7 +246,7 @@ export function useBotHostRead<T>(read: BotHostRead<T>, bot: Bot | null): T | nu
       : ''
   )
   const chatState = useAppStore((s) =>
-    followsChats && chatPaneKey ? s.agentStatusByPaneKey.get(chatPaneKey)?.state : undefined
+    followsChats && statusPaneKey ? s.agentStatusByPaneKey.get(statusPaneKey)?.state : undefined
   )
   const subscribe = useCallback(
     (listener: () => void) =>

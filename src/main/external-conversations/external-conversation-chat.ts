@@ -11,10 +11,6 @@ import type { ExternalConversationLink } from '../../shared/connectors/external-
 import { connectorAskerPrompt, connectorPlainMessages } from '../../shared/connector-asker-prompt'
 import { CHAT_GONE_REFUSAL } from '../../shared/connectors/connector-cloud-contract'
 import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../shared/agent-session/view/structured-agent-session-projection'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 import {
   getStructuredAgentSessionHost,
@@ -127,11 +123,6 @@ export function runningTurnOpenedByConversationReport(
 ): boolean {
   const opener = currentChat(chats)?.publishedWork(sessionId)?.activeTurnOpener
   return opener ? isConversationReport(opener.body) : false
-}
-
-/** The pane key the chat's status row is published under. */
-export function chatPaneKey(sessionId: string): string {
-  return structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId)
 }
 
 export function callerFor(link: Pick<ExternalConversationLink, 'sessionId'>): {

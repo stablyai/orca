@@ -1,4 +1,3 @@
-import { structuredAgentSessionStatusPaneKey } from '../agent-session/view/structured-agent-session-tab'
 import { describe, expect, it } from 'vitest'
 import type {
   AgentStatusEntry,
@@ -16,6 +15,7 @@ import {
 } from './bot-activity-model'
 import { workingWorkerRowCount } from './bot-activity-recorded-workers'
 import { botNow } from './bot-now'
+import { chatPaneKey } from '../agent-session/view/structured-agent-session-projection'
 
 const bot: Bot = {
   id: 'bot-1',
@@ -424,7 +424,7 @@ describe('buildBotActivity', () => {
   })
   it("lists a thread's chat by its status, without a tab, and leaves direct messages to Home", () => {
     const statuses: Record<string, Partial<AgentStatusEntry>> = {
-      [structuredAgentSessionStatusPaneKey('thread-live')]: {
+      [chatPaneKey('thread-live')]: {
         state: 'blocked',
         prompt: 'Deploy?',
         stateStartedAt: 9
@@ -433,7 +433,7 @@ describe('buildBotActivity', () => {
     const link = (sessionId: string) => ({
       source: 'slack' as const,
       externalId: `T1:C1:${sessionId}`,
-      paneKey: structuredAgentSessionStatusPaneKey(sessionId),
+      paneKey: chatPaneKey(sessionId),
       sessionId,
       agent: 'claude' as const,
       createdAt: 1
@@ -444,7 +444,7 @@ describe('buildBotActivity', () => {
         links: [link('thread-live'), link('thread-done'), link('chat-session')],
         sessionStatus: (sessionId) =>
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the model reads only state, workingMode, prompt and stateStartedAt.
-          (statuses[structuredAgentSessionStatusPaneKey(sessionId)] as AgentStatusEntry) ?? null
+          (statuses[chatPaneKey(sessionId)] as AgentStatusEntry) ?? null
       })
     )
 
@@ -458,12 +458,12 @@ describe('buildBotActivity', () => {
 
   it("titles a thread by its link, then by its chat's prompt", () => {
     const statuses: Record<string, Partial<AgentStatusEntry>> = {
-      [structuredAgentSessionStatusPaneKey('linear-done')]: {
+      [chatPaneKey('linear-done')]: {
         state: 'done',
         prompt: '<issue identifier="ENG-6470">\n<title>Bot replies drop the thread title</title>',
         stateStartedAt: 3
       },
-      [structuredAgentSessionStatusPaneKey('slack-done')]: {
+      [chatPaneKey('slack-done')]: {
         state: 'done',
         prompt: 'A later message',
         stateStartedAt: 2
@@ -472,7 +472,7 @@ describe('buildBotActivity', () => {
     const link = (sessionId: string, source: 'slack' | 'linear', title?: string) => ({
       source,
       externalId: sessionId,
-      paneKey: structuredAgentSessionStatusPaneKey(sessionId),
+      paneKey: chatPaneKey(sessionId),
       sessionId,
       agent: 'claude' as const,
       ...(title ? { title } : {}),
@@ -487,7 +487,7 @@ describe('buildBotActivity', () => {
         ],
         sessionStatus: (sessionId) =>
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the model reads only state, workingMode, prompt and stateStartedAt.
-          (statuses[structuredAgentSessionStatusPaneKey(sessionId)] as AgentStatusEntry) ?? null
+          (statuses[chatPaneKey(sessionId)] as AgentStatusEntry) ?? null
       })
     )
 
@@ -498,7 +498,7 @@ describe('buildBotActivity', () => {
   })
 
   it("opens a run's chat, shows its live status, and credits the run with its workers", () => {
-    const chat = structuredAgentSessionStatusPaneKey('run-chat')
+    const chat = chatPaneKey('run-chat')
     const activity = buildBotActivity(
       input({
         sessions: [],

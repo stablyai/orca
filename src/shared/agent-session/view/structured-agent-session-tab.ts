@@ -1,8 +1,5 @@
 import { isStructuredAgentId } from '../lifecycle/provider-handles/agent-session-provider-handle-encoding'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from './structured-agent-session-projection'
+import { structuredAgentSessionTabId } from './structured-agent-session-projection'
 import {
   isStructuredAgentSessionHostTabId,
   structuredAgentSessionHostTabId
@@ -13,11 +10,6 @@ export function isStructuredTab<T extends { contentType?: string; agentSessionAg
   tab: T
 ): tab is T & { contentType: 'agent-session' } {
   return tab.contentType === 'agent-session' && isStructuredAgentId(tab.agentSessionAgent)
-}
-
-/** The pane key a session's status row is published under, whether or not it has a tab. */
-export function structuredAgentSessionStatusPaneKey(sessionId: string): string {
-  return structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId)
 }
 
 /** The session a structured tab id names, or null for any other tab id. */

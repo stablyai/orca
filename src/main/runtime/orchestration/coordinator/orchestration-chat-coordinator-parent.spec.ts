@@ -9,10 +9,7 @@ import {
   store
 } from '../../construction/test-context/orca-runtime-test-fixtures.spec'
 import { testOrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address-test-fixture'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const CHAT_SESSION_ID = testOrcaSessionId('3a5c7e9b-1d4f-4a6c-8b0e-2f4a6c8e0b14')
 
@@ -63,10 +60,7 @@ describe('OrcaRuntimeService', () => {
 
       expect(result.agentOrchestrationByPaneKey?.[workerPaneKey]).toMatchObject({
         orchestrationRunId: run.id,
-        parentPaneKey: structuredAgentSessionPaneKey(
-          structuredAgentSessionTabId(CHAT_SESSION_ID),
-          CHAT_SESSION_ID
-        )
+        parentPaneKey: chatPaneKey(CHAT_SESSION_ID)
       })
     } finally {
       db.close()

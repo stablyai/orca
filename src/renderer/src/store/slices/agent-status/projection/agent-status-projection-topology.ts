@@ -3,7 +3,6 @@ import type { AgentStatusEntry } from '../../../../../../shared/agent-status/con
 import type { AgentStatusChange } from '../contracts/agent-status-contract'
 import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { parseAgentStatusPaneIdentity } from '../../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import { buildTitleDerivedAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-title-derived-agent-rows'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
@@ -14,6 +13,7 @@ import {
 } from '../../../record-transitions/keyed-record-change-reads'
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../../../shared/agent-status/presentation/migration-unsupported-agent-entry'
 import type { AgentStatusProjectionState } from './agent-status-projection-state'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const SEAM_AGENT_PRESENTATION_FIELDS = [
   'runtimePaneTitlesByTabId',
@@ -88,7 +88,7 @@ export function stageProjectionTopology(
           (diff?.kind !== 'addressed' || diff.tabIds.has(tab.id))
         ) {
           changedTabs.add(tab.id)
-          const key = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+          const key = chatPaneKey(tab.entityId)
           changedKeys.add(key)
           represented.delete(key)
           nextTabOwners.set(tab.id, null)
@@ -100,7 +100,7 @@ export function stageProjectionTopology(
           (diff?.kind !== 'addressed' || diff.tabIds.has(tab.id))
         ) {
           changedTabs.add(tab.id)
-          const key = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+          const key = chatPaneKey(tab.entityId)
           changedKeys.add(key)
           if (isStructuredTab(tab)) {
             represented.set(key, tab)

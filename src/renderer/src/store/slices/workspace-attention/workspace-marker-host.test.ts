@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { createTestStore, seedStore } from '../../testing/app-store-test-fixture'
 import { workspaceMarkerPaneKeysForHost } from './workspace-marker-host'
+import { chatPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 describe('a chat tab with its own id', () => {
   it('owns the markers its session address keys, so marking read clears them', () => {
@@ -24,7 +24,7 @@ describe('a chat tab with its own id', () => {
         ]
       }
     })
-    const key = structuredAgentSessionPaneKey('chat-tab-a', 'chat-1')
+    const key = chatPaneKey('chat-1')
     expect(key.startsWith('structured-agent-session-chat-1:')).toBe(true)
     expect([...workspaceMarkerPaneKeysForHost(store.getState(), 'ws', undefined, [key])]).toEqual([
       key

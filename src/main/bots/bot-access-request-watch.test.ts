@@ -4,10 +4,10 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeAccessRequest } from '../../shared/bots/bot-access-request.test-fixture'
 import type { ConnectorAccessRequest } from '../../shared/connector-bot-access-contract'
-import { structuredAgentSessionStatusPaneKey } from '../../shared/agent-session/view/structured-agent-session-tab'
 import type { OwnerNotice } from '../runtime/push/notifications/runtime-mobile-notification-controller'
 import { makeTestBot } from './bot.test-fixture'
 import { fakeAccessCloud } from './bot-access-cloud.test-fixture'
+import { chatPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
 import {
   botAccessSeenFile,
   createBotAccessRequestWatch,
@@ -84,7 +84,7 @@ describe('the access request watch', () => {
         title: 'Dana Kim asked to use Scout',
         body: 'Slack · Acme',
         worktreeId: 'folder:fw-scout',
-        paneKey: structuredAgentSessionStatusPaneKey('home-chat'),
+        paneKey: chatPaneKey('home-chat'),
         // The window toasts it itself.
         desktop: false
       }

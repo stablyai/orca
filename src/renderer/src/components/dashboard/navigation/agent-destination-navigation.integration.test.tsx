@@ -16,7 +16,7 @@ import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-
 import type * as WebRuntimeSessionEnvironment from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 
 import { activateWorktreeAgentPane } from '../../sidebar/workspace-card/activity/use-worktree-agent-activation'
-import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const effects = vi.hoisted(() => ({
   rpc: vi.fn(async () => ({ ok: true })),
@@ -112,12 +112,7 @@ it('opens a live paired chat from its physical SSH workspace', () => {
       ]
     }
   })
-  activateWorktreeAgentPane(
-    worktree.id,
-    'native-B',
-    structuredAgentSessionPaneKey('native-B', 'session-B'),
-    'ssh:server'
-  )
+  activateWorktreeAgentPane(worktree.id, 'native-B', chatPaneKey('session-B'), 'ssh:server')
 
   expect(useAppStore.getState()).toMatchObject({
     activeWorktreeId: worktree.id,

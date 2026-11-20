@@ -9,11 +9,11 @@ import {
 } from '../../../bots/bot-look-around-policy'
 import { postConnectorAction } from '../../../connector-cloud/connector-actions'
 import { cloudConversation } from '../../../../shared/connectors/connector-cloud-contract'
-import { chatPaneKey } from '../../../external-conversations/external-conversation-chat'
 import { defineMethod } from '../core'
 import { botTurnFor } from '../../../bots/bot-turn-for'
 import { sessionCallerOf } from '../../orchestration/addressing/orchestration-caller-identity'
 import { noteBotRequestPost } from './orchestration/messaging/bot-request-outcome'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 /** A refusal whose code the CLI reads and whose message a bot can act on. */
 export class ConnectorActError extends Error {

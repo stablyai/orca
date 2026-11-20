@@ -1,11 +1,11 @@
 import type { Tab } from '../../workspace-layout/tab-groups/tab-types'
-import { structuredAgentSessionPaneKey } from '../../agent-session/view/structured-agent-session-projection'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
 } from '../contracts/agent-status-types'
 import { isWebTerminalSurfaceTabId } from '../../workspace-layout/terminal-surface-id'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../workspace-layout/stable-pane-id'
+import { chatPaneKey } from '../../agent-session/view/structured-agent-session-projection'
 
 export type AgentStatusPaneIdentity = { tabId: string; paneId: string }
 
@@ -18,7 +18,7 @@ export function parseAgentStatusPaneIdentity(
   }
   if (
     representedTab?.contentType === 'agent-session' &&
-    structuredAgentSessionPaneKey(representedTab.id, representedTab.entityId) === paneKey
+    chatPaneKey(representedTab.entityId) === paneKey
   ) {
     return { tabId: representedTab.id, paneId: paneKey.slice(representedTab.id.length + 1) }
   }

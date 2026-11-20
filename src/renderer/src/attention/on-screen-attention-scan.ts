@@ -31,6 +31,7 @@ import {
   onScreenHostId
 } from '@/store/slices/workspace-attention/workspace-unread-flag-reads'
 import { paneKeyTabId } from '@/store/slices/workspace-attention/workspace-live-markers'
+import { chatPaneAddressTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { isOrcaWindowForegroundFocused } from '@/attention/orca-window-foreground-focus'
 import type { ClientWorkspaceViewReporter } from './client-workspace-view-report'
 
@@ -55,6 +56,16 @@ export type OnScreenAttentionEnvironment = {
 
 function hasMarkersOnScreen(s: AppState, targets: readonly AutoAckTabTarget[]): boolean {
   const tabIds = new Set(targets.map((target) => target.tabId))
+  // A chat's pane keys name its conversation address, not the tab it shows in.
+  for (const target of targets) {
+    const tab =
+      target.surfaceKind === 'structured'
+        ? s.unifiedTabsByWorktree[target.worktreeId ?? '']?.find(({ id }) => id === target.tabId)
+        : undefined
+    if (tab?.contentType === 'agent-session') {
+      tabIds.add(chatPaneAddressTabId(tab.entityId))
+    }
+  }
   const onScreen = (paneKey: string): boolean => tabIds.has(paneKeyTabId(paneKey) ?? '')
   return (
     targets.some(({ tabId }) => Boolean(s.unreadTerminalTabs[tabId])) ||

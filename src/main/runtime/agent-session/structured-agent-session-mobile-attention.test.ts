@@ -6,10 +6,6 @@ import type {
 import type { AgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 import type { NotificationSettings } from '../../../shared/notifications/notification-settings-types'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../shared/agent-session/view/structured-agent-session-projection'
 
 import {
   createStructuredAttentionMobileDelivery,
@@ -20,6 +16,7 @@ import {
 import type { MobileNotificationDispatchEvent } from '../push/notifications/runtime-mobile-notification-controller'
 import { makeTestBot } from '../../bots/bot.test-fixture'
 import { botGroupIdOfRoomPaneKey } from '../../../shared/bots/bot-group-room-pane-key'
+import { chatPaneKey } from '../../../shared/agent-session/view/structured-agent-session-projection'
 
 const SCOPE = {
   executionHostId: 'local',
@@ -201,10 +198,7 @@ describe("a bot run that couldn't finish", () => {
         source: 'agent-task-complete',
         agentState: 'done',
         worktreeId: 'folder:fw-atlas',
-        paneKey: structuredAgentSessionPaneKey(
-          structuredAgentSessionTabId('run-session'),
-          'run-session'
-        )
+        paneKey: chatPaneKey('run-session')
       })
     ])
   })

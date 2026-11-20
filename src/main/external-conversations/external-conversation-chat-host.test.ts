@@ -12,12 +12,13 @@ import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION
 } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
-import { chatPaneKey, deliverToChat, stopChat } from './external-conversation-chat'
+import { deliverToChat, stopChat } from './external-conversation-chat'
 import { answerChatPrompt, pendingChatPrompt } from './external-conversation-chat-prompts'
 import { findLink, readLinks } from './external-conversation-links'
 import { writeLinkFact } from './external-conversation-link-writes'
 import { agentReady, harness } from './external-conversation-seam.test-fixture'
 import { WORKTREE } from './external-conversation.test-fixture'
+import { chatPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
 
 // The real native-chat host over a fake provider: the seam's envelopes must pass its admission.
 const LINK: ExternalConversationLink = {

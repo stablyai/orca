@@ -7,7 +7,6 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
-import { structuredAgentSessionStatusPaneKey } from '../../shared/agent-session/view/structured-agent-session-tab'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { BotChatRow } from '../../shared/bots/bot-chat-row'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
@@ -18,6 +17,7 @@ import { listBotChats } from '../runtime/rpc/methods/bots-chats'
 import { openEmptyBotChat, readBotChatTree, type BotChatTreeHost } from './bot-chat-tree-host'
 import { BotLookAroundStore } from './bot-look-around-store'
 import { makeTestBot } from './bot.test-fixture'
+import { chatPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
 
 const bot = makeTestBot({ folderWorkspaceId: 'home-1', chatSessionId: 'chat-home' })
 const HOME = folderWorkspaceKey(bot.folderWorkspaceId)
@@ -246,9 +246,7 @@ const matrix: Record<string, Case> = {
         chatRecord('chat-beta', { otherHost: true })
       ],
       store: { tabs: ['chat-alpha', 'chat-beta'] },
-      statusRows: [
-        statusRow(structuredAgentSessionStatusPaneKey('chat-beta'), { stateStartedAt: 42 })
-      ],
+      statusRows: [statusRow(chatPaneKey('chat-beta'), { stateStartedAt: 42 })],
       rows: [
         row('chat-alpha', {
           title: 'Chat chat-beta',
@@ -262,7 +260,7 @@ const matrix: Record<string, Case> = {
         treeChat('chat-alpha', {
           title: 'Chat chat-beta',
           preview: 'Reply from chat-beta',
-          turnDone: { paneKey: structuredAgentSessionStatusPaneKey('chat-beta'), at: 42 }
+          turnDone: { paneKey: chatPaneKey('chat-beta'), at: 42 }
         })
       ]
     },
@@ -397,7 +395,7 @@ describe('bot chats tree: a chat worker in its own workspace', () => {
     const store = storeOf([chatRecord('chat-home'), chatRecord('chat-alpha')], {
       tabs: ['chat-home', 'chat-alpha']
     })
-    const workerRow = statusRow(structuredAgentSessionStatusPaneKey('chat-worker'), {
+    const workerRow = statusRow(chatPaneKey('chat-worker'), {
       state: 'working',
       worktreeId: worktree,
       stateStartedAt: AT + 60_000

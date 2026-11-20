@@ -25,7 +25,6 @@ export function NativeChatStructuredComposerTabStrips(props: {
     <>
       <NativeChatStructuredGoalStrip {...props} sessionId={props.transport.sessionId} />
       <NativeChatStructuredWorkerLifetimeStrip
-        tabId={props.tabId}
         transport={props.transport}
         isVisible={props.isVisible}
       />

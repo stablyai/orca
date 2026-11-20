@@ -5,8 +5,8 @@ import { findLink } from './external-conversation-links'
 import { writeChatLink, writeLinkFact } from './external-conversation-link-writes'
 import { fakeLinkStore } from './external-conversation.test-fixture'
 import type { ConversationKey } from './external-conversation-types'
-import { chatPaneKey } from './external-conversation-chat'
 import { ChatTurns } from './external-conversation-chat-turns'
+import { chatPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
 
 const SESSION = 'session-1'
 

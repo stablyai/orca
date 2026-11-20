@@ -1,5 +1,4 @@
 // `bots.chatTree`: a bot's chats with the workers each started, built on the bot's host from its own records.
-import { structuredAgentSessionStatusPaneKey } from '../../shared/agent-session/view/structured-agent-session-tab'
 import type { AgentListVerdict } from '../../shared/agent-status/presentation/agent-list-status'
 import { handedAgentRows } from '../../shared/bots/bot-activity-handed-agents'
 import type { BotChatTreeRead, BotChatTreeWorker } from '../../shared/bots/bot-chat-tree'
@@ -34,6 +33,7 @@ import {
 } from './bot-activity-host'
 import type { BotChatTreeParams } from '../../shared/rpc-contract/bots-params'
 import type { Bot } from '../../shared/bot-types'
+import { chatPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
 
 export type BotChatTreeHost = BotActivityHost & {
   /** The chat records, which live in the chat host that opens lazily. */
@@ -163,7 +163,7 @@ export async function readBotChatTreeParts(
     const placedPanes = new Set([
       ...workers.flatMap((worker) => (worker.paneKey ? [worker.paneKey] : [])),
       ...own.panes,
-      ...own.sessions.map(structuredAgentSessionStatusPaneKey)
+      ...own.sessions.map(chatPaneKey)
     ])
     const handedAgents = await readBotHandedAgents(host, bot, rowByPaneKey, handedWorkspaces)
     extras.push(

@@ -1,7 +1,7 @@
 import type { AgentSessionStatusSummary } from '../../../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionStatusFeedOwner } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { StructuredTab } from './structured-agent-session-tabs'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 export type HostGroup = {
   members: Set<Member>
@@ -195,7 +195,7 @@ export function createStructuredSessionMembership() {
       if (tabIds && !tabIds.has(tab.id)) {
         continue
       }
-      const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+      const paneKey = chatPaneKey(tab.entityId)
       listed.add(paneKey)
       if (members.get(paneKey)?.tab !== tab) {
         placeTab(tab, paneKey)

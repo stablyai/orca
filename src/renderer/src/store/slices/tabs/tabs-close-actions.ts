@@ -1,5 +1,5 @@
 import { editorTabRetirement } from '../editor/tabs/editor-tab-retirement'
-import { structuredAgentSessionAddressTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneAddressTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   landsOnEmptiedWorktree,
   emptiedWorktreeLandingPatch,
@@ -141,7 +141,9 @@ export function createTabsCloseActions(
               : current.unreadTerminalTabs
             // Why: a structured chat tab owns its markers directly; nothing else retires them.
             const structuredAttention =
-              tab.contentType === 'agent-session' ? removeTabsAttention(current, [tabId]) : null
+              tab.contentType === 'agent-session'
+                ? removeTabsAttention(current, [tabId, chatPaneAddressTabId(tab.entityId)])
+                : null
             let nextGroups = (current.groupsByWorktree[worktreeId] ?? []).map((candidate) =>
               candidate.id === group?.id
                 ? {
@@ -231,10 +233,7 @@ export function createTabsCloseActions(
                     // The tab is gone by now, so its chat's pane address is named here.
                     () =>
                       set((current) =>
-                        removeTabsAttention(current, [
-                          tabId,
-                          structuredAgentSessionAddressTabId(tabId, tab.entityId)
-                        ])
+                        removeTabsAttention(current, [tabId, chatPaneAddressTabId(tab.entityId)])
                       ),
                     { tabsBefore: state }
                   )

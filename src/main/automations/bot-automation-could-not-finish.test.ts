@@ -5,10 +5,6 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { removeTreeSync } from '../../shared/file-write/windows-transient-lock-removal'
 import type { Bot } from '../../shared/bot-types'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../shared/agent-session/view/structured-agent-session-projection'
 import type { Store } from '../persistence/loading-store/store'
 import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import type { OwnerNotice } from '../runtime/push/notifications/runtime-mobile-notification-controller'
@@ -20,6 +16,7 @@ import {
 import { AutomationService } from './automation-service'
 import { tickAt } from './testing/automation-service-tick.test-fixture'
 import { createBotAutomationDispatcher } from './bot-automation-launch'
+import { chatPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
 import {
   fakeResults,
   fakeSessions,
@@ -101,10 +98,7 @@ describe("a bot run refused before its turn tells the owner it couldn't finish",
         id: 'bot-could-not-finish:bot-1:Morning digest',
         ...notice,
         worktreeId: 'folder:gone',
-        paneKey: structuredAgentSessionPaneKey(
-          structuredAgentSessionTabId('home-chat'),
-          'home-chat'
-        )
+        paneKey: chatPaneKey('home-chat')
       }
     ])
   })

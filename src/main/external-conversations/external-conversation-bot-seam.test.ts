@@ -13,9 +13,11 @@ import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-sc
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 import type { ConversationBots } from './external-conversation-bots'
 import { connectorAskerPrompt } from '../../shared/connector-asker-prompt'
-import { projectStructuredItemToNativeChat } from '../../shared/agent-session/view/structured-agent-session-projection'
+import {
+  projectStructuredItemToNativeChat,
+  chatPaneKey
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 import { firstMessageActsFor } from '../bots/bot-request-asker'
-import { chatPaneKey } from './external-conversation-chat'
 import type { LinkableChat } from './external-conversation-chat-delivery'
 import { findLink } from './external-conversation-links'
 import type { ExternalConversationHost } from './external-conversation-host'
