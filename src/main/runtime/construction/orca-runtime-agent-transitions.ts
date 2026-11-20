@@ -125,12 +125,12 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
   private readonly externalConversations = installExternalConversations(this.store, this)
 
   // The sidebar feed's activity facts already announce row changes when it is on.
-  private readonly worktreeRowsChanges = ORCA_SIDEBAR_INPUTS_IS_MAIN
+  private readonly rowChanges = ORCA_SIDEBAR_INPUTS_IS_MAIN
     ? null
     : new WorktreeRowsChanges((event) => this.emitClientEvent(event))
 
   protected onTitleAgentStatusChanged(): void {
-    this.worktreeRowsChanges?.changed()
+    this.rowChanges?.changed()
   }
 
   /** The connector seam; null (no store) refuses every connector call. */
@@ -296,7 +296,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
       this.crewChanges.notify(crewStatusRowChange(mutation))
     )
     this.crewChanges.notify(new Set(['status', 'names']))
-    const detachRows = store.subscribeStatusRowMutations(() => this.worktreeRowsChanges?.changed())
+    const detachRows = store.subscribeStatusRowMutations((row) => this.rowChanges?.agentRow(row))
     const subscribe = store.subscribeEnrichedStatus?.bind(store)
     const detachTitles = subscribe
       ? subscribeHookStatusTitles({ subscribeEnrichedStatus: subscribe }, this)

@@ -1,4 +1,5 @@
 import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
+import type { AgentHookStatusRowMutation } from '../../../agent-hooks/server/server-types'
 import {
   createKeyedTrailingEdgeCoalescer,
   type KeyedTrailingEdgeCoalescer
@@ -22,5 +23,12 @@ export class WorktreeRowsChanges {
 
   changed(): void {
     this.coalescer.schedule(ROWS_KEY)
+  }
+
+  readonly agentRow = ({ subagentsOnly }: AgentHookStatusRowMutation): void => {
+    // Child-only changes reach the catalog on its ten-second backstop without rebuilding every row.
+    if (!subagentsOnly) {
+      this.changed()
+    }
   }
 }

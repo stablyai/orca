@@ -143,6 +143,7 @@ export type AgentHookStatusRowIdentity = {
 export type AgentHookStatusRowMutation = {
   before: AgentHookStatusRowIdentity | null
   after: AgentHookStatusRowIdentity | null
+  subagentsOnly?: true
 }
 export type StatusRowMutationListener = (mutation: AgentHookStatusRowMutation) => void
 export type PaneStatusClearListener = (clear: AgentStatusClearIpcPayload) => void
