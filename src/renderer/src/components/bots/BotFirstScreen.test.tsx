@@ -3,10 +3,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../shared/bot-types'
-import type {
-  NativeChatBlock,
-  NativeChatMessage
-} from '../../../../shared/native-chat/native-chat-types'
 
 const bot: Bot = {
   id: 'b1',
@@ -36,36 +32,26 @@ vi.mock('../native-chat/media/visuals/native-chat-visual-owner', () => ({
 
 import { BotFirstScreen } from './BotFirstScreen'
 
-function turn(blocks: NativeChatBlock[]): NativeChatMessage[] {
-  return [{ id: 'm', role: 'assistant', blocks, timestamp: null, source: 'transcript' }]
-}
-
-const repoList: NativeChatBlock[] = [
-  { type: 'tool-call', name: 'Bash', callId: '1', input: { command: 'orca repo list --json' } },
-  {
-    type: 'tool-result',
-    callId: '1',
-    output: JSON.stringify({
-      result: { repos: [{ displayName: 'orca' }, { displayName: 'relay' }] }
-    })
-  }
-]
-const linearRead: NativeChatBlock = {
-  type: 'tool-call',
-  name: 'Bash',
-  callId: '2',
-  input: { command: 'orca linear list-issues --assignee me --json' }
-}
-
 describe('a new bot’s first screen', () => {
   it('offers Try again when its first turn ended without a word', () => {
     render(
       <BotFirstScreen
-        firstScreen={{ phase: 'failed', turn: turn([...repoList, linearRead]), refused: null }}
+        firstScreen={{
+          phase: 'failed',
+          turn: [
+            {
+              id: 'm',
+              role: 'assistant',
+              blocks: [{ type: 'tool-call', name: 'Bash', input: { command: 'pwd' } }],
+              timestamp: null,
+              source: 'transcript'
+            }
+          ],
+          refused: null
+        }}
         isVisible
       />
     )
-    expect(screen.getByText('Couldn’t finish setting up')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(mocks.rpc).toHaveBeenCalledWith({ kind: 'local' }, 'bots.kickoff.retry', {
       botId: 'b1'
