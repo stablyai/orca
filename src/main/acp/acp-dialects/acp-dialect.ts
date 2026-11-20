@@ -214,7 +214,7 @@ export type AcpDialect = {
   /** The agent's own command for /compact. */
   compactCommand?: string
   /** Orca's catalog ids (the agent CLI's) its chat server names differently, as the server's ids. */
-  chatModelIds?: Readonly<Record<string, string>>
+  chatModelIds?: ReadonlyMap<string, string>
   /** The agent's own model command resolves selections its model option cannot name. */
   modelCommand?: {
     /** Only the model option's own "unknown model" refusal sends the value to the command. */

@@ -191,6 +191,22 @@ it("writes an explicit Auto as the chat server's `default`", () => {
     configId: 'model',
     value: 'default'
   })
+  // A session with no model option takes it through the model setter, under the same id.
+  const legacy = new AcpStructuredOptions(CURSOR.dialect)
+  legacy.adoptSession(
+    {
+      models: {
+        currentModelId: 'grok-4.7',
+        availableModels: [{ modelId: 'default', name: 'Auto' }]
+      }
+    },
+    'new'
+  )
+  expect(legacy.write('model', 'auto')).toEqual({ method: 'model', modelId: 'default' })
+  // Only Cursor's own aliases map; a name an object inherits is a model id like any other.
+  for (const id of ['constructor', '__proto__', 'toString']) {
+    expect(options.write('model', id)).toMatchObject({ value: id })
+  }
 })
 
 /** Cursor's model option, set to `value`. */

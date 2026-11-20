@@ -145,7 +145,7 @@ export class AcpStructuredOptions {
     if (this.resolvesConfig || this.picked.has(key) || this.unobservedCurrent.has(key)) {
       return false
     }
-    const native = (key === 'model' && this.dialect.chatModelIds?.[value]) || value
+    const native = (key === 'model' && this.dialect.chatModelIds?.get(value)) || value
     return value.length > 0 && this.currentValues()[key] === native
   }
 
@@ -224,7 +224,7 @@ export class AcpStructuredOptions {
     }
     if (key === 'model') {
       const option = this.select('model')
-      const model = this.dialect.chatModelIds?.[value] ?? value
+      const model = this.dialect.chatModelIds?.get(value) ?? value
       if (option) {
         return { method: 'config', configId: option.id, value: model }
       }
