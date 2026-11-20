@@ -92,6 +92,10 @@ export function createMailboxDeliveryIndexesIfPossible(this: OrchestrationDb): v
       ON messages(run_id, to_handle, sequence)
       WHERE read = 0 AND delivered_at IS NULL
         AND delivery_contract = 'current_delivery';
+    CREATE INDEX IF NOT EXISTS idx_messages_undelivered_current_inbox
+      ON messages(to_handle, sequence)
+      WHERE read = 0 AND delivered_at IS NULL
+        AND delivery_contract = 'current_delivery';
     CREATE INDEX IF NOT EXISTS idx_messages_unread_current_inbox
       ON messages(to_handle, sequence)
       WHERE read = 0 AND delivery_contract = 'current_delivery';
