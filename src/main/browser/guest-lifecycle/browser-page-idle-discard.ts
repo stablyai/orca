@@ -225,7 +225,7 @@ export function createBrowserPageIdleDiscard(sources: {
       deadlines.delete(pageId)
       schedule()
     },
-    /** Pages still loaded after being hidden at least this long. */
+    /** Pages Memory Saver could free that are still loaded after being hidden this long. */
     countHiddenLoadedPages(hiddenForMs: number): number {
       const cutoff = Date.now() - hiddenForMs
       let count = 0
@@ -233,6 +233,7 @@ export function createBrowserPageIdleDiscard(sources: {
         if (
           episode.visibilityKnown &&
           episode.visible === false &&
+          episode.revisits <= 15 &&
           !episode.consumed &&
           episode.hiddenAtWallMs !== null &&
           episode.hiddenAtWallMs <= cutoff
