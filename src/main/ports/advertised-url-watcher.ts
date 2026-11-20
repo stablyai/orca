@@ -237,7 +237,7 @@ export class AdvertisedUrlWatcher {
     this.reconcileObservedWorkspaces(new Map(worktreeIds.map((id) => [id, observedByPort])))
   }
 
-  couldDropUrls(observations: ObservationsByWorktree, canReconcile: boolean): boolean {
+  couldDropUrls(observations: () => ObservationsByWorktree, canReconcile: boolean): boolean {
     return couldDropAdvertisedUrls(this.cache, observations, canReconcile)
   }
 

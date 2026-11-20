@@ -16,9 +16,13 @@ export type ObservationsByWorktree = ReadonlyMap<
 /** Whether a scan with these observations would bind a printed URL to a pid, or drop it (absent listener when it can reconcile, or changed pid). */
 export function couldDropAdvertisedUrls(
   cache: ReadonlyMap<CacheKey, AdvertisedUrl>,
-  observations: ObservationsByWorktree,
+  getObservations: () => ObservationsByWorktree,
   canReconcile: boolean
 ): boolean {
+  if (cache.size === 0) {
+    return false
+  }
+  const observations = getObservations()
   // Indexed lazily: only workspaces that have a printed URL pay for it.
   const pidsByPortByWorktree = new Map<string, Map<number, (number | undefined)[]>>()
   const pidsByPortFor = (worktreeId: string): Map<number, (number | undefined)[]> | undefined => {
