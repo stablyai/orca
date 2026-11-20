@@ -2,13 +2,14 @@ import { expect, it, vi } from 'vitest'
 import { replaceTabBuckets } from '@/store/record-transitions/keyed-record-transitions'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { getWorktreeIdsWithStructuredChat } from './visible-worktree-activity-inputs'
+import type * as Sha256Module from '../../../../../../shared/hashing/sha256'
 
 // Perf contract (tracked in #45759): every terminal title write rescanned every structured chat
 // for the sidebar's chat workspaces and re-hashed each session id once the pane-key memo overflowed.
 
 const hashes = vi.hoisted(() => ({ count: 0 }))
 vi.mock('../../../../../../shared/hashing/sha256', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../../../../../shared/hashing/sha256')>()
+  const actual = await importOriginal<typeof Sha256Module>()
   return {
     ...actual,
     sha256: (message: Uint8Array) => {
