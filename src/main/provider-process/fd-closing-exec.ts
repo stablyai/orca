@@ -28,9 +28,9 @@ export async function resolveFdClosingExec(): Promise<string | undefined> {
   }
 }
 
-/** Launches that opt in before this resolves start as before, inheriting our descriptors. */
+/** Synchronous, so no opted-in launch can start before it; each launch checks the helper exists. */
 export function installFdClosingExec(): void {
   if (process.platform === 'linux') {
-    void resolveFdClosingExec().then(setFdClosingExec)
+    setFdClosingExec(resolveProviderExecPath('linux'))
   }
 }

@@ -1,7 +1,7 @@
 import { spawnProcess } from '@orca/process-host'
 import { FD_CLOSING_EXEC_ARGS, setFdClosingExec } from '@orca/process-host/fd-closing-exec-launch'
 import { once } from 'node:events'
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
@@ -51,12 +51,16 @@ describe.runIf(process.platform === 'linux')('fd-closing exec', () => {
         throw new Error('Missing stand-in descriptor')
       }
       leaked.resume()
-      // EOF arrives only once no helper pid holds it; the gate stays shut, so the helper still runs.
-      await once(leaked, 'end')
-      expect({ exitCode: child.exitCode, signalCode: child.signalCode }).toEqual({
-        exitCode: null,
-        signalCode: null
-      })
+      const released = once(leaked, 'end')
+      // The status frame comes after the helper forked its leader and watcher.
+      const status = child.stdio.at(5)
+      if (!(status instanceof Readable)) {
+        throw new Error('Missing status pipe')
+      }
+      await once(status, 'data')
+      await released
+      const stat = await readFile(`/proc/${child.pid}/stat`, 'utf8')
+      expect(stat.slice(stat.lastIndexOf(')') + 2, stat.lastIndexOf(')') + 3)).not.toBe('Z')
     } finally {
       // Closing the owner and gate pipes ends the watcher and the gated leader.
       for (const stream of child.stdio) {
@@ -76,7 +80,8 @@ describe.runIf(process.platform === 'linux')('fd-closing exec', () => {
       for (const program of ['orca-fd-closing-missing-program', script]) {
         const child = spawnProcess({ program, closeInheritedFds: true, stdio: 'ignore' })
         const [error] = await once(child, 'error')
-        expect(error).toMatchObject({ code: 'ENOENT' })
+        // A noexec tmpdir makes the direct spawn report EACCES; either way it's an error, not 127.
+        expect(['ENOENT', 'EACCES']).toContain((error as NodeJS.ErrnoException).code)
       }
     } finally {
       setFdClosingExec(undefined)

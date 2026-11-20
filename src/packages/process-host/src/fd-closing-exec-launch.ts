@@ -7,10 +7,12 @@ export const FD_CLOSING_EXEC_ARGS = ['--exec-without-inherited-fds', '--'] as co
 
 // libuv's search path when the child's environment has no PATH.
 const DEFAULT_SEARCH_PATH = '/usr/bin:/bin'
-// Linux reads at most this much of a `#!` line.
+// Linux reads at most this much of a `#!` line, and follows at most this many interpreters.
 const SHEBANG_MAX_BYTES = 256
+const INTERPRETER_MAX_DEPTH = 4
 
 let installedHelper: string | undefined
+let missingHelperLogged = false
 
 /** Main installs the Linux helper that execs a command keeping only stdio and NODE_CHANNEL_FD. */
 export function setFdClosingExec(helper: string | undefined): void {
@@ -31,6 +33,13 @@ export function fdClosingLaunch(
 ): FdClosingLaunch | null {
   const helper = installedHelper
   if (process.platform !== 'linux' || !helper) {
+    return null
+  }
+  if (!isExecutableFile(helper)) {
+    if (!missingHelperLogged) {
+      missingHelperLogged = true
+      console.warn(`[process-host] ${helper} is unavailable; children inherit our descriptors`)
+    }
     return null
   }
   const stdio = options.stdio
@@ -58,12 +67,12 @@ function wouldExec(file: string, options: Pick<SpawnOptions, 'cwd' | 'env'>): bo
 }
 
 // A script runs only if its `#!` interpreter does; exec otherwise fails with ENOENT or EACCES.
-function isRunnable(path: string): boolean {
-  if (!isExecutableFile(path)) {
+function isRunnable(path: string, depth = 0): boolean {
+  if (depth > INTERPRETER_MAX_DEPTH || !isExecutableFile(path)) {
     return false
   }
   const interpreter = shebangInterpreter(path)
-  return interpreter === null || isExecutableFile(interpreter)
+  return interpreter === null || isRunnable(interpreter, depth + 1)
 }
 
 function isExecutableFile(path: string): boolean {
@@ -90,8 +99,6 @@ function shebangInterpreter(path: string): string | null {
     return null
   }
   const text = head.subarray(0, length).toString('latin1')
-  if (!text.startsWith('#!')) {
-    return null
-  }
-  return text.slice(2).split('\n')[0].trim().split(/[ \t]/)[0] || null
+  // The kernel's parse: skip spaces and tabs, end at space, tab, newline or NUL; a CR stays.
+  return text.startsWith('#!') ? (/^[ \t]*([^ \t\n\0]+)/.exec(text.slice(2))?.[1] ?? null) : null
 }
