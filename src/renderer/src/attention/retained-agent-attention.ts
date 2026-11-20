@@ -7,6 +7,7 @@ import { notificationDeliveryId } from '../../../shared/notifications/notificati
 import { makePaneKey, parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { useAppStore } from '../store'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import {
   deliverAgentAttentionNotification,
   readAgentAttentionNotificationSound
@@ -43,7 +44,12 @@ export function createRetainedAgentAttentionReceiver() {
     const state = useAppStore.getState()
     if (
       notice.desktopAllowed === false ||
-      (notice.worktreeId && isWorkspaceNotificationMutedBySidebarFilters(state, notice.worktreeId))
+      (notice.worktreeId &&
+        isWorkspaceNotificationMutedBySidebarFilters(
+          state,
+          readRuntimeStatuses(),
+          notice.worktreeId
+        ))
     ) {
       return
     }
