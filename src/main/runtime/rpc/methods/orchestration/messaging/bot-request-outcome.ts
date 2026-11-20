@@ -144,8 +144,8 @@ async function settleBotRequests(
   }
   const db = runtime.getOrchestrationDb()
   const chat = isOrcaSessionId(sessionId) ? canonicalOrcaSessionId(sessionId) : null
-  // Read before any await, so mail the next turn takes is not read yet. Earlier turns' requests come
-  // too: one held for a worker is no longer the newest turn's once another turn starts.
+  // Earlier turns' requests too: one held for a worker is no longer the newest turn's once another
+  // turn starts. Read before any await, so it holds none the next turn took.
   const earlier =
     chat && why === 'ended'
       ? db.listReadOpenBotRequests(bot.id, orcaSessionMailboxes(db, chat))
