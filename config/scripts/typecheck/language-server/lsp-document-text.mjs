@@ -8,8 +8,13 @@ function offsetAt(text, { line, character }) {
     }
     lineStart = newline + 1
   }
-  const lineEnd = text.indexOf('\n', lineStart)
-  return Math.min(lineStart + character, lineEnd === -1 ? text.length : lineEnd)
+  let lineEnd = text.indexOf('\n', lineStart)
+  if (lineEnd === -1) {
+    lineEnd = text.length
+  } else if (text[lineEnd - 1] === '\r') {
+    lineEnd -= 1
+  }
+  return Math.min(lineStart + character, Math.max(lineStart, lineEnd))
 }
 
 export function applyContentChanges(text, changes = []) {

@@ -1,4 +1,4 @@
-import { sep } from 'node:path'
+import { resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const WATCH_KIND_ALL = 7
@@ -38,7 +38,7 @@ export function compileLspGlob(glob, flags = '') {
     } else if (char === '[' && glob.indexOf(']', i + 2) !== -1) {
       const end = glob.indexOf(']', i + 2)
       const body = glob.slice(i + 1, end).replace(/\\/g, '\\\\')
-      source += `[${body.startsWith('!') ? `^${body.slice(1)}` : body}]`
+      source += body.startsWith('!') ? `[^/${body.slice(1)}]` : `[${body}]`
       i = end
     } else {
       source += char.replace(/[.+^$()|\\[\]{}]/g, '\\$&')
@@ -50,7 +50,7 @@ export function compileLspGlob(glob, flags = '') {
 function baseToPath(baseUri) {
   const uri = typeof baseUri === 'string' ? baseUri : baseUri?.uri
   try {
-    return uri ? fileURLToPath(uri) : null
+    return uri ? resolve(fileURLToPath(uri)) : null
   } catch {
     return null
   }
@@ -58,7 +58,10 @@ function baseToPath(baseUri) {
 
 // Watches outside the workspace (package stores, global caches) are accepted and never fire; installs restart the server.
 export function parseWatchers(root, watchers = [], platform = process.platform) {
+  // Windows paths compare case-insensitively (drive letters arrive as c: or C:).
+  const fold = platform === 'win32' ? (path) => path.toLowerCase() : (path) => path
   const flags = platform === 'win32' ? 'i' : ''
+  const rootKey = fold(root)
   const parsed = []
   for (const { globPattern, kind = WATCH_KIND_ALL } of watchers) {
     if (typeof globPattern === 'string') {
@@ -66,19 +69,20 @@ export function parseWatchers(root, watchers = [], platform = process.platform) 
       continue
     }
     const base = baseToPath(globPattern?.baseUri)
-    if (base !== null && (base === root || base.startsWith(root + sep))) {
-      parsed.push({ prefix: base + sep, matcher: compileLspGlob(globPattern.pattern, flags), kind })
+    const baseKey = base === null ? null : fold(base)
+    if (baseKey !== null && (baseKey === rootKey || baseKey.startsWith(rootKey + sep))) {
+      parsed.push({ prefix: baseKey + sep, fold, matcher: compileLspGlob(globPattern.pattern, flags), kind })
     }
   }
   return parsed
 }
 
-export function watcherMatches({ prefix, matcher, kind }, path, type) {
+export function watcherMatches({ prefix, fold, matcher, kind }, path, type) {
   if ((kind & KIND_BIT[type]) === 0) {
     return false
   }
   if (prefix === null) {
     return matcher.test(toPosix(path))
   }
-  return path.startsWith(prefix) && matcher.test(toPosix(path.slice(prefix.length)))
+  return fold(path).startsWith(prefix) && matcher.test(toPosix(path.slice(prefix.length)))
 }

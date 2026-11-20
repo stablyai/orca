@@ -1,5 +1,6 @@
 // Adapt TypeScript 7 pull diagnostics for agent clients that only accept publishDiagnostics.
 import { spawnProcess } from '@orca/process-host'
+import { resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { resolveProjectCompilerInfo } from '../project-execution/run-typecheck-projects-in-parallel.mjs'
 import { resolveTsrsLauncher, supportsTsrs } from '../project-execution/tsrs-typecheck-compiler.mjs'
@@ -176,8 +177,10 @@ export function createDiagnosticsBridge({
 }
 
 function runLanguageServer() {
-  const root =
+  // resolve() drops the trailing separator the script-relative fallback carries.
+  const root = resolve(
     process.env.CLAUDE_PROJECT_DIR || fileURLToPath(new URL('../../../..', import.meta.url))
+  )
   let bridge
   const session = createServerSession({
     root,

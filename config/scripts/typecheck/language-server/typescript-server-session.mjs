@@ -8,6 +8,7 @@ const SESSION_ID_PREFIX = 'orca-session-'
 const WATCHED_FILES = 'workspace/didChangeWatchedFiles'
 const SHUTDOWN_GRACE_MS = 5000
 const REQUEST_CANCELLED = -32800
+const REQUEST_FAILED = -32803
 // These carry no work for a stopped server; a new one rereads the disk anyway.
 const NON_WAKING = new Set(['$/cancelRequest', '$/setTrace', 'textDocument/didClose', 'exit', WATCHED_FILES])
 const CHANGE_TYPE = { create: 1, update: 2, delete: 3 }
@@ -178,7 +179,22 @@ export function createServerSession({
 
   // Same initialize the client sent, then its open documents, so the new server sees what the old one saw.
   const wake = () => {
-    launch()
+    try {
+      launch()
+    } catch (error) {
+      // Mid-install the server package can be missing; fail this work and try again on the next request.
+      console.error(`agent-typescript-lsp: cannot start server: ${error.message}`)
+      state = 'stopped'
+      server = null
+      for (const message of queue.splice(0)) {
+        if (message.id !== undefined) {
+          toClient({ jsonrpc: '2.0', id: message.id, error: { code: REQUEST_FAILED, message: error.message } })
+        } else {
+          track(message)
+        }
+      }
+      return
+    }
     replayId = `${SESSION_ID_PREFIX}${++nextId}`
     server.write({ ...initialize, id: replayId })
   }
