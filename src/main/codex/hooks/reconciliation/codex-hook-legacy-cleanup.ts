@@ -13,8 +13,11 @@ import { readHooksJsonWithRaw } from '../../../agent-hooks/installation/configur
 import { resolveHooksJsonWritePath } from '../../../agent-hooks/installation/configuration/hook-config-write-path'
 import { findManagedTomlBlocks } from '../../../agent-hooks/installation/configuration/managed-toml-ownership'
 import type { CodexTrustEntry } from '../../trust/toml/config-toml-trust'
-import { writeTomlConfigAtomically } from '../../configuration/toml/config-toml-atomic-write'
-import { removeFileAtomicallyIfUnchanged } from '../../../filesystem/atomic-file-publication'
+import { unlinkSync } from 'node:fs'
+import {
+  readRawTomlConfig,
+  writeTomlConfigAtomically
+} from '../../configuration/toml/config-toml-atomic-write'
 import { ConcurrentFileEditError } from '../../../filesystem/concurrent-file-edit-guard'
 import {
   getConfigPath,
@@ -160,9 +163,10 @@ function cleanupLegacyCodexProfileHooks(): void {
     }
     return
   }
-  if (!removeFileAtomicallyIfUnchanged(profilePath, existing)) {
+  if (readRawTomlConfig(profilePath) !== existing) {
     throw new ConcurrentFileEditError(profilePath)
   }
+  unlinkSync(profilePath)
   observeFilePublication(profilePath, null)
 }
 

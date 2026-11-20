@@ -54,6 +54,9 @@ export function writeTomlConfigAtomically(
     })
     // A rejected update must not rotate the backup first.
     assertGuardedFileCurrent(writePath)
+    if (readRawTomlConfig(writePath) !== computedFrom) {
+      return false
+    }
     if (existsSync(writePath)) {
       writeRollingFileBackup(writePath, `${writePath}.bak`)
     }
