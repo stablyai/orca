@@ -1,5 +1,6 @@
 import type {
   GapRecovery,
+  GapScreenIdentity,
   RuntimeHeadlessTerminal
 } from '../records/runtime-terminal-state-records'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
@@ -8,24 +9,30 @@ import type { RuntimeTerminalProjection } from './terminal-projection'
 
 export type KeptGapScreen = RuntimeTerminalProjection & { seq: number; capturedAt: number }
 
-/** Keeps a frame known correct at `seq` unless a newer one is kept; it is read lazily, once. */
+function sameStream(a: GapScreenIdentity, b: GapScreenIdentity): boolean {
+  return a.generation === b.generation && a.anchorRevision === b.anchorRevision
+}
+
+/** Keeps a frame known correct at `seq` unless a newer one of the same stream is kept. It is projected at once,
+ *  so a landed capture's ANSI (the whole live window) is not retained past its parse. */
 export function keepGapRecoveryScreen(
   recovery: GapRecovery,
-  seq: number,
-  capturedAt: number,
+  frame: GapScreenIdentity & { seq: number; capturedAt: number },
   read: () => RuntimeTerminalProjection | Promise<RuntimeTerminalProjection>
 ): void {
-  if (recovery.keptScreen && recovery.keptScreen.seq >= seq) {
+  const kept = recovery.keptScreen
+  if (kept && sameStream(kept, frame) && kept.seq >= frame.seq) {
     return
   }
-  let projection: Promise<RuntimeTerminalProjection> | undefined
+  const projection = Promise.resolve()
+    .then(read)
+    .catch(() => null)
   recovery.keptScreen = {
-    seq,
-    capturedAt,
-    read: () =>
-      (projection ??= Promise.resolve()
-        .then(read)
-        .catch(() => ({ lines: [] })))
+    generation: frame.generation,
+    anchorRevision: frame.anchorRevision,
+    seq: frame.seq,
+    capturedAt: frame.capturedAt,
+    read: () => projection
   }
 }
 
@@ -33,33 +40,44 @@ export function keepGapRecoveryScreen(
 export function keepLandedGapScreen(
   recovery: GapRecovery | undefined,
   snapshot: PtyProviderBufferSnapshot,
-  capturedAt: number,
+  stream: GapScreenIdentity & { capturedAt: number },
   parse: (frame: { data: string; cols: number; rows: number }) => Promise<RuntimeTerminalProjection>
 ): void {
   if (recovery && !snapshot.synchronizedOutput) {
     const { data, cols, rows } = snapshot
-    keepGapRecoveryScreen(recovery, snapshot.seq, capturedAt, () => parse({ data, cols, rows }))
+    keepGapRecoveryScreen(recovery, { ...stream, seq: snapshot.seq }, () =>
+      parse({ data, cols, rows })
+    )
   }
 }
 
 /** Runs in stream order at the first gap: the trusted model's screen through the last byte before the drop, unless half-drawn. */
-export function keepPreGapScreen(state: RuntimeHeadlessTerminal, trusted: boolean): void {
-  if (trusted && state.gapReseed && !state.emulator.isSynchronizedOutput) {
+export function keepPreGapScreen(
+  state: RuntimeHeadlessTerminal,
+  stream: GapScreenIdentity | null
+): void {
+  if (stream && state.gapReseed && !state.emulator.isSynchronizedOutput) {
     const frame = projectTerminalVisibleLines(state.emulator)
-    keepGapRecoveryScreen(state.gapReseed, state.outputSequence, Date.now(), () => frame)
+    keepGapRecoveryScreen(
+      state.gapReseed,
+      { ...stream, seq: state.outputSequence, capturedAt: Date.now() },
+      () => frame
+    )
   }
 }
 
-/** The newest correct frame a rebuilding screen has, or null when it never had one. */
+/** The newest correct frame a rebuilding screen has, blank included, or null when it has none of the live stream. */
 export async function readKeptGapScreen(
-  recovery: GapRecovery | undefined
+  recovery: GapRecovery | undefined,
+  liveStream: () => GapScreenIdentity
 ): Promise<KeptGapScreen | null> {
   const kept = recovery?.keptScreen
-  if (!kept) {
+  if (!kept || !sameStream(kept, liveStream())) {
     return null
   }
   const projection = await kept.read()
-  return projection.lines.length > 0
+  // A reset or re-anchor while parsing leaves the frame's seq incomparable with the live stream.
+  return projection && sameStream(kept, liveStream())
     ? { ...projection, seq: kept.seq, capturedAt: kept.capturedAt }
     : null
 }

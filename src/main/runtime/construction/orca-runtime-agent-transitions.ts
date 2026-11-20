@@ -115,7 +115,8 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     ...this.terminalWorkerResolution,
     readHookRow: (paneKey) => this.agentTransitions.latestRow(paneKey),
     setTimer: unrefTimer,
-    readScreen: (handle) => this.readTerminal(handle, { screen: true, limit: 15 }),
+    readScreen: (handle, screen) =>
+      this.readTerminal(handle, { screen: screen ?? true, limit: 15 }),
     takeOpenApproval: (paneKey, dispatchId) =>
       this.terminalWorkerApprovals.takeOpenApproval(paneKey, dispatchId),
     markApprovalReported: (approvalId) => this.terminalWorkerApprovals.markReported(approvalId)

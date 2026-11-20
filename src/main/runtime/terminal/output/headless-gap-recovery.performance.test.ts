@@ -219,7 +219,7 @@ it.each([10, 100])(
   30_000
 )
 
-// A rebuilding screen answers from its kept frame: parsed once, never recaptured per read (#43889).
+// A rebuilding screen answers from its kept frame: parsed once when kept, never recaptured or reparsed per read (#43889).
 it.each([10, 100])(
   'answers %i rebuilding screens from their kept frames without recapturing or reparsing',
   async (count) => {
@@ -242,11 +242,12 @@ it.each([10, 100])(
         return Promise.resolve({
           data: '\x1b[H\x1b[2Jkept',
           ...grid,
-          seq: 5,
+          seq: 10,
           source: 'headless'
         })
       }
     })
+    const parses = vi.spyOn(HeadlessEmulator.prototype, 'dispose')
     vi.useFakeTimers({ toFake: ['setTimeout'] })
     try {
       for (const ptyId of ptyIds) {
@@ -257,7 +258,6 @@ it.each([10, 100])(
         runtime.notePtyDataGap(ptyId, 9)
       }
       await vi.waitFor(() => expect(recoveryCaptures).toBeGreaterThanOrEqual(count))
-      const parses = vi.spyOn(HeadlessEmulator.prototype, 'dispose')
       for (let round = 0; round < 10; round += 1) {
         for (const ptyId of ptyIds) {
           const screen = await headlessOf(runtime).readScreenProjection(ptyId)

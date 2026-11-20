@@ -26,7 +26,8 @@ export type TerminalWorkerTurnStopsDeps = WorkerTurnStopReportDeps & {
   setTimer: (run: () => void, delayMs: number) => { cancel: () => void }
   getHandle: (paneKey: string) => string | null
   getProcessIncarnation: (handle: string) => string | null
-  readScreen: (handle: string) => Promise<RuntimeTerminalRead>
+  /** `screen: false` reads accumulated output instead of the rendered grid. */
+  readScreen: (handle: string, screen?: false) => Promise<RuntimeTerminalRead>
   /** The pane's open approval Orca can answer. */
   takeOpenApproval: (paneKey: string, dispatchId: string) => Promise<WorkerApprovalPayload | null>
   /** Called only once the approval's escalation went out. */
@@ -122,9 +123,15 @@ export class TerminalWorkerTurnStops {
     awaitDialog: boolean
   ): Promise<string | undefined> {
     // A prompt is what the grid shows now; an unavailable screen's tail is older transcript, a stale one an older frame.
+    // Other stops want the latest output: a stale frame predates it, so they take the accumulated output instead.
     const read = () =>
       this.deps
         .readScreen(handle)
+        .then((view) =>
+          view.source === 'screen-stale' && !needsScreen
+            ? this.deps.readScreen(handle, false)
+            : view
+        )
         .then((view) =>
           needsScreen && (view.source === 'screen-unavailable' || view.source === 'screen-stale')
             ? null

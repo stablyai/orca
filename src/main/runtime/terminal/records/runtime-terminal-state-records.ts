@@ -257,8 +257,12 @@ export type GapRecovery = {
   keptScreen?: GapRecoveryScreen
 }
 
-export type GapRecoveryScreen = {
+/** The stream a frame's seq belongs to: a lifecycle or anchor change makes it incomparable. */
+export type GapScreenIdentity = { generation: number; anchorRevision: number | undefined }
+
+export type GapRecoveryScreen = GapScreenIdentity & {
   seq: number
   capturedAt: number
-  read: () => Promise<RuntimeTerminalProjection>
+  /** Null when the frame could not be parsed. */
+  read: () => Promise<RuntimeTerminalProjection | null>
 }

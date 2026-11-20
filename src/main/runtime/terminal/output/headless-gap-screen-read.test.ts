@@ -5,7 +5,10 @@ import {
 } from '../wait/agent-transcript-pane-test-harness'
 
 // A model-owned screen whose rebuild capture is held by fake timers, or never lands.
-async function recoveringPane(recoveryFrame?: { seq: number; synchronizedOutput?: boolean }) {
+async function recoveringPane(
+  recoveryFrame?: { seq: number; synchronizedOutput?: boolean },
+  beforeGap = 'before gap\r\n'
+) {
   let recoveryAsked = (): void => {}
   const asked = new Promise<void>((resolve) => {
     recoveryAsked = resolve
@@ -32,7 +35,7 @@ async function recoveringPane(recoveryFrame?: { seq: number; synchronizedOutput?
   vi.useFakeTimers({ toFake: ['setTimeout'] })
   pane.runtime.synchronizePtyOutputSequenceFromProvider(PTY_ID, { value: 0, generation: 'reset' })
   pane.runtime.anchorProviderSequence(PTY_ID, 0, 0)
-  pane.runtime.onPtyData(PTY_ID, 'before gap\r\n', 1)
+  pane.runtime.onPtyData(PTY_ID, beforeGap, 1)
   pane.runtime.notePtyDataGap(PTY_ID, 9)
   await asked
   pane.runtime.onPtyData(PTY_ID, 'after gap', 2)
@@ -76,6 +79,34 @@ it('keeps the last whole frame when the landed recovery frame is half-drawn', as
     const read = await runtime.readTerminal(handle, { screen: true })
     expect(read.source).toBe('screen-stale')
     expect(read.tail).toEqual(['before gap'])
+  } finally {
+    vi.useRealTimers()
+    await runtime.onPtyExit(PTY_ID, 0)
+  }
+})
+
+it('answers a blank screen cleared before the gap as a blank frame, not the transcript', async () => {
+  const { runtime, handle } = await recoveringPane(undefined, 'old prompt\r\n\x1b[2J\x1b[H')
+  try {
+    const read = await runtime.readTerminal(handle, { screen: true })
+    expect(read.source).toBe('screen-stale')
+    expect(read.tail).toEqual([])
+  } finally {
+    vi.useRealTimers()
+    await runtime.onPtyExit(PTY_ID, 0)
+  }
+})
+
+it('drops a kept frame once a re-anchor makes its position incomparable', async () => {
+  const { runtime, handle } = await recoveringPane({ seq: 1_000 })
+  try {
+    await vi.waitFor(async () => {
+      expect((await runtime.readTerminal(handle, { screen: true })).source).toBe('screen')
+    })
+    // The provider's count moves: the frame's mapped position no longer says where it stands.
+    runtime.anchorProviderSequence(PTY_ID, 30, 2_030)
+    const read = await runtime.readTerminal(handle, { screen: true })
+    expect(read.source).toBe('screen-unavailable')
   } finally {
     vi.useRealTimers()
     await runtime.onPtyExit(PTY_ID, 0)

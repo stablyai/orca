@@ -2,6 +2,7 @@ import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fall
 import { OrcaRuntimeWithCreatePtyHeadlessTerminalState } from './headless-terminal-state'
 import type {
   GapRecovery,
+  GapScreenIdentity,
   RuntimeHeadlessTerminal
 } from '../records/runtime-terminal-state-records'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
@@ -44,7 +45,8 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     opts: { scrollbackRows?: number; signal?: AbortSignal; recovery?: true },
     generation: number
   ): Promise<PtyProviderBufferSnapshot | null>
-  protected abstract readWholeScreenModel(ptyId: string): RuntimeHeadlessTerminal | null
+  protected abstract gapScreenStream(ptyId: string): GapScreenIdentity
+  protected abstract trustedGapScreenStream(ptyId: string): GapScreenIdentity | null
 
   private gapCapturesInFlight = 0
   // Keyed and insertion-ordered: FIFO admission, and a retired model leaves without a scan.
@@ -68,10 +70,10 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     const state = this.getOrCreateHeadlessTerminal(ptyId)
     const gapEnd = this.getPtyOutputSequence(ptyId)
     // Only a trusted screen is worth keeping; one already rebuilding keeps what it has.
-    const keepScreen = !state.gapReseed && this.readWholeScreenModel(ptyId) === state
+    const stream = state.gapReseed ? null : this.trustedGapScreenStream(ptyId)
     state.writeChain = state.writeChain
       .then(async () => {
-        keepPreGapScreen(state, keepScreen)
+        keepPreGapScreen(state, stream)
         // CAN grounds the parser: the kept output can resume inside an escape whose start was dropped.
         await state.emulator.write('\x18')
         // Here, in stream order: chunks queued before the gap finished their carries already.

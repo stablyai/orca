@@ -300,7 +300,8 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     opts: { limit?: number } = {}
   ): Promise<RuntimeTerminalRead> {
     const projection = await this.readScreenProjection(ptyId, opts.limit)
-    if (!projection || projection.lines.length === 0) {
+    // A kept frame can be a correct blank grid; elsewhere an empty projection means none was read.
+    if (!projection || (projection.lines.length === 0 && !('capturedAt' in projection))) {
       return { ...read, source: 'screen-unavailable' }
     }
     const screen = buildVisibleSnapshotReadFallback(

@@ -21,7 +21,7 @@ import {
 } from '../view/orca-runtime-terminal-projection'
 import { VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-budget'
 import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
-import { keepLandedGapScreen, readKeptGapScreen, type KeptGapScreen } from './gap-recovery-screen'
+import { keepLandedGapScreen } from './gap-recovery-screen'
 
 export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaRuntimeWithSerializeTerminalBufferFromAvailableState {
   protected abstract readVisibleTerminalState(
@@ -45,8 +45,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     generation: number
   ): Promise<PtyProviderBufferSnapshot | null> {
     const providerOwnedScreenAtStart = this.providerSnapshotPreferredPtys.has(ptyId)
-    const startedAt = Date.now()
-    const anchorRevision = this.providerSequenceAnchorRevisions.get(ptyId)
+    const stream = { ...this.gapScreenStream(ptyId), capturedAt: Date.now() }
     const liveModeTracker = new TerminalKittyKeyboardModeTracker()
     let liveModeTrackers = this.providerModeSnapshotScansByPtyId.get(ptyId)
     if (!liveModeTrackers) {
@@ -98,12 +97,15 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       if (liveModeTracker.hasObservedAlternateScreenSwitch) {
         this.providerSnapshotsWithLiveModeTransition.add(reconciledSnapshot)
       }
-      // A recovery frame that its anchor still places is correct at its seq even when it cannot rebuild.
-      if (opts.recovery && this.providerSequenceAnchorRevisions.get(ptyId) === anchorRevision) {
+      // A recovery frame of an unchanged stream is correct at its seq even when it cannot rebuild.
+      if (
+        opts.recovery &&
+        this.providerSequenceAnchorRevisions.get(ptyId) === stream.anchorRevision
+      ) {
         keepLandedGapScreen(
           this.headlessTerminals.get(ptyId)?.gapReseed,
           reconciledSnapshot,
-          startedAt,
+          stream,
           (frame) => this.parseVisibleSnapshot(frame)
         )
       }
@@ -194,34 +196,6 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       projection.draft,
       projection.tailRows
     )
-  }
-
-  /** A rendered screen for an explicit screen read, or null when none can be known now. */
-  protected async readScreenProjection(
-    ptyId: string,
-    limit: number | undefined
-  ): Promise<RuntimeTerminalProjection | KeptGapScreen | null> {
-    const visibleState = await this.readVisibleTerminalState(ptyId)
-    if (visibleState) {
-      return visibleState
-    }
-    // A rebuilding screen answers at once from its newest correct frame: the daemon is busy with recovery's captures.
-    // A screen the provider owned before the gap already took main's cached, bounded provider path above.
-    if (this.headlessTerminals.get(ptyId)?.gapReseed) {
-      return readKeptGapScreen(this.headlessTerminals.get(ptyId)?.gapReseed)
-    }
-    // A rebuild that finished during the lookup left a trusted model to answer, not the daemon.
-    if (this.readWholeScreenModel(ptyId)) {
-      const settled = await this.readVisibleTerminalState(ptyId)
-      if (settled) {
-        return settled
-      }
-    }
-    // A gap during that lookup started a new rebuild: the same answer as above.
-    if (this.headlessTerminals.get(ptyId)?.gapReseed) {
-      return readKeptGapScreen(this.headlessTerminals.get(ptyId)?.gapReseed)
-    }
-    return this.readProviderTerminalTailLines(ptyId, limit, { visibleScreenOnly: true })
   }
 
   // ConPTY absolute cursor paints overwrite text that raw tails retain, including ghost PSReadLine predictions; read rendered cells.
