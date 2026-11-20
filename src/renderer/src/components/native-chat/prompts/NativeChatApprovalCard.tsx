@@ -46,6 +46,9 @@ export type NativeChatApprovalCardProps = {
   parsedFromTerminal?: boolean
 }
 
+// Answers keep the small button's height and body text, growing to wrap a long label rather than spill out.
+const QUIET_ANSWER_SIZE = 'min-h-8 px-3 py-1 text-left text-sm font-medium'
+
 /** PTY options are literal replies; structured options are journal ids. The first option is primary unless the options are neutral. */
 export function NativeChatApprovalCard({
   approval,
@@ -321,7 +324,7 @@ export function NativeChatApprovalCard({
               ) : null}
               <div
                 data-native-chat-approval-actions="true"
-                className={cn('flex shrink-0 flex-wrap', quiet ? 'gap-1.5 pl-5' : 'gap-2')}
+                className={cn('flex shrink-0 flex-wrap gap-2', quiet && 'pl-5')}
               >
                 {approval.options.map((opt, i) => {
                   const opensUrl = url !== null && opt.send === URL_APPROVAL_OPEN_OPTION_ID
@@ -340,9 +343,7 @@ export function NativeChatApprovalCard({
                       }}
                       className={cn(
                         'rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
-                        quiet
-                          ? 'h-6 px-2.5 text-xs font-medium'
-                          : 'px-4 py-1.5 text-sm font-semibold',
+                        quiet ? QUIET_ANSWER_SIZE : 'px-4 py-1.5 text-sm font-semibold',
                         i === 0 && !approval.neutralOptions
                           ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                           : url !== null
@@ -369,7 +370,7 @@ export function NativeChatApprovalCard({
                     onClick={onOpenTerminal}
                     className={cn(
                       'rounded-md bg-primary text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                      quiet ? 'h-6 px-2.5 text-xs font-medium' : 'px-4 py-1.5 text-sm font-semibold'
+                      quiet ? QUIET_ANSWER_SIZE : 'px-4 py-1.5 text-sm font-semibold'
                     )}
                   >
                     {t('components.native-chat.question.openTerminal', 'Answer in terminal')}
@@ -380,7 +381,7 @@ export function NativeChatApprovalCard({
                     type="button"
                     aria-expanded={detailOpen}
                     onClick={() => setDetailOpen(!detailOpen)}
-                    className="inline-flex h-6 items-center gap-0.5 rounded-md px-1.5 text-xs font-medium text-chat-foreground-faint transition-colors hover:bg-chat-foreground/5 hover:text-chat-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="inline-flex h-8 items-center gap-0.5 rounded-md px-2 text-sm font-medium text-chat-foreground-faint transition-colors hover:bg-chat-foreground/5 hover:text-chat-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {t('components.native-chat.notices.details', 'Details')}
                     <ChevronDown

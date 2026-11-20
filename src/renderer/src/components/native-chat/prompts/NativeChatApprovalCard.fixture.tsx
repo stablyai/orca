@@ -1,5 +1,6 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
+import { nativeChatAppearanceStyle } from '../appearance/native-chat-appearance-style'
 
 export const fileChanges = defineFixture({
   width: 720,
@@ -56,3 +57,38 @@ export const narrowFileChangesExpanded = defineFixture({
   ...narrowFileChanges,
   interact: expandDetails
 })
+
+const LONG_OPTIONS = [
+  { label: 'Yes', send: '1' },
+  { label: "Yes, and don't ask again for git commands in /workspace/orca", send: '2' },
+  { label: 'Yes, allow all edits during this session', send: '3' },
+  { label: 'No, and tell Claude what to do differently', send: '4' },
+  { label: 'Allow for this project only', send: '5' },
+  { label: 'Stop', send: '6' }
+]
+
+function choices(count: number, width: number) {
+  return defineFixture({
+    width,
+    render: () => (
+      <div className="native-chat-appearance bg-chat-canvas" style={nativeChatAppearanceStyle({})}>
+        <NativeChatApprovalCard
+          approval={{
+            title: 'Run git commit -m "Update the greeting"?',
+            detail: 'git commit -m "Update the greeting"',
+            options: LONG_OPTIONS.slice(0, count)
+          }}
+          onChoose={() => {}}
+          onCancel={() => {}}
+        />
+      </div>
+    )
+  })
+}
+
+export const twoChoices = choices(2, 720)
+export const fourChoices = choices(4, 720)
+export const sixChoices = choices(6, 720)
+export const narrowTwoChoices = choices(2, 360)
+export const narrowFourChoices = choices(4, 360)
+export const narrowSixChoices = choices(6, 360)
