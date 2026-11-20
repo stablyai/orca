@@ -20,7 +20,7 @@ import type * as NodeFsPromises from 'node:fs/promises'
 import { syncSystemCodexSessionsIntoManagedHomeIncrementally } from './codex-session-bridge'
 import { prepareLegacySharedCodexSessionResume } from '../resume/codex-legacy-session-resume'
 
-const renameHook = vi.hoisted(() => ({ beforeAside: null as (() => void) | null }))
+const renameHook = vi.hoisted((): { beforeAside: (() => void) | null } => ({ beforeAside: null }))
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
@@ -172,6 +172,38 @@ describe('legacy session copy swap', () => {
     expect(lstatSync(blockedCopy).ino).not.toBe(lstatSync(blockedSource).ino)
   })
 
+  it('swaps the rest of a pass when one copy is larger than a whole pass may read', async () => {
+    const largeRelative = join(
+      '2026',
+      '05',
+      '19',
+      `rollout-2026-05-19T10-00-00-${BLOCKED_THREAD_ID}.jsonl`
+    )
+    const largeSource = join(systemHome, 'sessions', largeRelative)
+    const largeCopy = join(runtimeHome(), 'sessions', largeRelative)
+    writeFile(largeSource, OLD_TURNS)
+    writeFile(largeCopy, OLD_TURNS)
+    truncateSync(largeCopy, 65 * 1024 * 1024)
+    truncateSync(largeSource, 65 * 1024 * 1024)
+    const large = lstatSync(largeCopy)
+    writeFile(
+      join(runtimeHome(), '.orca-session-copies', `${largeRelative}.json`),
+      JSON.stringify({
+        sourcePath: largeSource,
+        sourceSize: large.size,
+        sourceMtimeMs: lstatSync(largeSource).mtimeMs,
+        targetSize: large.size,
+        targetMtimeMs: large.mtimeMs
+      })
+    )
+    legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
+
+    await bridgePass()
+
+    expect(lstatSync(copyPath).ino).toBe(lstatSync(sourcePath).ino)
+    expect(lstatSync(largeCopy).ino).not.toBe(lstatSync(largeSource).ino)
+  })
+
   it('leaves a copy alone while a Codex holds its thread lock, and hides it from older builds', async () => {
     legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
     writeFile(join(runtimeHome(), 'thread-writer-locks', `${THREAD_ID}.lock`), '')
@@ -210,7 +242,7 @@ describe('legacy session copy swap', () => {
 
   it('finishes a swap that stopped after moving the copy aside', async () => {
     legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
-    const aside = `${copyPath}.orca-legacy-copy.0a1b2c3d4e5f`
+    const aside = `${copyPath}.orca-legacy-copy.1`
     writeFileSync(
       markerPath,
       JSON.stringify({ ...JSON.parse(readFileSync(markerPath, 'utf-8')), aside: basename(aside) })

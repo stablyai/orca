@@ -75,7 +75,10 @@ export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
   const managedHome = getOrcaManagedCodexHomePath()
   const managedSessionsRoot = join(managedHome, 'sessions')
   const summary: CodexSessionBridgeSummary = { scannedFiles: 0, linkedFiles: 0 }
-  const readBudget: LegacySessionCopyReadBudget = { bytes: LEGACY_COPY_READ_BUDGET_BYTES }
+  const readBudget: LegacySessionCopyReadBudget = {
+    bytes: LEGACY_COPY_READ_BUDGET_BYTES,
+    limit: LEGACY_COPY_READ_BUDGET_BYTES
+  }
   const hasLegacyCopies = existsSync(join(managedHome, '.orca-session-copies'))
   for await (const systemSessionFilePath of listCodexSessionJsonlFilesIncrementally(
     systemSessionsRoot,

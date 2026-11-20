@@ -18,7 +18,7 @@ import type {
 // cost ~50x more and occupy the libuv pool Electron main shares.
 
 // `.orca-legacy-copy.<attempt>`: an old session copy's own bytes, kept once its name points at the source.
-const ROLLOUT_FILE = /^rollout-.*\.jsonl(?:\.zst|\.orca-legacy-copy\.[0-9a-f]+)?$/
+const ROLLOUT_FILE = /^rollout-.*\.jsonl(?:\.zst|\.orca-legacy-copy\.\d+)?$/
 // Live, archived, twins set aside when history was shared, and `<folder>[.<ms>].orca-profile-merge` conflicts.
 const HISTORY_FOLDERS = ['sessions', 'archived_sessions', '.orca-set-aside-rollouts']
 const MERGE_PENDING_FOLDER = /\.orca-profile-merge$/

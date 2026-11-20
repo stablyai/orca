@@ -11,18 +11,22 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
   return {
     ...actual,
-    lstat: ((path: Parameters<typeof actual.lstat>[0], ...rest: unknown[]) => {
-      if (String(path).endsWith('.jsonl')) {
-        markerReads.transcriptStats += 1
+    lstat: new Proxy(actual.lstat, {
+      apply(target, thisArg, args: unknown[]) {
+        if (String(args[0]).endsWith('.jsonl')) {
+          markerReads.transcriptStats += 1
+        }
+        return Reflect.apply(target, thisArg, args)
       }
-      return (actual.lstat as (...args: unknown[]) => unknown)(path, ...rest)
-    }) as typeof actual.lstat,
-    readFile: ((path: Parameters<typeof actual.readFile>[0], ...rest: unknown[]) => {
-      if (String(path).includes('.orca-session-copies')) {
-        markerReads.count += 1
+    }),
+    readFile: new Proxy(actual.readFile, {
+      apply(target, thisArg, args: unknown[]) {
+        if (String(args[0]).includes('.orca-session-copies')) {
+          markerReads.count += 1
+        }
+        return Reflect.apply(target, thisArg, args)
       }
-      return (actual.readFile as (...args: unknown[]) => unknown)(path, ...rest)
-    }) as typeof actual.readFile
+    })
   }
 })
 
@@ -77,10 +81,9 @@ afterEach(() => {
 
 describe('legacy session copy swap budget', () => {
   it.each([10, 100])('only protects markers after the read budget runs out (N=%i)', async (n) => {
-    // Sorts first and is larger than one pass may read.
-    legacyCopy('01', 0, 65 * 1024 * 1024)
-    for (let index = 1; index <= n; index += 1) {
-      legacyCopy('20', index)
+    // Each a third of what a pass may read (sparse): whichever comes second ends the pass.
+    for (let index = 0; index < n + 2; index += 1) {
+      legacyCopy('20', index, 33 * 1024 * 1024)
     }
 
     await syncSystemCodexSessionsIntoManagedHomeIncrementally(
@@ -89,8 +92,8 @@ describe('legacy session copy swap budget', () => {
     )
 
     // One marker read per copy, as before this change; no copy past the budget is examined.
-    expect(markerReads.count).toBe(n + 1)
-    // Only the first copy is examined, whatever N is.
-    expect(markerReads.transcriptStats).toBeLessThanOrEqual(6)
+    expect(markerReads.count).toBe(n + 2)
+    // Only the first two copies are examined, whatever N is.
+    expect(markerReads.transcriptStats).toBeLessThanOrEqual(12)
   })
 })

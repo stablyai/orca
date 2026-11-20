@@ -83,8 +83,14 @@ describe('sweepDeletedWorkspaceChatHistory with Codex rollouts', () => {
       )
       // A legacy copy's own bytes, set aside when its name was pointed at the source.
       const aside = write(
-        join(managed, ...DATED, `${NAME('1')}.orca-legacy-copy.0a1b2c3d4e5f`),
+        join(managed, ...DATED, `${NAME('1')}.orca-legacy-copy.1`),
         rollout(gone, [gone])
+      )
+      // What a swap leaves beside it: the empty probe, and an earlier attempt's unused reservation.
+      const asideProbe = write(join(managed, ...DATED, `${NAME('1')}.orca-legacy-copy.probe`), '')
+      const unusedReservation = write(
+        join(managed, ...DATED, `${NAME('1')}.orca-legacy-copy.2`),
+        ''
       )
 
       // Codex compressed the account's copy, breaking the link, and that copy was resumed in `live`.
@@ -180,6 +186,8 @@ describe('sweepDeletedWorkspaceChatHistory with Codex rollouts', () => {
           join(managed, ...DATED, `${NAME('1')}.zst`),
           marker,
           aside,
+          asideProbe,
+          unusedReservation,
           packedOnly,
           packedLink,
           reverted

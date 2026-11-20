@@ -1,4 +1,4 @@
-import { lstat, readdir, realpath, rm, stat, unlink } from 'node:fs/promises'
+import { lstat, realpath, rm, stat, unlink } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import type { AiVaultAgent } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
@@ -7,7 +7,7 @@ import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesy
 import { resolveOrcaManagedCodexHomePath } from '../../configuration/homes/codex-home-paths'
 import { codexDatedRolloutRelativePath } from '../resume/codex-session-resume-home'
 import { holdCodexRolloutForDeletion } from '../rollouts/codex-rollout-deletion-guard'
-import { LEGACY_SESSION_COPY_ASIDE_SUFFIX } from '../bridges/codex-legacy-session-copy'
+import { isEmptyLegacyCopyName, legacyCopyAsideNames } from './codex-rollout-legacy-copy-names'
 import { forgetCodexHistoryDiskUsage } from '../disk-usage/codex-history-disk-usage'
 import {
   isOutsideProtectedRoots,
@@ -19,7 +19,7 @@ import {
 type RolloutTarget = { agent: AiVaultAgent; filePath: string }
 type DeleteResult = { deleted: number; failed: number; freedBytes: number }
 
-type RolloutName = { path: string; root: string }
+export type RolloutName = { path: string; root: string }
 
 const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
 
@@ -60,32 +60,6 @@ function rolloutNames(homes: readonly string[], stem: string): RolloutName[] {
       { path: `${join(archived, fileName)}.zst`, root: archived }
     ]
   })
-}
-
-/** An old session copy's own bytes, kept beside the name once its source was linked in. */
-async function legacyCopyAsideNames(
-  homes: readonly string[],
-  stem: string
-): Promise<RolloutName[]> {
-  const parts = stem.split('/')
-  const prefix = `${parts.at(-1) ?? stem}${LEGACY_SESSION_COPY_ASIDE_SUFFIX}.`
-  const names: RolloutName[] = []
-  for (const home of homes) {
-    const sessions = join(home, 'sessions')
-    const folder = join(sessions, ...parts.slice(0, -1))
-    const entries = await readdir(folder).catch((error: unknown) => {
-      if (isDefinitiveAbsence(error)) {
-        return []
-      }
-      throw error
-    })
-    for (const entry of entries) {
-      if (entry.startsWith(prefix)) {
-        names.push({ path: join(folder, entry), root: sessions })
-      }
-    }
-  }
-  return names
 }
 
 /** Null when absent; throws when it can't be proven absent, is no file, or leaves its home. */
@@ -248,17 +222,21 @@ async function deleteRollout(
       result.failed += 1
       return
     }
-    const names = [...rolloutNames(homes, stem), ...(await legacyCopyAsideNames(homes, stem))]
     if (await isOpenInCodex(homes, stem)) {
       return
     }
+    const names = [...rolloutNames(homes, stem), ...(await legacyCopyAsideNames(homes, stem))]
     // After the open check: a chat still open never reads the import folder (which can start WSL).
     const protectedRoots = await resolveProtectedRoots(listed, stem)
     const found = await readNames(names)
     // Every name, every extension: a chat resumed or still written anywhere keeps them all.
     const checked = new Set<string>()
     for (const state of found) {
-      if (state.content === null || checked.has(state.content)) {
+      if (
+        state.content === null ||
+        checked.has(state.content) ||
+        isEmptyLegacyCopyName(state.path, state.size)
+      ) {
         continue
       }
       checked.add(state.content)

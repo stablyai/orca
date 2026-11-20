@@ -20,21 +20,45 @@ export function legacySessionCopyMarkerPath(managedHome: string, relativePath: s
 }
 
 export function parseLegacyCopiedSessionMarker(text: string): LegacyCopiedSessionMarker | null {
+  let fields: unknown
   try {
-    const marker: unknown = JSON.parse(text)
-    if (!marker || typeof marker !== 'object' || Array.isArray(marker)) {
-      return null
-    }
-    const fields = marker as Record<string, unknown>
-    return typeof fields.sourcePath === 'string' &&
-      typeof fields.sourceSize === 'number' &&
-      typeof fields.sourceMtimeMs === 'number' &&
-      typeof fields.targetSize === 'number' &&
-      typeof fields.targetMtimeMs === 'number'
-      ? (fields as LegacyCopiedSessionMarker)
-      : null
+    fields = JSON.parse(text)
   } catch {
     return null
+  }
+  if (!fields || typeof fields !== 'object' || Array.isArray(fields)) {
+    return null
+  }
+  const field = (key: keyof LegacyCopiedSessionMarker): unknown => Reflect.get(fields, key)
+  const [sourcePath, sourceSize, sourceMtimeMs, targetSize, targetMtimeMs, kept, verified, aside] =
+    [
+      field('sourcePath'),
+      field('sourceSize'),
+      field('sourceMtimeMs'),
+      field('targetSize'),
+      field('targetMtimeMs'),
+      field('kept'),
+      field('verified'),
+      field('aside')
+    ]
+  if (
+    typeof sourcePath !== 'string' ||
+    typeof sourceSize !== 'number' ||
+    typeof sourceMtimeMs !== 'number' ||
+    typeof targetSize !== 'number' ||
+    typeof targetMtimeMs !== 'number'
+  ) {
+    return null
+  }
+  return {
+    sourcePath,
+    sourceSize,
+    sourceMtimeMs,
+    targetSize,
+    targetMtimeMs,
+    ...(kept === true ? { kept } : {}),
+    ...(typeof verified === 'string' ? { verified } : {}),
+    ...(typeof aside === 'string' ? { aside } : {})
   }
 }
 

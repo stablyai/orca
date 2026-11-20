@@ -1,6 +1,5 @@
 import type { BigIntStats } from 'node:fs'
 import { link, lstat, open, readFile, rename, stat, unlink } from 'node:fs/promises'
-import { randomBytes } from 'node:crypto'
 import { basename, dirname, join, normalize } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { linkCodexRolloutUnlessHeld } from '../rollouts/codex-rollout-deletion-guard'
@@ -18,13 +17,18 @@ import { sourceStartsWithCopy } from './codex-legacy-session-copy-prefix'
  * linked in; each attempt reserves a name of its own, so no step ever replaces or removes one.
  */
 export const LEGACY_SESSION_COPY_ASIDE_SUFFIX = '.orca-legacy-copy'
+/** Attempts that each keep an aside name; past this a copy settles as kept. */
+export const LEGACY_SESSION_COPY_MAX_ASIDES = 16
 const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
 
 /** `kept`: the copy holds bytes its source lacks, or its source can't be linked beside it, for good. */
 export type LegacySessionCopySwap = 'swapped' | 'kept' | 'deferred' | 'none'
 
-/** `exhausted`: a copy found too little left, so the pass starts no more swaps. */
-export type LegacySessionCopyReadBudget = { bytes: number; exhausted?: boolean }
+/**
+ * `exhausted`: a copy found too little left, so the pass starts no more swaps. A copy larger than
+ * a whole pass's `limit` is left to resume-time swaps and never ends the pass.
+ */
+export type LegacySessionCopyReadBudget = { bytes: number; limit: number; exhausted?: boolean }
 
 const swapsInFlight = new Map<string, Promise<LegacySessionCopySwap>>()
 
@@ -76,7 +80,9 @@ async function swap(
   if (!copy) {
     // A pass stopped after moving the copy aside: its name comes back before anything else.
     const asidePath = marker.aside ? join(dirname(copyPath), marker.aside) : null
-    if (!asidePath || !(await lstatIfPresent(asidePath))?.isFile()) {
+    const aside = asidePath ? await lstatIfPresent(asidePath) : null
+    // An empty aside is a reservation the copy never moved onto.
+    if (!asidePath || !aside?.isFile() || aside.size === 0n) {
       return 'none'
     }
     // Under the deletion guard: a cleanup deleting this chat must not see its name come back.
@@ -128,7 +134,7 @@ async function swap(
   if (marker.verified !== proof || source.size < copy.size) {
     if (args.readBudget) {
       if (copy.size > BigInt(args.readBudget.bytes)) {
-        args.readBudget.exhausted = true
+        args.readBudget.exhausted ||= copy.size <= BigInt(args.readBudget.limit)
         return 'deferred'
       }
       args.readBudget.bytes -= Number(copy.size)
@@ -173,6 +179,9 @@ async function publishSourceOverCopy({
     return 'deferred'
   }
   const asidePath = await reserveAside(copyPath, markerPath, marker)
+  if (!asidePath) {
+    return 'kept'
+  }
   if (!(await supportsHardLinks(asidePath))) {
     return 'kept'
   }
@@ -256,7 +265,7 @@ async function reserveAside(
   copyPath: string,
   markerPath: string,
   marker: LegacyCopiedSessionMarker
-): Promise<string> {
+): Promise<string | null> {
   if (marker.aside) {
     const earlier = join(dirname(copyPath), marker.aside)
     const reservation = await lstatIfPresent(earlier)
@@ -264,22 +273,35 @@ async function reserveAside(
       return earlier
     }
   }
-  const asideName = `${basename(copyPath)}${LEGACY_SESSION_COPY_ASIDE_SUFFIX}.${randomBytes(6).toString('hex')}`
-  await writeMarker(markerPath, { ...marker, aside: asideName })
-  const asidePath = join(dirname(copyPath), asideName)
-  await (await open(asidePath, 'wx')).close()
-  return asidePath
+  // Numbered in order and never removed here, so cleanup finds them all by counting up from 1.
+  for (let attempt = 1; attempt <= LEGACY_SESSION_COPY_MAX_ASIDES; attempt += 1) {
+    const asideName = `${basename(copyPath)}${LEGACY_SESSION_COPY_ASIDE_SUFFIX}.${attempt}`
+    const asidePath = join(dirname(copyPath), asideName)
+    try {
+      await (await open(asidePath, 'wx')).close()
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException | null)?.code === 'EEXIST') {
+        continue
+      }
+      throw error
+    }
+    await writeMarker(markerPath, { ...marker, aside: asideName })
+    return asidePath
+  }
+  return null
 }
 
 /** Probed on our own empty reservation, before anything of the user's moves; the probe name stays. */
 async function supportsHardLinks(reservedPath: string): Promise<boolean> {
   try {
-    await link(reservedPath, `${reservedPath}.probe`)
+    // One probe name per copy, beside its asides, however many attempts it takes.
+    await link(reservedPath, `${reservedPath.replace(/\.\d+$/, '')}.probe`)
   } catch (error) {
     const code = (error as NodeJS.ErrnoException | null)?.code
-    if (code === 'EXDEV' || code === 'ENOTSUP' || code === 'EOPNOTSUPP' || code === 'EPERM') {
+    if (code === 'EXDEV' || code === 'ENOTSUP' || code === 'EOPNOTSUPP') {
       return false
     }
+    // Anything else, EPERM included, may pass: the swap waits for a later pass.
     if (code !== 'EEXIST') {
       throw error
     }
