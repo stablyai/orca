@@ -154,8 +154,15 @@ function restoreMovedFileWithoutOverwrite(
   let claimedAway = false
   // Back under the held name, which the next guarded operation recovers first, unless taken.
   const giveBack = (error: unknown): never => {
-    if (claimedAway && publishFileWithoutOverwrite(claimed, sourcePath)) {
-      drop()
+    if (claimedAway) {
+      try {
+        if (publishFileWithoutOverwrite(claimed, sourcePath)) {
+          drop()
+        }
+      } catch {
+        // No room for a link (a full disk): a rename needs none.
+        renameFileWithWindowsRetry(claimed, sourcePath)
+      }
     }
     throw error
   }
@@ -175,7 +182,7 @@ function restoreMovedFileWithoutOverwrite(
   try {
     held = readFileSync(claimed)
   } catch {
-    // Unreadable: a kept copy stays under its claimed name.
+    // Unreadable: it can't be named by content, so it goes back under the held name below.
   }
   // Named by content, so a repeated conflict finds its copy already kept; a name holding other
   // bytes (a kept copy edited since) moves on to the next. The target comes first.
@@ -215,11 +222,8 @@ function restoreMovedFileWithoutOverwrite(
     drop()
     return
   }
-  if (name !== null) {
-    // Every content name holds other bytes: a copy per conflict would grow without bound.
-    giveBack(new Error(`Could not keep an earlier version of ${targetPath}`))
-  }
-  console.warn('[atomic-file] Kept an earlier version beside', targetPath, claimed)
+  // Unreadable, or every content name holds other bytes: a copy per conflict would grow unbounded.
+  giveBack(new Error(`Could not keep an earlier version of ${targetPath}`))
 }
 
 const KEPT_NAME_ATTEMPTS = 16
@@ -243,6 +247,8 @@ function attemptGuardedAtomicWrite(
   const heldPath = getGuardedOperationHeldPath(targetPath)
   restoreMovedFileWithoutOverwrite(heldPath, targetPath, true, keep)
   let superseded = false
+  // How the held file goes back once this attempt ends; null when nothing was held.
+  let restoreHeld: boolean | null = null
   try {
     writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
     if (expectedContents === null) {
@@ -258,22 +264,25 @@ function attemptGuardedAtomicWrite(
       throw error
     }
     if (!nodeFileContentsEqualSync(heldPath, expectedContents)) {
-      restoreMovedFileWithoutOverwrite(heldPath, targetPath, true, keep)
+      restoreHeld = true
       return false
     }
     if (!publishFileWithoutOverwrite(tmpPath, targetPath)) {
       // Another writer's file supersedes the held one, even if it is deleted again meanwhile.
       superseded = true
-      restoreMovedFileWithoutOverwrite(heldPath, targetPath, false, keep)
+      restoreHeld = false
       return false
     }
     rmSync(heldPath, { force: true })
     return true
   } catch (error) {
-    restoreMovedFileWithoutOverwrite(heldPath, targetPath, !superseded, keep)
+    restoreHeld = !superseded
     throw error
   } finally {
     rmSync(tmpPath, { force: true })
+    if (restoreHeld !== null) {
+      restoreMovedFileWithoutOverwrite(heldPath, targetPath, restoreHeld, keep)
+    }
   }
 }
 

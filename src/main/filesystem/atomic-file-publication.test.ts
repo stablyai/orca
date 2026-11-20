@@ -220,6 +220,48 @@ describe('writeFileAtomically', () => {
     }
   })
 
+  it.skipIf(process.platform === 'win32')(
+    'gives back a held file it cannot read instead of keeping a copy per conflict',
+    () => {
+      setup()
+      try {
+        const target = join(dir, 'config.toml')
+        const heldPath = `${target}.orca-guarded`
+        writeFileSync(target, 'approval = "never"\n')
+        writeFileSync(heldPath, 'model = "o5"\n', { mode: 0o000 })
+
+        expect(() => recoverInterruptedGuardedFileOperation(target)).toThrow()
+        expect(() => recoverInterruptedGuardedFileOperation(target)).toThrow()
+        expect(readdirSync(dir).sort()).toEqual(['config.toml', 'config.toml.orca-guarded'])
+      } finally {
+        cleanup()
+      }
+    }
+  )
+
+  it('restores the user file even when giving the held file back by link fails too', () => {
+    setup()
+    try {
+      const target = join(dir, 'config.toml')
+      writeFileSync(`${target}.orca-guarded`, 'user edit\n')
+      const link = fsMock.linkSync.getMockImplementation()!
+      const full = Object.assign(new Error('no space'), { code: 'ENOSPC' })
+      fsMock.linkSync.mockImplementation((source: string, destination: string) => {
+        if (destination === target || isHeld(destination)) {
+          throw full
+        }
+        return link(source, destination)
+      })
+
+      expect(() => recoverInterruptedGuardedFileOperation(target)).toThrow('no space')
+      fsMock.linkSync.mockImplementation(link)
+      expect(writeFileAtomicallyIfUnchanged(target, null, 'fresh\n')).toBe(false)
+      expect(readFileSync(target, 'utf-8')).toBe('user edit\n')
+    } finally {
+      cleanup()
+    }
+  })
+
   it('restores the user file on the next write after a failed restore', () => {
     setup()
     try {
