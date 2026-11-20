@@ -77,6 +77,7 @@ const NON_UNIT_TEST_RUNNERS = [
     mirrors: ["include: ['test/**/*.test.ts']"]
   })),
   ...[
+    'cloud/apps/relay-auth',
     'cloud/apps/relay-ingress',
     'cloud/packages/cloud-database',
     'cloud/packages/connector-contract',
