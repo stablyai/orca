@@ -131,6 +131,8 @@ export function BotShareMemoryRow({
         checked={checked}
         aria-label={name}
         aria-describedby={flag ? flagId : undefined}
+        // On the muted card an unticked box needs a firmer edge in the light theme.
+        className="data-[state=unchecked]:border-foreground/25 dark:data-[state=unchecked]:border-muted-foreground/60"
         // The line's own click ticks it; the box must not tick twice.
         onClick={(event) => event.stopPropagation()}
         onCheckedChange={(value) => onChange(value === true)}

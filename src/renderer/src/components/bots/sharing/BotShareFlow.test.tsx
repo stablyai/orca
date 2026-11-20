@@ -190,6 +190,8 @@ it('picks every memory file with Include memory, and All clears or picks them al
   expect(all.getAttribute('aria-checked')).toBe('true')
   expect(file.getAttribute('aria-checked')).toBe('true')
   expect(screen.getByText('1 of 1')).toBeDefined()
+  // The page takes focus at its title, not on Cancel.
+  expect(document.activeElement?.textContent).toContain('Memory')
 
   fireEvent.click(all)
   expect(all.getAttribute('aria-checked')).toBe('false')
