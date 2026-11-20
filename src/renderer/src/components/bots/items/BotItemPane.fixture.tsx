@@ -261,7 +261,7 @@ const answered: BotItemEvent[] = [
   }
 ]
 
-/** The open question, outlined, under two long messages folded at 8 lines. */
+/** The open question, tagged Needs you, under two long messages folded at 8 lines. */
 export const asking = defineFixture({
   width: 400,
   render: () => (
