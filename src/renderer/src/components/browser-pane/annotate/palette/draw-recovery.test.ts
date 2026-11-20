@@ -8,11 +8,10 @@ import type { MarkupShape } from '../drawing/markup-drawing-model'
 import { useBrowserAnnotateToolSwitch } from './use-browser-annotate-tool-switch'
 import { browserPageDocumentIdentity } from './browser-page-document-identity'
 
-// The page capture is the only stub: each capture is a new, numbered frozen page.
-const capture = vi.hoisted(() => ({ count: 0 }))
+// Only the capture boundary is stubbed; restoration must retain its original snapshot object.
 vi.mock('../capture/markup-base-image', () => ({
   captureMarkupBaseImage: async () => ({
-    dataUrl: `data:image/png;base64,capture-${++capture.count}`,
+    dataUrl: 'data:image/png;base64,AA',
     width: 800,
     height: 600
   })
@@ -49,7 +48,6 @@ const strokeA: MarkupShape = {
 const strokeB: MarkupShape = { ...strokeA, id: 'b', from: { x: 20, y: 20 }, to: { x: 40, y: 40 } }
 
 beforeEach(() => {
-  capture.count = 0
   toasts.last = null
   Object.defineProperty(window, 'api', {
     configurable: true,
@@ -95,7 +93,7 @@ function renderTools() {
         markup,
         canPickElements: true,
         toolTargetId: PAGE_ID,
-        ...browserPageDocumentIdentity({ id: PAGE_ID, loading: tab.loading })
+        ...browserPageDocumentIdentity({ id: PAGE_ID, loading: tab.loading }, 0)
       })
       return { markup, tools }
     },
@@ -110,10 +108,6 @@ async function enterDraw({ result }: Rendered): Promise<void> {
   await waitFor(() => expect(result.current.markup.state).toBe('drawing'))
 }
 
-function shownPage({ result }: Rendered): string | undefined {
-  return result.current.markup.baseImage?.dataUrl
-}
-
 function drawAndLeave(rendered: Rendered, shapes: MarkupShape[]): void {
   act(() => rendered.result.current.tools.reportShapes(shapes))
   act(() => rendered.result.current.tools.exit())
@@ -124,26 +118,26 @@ describe('getting a discarded drawing back', () => {
   it('Draw again while Undo is on offer brings back the same page and strokes, without a new capture', async () => {
     const rendered = renderTools()
     await enterDraw(rendered)
-    expect(shownPage(rendered)).toContain('capture-1')
+    const original = rendered.result.current.markup.baseImage
     drawAndLeave(rendered, [strokeA])
     expect(rendered.result.current.tools.activeTool).toBeNull()
 
     await enterDraw(rendered)
 
-    expect(shownPage(rendered)).toContain('capture-1')
-    expect(capture.count).toBe(1)
+    expect(rendered.result.current.markup.baseImage).toBe(original)
     expect(rendered.result.current.tools.restoredShapes).toEqual([strokeA])
   })
 
   it('the Undo button brings it back too', async () => {
     const rendered = renderTools()
     await enterDraw(rendered)
+    const original = rendered.result.current.markup.baseImage
     drawAndLeave(rendered, [strokeA])
 
     act(() => toasts.last?.action?.onClick())
 
     expect(rendered.result.current.tools.activeTool).toBe('draw')
-    expect(shownPage(rendered)).toContain('capture-1')
+    expect(rendered.result.current.markup.baseImage).toBe(original)
     expect(rendered.result.current.tools.restoredShapes).toEqual([strokeA])
   })
 
@@ -152,6 +146,7 @@ describe('getting a discarded drawing back', () => {
     async (entry) => {
       const rendered = renderTools()
       await enterDraw(rendered)
+      const original = rendered.result.current.markup.baseImage
       drawAndLeave(rendered, [strokeA])
       const undo = toasts.last?.action
       if (entry === 'Draw again') {
@@ -160,7 +155,7 @@ describe('getting a discarded drawing back', () => {
         act(() => undo?.onClick())
         await waitFor(() => expect(rendered.result.current.markup.state).toBe('drawing'))
       }
-      expect(shownPage(rendered)).toContain('capture-1')
+      expect(rendered.result.current.markup.baseImage).toBe(original)
       // Cleared, then left: nothing to offer back.
       drawAndLeave(rendered, [])
       // The earlier toast's Undo, still fading out, can't revive the consumed drawing either.
@@ -169,7 +164,7 @@ describe('getting a discarded drawing back', () => {
 
       await enterDraw(rendered)
 
-      expect(shownPage(rendered)).toContain('capture-2')
+      expect(rendered.result.current.markup.baseImage).not.toBe(original)
       expect(rendered.result.current.tools.restoredShapes).toBeUndefined()
     }
   )
@@ -177,28 +172,31 @@ describe('getting a discarded drawing back', () => {
   it('never replaces a drawing that is open now when an old Undo is pressed', async () => {
     const rendered = renderTools()
     await enterDraw(rendered)
+    const original = rendered.result.current.markup.baseImage
     drawAndLeave(rendered, [strokeA])
     const staleUndo = toasts.last?.action
     // The offer runs out, and a new drawing is started.
     act(() => toasts.last?.onAutoClose?.())
     await enterDraw(rendered)
-    expect(shownPage(rendered)).toContain('capture-2')
+    expect(rendered.result.current.markup.baseImage).not.toBe(original)
 
+    const replacement = rendered.result.current.markup.baseImage
     act(() => staleUndo?.onClick())
 
-    expect(shownPage(rendered)).toContain('capture-2')
+    expect(rendered.result.current.markup.baseImage).toBe(replacement)
     expect(rendered.result.current.tools.restoredShapes).toBeUndefined()
   })
 
   it('once the offer runs out, Draw captures afresh', async () => {
     const rendered = renderTools()
     await enterDraw(rendered)
+    const original = rendered.result.current.markup.baseImage
     drawAndLeave(rendered, [strokeA])
 
     act(() => toasts.last?.onAutoClose?.())
     await enterDraw(rendered)
 
-    expect(shownPage(rendered)).toContain('capture-2')
+    expect(rendered.result.current.markup.baseImage).not.toBe(original)
     expect(rendered.result.current.tools.restoredShapes).toBeUndefined()
   })
 
@@ -208,48 +206,52 @@ describe('getting a discarded drawing back', () => {
     drawAndLeave(rendered, [strokeA])
     act(() => toasts.last?.onAutoClose?.())
     await enterDraw(rendered)
+    const replacement = rendered.result.current.markup.baseImage
     drawAndLeave(rendered, [strokeB])
 
     await enterDraw(rendered)
 
-    expect(shownPage(rendered)).toContain('capture-2')
+    expect(rendered.result.current.markup.baseImage).toBe(replacement)
     expect(rendered.result.current.tools.restoredShapes).toEqual([strokeB])
   })
 
   it('a reload of the page withdraws the offer: Draw captures the new document', async () => {
     const rendered = renderTools()
     await enterDraw(rendered)
+    const original = rendered.result.current.markup.baseImage
     drawAndLeave(rendered, [strokeA])
 
     rendered.rerender({ ...LOADED, loading: true })
     rendered.rerender(LOADED)
     await enterDraw(rendered)
 
-    expect(shownPage(rendered)).toContain('capture-2')
+    expect(rendered.result.current.markup.baseImage).not.toBe(original)
     expect(rendered.result.current.tools.restoredShapes).toBeUndefined()
   })
 
   it('a same-document URL change (pushState, hash) keeps the offer: Draw still restores', async () => {
     const rendered = renderTools()
     await enterDraw(rendered)
+    const original = rendered.result.current.markup.baseImage
     drawAndLeave(rendered, [strokeA])
 
     rendered.rerender({ url: 'http://acme.test/#pricing', loading: false })
     rendered.rerender({ url: 'http://acme.test/plans', loading: false })
     await enterDraw(rendered)
 
-    expect(shownPage(rendered)).toContain('capture-1')
+    expect(rendered.result.current.markup.baseImage).toBe(original)
     expect(rendered.result.current.tools.restoredShapes).toEqual([strokeA])
   })
 
   it('leaving Draw with nothing drawn offers nothing back', async () => {
     const rendered = renderTools()
     await enterDraw(rendered)
+    const original = rendered.result.current.markup.baseImage
     drawAndLeave(rendered, [])
     expect(toasts.last).toBeNull()
 
     await enterDraw(rendered)
 
-    expect(shownPage(rendered)).toContain('capture-2')
+    expect(rendered.result.current.markup.baseImage).not.toBe(original)
   })
 })
