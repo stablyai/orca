@@ -78,7 +78,10 @@ export function createCodexRolloutHistoryReferencesClient(
       return Promise.reject(failure)
     }
     try {
-      signal.throwIfAborted()
+      // A cancelled sweep still saves what it read.
+      if (body.op !== 'save') {
+        signal.throwIfAborted()
+      }
       worker ??= start()
     } catch (error) {
       return Promise.reject(error)

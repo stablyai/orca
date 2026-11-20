@@ -6,7 +6,7 @@ import { codexPhysicalRolloutId } from '../../../native-chat/transcript-history/
 import { readHistoryBase } from './codex-rollout-history-base-header'
 import { createCodexRolloutFolderStamps } from './codex-rollout-folder-stamps'
 import { isNamedOn, recentDates } from './codex-rollout-recent-dates'
-import { linksIntoWsl, lstatUnlessAbsent, statUnlessAbsent } from './codex-rollout-path-probes'
+import { lstatUnlessAbsent, statUnlessAbsent } from './codex-rollout-path-probes'
 import {
   loadCodexRolloutHistoryBaseCache,
   type CodexRolloutHistoryBaseCache
@@ -86,10 +86,15 @@ export function createCodexRolloutHistoryReferences(
       return header === 'vanished'
     }
     if (header === 'unreadable' || !header.settled) {
-      const modified = (await statUnlessAbsent(path))?.mtimeMs ?? 0
+      const entry = await statUnlessAbsent(path)
+      // Its age can't be told: read it again next pass. Gone: it moved, or Codex deleted it.
+      if (!entry) {
+        moved ||= entry === null
+        return entry === null
+      }
       // A header still being written may name a base. An old one never will, and Codex's own
       // reference scan skips a rollout it can't read: it isn't cached, so a later sweep retries.
-      return Date.now() - modified >= UNFINISHED_HEADER_GRACE_MS
+      return Date.now() - entry.mtimeMs >= UNFINISHED_HEADER_GRACE_MS
     }
     link(rolloutId, header.base)
     await cache!.set(rolloutId, header.base)
@@ -97,9 +102,6 @@ export function createCodexRolloutHistoryReferences(
   }
 
   const visitLink = async (path: string, entry: Pending, visited: Set<string>) => {
-    if (await linksIntoWsl(path)) {
-      return true
-    }
     const target = await statUnlessAbsent(path)
     if (target === undefined) {
       return false
@@ -190,6 +192,7 @@ export function createCodexRolloutHistoryReferences(
       signal?.throwIfAborted()
       const path = join(folder, name)
       const entry = await lstatUnlessAbsent(path)
+      moved ||= entry === null
       if (entry === undefined) {
         pending.set(path, { kind: 'link', rolloutId, recursive: false })
       } else if (entry?.isFile() && rolloutId) {
@@ -242,9 +245,6 @@ export function createCodexRolloutHistoryReferences(
       for (const home of homes) {
         for (const name of ['sessions', 'archived_sessions']) {
           let root: string
-          if (await linksIntoWsl(join(home, name))) {
-            continue
-          }
           try {
             root = await realpath(join(home, name))
           } catch (error) {
