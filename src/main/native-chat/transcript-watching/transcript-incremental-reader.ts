@@ -70,12 +70,13 @@ export async function readIncrementalTranscriptMessages(
     return []
   }
   const messages: NativeChatMessage[] = []
-  let rangeStart: number | undefined
+  // Ranges cover every consumed line, including ones that decode to nothing, so consecutive reads stay contiguous.
+  let rangeStart = state.pendingStart
   let digest = 0n
   const ranges = (): TranscriptByteRange[] =>
-    rangeStart === undefined
-      ? []
-      : [{ start: rangeStart, end: state.pendingStart, digest: transcriptDigestHex(digest) }]
+    rangeStart < state.pendingStart
+      ? [{ start: rangeStart, end: state.pendingStart, digest: transcriptDigestHex(digest) }]
+      : []
   const stream = openTranscriptReadStream(
     filePath,
     { start: state.offset, end: end - 1 },
@@ -133,10 +134,7 @@ export async function readIncrementalTranscriptMessages(
     // A single synchronously decoded chunk is already owned; avoid copying it.
     const bytes =
       state.pendingChunks.length === 1 ? state.pendingChunks[0] : Buffer.concat(state.pendingChunks)
-    const lineDigest = transcriptLineDigest(state.pendingStart, bytes, state.pendingBytes)
-    if (rangeStart !== undefined) {
-      digest += lineDigest
-    }
+    digest += transcriptLineDigest(state.pendingStart, bytes, state.pendingBytes)
     if (state.droppingOversizedRecord) {
       return
     }
@@ -162,20 +160,11 @@ export async function readIncrementalTranscriptMessages(
       sourceOrder ? state.pendingStart : undefined
     )
     state.latestTimestamp = ordered.latest
-    if (rangeStart === undefined) {
-      rangeStart = state.pendingStart
-      digest = lineDigest
-    }
     messages.push(ordered.message)
     if (onBatch && messages.length >= APPEND_BATCH_MESSAGE_LIMIT) {
-      onBatch(messages.splice(0), [
-        {
-          start: rangeStart,
-          end: state.pendingStart + state.pendingBytes + 1,
-          digest: transcriptDigestHex(digest)
-        }
-      ])
-      rangeStart = undefined
+      const end = state.pendingStart + state.pendingBytes + 1
+      onBatch(messages.splice(0), [{ start: rangeStart, end, digest: transcriptDigestHex(digest) }])
+      rangeStart = end
       digest = 0n
     }
   }

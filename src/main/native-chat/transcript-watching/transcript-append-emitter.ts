@@ -39,7 +39,7 @@ export async function readAndEmitTranscriptAppends(
       ranges = value
     }
   )
-  if (canPublish() && (remaining.length > 0 || lifecycle)) {
+  if (canPublish() && (remaining.length > 0 || lifecycle || ranges?.length)) {
     onAppend(remaining, lifecycle, ranges)
   }
 }
