@@ -25,7 +25,11 @@ import {
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { readHostAgentLaunchDefaults } from '../../runtime/agent-launch-settings/agent-launch-settings-transport'
 import type { NewTabAgentMenuModel } from './launch-menu/new-tab-agent-menu-model'
-import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import {
+  buildAgentLaunchRouteInput,
+  buildAgentLaunchRouteView
+} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { readRuntimeStatusesForView } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { workspaceKindForWorktreeId } from '../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { readHostStructuredAgentsForRuntime } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
@@ -81,15 +85,18 @@ export function useAgentLaunchPickerInventorySource(
   }, [selected])
   const context = model.state === 'settled' ? model.pickerContext : undefined
   const settings = context ? context.settings : store.getState().settings
-  const executionHostId =
-    context?.executionHostId ??
-    buildAgentLaunchRouteInput(store.getState(), {
+  // Built only when a route is asked for; a closed picker reads none.
+  const routeView = () =>
+    buildAgentLaunchRouteView(store.getState(), readRuntimeStatusesForView(store))
+  const pickerRoute = () =>
+    buildAgentLaunchRouteInput(routeView(), {
       agent: 'claude',
       workspace: context?.workspace ?? {
         kind: worktreeId ? workspaceKindForWorktreeId(worktreeId) : 'floating',
         ...(worktreeId ? { worktreeId } : {})
       }
-    }).executionHostId
+    })
+  const executionHostId = context?.executionHostId ?? pickerRoute().executionHostId
   const target = structuredAgentSessionTargetForHost(executionHostId)
   const agentsVersion = useHostStructuredAgentsVersion()
   const registeredAgents = recomputeOn(
@@ -125,13 +132,7 @@ export function useAgentLaunchPickerInventorySource(
       ? localCapabilities.state === 'known'
         ? localCapabilities.capabilities
         : null
-      : buildAgentLaunchRouteInput(state, {
-          agent: 'claude',
-          workspace: context?.workspace ?? {
-            kind: worktreeId ? workspaceKindForWorktreeId(worktreeId) : 'floating',
-            ...(worktreeId ? { worktreeId } : {})
-          }
-        }).hostCapabilities
+      : pickerRoute().hostCapabilities
   const coherentCatalog =
     hostCapabilities?.includes(AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY) === true
   const draftTarget = useMemo(

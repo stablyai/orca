@@ -1,6 +1,7 @@
 import { readAgentMenuTerminalPending } from './agent-menu-launch-facts'
 import { terminalPendingReason } from './new-tab-agent-menu-model'
 import { useAppStore } from '@/store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { SubscribedAgentLaunchPickerMenu } from '@/components/agent/AgentLaunchPickerMenu'
 import {
@@ -91,7 +92,9 @@ export function useTabAgentMenuLaunch({
         disabled ||
         row.kind === 'chat-unavailable' ||
         (row.kind !== 'chat' &&
-          readAgentMenuTerminalPending(useAppStore.getState(), { worktreeId }))
+          readAgentMenuTerminalPending(useAppStore.getState(), readRuntimeStatuses(), {
+            worktreeId
+          }))
       ) {
         return false
       }

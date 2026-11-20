@@ -72,10 +72,10 @@ async function preloadLocal(again: boolean): Promise<void> {
   }
 }
 
+const readStatuses = () => runtimeStatusSubscriptionsFor(useAppStore).readStatuses()
+
 function pairedHostStatus(environmentId: string): RuntimeStatus | null {
-  return lastVerifiedRuntimeStatus(
-    useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)
-  )
+  return lastVerifiedRuntimeStatus(readStatuses().get(environmentId))
 }
 
 /** A paired host's lists again after contact returns: every registered agent from a host that reads
@@ -98,7 +98,7 @@ function preloadHostsWithNewAgents(): void {
   if (hostReadsSavedModelCatalogsOnly(readLocalRuntimeCapabilitiesOrUnknown())) {
     void preloadRegisteredAgents(LOCAL, LOCAL_EXECUTION_HOST_ID, null, false)
   }
-  for (const environmentId of useAppStore.getState().runtimeStatusByEnvironmentId.keys()) {
+  for (const environmentId of readStatuses().keys()) {
     const executionHostId = toRuntimeExecutionHostId(environmentId)
     const status = pairedHostStatus(environmentId)
     if (!status || !hostReadsSavedModelCatalogsOnly(status.capabilities)) {
@@ -127,7 +127,7 @@ export function installHostModelCatalogSnapshotsSync(): () => void {
   const watchHosts = (state: AppState, environmentIds: Iterable<string>): void => {
     for (const environmentId of environmentIds) {
       if (
-        state.runtimeStatusByEnvironmentId.has(environmentId) &&
+        readStatuses().has(environmentId) &&
         !state.removedRuntimeEnvironmentIds.has(environmentId) &&
         !contactStops.has(environmentId)
       ) {
@@ -148,7 +148,7 @@ export function installHostModelCatalogSnapshotsSync(): () => void {
         preloadedFrom.delete(toRuntimeExecutionHostId(environmentId))
       }
     }
-    watchHosts(state, state.runtimeStatusByEnvironmentId.keys())
+    watchHosts(state, readStatuses().keys())
   }
   watchPairedHosts(useAppStore.getState())
   // A status write can only add hosts to watch, so it visits just the hosts it touched.

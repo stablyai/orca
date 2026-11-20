@@ -164,15 +164,17 @@ export function installRemoteUnsavedEditorReport(): () => void {
   // A reloaded window must clear what its previous renderer reported over main's still-open socket.
   const known = new Set<string>()
   /** The hosts that just got their first report owed. */
+  const hostStatuses = runtimeStatusSubscriptionsFor(useAppStore)
   const noteEnvironments = (
-    state: Pick<AppState, 'runtimeStatusByEnvironmentId' | 'runtimeEnvironments'>,
-    environmentIds: Iterable<string> = state.runtimeStatusByEnvironmentId.keys()
+    state: Pick<AppState, 'runtimeEnvironments'>,
+    environmentIds: Iterable<string> = hostStatuses.readStatuses().keys()
   ): string[] => {
+    const statuses = hostStatuses.readStatuses()
     // Statuses can outlive a removed host; only configured hosts get a report.
     const noted: string[] = []
     let configured: Set<string> | undefined
     for (const environmentId of environmentIds) {
-      if (known.has(environmentId) || !state.runtimeStatusByEnvironmentId.has(environmentId)) {
+      if (known.has(environmentId) || !statuses.has(environmentId)) {
         continue
       }
       configured ??= new Set(state.runtimeEnvironments.map((environment) => environment.id))
@@ -187,7 +189,7 @@ export function installRemoteUnsavedEditorReport(): () => void {
   noteEnvironments(useAppStore.getState())
   sync()
   // Routing reads no host status, so a status write only owes a first report to a newly seen host.
-  const stopStatuses = runtimeStatusSubscriptionsFor(useAppStore).subscribeStatusChanges((change) =>
+  const stopStatuses = hostStatuses.subscribeStatusChanges((change) =>
     syncHosts(noteEnvironments(useAppStore.getState(), change.ids))
   )
   const stopStore = useAppStore.subscribe((state, previous) => {
