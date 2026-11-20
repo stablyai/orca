@@ -297,6 +297,17 @@ describe('legacy session copy swap', () => {
     expect(readFileSync(copyPath, 'utf-8')).toBe(`${OLD_TURNS}{"late":true}\n`)
   })
 
+  it('leaves the name empty while the marker of a copy moved aside cannot be read', async () => {
+    legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
+    renameSync(copyPath, `${copyPath}.orca-legacy-copy.1`)
+    rmSync(markerPath)
+    mkdirSync(markerPath)
+
+    await bridgePass()
+
+    expect(existsSync(copyPath)).toBe(false)
+  })
+
   it('keeps the exact source spelling of a copy written since it was copied', async () => {
     legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
     writeFileSync(copyPath, `${OLD_TURNS}{"resumed":true}\n`)

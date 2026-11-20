@@ -81,9 +81,15 @@ export async function settleLegacySessionCopyName(args: {
     return
   }
   const markerPath = legacySessionCopyMarkerPath(args.managedHome, args.relativePath)
+  // Only a marker proven absent lets the caller link the source in over a copy that may be aside.
   const marker = await readFile(markerPath, 'utf-8').then(
     parseLegacyCopiedSessionMarker,
-    () => null
+    (error: unknown) => {
+      if (isDefinitiveAbsence(error)) {
+        return null
+      }
+      throw error
+    }
   )
   if (marker && !marker.kept) {
     await restoreMovedCopy(marker, normalize(marker.sourcePath), copyPath)
