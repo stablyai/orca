@@ -35,6 +35,7 @@ import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-pa
 import type { BotHome } from '../../settings/bots/bot-home-files'
 import { useBotMemoryTopicCount } from '../../settings/bots/use-bot-memory-topics'
 import { useBotNotificationToggles } from '../../settings/bots/use-bot-notification-toggles'
+import { botSkillSourceNames, useBotOwnSkills } from '../../settings/bots/use-bot-skill-projects'
 import { useBotPictureSetting } from '../../settings/bots/use-bot-picture-setting'
 import { BotNameInlineEdit } from '../BotNameInlineEdit'
 import { BotPictureButton } from '../BotPictureButton'
@@ -193,9 +194,13 @@ function AccessGroup({
   const lines = useAccessLines(bot)
   const { view } = useBotTools(bot, 'finished')
   const repos = useAppStore((state) => state.repos)
+  const own = useBotOwnSkills(bot)
   const skills = namesLine(
-    (bot.skillProjects ?? []).flatMap(
-      (id) => repos.find((repo) => repo.id === id)?.displayName ?? []
+    botSkillSourceNames(
+      own,
+      (bot.skillProjects ?? []).flatMap(
+        (id) => repos.find((repo) => repo.id === id)?.displayName ?? []
+      )
     ),
     intlLocale
   )

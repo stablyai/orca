@@ -26,7 +26,7 @@ const SKILL_FOLDERS = ['.agents', '.claude'] as const
 const MAX_SKILL_FILE_BYTES = 256 * 1024
 
 /** An admitted skill, with the real folder its link in Orca's folder points to. */
-type ScannedSkill = LinkedProjectSkill & { folder: string }
+export type ScannedSkill = LinkedProjectSkill & { folder: string }
 
 type ScannedProject = { skillsDir: string; skills: ScannedSkill[] }
 
@@ -68,7 +68,7 @@ async function admittedSkill(skillFile: string): Promise<ScannedSkill | null> {
   }
 }
 
-async function scanSkillsFolder(skillsDir: string): Promise<ScannedSkill[]> {
+export async function scanSkillsFolder(skillsDir: string): Promise<ScannedSkill[]> {
   const files = await findSkillFiles(skillsDir, skillDirectoryMaxDepth('repo'))
   const admitted = await Promise.all(files.map(admittedSkill))
   const byFolder = new Map<string, ScannedSkill>()
@@ -101,7 +101,7 @@ export function botLinkedSkillsFolder(botId: string): string {
 
 /** Each skills folder's link name for every skill, unique across the bot's projects even where
  *  the filesystem ignores case (macOS, Windows), so `deploy` and `Deploy` both get a link. */
-function skillLinks(skills: readonly ScannedSkill[]): Map<string, string> {
+export function skillLinks(skills: readonly ScannedSkill[]): Map<string, string> {
   const links = new Map<string, string>()
   const taken = new Set<string>()
   for (const skill of skills) {
@@ -116,16 +116,29 @@ function skillLinks(skills: readonly ScannedSkill[]): Map<string, string> {
   return links
 }
 
+/** Which links in a skills folder Orca may replace or remove, and whether a name taken by anything
+ *  else fails the sync or is left alone. */
+export type LinkScope = {
+  owns: (link: string) => Promise<boolean>
+  leaveTaken: boolean
+}
+
+const EVERY_LINK: LinkScope = { owns: async () => true, leaveTaken: false }
+
 /** Makes one skills folder hold exactly these links, in place, so an agent watching it sees the
- *  change; anything there that isn't a link is left alone. */
-async function syncLinks(skillsDir: string, links: ReadonlyMap<string, string>): Promise<void> {
+ *  change; anything there that isn't a link (or, with a scope, isn't Orca's link) is left alone. */
+export async function syncLinks(
+  skillsDir: string,
+  links: ReadonlyMap<string, string>,
+  scope: LinkScope = EVERY_LINK
+): Promise<void> {
   await mkdir(skillsDir, { recursive: true })
   const present = new Set<string>()
   for (const entry of await readdir(skillsDir, { withFileTypes: true })) {
-    if (!entry.isSymbolicLink()) {
+    const path = join(skillsDir, entry.name)
+    if (!entry.isSymbolicLink() || !(await scope.owns(path))) {
       continue
     }
-    const path = join(skillsDir, entry.name)
     const target = links.get(entry.name)
     if (target !== undefined && (await realpath(path).catch(() => null)) === target) {
       present.add(entry.name)
@@ -141,8 +154,9 @@ async function syncLinks(skillsDir: string, links: ReadonlyMap<string, string>):
     await symlink(target, path, process.platform === 'win32' ? 'junction' : 'dir').catch(
       async (error: NodeJS.ErrnoException) => {
         // Taken counts only when it is this link (another Orca process made it); anything else
-        // there is left alone, and the sync fails so the chat gets the list instead.
-        if (error.code !== 'EEXIST' || (await realpath(path).catch(() => null)) !== target) {
+        // there is left alone, and, unscoped, the sync fails so the chat gets the list instead.
+        const taken = error.code === 'EEXIST'
+        if (!taken || (!scope.leaveTaken && (await realpath(path).catch(() => null)) !== target)) {
           throw error
         }
       }
@@ -154,7 +168,7 @@ const syncing = new Map<string, Promise<unknown>>()
 
 /** One scan-and-sync per folder at a time, in call order, so an older scan never lands over a
  *  newer one's links. */
-function serialized<T>(folder: string, run: () => Promise<T>): Promise<T> {
+export function serialized<T>(folder: string, run: () => Promise<T>): Promise<T> {
   const next = (syncing.get(folder) ?? Promise.resolve()).catch(() => {}).then(run)
   syncing.set(folder, next)
   return next.finally(() => {

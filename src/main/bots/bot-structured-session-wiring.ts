@@ -23,6 +23,7 @@ import type { TurnEndedVerdict } from '../native-chat/agent-session-wire/structu
 import type { BotChatJournal } from './bot-turn-rows'
 import type { BotRecentChatsSection } from './bot-recent-chats'
 import { BOT_FIRST_RUN_RULES } from './bot-preamble'
+import { syncBotOwnSkills } from './bot-own-skills'
 import { botSessionInstructions } from './bot-session-instructions'
 import type { BotController } from './bot-controller'
 import type { BotWorkRecord } from './bot-work-record'
@@ -202,6 +203,9 @@ export function botStructuredSessionWiring(deps: {
       const bot = botOfRecord(record)
       if (bot) {
         await deps.scrubToolSecrets?.(bot)
+        await syncBotOwnSkills(botHomeFolder(bot)).catch((error: unknown) => {
+          console.warn("[bots] the bot's own skills could not be linked", bot.id, error)
+        })
       }
     },
     resolveSessionToolServers: async (record, launchDirectory) => {

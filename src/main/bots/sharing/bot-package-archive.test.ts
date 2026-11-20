@@ -241,7 +241,7 @@ describe('bot package export and archive', () => {
         { from: 'memory/area-owners.md', to: 'memory/area-owners.md', executable: false },
         {
           from: 'skills/changelog-style/SKILL.md',
-          to: '.agents/skills/changelog-style/SKILL.md',
+          to: 'skills/changelog-style/SKILL.md',
           executable: false
         }
       ],
