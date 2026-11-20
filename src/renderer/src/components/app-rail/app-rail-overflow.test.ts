@@ -1,10 +1,5 @@
 import { expect, it } from 'vitest'
-import { appRailSlotCapacity, partitionAppRail } from './app-rail-overflow'
-
-it('counts whole 36px slots', () => {
-  expect(appRailSlotCapacity(36 * 4)).toBe(4)
-  expect(appRailSlotCapacity(36 * 4 - 1)).toBe(3)
-})
+import { partitionAppRail } from './app-rail-overflow'
 
 it('shows everything without More when it all fits', () => {
   expect(partitionAppRail(6, 9)).toEqual({

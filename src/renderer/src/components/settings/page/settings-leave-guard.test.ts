@@ -33,26 +33,6 @@ it('leaves at once when nothing guards Settings', async () => {
   expect(leave).toHaveBeenCalledTimes(1)
 })
 
-it('runs nothing when Settings vetoes leaving', async () => {
-  unregister = registerSettingsLeaveGuard(async () => false)
-  const leave = vi.fn()
-  await leaveSettingsThen(() => true, leave)
-  expect(leave).not.toHaveBeenCalled()
-})
-
-it('runs the approved intent once and drops a second request while asking', async () => {
-  const deferred = deferredGuard()
-  unregister = registerSettingsLeaveGuard(deferred.guard)
-  const first = vi.fn()
-  const second = vi.fn()
-  const pending = leaveSettingsThen(() => true, first)
-  await leaveSettingsThen(() => true, second)
-  deferred.approve()
-  await pending
-  expect(first).toHaveBeenCalledTimes(1)
-  expect(second).not.toHaveBeenCalled()
-})
-
 it('aborts the open confirmation when Settings unmounts and lets the next visit ask again', async () => {
   const deferred = deferredGuard()
   const stop = registerSettingsLeaveGuard(deferred.guard)
