@@ -1,5 +1,5 @@
 // @protected-copy
-import type { JSX } from 'react'
+import { useLayoutEffect, useRef, useState, type JSX } from 'react'
 import { Check, CircleAlert } from 'lucide-react'
 import { DialogDisclosure } from '@/components/ui/dialog-parts'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
@@ -85,6 +85,16 @@ export function DeleteWorktreeChangesSummary({
   atRiskLocalFilesByIdentity: ReadonlyMap<string, DeleteWorktreeLocalFilesState>
 }): JSX.Element | null {
   const t = useTranslate()
+  const [open, setOpen] = useState(false)
+  const [clipped, setClipped] = useState(false)
+  const textRef = useRef<HTMLSpanElement>(null)
+  const noteRef = useRef<HTMLSpanElement>(null)
+  // A long translation can clip the one fixed line; the full sentence then moves into the panel.
+  useLayoutEffect(() => {
+    setClipped(
+      [textRef.current, noteRef.current].some((el) => el != null && el.scrollWidth > el.clientWidth)
+    )
+  })
   const key = worktree.hostId ? getWorktreeHostIdentity(worktree) : worktree.id
   const changeCount = dirtyChanges.counts.get(key)
   const checkState = dirtyChanges.checkStates.get(key)
@@ -98,8 +108,9 @@ export function DeleteWorktreeChangesSummary({
     t,
     (atRiskLocalFiles?.count ?? 0) > 0
   )
-  const changesChecking = changeCount === undefined && checkState === 'checking'
-  const changesFailed = changeCount === undefined && checkState === 'unavailable'
+  // A refused delete's fallback count is not a finished check, so follow the Git check itself.
+  const changesChecking = checkState === 'checking'
+  const changesFailed = checkState === 'unavailable'
   const ignoredChecking = localFilesState?.status === 'checking'
   const ignoredUnchecked =
     localFilesState?.status === 'unsupported' ||
@@ -116,7 +127,8 @@ export function DeleteWorktreeChangesSummary({
       ? ['warning', failedLabel]
       : changesChecking || (ignoredChecking && checkState !== 'complete')
         ? ['checking', checkingLabel]
-        : checkState === 'complete'
+        : // An open panel outlives its last loss (e.g. an autosave), so it never collapses on its own.
+          checkState === 'complete' || open
           ? [
               ignoredUnchecked ? 'warning' : 'clean',
               t('components.workspace.delete.changes.none', 'No uncommitted changes')
@@ -135,6 +147,8 @@ export function DeleteWorktreeChangesSummary({
   const changedFiles = preview?.files ?? []
   const ignoredPaths = atRiskLocalFiles?.paths ?? atRiskLocalFiles?.samplePaths ?? []
   const hasDetails = changedFiles.length > 0 || unsavedFiles.length > 0 || ignoredPaths.length > 0
+  // Stay mounted while open, so an autosave that empties the list never collapses it under the user.
+  const expandable = hasDetails || clipped || open
   if (!tone) {
     return null
   }
@@ -149,12 +163,16 @@ export function DeleteWorktreeChangesSummary({
           <CircleAlert className="size-3.5" />
         )}
       </span>
-      <span className="min-w-0 truncate" title={text}>
+      <span ref={textRef} className="min-w-0 truncate" title={text}>
         {text}
       </span>
       {note ? (
         // The note gives way first so a narrow line keeps the loss sentence.
-        <span className="min-w-0 shrink-[1000] truncate text-muted-foreground" title={note}>
+        <span
+          ref={noteRef}
+          className="min-w-0 shrink-[1000] truncate text-muted-foreground"
+          title={note}
+        >
           · {note}
         </span>
       ) : null}
@@ -172,7 +190,7 @@ export function DeleteWorktreeChangesSummary({
       : 'text-muted-foreground'
   return (
     <div aria-live="polite" className="min-w-0">
-      {hasDetails ? (
+      {expandable ? (
         // A fixed open height: results that land after opening scroll inside instead of moving Delete.
         <DialogDisclosure
           label={line}
@@ -180,7 +198,14 @@ export function DeleteWorktreeChangesSummary({
           chevron="trailing"
           contentClassName="h-44"
           triggerClassName={`h-5 max-w-full min-w-0 gap-1.5 ${toneClassName}`}
+          open={open}
+          onOpenChange={setOpen}
         >
+          {clipped ? (
+            <p className="mb-2 font-sans text-[13px] text-foreground">
+              {note ? `${text} · ${note}` : text}
+            </p>
+          ) : null}
           {ignoredPaths.length > 0 && atRiskLocalFiles ? (
             <DeleteWorktreeLocalFilesDetails files={atRiskLocalFiles} />
           ) : null}
@@ -233,7 +258,7 @@ export function DeleteWorktreeChangesSummary({
           ) : null}
         </DialogDisclosure>
       ) : null}
-      {hasDetails ? null : (
+      {expandable ? null : (
         <p className={`flex h-5 min-w-0 items-center gap-1.5 text-[13px] ${toneClassName}`}>
           {line}
         </p>

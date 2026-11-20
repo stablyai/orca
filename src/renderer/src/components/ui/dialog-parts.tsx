@@ -82,7 +82,9 @@ function DialogDisclosure({
   variant = 'boxed',
   chevron = 'leading',
   triggerClassName,
-  contentClassName
+  contentClassName,
+  open: controlledOpen,
+  onOpenChange
 }: {
   label: React.ReactNode
   children: React.ReactNode
@@ -93,8 +95,12 @@ function DialogDisclosure({
   chevron?: 'leading' | 'trailing'
   triggerClassName?: string
   contentClassName?: string
+  /** Controlled open state, for callers that must keep the section open while its content changes. */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }): React.JSX.Element {
-  const [open, setOpen] = React.useState(defaultOpen)
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen)
+  const open = controlledOpen ?? uncontrolledOpen
   const contentId = React.useId()
   const chevronIcon = (
     <ChevronRight
@@ -108,7 +114,10 @@ function DialogDisclosure({
         type="button"
         aria-expanded={open}
         aria-controls={contentId}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          setUncontrolledOpen(!open)
+          onOpenChange?.(!open)
+        }}
         className={cn(
           'flex w-fit items-center gap-1 rounded-sm text-[13px] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50',
           triggerClassName
