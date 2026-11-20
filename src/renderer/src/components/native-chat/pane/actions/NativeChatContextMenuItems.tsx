@@ -1,4 +1,14 @@
-import { Copy, ExternalLink, FileText, Globe, Quote, Search, Trash2, Undo2 } from 'lucide-react'
+import {
+  Copy,
+  ExternalLink,
+  FileText,
+  Globe,
+  MessageSquarePlus,
+  Quote,
+  Search,
+  Trash2,
+  Undo2
+} from 'lucide-react'
 import {
   useNativeChatRewindConfirm,
   useNativeChatSlackMirrorContext
@@ -9,6 +19,7 @@ import { useAppStore } from '@/store'
 import type { LinkAction } from '@/components/link-actions/link-action-request'
 import { useTranslate } from '@/i18n/use-translate'
 import type { NativeChatContextMenuTarget } from './native-chat-context-menu-target'
+import type { NativeChatSelectionReference } from '../../selection-quotes/native-chat-transcript-selection'
 import type { NativeChatRewindSurface } from '../../messages/actions/use-native-chat-rewind-host'
 
 function copyText(text: string): void {
@@ -20,14 +31,26 @@ function copyText(text: string): void {
 export function NativeChatContextMenuTargetItems({
   target,
   onQuote,
+  onAskInAuxiliaryChat,
+  auxiliaryChatBlockedReason,
   rewind
 }: {
   target: NativeChatContextMenuTarget
   onQuote: (text: string) => void
+  onAskInAuxiliaryChat?: (reference: NativeChatSelectionReference) => void
+  auxiliaryChatBlockedReason?: string | null
   rewind: NativeChatRewindSurface | undefined
 }): React.JSX.Element {
   const t = useTranslate()
-  const { quoteText, link, codeText, messageText, rewindItemId, slackPostedItemId } = target
+  const {
+    quoteText,
+    auxiliaryReference,
+    link,
+    codeText,
+    messageText,
+    rewindItemId,
+    slackPostedItemId
+  } = target
   const slackMirror = useNativeChatSlackMirrorContext()
   const linkRows = link ? [link.primary, link.alternate, ...(link.secondaryActions ?? [])] : []
   return (
@@ -36,6 +59,22 @@ export function NativeChatContextMenuTargetItems({
         <DropdownMenuItem onSelect={() => onQuote(quoteText)}>
           <Quote />
           {t('components.native-chat.addSelectionToChat', 'Add to chat')}
+        </DropdownMenuItem>
+      ) : null}
+      {auxiliaryReference && onAskInAuxiliaryChat ? (
+        <DropdownMenuItem
+          disabled={Boolean(auxiliaryChatBlockedReason)}
+          onSelect={() => onAskInAuxiliaryChat(auxiliaryReference)}
+        >
+          <MessageSquarePlus />
+          <span className="grid min-w-0 flex-1">
+            {t('components.native-chat.askSelectionInSideChat', 'Ask in auxiliary chat')}
+            {auxiliaryChatBlockedReason ? (
+              <span className="text-xs whitespace-normal text-muted-foreground contain-inline-size">
+                {auxiliaryChatBlockedReason}
+              </span>
+            ) : null}
+          </span>
         </DropdownMenuItem>
       ) : null}
       {linkRows.map((action) =>

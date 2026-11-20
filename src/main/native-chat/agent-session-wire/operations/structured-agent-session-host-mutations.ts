@@ -295,7 +295,12 @@ export async function changeStructuredAgentSessionThreadGoal(
     {
       goal: true,
       beforeAgent: (record) =>
-        refuseThreadGoalUnsupported(context.deps.adapter, context.deps.agents, record?.provider)
+        refuseThreadGoalUnsupported(
+          context.deps.adapter,
+          context.deps.agents,
+          record?.provider,
+          record?.auxiliaryChat
+        )
     }
   )
 }

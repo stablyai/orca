@@ -21,6 +21,8 @@ export type StructuredProviderSessionOwnership = {
   ownerObservation: AgentSessionOwnerObservation
   /** `head`: the conversation the chat continues now; `earlier`: one its chain held before. */
   role: 'head' | 'earlier'
+  /** Unlisted auxiliary children never appear in Session History or terminal resume offers. */
+  auxiliary?: true
   key: ConversationKey
 }
 
@@ -45,6 +47,7 @@ export function listStructuredProviderSessionOwnership(
                   providerSessionId: history.rowSessionId(link),
                   conversationName: record.conversationName,
                   ownerObservation: record.ownerObservation,
+                  ...(record.auxiliaryChat ? { auxiliary: true as const } : {}),
                   // A repeat resume link of the head's id is the head too.
                   role: keysMayMatch(key, headKey) ? ('head' as const) : ('earlier' as const),
                   key

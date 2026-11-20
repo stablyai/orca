@@ -77,7 +77,12 @@ export function useNativeChatComposerCommandPicker(
     editor,
     setNotice
   })
-  const side = useNativeChatSideChatCommand({ structuredTransport, picker, editor })
+  const side = useNativeChatSideChatCommand({
+    structuredTransport: mode ? undefined : structuredTransport,
+    picker,
+    editor,
+    disabled: pickerArgs.disabled
+  })
   // `/btw` and `/resume` never collide, so each draft and pick has at most one owner.
   const { consume: sideConsume, matchesDraft: sideMatches, interceptPick: sideIntercept } = side
   const {

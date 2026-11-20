@@ -16,6 +16,10 @@ import {
 import type { AgentSessionLastTurn } from './records/agent-session-last-turn'
 import type { AgentSessionForkedFrom } from './records/agent-session-forked-from'
 export type { AgentSessionForkedFrom }
+import {
+  isAgentSessionAuxiliaryChat,
+  type AgentSessionAuxiliaryChat
+} from './records/agent-session-auxiliary-chat'
 import type { ExecutionHostId } from '../../execution-host/execution-host'
 import { isAgentSessionConversationCommandRecord } from '../conversation-context/agent-session-conversation-command'
 import type { AgentSessionConversationCommandRecord } from '../conversation-context/agent-session-conversation-command'
@@ -146,6 +150,8 @@ export type AgentSessionRecord = {
   forkedFrom?: AgentSessionForkedFrom
   /** Key of the host-owned instructions this provider context was confirmed to hold; absent: unknown. */
   instructionsKey?: string
+  /** An unlisted child chat; never a fork marker, tab, status row or Session History entry. */
+  auxiliaryChat?: AgentSessionAuxiliaryChat
   lease: AgentSessionLease
   createdAt: number
   updatedAt: number
@@ -276,9 +282,7 @@ function isPersistedAgentSessionObservationLease(
     isStoredRecordObject(lease) &&
     isAgentSessionId(lease.sessionId) &&
     isPersistedAgentSessionRuntimeKind(lease.runtimeKind) &&
-    typeof lease.runtimeFence === 'number' &&
-    Number.isSafeInteger(lease.runtimeFence) &&
-    lease.runtimeFence >= 0 &&
+    isNonNegativeSafeInteger(lease.runtimeFence) &&
     (lease.handoffStage === null || isPersistedAgentSessionHandoffStage(lease.handoffStage)) &&
     (lease.provenHandleLinkId === null || isBoundedString(lease.provenHandleLinkId, 128)) &&
     (lease.ownerProcess === null || isAgentSessionProcessIdentity(lease.ownerProcess)) &&
@@ -329,6 +333,7 @@ export function isPersistedAgentSessionObservationRecord(
         isAgentSessionConversationName(record.conversationName)) &&
       (record.conversationNameSource === undefined || record.conversationNameSource === 'user') &&
       (record.launchArgs === undefined || isAgentSessionLaunchArgs(record.launchArgs)) &&
+      (record.auxiliaryChat === undefined || isAgentSessionAuxiliaryChat(record.auxiliaryChat)) &&
       !Object.hasOwn(record, 'launchEnv') &&
       isPersistedAgentSessionObservationLease(record.lease) &&
       record.lease.sessionId === record.sessionId &&
@@ -360,11 +365,9 @@ export function isPersistedAgentSessionObservationRecord(
 export function isPersistedAgentSessionRecord(
   value: unknown
 ): value is PersistedAgentSessionRecord {
-  if (!isPersistedAgentSessionObservationRecord(value)) {
-    return false
-  }
-  const floor = value.lease.minimumNextFence
   return (
-    floor === undefined || (typeof floor === 'number' && Number.isSafeInteger(floor) && floor >= 0)
+    isPersistedAgentSessionObservationRecord(value) &&
+    (value.lease.minimumNextFence === undefined ||
+      isNonNegativeSafeInteger(value.lease.minimumNextFence))
   )
 }

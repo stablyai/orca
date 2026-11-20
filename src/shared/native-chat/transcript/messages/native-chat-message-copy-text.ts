@@ -1,6 +1,6 @@
 import type { NativeChatMessage } from '../../native-chat-types'
 import { deriveNativeChatRowContent } from '../row-content/native-chat-row-content'
-import { withoutSentImagePromptMarkers } from '../images/native-chat-sent-image-prompt-markers'
+import { nativeChatVisibleMessageBlocks } from './native-chat-sent-prompt-references'
 import { nativeChatBlocksInOwnWords } from '../pending-sends/native-chat-stopped-before-start'
 import { withoutNativeChatVisualDirectiveLines } from '../../visuals/native-chat-visual-directive'
 
@@ -10,7 +10,7 @@ export function nativeChatMessageCopyText(
   stoppedLabel?: string
 ): string {
   const { markdown } = deriveNativeChatRowContent(
-    nativeChatBlocksInOwnWords(withoutSentImagePromptMarkers(message), stoppedLabel)
+    nativeChatBlocksInOwnWords(nativeChatVisibleMessageBlocks(message), stoppedLabel)
   )
   return message.role === 'user' ? markdown : withoutNativeChatVisualDirectiveLines(markdown)
 }

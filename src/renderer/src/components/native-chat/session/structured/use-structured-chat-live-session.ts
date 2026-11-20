@@ -3,7 +3,7 @@ import type { NativeChatLiveSession } from '../terminal/read/native-chat-live-se
 import type { useStructuredAgentSession } from './use-structured-agent-session'
 import type { structuredChatHistoryPhase } from '../status/native-chat-view-state'
 
-type StructuredChatController = Pick<
+export type StructuredChatController = Pick<
   ReturnType<typeof useStructuredAgentSession>,
   | 'messages'
   | 'status'

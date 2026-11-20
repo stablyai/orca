@@ -70,6 +70,13 @@ async function resolveForkSource(input: StructuredAgentSessionForkInput) {
       )
     }
     const record = host.deps.store.requireWritableRecord(input.sessionId)
+    if (record.auxiliaryChat) {
+      throw agentConversationCopyRefusal(
+        'agent_session_operation_invalid',
+        { reason: 'requestMalformed' },
+        'An auxiliary chat cannot be used as a copy source.'
+      )
+    }
     const metadata = structuredAgentRuntimeMetadata(input.agent)
     const capability = host.deps.agents.capabilities(input.agent)?.fork
     const { head, pendingClear } = activeProviderContext(record)

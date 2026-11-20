@@ -95,6 +95,8 @@ export function NativeChatAssistantMessageRow({
       ref={rowRef}
       // The context menu offers Copy message only where the row's controls offer Copy.
       data-native-chat-message-id={showControls && words.length > 0 ? message.id : undefined}
+      // Selected row text, including a reply that is still streaming, belongs to this stable row.
+      data-native-chat-selection-row={isSystem ? undefined : message.id}
       data-native-chat-message-tone={isSystem ? 'faint' : undefined}
       className={cn(
         'group relative max-w-full select-text text-sm leading-relaxed text-chat-foreground',

@@ -150,6 +150,7 @@ export async function readStructuredAgentSessionOptions(
   }
   const resting = live ? restingOptions : null
   const record = store.getConversation(sessionId)
+  const auxiliary = record?.auxiliaryChat !== undefined
   const permissionMode = record
     ? structuredAgentSessionImmediatePermission(context.deps, record)
     : null
@@ -243,8 +244,9 @@ export async function readStructuredAgentSessionOptions(
   return {
     ...options,
     ...recovery,
-    forkSupport:
-      capabilities?.fork === 'checkpoint'
+    forkSupport: auxiliary
+      ? 'unsupported'
+      : capabilities?.fork === 'checkpoint'
         ? 'supported'
         : capabilities?.fork === 'tip'
           ? (live?.forkSupport ?? readAcpForkSupport(agent))
@@ -272,8 +274,9 @@ export async function readStructuredAgentSessionOptions(
         ? { reportedPermissionMode: options.current.reportedPermissionMode }
         : { reportedPermissionMode: undefined })
     },
-    rewind:
-      phase === 'prepared' || phase === 'provider-succeeded'
+    rewind: auxiliary
+      ? { supported: false, reason: 'unsupported' }
+      : phase === 'prepared' || phase === 'provider-succeeded'
         ? { supported: false, reason: 'outcome-unknown' }
         : (adapter.rewindSupport?.(sessionId, agent) ?? {
             supported: false,
@@ -286,7 +289,7 @@ export async function readStructuredAgentSessionOptions(
     // Live children may narrow declared capabilities, never expand them.
     acceptsImages: capabilities?.imagePrompts === true && options.acceptsImages !== false,
     ...structuredAgentSessionThreadGoalReport(
-      capabilities?.threadGoal === true,
+      !auxiliary && capabilities?.threadGoal === true,
       goalSource.goal,
       contextFloor
     ),

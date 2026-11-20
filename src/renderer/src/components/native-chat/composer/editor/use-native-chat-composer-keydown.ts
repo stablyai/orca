@@ -6,6 +6,7 @@ import {
   type KeyboardEventHandler,
   type SetStateAction
 } from 'react'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import type { ComposerAutocomplete } from '../../../../../../shared/native-chat/input/composer/native-chat-composer-autocomplete'
 import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
 import { isMacPlatform } from '../../pane/routing/native-chat-shortcut'
@@ -130,6 +131,9 @@ export function useNativeChatComposerKeyDown({
       }
 
       if (event.key === 'Escape') {
+        if (hasVisibleOverlay({ ignoreContaining: event.currentTarget })) {
+          return
+        }
         event.preventDefault()
         interrupt?.()
         return

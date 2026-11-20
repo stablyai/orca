@@ -57,8 +57,8 @@ export type NativeChatStructuredComposerTransport = {
   worktreeId?: string
   /** Present only where the host can set this session's goal. */
   threadGoal?: { setObjective: (objective: string) => Promise<boolean> }
-  /** `/btw`; absent where Orca can't fork this chat, so the command stays the agent's. */
-  sideChat?: NativeChatSideChat
+  /** `/side` and `/btw`; absent where the agent handles them. */
+  sideChat?: Pick<NativeChatSideChat, 'notReadyReason' | 'open'> & { auxiliary?: true }
   /** Present only where the host can read this chat's Codex account usage. */
   accountUsage?: { open: () => void }
   /** Present only where the host manages this agent's MCP servers; `/mcp` opens Orca's MCP tray. */

@@ -5,8 +5,12 @@ import type {
   RightSidebarExplorerView
 } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { defaultFileSearchState } from '../editor/search/file-search-state'
+import {
+  nativeChatAuxiliaryParentKey,
+  type NativeChatAuxiliaryState
+} from './native-chat-auxiliary-state'
 
-export type RightSidebarState = {
+export type RightSidebarState = NativeChatAuxiliaryState & {
   rightSidebarOpen: boolean
   rightSidebarWidth: number
   rightSidebarTab: ActiveRightSidebarTab
@@ -30,6 +34,8 @@ export type RightSidebarState = {
     includePattern?: string | null
   }) => void
   showAiVaultSearch: () => void
+  /** Opens this conversation's side chats without selecting a main tab. */
+  showRightSidebarSideChat: () => void
   clearAiVaultSearchFocusRequest: () => void
   setRightSidebarEffectiveTab: (tab: ActiveRightSidebarTab | null) => void
   setActivityBarPosition: (position: ActivityBarPosition) => void
@@ -46,6 +52,7 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
     rightSidebarTabByWorktree: {},
     rightSidebarExplorerViewByWorktree: {},
     rightSidebarEffectiveTab: null,
+    nativeChatAuxiliaryByParent: {},
     activityBarPosition: 'top',
     toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
     setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
@@ -141,6 +148,70 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
         rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
         aiVaultSearchFocusRequested: true
       })),
+    showRightSidebarSideChat: () =>
+      set((s) => ({
+        rightSidebarOpen: true,
+        rightSidebarTab: 'side-chat' as const,
+        rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1
+      })),
+    addNativeChatAuxiliaryChild: (parent, child) =>
+      set((s) => {
+        const key = nativeChatAuxiliaryParentKey(parent)
+        const current = s.nativeChatAuxiliaryByParent[key]
+        const conversation = {
+          key,
+          parentSessionId: parent.sessionId,
+          parentTabId: parent.tabId,
+          worktreeId: parent.worktreeId,
+          target: parent.target,
+          agent: child.agent,
+          children: [...(current?.children ?? []), child],
+          activeChildSessionId: child.sessionId
+        }
+        return {
+          nativeChatAuxiliaryByParent: {
+            ...s.nativeChatAuxiliaryByParent,
+            [key]: conversation
+          }
+        }
+      }),
+    setActiveNativeChatAuxiliaryChild: (key, sessionId) =>
+      set((s) => {
+        const current = s.nativeChatAuxiliaryByParent[key]
+        if (
+          !current ||
+          current.activeChildSessionId === sessionId ||
+          (sessionId !== null && !current.children.some((child) => child.sessionId === sessionId))
+        ) {
+          return {}
+        }
+        return {
+          nativeChatAuxiliaryByParent: {
+            ...s.nativeChatAuxiliaryByParent,
+            [key]: { ...current, activeChildSessionId: sessionId }
+          }
+        }
+      }),
+    removeNativeChatAuxiliaryChild: (key, sessionId) =>
+      set((s) => {
+        const current = s.nativeChatAuxiliaryByParent[key]
+        if (!current) {
+          return {}
+        }
+        if (!current.children.some((child) => child.sessionId === sessionId)) {
+          return {}
+        }
+        const children = current.children.filter((child) => child.sessionId !== sessionId)
+        // Closing or losing the active child never routes to a sibling on its own.
+        const activeChildSessionId =
+          current.activeChildSessionId === sessionId ? null : current.activeChildSessionId
+        return {
+          nativeChatAuxiliaryByParent: {
+            ...s.nativeChatAuxiliaryByParent,
+            [key]: { ...current, children, activeChildSessionId }
+          }
+        }
+      }),
     clearAiVaultSearchFocusRequest: () => set({ aiVaultSearchFocusRequested: false }),
     setRightSidebarEffectiveTab: (tab) =>
       set((s) => (s.rightSidebarEffectiveTab === tab ? {} : { rightSidebarEffectiveTab: tab })),

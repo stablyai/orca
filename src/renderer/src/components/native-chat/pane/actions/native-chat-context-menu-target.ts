@@ -4,10 +4,25 @@ import type { NativeChatFileLinkContext } from '../../links/actions/native-chat-
 import { nativeChatLinkActions } from '../../links/actions/native-chat-link-target-actions'
 import { readNativeChatQuotableSelection } from '../../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 import type { NativeChatMessageListHandle } from '../../messages/actions/use-native-chat-reveal-latest'
+import {
+  readNativeChatTranscriptRowSelection,
+  type NativeChatSelectionReference as SelectionReference
+} from '../../selection-quotes/native-chat-transcript-selection'
+
+export type { NativeChatSelectionReference } from '../../selection-quotes/native-chat-transcript-selection'
+
+/** Present only where this chat can take a selection into an auxiliary chat; presence is the capability. */
+export type NativeChatAuxiliaryChat = {
+  addReference: (reference: SelectionReference) => void
+  /** Why the action cannot run now; null when it can. */
+  referenceBlockedReason: string | null
+}
 
 export type NativeChatContextMenuTarget = {
   /** The selection the "Add to chat" offer would quote. */
   quoteText: string | null
+  /** The selected row text, frozen when the menu was opened. */
+  auxiliaryReference: SelectionReference | null
   link: FileLinkActions | null
   codeText: string | null
   messageText: string | null
@@ -18,6 +33,7 @@ export type NativeChatContextMenuTarget = {
 
 export const noNativeChatContextMenuTarget: NativeChatContextMenuTarget = {
   quoteText: null,
+  auxiliaryReference: null,
   link: null,
   codeText: null,
   messageText: null,
@@ -30,6 +46,16 @@ export type NativeChatLinkContextResolver = (
   link: Element
 ) => NativeChatFileLinkContext | null
 
+export function hasNativeChatContextTarget(target: NativeChatContextMenuTarget): boolean {
+  return Boolean(
+    target.quoteText ??
+    target.auxiliaryReference ??
+    target.link ??
+    target.codeText ??
+    target.messageText
+  )
+}
+
 export type NativeChatContextMenuTargetSources = {
   root: HTMLElement | null
   composer: Pick<NativeChatComposerHandle, 'acceptsText'> | null
@@ -37,13 +63,14 @@ export type NativeChatContextMenuTargetSources = {
   linkContext: NativeChatFileLinkContext | null | NativeChatLinkContextResolver
 }
 
-/** Rows mark themselves with ids only; their text comes from the transcript the rows draw. */
+/** Rows mark their stable identity; text comes from the selection or the transcript they draw. */
 export function readNativeChatContextMenuTarget(
   target: EventTarget | null,
   { root, composer, messageList, linkContext }: NativeChatContextMenuTargetSources
 ): NativeChatContextMenuTarget {
   const element = target instanceof Element ? target : null
   const quotable = root && composer?.acceptsText() ? readNativeChatQuotableSelection(root) : null
+  const selectedRow = root ? readNativeChatTranscriptRowSelection(root) : null
   // The attribute, not the resolved `href` property, which rewrites chat file links into page URLs.
   const link = element?.closest('a[href], [data-native-chat-link-href]')
   const href = link?.getAttribute('data-native-chat-link-href') ?? link?.getAttribute('href')
@@ -52,6 +79,9 @@ export function readNativeChatContextMenuTarget(
     ?.getAttribute('data-native-chat-message-id')
   return {
     quoteText: quotable?.text ?? null,
+    auxiliaryReference: selectedRow
+      ? { sourceRowId: selectedRow.sourceRowId, text: selectedRow.text }
+      : null,
     link:
       href && link
         ? nativeChatLinkActions(

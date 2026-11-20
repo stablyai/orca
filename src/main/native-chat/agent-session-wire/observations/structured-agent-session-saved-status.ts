@@ -41,6 +41,9 @@ export function savedStructuredAgentSessionStatus(
   const launchDirectory = agentSessionPinnedLaunchDirectory(record)
   return {
     sessionId: record.sessionId,
+    ...(record.auxiliaryChat
+      ? { auxiliaryParentSessionId: record.auxiliaryChat.parentSessionId }
+      : {}),
     workspaceId: record.location.workspaceId,
     agent: record.provider,
     status: turn || markerAt !== undefined ? 'idle' : null,

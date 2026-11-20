@@ -59,10 +59,12 @@ function readInitialTriggerPosition(): FloatingTerminalTriggerPositionState {
 
 export function FloatingTerminalToggleButton({
   open,
-  onToggle
+  onToggle,
+  rightBoundary = null
 }: {
   open: boolean
   onToggle: () => void
+  rightBoundary?: number | null
 }): React.JSX.Element {
   const t = useTranslate()
   // Memoized: subscribe so a language change still repaints its labels.
@@ -82,6 +84,11 @@ export function FloatingTerminalToggleButton({
     initialPositionState.current.committedPosition
   )
   const [position, setPosition] = useState(initialPositionState.current.position)
+  // A visible side chat reserves its controls without overwriting the saved launcher location.
+  const visiblePosition =
+    rightBoundary === null
+      ? position
+      : clampFloatingTerminalTriggerPosition(position, rightBoundary)
   const dragRef = useRef<{
     pointerId: number
     startX: number
@@ -93,11 +100,11 @@ export function FloatingTerminalToggleButton({
   const stagedPositionRef = useRef<FloatingTerminalTriggerPosition | null>(null)
   const suppressClickRef = useRef(false)
 
-  const previewPosition = useCallback((nextPosition: FloatingTerminalTriggerPosition): void => {
-    const clamped = clampFloatingTerminalTriggerPosition(nextPosition)
+  const previewPosition = (nextPosition: FloatingTerminalTriggerPosition): void => {
+    const clamped = clampFloatingTerminalTriggerPosition(nextPosition, rightBoundary ?? undefined)
     stagedPositionRef.current = clamped
     setPosition(clamped)
-  }, [])
+  }
 
   const commitPosition = useCallback((nextPosition: FloatingTerminalTriggerPosition): void => {
     stagedPositionRef.current = null
@@ -145,8 +152,8 @@ export function FloatingTerminalToggleButton({
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      left: position.left,
-      top: position.top,
+      left: visiblePosition.left,
+      top: visiblePosition.top,
       moved: false
     }
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -196,7 +203,7 @@ export function FloatingTerminalToggleButton({
       currentLocation="floating-button"
       // Keep the toggle above the panel so overlapping areas remain clickable.
       className="fixed z-[46]"
-      style={{ left: position.left, top: position.top }}
+      style={{ left: visiblePosition.left, top: visiblePosition.top }}
     >
       <Tooltip>
         <TooltipTrigger asChild>

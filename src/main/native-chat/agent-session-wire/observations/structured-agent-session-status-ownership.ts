@@ -73,6 +73,10 @@ export class StructuredAgentSessionStatusOwnership {
     location?: AgentSessionExecutionLocation,
     sink: StructuredAgentSessionStatusPublisher | undefined = this.sink()
   ): void {
+    // An auxiliary child's status belongs only to its own subscriber stream, never global rows.
+    if (summary.auxiliaryParentSessionId !== undefined) {
+      return
+    }
     if (!sink || (!location && !this.subjects.has(summary.sessionId))) {
       return
     }
@@ -146,7 +150,9 @@ export class StructuredAgentSessionStatusOwnership {
     const apply = () => {
       if (deps.sessions.get(sessionId) === session && !deps.rowRetired?.(sessionId)) {
         try {
-          this.establish(sessionId, session.params.location, session.params.provider, deps.now())
+          if (!deps.getConversation(sessionId)?.auxiliaryChat) {
+            this.establish(sessionId, session.params.location, session.params.provider, deps.now())
+          }
         } catch (error) {
           deps.logger.warn('status sink publish failed', {
             scope: 'status-sink-publish',

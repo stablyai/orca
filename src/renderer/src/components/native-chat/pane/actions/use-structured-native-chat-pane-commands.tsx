@@ -19,7 +19,8 @@ export function useStructuredNativeChatPaneCommands({
   ownerWorktreeId,
   composerRef,
   sessionContext,
-  rewind
+  rewind,
+  auxiliaryChat
 }: {
   pane: Omit<NativeChatStructuredViewProps, 'mode'>
   handOff: NativeChatHandOff
@@ -27,6 +28,8 @@ export function useStructuredNativeChatPaneCommands({
   ownerWorktreeId: string | null
   composerRef: React.RefObject<NativeChatComposerHandle | null>
   rewind?: NativeChatSurfaceMenu['rewind']
+  /** Absent where the chat has no auxiliary chat to take a selected row into. */
+  auxiliaryChat?: NativeChatSurfaceMenu['auxiliaryChat']
 }): { menu: NativeChatSurfaceMenu; onSplit: (shortcut: NativeChatPaneShortcut) => boolean } {
   const { tabId, groupId, isVisible, sessionId, target } = pane
   const terminalPaneActions = pane.contextMenuActions
@@ -55,6 +58,7 @@ export function useStructuredNativeChatPaneCommands({
   )
   const menu: NativeChatSurfaceMenu = {
     rewind,
+    auxiliaryChat,
     // A chat in a terminal pane already hands off through that pane's own menu row.
     handOffDisabled: handOff.preparing || handOff.dialog !== null,
     onHandOff: terminalPaneActions === undefined && handOff.available ? handOff.open : undefined,

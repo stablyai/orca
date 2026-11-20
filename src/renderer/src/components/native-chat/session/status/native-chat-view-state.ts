@@ -39,13 +39,15 @@ export function selectNativeChatViewState(
   return { kind: 'empty' }
 }
 
+export type StructuredChatHistoryLaunch = {
+  launch?: { kind: 'new' | 'resume' }
+  lifecycle: StructuredAgentSessionLaunchLifecycle | null
+  transportEnabled: boolean
+}
+
 /** Before the first read, resumes remain reading while launch/read can deliver history; failed/unconfirmed resumes are unread, new/cancelled chats known. */
 export function structuredChatHistoryPhase(
-  launch: {
-    launch?: { kind: 'new' | 'resume' }
-    lifecycle: StructuredAgentSessionLaunchLifecycle | null
-    transportEnabled: boolean
-  },
+  launch: StructuredChatHistoryLaunch,
   readStatus: 'idle' | 'loading' | 'ready' | 'error'
 ): 'reading' | 'unread' | 'known' {
   if (launch.launch?.kind === 'new') {

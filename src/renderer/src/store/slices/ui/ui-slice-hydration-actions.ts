@@ -102,8 +102,6 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             ? ui.customSidekicks
             : []
         const petId = ui.petId ?? ui.sidekickId
-        // Migration: one-shot old-'recent'→'smart' runs in main (_sortBySmartMigrated), not here, so a deliberate 'recent' choice survives restart.
-        const sortBy = ui.sortBy
         const statusBarItemsWithGrok = hydrateStatusBarItems(ui)
         const hydrated = {
           // Why: persisted widths may be stale/corrupt/hand-edited; clamp during hydration so invalid values can't break layout.
@@ -132,7 +130,8 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           ...normalizeRightSidebarRoute(ui.rightSidebarTab, ui.rightSidebarExplorerView),
           activityBarPosition: sanitizeActivityBarPosition(ui.activityBarPosition),
           groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
-          sortBy,
+          // One-shot sort migrations run in main, so a deliberate choice survives restart.
+          sortBy: ui.sortBy,
           // Why: main-process getUI() already normalized this (defaulting to 'manual'); read it through without migrating.
           projectOrderBy: ui.projectOrderBy,
           // Why: Active-only was retired; force the old flag off so an old profile can't invisibly narrow the workspace list.
@@ -300,6 +299,10 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             ;(hydrated as Record<string, unknown>)[field] = s[field]
           }
         }
+        // Keep the window's transient auxiliary route out of the shared profile.
+        if (source === 'sync' && s.rightSidebarTab === 'side-chat') {
+          hydrated.rightSidebarTab = 'side-chat'
+        }
         // Identical hydration preserves root identity; advance only baseline keys on baseline movement so acks cannot erase remote edits or spur redundant resends.
         const writeBaselineMoved =
           !previousBaseline ||
@@ -307,14 +310,8 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
         const nextWriteBaselineGeneration = writeBaselineMoved
           ? s.persistedUIWriteBaselineGeneration + 1
           : s.persistedUIWriteBaselineGeneration
-        if (hydratedFieldsAreState(s, hydrated as Partial<UISlice>)) {
-          if (!writeBaselineMoved) {
-            return s
-          }
-          return {
-            persistedUIWriteBaseline: nextWriteBaseline,
-            persistedUIWriteBaselineGeneration: nextWriteBaselineGeneration
-          }
+        if (!writeBaselineMoved && hydratedFieldsAreState(s, hydrated as Partial<UISlice>)) {
+          return s
         }
         return {
           ...hydrated,

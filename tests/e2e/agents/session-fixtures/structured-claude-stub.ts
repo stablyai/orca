@@ -104,7 +104,11 @@ export const test = base.extend<{ claudeStub: ClaudeStub }>({
 })
 
 /** Creates a chat the way the CLI or a paired phone does: on the host, not in the window. */
-export async function createChatOnHost(page: Page, worktreeId: string): Promise<string> {
+export async function createChatOnHost(
+  page: Page,
+  worktreeId: string,
+  agent: 'claude' | 'omp' = 'claude'
+): Promise<string> {
   const sessionId = createOrcaSessionId(randomUUID)
   const worktree = `id:${worktreeId}`
   const params = {
@@ -115,11 +119,11 @@ export async function createChatOnHost(page: Page, worktreeId: string): Promise<
       payloadFingerprint: structuredAgentSessionCreateFingerprint({
         sessionId,
         worktree,
-        agent: 'claude'
+        agent
       })
     },
     worktree,
-    agent: 'claude'
+    agent
   }
   const reply = await page.evaluate(
     (p) => window.api.runtime.call({ method: 'agentSession.create', params: p }),

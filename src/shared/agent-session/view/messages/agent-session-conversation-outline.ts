@@ -10,7 +10,7 @@ import {
   deriveNativeChatRowContent,
   nativeChatRowRendersContent
 } from '../../../native-chat/transcript/row-content/native-chat-row-content'
-import { withoutSentImagePromptMarkers } from '../../../native-chat/transcript/images/native-chat-sent-image-prompt-markers'
+import { nativeChatVisibleMessageBlocks } from '../../../native-chat/transcript/messages/native-chat-sent-prompt-references'
 import { iterateProcessOutputLines } from '../../../process-observation/process-output-field-scanner'
 import { agentJournalSubmissionKey } from '../../journal/agent-session-journal-item-key'
 import { dispatchWasWithdrawn } from '../../requests/structured-agent-session-dispatch-rejection'
@@ -58,7 +58,7 @@ export function nativeChatUserMessagePreview(
   if (cached) {
     return cached
   }
-  const content = deriveNativeChatRowContent(withoutSentImagePromptMarkers(message))
+  const content = deriveNativeChatRowContent(nativeChatVisibleMessageBlocks(message))
   const preview = {
     text: content.markdown.replace(/\s+/g, ' ').trim(),
     imageCount: content.prose.filter((block) => block.type === 'image-ref').length

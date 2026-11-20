@@ -8,6 +8,10 @@ import {
   observeStructuredSession,
   structuredSessionCloseSettled
 } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
+import {
+  auxiliaryChatChildren,
+  discardAuxiliaryChatFile
+} from './structured-agent-session-auxiliary-file'
 
 export type StructuredAgentSessionCloseOutcome = {
   stopped: boolean
@@ -50,6 +54,7 @@ export async function closeStructuredAgentSessionChild(
       reason: 'The structured agent-session host is not installed; no session was closed.'
     }
   }
+  const record = host.deps.store.getRecord(sessionId)
   const surface =
     options.surface === undefined
       ? captureStructuredSessionSurface(host, sessionId, options.runtime)
@@ -87,7 +92,45 @@ export async function closeStructuredAgentSessionChild(
     }
   }
   await retireCapturedStructuredSessionSurface(host, sessionId, surface, options.runtime)
+  // The provider is proven exited before its derived native file is removed.
+  if (record?.auxiliaryChat) {
+    await discardAuxiliaryChatFile(record.auxiliaryChat).catch((error: unknown) =>
+      host.deps.logger.warn('discarding an auxiliary chat file failed', {
+        scope: 'auxiliary-file-discard',
+        sessionId,
+        error
+      })
+    )
+  }
   return { stopped: true, closeAttempted: true }
+}
+
+/** Close a visible parent's hidden children before the parent path itself proceeds. */
+export async function closeAuxiliaryChatChildren(
+  host: StructuredAgentSessionHost,
+  parentSessionId: string,
+  runtime?: StructuredSessionSurfaceRuntime
+): Promise<void> {
+  for (const child of auxiliaryChatChildren(host, parentSessionId)) {
+    try {
+      const outcome = await closeStructuredAgentSessionChild(child.sessionId, { runtime })
+      if (!outcome.stopped) {
+        host.deps.logger.warn('auxiliary chat did not prove exit during parent close', {
+          scope: 'auxiliary-child-close',
+          sessionId: child.sessionId,
+          parentSessionId,
+          reason: outcome.reason
+        })
+      }
+    } catch (error) {
+      host.deps.logger.warn('closing an auxiliary chat failed', {
+        scope: 'auxiliary-child-close',
+        sessionId: child.sessionId,
+        parentSessionId,
+        error
+      })
+    }
+  }
 }
 
 /** Capture actual presentation independently: a failed SHOW can leave Retry with no table row. */
@@ -222,9 +265,14 @@ export async function closeCapturedStructuredSession(
   if (surface && !structuredSessionSurfaceIsCurrent(host, sessionId, surface, runtime)) {
     return false
   }
+  const record = host.deps.store.getRecord(sessionId)
   // A bot's thread or run keeps working when its tab closes; it waits in the bot's Activity.
+  // An unlisted auxiliary child never keeps working in a bot home; closing it must stop it.
   const keepRunning =
-    cause === 'user-close' && runtime.bots !== undefined && runsForBot(runtime.bots, sessionId)
+    cause === 'user-close' &&
+    !record?.auxiliaryChat &&
+    runtime.bots !== undefined &&
+    runsForBot(runtime.bots, sessionId)
   const result = await retireCapturedStructuredSessionSurface(
     host,
     sessionId,
@@ -238,8 +286,20 @@ export async function closeCapturedStructuredSession(
   ) {
     return false
   }
+  if (!keepRunning && record && !record.auxiliaryChat) {
+    await closeAuxiliaryChatChildren(host, sessionId, runtime)
+  }
   if (!keepRunning) {
     await host.close(sessionId, cause)
+  }
+  if (record?.auxiliaryChat && structuredSessionCloseSettled(sessionId)) {
+    await discardAuxiliaryChatFile(record.auxiliaryChat).catch((error: unknown) =>
+      host.deps.logger.warn('discarding an auxiliary chat file failed', {
+        scope: 'auxiliary-file-discard',
+        sessionId,
+        error
+      })
+    )
   }
   return result.committed
 }

@@ -73,6 +73,22 @@ export function structuredAgentSessionCreateFingerprint(input: {
   })
 }
 
+/** The parent identity and optional opening message are the whole client intent. */
+export function createAuxiliaryFingerprint(input: {
+  sessionId: string
+  parentSessionId: string
+  firstMessage?: StructuredAgentSessionFirstMessage
+}): string {
+  return structuredAgentSessionPayloadFingerprint({
+    method: 'agentSession.createAuxiliary',
+    sessionId: input.sessionId,
+    fields: {
+      parentSessionId: input.parentSessionId,
+      firstMessage: input.firstMessage
+    }
+  })
+}
+
 export function createStructuredAgentSessionOperationId(
   randomUuid: () => string,
   now: number = Date.now()

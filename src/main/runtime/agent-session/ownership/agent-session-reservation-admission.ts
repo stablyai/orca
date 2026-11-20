@@ -26,6 +26,7 @@ import {
   type AgentSessionLaunchEnv,
   type AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionAuxiliaryChat } from '../../../../shared/agent-session/lifecycle/records/agent-session-auxiliary-chat'
 import { isAgentSessionLaunchArgs } from '../../../../shared/agent-session/lifecycle/records/agent-session-launch-args'
 import { agentSessionProviderHandleRoot } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type {
@@ -69,6 +70,8 @@ export type AgentSessionReserveRequest = {
   surfaceTabId?: string
   /** Seed an adopted handle to resume its conversation; absent means a fresh provider conversation. */
   adoptedHandleLink?: AgentSessionProviderHandleLink
+  /** An unlisted child derived from a visible parent; identity is otherwise the same. */
+  auxiliaryChat?: AgentSessionAuxiliaryChat
   /** Only an adopting create is named before its first message. */
   conversationName?: string
   /** Null when the session does not exist yet; otherwise the fence the caller last observed. */

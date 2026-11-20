@@ -33,6 +33,9 @@ export type NativeChatStructuredViewProps = {
   target: RuntimeClientTarget
   agent: AgentType
   isVisible: boolean
+  /** Only unlisted auxiliary panes lack a layout tab of their own. */
+  auxiliaryOwnerWorktreeId?: string
+  auxiliaryParentTabId?: string
   /** This pane's split group holds focus; a revealed sibling column must not take the caret. */
   isFocusedGroup: boolean
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
