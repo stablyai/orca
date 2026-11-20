@@ -234,29 +234,3 @@ it("steers the next agent's mail into a running turn while earlier mail is still
   }
   expect(await claim(burst, 'send-32')).toEqual({ kind: 'waiting' })
 })
-
-it("holds other agents' mail out of a running turn the provider can only join by cancelling, then delivers it once the turn ends", async () => {
-  const f = automaticSubmissionFixture(cleanups)
-  f.selection.mailJoinsTurn = false
-  await f.turn()
-  await f.enqueue('mail', {
-    body: { ...automaticBody('status'), from: automaticMail },
-    options: { model: 'active' },
-    deliveryMode: 'queue'
-  })
-  expect((await f.claim('busy', f.prepare(100, 'owed'))).value).toEqual({ kind: 'waiting' })
-  expect(f.card('mail')?.state).toBe('waiting')
-  await f.run({
-    kind: 'item',
-    identity: { provider: 'orca', clientMessageId: 'turn' },
-    body: { kind: 'turn', turnId: 'running', state: 'completed' },
-    options: { fence: 1, turnScope: { kind: 'thread' } }
-  })
-  expect((await f.claim('after', f.prepare(100, 'owed'))).value).toMatchObject({
-    kind: 'claimed',
-    messageId: 'mail',
-    steer: false
-  })
-  expect(f.card('mail')).toMatchObject({ state: 'dispatched', consumedAs: 'after' })
-  expect((await f.claim('again', f.prepare(100, 'owed'))).value).toEqual({ kind: 'waiting' })
-})

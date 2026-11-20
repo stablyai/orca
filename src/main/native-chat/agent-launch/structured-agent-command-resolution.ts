@@ -14,6 +14,10 @@ import {
 } from '../../../shared/agent-launch/startup/tui-agent-launch-command-override'
 import '../agent-session-wire/providers/structured-agent-session-adapter'
 import {
+  providerDiagnostic,
+  withProviderDiagnostic
+} from '../../../shared/agent-session/failures/agent-session-failure'
+import {
   AgentSessionPreSpawnError,
   isAgentSessionPreSpawnError
 } from '../agent-session-wire/providers/structured-agent-session-adapter-errors'
@@ -22,8 +26,8 @@ import {
   resolveGuestNativeProgram
 } from '../../wsl/filesystem/wsl-guest-windows-drive-path'
 import {
-  isManagedAgentCli,
-  managedAgentCommand
+  isManagedAgentCopyPath,
+  managedAgentCommandFor
 } from '../../managed-agent-cli/managed-agent-cli-registry'
 
 export type StructuredAgentResolutionOperation = {
@@ -45,7 +49,7 @@ export function assertStructuredAgentResolutionCurrent(
 }
 
 export type StructuredAgentCommandSettings = Partial<
-  Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultEnv'>
+  Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultEnv' | 'antigravityManagedAgyEnabled'>
 >
 type CommandSettings = StructuredAgentCommandSettings
 type CommandOptions = NonNullable<Parameters<typeof resolveExecutableCommand>[1]>
@@ -74,26 +78,41 @@ function resolveOverride(
     : null
 }
 
-export type StructuredAgentCommand = { command: string; prefixArgs: string[] }
+export type StructuredAgentCommand = {
+  command: string
+  prefixArgs: string[]
+  /** The user's Command setting as written; absent for the stock CLI. */
+  configured?: string
+}
 
 /** Read live settings on every lookup; invalid explicit commands must refuse instead of launching stock CLI. */
 export function resolveStructuredAgentCommand(
   agent: TuiAgent,
   settings: CommandSettings,
   options: CommandOptions = {},
-  stock: { command?: string; resolve?: typeof resolveCliCommand } = {}
+  stock: { command?: string; resolve?: typeof resolveCliCommand; managedCopy?: boolean } = {}
 ): StructuredAgentCommand {
   if (!hasExplicitTuiLaunchCommand(settings, agent)) {
     // WSL PATH may contain drive-mounted Windows shims after native entries.
     const command = stock.command ?? agent
     const resolved = resolveGuestNativeProgram(command, options, stock.resolve)
-    // The user's own install wins; Orca's copy serves hosts that have none.
+    // The user's own install wins; Orca's copy serves hosts that have none, where it may run.
     const managed =
-      isManagedAgentCli(agent) && (resolved === null || !isAbsolute(resolved))
-        ? managedAgentCommand(agent)
+      stock.managedCopy !== false && (resolved === null || !isAbsolute(resolved))
+        ? managedAgentCommandFor(agent, command)
         : null
     if (managed) {
       return { command: managed, prefixArgs: [] }
+    }
+    // Orca's copy, reached through a PATH an Orca terminal passed on, may not run either.
+    if (
+      stock.managedCopy === false &&
+      resolved !== null &&
+      isManagedAgentCopyPath(agent, resolved)
+    ) {
+      throw new AgentSessionPreSpawnError(`${command} is not installed on this host`, {
+        reason: 'cliMissing'
+      })
     }
     if (resolved === null) {
       throw new AgentSessionPreSpawnError(
@@ -103,16 +122,24 @@ export function resolveStructuredAgentCommand(
     }
     return { command: resolved, prefixArgs: [] }
   }
+  const configured = settings.agentCmdOverrides?.[agent]?.trim() ?? ''
+  const platform = options.platform ?? process.platform
   const invocation = resolveOverride(agent, settings, options)
-  if (
-    !invocation ||
-    !isSpawnableCommand(options.platform ?? process.platform, invocation.command)
-  ) {
-    throw new AgentSessionPreSpawnError(`the ${agent} Command setting is not a runnable program`, {
-      reason: 'agentCommandNotRunnable'
-    })
+  if (!invocation || !isSpawnableCommand(platform, invocation.command)) {
+    const refusal = new AgentSessionPreSpawnError(
+      `the ${agent} Command setting is not a runnable program`,
+      { reason: 'agentCommandNotRunnable' }
+    )
+    // Shell syntax keeps the general sentence, which says how to fix it; only a name not found is named.
+    const plan = invocation ? null : structuredAgentCommandPlan(configured, platform)
+    throw plan
+      ? withProviderDiagnostic(
+          refusal,
+          providerDiagnostic(`'${plan.program}' isn't a program Orca can find`, 'person')
+        )
+      : refusal
   }
-  return invocation
+  return { ...invocation, configured }
 }
 
 export type ProgramSearch<T> = {

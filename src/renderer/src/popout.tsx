@@ -19,15 +19,12 @@ import { getOrCreateRendererRoot } from './app-shell/startup/react-renderer-root
 import { setReactCommitCascadeRendererSurface } from './diagnostics/react-commits/react-commit-cascade-telemetry'
 import { installOsFileDropCancellationGuard } from './lib/files/drop/os-file-drop-cancellation-guard'
 import { installBodyOverlayAttributes } from './lib/overlay-interaction/body-overlay-attributes'
-import { installLoopingAnimationClock } from './lib/window-activity/looping-animation-clock'
 import { useReduceVisualEffects } from './hooks/theme/use-reduce-visual-effects'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
 const disposeBodyOverlayAttributes = installBodyOverlayAttributes()
 import.meta.hot?.dispose(disposeBodyOverlayAttributes)
-const disposeLoopingAnimationClock = installLoopingAnimationClock()
-import.meta.hot?.dispose(disposeLoopingAnimationClock)
 // Each popout has a separate React root/DOM/JS context; run full renderer bootstrap despite sharing preload/window.api.
 recordRendererCrashBreadcrumb('popout_bootstrap_started', { dev: import.meta.env.DEV })
 installRendererCrashDiagnostics('dashboard-popout')

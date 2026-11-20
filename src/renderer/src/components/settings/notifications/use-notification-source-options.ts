@@ -1,17 +1,18 @@
 import { useMemo } from 'react'
-import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store/index'
+import { shallow } from 'zustand/shallow'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { buildNotificationSourceOptions } from '@/attention/notification-sources'
 
 export function useNotificationSourceOptions() {
-  const state = useAppStore(
-    useShallow((s) => ({
+  const state = useAppStoreWithHostStatuses(
+    (s, statuses) => ({
       sshTargetLabels: s.sshTargetLabels,
       sshConnectionStates: s.sshConnectionStates,
       settings: s.settings,
       runtimeEnvironments: s.runtimeEnvironments,
-      runtimeStatusByEnvironmentId: s.runtimeStatusByEnvironmentId
-    }))
+      runtimeStatusByEnvironmentId: statuses
+    }),
+    shallow
   )
   return useMemo(() => buildNotificationSourceOptions(state), [state])
 }
