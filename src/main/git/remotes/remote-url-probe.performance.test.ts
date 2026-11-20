@@ -124,3 +124,35 @@ it.each([10, 100])('reads HEAD once across conditional config fragments (N=%i)',
   expect(await readLocalGitConfigSignature({ repoPath: root, connectionId: null })).toBeDefined()
   expect(headReadMock).toHaveBeenCalledTimes(1)
 })
+
+it.each([10, 100])('keeps listings warm across detached commits (N=%i)', async (commits) => {
+  await mkdir(join(root, '.git'))
+  await writeFile(
+    join(root, '.git', 'config'),
+    '[includeIf "onbranch:release/**"] path = remote-config\n'
+  )
+  await writeFile(join(root, '.git', 'HEAD'), 'a'.repeat(40) + '\n')
+  await listCachedRemoteNames(root)
+  for (let index = 0; index < commits; index += 1) {
+    await writeFile(join(root, '.git', 'HEAD'), index.toString(16).padStart(40, '0') + '\n')
+    await listCachedRemoteNames(root)
+  }
+  expect(
+    gitExecFileAsyncMock.mock.calls.filter(([args]) => args.join(' ') === 'remote')
+  ).toHaveLength(1)
+  await writeFile(join(root, '.git', 'HEAD'), 'ref: refs/heads/release/next\n')
+  await listCachedRemoteNames(root)
+  expect(
+    gitExecFileAsyncMock.mock.calls.filter(([args]) => args.join(' ') === 'remote')
+  ).toHaveLength(2)
+})
+
+it('does not sign branch-dependent config with a reftable HEAD placeholder', async () => {
+  await mkdir(join(root, '.git'))
+  await writeFile(
+    join(root, '.git', 'config'),
+    '[includeIf "onbranch:release/**"] path = remote-config\n'
+  )
+  await writeFile(join(root, '.git', 'HEAD'), 'ref: refs/heads/.invalid\n')
+  expect(await readLocalGitConfigSignature({ repoPath: root, connectionId: null })).toBeUndefined()
+})

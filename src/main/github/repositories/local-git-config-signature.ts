@@ -104,10 +104,11 @@ async function readConfigPathSignatures(
 
 async function readBranchSignature(headPath: string): Promise<string> {
   const head = await readFile(headPath, 'utf8')
-  // Reftable stores HEAD in the table stack; its loose HEAD is a fixed placeholder.
-  return head.trim() === 'ref: refs/heads/.invalid'
-    ? readFile(join(dirname(headPath), 'reftable', 'tables.list'), 'utf8')
-    : head
+  if (head.trim() === 'ref: refs/heads/.invalid') {
+    throw new Error('Branch-dependent reftable config cannot be signed from loose HEAD')
+  }
+  // onbranch never matches detached HEAD, so commits there do not change effective config.
+  return head.startsWith('ref:') ? head : 'detached'
 }
 
 async function readConfigPathSignature(configPath: string): Promise<string> {

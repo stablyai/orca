@@ -33,23 +33,10 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-it.for(['folder', 'linked worktree', 'escaped condition', 'reftable'])(
+it.each(['folder', 'linked worktree', 'escaped condition'])(
   'refreshes branch-conditional remotes immediately in a %s',
-  async (kind, context) => {
-    try {
-      await git(
-        root,
-        'init',
-        '-b',
-        'nope-remote',
-        ...(kind === 'reftable' ? ['--ref-format=reftable'] : [])
-      )
-    } catch (error) {
-      if (kind === 'reftable' && /unknown option|unknown ref storage format/i.test(String(error))) {
-        context.skip()
-      }
-      throw error
-    }
+  async (kind) => {
+    await git(root, 'init', '-b', 'nope-remote')
     await git(
       root,
       '-c',
