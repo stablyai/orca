@@ -30,9 +30,12 @@ export type NativeChatPaneResolution = {
 
 /** Resolve agent evidence even before its provider session arrives; return null without an agent. */
 export function resolveNativeChatSession(
-  input: NativeChatPaneResolutionInput
+  input: NativeChatPaneResolutionInput,
+  previous?: NativeChatPaneResolution | null
 ): NativeChatPaneResolution | null {
-  const record = input.saved
+  const entry = input.agentStatusEntry
+  const confirmed = entry && !entry.restoredUnconfirmed
+  const record = confirmed ? undefined : input.saved
   const saved =
     record?.agent === 'claude' &&
     record.paneKey === input.paneKey &&
@@ -41,20 +44,30 @@ export function resolveNativeChatSession(
       ? record
       : undefined
   const agent = nativeChatAvailabilityAgent({
-    detectedAgent: input.agentStatusEntry?.agentType,
+    detectedAgent: entry?.agentType,
     launchAgent: input.launchAgent,
     resolvedAgent: input.resolvedAgent ?? saved?.agent
   })
-  if (!agent || !isNativeChatSupportedAgent(agent)) {
-    return null
-  }
   const provider =
-    input.agentStatusEntry?.providerSession ??
-    (saved?.agent === agent ? saved.providerSession : undefined)
+    entry?.providerSession ?? (saved?.agent === agent ? saved?.providerSession : undefined)
+  const samePane =
+    previous?.paneKey === input.paneKey &&
+    !(previous.ptyId && input.ptyId && previous.ptyId !== input.ptyId)
+  // A confirmed Claude row without a provider ID may already describe the next session in this pane.
+  const retain =
+    samePane &&
+    (!agent || previous.agent === agent) &&
+    (!provider || provider.id === previous.sessionId) &&
+    (previous.agent !== 'claude' || !confirmed || provider !== undefined)
+      ? previous
+      : null
+  if (!agent || !isNativeChatSupportedAgent(agent)) {
+    return retain
+  }
   return {
     agent,
-    sessionId: provider?.id ?? null,
-    transcriptPath: provider?.transcriptPath ?? null,
+    sessionId: provider?.id ?? retain?.sessionId ?? null,
+    transcriptPath: provider?.transcriptPath ?? retain?.transcriptPath ?? null,
     ptyId: input.ptyId,
     paneKey: input.paneKey
   }

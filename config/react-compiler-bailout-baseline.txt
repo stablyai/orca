@@ -231,7 +231,7 @@
 2 src/renderer/src/components/native-chat/composer/pickers/use-native-chat-skills.ts
 1 src/renderer/src/components/native-chat/conversation/projection/use-native-chat-context-clear-floor.ts
 2 src/renderer/src/components/native-chat/conversation/projection/use-native-chat-transcript-projection.ts
-4 src/renderer/src/components/native-chat/host-access/NativeChatSessionGate.tsx
+1 src/renderer/src/components/native-chat/host-access/NativeChatSessionGate.tsx
 1 src/renderer/src/components/native-chat/host-access/use-native-chat-mobile-hold-notice.ts
 2 src/renderer/src/components/native-chat/host-access/use-native-chat-provisional-launch.ts
 1 src/renderer/src/components/native-chat/media/images/NativeChatImageAttachments.tsx

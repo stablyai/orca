@@ -18,7 +18,6 @@ export function useNativeChatStatusEntry(
       const saved =
         record?.agent === 'claude' &&
         !record.connectionId &&
-        (!entry || entry.restoredUnconfirmed) &&
         !state.paneForegroundAgentByPaneKey[record.paneKey]?.shellForeground &&
         tryRuntimeTargetForWorktreeOwner(state, record.worktreeId)?.kind === 'local'
           ? record

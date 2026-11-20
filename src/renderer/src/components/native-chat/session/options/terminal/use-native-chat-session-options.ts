@@ -182,7 +182,7 @@ export function useNativeChatSessionOptions(args: {
       return
     }
     appliedReportedModelRef.current = matched
-    surface.reportSessionOptions({ model: matched })
+    surface.reportSessionOptions({ values: { model: matched } })
   }, [agent, discoveryContext, reportedModel, surface])
 
   useEffect(() => {

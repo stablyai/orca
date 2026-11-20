@@ -17,32 +17,9 @@ export function NativeChatSessionGate({
   ...input
 }: NativeChatSessionGateProps): JSX.Element {
   const lastResolutionRef = useRef<NativeChatPaneResolution | null>(null)
-  const currentResolution = resolveNativeChatSession(input)
-  const previousResolution =
-    lastResolutionRef.current?.paneKey === input.paneKey ? lastResolutionRef.current : null
-  const resolution = (() => {
-    if (!currentResolution) {
-      return previousResolution
-    }
-    if (
-      previousResolution?.agent === currentResolution.agent &&
-      previousResolution.sessionId &&
-      !currentResolution.sessionId
-    ) {
-      // Preserve session identity through partial reconnect snapshots so transcript IO and the composer do not reset.
-      return {
-        ...currentResolution,
-        sessionId: previousResolution.sessionId,
-        transcriptPath: previousResolution.transcriptPath
-      }
-    }
-    return currentResolution
-  })()
+  const resolution = resolveNativeChatSession(input, lastResolutionRef.current)
   useEffect(() => {
-    if (resolution) {
-      // Retain the rendered identity because hook/title evidence can disappear before transport replay.
-      lastResolutionRef.current = resolution
-    }
+    lastResolutionRef.current = resolution
   }, [resolution])
   if (!resolution) {
     // Why its own canvas: over a theme image the cover is clear and only a chat root paints.

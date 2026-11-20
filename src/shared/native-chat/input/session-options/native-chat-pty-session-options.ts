@@ -11,7 +11,8 @@ import {
   applyNativeChatReportedSessionOptions,
   clearNativeChatSessionModel,
   createNativeChatSessionOptionRecord,
-  setTrackedSessionOption
+  setTrackedSessionOption,
+  type NativeChatOptionReport
 } from './native-chat-session-option-state'
 import {
   readNativeChatSessionOptionCache,
@@ -36,7 +37,7 @@ type PersistSelection = (args: {
 
 export type NativeChatPtySessionOptionsSurface = SessionOptionsSurface & {
   recordOutgoingCommand(command: string): void
-  reportSessionOptions(values: Record<string, SessionOptionValue>): void
+  reportSessionOptions(report: NativeChatOptionReport): void
   replaceModels(models: CatalogModel[]): void
   /** The context window the host's model listing states for `modelId`, or null. */
   contextWindowTokens(modelId: string): number | null
@@ -51,7 +52,7 @@ export type CreateNativeChatPtySessionOptionsArgs = {
   /** The model row's name in the reader's language. */
   modelLabel: string
   canSwitchOmpModel?: boolean
-  reportedValues?: Record<string, SessionOptionValue> | null
+  reportedValues?: NativeChatOptionReport | null
   dispatchCommand: NativeChatSessionOptionDispatchCommand
   onAgentPicker?: () => void
   persistSelection?: PersistSelection
