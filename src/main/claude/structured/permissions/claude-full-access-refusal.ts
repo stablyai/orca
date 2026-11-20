@@ -61,8 +61,17 @@ export function claudeAllowedPermissionMode(
 // Claude's answer to `set_permission_mode bypassPermissions` once its settings turn bypass off.
 const CLAUDE_BYPASS_REFUSAL = /bypassPermissions because it is disabled by settings/
 
-/** Asks for the mode Claude allows; a bypass refusal the startup settings read missed is
- *  remembered for this process and answered with the fallback. Resolves to the mode applied. */
+function isClaudeBypassRefusal(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  const cause = record(error.cause)
+  return cause?.errorCode === 'bypass_disabled' || CLAUDE_BYPASS_REFUSAL.test(error.message)
+}
+
+/** Asks for the mode Claude allows and resolves to the mode applied. While no settings read
+ *  or start proved whether Claude allows bypass, its fallback is written first and bypass right behind it:
+ *  a refusal then leaves Claude in the fallback, with no late write to race a newer choice. */
 export async function setClaudeAllowedPermissionMode(
   session: ClaudeBypassFacts & {
     connection: Pick<ClaudeSession['connection'], 'setPermissionMode'>
@@ -71,22 +80,29 @@ export async function setClaudeAllowedPermissionMode(
   options?: { timeoutMs?: number }
 ): Promise<PermissionMode> {
   const allowed = claudeAllowedPermissionMode(session, mode)
-  try {
+  const known =
+    session.bypassDisabled !== undefined ||
+    session.firstRootInit?.permissionMode === 'bypassPermissions'
+  if (allowed !== 'bypassPermissions' || known) {
     await session.connection.setPermissionMode(allowed, options)
     return allowed
-  } catch (error) {
-    if (
-      allowed !== 'bypassPermissions' ||
-      !(error instanceof Error) ||
-      !CLAUDE_BYPASS_REFUSAL.test(error.message)
-    ) {
-      throw error
-    }
-    session.bypassDisabled = true
-    const fallback = claudeAllowedPermissionMode(session, mode)
-    await session.connection.setPermissionMode(fallback, options)
-    return fallback
   }
+  const fallback = claudeAllowedPermissionMode({ ...session, bypassDisabled: true }, mode)
+  const [fallbackWrite, bypassWrite] = await Promise.allSettled([
+    session.connection.setPermissionMode(fallback, options),
+    session.connection.setPermissionMode('bypassPermissions', options)
+  ])
+  if (fallbackWrite.status === 'rejected') {
+    throw fallbackWrite.reason
+  }
+  if (bypassWrite.status === 'fulfilled') {
+    return 'bypassPermissions'
+  }
+  if (!isClaudeBypassRefusal(bypassWrite.reason)) {
+    throw bypassWrite.reason
+  }
+  session.bypassDisabled = true
+  return fallback
 }
 
 const MAX_ANNOUNCED = 1_000

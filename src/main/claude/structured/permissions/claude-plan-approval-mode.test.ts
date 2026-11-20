@@ -30,7 +30,7 @@ describe('leaving Plan mode after an approved plan', () => {
     expect(approvePlan('bypassPermissions', 'plan', true)).toBe('default')
   })
 
-  it('falls back to Ask when Claude refuses bypass and no settings read said so', async () => {
+  it('ends in Ask when Claude refuses bypass and no settings read said so', async () => {
     const setPermissionMode = vi.fn((mode: string) =>
       mode === 'bypassPermissions'
         ? Promise.reject(
@@ -54,8 +54,8 @@ describe('leaving Plan mode after an approved plan', () => {
     )
     await vi.waitFor(() => expect(appliedInputOptions.get('buildPermissionMode')).toBe('default'))
     expect(setPermissionMode.mock.calls.map(([mode]) => mode)).toEqual([
-      'bypassPermissions',
-      'default'
+      'default',
+      'bypassPermissions'
     ])
   })
 
