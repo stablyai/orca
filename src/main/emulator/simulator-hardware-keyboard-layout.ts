@@ -209,8 +209,8 @@ export class SimulatorHardwareKeyboardSync {
   private async syncNow(udid: string): Promise<boolean> {
     const macLayoutId = (await readCurrentKeyboardLayoutSourceId()).trim()
     const known = this.devices.get(udid)
-    if (known?.macLayoutId === macLayoutId) {
-      return known.synced
+    if (known?.macLayoutId === macLayoutId && !known.synced) {
+      return false
     }
     // A re-sync reads fresh: the user may have added keyboards since Orca last wrote.
     this.keyboards.delete(udid)
