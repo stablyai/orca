@@ -6,6 +6,7 @@ import {
   Globe,
   PanelRightClose,
   Play,
+  RefreshCw,
   SquareTerminal,
   Trash2
 } from 'lucide-react'
@@ -241,6 +242,32 @@ export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] 
     isAvailable: () => ({ available: true }),
     run: async (ctx) => {
       ctx.openAddQuickCommand()
+      return { status: 'ok' }
+    }
+  },
+  {
+    id: 'restart-agent-sessions',
+    kind: 'action',
+    title: translate(
+      'auto.components.cmd.j.quick.actions.restartAgentSessions',
+      'Restart Agent Sessions'
+    ),
+    description: translate(
+      'auto.components.cmd.j.quick.actions.restartAgentSessionsDescription',
+      'Restart agents on this computer and continue their conversations.'
+    ),
+    icon: RefreshCw,
+    verbKeywords: [
+      translate('auto.components.cmd.j.quick.actions.verbs.restartAgents', 'restart agents'),
+      translate('auto.components.cmd.j.quick.actions.verbs.restartSessions', 'restart sessions'),
+      translate('auto.components.cmd.j.quick.actions.verbs.restartClaude', 'restart claude'),
+      translate('auto.components.cmd.j.quick.actions.verbs.restartCodex', 'restart codex')
+    ],
+    isAvailable: () => ({ available: true }),
+    run: async () => {
+      const { openRestartAgentSessionsPrompt } =
+        await import('@/lib/agent-session/manual-restart/restart-agent-sessions-prompt')
+      await openRestartAgentSessionsPrompt()
       return { status: 'ok' }
     }
   }

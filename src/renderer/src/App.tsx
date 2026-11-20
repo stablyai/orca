@@ -13,6 +13,7 @@ import PinnedTabCloseDialog from './components/terminal-pane/layout/close/Pinned
 import RunningTerminalCloseDialog from './components/terminal-pane/layout/close/RunningTerminalCloseDialog'
 import WorktreeBaseFallbackDialog from './components/sidebar/workspace-creation/base-ref-update/WorktreeBaseFallbackDialog'
 import ClaudeAccountSwitchDialog from './components/provider-accounts/claude/ClaudeAccountSwitchDialog'
+import RestartAgentSessionsDialog from './components/agent-session-restart/RestartAgentSessionsDialog'
 import { AppBackgroundServices } from './app-shell/AppBackgroundServices'
 import { AppRootSurfaces } from './app-shell/AppRootSurfaces'
 import { AppWorkspaceShell } from './app-shell/AppWorkspaceShell'
@@ -128,6 +129,7 @@ function App(): React.JSX.Element {
       {/* One account-link confirm at a time, over whatever screen the owner is on. */}
       <WorktreeBaseFallbackDialog />
       <ClaudeAccountSwitchDialog />
+      <RestartAgentSessionsDialog />
       <PinnedTabCloseDialog />
       <RunningTerminalCloseDialog />
       {/* Electron drag hit-testing follows DOM order, ignoring z-index; render controls last to keep them clickable. */}

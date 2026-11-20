@@ -10,20 +10,20 @@ import type { usePaneProcessRestart } from '../process-exit/use-pane-process-res
 import type { usePaneAccountRestartStartup } from './use-pane-account-restart-startup'
 
 export function useReadyPaneAccountRestarts({
-  consumePendingPaneAccountRestart,
+  consumePendingPaneRestart,
   managerRef,
   paneTransportsRef,
   tabId,
-  buildAccountRestartStartup,
+  buildPaneRestartStartup,
   handleRestartPane,
   panePtyLayoutBindings
 }: Pick<
   TerminalPaneCloseController,
-  'consumePendingPaneAccountRestart' | 'managerRef' | 'paneTransportsRef' | 'tabId'
+  'consumePendingPaneRestart' | 'managerRef' | 'paneTransportsRef' | 'tabId'
 > & {
-  buildAccountRestartStartup: ReturnType<
+  buildPaneRestartStartup: ReturnType<
     typeof usePaneAccountRestartStartup
-  >['buildAccountRestartStartup']
+  >['buildPaneRestartStartup']
   handleRestartPane: ReturnType<typeof usePaneProcessRestart>['handleRestartPane']
   panePtyLayoutBindings: TerminalPaneCloseController['savedLayout']['ptyIdsByLeafId']
 }) {
@@ -42,16 +42,18 @@ export function useReadyPaneAccountRestarts({
       if (!ptyId || !ready.includes(ptyId)) {
         continue
       }
-      const agent = consumePendingPaneAccountRestart(ptyId)
-      const startup = agent ? buildAccountRestartStartup(agent, pane.leafId) : null
-      if (agent && startup) {
-        // Why: one Claude switch restarts many panes at once; none was the one the user clicked.
-        handleRestartPane(pane.id, startup, { focus: agent === 'codex' })
+      const restart = consumePendingPaneRestart(ptyId)
+      const startup = restart ? buildPaneRestartStartup(restart, pane.leafId) : null
+      if (restart && startup) {
+        // Why: Claude switches and manual restarts hit many panes at once; none was the one the user clicked.
+        handleRestartPane(pane.id, startup, {
+          focus: restart.intent === 'account' && restart.agent === 'codex'
+        })
       }
     }
   }, [
-    buildAccountRestartStartup,
-    consumePendingPaneAccountRestart,
+    buildPaneRestartStartup,
+    consumePendingPaneRestart,
     handleRestartPane,
     managerRef,
     paneTransportsRef,

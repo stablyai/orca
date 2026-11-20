@@ -148,6 +148,12 @@ export function createTerminalPtyBindingActions(
         const hasReplacementPendingRestart = replacementPtyId
           ? replacementPtyId in s.pendingPaneAccountRestarts
           : false
+        const hasReplacementManualRestart = replacementPtyId
+          ? replacementPtyId in s.pendingPaneManualRestarts
+          : false
+        const nextPendingPaneManualRestarts = hasReplacementManualRestart
+          ? { ...s.pendingPaneManualRestarts }
+          : s.pendingPaneManualRestarts
         const hasReplacementRestartNotice = replacementPtyId
           ? replacementPtyId in s.codexRestartNoticeByPtyId
           : false
@@ -167,6 +173,10 @@ export function createTerminalPtyBindingActions(
           if (hasReplacementPendingRestart) {
             nextPendingPaneAccountRestarts[ptyId] = nextPendingPaneAccountRestarts[replacementPtyId]
             delete nextPendingPaneAccountRestarts[replacementPtyId]
+          }
+          if (hasReplacementManualRestart) {
+            nextPendingPaneManualRestarts[ptyId] = nextPendingPaneManualRestarts[replacementPtyId]
+            delete nextPendingPaneManualRestarts[replacementPtyId]
           }
           if (hasReplacementRestartNotice) {
             const replacedNotice = nextCodexRestartNoticeByPtyId[replacementPtyId]
@@ -208,6 +218,7 @@ export function createTerminalPtyBindingActions(
             : {}),
           suppressedPtyExitIds: nextSuppressedPtyExitIds,
           pendingPaneAccountRestarts: nextPendingPaneAccountRestarts,
+          pendingPaneManualRestarts: nextPendingPaneManualRestarts,
           codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
           migrationUnsupportedByPtyId: nextMigrationUnsupportedByPtyId,
           ...(nextTerminalLayoutsByTabId !== s.terminalLayoutsByTabId

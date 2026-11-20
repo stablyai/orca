@@ -40,6 +40,7 @@ export const createTerminalSlice: (
   suppressedPtyExitIds: {},
   pendingPtyShutdownIds: {},
   pendingPaneAccountRestarts: {},
+  pendingPaneManualRestarts: {},
   codexRestartNoticeByPtyId: {},
   expandedPaneByTabId: {},
   canExpandPaneByTabId: {},

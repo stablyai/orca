@@ -18675,10 +18675,16 @@
                 "newQuickCommand": "new quick command",
                 "browserRight": "browser right",
                 "splitBrowser": "split browser",
-                "browserSplit": "browser split"
+                "browserSplit": "browser split",
+                "restartAgents": "restart agents",
+                "restartSessions": "restart sessions",
+                "restartClaude": "restart claude",
+                "restartCodex": "restart codex"
               },
               "newBrowserTabSplitRight": "New Browser Tab in Right Split",
-              "newBrowserTabSplitRightDescription": "Open a browser tab in a new split to the right."
+              "newBrowserTabSplitRightDescription": "Open a browser tab in a new split to the right.",
+              "restartAgentSessions": "Restart Agent Sessions",
+              "restartAgentSessionsDescription": "Restart agents on this computer and continue their conversations."
             }
           },
           "palette": {
@@ -29588,5 +29594,25 @@
       "previous": "Previous month",
       "next": "Next month"
     }
+  },
+  "agentSessionRestart": {
+    "title": "Restart agent sessions",
+    "body": "Restarting continues each conversation in a new process, for example after updating an agent CLI. Only sessions that look finished are checked. Restarting a busy session stops its current work.",
+    "listLabel": "Agent sessions to restart",
+    "session": "{{agent}} session",
+    "restart_one": "Restart {{count}} session",
+    "restart_other": "Restart {{count}} sessions",
+    "groupCantRestart": "Can't restart",
+    "reasonNoSession": "No conversation to resume",
+    "reasonAgentTeamsLead": "Agent Teams lead",
+    "reasonCouldntCheck": "Couldn't check",
+    "reasonNoCwd": "Work folder unknown",
+    "reasonOtherAccount": "Would move to another account",
+    "scanning": "Looking for agent sessions…",
+    "none": "No agent sessions to restart.",
+    "restarted_one": "Restarted {{count}} agent session.",
+    "restarted_other": "Restarted {{count}} agent sessions.",
+    "partlyRestarted_one": "Restarted {{restarted}} of {{count}} agent session. {{failed}} couldn't restart.",
+    "partlyRestarted_other": "Restarted {{restarted}} of {{count}} agent sessions. {{failed}} couldn't restart."
   }
 }

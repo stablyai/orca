@@ -67,6 +67,7 @@ export function commitTerminalShutdownState({
       const suppressedPtyExitIds = copyOnWriteRecord(state.suppressedPtyExitIds)
       const pendingPtyShutdownIds = copyOnWriteRecord(state.pendingPtyShutdownIds)
       const pendingPaneAccountRestarts = copyOnWriteRecord(state.pendingPaneAccountRestarts)
+      const pendingPaneManualRestarts = copyOnWriteRecord(state.pendingPaneManualRestarts)
       const codexRestartNoticeByPtyId = copyOnWriteRecord(state.codexRestartNoticeByPtyId)
       for (const ptyId of exitGuardPtyIds) {
         if (state.suppressedPtyExitIds[ptyId] !== true) {
@@ -85,6 +86,8 @@ export function commitTerminalShutdownState({
         if (!keepIdentifiers) {
           pendingPaneAccountRestarts.delete(ptyId)
         }
+        // Manual restarts are one-shot for a live pane, so they never survive sleep.
+        pendingPaneManualRestarts.delete(ptyId)
         codexRestartNoticeByPtyId.delete(ptyId)
       }
 
@@ -140,6 +143,7 @@ export function commitTerminalShutdownState({
         suppressedPtyExitIds: suppressedPtyExitIds.read(),
         pendingPtyShutdownIds: pendingPtyShutdownIds.read(),
         pendingPaneAccountRestarts: pendingPaneAccountRestarts.read(),
+        pendingPaneManualRestarts: pendingPaneManualRestarts.read(),
         codexRestartNoticeByPtyId: codexRestartNoticeByPtyId.read(),
         pendingIssueCommandSplitByTabId: pendingIssueCommandSplitByTabId.read(),
         terminalLayoutsByTabId:

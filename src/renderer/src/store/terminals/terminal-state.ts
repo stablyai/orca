@@ -12,7 +12,8 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import type {
   SavedResumeStartupSource,
   AgentProviderSessionMetadata,
-  SleepingAgentLaunchConfig
+  SleepingAgentLaunchConfig,
+  ResumableTuiAgent
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { StartupCommandDelivery } from '../../../../shared/agent-launch/startup/codex-startup-delivery'
@@ -46,6 +47,8 @@ export type TerminalState = {
   pendingPtyShutdownIds: Record<string, number>
   /** Account-switch restarts awaiting execution, keyed by the PTY they replace. */
   pendingPaneAccountRestarts: Record<string, AccountRestartAgent>
+  /** User-triggered restarts, kept apart so account-switch consumers never see them. */
+  pendingPaneManualRestarts: Record<string, ResumableTuiAgent>
   codexRestartNoticeByPtyId: Record<string, CodexRestartNotice>
   expandedPaneByTabId: Record<string, boolean>
   canExpandPaneByTabId: Record<string, boolean>

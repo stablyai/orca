@@ -30,6 +30,14 @@
       "updateRequired": "OpenCode cannot safely start with a chosen model on this version. Update OpenCode to a supported release, or omit the model choice."
     }
   },
+  "agentSessionRestart": {
+    "partlyRestarted_one": "Restarted {{restarted}} of {{count}} agent session. {{failed}} couldn't restart.",
+    "partlyRestarted_other": "Restarted {{restarted}} of {{count}} agent sessions. {{failed}} couldn't restart.",
+    "restart_one": "Restart {{count}} session",
+    "restart_other": "Restart {{count}} sessions",
+    "restarted_one": "Restarted {{count}} agent session.",
+    "restarted_other": "Restarted {{count}} agent sessions."
+  },
   "aiVault": {
     "scanIssues": {
       "invalidResultsSkipped_one": "Skipped {{count}} invalid Agent Session History result entry.",

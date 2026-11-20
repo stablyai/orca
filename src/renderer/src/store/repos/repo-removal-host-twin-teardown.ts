@@ -133,6 +133,7 @@ export function closeRemovedHostTwinState(
       ),
       suppressedPtyExitIds: omitRecordKeys(state.suppressedPtyExitIds, retiredPtyIds),
       pendingPaneAccountRestarts: omitRecordKeys(state.pendingPaneAccountRestarts, retiredPtyIds),
+      pendingPaneManualRestarts: omitRecordKeys(state.pendingPaneManualRestarts, retiredPtyIds),
       codexRestartNoticeByPtyId: omitRecordKeys(state.codexRestartNoticeByPtyId, retiredPtyIds)
     }))
     // Why: a pending chat's tab can already be gone, so its launch is cancelled through the registry.

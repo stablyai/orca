@@ -7,9 +7,8 @@ import type {
   TerminalTab
 } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { parseRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { lastInputBlocksHibernation } from './agent-hibernation-input-guard'
+import { getAgentPaneQuietEvidence, isAgentPaneQuiet } from './agent-pane-quiet'
 import { isLiveResumeAnchorForCompletedAgent } from '../../../../../shared/agent-session/lifecycle/resume/live-resume-anchor-record'
-import { agentTurnEndedUncleanly } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentHibernationPlannerSnapshot } from './agent-hibernation-planner-snapshot'
 import type { RuntimeTerminalAttention } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
@@ -52,12 +51,6 @@ function getPaneLivePtyId(
   return ptyId ? { leafId: parsed.leafId, ptyId } : null
 }
 
-// Why: provider done hooks can fire mid-Dispatch; only runtime-confirmed settlement makes sleep safe.
-const hasUnsettledOrUnknownDispatch = ({ orchestration }: AgentStatusEntry): boolean =>
-  orchestration
-    ? !['completed', 'failed', 'circuit_broken'].includes(orchestration.dispatchStatus ?? '')
-    : false
-
 export function getEligiblePane(args: {
   entry: AgentStatusEntry
   tab: TerminalTab
@@ -92,13 +85,7 @@ export function getEligiblePane(args: {
     sleepingRecord,
     tab.worktreeId
   )
-  if (
-    entry.state !== 'done' ||
-    agentTurnEndedUncleanly(entry) ||
-    Boolean(entry.subagents?.length) ||
-    hasUnsettledOrUnknownDispatch(entry) ||
-    (sleepingRecord && !hasOnlyLiveResumeAnchor)
-  ) {
+  if (entry.state !== 'done' || (sleepingRecord && !hasOnlyLiveResumeAnchor)) {
     return null
   }
   if (
@@ -133,16 +120,15 @@ export function getEligiblePane(args: {
   const { leafId, ptyId } = livePane
   const runtimePtyId = toRuntimePtyId(ptyId)
   const attention = args.attentionByPtyId[runtimePtyId]
-  if (!livePtyIds.has(runtimePtyId) || inUsePtyIds.has(runtimePtyId) || attention?.shownRemotely) {
+  if (!livePtyIds.has(runtimePtyId)) {
     return null
   }
-  // Input from a paired client or phone reaches the host, not this window's own input stamps.
-  const inputAt = latestFinite(
+  const evidence = getAgentPaneQuietEvidence(
     lastTerminalInputAtByPaneKey[entry.paneKey],
-    attention?.lastInputAt ?? undefined
+    attention,
+    inUsePtyIds.has(runtimePtyId)
   )
-  // Killing the PTY loses drafts/queued input typed during working too; input-after-done alone misses them.
-  if (inputAt !== null && lastInputBlocksHibernation(entry, inputAt)) {
+  if (!isAgentPaneQuiet(entry, evidence)) {
     return null
   }
   return {
@@ -158,13 +144,6 @@ export function getEligiblePane(args: {
     state: entry.state,
     stateStartedAt: entry.stateStartedAt,
     effectiveIdleStart,
-    inputAt: inputAt ?? 0
+    inputAt: evidence.inputAt ?? 0
   }
-}
-
-function latestFinite(...values: (number | undefined)[]): number | null {
-  const finite = values.filter(
-    (value): value is number => typeof value === 'number' && Number.isFinite(value)
-  )
-  return finite.length > 0 ? Math.max(...finite) : null
 }

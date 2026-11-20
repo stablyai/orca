@@ -17,6 +17,7 @@ import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-
 import { normalizeAgentProviderSession } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   AgentProviderSessionMetadata,
+  ResumableTuiAgent,
   SleepingAgentLaunchConfig
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { resolveResumeLaunchRecipe } from '../../../../../shared/agent-launch/choices/resume-launch-recipe'
@@ -29,7 +30,7 @@ import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/ex
 export type AgentAccountRestartStartup = {
   command: string
   startupCommandDelivery: 'shell-ready'
-  launchAgent: AccountRestartAgent
+  launchAgent: ResumableTuiAgent
   env?: Record<string, string>
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
@@ -49,7 +50,7 @@ type AccountRestartTarget = Pick<AccountRestartPane, 'worktreeId' | 'shellOverri
  * Capture it before restart clears the old pane's status.
  */
 export function resolveAgentAccountRestartResumeStartup(
-  agent: AccountRestartAgent,
+  agent: ResumableTuiAgent,
   args: AccountRestartPane
 ): AgentAccountRestartStartup | null {
   const state = useAppStore.getState()
@@ -132,6 +133,27 @@ export function buildPaneAccountRestartStartup(
     return null
   }
   return resume ?? (agent === 'codex' ? buildCodexAccountRestartStartup(args) : null)
+}
+
+/** Manual restart: the same agent's own conversation or nothing; never a fresh launch. */
+export function buildManualRestartStartup(
+  agent: ResumableTuiAgent,
+  args: AccountRestartPane
+): AgentAccountRestartStartup | null {
+  const resume = resolveAgentAccountRestartResumeStartup(agent, args)
+  const sessionId = resume?.resumeProviderSession?.id
+  if (
+    sessionId &&
+    isSessionHeldByAnotherPane(
+      useAppStore.getState(),
+      makePaneKey(args.tabId, args.leafId),
+      sessionId,
+      agent
+    )
+  ) {
+    return null
+  }
+  return resume
 }
 
 export function buildCodexAccountRestartStartup(
