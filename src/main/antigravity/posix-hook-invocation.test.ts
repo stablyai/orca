@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as OsModule from 'node:os'
 import { join } from 'node:path'
@@ -8,7 +8,6 @@ import { z } from 'zod'
 import { tokenizeCommandLine } from '../../shared/agent-status/process/agent-command-line-entrypoint'
 import { spawnProcess } from '@orca/process-host'
 import { AntigravityHookService } from './hook-service'
-import { ANTIGRAVITY_PRE_TOOL_USE_DECISION } from './hook-events'
 import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { readAgentProcess } from '../../shared/agent-status/process/agent-process-presence-probe'
@@ -116,7 +115,7 @@ describe.skipIf(process.platform === 'win32')('Antigravity POSIX hook executable
         const command =
           version === 'current'
             ? currentCommand
-            : `/bin/sh -c ${quotePosixShell(wrapPosixHookCommand(join(home, '.orca', 'agent-hooks', 'antigravity-hook.sh'), { ORCA_ANTIGRAVITY_EVENT: 'PreToolUse' }, { fallbackStdout: ANTIGRAVITY_PRE_TOOL_USE_DECISION }))}`
+            : `/bin/sh -c ${quotePosixShell(wrapPosixHookCommand(join(home, '.orca', 'agent-hooks', 'antigravity-hook.sh'), { ORCA_ANTIGRAVITY_EVENT: 'PreToolUse' }, { fallbackStdout: '{"decision":"ask"}' }))}`
         const result = await invoke(command, payload, {
           ...process.env,
           ORCA_AGENT_HOOK_ENDPOINT: '',
@@ -128,7 +127,7 @@ describe.skipIf(process.platform === 'win32')('Antigravity POSIX hook executable
           TMUX_PANE: '%4'
         })
         expect(result.code).toBe(0)
-        expect(result.stdout).toBe('{"decision":"ask"}')
+        expect(result.stdout).toBe('')
         expect(result.elapsedMs).toBeLessThan(8000)
         expect(posts).toHaveLength(1)
         expect(posts[0]?.get('payload')).toBe(payload)
@@ -152,41 +151,58 @@ describe.skipIf(process.platform === 'win32')('Antigravity POSIX hook executable
     10000
   )
 
-  it('preserves process and tmux evidence in startup spool bodies', async () => {
-    home = mkdtempSync(join(tmpdir(), 'orca-agy-spool-'))
-    const endpoint = join(home, 'endpoint.sh')
-    writeFileSync(endpoint, '# endpoint not ready\n')
-    const result = await invoke(installedCommand(home, 'PreInvocation'), '{}', {
-      ...process.env,
-      ORCA_AGENT_HOOK_ENDPOINT: endpoint,
-      ORCA_AGENT_HOOK_PORT: '',
-      ORCA_AGENT_HOOK_TOKEN: '',
-      ORCA_PANE_KEY: 'test-pane',
-      ORCA_HOOK_AGENT_PID: '2',
-      TMUX: '/tmp/agy-test.sock,123,0',
-      TMUX_PANE: '%4'
-    })
-    expect(result.code).toBe(0)
-    const spool = join(home, 'spool')
-    const { records } = readSpoolFile(join(spool, readdirSync(spool)[0]))
-    expect(records).toHaveLength(1)
-    const body = buildSpoolHookBody(records[0])
-    expect(JSON.parse(String(body.agentProcess))).toMatchObject({ pid: process.pid })
-    expect(body.tmuxPane).toBe('%4 /tmp/agy-test.sock')
-    expect(body.hookEventName).toBe('PreInvocation')
-  })
+  it.each([
+    ['a tmux started in the pane', '', '%4 /tmp/agy-test.sock'],
+    // Orca itself runs in that tmux pane; the pane hosts no tmux of its own.
+    ["Orca's own tmux", '%4 /tmp/agy-test.sock', '']
+  ])(
+    'keeps process evidence and reports %s in startup spool bodies',
+    async (_, inherited, pane) => {
+      home = mkdtempSync(join(tmpdir(), 'orca-agy-spool-'))
+      const endpoint = join(home, 'endpoint.sh')
+      writeFileSync(endpoint, '# endpoint not ready\n')
+      const result = await invoke(installedCommand(home, 'PreInvocation'), '{}', {
+        ...process.env,
+        ORCA_AGENT_HOOK_ENDPOINT: endpoint,
+        ORCA_AGENT_HOOK_PORT: '',
+        ORCA_AGENT_HOOK_TOKEN: '',
+        ORCA_PANE_KEY: 'test-pane',
+        ORCA_HOOK_AGENT_PID: '2',
+        TMUX: '/tmp/agy-test.sock,123,0',
+        TMUX_PANE: '%4',
+        ORCA_INHERITED_TMUX: inherited
+      })
+      expect(result.code).toBe(0)
+      const spool = join(home, 'spool')
+      const { records } = readSpoolFile(join(spool, readdirSync(spool)[0]))
+      expect(records).toHaveLength(1)
+      const body = buildSpoolHookBody(records[0])
+      expect(JSON.parse(String(body.agentProcess))).toMatchObject({ pid: process.pid })
+      expect(body.tmuxPane).toBe(pane)
+      expect(body.hookEventName).toBe('PreInvocation')
+    }
+  )
 
-  it('returns after a bounded wait when stdin has no bytes and remains open', async () => {
-    home = mkdtempSync(join(tmpdir(), 'orca-agy-empty-hook-'))
-    const result = await invoke(installedCommand(home, 'PreInvocation'), '', {
-      ...process.env,
-      ORCA_AGENT_HOOK_ENDPOINT: '',
-      ORCA_AGENT_HOOK_PORT: '',
-      ORCA_AGENT_HOOK_TOKEN: '',
-      ORCA_PANE_KEY: ''
-    })
-    expect(result.code).toBe(0)
-    expect(result.stdout).toBe('{}')
-    expect(result.elapsedMs).toBeLessThan(8000)
-  }, 10000)
+  it.each([
+    ['PreToolUse', ''],
+    ['Stop', '{"decision":""}'],
+    ['PreInvocation', '{}']
+  ])(
+    'outside an Orca pane, %s skips the managed script and returns while stdin stays open',
+    async (event, expectedStdout) => {
+      home = mkdtempSync(join(tmpdir(), 'orca-agy-outside-'))
+      const command = installedCommand(home, event)
+      const marker = join(home, 'script-ran')
+      writeFileSync(
+        join(home, '.orca', 'agent-hooks', 'antigravity-hook.sh'),
+        `#!/bin/sh\n: > ${quotePosixShell(marker)}\n`
+      )
+      const { ORCA_PANE_KEY: _paneKey, ORCA_AGENT_PANE: _paneAlias, ...outsideEnv } = process.env
+      const result = await invoke(command, '{"tool_name":"run_command"}', outsideEnv)
+      expect(result.code).toBe(0)
+      expect(result.stdout).toBe(expectedStdout)
+      expect(existsSync(marker)).toBe(false)
+    },
+    10000
+  )
 })

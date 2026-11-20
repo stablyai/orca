@@ -1,7 +1,7 @@
 import { ArrowRight, Files, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { OrcaSignInButton, OrcaSignInWaitNotice } from '../OrcaSignInProgress'
+import { OrcaSignInButton, OrcaSignInWaitNotice } from '../orca-profiles/OrcaSignInProgress'
 
 export function ArtifactsPageErrorBanner({
   error,
@@ -138,10 +138,7 @@ export function ArtifactsPageEmptyState({
           className="mt-1"
           onClick={onOpenArtifactsSettings}
         >
-          {t(
-            'auto.components.artifacts.ArtifactsPage.openArtifactsSettings',
-            'Open Settings → Artifacts'
-          )}
+          {t('auto.components.artifacts.ArtifactsPage.openArtifactsSettings', 'Artifact settings')}
         </Button>
       ) : null}
       {hasMore ? (

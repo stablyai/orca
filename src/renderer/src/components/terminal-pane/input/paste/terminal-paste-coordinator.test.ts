@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import '../../../../../../shared/paste-payload-corpus'
+import '../../../../../../shared/clipboard/testing/paste-payload-corpus'
 
 import './terminal-bracketed-paste'
 

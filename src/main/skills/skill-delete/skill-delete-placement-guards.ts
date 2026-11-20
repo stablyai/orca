@@ -1,14 +1,14 @@
 import { posix as pathPosix, win32 as pathWin32 } from 'node:path'
-import { skillFileMaxDepth } from '../../../shared/skill-discovery-depth'
+import { skillFileMaxDepth } from '../../../shared/skills/discovery/skill-discovery-depth'
 import type {
   SkillDeleteBlockReason,
   SkillDeletePlacement
-} from '../../../shared/skill-delete-contract'
+} from '../../../shared/skills/deletion/skill-delete-contract'
 import {
   skillPathDepthBelow,
   skillPathsEqual,
   type SkillPathSemantics
-} from '../../../shared/skill-path-containment'
+} from '../../../shared/skills/paths/skill-path-containment'
 import type { SkillScanRoot } from '../discovery/skill-discovery-sources'
 import type { SkillPlacementCandidate } from './skill-delete-placement-enumeration'
 
@@ -50,7 +50,7 @@ export function owningSkillRoot(
   return null
 }
 
-/** Re-derive canonical eligibility on the host: symlinked plugin/.system skills may report home on clients. External content stays untouched, but its owned in-root links may be deleted; no owned placements means unowned. */
+/** Re-derive canonical eligibility on the host: symlinked plugin/bundled skills may report home on clients. External content stays untouched, but its owned in-root links may be deleted; no owned placements means unowned. */
 export function blockedCanonicalReason(
   canonicalDirectoryPath: string,
   context: SkillDeleteGuardContext
@@ -64,6 +64,9 @@ export function blockedCanonicalReason(
     }
     if (root.sourceKind === 'plugin') {
       return 'plugin'
+    }
+    if (root.sourceKind === 'bundled') {
+      return 'bundled'
     }
     if (
       root.sourceKind === 'home' &&

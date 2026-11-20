@@ -1,7 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join } from 'node:path'
 import type { WorktreeHeadIdentity } from '../../../../shared/worktree/types'
-import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import {
   FULL_HEAD_IDENTITY_SCOPE,
   headIdentityEntryKey,
@@ -38,6 +38,8 @@ export type GitCommonHeadIdentityRead = {
   identities: WorktreeHeadIdentity[]
   /** Incomplete listing/metadata reads cannot establish a full freshness checkpoint. */
   complete: boolean
+  /** Entry keys read this pass without a head (unborn or invalid), so no identity can publish them. */
+  headlessEntryKeys: ReadonlySet<string>
 }
 
 /** ref → oid resolved during one pass; null means the ref no longer resolves. */
@@ -284,7 +286,11 @@ export async function readGitCommonHeadIdentities(
   }
   if (entryNames === null) {
     // Failed initial listing must leave the memo unset for retry.
-    return { identities: cache.primary ? [cache.primary] : [], complete: false }
+    return {
+      identities: cache.primary ? [cache.primary] : [],
+      complete: false,
+      headlessEntryKeys: new Set()
+    }
   }
 
   let entryKeys = entryNames.map(headIdentityEntryKey)
@@ -305,6 +311,7 @@ export async function readGitCommonHeadIdentities(
   const reads = await mapWithConcurrency(staleNames, HEAD_IDENTITY_READ_CONCURRENCY, (name) =>
     readLinkedEntryIdentity(commonDirPath, name, packedRefs, resolved)
   )
+  const headlessEntryKeys = new Set<string>()
   staleNames.forEach((name, index) => {
     const identity = reads[index]
     if (identity === UNREADABLE) {
@@ -316,6 +323,7 @@ export async function readGitCommonHeadIdentities(
       cache.entries.set(name, identity)
     } else {
       cache.entries.delete(name)
+      headlessEntryKeys.add(headIdentityEntryKey(name))
     }
   })
   applyResolvedRefOids(cache, resolved)
@@ -331,6 +339,7 @@ export async function readGitCommonHeadIdentities(
   }
   return {
     identities,
-    complete: !listingStale && cache.unverified.size === 0 && !cache.primaryUnverified
+    complete: !listingStale && cache.unverified.size === 0 && !cache.primaryUnverified,
+    headlessEntryKeys
   }
 }

@@ -6,7 +6,7 @@ import type { WorktreeCardPrDisplay } from '../review/worktree-card-pr-display'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { toast } from 'sonner'
 
-import type { GitHubWorkItem } from '../../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import { translate } from '@/i18n/i18n'
 import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
 import './WorktreeCardMeta'
@@ -14,6 +14,7 @@ import { hasWorktreeCardDetails } from '../metadata/WorktreeCardMetaBadges'
 import { usePromptCacheCountdownStartedAt } from '../activity/CacheTimer'
 import { useWorktreeAgentRows } from '../activity/useWorktreeAgentRows'
 import type { WorktreeCardSecondaryDetailsInputs } from './worktree-card-secondary-details-inputs'
+import { useWorktreeBot } from '@/components/bots/use-worktree-bot'
 
 export function useWorktreeCardSecondaryDetails({
   worktree,
@@ -26,6 +27,7 @@ export function useWorktreeCardSecondaryDetails({
   showPR,
   showAutomation,
   showCli,
+  showBot = true,
   showComment,
   showPorts,
   issueDisplay,
@@ -60,17 +62,17 @@ export function useWorktreeCardSecondaryDetails({
   const metaReview = showPR ? hoverReview : null
   const metaAutomationProvenance = showAutomation ? worktree.automationProvenance : null
   const metaCliProvenance = showCli ? worktree.cliProvenance : null
+  const metaBot = useWorktreeBot(worktree, showBot && settings?.botsEnabled !== false)
   const metaComment = showComment ? hoverComment : null
   const showInlineAgentList = cardDetails.inlineAgents
-  const compactInlineAgentRows = useWorktreeAgentRows(
+  const inlineAgentRows = useWorktreeAgentRows(
     worktree.id,
-    showInlineAgentList && agentActivityDisplayMode === 'compact'
+    newCardStyle || showInlineAgentList,
+    worktree.hostId
   )
-  const compactInlineAgentRowsVisible =
-    showInlineAgentList &&
-    agentActivityDisplayMode === 'compact' &&
-    compactInlineAgentRows.length > 0
-  const showAggregateCacheTimer = !compactCards && !compactInlineAgentRowsVisible
+  const inlineAgentRowsVisible =
+    showInlineAgentList && agentActivityDisplayMode === 'compact' && inlineAgentRows.length > 0
+  const showAggregateCacheTimer = !compactCards && !inlineAgentRowsVisible
   const handleOpenGitHubIssueInOrca = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -133,18 +135,8 @@ export function useWorktreeCardSecondaryDetails({
     },
     [worktree.id]
   )
-  const handleOpenIssueInBrowser = useCallback(
-    (url: string): void => {
-      openLinkedUrlInBrowser(url)
-    },
-    [openLinkedUrlInBrowser]
-  )
-  const handleOpenReviewInBrowser = useCallback(
-    (url: string): void => {
-      openLinkedUrlInBrowser(url)
-    },
-    [openLinkedUrlInBrowser]
-  )
+  const handleOpenIssueInBrowser = openLinkedUrlInBrowser
+  const handleOpenReviewInBrowser = openLinkedUrlInBrowser
   const hoverReviewProvider = hoverReview?.provider
   const canUnlinkReview =
     hoverReviewProvider === 'github' ||
@@ -225,16 +217,19 @@ export function useWorktreeCardSecondaryDetails({
     },
     [linearIssue, openTaskPage]
   )
+  // The experimental card draws the PR in its status lane; Classic lists it with the other details.
+  const reviewInStatusLane = newCardStyle
   const hasDetails =
     getWorkspaceAttachments(worktree).length > 0 ||
     hasWorktreeCardDetails({
       issue: metaIssue,
       linearIssue: metaLinearIssue,
       jiraIssue: metaJiraIssue,
-      review: newCardStyle ? null : metaReview,
+      review: reviewInStatusLane ? null : metaReview,
       comment: metaComment,
       automationProvenance: metaAutomationProvenance,
-      cliProvenance: metaCliProvenance
+      cliProvenance: metaCliProvenance,
+      bot: metaBot
     })
   const hasPorts = showPorts && workspacePorts.length > 0
   const cacheStartedAt = usePromptCacheCountdownStartedAt(worktree.id, showAggregateCacheTimer)
@@ -255,9 +250,10 @@ export function useWorktreeCardSecondaryDetails({
     metaReview,
     metaAutomationProvenance,
     metaCliProvenance,
+    metaBot,
     metaComment,
     showInlineAgentList,
-    compactInlineAgentRows,
+    inlineAgentRows,
     handleOpenGitHubIssueInOrca,
     handleOpenIssueInBrowser,
     handleOpenReviewInOrca,
@@ -266,6 +262,7 @@ export function useWorktreeCardSecondaryDetails({
     hasExplicitLinkedReview,
     handleUnlinkReview,
     handleOpenLinearIssueInOrca,
+    reviewInStatusLane,
     hasDetails,
     hasPorts,
     cacheStartedAt,

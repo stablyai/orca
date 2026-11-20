@@ -6,7 +6,7 @@ const {
   APPIMAGE_NODE_RUNTIME_FPM_EXCLUDE,
   APPIMAGE_NODE_RUNTIME_SEGMENTS,
   appImageNodeRuntimeTarget
-} = require('../../../../src/shared/appimage-node-runtime.ts')
+} = require('../../../../src/shared/desktop-distribution/appimage/appimage-node-runtime.ts')
 const {
   runTerminalHostRoundTrip
 } = require('../runtime-verification/verify-packaged-daemon-entry.cjs')

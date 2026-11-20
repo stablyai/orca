@@ -1,10 +1,10 @@
 import { useMemo } from 'react'
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import {
   HOST_LIST_TARGET,
   hostRepoLabelsQuery,
   NO_HOST_LIST_INPUT
-} from '../host-screen/host-list-queries'
+} from '../host-screen/catalog/host-list-queries'
 import { useHostQuery } from '../query/host-query'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 

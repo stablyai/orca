@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SkillDeleteRequest } from '../../../shared/skill-delete-contract'
+import type { SkillDeleteRequest } from '../../../shared/skills/deletion/skill-delete-contract'
 import { buildSkillDeletePlan } from './skill-delete-plan'
 import './skill-delete-placement-guards'
 import { nativeSkillInstallFilesystem } from '../filesystem/skill-install-filesystem'
@@ -92,11 +92,14 @@ describe('buildSkillDeletePlan placement enumeration', () => {
     }
   )
 
-  it.skipIf(WINDOWS)(
-    'refuses a bundled skill even when the row claimed a home source',
-    async () => {
+  it.skipIf(WINDOWS).each([
+    ['.claude', 'skills', '.system', 'demo'],
+    ['.cursor', 'skills-cursor', 'demo']
+  ])(
+    'refuses a bundled skill even when the row claimed a home source (%s/%s)',
+    async (...segments) => {
       const { home } = await fixture()
-      const bundled = join(home, '.claude', 'skills', '.system', 'demo')
+      const bundled = join(home, ...segments)
       const file = await writeSkill(bundled, 'demo')
       await mkdir(join(home, '.agents', 'skills'), { recursive: true })
       await symlink(bundled, join(home, '.agents', 'skills', 'demo'), 'dir')

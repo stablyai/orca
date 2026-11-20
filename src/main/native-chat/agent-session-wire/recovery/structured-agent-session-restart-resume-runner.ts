@@ -3,11 +3,14 @@
 import { isAgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionAnyRefusalDetails } from '../../../../shared/agent-session/failures/agent-session-refusal-details'
 import { availableParallelism } from 'node:os'
-import { PrioritySemaphore } from '../../../../shared/priority-semaphore'
+import { PrioritySemaphore } from '../../../../shared/concurrency/priority-semaphore'
 import type { StructuredAgentSessionResumeCandidate } from './structured-agent-session-restart-resume-set'
 
-/** Bound CPU-heavy startup per host core; ready chats run concurrently. */
-export const STRUCTURED_AGENT_SESSION_RESUME_CONCURRENCY = Math.max(1, availableParallelism())
+/** Bound CPU-heavy startup; wider launch bursts time out the process-table reads behind provider ownership. */
+export const STRUCTURED_AGENT_SESSION_RESUME_CONCURRENCY = Math.max(
+  1,
+  Math.min(6, availableParallelism())
+)
 
 export const STRUCTURED_AGENT_SESSION_RESUME_IN_PROGRESS =
   'agent_session_resume_already_in_progress'

@@ -12,7 +12,7 @@ import {
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
 import type { SourceControlActionError } from '../sync/action-error'
 import type { CreatePrIntentNotice } from '../commit/commit-area-types'

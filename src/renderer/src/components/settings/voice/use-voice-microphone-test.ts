@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { DICTATION_SAMPLE_RATE } from '../../../../../shared/rpc-contract/speech-params'
+import { DICTATION_SAMPLE_RATE } from '../../../../../shared/rpc-contract/speech/speech-params'
 import {
   DEFAULT_DICTATION_METER,
   type DictationMeterState
-} from '../../../../../shared/dictation-audio-meter'
-import type { SpeechModelManifest, VoiceSettings } from '../../../../../shared/speech-types'
-import { useAudioCapture } from '@/hooks/use-audio-capture'
+} from '../../../../../shared/speech/dictation/dictation-audio-meter'
+import type { SpeechModelManifest, VoiceSettings } from '../../../../../shared/speech/speech-types'
+import { useAudioCapture } from '@/components/dictation/use-audio-capture'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
-import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { encodeMonoWav } from './voice-microphone-test-wav'
 
 export const MICROPHONE_TEST_MAX_SECONDS = 10

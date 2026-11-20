@@ -4,7 +4,7 @@ import {
   pairedRuntimeConnectionFromOffer,
   type PairedRuntimeConnection
 } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
-import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/orcad-managed-runtime'
+import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike

@@ -1,12 +1,13 @@
 import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
-import { ALL_EXECUTION_HOSTS_SCOPE } from '../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { ALL_EXECUTION_HOSTS_SCOPE } from '../../../shared/execution-host/execution-host'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { sidebarHasActiveFilters } from '@/components/sidebar/worktree-list/controls/sidebar-filter-actions'
 import { computeVisibleWorktreeIds } from '@/components/sidebar/worktree-list/listing/compute-visible-worktrees'
 import { buildVisibleWorktreeOptionsFromState } from '@/components/sidebar/worktree-list/listing/visible-worktree-options-from-state'
-import { isFolderWorkspaceFromOtherDevice } from '../../../shared/workspace-creator-visibility'
+import { NO_HIDDEN_PROJECTS } from '../../../shared/project/catalog/hidden-projects'
+import { isFolderWorkspaceFromOtherDevice } from '../../../shared/workspace-view/workspace-creator-visibility'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
@@ -46,6 +47,8 @@ export function isWorkspaceNotificationMutedBySidebarFilters(
   // Use the full sidebar pass (~0.2–0.3ms/1,000 workspaces) to preserve every rule that adds rows back.
   const visibleIds = computeVisibleWorktreeIds(selectWorktreesByRepo(state), [], {
     ...inputs,
+    // Hiding a project is a view choice, never a mute: its workspaces notify as if listed.
+    hiddenProjects: NO_HIDDEN_PROJECTS,
     filterRepoIds: [],
     workspaceHostScope: ALL_EXECUTION_HOSTS_SCOPE,
     visibleWorkspaceHostIds: null

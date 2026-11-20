@@ -8,7 +8,7 @@ export const getBrowserSitePermissionsSearchEntry = createLocalizedCatalog(
     title: translate('settings.browser.sitePermissions.title', 'Site permissions'),
     description: translate(
       'settings.browser.sitePermissions.description',
-      'Sites ask before using your camera, microphone, location and more. Change what you allowed or blocked for each site.'
+      'Sites ask before using your camera, microphone, location, opening other apps and more. Change what you allowed or blocked for each site.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
@@ -27,7 +27,8 @@ export const getBrowserSitePermissionsSearchEntry = createLocalizedCatalog(
       ...translateSearchKeyword(
         'settings.browser.sitePermissions.search.localNetwork',
         'local network'
-      )
+      ),
+      ...translateSearchKeyword('settings.browser.sitePermissions.search.apps', 'apps')
     ]
   })
 )

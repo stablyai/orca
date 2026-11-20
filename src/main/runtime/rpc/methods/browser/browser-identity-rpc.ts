@@ -1,5 +1,5 @@
 import { defineMethod } from '../../core'
-import { BrowserIdentitySet } from '../../../../../shared/rpc-contract/browser-identity-params'
+import { BrowserIdentitySet } from '../../../../../shared/rpc-contract/browser/browser-identity-params'
 import {
   getBrowserIdentityModeStatus,
   setBrowserIdentityMode

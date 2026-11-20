@@ -7,7 +7,7 @@ import { buildSkillCommandForRuntime } from '../../../lib/skills/runtime/skill-r
 import { WslAgentSkillSetupPanel } from './WslAgentSkillSetupPanel'
 import { useCallback } from 'react'
 import { Download, Loader2, RefreshCw } from 'lucide-react'
-import { IntegrationStatusPill } from '../../integration-status-pill'
+import { IntegrationStatusPill } from '../../integrations/presentation/integration-status-pill'
 import {
   SkillPlanStatusPill,
   SkillUnsupportedStatusPill
@@ -137,7 +137,7 @@ function BundledAgentSkillSetupPanel({
             : installedButton === 'replace'
               ? t(
                   'auto.components.settings.AgentSkillSetupPanel.replaceWithOrcaCopy',
-                  "Replace with Orca's copy"
+                  'Replace with Orca’s'
                 )
               : action.kind === 'run' && action.changes
                 ? bundledSkillSetupActionLabel(action.changes, t)

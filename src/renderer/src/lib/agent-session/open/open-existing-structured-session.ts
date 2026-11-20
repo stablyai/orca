@@ -1,7 +1,7 @@
 import {
   openStructuredAgentSession,
   structuredSessionOpenFailure
-} from '../../../../../shared/open-structured-agent-session'
+} from '../../../../../shared/agent-session/view/open-structured-agent-session'
 import type {
   StructuredSessionOpenSource,
   StructuredSessionOpenResult,
@@ -9,7 +9,7 @@ import type {
   StructuredSessionOpenTarget,
   StructuredSessionOpenTab,
   StructuredSessionOpenFailure
-} from '../../../../../shared/open-structured-agent-session'
+} from '../../../../../shared/agent-session/view/open-structured-agent-session'
 import {
   findStructuredAgentSessionTab,
   activateStructuredAgentSessionById
@@ -21,11 +21,11 @@ import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibilit
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { refreshLocalStructuredSessionWorktreeTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
-import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { OrchestrationPartyLocationResult } from '../../../../../shared/orchestration/orchestration-caller-status'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 const STRUCTURED_SESSION_RESTORE_TIMEOUT_MS = 5_000
 

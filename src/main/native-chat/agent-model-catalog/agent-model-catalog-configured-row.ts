@@ -1,4 +1,4 @@
-import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 
 /** The listed row a configured model runs: an exact row first, else the row a configured alias
  *  resolves to. Its alias rows run the same model, so a chat saved on one shows the configured effort. */

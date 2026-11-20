@@ -1,7 +1,7 @@
 import { admitTerminalNoticeLifetime } from '../../provider-notices/terminal-notice-lifetime'
 import { terminalLaunchFacts } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { readTerminalSpawnDeferral } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
-import { isRuntimeOwnedSshTargetId } from '../../../../../../shared/execution-host'
+import { isRuntimeOwnedSshTargetId } from '../../../../../../shared/execution-host/execution-host'
 import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 import { ensurePtyDispatcher } from '../delivery/pty-dispatcher'
 import {
@@ -13,7 +13,7 @@ import {
   isPreHandlerPtyStateDiscarded
 } from '../delivery/pty-pre-handler-buffer'
 import { projectIpcPtyConnectResult } from './ipc-pty-connect-result'
-import { markTerminalProviderSessionBound } from '../../../terminal/terminal-provider-gone-sessions'
+import { markTerminalProviderSessionBound } from '../../../terminal/provider-snapshots/terminal-provider-gone-sessions'
 import { waitAtTerminalPtyPreSpawnE2EBarrier } from './terminal-pty-pre-spawn-e2e-barrier'
 import type { IpcPtySessionHandlers } from './ipc-pty-session-handlers'
 import { isSshSessionGoneError } from '../host-ownership/ssh-session-gone-verdict'

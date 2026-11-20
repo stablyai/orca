@@ -1,8 +1,8 @@
 import type { GroupHeaderRow } from '../../../../../../shared/sidebar-list/row-types'
 import type { SidebarHostOption } from '../controls/sidebar-host-options'
-import { getExecutionHostLabel } from '../../../../../../shared/execution-host'
-import type { Project, ProjectHostSetup } from '../../../../../../shared/project-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import { getExecutionHostLabel } from '../../../../../../shared/execution-host/execution-host'
+import type { Project, ProjectHostSetup } from '../../../../../../shared/project/project-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { DetectedWorktree, Worktree } from '../../../../../../shared/worktree/types'
 
 export const LOCAL_HOST_LABEL = getExecutionHostLabel('local')

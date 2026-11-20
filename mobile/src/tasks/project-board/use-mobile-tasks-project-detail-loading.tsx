@@ -1,0 +1,153 @@
+import type { ItemDetailMetadataEffectsModel as ItemDetailLoadingModel } from '../item-detail/use-mobile-tasks-item-detail-metadata-effects'
+import { useEffect, useLayoutEffect } from 'react'
+import { editableProjectFields, projectFieldDraftValue } from './mobile-tasks-project-fields'
+import { projectRowType, splitRepositorySlug } from '../item-detail/mobile-tasks-item-mapping'
+import { githubProjectRowDetailRead } from './mobile-task-project-board-operations'
+
+export function useMobileTasksProjectDetailLoading<
+  Model extends Pick<
+    ItemDetailLoadingModel,
+    | 'activeGitHubProjectHost'
+    | 'client'
+    | 'githubProjectTable'
+    | 'projectRowDetailRefreshSeq'
+    | 'projectRowItem'
+    | 'setExpandedPrFilePath'
+    | 'setPrFileCommentDrafts'
+    | 'resetPrFiles'
+    | 'setProjectBodyDraft'
+    | 'setProjectEditingCommentDraft'
+    | 'setProjectEditingCommentId'
+    | 'setProjectFieldDrafts'
+    | 'setProjectReviewersDraft'
+    | 'setProjectRowDetail'
+    | 'setProjectRowDetailError'
+    | 'setProjectRowDetailLoading'
+    | 'setProjectTitleDraft'
+    | 'tasksSupported'
+  >
+>(model: Model) {
+  const {
+    activeGitHubProjectHost,
+    client,
+    githubProjectTable,
+    projectRowDetailRefreshSeq,
+    projectRowItem,
+    setExpandedPrFilePath,
+    setPrFileCommentDrafts,
+    resetPrFiles,
+    setProjectBodyDraft,
+    setProjectEditingCommentDraft,
+    setProjectEditingCommentId,
+    setProjectFieldDrafts,
+    setProjectReviewersDraft,
+    setProjectRowDetail,
+    setProjectRowDetailError,
+    setProjectRowDetailLoading,
+    setProjectTitleDraft,
+    tasksSupported
+  } = model
+  useLayoutEffect(() => {
+    resetPrFiles()
+  }, [projectRowItem, client, projectRowDetailRefreshSeq, resetPrFiles])
+  // Keyed on row id: field edits, merges and reconnects hand over a new object for the same row.
+  // The comment box is not reset: it is kept per row in its draft row.
+  const projectRowId = projectRowItem?.id ?? null
+  useEffect(() => {
+    setProjectTitleDraft(projectRowItem?.content.title ?? '')
+    setProjectBodyDraft(projectRowItem?.content.body ?? '')
+    setProjectEditingCommentId(null)
+    setProjectEditingCommentDraft('')
+    setProjectReviewersDraft('')
+    setExpandedPrFilePath(null)
+    setPrFileCommentDrafts({})
+    setProjectFieldDrafts(
+      projectRowItem
+        ? Object.fromEntries(
+            editableProjectFields(githubProjectTable).map((field) => [
+              field.id,
+              projectFieldDraftValue(projectRowItem, field)
+            ])
+          )
+        : {}
+    )
+  }, [projectRowId])
+
+  useEffect(() => {
+    if (!projectRowItem) {
+      setProjectRowDetail(null)
+      setProjectRowDetailLoading(false)
+      setProjectRowDetailError('')
+      return
+    }
+
+    const type = projectRowType(projectRowItem)
+    const slug = splitRepositorySlug(projectRowItem.content.repository)
+    setProjectRowDetail(null)
+    setProjectRowDetailError('')
+
+    if (!tasksSupported || !client || !type || !slug || !projectRowItem.content.number) {
+      setProjectRowDetailLoading(false)
+      return
+    }
+
+    let stale = false
+    setProjectRowDetailLoading(true)
+
+    void githubProjectRowDetailRead
+      .request(
+        client,
+        {
+          owner: slug.owner,
+          repo: slug.repo,
+          host: activeGitHubProjectHost,
+          number: projectRowItem.content.number,
+          type
+        },
+        { timeoutMs: 30_000 }
+      )
+      .then((response) => {
+        if (stale) {
+          return
+        }
+        const result = githubProjectRowDetailRead.interpret(response)
+        if (!result.ok) {
+          throw new Error(result.error.message)
+        }
+        // Forward reviewDecision unchanged: null and absence represent distinct review states.
+        setProjectRowDetail({
+          provider: 'github',
+          body: result.details.body ?? '',
+          comments: result.details.comments ?? [],
+          labels: result.details.item?.labels ?? projectRowItem.content.labels.map((l) => l.name),
+          assignees: result.details.assignees ?? [],
+          reviewDecision: result.details.item?.reviewDecision,
+          reviewRequests: result.details.item?.reviewRequests ?? [],
+          latestReviews: result.details.item?.latestReviews ?? [],
+          headSha: result.details.headSha,
+          baseSha: result.details.baseSha,
+          pullRequestId: result.details.pullRequestId,
+          checks: result.details.checks ?? [],
+          files: result.details.files ?? []
+        })
+      })
+      .catch((err) => {
+        if (!stale) {
+          setProjectRowDetailError(err instanceof Error ? err.message : 'Failed to load details')
+        }
+      })
+      .finally(() => {
+        if (!stale) {
+          setProjectRowDetailLoading(false)
+        }
+      })
+
+    return () => {
+      stale = true
+    }
+  }, [activeGitHubProjectHost, client, projectRowDetailRefreshSeq, projectRowItem, tasksSupported])
+  return model
+}
+
+export type ProjectDetailLoadingModel = ItemDetailLoadingModel &
+  ReturnType<typeof useMobileTasksProjectDetailLoading>

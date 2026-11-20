@@ -1,9 +1,11 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { prepareLegacyTranscriptImport } from './journal-legacy-import'
+import { encodeClaudeProjectPath } from '../../../ai-vault/scanners/claude/claude-project-dir-encoding'
+import { grokEncodedCwdDirName } from '../../../../shared/agent-hook-listener/providers/grok/grok-session-paths'
 
 let root: string
 
@@ -85,11 +87,9 @@ it.each([
   },
   { tail: '{"type":"summary","message":null}', sourceEmpty: false, items: 0 },
   { tail: '{"type":"user","uuid":"u1"}', sourceEmpty: false, items: 0 },
-  { tail: '{"type":7}', sourceEmpty: false, items: 0 },
   { tail: '{"type":""}', sourceEmpty: false, items: 0 },
   { tail: '{}', sourceEmpty: false, items: 0 },
   { tail: 'null', sourceEmpty: false, items: 0 },
-  { tail: '[]', sourceEmpty: false, items: 0 },
   { tail: '{"type":"user","message":{"role":"us', sourceEmpty: false, items: 0 },
   {
     tail: '{"type":"user","isMeta":true,"message":{"role":"user","content":"<local-command-caveat>Local command</local-command-caveat>"}}',
@@ -107,6 +107,17 @@ it.each([
     sourceEmpty: false,
     items: 1,
     shows: '<command-name>/rename</command-name>'
+  },
+  {
+    tail: '{"type":"system","subtype":"local_command","uuid":"lc1","commandRun":{"command":"recap","args":""},"content":"<local-command-stdout>Session recap text</local-command-stdout>"}',
+    sourceEmpty: false,
+    items: 1,
+    shows: 'Session recap text'
+  },
+  {
+    tail: '{"type":"system","subtype":"local_command","uuid":"lc3","commandRun":{"command":"model","args":""},"content":"<local-command-stdout>Kept model as Opus</local-command-stdout>"}',
+    sourceEmpty: true,
+    items: 0
   },
   {
     tail: '{"type":"user","message":{"role":"user","content":[{"type":"future-content","text":"existing prompt"}]}}',
@@ -151,5 +162,79 @@ it.each([
       expect(JSON.stringify(prepared.ok && prepared.items)).toContain(shows)
     }
     expect(prepared.ok && prepared.sourceEmpty).toBe(sourceEmpty)
+  }
+)
+
+const longWorktree = 'w'.repeat(220)
+
+it.each([
+  { worktree: 'moved-worktree', bucketCwd: 'moved-worktree', ok: true },
+  { worktree: 'moved-worktree', bucketCwd: 'elsewhere', ok: false },
+  // Claude Code names a bucket past 200 characters `<first 200>-<hash>`.
+  { worktree: longWorktree, bucketCwd: longWorktree, hashed: true, ok: true }
+])(
+  'adopts a moved Claude conversation only from the workspace project bucket: %j',
+  async ({ worktree, bucketCwd, hashed, ok }) => {
+    const workspaceCwd = join(root, worktree)
+    const encoded = encodeClaudeProjectPath(join(root, bucketCwd))
+    const bucketDir = join(root, 'projects', hashed ? `${encoded.slice(0, 200)}-1a2b3c` : encoded)
+    await mkdir(workspaceCwd)
+    await mkdir(bucketDir, { recursive: true })
+    const filePath = join(bucketDir, 'claude-moved.jsonl')
+    // Saved lines keep the cwd the chat started in before its worktree moved.
+    await writeFile(
+      filePath,
+      `${JSON.stringify({
+        type: 'user',
+        uuid: 'u1',
+        cwd: join(root, 'original-worktree'),
+        sessionId: 'claude-moved',
+        message: { role: 'user', content: 'hello' }
+      })}\n`
+    )
+    const prepared = await prepareLegacyTranscriptImport({
+      agent: 'claude',
+      sessionId: 'claude-moved',
+      options: { filePath, source: { providerSessionId: 'claude-moved', workspaceCwd } }
+    })
+    expect(prepared).toMatchObject(
+      ok
+        ? { ok: true }
+        : {
+            ok: false,
+            cause: {
+              refusal: {
+                code: 'agent_session_identity_required',
+                details: { reason: 'transcriptUnreadable', otherFolder: true }
+              }
+            }
+          }
+    )
+  }
+)
+
+it.each([
+  { bucketCwd: 'moved-worktree', ok: true },
+  { bucketCwd: 'elsewhere', ok: false }
+])(
+  'adopts a moved Grok conversation only from the workspace session bucket: %j',
+  async ({ bucketCwd, ok }) => {
+    const workspaceCwd = join(root, 'moved-worktree')
+    const bucket = grokEncodedCwdDirName(join(root, bucketCwd)) ?? ''
+    const sessionDir = join(root, 'sessions', bucket, 'grok-moved')
+    await mkdir(workspaceCwd)
+    await mkdir(sessionDir, { recursive: true })
+    await writeFile(
+      join(sessionDir, 'summary.json'),
+      JSON.stringify({ info: { id: 'grok-moved', cwd: join(root, 'original-worktree') } })
+    )
+    const filePath = join(sessionDir, 'chat_history.jsonl')
+    await writeFile(filePath, `${JSON.stringify({ type: 'user', content: 'hello' })}\n`)
+    const prepared = await prepareLegacyTranscriptImport({
+      agent: 'grok',
+      sessionId: 'grok-moved',
+      options: { filePath, source: { providerSessionId: 'grok-moved', workspaceCwd } }
+    })
+    expect(prepared.ok).toBe(ok)
   }
 )

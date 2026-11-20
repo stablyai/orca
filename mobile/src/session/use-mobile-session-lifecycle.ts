@@ -1,19 +1,23 @@
-import { useShellStorage } from '../platform/shell-storage'
+import { useShellStorage } from '../platform/shell-storage/shell-storage'
 import { useDirectionPadAvailable } from '../layout/use-shell-side-rail'
 import { settleSessionPreferenceRead } from './session-preference-read'
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { AppState, type AppStateStatus, Platform } from 'react-native'
 import { useFocusEffect } from 'expo-router'
+import { currentAppStateStatus } from '../platform/app-state-status'
 import { loadHosts } from '../host-catalog/host-store'
 import {
   loadTerminalAccessoryLayout,
   saveTerminalSmartRail
-} from '../terminal/terminal-accessory-layout'
+} from '../terminal/key-input/terminal-accessory-layout'
 import {
   recoverActiveTerminalAfterForeground,
   shouldRecoverTerminalOnAppStateChange
-} from '../terminal/terminal-foreground-recovery'
-import { loadCustomKeys, subscribeStoredCustomKeys } from '../terminal/terminal-custom-keys'
+} from '../terminal/webview/terminal-foreground-recovery'
+import {
+  loadCustomKeys,
+  subscribeStoredCustomKeys
+} from '../terminal/key-input/terminal-custom-keys'
 import type { MobileSessionTabReconciliationModel } from './tabs/use-mobile-session-tab-reconciliation'
 
 export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationModel) {
@@ -157,7 +161,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
 
   const pendingForegroundRecoveryRef = useRef(false)
   useEffect(() => {
-    let previousAppState: AppStateStatus | null = AppState.currentState
+    let previousAppState: AppStateStatus | null = currentAppStateStatus()
     const sub = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       const shouldRecover = shouldRecoverTerminalOnAppStateChange(
         previousAppState,

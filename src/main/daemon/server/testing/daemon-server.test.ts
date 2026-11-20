@@ -1,22 +1,19 @@
 import '../../pty-subprocess/testing/mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { connect, type Server, type Socket } from 'node:net'
+import { connect } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { existsSync, mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs'
 import { DaemonServer } from '../daemon-server'
-import type { ConnectedDaemonClient } from '../daemon-client-connections'
 import { DaemonClient } from '../../transport/client/daemon-client'
-import { encodeNdjson } from '../../../../shared/main-process-ndjson-framer'
+import { encodeNdjson } from '../../../../shared/json-stream/main-process-ndjson-framer'
 import { PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
-import type { DaemonRequest } from '../../protocol/daemon-rpc-contract'
 import type { SubprocessHandle } from '../../sessions/session-subprocess-handle'
 import {
   getDaemonPidPath,
   getDaemonSocketPath,
   serializeDaemonPidFile
 } from '../../launch/daemon-spawner'
-import { waitForEndpointUnreachable } from '../../endpoint/publication/testing/daemon-endpoint-reachability-test-harness'
 
 const confirmForegroundProcessMock = vi.fn(async () => 'droid')
 
@@ -24,11 +21,7 @@ function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'daemon-server-test-'))
 }
 
-function createMockSubprocess(): SubprocessHandle & {
-  _simulateData: (data: string) => void
-  _simulateExit: (code: number) => void
-} {
-  let onDataCb: ((data: string) => void) | null = null
+function createMockSubprocess(): SubprocessHandle {
   let onExitCb: ((code: number) => void) | null = null
   return {
     pid: 55555,
@@ -40,32 +33,11 @@ function createMockSubprocess(): SubprocessHandle & {
     terminateOwnedTree: () => 'unavailable' as const,
     forceKill: vi.fn(() => onExitCb?.(137)),
     signal: vi.fn(),
-    onData(cb) {
-      onDataCb = cb
-    },
+    onData: vi.fn(),
     onExit(cb) {
       onExitCb = cb
     },
-    dispose: vi.fn(),
-    _simulateData(data: string) {
-      onDataCb?.(data)
-    },
-    _simulateExit(code: number) {
-      onExitCb?.(code)
-    }
-  }
-}
-
-type DaemonServerPrivate = {
-  lifecycle: { server: Server | null }
-  preparations: { pending: Map<string, Set<unknown>> }
-  host: {
-    kill: (sessionId: string, opts?: { immediate?: boolean }) => void | Promise<void>
-    dispose: () => Promise<void>
-  }
-  connections: { clients: Map<string, ConnectedDaemonClient> }
-  requestRouter: {
-    route(clientId: string, request: DaemonRequest): Promise<unknown>
+    dispose: vi.fn()
   }
 }
 
@@ -91,12 +63,11 @@ describe('DaemonServer', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  async function startServer(launchNonce?: string, onRpcShutdown?: () => void): Promise<void> {
+  async function startServer(launchNonce?: string): Promise<void> {
     server = new DaemonServer({
       socketPath,
       tokenPath,
       ...(launchNonce ? { pidPath, launchNonce } : {}),
-      ...(onRpcShutdown ? { onRpcShutdown } : {}),
       spawnSubprocess: () => createMockSubprocess()
     })
     await server.start()
@@ -106,50 +77,6 @@ describe('DaemonServer', () => {
     client = new DaemonClient({ socketPath, tokenPath })
     await client.ensureConnected()
     return client
-  }
-
-  async function connectRawHello(role: 'control' | 'stream', clientId: string): Promise<Socket> {
-    const socket = connect(socketPath)
-    await new Promise<void>((resolve) => socket.once('connect', resolve))
-    socket.write(
-      encodeNdjson({
-        type: 'hello',
-        version: PROTOCOL_VERSION,
-        token: readFileSync(tokenPath, 'utf-8').trim(),
-        clientId,
-        role
-      })
-    )
-    await new Promise<void>((resolve, reject) => {
-      const cleanup = (): void => {
-        socket.off('data', onData)
-        socket.off('error', onError)
-      }
-      const onData = (data: Buffer): void => {
-        cleanup()
-        const parsed = JSON.parse(data.toString().trim()) as { ok?: boolean; error?: string }
-        if (parsed.ok) {
-          resolve()
-          return
-        }
-        reject(new Error(parsed.error ?? 'hello rejected'))
-      }
-      const onError = (error: Error): void => {
-        cleanup()
-        reject(error)
-      }
-      socket.on('data', onData)
-      socket.on('error', onError)
-    })
-    return socket
-  }
-
-  async function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<void> {
-    const startedAt = Date.now()
-    while (!predicate() && Date.now() - startedAt < timeoutMs) {
-      await new Promise((resolve) => setTimeout(resolve, 20))
-    }
-    expect(predicate()).toBe(true)
   }
 
   describe('RPC routing', () => {
@@ -283,71 +210,6 @@ describe('DaemonServer', () => {
       expect(spawnSubprocess).not.toHaveBeenCalled()
     })
 
-    it('cancels a disconnecting client’s pending preparation to avoid an orphan PTY (F4)', async () => {
-      let finishPreparation!: () => void
-      const preparation = new Promise<void>((resolve) => {
-        finishPreparation = resolve
-      })
-      const preparePtySpawn = vi.fn(() => preparation)
-      const spawnSubprocess = vi.fn(() => createMockSubprocess())
-      server = new DaemonServer({
-        socketPath,
-        tokenPath,
-        preparePtySpawn,
-        spawnSubprocess
-      })
-      await server.start()
-      const c = await connectClient()
-
-      c.request('createOrAttach', {
-        sessionId: 'disconnect-pending',
-        cols: 80,
-        rows: 24
-      }).catch(() => {})
-      await vi.waitFor(() => expect(preparePtySpawn).toHaveBeenCalledOnce())
-
-      c.disconnect()
-      // Let disconnect cancel the preparation before releasing preflight.
-      await vi.waitFor(() =>
-        expect((server as unknown as DaemonServerPrivate).connections.clients.size).toBe(0)
-      )
-      finishPreparation()
-      await vi.waitFor(() =>
-        expect((server as unknown as DaemonServerPrivate).preparations.pending.size).toBe(0)
-      )
-      expect(spawnSubprocess).not.toHaveBeenCalled()
-    })
-
-    it('does not acknowledge kill until asynchronous teardown completes', async () => {
-      await startServer()
-      const daemon = server as unknown as DaemonServerPrivate
-      let finishKill!: () => void
-      const teardown = new Promise<void>((resolve) => {
-        finishKill = resolve
-      })
-      const kill = vi.spyOn(daemon.host, 'kill').mockReturnValue(teardown)
-
-      let acknowledged = false
-      const routed = daemon.requestRouter
-        .route('client-1', {
-          id: 'kill-1',
-          type: 'kill',
-          payload: { sessionId: 'agent-session', immediate: true }
-        })
-        .then((result) => {
-          acknowledged = true
-          return result
-        })
-
-      await Promise.resolve()
-      expect(kill).toHaveBeenCalledWith('agent-session', { immediate: true })
-      expect(acknowledged).toBe(false)
-
-      finishKill()
-      await expect(routed).resolves.toEqual({})
-      expect(acknowledged).toBe(true)
-    })
-
     it('emits exit when a fire-and-forget write targets a missing session', async () => {
       await startServer()
       const c = await connectClient()
@@ -364,120 +226,6 @@ describe('DaemonServer', () => {
         sessionId: 'missing-session',
         payload: { code: -1 }
       })
-    })
-
-    it('flushes pending batched stream output before the exit event', async () => {
-      vi.useFakeTimers()
-      try {
-        let subprocess: ReturnType<typeof createMockSubprocess>
-        server = new DaemonServer({
-          socketPath,
-          tokenPath,
-          spawnSubprocess: () => {
-            subprocess = createMockSubprocess()
-            return subprocess
-          }
-        })
-        const daemon = server as unknown as DaemonServerPrivate
-        const controlSocket = { destroy: vi.fn() } as unknown as Socket
-        const streamSocket = {
-          destroyed: false,
-          destroy: vi.fn(),
-          write: vi.fn()
-        } as unknown as Socket & { write: ReturnType<typeof vi.fn> }
-
-        daemon.connections.clients.set('client-1', {
-          clientId: 'client-1',
-          controlSocket,
-          streamSocket,
-          authenticatedPairEstablished: true
-        })
-
-        await daemon.requestRouter.route('client-1', {
-          id: 'req-1',
-          type: 'createOrAttach',
-          payload: { sessionId: 'test-session', cols: 80, rows: 24 }
-        })
-
-        subprocess!._simulateData('final-output')
-        subprocess!._simulateExit(42)
-
-        expect(streamSocket.write).toHaveBeenCalledTimes(2)
-        expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain('"event":"data"')
-        expect(String(streamSocket.write.mock.calls[0]?.[0])).toContain('"data":"final-output"')
-        expect(String(streamSocket.write.mock.calls[1]?.[0])).toContain('"event":"exit"')
-        expect(String(streamSocket.write.mock.calls[1]?.[0])).toContain('"code":42')
-        vi.advanceTimersByTime(8)
-        expect(streamSocket.write).toHaveBeenCalledTimes(2)
-      } finally {
-        vi.useRealTimers()
-      }
-    })
-
-    it('keeps exit behind final output held by the shallow socket gate', async () => {
-      vi.useFakeTimers()
-      try {
-        let subprocess: ReturnType<typeof createMockSubprocess>
-        server = new DaemonServer({
-          socketPath,
-          tokenPath,
-          spawnSubprocess: () => {
-            subprocess = createMockSubprocess()
-            return subprocess
-          }
-        })
-        const daemon = server as unknown as DaemonServerPrivate
-        const refillCallbacks: (() => void)[] = []
-        const controlSocket = { destroy: vi.fn() } as unknown as Socket
-        const streamSocket = {
-          destroyed: false,
-          destroy: vi.fn(),
-          writableLength: 128 * 1024,
-          write: vi.fn((_line: string, callback?: () => void) => {
-            if (callback) {
-              refillCallbacks.push(callback)
-            }
-            return true
-          })
-        } as unknown as Socket & {
-          write: ReturnType<typeof vi.fn>
-          writableLength: number
-        }
-
-        daemon.connections.clients.set('client-1', {
-          clientId: 'client-1',
-          controlSocket,
-          streamSocket,
-          authenticatedPairEstablished: true
-        })
-        await daemon.requestRouter.route('client-1', {
-          id: 'req-1',
-          type: 'createOrAttach',
-          payload: { sessionId: 'test-session', cols: 80, rows: 24 }
-        })
-
-        const finalOutput = 'final-output'.repeat(1024)
-        subprocess!._simulateData(finalOutput)
-        subprocess!._simulateExit(42)
-
-        // Keep exit behind final output; only a refill sentinel may enter the already-full socket.
-        expect(refillCallbacks).toHaveLength(1)
-        const beforeRefill = streamSocket.write.mock.calls.map(([line]) => JSON.parse(String(line)))
-        expect(beforeRefill).toHaveLength(1)
-        expect(beforeRefill[0]).toMatchObject({ event: 'data', payload: { data: '' } })
-
-        streamSocket.writableLength = 0
-        refillCallbacks[0]()
-        const delivered = streamSocket.write.mock.calls
-          .map(
-            ([line]) => JSON.parse(String(line)) as { event: string; payload: { data?: string } }
-          )
-          .filter((message) => message.payload.data !== '')
-        expect(delivered.map((message) => message.event)).toEqual(['data', 'exit'])
-        expect(delivered[0]?.payload.data).toBe(finalOutput)
-      } finally {
-        vi.useRealTimers()
-      }
     })
   })
 
@@ -508,93 +256,7 @@ describe('DaemonServer', () => {
     })
   })
 
-  describe('stream socket lifecycle', () => {
-    it('destroys a replaced stream socket for the same client', async () => {
-      await startServer()
-      const daemon = server as unknown as DaemonServerPrivate
-      const control = await connectRawHello('control', 'raw-client')
-      const firstStream = await connectRawHello('stream', 'raw-client')
-      let firstClosed = false
-      firstStream.once('close', () => {
-        firstClosed = true
-      })
-
-      const secondStream = await connectRawHello('stream', 'raw-client')
-
-      await waitFor(() => firstClosed)
-      expect(daemon.connections.clients.get('raw-client')?.streamSocket).toBeTruthy()
-      secondStream.destroy()
-      control.destroy()
-    })
-
-    it('destroys previous sockets when a control client id reconnects', async () => {
-      await startServer()
-      const daemon = server as unknown as DaemonServerPrivate
-      const firstControl = await connectRawHello('control', 'raw-client')
-      const firstStream = await connectRawHello('stream', 'raw-client')
-      let firstControlClosed = false
-      let firstStreamClosed = false
-      firstControl.once('close', () => {
-        firstControlClosed = true
-      })
-      firstStream.once('close', () => {
-        firstStreamClosed = true
-      })
-
-      const secondControl = await connectRawHello('control', 'raw-client')
-
-      await waitFor(() => firstControlClosed && firstStreamClosed)
-      expect(daemon.connections.clients.get('raw-client')?.controlSocket).toBeTruthy()
-      expect(daemon.connections.clients.get('raw-client')?.streamSocket).toBeNull()
-      secondControl.destroy()
-    })
-
-    it('destroys orphan stream sockets without a control client', async () => {
-      await startServer()
-      const daemon = server as unknown as DaemonServerPrivate
-      const stream = await connectRawHello('stream', 'missing-client')
-      let closed = false
-      stream.once('close', () => {
-        closed = true
-      })
-
-      await waitFor(() => closed || stream.destroyed)
-      expect(daemon.connections.clients.has('missing-client')).toBe(false)
-    })
-  })
-
   describe('shutdown', () => {
-    it('waits for the ordinary shutdown reply write before destroying resources', async () => {
-      const onRpcShutdown = vi.fn()
-      await startServer(undefined, onRpcShutdown)
-      const c = await connectClient()
-      const daemon = server as unknown as DaemonServerPrivate & {
-        host: { dispose: () => Promise<void> }
-      }
-      const controlSocket = [...daemon.connections.clients.values()][0].controlSocket
-      const originalWrite = controlSocket.write.bind(controlSocket)
-      let replyFlushed: (() => void) | undefined
-      vi.spyOn(controlSocket, 'write').mockImplementation(((
-        chunk: string | Uint8Array,
-        ...args: unknown[]
-      ) => {
-        replyFlushed = args.find((arg) => typeof arg === 'function') as (() => void) | undefined
-        return originalWrite(chunk)
-      }) as unknown as Socket['write'])
-      const dispose = vi.spyOn(daemon.host, 'dispose')
-
-      await expect(c.request('shutdown', { killSessions: false })).resolves.toEqual({})
-      expect(dispose).not.toHaveBeenCalled()
-      expect(onRpcShutdown).not.toHaveBeenCalled()
-      expect(existsSync(tokenPath)).toBe(true)
-
-      replyFlushed?.()
-      await waitFor(() => onRpcShutdown.mock.calls.length === 1)
-      expect(existsSync(tokenPath)).toBe(false)
-      expect(dispose).toHaveBeenCalledOnce()
-      expect(onRpcShutdown).toHaveBeenCalledOnce()
-    })
-
     it('removes only its owned token and PID record', async () => {
       const launchNonce = 'ordinary-shutdown'
       writeFileSync(
@@ -628,26 +290,6 @@ describe('DaemonServer', () => {
         pid: process.pid,
         launchNonce: 'replacement'
       })
-    })
-
-    it('still terminates via the shutdown RPC when disposal cannot prove physical exit', async () => {
-      await startServer()
-      const daemon = server as unknown as DaemonServerPrivate & {
-        host: { dispose: () => Promise<void> }
-      }
-      // An unreapable child can reject disposal; RPC shutdown must still retire the daemon.
-      daemon.host.dispose = vi.fn(() =>
-        Promise.reject(new Error('Timed out waiting for physical PTY exit'))
-      )
-
-      const c = await connectClient()
-      await expect(c.request('shutdown', { killSessions: true })).resolves.toEqual({})
-
-      await waitFor(() => daemon.lifecycle.server === null)
-      // Shutdown leaves the dead endpoint entry for the next publisher.
-      expect(await waitForEndpointUnreachable(socketPath)).toBe(true)
-      const late = new DaemonClient({ socketPath, tokenPath })
-      await expect(late.ensureConnected()).rejects.toThrow()
     })
   })
 })

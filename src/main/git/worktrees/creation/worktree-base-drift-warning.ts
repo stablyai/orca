@@ -1,5 +1,5 @@
 import { parseGitRevListAheadBehindCounts } from '../../../../shared/git/refs/git-rev-list-output'
-import type { LocalBaseRefDriftWarning } from '../../../../shared/worktree/base-ref-drift-types'
+import type { LocalBaseRefDriftWarning } from '../../../../shared/worktree/base-refs/base-ref-drift-types'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { resolveLocalWorktreeBaseRef } from './worktree-base-ref-probe'
 import type { GitWorktreeExecOptions } from '../worktree-operation-options'

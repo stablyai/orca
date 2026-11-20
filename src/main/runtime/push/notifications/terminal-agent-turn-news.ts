@@ -4,7 +4,7 @@ import { mainAgentTurnInterrupted } from '../../../../shared/agent-status/lifecy
 import { agentTurnEndedOnPurpose } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { AGENT_DONE_QUIET_MS } from '../../../../shared/agent-status/lifecycle/agent-transitions'
-import { isPiCompatibleAgentType } from '../../../../shared/pi-agent-kind'
+import { isPiCompatibleAgentType } from '../../../../shared/agent-launch/catalog/pi-agent-kind'
 
 export type TerminalAgentTurnNewsItem = {
   paneKey: string
@@ -16,7 +16,9 @@ export type TerminalAgentTurnNewsDeps<Prepared> = {
   readHookRow: (paneKey: string) => AgentStatusIpcPayload | null
   /** Runs when the news is decided, so what it reads is that moment's even if delivery waits. */
   prepare: (news: TerminalAgentTurnNewsItem) => Prepared
-  deliver: (prepared: Prepared) => void
+  /** `row` is the turn's row at delivery: a Stop's reply read from its transcript can land after the
+   *  Stop decided the news, and only the row, never what `prepare` read, takes it. */
+  deliver: (prepared: Prepared, row: AgentStatusIpcPayload) => void
   setTimer: (run: () => void, delayMs: number) => { cancel: () => void }
   /** Opt-in: a turn began (a prompt went in), told at once. */
   started?: (news: TerminalAgentTurnNewsItem) => void
@@ -71,7 +73,10 @@ export class TerminalAgentTurnNews<Prepared> {
     ) {
       return
     }
-    this.cancelPending(paneKey)
+    // Departure retracts occupancy; an accepted finish still owns its queued delivery.
+    if (change.to !== 'rest') {
+      this.cancelPending(paneKey)
+    }
     if (transition === 'prompt-submitted' || change.to === 'rest') {
       this.finishedTurnByPane.delete(paneKey)
     }
@@ -89,6 +94,11 @@ export class TerminalAgentTurnNews<Prepared> {
     const waitOutQuiet = this.workingSeen.has(paneKey) || isPiCompatibleAgentType(row.agentType)
     this.workingSeen.delete(paneKey)
     this.announce(paneKey, change.workspace.worktreeId, row, waitOutQuiet)
+  }
+
+  /** A finish decided for this pane and still waiting out its quiet window. */
+  hasPending(paneKey: string): boolean {
+    return this.pendingByPane.has(paneKey)
   }
 
   dispose(): void {
@@ -176,14 +186,16 @@ export class TerminalAgentTurnNews<Prepared> {
     }
     const prepared = this.deps.prepare({ paneKey, worktreeId, row })
     if (!waitOutQuiet) {
-      this.deps.deliver(prepared)
+      this.deps.deliver(prepared, row)
       return
     }
     const pending: PendingFinish = { quiet: null }
     this.pendingByPane.set(paneKey, pending)
     pending.quiet = this.deps.setTimer(() => {
       this.pendingByPane.delete(paneKey)
-      this.deps.deliver(prepared)
+      const latest = this.deps.readHookRow(paneKey)
+      const sameTurn = latest?.state === row.state && latest.stateStartedAt === row.stateStartedAt
+      this.deps.deliver(prepared, sameTurn ? latest : row)
     }, AGENT_DONE_QUIET_MS)
   }
 

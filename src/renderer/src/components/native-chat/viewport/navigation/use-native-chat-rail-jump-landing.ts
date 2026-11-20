@@ -10,6 +10,7 @@ export function useNativeChatRailJumpLanding({
   scrollRef,
   scrollMessageToTop,
   onActivate,
+  onScroll,
   release
 }: {
   railJump: { messageId: string; requestId: number } | null
@@ -17,6 +18,7 @@ export function useNativeChatRailJumpLanding({
   scrollRef: React.RefObject<HTMLDivElement | null>
   scrollMessageToTop: (element: HTMLElement) => void
   onActivate: (id: string) => void
+  onScroll?: () => void
   release: (request: null) => void
 }): void {
   const servicedRef = useRef(0)
@@ -28,9 +30,10 @@ export function useNativeChatRailJumpLanding({
     const index = nativeChatSlotIndexOf(slots, railJump.messageId)
     const row = scrollRef.current?.querySelector<HTMLElement>(`[data-index="${index}"]`)
     if (row) {
+      onScroll?.()
       scrollMessageToTop(row)
     }
     onActivate(railJump.messageId)
     release(null)
-  }, [onActivate, railJump, release, scrollMessageToTop, scrollRef, slots])
+  }, [onActivate, onScroll, railJump, release, scrollMessageToTop, scrollRef, slots])
 }

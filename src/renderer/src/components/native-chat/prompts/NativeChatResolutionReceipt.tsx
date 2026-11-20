@@ -2,6 +2,13 @@ import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatMessageTimestamp } from '../messages/rows/NativeChatMessageTimestamp'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
+import { NativeChatUrlRequestReceipt } from './NativeChatUrlRequest'
+import {
+  isPlanApprovalSubject,
+  urlApprovalProgress
+} from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
+import { NativeChatApprovalRecord } from './NativeChatApprovalRecord'
+import { ownApprovalRecordLine } from './native-chat-approval-record'
 import {
   NATIVE_CHAT_RECEIPT_COPY,
   nativeChatReceiptAnswerHeading,
@@ -9,7 +16,7 @@ import {
   nativeChatReceiptDevice,
   nativeChatReceiptSubject,
   type NativeChatResolvedPrompt
-} from '../../../../../shared/native-chat/native-chat-resolution-receipt'
+} from '../../../../../shared/native-chat/input/questions/native-chat-resolution-receipt'
 
 export function NativeChatResolutionReceipt({
   body,
@@ -33,6 +40,14 @@ export function NativeChatResolutionReceipt({
         disclosureKey={askDisclosureKey}
       />
     ) : null
+  }
+  const urlProgress = body.kind === 'approval' ? urlApprovalProgress(body) : null
+  if (body.kind === 'approval' && urlProgress) {
+    return <NativeChatUrlRequestReceipt body={body} {...urlProgress} />
+  }
+  // A plan review keeps its full receipt: the plan is what was answered.
+  if (body.kind === 'approval' && !isPlanApprovalSubject(body.subject)) {
+    return <NativeChatApprovalRecord line={ownApprovalRecordLine(body, t)} />
   }
   const { resolution } = body
   const device = nativeChatReceiptDevice(resolution, {

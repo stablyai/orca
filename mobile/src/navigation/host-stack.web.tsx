@@ -15,21 +15,25 @@ import {
   reportAfterFirstPaint,
   useRouteScreenPaintReporter,
   type PageFrameScheduler
-} from '../mobile-web-shell/bridge/page-first-paint'
+} from '../mobile-web-shell/bridge/page-lifecycle/page-first-paint'
 
 // Expo native-stack’s web view ignores animation and switches display; reuse StackRouter with a view that retains popped screens through their exit slide.
 export function HostStack({ animation }: { animation: HostStackAnimation }) {
   useMobileTranslation()
-  const router = useShellOpenTarget()
   useReportedPageLocation()
   return (
-    <Navigator router={router}>
+    <Navigator>
       {HOST_STACK_SCREENS.map(({ name, title }) => (
         <Navigator.Screen key={name} name={name} options={{ title }} />
       ))}
-      <HostStackView animation={animation} />
+      <HostStackContent animation={animation} />
     </Navigator>
   )
+}
+
+// Mount the view on the stack the shell's open target leaves, so it starts with only the target drawn.
+function HostStackContent({ animation }: { animation: HostStackAnimation }) {
+  return useShellOpenTarget() ? null : <HostStackView animation={animation} />
 }
 
 type NavigatorContext = ReturnType<typeof Navigator.useContext>
@@ -194,7 +198,7 @@ const styles = themedStyleSheet(() => ({
     overflow: 'hidden'
   },
   screen: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: colors.bgBase
   },
   transparent: {
