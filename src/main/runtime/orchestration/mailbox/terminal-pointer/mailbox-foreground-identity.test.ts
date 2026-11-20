@@ -326,5 +326,7 @@ it.each([
     undefined,
     'mailbox-incarnation'
   )
-  expect(result).toEqual({ foreground: 'unknown' })
+  expect(result).toEqual(
+    host.windows ? { foreground: 'unknown', agentUnprovable: true } : { foreground: 'unknown' }
+  )
 })
