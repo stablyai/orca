@@ -17,6 +17,7 @@ import { EMPTY_HEAD_IDENTITY_SCOPE } from './worktree-head-identity-scope'
 
 const REPO_ID = 'repo-1'
 const tempDirs: string[] = []
+let nextWindowId = 40
 
 function git(cwd: string, ...args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
@@ -45,11 +46,13 @@ function createWatch(
   runtimeEnvironmentActive = false
 ): WorktreeBaseNotificationWatch & { sent: { channel: string; payload: unknown }[] } {
   const sent: { channel: string; payload: unknown }[] = []
+  // Unique ids so readers in one test each receive their own window's publications.
+  nextWindowId += 2
   const mainWindow = {
-    id: 41,
+    id: nextWindowId,
     isDestroyed: () => false,
     webContents: {
-      id: 42,
+      id: nextWindowId + 1,
       send: (channel: string, payload: unknown) => sent.push({ channel, payload })
     }
   }
