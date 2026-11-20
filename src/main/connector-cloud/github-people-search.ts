@@ -1,9 +1,10 @@
 // "Who can ask" › Add on GitHub: the people the owner works with, found through the host's own `gh`.
 // The cloud only resolves one exact username, so typing a teammate's first name found a stranger.
 //
-// Budgets, per host process: at most one gh child at a time, one search queued behind it (a newer
-// one replaces it), each child killed at LOCAL_DEADLINE_MS and never retried; an account's roster
-// (an organization's members, a person's own repositories) is read at most once per ROSTER_TTL_MS.
+// Budget, per host process: one gh call per search and at most one alive; a newer search aborts the
+// one in flight (from any client: they share the host's gh). One deadline, LOCAL_DEADLINE_MS, covers
+// the whole call including the runner's binary fallback, and the call is never retried. Nothing is
+// cached, so every result comes with the account it was read as.
 import { ghExecFileAsync } from '../git/command-runner/hosted-cli/gh-exec-file'
 import { extractExecError } from '../git/command-runner/process-capture/exec-error'
 import {
@@ -13,210 +14,107 @@ import {
   type ConnectorGitHubUsersResponse
 } from '../../shared/connector-bot-github-contract'
 import type { BotSlackResult } from '../../shared/connector-bot-slack-contract'
+import type { GitHubPeopleScope } from '../../shared/bots/github-people-scope'
 import {
-  GITHUB_PEOPLE_MAX_OWNERS,
-  GITHUB_PEOPLE_MAX_REPOSITORIES,
-  type GitHubPeopleScope
-} from '../../shared/bots/github-people-scope'
-import {
-  RepositoryAnswer,
-  RosterAnswer,
-  RosterViewer,
-  finish,
-  graphqlArgs,
-  json,
-  peopleOf,
-  repositoryOf,
-  repositoryQuery,
-  rosterFrom,
-  rosterQuery,
-  type GitHubPerson,
-  type LocalSearch,
-  type Roster
+  MAX_GITHUB_PEOPLE,
+  peopleQuery,
+  rankGitHubPeople,
+  readPeople,
+  targetOf,
+  type GitHubPerson
 } from './github-people-query'
 
 export {
   MAX_GITHUB_PEOPLE,
+  peopleQuery,
   rankGitHubPeople,
-  repositoryQuery,
-  rosterQuery,
-  type GitHubPerson,
-  type LocalSearch
+  type GitHubPerson
 } from './github-people-query'
 
-/** A keystroke's search is interactive: past this the exact-username answer goes out alone. */
-export const LOCAL_DEADLINE_MS = 5_000
-export const ROSTER_TTL_MS = 5 * 60_000
+/** The exact-username answer waits at most this long for the repositories' answer. */
+export const LOCAL_DEADLINE_MS = 4_000
 
-export type GhRun = (args: string[]) => Promise<string>
+export type GhRun = (args: string[], signal: AbortSignal) => Promise<string>
 
-// No retries (`idempotent: false`): a retry's backoff would hold the exact answer past the deadline.
-const ghRun: GhRun = async (args) => {
+// No retries (`idempotent: false`): a retry's backoff would outlast the deadline. The signal kills
+// the child, and any fallback child, when the deadline passes or a newer search starts.
+const ghRun: GhRun = async (args, signal) => {
   try {
     const { stdout } = await ghExecFileAsync(args, {
       encoding: 'utf-8',
       host: 'github.com',
       idempotent: false,
-      timeout: LOCAL_DEADLINE_MS
+      timeout: LOCAL_DEADLINE_MS,
+      signal
     })
     return stdout
   } catch (error) {
-    // A GraphQL error on one alias exits non-zero but still prints the other aliases' data.
+    // A GraphQL error on one source exits non-zero but still prints the others' data.
     return extractExecError(error).stdout
   }
 }
 
+export type LocalSearch = {
+  people: GitHubPerson[]
+  /** Some of the scope or its matches was not searched or not returned. */
+  limited: boolean
+  /** Typing more would bring in matches left out; false when the cut doesn't depend on it. */
+  narrowable: boolean
+  /** The account gh read every source as, from the same call; null when it did not say. */
+  viewer: string | null
+}
+
 export class GitHubPeopleSearch {
-  private rosters = new Map<string, { roster: Roster; at: number }>()
-  /** Who the last roster read ran as: an organization-only search asks gh nothing else. */
-  private rosterViewer: string | null = null
-  private running = false
-  private queued: { start: () => void; supersede: () => void } | null = null
+  private inFlight: AbortController | null = null
 
   constructor(
     private readonly run: GhRun = ghRun,
-    private readonly now: () => number = Date.now
+    private readonly deadlineMs: number = LOCAL_DEADLINE_MS
   ) {}
 
-  /** Runs `task` once no other search is running; a newer call replaces a waiting one, which
-   *  resolves null without starting anything. */
-  private exclusive<T>(task: () => Promise<T>): Promise<T | null> {
-    return new Promise<T | null>((resolve) => {
-      const start = (): void => {
-        this.running = true
-        void task()
-          .then(resolve, () => resolve(null))
-          .finally(() => {
-            this.running = false
-            const next = this.queued
-            this.queued = null
-            next?.start()
-          })
+  /** The people of `scope` matching `query`, best first; null when no source could be read (gh
+   *  missing, signed out, offline, past the deadline) or a newer search replaced this one. */
+  async search(query: string, scope: GitHubPeopleScope): Promise<LocalSearch | null> {
+    this.inFlight?.abort()
+    const controller = new AbortController()
+    this.inFlight = controller
+    const deadline = setTimeout(() => controller.abort(), this.deadlineMs)
+    try {
+      const { target, dropped } = targetOf(scope)
+      const built = peopleQuery(query.trim(), target)
+      const args = ['api', 'graphql', '-f', `query=${built.document}`]
+      for (const [key, value] of Object.entries(built.vars)) {
+        args.push('-f', `${key}=${value}`)
       }
-      if (!this.running) {
-        start()
-        return
+      const stdout = await this.run(args, controller.signal)
+      const read = controller.signal.aborted ? null : readPeople(stdout, target)
+      // The viewer alone is not a search: success needs at least one source read.
+      if (!read || read.sourcesRead === 0) {
+        return null
       }
-      this.queued?.supersede()
-      this.queued = { start, supersede: () => resolve(null) }
-    })
-  }
-
-  private async rostersOf(owners: string[]): Promise<Roster[]> {
-    const rosters: Roster[] = []
-    const missing: string[] = []
-    for (const owner of owners) {
-      const cached = this.rosters.get(owner.toLowerCase())
-      if (cached && this.now() - cached.at < ROSTER_TTL_MS) {
-        rosters.push(cached.roster)
-      } else {
-        missing.push(owner)
+      const ranked = rankGitHubPeople(read.people, query)
+      const overflow = ranked.length > MAX_GITHUB_PEOPLE
+      return {
+        people: ranked.slice(0, MAX_GITHUB_PEOPLE),
+        limited:
+          scope.more || dropped || read.lossy || read.scopeCut || read.matchesCapped || overflow,
+        narrowable: read.matchesCapped || overflow,
+        viewer: read.viewer
+      }
+    } finally {
+      clearTimeout(deadline)
+      if (this.inFlight === controller) {
+        this.inFlight = null
       }
     }
-    if (missing.length === 0) {
-      return rosters
-    }
-    const built = rosterQuery(missing)
-    const answer = json(await this.run(graphqlArgs(built.document, built.vars)))
-    const parsed = RosterAnswer.safeParse(answer)
-    const viewer = RosterViewer.safeParse(answer)
-    this.rosterViewer = viewer.success ? viewer.data.data.viewer.login : null
-    missing.forEach((owner, index) => {
-      const roster = rosterFrom(parsed.success ? parsed.data.data[`a${index}`] : undefined)
-      rosters.push(roster)
-      // An unreadable roster (gh failed) is asked again next time rather than remembered.
-      if (roster.kind !== 'unreadable') {
-        this.rosters.set(owner.toLowerCase(), { roster, at: this.now() })
-      }
-    })
-    return rosters
-  }
-
-  /** The people of `scope` matching `query`, best first, with how much of the scope was searched
-   *  and as whom; null when gh gave nothing usable (missing, signed out, offline, too slow) or a
-   *  newer search took this one's place. */
-  search(query: string, scope: GitHubPeopleScope): Promise<LocalSearch | null> {
-    return this.exclusive(async () => {
-      const owners = scope.owners
-        .filter((login) => GITHUB_LOGIN_PATTERN.test(login))
-        .slice(0, GITHUB_PEOPLE_MAX_OWNERS)
-      const rosters = owners.length > 0 ? await this.rostersOf(owners) : []
-      let limited = scope.more || owners.length < scope.owners.length
-      const people: GitHubPerson[] = []
-      const names = [...scope.repositories]
-      for (const roster of rosters) {
-        if (roster.kind === 'organization') {
-          people.push(...roster.people)
-        } else if (roster.kind === 'user') {
-          names.push(...roster.repositories)
-        }
-        limited ||= roster.kind === 'unreadable' || !roster.complete
-      }
-      const unique = new Map<string, [string, string]>()
-      for (const name of names) {
-        const repo = repositoryOf(name)
-        limited ||= repo === null
-        if (repo) {
-          unique.set(name.toLowerCase(), repo)
-        }
-      }
-      const searched = [...unique.values()].slice(0, GITHUB_PEOPLE_MAX_REPOSITORIES)
-      limited ||= unique.size > searched.length
-      const answer =
-        searched.length > 0 || people.length === 0
-          ? await this.searchRepositories(query.trim(), searched)
-          : null
-      if (answer) {
-        return finish(
-          [...people, ...answer.people],
-          query,
-          limited || answer.limited,
-          answer.viewer
-        )
-      }
-      // The repositories gave nothing, but an organization roster read earlier still answers.
-      return people.length > 0
-        ? finish(
-            people,
-            query,
-            limited || searched.length > 0,
-            searched.length > 0 ? null : this.rosterViewer
-          )
-        : null
-    })
-  }
-
-  private async searchRepositories(
-    query: string,
-    repositories: [string, string][]
-  ): Promise<LocalSearch | null> {
-    const built = repositoryQuery(query, repositories)
-    const parsed = RepositoryAnswer.safeParse(
-      json(await this.run(graphqlArgs(built.document, built.vars)))
-    )
-    const data = parsed.success ? parsed.data.data : null
-    if (!data) {
-      return null
-    }
-    let limited = false
-    const people: GitHubPerson[] = []
-    repositories.forEach((_repo, index) => {
-      const users = data[`r${index}`]?.assignableUsers
-      if (!users) {
-        limited = true
-        return
-      }
-      people.push(...peopleOf(users.nodes))
-      limited ||= users.totalCount > users.nodes.length
-    })
-    return { people, limited, viewer: data.viewer?.login ?? null }
   }
 }
 
 type CloudUsers = (query: string) => Promise<BotSlackResult<ConnectorGitHubUsersResponse>>
+type Coverage = NonNullable<BotGitHubPeople['coverage']>
 
-/** The picker's answer: people the owner works with, then anyone on GitHub with exactly that
- *  username, each with where they were found and how much was searched. */
+/** The picker's answer: people found in the scope, then anyone on GitHub with exactly that
+ *  username (up to MAX_GITHUB_PEOPLE + 1), each with where they were found and what was searched. */
 export async function findGitHubPeople(
   cloudUsers: CloudUsers,
   query: string,
@@ -230,17 +128,24 @@ export async function findGitHubPeople(
     // The cloud answers one exact username; anything else is not worth a round trip.
     GITHUB_LOGIN_PATTERN.test(login) ? cloudUsers(login) : Promise.resolve(null)
   ])
-  // GitHub off for this account is definitive: nothing found here would mean anything.
-  if (exact && !exact.ok && (exact.error === BOT_GITHUB_OFF || found === null)) {
+  // GitHub off for this account, as the cloud just said, is definitive.
+  if (exact && !exact.ok && exact.error === BOT_GITHUB_OFF) {
     return exact
   }
-  const searched: NonNullable<BotGitHubPeople['coverage']>['local'] = !scoped
-    ? 'none'
-    : found === null
-      ? 'unavailable'
-      : found.limited
-        ? 'limited'
-        : 'full'
+  // No source answered and the exact lookup failed: the error, so the picker offers a retry.
+  if (exact && !exact.ok && found === null) {
+    return exact
+  }
+  const searched: Coverage['local'] =
+    scope === undefined
+      ? 'skipped'
+      : !scoped
+        ? 'none'
+        : found === null
+          ? 'unavailable'
+          : found.limited
+            ? 'limited'
+            : 'full'
   const people = found?.people ?? []
   const known = new Set(people.map((person) => person.id))
   const members: BotGitHubPeople['members'] = people.map((person) => ({
@@ -251,7 +156,7 @@ export async function findGitHubPeople(
   }))
   for (const member of exact?.ok ? exact.value.members : []) {
     if (!known.has(member.id)) {
-      // Only a complete search of the scope shows someone is outside it.
+      // Only a complete search of the scope shows the scope's search didn't find them.
       members.push({
         id: member.id,
         name: member.name,
@@ -267,6 +172,7 @@ export async function findGitHubPeople(
       coverage: {
         local: searched,
         exact: exact === null ? 'skipped' : exact.ok ? 'searched' : 'failed',
+        ...(found?.narrowable ? { narrowable: true } : {}),
         ...(found?.viewer ? { searchedAs: found.viewer } : {})
       }
     }
@@ -274,7 +180,7 @@ export async function findGitHubPeople(
 }
 
 let shared: GitHubPeopleSearch | null = null
-/** The host's one search queue and roster cache. */
+/** The host's one search slot. */
 export function gitHubPeopleSearch(): GitHubPeopleSearch {
   shared ??= new GitHubPeopleSearch()
   return shared

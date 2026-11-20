@@ -30,19 +30,26 @@ export function useGitHubWhoCanAsk(
   const installations = view.status === 'ready' ? view.github.installations : null
   // Search the people of the connected repositories first: those are the owner's teammates.
   // Keyed by content: a state refresh hands over new objects, which must not restart the search.
+  // Until the GitHub state is read, no scope is sent: unknown, not "nothing connected".
   const scopeKey = useMemo(
     () =>
-      JSON.stringify(
-        gitHubPeopleScope(
-          (installations ?? []).filter(
-            (install) => installationId === undefined || install.installationId === installationId
-          )
-        )
-      ),
+      installations === null
+        ? null
+        : JSON.stringify(
+            gitHubPeopleScope(
+              installations.filter(
+                (install) =>
+                  installationId === undefined || install.installationId === installationId
+              )
+            )
+          ),
     [installations, installationId]
   )
-  const scope = useMemo((): GitHubPeopleScope => JSON.parse(scopeKey), [scopeKey])
-  const withOrganizations = scope.owners.length > 0
+  const scope = useMemo(
+    (): GitHubPeopleScope | undefined => (scopeKey === null ? undefined : JSON.parse(scopeKey)),
+    [scopeKey]
+  )
+  const withOrganizations = (scope?.owners.length ?? 0) > 0
   return useMemo(
     (): BotWhoCanAskService => ({
       listed: (members) =>
@@ -55,21 +62,28 @@ export function useGitHubWhoCanAsk(
           : { source: 'github', workspaceId: installationId },
       max: CONNECTOR_CLIENT_LIMITS.maxBotWorkspaceMembers,
       search: async (query) => {
-        const result = await botGitHubCalls(hostId).users({ query, scope })
+        const result = await botGitHubCalls(hostId).users({ query, ...(scope ? { scope } : {}) })
         return result.ok
-          ? { ok: true, value: gitHubWhoCanAskFound(result.value, ownerName, t) }
+          ? {
+              ok: true,
+              value: gitHubWhoCanAskFound(
+                result.value,
+                { query, ownerLogin: ownerName, withOrganizations },
+                t
+              )
+            }
           : result
       },
       errorMessage: (code) => botGitHubErrorMessage(code, hostName),
       searchPlaceholder: t('bots.github.whoCanAsk.searchPeople', 'Search by name or username'),
       peopleHeading: t('bots.github.whoCanAsk.found', 'People on GitHub'),
       scopedHeading: withOrganizations
-        ? t('bots.github.whoCanAsk.inReposAndOrgs', 'People in your repos and orgs')
-        : t('bots.github.whoCanAsk.inRepositories', 'People in your repositories'),
+        ? t('bots.github.whoCanAsk.foundInReposAndOrgs', 'Found in your repos and orgs')
+        : t('bots.github.whoCanAsk.foundInRepos', 'Found in your repos'),
       outsideHeading: t('bots.github.whoCanAsk.elsewhere', 'Elsewhere on GitHub'),
       outsideTag: withOrganizations
-        ? t('bots.github.whoCanAsk.notInReposOrOrgs', 'Not in your repos or orgs')
-        : t('bots.github.whoCanAsk.notInRepos', 'Not in your repos'),
+        ? t('bots.github.whoCanAsk.notFoundInReposOrOrgs', 'Not found in your repos or orgs')
+        : t('bots.github.whoCanAsk.notFoundInRepos', 'Not found in your repos'),
       noMatch: (query) => ({
         title: t('bots.github.whoCanAsk.noPerson', 'No one found for “{{query}}”', { query }),
         detail: t('bots.github.whoCanAsk.checkedWhere', 'Searched your repos and exact usernames.')
