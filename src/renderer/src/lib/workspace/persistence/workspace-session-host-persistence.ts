@@ -298,15 +298,16 @@ export async function persistWorkspaceSessionByHost(
 /** Build local-first full-session snapshots for the beforeunload / quit paths. */
 export function buildWorkspaceSessionHostSnapshots(
   payload: WorkspaceSessionState,
-  state: HostPersistenceState
+  state: HostPersistenceState,
+  acknowledged: AcknowledgedWorkspaceSessionEntries = windowAcknowledgedSessionEntries
 ): WorkspaceSessionHostSnapshot[] {
   // Why 'replace': quit snapshots are applied as full partition sets.
   const slices = splitWorkspaceSessionForWrite(payload, state, 'replace')
   // They replace main's copy, including when the unload is vetoed and the window stays.
-  windowAcknowledgedSessionEntries.forget()
+  acknowledged.forget()
   const remote = nonLocalHostSessionEntries(slices)
   for (const [hostId, hostState] of remote) {
-    windowAcknowledgedSessionEntries.noteSnapshot(hostId, hostState)
+    acknowledged.ownSavedKeys(hostId, hostState)
   }
   return [
     { state: slices[LOCAL_EXECUTION_HOST_ID] ?? payload },

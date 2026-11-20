@@ -36,6 +36,8 @@ export type WorkspaceSessionHostRead = {
   contestedPrimaryHostBySessionKey: Record<string, ExecutionHostId>
   /** Runtime partitions this read actually loaded, so a later write may speak for all of their rows. */
   hydratedRuntimeSessionHostIds: ExecutionHostId[]
+  /** Partitions read with no rows parked for another host: their saved relay ids are this window's. */
+  wholeReadPartitions: [ExecutionHostId, WorkspaceSessionState][]
 }
 
 const WORKSPACE_SESSION_KEYED_FIELDS = [
@@ -223,8 +225,21 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
       primaryHostBySessionKey[workspaceId] = hostId
     }
   }
+  const wholeReadPartitions: [ExecutionHostId, WorkspaceSessionState][] = []
+  const localSlice = slices[LOCAL_EXECUTION_HOST_ID]
+  for (const entry of [
+    ...(localSlice ? [[LOCAL_EXECUTION_HOST_ID, localSlice] as const] : []),
+    ...nonLocalHostSessionEntries(slices),
+    ...sshPartitions
+  ]) {
+    const [hostId, slice] = entry
+    if (slice && !shadow[hostId]) {
+      wholeReadPartitions.push([hostId, slice])
+    }
+  }
   return {
     session,
+    wholeReadPartitions,
     // Derive owners from surviving merged rows, never parked raw rows, or startup creates runtime placeholders for local winners.
     runtimeHostIdByWorkspaceSessionKey: buildRuntimeHostIdByWorkspaceSessionKey(merged.slices),
     contestedHostWorkspaceSessions: shadow,

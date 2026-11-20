@@ -8,6 +8,9 @@ type SessionField = keyof WorkspaceSessionState
 export type WorkspaceSessionFieldEntryChanges = {
   set: Record<string, unknown>
   remove: string[]
+  /** Per removed key, the value the window last wrote: main keeps a key another writer has since
+   *  replaced. Keys without one are removed unconditionally. */
+  removeIfStored?: Record<string, unknown>
 }
 
 /** A window save that carries whole values only for fields that aren't keyed records (or that main
@@ -30,7 +33,20 @@ function isFieldEntryChanges(value: unknown): value is WorkspaceSessionFieldEntr
     isWorkspaceSessionRecord(value) &&
     isWorkspaceSessionRecord(value.set) &&
     Array.isArray(value.remove) &&
-    value.remove.every((key) => typeof key === 'string')
+    value.remove.every((key) => typeof key === 'string') &&
+    (value.removeIfStored === undefined || isWorkspaceSessionRecord(value.removeIfStored))
+  )
+}
+
+/** Whether `key` still holds what the window expected to remove (or carries no expectation). */
+function removalApplies(
+  record: Record<string, unknown>,
+  changes: WorkspaceSessionFieldEntryChanges,
+  key: string
+): boolean {
+  const expected = changes.removeIfStored
+  return (
+    !expected || !Object.hasOwn(expected, key) || structuralValuesEqual(record[key], expected[key])
   )
 }
 
@@ -52,7 +68,9 @@ export function applyWorkspaceSessionEntriesPatch(
     const current = storedFields[field]
     const next: Record<string, unknown> = isWorkspaceSessionRecord(current) ? { ...current } : {}
     for (const key of changes.remove) {
-      delete next[key]
+      if (removalApplies(next, changes, key)) {
+        delete next[key]
+      }
     }
     Object.assign(next, changes.set)
     Reflect.set(whole, field, next)
@@ -82,7 +100,9 @@ export function fieldsStoredDifferently(
     const current = storedFields[field]
     const record = isWorkspaceSessionRecord(current) ? current : {}
     const same =
-      changes.remove.every((key) => !Object.hasOwn(record, key)) &&
+      changes.remove.every(
+        (key) => !Object.hasOwn(record, key) || !removalApplies(record, changes, key)
+      ) &&
       Object.entries(changes.set).every(
         ([key, value]) => Object.hasOwn(record, key) && structuralValuesEqual(record[key], value)
       )

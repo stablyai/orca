@@ -11,6 +11,7 @@ import { waitForNativeChatDraftsAtStartup } from '../../components/native-chat/d
 import { WORKTREE_REFRESH_CONCURRENCY } from '../../store/slices/worktrees/listing/worktree-slice-constants'
 import { sweepRestoredCodexPanesForStaleAccounts } from '../../lib/agent-session/accounts/codex/codex-stale-pane-sweep'
 import { fetchWorkspaceSessionWithRuntimeHostOwners } from '../../lib/workspace/persistence/workspace-session-host-hydration'
+import { windowAcknowledgedSessionEntries } from '../../lib/workspace/persistence/workspace-session-acknowledged-entries'
 import {
   collectFolderWorkspaceKeysFromSession,
   collectWorktreeHydrationRepoIdsFromSession
@@ -196,6 +197,9 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
               useAppStore.getState().wslMovedProjects,
               sessionRead.runtimeHostIdByWorkspaceSessionKey
             )
+          }
+          for (const [hostId, partition] of sessionRead.wholeReadPartitions) {
+            windowAcknowledgedSessionEntries.ownSavedKeys(hostId, partition)
           }
           timeRendererStartupSyncStep('hydrate-session-stores', () => {
             // The read's host-ownership fields are named as the hydration options it feeds.
