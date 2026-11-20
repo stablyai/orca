@@ -1,24 +1,30 @@
 import { expect, it } from 'vitest'
 import { agentCopyMenuRows } from './agent-copy-menu-rows'
 
-it("offers a copy on its agent's chat and CLI rows, or a terminal when the agent has none", () => {
-  const copies = [
-    { id: 'claude.code-mode', name: 'Claude code-mode', agent: 'claude' as const },
-    { id: 'codex.fast', name: 'Codex fast', agent: 'codex' as const },
-    { id: 'gemini.flash', name: 'Gemini flash', agent: 'gemini' as const }
-  ]
+it('offers a copy as a chat and a CLI where its agent is, and nowhere else', () => {
+  const copy = (id: string, agent: 'claude' | 'codex' | 'gemini' | 'grok') => ({
+    id,
+    name: id,
+    agent
+  })
   const rows = agentCopyMenuRows(
     [
       { kind: 'chat', agent: 'claude' },
-      { kind: 'cli', agent: 'claude' },
-      { kind: 'chat-unavailable', agent: 'codex', reason: 'wsl' }
+      { kind: 'chat-unavailable', agent: 'codex', reason: 'wsl' },
+      { kind: 'cli', agent: 'grok' }
     ],
-    copies,
-    ['claude', 'codex']
+    [
+      copy('claude.a', 'claude'),
+      copy('codex.b', 'codex'),
+      copy('gemini.c', 'gemini'),
+      copy('grok.d', 'grok')
+    ],
+    ['claude', 'codex', 'grok']
   )
-  expect(rows).toEqual([
-    { kind: 'chat', agent: 'claude', copy: { id: 'claude.code-mode', name: 'Claude code-mode' } },
-    { kind: 'cli', agent: 'claude', copy: { id: 'claude.code-mode', name: 'Claude code-mode' } },
-    { kind: 'terminal', agent: 'codex', copy: { id: 'codex.fast', name: 'Codex fast' } }
+  expect(rows.map((row) => `${row.kind}:${row.copy?.id}`)).toEqual([
+    'chat:claude.a',
+    'cli:claude.a',
+    'cli:codex.b',
+    'cli:grok.d'
   ])
 })

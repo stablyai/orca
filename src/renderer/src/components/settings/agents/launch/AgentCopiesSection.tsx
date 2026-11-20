@@ -98,7 +98,6 @@ export function AgentCopiesSection({
         'settings.agents.copiesDescription',
         'Each copy runs its agent with its own command, arguments and environment. Pick it by name wherever you start an agent, or pass its ID to --agent.'
       )}
-      scrollLabel={t('settings.agents.copiesRegion', 'Agent copies')}
     >
       {copies.map((copy) => (
         <AgentCopyRow
