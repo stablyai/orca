@@ -16,6 +16,7 @@ import { listCodexSessionJsonlFilesIncrementally } from '../rollouts/codex-sessi
 import { linkCodexSessionFile, tryHardlinkCodexSessionFile } from '../rollouts/codex-session-link'
 import type { CodexSessionBridgeIncrementalOptions } from '../rollouts/codex-session-file-listing'
 import {
+  settleLegacySessionCopyName,
   swapLegacySessionCopy,
   type LegacySessionCopyReadBudget
 } from './codex-legacy-session-copy'
@@ -86,11 +87,21 @@ export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
   )) {
     summary.scannedFiles += 1
     const relativePath = relative(systemSessionsRoot, systemSessionFilePath)
-    const bridged = bridgeSystemCodexSessionFile(
+    const managedSessionFilePath = join(managedSessionsRoot, relativePath)
+    let bridged = bridgeSystemCodexSessionFile(
       systemSessionFilePath,
-      join(managedSessionsRoot, relativePath),
-      relativePath
+      managedSessionFilePath,
+      relativePath,
+      hasLegacyCopies ? legacySessionCopyMarkerPath(managedHome, relativePath) : undefined
     )
+    if (bridged === 'moved-aside') {
+      await settleLegacySessionCopyName({ managedHome, relativePath })
+      bridged = bridgeSystemCodexSessionFile(
+        systemSessionFilePath,
+        managedSessionFilePath,
+        relativePath
+      )
+    }
     if (bridged === 'existing') {
       if (hasLegacyCopies && existsSync(legacySessionCopyMarkerPath(managedHome, relativePath))) {
         // Past the read budget a copy waits for a later pass; only its marker is hidden from older builds.
@@ -115,8 +126,9 @@ export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
 function bridgeSystemCodexSessionFile(
   systemSessionFilePath: string,
   managedSessionFilePath: string,
-  relativePath: string
-): boolean | 'existing' {
+  relativePath: string,
+  movedAsideMarkerPath?: string
+): boolean | 'existing' | 'moved-aside' {
   if (existsSync(managedSessionFilePath)) {
     return (
       replaceSymlinkSessionBridgeWithHardlink(
@@ -125,6 +137,10 @@ function bridgeSystemCodexSessionFile(
         relativePath
       ) || 'existing'
     )
+  }
+  // A swap stopped with the copy moved aside: linking the source here would hide the copy's bytes.
+  if (movedAsideMarkerPath && existsSync(movedAsideMarkerPath)) {
+    return 'moved-aside'
   }
   mkdirSync(dirname(managedSessionFilePath), { recursive: true })
   return linkSystemCodexSessionFile(systemSessionFilePath, managedSessionFilePath, relativePath)

@@ -281,6 +281,22 @@ describe('legacy session copy swap', () => {
     expect(existsSync(markerPath)).toBe(false)
   })
 
+  it('gives back a copy moved aside with a late turn instead of linking its source there', async () => {
+    legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
+    const aside = `${copyPath}.orca-legacy-copy.1`
+    writeFileSync(
+      markerPath,
+      JSON.stringify({ ...JSON.parse(readFileSync(markerPath, 'utf-8')), aside: basename(aside) })
+    )
+    // A Codex wrote a turn just before the move, then Orca quit before finishing the swap.
+    writeFileSync(copyPath, `${OLD_TURNS}{"late":true}\n`)
+    renameSync(copyPath, aside)
+
+    await bridgePass()
+
+    expect(readFileSync(copyPath, 'utf-8')).toBe(`${OLD_TURNS}{"late":true}\n`)
+  })
+
   it('keeps the exact source spelling of a copy written since it was copied', async () => {
     legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
     writeFileSync(copyPath, `${OLD_TURNS}{"resumed":true}\n`)
