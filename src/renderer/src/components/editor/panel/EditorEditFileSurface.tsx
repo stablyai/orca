@@ -33,11 +33,9 @@ import type { ActivePluginCustomEditor } from '@/store/plugins/file-editors/plug
 import { PluginEditorSourceFallbackNotice } from '../plugin-editors/PluginEditorNeedsDesktopNotice'
 import PluginCustomEditorFrame from '../plugin-editors/PluginCustomEditorFrame'
 import PluginBytesCustomEditorSurface from '../plugin-editors/PluginBytesCustomEditorSurface'
+import { noopEditorContentChange, noopEditorSave } from './noop-editor-handlers'
 
 // Retry is a user act: it may start a stopped WSL distro.
-
-const noopEditorContentChange = (_content: string): void => {}
-const noopEditorSave = async (_content: string): Promise<boolean> => false
 
 type MarkdownDocumentsController = ReturnType<typeof useMarkdownDocuments>
 

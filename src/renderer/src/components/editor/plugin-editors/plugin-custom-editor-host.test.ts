@@ -58,7 +58,9 @@ function harness(options: Omit<CustomEditorHostOptions, 'getFrameWindow'>) {
       }
     }
   }
-  return { host, send, answerFlushes }
+  const documents = () =>
+    posted.filter((message) => isPluginJsonObject(message) && message.event === 'editor.document')
+  return { host, send, answerFlushes, documents }
 }
 
 function setupWith(initial: { text: string; onMergesOutside: () => void }) {
@@ -150,5 +152,27 @@ describe('custom editor document channel', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('custom editor diff documents', () => {
+  it('sends the original side with the first document, and again when only it changes', () => {
+    const diff = { text: '<after/>', readOnly: true, original: '<before/>' }
+    const h = harness({ getDocument: () => diff, onEdit: vi.fn() })
+    h.send(READY)
+    diff.original = '<staged/>'
+    h.host.syncDocument()
+
+    expect(h.documents()).toMatchObject([
+      {
+        payload: {
+          version: 1,
+          readOnly: true,
+          content: { kind: 'text', text: '<after/>' },
+          diff: { original: { kind: 'text', text: '<before/>' } }
+        }
+      },
+      { payload: { version: 2, diff: { original: { kind: 'text', text: '<staged/>' } } } }
+    ])
   })
 })

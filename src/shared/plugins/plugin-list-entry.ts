@@ -34,6 +34,8 @@ export type PluginHostCustomEditor = {
   contentKind?: 'text' | 'bytes'
   /** Absent on hosts that predate the field: `any`. */
   frame?: 'any' | 'isolated'
+  /** Also offered in single-file diff tabs. Absent on hosts that predate the field: false. */
+  diff?: boolean
   /** orca-plugin-image URL of the editor's tab icon; absent when it declares none. */
   icon?: string
 }

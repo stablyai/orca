@@ -23,6 +23,8 @@ export const PLUGIN_HOOKS_SINCE = '1.4.248'
 export const PLUGIN_HOST_ACTIONS_SINCE = '1.4.248'
 /** First release that plays an app theme's `background.videoPath`. */
 export const PLUGIN_THEME_VIDEO_BACKGROUND_SINCE = '1.4.254'
+/** First release that reads `customEditors[].diff` and offers such editors in diff tabs. */
+export const PLUGIN_EDITOR_DIFF_SINCE = '1.4.259'
 
 type PluginFieldDoc = {
   description: string

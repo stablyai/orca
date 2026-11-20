@@ -1241,6 +1241,14 @@
             "any",
             "isolated"
           ]
+        },
+        "diff": {
+          "description": "`true` also offers this editor in a single-file diff tab, beside Orca's diff, which stays the default. The editor then gets the changed side as a read-only document and the side the change started from as `diff.original`. Text editors only.",
+          "x-orca-since": "1.4.259",
+          "examples": [
+            true
+          ],
+          "type": "boolean"
         }
       },
       "required": [
