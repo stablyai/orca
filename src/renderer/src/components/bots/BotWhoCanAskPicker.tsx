@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -31,7 +31,14 @@ function useMemberSearch(
 ): { search: Search; retry: () => void } {
   const [search, setSearch] = useState<Search>({ status: 'loading' })
   const [attempt, setAttempt] = useState(0)
-  const { search: find, errorMessage } = service
+  // Try again starts a fresh session; a search still loading only asks again.
+  const [session, setSession] = useState(0)
+  const { errorMessage } = service
+  // One search session per picker open (and per Try again), kept across keystrokes.
+  const find = useMemo(
+    () => (session >= 0 && service.begin ? service.begin() : service.search),
+    [service, session]
+  )
   useEffect(() => {
     let current = true
     setSearch({ status: 'loading' })
@@ -43,6 +50,11 @@ function useMemberSearch(
               ? { status: 'ready', found: result.value }
               : { status: 'failed', error: errorMessage(result.error) }
           )
+          void (result.ok ? result.value.pending : undefined)?.then(() => {
+            if (current) {
+              setAttempt((count) => count + 1)
+            }
+          })
         }
       })
     }, SEARCH_DEBOUNCE_MS)
@@ -51,7 +63,7 @@ function useMemberSearch(
       clearTimeout(timer)
     }
   }, [find, errorMessage, query, attempt])
-  return { search, retry: () => setAttempt((count) => count + 1) }
+  return { search, retry: () => setSession((count) => count + 1) }
 }
 
 const matches = (name: string, needle: string): boolean =>
@@ -146,6 +158,7 @@ export function BotWhoCanAskPicker({
   const outside = grouped ? addable.filter((person) => person.group === 'outside') : []
   const unsorted = grouped ? addable.filter((person) => person.group === undefined) : addable
   const note = search.status === 'ready' ? search.found.note : undefined
+  const labels = search.status === 'ready' ? search.found.labels : undefined
 
   /** `handle`: the muted text beside the name; `realName`: what else a search may match them by. */
   const pickRow = (
@@ -214,7 +227,7 @@ export function BotWhoCanAskPicker({
   ) : addable.length > 0 ? (
     <>
       {scoped.length > 0 ? (
-        <CommandGroup heading={service.scopedHeading ?? service.peopleHeading}>
+        <CommandGroup heading={labels?.scoped ?? service.scopedHeading ?? service.peopleHeading}>
           {scoped.map((person) => pickRow(asMember(person, service), person.handle))}
         </CommandGroup>
       ) : null}
@@ -230,7 +243,7 @@ export function BotWhoCanAskPicker({
           {outside.map((person) =>
             pickRow(
               asMember(person, service),
-              person.tag ?? service.outsideTag ?? person.handle,
+              person.tag ?? labels?.outsideTag ?? service.outsideTag ?? person.handle,
               person.handle
             )
           )}

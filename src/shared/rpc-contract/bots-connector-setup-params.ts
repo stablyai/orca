@@ -41,19 +41,17 @@ export const BotLinearWorkspace = z.object({ workspaceId: Id })
 export const BotLinearMembers = z.object({ workspaceId: Id, query: Query })
 export const BotLinearDefaultBot = z.object({ workspaceId: Id, botId: Id.nullable() })
 
-/** `scope`: the connected repositories and whole-account installs to search first, already bounded
- *  by gitHubPeopleScope; `more` says the installations held more than was sent. */
-export const BotGitHubUsers = z.object({
-  query: Query,
-  scope: z
-    .object({
-      repositories: z.array(z.string().max(140)).max(GITHUB_PEOPLE_MAX_REPOSITORIES),
-      owners: z.array(z.string().max(39)).max(GITHUB_PEOPLE_MAX_OWNERS),
-      more: z.boolean()
-    })
-    .optional()
-})
+export const BotGitHubUsers = z.object({ query: Query })
 export const BotGitHubDefaultBot = z.object({ botId: Id.nullable() })
+/** The connected repositories and whole-account installs whose people the Add picker lists,
+ *  already bounded by gitHubPeopleScope; `more` says the installations held more than was sent. */
+export const BotGitHubPeople = z.object({
+  scope: z.object({
+    repositories: z.array(z.string().max(140)).max(GITHUB_PEOPLE_MAX_REPOSITORIES),
+    owners: z.array(z.string().max(39)).max(GITHUB_PEOPLE_MAX_OWNERS),
+    more: z.boolean()
+  })
+})
 
 const Source = z.enum(CONNECTOR_CONNECT_SOURCES)
 /** `switchAccount` is "Not you?", which lets the person pick another account. */

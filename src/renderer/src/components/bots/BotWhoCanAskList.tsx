@@ -34,6 +34,10 @@ export type BotWhoCanAskFound = {
   note?: string
   /** What an empty result says, when the search knows better than the service's `noMatch`. */
   empty?: { title: string; detail: string }
+  /** Headings and tags naming where this search actually looked, over the service's defaults. */
+  labels?: { scoped?: string; outsideTag?: string }
+  /** Settles when more of this search arrives (a list still loading); the picker asks again. */
+  pending?: Promise<unknown>
 }
 
 /** One connector's people: who is listed, how to find more, and what the card says around them. */
@@ -44,6 +48,8 @@ export type BotWhoCanAskService = {
   /** How many people this connector takes, within the bot's BOT_MAX_MEMBERS overall. */
   max: number
   search: (query: string) => Promise<BotSlackResult<BotWhoCanAskFound>>
+  /** Called once per picker open for a search that keeps what it read across keystrokes. */
+  begin?: () => (query: string) => Promise<BotSlackResult<BotWhoCanAskFound>>
   errorMessage: (code: string) => string
   searchPlaceholder: string
   /** The picker's heading over found people, e.g. "People in Globex". */

@@ -142,6 +142,7 @@ import {
 } from './bots-composio-params'
 import {
   BotGitHubDefaultBot,
+  BotGitHubPeople,
   BotGitHubUsers,
   BotLinearDefaultBot,
   BotLinearMembers,
@@ -1220,6 +1221,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.create': BotCreate,
   'bots.createOffer': BotCreateOfferRequest,
   'bots.delete': BotDelete,
+  'bots.github.people': BotGitHubPeople,
   'bots.github.setDefaultBot': BotGitHubDefaultBot,
   'bots.github.state': null,
   'bots.github.unlink': null,

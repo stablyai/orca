@@ -8,7 +8,7 @@ import { botMembersFrom, gitHubMembersOf } from '../../../../../shared/bot-types
 import { CONNECTOR_CLIENT_LIMITS } from '../../../../../shared/connectors/connector-cloud-contract'
 import type { BotWhoCanAskService } from '../BotWhoCanAskList'
 import { botGitHubErrorMessage } from './bot-github-copy'
-import { gitHubWhoCanAskFound } from './github-who-can-ask-found'
+import { gitHubWhoCanAskSession } from './github-who-can-ask-session'
 import {
   gitHubPeopleScope,
   type GitHubPeopleScope
@@ -28,7 +28,7 @@ export function useGitHubWhoCanAsk(
   const ownerId = account?.userId ?? null
   const ownerName = account?.login ?? null
   const installations = view.status === 'ready' ? view.github.installations : null
-  // Search the people of the connected repositories first: those are the owner's teammates.
+  // The picker lists the people of the connected repositories: those are the owner's teammates.
   // Keyed by content: a state refresh hands over new objects, which must not restart the search.
   // Until the GitHub state is read, no scope is sent: unknown, not "nothing connected".
   const scopeKey = useMemo(
@@ -50,8 +50,15 @@ export function useGitHubWhoCanAsk(
     [scopeKey]
   )
   const withOrganizations = (scope?.owners.length ?? 0) > 0
-  return useMemo(
-    (): BotWhoCanAskService => ({
+  return useMemo((): BotWhoCanAskService => {
+    const session = () =>
+      gitHubWhoCanAskSession(botGitHubCalls(hostId), {
+        scope,
+        ownerLogin: ownerName,
+        hostName,
+        t
+      })
+    return {
       listed: (members) =>
         installationId === undefined
           ? botMembersFrom(members, 'github')
@@ -61,19 +68,9 @@ export function useGitHubWhoCanAsk(
           ? { source: 'github' }
           : { source: 'github', workspaceId: installationId },
       max: CONNECTOR_CLIENT_LIMITS.maxBotWorkspaceMembers,
-      search: async (query) => {
-        const result = await botGitHubCalls(hostId).users({ query, ...(scope ? { scope } : {}) })
-        return result.ok
-          ? {
-              ok: true,
-              value: gitHubWhoCanAskFound(
-                result.value,
-                { query, ownerLogin: ownerName, withOrganizations },
-                t
-              )
-            }
-          : result
-      },
+      search: (query) => session()(query),
+      // One roster read per picker open, filtered as the owner types.
+      begin: () => session(),
       errorMessage: (code) => botGitHubErrorMessage(code, hostName),
       searchPlaceholder: t('bots.github.whoCanAsk.searchPeople', 'Search by name or username'),
       peopleHeading: t('bots.github.whoCanAsk.found', 'People on GitHub'),
@@ -107,7 +104,6 @@ export function useGitHubWhoCanAsk(
         'bots.github.whoCanAsk.needsSetup',
         'Finish setup to link your GitHub account, then pick people here.'
       )
-    }),
-    [hostId, hostName, linked, installationId, ownerId, ownerName, scope, withOrganizations, t]
-  )
+    }
+  }, [hostId, hostName, linked, installationId, ownerId, ownerName, scope, withOrganizations, t])
 }
