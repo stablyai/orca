@@ -24,6 +24,7 @@ import {
   type PtyConnectionAgentTitleMocks,
   bindPaneAgentTitleMocks
 } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-deps'
+import { _dispatchTerminalSideEffectBatchForTest } from '@/components/terminal-pane/pty-transport/output/terminal-side-effect-facts-handler'
 import { createInitialStoreState } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-store-fixtures'
 import {
   installTerminalTestGlobals,
@@ -297,6 +298,30 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
       expect(mockStoreState.agentStatusByPaneKey.get(paneKey)!).toBeUndefined()
     }
   )
+
+  it('retires the row when the host reports an agent exit that printed nothing', async () => {
+    mockStoreState.settings = { ...mockStoreState.settings, terminalMainSideEffectAuthority: true }
+    let foreground: string | null = 'codex'
+    vi.mocked(window.api.pty.getForegroundProcess).mockImplementation(async () => foreground)
+    vi.mocked(window.api.pty.hasChildProcesses).mockImplementation(
+      async () => foreground === 'codex'
+    )
+    const { paneKey } = await connectAgentPane({ ptyId: 'pty-silent-exit', visible: true })
+    await seedHookRow(paneKey, 'codex')
+    await vi.advanceTimersByTimeAsync(3_000)
+
+    // Empty prompt, no shell integration: the exit prints no byte, so only the host's notice arrives.
+    foreground = 'zsh'
+    _dispatchTerminalSideEffectBatchForTest({
+      ptyId: 'pty-silent-exit',
+      seq: 1,
+      facts: [{ kind: 'foreground-exit' }]
+    })
+    await vi.advanceTimersByTimeAsync(10_000)
+    await flushAsyncTicks()
+
+    expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
+  })
 
   it('keeps the row when the agent is relaunched before the exit settles', async () => {
     const hostAnswer = createDeferred<boolean>()

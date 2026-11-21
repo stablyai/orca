@@ -65,6 +65,8 @@ export type TerminalSideEffectFactConsumerCallbacks = {
   /** DECSET 2031 withdrawal observed by main's tracker. Clears the pane's
    *  subscription registry so later theme flips stop pushing CSI 997. */
   onMode2031Unsubscribe?: () => void
+  /** The host saw the tracked foreground agent exit, which may print nothing. */
+  onForegroundExit?: () => void
 }
 
 type ConsumerEntry = {
@@ -121,6 +123,9 @@ function applyLiveFact(entry: ConsumerEntry, fact: TerminalSideEffectFact, seq: 
       return
     case '2031-unsubscribe':
       entry.callbacks.onMode2031Unsubscribe?.()
+      return
+    case 'foreground-exit':
+      entry.callbacks.onForegroundExit?.()
   }
 }
 

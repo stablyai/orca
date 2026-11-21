@@ -10,6 +10,7 @@ import { getStrictProcessTableSnapshotWithAge } from '../../../shared/process-ob
 import { resolveRemoteForegroundEvidence } from '../../providers/foreground/agent-process-batch'
 import { buildPaneProcessFingerprint } from '../../providers/foreground/posix-pane-fingerprint'
 import type { Session } from '../sessions/session'
+import type { TerminalHostAgentExitWatches } from './terminal-host-agent-exit-watches'
 import { resolveSpawnFileForegroundFromRows } from '../pty-subprocess/spawn-file-foreground-process'
 import { inspectSpawnFileChildProcessesFromRows } from '../pty-subprocess/spawn-file-child-processes'
 import {
@@ -254,7 +255,8 @@ export function inspectTerminalHostSession(
   sessionId: string,
   options: PtyProcessInspectionOptions | undefined,
   authorityGeneration: string,
-  nextObservationEpoch: () => number
+  nextObservationEpoch: () => number,
+  agentExitWatches?: TerminalHostAgentExitWatches
 ): Promise<TerminalHostProcessInspection> {
   pruneRetiredPtyIncarnations(retired)
   const session = getInspectableTerminalHostSession(
@@ -271,5 +273,8 @@ export function inspectTerminalHostSession(
     retiredIncarnation: retired.get(sessionId),
     authorityGeneration,
     nextObservationEpoch
+  }).then((result) => {
+    agentExitWatches?.noteInspection(sessionId, sessions.get(sessionId), result.foregroundProcess)
+    return result
   })
 }

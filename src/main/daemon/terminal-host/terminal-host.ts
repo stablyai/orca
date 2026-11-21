@@ -46,6 +46,8 @@ import {
   takeTerminalHostPendingOutput
 } from './terminal-host-session-inspection-operations'
 
+import { TerminalHostAgentExitWatches } from './terminal-host-agent-exit-watches'
+
 const DEFAULT_MAX_TOMBSTONES = 1000
 
 export class TerminalHost {
@@ -64,6 +66,7 @@ export class TerminalHost {
   private readonly agentSessionGenerations = new TerminalHostAgentSessionGenerations()
   private readonly authorityGeneration = randomUUID()
   private observationEpoch = 0
+  private readonly agentExitWatches: TerminalHostAgentExitWatches
   private readonly retiredIncarnations = new Map<
     string,
     { incarnationId: string; code: number; expiresAt: number }
@@ -74,6 +77,7 @@ export class TerminalHost {
     this.onSessionReaped = opts.onSessionReaped
     this.reportReadinessEvent = opts.reportReadinessEvent
     this.onFinalCheckpoint = opts.onFinalCheckpoint
+    this.agentExitWatches = new TerminalHostAgentExitWatches(opts.onSessionAgentExit)
     this.killedTombstones = new TerminalHostTombstones(opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES)
   }
 
@@ -170,16 +174,9 @@ export class TerminalHost {
   }
 
   kill(sessionId: string, opts: { immediate?: boolean } = {}): Promise<void> {
-    const pending = this.sessionTeardown.get(sessionId)
-    if (pending) {
-      return Promise.resolve(
-        opts.immediate ? this.sessionTeardown.requestImmediate(sessionId) : pending
-      )
-    }
-    const session = getAliveTerminalHostSession(this.sessions, sessionId)
-    const killed = this.sessionTeardown.killSession(sessionId, session, opts.immediate === true)
-    this.killedTombstones.record(sessionId)
-    return Promise.resolve(killed)
+    return this.sessionTeardown.kill(sessionId, opts.immediate === true, () =>
+      this.killedTombstones.record(sessionId)
+    )
   }
 
   beginFencedTermination(request: PtyFencedTerminationRequest) {
@@ -199,6 +196,7 @@ export class TerminalHost {
     }
     session.dispose()
     this.sessions.delete(sessionId)
+    this.agentExitWatches.forget(sessionId)
     this.onSessionReaped?.(sessionId)
   }
 
@@ -250,7 +248,8 @@ export class TerminalHost {
       sessionId,
       options,
       this.authorityGeneration,
-      () => ++this.observationEpoch
+      () => ++this.observationEpoch,
+      this.agentExitWatches
     )
   }
 
@@ -327,6 +326,7 @@ export class TerminalHost {
 
   dispose(): Promise<void> {
     this.creationFenced = true
+    this.agentExitWatches.dispose()
     if (this.disposePromise) {
       return this.disposePromise
     }

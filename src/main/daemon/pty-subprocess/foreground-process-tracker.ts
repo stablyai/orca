@@ -45,6 +45,8 @@ export type PtyForegroundProcessTracker = {
   getForegroundProcess(options?: { rawFallback?: boolean; cachedOnly?: boolean }): string | null
   confirmForegroundProcess(context?: { decision?: boolean }): Promise<string | null>
   confirmShellForeground(): Promise<boolean>
+  /** The pid that proved the cached agent identity; null when none is cached or it was ambiguous. */
+  cachedAgentPid(): number | null
 }
 
 export function createPtyForegroundProcessTracker(args: {
@@ -216,6 +218,7 @@ export function createPtyForegroundProcessTracker(args: {
       cachedAgentForeground = null
       startupAgentForeground = null
     },
+    cachedAgentPid: () => cachedAgentForeground?.pid ?? null,
     getForegroundProcess: (options) => {
       if (args.isDead()) {
         return null

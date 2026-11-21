@@ -64,6 +64,10 @@ export abstract class SessionProcessInspection {
     return this.subprocess.getForegroundProcess(options)
   }
 
+  foregroundAgentPid(): number | null {
+    return this.subprocess.foregroundAgentPid?.() ?? null
+  }
+
   async confirmForegroundProcess(context?: { decision?: boolean }): Promise<string | null> {
     return (
       this.subprocess.confirmForegroundProcess?.(context) ?? this.subprocess.getForegroundProcess()

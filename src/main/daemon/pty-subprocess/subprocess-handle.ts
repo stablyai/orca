@@ -165,6 +165,11 @@ export function createDaemonPtySubprocessHandle(args: {
     getForegroundProcess: foreground.getForegroundProcess,
     confirmForegroundProcess: foreground.confirmForegroundProcess,
     confirmShellForeground: foreground.confirmShellForeground,
+    // POSIX: the foreground job's group leader is the program the shell started; ConPTY has no group.
+    foregroundAgentPid: () =>
+      process.platform === 'win32'
+        ? foreground.cachedAgentPid()
+        : (readPtyForegroundGroup(proc) ?? null),
     write: (data) => {
       if (dead || ioFailed || masterRetired) {
         return

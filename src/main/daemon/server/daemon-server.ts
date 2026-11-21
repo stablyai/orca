@@ -34,6 +34,7 @@ import {
   PROTOCOL_VERSION
 } from '../protocol/daemon-protocol-version'
 import type { DaemonRequest } from '../protocol/daemon-rpc-contract'
+import { sendDaemonTransientFact } from './daemon-transient-fact-delivery'
 import { answerDaemonControlRequest } from './daemon-control-request'
 
 export class DaemonServer {
@@ -79,20 +80,16 @@ export class DaemonServer {
         this.streamDataBatcher.refreshSessionDroppability(sessionId)
         options.onPtySessionExit?.(sessionId)
         this.lifecycle.reevaluateIdleShutdown()
-      }
+      },
+      onSessionAgentExit: (sessionId) =>
+        sendDaemonTransientFact(this.attachments, this.streamDataBatcher, sessionId, {
+          kind: 'foreground-exit'
+        })
     })
     this.attachments = new DaemonSessionAttachments(this.host)
-    this.transientFactRelay = new BackgroundTransientFactRelay((sessionId, fact) => {
-      const clientId = this.attachments.clientIdForSession(sessionId)
-      if (clientId) {
-        this.streamDataBatcher.enqueueControlEvent(clientId, sessionId, {
-          type: 'event',
-          event: 'transientFact',
-          sessionId,
-          payload: fact
-        })
-      }
-    })
+    this.transientFactRelay = new BackgroundTransientFactRelay((sessionId, fact) =>
+      sendDaemonTransientFact(this.attachments, this.streamDataBatcher, sessionId, fact)
+    )
     this.streamDataBatcher = new DaemonStreamDataBatcher(
       (clientId) => this.connections.get(clientId),
       {

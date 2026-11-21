@@ -2382,3 +2382,281 @@ diff --git a/src/native.d.ts b/src/native.d.ts
    fork(file: string, args: string[], parsedEnv: string[], cwd: string, cols: number, rows: number, uid: number, gid: number, useUtf8: boolean, helperPath: string, onExitCallback: (code: number, signal: number) => void): IUnixProcess;
    open(cols: number, rows: number): IUnixOpenProcess;
    process(fd: number, pty?: string): string;
+diff --git a/src/unix/pty.cc b/src/unix/pty.cc
+--- a/src/unix/pty.cc
++++ b/src/unix/pty.cc
+@@ -1347,10 +1347,151 @@
+   const pid_t group = fd < 0 ? -1 : tcgetpgrp(fd);
+   if (group > 0) return Napi::Number::New(env, group);
+   return env.Null();
++}
++
++/**
++ * Orca: watch an arbitrary pid for exit on the event loop, with no thread or timer:
++ * kqueue EVFILT_PROC/NOTE_EXIT on macOS, a pidfd on Linux. watchProcessExit(pid, cb)
++ * returns a watch id, 0 when no such process exists, or null when this host cannot watch.
++ * The callback fires once; the watch then releases itself.
++ */
++
++#include <uv.h>
++#include <unordered_map>
++#if defined(__linux__)
++#include <sys/syscall.h>
++#endif
++
++struct OrcaExitWatch {
++  uv_poll_t poll;
++  int fd = -1;
++  uint32_t id = 0;
++  Napi::FunctionReference callback;
++};
++
++static thread_local std::unordered_map<uint32_t, OrcaExitWatch*> orcaExitWatches;
++static thread_local uint32_t orcaLastExitWatchId = 0;
++
++static void OrcaExitWatchClosed(uv_handle_t* handle) {
++  OrcaExitWatch* watch = static_cast<OrcaExitWatch*>(handle->data);
++  close(watch->fd);
++  delete watch;
++}
++
++static void OrcaStopExitWatch(OrcaExitWatch* watch) {
++  orcaExitWatches.erase(watch->id);
++  watch->callback.Reset();
++  uv_poll_stop(&watch->poll);
++  uv_close(reinterpret_cast<uv_handle_t*>(&watch->poll), OrcaExitWatchClosed);
+ }
+ 
++static void OrcaExitWatchReady(uv_poll_t* handle, int status, int events) {
++  OrcaExitWatch* watch = static_cast<OrcaExitWatch*>(handle->data);
++#if defined(__APPLE__)
++  if (status == 0) {
++    struct kevent event = {0};
++    struct timespec immediate = {0, 0};
++    if (HANDLE_EINTR(kevent(watch->fd, NULL, 0, &event, 1, &immediate)) == 0) {
++      return;
++    }
++  }
++#endif
++  // A poll error is reported as exit too: the caller only re-reads the foreground.
++  Napi::Env env = watch->callback.Env();
++  Napi::HandleScope scope(env);
++  Napi::Function callback = watch->callback.Value();
++  OrcaStopExitWatch(watch);
++  try {
++    callback.MakeCallback(env.Global(), {});
++  } catch (const Napi::Error&) {
++    // The callback owns its errors; an escaped one must not unwind into libuv.
++  }
++}
++
++// 1 with an open descriptor, 0 when the process is gone, -1 when it cannot be watched.
++static int OrcaOpenExitDescriptor(pid_t pid, int* fd) {
++#if defined(__APPLE__)
++  const int queue = HANDLE_EINTR(kqueue());
++  if (queue < 0) {
++    return -1;
++  }
++  struct kevent change = {0};
++  EV_SET(&change, pid, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT, 0, NULL);
++  if (HANDLE_EINTR(kevent(queue, &change, 1, NULL, 0, NULL)) == -1) {
++    const int error = errno;
++    close(queue);
++    return error == ESRCH ? 0 : -1;
++  }
++  *fd = queue;
++  return 1;
++#elif defined(__linux__) && defined(SYS_pidfd_open)
++  const int descriptor = static_cast<int>(syscall(SYS_pidfd_open, pid, 0));
++  if (descriptor < 0) {
++    return errno == ESRCH ? 0 : -1;
++  }
++  *fd = descriptor;
++  return 1;
++#else
++  return -1;
++#endif
++}
++
++Napi::Value OrcaWatchProcessExit(const Napi::CallbackInfo& info) {
++  Napi::Env env = info.Env();
++  if (info.Length() != 2 || !info[0].IsNumber() || !info[1].IsFunction()) {
++    throw Napi::TypeError::New(env, "Expected a pid and an exit callback");
++  }
++  const pid_t pid = info[0].As<Napi::Number>().Int32Value();
++  if (pid <= 0) {
++    return env.Null();
++  }
++  uv_loop_t* loop = nullptr;
++  if (napi_get_uv_event_loop(env, &loop) != napi_ok || loop == nullptr) {
++    return env.Null();
++  }
++  int fd = -1;
++  const int opened = OrcaOpenExitDescriptor(pid, &fd);
++  if (opened <= 0) {
++    return opened == 0 ? Napi::Number::New(env, 0) : env.Null();
++  }
++  OrcaExitWatch* watch = new OrcaExitWatch();
++  watch->fd = fd;
++  watch->poll.data = watch;
++  if (uv_poll_init(loop, &watch->poll, fd) != 0) {
++    close(fd);
++    delete watch;
++    return env.Null();
++  }
++  do {
++    watch->id = ++orcaLastExitWatchId;
++  } while (watch->id == 0 || orcaExitWatches.count(watch->id) > 0);
++  watch->callback = Napi::Persistent(info[1].As<Napi::Function>());
++  orcaExitWatches[watch->id] = watch;
++  // A watch never keeps the process alive.
++  uv_unref(reinterpret_cast<uv_handle_t*>(&watch->poll));
++  if (uv_poll_start(&watch->poll, UV_READABLE, OrcaExitWatchReady) != 0) {
++    OrcaStopExitWatch(watch);
++    return env.Null();
++  }
++  return Napi::Number::New(env, watch->id);
++}
++
++Napi::Value OrcaUnwatchProcessExit(const Napi::CallbackInfo& info) {
++  Napi::Env env = info.Env();
++  if (info.Length() != 1 || !info[0].IsNumber()) {
++    throw Napi::TypeError::New(env, "Expected an exit watch id");
++  }
++  auto found = orcaExitWatches.find(info[0].As<Napi::Number>().Uint32Value());
++  if (found != orcaExitWatches.end()) {
++    OrcaStopExitWatch(found->second);
++  }
++  return env.Undefined();
++}
++
+ Napi::Object init(Napi::Env env, Napi::Object exports) {
+   exports.Set("foregroundProcessGroup", Napi::Function::New(env, PtyForegroundGroup));
++  exports.Set("watchProcessExit", Napi::Function::New(env, OrcaWatchProcessExit));
++  exports.Set("unwatchProcessExit", Napi::Function::New(env, OrcaUnwatchProcessExit));
+   exports.Set("fork",    Napi::Function::New(env, PtyFork));
+   exports.Set("open",    Napi::Function::New(env, PtyOpen));
+   exports.Set("resize",  Napi::Function::New(env, PtyResize));
+diff --git a/src/win/conpty.cc b/src/win/conpty.cc
+--- a/src/win/conpty.cc
++++ b/src/win/conpty.cc
+@@ -21,6 +21,7 @@
+ #include <mutex>
+ #include <atomic>
+ #include <vector>
++#include <unordered_map>
+ #include <Windows.h>
+ #include <strsafe.h>
+ #include "path_util.h"
+@@ -911,6 +912,102 @@
+ }
+ 
+ /**
++ * Orca: watch an arbitrary pid for exit with no thread or timer of our own: the
++ * process handle is waited on by the system thread pool (RegisterWaitForSingleObject).
++ * watchProcessExit(pid, cb) returns a watch id, 0 when no such process exists, or
++ * null when it cannot be watched. The callback fires once; the watch then releases itself.
++ */
++
++struct OrcaExitWatch {
++  HANDLE process = nullptr;
++  HANDLE wait = nullptr;
++  uint32_t id = 0;
++  Napi::ThreadSafeFunction tsfn;
++};
++
++// Touched only on the JS thread; the pool callback carries the id, never the map.
++static std::unordered_map<uint32_t, OrcaExitWatch*> orcaExitWatches;
++static uint32_t orcaLastExitWatchId = 0;
++
++static void OrcaReleaseExitWatch(OrcaExitWatch* watch) {
++  orcaExitWatches.erase(watch->id);
++  // INVALID_HANDLE_VALUE waits out a callback already running on the pool.
++  UnregisterWaitEx(watch->wait, INVALID_HANDLE_VALUE);
++  CloseHandle(watch->process);
++  watch->tsfn.Release();
++  delete watch;
++}
++
++static void CALLBACK OrcaExitWatchSignaled(PVOID context, BOOLEAN) {
++  OrcaExitWatch* watch = static_cast<OrcaExitWatch*>(context);
++  uint32_t* id = new uint32_t(watch->id);
++  auto deliver = [](Napi::Env env, Napi::Function callback, uint32_t* signaledId) {
++    const uint32_t watchId = *signaledId;
++    delete signaledId;
++    auto found = orcaExitWatches.find(watchId);
++    if (found == orcaExitWatches.end()) {
++      return;
++    }
++    OrcaReleaseExitWatch(found->second);
++    if (env != nullptr && !callback.IsEmpty()) {
++      try {
++        callback.Call({});
++      } catch (const Napi::Error&) {
++        // The callback owns its errors.
++      }
++    }
++  };
++  if (watch->tsfn.NonBlockingCall(id, deliver) != napi_ok) {
++    delete id;
++  }
++}
++
++static Napi::Value PtyWatchProcessExit(const Napi::CallbackInfo& info) {
++  Napi::Env env(info.Env());
++  if (info.Length() != 2 || !info[0].IsNumber() || !info[1].IsFunction()) {
++    throw Napi::TypeError::New(env, "Expected a pid and an exit callback");
++  }
++  const DWORD pid = info[0].As<Napi::Number>().Uint32Value();
++  if (pid == 0) {
++    return env.Null();
++  }
++  HANDLE process = OpenProcess(SYNCHRONIZE, FALSE, pid);
++  if (process == nullptr) {
++    return GetLastError() == ERROR_INVALID_PARAMETER ? Napi::Number::New(env, 0) : env.Null();
++  }
++  OrcaExitWatch* watch = new OrcaExitWatch();
++  watch->process = process;
++  do {
++    watch->id = ++orcaLastExitWatchId;
++  } while (watch->id == 0 || orcaExitWatches.count(watch->id) > 0);
++  watch->tsfn = Napi::ThreadSafeFunction::New(
++      env, info[1].As<Napi::Function>(), "OrcaExitWatch", 0, 1);
++  // A watch never keeps the process alive.
++  watch->tsfn.Unref(env);
++  if (!RegisterWaitForSingleObject(&watch->wait, process, OrcaExitWatchSignaled, watch,
++                                   INFINITE, WT_EXECUTEONLYONCE)) {
++    CloseHandle(process);
++    watch->tsfn.Release();
++    delete watch;
++    return env.Null();
++  }
++  orcaExitWatches[watch->id] = watch;
++  return Napi::Number::New(env, watch->id);
++}
++
++static Napi::Value PtyUnwatchProcessExit(const Napi::CallbackInfo& info) {
++  Napi::Env env(info.Env());
++  if (info.Length() != 1 || !info[0].IsNumber()) {
++    throw Napi::TypeError::New(env, "Expected an exit watch id");
++  }
++  auto found = orcaExitWatches.find(info[0].As<Napi::Number>().Uint32Value());
++  if (found != orcaExitWatches.end()) {
++    OrcaReleaseExitWatch(found->second);
++  }
++  return env.Undefined();
++}
++
++/**
+ * Init
+ */
+ 
+@@ -925,6 +1022,8 @@
+   exports.Set("assignCurrentProcessToJob", Napi::Function::New(env, PtyAssignCurrentProcessToJob));
+   exports.Set("assignCurrentProcessToStrictJob", Napi::Function::New(env, PtyAssignCurrentProcessToStrictJob));
+   exports.Set("setActiveProcessLimit", Napi::Function::New(env, PtySetActiveProcessLimit));
++  exports.Set("watchProcessExit", Napi::Function::New(env, PtyWatchProcessExit));
++  exports.Set("unwatchProcessExit", Napi::Function::New(env, PtyUnwatchProcessExit));
+   return exports;
+ };
+ 

@@ -24,6 +24,8 @@ export type SubprocessHandle = {
   confirmForegroundProcess?(context?: { decision?: boolean }): Promise<string | null>
   /** Proves a fresh post-boundary PTY process tree contains only the shell. */
   confirmShellForeground?(): Promise<boolean>
+  /** The process whose exit ends a foreground agent, when the host can name one. */
+  foregroundAgentPid?(): number | null
   /** Skip stdin command delivery when shell arguments already delivered it. */
   startupCommandDeliveredInShellArgs?: boolean
   /** Report the actual fallback shell so unsupported readiness markers cannot stall startup. */
