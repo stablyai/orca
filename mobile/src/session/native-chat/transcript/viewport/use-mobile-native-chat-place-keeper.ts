@@ -77,11 +77,20 @@ export function useMobileNativeChatPlaceKeeper<S extends MobileNativeChatScrollN
         const from = Math.max(first, indexOf.get(head ?? '') ?? first)
         const saved = { firstKey: keys[from] ?? null, count: n - from, place: place.current }
         setBoundedScopeCacheEntry(savedPlaces, rowKeys.scope, saved, MAX_CACHED_TRANSCRIPTS)
+        const drawnFrom = keys[first]
+        if (drawnFrom !== undefined) {
+          // New rows slide the opening window; anchor it so they cannot undraw the reader's rows.
+          setDrawn((was) =>
+            was.scope === rowKeys.scope && was.firstKey !== null
+              ? was
+              : { scope: rowKeys.scope, firstKey: drawnFrom, count: n - first }
+          )
+        }
       } else {
         savedPlaces.delete(rowKeys.scope)
       }
     },
-    [isFollowing, latest]
+    [isFollowing, latest, setDrawn]
   )
 
   // With nothing saved, or its rows gone, the chat opens following.
