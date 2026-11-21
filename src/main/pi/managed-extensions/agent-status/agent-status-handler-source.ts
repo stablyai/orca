@@ -1,4 +1,5 @@
 import { getOmpModelCommandSourceLines } from './omp-model-command-source'
+import { getOmpVibeCommandSourceLines } from './omp-vibe-command-source'
 import { getPiPrefillHandlerSourceLines } from '../prefill-extension-source'
 import { getAgentStatusInputRedactionSourceLines } from './agent-status-input-redaction-source'
 import type { PiAgentKind } from '../../../../shared/agent-launch/catalog/pi-agent-kind'
@@ -134,6 +135,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     ...getOmpSessionOwnerHandlerSourceLines(kind),
     ...getAgentStatusSessionBoundaryHandlerSourceLines(kind),
     ...getOmpModelCommandSourceLines(),
+    ...getOmpVibeCommandSourceLines(),
     ...sessionStartHandler,
     ...(kind === 'omp' ? getPiPrefillHandlerSourceLines('omp', true) : []),
     `  onStatus('before_agent_start', (event${ctxParam}) => {`,
