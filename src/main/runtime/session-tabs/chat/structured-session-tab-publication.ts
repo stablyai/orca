@@ -26,7 +26,8 @@ export type StructuredSessionTabPublicationInput = {
   sessionId: string
   agent: StructuredAgentId
   activate: boolean
-  navigation?: 'caller'
+  /** A reveal allocates a new tab lifetime only if the chat is currently hidden. */
+  reopen?: true
   capture?: (surface: StructuredSessionSurface) => void
   workspaceAuthority?: {
     writerFence?: Int32Array
@@ -44,18 +45,18 @@ export type StructuredSessionTabPublicationInput = {
   placement?: { groupId?: string; afterTabId?: string }
 }
 
-/** Caller opens require a committed lifetime; legacy opens retain their best-effort Retry surface. */
+/** Reveals require a committed lifetime; creates retain their best-effort Retry surface. */
 export async function admitStructuredSessionTabPublication(
   input: Pick<
     StructuredSessionTabPublicationInput,
-    'sessionId' | 'tabId' | 'navigation' | 'workspaceAuthority'
+    'sessionId' | 'tabId' | 'reopen' | 'workspaceAuthority'
   >,
   restore: () => Promise<void>
 ): Promise<{ tabId: string; current: string | null; eligible: () => boolean }> {
   let host = getStructuredAgentSessionHost()
   let tabId = input.tabId ?? chatTabId(input.sessionId)
   let committed = false
-  if (input.navigation === 'caller') {
+  if (input.reopen) {
     await restore()
     host = getStructuredAgentSessionHost()
     if (!host) {
