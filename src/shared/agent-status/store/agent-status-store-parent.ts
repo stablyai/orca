@@ -15,6 +15,12 @@ export type AgentStatusParentInput = {
 
 export type AgentStatusParentRecord = AgentStatusParentInput & { revision: number }
 
+declare const storedParentRecord: unique symbol
+/** A parsed, deep-frozen row the store hands to readers without copying. */
+export type StoredAgentStatusParentRecord = AgentStatusParentRecord & {
+  readonly [storedParentRecord]: true
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
