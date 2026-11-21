@@ -29504,8 +29504,8 @@
         "customWeekdays": "Weekdays at {{times}}",
         "customDaily": "Every day at {{times}}"
       },
-      "hoverMissed": "Look around · {{time}} didn’t run {{count}} days",
-      "hoverTrouble": "Look around · {{time}} failed or didn’t run {{count}} days",
+      "hoverMissed": "Look around · Missed {{count}} days",
+      "hoverTrouble": "Look around · Failed or missed {{count}} days",
       "hostTooOld": "This bot’s computer runs an older Orca that can’t keep custom times. Update Orca there first.",
       "hostUnreachable": "Couldn’t reach this bot’s computer. Nothing was saved."
     }

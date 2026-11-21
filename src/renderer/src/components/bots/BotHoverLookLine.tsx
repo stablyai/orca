@@ -1,7 +1,6 @@
 // The bot's Look around in its sidebar card: when it looks next, or what it needs; opens its settings.
 import { ChevronRight, CircleAlert, Eye } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import type { Bot } from '../../../../shared/bot-types'
 import { botLookAround, lookAroundSupported } from '../../../../shared/bots/bot-look-around'
 import { foreignZone, lookAroundScheduleShort } from './bot-look-around-copy'
@@ -9,8 +8,6 @@ import { openBotSettings } from './bot-settings-open'
 import { upcomingAt } from './bot-upcoming-copy'
 import { LookStatusToken } from './LookStatusToken'
 import { useLookAroundFailing, useLookAroundStatus } from './use-look-around-status'
-
-const CLOCK = { hour: 'numeric', minute: '2-digit' } as const
 
 export function BotHoverLookLine({ bot }: { bot: Bot }): React.JSX.Element | null {
   const t = useTranslate()
@@ -31,21 +28,13 @@ export function BotHoverLookLine({ bot }: { bot: Bot }): React.JSX.Element | nul
         count: failing
       })
     }
-    const time = uiDateTimeFormat(CLOCK).format(repeat.scheduledFor)
+    // Short enough for one line in the card; Settings names the time.
     const count = repeat.failed + repeat.missed
     return repeat.failed === 0
-      ? t('bots.lookAround.hoverMissed', 'Look around · {{time}} didn’t run {{count}} days', {
-          time,
+      ? t('bots.lookAround.hoverMissed', 'Look around · Missed {{count}} days', { count })
+      : t('bots.lookAround.hoverTrouble', 'Look around · Failed or missed {{count}} days', {
           count
         })
-      : t(
-          'bots.lookAround.hoverTrouble',
-          'Look around · {{time}} failed or didn’t run {{count}} days',
-          {
-            time,
-            count
-          }
-        )
   }
   const text = !setting.on
     ? turnedOff
@@ -68,10 +57,10 @@ export function BotHoverLookLine({ bot }: { bot: Bot }): React.JSX.Element | nul
       type="button"
       title={text}
       aria-label={turnedOff ? `${text} · ${t('bots.lookAround.needsYou', 'Needs you')}` : text}
-      className="-mx-1.5 mt-2 flex w-[calc(100%+0.75rem)] min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs text-muted-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      className="-mx-1.5 mt-2 flex w-[calc(100%+0.75rem)] min-w-0 items-start gap-1.5 rounded-md px-1.5 py-1 text-left text-xs text-muted-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       onClick={() => openBotSettings(bot.id, 'look-around')}
     >
-      <Eye className="size-3.5 shrink-0" aria-hidden />
+      <Eye className="mt-px size-3.5 shrink-0" aria-hidden />
       {/* Wraps rather than truncating, since the cut-off part would be the fact; the token drops
           under it when both don't fit. */}
       <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1">
@@ -86,7 +75,7 @@ export function BotHoverLookLine({ bot }: { bot: Bot }): React.JSX.Element | nul
           </LookStatusToken>
         ) : null}
       </span>
-      <ChevronRight className="size-3.5 shrink-0" aria-hidden />
+      <ChevronRight className="mt-px size-3.5 shrink-0" aria-hidden />
     </button>
   )
 }
