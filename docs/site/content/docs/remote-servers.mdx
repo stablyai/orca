@@ -117,6 +117,17 @@ That means:
 - reconnecting the client or reopening Orca returns you to the server-owned workspace, tab, and visible-pane state without duplicating paired tabs;
 - projects you delete on the server disappear from every paired client's sidebar (no permanent ghost rows).
 
+### Run a bot on the server
+
+A paired Orca server can host a bot. The server owns the bot’s home folder and runs its agent. Your desktop can create the bot and open its chats while connected to that server.
+
+1. Pair the server with your desktop and open **Bots → New bot**.
+2. In **Computer**, select the server. In **Agent**, choose an agent installed and signed in on that computer.
+3. Give the bot a name and create it. Open its chat and send a small request to check that its agent can run on the server.
+4. To use a cloud connector, configure it for that bot. On a headless server, run `orca auth login` on the server and use `orca auth status` there to check its Orca sign-in. The agent provider has its own sign-in.
+
+If **Computer** shows the server as unreachable, reconnect it in **Settings → Remote Orca Servers**. If the server needs an update, update Orca on that machine. A computer added only as an SSH host must also run a paired Orca server to host a bot.
+
 ## Access and security
 
 Orca creates a separate, revocable token for each paired client. The server lists these under **Shared Server Access**.
