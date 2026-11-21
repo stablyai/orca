@@ -1,6 +1,7 @@
 // What a bot's chats tree is built from on its host, apart from live status, tabs and read state: the
 // chats its records name and the Dispatches they started. The index keeps one per bot between reads;
 // a full build from every record is the same function, and the index's oracle.
+import { botChatPreviewText } from '../../shared/bots/bot-chat-preview-text'
 import type { AgentSessionConversationView } from '../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { defaultAgentChatLabel } from '../../shared/agent-session/conversation-naming/agent-session-chat-label'
 import { structuredAgentSessionStatusPaneKey } from '../../shared/agent-session/view/structured-agent-session-tab'
@@ -155,7 +156,7 @@ export function botChatBaseChat(
   const root = store.getRecord(row.id)
   const closed = root ? structuredSessionMailReach(store, root, ctx.db).kind === 'ended' : false
   const origin = row.home ? { origin: 'home' as const } : build.originBySessionId.get(row.id)
-  const preview = row.lastSaid ?? row.lastAsked
+  const preview = botChatPreviewText(row.lastSaid ?? row.lastAsked ?? '')
   return {
     chatId: row.id,
     home: row.home,

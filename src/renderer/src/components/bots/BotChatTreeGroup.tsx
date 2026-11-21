@@ -61,18 +61,24 @@ function openChat(bot: Bot, chat: BotChatTreeChat): void {
   }
 }
 
-/** A chat row's second line, as the Chats tab shows it (the `@` list's chat rows too). */
+/** A chat row's second line, as the Chats tab shows it (the `@` list's chat rows too). With
+ *  `liveAtEnd`, the chat's live state is left to the line's end (`ChatRowLive`), so the preview stays. */
 export function BotChatLine({
   bot,
   chat,
-  folded
+  folded,
+  liveAtEnd = false
 }: {
   bot: Bot
   chat: BotChatTreeChat
   folded: boolean
+  liveAtEnd?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const stop = useBotUsageLimitStopIndex().bySession.get(chat.chatId)
+  if (liveAtEnd) {
+    return <BotChatPreview bot={bot} chat={chat} />
+  }
   if (chat.live === 'replying') {
     return <>{t('bots.chats.replying', 'Replying…')}</>
   }
@@ -92,6 +98,12 @@ export function BotChatLine({
   if (counts) {
     return <>{chatFoldSummary(t, counts)}</>
   }
+  return <BotChatPreview bot={bot} chat={chat} />
+}
+
+/** Where the chat is, when it closed, and the last thing said. */
+function BotChatPreview({ bot, chat }: { bot: Bot; chat: BotChatTreeChat }): React.JSX.Element {
+  const t = useTranslate()
   const closed = chat.closedAt
     ? t('bots.chats.closedOn', 'closed {{date}}', {
         date: uiDateTimeFormat({ month: 'short', day: 'numeric' }).format(chat.closedAt)
@@ -102,14 +114,34 @@ export function BotChatLine({
     (chat.origin === 'home'
       ? t('bots.chats.sayHi', 'Say hi to {{name}}', { name: bot.name })
       : null)
-  return <>{[place, closed, preview].filter(Boolean).join(' · ')}</>
+  return <>{[botChatPlace(chat), closed, preview].filter(Boolean).join(' · ')}</>
+}
+
+/** The preview line's end for the chat itself: replying, waiting for the owner, or stopped on its
+ *  usage limit while quiet. */
+function ChatRowLive({ chat }: { chat: BotChatTreeChat }): React.JSX.Element | null {
+  const t = useTranslate()
+  const stop = useBotUsageLimitStopIndex().bySession.get(chat.chatId)
+  if (chat.live === 'replying') {
+    return <span className={META}>{t('bots.chats.replying', 'Replying…')}</span>
+  }
+  if (chat.live === 'needs-you') {
+    return (
+      <span className={cn(META, 'text-foreground')}>
+        {t('bots.chats.waiting', 'Waiting for you')}
+      </span>
+    )
+  }
+  return stop ? (
+    <span className={cn(META, 'text-status-warning-text')}>{usageLimitStopText(t, stop)}</span>
+  ) : null
 }
 
 const META = 'flex shrink-0 items-center gap-1.5 text-2xs text-muted-foreground tabular-nums'
 
-/** The row's right edge: "N waiting" with the waiting dot and "N running" with its spinner while
- *  workers wait or run (their glyphs alone when narrow), else the time, which a narrow panel drops. */
-function ChatRowMeta({ chat }: { chat: BotChatTreeChat }): React.JSX.Element | null {
+/** The preview line's end while workers wait or run: "N waiting" with the waiting dot and "N running"
+ *  with its spinner (their glyphs alone when narrow), and how many stopped on a usage limit. */
+function ChatRowWork({ chat }: { chat: BotChatTreeChat }): React.JSX.Element | null {
   const t = useTranslate()
   const waiting = chatWaitingCount(chat)
   const { byWorkspace } = useBotUsageLimitStopIndex()
@@ -161,12 +193,7 @@ function ChatRowMeta({ chat }: { chat: BotChatTreeChat }): React.JSX.Element | n
       </span>
     )
   }
-  // A Home Chat not started yet has no time.
-  return chat.lastActiveAt > 0 ? (
-    <span className="shrink-0 text-2xs text-muted-foreground tabular-nums @max-[240px]:hidden">
-      {formatShortTimeAgo(chat.lastActiveAt)}
-    </span>
-  ) : null
+  return null
 }
 
 export function BotChatTreeGroup({
@@ -219,7 +246,7 @@ export function BotChatTreeGroup({
   return (
     <div className="flex flex-col">
       <BotChatContextMenu bot={bot} chat={chat} onOpen={() => openChat(bot, chat)}>
-        <div className="group/bot-chat relative flex w-full min-w-0 items-start gap-1 rounded-md py-1.5 pr-2 pl-0.5 hover:bg-accent">
+        <div className="group/bot-chat relative flex w-full min-w-0 items-start gap-1 rounded-md py-1.5 pr-2 pl-2 hover:bg-accent">
           <button
             type="button"
             aria-label={[label, chat.unread ? t('bots.chats.unread', 'Unread') : null]
@@ -234,30 +261,42 @@ export function BotChatTreeGroup({
               }
             }}
           />
-          <span className="flex h-5 w-3.5 shrink-0 items-center justify-center">
+          {/* A chat with workers: its source icon turns into the fold chevron on hover, and stays one while unfolded. */}
+          <span className="relative flex h-5 w-4 shrink-0 items-center justify-center">
+            <BotChatStatusSlot
+              chat={chat}
+              stop={stopIndex.bySession.get(chat.chatId) ?? null}
+              className={cn(
+                'h-5 w-4',
+                // Hidden exactly while the chevron over it shows: on hover, or while it has focus.
+                foldable &&
+                  'group-hover/bot-chat:invisible group-has-[[data-fold]:focus-visible]/bot-chat:invisible',
+                open && 'invisible'
+              )}
+              iconClassName="size-3.5"
+              onClick={pressRow}
+            />
             {foldable ? (
               <button
                 type="button"
+                data-fold=""
                 aria-expanded={open}
                 aria-label={
                   open
                     ? t('bots.chats.fold', 'Fold {{name}}', { name: title })
                     : t('bots.chats.unfold', 'Unfold {{name}}', { name: title })
                 }
-                className={cn('relative size-3.5', FOLD_TOGGLE_CLASS)}
+                className={cn(
+                  'absolute inset-0',
+                  FOLD_TOGGLE_CLASS,
+                  !open && 'opacity-0 group-hover/bot-chat:opacity-100 focus-visible:opacity-100'
+                )}
                 onClick={toggleFold}
               >
-                <ChevronRight className={cn('size-3', open && 'rotate-90')} />
+                <ChevronRight className={cn('size-3.5', open && 'rotate-90')} />
               </button>
             ) : null}
           </span>
-          <BotChatStatusSlot
-            chat={chat}
-            stop={stopIndex.bySession.get(chat.chatId) ?? null}
-            className="h-5 w-4"
-            iconClassName="size-3.5"
-            onClick={pressRow}
-          />
           <span className="min-w-0 flex-1 pl-1">
             <span className="flex min-w-0 items-center gap-1.5">
               <span
@@ -274,11 +313,18 @@ export function BotChatTreeGroup({
                 </span>
               ) : null}
               <span className="flex-1" />
-              {/* The ⋯ takes the meta's place on hover, so nothing moves. */}
-              <span className="group/chat-end relative flex shrink-0 items-center">
-                <span className={cn('flex items-center', botChatHasMenu(chat) && MENU_TAKES_PLACE)}>
-                  <ChatRowMeta chat={chat} />
-                </span>
+              {/* The ⋯ takes the time's place on hover, flush to the same edge, so nothing moves. */}
+              <span className="group/chat-end relative flex h-5 min-w-6 shrink-0 items-center justify-end">
+                {chat.lastActiveAt > 0 ? (
+                  <span
+                    className={cn(
+                      'text-2xs text-muted-foreground tabular-nums',
+                      botChatHasMenu(chat) && MENU_TAKES_PLACE
+                    )}
+                  >
+                    {formatShortTimeAgo(chat.lastActiveAt)}
+                  </span>
+                ) : null}
                 <BotChatMoreButton
                   bot={bot}
                   chat={chat}
@@ -287,8 +333,12 @@ export function BotChatTreeGroup({
                 />
               </span>
             </span>
-            <span className="block truncate text-2xs text-muted-foreground">
-              <BotChatLine bot={bot} chat={chat} folded={false} />
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="min-w-0 flex-1 truncate text-2xs text-muted-foreground">
+                <BotChatLine bot={bot} chat={chat} folded={false} liveAtEnd />
+              </span>
+              <ChatRowLive chat={chat} />
+              <ChatRowWork chat={chat} />
             </span>
           </span>
         </div>
