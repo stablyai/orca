@@ -100,6 +100,7 @@ export async function escalateChatWorkerError(
             requestError: {
               text,
               ...(detail ? { detail } : {}),
+              ...(kind ? { kind } : {}),
               facts: {
                 sessionId: request.sessionId,
                 agent: request.agent,

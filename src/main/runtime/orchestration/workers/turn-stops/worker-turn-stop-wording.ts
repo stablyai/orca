@@ -39,12 +39,21 @@ export function redactFailure(text: string): string {
 
 export function describeStop(stop: WorkerTurnStop, context: StopContext): string {
   if (stop.requestError) {
-    const { text, detail } = stop.requestError
+    const { text, detail, kind } = stop.requestError
+    const chat = stop.from.startsWith(ORCA_SESSION_ADDRESS_PREFIX)
     return [
       `Worker ${stop.from} hit an error while running task ${context.task}.`,
       `Error: ${text}`,
       ...(detail ? [`Details from the agent: ${detail}`] : []),
-      'The task is still assigned to this chat, which keeps its history.'
+      ...(chat ? ['The task is still assigned to this chat, which keeps its history.'] : []),
+      ...(kind === 'usageLimitReached'
+        ? [
+            `Stop the worker with your Orca CLI's \`orchestration worker-stop --dispatch ${context.dispatchId}\` and retry the task on another agent with \`orchestration worker-start --task ${context.taskId} --retry-of ${context.dispatchId} --agent <other>\`, or wait until the limit resets.`
+          ]
+        : chat
+          ? []
+          : describeNextStep(stop, context)),
+      ...(chat ? [] : [`Full output: orchestration worker-read --dispatch ${context.dispatchId}`])
     ].join('\n')
   }
   const { task, dispatchId } = context
