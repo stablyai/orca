@@ -1,10 +1,6 @@
 import { memo } from 'react'
 import { Text } from 'react-native'
-import {
-  getNativeChatMessageDay,
-  getNativeChatMessageTimeFormatter
-} from '../../../../../../src/shared/native-chat/transcript/messages/native-chat-message-time'
-import { useSharedNowSnapshot } from '../../../../hooks/use-now'
+import { useMobileMessageTime } from './use-mobile-message-time'
 import { colors, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
@@ -14,13 +10,12 @@ import { scaledType } from './mobile-native-chat-message-styles'
 export function useMobileNativeChatMessageTimeLabel(
   timestamp: number | null | undefined
 ): { short: string; full: string } | null {
-  const today = useSharedNowSnapshot(30_000, getNativeChatMessageDay)
-  const date = timestamp == null ? null : new Date(timestamp)
-  if (!date || Number.isNaN(date.getTime())) {
+  const time = useMobileMessageTime()
+  if (timestamp == null) {
     return null
   }
-  const formatter = getNativeChatMessageTimeFormatter(undefined, today)
-  return { short: formatter.format(date, today.date), full: formatter.formatFull(date) }
+  const short = time.label(timestamp)
+  return short ? { short, full: time.full(timestamp) } : null
 }
 
 export const MobileNativeChatMessageTime = memo(function MobileNativeChatMessageTime({
