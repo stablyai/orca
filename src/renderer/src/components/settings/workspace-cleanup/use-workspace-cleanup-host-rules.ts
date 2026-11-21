@@ -95,7 +95,6 @@ export function useWorkspaceCleanupHostRules(
     return () => {
       current = false
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- readInOrder only reads refs and setters.
   }, [environmentId, attempt])
 
   useEffect(() => {
@@ -114,7 +113,6 @@ export function useWorkspaceCleanupHostRules(
       current = false
       stop()
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- readInOrder only reads refs and setters.
   }, [environmentId])
 
   const reportFailure = (error: unknown): void => {
