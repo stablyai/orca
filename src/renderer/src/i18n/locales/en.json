@@ -27557,7 +27557,8 @@
         "removeNote": "People can no longer ask it on GitHub, and its GitHub people are cleared. The Orca app stays installed.",
         "removeConfirm": "Remove",
         "finishSetup": "Finish setup",
-        "orgDescription": "{{repos}} · signed in as @{{login}}"
+        "orgDescription": "{{repos}} · signed in as @{{login}}",
+        "addAccount": "Add another GitHub account"
       },
       "setup": {
         "install": "Install the Orca app",
@@ -27593,6 +27594,8 @@
         "unlink": "Unlink",
         "unlinked": "Add GitHub from a bot’s Connectors to link your account.",
         "descriptionOnHost": "The GitHub user {{host}}’s bots work as and are owned by.",
+        "descriptionPlural": "Your GitHub accounts, so your bots know which comments are yours.",
+        "descriptionOnHostPlural": "The GitHub users {{host}}’s bots work as and are owned by.",
         "linkedAs": "Linked as {{login}}",
         "reconnect": "Reconnect",
         "linkFromApp": "Link GitHub from Orca on a computer paired to {{host}}.",
