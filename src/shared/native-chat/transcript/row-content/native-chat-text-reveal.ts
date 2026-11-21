@@ -28,7 +28,7 @@ export type NativeChatTextRevealFrames = {
 const FRAME_SLACK_MS = 8
 const FRAME_MS = 1000 / 60
 /** However slowly the reply renders, it still moves at least this often. */
-const MAX_STEP_MS = 1000
+const MAX_STEP_MS = 6000
 /** Hidden windows get no animation frames, so a timer steps them a little after each step is due. */
 const HIDDEN_STEP_MS = 100
 
