@@ -49,13 +49,16 @@ function nativeChatUserMessageContentKey(
   // Some CLIs retain pasted attachment paths as prompt text instead of image markers.
   const paths = sentImagePaths?.filter(Boolean) ?? []
   const normalizedPaths = paths.map(normalizeNativeChatPendingText)
-  // A terminal chat types the stored path with its spaces backslash-escaped.
+  // A terminal chat types the stored path with its spaces backslash-escaped, or a Windows one in double quotes.
   const escapedPaths = normalizedPaths.map((path) => path.replace(/ /g, '\\ '))
+  const quotedPaths = normalizedPaths.map((path) => (/\s/.test(path) ? `"${path}"` : path))
   for (const prefix of [
     normalizedPaths.join(' '),
     normalizedPaths.join(''),
     escapedPaths.join(' '),
-    escapedPaths.join('')
+    escapedPaths.join(''),
+    quotedPaths.join(' '),
+    quotedPaths.join('')
   ]) {
     if (prefix && (text === prefix || text.startsWith(`${prefix} `))) {
       text = text.slice(prefix.length).trimStart()

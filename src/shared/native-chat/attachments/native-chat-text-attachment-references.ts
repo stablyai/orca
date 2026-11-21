@@ -19,11 +19,25 @@ export function isChatAttachmentStorePath(path: string): boolean {
 
 const REFERENCE_TOKEN = /@"(?:\\"|[^"])*"|@'[^']*'|@[^\s]+/g
 
-// A terminal chat writes the stored file's path as typed text, spaces escaped with a backslash.
+const UPLOAD_ID = '[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}'
+
+// A terminal chat writes the stored file's path as typed text: POSIX spaces escaped with a backslash, a Windows path as it is, in double quotes when it has a space.
 const REFERENCE_OR_PLAIN_UPLOAD_PATH = new RegExp(
-  `${REFERENCE_TOKEN.source}|(?:[a-z]:)?/(?:\\\\.|[^\\s\\\\])*?${AGENT_SESSION_ATTACHMENTS_DIR_NAME}/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}/(?:\\\\.|[^\\s\\\\/])+`,
+  [
+    REFERENCE_TOKEN.source,
+    `"[a-z]:\\\\[^"]*?${AGENT_SESSION_ATTACHMENTS_DIR_NAME}\\\\${UPLOAD_ID}\\\\[^"\\\\]+"`,
+    `[a-z]:\\\\[^\\s"]*?${AGENT_SESSION_ATTACHMENTS_DIR_NAME}\\\\${UPLOAD_ID}\\\\[^\\s"\\\\]+`,
+    `(?:[a-z]:)?/(?:\\\\.|[^\\s\\\\])*?${AGENT_SESSION_ATTACHMENTS_DIR_NAME}/${UPLOAD_ID}/(?:\\\\.|[^\\s\\\\/])+`
+  ].join('|'),
   'gi'
 )
+
+function plainUploadPath(token: string): string {
+  if (token.startsWith('"')) {
+    return token.slice(1, -1)
+  }
+  return /^[a-z]:\\/i.test(token) ? token : token.replace(/\\(.)/g, '$1')
+}
 
 function referencedPath(token: string): string {
   if (token[1] === '"') {
@@ -51,7 +65,7 @@ export function nativeChatTextAttachmentParts(
     if (token.length > 8192) {
       continue
     }
-    const path = token.startsWith('@') ? referencedPath(token) : token.replace(/\\(.)/g, '$1')
+    const path = token.startsWith('@') ? referencedPath(token) : plainUploadPath(token)
     if (!acceptPath(path)) {
       continue
     }
