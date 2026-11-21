@@ -86,15 +86,23 @@ export async function resolveBranchCheckouts(
     return { kind: 'owned', gitDirs: owners }
   }
   let unresolvable = false
-  await forEachBounded(unnamed, async (gitDir) => {
-    const link = settled() || state.linksRead ? undefined : await readRefLink(join(gitDir, 'HEAD'))
-    if (link !== undefined) {
-      unresolvable ||= !classify(gitDir, link)
-    } else {
-      const head = state.heads.get(gitDir) ?? ''
-      unresolvable ||= head !== '' && !COMMIT_ID.test(head)
+  const settle = (gitDir: string, link: string | undefined) => {
+    const head = state.heads.get(gitDir) ?? ''
+    unresolvable ||=
+      link === undefined ? head !== '' && !COMMIT_ID.test(head) : !classify(gitDir, link)
+  }
+  if (state.linksRead) {
+    // The sweep already followed symlinked HEADs; these are plain content.
+    for (const gitDir of unnamed) {
+      settle(gitDir, undefined)
     }
-  })
+  } else {
+    await forEachBounded(
+      unnamed,
+      async (gitDir) => settle(gitDir, await readRefLink(join(gitDir, 'HEAD'))),
+      settled
+    )
+  }
   if (settled()) {
     return { kind: 'owned', gitDirs: owners }
   }
@@ -124,7 +132,7 @@ export async function resolveBranchCheckouts(
     }
     unknown = true
   }
-  await forEachBounded(branches, resolve).catch((error: unknown) => {
+  await forEachBounded(branches, resolve, () => unknown || settled()).catch((error: unknown) => {
     unknown = true
     throw error
   })

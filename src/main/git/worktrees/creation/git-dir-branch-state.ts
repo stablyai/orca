@@ -86,16 +86,17 @@ export async function readRefLink(path: string): Promise<string | undefined> {
 
 const READ_CONCURRENCY = 16
 
-/** Runs at most `READ_CONCURRENCY` at once and starts nothing after a failure. */
+/** Runs at most `READ_CONCURRENCY` at once; starts nothing after a failure or once `done()` holds. */
 export async function forEachBounded<T>(
   items: readonly T[],
-  run: (item: T) => Promise<void>
+  run: (item: T) => Promise<void>,
+  done: () => boolean = () => false
 ): Promise<void> {
   let next = 0
   let failed = false
   await Promise.all(
     Array.from({ length: Math.min(READ_CONCURRENCY, items.length) }, async () => {
-      while (next < items.length && !failed) {
+      while (next < items.length && !failed && !done()) {
         const item = items[next++]
         try {
           await run(item)
