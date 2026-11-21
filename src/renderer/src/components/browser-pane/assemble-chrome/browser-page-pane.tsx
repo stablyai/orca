@@ -324,6 +324,7 @@ export function BrowserPagePane({
         worktreeId={worktreeId}
         sessionProfileId={sessionProfileId}
         isActive={isActive}
+        inputLocked={inputLocked}
         webviewRef={webviewRef}
         addressBarInputRef={addressBarInputRef}
         dismissAddressBarSuggestionsRef={dismissAddressBarSuggestionsRef}
