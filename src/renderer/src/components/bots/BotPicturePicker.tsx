@@ -10,7 +10,7 @@ import { PICKABLE_BOT_MASCOT_IDS, type BotMascotId } from '../../../../shared/bo
 import type { BotAvatarOutfit } from '../../../../shared/bots/bot-avatar-outfit'
 import { BOT_AVATAR_ACCEPT } from './bot-avatar-intake'
 import { useBotMascotTileLooks, type BotMascotTileLook } from './bot-mascot-look'
-import { BotPictureColors, BotPictureOutfits } from './BotPictureLook'
+import { BotPictureLook } from './BotPictureLook'
 import { BotPictureIntakeLine, LineAction } from './BotPictureIntakeLine'
 import {
   useBotAvatarIntakeHost,
@@ -300,15 +300,13 @@ export function BotPicturePicker({
         <BotPictureRowFold open={!generating}>
           {onColorChange || onOutfitChange ? (
             <BotPictureRowFold open={!showingCustom}>
-              {onColorChange ? <BotPictureColors color={color} onChange={onColorChange} /> : null}
-              {onOutfitChange ? (
-                <BotPictureOutfits
-                  id={PICKABLE_BOT_MASCOT_IDS[mascotIndex] ?? PICKABLE_BOT_MASCOT_IDS[0]}
-                  color={color}
-                  outfit={outfit}
-                  onChange={onOutfitChange}
-                />
-              ) : null}
+              <BotPictureLook
+                id={PICKABLE_BOT_MASCOT_IDS[mascotIndex] ?? PICKABLE_BOT_MASCOT_IDS[0]}
+                color={color}
+                onColorChange={onColorChange}
+                outfit={outfit}
+                onOutfitChange={onOutfitChange}
+              />
             </BotPictureRowFold>
           ) : null}
           {uploadLine}

@@ -1,6 +1,6 @@
 // A mascot's look under the picture carousel: its tile color and what it wears.
-import { ChevronDown, Plus } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Plus } from 'lucide-react'
+import { HangerIcon } from '@/components/icons/HangerIcon'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { ColorPicker } from '@/components/ui/color-picker'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -16,7 +16,7 @@ import { useBotMascotTileLooks } from './bot-mascot-look'
 import { BotMascotBitmapTile } from './BotMascotBitmapTile'
 
 /** The mascot's tile color: the swatches, then any color. */
-export function BotPictureColors({
+function BotPictureColors({
   color,
   onChange
 }: {
@@ -43,7 +43,7 @@ export function BotPictureColors({
     <div
       role="group"
       aria-label={t('bots.new.pictureColor', 'Background color')}
-      className="mt-2 flex flex-wrap items-center justify-center gap-1"
+      className="contents"
     >
       {BOT_AVATAR_COLORS.map((swatch) => (
         <button
@@ -140,19 +140,69 @@ function OutfitTile({
   )
 }
 
-/** What the mascot wears, under a row that names it: nothing, then each outfit, shown on the mascot itself. */
 const OUTFIT_GRID_COLUMNS = 5
 
-export function BotPictureOutfits({
+/** What the mascot wears: nothing, then each outfit, shown on the mascot itself. */
+function BotPictureOutfitGrid({
   id,
   color,
   outfit,
+  names,
   onChange
 }: {
   id: BotMascotId
   color: string | null
   outfit: BotAvatarOutfit | null
+  names: Record<BotAvatarOutfit, string>
   onChange: (outfit: BotAvatarOutfit | null) => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <div
+      role="group"
+      aria-label={t('bots.new.pictureOutfit', 'Outfit')}
+      className="mx-auto grid w-fit grid-cols-5 gap-2 p-1"
+    >
+      <OutfitTile
+        id={id}
+        color={color}
+        outfit={null}
+        label={t('bots.new.outfitNone', 'No outfit')}
+        selected={outfit === null}
+        side="top"
+        onPick={() => onChange(null)}
+      />
+      {BOT_AVATAR_OUTFITS.map((worn, index) => (
+        <OutfitTile
+          key={worn}
+          id={id}
+          color={color}
+          outfit={worn}
+          label={names[worn]}
+          selected={outfit === worn}
+          // "No outfit" fills the first row's first place.
+          side={index < OUTFIT_GRID_COLUMNS - 1 ? 'top' : 'bottom'}
+          onPick={() => onChange(worn)}
+        />
+      ))}
+    </div>
+  )
+}
+
+/** The mascot's look under the carousel: the color row, ending in a hanger that opens the outfits under
+ *  it. Either half is absent when the host can't store it. */
+export function BotPictureLook({
+  id,
+  color,
+  onColorChange,
+  outfit,
+  onOutfitChange
+}: {
+  id: BotMascotId
+  color: string | null
+  onColorChange?: (color: string | null) => void
+  outfit: BotAvatarOutfit | null
+  onOutfitChange?: (outfit: BotAvatarOutfit | null) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const names: Record<BotAvatarOutfit, string> = {
@@ -165,43 +215,46 @@ export function BotPictureOutfits({
     scientist: t('bots.new.outfitScientist', 'Scientist'),
     party: t('bots.new.outfitParty', 'Party')
   }
-  const label = t('bots.new.pictureOutfit', 'Outfit')
+  const outfitLabel = t('bots.new.pictureOutfit', 'Outfit')
   return (
-    <Collapsible className="mt-1 flex flex-col items-center">
-      <CollapsibleTrigger asChild>
-        <Button type="button" variant="disclosure" size="xs" className="group">
-          {outfit
-            ? t('bots.new.pictureOutfitsWorn', 'Outfits · {{outfit}}', { outfit: names[outfit] })
-            : t('bots.new.pictureOutfits', 'Outfits')}
-          <ChevronDown className="transition-transform group-data-[state=open]:rotate-180 motion-reduce:transition-none" />
-        </Button>
-      </CollapsibleTrigger>
-      <CollapsibleContent animation="height">
-        <div role="group" aria-label={label} className="mx-auto grid w-fit grid-cols-5 gap-2 p-1">
-          <OutfitTile
-            id={id}
-            color={color}
-            outfit={null}
-            label={t('bots.new.outfitNone', 'No outfit')}
-            selected={outfit === null}
-            side="top"
-            onPick={() => onChange(null)}
-          />
-          {BOT_AVATAR_OUTFITS.map((worn, index) => (
-            <OutfitTile
-              key={worn}
+    <Collapsible className="flex flex-col items-center">
+      <div className="mt-2 flex flex-wrap items-center justify-center gap-1">
+        {onColorChange ? <BotPictureColors color={color} onChange={onColorChange} /> : null}
+        {onOutfitChange ? (
+          <>
+            {onColorChange ? <span aria-hidden className="mx-0.5 h-3 w-px bg-input" /> : null}
+            <Tooltip>
+              <CollapsibleTrigger asChild>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={outfitLabel}
+                    className="flex size-4 cursor-pointer items-center justify-center rounded-full border border-border bg-muted text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[state=open]:border-foreground data-[state=open]:bg-foreground data-[state=open]:text-popover"
+                  >
+                    <HangerIcon className="size-3" />
+                  </button>
+                </TooltipTrigger>
+              </CollapsibleTrigger>
+              <TooltipContent side="bottom" sideOffset={4}>
+                {outfitLabel}
+              </TooltipContent>
+            </Tooltip>
+          </>
+        ) : null}
+      </div>
+      {onOutfitChange ? (
+        <CollapsibleContent animation="height">
+          <div className="pt-1">
+            <BotPictureOutfitGrid
               id={id}
               color={color}
-              outfit={worn}
-              label={names[worn]}
-              selected={outfit === worn}
-              // "No outfit" fills the first row's first place.
-              side={index < OUTFIT_GRID_COLUMNS - 1 ? 'top' : 'bottom'}
-              onPick={() => onChange(worn)}
+              outfit={outfit}
+              names={names}
+              onChange={onOutfitChange}
             />
-          ))}
-        </div>
-      </CollapsibleContent>
+          </div>
+        </CollapsibleContent>
+      ) : null}
     </Collapsible>
   )
 }
