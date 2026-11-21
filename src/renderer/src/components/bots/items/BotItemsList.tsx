@@ -1,7 +1,7 @@
 // A bot's items in groups: Needs you (led by Orca's asks) and In progress open; Planned, Snoozed, Stale
 // and Closed folded. Each shows five rows, then Show N more. Checked rows get the floating pill; Stale's header
 // cancels them all. Asks have no checkbox, so selection and ranges never reach them.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
@@ -33,7 +33,6 @@ import { botItemsByBot, setBotItemsStatus } from './use-bot-items'
 import { useBotItemSnoozing, type BotItemSnoozing } from './BotItemSnooze'
 import { BotItemRowsWindow, focusBotItemBackRow } from './BotItemRowsWindow'
 import { useBotItemsViewport, type BotItemsViewport } from './bot-items-viewport'
-import { useReusedArrayIdentity } from '../../sidebar/worktree-list/listing/use-reused-array-identity'
 import { listOwner, type BotItemsListMembers, type ListOwner } from './bot-items-list-owner'
 
 export type { BotItemsListMembers }
@@ -93,6 +92,10 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
   // State, not a ref: a group's window subscribes before a ref here would be set.
   const [list, setList] = useState<HTMLDivElement | null>(null)
   const viewport = useBotItemsViewport(props.scroller ?? null, list)
+  // A group whose size changes moves the groups below it, even with the list's height unchanged (rows
+  // aging from one group into another): their windows measure again before the change is painted.
+  const shape = BOT_ITEM_GROUP_IDS.map((id) => groups[id].length).join()
+  useLayoutEffect(() => viewport.flush(), [viewport, shape])
 
   const select = useLatestHandler((item: BotItem, on: boolean, range: boolean): void => {
     setSelected((current) => {
@@ -228,12 +231,9 @@ function BotItemGroup({
   )
   const [shown, setShown] = useState(Math.max(BOT_ITEM_GROUP_ROWS, focusIndex + 1))
   // Only an open window draws rows: a folded group, or Needs you, copies none.
-  // The same rows keep the same list (the minute clock regroups every item), so the window does nothing.
-  const shownItems = useReusedArrayIdentity(
-    useMemo(
-      () => (open && id !== 'needs_you' ? items.slice(0, shown) : []),
-      [open, id, items, shown]
-    )
+  const shownItems = useMemo(
+    () => (open && id !== 'needs_you' ? items.slice(0, shown) : []),
+    [open, id, items, shown]
   )
   const section = useRef<HTMLElement | null>(null)
   // Back's row until it has focus; one that left the group has nothing to return to.

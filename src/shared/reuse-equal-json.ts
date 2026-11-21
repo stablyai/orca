@@ -44,15 +44,16 @@ export function reuseEqualJson<T>(previous: unknown, next: T): T {
     const keyed = uidOf(next[0]) !== null
     const merged = next.map((item: unknown, index) => {
       const atIndex = index < previous.length ? previous[index] : undefined
-      let kept = atIndex === undefined ? item : reuseEqualJson(atIndex, item)
-      // A record whose `uid` moved pairs with the previous one carrying it, so it keeps its identity.
-      // Checked only where the record in its place differs, so an unchanged answer pays nothing for it.
-      const uid = keyed && kept !== atIndex ? uidOf(item) : null
+      // A record whose `uid` moved pairs with the previous one carrying it, so it keeps its identity and
+      // is compared once, with itself. Two property reads per record, beside the field-by-field
+      // comparison every record gets.
+      let match = atIndex
+      const uid = keyed ? uidOf(item) : null
       if (uid !== null && uidOf(atIndex) !== uid) {
         byUid = byUid === undefined ? indexByUid(previous) : byUid
-        const match = byUid?.get(uid)
-        kept = match === undefined ? item : reuseEqualJson(match, item)
+        match = byUid ? byUid.get(uid) : atIndex
       }
+      const kept = match === undefined ? item : reuseEqualJson(match, item)
       same &&= kept === previous[index]
       return kept
     })

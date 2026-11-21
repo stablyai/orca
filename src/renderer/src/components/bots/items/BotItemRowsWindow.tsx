@@ -64,11 +64,19 @@ function mixedGeometry(tall: readonly boolean[]): Geometry {
 }
 
 type Range = { start: number; end: number }
+/** A window's range, and the rows it was measured against. */
+type WindowRange = Range & { of: readonly BotItem[] }
+
+const NO_INDEXES: readonly number[] = []
+// A short group's range is every row, with none to carry once it grows long.
+const NO_ROWS: readonly BotItem[] = []
 
 /** A row by its uid and where it was: found there at once unless the rows have moved since. */
 type RowPick = { uid: string; at: number }
 
 type IndexOf = (pick: RowPick | null) => number
+/** How far from where it was a pick is looked for before the whole list is indexed. */
+const NEAR_ROWS = 8
 
 /** Finds picks in one shown list: at once where they were, else by one index of the list, built on the
  *  first miss and shared by every pick. -1 for a row that left. */
@@ -78,8 +86,14 @@ function indexOfPicks(items: readonly BotItem[]): IndexOf {
     if (pick === null) {
       return -1
     }
-    if (items[pick.at]?.uid === pick.uid) {
-      return pick.at
+    // A row an update moved a few places (rows above it added, removed or sorted) is found close by.
+    for (let distance = 0; distance <= NEAR_ROWS; distance++) {
+      if (items[pick.at + distance]?.uid === pick.uid) {
+        return pick.at + distance
+      }
+      if (distance > 0 && items[pick.at - distance]?.uid === pick.uid) {
+        return pick.at - distance
+      }
     }
     byUid ??= new Map(items.map((item, index) => [item.uid, index]))
     return byUid.get(pick.uid) ?? -1
@@ -142,19 +156,33 @@ export function BotItemRowsWindow({
     [count, tallKey]
   )
   const indexOf = useMemo(() => indexOfPicks(items), [items])
-  const [windowRange, setRange] = useState<Range>(() => ({
+  const [windowRange, setRange] = useState<WindowRange>(() => ({
     start: 0,
-    end: Math.min(count, FIRST_ROWS)
+    end: Math.min(count, FIRST_ROWS),
+    of: items
   }))
   const range = useMemo(
-    () => (all ? { start: 0, end: count } : windowRange),
+    (): Range => (all ? { start: 0, end: count } : windowRange),
     [all, count, windowRange]
   )
+  // Rows change before the range follows them: the rows drawn until now stay drawn wherever they moved,
+  // so however many rows an update adds or removes above the view, the browser keeps a row it can hold
+  // the reading position by. The range measured next lets them go.
+  const carried = useMemo(() => {
+    if (all || windowRange.of === items) {
+      return NO_INDEXES
+    }
+    const { of, start, end } = windowRange
+    return of
+      .slice(start, end)
+      .map((item, offset) => indexOf({ uid: item.uid, at: start + offset }))
+      .filter((index) => index >= 0)
+  }, [all, windowRange, items, indexOf])
   const measure = useLatestHandler((): void => {
     const box = viewport.read()
     const element = container.current
     const top = box && element ? element.getBoundingClientRect().top : null
-    let next = { start: 0, end: Math.min(count, FIRST_ROWS) }
+    let next: Range = { start: 0, end: Math.min(count, FIRST_ROWS) }
     if (box && top !== null) {
       const from = box.top - top - OVERSCAN_PX
       const to = box.bottom - top + OVERSCAN_PX
@@ -163,7 +191,11 @@ export function BotItemRowsWindow({
           ? { start: 0, end: 0 }
           : { start: geometry.indexAt(Math.max(0, from)), end: geometry.indexAt(to) + 1 }
     }
-    setRange((prev) => (prev.start === next.start && prev.end === next.end ? prev : next))
+    setRange((prev) =>
+      prev.start === next.start && prev.end === next.end && prev.of === items
+        ? prev
+        : { ...next, of: items }
+    )
   })
   // A short group draws every row and needs no view. A long one listens once for as long as it windows.
   useLayoutEffect(() => (all ? undefined : viewport.subscribe(measure)), [all, viewport, measure])
@@ -173,7 +205,9 @@ export function BotItemRowsWindow({
   // group's range is every row, kept current so it starts from there if it grows long.
   useLayoutEffect(() => {
     if (all) {
-      setRange((was) => (was.start === 0 && was.end === count ? was : { start: 0, end: count }))
+      setRange((was) =>
+        was.start === 0 && was.end === count ? was : { start: 0, end: count, of: NO_ROWS }
+      )
     } else if (!document.hidden) {
       measure()
     }
@@ -209,12 +243,12 @@ export function BotItemRowsWindow({
     [tabStop, focusedIndex, targetIndex, backIndex, count, range]
   )
   const drawn = useMemo(() => {
-    const indexes = new Set(pinned)
+    const indexes = new Set([...pinned, ...carried])
     for (let index = range.start; index < Math.min(range.end, count); index++) {
       indexes.add(index)
     }
     return [...indexes].sort((a, b) => a - b)
-  }, [pinned, range, count])
+  }, [pinned, carried, range, count])
 
   const focusTarget = useCallback((node: HTMLElement | null) => {
     if (node) {

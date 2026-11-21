@@ -11,6 +11,9 @@ export type BotItemsViewport = {
   read: () => BotItemsViewportBox | null
   /** The first listener starts listening to the scroller; the last one leaving stops. */
   subscribe: (listener: () => void) => () => void
+  /** Notifies every listener now: the list's groups changed shape, which can move a group into view
+   *  without the list changing height. */
+  flush: () => void
 }
 
 function readBox(scroller: HTMLElement): BotItemsViewportBox {
@@ -80,6 +83,11 @@ function createViewport(scroller: HTMLElement | null, list: HTMLElement | null):
           stop()
           stop = null
         }
+      }
+    },
+    flush: () => {
+      if (listeners.size > 0 && !document.hidden) {
+        onFrame()
       }
     }
   }
