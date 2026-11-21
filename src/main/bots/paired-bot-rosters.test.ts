@@ -68,7 +68,7 @@ it("reads each paired server's bots with the --on that reaches it, and says whic
 it('answers from the last read without waiting, reads again behind it, and keeps the last answer when a read fails', async () => {
   const answers: Record<string, unknown> = { 'env-air': { bots: [ENTRY] } }
   const runtime = servers(answers)
-  const read = pairedBotRosterCache(runtime)
+  const { read } = pairedBotRosterCache(runtime)
   const air = new Set(['env-air'])
 
   expect(await read(air)).toEqual([

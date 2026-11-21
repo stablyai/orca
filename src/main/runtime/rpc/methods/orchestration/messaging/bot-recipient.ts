@@ -97,7 +97,7 @@ export function botAddressReach(
     const bot = botOfAddress(bots, name)
     return bot
       ? { kind: 'bot', receiving: { bot, via: 'alias', chat: null } }
-      : refuse(botNotFound(name, bots))
+      : refuse(botNotFound(name, bots, runtime.pairedBotRosters.lastRead()))
   }
   if (bots.length === 0) {
     return { kind: 'none' }

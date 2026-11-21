@@ -72,14 +72,28 @@ export type KnownPairedBotRoster = {
   bots: readonly BotRosterEntry[] | null
 }
 
+export type PairedBotRosterCache = {
+  /** The asked servers as last read, refreshing them in the background for the next ask. */
+  read(servers: ReadonlySet<string>): Promise<KnownPairedBotRoster[]>
+  /** Every entry any read answered with, without listing servers or touching the network. */
+  lastRead(): readonly BotRosterEntry[]
+  /** Keeps what a full read just answered, so the next ask needn't wait on it. */
+  remember(rosters: readonly PairedBotRoster[]): void
+}
+
 /** The paired servers' bots without waiting on the network: what each was last read to hold, while
  *  a read in the background brings it up to date for the next ask. A server that can't be read keeps
  *  its last answer. */
-export function pairedBotRosterCache(
-  runtime: PairedBotServers
-): (servers: ReadonlySet<string>) => Promise<KnownPairedBotRoster[]> {
+export function pairedBotRosterCache(runtime: PairedBotServers): PairedBotRosterCache {
   const known = new Map<string, readonly BotRosterEntry[]>()
   const reading = new Set<string>()
+  const remember = (rosters: readonly PairedBotRoster[]): void => {
+    for (const roster of rosters) {
+      if ('bots' in roster) {
+        known.set(roster.environmentId, roster.bots)
+      }
+    }
+  }
   const refresh = (ids: readonly string[]): void => {
     const stale = ids.filter((id) => !reading.has(id))
     if (stale.length === 0) {
@@ -87,25 +101,23 @@ export function pairedBotRosterCache(
     }
     stale.forEach((id) => reading.add(id))
     void readPairedBotRosters(runtime, new Set(stale))
-      .then((rosters) => {
-        for (const roster of rosters) {
-          if ('bots' in roster) {
-            known.set(roster.environmentId, roster.bots)
-          }
-        }
-      })
+      .then(remember)
       .catch(() => {})
       .finally(() => stale.forEach((id) => reading.delete(id)))
   }
-  return async (servers) => {
-    const all = await runtime.listOrchestrationWorkerServers().catch(() => [])
-    const asked = all.filter((server) => servers.has(server.environmentId))
-    refresh(asked.map((server) => server.environmentId))
-    return asked.map(({ environmentId, name }) => ({
-      environmentId,
-      server: { name, on: serverSelector(all, environmentId, name) },
-      bots: known.get(environmentId) ?? null
-    }))
+  return {
+    read: async (servers) => {
+      const all = await runtime.listOrchestrationWorkerServers().catch(() => [])
+      const asked = all.filter((server) => servers.has(server.environmentId))
+      refresh(asked.map((server) => server.environmentId))
+      return asked.map(({ environmentId, name }) => ({
+        environmentId,
+        server: { name, on: serverSelector(all, environmentId, name) },
+        bots: known.get(environmentId) ?? null
+      }))
+    },
+    lastRead: () => [...known.values()].flat(),
+    remember
   }
 }
 
