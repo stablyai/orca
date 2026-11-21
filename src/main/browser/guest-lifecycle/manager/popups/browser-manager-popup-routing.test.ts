@@ -37,7 +37,8 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../popups/presentation/popup-origin-bar-window', () => ({
+vi.mock('../../popups/presentation/popup-origin-bar-window', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   openPopupWithOriginBar: browserMocks.openPopupWithOriginBarMock
 }))
 
@@ -114,7 +115,8 @@ describe('browserManager', () => {
       frameName: string
       features: string
       disposition: string
-    }) => unknown = guestSetWindowOpenHandlerMock.mock.calls[0][0]
+    }) => { createWindow?: (options: unknown) => unknown } =
+      guestSetWindowOpenHandlerMock.mock.calls[0][0]
     const mouseEventHandler = guestOnMock.mock.calls.find(
       ([event]) => event === 'before-mouse-event'
     )?.[1]
@@ -122,7 +124,22 @@ describe('browserManager', () => {
       guest,
       rendererSendMock,
       openLink: (url) => {
-        handler({ url, frameName: '', features: '', disposition: 'foreground-tab' })
+        const response = handler({
+          url,
+          frameName: '',
+          features: '',
+          disposition: 'foreground-tab'
+        })
+        // Chromium creates a clicked link's child before its opener can be read; links have none.
+        response.createWindow?.({
+          webContents: {
+            opener: null,
+            isDestroyed: () => false,
+            on: vi.fn(),
+            setWindowOpenHandler: vi.fn(),
+            close: vi.fn()
+          }
+        })
       },
       pressMouse: () => mouseEventHandler({}, { type: 'mouseUp' })
     }
@@ -141,6 +158,30 @@ describe('browserManager', () => {
       ([channel]) => channel === 'browser:open-link-in-orca-tab'
     )
   }
+
+  it("opens a window.open(url, '_blank') an agent or phone clicked as a tab, since only this desktop sees popups", async () => {
+    const { guest, rendererSendMock, pressMouse } = attachGuest()
+    registerAsTab(guest)
+    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0]
+
+    await withAgentInputInjection(guest as never, async () => {
+      pressMouse()
+    })
+    const response = handler({
+      url: 'https://docs.example.com/picker',
+      frameName: '',
+      features: '',
+      disposition: 'foreground-tab'
+    })
+
+    expect(response).toEqual({ action: 'deny' })
+    expect(openedTabs(rendererSendMock)).toEqual([
+      [
+        'browser:open-link-in-orca-tab',
+        { browserPageId: 'browser-1', url: 'https://docs.example.com/picker' }
+      ]
+    ])
+  })
 
   it("opens an agent's link behind the user's tab, and the user's own click in front", async () => {
     const { guest, rendererSendMock, openLink, pressMouse } = attachGuest()

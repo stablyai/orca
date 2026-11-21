@@ -17,6 +17,7 @@ import {
   type GitStageWorktreeScopeReceipt
 } from '../../../../shared/git/paths/git-stage-worktree-scope'
 import { findExistingWorktreeSymlinkPaths } from '../../worktrees/content-paths/worktree-symlink-detection'
+import { checkIgnoredPaths } from '../ignores/check-ignored-paths'
 import { redoWriteForDriveCheckoutSuspects } from '../drive-checkout/drive-checkout-suspect-writes'
 import { runWithGitWorktreeOperationLock } from '../../../../shared/git/worktrees/git-worktree-operation-lock'
 import { trackGitOperationWriters } from '../../command-runner/git-writer-lifetime'
@@ -148,13 +149,15 @@ export async function stageWorktreeChanges(
   invalidateGitReadCaches()
   try {
     const gitOptions = gitOptionsForWorktree(worktreePath, options)
-    // Directory-only ignore rules do not hide shared symlinks; exclude them from add --all.
-    const excludedUntrackedPaths =
+    // Exclude unignored shared links from add --all; excluding an ignored path makes add exit 1.
+    const sharedLinks =
       scope === 'all' && options.sharedLinkPaths && options.sharedLinkPaths.length > 0
         ? await findExistingWorktreeSymlinkPaths(worktreePath, options.sharedLinkPaths, {
             wslDistro: options.wslDistro
           })
         : []
+    const ignoredLinks = new Set(await checkIgnoredPaths(worktreePath, sharedLinks, options))
+    const excludedUntrackedPaths = sharedLinks.filter((link) => !ignoredLinks.has(link))
     const receipt = await stageGitWorktreeScope(
       scope,
       (args, stdin) =>

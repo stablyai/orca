@@ -18,7 +18,12 @@ export const CONNECTOR_ACTION_VERBS = [
   'find',
   'check',
   'attach',
-  'set'
+  'set',
+  // Slack's own surfaces; sent only to a cloud listing `slack.tools`.
+  'pin',
+  'canvas',
+  'list',
+  'scheduled'
 ] as const
 export type ConnectorActionVerb =
   | (typeof CONNECTOR_ACTION_VERBS)[number]
@@ -80,6 +85,12 @@ export const ConnectorActionArgs = z
     join: z.literal(true).optional(),
     // Minted once by the CLI, so the host's retries post at most once.
     postId: z.string().min(1).max(128).optional(),
+    // post: when to post it (epoch seconds); sent only to a cloud listing `post.schedule`.
+    postAt: z.number().int().positive().optional(),
+    // list: its items, one line each, top to bottom.
+    items: z.array(z.string().trim().min(1).max(500)).min(1).max(50).optional(),
+    // scheduled: the id of one scheduled post to cancel; without it, they are listed.
+    cancel: z.string().min(1).max(64).optional(),
     // read: the id of a file on the message read, to download it.
     download: z.string().min(1).max(64).optional(),
     // reply and attach, with stage: a file the CLI uploads itself, straight to the source, to the
@@ -125,6 +136,8 @@ export const CONNECTOR_ACT_ERROR_CODES = [
   'cloud_lacks_actions',
   'cloud_lacks_places',
   'cloud_lacks_search',
+  'cloud_lacks_schedule',
+  'cloud_lacks_slack_tools',
   'cloud_lacks_set',
   'cloud_lacks_create',
   // `bot reply` with several files, to a cloud that posts one file a message.

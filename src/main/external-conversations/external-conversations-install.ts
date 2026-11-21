@@ -8,6 +8,10 @@ import {
   onStructuredAgentSessionHostChanged
 } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { SlackMirror } from './slack-mirror'
+import { connectorAskerImages } from './connector-asker-images'
+import { postConnectorAction } from '../connector-cloud/connector-actions'
+import { cloudConversation } from '../../shared/connectors/connector-cloud-contract'
+import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { SlackMirrorCloud } from './slack-mirror-cloud'
 import { DeliveryReceipts, type DeliveryReceiptDb } from './external-conversation-delivery-receipts'
 import { allLinks, type ExternalConversationLinkStore } from './external-conversation-links'
@@ -97,6 +101,35 @@ export function installExternalConversations(
       readHookRow: (paneKey) => runtime.agentTransitions.latestRow(paneKey),
       onAgentPaneChange: (listener) => runtime.agentTransitions.subscribe(listener),
       onLinked: () => runtime.onConversationLinked?.(),
+      // Through the cloud a bot's own `read --download` goes through, into the attachment store.
+      askerImages: connectorAskerImages({
+        read: async ({ botId, ref, fileId, conversation }, imageSignal) => {
+          const cloud = runtime.getConnectorCloud?.()
+          const about = cloudConversation(conversation)
+          // A cloud that can't stream a file leaves it to the agent's own download.
+          if (!cloud?.cloudFeatures()?.has('files.direct' satisfies ConnectorCloudFeature)) {
+            return null
+          }
+          return await postConnectorAction(
+            cloud,
+            {
+              botId,
+              verb: 'read',
+              ref,
+              args: { download: fileId, stream: true },
+              ...(about ? { conversation: about } : {})
+            },
+            imageSignal
+          )
+        },
+        store: async (name, bytes) => {
+          const attachments = getAgentSessionAttachmentStore()
+          if (!attachments) {
+            throw new Error('no attachment store')
+          }
+          return await attachments.storeFile(name, bytes)
+        }
+      }),
       // An older cloud without refs names no channel; the row then shows Slack's name.
       nameChannel: async (botId, channelId) => {
         const resolve = runtime.getConnectorCloud?.()?.refResolver()

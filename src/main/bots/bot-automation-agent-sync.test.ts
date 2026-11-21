@@ -22,7 +22,7 @@ describe('bot automation agents', () => {
   it("drops a setup this Orca can't run as the store loads, so the bot's agent runs it", () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const stale: Pick<Automation, 'id' | 'agentId' | 'bot'> = JSON.parse(
-      '{"id":"a3","agentId":"opencode2","bot":{"botId":"bot-1","runsIn":"new","resultsTo":"chat","agentSetup":{"agent":"opencode2"}}}'
+      '{"id":"a3","agentId":"gemini","bot":{"botId":"bot-1","runsIn":"new","resultsTo":"chat","agentSetup":{"agent":"gemini"}}}'
     )
     const changed = vi.fn()
 

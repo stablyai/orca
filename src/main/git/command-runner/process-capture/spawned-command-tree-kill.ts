@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
+import { endAbandonedWorkerGroup } from './abandoned-worker-group-termination'
 import { admitSelfInitiatedTreeKill } from '../../../pty/process-retirement/own-chromium-tree-kill-guard'
 import {
   canSpawnOnWorkerThread,
@@ -107,8 +108,13 @@ export function endAbandonedWorkerChild(
   child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill'>,
   onWorkerLost: (() => void) | undefined,
   onTerminated: () => void,
-  lifetimeEndsOnLoss = false
+  lifetimeEndsOnLoss = false,
+  ownedPosixGroup = false
 ): void {
+  if (ownedPosixGroup && child instanceof WorkerThreadChildProcess) {
+    endAbandonedWorkerGroup(child, onWorkerLost, onTerminated, lifetimeEndsOnLoss)
+    return
+  }
   onWorkerLost?.()
   const killed = killAbandonedWorkerChildTree(child)
   if (lifetimeEndsOnLoss) {

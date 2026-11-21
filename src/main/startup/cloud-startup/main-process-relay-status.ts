@@ -2,7 +2,7 @@ import type { MobileRelayStatusDetail } from '../../../shared/remote-runtime/rel
 import { mainProcessState as state } from '../main-process-state'
 
 export function getDesktopRelayStatus(): MobileRelayStatusDetail {
-  return { ...state.desktopRelayStatus }
+  return { ...state.core.desktopRelayStatus }
 }
 
 export function publishDesktopRelayStatus(
@@ -10,7 +10,7 @@ export function publishDesktopRelayStatus(
   cellUrl?: string,
   clockOffsetMs?: number
 ): void {
-  state.desktopRelayStatus = {
+  state.core.desktopRelayStatus = {
     status,
     ...(cellUrl === undefined ? {} : { cellUrl }),
     ...(clockOffsetMs === undefined ? {} : { clockOffsetMs })

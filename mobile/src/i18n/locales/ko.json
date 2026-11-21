@@ -2018,6 +2018,9 @@
       "sendFailed": "재개 명령을 보내지 못했습니다."
     },
     "aiVaultResumePreparation": {
+      "openInChat": "이 {{agent}} 대화는 채팅에서 열려 있습니다. 열려면 세션 기록을 새로고침하세요.",
+      "ownershipUnknown": "Orca가 이 {{agent}} 대화의 소유자를 확인할 수 없습니다. 세션 기록을 새로고침한 후 다시 시도하세요.",
+      "preparationRefused": "Orca가 이 {{agent}} 대화를 준비할 수 없습니다. 계속하려면 새 채팅을 시작하세요.",
       "prepareFailed": "이 레거시 Codex 세션을 준비하지 못했습니다. 재개를 다시 시도하세요."
     },
     "backgroundTask": {
@@ -2126,6 +2129,7 @@
     "failure": {
       "accountSwitchInProgress": "이 호스트에서 {{agent}} 설정을 변경하는 중입니다. 완료된 후 다시 시도하세요.",
       "agentCommandNotRunnable": "{{agent}}의 설정 → 에이전트 → 명령은 Orca가 찾을 수 있는 프로그램 경로나 이름이어야 하며, 인수나 변수를 포함할 수 없습니다. 변경하거나 재설정하세요.",
+      "agentCommandFailed": "설정 → 에이전트에서 {{agent}}의 명령이 {{agent}}를 시작하지 못했습니다: {{detail}}. 명령을 변경하거나 초기화하세요.",
       "agentCommandNotSignedIn": "이 채팅을 실행하는 컴퓨터에서 `{{loginCommand}}`으로 {{agent}}에 로그인하세요.",
       "agentNotSignedIn": "{{agent}}에 로그인하세요.",
       "agentStarting": "에이전트가 아직 시작 중입니다.",

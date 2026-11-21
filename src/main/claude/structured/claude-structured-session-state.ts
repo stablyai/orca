@@ -33,6 +33,16 @@ import type { ClaudeInitializeFacts } from './startup/claude-structured-session-
 import type { ClaudeStructuredSessionEvent } from './lifecycle/claude-structured-session-event'
 import type { ClaudePromptSuggestionPause } from './claude-prompt-suggestion-pause'
 
+export type ClaudeBypassRefusal = 'settings' | 'restricted' | 'not-launched'
+
+/** Why a Full access chat runs another mode, for its warning. */
+export type ClaudeFullAccessRefusalReason = ClaudeBypassRefusal | 'started-outside'
+
+/** `retryAt` for refusals that pass with time; `model` / `fastMode` hold the choice Claude refused under. */
+export type ClaudeAutoUnsettled =
+  | { kind: 'time'; retryAt: number }
+  | { kind: 'model'; model: string | undefined }
+  | { kind: 'fast-mode'; fastMode: string | undefined }
 export type ClaudeStartedSend = { clientMessageId: string; requestedAt?: number }
 
 export type ClaudeLateDispatchOutcome =
@@ -141,13 +151,35 @@ export type ClaudeSession = {
   fastModePerSessionOptIn?: boolean
   /** Mutation sequence of the last model report; newer writes outrank it. */
   reportedModelMutation: number
+  /** A session-scope refusal fallback this process runs until an accepted model write; a pick awaits its turn. */
+  modelFallback?: { model: string; replaced: string; picked?: true }
   /** Options whose recorded value the provider reported, not merely accepted. */
   confirmedOptions: Set<string>
   /** Inputs carried by launch or accepted controls, independent of provider reports. */
   appliedInputOptions: Map<string, string>
-  /** What Orca put on this process's command line, and the first root init's answer; this process only. */
+  /** What Orca put on this process's command line, and the mode it opened in; this process only. */
   launchIntent?: { permissionMode?: string; model?: string }
   firstRootInit?: { permissionMode: string | null }
+  /** Claude's own effective settings turn bypass off for this process (startup `get_settings`). */
+  bypassDisabled?: boolean
+  /** Claude accepted a bypass switch in this process, which overrules a start outside it. */
+  bypassAccepted?: boolean
+  /** Why Claude refused a bypass switch, where one told; a settings read or start says settings. */
+  bypassRefusal?: ClaudeBypassRefusal
+  /** The Full access refusal warning this process last wrote; a change gets a new row. */
+  fullAccessRefusalNoticeId?: string
+  /** This process's warning rows: a random id and a count, so each is a new row at the bottom. */
+  fullAccessRefusalNotices?: { process: string; count: number }
+  /** Counts permission mode requests, so a fallback written after Claude answers never lands
+   *  over a newer request. */
+  permissionModeRequests?: number
+  /** The startup `get_settings` read; settles once its facts are recorded, never rejects. */
+  startupSettings?: Promise<void>
+  /** Claude's settings turn auto mode off for this process (startup `get_settings`, or a refusal). */
+  autoDisabled?: boolean
+  /** Claude last refused auto for a reason that can pass (availability, model, Fast mode), or
+   *  left the switch unanswered; says when asking again can get a different answer. */
+  autoUnsettled?: ClaudeAutoUnsettled
   /** Full access processes only: Claude's mode in wire order, ahead of `reportedOptions`. */
   orderedPermissionMode?: (() => string | null | undefined) | null
   /** Fast was omitted from launch settings and must be applied before message input. */
@@ -222,8 +254,11 @@ export type ClaudeAcquisitionAttempt = {
   exitProven: boolean
   finished: Promise<void>
   finish: () => void
-  /** The resolved launch's account, read by the translator to word a sign-in failure. */
-  account?: ClaudeStructuredLaunch['account']
+  /** The resolved launch: its account words a sign-in failure, its Command a start that exited. */
+  launch?: Pick<
+    ClaudeStructuredLaunch,
+    'account' | 'pathToClaudeCodeExecutable' | 'configuredProgram' | 'prefixArgs'
+  >
 }
 
 export function createClaudeAcquisitionAttempt(

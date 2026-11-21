@@ -37,7 +37,7 @@ describe('CommandCodeHookService', () => {
   const itPosix = process.platform === 'win32' ? it.skip : it
 
   itPosix(
-    'stops identity recovery at a background ancestor even when the hook env is scrubbed',
+    'recovers only the scrubbed token from ancestors, never pane identity or a background launch',
     async () => {
       new CommandCodeHookService().install()
       const requests: string[] = []
@@ -54,10 +54,12 @@ describe('CommandCodeHookService', () => {
       writeFileSync(
         ancestor,
         `const { spawn } = require('node:child_process')
-const [hook, disabled, stage] = process.argv.slice(2)
-const env = { PATH: process.env.PATH, HOME: process.env.HOME }
+const [hook, disabled, ownPane, stage] = process.argv.slice(2)
+// Command Code keeps pane and port but strips TOKEN-named variables.
+const env = { PATH: process.env.PATH, HOME: process.env.HOME, ORCA_AGENT_HOOK_PORT: process.env.ORCA_AGENT_HOOK_PORT }
+if (ownPane === '1') env.ORCA_PANE_KEY = process.env.ORCA_PANE_KEY
 const child = stage === 'ancestor'
-  ? spawn(process.execPath, [__filename, hook, disabled, 'background'], {
+  ? spawn(process.execPath, [__filename, hook, disabled, ownPane, 'background'], {
       env: { ...env, ORCA_AGENT_HOOKS_DISABLED: disabled },
       stdio: ['ignore', 'inherit', 'inherit']
     })
@@ -70,13 +72,14 @@ child.on('close', code => { process.exitCode = code ?? 1 })
       try {
         await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
         const address = server.address() as AddressInfo
-        const run = async (disabled: string) => {
+        const run = async (disabled: string, ownPane: string) => {
           const child = spawnProcess({
             program: process.execPath,
             args: [
               ancestor,
               join(homeDir, '.orca', 'agent-hooks', 'command-code-hook.sh'),
               disabled,
+              ownPane,
               'ancestor'
             ],
             env: {
@@ -100,9 +103,11 @@ child.on('close', code => { process.exitCode = code ?? 1 })
           })
           expect(code, stderr).toBe(0)
         }
-        await run('0')
+        await run('0', '1')
         expect(requests).toEqual(['recovered-tab:leaf'])
-        await run('1')
+        await run('1', '1')
+        expect(requests).toEqual(['recovered-tab:leaf'])
+        await run('0', '0')
         expect(requests).toEqual(['recovered-tab:leaf'])
       } finally {
         await new Promise<void>((resolve) => server.close(() => resolve()))

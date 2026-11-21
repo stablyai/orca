@@ -8,7 +8,7 @@ import {
   readSavedCursorRegister,
   serializeWithAbsoluteCursor
 } from '../../../../shared/terminal/replay/terminal-serialize-absolute-cursor'
-import type { SerializeFuzzCase } from './serialize-grid-fuzz-stream'
+import type { SerializeFuzzCase } from './serialize-grid-replay-case'
 import {
   serializedNormalStart,
   variantOverlong,
@@ -304,12 +304,12 @@ export async function runSerializeFuzzCase(
 export type Verdict = 'i1-bytes-differ' | 'regression' | 'fixed' | 'both-fail' | 'new-fail'
 
 /** Byte identity applies outside intentional overlong-line and trailing-background changes. */
-export function i1Applies(check: SerializeCheckResult): boolean[] {
+function i1Applies(check: SerializeCheckResult): boolean[] {
   return check.overlong.map((overlong, v) => !overlong && !check.trailingBackgroundRows[v])
 }
 
 /** Per variant: I1 applies, yet the bytes changed. */
-export function i1BytesDifferByVariant(check: SerializeCheckResult): boolean[] {
+function i1BytesDifferByVariant(check: SerializeCheckResult): boolean[] {
   return i1Applies(check).map(
     (applies, v) => applies && check.outputs.old![v] !== check.outputs.new![v]
   )

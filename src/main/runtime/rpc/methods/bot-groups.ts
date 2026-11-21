@@ -80,7 +80,11 @@ export const BOT_GROUP_METHODS = [
     params: BotGroupSend,
     handler: async (params, context) => {
       assertBotGroupOwner(context)
-      return { message: await runtimeBotGroups(context.runtime).send(params) }
+      return {
+        message: await runtimeBotGroups(context.runtime).send(params, {
+          local: context.caller?.kind === 'desktop'
+        })
+      }
     }
   }),
   defineMethod({

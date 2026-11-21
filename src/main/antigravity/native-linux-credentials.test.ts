@@ -45,6 +45,7 @@ describe('Antigravity Linux keyring access', () => {
     const failed = (stderr: string): ProcessResult => ({ ...ok(), code: 1, stderr })
     // A system service for a lingering user: the bus socket exists but the env doesn't name it.
     vi.stubEnv('DBUS_SESSION_BUS_ADDRESS', '')
+    vi.stubEnv('XDG_RUNTIME_DIR', '')
     vi.mocked(runProcess).mockResolvedValueOnce(
       failed('Error connecting: Cannot autolaunch D-Bus without X11 $DISPLAY\n')
     )

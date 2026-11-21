@@ -1,5 +1,6 @@
 import { useCallback, useRef } from 'react'
-import { ArrowLeft, ArrowRight, MoreHorizontal, PanelLeft } from 'lucide-react'
+import { ArrowLeft, ArrowRight, MoreHorizontal } from 'lucide-react'
+import { SidebarToggleIcon } from '@/components/icons/SidebarToggleIcon'
 import logo from '../../../../../resources/logo.svg'
 import { useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -105,7 +106,7 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
                 onClick={toggleSidebar}
                 aria-label={t('auto.App.e4b9e7dff7', 'Toggle sidebar')}
               >
-                <PanelLeft size={16} />
+                <SidebarToggleIcon side="left" size={16} />
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>

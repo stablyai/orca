@@ -131,6 +131,13 @@ it('settles current tools and turns and refuses a later provider close or text r
       }
     },
     {
+      kind: 'item',
+      identity: identity('prompt'),
+      body: pending,
+      options: { ...options, turnScope: inTurn },
+      reservedBytes: 4096
+    },
+    {
       kind: 'settlement',
       settlementId: 'ended',
       fence: 1,
@@ -170,12 +177,14 @@ it('settles current tools and turns and refuses a later provider close or text r
       { kind: 'committed', wrote: true },
       { kind: 'committed', wrote: true },
       { kind: 'committed', wrote: true },
+      { kind: 'committed', wrote: true },
       { kind: 'dropped', reason: 'item-settled' },
       { kind: 'dropped', reason: 'turn-settled', turnItemId: 'orca:turn' }
     ]
   })
   expect(f.item('orca:tool')?.body).toMatchObject({ state: 'failed', endedAs: 'interrupted' })
   expect(f.item('orca:turn')?.body).toMatchObject({ state: 'interrupted', completedAt: 80 })
+  expect(f.item('orca:prompt')?.body).toMatchObject({ resolution: { state: 'cancelled' } })
   expect(f.item('orca:late-text')).toBeUndefined()
 })
 

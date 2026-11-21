@@ -6,7 +6,7 @@ import { createFleetStatusIndex } from '../../../../shared/orchestration/fleet/o
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import { creatorFirstParent } from './crew-rules'
 import { createCrewPartyRegistry, type Party } from './crew-parties'
-import { readCrewAssignments, type CrewAssignmentRow } from './crew-query'
+import { readCrewAssignmentIds, readCrewAssignments, type CrewAssignmentRow } from './crew-query'
 import { createCrewSourceInputs } from './crew-source-inputs'
 import type { CrewReadDependencies } from './crew-read-dependencies'
 
@@ -199,9 +199,12 @@ function indexCrewStatuses<
 /** Replaces assignment rows whose only change is their stage; null when any changed more, which needs a rebuild. */
 export function patchCrewAssignmentStages(
   host: CrewHostDerivation,
-  rows: readonly CrewAssignmentRow[],
   ids: ReadonlySet<string>
 ): CrewHostDerivation | null {
+  if (!host.deps.db) {
+    return host
+  }
+  const rows = readCrewAssignmentIds(host.deps.db, [...ids])
   const byId = new Map(rows.map((row) => [row.id, row]))
   const changed = new Map<string, CrewAssignmentRow>()
   for (const id of ids) {

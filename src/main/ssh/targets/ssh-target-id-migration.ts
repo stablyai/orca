@@ -16,6 +16,30 @@ function rewriteSshPtyId(ptyId: string, oldTargetId: string, newTargetId: string
   return toAppSshPtyId(newTargetId, parsed.relayPtyId)
 }
 
+/** The window keeps a rewritten relay only if it owned the old id; ownership of other keys is unchanged. */
+function migratedRelayOwnership(
+  session: WorkspaceSessionState,
+  rewritten: Record<string, string>
+): Pick<WorkspaceSessionState, 'desktopRelayOwnerByTabId'> {
+  const before = session.desktopRelayOwnerByTabId
+  if (!before) {
+    return {}
+  }
+  const owners = { ...before }
+  for (const [tabId, relayId] of Object.entries(rewritten)) {
+    const old = session.remoteSessionIdsByTabId?.[tabId]
+    if (old === relayId) {
+      continue
+    }
+    if (owners[tabId] === old) {
+      owners[tabId] = relayId
+    } else {
+      delete owners[tabId]
+    }
+  }
+  return { desktopRelayOwnerByTabId: Object.keys(owners).length > 0 ? owners : undefined }
+}
+
 function rewriteSshPtyIdRecordValues(
   record: Record<string, string> | undefined,
   oldTargetId: string,
@@ -78,7 +102,11 @@ export function migrateWorkspaceSessionSshTargetId(
     newTargetId
   )
   if (remoteSessionIdsByTabId) {
-    next = { ...(next ?? session), remoteSessionIdsByTabId }
+    next = {
+      ...(next ?? session),
+      remoteSessionIdsByTabId,
+      ...migratedRelayOwnership(session, remoteSessionIdsByTabId)
+    }
   }
   if (session.activeConnectionIdsAtShutdown?.includes(oldTargetId)) {
     next = {

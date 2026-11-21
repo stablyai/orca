@@ -246,7 +246,7 @@ async function routeBotStart(
     if (!sessionId) {
       throw new InvalidArgumentError("Run this from a bot's chat.")
     }
-    await postConnectorOffer(sessionId, bot, { botId, source: 'google' })
+    await postConnectorOffer(sessionId, bot, { botId, source: 'google' }, context.runtime)
   }
   return { routed: ask.kind === 'card' ? 'offer' : ask.kind, message: ask.message }
 }

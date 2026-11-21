@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getSecretStore, setSecretStore } from '../../../../shared/secure-storage/secret-store'
-import { fixture } from './profile-state-delayed-authority-fixture'
+import {
+  deferred,
+  fixture,
+  withReopenedProfileStore
+} from './profile-state-delayed-authority-fixture'
 
 export function registerProfileStateWorkerSecretRetentionTests(): void {
   let encryptionAvailable = true
@@ -60,5 +64,35 @@ export function registerProfileStateWorkerSecretRetentionTests(): void {
     store.updateSettings({ theme: 'light' })
     await store.flushPendingOrThrowAsync()
     expect(readState().settings).not.toHaveProperty('opencodeGoApiKey')
+  })
+
+  it('saves the proxy changed while its seal was in flight, with no synchronous sealing', async () => {
+    const { store, readState } = await fixture()
+    const seals: { plaintext: string; sealed: ReturnType<typeof deferred<Buffer>> }[] = []
+    setSecretStore({
+      isEncryptionAvailable: () => true,
+      encryptString: () => {
+        throw new Error('synchronous sealing is unavailable on this host')
+      },
+      encryptStringAsync: (value) => {
+        const sealed = deferred<Buffer>()
+        seals.push({ plaintext: value, sealed })
+        return sealed.promise
+      },
+      decryptString: (value) => value.toString().slice('sealed:'.length),
+      describeProtectionGap: () => null
+    })
+    store.updateSettings({ httpProxyUrl: 'http://first.example:8080' })
+    const write = store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+    await vi.waitFor(() => expect(seals).toHaveLength(1))
+    store.updateSettings({ httpProxyUrl: 'http://second.example:8080' })
+    seals[0].sealed.resolve(Buffer.from('sealed:http://first.example:8080'))
+    await vi.waitFor(() => expect(seals).toHaveLength(2))
+    expect(seals[1].plaintext).toBe('http://second.example:8080')
+    seals[1].sealed.resolve(Buffer.from('sealed:http://second.example:8080'))
+    await write
+    await withReopenedProfileStore(readState(), 'reopened-orca-data.json', (reopened) => {
+      expect(reopened.getSettings().httpProxyUrl).toBe('http://second.example:8080')
+    })
   })
 }
