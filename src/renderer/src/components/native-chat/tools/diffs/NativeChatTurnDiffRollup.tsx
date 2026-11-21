@@ -17,6 +17,7 @@ import {
   type NativeChatTurnDiff,
   type NativeChatTurnDiffFile
 } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
+import { useNativeChatTurnDiffGitState } from './use-native-chat-turn-diff-git-state'
 
 function TurnDiffFilePatches({ file }: { file: NativeChatTurnDiffFile }): React.JSX.Element {
   return (
@@ -36,7 +37,16 @@ function TurnDiffFilePatches({ file }: { file: NativeChatTurnDiffFile }): React.
   )
 }
 
-function TurnDiffFileRow({ file }: { file: NativeChatTurnDiffFile }): React.JSX.Element {
+function TurnDiffFileRow({
+  file,
+  uncommitted,
+  diverged
+}: {
+  file: NativeChatTurnDiffFile
+  uncommitted: boolean
+  diverged: boolean
+}): React.JSX.Element {
+  const t = useTranslate()
   const name = nativeChatEditFileBaseName(file.path)
   const disclosureKey = `turn-diff:${file.edits[0]?.target.messageId}:${file.path}`
   const { open, setOpen } = useNativeChatDisclosure(disclosureKey, false)
@@ -57,6 +67,13 @@ function TurnDiffFileRow({ file }: { file: NativeChatTurnDiffFile }): React.JSX.
           {file.path.slice(0, -name.length)}
         </span>
         <DiffLineCounts added={file.added} removed={file.removed} />
+        {uncommitted ? (
+          <span className="shrink-0 text-chat-warning">
+            {diverged
+              ? t('components.native-chat.turnDiff.fileDiverged', 'uncommitted · changed')
+              : t('components.native-chat.turnDiff.fileUncommitted', 'uncommitted')}
+          </span>
+        ) : null}
       </Button>
       <NativeChatExpandable open={open}>
         <TurnDiffFilePatches file={file} />
@@ -71,27 +88,45 @@ export function NativeChatTurnDiffRollup({
   diff: NativeChatTurnDiff
 }): React.JSX.Element {
   const t = useTranslate()
+  const git = useNativeChatTurnDiffGitState(diff)
   const { open: showAll, setOpen: setShowAll } = useNativeChatDisclosure(
     `turn-diff-files:${diff.files[0]?.edits[0]?.target.messageId}`,
     false
   )
   const files = showAll ? diff.files : diff.files.slice(0, NATIVE_CHAT_TURN_DIFF_FILE_LIMIT)
   const remaining = diff.files.length - files.length
+  const committedState =
+    git === null || git.committedCount === 0
+      ? null
+      : git.allPushed === true
+        ? t('components.native-chat.turnDiff.pushed', 'pushed')
+        : git.allPushed === false
+          ? t('components.native-chat.turnDiff.unpushed', 'committed · unpushed')
+          : t('components.native-chat.turnDiff.committed', 'committed')
   return (
     <div
       className={`${NATIVE_CHAT_HIDEABLE_CARD_CLASS} rounded-lg border border-chat-code-border p-2 text-xs text-chat-foreground-faint`}
     >
       <div className="flex min-w-0 items-center gap-1.5 px-1 pb-1">
         <span className="min-w-0 truncate">
-          {t('components.native-chat.turnDiff.changedFiles', '{{count}} changed files', {
+          {t('components.native-chat.turnDiff.filesEdited', '{{count}} files edited', {
             count: diff.files.length,
-            defaultValue_one: '{{count}} changed file'
+            defaultValue_one: '{{count}} file edited'
           })}
         </span>
         <DiffLineCounts added={diff.added} removed={diff.removed} />
         {diff.truncated ? (
           <span>{t('components.native-chat.turnDiff.partial', 'Partial diff')}</span>
         ) : null}
+        {git !== null && git.uncommittedCount > 0 ? (
+          <span className="shrink-0 text-chat-warning">
+            {t('components.native-chat.turnDiff.uncommitted', '{{count}} uncommitted', {
+              count: git.uncommittedCount,
+              defaultValue_one: '{{count}} uncommitted'
+            })}
+          </span>
+        ) : null}
+        {committedState !== null ? <span className="shrink-0">{committedState}</span> : null}
         <NativeChatCardHideButton
           updates={{ nativeChatTurnDiffSummary: false }}
           settingSectionId={NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID}
@@ -103,7 +138,12 @@ export function NativeChatTurnDiffRollup({
       </div>
       <div className="space-y-1">
         {files.map((file) => (
-          <TurnDiffFileRow key={file.path} file={file} />
+          <TurnDiffFileRow
+            key={file.path}
+            file={file}
+            uncommitted={git?.uncommittedPaths.has(file.path) === true}
+            diverged={git?.divergedPaths.has(file.path) === true}
+          />
         ))}
         {remaining > 0 ? (
           <Button variant="ghost" size="xs" onClick={() => setShowAll(true)}>

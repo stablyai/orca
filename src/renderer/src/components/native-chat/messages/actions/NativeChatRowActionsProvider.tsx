@@ -10,6 +10,7 @@ import {
 } from '@/components/native-chat/messages/actions/native-chat-fork-context'
 import { NativeChatRewindContext } from '@/components/native-chat/messages/actions/native-chat-rewind-context'
 import { useNativeChatTabOwnerWorktreeId } from '@/components/native-chat/pane/ownership/use-native-chat-tab-owner'
+import { NativeChatOwnerWorktreeContext } from '@/components/native-chat/pane/ownership/native-chat-owner-worktree-context'
 import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
 import type { NativeChatRewindSurface } from '@/components/native-chat/messages/actions/use-native-chat-rewind-host'
 import type { NativeChatPaneForks } from '@/components/native-chat/messages/actions/use-native-chat-fork'
@@ -52,16 +53,18 @@ export function NativeChatRowActionsProvider({
     [agent, target, worktreeId, sourceOpenable]
   )
   return (
-    <NativeChatRewindContext.Provider value={chat.rewind.surface}>
-      <NativeChatForkContext.Provider value={forks.fork}>
-        <NativeChatSideChatForkPointContext.Provider value={forks.sideChat?.reportForkPoint}>
-          <NativeChatForkedFromContext.Provider value={openSource}>
-            <NativeChatForkSlotContext.Provider value>
-              {children}
-            </NativeChatForkSlotContext.Provider>
-          </NativeChatForkedFromContext.Provider>
-        </NativeChatSideChatForkPointContext.Provider>
-      </NativeChatForkContext.Provider>
-    </NativeChatRewindContext.Provider>
+    <NativeChatOwnerWorktreeContext.Provider value={worktreeId}>
+      <NativeChatRewindContext.Provider value={chat.rewind.surface}>
+        <NativeChatForkContext.Provider value={forks.fork}>
+          <NativeChatSideChatForkPointContext.Provider value={forks.sideChat?.reportForkPoint}>
+            <NativeChatForkedFromContext.Provider value={openSource}>
+              <NativeChatForkSlotContext.Provider value>
+                {children}
+              </NativeChatForkSlotContext.Provider>
+            </NativeChatForkedFromContext.Provider>
+          </NativeChatSideChatForkPointContext.Provider>
+        </NativeChatForkContext.Provider>
+      </NativeChatRewindContext.Provider>
+    </NativeChatOwnerWorktreeContext.Provider>
   )
 }

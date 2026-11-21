@@ -19660,9 +19660,6 @@
       },
       "turnDiff": {
         "partial": "Diff parcial",
-        "changedFiles_one": "{{count}} archivo modificado",
-        "changedFiles_other": "{{count}} archivos modificados",
-        "changedFiles_many": "{{count}} archivos modificados",
         "hide": "Ocultar",
         "hidden": "Orca ya no mostrará las diferencias de los turnos"
       },

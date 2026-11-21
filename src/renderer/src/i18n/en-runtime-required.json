@@ -2542,8 +2542,10 @@
         "removed": "Removed"
       },
       "turnDiff": {
-        "changedFiles_one": "{{count}} changed file",
-        "changedFiles_other": "{{count}} changed files"
+        "filesEdited_one": "{{count}} file edited",
+        "filesEdited_other": "{{count}} files edited",
+        "uncommitted_one": "{{count}} uncommitted",
+        "uncommitted_other": "{{count}} uncommitted"
       },
       "writeNotice": {
         "agentRefused": "The agent turned this down.",

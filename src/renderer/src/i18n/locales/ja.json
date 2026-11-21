@@ -20058,7 +20058,6 @@
       },
       "turnDiff": {
         "partial": "部分的な差分",
-        "changedFiles_other": "変更されたファイル {{count}} 個",
         "showMoreFiles": "さらに {{count}} 個を表示",
         "hide": "非表示",
         "hidden": "Orca は今後ターンの差分を表示しません"
