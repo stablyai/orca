@@ -20,12 +20,48 @@ const FALLBACK_FONTS = [
   'monospace'
 ] as const
 
+/**
+ * Split a user-entered stack on commas outside quotes, dropping each family's surrounding
+ * quotes. A comma-separated value in the single font setting used to be quoted as one
+ * unresolvable family name, so a fallback stack could never be typed (#42938).
+ */
+function splitFontStack(value: string): string[] {
+  const families: string[] = []
+  let current = ''
+  let quote: '"' | "'" | null = null
+  for (const ch of value) {
+    if (quote !== null) {
+      if (ch === quote) {
+        quote = null
+      } else {
+        current += ch
+      }
+    } else if (ch === '"' || ch === "'") {
+      quote = ch
+    } else if (ch === ',') {
+      const trimmedFamily = current.trim()
+      if (trimmedFamily) {
+        families.push(trimmedFamily)
+      }
+      current = ''
+    } else {
+      current += ch
+    }
+  }
+  const tail = current.trim()
+  if (tail) {
+    families.push(tail)
+  }
+  return families
+}
+
 export function buildFontFamily(fontFamily: string): string {
   const trimmed = fontFamily.trim()
-  const parts = trimmed ? [`"${trimmed}"`] : []
-  const lowerParts = parts.map((p) => p.toLowerCase())
-  // Why: a plugin family such as "Menlo (acme.fonts)" is never a fallback, so it must keep all of them.
+  // Why: a plugin family such as "Menlo (acme.fonts)" is never a fallback list, so it stays whole.
   const isPluginFamily = isPluginFontFamilyName(trimmed)
+  const families = trimmed ? (isPluginFamily ? [trimmed] : splitFontStack(trimmed)) : []
+  const parts = families.map((family) => `"${family}"`)
+  const lowerParts = parts.map((p) => p.toLowerCase())
   for (const fallback of FALLBACK_FONTS) {
     const lower = fallback.toLowerCase()
     if (isPluginFamily || !lowerParts.some((p) => p.includes(lower))) {
