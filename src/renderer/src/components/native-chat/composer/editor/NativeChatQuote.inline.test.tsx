@@ -241,6 +241,50 @@ it.each(KEY_CASES)('%s on %j at %s', (key, text, _caret, place, outcome) => {
   expect(input.value).toBe(outcome)
 })
 
+// Lines: 0 'x' (caret places 1, 2), 1 the hidden empty line (4), 2 the chip line (6 before the chip).
+const GAP_TEXT = 'x\n\n> q\n\nc'
+
+it('hides the empty line above a chip line from screen readers', async () => {
+  const { view } = mount(GAP_TEXT)
+  await waitFor(() => expect(view.container.textContent).toContain('Quote: '))
+  expect(
+    view.container.querySelector('[data-native-chat-quote-gap]')?.getAttribute('aria-hidden')
+  ).toBe('true')
+})
+
+it.each([
+  ['ArrowLeft', 6, 2],
+  ['Backspace', 6, 2],
+  ['ArrowRight', 2, 6],
+  ['Delete', 2, 2]
+])('%s next to the hidden empty line steps over it and keeps the text', (key, from, to) => {
+  const { input, editor } = mount(GAP_TEXT)
+  act(() => {
+    editor.commands.setTextSelection(from)
+  })
+  let browserHandles = true
+  act(() => {
+    browserHandles = press(key)
+  })
+  expect(browserHandles).toBe(false)
+  expect(editor.state.selection.from).toBe(to)
+  expect(input.value).toBe(GAP_TEXT)
+})
+
+it.each([
+  ['from below', 6, 2],
+  ['from above', 2, 6]
+])('moves a caret that lands on the hidden empty line %s on past it', (_name, from, to) => {
+  const { editor } = mount(GAP_TEXT)
+  act(() => {
+    editor.commands.setTextSelection(from)
+  })
+  act(() => {
+    editor.commands.setTextSelection(4)
+  })
+  expect(editor.state.selection.from).toBe(to)
+})
+
 it('moves the caret across a chip as across an image: one press steps over it', () => {
   const { input, editor } = mount('> q\n\nc')
   const key = (name: string) =>

@@ -2,6 +2,7 @@ import { Extension } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { TextSelection, type EditorState } from '@tiptap/pm/state'
 import type { EditorView } from '@tiptap/pm/view'
+import { quoteGapKey } from './native-chat-quote-layout'
 
 // A pill: an inline atom the user can select (a skill, file, image, agent or bot). Not a hard break.
 function isPill(node: ProseMirrorNode | null | undefined): node is ProseMirrorNode {
@@ -46,7 +47,7 @@ export function nativeChatPromptPillKey(
   const side = key === 'Backspace' || key === 'ArrowLeft' ? 'before' : 'after'
   const pill = pillBeside(state, side)
   if (!pill) {
-    return false
+    return quoteGapKey(view, key)
   }
   const at = state.selection.from
   const [from, to] = side === 'before' ? [at - pill.nodeSize, at] : [at, at + pill.nodeSize]

@@ -97,7 +97,10 @@ describe('quote chips in the composer', () => {
       editor.commands.setTextSelection(at)
       editor.commands.insertContent(text)
     }
-  /** Typed lines, an empty line and a chip line; then Backspace at the start of the chip line. */
+  /**
+   * Typed lines, an empty line and a chip line; then the chip line joins the empty line, as a delete
+   * across the empty line does. Backspace there leaves the text as it is.
+   */
   const joinChipLineUnder =
     (lines: string[]) =>
     ({ editor }: { editor: Editor }): void => {
@@ -119,7 +122,7 @@ describe('quote chips in the composer', () => {
       })
       const chipLine = lines.reduce((size, text) => size + text.length + 2, 2)
       editor.commands.setTextSelection(chipLine + 1)
-      fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Backspace', keyCode: 8 })
+      editor.commands.joinBackward()
     }
   const QUOTE_LINE_CASES: [
     name: string,
@@ -145,28 +148,28 @@ describe('quote chips in the composer', () => {
       ['> q\n\n']
     ],
     [
-      'a Backspace that joins a chip line to the empty line under a typed quote line',
+      'a join of a chip line to the empty line under a typed quote line',
       '',
       joinChipLineUnder(['> typed']),
       '> typed\n\n> q\n\nc',
       ['> q\n\n']
     ],
     [
-      'a Backspace that joins a chip line under a quote line and a lazy line',
+      'a join of a chip line under a quote line and a lazy line',
       '',
       joinChipLineUnder(['> x', 'foo']),
       '> x\nfoo\n\n> q\n\nc',
       ['> q\n\n']
     ],
     [
-      'a Backspace that joins a chip line under a text line, a blank line and a quote line',
+      'a join of a chip line under a text line, a blank line and a quote line',
       '',
       joinChipLineUnder(['> x', '', 'foo']),
       '> x\n\nfoo\n> q\n\nc',
       ['> q\n\n']
     ],
     [
-      'a Backspace that joins a chip line under two text lines',
+      'a join of a chip line under two text lines',
       '',
       joinChipLineUnder(['foo', 'bar']),
       'foo\nbar\n> q\n\nc',
