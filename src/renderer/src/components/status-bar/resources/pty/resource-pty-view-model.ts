@@ -31,7 +31,6 @@ export type ResourcePtyRow = {
   sortName: string
   lastActivityAt: number
   workspace: string | null
-  projectId: string
   project: string | null
   workspaceId: string | null
   tabId: string | null
@@ -39,18 +38,12 @@ export type ResourcePtyRow = {
   binding: 'bound' | 'unbound' | 'pending'
 }
 
+/** One line in the PTYs tab: every PTY without a tab, or one workspace's PTYs. */
 export type ResourcePtyGroup = {
-  id: string
+  key: string
+  kind: 'unbound' | 'workspace'
   name: string | null
-  sortName: string
-  lastActivityAt: number
-  workspaces: {
-    id: string
-    name: string | null
-    sortName: string
-    lastActivityAt: number
-    rows: ResourcePtyRow[]
-  }[]
+  rows: ResourcePtyRow[]
 }
 
 export function buildResourcePtyRows(args: {
@@ -171,7 +164,6 @@ export function buildResourcePtyRows(args: {
       lastActivityAt: recentStamp(workspace ?? {}),
       workspace: workspaceName,
       workspaceId: workspace?.id ?? null,
-      projectId: project ? (workspace?.repoId ?? '') : '',
       project: project ?? null,
       tabId,
       paneKey: tabId ? (paneKeys.get(session.id) ?? null) : null,
@@ -185,61 +177,56 @@ export function buildResourcePtyRows(args: {
   })
 }
 
+export const UNBOUND_RESOURCE_PTY_GROUP_KEY = 'unbound'
+
 export function groupResourcePtyRows(rows: readonly ResourcePtyRow[]): ResourcePtyGroup[] {
-  const projects = new Map<
+  const unbound: ResourcePtyGroup = {
+    key: UNBOUND_RESOURCE_PTY_GROUP_KEY,
+    kind: 'unbound',
+    name: null,
+    rows: []
+  }
+  const workspaces = new Map<
     string,
-    { group: ResourcePtyGroup; workspaces: Map<string, ResourcePtyGroup['workspaces'][number]> }
+    ResourcePtyGroup & { sortName: string; lastActivityAt: number; id: string }
   >()
   for (const row of rows) {
-    let project = projects.get(row.projectId)
-    if (!project) {
-      project = {
-        group: {
-          id: row.projectId,
-          name: row.project,
-          sortName: row.project?.trim().toLocaleLowerCase() ?? '\uffff',
-          lastActivityAt: 0,
-          workspaces: []
-        },
-        workspaces: new Map()
-      }
-      projects.set(row.projectId, project)
+    if (row.binding === 'unbound') {
+      unbound.rows.push(row)
+      continue
     }
-    const workspaceId = row.workspaceId ?? ''
-    let workspace = project.workspaces.get(workspaceId)
+    const id = row.workspaceId ?? ''
+    let workspace = workspaces.get(id)
     if (!workspace) {
       workspace = {
-        id: workspaceId,
+        key: `workspace:${id}`,
+        kind: 'workspace',
+        id,
         name: row.workspace,
         sortName: row.workspace?.trim().toLocaleLowerCase() ?? '\uffff',
         lastActivityAt: 0,
         rows: []
       }
-      project.workspaces.set(workspaceId, workspace)
-      project.group.workspaces.push(workspace)
+      workspaces.set(id, workspace)
     }
     workspace.rows.push(row)
     workspace.lastActivityAt = Math.max(workspace.lastActivityAt, row.lastActivityAt)
-    project.group.lastActivityAt = Math.max(project.group.lastActivityAt, row.lastActivityAt)
   }
-  const groups = [...projects.values()].map(({ group }) => group)
-  for (const group of groups) {
-    group.workspaces.sort(
-      (a, b) =>
-        b.lastActivityAt - a.lastActivityAt ||
-        a.sortName.localeCompare(b.sortName) ||
-        a.id.localeCompare(b.id)
-    )
-    for (const workspace of group.workspaces) {
-      workspace.rows.sort(
-        (a, b) => a.sortName.localeCompare(b.sortName) || a.session.id.localeCompare(b.session.id)
-      )
-    }
-  }
-  return groups.sort(
+  const byName = (a: ResourcePtyRow, b: ResourcePtyRow): number =>
+    a.sortName.localeCompare(b.sortName) || a.session.id.localeCompare(b.session.id)
+  const groups: ResourcePtyGroup[] = [...workspaces.values()].sort(
     (a, b) =>
       b.lastActivityAt - a.lastActivityAt ||
       a.sortName.localeCompare(b.sortName) ||
       a.id.localeCompare(b.id)
   )
+  for (const group of groups) {
+    group.rows.sort(byName)
+  }
+  if (unbound.rows.length > 0) {
+    unbound.rows.sort(byName)
+    // Why first: PTYs no tab owns are the cleanup target, so they stay one click away.
+    groups.unshift(unbound)
+  }
+  return groups
 }

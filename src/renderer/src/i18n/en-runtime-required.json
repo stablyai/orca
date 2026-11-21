@@ -2896,8 +2896,8 @@
   },
   "resourceManager": {
     "pty": {
-      "localOwnedCount_one": "{{count}} Orca PTY on this computer",
-      "localOwnedCount_other": "{{count}} Orca PTYs on this computer"
+      "count_one": "{{count}} PTY",
+      "count_other": "{{count}} PTYs"
     }
   },
   "runtime": {

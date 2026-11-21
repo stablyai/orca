@@ -1,6 +1,20 @@
 import React from 'react'
-import { AlertTriangle, MemoryStick, RotateCw, Trash2 } from 'lucide-react'
+import {
+  AlertTriangle,
+  MemoryStick,
+  MoreHorizontal,
+  RefreshCw,
+  RotateCw,
+  Trash2
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
@@ -31,42 +45,60 @@ export function renderResourceUsagePopoverHeader(
 
       <div className="flex items-center gap-0.5">
         {onRefresh && (
-          <Button variant="ghost" size="xs" onClick={onRefresh}>
-            {t('resourceManager.refresh', 'Refresh')}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="text-muted-foreground hover:text-foreground"
+                onClick={onRefresh}
+                aria-label={t('resourceManager.refresh', 'Refresh')}
+              >
+                <RefreshCw />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {t('resourceManager.refresh', 'Refresh')}
+            </TooltipContent>
+          </Tooltip>
         )}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={() => daemonActions.setPending('restart')}
+        <DropdownMenu modal={false}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="text-muted-foreground hover:text-foreground"
+                  aria-label={t('resourceManager.moreActions', 'More actions')}
+                >
+                  <MoreHorizontal />
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {t('resourceManager.moreActions', 'More actions')}
+            </TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent align="end" className="min-w-48">
+            <DropdownMenuItem
               disabled={daemonActions.isBusy}
-              aria-label={t('resourceManager.restartLocal', 'Restart local daemon')}
-              className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
+              onSelect={() => daemonActions.setPending('restart')}
             >
-              <RotateCw className="size-3" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={6}>
-            {t('resourceManager.restartLocal', 'Restart local daemon')}
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={() => daemonActions.setPending('killAll')}
+              <RotateCw />
+              {t('resourceManager.restartLocal', 'Restart local daemon')}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              variant="destructive"
               disabled={daemonActions.isBusy}
-              aria-label={t('resourceManager.killAllLocal', 'Kill all local sessions')}
-              className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
+              onSelect={() => daemonActions.setPending('killAll')}
             >
-              <Trash2 className="size-3" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={6}>
-            {t('resourceManager.killAllLocal', 'Kill all local sessions')}
-          </TooltipContent>
-        </Tooltip>
+              <Trash2 />
+              {t('resourceManager.killAllLocalMenu', 'Kill all local sessions…')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   )
