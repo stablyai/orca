@@ -12,7 +12,12 @@ import { createClaudeSessionJournalTranslator } from './claude-structured-sessio
 
 type Launch = Pick<
   ClaudeSession,
-  'launchIntent' | 'firstRootInit' | 'bypassDisabled' | 'bypassRefusal' | 'autoUnsettled'
+  | 'launchIntent'
+  | 'firstRootInit'
+  | 'bypassDisabled'
+  | 'bypassRefusal'
+  | 'autoDisabled'
+  | 'autoUnsettled'
 > & {
   running?: string
 }
@@ -250,5 +255,62 @@ describe('a Full access chat whose Claude refuses bypass', () => {
     })
     asked.init('default')
     expect([...granted.warnings(), ...plan.warnings(), ...asked.warnings()]).toHaveLength(0)
+  })
+})
+
+const APPROVE_FOR_ME = { permissionMode: 'auto' }
+
+describe('an Approve for me chat Claude runs in Ask', () => {
+  it('says the settings turn auto off, and repeats it at the bottom after a restart', () => {
+    const opened = {
+      launchIntent: APPROVE_FOR_ME,
+      firstRootInit: { permissionMode: 'default' },
+      autoDisabled: true
+    }
+    const first = launch('auto-off-chat', opened)
+    first.session.appliedInputOptions.set('buildPermissionMode', 'default')
+    first.init('default')
+    first.init('default')
+    expect(first.warnings()).toEqual([
+      expect.objectContaining({
+        text: "Claude's settings turn off Approve for me (disableAutoMode), so Claude uses Ask for approval instead."
+      })
+    ])
+
+    const restarted = launch('auto-off-chat', opened, '1')
+    restarted.session.appliedInputOptions.set('buildPermissionMode', 'default')
+    restarted.init('default')
+    expect(restarted.ids).toEqual([expect.stringMatching(/:auto-settings:ask$/)])
+    expect(restarted.ids[0]).not.toBe(first.ids[0])
+  })
+
+  it('says when Claude did not start it in Approve for me', () => {
+    const outside = launch('auto-outside-chat', {
+      launchIntent: APPROVE_FOR_ME,
+      firstRootInit: { permissionMode: 'default' },
+      autoDisabled: false
+    })
+    outside.session.appliedInputOptions.set('buildPermissionMode', 'default')
+    outside.status()
+    expect(outside.warnings()).toEqual([
+      expect.objectContaining({
+        text: "Claude didn't start this chat in Approve for me, so Claude uses Ask for approval instead."
+      })
+    ])
+  })
+
+  it('says Approve for me is not available right now while Claude refuses it for now', () => {
+    const forNow = launch('auto-for-now-chat', {
+      launchIntent: APPROVE_FOR_ME,
+      firstRootInit: { permissionMode: 'auto' },
+      autoUnsettled: { kind: 'time', retryAt: 0 }
+    })
+    forNow.session.appliedInputOptions.set('buildPermissionMode', 'default')
+    forNow.init('default')
+    expect(forNow.warnings()).toEqual([
+      expect.objectContaining({
+        text: "Approve for me isn't available right now, so Claude uses Ask for approval instead."
+      })
+    ])
   })
 })

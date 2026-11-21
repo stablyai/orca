@@ -381,8 +381,11 @@ describe('leaving Plan mode after an approved plan', () => {
     expect(claudeOwesFullAccessFallback(facts(refused, 'auto', 'ask'))).toBe(true)
   })
 
-  it('fails the send when Claude settings turn off the Approve for me the chat chose', async () => {
-    for (const autoDisabled of [undefined, true]) {
+  it('runs an Approve for me chat in Ask when Claude settings turn auto off', async () => {
+    for (const [autoDisabled, written] of [
+      [undefined, ['auto', 'default', 'default']],
+      [true, ['default', 'default']]
+    ] as const) {
       const setPermissionMode = claude(['auto'])
       const session = {
         launchIntent: { permissionMode: 'auto' },
@@ -391,22 +394,49 @@ describe('leaving Plan mode after an approved plan', () => {
         appliedInputOptions: new Map<string, string>(),
         connection: { setPermissionMode }
       }
-      await expect(send(session)).rejects.toThrow(AUTO_REFUSAL)
-      await expect(send(session)).rejects.toThrow(AUTO_REFUSAL)
-      expect(setPermissionMode.mock.calls.map(([mode]) => mode)).toEqual(['auto', 'auto'])
+      expect(await send(session)).toBe('default')
+      expect(await send(session)).toBe('default')
+      expect(setPermissionMode.mock.calls.map(([mode]) => mode)).toEqual(written)
     }
   })
 
-  it('keeps asking for Approve for me when the chat chose it and Claude refused it only for now', async () => {
+  it('builds an Approve for me chat in Ask after Plan when Claude settings turn auto off', async () => {
+    expect(
+      await approvePlan({ launched: 'auto', opened: 'plan', autoDisabled: true }, ['auto'])
+    ).toEqual({ applied: 'default', written: ['default'] })
+  })
+
+  it('runs an Approve for me chat in Ask while Claude refuses auto for now, then in auto', async () => {
     const auto = autoForNow()
     const session = {
       launchIntent: { permissionMode: 'auto' },
       firstRootInit: { permissionMode: 'auto' },
-      appliedInputOptions: new Map<string, string>(),
+      appliedInputOptions: new Map<string, string>([['model', 'small']]),
       connection: { setPermissionMode: auto.setPermissionMode }
     }
-    await expect(send(session)).rejects.toThrow('auto mode is not available for this model')
+    expect(await send(session)).toBe('default')
     auto.available = true
+    session.appliedInputOptions.set('model', 'large')
     expect(await send(session)).toBe('auto')
+    expect(auto.setPermissionMode.mock.calls.map(([mode]) => mode)).toEqual([
+      'auto',
+      'default',
+      'default',
+      'auto'
+    ])
+  })
+
+  it('records Ask without a write when Claude starts an Approve for me chat in it', () => {
+    const setPermissionMode = claude([])
+    const session = {
+      launchIntent: { permissionMode: 'auto' },
+      autoDisabled: true,
+      appliedInputOptions: new Map<string, string>(),
+      reportedOptions: {},
+      connection: { setPermissionMode }
+    }
+    observeClaudeRootInit(session, { permissionMode: 'default' }, 'default')
+    expect(session.appliedInputOptions.get('buildPermissionMode')).toBe('default')
+    expect(setPermissionMode).not.toHaveBeenCalled()
   })
 })

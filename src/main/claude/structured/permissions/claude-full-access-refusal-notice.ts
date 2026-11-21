@@ -1,4 +1,5 @@
-// The warning a Full access chat gets, as a new row, when Claude runs it in another mode.
+// The warning a Full access or Approve for me chat gets, as a new row, when Claude runs it in
+// another mode.
 
 import { randomUUID } from 'node:crypto'
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -10,6 +11,8 @@ import { readClaudeReportedPermissionMode } from '../startup/claude-structured-i
 import type { ClaudeSession } from '../claude-structured-session-state'
 import type { ClaudeJournalTranslatorDeps } from '../journal/claude-journal-translator-contract'
 import {
+  claudeAutoFallsBack,
+  claudeAutoRefused,
   claudeBypassRefused,
   claudeFullAccessRefusalReason,
   type ClaudeBypassFacts
@@ -36,6 +39,11 @@ function claudeFallbackChoice(applied: string): string {
  *  attempt, Plan exit included, so it names a mode Claude accepted. */
 function claudeFullAccessRefusalNoticeId(session: ClaudeNoticeFacts): string | null {
   const applied = session.appliedInputOptions?.get('buildPermissionMode')
+  if (session.launchIntent?.permissionMode === 'auto') {
+    return claudeAutoFallsBack(session) && applied !== undefined && applied !== 'auto'
+      ? `auto-${claudeAutoFallbackReason(session)}:${claudeFallbackChoice(applied)}`
+      : null
+  }
   if (!claudeBypassRefused(session) || applied === undefined || applied === 'bypassPermissions') {
     return null
   }
@@ -51,10 +59,35 @@ function claudeFullAccessRefusalNoticeId(session: ClaudeNoticeFacts): string | n
   return `${claudeFullAccessRefusalReason(session)}:${choice}${auto}`
 }
 
+/** Why an Approve for me chat runs in Ask: its settings, its start, or a refusal only for now. */
+function claudeAutoFallbackReason(
+  session: ClaudeNoticeFacts
+): 'settings' | 'started-outside' | 'for-now' {
+  return session.autoDisabled === true
+    ? 'settings'
+    : claudeAutoRefused(session)
+      ? 'started-outside'
+      : 'for-now'
+}
+
+function claudeAutoFallbackText(session: ClaudeNoticeFacts, running: string): string {
+  switch (claudeAutoFallbackReason(session)) {
+    case 'settings':
+      return `Claude's settings turn off Approve for me (disableAutoMode), so Claude uses ${running} instead.`
+    case 'started-outside':
+      return `Claude didn't start this chat in Approve for me, so Claude uses ${running} instead.`
+    case 'for-now':
+      return `Approve for me isn't available right now, so Claude uses ${running} instead.`
+  }
+}
+
 function claudeFullAccessRefusalText(session: ClaudeNoticeFacts, choice: string): string {
   const running = isAgentChatPermissionMode(choice)
     ? agentChatPermissionModeCopy('claude', choice).label
     : 'its own permission settings'
+  if (session.launchIntent?.permissionMode === 'auto') {
+    return claudeAutoFallbackText(session, running)
+  }
   const reason = claudeFullAccessRefusalReason(session)
   const autoOff = choice === 'ask' && session.autoDisabled === true
   const autoForNow = choice === 'ask' && !autoOff && session.autoUnsettled !== undefined

@@ -96,10 +96,9 @@ export async function acquireClaudeSession({
       return
     }
     if (message.type === 'system' && message.subtype === 'init' && isRootClaudeFrame(message)) {
-      firstRootInit ??= {
-        permissionMode: proof.readClaudeFrameString(message, 'permissionMode')
-      }
-      observeClaudeRootInit(liveSession, firstRootInit)
+      const running = proof.readClaudeFrameString(message, 'permissionMode')
+      firstRootInit ??= { permissionMode: running }
+      observeClaudeRootInit(liveSession, firstRootInit, running)
     }
     const permissionChanged = proof.observeClaudeReportedPermissionMode(observedOptions, message)
     const modelReport = observeClaudeFrameModels(liveSession, message, init?.model)
