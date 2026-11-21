@@ -28,3 +28,19 @@ it('marks a chat as setup only when its agent is not installed on the host', () 
     agent: 'antigravity'
   })
 })
+
+it('lists chats the host runs now before chats that install their agent first', () => {
+  const rows = buildNewTabAgentMenuRows({
+    settings: { agentDefaultSurface: 'chat' },
+    detectedOnHost: ['opencode'],
+    chatAgents: ['codex', 'opencode'],
+    hostChatAnswer: () => 'yes',
+    chatProgram: (agent) => (agent === 'opencode' ? 'available' : 'installable'),
+    offerAgentSetup: true,
+    hostPlatform: 'darwin'
+  })
+  expect(rows).toEqual([
+    { kind: 'chat', agent: 'opencode' },
+    { kind: 'chat', agent: 'codex', setup: true }
+  ])
+})

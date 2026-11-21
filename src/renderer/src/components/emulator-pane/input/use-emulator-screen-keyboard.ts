@@ -1,62 +1,31 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ClipboardEvent,
+  type FocusEvent,
   type KeyboardEvent
 } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
+import type { ServeSimKeyboardFrame } from '../../../../../shared/emulator/emulator-keyboard-frame'
 import {
-  buildServeSimKeyboardFramesForCode,
-  buildServeSimKeyboardFramesForKey,
-  type ServeSimKeyboardFrame
-} from '../../../../../shared/emulator/emulator-keyboard-frame'
-import type { ScrcpyKeyboard } from '../streaming/use-emulator-control-stream'
+  ANDROID_KEY_BUTTONS,
+  KEYBOARD_FRAME_DELAY_MS,
+  type ScrcpyKeyboard
+} from '../streaming/use-emulator-control-stream'
 import { pasteTextIntoEmulator, type EmulatorKeyboardPasteResult } from './emulator-keyboard-paste'
-
-// Android keycode names (see android-input-mapping.ts) for the named keys; others type as text.
-const ANDROID_KEY_BUTTONS: Record<string, string> = {
-  Enter: 'enter',
-  Tab: 'tab',
-  Backspace: 'backspace',
-  Delete: 'forward_delete',
-  ArrowUp: 'dpad_up',
-  ArrowDown: 'dpad_down',
-  ArrowLeft: 'dpad_left',
-  ArrowRight: 'dpad_right',
-  Home: 'move_home',
-  End: 'move_end',
-  PageUp: 'page_up',
-  PageDown: 'page_down'
-}
-
-type SimulatorKeyPress = {
-  alt: boolean
-  /** Caps Lock capitalized a character; the guest has no Caps Lock state of its own. */
-  capsLetter: boolean
-  code: string
-  key: string
-  shift: boolean
-}
-
-// Synced simulators take the physical key; unsynced ones keep a US layout, so the character picks its US key.
-function simulatorKeyFrames(
-  press: SimulatorKeyPress,
-  physicalKeys: boolean
-): ServeSimKeyboardFrame[] | null {
-  if (physicalKeys) {
-    return buildServeSimKeyboardFramesForCode(press.code, {
-      alt: press.alt,
-      shift: press.shift || press.capsLetter
-    })
-  }
-  // Option composes characters only through the guest's own layout.
-  return press.alt ? null : buildServeSimKeyboardFramesForKey(press.key, { shift: press.shift })
-}
+import {
+  HeldSimulatorInput,
+  simulatorKeyFrames,
+  type HeldSimulatorInputSinks,
+  type SimulatorKeyPress
+} from './simulator-keyboard-input'
+import { useEmulatorKeyboardProxy } from './use-emulator-keyboard-proxy'
 
 type UseEmulatorScreenKeyboardArgs = {
   cancelKeyboardFrames: () => void
@@ -79,18 +48,39 @@ export function useEmulatorScreenKeyboard({
   // True once main has put the simulator's hardware layout on the Mac's, so physical keys type what the Mac key shows.
   const physicalKeysRef = useRef(false)
   const layoutSyncIdRef = useRef(0)
-  // Non-null while a layout sync is in flight: keys wait so none is sent under the old layout.
-  const pendingKeyPressesRef = useRef<SimulatorKeyPress[] | null>(null)
   const [keyboardCaptureActive, setKeyboardCaptureActive] = useState(false)
+
+  // Keys wait during a layout sync (so none goes under the old layout) and behind committed IME text.
+  const [heldInput] = useState(() => new HeldSimulatorInput())
+  const simulatorSinks = useMemo<HeldSimulatorInputSinks>(
+    () => ({
+      keyFrames: (press) => simulatorKeyFrames(press, physicalKeysRef.current),
+      sendFrames: (frames) =>
+        captureActiveRef.current && sendKeyboardFrames(frames)
+          ? (frames.length - 1) * KEYBOARD_FRAME_DELAY_MS
+          : null,
+      typeText: (text) =>
+        callRuntimeRpc({ kind: 'local' }, 'emulator.type', { text, worktree: worktreeId })
+    }),
+    [sendKeyboardFrames, worktreeId]
+  )
+  const { physicalDeadKeyRef, keyboardProxyRef, ...keyboardProxyHandlers } =
+    useEmulatorKeyboardProxy({
+      canInteract,
+      captureActiveRef,
+      heldInput,
+      scrcpyKeyboard,
+      simulatorSinks
+    })
 
   const syncKeyboardLayout = useCallback((): void => {
     if (scrcpyKeyboard) {
       return
     }
     const syncId = ++layoutSyncIdRef.current
-    if (pendingKeyPressesRef.current === null) {
-      pendingKeyPressesRef.current = []
-    }
+    heldInput.startSync()
+    // A dead key the simulator took under the old layout no longer owns the Mac's next composition.
+    physicalDeadKeyRef.current = false
     void callRuntimeRpc<{ physicalKeys: boolean }>(
       { kind: 'local' },
       'emulator.syncKeyboardLayout',
@@ -105,15 +95,9 @@ export function useEmulatorScreenKeyboard({
           return
         }
         physicalKeysRef.current = physicalKeys
-        const presses = pendingKeyPressesRef.current ?? []
-        pendingKeyPressesRef.current = null
-        // One call keeps the held keys in order; separate calls would interleave their spaced frames.
-        const frames = presses.flatMap((press) => simulatorKeyFrames(press, physicalKeys) ?? [])
-        if (frames.length > 0 && captureActiveRef.current) {
-          sendKeyboardFrames(frames)
-        }
+        heldInput.finishSync(simulatorSinks)
       })
-  }, [scrcpyKeyboard, sendKeyboardFrames, worktreeId])
+  }, [heldInput, physicalDeadKeyRef, scrcpyKeyboard, simulatorSinks, worktreeId])
 
   const cancelActivePaste = useCallback((): void => {
     pasteRequestIdRef.current += 1
@@ -126,14 +110,15 @@ export function useEmulatorScreenKeyboard({
         cancelActivePaste()
         // Keys buffered for this capture must not be delivered into a later one.
         layoutSyncIdRef.current += 1
-        pendingKeyPressesRef.current = null
+        heldInput.clear()
+        physicalDeadKeyRef.current = false
       } else if (!captureActiveRef.current) {
         syncKeyboardLayout()
       }
       captureActiveRef.current = active
       setKeyboardCaptureActive(active)
     },
-    [cancelActivePaste, syncKeyboardLayout]
+    [cancelActivePaste, heldInput, physicalDeadKeyRef, syncKeyboardLayout]
   )
 
   // A Mac input source switch while typing into the simulator moves its layout too.
@@ -153,20 +138,47 @@ export function useEmulatorScreenKeyboard({
     }
   }, [canInteract, setCaptureActive])
 
+  // Input still held when the pane closes must not reach the device afterwards.
+  useEffect(() => () => heldInput.clear(), [heldInput])
+
   const enableKeyboardCapture = useCallback(() => {
     if (canInteract) {
+      try {
+        keyboardProxyRef.current?.focus({ preventScroll: true })
+      } catch {}
       setCaptureActive(true)
     }
-  }, [canInteract, setCaptureActive])
+  }, [canInteract, keyboardProxyRef, setCaptureActive])
 
-  const handleBlur = useCallback(() => {
-    setCaptureActive(false)
-  }, [setCaptureActive])
+  const handleBlur = useCallback(
+    (event: FocusEvent<HTMLElement>) => {
+      // Focus moving between the screen and its keyboard proxy stays in the pane.
+      if (
+        event.relatedTarget instanceof Node &&
+        event.currentTarget.contains(event.relatedTarget)
+      ) {
+        return
+      }
+      setCaptureActive(false)
+    },
+    [setCaptureActive]
+  )
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
-      const simulatorOption =
-        !scrcpyKeyboard && (physicalKeysRef.current || pendingKeyPressesRef.current !== null)
+      const simulatorOption = !scrcpyKeyboard && (physicalKeysRef.current || heldInput.holding)
+      // A key the host input method is composing with is the IME's; its text arrives on commit.
+      const imeKey = event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229
+      // Only a simulator known to follow the Mac layout composes dead keys from physical keys.
+      const simulatorDeadKey =
+        !scrcpyKeyboard &&
+        physicalKeysRef.current &&
+        !heldInput.syncingLayout &&
+        (event.key === 'Dead' || (imeKey && physicalDeadKeyRef.current))
+      if (event.key === 'Dead' && !simulatorDeadKey) {
+        // The Mac composes this dead key, so its composition must reach the device.
+        physicalDeadKeyRef.current = false
+      }
       // Android takes whatever character the host layout produced as text, Option and AltGr ones too.
       const androidText = scrcpyKeyboard !== null && [...event.key].length === 1
       // AltGr arrives as Ctrl+Alt on Windows and Linux; its characters are text, not a Ctrl shortcut.
@@ -175,7 +187,7 @@ export function useEmulatorScreenKeyboard({
       const optionText = androidText && isMacUserAgent()
       if (
         !canInteract ||
-        event.nativeEvent.isComposing ||
+        ((imeKey || event.key === 'Dead') && !simulatorDeadKey) ||
         event.metaKey ||
         (event.ctrlKey && !altGraphText) ||
         (event.altKey && !simulatorOption && !optionText && !altGraphText)
@@ -186,6 +198,7 @@ export function useEmulatorScreenKeyboard({
       if (event.key === 'Escape') {
         if (captureActiveRef.current) {
           setCaptureActive(false)
+          keyboardProxyRef.current?.blur()
           event.currentTarget.blur()
           event.preventDefault()
           event.stopPropagation()
@@ -213,14 +226,12 @@ export function useEmulatorScreenKeyboard({
           key: event.key,
           shift: event.shiftKey
         }
-        const pending = pendingKeyPressesRef.current
-        if (pending) {
-          pending.push(press)
-        } else {
-          const frames = simulatorKeyFrames(press, physicalKeysRef.current)
-          if (!frames || !sendKeyboardFrames(frames)) {
-            return
-          }
+        // A key the simulator can't press is left to the proxy, which commits its text.
+        if (heldInput.pressKey(press, simulatorSinks) === 'unsupported') {
+          return
+        }
+        if (event.key === 'Dead' || !imeKey) {
+          physicalDeadKeyRef.current = event.key === 'Dead'
         }
         event.preventDefault()
         event.stopPropagation()
@@ -238,7 +249,15 @@ export function useEmulatorScreenKeyboard({
       event.preventDefault()
       event.stopPropagation()
     },
-    [canInteract, scrcpyKeyboard, sendKeyboardFrames, setCaptureActive]
+    [
+      canInteract,
+      heldInput,
+      keyboardProxyRef,
+      physicalDeadKeyRef,
+      scrcpyKeyboard,
+      setCaptureActive,
+      simulatorSinks
+    ]
   )
 
   const handlePaste = useCallback(
@@ -282,7 +301,9 @@ export function useEmulatorScreenKeyboard({
     handleBlur,
     handleKeyDown,
     handlePaste,
-    keyboardCaptureActive
+    keyboardCaptureActive,
+    keyboardProxyRef,
+    ...keyboardProxyHandlers
   }
 }
 

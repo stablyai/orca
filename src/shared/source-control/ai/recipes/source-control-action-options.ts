@@ -11,6 +11,7 @@ import {
   agentPermissionHasTerminalChoice,
   type AgentPermissionChoice
 } from '../../../agent-launch/permissions/tui-agent-permission-choice'
+import { agentChatPermissionModes } from '../../../agent-launch/permissions/agent-chat-permission-support'
 
 /** Agents whose model an action can pick: the ones whose session catalog lists models. */
 export function sourceControlActionAgentPicksModel(
@@ -28,7 +29,13 @@ export function sourceControlActionPermissionModeRoute(
   agent: TuiAgent,
   mode: AgentPermissionChoice
 ): SourceControlActionChoiceRoute {
-  return agentPermissionHasTerminalChoice(agent, mode) ? null : 'chats'
+  if (!agentPermissionHasTerminalChoice(agent, mode)) {
+    return 'chats'
+  }
+  const chatModes = agentChatPermissionModes(agent)?.modes
+  return mode !== 'own' && chatModes && !chatModes.some((offered) => offered === mode)
+    ? 'terminals'
+    : null
 }
 
 function optionReachesChats(agent: TuiAgent, option: CatalogOption): boolean {

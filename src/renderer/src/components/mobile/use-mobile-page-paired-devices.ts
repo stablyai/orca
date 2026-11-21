@@ -77,26 +77,27 @@ export function useMobilePagePairedDevices({
       } = {}
     ): Promise<readonly PairedMobileDevice[]> => {
       try {
-        const nextDevices = await refreshDevices(opts)
-        if (mountedRef.current) {
-          if (
-            shouldShowPairedAfterDeviceRefresh({
-              stage: stageRef.current,
-              deviceCountAtPairStart: deviceCountAtPairStartRef.current,
-              nextDeviceCount: nextDevices.length
-            })
-          ) {
-            showPairedDevices(nextDevices.length)
-          }
-        }
-        return nextDevices
+        return await refreshDevices(opts)
       } catch (err) {
         console.error('mobile.listDevices failed', err)
         return []
       }
     },
-    [mountedRef, refreshDevices, showPairedDevices]
+    [refreshDevices]
   )
+
+  // Any cache update (poll or main's devices-changed push) can complete a pairing started on this page.
+  useEffect(() => {
+    if (
+      shouldShowPairedAfterDeviceRefresh({
+        stage: stageRef.current,
+        deviceCountAtPairStart: deviceCountAtPairStartRef.current,
+        nextDeviceCount: devices.length
+      })
+    ) {
+      showPairedDevices(devices.length)
+    }
+  }, [devices.length, showPairedDevices])
 
   useEffect(() => {
     let cancelled = false

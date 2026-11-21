@@ -42,6 +42,19 @@ vi.mock('../components/composer-input/TextField', () => ({
 vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
 vi.mock('../platform/media-picking/media-picker', () => ({ useMediaPicker: () => ({}) }))
 vi.mock('./MobileBotAvatar', () => ({ MobileBotAvatar: () => null }))
+vi.mock('./soul-memory/MobileBotSoulAndMemory', () => ({
+  MobileBotSoulPage: () => null,
+  MobileBotMemoryPage: () => null
+}))
+vi.mock('./soul-memory/use-bot-home-files', () => ({
+  useBotMemoryTopicNames: () => null,
+  botMemoryTopicCount: () => 0
+}))
+vi.mock('./skills/MobileBotSkills', () => ({
+  useBotSkillScan: () => null,
+  botSkillSourceCount: () => null,
+  MobileBotSkillsPage: () => null
+}))
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0 })
 }))
@@ -111,7 +124,8 @@ const routeBot: RouteBot = {
   applyBot: () => {},
   refresh: () => {},
   reads: 0,
-  itemReads: 0
+  itemReads: 0,
+  hostKey: 'host'
 }
 
 const suggestion = (id: string, title: string) => ({

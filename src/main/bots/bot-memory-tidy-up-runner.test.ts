@@ -4,12 +4,16 @@ import type { Bot } from '../../shared/bot-types'
 import { makeTestBot } from './bot.test-fixture'
 import { BotLookAroundStore } from './bot-look-around-store'
 import { createBotMemoryHistory } from './bot-memory-history'
-import { createBotMemoryRecord } from './bot-memory-record'
+import { createBotMemoryRecord, tagBotMemoryFile } from './bot-memory-record'
 import { TIDY_UP_FAILURES, type TidyUpChat } from './bot-memory-tidy-up'
 import { ASLEEP_RETRY_AFTER_MS } from './bot-look-around-state'
 import { BotTidyUpRunner } from './bot-memory-tidy-up-runner'
 import { testRunPower } from './bot-background-run.test-fixture'
 import type { BotTurnEnd } from './bot-run-turn-watch'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { memorySnapshot } from './bot-memory-ops'
+import { TIDY_UP_OPS_PILOT_FILE } from './bot-memory-ops-pilot'
+import { readdGuard } from './bot-memory-readd-guard'
 
 const HOME = '/home/me/.orca/bots/scout'
 const MEMORY = join(HOME, 'MEMORY.md')
@@ -80,7 +84,8 @@ function harness(
       files.get(path) === expected && write(path, text),
     writeText: async (path: string, text: string, opts?: { exclusive?: boolean }) =>
       !(opts?.exclusive && files.has(path)) && write(path, text),
-    makeDirectory: async () => {}
+    makeDirectory: async () => {},
+    statFile: async (path: string) => (files.has(path) ? { size: 0, mtimeMs: 0 } : null)
   }
   const stored = new Map<string, string>()
   const history = createBotMemoryHistory(
@@ -121,10 +126,12 @@ function harness(
     bot = { ...bot, tidyUp: { on: false } }
   })
   const noteTidied = vi.fn()
+  const readFrom: number[] = []
   const runner = new BotTidyUpRunner({
     bots: () => [bot],
     store,
-    newChats: async () => {
+    newChats: async (_bot, since) => {
+      readFrom.push(since)
       if (options.readChats) {
         return options.readChats()
       }
@@ -157,6 +164,7 @@ function harness(
   }
   return {
     runner,
+    fs,
     host,
     release,
     delivered,
@@ -169,6 +177,8 @@ function harness(
     last: () => store.get('b1').tidyUp?.last,
     rows: () => history.list('b1'),
     runs: () => store.get('b1').tidyUp?.runs ?? [],
+    state: () => store.get('b1').tidyUp,
+    readFrom,
     through: () => store.get('b1').tidyUp?.through,
     /** A tick, and the run it starts, to its end: every step here settles on the task queue. */
     tick: async () => {
@@ -655,5 +665,216 @@ describe('Tidy-up on a sleeping host', () => {
     end.resolve({ outcome: 'success', message: reply(INDEX, REPLACED) })
     await vi.waitFor(() => expect(h.runs()[0]?.endedAt).toBeDefined())
     expect(h.runs()[0]?.error).toBeUndefined()
+  })
+})
+
+describe('Tidy-up on ops, for a bot in the pilot', () => {
+  const STATUS = '- 2026-11-02 #4417 merged at a1b2c3d4; follow-up waiting on review'
+  const OLD = [
+    '# Memory',
+    '- 2026-10-02 times in Eastern',
+    '- 2026-10-03 times are in Eastern',
+    STATUS,
+    '- 2026-10-06 PRs open ready, not draft',
+    ''
+  ].join('\n')
+  const SHOWN = OLD.replace(`${STATUS}\n`, '')
+  const merge = (): string => {
+    const [first, second] = memorySnapshot(SHOWN)
+    return `Done.\n[{"op":"merge","lines":["${first.ref}","${second.ref}"],"keep":"${second.ref}"}]`
+  }
+  const JOURNAL = join(HOME, 'memory', 'journal', '2026-11.md')
+  const TIDIED =
+    '# Memory\n- 2026-10-03 times are in Eastern\n- 2026-10-06 PRs open ready, not draft\n'
+
+  it('moves status to the journal and applies the ops as one History row', async () => {
+    const run = harness({ memory: OLD, reply: merge() })
+    run.files.set(join(HOME, TIDY_UP_OPS_PILOT_FILE), '')
+    await run.tick()
+
+    const shownRef = `${memorySnapshot(SHOWN)[0].ref} - 2026-10-02 times in Eastern`
+    expect(run.startConversation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ text: expect.stringContaining(shownRef) })
+    )
+    expect(run.startConversation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ text: expect.not.stringContaining('#4417') })
+    )
+    expect(run.files.get(MEMORY)).toBe(TIDIED)
+    expect(run.files.get(JOURNAL)).toBe(`# Status moved out of MEMORY.md, 2026-11\n${STATUS}\n`)
+    expect(run.files.get(ARCHIVE)).toBe(
+      '# Archive\n- 2026-10-02 times in Eastern · merged 2026-11-06\n'
+    )
+    expect(await run.rows()).toHaveLength(1)
+    expect(run.last()).toMatchObject({
+      filed: [{ topic: 'journal/2026-11', count: 1 }],
+      merged: 1,
+      moved: 0,
+      skipped: []
+    })
+  })
+
+  it('never falls back to the whole-file reply for a pilot bot whose file is mostly prose', async () => {
+    const prose = `${SHOWN}${Array.from({ length: 6 }, (_, i) => `prose ${i}`).join('\n')}\n`
+    const run = harness({ memory: prose, reply: reply(INDEX) })
+    run.files.set(join(HOME, TIDY_UP_OPS_PILOT_FILE), '')
+    await run.tick()
+    expect(run.startConversation).not.toHaveBeenCalled()
+    expect(run.files.get(MEMORY)).toBe(prose)
+    expect(run.runs()[0].error).toBe(TIDY_UP_FAILURES.notListLines)
+  })
+
+  it('stays on the whole-file reply off the pilot', async () => {
+    const run = harness({ memory: OLD, reply: merge() })
+    await run.tick()
+    expect(run.files.get(MEMORY)).toBe(OLD)
+    expect(run.runs()[0].error).toBe(TIDY_UP_FAILURES.noDraft)
+  })
+
+  it("keeps a stale chat's rewrite from putting moved lines back, unless its owner asked", async () => {
+    const run = harness({ memory: OLD, reply: merge() })
+    run.files.set(join(HOME, TIDY_UP_OPS_PILOT_FILE), '')
+    await run.tick()
+    const owner = (text: string): AgentJournalRenderItem => ({
+      itemId: 'i1',
+      revision: 1,
+      sequence: 1,
+      observedAt: run.now(),
+      turnScope: { kind: 'turn', turnItemId: 't1' },
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }
+    })
+    // The chat read OLD at its start and writes it back whole, with one new line of its own.
+    const rewrite = async (turn: AgentJournalRenderItem[]) => {
+      run.files.set(MEMORY, `${OLD}- 2026-11-06 Lesson: check worker liveness after a restart\n`)
+      const record = { history: async () => run.rows() }
+      const keepOut = await readdGuard(
+        run.fs,
+        { botId: 'b1', folder: HOME },
+        record,
+        turn,
+        run.now()
+      )
+      return tagBotMemoryFile(run.fs, HOME, TIDIED, async () => null, keepOut)
+    }
+
+    const tagged = await rewrite([owner('Thanks, carry on')])
+    expect(tagged?.text).toBe(
+      `${TIDIED}- 2026-11-06 Lesson: check worker liveness after a restart\n`
+    )
+    expect(run.files.get(ARCHIVE)).toContain(`${STATUS} · kept out 2026-11-06`)
+    expect(run.files.get(ARCHIVE)).toContain('- 2026-10-02 times in Eastern · kept out 2026-11-06')
+
+    const asked = await rewrite([owner('Put the #4417 merged at a1b2c3d4 follow-up line back')])
+    expect(asked?.text).toContain(STATUS)
+  })
+
+  it('keeps nothing out before the record knows the file, or when the archive cannot take it', async () => {
+    const run = harness({ memory: OLD, reply: merge() })
+    run.files.set(join(HOME, TIDY_UP_OPS_PILOT_FILE), '')
+    await run.tick()
+    const record = { history: async () => run.rows() }
+    const keepOut = await readdGuard(run.fs, { botId: 'b1', folder: HOME }, record, [], run.now())
+    run.files.set(MEMORY, OLD)
+    const unknown = await tagBotMemoryFile(run.fs, HOME, '', async () => null, keepOut)
+    expect(unknown?.text).toContain(STATUS)
+
+    run.files.set(MEMORY, OLD)
+    const archive = run.files.get(ARCHIVE) ?? ''
+    const replace = run.fs.replaceText
+    run.fs.replaceText = async (path, expected, text) =>
+      path !== ARCHIVE && replace(path, expected, text)
+    const refused = await tagBotMemoryFile(run.fs, HOME, TIDIED, async () => null, keepOut)
+    expect(refused?.text).toContain(STATUS)
+    expect(run.files.get(ARCHIVE)).toBe(archive)
+  })
+
+  it('keeps the status move but fails the ops half when the reply is unreadable', async () => {
+    const run = harness({ memory: OLD, reply: 'Sorry, I could not do that.' })
+    run.files.set(join(HOME, TIDY_UP_OPS_PILOT_FILE), '')
+    await run.tick()
+    expect(run.files.get(MEMORY)).toBe(SHOWN)
+    expect(run.files.get(JOURNAL)).toContain(STATUS)
+    expect(run.runs()[0].error).toBe(`${TIDY_UP_FAILURES.movedOnly} (${TIDY_UP_FAILURES.noOps})`)
+    expect(run.through()).toBeUndefined()
+    expect(run.last()).toMatchObject({ filed: [{ topic: 'journal/2026-11', count: 1 }] })
+  })
+
+  it('keeps the status move when every op was skipped, and still fails the ops half', async () => {
+    const run = harness({
+      memory: OLD,
+      reply: '[{"op":"retire","line":"L9#0000","reason":"stale"}]'
+    })
+    run.files.set(join(HOME, TIDY_UP_OPS_PILOT_FILE), '')
+    await run.tick()
+    expect(run.files.get(MEMORY)).toBe(SHOWN)
+    expect(run.runs()[0].error).toBe(
+      `${TIDY_UP_FAILURES.movedOnly} (retire 1: names a line MEMORY.md no longer has)`
+    )
+  })
+
+  it.each([
+    ['the line a merge keeps changed', OLD.replace('are in Eastern', 'are in Pacific')],
+    ['a line it moves was undated', OLD.replace('- 2026-10-02 times in', '- times in')],
+    ['a copy of a line it moves was written', `${OLD}- 2026-11-06 times in Eastern\n`],
+    [
+      'a secret-looking line was written above a line it moves',
+      OLD.replace(
+        '- 2026-10-02 times in',
+        '- 2026-10-01 token=sk-live-1234567890abcdef\n- 2026-10-02 times in'
+      )
+    ]
+  ])('takes nothing out when %s during the run', async (_what, changed) => {
+    const run = harness({
+      memory: OLD,
+      reply: merge(),
+      duringRun: (files) => files.set(MEMORY, changed)
+    })
+    run.files.set(join(HOME, TIDY_UP_OPS_PILOT_FILE), '')
+    await run.tick()
+    expect(run.files.get(MEMORY)).toBe(changed)
+    expect(run.runs()[0].error).toBe(TIDY_UP_FAILURES.changed)
+  })
+
+  it("keeps where the first run would read from when it couldn't read its chats", async () => {
+    let fail = true
+    const run = harness({
+      memory: SHOWN,
+      readChats: async () => {
+        if (fail) {
+          fail = false
+          throw new Error('unreadable')
+        }
+        return [OWNER_CHAT]
+      }
+    })
+    await run.tick()
+    run.setNow(NIGHT + 60_000)
+    await run.tick()
+    expect(run.readFrom).toEqual([NIGHT - DAY, NIGHT - DAY])
+  })
+
+  it('keeps where a failed first run read from, so the next run reads those chats too', async () => {
+    const run = harness({ memory: SHOWN, reply: 'no ops' })
+    run.files.set(join(HOME, TIDY_UP_OPS_PILOT_FILE), '')
+    await run.tick()
+    expect(run.runs()[0].error).toBe(TIDY_UP_FAILURES.noOps)
+    run.setNow(NIGHT + DAY)
+    await run.tick()
+    expect(run.readFrom).toEqual([NIGHT - DAY, NIGHT - DAY])
+  })
+
+  it('fails a run whose every op was skipped, so its chats are read again', async () => {
+    const run = harness({
+      memory: SHOWN,
+      reply: '[{"op":"retire","line":"L9#0000","reason":"stale"}]'
+    })
+    run.files.set(join(HOME, TIDY_UP_OPS_PILOT_FILE), '')
+    await run.tick()
+    expect(run.files.get(MEMORY)).toBe(SHOWN)
+    expect(run.runs()[0].error).toBe(
+      `${TIDY_UP_FAILURES.allSkipped} (retire 1: names a line MEMORY.md no longer has)`
+    )
+    expect(run.through()).toBeUndefined()
   })
 })
