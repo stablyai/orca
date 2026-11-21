@@ -1,72 +1,47 @@
 import { expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
 import { createTestStore } from '@/store/testing/app-store-test-fixture'
-import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
-import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
-import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { createUnreadBadgeCountSelector } from './unread-badge-count-selector'
 
-// Perf contract: terminal title batches replace the tab map several times a second with 100+ agents.
-// A write that leaves every unread folder's tabs and the marker maps alone must not re-check any folder's markers.
+// Perf contract (#46026): every remote status write replaces the status map. One that keeps every paired
+// device id cannot change which rows the Dock counts, so it must not rescan the fleet.
 
-function folder(id: string): FolderWorkspace {
-  return {
-    id,
-    projectGroupId: 'group-1',
-    name: id,
-    folderPath: `/folders/${id}`,
-    linkedTask: null,
-    comment: '',
-    isArchived: false,
-    isUnread: true,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 1,
-    createdAt: 1,
-    updatedAt: 1
-  }
-}
+type Write = (state: AppState) => AppState
 
-function markerReadsOnUnrelatedTitleWrite(unreadFolders: number): number {
+function rowReadsAfter(worktreeCount: number, write: Write): number {
   const base = createTestStore().getState()
-  const folders = Array.from({ length: unreadFolders }, (_, index) => folder(`folder-${index}`))
-  const tabsByWorktree: AppState['tabsByWorktree'] = {
-    'wt-1': [makeTab({ id: 'wt-tab', worktreeId: 'wt-1', title: 'before' })]
-  }
-  const markers: AppState['unreadTerminalTabs'] = {}
-  for (const { id } of folders) {
-    const key = folderWorkspaceKey(id)
-    tabsByWorktree[key] = [makeTab({ id: `${id}-tab`, worktreeId: key })]
-    markers[`${id}-tab`] = true
-  }
+  const worktrees = Array.from({ length: worktreeCount }, (_, index) =>
+    makeWorktree({ id: `repo-1::/wt-${index}`, repoId: 'repo-1', isUnread: index % 2 === 0 })
+  )
   let reads = 0
-  const countedMarkers = new Proxy(markers, {
-    get(target, property) {
-      reads += 1
-      return typeof property === 'string' ? target[property] : undefined
+  const countedBuckets = new Proxy<AppState['worktreesByRepo']>(
+    { 'repo-1': worktrees },
+    {
+      get(target, property) {
+        reads += 1
+        return typeof property === 'string' ? target[property] : undefined
+      }
     }
-  })
+  )
   const before: AppState = {
     ...base,
-    folderWorkspaces: folders,
-    tabsByWorktree,
-    unreadTerminalTabs: countedMarkers
+    worktreesByRepo: countedBuckets,
+    hideWorkspacesFromOtherDevices: true
   }
   const select = createUnreadBadgeCountSelector()
   select(before)
-
   reads = 0
-  select({
-    ...before,
-    tabsByWorktree: {
-      ...tabsByWorktree,
-      'wt-1': [makeTab({ id: 'wt-tab', worktreeId: 'wt-1', title: 'after' })]
-    }
-  })
+  select(write(before))
   return reads
 }
 
-it('a title write outside unread folders reads no folder markers at N and 10N folders', () => {
-  expect(markerReadsOnUnrelatedTitleWrite(100)).toBe(0)
-  expect(markerReadsOnUnrelatedTitleWrite(1_000)).toBe(0)
+const remoteStatusWrite: Write = (state) => ({
+  ...state,
+  runtimeStatusByEnvironmentId: new Map(state.runtimeStatusByEnvironmentId)
+})
+
+it('a remote status write that keeps every device id reads no worktree rows at N and 10N', () => {
+  expect(rowReadsAfter(100, remoteStatusWrite)).toBe(0)
+  expect(rowReadsAfter(1_000, remoteStatusWrite)).toBe(0)
 })

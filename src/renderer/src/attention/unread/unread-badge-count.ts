@@ -12,12 +12,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host/executio
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
-import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
-import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
-import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
-import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { workspaceHasLiveMarker } from '@/store/slices/workspace-attention/workspace-live-markers'
 
 export type UnreadBadgeCountSources = {
   worktreeBuckets: Readonly<Record<string, readonly Worktree[]>>
@@ -29,15 +24,9 @@ export type UnreadBadgeCountSources = {
   defaultHostId: ExecutionHostId
   /** null unless the sidebar hides workspaces created from other devices. */
   hiddenOtherDevicePairings: ReadonlyMap<string, string> | null
-  tabsByWorktree?: Readonly<Record<string, readonly Pick<TerminalTab, 'id'>[]>>
-  unifiedTabsByWorktree?: Readonly<
-    Record<string, readonly (Pick<Tab, 'id' | 'contentType'> & { entityId?: string })[]>
-  >
-  unreadTerminalTabs?: Readonly<Record<string, StoredAgentAttentionUnread>>
-  unreadAgentCompletionPanes: Readonly<Record<string, StoredAgentAttentionUnread>>
 }
 
-/** Folder rows also need a live tab or completion marker; worktree rows count their flag alone. */
+/** Each row counts its unread flag, as the sidebar dot does. */
 export function getUnreadBadgeCount(sources: UnreadBadgeCountSources): number {
   const { visibleHostIds, defaultHostId } = sources
   // Preserve the existing id-only count while narrowing it to visible hosts.
@@ -62,9 +51,7 @@ export function getUnreadBadgeCount(sources: UnreadBadgeCountSources): number {
 /** Folder workspaces through the same membership steps the sidebar runs before building rows. */
 function countUnreadFolderRows(sources: UnreadBadgeCountSources): number {
   const { projectGroups, visibleHostIds, defaultHostId, hiddenOtherDevicePairings } = sources
-  const unread = sources.folders.filter(
-    (folder) => folder.isUnread && workspaceHasLiveMarker(sources, folderWorkspaceKey(folder.id))
-  )
+  const unread = sources.folders.filter((folder) => folder.isUnread)
   if (unread.length === 0) {
     return 0
   }

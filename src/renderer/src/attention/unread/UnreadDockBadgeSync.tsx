@@ -27,8 +27,11 @@ export function UnreadDockBadgeSync({
     (s) =>
       enabled && s.settings?.floatingTerminalEnabled === true && selectFloatingWorkspaceHasUnread(s)
   )
-  const unreadCount =
+  // Why capped: the Dock shows 99+ above 99, so larger counts would send without a visible change.
+  const unreadCount = Math.min(
+    100,
     unreadWorkspaceCount + (floatingTerminalHasUnread && !floatingTerminalOpen ? 1 : 0)
+  )
 
   useEffect(() => {
     setUnreadDockBadgeCountBestEffort(unreadCount)

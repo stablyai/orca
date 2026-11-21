@@ -4,11 +4,8 @@ import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import type { AppState } from '@/store/types'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { sameBucketRecords } from './unread-bucket-record-equality'
 import { getUnreadBadgeCount } from './unread-badge-count'
-import { workspaceHasLiveMarker } from '@/store/slices/workspace-attention/workspace-live-markers'
-import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
@@ -26,10 +23,6 @@ type UnreadBadgeCountState = Pick<
   | 'hideWorkspacesFromOtherDevices'
   | 'runtimeEnvironments'
   | 'runtimeStatusByEnvironmentId'
-  | 'tabsByWorktree'
-  | 'unifiedTabsByWorktree'
-  | 'unreadTerminalTabs'
-  | 'unreadAgentCompletionPanes'
 >
 
 /** The worktree fields the count reads (`id` embeds `repoId`), so equality over them is a sound cache key. */
@@ -49,48 +42,6 @@ function sameBadgeWorktree(previous: Worktree, next: Worktree): boolean {
   )
 }
 
-const unreadFoldersCache = new WeakMap<readonly FolderWorkspace[], readonly FolderWorkspace[]>()
-
-function unreadFolders(folders: readonly FolderWorkspace[]): readonly FolderWorkspace[] {
-  let unread = unreadFoldersCache.get(folders)
-  if (!unread) {
-    unread = folders.filter((folder) => folder.isUnread)
-    unreadFoldersCache.set(folders, unread)
-  }
-  return unread
-}
-
-function sameFolderAttention(
-  previous: UnreadBadgeCountState,
-  next: UnreadBadgeCountState
-): boolean {
-  const sameMarkers =
-    previous.unreadTerminalTabs === next.unreadTerminalTabs &&
-    previous.unreadAgentCompletionPanes === next.unreadAgentCompletionPanes
-  if (
-    sameMarkers &&
-    previous.tabsByWorktree === next.tabsByWorktree &&
-    previous.unifiedTabsByWorktree === next.unifiedTabsByWorktree
-  ) {
-    return true
-  }
-  for (const folder of unreadFolders(selectFolderWorkspaces(next))) {
-    const key = folderWorkspaceKey(folder.id)
-    // Why: title batches replace the tab maps but keep other workspaces' buckets.
-    if (
-      sameMarkers &&
-      previous.tabsByWorktree[key] === next.tabsByWorktree[key] &&
-      previous.unifiedTabsByWorktree[key] === next.unifiedTabsByWorktree[key]
-    ) {
-      continue
-    }
-    if (workspaceHasLiveMarker(previous, key) !== workspaceHasLiveMarker(next, key)) {
-      return false
-    }
-  }
-  return true
-}
-
 function sameCountInputs(previous: UnreadBadgeCountState, next: UnreadBadgeCountState): boolean {
   return (
     selectFolderWorkspaces(previous) === selectFolderWorkspaces(next) &&
@@ -100,44 +51,74 @@ function sameCountInputs(previous: UnreadBadgeCountState, next: UnreadBadgeCount
     previous.visibleWorkspaceHostIds === next.visibleWorkspaceHostIds &&
     previous.settings?.activeRuntimeEnvironmentId === next.settings?.activeRuntimeEnvironmentId &&
     previous.hideWorkspacesFromOtherDevices === next.hideWorkspacesFromOtherDevices &&
-    // Why gated: runtime status reallocates on remote activity and only this filter reads it.
-    (!next.hideWorkspacesFromOtherDevices ||
-      (previous.runtimeEnvironments === next.runtimeEnvironments &&
-        previous.runtimeStatusByEnvironmentId === next.runtimeStatusByEnvironmentId)) &&
     sameBucketRecords(
       selectWorktreesByRepo(previous),
       selectWorktreesByRepo(next),
       sameBadgeWorktree
-    ) &&
-    sameFolderAttention(previous, next)
+    )
   )
 }
 
-/** Subscribe App to the badge integer, avoiding whole-shell rerenders on raw-map/title churn. Compare each state’s read set to its predecessor; transitive equality preserves the cached count across unchanged runs. */
+function samePairings(
+  previous: ReadonlyMap<string, string> | null,
+  next: ReadonlyMap<string, string> | null
+): boolean {
+  if (previous === next) {
+    return true
+  }
+  if (!previous || !next || previous.size !== next.size) {
+    return false
+  }
+  for (const [environmentId, deviceId] of next) {
+    if (previous.get(environmentId) !== deviceId) {
+      return false
+    }
+  }
+  return true
+}
+
+/** Subscribe the Dock sync to the badge integer, so raw-map and title churn neither rescans nor rerenders. Compare each state's read set to its predecessor; transitive equality preserves the cached count across unchanged runs. */
 export function createUnreadBadgeCountSelector(): (state: UnreadBadgeCountState) => number {
   let previousState: UnreadBadgeCountState | undefined
+  let pairings: ReadonlyMap<string, string> | null = null
   let unreadCount = 0
 
+  // Why by content: runtime status reallocates on every remote status write, but only device ids filter rows.
+  const nextPairings = (state: UnreadBadgeCountState): ReadonlyMap<string, string> | null => {
+    if (!state.hideWorkspacesFromOtherDevices) {
+      return null
+    }
+    if (
+      pairings &&
+      previousState?.hideWorkspacesFromOtherDevices &&
+      previousState.runtimeEnvironments === state.runtimeEnvironments &&
+      previousState.runtimeStatusByEnvironmentId === state.runtimeStatusByEnvironmentId
+    ) {
+      return pairings
+    }
+    return getPairedDeviceIdsByEnvironment(
+      state.runtimeEnvironments,
+      state.runtimeStatusByEnvironmentId
+    )
+  }
+
   return (state) => {
-    if (!previousState || !sameCountInputs(previousState, state)) {
+    const statePairings = nextPairings(state)
+    if (
+      !previousState ||
+      !samePairings(pairings, statePairings) ||
+      !sameCountInputs(previousState, state)
+    ) {
       unreadCount = getUnreadBadgeCount({
         worktreeBuckets: selectWorktreesByRepo(state),
         folders: selectFolderWorkspaces(state),
-        tabsByWorktree: state.tabsByWorktree,
-        unifiedTabsByWorktree: state.unifiedTabsByWorktree,
-        unreadTerminalTabs: state.unreadTerminalTabs,
-        unreadAgentCompletionPanes: state.unreadAgentCompletionPanes,
         projectGroups: state.projectGroups,
         repoMap: getIndexedRepoMap(state.repos),
         visibleHostIds: getVisibleWorkspaceHostIdSet(state),
         defaultHostId: getSettingsFocusedExecutionHostId(state.settings),
-        hiddenOtherDevicePairings: state.hideWorkspacesFromOtherDevices
-          ? getPairedDeviceIdsByEnvironment(
-              state.runtimeEnvironments,
-              state.runtimeStatusByEnvironmentId
-            )
-          : null
+        hiddenOtherDevicePairings: statePairings
       })
+      pairings = statePairings
     }
     previousState = state
     return unreadCount
