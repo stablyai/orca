@@ -6,6 +6,7 @@ import { SKILL as dependencyUpgrade } from './bot-template-skills/dependency-upg
 import { SKILL as feedbackThemes } from './bot-template-skills/feedback-themes'
 import { SKILL as incidentTimeline } from './bot-template-skills/incident-timeline'
 import { SKILL as issueTriage } from './bot-template-skills/issue-triage'
+import { SKILL as localMaintenance } from './bot-template-skills/local-maintenance'
 import { SKILL as prReviewChecklist } from './bot-template-skills/pr-review-checklist'
 import { SKILL as releaseNotesStyle } from './bot-template-skills/release-notes-style'
 import { SKILL as releaseReadiness } from './bot-template-skills/release-readiness'
@@ -21,6 +22,7 @@ export const BOT_TEMPLATE_SKILL_TEXT: Record<BotTemplateSkill, string> = {
   'feedback-themes': feedbackThemes,
   'incident-timeline': incidentTimeline,
   'issue-triage': issueTriage,
+  'local-maintenance': localMaintenance,
   'pr-review-checklist': prReviewChecklist,
   'release-notes-style': releaseNotesStyle,
   'release-readiness': releaseReadiness,
