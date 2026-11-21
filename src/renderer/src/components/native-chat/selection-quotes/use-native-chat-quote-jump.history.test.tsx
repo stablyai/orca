@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 
@@ -85,7 +85,10 @@ function Transcript({
     scrollToBottom: none,
     unfoldTurnOf: () => false
   })
-  onJump(jumpToQuote)
+  // The test reads the jump after the commit, not during render.
+  useLayoutEffect(() => {
+    onJump(jumpToQuote)
+  })
   return (
     <div ref={scrollRef}>
       {slots.map((row, index) => (
