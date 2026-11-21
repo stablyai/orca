@@ -54,10 +54,15 @@ async function stopListedTerminals(input: {
   timeoutMs: number
 }): Promise<boolean | null> {
   try {
-    const listed = await Promise.all(
+    // A thread whose listing failed doesn't stop the others' known terminals from being stopped.
+    const settled = await Promise.allSettled(
       input.threads.map((threadId) =>
         listCodexThreadBackgroundTerminals(input.rpc, threadId, input.timeoutMs)
       )
+    )
+    const unchecked = settled.some((result) => result.status === 'rejected')
+    const listed = settled.flatMap((result) =>
+      result.status === 'fulfilled' ? [result.value] : []
     )
     if (listed.some((terminals) => terminals === null)) {
       await Promise.all(
@@ -79,13 +84,13 @@ async function stopListedTerminals(input: {
     }
     const terminals = listed.flatMap((terminals) => terminals ?? [])
     if (terminals.length === 0) {
-      return true
+      return !unchecked
     }
     const result = await terminateCodexBackgroundTerminals(input.rpc, terminals, {
       timeoutMs: input.timeoutMs,
       isCurrent: () => true
     })
-    return !result.survived
+    return !result.survived && !unchecked
   } catch {
     return false
   }
@@ -120,10 +125,9 @@ async function stopTaggedProcesses(
       }
       await new Promise((resolve) => setTimeout(resolve, SWEEP_SETTLE_MS))
     }
-    const after =
-      targets.length > 0
-        ? await scanCodexLeaseProcesses(CODEX_SHARED_LEASE_ENV, serverPid, platform)
-        : first
+    // Always a reading taken after the first finished: a process forked while the first was
+    // being read, or reparented when its parent exited mid-read, shows up in this one.
+    const after = await scanCodexLeaseProcesses(CODEX_SHARED_LEASE_ENV, serverPid, platform)
     if (
       !after ||
       !after.bounded ||

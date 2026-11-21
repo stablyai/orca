@@ -56,6 +56,12 @@ export class CodexSharedServerRouter {
     }
     this.owners.set(threadId, lease)
     lease.threads.add(threadId)
+    // A chat that let this thread go no longer stops its turns: they are the new owner's now.
+    for (const other of this.leases()) {
+      if (other !== lease) {
+        other.abandonedThreads.delete(threadId)
+      }
+    }
     this.retired.delete(threadId)
     for (const frame of this.unrouted.take(threadId)) {
       // A held frame can name helpers of its own; claim them (and replay theirs) before delivery.

@@ -27,6 +27,8 @@ export type CodexLeaseRequestOwner = {
   readonly outstanding: Set<(error: Error) => void>
   /** Threads this chat holds now. */
   readonly threads: ReadonlySet<string>
+  /** Threads a resume of this chat's has reopened; a failed resume never undoes one of these. */
+  readonly resumedThreads: Set<string>
   /** `opened`: by the reply to a thread open, which may find the thread's early frames dropped. */
   claim: (threadId: string, opened?: boolean) => void
   heldByOther: (threadId: string) => boolean
@@ -102,6 +104,9 @@ export async function sendCodexLeaseRequest(
         if (threadId) {
           if (owner.open && !callerGone) {
             owner.claim(threadId, true)
+            if (method === 'thread/resume') {
+              owner.resumedThreads.add(threadId)
+            }
           } else {
             owner.abandon(threadId)
           }
@@ -159,13 +164,18 @@ export async function sendCodexLeaseRequest(
       (result) => {
         clearTimeout(timer)
         owner.outstanding.delete(giveUp)
+        // A thread that opened after the chat began closing was let go in onReply, not handed over.
+        if (opensThread && !owner.open) {
+          reject(new Error(`codex app-server connection is closed (${method})`))
+          return
+        }
         resolve(result)
       },
       (error: unknown) => {
         clearTimeout(timer)
         owner.outstanding.delete(giveUp)
         // Codex opened nothing, so another chat may still open this thread here.
-        if (resumed && resumedNewly) {
+        if (resumed && resumedNewly && !owner.resumedThreads.has(resumed)) {
           owner.unclaim(resumed)
         }
         reject(error instanceof Error ? error : new Error(String(error)))

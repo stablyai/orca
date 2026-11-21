@@ -29,6 +29,7 @@ export class CodexSharedServerTurns {
   noteStarted(threadId: string, turnId: string): void {
     if (!this.recentlyCompleted.has(turnId)) {
       this.running.set(threadId, turnId)
+      this.changed()
     }
   }
 

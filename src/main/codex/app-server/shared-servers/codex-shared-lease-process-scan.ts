@@ -174,7 +174,8 @@ async function scanLinux(
   const entries: (readonly [number, string | null])[] = []
   const unreadable: number[] = []
   for (const pid of scope) {
-    if (watchers.has(pid)) {
+    // A process with the launcher's name but a lease tag is a chat's command, not the watcher.
+    if (watchers.has(pid) && (tags.get(pid) ?? null) === null) {
       continue
     }
     const owner = ownerOf(pid)

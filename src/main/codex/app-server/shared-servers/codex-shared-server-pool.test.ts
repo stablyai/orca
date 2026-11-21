@@ -287,7 +287,7 @@ describe('shared Codex app-servers', () => {
       servers[0]!.handlers.onNotification?.('item/started', { threadId: `stray-${i}` })
     }
     servers[0]!.releaseOpen()
-    await started
+    await expect(started).rejects.toThrow('closed')
     await vi.waitFor(() => expect(a.exits).toHaveLength(1))
     expect(a.exits[0]?.expected).toBe(false)
   })
@@ -509,7 +509,7 @@ describe('shared Codex app-servers', () => {
     const opening = connA.request('thread/start', { cwd: '/work', holdOpen: true })
     const closing = connA.close()
     servers[0]!.releaseOpen()
-    await opening
+    await expect(opening).rejects.toThrow('closed')
     await closing
     const opened = servers[0]!.requests.filter((r) => r.method === 'thread/unsubscribe')
     expect(opened).toEqual([{ method: 'thread/unsubscribe', params: { threadId: 'thread-1' } }])
@@ -583,5 +583,51 @@ describe('shared Codex app-servers', () => {
       turn: { id: 'late' }
     })
     expect(a.notifications.map((n) => n.method)).not.toContain('turn/started')
+  })
+
+  it('does not interrupt the turn of a chat that reopened a thread another chat let go of', async () => {
+    vi.useFakeTimers()
+    const { servers, pool } = fakeCodex()
+    const connA = await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
+    const connB = await pool.open(launch(), chat().handlers, { sessionId: 'b', skillRoots: [] })
+    const resuming = connA.request(
+      'thread/resume',
+      { threadId: 'shared-thread', holdOpen: true },
+      { timeoutMs: 1_000 }
+    )
+    const failed = expect(resuming).rejects.toThrow('exceeded 1000ms')
+    await vi.advanceTimersByTimeAsync(1_500)
+    await failed
+    servers[0]!.releaseOpen()
+    await connB.request('thread/resume', { threadId: 'shared-thread' })
+    servers[0]!.handlers.onNotification?.('turn/started', {
+      threadId: 'shared-thread',
+      turn: { id: 'b-turn' }
+    })
+    await connA.close()
+    expect(servers[0]!.requests.filter((r) => r.method === 'turn/interrupt')).toEqual([])
+  })
+
+  it('refuses an approval for a chat that is leaving instead of leaving Codex waiting', async () => {
+    vi.useFakeTimers()
+    const { servers, pool } = fakeCodex('ignored')
+    const requests: string[] = []
+    const a = chat()
+    const connA = await pool.open(
+      launch(),
+      { ...a.handlers, onServerRequest: (request) => requests.push(request.method) },
+      { sessionId: 'a', skillRoots: [] }
+    )
+    await pool.open(launch(), chat().handlers, { sessionId: 'b', skillRoots: [] })
+    const threadA = await startThread(connA)
+    servers[0]!.handlers.onNotification?.('turn/started', { threadId: threadA, turn: { id: 't' } })
+    void connA.close()
+    servers[0]!.handlers.onServerRequest?.({
+      id: 11,
+      method: 'item/commandExecution/requestApproval',
+      params: { threadId: threadA }
+    })
+    expect(servers[0]!.refused).toEqual([11])
+    expect(requests).toEqual([])
   })
 })

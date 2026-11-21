@@ -69,6 +69,10 @@ export class CodexSharedServerPool {
         throw new Error('codex shared app-server exited before the chat joined it')
       }
       await lease.announce()
+      // The server can exit while onSpawned runs; that ends the reserved lease.
+      if (lease.closed) {
+        throw new Error('codex shared app-server exited before the chat joined it')
+      }
     } catch (error) {
       await server.release(lease).catch(() => {})
       throw error

@@ -5,7 +5,8 @@ import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
 } from '../codex-app-server-connection-types'
-import { codexSharedFrameParams, type CodexSharedServerFrame } from './codex-shared-server-frames'
+import type { CodexSharedServerFrame } from './codex-shared-server-frames'
+import { CodexSharedLeaseQueue } from './codex-shared-lease-queue'
 import type { CodexSharedServerRouter } from './codex-shared-server-router'
 import { sendCodexLeaseRequest } from './codex-shared-server-lease-requests'
 
@@ -17,10 +18,6 @@ export const CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES = 20_000
  *  a retry), and whether its commands are proven gone. */
 export type CodexLeaseRelease = { writerStopped: boolean; workloadGone: boolean }
 
-/** A paused chat that resumes replays this much of its queue per task, then yields, as a pipe
- *  read would. */
-const DRAIN_CHUNK_BYTES = 64 * 1024
-
 /** What a lease needs from the server it rides on. */
 export type CodexSharedLeaseHost = {
   readonly pid: number | undefined
@@ -29,6 +26,8 @@ export type CodexSharedLeaseHost = {
   claim: (threadId: string, lease: CodexSharedServerLease, opened?: boolean) => void
   /** This chat's queue grew or shrank by these bytes, or it may have started waiting (0). */
   backlog: (lease: CodexSharedServerLease, deltaBytes: number) => void
+  /** Answers a server request no chat will take, so Codex doesn't wait on it. */
+  refuse: (frame: CodexSharedServerFrame) => void
   /** Whether any of these threads has a turn running. */
   hasRunningTurn: (threads: Iterable<string>) => boolean
   /** A thread open or turn start settled, so a wait on them can re-check. */
@@ -58,6 +57,7 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   readonly id = randomUUID()
   /** thread/start, /resume and /fork still awaiting Codex; close waits for them. */
   readonly pendingOpens = new Set<Promise<unknown>>()
+  readonly resumedThreads = new Set<string>()
   readonly outstanding = new Set<(error: Error) => void>()
   /** Threads that opened after this chat left, and the server letting each go. */
   readonly abandonedThreads = new Set<string>()
@@ -67,16 +67,16 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   private closing: Promise<boolean> | null = null
   private closeAnnounced = false
   private paused = false
-  private draining = false
-  private queue: { frame: CodexSharedServerFrame; bytes: number }[] = []
-  /** Next frame to dispatch; drained slots are dropped in one splice so a drain stays linear. */
-  private queueHead = 0
-  private queuedBytes = 0
+  private readonly queue = new CodexSharedLeaseQueue({
+    canDispatch: () => !this.paused && this.state !== 'ended',
+    dispatch: (frame) => this.dispatch(frame),
+    backlog: (deltaBytes) => this.host.backlog(this, deltaBytes),
+    refuse: (frame) => this.host.refuse(frame)
+  })
   /** Dropped for falling behind: its frames are discarded until it ends. */
   private shedding = false
   /** Its cleanup is running and needs the shared reader. */
   private releasing = false
-  private drainScheduled = false
 
   constructor(
     readonly host: CodexSharedLeaseHost,
@@ -159,7 +159,7 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
 
   resumeReading = (): void => {
     this.paused = false
-    this.drainQueue()
+    this.queue.drain()
     this.noteWaiting()
   }
 
@@ -170,7 +170,7 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
       (this.state === 'open' &&
         !this.paused &&
         // One still catching up on its own queue waits on itself, not on the others.
-        this.queuedBytes === 0 &&
+        this.queue.bytes === 0 &&
         (this.outstanding.size > 0 || this.host.hasRunningTurn(this.threads)))
     )
   }
@@ -180,15 +180,16 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   }
 
   deliver(frame: CodexSharedServerFrame): void {
+    // A chat that is leaving can't answer; Codex gets a refusal instead of waiting forever.
+    if (frame.kind === 'request' && (this.state !== 'open' || this.shedding)) {
+      this.host.refuse(frame)
+      return
+    }
     if (this.state === 'ended' || this.shedding) {
       return
     }
-    if (this.paused || this.queue.length > this.queueHead) {
-      const bytes = Buffer.byteLength(JSON.stringify(codexSharedFrameParams(frame) ?? null), 'utf8')
-      this.queue.push({ frame, bytes })
-      this.queuedBytes += bytes
-      this.host.backlog(this, bytes)
-      if (this.queue.length - this.queueHead > CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES) {
+    if (this.paused || this.queue.pending > 0) {
+      if (this.queue.push(frame) > CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES) {
         this.shed()
       }
       return
@@ -199,48 +200,8 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   /** Too far behind: drops its queue and ends it alone; it reopens its thread on its next send. */
   shed(): void {
     this.shedding = true
-    this.dropQueue()
+    this.queue.drop()
     this.fail(new Error('codex chat fell too far behind its shared app-server'), true)
-  }
-
-  private dropQueue(): void {
-    this.host.backlog(this, -this.queuedBytes)
-    this.queue = []
-    this.queueHead = 0
-    this.queuedBytes = 0
-  }
-
-  private get canDrain(): boolean {
-    return !this.paused && this.queueHead < this.queue.length && this.state !== 'ended'
-  }
-
-  private drainQueue(): void {
-    if (this.draining) {
-      return
-    }
-    this.draining = true
-    let budget = DRAIN_CHUNK_BYTES
-    try {
-      while (budget > 0 && this.canDrain) {
-        const { frame, bytes } = this.queue[this.queueHead]!
-        this.queueHead += 1
-        this.queuedBytes -= bytes
-        budget -= bytes
-        this.host.backlog(this, -bytes)
-        this.dispatch(frame)
-      }
-    } finally {
-      this.queue.splice(0, this.queueHead)
-      this.queueHead = 0
-      this.draining = false
-    }
-    if (!this.drainScheduled && this.canDrain) {
-      this.drainScheduled = true
-      setImmediate(() => {
-        this.drainScheduled = false
-        this.drainQueue()
-      })
-    }
   }
 
   private dispatch(frame: CodexSharedServerFrame): void {
@@ -364,7 +325,7 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
       return
     }
     this.state = 'ended'
-    this.dropQueue()
+    this.queue.drop()
     this.workload = typeof workload === 'function' ? workload : () => workload
     for (const giveUp of this.outstanding) {
       giveUp(new Error('codex app-server connection closed'))

@@ -117,10 +117,14 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   releaseMayProve(lease: CodexSharedServerLease): Promise<boolean> {
     const others = this.leases.size
     const threads = (): string[] => [...lease.threads, ...lease.abandonedThreads]
+    const running = (): string[] => threads().flatMap((id) => this.turns.runningOn(id) ?? [])
+    // A turn that started since (a helper) needs its own interrupt, so it wakes the retry too.
+    const seen = new Set(running())
     return this.turns.waitUntil(
       () =>
         this.hasExited ||
         this.leases.size < others ||
+        running().some((turnId) => !seen.has(turnId)) ||
         (lease.pendingOpens.size === 0 &&
           !this.turns.anyStartPending(threads()) &&
           !this.hasRunningTurn(threads())),
@@ -217,23 +221,25 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     this.leases.delete(lease)
     const owned = this.router.release(lease)
     // Threads that opened after the chat left are let go here, and their commands stopped below.
-    let workloadGone = (await Promise.all(lease.abandoning)).every(Boolean)
-    // Turns ending doesn't end the commands they started; the chat's own are stopped alone.
-    workloadGone &&= await stopCodexSharedChatWorkload({
+    const abandonedGone = (await Promise.all(lease.abandoning)).every(Boolean)
+    // Turns ending doesn't end the commands they started; the chat's own are stopped alone. Each
+    // step runs even if an earlier one failed; any failure leaves the workload unproven.
+    const commandsGone = await stopCodexSharedChatWorkload({
       rpc: physical,
       threads: [...owned, ...lease.abandonedThreads],
       leaseId: lease.id,
       ...(this.sweep ? { sweep: this.sweep } : {}),
       serverPid: this.pid,
       timeoutMs: RELEASE_REQUEST_TIMEOUT_MS
-    })
+    }).catch(() => false)
     // A chat that resumed one of these threads here owns its subscription now; abandoned threads
     // were already let go by abandon().
-    workloadGone &&= await unsubscribeCodexThreads(
+    const unsubscribed = await unsubscribeCodexThreads(
       physical,
       owned.filter((threadId) => !this.router.isClaimed(threadId)),
       RELEASE_REQUEST_TIMEOUT_MS
     )
+    const workloadGone = abandonedGone && commandsGone && unsubscribed
     if (!workloadGone && !this.hasExited) {
       await this.stopIfAlone(lease)
     }
@@ -303,7 +309,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     return (await this.physical.close()) && this.physical.closeResult?.root === 'exited'
   }
 
-  private refuse(frame: CodexSharedServerFrame): void {
+  refuse(frame: CodexSharedServerFrame): void {
     if (frame.kind === 'request' && !this.closed) {
       this.physical?.respondWithError(
         frame.request.id,
