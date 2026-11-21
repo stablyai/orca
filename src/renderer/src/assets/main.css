@@ -1463,8 +1463,53 @@ html.native-shell .app-layout {
 }
 
 :root.dark[data-window-material='frosted']:not([data-theme-background], [data-reduce-effects])
+  [data-worktree-sticky-header].bg-worktree-sidebar {
+  /* Soften scrolling rows under pinned headers without painting a second sidebar tint. */
+  background-color: transparent;
+  backdrop-filter: blur(8px);
+}
+
+:root.dark[data-window-material='frosted']:not([data-theme-background], [data-reduce-effects])
+  .right-sidebar-surface {
+  background-color: color-mix(in srgb, var(--sidebar) 28%, transparent);
+}
+
+:root.dark[data-window-material='frosted']:not([data-theme-background], [data-reduce-effects])
+  [data-right-sidebar-panel]
+  > .bg-sidebar {
+  background-color: transparent;
+}
+
+:root.dark[data-window-material='frosted']:not([data-theme-background], [data-reduce-effects])
   :is(.titlebar, .titlebar-left-floating, .bg-tab-bar) {
   background-color: color-mix(in srgb, var(--tab-bar, var(--card)) 40%, transparent);
+}
+
+:root.dark[data-window-material='frosted']:not([data-theme-background], [data-reduce-effects])
+  :is([data-tab-group-strip-id], .titlebar)
+  [data-tab-strip-scroller] {
+  border-right-color: transparent;
+
+  :is(.bg-tab-active, .bg-tab-inactive) {
+    width: calc(100% - var(--spacing));
+    height: calc(100% - var(--spacing));
+    margin: calc(var(--spacing) / 2);
+    border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+    border-radius: var(--radius-md);
+  }
+
+  .bg-tab-active {
+    background-color: color-mix(in srgb, var(--tab-active) 56%, transparent);
+    border-color: var(--border);
+  }
+
+  .bg-tab-inactive {
+    background-color: color-mix(in srgb, var(--tab-inactive) 20%, transparent);
+  }
+
+  .bg-tab-active > .bg-tab-active-indicator {
+    display: none;
+  }
 }
 
 .titlebar-traffic-light-pad {
