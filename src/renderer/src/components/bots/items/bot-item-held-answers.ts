@@ -40,30 +40,35 @@ export function holdBotItemAnswer(scope: string, answer: BotItemHeldAnswer | nul
   )
 }
 
+/** A store over several scopes: the same answers while no draft changed, as the store's records are. */
+function heldAnswersStore(joined: string): {
+  subscribe: (listener: () => void) => () => void
+  read: () => readonly (BotItemHeldAnswer | null)[]
+} {
+  const keys = joined ? joined.split('\n') : []
+  let drafts: readonly unknown[] = []
+  let held: readonly (BotItemHeldAnswer | null)[] = []
+  return {
+    subscribe: (listener) => {
+      const stops = keys.map((key) => subscribeToNativeChatComposerDraft(key, listener))
+      return () => stops.forEach((stop) => stop())
+    },
+    read: () => {
+      const next = keys.map((key) => readNativeChatComposerDraft(key))
+      if (next.length !== drafts.length || next.some((draft, at) => draft !== drafts[at])) {
+        drafts = next
+        held = keys.map((key) => readBotItemHeldAnswer(key))
+      }
+      return held
+    }
+  }
+}
+
 /** The answers held in `scopes`, in their order; read again when any of them changes. */
 export function useBotItemHeldAnswers(
   scopes: readonly string[]
 ): readonly (BotItemHeldAnswer | null)[] {
   const joined = scopes.join('\n')
-  const store = useMemo(() => {
-    const keys = joined ? joined.split('\n') : []
-    let drafts: readonly unknown[] = []
-    let held: readonly (BotItemHeldAnswer | null)[] = []
-    return {
-      subscribe: (listener: () => void) => {
-        const stops = keys.map((key) => subscribeToNativeChatComposerDraft(key, listener))
-        return () => stops.forEach((stop) => stop())
-      },
-      // The same answers while no draft changed, as the store's records are.
-      read: () => {
-        const next = keys.map((key) => readNativeChatComposerDraft(key))
-        if (next.length !== drafts.length || next.some((draft, at) => draft !== drafts[at])) {
-          drafts = next
-          held = keys.map((key) => readBotItemHeldAnswer(key))
-        }
-        return held
-      }
-    }
-  }, [joined])
+  const store = useMemo(() => heldAnswersStore(joined), [joined])
   return useSyncExternalStore(store.subscribe, store.read)
 }
