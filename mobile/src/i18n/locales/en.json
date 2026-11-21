@@ -1632,6 +1632,7 @@
         "permissionAuto": "Approve for me",
         "permissionFullAccess": "Full access",
         "permissionAgentSettings": "{{agent}} settings",
+        "permissionAgentSettingsHint": "Uses your {{agent}} permission settings. The mode appears after your first message.",
         "permissionFromAgentSettings": "{{mode}}, from {{agent}} settings"
       },
       "goal": {
@@ -3278,6 +3279,7 @@
       "workingAnnouncement": "Agent is working. Model settings unlock when this turn finishes.",
       "modelFullAccessLabel": "Model, {{value}}, full access",
       "modelLabel": "Model, {{value}}",
+      "modelPermissionsLabel": "Model, {{model}}, Permissions: {{permissions}}",
       "permissionsLabel": "Permissions, {{value}}",
       "backToModels": "Back to models",
       "agentWorking": "Agent is working",
@@ -3348,9 +3350,9 @@
       "setWhenSessionStarts": "Set when the session starts.",
       "availableAfterSessionStarts": "Available after the session starts.",
       "sessionOptions": "Session options",
-      "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}",
+      "permissionAppliesNextMessage": "{{saved}} applies to your next message; currently using {{active}}",
       "permissionAppliesNextMessageCompact": "{{saved}} · next message",
-      "permissionAppliesNextMessageTiming": "Applies next message · running {{active}}"
+      "permissionAppliesNextMessageTiming": "Applies next message · currently using {{active}}"
     },
     "streamFrame": {
       "streamFailed": "Transcript stream failed",

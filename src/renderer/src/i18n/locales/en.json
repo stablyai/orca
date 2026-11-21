@@ -21253,6 +21253,7 @@
         "permissionAutoDescription": "Reviews approval requests for you",
         "permissionFullAccess": "Full access",
         "permissionAgentSettings": "{{agent}} settings",
+        "permissionAgentSettingsHint": "Uses your {{agent}} permission settings. The mode appears after your first message.",
         "permissionFromAgentSettings": "{{mode}}, from {{agent}} settings",
         "permissionFullAccessDescription": "Never asks before edits or commands",
         "permissionFullAccessCodexDescription": "Never asks; can edit any file and use the network",
@@ -21283,7 +21284,7 @@
         "noMatchingChats": "No matching chats",
         "noOtherChats": "No other chats",
         "retryChats": "Retry",
-        "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}",
+        "permissionAppliesNextMessage": "{{saved}} applies to your next message; currently using {{active}}",
         "modelAndEffortValue": "{{model}} · {{effort}}",
         "modelAndEffort": "Model and effort"
       },

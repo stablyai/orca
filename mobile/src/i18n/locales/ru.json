@@ -450,7 +450,9 @@
       "toggleOption": "Переключить {{value0}}",
       "ultra": "Предельный",
       "xhigh": "Очень высокий",
-      "xhighShort": "Очень выс."
+      "xhighShort": "Очень выс.",
+      "permissionAppliesNextMessage": "{{saved}} применяется со следующего сообщения; сейчас используется: {{active}}",
+      "permissionAppliesNextMessageTiming": "Со следующего сообщения · сейчас используется: {{active}}"
     },
     "sessionOptionPickers": {
       "agentWorking": "Агент работает",
@@ -458,6 +460,7 @@
       "dispatchUnconfirmed": "Отправлено агенту — получение не подтверждено",
       "modelFullAccessLabel": "Модель: {{value}}, полный доступ",
       "modelLabel": "Модель: {{value}}",
+      "modelPermissionsLabel": "Модель, {{model}}, Разрешения: {{permissions}}",
       "permissions": "Разрешения",
       "permissionsLabel": "Разрешения: {{value}}",
       "settingsLocked": "Настройки модели станут доступны после завершения текущего ответа.",
@@ -1231,6 +1234,7 @@
         "permissionAuto": "Одобрять за меня",
         "permissionFullAccess": "Полный доступ",
         "permissionAgentSettings": "Настройки {{agent}}",
+        "permissionAgentSettingsHint": "Использует ваши настройки разрешений {{agent}}. Режим появится после первого сообщения.",
         "permissionFromAgentSettings": "{{mode}}, из настроек {{agent}}"
       },
       "goal": {

@@ -25,6 +25,7 @@ import { sayMobileNativeChatSessionOption as say } from './native-chat-session-o
 import {
   mobileDeferredPermissionSummary,
   mobileEffectivePermissionValue,
+  mobilePermissionSettingsHint,
   mobileReportedPermissionAccessibleValue,
   mobileSessionOptionSummaryValue
 } from './mobile-native-chat-session-option-labels'
@@ -146,9 +147,8 @@ export function MobileNativeChatSessionOptionPickers({
   const permissionDeferred = permission ? mobileDeferredPermissionSummary(permission)?.full : null
   const permissionReported = mobileReportedPermissionAccessibleValue(permission)
   const secondary = (model && nativeChatOptionValuesLabel(options, say)) || null
-  const modelValue = [primary, secondary, model && (permissionDeferred ?? permissionReported)]
-    .filter(Boolean)
-    .join(' ')
+  const modelValue = [primary, secondary].filter(Boolean).join(' ')
+  const permissionAccessible = permissionDeferred ?? permissionReported
 
   const closePicker = (): void => onNavigate(null)
   const applyOption = (descriptor: SessionOptionDescriptor, value: SessionOptionValue): void => {
@@ -188,17 +188,24 @@ export function MobileNativeChatSessionOptionPickers({
         warning={permissionColor !== undefined}
         icon={permissionIcon}
         leading={controller.heldPick ? Clock : undefined}
+        accessibleHint={mobilePermissionSettingsHint(permission)}
         accessibleName={
           model
-            ? permissionColor && !permissionDeferred && !permissionReported
+            ? permissionAccessible
               ? t(
-                  'chat.sessionOptionPickers.modelFullAccessLabel',
-                  'Model, {{value}}, full access',
-                  {
-                    value: modelValue
-                  }
+                  'chat.sessionOptionPickers.modelPermissionsLabel',
+                  'Model, {{model}}, Permissions: {{permissions}}',
+                  { model: modelValue, permissions: permissionAccessible }
                 )
-              : t('chat.sessionOptionPickers.modelLabel', 'Model, {{value}}', { value: modelValue })
+              : permissionColor
+                ? t(
+                    'chat.sessionOptionPickers.modelFullAccessLabel',
+                    'Model, {{value}}, full access',
+                    { value: modelValue }
+                  )
+                : t('chat.sessionOptionPickers.modelLabel', 'Model, {{value}}', {
+                    value: modelValue
+                  })
             : t('chat.sessionOptionPickers.permissionsLabel', 'Permissions, {{value}}', {
                 value:
                   permissionDeferred ?? (home === permission ? permissionReported : null) ?? primary

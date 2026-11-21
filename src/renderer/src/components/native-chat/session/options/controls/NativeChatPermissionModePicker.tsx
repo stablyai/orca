@@ -148,7 +148,7 @@ function NativeChatPermissionModePickerInner({
   const label = activeLabel
     ? t(
         'components.native-chat.composer.permissionAppliesNextMessage',
-        '{{saved}} applies to your next message; running {{active}}',
+        '{{saved}} applies to your next message; currently using {{active}}',
         { saved: selectedLabel, active: activeLabel }
       )
     : selectedLabel
@@ -161,6 +161,14 @@ function NativeChatPermissionModePickerInner({
           { mode: label, agent: settingsAgent }
         )
       : label
+  const tooltipLabel =
+    own && !activeLabel && shown === current && !ownPlan
+      ? t(
+          'components.native-chat.composer.permissionAgentSettingsHint',
+          'Uses your {{agent}} permission settings. The mode appears after your first message.',
+          { agent: settingsAgent }
+        )
+      : described
   // `shrink` overrides the button's shrink-0 so a narrow composer truncates the mode name.
   return (
     <DropdownMenu>
@@ -177,9 +185,7 @@ function NativeChatPermissionModePickerInner({
                 { value0: title, value1: described }
               )}
               className={
-                appearance === 'form'
-                  ? 'h-8 w-64 max-w-full justify-between'
-                  : 'max-w-40 min-w-0 shrink'
+                appearance === 'form' ? 'h-8 w-64 max-w-full justify-between' : 'min-w-0 shrink'
               }
             >
               {isAgentChatPermissionMode(shown) ? (
@@ -196,8 +202,13 @@ function NativeChatPermissionModePickerInner({
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={4}>
-          {described}
+        <TooltipContent
+          side="top"
+          sideOffset={4}
+          collisionPadding={8}
+          className="max-w-(--radix-tooltip-content-available-width)"
+        >
+          <span className="block max-w-72 break-words">{tooltipLabel}</span>
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="start" side="top" collisionPadding={8} className="w-72">

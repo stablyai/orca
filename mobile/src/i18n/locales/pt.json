@@ -463,7 +463,9 @@
       "ultra": "Ultra",
       "xhigh": "Extra alto",
       "xhighShort": "Extra alto",
-      "ultracode": "Ultracode"
+      "ultracode": "Ultracode",
+      "permissionAppliesNextMessage": "{{saved}} vale para a próxima mensagem; usando {{active}} no momento",
+      "permissionAppliesNextMessageTiming": "Vale para a próxima mensagem · usando {{active}} no momento"
     },
     "sessionOptionPickers": {
       "agentWorking": "O agente está trabalhando",
@@ -471,6 +473,7 @@
       "dispatchUnconfirmed": "Enviado ao agente — não confirmado",
       "modelFullAccessLabel": "Modelo, {{value}}, acesso total",
       "modelLabel": "Modelo, {{value}}",
+      "modelPermissionsLabel": "Modelo, {{model}}, Permissões: {{permissions}}",
       "permissions": "Permissões",
       "permissionsLabel": "Permissões, {{value}}",
       "settingsLocked": "As configurações do modelo serão desbloqueadas quando este turno terminar.",
@@ -1273,6 +1276,7 @@
         "permissionAuto": "Aprovar por mim",
         "permissionFullAccess": "Acesso total",
         "permissionAgentSettings": "Configurações de {{agent}}",
+        "permissionAgentSettingsHint": "Usa suas configurações de permissão do {{agent}}. O modo aparece após sua primeira mensagem.",
         "permissionFromAgentSettings": "{{mode}}, conforme as configurações de {{agent}}"
       },
       "turnDiff": {

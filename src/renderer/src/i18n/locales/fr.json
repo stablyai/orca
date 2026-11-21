@@ -19435,6 +19435,7 @@
         "permissionAutoDescription": "Examine les demandes d’approbation pour vous",
         "permissionFullAccess": "Accès complet",
         "permissionAgentSettings": "Paramètres de {{agent}}",
+        "permissionAgentSettingsHint": "Utilise vos paramètres d’autorisation de {{agent}}. Le mode apparaît après votre premier message.",
         "permissionFromAgentSettings": "{{mode}}, d’après les paramètres de {{agent}}",
         "permissionFullAccessDescription": "Ne demande jamais avant les modifications ou les commandes",
         "permissionFullAccessCodexDescription": "Ne demande jamais ; peut modifier n’importe quel fichier et utiliser le réseau",
@@ -19450,7 +19451,8 @@
         "sessionAttachmentsFailed": "Le chat {{agent}} n'a pas pu s'ouvrir. Utilisez Réessayer dans le chat, puis joignez à nouveau les fichiers.",
         "sessionAttachmentsStarting": "Le chat de {{agent}} est encore en cours d’ouverture. Attendez qu’il soit ouvert, puis joignez à nouveau les fichiers.",
         "moreControls": "Plus de commandes de conversation",
-        "exitPlanMode": "Quitter le mode plan"
+        "exitPlanMode": "Quitter le mode plan",
+        "permissionAppliesNextMessage": "{{saved}} s’applique à votre prochain message ; réglage utilisé actuellement : {{active}}"
       },
       "tool": {
         "result": "Résultat",

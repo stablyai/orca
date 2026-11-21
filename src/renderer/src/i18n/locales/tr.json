@@ -19669,6 +19669,7 @@
         "permissionAutoDescription": "Onay isteklerini sizin yerinize değerlendirir",
         "permissionFullAccess": "Tam erişim",
         "permissionAgentSettings": "{{agent}} ayarları",
+        "permissionAgentSettingsHint": "{{agent}} izin ayarlarınızı kullanır. Mod, ilk mesajınızdan sonra görünür.",
         "permissionFromAgentSettings": "{{mode}}, {{agent}} ayarlarından",
         "permissionFullAccessDescription": "Düzenleme veya komutlardan önce asla sormaz",
         "permissionFullAccessCodexDescription": "Asla sormaz; tüm dosyaları düzenleyebilir ve ağı kullanabilir",
@@ -19683,7 +19684,8 @@
         },
         "imageUnavailable": "Önizleme kullanılamıyor",
         "exitPlanMode": "Plan modundan çık",
-        "moreControls": "Diğer sohbet kontrolleri"
+        "moreControls": "Diğer sohbet kontrolleri",
+        "permissionAppliesNextMessage": "{{saved}} sonraki mesajınızda geçerli olur; şu anda {{active}} kullanılıyor"
       },
       "tool": {
         "exitCode": "çıkış {{value0}}",

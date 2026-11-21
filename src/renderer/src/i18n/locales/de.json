@@ -19519,6 +19519,7 @@
         "permissionAutoDescription": "Prüft Genehmigungsanfragen stellvertretend",
         "permissionFullAccess": "Vollzugriff",
         "permissionAgentSettings": "{{agent}}-Einstellungen",
+        "permissionAgentSettingsHint": "Verwendet deine Berechtigungseinstellungen für {{agent}}. Der Modus erscheint nach deiner ersten Nachricht.",
         "permissionFromAgentSettings": "{{mode}}, aus den {{agent}}-Einstellungen",
         "permissionFullAccessDescription": "Fragt nie vor Änderungen oder Befehlen",
         "permissionFullAccessCodexDescription": "Fragt nie nach; kann jede Datei bearbeiten und das Netzwerk nutzen",
@@ -19533,7 +19534,8 @@
         },
         "imageUnavailable": "Vorschau nicht verfügbar",
         "moreControls": "Weitere Chat-Steuerelemente",
-        "exitPlanMode": "Planungsmodus verlassen"
+        "exitPlanMode": "Planungsmodus verlassen",
+        "permissionAppliesNextMessage": "{{saved}} gilt für deine nächste Nachricht; derzeit wird {{active}} verwendet"
       },
       "tool": {
         "exitCode": "Rückgabecode {{value0}}",

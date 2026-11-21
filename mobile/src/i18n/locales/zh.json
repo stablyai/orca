@@ -470,9 +470,9 @@
       "on": "开启",
       "permissions": "权限",
       "sessionOptions": "会话选项",
-      "permissionAppliesNextMessage": "{{saved}} 从下一条消息起生效；当前为 {{active}}",
+      "permissionAppliesNextMessage": "{{saved}} 从下一条消息起生效；当前使用 {{active}}",
       "permissionAppliesNextMessageCompact": "{{saved}} · 下一条消息",
-      "permissionAppliesNextMessageTiming": "下一条消息生效 · 当前为 {{active}}",
+      "permissionAppliesNextMessageTiming": "下一条消息起生效 · 当前使用 {{active}}",
       "setWhenSessionStarts": "请在会话开始时设置",
       "speed": "速度",
       "standard": "标准",
@@ -488,6 +488,7 @@
       "dispatchUnconfirmed": "已发送给智能体 — 尚未确认",
       "modelFullAccessLabel": "模型，{{value}}，完全访问权限",
       "modelLabel": "模型，{{value}}",
+      "modelPermissionsLabel": "模型，{{model}}，权限：{{permissions}}",
       "permissions": "权限",
       "applying": "正在应用…",
       "onAttach": "聊天连接后生效",
@@ -1334,6 +1335,7 @@
         "permissionAuto": "替我批准",
         "permissionFullAccess": "完全访问",
         "permissionAgentSettings": "{{agent}} 设置",
+        "permissionAgentSettingsHint": "使用你的 {{agent}} 权限设置。发送第一条消息后会显示模式。",
         "permissionFromAgentSettings": "{{mode}}，来自 {{agent}} 设置"
       },
       "goal": {

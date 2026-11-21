@@ -91,12 +91,12 @@ function deferredPermissionSummary(
     ),
     timing: translate(
       'chat.sessionOptionCopy.permissionAppliesNextMessageTiming',
-      'Applies next message · running {{active}}',
+      'Applies next message · currently using {{active}}',
       { active: activeLabel }
     ),
     full: translate(
       'chat.sessionOptionCopy.permissionAppliesNextMessage',
-      '{{saved}} applies to your next message; running {{active}}',
+      '{{saved}} applies to your next message; currently using {{active}}',
       { saved, active: activeLabel }
     )
   }
@@ -124,6 +124,25 @@ function mobileAgentSettingsLabel(descriptor: SessionOptionDescriptor): string {
         descriptor.kind.type === 'select' ? descriptor.kind.settingsAgent : undefined
       )
     }
+  )
+}
+
+export function mobilePermissionSettingsHint(
+  descriptor: SessionOptionDescriptor | undefined
+): string | undefined {
+  if (
+    descriptor?.kind.type !== 'select' ||
+    descriptor.kind.currentValue !== 'own' ||
+    descriptor.valueSource === 'dispatched' ||
+    isAgentChatPermissionMode(descriptor.kind.reportedValue) ||
+    descriptor.kind.reportedValue === 'plan'
+  ) {
+    return undefined
+  }
+  return translate(
+    'components.native-chat.composer.permissionAgentSettingsHint',
+    'Uses your {{agent}} permission settings. The mode appears after your first message.',
+    { agent: agentPermissionSettingsSourceName(descriptor.kind.settingsAgent) }
   )
 }
 

@@ -442,7 +442,9 @@
       "toggleOption": "{{value0}} aç/kapat",
       "ultra": "Ultra",
       "xhigh": "Ekstra yüksek",
-      "xhighShort": "Çok yüksek"
+      "xhighShort": "Çok yüksek",
+      "permissionAppliesNextMessage": "{{saved}} sonraki mesajınızda geçerli olur; şu anda {{active}} kullanılıyor",
+      "permissionAppliesNextMessageTiming": "Sonraki mesajda geçerli · şu anda {{active}} kullanılıyor"
     },
     "sessionOptionPickers": {
       "agentWorking": "Ajan çalışıyor",
@@ -450,6 +452,7 @@
       "dispatchUnconfirmed": "Ajana gönderildi, onaylanmadı",
       "modelFullAccessLabel": "Model, {{value}}, tam erişim",
       "modelLabel": "Model, {{value}}",
+      "modelPermissionsLabel": "Model, {{model}}, İzinler: {{permissions}}",
       "permissions": "İzinler",
       "permissionsLabel": "İzinler, {{value}}",
       "settingsLocked": "Bu tur tamamlandığında model ayarlarının kilidi açılır.",
@@ -1153,6 +1156,7 @@
         "permissionAuto": "Benim yerime onayla",
         "permissionFullAccess": "Tam erişim",
         "permissionAgentSettings": "{{agent}} ayarları",
+        "permissionAgentSettingsHint": "{{agent}} izin ayarlarınızı kullanır. Mod, ilk mesajınızdan sonra görünür.",
         "permissionFromAgentSettings": "{{mode}}, {{agent}} ayarlarından"
       },
       "goal": {

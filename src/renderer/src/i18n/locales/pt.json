@@ -20713,6 +20713,7 @@
         "permissionAutoDescription": "Analisa os pedidos de aprovação por você",
         "permissionFullAccess": "Acesso total",
         "permissionAgentSettings": "Configurações de {{agent}}",
+        "permissionAgentSettingsHint": "Usa suas configurações de permissão do {{agent}}. O modo aparece após sua primeira mensagem.",
         "permissionFromAgentSettings": "{{mode}}, conforme as configurações de {{agent}}",
         "permissionFullAccessDescription": "Nunca pede aprovação antes de edições ou comandos",
         "permissionFullAccessCodexDescription": "Nunca pede aprovação; pode editar qualquer arquivo e usar a rede",
@@ -20727,7 +20728,8 @@
         },
         "imageUnavailable": "Prévia indisponível",
         "exitPlanMode": "Sair do modo de planejamento",
-        "moreControls": "Mais controles do chat"
+        "moreControls": "Mais controles do chat",
+        "permissionAppliesNextMessage": "{{saved}} vale para a próxima mensagem; usando {{active}} no momento"
       },
       "tool": {
         "exitCode": "saída {{value0}}",

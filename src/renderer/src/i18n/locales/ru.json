@@ -20094,6 +20094,7 @@
         "permissionAutoDescription": "Проверяет запросы разрешений за вас",
         "permissionFullAccess": "Полный доступ",
         "permissionAgentSettings": "Настройки {{agent}}",
+        "permissionAgentSettingsHint": "Использует ваши настройки разрешений {{agent}}. Режим появится после первого сообщения.",
         "permissionFromAgentSettings": "{{mode}}, из настроек {{agent}}",
         "permissionFullAccessDescription": "Не спрашивает перед правками и командами",
         "permissionFullAccessCodexDescription": "Не спрашивает разрешение; может менять любые файлы и использовать сеть",
@@ -20108,7 +20109,8 @@
         },
         "imageUnavailable": "Предпросмотр недоступен",
         "exitPlanMode": "Выйти из режима планирования",
-        "moreControls": "Другие элементы управления чатом"
+        "moreControls": "Другие элементы управления чатом",
+        "permissionAppliesNextMessage": "{{saved}} применяется со следующего сообщения; сейчас используется: {{active}}"
       },
       "tool": {
         "exitCode": "код {{value0}}",

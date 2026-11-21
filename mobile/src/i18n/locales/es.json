@@ -446,7 +446,9 @@
       "toggleOption": "Alternar {{value0}}",
       "ultra": "Supremo",
       "xhigh": "Muy alto",
-      "xhighShort": "Muy alto"
+      "xhighShort": "Muy alto",
+      "permissionAppliesNextMessage": "{{saved}} se aplica a tu próximo mensaje; actualmente se usa {{active}}",
+      "permissionAppliesNextMessageTiming": "Se aplica al próximo mensaje · usando {{active}} actualmente"
     },
     "sessionOptionPickers": {
       "agentWorking": "El agente está trabajando",
@@ -454,6 +456,7 @@
       "dispatchUnconfirmed": "Enviado al agente — sin confirmar",
       "modelFullAccessLabel": "Modelo, {{value}}, acceso total",
       "modelLabel": "Modelo, {{value}}",
+      "modelPermissionsLabel": "Modelo, {{model}}, Permisos: {{permissions}}",
       "permissions": "Permisos",
       "permissionsLabel": "Permisos, {{value}}",
       "settingsLocked": "La configuración del modelo se desbloqueará cuando termine este turno.",
@@ -1192,6 +1195,7 @@
         "permissionAuto": "Aprobar por mí",
         "permissionFullAccess": "Acceso total",
         "permissionAgentSettings": "Configuración de {{agent}}",
+        "permissionAgentSettingsHint": "Usa tu configuración de permisos de {{agent}}. El modo aparece después de tu primer mensaje.",
         "permissionFromAgentSettings": "{{mode}}, según la configuración de {{agent}}"
       },
       "goal": {

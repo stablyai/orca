@@ -200,6 +200,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
     {
       id: 'permissions',
       priority: 5,
+      shrink: true,
       content: (
         <NativeChatComposerPermissionPicker
           surface={sessionOptionsSurface}

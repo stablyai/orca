@@ -37,6 +37,7 @@ export function ModelPill({
   icon: Icon,
   leading,
   accessibleName,
+  accessibleHint,
   disabled,
   onPress
 }: {
@@ -47,6 +48,7 @@ export function ModelPill({
   /** Shown before the label, unlike `icon`, which replaces it. */
   leading?: LucideIcon
   accessibleName: string
+  accessibleHint?: string
   disabled: boolean
   onPress: () => void
 }): React.JSX.Element {
@@ -56,6 +58,7 @@ export function ModelPill({
   return (
     <Pressable
       accessibilityLabel={accessibleName}
+      accessibilityHint={accessibleHint}
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       style={({ pressed }) => [styles.pill, pressed && !disabled && styles.pressed]}

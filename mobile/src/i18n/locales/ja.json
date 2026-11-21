@@ -442,7 +442,9 @@
       "toggleOption": "{{value0}}を切り替える",
       "ultra": "ウルトラ",
       "xhigh": "最高",
-      "xhighShort": "最高"
+      "xhighShort": "最高",
+      "permissionAppliesNextMessage": "{{saved}} は次のメッセージから適用されます。現在は {{active}} を使用しています",
+      "permissionAppliesNextMessageTiming": "次のメッセージから適用 · 現在は {{active}} を使用"
     },
     "sessionOptionPickers": {
       "agentWorking": "Agent が作業中",
@@ -450,6 +452,7 @@
       "dispatchUnconfirmed": "Agent に送信済み — 未確認",
       "modelFullAccessLabel": "モデル、{{value}}、フルアクセス",
       "modelLabel": "モデル、{{value}}",
+      "modelPermissionsLabel": "モデル、{{model}}、権限：{{permissions}}",
       "permissions": "権限",
       "permissionsLabel": "権限、{{value}}",
       "settingsLocked": "このターンが完了すると、モデル設定を変更できます。",
@@ -1149,6 +1152,7 @@
         "permissionAuto": "代わりに承認",
         "permissionFullAccess": "フルアクセス",
         "permissionAgentSettings": "{{agent}} の設定",
+        "permissionAgentSettingsHint": "{{agent}} の権限設定を使用します。最初のメッセージを送信するとモードが表示されます。",
         "permissionFromAgentSettings": "{{mode}}（{{agent}} の設定より）"
       },
       "goal": {

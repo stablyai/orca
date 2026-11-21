@@ -442,7 +442,9 @@
       "toggleOption": "切換{{value0}}",
       "ultra": "極致",
       "xhigh": "極高",
-      "xhighShort": "極高"
+      "xhighShort": "極高",
+      "permissionAppliesNextMessage": "{{saved}} 將從下一則訊息生效；目前使用 {{active}}",
+      "permissionAppliesNextMessageTiming": "下一則訊息起生效 · 目前使用 {{active}}"
     },
     "sessionOptionPickers": {
       "agentWorking": "代理程式正在執行",
@@ -450,6 +452,7 @@
       "dispatchUnconfirmed": "已傳送給代理程式 — 尚未確認",
       "modelFullAccessLabel": "模型，{{value}}，完整存取權",
       "modelLabel": "模型，{{value}}",
+      "modelPermissionsLabel": "模型，{{model}}，權限：{{permissions}}",
       "permissions": "權限",
       "permissionsLabel": "權限，{{value}}",
       "settingsLocked": "本回合結束後即可變更模型設定。",
@@ -1149,6 +1152,7 @@
         "permissionAuto": "替我核准",
         "permissionFullAccess": "完整存取權",
         "permissionAgentSettings": "{{agent}} 設定",
+        "permissionAgentSettingsHint": "使用你的 {{agent}} 權限設定。傳送第一則訊息後會顯示模式。",
         "permissionFromAgentSettings": "{{mode}}，來自 {{agent}} 設定"
       },
       "goal": {

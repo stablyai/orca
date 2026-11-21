@@ -442,7 +442,9 @@
       "toggleOption": "{{value0}} umschalten",
       "ultra": "Ultra",
       "xhigh": "Sehr hoch",
-      "xhighShort": "Sehr hoch"
+      "xhighShort": "Sehr hoch",
+      "permissionAppliesNextMessage": "{{saved}} gilt für deine nächste Nachricht; derzeit wird {{active}} verwendet",
+      "permissionAppliesNextMessageTiming": "Gilt ab der nächsten Nachricht · derzeit verwendet: {{active}}"
     },
     "sessionOptionPickers": {
       "agentWorking": "Agent arbeitet",
@@ -450,6 +452,7 @@
       "dispatchUnconfirmed": "An den Agenten gesendet — nicht bestätigt",
       "modelFullAccessLabel": "Modell, {{value}}, Vollzugriff",
       "modelLabel": "Modell, {{value}}",
+      "modelPermissionsLabel": "Modell, {{model}}, Berechtigungen: {{permissions}}",
       "permissions": "Berechtigungen",
       "permissionsLabel": "Berechtigungen, {{value}}",
       "settingsLocked": "Die Modelleinstellungen werden nach diesem Durchgang freigegeben.",
@@ -1153,6 +1156,7 @@
         "permissionAuto": "Genehmigen lassen",
         "permissionFullAccess": "Vollzugriff",
         "permissionAgentSettings": "{{agent}}-Einstellungen",
+        "permissionAgentSettingsHint": "Verwendet deine Berechtigungseinstellungen für {{agent}}. Der Modus erscheint nach deiner ersten Nachricht.",
         "permissionFromAgentSettings": "{{mode}}, aus den {{agent}}-Einstellungen"
       },
       "goal": {
