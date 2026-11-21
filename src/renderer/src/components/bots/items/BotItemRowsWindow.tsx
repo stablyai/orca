@@ -208,7 +208,8 @@ export function BotItemRowsWindow({
   const measure = useLatestHandler((): void => {
     const box = viewport.read()
     const element = container.current
-    const top = box && element ? element.getBoundingClientRect().top : null
+    const rect = box && element ? element.getBoundingClientRect() : null
+    const top = rect ? rect.top : null
     let next: Range = { start: 0, end: Math.min(count, FIRST_ROWS) }
     if (box && top !== null) {
       const from = box.top - top - OVERSCAN_PX
@@ -218,10 +219,11 @@ export function BotItemRowsWindow({
           ? { start: 0, end: 0 }
           : { start: geometry.indexAt(Math.max(0, from)), end: geometry.indexAt(to) + 1 }
     }
-    // Heights are read from drawn rows once, then as the range moves (not every scroll frame), and
-    // never for a group out of view.
+    // Heights are read from drawn rows once, then as the range moves or the group's height stops
+    // matching them (the font size changed), not every scroll frame, and never for a group out of view.
     const moved = next.start !== windowRange.start || next.end !== windowRange.end
-    if (element && next.end > next.start && (moved || !sizesRead.current)) {
+    const resized = rect !== null && Math.abs(rect.height - geometry.total) > 1
+    if (element && next.end > next.start && (moved || resized || !sizesRead.current)) {
       sizesRead.current = windowRange.end > windowRange.start
       const read = readRowSizes(element, sizes)
       if (read !== sizes) {

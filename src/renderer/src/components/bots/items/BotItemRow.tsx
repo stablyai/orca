@@ -53,6 +53,18 @@ type BotItemRowProps = {
   listItem?: boolean
 }
 
+// Whether an item has a live worker, worked out once per item object: the comparison and the render
+// share it, so a fresh read walks each item's links once, as rendering it did.
+const liveByItem = new WeakMap<BotItem, boolean>()
+function itemLive(item: BotItem): boolean {
+  let live = liveByItem.get(item)
+  if (live === undefined) {
+    live = isBotItemLive(item)
+    liveByItem.set(item, live)
+  }
+  return live
+}
+
 type ItemFieldEqual = (a: BotItem, b: BotItem) => boolean
 const skipped: ItemFieldEqual = () => true
 
@@ -72,7 +84,7 @@ const ITEM_FIELD_RULES: Record<keyof BotItem, ItemFieldEqual> = {
   madeBy: (a, b) => structuralValuesEqual(a.madeBy, b.madeBy),
   question: (a, b) => structuralValuesEqual(a.question, b.question),
   closeNote: (a, b) => a.closeNote === b.closeNote,
-  links: (a, b) => isBotItemLive(a) === isBotItemLive(b),
+  links: (a, b) => itemLive(a) === itemLive(b),
   version: (a, b) => a.version === b.version,
   lastEventId: (a, b) => a.lastEventId === b.lastEventId,
   othersLastEventId: (a, b) => a.othersLastEventId === b.othersLastEventId,
@@ -97,6 +109,10 @@ function sameItem(a: BotItem, b: BotItem): boolean {
 
 /** The item compares by value, as a fresh host read decodes it anew; every other prop by identity. */
 function sameRowProps(prev: BotItemRowProps, next: BotItemRowProps): boolean {
+  // The minute clock changes every row's age at once: that render needs no comparison.
+  if (prev.now !== next.now) {
+    return false
+  }
   const before: Readonly<Record<string, unknown>> = prev
   const after: Readonly<Record<string, unknown>> = next
   const keys = Object.keys(after)
@@ -150,11 +166,7 @@ function BotItemRowView({
     >
       <span className="group/check flex h-5 w-4 shrink-0 items-center justify-center">
         <span className={cn('flex', checkbox ? 'hidden' : 'group-hover/check:hidden')}>
-          <BotItemStatusIcon
-            status={item.status}
-            live={isBotItemLive(item)}
-            stale={stale || snoozed}
-          />
+          <BotItemStatusIcon status={item.status} live={itemLive(item)} stale={stale || snoozed} />
         </span>
         <Checkbox
           tabIndex={tabbable ? undefined : -1}

@@ -11,6 +11,8 @@ type Upload = {
   /** The finished read: a data URL, or null for none. */
   read?: string | null
   failedAt?: number
+  /** Faces that joined while the read was in flight: the ones a failure reaches. */
+  waiting: Set<OnRead>
 }
 type OnRead = (version: string, src: string | null) => void
 
@@ -20,13 +22,14 @@ type OnRead = (version: string, src: string | null) => void
 // so scrolling doesn't read again for every row that comes into view.
 const uploads = new Map<string, Upload>()
 const RETRY_MS = 30_000
-// The faces mounted per bot: each read that finishes reaches them all, so faces showing a failed read
-// recover when a later one succeeds. Each face leaves as it unmounts, so scrolling adds none.
+// The faces mounted per bot: each successful read reaches them all, so faces showing a failed read
+// recover when a later one succeeds; a failure reaches only the faces waiting on it. Each face leaves
+// as it unmounts, so scrolling adds none.
 const faces = new Map<string, Set<OnRead>>()
 
 function startUpload(bot: BotRef, version: string): Upload {
   const key = botRefKey(bot)
-  const entry: Upload = { version }
+  const entry: Upload = { version, waiting: new Set() }
   uploads.set(key, entry)
   void readBotAvatarPng(bot)
     .then(
@@ -38,17 +41,41 @@ function startUpload(bot: BotRef, version: string): Upload {
       }
     )
     .then(() => {
-      const watching = faces.get(key)
-      watching?.forEach((onRead) => onRead(version, entry.read ?? null))
-      forgetFailure(key, watching)
+      if (uploads.get(key) === entry) {
+        if (entry.failedAt === undefined) {
+          failed.delete(key)
+        } else {
+          keepFailure(key)
+        }
+      }
+      const reached = entry.failedAt === undefined ? faces.get(key) : entry.waiting
+      const settled = [...(reached ?? [])]
+      entry.waiting.clear()
+      settled.forEach((onRead) => onRead(version, entry.read ?? null))
     })
   return entry
 }
 
-/** A failure is kept only while a face shows it, so it never outlives the bot's faces. */
-function forgetFailure(key: string, watching: Set<OnRead> | undefined): void {
-  if (!watching?.size && uploads.get(key)?.failedAt !== undefined) {
-    uploads.delete(key)
+// Bots whose current read failed, oldest first: a few are kept after their faces leave (so a row
+// scrolled back waits to retry), and past KEPT_FAILURES the oldest no face shows is forgotten.
+const failed = new Set<string>()
+const KEPT_FAILURES = 32
+
+function keepFailure(key: string): void {
+  failed.delete(key)
+  failed.add(key)
+  trimFailures()
+}
+
+function trimFailures(): void {
+  for (const old of failed) {
+    if (failed.size <= KEPT_FAILURES) {
+      break
+    }
+    if (!faces.has(old)) {
+      failed.delete(old)
+      uploads.delete(old)
+    }
   }
 }
 
@@ -70,8 +97,12 @@ function watchUpload(
   const watching = faces.get(key) ?? new Set<OnRead>()
   faces.set(key, watching)
   watching.add(onRead)
+  const pending = entry.read === undefined && entry.failedAt === undefined
+  if (pending) {
+    entry.waiting.add(onRead)
+  }
   let live = true
-  if (entry.read !== undefined || entry.failedAt !== undefined) {
+  if (!pending) {
     queueMicrotask(() => {
       if (live) {
         onRead(version, entry.read ?? null)
@@ -80,11 +111,12 @@ function watchUpload(
   }
   return () => {
     live = false
+    entry.waiting.delete(onRead)
     watching.delete(onRead)
     if (watching.size === 0 && faces.get(key) === watching) {
       faces.delete(key)
+      trimFailures()
     }
-    forgetFailure(key, faces.get(key))
   }
 }
 
