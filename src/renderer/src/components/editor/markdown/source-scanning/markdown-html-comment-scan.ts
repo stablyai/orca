@@ -152,18 +152,26 @@ function getLineBounds(
   return { lineEnd, nextLineStart: newlineIndex === -1 ? content.length : newlineIndex + 1 }
 }
 
+type CommentCloseSearchResult =
+  | {
+      found: true
+      closeLineStart: number
+      closeLineEnd: number
+      closeNextLineStart: number
+      closeOffsetInLine: number
+      newlineCount: number
+    }
+  | {
+      found: false
+      stopOffset: number
+    }
+
 function findCommentCloseInContainer(
   content: string,
   startLineOffset: number,
   quoteDepth: number,
   containerIndent: number
-): {
-  closeLineStart: number
-  closeLineEnd: number
-  closeNextLineStart: number
-  closeOffsetInLine: number
-  newlineCount: number
-} | null {
+): CommentCloseSearchResult {
   let scanStart = startLineOffset
   let newlineCount = 0
   while (scanStart < content.length) {
@@ -172,16 +180,16 @@ function findCommentCloseInContainer(
     const scanLine = content.slice(scanStart, lineEnd)
     const continuation = matchContainerContinuation(scanLine, quoteDepth, containerIndent)
     if (continuation === null) {
-      return null
+      return { found: false, stopOffset: scanStart }
     }
     const closeInContainer = continuation.containerLine.indexOf('-->')
     if (closeInContainer !== -1) {
-      const strippedPrefixLength = scanLine.length - continuation.containerLine.length
       return {
+        found: true,
         closeLineStart: scanStart,
         closeLineEnd: lineEnd,
         closeNextLineStart: nextLineStart,
-        closeOffsetInLine: strippedPrefixLength + closeInContainer + 3,
+        closeOffsetInLine: continuation.prefixLength + closeInContainer + 3,
         newlineCount
       }
     }
@@ -190,7 +198,7 @@ function findCommentCloseInContainer(
     }
     scanStart = nextLineStart
   }
-  return null
+  return { found: false, stopOffset: content.length }
 }
 
 /** Mask closed HTML comments within their container while preserving line breaks and column-0 alignment. */
@@ -200,6 +208,7 @@ export function stripClosedHtmlComments(contentWithoutCode: string): string {
     return contentWithoutCode
   }
   const containers: MarkdownContainer[] = []
+  const failedScanStopByContainer = new Map<string, number>()
   let output = ''
   let lineStart = 0
 
@@ -241,15 +250,24 @@ export function stripClosedHtmlComments(contentWithoutCode: string): string {
         cursor = sameLineClose + 3
         continue
       }
-      const multilineClose =
-        lineEnd < contentWithoutCode.length
-          ? findCommentCloseInContainer(
-              contentWithoutCode,
-              nextLineStart,
-              state.quoteDepth,
-              state.effectiveIndent
-            )
-          : null
+      let multilineClose: Extract<CommentCloseSearchResult, { found: true }> | null = null
+      if (lineEnd < contentWithoutCode.length) {
+        const containerKey = `${state.quoteDepth}:${state.effectiveIndent}`
+        const cachedStopOffset = failedScanStopByContainer.get(containerKey)
+        if (cachedStopOffset === undefined || nextLineStart > cachedStopOffset) {
+          const searchResult = findCommentCloseInContainer(
+            contentWithoutCode,
+            nextLineStart,
+            state.quoteDepth,
+            state.effectiveIndent
+          )
+          if (searchResult.found) {
+            multilineClose = searchResult
+          } else {
+            failedScanStopByContainer.set(containerKey, searchResult.stopOffset)
+          }
+        }
+      }
       if (!multilineClose) {
         output += '<!--'
         cursor = openIndex + 4

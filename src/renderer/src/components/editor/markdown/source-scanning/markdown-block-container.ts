@@ -19,63 +19,110 @@ export function countBlockquoteDepth(prefix: string): number {
   return depth
 }
 
-/** Strips exactly `levels` CommonMark blockquote markers (0-3 spaces, `>`, optional space). */
-export function stripBlockquoteLevels(line: string, levels: number): string | null {
-  let index = 0
-  for (let level = 0; level < levels; level += 1) {
-    let spaces = 0
-    while (index < line.length && spaces < 3 && line.charCodeAt(index) === 32) {
-      index += 1
-      spaces += 1
-    }
-    if (index >= line.length || line.charCodeAt(index) !== 62) {
-      return null
-    }
-    index += 1
-    if (index < line.length && line.charCodeAt(index) === 32) {
-      index += 1
-    }
-  }
-  return line.slice(index)
+const THEMATIC_BREAK_PATTERN = /^(?:-[ \t]*){3,}$|^(?:_[ \t]*){3,}$|^(?:\*[ \t]*){3,}$/
+
+type BlockquotePrefixResult = {
+  depth: number
+  prefixLength: number
+  content: string
+  column: number
+  virtualSpaces: number
 }
 
-export function stripAllBlockquotePrefixes(line: string): {
-  depth: number
-  content: string
-  prefixLength: number
-} {
+function stripBlockquotePrefix(line: string, maxLevels: number): BlockquotePrefixResult {
   let depth = 0
   let index = 0
-  while (index < line.length) {
+  let col = 0
+  let virtualSpaces = 0
+
+  while (depth < maxLevels && index < line.length) {
     let cursor = index
-    let spaces = 0
-    while (cursor < line.length && spaces < 3 && line.charCodeAt(cursor) === 32) {
-      cursor += 1
-      spaces += 1
+    let spaces = virtualSpaces
+    let levelCol = col
+    while (cursor < line.length && spaces < 3) {
+      const ch = line.charCodeAt(cursor)
+      if (ch === 32) {
+        cursor += 1
+        spaces += 1
+        levelCol += 1
+      } else if (ch === 9) {
+        const tabWidth = 4 - (levelCol % 4)
+        if (spaces + tabWidth > 3) {
+          break
+        }
+        cursor += 1
+        spaces += tabWidth
+        levelCol += tabWidth
+      } else {
+        break
+      }
     }
     if (cursor >= line.length || line.charCodeAt(cursor) !== 62) {
       break
     }
     cursor += 1
-    if (cursor < line.length && line.charCodeAt(cursor) === 32) {
-      cursor += 1
+    levelCol += 1
+    let nextVirtualSpaces = 0
+    if (cursor < line.length) {
+      const afterMarker = line.charCodeAt(cursor)
+      if (afterMarker === 32) {
+        cursor += 1
+        levelCol += 1
+      } else if (afterMarker === 9) {
+        const tabWidth = 4 - (levelCol % 4)
+        cursor += 1
+        levelCol += tabWidth
+        nextVirtualSpaces = tabWidth - 1
+      }
     }
     depth += 1
     index = cursor
+    col = levelCol
+    virtualSpaces = nextVirtualSpaces
   }
-  return { depth, content: line.slice(index), prefixLength: index }
+
+  return {
+    depth,
+    prefixLength: index,
+    content: line.slice(index),
+    column: col,
+    virtualSpaces
+  }
 }
 
-export function measureLeadingColumns(text: string): { columns: number; offset: number } {
-  let columns = 0
+/** Strips exactly `levels` CommonMark blockquote markers (0-3 spaces, `>`, optional space/tab column). */
+export function stripBlockquoteLevels(line: string, levels: number): string | null {
+  const stripped = stripBlockquotePrefix(line, levels)
+  if (stripped.depth < levels) {
+    return null
+  }
+  return stripped.virtualSpaces > 0
+    ? ' '.repeat(stripped.virtualSpaces) + stripped.content
+    : stripped.content
+}
+
+export function stripAllBlockquotePrefixes(line: string): BlockquotePrefixResult {
+  return stripBlockquotePrefix(line, Number.POSITIVE_INFINITY)
+}
+
+export function measureLeadingColumns(
+  text: string,
+  startColumn = 0,
+  initialColumns = 0
+): { columns: number; offset: number } {
+  let columns = initialColumns
+  let visualColumn = startColumn
   let offset = 0
   while (offset < text.length) {
     const ch = text.charCodeAt(offset)
     if (ch === 32) {
       columns += 1
+      visualColumn += 1
       offset += 1
     } else if (ch === 9) {
-      columns += 4 - (columns % 4)
+      const tabWidth = 4 - (visualColumn % 4)
+      columns += tabWidth
+      visualColumn += tabWidth
       offset += 1
     } else {
       break
@@ -102,6 +149,9 @@ export function detectContainerLine(
       startsIndentedCode: false
     }
   }
+  if (THEMATIC_BREAK_PATTERN.test(rest)) {
+    return null
+  }
   const listMatch = rest.match(/^([-+*]|\d{1,9}[.)])([ \t]+|$)/)
   if (!listMatch) {
     return null
@@ -126,17 +176,36 @@ export function matchContainerContinuation(
   line: string,
   quoteDepth: number,
   containerIndent: number
-): { containerLine: string; columns: number; offset: number; isBlank: boolean } | null {
-  const containerLine = quoteDepth === 0 ? line : stripBlockquoteLevels(line, quoteDepth)
-  if (containerLine === null) {
+): {
+  containerLine: string
+  prefixLength: number
+  columns: number
+  offset: number
+  isBlank: boolean
+} | null {
+  const stripped =
+    quoteDepth === 0
+      ? { depth: 0, prefixLength: 0, content: line, column: 0, virtualSpaces: 0 }
+      : stripBlockquotePrefix(line, quoteDepth)
+  if (stripped.depth < quoteDepth) {
     return null
   }
-  const { columns, offset } = measureLeadingColumns(containerLine)
-  const isBlank = offset === containerLine.length
+  const { columns, offset } = measureLeadingColumns(
+    stripped.content,
+    stripped.column,
+    stripped.virtualSpaces
+  )
+  const isBlank = offset === stripped.content.length
   if (!isBlank && columns < containerIndent) {
     return null
   }
-  return { containerLine, columns, offset, isBlank }
+  return {
+    containerLine: stripped.content,
+    prefixLength: stripped.prefixLength,
+    columns,
+    offset,
+    isBlank
+  }
 }
 
 export function advanceContainerStackForLine(
@@ -156,13 +225,15 @@ export function advanceContainerStackForLine(
   const {
     depth: quoteDepth,
     content: lineWithoutQuote,
-    prefixLength
+    prefixLength,
+    column,
+    virtualSpaces
   } = stripAllBlockquotePrefixes(line)
   while ((containers.at(-1)?.quoteDepth ?? -1) > quoteDepth) {
     containers.pop()
   }
 
-  const { columns, offset } = measureLeadingColumns(lineWithoutQuote)
+  const { columns, offset } = measureLeadingColumns(lineWithoutQuote, column, virtualSpaces)
   const isBlank = offset === lineWithoutQuote.length
   if (!isBlank) {
     while (
