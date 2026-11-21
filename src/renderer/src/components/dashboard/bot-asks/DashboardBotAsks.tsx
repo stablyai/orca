@@ -48,8 +48,9 @@ export function useDashboardBotAskCount(): number {
 
 /** The card's fields, plain enough to cross to the pop-out in its snapshot. */
 export function toDashboardBotAsk(bot: Bot, item: BotItem, now: number): DashboardBotAsk {
+  // `||`: a fresh `--ask` stores an empty gist until one is written.
   const question = item.question
-    ? (item.question.gist ?? botItemQuestionLine(item.question.text))
+    ? item.question.gist || botItemQuestionLine(item.question.text)
     : ''
   return {
     botHostId: bot.hostId,
