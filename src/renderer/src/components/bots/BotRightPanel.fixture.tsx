@@ -291,3 +291,47 @@ export const askRowCard = defineFixture({
   render: () => <BotPanelFrame />,
   interact: focusRow('Open: Fix flaky')
 })
+
+/** Look around in Automations: a failing streak reads as Failed; turned itself off needs the owner. */
+function lookTroubleFixture(turnedOff: boolean) {
+  const failing = turnedOff ? 10 : 3
+  const bot = turnedOff
+    ? {
+        ...cos,
+        lookAround: { on: false, every: 'every-4h' as const, weekdaysOnly: true, focus: '' }
+      }
+    : cos
+  const activity: BotActivity = {
+    ...NEEDS_YOU,
+    upNext: {
+      state: {
+        running: false,
+        seenAt: 0,
+        lastLookedAt: now - 3_600_000,
+        failedInARow: failing,
+        error: 'Couldn’t start Claude Code'
+      },
+      items: []
+    }
+  }
+  return defineFixture({
+    width: 360,
+    store: botPanelPage(true, 'blocked'),
+    setup: () => {
+      stubBotPanel(activity, bot)()
+      const runtime = window.api.runtime
+      const inner = runtime.call
+      Reflect.set(window.api, 'runtime', {
+        ...runtime,
+        call: async (request: Parameters<typeof inner>[0]) =>
+          request.method === 'bots.lookAround.failing'
+            ? { ok: true, result: { unseen: { [bot.id]: failing } } }
+            : inner(request)
+      })
+    },
+    render: () => <BotPanelFrame />
+  })
+}
+
+export const lookFailing = lookTroubleFixture(false)
+export const lookTurnedOff = lookTroubleFixture(true)

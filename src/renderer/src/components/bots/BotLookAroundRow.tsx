@@ -63,10 +63,11 @@ export function LookAroundRow({
   const needsYou = t('bots.lookAround.needsYou', 'Needs you')
   // Its last look stopped on the usage limit: the stop says so in place of Failed.
   const stop = useLastLookStop(bot, looking ? undefined : state?.lastSessionId)
+  // Turned itself off is the one state that needs the owner; a streak of failures reads as Failed.
   const rowState: BotRowState | null = !setting.on
     ? failing > 0
       ? {
-          kind: 'alert',
+          kind: 'failed',
           label: needsYou,
           reason: t(
             'bots.upcoming.lookTurnedOff',
@@ -88,7 +89,7 @@ export function LookAroundRow({
         : state?.error && !state.running
           ? {
               kind: 'failed',
-              label: failing > 0 ? needsYou : t('bots.automations.failed', 'Failed'),
+              label: t('bots.automations.failed', 'Failed'),
               reason: state.error
             }
           : null

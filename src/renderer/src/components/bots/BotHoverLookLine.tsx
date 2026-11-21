@@ -21,12 +21,13 @@ export function BotHoverLookLine({ bot }: { bot: Bot }): React.JSX.Element | nul
   }
   const setting = botLookAround(bot)
   const state = status?.upNext
-  const needsYou = failing > 0
+  // Only Look around turning itself off needs the owner; a streak of failures can clear on its own.
+  const turnedOff = !setting.on && failing > 0
   // Which kind of trouble it is: looks that failed in a row, or one time that keeps not running.
-  const needsYouText = (): string => {
+  const troubleText = (): string => {
     const repeat = state?.repeatTrouble
     if ((state?.failedInARow ?? 0) >= failing || !repeat) {
-      return t('bots.lookAround.hoverFailing', 'Look around · {{count}} looks failed', {
+      return t('bots.lookAround.hoverFailing', 'Look around · {{count}} failed', {
         count: failing
       })
     }
@@ -47,11 +48,11 @@ export function BotHoverLookLine({ bot }: { bot: Bot }): React.JSX.Element | nul
         )
   }
   const text = !setting.on
-    ? needsYou
-      ? t('bots.lookAround.hoverTurnedOff', 'Look around turned itself off')
+    ? turnedOff
+      ? t('bots.lookAround.hoverTurnedOff', 'Look around · Turned off')
       : t('bots.lookAround.hoverOff', 'Look around is off')
-    : needsYou
-      ? needsYouText()
+    : failing > 0
+      ? troubleText()
       : state?.running
         ? t('bots.lookAround.hoverLooking', 'Looking around now')
         : state?.nextAt
@@ -66,32 +67,35 @@ export function BotHoverLookLine({ bot }: { bot: Bot }): React.JSX.Element | nul
     <button
       type="button"
       title={text}
-      aria-label={needsYou ? `${text} · ${t('bots.lookAround.needsYou', 'Needs you')}` : text}
+      aria-label={turnedOff ? `${text} · ${t('bots.lookAround.needsYou', 'Needs you')}` : text}
       className="-mx-1.5 mt-2 flex w-[calc(100%+0.75rem)] min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs text-muted-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       onClick={() => openBotSettings(bot.id, 'look-around')}
     >
       <Eye className="size-3.5 shrink-0" aria-hidden />
-      <span className="min-w-0 flex-1 truncate">{text}</span>
-      {needsYou ? (
-        <LookStatusToken severity="need">
-          {t('bots.lookAround.needsYou', 'Needs you')}
-        </LookStatusToken>
-      ) : setting.on && state?.lastLateFor !== undefined ? (
-        <LookStatusToken severity="info">
-          {t('settings.bots.lookAround.ranLate', 'Ran late')}
-        </LookStatusToken>
-      ) : null}
+      {/* Wraps rather than truncating, since the cut-off part would be the fact; the token drops
+          under it when both don't fit. */}
+      <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1">
+        <span className="min-w-0 break-words">{text}</span>
+        {turnedOff ? (
+          <LookStatusToken severity="need">
+            {t('bots.lookAround.needsYou', 'Needs you')}
+          </LookStatusToken>
+        ) : setting.on && failing === 0 && state?.lastLateFor !== undefined ? (
+          <LookStatusToken severity="info">
+            {t('settings.bots.lookAround.ranLate', 'Ran late')}
+          </LookStatusToken>
+        ) : null}
+      </span>
       <ChevronRight className="size-3.5 shrink-0" aria-hidden />
     </button>
   )
 }
 
-/** On the sidebar row only while Look around needs the owner: failing, or turned off by failures. */
+/** On the sidebar row only once Look around turned itself off after failed looks: the one state that
+ *  stops its work until the owner acts. */
 export function BotLookNeedsYouBadge({ bot }: { bot: Bot }): React.JSX.Element {
   const t = useTranslate()
-  const label = botLookAround(bot).on
-    ? t('bots.lookAround.badge', 'Look around needs you')
-    : t('bots.lookAround.badgeTurnedOff', 'Look around turned itself off')
+  const label = t('bots.lookAround.badgeTurnedOff', 'Look around turned off')
   return (
     <button
       type="button"

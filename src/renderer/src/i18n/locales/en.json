@@ -29484,15 +29484,14 @@
       "openHome": "Open {{name}}’s Home"
     },
     "lookAround": {
-      "hoverTurnedOff": "Look around turned itself off",
+      "hoverTurnedOff": "Look around · Turned off",
       "hoverOff": "Look around is off",
-      "hoverFailing": "Look around · {{count}} looks failed",
+      "hoverFailing": "Look around · {{count}} failed",
       "hoverLooking": "Looking around now",
       "hoverNext": "Looks around {{every}} · next {{when}}",
       "hoverEvery": "Looks around {{every}}",
       "needsYou": "Needs you",
-      "badge": "Look around needs you",
-      "badgeTurnedOff": "Look around turned itself off",
+      "badgeTurnedOff": "Look around turned off",
       "schedule": {
         "every4hWeekdays": "Every 4 hours on weekdays, 8 AM to 8 PM",
         "every4h": "Every 4 hours, 8 AM to 8 PM",

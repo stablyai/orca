@@ -337,57 +337,65 @@ function hoverCard(c: Case, setting: BotLookAround = preset, width = 340) {
   })
 }
 
-/** The sidebar card's look line: next look, ran late, and needing the owner. */
+/** The sidebar card's look line: next look, ran late, a failing streak, and turned off. */
 export const hoverCardNext = hoverCard({ now: at(10, 12), state: { nextAt: at(12) } })
 export const hoverCardCustomRanLate = hoverCard(
   { now: at(10, 12), state: { nextAt: at(14), lastLateFor: at(9, 30) } },
   custom
 )
-export const hoverCardNeedsYou = hoverCard({
+/** A streak can clear on its own: plain text, no Needs you. */
+export const hoverCardFailing = hoverCard({
   now: at(10, 12),
   failing: 3,
   state: { nextAt: at(12), failedInARow: 3 }
 })
 
-/** Needs you because the 8:00 AM look keeps not running, with no failed look at all. */
-export const hoverCardMissedNeedsYou = hoverCard({
+/** The 8:00 AM look keeps not running, with no failed look at all. */
+export const hoverCardMissed = hoverCard({
   now: at(10, 12),
   failing: 3,
   state: { nextAt: at(12), repeatTrouble: { scheduledFor: at(8), failed: 0, missed: 3, of: 3 } }
 })
 
-/** Sidebar rows: only the bot whose Look around needs its owner carries the badge. */
-export const sidebarRowBadge = defineFixture({
-  width: 280,
-  store: {
-    folderWorkspaces: [
-      makeFolderWorkspace({ id: 'fw-cos', name: 'CoS', folderPath: '/Users/owner/bots/cos' })
-    ]
-  },
-  setup: () => {
-    stub({
-      now: at(10, 12),
-      failing: 3,
-      state: { nextAt: at(12), repeatTrouble: { scheduledFor: at(8), failed: 0, missed: 3, of: 3 } }
-    })
-  },
-  render: () => (
-    <ConfirmationDialogProvider>
-      <div className="flex flex-col rounded-lg border border-border bg-worktree-sidebar py-1 pr-1.5 text-worktree-sidebar-foreground">
-        <BotRow
-          bot={bot(preset)}
-          home={makeFolderWorkspace({
-            id: 'fw-cos',
-            name: 'CoS',
-            folderPath: '/Users/owner/bots/cos'
-          })}
-          isActive={false}
-          onOpen={() => {}}
-        />
-      </div>
-    </ConfirmationDialogProvider>
-  )
-})
+/** Turned itself off: the one state that needs the owner. */
+export const hoverCardTurnedOff = hoverCard(
+  { now: at(10, 12), failing: 10, state: {} },
+  { ...preset, on: false }
+)
+
+function sidebarRow(setting: BotLookAround, failing: number) {
+  return defineFixture({
+    width: 280,
+    store: {
+      folderWorkspaces: [
+        makeFolderWorkspace({ id: 'fw-cos', name: 'CoS', folderPath: '/Users/owner/bots/cos' })
+      ]
+    },
+    setup: () => {
+      stub({ now: at(10, 12), setting, failing, state: { nextAt: at(12), failedInARow: failing } })
+    },
+    render: () => (
+      <ConfirmationDialogProvider>
+        <div className="flex flex-col rounded-lg border border-border bg-worktree-sidebar py-1 pr-1.5 text-worktree-sidebar-foreground">
+          <BotRow
+            bot={bot(setting)}
+            home={makeFolderWorkspace({
+              id: 'fw-cos',
+              name: 'CoS',
+              folderPath: '/Users/owner/bots/cos'
+            })}
+            isActive={false}
+            onOpen={() => {}}
+          />
+        </div>
+      </ConfirmationDialogProvider>
+    )
+  })
+}
+
+/** Sidebar rows: the badge only once Look around turned itself off; a streak leaves the row quiet. */
+export const sidebarRowTurnedOff = sidebarRow({ ...preset, on: false }, 10)
+export const sidebarRowStreak = sidebarRow(preset, 3)
 
 export const unavailableHost = section({ now: at(10, 12), readFailure: true, state: {} }, 320)
 export const unreadableZone = section(
@@ -410,4 +418,9 @@ export const hoverCardMissedNarrow = hoverCard(
   },
   preset,
   320
+)
+export const hoverCardTurnedOffNarrow = hoverCard(
+  { now: at(10, 12), failing: 10, state: {} },
+  { ...preset, on: false },
+  260
 )

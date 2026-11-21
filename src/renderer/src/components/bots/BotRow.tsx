@@ -10,7 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useBotUpNextUnseen } from '@/lib/bot-up-next-unseen'
 import { cn } from '@/lib/class-names'
 import type { Bot } from '../../../../shared/bot-types'
-import { lookAroundSupported } from '../../../../shared/bots/bot-look-around'
+import { botLookAround, lookAroundSupported } from '../../../../shared/bots/bot-look-around'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { botErrorMessage } from './bot-presentation'
 import {
@@ -63,7 +63,8 @@ export function BotRow({
   const { workspaceId, status, hostLabel, offline, description, line, limit, now } = details
   const isUnread = home.isUnread && !offline
   const upNextNew = useBotUpNextUnseen(bot)
-  const lookNeedsYou = useLookAroundFailing(offline ? null : bot) > 0
+  // Only once Look around turned itself off: a streak of failures shows in the hover card, not here.
+  const lookNeedsYou = useLookAroundFailing(offline ? null : bot) > 0 && !botLookAround(bot).on
   const age = offline ? null : botRowLineAge(line, now)
   const hostPill = hostLabel ? <BotRowHostIcon label={hostLabel} /> : null
   // The Bots search matches purposes from what each listed row shows; it never reads SOUL.md.

@@ -28307,15 +28307,14 @@
       "for": "用于 {{name}}"
     },
     "lookAround": {
-      "hoverTurnedOff": "巡视已自动关闭",
+      "hoverTurnedOff": "巡视 · 已关闭",
       "hoverOff": "巡视已关闭",
       "hoverFailing": "巡视 · {{count}} 次失败",
       "hoverLooking": "正在巡视",
       "hoverNext": "巡视{{every}} · 下次 {{when}}",
       "hoverEvery": "巡视{{every}}",
       "needsYou": "需要你处理",
-      "badge": "巡视需要你处理",
-      "badgeTurnedOff": "巡视已自动关闭",
+      "badgeTurnedOff": "巡视已关闭",
       "schedule": {
         "every4hWeekdays": "工作日每 4 小时一次，早上 8 点至晚上 8 点",
         "every4h": "每 4 小时一次，早上 8 点至晚上 8 点",

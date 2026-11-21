@@ -80,8 +80,7 @@ export function BotLookAroundStatus({
   state = NOT_LOOKED,
   suggestions,
   unsaved,
-  where,
-  needsYou
+  where
 }: {
   bot: Bot
   setting: BotLookAround
@@ -91,8 +90,6 @@ export function BotLookAroundStatus({
   unsaved: boolean
   /** "this computer", or the paired server's name. */
   where: string
-  /** The host says the owner should step in (failing, or one slot failing or missed). */
-  needsYou: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const now = useNow(60_000)
@@ -157,11 +154,6 @@ export function BotLookAroundStatus({
     const count = repeat.failed + repeat.missed
     notes.push(
       <span key="repeat" className="flex flex-wrap items-center gap-1.5">
-        {needsYou && failed < NEEDS_YOU ? (
-          <LookStatusToken severity="need">
-            {t('bots.lookAround.needsYou', 'Needs you')}
-          </LookStatusToken>
-        ) : null}
         {repeat.missed === 0
           ? t(
               'settings.bots.lookAround.repeatFailed',

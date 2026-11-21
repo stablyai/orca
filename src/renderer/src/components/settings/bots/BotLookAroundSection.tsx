@@ -298,7 +298,6 @@ export function BotLookAroundSection({
             suggestions={upNext?.items.length ?? 0}
             unsaved={unsavedTimes !== null || heldEdit !== null}
             where={where}
-            needsYou={failing > 0}
           />
           <div className="space-y-2 py-3">
             <Label htmlFor={`bot-look-for-${bot.id}`}>
