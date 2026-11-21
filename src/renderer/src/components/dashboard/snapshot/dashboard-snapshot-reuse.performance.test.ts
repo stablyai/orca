@@ -7,6 +7,8 @@ import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-
 import { buildDashboardSnapshot } from './build-dashboard-snapshot'
 import { createDashboardSnapshotReuse } from './dashboard-snapshot-reuse'
 import { i18n } from '@/i18n/i18n'
+import { createDashboardBoardProjection } from '../board/agent-board-projection'
+import { EMPTY_DASHBOARD_FILTERS } from '../board/agent-board-filtering'
 
 const NOW = 1_000_000_000
 const LEAF = '11111111-1111-4111-8111-111111111111'
@@ -92,6 +94,66 @@ function update(
 afterEach(() => vi.restoreAllMocks())
 
 describe('dashboard incremental snapshot contract', () => {
+  // Child status updates exposed fleet-wide dashboard work in #45054.
+  it.each([100, 1000])('keeps child status work local with %s agent cards', (size) => {
+    vi.spyOn(Date, 'now').mockReturnValue(NOW)
+    const store = fleet(size)
+    const reuse = createDashboardSnapshotReuse()
+    const read = () =>
+      buildDashboardSnapshot({ ...store.getState(), chatNames: names }, NOW, { reuse })
+    const key = makePaneKey('t0', LEAF)
+    const publish = (description: string, updatedAt: number) => {
+      const statuses = store.getState().agentStatusByPaneKey
+      store.setState({
+        agentStatusByPaneKey: statuses.replace([
+          [
+            key,
+            {
+              ...statuses.get(key)!,
+              updatedAt,
+              subagents: [
+                {
+                  id: 'worker',
+                  description,
+                  state: 'working',
+                  startedAt: NOW
+                }
+              ]
+            }
+          ]
+        ])
+      })
+    }
+    publish('Initial helper', NOW)
+    const before = read()
+    const search = vi.fn(() => 'task')
+    for (const card of before.cards.slice(1)) {
+      Object.defineProperty(card, 'task', { get: search })
+    }
+    const project = createDashboardBoardProjection()
+    const board = project(before.cards, false, 'task', EMPTY_DASHBOARD_FILTERS)
+    expect(board.lanes.working.indexes).toHaveLength(size)
+    expect(search).toHaveBeenCalledTimes(size - 1)
+    search.mockClear()
+    const projection = store.getState().agentStatusByPaneKey.projection
+    const list = vi.spyOn(projection, 'list')
+    publish('Renamed helper', NOW + 1)
+    const next = read()
+    expect(list.mock.calls).toEqual([['w0']])
+    expect(projection.row(`${key}\0subagent:worker`)?.entry.prompt).toBe('Renamed helper')
+    expect(next.cards.filter((card, index) => card !== before.cards[index])).toEqual([
+      next.cards[0]
+    ])
+    expect(next.cards[0]).toMatchObject({
+      statusUpdatedAt: NOW + 1,
+      subagents: [{ id: `${key}\0subagent:worker`, name: 'Renamed helper', dotState: 'working' }]
+    })
+    const nextBoard = project(next.cards, false, 'task', EMPTY_DASHBOARD_FILTERS)
+    expect(nextBoard.lanes.working).toBe(board.lanes.working)
+    expect(nextBoard.lanes.working.subagentCounts[0]).toBe(1)
+    expect(nextBoard.visibleCards).toBe(board.visibleCards)
+    expect(search).not.toHaveBeenCalled()
+  })
   it('keeps a reused snapshot current as pane state and card details change', () => {
     vi.spyOn(Date, 'now').mockReturnValue(NOW)
     const store = fleet(2)

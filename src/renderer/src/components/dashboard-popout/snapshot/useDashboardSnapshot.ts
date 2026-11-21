@@ -6,6 +6,8 @@ import {
   type DashboardSnapshot
 } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { patchDashboardSnapshotFromAgentStatus } from './dashboard-agent-status-patch'
+import { dashboardCardChangesSince } from '../../dashboard/snapshot/dashboard-card-changes'
+import { KeyedDeadlines } from '../../../../../shared/collections/keyed-deadlines'
 
 const TOPOLOGY_REFRESH_DEBOUNCE_MS = 250
 const TOPOLOGY_REFRESH_MAX_WAIT_MS = 1_000
@@ -43,6 +45,7 @@ export function useDashboardSnapshot(): DashboardSnapshot {
     let topologyRefreshTimer: ReturnType<typeof setTimeout> | null = null
     let topologyRefreshStartedAt: number | null = null
     let staleRefreshTimer: ReturnType<typeof setTimeout> | null = null
+    const deadlines = new KeyedDeadlines()
     const transientClearWatermarks = new Map<string, number>()
 
     const requestTopologyRefresh = (): void => {
@@ -67,22 +70,30 @@ export function useDashboardSnapshot(): DashboardSnapshot {
       )
     }
 
-    const scheduleStaleRefresh = (next: DashboardSnapshot): void => {
+    const scheduleStaleRefresh = (next: DashboardSnapshot, changes: number[] | null): void => {
       if (staleRefreshTimer) {
         clearTimeout(staleRefreshTimer)
         staleRefreshTimer = null
       }
-      let nextDeadline = Number.POSITIVE_INFINITY
-      for (const card of next.cards) {
-        if (
+      const update = (index: number): void => {
+        const card = next.cards[index]
+        const active =
           card.statusUpdatedAt !== undefined &&
           (card.dotState === 'working' ||
             card.dotState === 'blocked' ||
             card.dotState === 'waiting')
-        ) {
-          nextDeadline = Math.min(nextDeadline, card.statusUpdatedAt + AGENT_STATUS_STALE_AFTER_MS)
-        }
+        deadlines.set(
+          String(index),
+          active ? card.statusUpdatedAt! + AGENT_STATUS_STALE_AFTER_MS : undefined
+        )
       }
+      if (changes) {
+        changes.forEach(update)
+      } else {
+        deadlines.clear()
+        next.cards.forEach((_, index) => update(index))
+      }
+      const nextDeadline = deadlines.next
       if (Number.isFinite(nextDeadline)) {
         staleRefreshTimer = setTimeout(
           requestTopologyRefresh,
@@ -100,9 +111,15 @@ export function useDashboardSnapshot(): DashboardSnapshot {
       if (next.repoIconsByRepoId !== undefined) {
         retainedRepoIconsRef.current = next.repoIconsByRepoId
       }
+      const previous = snapshotRef.current
+      const changes = dashboardCardChangesSince(next.cards, previous.cards)
       snapshotRef.current = next
-      scheduleStaleRefresh(next)
-      const nextSignature = columnSignature(next)
+      scheduleStaleRefresh(next, changes)
+      const nextSignature =
+        !changes ||
+        changes.some((index) => next.cards[index].bucket !== previous.cards[index].bucket)
+          ? columnSignature(next)
+          : columnSignatureRef.current
       const layoutChanged = nextSignature !== columnSignatureRef.current
       columnSignatureRef.current = nextSignature
 
