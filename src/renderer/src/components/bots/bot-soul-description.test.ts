@@ -6,11 +6,8 @@ const callRuntimeRpc = vi.hoisted(() => vi.fn())
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc }))
 
 import { getDiskBaselineSignature } from '../../../../shared/file-write/disk-baseline-signature'
-import { ORCA_EDITOR_FILE_SAVED_EVENT } from '@/components/editor/autosave/editor-autosave'
 import { setBotHostListing } from '@/lib/bot-catalog-snapshot'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
-import { useAppStore } from '@/store'
-import { makeOpenFile } from '@/store/slices/editor/types/open-file.test-fixture'
 import { writeBotHomeFile, type BotHome } from '../settings/bots/bot-home-files'
 import { useBotSoulDescription } from './bot-soul-description'
 
@@ -49,31 +46,11 @@ beforeEach(() => {
     ],
     updateNeeded: []
   })
-  useAppStore.setState({ openFiles: [] })
 })
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
 })
-
-function editorSaved(file: { id: string; runtimeEnvironmentId: string | null }, content: string) {
-  useAppStore.setState({
-    openFiles: [
-      makeOpenFile({
-        id: file.id,
-        worktreeId: 'folder:fw-cos',
-        filePath: '/bots/cos/SOUL.md',
-        relativePath: 'SOUL.md',
-        runtimeEnvironmentId: file.runtimeEnvironmentId
-      })
-    ]
-  })
-  window.dispatchEvent(
-    new CustomEvent(ORCA_EDITOR_FILE_SAVED_EVENT, {
-      detail: { fileId: file.id, content, recordViewIds: [file.id] }
-    })
-  )
-}
 
 describe('useBotSoulDescription', () => {
   it("reads a paired bot's SOUL.md on its own server, not this computer's file at that path", async () => {
@@ -83,14 +60,6 @@ describe('useBotSoulDescription', () => {
     await waitFor(() => expect(result.current).toBe('Runs the team’s week on the server'))
     expect(callRuntimeRpc.mock.calls[0][0]).toEqual({ kind: 'environment', environmentId: 'env-1' })
     expect(readFile).not.toHaveBeenCalled()
-  })
-
-  it('shows a SOUL.md save at once, without remounting', async () => {
-    readFile.mockResolvedValue({ content: soul('Old purpose') })
-    const { result } = renderHook(() => useBotSoulDescription(local()))
-    await waitFor(() => expect(result.current).toBe('Old purpose'))
-    await act(() => writeBotHomeFile(local(), 'SOUL.md', soul('New purpose'), OVERWRITE))
-    expect(result.current).toBe('New purpose')
   })
 
   it("takes a save only on its own host's SOUL.md at its own folder", async () => {
@@ -141,28 +110,6 @@ describe('useBotSoulDescription', () => {
     expect(result.current).toBe('On disk')
     await act(() => writeBotHomeFile(local(), 'SOUL.md', soul('Accepted'), OVERWRITE))
     expect(result.current).toBe('Accepted')
-  })
-
-  it('shows a save from SOUL.md’s editor tab on its own host', async () => {
-    readFile.mockResolvedValue({ content: soul('Before the tab') })
-    const { result } = renderHook(() => useBotSoulDescription(local()))
-    await waitFor(() => expect(result.current).toBe('Before the tab'))
-    act(() =>
-      editorSaved({ id: 'soul-tab', runtimeEnvironmentId: null }, soul('Edited in the tab'))
-    )
-    expect(result.current).toBe('Edited in the tab')
-    // The same path saved on the server is another file.
-    act(() => editorSaved({ id: 'server-tab', runtimeEnvironmentId: 'env-1' }, soul('Server tab')))
-    expect(result.current).toBe('Edited in the tab')
-  })
-
-  it('reads again when Orca regains focus, for an edit made outside it', async () => {
-    readFile.mockResolvedValueOnce({ content: soul('Before') })
-    const { result } = renderHook(() => useBotSoulDescription(local()))
-    await waitFor(() => expect(result.current).toBe('Before'))
-    readFile.mockResolvedValueOnce({ content: soul('Changed in another app') })
-    act(() => void window.dispatchEvent(new Event('focus')))
-    await waitFor(() => expect(result.current).toBe('Changed in another app'))
   })
 
   it('keeps only the newest of overlapping reads', async () => {

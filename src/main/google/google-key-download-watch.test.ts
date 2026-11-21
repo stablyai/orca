@@ -40,7 +40,7 @@ describe('watching Downloads for the Google key', () => {
     await expect(found).resolves.toMatchObject({ ok: false })
   })
 
-  it('says so when the folder cannot be watched', async () => {
+  it('reports an unavailable Downloads folder and finds no recoverable key', async () => {
     const result = await watchFolderForGoogleKey(
       join(folder, 'missing'),
       new AbortController().signal
@@ -50,6 +50,7 @@ describe('watching Downloads for the Google key', () => {
       unwatchable: true,
       message: expect.stringContaining('Add the file')
     })
+    await expect(findGoogleKeyInFolder(join(folder, 'missing'), { since: 0 })).resolves.toBeNull()
   })
 })
 
@@ -94,9 +95,5 @@ describe('finding a key already in Downloads', () => {
     await expect(
       findGoogleKeyInFolder(folder, { since: step, projectId: 'orca-none' })
     ).resolves.toBeNull()
-  })
-
-  it('finds nothing in a missing folder', async () => {
-    await expect(findGoogleKeyInFolder(join(folder, 'gone'), { since: 0 })).resolves.toBeNull()
   })
 })

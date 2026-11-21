@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import { z } from 'zod'
 import { readKeychainPassword } from '../../../macos-keychain/generic-password'
+import { readCursorLinuxKeyringSecret, type CursorLinuxKeyringRead } from './cursor-linux-keyring'
 import {
   getCursorCliAuthPath,
   getCursorCliConfigPath,
@@ -48,7 +50,8 @@ const cliConfigSchema = z.object({
   authInfo: z.object({ email: z.unknown(), displayName: z.unknown() }).partial().optional()
 })
 
-const cliAuthFileSchema = z.object({ accessToken: z.unknown() }).partial()
+// Linux cursor-agent keeps this shape in the keyring and leaves only `storedIn` in auth.json.
+const cliAuthFileSchema = z.object({ accessToken: z.unknown(), storedIn: z.unknown() }).partial()
 
 /** `cli-config.json` carries the signed-in identity for keychain-backed CLI sessions. */
 export function readCursorCliIdentity(configPath = getCursorCliConfigPath()): CursorIdentity {
@@ -75,6 +78,64 @@ type TokenReadResult =
   | { status: 'error'; error: string }
   | { status: 'ok'; token: string }
 
+type CliFileReadResult = TokenReadResult | { status: 'in-keyring' }
+
+function parseCliCredentials(text: string): CliFileReadResult {
+  const parsed = cliAuthFileSchema.safeParse(JSON.parse(text))
+  const token = parsed.success ? parsed.data.accessToken : null
+  if (typeof token === 'string' && token.length > 0) {
+    return { status: 'ok', token }
+  }
+  return parsed.success && parsed.data.storedIn === 'os-secret-store'
+    ? { status: 'in-keyring' }
+    : { status: 'missing' }
+}
+
+// Providers may prompt on each search (KeePassXC unlock-before-search), so every outcome, failures included,
+// is reused until cursor-agent rewrites auth.json; concurrent reads for the same mtime share one secret-tool run.
+let linuxKeyringRead: {
+  authPath: string
+  authMtimeMs: number
+  result: Promise<TokenReadResult>
+} | null = null
+
+function tokenFromKeyringRead(read: CursorLinuxKeyringRead): TokenReadResult {
+  if (read.status !== 'ok') {
+    return read
+  }
+  try {
+    const parsed = parseCliCredentials(read.secret)
+    return parsed.status === 'ok' ? parsed : { status: 'missing' }
+  } catch {
+    return { status: 'missing' }
+  }
+}
+
+async function readLinuxKeyringToken(
+  authPath: string,
+  cliFile: CliFileReadResult
+): Promise<TokenReadResult> {
+  // Only cursor-agent's auth.json marker justifies reading the keyring.
+  if (cliFile.status !== 'in-keyring') {
+    return { status: 'missing' }
+  }
+  let authMtimeMs: number
+  try {
+    // cursor-agent rewrites auth.json after every keyring write, so its mtime versions the secret.
+    authMtimeMs = (await stat(authPath)).mtimeMs
+  } catch {
+    return { status: 'missing' }
+  }
+  if (linuxKeyringRead?.authPath !== authPath || linuxKeyringRead.authMtimeMs !== authMtimeMs) {
+    linuxKeyringRead = {
+      authPath,
+      authMtimeMs,
+      result: readCursorLinuxKeyringSecret().then(tokenFromKeyringRead)
+    }
+  }
+  return linuxKeyringRead.result
+}
+
 async function readKeychainToken(): Promise<TokenReadResult> {
   if (process.platform !== 'darwin') {
     return { status: 'missing' }
@@ -88,16 +149,12 @@ async function readKeychainToken(): Promise<TokenReadResult> {
   }
 }
 
-function readCliFileToken(authPath: string): TokenReadResult {
+function readCliFileToken(authPath: string): CliFileReadResult {
   if (!existsSync(authPath)) {
     return { status: 'missing' }
   }
   try {
-    const parsed = cliAuthFileSchema.safeParse(JSON.parse(readFileSync(authPath, 'utf8')))
-    const token = parsed.success ? parsed.data.accessToken : null
-    return typeof token === 'string' && token.length > 0
-      ? { status: 'ok', token }
-      : { status: 'missing' }
+    return parseCliCredentials(readFileSync(authPath, 'utf8'))
   } catch (error) {
     // Filesystem errors include paths; keep usernames out of account state.
     return {
@@ -134,7 +191,7 @@ export type CursorAuthReadOptions = {
   desktopStateDbPath?: string
 }
 
-/** Prefer live CLI sessions (Keychain, then legacy auth.json), then IDE sessions; never refresh or write credentials. */
+/** Prefer live CLI sessions (OS keychain, then legacy auth.json), then IDE sessions; never refresh or write credentials. */
 export async function readCursorAuthSession(
   options: CursorAuthReadOptions = {}
 ): Promise<CursorAuthReadResult> {
@@ -155,7 +212,12 @@ export async function readCursorAuthSession(
     return session
   }
 
-  const keychainRead = await readKeychainToken()
+  let cliFile: CliFileReadResult | undefined
+  const readCliFile = (): CliFileReadResult => (cliFile ??= readCliFileToken(cliAuthPath))
+  const keychainRead =
+    process.platform === 'linux'
+      ? await readLinuxKeyringToken(cliAuthPath, readCliFile())
+      : await readKeychainToken()
   if (keychainRead.status === 'error') {
     errors.push(keychainRead.error)
   }
@@ -168,7 +230,7 @@ export async function readCursorAuthSession(
     }
   }
 
-  const cliRead = readCliFileToken(cliAuthPath)
+  const cliRead = readCliFile()
   if (cliRead.status === 'error') {
     errors.push(cliRead.error)
   }

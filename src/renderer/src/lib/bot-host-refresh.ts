@@ -22,6 +22,11 @@ import {
   type BotHostConnectorStatus
 } from './bot-catalog-snapshot'
 import { botHostTarget } from './bot-hosts'
+import {
+  botHostLinkReadCurrent,
+  noteBotHostLinkRead,
+  sendBotHostLinkRead
+} from './bot-host-link-read'
 
 type HostRefresh = {
   updatesInFlight: number
@@ -88,6 +93,7 @@ async function readBotHost(hostId: ExecutionHostId, state: HostRefresh): Promise
     return
   }
   const edits = state.edits
+  const ticket = sendBotHostLinkRead(hostId)
   try {
     const read = (): Promise<BotsListAnswer> =>
       callRuntimeRpc<BotsListAnswer>(botHostTarget(hostId), 'bots.list', undefined, {
@@ -95,7 +101,13 @@ async function readBotHost(hostId: ExecutionHostId, state: HostRefresh): Promise
       })
     const result = await (hostId === LOCAL_EXECUTION_HOST_ID ? read() : withPairedReadSlot(read))
     // While an update is out the shown list is newer than any answer; the last one to land refreshes.
-    if (state.updatesInFlight > 0 || state.edits !== edits || readBotHostState(hostId) === null) {
+    // A read sent before the host went away answers for a host that may have changed: its re-read follows.
+    if (
+      state.updatesInFlight > 0 ||
+      state.edits !== edits ||
+      readBotHostState(hostId) === null ||
+      !botHostLinkReadCurrent(hostId, ticket)
+    ) {
       return
     }
     publish(
@@ -112,8 +124,14 @@ async function readBotHost(hostId: ExecutionHostId, state: HostRefresh): Promise
       },
       hostId
     )
+    noteBotHostLinkRead(hostId, true, ticket)
     readWhenNeedsYouGoesStale(hostId, state)
   } catch (error) {
+    // A failure from before the host came back says nothing of its list now; its re-read follows.
+    if (!botHostLinkReadCurrent(hostId, ticket)) {
+      return
+    }
+    noteBotHostLinkRead(hostId, false, ticket)
     markBotsListFailed(hostId)
     console.error('Failed to list bots:', error)
   }

@@ -3,6 +3,7 @@ import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
+import type { ExternalConversationLink } from '../../../../shared/connectors/external-conversation-link'
 import { BotSchema } from '../../../../shared/bot-types'
 import { useBotChatIdentity } from './use-bot-chat-identity'
 
@@ -45,12 +46,13 @@ function seed() {
 describe('session owner bot identity', () => {
   it('does not carry Home identity into an ordinary chat or worker, or after deletion', () => {
     const bot = seed()
+    const initialProps: { sessionId: string | null } = { sessionId: 'home-session' }
     const { result, rerender } = renderHook(
       ({ sessionId }) => useBotChatIdentity('folder:home', sessionId, { kind: 'local' }),
-      { initialProps: { sessionId: 'home-session' } }
+      { initialProps }
     )
     expect(result.current).toBe(bot)
-    for (const sessionId of ['ordinary', 'worker']) {
+    for (const sessionId of ['ordinary', 'worker', null]) {
       rerender({ sessionId })
       expect(result.current).toBeNull()
     }
@@ -87,7 +89,7 @@ it('uses only the selected local folder link for an external thread', () => {
     useBotChatIdentity('folder:home', 'thread', { kind: 'local' })
   )
   expect(result.current).toBeNull()
-  const link = {
+  const link: ExternalConversationLink = {
     source: 'slack',
     externalId: 'thread',
     sessionId: 'thread',
@@ -95,25 +97,29 @@ it('uses only the selected local folder link for an external thread', () => {
     paneKey: 'thread',
     bot: { kind: 'bot', botId: bot.id },
     createdAt: 1
-  } as const
-  act(() =>
-    useAppStore.setState({
-      folderWorkspaces: [
-        makeFolderWorkspace({ id: 'home', executionHostId: 'local', externalConversations: [link] })
-      ]
-    })
-  )
+  }
+  function setLink(externalLink: ExternalConversationLink) {
+    act(() =>
+      useAppStore.setState({
+        folderWorkspaces: [
+          makeFolderWorkspace({
+            id: 'home',
+            executionHostId: 'local',
+            externalConversations: [externalLink]
+          })
+        ]
+      })
+    )
+  }
+
+  setLink(link)
   expect(result.current).toBe(bot)
-  act(() =>
-    useAppStore.setState({
-      folderWorkspaces: [
-        makeFolderWorkspace({
-          id: 'home',
-          executionHostId: 'local',
-          externalConversations: [{ ...link, bot: undefined }]
-        })
-      ]
-    })
-  )
-  expect(result.current).toBeNull()
+  for (const other of [
+    { ...link, bot: undefined },
+    { ...link, bot: { kind: 'bot', botId: 'deleted-bot' } } as const,
+    { ...link, sessionId: 'another-session' }
+  ]) {
+    setLink(other)
+    expect(result.current).toBeNull()
+  }
 })

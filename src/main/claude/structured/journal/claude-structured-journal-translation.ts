@@ -40,6 +40,7 @@ import { ClaudeUsageLimits } from './claude-usage-limits'
 import { ClaudeThreadGoal } from './claude-thread-goal'
 import { createClaudeFinalOutputCoverage } from './claude-final-output-coverage'
 import { withClaudeConversationContent } from './claude-internal-message-content'
+import { journalClaudeFullAccessRefusal } from '../permissions/claude-full-access-refusal-notice'
 import {
   journalClaudePluginInputFailure,
   settleClaudeInterruptedTurn
@@ -186,6 +187,8 @@ export function createClaudeJournalTranslator(
             event.message.is_api_error_message !== true ||
             event.startedSend != null
         }
+        // Checked on every root frame: an approved plan settles the fallback without a new init.
+        journalClaudeFullAccessRefusal(deps, turnScope())
       }
     }
     if (event.type === 'message' && absorbClaudeCommandFrame(messageContext, event.message)) {

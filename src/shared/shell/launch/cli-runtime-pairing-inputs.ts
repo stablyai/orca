@@ -8,16 +8,21 @@ const NATIVE_EXECUTABLE_MAGIC = [
   [0x4d, 0x5a] // Windows PE
 ]
 
+export const NATIVE_EXECUTABLE_HEAD_BYTES = 4
+
+export function hasNativeExecutableMagic(head: Uint8Array): boolean {
+  return NATIVE_EXECUTABLE_MAGIC.some(
+    (magic) => head.length >= magic.length && magic.every((byte, index) => head[index] === byte)
+  )
+}
+
 /** Compiled binaries need no Node PATH pairing, which would only reorder Homebrew/system entries. */
 export function isNativeExecutable(commandPath: string): boolean {
   let fd: number | null = null
   try {
     fd = openSync(commandPath, 'r')
-    const head = Buffer.alloc(4)
-    const read = readSync(fd, head, 0, head.length, 0)
-    return NATIVE_EXECUTABLE_MAGIC.some(
-      (magic) => read >= magic.length && magic.every((byte, index) => head[index] === byte)
-    )
+    const head = Buffer.alloc(NATIVE_EXECUTABLE_HEAD_BYTES)
+    return hasNativeExecutableMagic(head.subarray(0, readSync(fd, head, 0, head.length, 0)))
   } catch {
     return false
   } finally {

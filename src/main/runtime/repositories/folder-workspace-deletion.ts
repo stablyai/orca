@@ -15,6 +15,19 @@ import type { RuntimeProjectGroupDependencies } from './runtime-project-group-co
 export type FolderWorkspaceDeleteOptions = FolderWorkspaceMutationOptions & {
   runHooks?: boolean
   allowFailedArchiveHook?: boolean
+  /** Bot homes are torn down by the bot's own delete, after parts of it are already gone. */
+  discardUnsavedDrafts?: boolean
+}
+
+function hasUnsavedDraft(
+  store: NonNullable<ReturnType<RuntimeProjectGroupDependencies['getStore']>>,
+  ownerKey: string
+): boolean {
+  return (store.getWorkspaceSessionHostIds?.() ?? []).some((hostId) =>
+    store
+      .getWorkspaceSession?.(hostId)
+      ?.openFilesByWorktree?.[ownerKey]?.some((file) => file.dirtyDraftContent !== undefined)
+  )
 }
 
 export async function deleteFolderWorkspaceRow(
@@ -34,6 +47,18 @@ export async function deleteFolderWorkspaceRow(
   if (workspace && isLocalWslMoveRow(workspace)) {
     assertWslMoveProjectWritable(store, { folderWorkspaceId })
   }
+  // The purge drops the session's unsaved editor text, which lives nowhere else; desktop blocks first.
+  // Checked again before the purge: a draft can land while the archive hook or teardown runs.
+  const refuseUnsavedDrafts = (): void => {
+    if (
+      workspace &&
+      !options.discardUnsavedDrafts &&
+      hasUnsavedDraft(store, folderWorkspaceKey(folderWorkspaceId))
+    ) {
+      throw new Error('Unsaved editor changes. Save or close them in Orca, then delete again.')
+    }
+  }
+  refuseUnsavedDrafts()
   let gate:
     | Awaited<ReturnType<RuntimeProjectGroupDependencies['acquireFileWatcherRemoval']>>
     | undefined
@@ -75,6 +100,7 @@ export async function deleteFolderWorkspaceRow(
         options,
         'Its terminals may already be stopped; nothing else was changed.'
       )
+      refuseUnsavedDrafts()
       // Fired here (timing unchanged) but awaited at the end: the delete may
       // only resolve after the purge has landed. `folder:<uuid>` ids parse to
       // no filesystem path, so the pretrust drop inside the purge skips here —

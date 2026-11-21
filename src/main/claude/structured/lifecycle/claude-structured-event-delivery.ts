@@ -15,7 +15,7 @@ type ClaudeEventDelivery = {
   event: ClaudeStructuredSessionEvent
   deps: Pick<
     ClaudeStructuredSessionAdapterDeps,
-    'onEvent' | 'onForegroundTasksChanged' | 'requestTimeoutMs' | 'logger'
+    'onEvent' | 'onForegroundTasksChanged' | 'onUserRenamed' | 'requestTimeoutMs' | 'logger'
   >
   publishChildWork: (
     sessionId: string,
@@ -57,6 +57,9 @@ export function emitClaudeStructuredSessionEvent({
   }
   if (event.type !== 'retiring') {
     deps.onEvent?.(event)
+  }
+  if (event.type === 'message' && event.renamedTo) {
+    deps.onUserRenamed?.(event.sessionId, event.renamedTo)
   }
   publishChildWork(event.sessionId, session, event.type === 'message' ? event.message : null)
   // Child waiting requires the card to be durable.

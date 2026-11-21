@@ -56,12 +56,7 @@
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readDir\",\"params\":{\"worktree\":\"id:wt-files\",\"relativePath\":\"\",\"limit\":500}}"
     },
-    "75aaf142eb3b": {
-      "name": "files.list#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:wt-files\"}}"
-    },
-    "948a6977def7": {
+    "6cab428ea46c": {
       "crash": {
         "$rpc": "null"
       },
@@ -70,7 +65,7 @@
         "Defs": 1,
         "FlatList": 1,
         "LinearGradient": 1,
-        "Pressable": 1,
+        "Pressable": 2,
         "Rect": 1,
         "SafeAreaView": 1,
         "Search": 1,
@@ -78,11 +73,16 @@
         "Svg": 1,
         "Text": 2,
         "TextInput": 1,
-        "View": 11
+        "View": 12
       },
       "labels": ["Back to session", "Filter files"],
       "rows": ["dir:src", "file:README.md"],
       "text": ["Files", "orca-files - Showing first 5000"]
+    },
+    "75aaf142eb3b": {
+      "name": "files.list#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:wt-files\"}}"
     },
     "c3427cf20352": {
       "name": "files.readDir#1",
@@ -197,7 +197,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "948a6977def7",
+          "state": "6cab428ea46c",
           "effects": []
         }
       }

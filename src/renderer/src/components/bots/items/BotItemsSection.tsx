@@ -7,11 +7,14 @@ import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import {
   BOT_ITEM_NO_FILTER,
+  botItemFilterChat,
+  isBotItemFilterOn,
   type BotItemChatChoice,
   type BotItemFilter,
   type BotItemGroups
 } from '../../../../../shared/bots/bot-item-groups'
 import { BotItemsList } from './BotItemsList'
+import { BotItemsLoading } from './BotItemsLoading'
 import { BotItemsReadFailed } from './BotItemsReadFailed'
 import type { BotItemsShownList } from './use-bot-items-shown-list'
 import type { BotNeedsYouAsks } from '../BotNeedsYouSection'
@@ -52,7 +55,7 @@ export function BotItemsSection({
   /** The row Back returns to: shown, focused and scrolled to once. */
   focusUid: string | null
   onOpen: (item: BotItem) => void
-  /** The bot's own item read: `unsupported` for a host without items, which says nothing of them. */
+  /** The bot's own item read. */
   botRead: { state: BotHostReadState; retry: () => void }
   /** Orca's asks the filter keeps; they lead Needs you whatever the item read says. */
   asks: BotNeedsYouAsks
@@ -64,19 +67,17 @@ export function BotItemsSection({
   // Rows wait for the seen mark as the tab opened, so none flashes as changed.
   const read = seenEventId === null ? null : list.read
   const groups = read ? list.groups : NO_GROUPS
-  const filtered = filter.chatId !== null || filter.needsYou
+  const filtered = isBotItemFilterOn(filter)
   const asking = asks.needs.length + asks.stoppedForSignIn.length > 0
   // Every message here speaks for items only; the asks above it stand on their own.
   const itemsNote = (): React.ReactNode => {
     if (!read) {
-      if (botRead.state === 'unsupported') {
-        return null
-      }
-      const chatFailed = filter.chatId !== null && chatRead.failed
+      const chatFailed = filter.chatIds !== null && chatRead.failed
       return botRead.state === 'failed' || chatFailed ? (
         <BotItemsReadFailed onRetry={chatFailed ? chatRead.retry : botRead.retry} />
       ) : (
-        <BotItemsLoading />
+        // Needs you shows only for counted asks; runs a sign-in stopped, alone, leave it out.
+        <BotItemsLoading afterAsks={asks.needs.length > 0} />
       )
     }
     if (items.length === 0 && !filtered) {
@@ -119,7 +120,7 @@ export function BotItemsSection({
   return (
     <>
       {/* A chat's re-read failed: its last read stays up, saying so, with Retry. */}
-      {read && filter.chatId !== null && chatRead.failed ? (
+      {read && filter.chatIds !== null && chatRead.failed ? (
         <BotItemsReadFailed stale onRetry={chatRead.retry} />
       ) : null}
       {/* Mounted in every read state, so an ask keeps its place and focus as items arrive. */}
@@ -152,7 +153,8 @@ function FilteredEmpty({
   onFilter: (filter: BotItemFilter) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const chat = chats.find((entry) => entry.chatId === filter.chatId)
+  const chatId = botItemFilterChat(filter)
+  const chat = chats.find((entry) => entry.chatId === chatId)
   const chatName =
     chat?.kind === 'home' ? t('bots.items.homeChat', 'Home Chat') : (chat?.title ?? '')
   return (
@@ -168,14 +170,5 @@ function FilteredEmpty({
         {t('bots.items.filter.clearAll', 'Clear filters')}
       </Button>
     </div>
-  )
-}
-
-export function BotItemsLoading(): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    <p className="px-6 py-6 text-center text-xs text-muted-foreground">
-      {t('bots.items.loading', 'Loading items…')}
-    </p>
   )
 }

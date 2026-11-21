@@ -17,12 +17,19 @@ export function mobileNativeChatRowAnchor(hasHeader: boolean): { minIndexForVisi
   return hasHeader ? ANCHOR_BELOW_HEADER : ANCHOR_AT_FIRST_ROW
 }
 
-function distanceFromTail(event: NativeScrollEvent): number {
+/** The scroll metrics the tail reads; a native scroll event carries them. */
+export type MobileScrollTailMetrics = {
+  contentOffset: { y: number }
+  contentSize: { height: number }
+  layoutMeasurement: { height: number }
+}
+
+function distanceFromTail(event: MobileScrollTailMetrics): number {
   const { contentOffset, contentSize, layoutMeasurement } = event
   return contentSize.height - (contentOffset.y + layoutMeasurement.height)
 }
 
-function isAtTail(event: NativeScrollEvent): boolean {
+export function isAtTail(event: MobileScrollTailMetrics): boolean {
   return distanceFromTail(event) <= AT_TAIL_SLOP
 }
 

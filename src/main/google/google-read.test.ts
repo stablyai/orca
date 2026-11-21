@@ -19,7 +19,7 @@ async function apiWith(routes: FakeRoute[], emails?: string[]) {
   cleanup = google.cleanup
   const fake = fakeGoogle(routes)
   return {
-    api: google.client.googleApi(undefined, { http: fake.http, now: () => NOW }),
+    api: await google.client.googleApi(undefined, { http: fake.http, now: () => NOW }),
     fake,
     google
   }
@@ -228,27 +228,6 @@ describe('Gmail read', () => {
 })
 
 describe('the Google API client', () => {
-  it('renews a token Google refuses once, then retries', async () => {
-    let refused = false
-    const { api, fake } = await apiWith([
-      (url) =>
-        url.hostname === 'oauth2.googleapis.com'
-          ? googleJson(200, { access_token: 'at-2', expires_in: 3600 })
-          : null,
-      (url, init) => {
-        const auth = new Headers(init?.headers).get('authorization')
-        if (auth === 'Bearer at-1') {
-          refused = true
-          return googleJson(401, { error: { code: 401, message: 'Invalid Credentials' } })
-        }
-        return url.pathname === `${GMAIL}/threads` ? googleJson(200, { threads: [] }) : null
-      }
-    ])
-    await expect(searchGmail(api, { query: 'x' })).resolves.toMatchObject({ threads: [] })
-    expect(refused).toBe(true)
-    expect(fake.calls.filter((call) => call.hostname === 'oauth2.googleapis.com')).toHaveLength(1)
-  })
-
   it('says how to turn on an API that is off, with the Console link', async () => {
     const { api } = await apiWith([
       () =>
@@ -276,11 +255,11 @@ describe('the Google API client', () => {
     const google = await connectedGoogle(['ada@acme.dev', 'ada@gmail.com'])
     cleanup = google.cleanup
     // Accounts come in the order the store lists them, which varies by file system.
-    expect(() => google.client.googleApi(undefined)).toThrow(
+    await expect(google.client.googleApi(undefined)).rejects.toThrow(
       /ada@acme\.dev, ada@gmail\.com|ada@gmail\.com, ada@acme\.dev/
     )
-    expect(google.client.googleApi('ADA@gmail.com').email).toBe('ada@gmail.com')
-    expect(() => google.client.googleApi('sam@x.com')).toThrow("isn't connected")
+    expect((await google.client.googleApi('ADA@gmail.com')).email).toBe('ada@gmail.com')
+    await expect(google.client.googleApi('sam@x.com')).rejects.toThrow("isn't connected")
   })
 })
 

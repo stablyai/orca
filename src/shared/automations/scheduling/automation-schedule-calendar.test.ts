@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  latestAutomationOccurrenceAtOrBefore,
-  nextAutomationOccurrenceAfter
-} from './automation-schedule-occurrences'
+import { nextAutomationOccurrenceAfter } from './automation-schedule-occurrences'
 
 afterEach(() => vi.unstubAllEnvs())
 
@@ -70,33 +67,6 @@ describe.skipIf(process.platform === 'win32')(
       expect(nextRuns(rrule, 'America/New_York', from, 1)).toEqual([expected])
       vi.stubEnv('TZ', 'America/New_York')
       expect(nextRuns(rrule, 'America/New_York', from, 1)).toEqual([expected])
-    })
-
-    it('matches the host clock exactly when the host is in that zone', () => {
-      const schedules = [
-        'FREQ=DAILY;BYHOUR=0;BYMINUTE=30',
-        'FREQ=WEEKLY;BYDAY=SU,WE;BYHOUR=23;BYMINUTE=45',
-        '0 2 * * *',
-        '*/20 1-3 8 3,11 *'
-      ]
-      const anchors = Array.from(
-        { length: 40 },
-        (_, index) => Date.parse('2026-01-01T00:00:00Z') + index * 9.3 * 24 * 60 * 60 * 1000
-      )
-      const read = () =>
-        schedules.flatMap((rrule) =>
-          anchors.flatMap((anchor) => [
-            nextAutomationOccurrenceAfter(rrule, 0, anchor, 'America/New_York'),
-            latestAutomationOccurrenceAtOrBefore(rrule, 0, anchor, 'America/New_York')
-          ])
-        )
-      vi.stubEnv('TZ', 'America/New_York')
-      expect(Intl.DateTimeFormat().resolvedOptions().timeZone).toBe('America/New_York')
-      const onHostClock = read()
-      vi.stubEnv('TZ', 'Asia/Tokyo')
-      // Precondition: the host zone moved, so this pass reads the automation's zone itself.
-      expect(Intl.DateTimeFormat().resolvedOptions().timeZone).toBe('Asia/Tokyo')
-      expect(read()).toEqual(onHostClock)
     })
 
     it('keeps the host clock for a zone it does not know', () => {

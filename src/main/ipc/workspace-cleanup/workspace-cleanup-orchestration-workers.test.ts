@@ -44,7 +44,7 @@ async function commitFile(cwd: string, name: string): Promise<void> {
 async function addWorktree(name: string, from: string): Promise<{ id: string; path: string }> {
   const path = join(scratchDir, name)
   await git(['worktree', 'add', '-q', '-b', name, path, from], repoPath)
-  const id = `repo::${path}`
+  const id = `repo::${path.replaceAll('\\', '/')}`
   meta[id] = {
     instanceId: `${name}-instance`,
     displayName: name,

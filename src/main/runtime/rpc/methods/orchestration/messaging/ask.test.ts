@@ -112,28 +112,17 @@ describe('orchestration RPC methods', () => {
       expect(db.getInbox(100).filter((message) => message.type === 'question')).toHaveLength(0)
 
       incarnation.mockReturnValue('runtime_test:term_worker:1')
-      expect(
-        await call('orchestration.ask', { from: 'term_worker', question: 'current', timeoutMs: 1 })
-      ).toMatchObject({ messageId: expect.stringMatching(/^msg_/), timedOut: true })
-    })
-
-    it('returns timedOut when no reply arrives in the window', async () => {
-      setup()
-      createAskingDispatch()
-      vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
-      vi.spyOn(runtime, 'waitForMessage').mockResolvedValue('timed_out')
-
-      const result = (await call('orchestration.ask', {
+      const result = await call('orchestration.ask', {
         from: 'term_worker',
-        question: 'still there?',
+        question: 'current',
         timeoutMs: 1
-      })) as { answer: string | null; timedOut: boolean; messageId: string | null }
-
-      expect(result.timedOut).toBe(true)
-      expect(result.answer).toBeNull()
-      expect(result.messageId).toMatch(/^msg_/)
+      })
+      expect(result).toMatchObject({
+        answer: null,
+        messageId: expect.stringMatching(/^msg_/),
+        timedOut: true
+      })
       const outbound = db.getInbox(10).find((message) => message.type === 'question')
-      expect(outbound).toBeTruthy()
       expect(db.getQuestion(outbound!.id)?.status).toBe('pending')
     })
 

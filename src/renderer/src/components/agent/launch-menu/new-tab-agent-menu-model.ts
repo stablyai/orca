@@ -18,8 +18,6 @@ export type NewTabAgentMenuModel =
       /** The default these rows were ordered by, so the new-agent badge marks the same agent. */
       defaultTuiAgent?: GlobalSettings['defaultTuiAgent']
       terminalPending?: boolean
-      /** Agents the host publishes Orca's managed runtime for; absent until its agent list is read. */
-      managedRuntimeAgents?: readonly string[] | undefined
       pickerContext?: {
         launchCwd?: string | null
         workspace: ProspectiveWorkspace
@@ -78,7 +76,8 @@ export function sameAgentLaunchPickerModel(a: NewTabAgentMenuModel, b: NewTabAge
         row.agent,
         row.kind,
         row.executionHostId,
-        'reason' in row ? row.reason : undefined
+        'reason' in row ? row.reason : undefined,
+        'setup' in row ? row.setup : undefined
       ])
     ],
     [
@@ -106,7 +105,8 @@ export function sameAgentLaunchPickerModel(a: NewTabAgentMenuModel, b: NewTabAge
         row.agent,
         row.kind,
         row.executionHostId,
-        'reason' in row ? row.reason : undefined
+        'reason' in row ? row.reason : undefined,
+        'setup' in row ? row.setup : undefined
       ])
     ]
   )

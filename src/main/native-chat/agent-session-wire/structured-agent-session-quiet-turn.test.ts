@@ -71,7 +71,9 @@ async function settle(lastWords: string): Promise<AgentSessionTurnCompletionEven
 
 describe('a bot turn that ends on its quiet marker', () => {
   it('still reports the turn end, marked quiet, and carries no attention news', async () => {
-    const [event] = await settle('Checked the PR queue; nothing new since 8:30.\n\nNO_REPLY')
+    const [event] = await settle(
+      `${'Looked through every open PR and thread. '.repeat(20)}\n\nNO_REPLY`
+    )
     expect(event).toMatchObject({
       type: 'completion',
       completion: { outcome: 'success', quiet: true }
@@ -81,13 +83,6 @@ describe('a bot turn that ends on its quiet marker', () => {
     }
     // No push, banner or unread, whatever the bot's Task Complete switch says.
     expect(agentSessionAttentionNews(event)).toBeNull()
-  })
-
-  it('finds the marker past the clipped status field', async () => {
-    const [event] = await settle(
-      `${'Looked through every open PR and thread. '.repeat(20)}NO_REPLY`
-    )
-    expect(event).toMatchObject({ completion: { quiet: true } })
   })
 
   it('leaves a turn with something to say as ordinary news', async () => {

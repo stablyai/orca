@@ -10,14 +10,13 @@ export const BOT_TEMPLATES_SUPPORT: readonly BotTemplate[] = [
       'Lists unanswered questions in the Slack channels you pick, with links, and notes which already have an issue.',
     mascot: 'A1',
     watches: 'Slack channels you pick',
-    does: 'List unanswered questions with links. Note which already have a Linear issue.',
+    does: 'Lists unanswered questions with links, and notes which already have a Linear issue.',
     reports: 'Here, every 2 hours on weekdays',
     connectors: ['slack', 'linear'],
     schedules: [
       {
         id: 'unanswered',
         when: 'Weekdays, every 2 hours from 9 AM to 5 PM',
-        short: 'Every 2 hours',
         what: 'Unanswered questions',
         rrule: '0 9-17/2 * * 1-5',
         prompt:
@@ -40,14 +39,13 @@ export const BOT_TEMPLATES_SUPPORT: readonly BotTemplate[] = [
       'Groups the last month of feedback in the channels you pick into themes, with counts and quotes.',
     mascot: 'F1',
     watches: 'Slack feedback channels',
-    does: 'Group feedback into themes with quotes and counts. Link existing Linear issues.',
+    does: 'Groups feedback into themes with quotes and counts, and links existing Linear issues.',
     reports: 'Here, Mondays at 9 AM',
     connectors: ['slack', 'linear'],
     schedules: [
       {
         id: 'weekly-themes',
         when: 'Mondays at 9 AM',
-        short: 'Mon 9 AM',
         what: 'Themes of the week',
         rrule: '0 9 * * 1',
         prompt:
@@ -70,7 +68,7 @@ export const BOT_TEMPLATES_SUPPORT: readonly BotTemplate[] = [
       'Reads the channel you pick and drafts an issue for each new bug report. It files them only after you approve.',
     mascot: 'Q1',
     watches: 'The Slack channel where bugs are reported',
-    does: 'Draft a Linear issue with repro steps for each bug report; file it once approved.',
+    does: 'Drafts a Linear issue with repro steps for each bug report; files it once approved.',
     reports: 'Here, when a bug is reported',
     connectors: ['slack', 'linear'],
     schedules: [],
@@ -99,7 +97,7 @@ export const BOT_TEMPLATES_SUPPORT: readonly BotTemplate[] = [
       'Goes through the last week of new issues in a repo you pick and proposes labels and duplicates here.',
     mascot: 'R3',
     watches: 'New issues in the repos you pick',
-    does: 'Propose labels and duplicates, and list missing details, for each new issue.',
+    does: 'Proposes labels and duplicates, and lists missing details, for each new issue.',
     reports: 'Here, when an issue is opened',
     connectors: ['github'],
     schedules: [],

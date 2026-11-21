@@ -1,11 +1,16 @@
-import { MobileQueuedMessageComposerContext } from './input/queued-messages/mobile-queued-message-composer-context'
+import { slackPeopleOf } from '../../../../src/shared/connectors/slack-mention-tokens'
+import { MobileNativeChatForegroundTasksProvider } from './input/MobileNativeChatForegroundTaskAction'
+import {
+  MobileQueuedMessageComposerContext,
+  useMobileQueuedMessageComposer
+} from './input/queued-messages/mobile-queued-message-composer-context'
+import { MobileMarkdownSlackPeopleContext } from '../../components/markdown/parsing/mobile-markdown-mentions'
 import { Activity, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
 import { useMobileNativeChatProjection } from './transcript/projection/use-mobile-native-chat-projection'
 import { nativeChatDockedTaskList } from '../../../../src/shared/native-chat/input/task-lists/native-chat-task-list-state'
 import type { MobileNativeChatImageAttachments } from './composer/attachments/use-mobile-native-chat-image-attachments'
-import { MobileNativeChatForegroundTasksProvider } from './input/MobileNativeChatForegroundTaskAction'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 import type { MobileNativeChatStructuredComposer } from './composer/commands/mobile-native-chat-structured-composer'
 import { useMobileNativeChatComposerTray } from './composer/menus/use-mobile-native-chat-composer-tray'
@@ -122,6 +127,7 @@ function MobileNativeChatOverlayContent({
     session.messages,
     controller.nativeChatItemSource
   )
+  const slackPeople = useMemo(() => slackPeopleOf(session.messages), [session.messages])
   const folded = useMobileNativeChatProjection(
     fullContent.messages,
     agent,
@@ -184,44 +190,17 @@ function MobileNativeChatOverlayContent({
         : null,
     [itemSource, fullContent.detail, load]
   )
-  const queuedComposerContext = useMemo(
-    () => ({
-      agent,
-      structured: structuredComposer ?? null,
-      interactionModeSupported: controller.nativeChatSessionOptions?.controller.snapshot.some(
-        (entry) => entry.id === 'interactionMode'
-      ),
-      skillDiscovery: controller.nativeChatSkills,
-      onNeedSkills: controller.loadNativeChatSkills,
-      filePaths: controller.nativeChatFilePaths,
-      onNeedFiles: controller.loadNativeChatFiles,
-      onError: (message: string) => controller.reportQueuedEditError?.(message),
-      onMicPress,
-      micActive,
-      micStarting,
-      micProcessing,
-      dictationMode,
-      onMicPressIn,
-      onMicPressOut
-    }),
-    [
-      agent,
-      structuredComposer,
-      controller.nativeChatSessionOptions,
-      controller.nativeChatSkills,
-      controller.loadNativeChatSkills,
-      controller.nativeChatFilePaths,
-      controller.loadNativeChatFiles,
-      controller.reportQueuedEditError,
-      onMicPress,
-      micActive,
-      micStarting,
-      micProcessing,
-      dictationMode,
-      onMicPressIn,
-      onMicPressOut
-    ]
-  )
+  const queuedComposerContext = useMobileQueuedMessageComposer(controller, {
+    agent,
+    structured: structuredComposer ?? null,
+    onMicPress,
+    micActive,
+    micStarting,
+    micProcessing,
+    dictationMode,
+    onMicPressIn,
+    onMicPressOut
+  })
   // Why a ref: rows read this through context, and the route's callback changes every render.
   const runInTerminalRef = useRef(onRunInTerminal)
   useLayoutEffect(() => {
@@ -236,6 +215,7 @@ function MobileNativeChatOverlayContent({
       ...(agent ? { agentName: tuiAgentDisplayName(agent) ?? agent } : {}),
       onRunInTerminal: runInTerminal,
       usageLimit: controller.nativeChatUsageLimit,
+      unresolvedFailureRows: controller.nativeChatUnresolvedFailureRows,
       ...(onOpenAccounts ? { openAccounts: onOpenAccounts } : {}),
       ...(continuation
         ? {
@@ -257,6 +237,7 @@ function MobileNativeChatOverlayContent({
       onClearSendError,
       runInTerminal,
       controller.nativeChatUsageLimit,
+      controller.nativeChatUnresolvedFailureRows,
       onOpenAccounts
     ]
   )
@@ -269,7 +250,7 @@ function MobileNativeChatOverlayContent({
     isWorking: controller.nativeChatTurnActive
   })
   const continueFailed = sendErrorMessage === null && continuation?.failed === true
-  return (
+  const chat = (
     <MobileNativeChatRowOverlaysHost
       conversation={{ surfaceId: sendSurfaceId, sessionId }}
       imageSource={imageSource}
@@ -307,6 +288,7 @@ function MobileNativeChatOverlayContent({
                         workingStartedAt={controller.nativeChatWorkingStartedAt}
                         settledTurns={controller.nativeChatSettledTurns}
                         turnJournal={controller.nativeChatTurnJournal}
+                        transcriptLoading={session.transcriptLoading}
                         receipts={controller.nativeChatReceipts}
                         actionablePromptIds={controller.nativeChatActionablePromptIds}
                         streaming={streaming}
@@ -334,6 +316,7 @@ function MobileNativeChatOverlayContent({
                         question={controller.nativeChatQuestion}
                         onAnswerQuestion={controller.handleNativeChatQuestionAnswer}
                         permission={controller.nativeChatPermission}
+                        workerApprovals={controller.nativeChatWorkerApprovals}
                         onRespondPermission={controller.handleNativeChatRespondPermission}
                         composerTray={composerTray}
                         onOpenFile={onOpenFile}
@@ -379,9 +362,7 @@ function MobileNativeChatOverlayContent({
                               )
                             : sendErrorMessage
                         }
-                        onDismissSendError={
-                          continueFailed ? continuation?.dismissFailure : undefined
-                        }
+                        onDismissSendError={continueFailed ? continuation?.dismissFailure : undefined}
                         onClearSendError={onClearSendError}
                         filePaths={controller.nativeChatFilePaths}
                         onNeedFiles={controller.loadNativeChatFiles}
@@ -401,6 +382,11 @@ function MobileNativeChatOverlayContent({
         </MobileQueuedMessageComposerContext.Provider>
       </MobileMarkdownLinksContext.Provider>
     </MobileNativeChatRowOverlaysHost>
+  )
+  return (
+    <MobileMarkdownSlackPeopleContext.Provider value={slackPeople}>
+      {chat}
+    </MobileMarkdownSlackPeopleContext.Provider>
   )
 }
 

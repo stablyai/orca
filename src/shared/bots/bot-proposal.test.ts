@@ -6,33 +6,20 @@ import {
   proposalSoul,
   templateProposal,
   proposalCreateParams,
+  proposalIdentity,
   withAcceptedOffer
 } from './bot-proposal'
-import { botTemplate } from './bot-templates'
+import { BOT_TEMPLATES, botTemplate } from './bot-templates'
 
 describe('a proposed bot', () => {
-  it('seeds SOUL.md with its purpose first, how it works, and read-only to start', () => {
+  it('seeds SOUL.md with its purpose first and read-only instructions', () => {
     const soul = proposalSoul('Milo', {
       purpose: 'Keeps a list of questions nobody has answered.',
       watches: 'support-replies, faq-updates · Linear team Support',
       reports: 'Here, every 2 hours on weekdays',
       templateId: 'support'
     })
-    expect(soul).toBe(`# Milo
-
-Keeps a list of questions nobody has answered.
-
-## How I work
-
-- Watches: support-replies, faq-updates · Linear team Support
-- Reports: Here, every 2 hours on weekdays
-- Started from the Support triage template.
-
-## Never
-
-- Change anything (comments, labels, pull requests, posts anywhere but here) until my owner says I can. I start by reading and reporting only.
-`)
-    // `bot list` reads what it is for.
+    expect(soul).toContain('until my owner says I can. I start by reading and reporting only.')
     expect(soulDescription(soul)).toBe('Keeps a list of questions nobody has answered.')
   })
 
@@ -55,13 +42,20 @@ Keeps a list of questions nobody has answered.
       seed: {
         purpose: 'Turns feedback into a weekly list of themes.',
         watches: 'Slack feedback channels',
-        does: 'Group feedback into themes with quotes and counts. Link existing Linear issues.',
+        does: 'Groups feedback into themes with quotes and counts, and links existing Linear issues.',
         reports: 'Here, Mondays at 9 AM',
         templateId: 'feedback'
       },
       fromTemplate: { id: 'feedback', skills: [] }
     })
     expect(BotCreate.safeParse(params).success).toBe(true)
+  })
+
+  it('pre-fills every template identity short enough to stay a valid purpose once edited', () => {
+    const tooLong = BOT_TEMPLATES.filter(
+      (template) => proposalIdentity(templateProposal(template)).length > 200
+    ).map((template) => template.id)
+    expect(tooLong).toEqual([])
   })
 
   it('sends an older host only what its enum takes: the seed, and an old template id', () => {

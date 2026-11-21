@@ -111,11 +111,7 @@ export async function refreshPullRequestChecks(args: {
     }
     args.setChecksState((current) =>
       current.contextOwner === refreshContextOwner
-        ? updateGitHubChecksTabLocalChecks(
-            resetGitHubChecksTabForSource(current),
-            nextChecks,
-            observation.owner
-          )
+        ? updateGitHubChecksTabLocalChecks(resetGitHubChecksTabForSource(current), nextChecks)
         : current
     )
     args.onChecksUpdated(nextChecks)

@@ -1,3 +1,4 @@
+import { boundedStoredJson, boundedStoredJsonSql } from './journal-stored-json-bounds'
 import { readJournalStoredItem } from './journal-stored-output-rows'
 import type Database from '../../sqlite/sync-database'
 import {
@@ -23,15 +24,14 @@ import {
   journalThreadGoalSource,
   type JournalThreadGoalSource
 } from './projection/journal-thread-goal-source'
-import type {
-  JournalContinuationContext,
-  JournalMessageOptions,
-  JournalNamedTurn
-} from './journal-reads'
+import type { JournalMessageOptions, JournalNamedTurn } from './journal-reads'
 import {
   journalDomainContextHead,
-  readJournalDomainContinuationContext
+  readJournalDomainContinuation,
+  type JournalContinuationRead,
+  type JournalContinuationReadResult
 } from './journal-sql-continuation-context'
+import { readJournalDomainRestartCut, type JournalRestartCut } from './journal-sql-restart-cut'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { ClaudeJournalSnapshot } from '../../claude/subagents/claude-subagent-journaled-identities'
 import { readJournalDomainClaudeIdentities } from './journal-sql-claude-identities'
@@ -58,7 +58,8 @@ export type JournalSqlItemRead =
   | { kind: 'claude-snapshot' }
   | { kind: 'named-turn'; turnId: string }
   | { kind: 'message-options'; clientMessageId: string }
-  | { kind: 'continuation-context' }
+  | JournalContinuationRead
+  | { kind: 'restart-cut' }
   | JournalSqlLifecycleRead
 
 export type JournalSqlItemReadResult =
@@ -73,7 +74,8 @@ export type JournalSqlItemReadResult =
   | { kind: 'claude-snapshot'; snapshot: ClaudeJournalSnapshot }
   | { kind: 'named-turn'; turn: JournalNamedTurn }
   | { kind: 'message-options'; options: JournalMessageOptions }
-  | { kind: 'continuation-context'; context: JournalContinuationContext }
+  | JournalContinuationReadResult
+  | { kind: 'restart-cut'; cut: JournalRestartCut }
   | JournalSqlLifecycleReadResult
 
 export type JournalDomainItemRead = Exclude<JournalSqlItemRead, JournalSqlLifecycleRead>
@@ -115,7 +117,7 @@ export function readJournalDomainItems(
         items: readJournalHistoryItems(
           {
             canonicalItemId: canonical,
-            item: (itemId) => visibleItem(db, prefix, itemId),
+            item: (itemId) => journalVisibleItem(db, prefix, itemId),
             presentationRemoved: (key) => Boolean(removed.get(...prefix, canonical(key))!.removed),
             ...(operation.options?.includeOpeners
               ? {
@@ -136,13 +138,13 @@ export function readJournalDomainItems(
           operation.uuids
         )
       }
+    case 'restart-cut':
+      return { kind: 'restart-cut', cut: readJournalDomainRestartCut(db, target) }
     case 'continuation-context':
-      return {
-        kind: 'continuation-context',
-        context: readJournalDomainContinuationContext(db, target)
-      }
+    case 'continuation-spill':
+      return readJournalDomainContinuation(db, target, operation)
     case 'message-options': {
-      const body = visibleItem(
+      const body = journalVisibleItem(
         db,
         prefix,
         agentJournalSubmissionKey(operation.clientMessageId)
@@ -240,16 +242,16 @@ export function journalCanonicalItemId(db: Database.Database, prefix: Prefix) {
   }
 }
 
-function visibleItem(
+export function journalVisibleItem(
   db: Database.Database,
   prefix: Prefix,
   itemId: string
 ): AgentJournalRenderItem | null {
   const row = db
-    .prepare(`SELECT payload_json FROM journal_items
+    .prepare(`SELECT ${boundedStoredJsonSql('payload_json', 'payload_json')} FROM journal_items
     WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
     .get(...prefix, itemId)
-  return row ? readJournalStoredItem(db, prefix, row.payload_json) : null
+  return row ? readJournalStoredItem(db, prefix, boundedStoredJson(row, 'payload_json')) : null
 }
 
 /** The input order's newest turn: latest position, then the greatest item ID among ties. */

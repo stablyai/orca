@@ -94,14 +94,38 @@ describe('botAutomationSessions', () => {
     expect(deps.chats.sendToChat).not.toHaveBeenCalled()
   })
 
-  it('runs a wait whose own chat is gone in the Home Chat when Orca chose that chat', async () => {
+  it("drops a wait's thread answer when its gone chat's run lands in the Home Chat", async () => {
     const { deps, sessions: chats } = sessions()
+    const automationRun = {
+      runId: 'run-1',
+      automation: {
+        id: 'wait-1',
+        name: 'Run 1',
+        enabled: true,
+        nextRunAt: 0,
+        updatedAt: 0,
+        dtstart: 0,
+        rrule: 'FREQ=DAILY',
+        workspaceId: 'folder:f1'
+      },
+      trigger: 'event' as const,
+      toConversation: true as const,
+      instructionsLength: 0
+    }
 
-    await expect(
-      chats.sendToBotChat(bot, 'closed-chat', 'PR merged', undefined, true)
-    ).resolves.toMatchObject({ sessionId: 'chat-session' })
-    expect(deps.chats.sendToChat).toHaveBeenCalledOnce()
-    expect(deps.chats.sendToSession).not.toHaveBeenCalled()
+    await chats.sendToBotChat(bot, 'closed-chat', 'PR merged', { automationRun }, true)
+    await chats.sendToBotChat(bot, 'side-chat', 'PR merged', { automationRun }, true)
+
+    const { toConversation: _dropped, ...homeRun } = automationRun
+    expect(deps.chats.sendToChat).toHaveBeenCalledExactlyOnceWith(bot.id, 'PR merged', undefined, {
+      automationRun: homeRun
+    })
+    expect(deps.chats.sendToSession).toHaveBeenCalledExactlyOnceWith(
+      bot.id,
+      'side-chat-after-clear',
+      'PR merged',
+      { automationRun }
+    )
   })
 
   it('keeps the session when naming it fails', async () => {
@@ -112,22 +136,6 @@ describe('botAutomationSessions', () => {
     await expect(
       started.startConversation(bot, { text: 'hi', title: 'run 1', actsFor: OWNER })
     ).resolves.toMatchObject({ sessionId: 'new-session' })
-  })
-
-  it('returns the Chat session and message the prompt went to', async () => {
-    const { deps, sessions: chat } = sessions()
-
-    await expect(chat.sendToChat(bot, 'Summarize the night')).resolves.toEqual({
-      sessionId: 'chat-session',
-      clientMessageId: 'm',
-      fingerprint: 'f'
-    })
-    expect(deps.chats.sendToChat).toHaveBeenCalledExactlyOnceWith(
-      bot.id,
-      'Summarize the night',
-      undefined,
-      undefined
-    )
   })
 
   it('fails the launch when the Chat refuses or rejects the prompt', async () => {

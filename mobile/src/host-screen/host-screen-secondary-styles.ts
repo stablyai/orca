@@ -50,11 +50,6 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   sectionPendingSpinner: {
     marginLeft: spacing.sm
   },
-  // At the header's end, as the desktop's Bots + is.
-  sectionNewBot: {
-    marginLeft: 'auto',
-    paddingHorizontal: spacing.xs
-  },
   separator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
@@ -83,12 +78,6 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   optionSegmented: {
     marginBottom: spacing.md
   },
-  // Over the sheet header's empty leading side, centred in its 52pt row.
-  optionPageBack: {
-    position: 'absolute',
-    top: 8,
-    left: spacing.xs
-  },
   filterRepoDot: {
     width: 8,
     height: 8,
@@ -107,6 +96,16 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     color: colors.textSecondary,
     marginTop: spacing.xs,
     lineHeight: 20
+  },
+  // Desktop's amber loss line, as plain text: what deleting throws away.
+  confirmLoss: {
+    color: colors.statusAmber
+  },
+  confirmDetail: {
+    fontSize: typography.metaSize,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+    lineHeight: 16
   },
   confirmButtons: {
     flexDirection: 'row',

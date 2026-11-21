@@ -91,7 +91,7 @@ describe('Composio apps for a bot', () => {
       }
     ])
     expect(await subject.status('bot-1')).toEqual({ key: 'ok', limit: null, added: true })
-    expect(subject.key()).toEqual({ key: 'ok', hint: '_one' })
+    expect(await subject.key()).toEqual({ key: 'ok', hint: '_one' })
   })
 
   it('moves the tool to a new session, keeping its name, when Composio dropped the old one', async () => {
@@ -186,7 +186,7 @@ describe('Composio apps for a bot', () => {
     const subject = bots(fakeComposio({}))
     await subject.removeKey()
     expect(key).toBeNull()
-    expect(subject.keyState()).toBe('none')
+    expect(await subject.keyState()).toBe('none')
     expect((await readBotToolServers(cli.folder)).map((server) => server.name)).toEqual(['notion'])
   })
 
@@ -217,7 +217,7 @@ describe('Composio apps for a bot', () => {
     ])
   })
 
-  it('makes sessions with Composio’s own connect tool and workbench off, and turns them off on an older one', async () => {
+  it('turns Composio’s own connect tool and workbench off on an existing session', async () => {
     const composio = fakeComposio({
       'POST /tool_router/session': () => SESSION('trs_a'),
       'PATCH /tool_router/session/trs_a': () => ({ body: {} })
@@ -226,7 +226,6 @@ describe('Composio apps for a bot', () => {
     await subject.ensureTool('bot-1')
     await subject.ensureTool('bot-1')
     const settings = { manage_connections: { enable: false }, workbench: { enable: false } }
-    expect(composio.calls.find((call) => call.method === 'POST')?.body).toMatchObject(settings)
     expect(composio.calls.find((call) => call.method === 'PATCH')?.body).toEqual(settings)
   })
 
@@ -259,7 +258,26 @@ describe('Composio apps for a bot', () => {
               },
               { slug: 'tavily', name: 'Tavily', auth_schemes: ['API_KEY'] },
               { slug: 'shopify', name: 'Shopify', auth_schemes: ['OAUTH2'] },
-              { slug: 'hackernews', name: 'Hacker News', no_auth: true }
+              { slug: 'hackernews', name: 'Hacker News', no_auth: true },
+              {
+                slug: 'notion',
+                name: 'Notion',
+                composio_managed_auth_schemes: ['OAUTH2'],
+                auth_config_details: [{ mode: 'OAUTH2' }, { mode: 'API_KEY' }]
+              },
+              { slug: 'twitter', name: 'Twitter', auth_config_details: [{ mode: 'OAUTH2' }] },
+              {
+                slug: 'posthog',
+                name: 'PostHog',
+                auth_schemes: [],
+                auth_config_details: [{ mode: 'api_key' }]
+              },
+              {
+                slug: 'reddit',
+                name: 'Reddit',
+                auth_config_details: [{ mode: 'NO_AUTH' }]
+              },
+              { slug: 'public-api', name: 'Public API', auth_schemes: ['no_auth'] }
             ],
             next_cursor: 'c2'
           }
@@ -272,7 +290,12 @@ describe('Composio apps for a bot', () => {
       ['outlook', 'composio'],
       ['tavily', 'key'],
       ['shopify', 'own'],
-      ['hackernews', 'none']
+      ['hackernews', 'none'],
+      ['notion', 'composio'],
+      ['twitter', 'own'],
+      ['posthog', 'key'],
+      ['reddit', 'none'],
+      ['public-api', 'none']
     ])
   })
 
@@ -333,10 +356,10 @@ describe('Composio apps for a bot', () => {
     })
     const subject = bots(composio)
     await expect(subject.apps({})).rejects.toBeInstanceOf(ComposioKeyRejectedError)
-    expect(subject.keyState()).toBe('rejected')
+    expect(await subject.keyState()).toBe('rejected')
     status = 200
     await subject.apps({})
-    expect(subject.keyState()).toBe('ok')
+    expect(await subject.keyState()).toBe('ok')
     expect(changes).toBe(2)
   })
 
@@ -603,11 +626,11 @@ describe('Composio apps for a bot', () => {
       botExists: (botId) => botId === 'bot-1',
       onProjectRekeyed: rekeyed
     })
-    cleanup.add({ botId: 'gone', project: subject.project() })
+    cleanup.add({ botId: 'gone', project: await subject.project() })
     // The old key is refused now, as after regenerating it in Composio.
     key = 'ak_one'
     await subject.setKey('ak_one_new')
-    expect(rekeyed).toHaveBeenCalledWith(expect.any(String), subject.project())
+    expect(rekeyed).toHaveBeenCalledWith(expect.any(String), await subject.project())
     await vi.waitFor(() => expect(cleanup.pending()).toEqual([]))
     expect(deleted).toEqual(['ca_1'])
   })
@@ -644,7 +667,7 @@ describe('Composio apps for a bot', () => {
     await subject.connections('bot-1')
     answerOld()
     await expect(old).rejects.toThrow()
-    expect(subject.keyState()).toBe('ok')
+    expect(await subject.keyState()).toBe('ok')
     expect((await subject.status('bot-1')).limit).toBeNull()
     await subject.connections('bot-1')
     expect(composio.calls.filter((call) => call.path === '/connected_accounts')).toHaveLength(2)

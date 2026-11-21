@@ -9,6 +9,7 @@ import { botHomeWorktreeId, hostBotsKey } from '../../../../bots/host-bots-read'
 import { publishBotLink } from '../../../../bots/pending-bot-link'
 import { openMobileStructuredSession } from '../../agent-session/open-mobile-structured-session'
 import { useOpenMobileSession } from '../../../use-open-mobile-session'
+import { useOpenMobileAutomations } from '../../../../automations/use-open-mobile-automations'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import { WorkspaceServerContext } from '../../../../worktree/execution-hosts/workspace-server-context'
 import { publishHostBot, useHostBotsEntry } from '../../../../bots/host-bot-store'
@@ -40,6 +41,7 @@ export function MobileBotCardHostProvider({
   const server = useContext(WorkspaceServerContext)
   const [editing, setEditing] = useState<MobileBotCardOfferEdit | null>(null)
   const openMobileSession = useOpenMobileSession()
+  const openMobileAutomations = useOpenMobileAutomations()
   const chatOpener = useMemo(
     () =>
       botCardChatOpener({
@@ -76,9 +78,10 @@ export function MobileBotCardHostProvider({
       pairedHostId,
       ...(executionHost ? { executionHost } : {}),
       hostLabel: (server ? server.name : hostTitle) ?? '',
-      editOffer: setEditing
+      editOffer: setEditing,
+      ...(executionHost ? {} : { openAutomations: () => openMobileAutomations(pairedHostId) })
     }),
-    [client, pairedHostId, executionHost, server, hostTitle, chatOpener]
+    [client, pairedHostId, executionHost, server, hostTitle, chatOpener, openMobileAutomations]
   )
   const bots = useHostBotsEntry(editing ? host.hostKey : null)?.bots
   const hostId = host.executionHost ?? LOCAL_EXECUTION_HOST_ID

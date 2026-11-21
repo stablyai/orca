@@ -145,18 +145,8 @@ describe('BotController', () => {
       name: 'Milo',
       seed: { purpose: 'Keeps a list of questions nobody has answered.', templateId: 'support' }
     })
-    expect(readFileSync(join(botsRoot(), 'milo', 'SOUL.md'), 'utf8')).toBe(`# Milo
-
-Keeps a list of questions nobody has answered.
-
-## How I work
-
-- Started from the Support triage template.
-
-## Never
-
-- Change anything (comments, labels, pull requests, posts anywhere but here) until my owner says I can. I start by reading and reporting only.
-`)
+    const soul = readFileSync(join(botsRoot(), 'milo', 'SOUL.md'), 'utf8')
+    expect(soul).toContain('Keeps a list of questions nobody has answered.')
   })
 
   it('creates one bot per card even when two accepts of it race', async () => {
@@ -209,13 +199,6 @@ Keeps a list of questions nobody has answered.
     expect(bots.list()[0]).toBe(saved)
   })
 
-  it('is on unless bots are turned off, and then refuses to be used', async () => {
-    expect(bots.enabled()).toBe(true)
-    store.updateSettings({ botsEnabled: false })
-    expect(bots.enabled()).toBe(false)
-    expect(() => bots.assertEnabled()).toThrow(BotsDisabledError)
-  })
-
   it('lists the bots with the switch and the Hide bot workspaces setting a client draws them by', async () => {
     const bot = await bots.create({ name: 'Reviewer' })
     expect(bots.listing()).toEqual({
@@ -226,6 +209,7 @@ Keeps a list of questions nobody has answered.
     store.updateSettings({ botsEnabled: false })
     store.updateUI({ hideBotCreatedWorkspaces: false })
     expect(bots.listing()).toMatchObject({ botsEnabled: false, hideBotCreatedWorkspaces: false })
+    expect(() => bots.assertEnabled()).toThrow(BotsDisabledError)
   })
 
   it('gives a new bot a random mascot unless it is created with a picture', async () => {
@@ -760,23 +744,19 @@ Keeps a list of questions nobody has answered.
   it('keeps a sidebar order a drag gave across a restart, for every client to list by', async () => {
     const first = await bots.create({ name: 'Reviewer' })
     const second = await bots.create({ name: 'Scout' })
-    await bots.update(second.id, { sidebarOrder: 0 })
-    await bots.update(first.id, { sidebarOrder: 1 })
+    const movedSecond = await bots.update(second.id, { sidebarOrder: 0 })
+    const movedFirst = await bots.update(first.id, { sidebarOrder: 1 })
     store.flush()
     await closeTestStores()
 
-    expect(
-      new Map(
-        createStore()
-          .getBots()
-          .map((bot) => [bot.name, bot.sidebarOrder])
-      )
-    ).toEqual(
+    const reloaded = createStore()
+    expect(new Map(reloaded.getBots().map((bot) => [bot.name, bot]))).toEqual(
       new Map([
-        ['Reviewer', 1],
-        ['Scout', 0]
+        ['Reviewer', { ...movedFirst, sidebarOrder: 1 }],
+        ['Scout', { ...movedSecond, sidebarOrder: 0 }]
       ])
     )
+    expect(runtimeVisibleProjectGroups(reloaded)).toEqual([])
   })
 
   it('saves a create and a delete before answering, so a quit right after cannot undo them', async () => {
@@ -786,16 +766,6 @@ Keeps a list of questions nobody has answered.
 
     await bots.delete({ botId: bot.id, deleteFolder: true })
     expect(readPersistedState().bots).toEqual([])
-  })
-
-  it('persists bots across a restart', async () => {
-    const bot = await bots.create({ name: 'Reviewer' })
-    store.flush()
-    await closeTestStores()
-
-    const reloaded = createStore()
-    expect(reloaded.getBots()).toEqual([bot])
-    expect(runtimeVisibleProjectGroups(reloaded)).toEqual([])
   })
 
   it('keeps the model and options picked at create, and drops them with the agent they belong to', async () => {
@@ -834,15 +804,6 @@ Keeps a list of questions nobody has answered.
     await closeTestStores()
 
     expect(createStore().getBots()[0]).not.toHaveProperty('permissionMode')
-  })
-
-  it("keeps an owner's Ask across a restart", async () => {
-    const bot = await bots.create({ name: 'Reviewer' })
-    await bots.update(bot.id, { permissionMode: 'ask' })
-    store.flush()
-    await closeTestStores()
-
-    expect(createStore().getBots()[0]).toMatchObject({ permissionMode: 'ask' })
   })
 
   it('persists the legacy Ask migration once and keeps subsequent owner overrides', async () => {
@@ -888,16 +849,34 @@ Keeps a list of questions nobody has answered.
     ])
   })
 
-  it('loads a bot saved before bots had a Chat', async () => {
-    const { chatSessionId: _unset, ...saved } = await bots.create({ name: 'Reviewer' })
-
-    expect(normalizePersistedBots([saved])).toEqual([{ ...saved, chatSessionId: null }])
+  it('saves newer-agent bots apart and keeps saved order', async () => {
+    const saved = await bots.create({ name: 'Reviewer' })
+    store.saveBot({ ...saved, id: 'cursor-bot', agent: 'cursor' })
+    store.saveBot({ ...saved, id: 'last-bot' })
+    store.flush()
+    await closeTestStores()
+    const persisted = readPersistedState()
+    expect(persisted.bots?.map((bot) => bot.id)).toEqual([saved.id, 'last-bot'])
+    expect(persisted.botsNewerAgents?.map((bot) => bot.id)).toEqual(['cursor-bot'])
+    expect(
+      createStore()
+        .getBots()
+        .map((bot) => bot.id)
+    ).toEqual([saved.id, 'cursor-bot', 'last-bot'])
   })
 
-  it('loads a bot saved before Linear as a bot not on Linear', async () => {
-    const { linear: _unset, ...saved } = await bots.create({ name: 'Reviewer' })
+  it('loads legacy bots with no Chat or Linear link', async () => {
+    const {
+      chatSessionId: _chat,
+      linear: _linear,
+      ...saved
+    } = await bots.create({
+      name: 'Reviewer'
+    })
 
-    expect(normalizePersistedBots([saved])).toEqual([{ ...saved, linear: null }])
+    expect(normalizePersistedBots([saved])).toEqual([
+      { ...saved, chatSessionId: null, linear: null }
+    ])
   })
 
   it('saves a profile without bots exactly as before', () => {

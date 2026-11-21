@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store/index'
 import { Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
+import { BotChatsSkeleton } from '../bots/BotChatsSkeleton'
 import type { ActiveRightSidebarTab } from '../../../../shared/ui-chrome/ui-chrome-types'
 import '../../../../shared/plugins/manifest/plugin-manifest'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/frames/plugin-tab-key'
@@ -43,10 +44,12 @@ export function RightSidebarPanelContent({
   return (
     <div
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
+      // Bot panel rows open their hover cards outside this rect's left edge, covering nothing in it.
+      data-right-sidebar-panel=""
       // `orca plugin shot` captures exactly this rect.
       data-plugin-panel-surface={isPluginPanelTabKey(effectiveTab) ? effectiveTab : undefined}
     >
-      <Suspense fallback={null}>
+      <Suspense fallback={effectiveTab === 'bot-chats' ? <BotChatsSkeleton toolbar /> : null}>
         {effectiveTab === 'explorer' && <FileExplorer />}
         {effectiveTab === 'source-control' &&
           (isFolderWorkspace ? (

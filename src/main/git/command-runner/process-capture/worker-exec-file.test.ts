@@ -15,7 +15,10 @@ import { setImmediate as nextTurn } from 'node:timers/promises'
 import { Worker } from 'node:worker_threads'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type * as WorkerChildModule from '../../../worker-thread-child-process/worker-thread-child-process'
-import type { WorkerThreadChildProcessHost } from '../../../worker-thread-child-process/worker-thread-child-process'
+import type {
+  WorkerThreadChildProcess,
+  WorkerThreadChildProcessHost
+} from '../../../worker-thread-child-process/worker-thread-child-process'
 import { createWorkerThreadChildProcessTestEntry } from '../../../worker-thread-child-process/worker-thread-child-process-worker.test-fixtures'
 import { workerExecFile } from './worker-exec-file'
 import { execFileCapture } from './exec-file-capture'
@@ -26,6 +29,8 @@ const state = vi.hoisted(() => {
 })
 vi.mock('../../../worker-thread-child-process/worker-thread-child-process', async (original) => ({
   ...(await original<typeof WorkerChildModule>()),
+  whenSpawnWorkerReady: async () => state.host !== null,
+  spawnWorkerReadyNow: () => state.host !== null,
   spawnProcessOnWorkerThread: (spec: Parameters<WorkerThreadChildProcessHost['spawn']>[0]) => {
     if (!state.host) {
       throw new Error('Test worker not initialized')
@@ -62,6 +67,19 @@ async function createHost(gate?: SharedArrayBuffer) {
     workers.push(worker)
     return worker
   })
+}
+
+// A launch reaches the worker after its ready check; watch for it before starting one, then wait before stopping.
+function nextWorkerLaunch(): Promise<WorkerThreadChildProcess> {
+  const host = state.host!
+  const spawn = host.spawn.bind(host)
+  const launched = Promise.withResolvers<WorkerThreadChildProcess>()
+  vi.spyOn(host, 'spawn').mockImplementationOnce((spec) => {
+    const child = spawn(spec)
+    launched.resolve(child)
+    return child
+  })
+  return launched.promise
 }
 
 function capture(script: string, maxBuffer = 1024 * 1024) {
@@ -113,11 +131,118 @@ describe('worker-owned Git capture', () => {
     const result = new Promise<Error | null>((resolve) =>
       workerExecFile('/orca/nonexistent-git', [], { maxBuffer: 32 }, (error) => resolve(error))
     )
-    await expect(result).resolves.toMatchObject({ code: 'ENOENT' })
+    // Callers classify a missing binary by its spawn syscall (isMissingCommandBinaryError).
+    await expect(result).resolves.toMatchObject({
+      code: 'ENOENT',
+      syscall: 'spawn /orca/nonexistent-git'
+    })
   })
 })
 
-describe.skipIf(process.platform !== 'darwin')('macOS worker capture cancellation', () => {
+describe.skipIf(process.platform === 'win32')('POSIX captured Git on the worker', () => {
+  it("keeps main's failure text and passes the caller's current environment", async () => {
+    await createHost()
+    const proxy = vi.spyOn(state.host!, 'spawn')
+    const script = 'printf "$ORCA_WORKER_ENV_PROBE" >&2; exit 3'
+    const failure = execFileCapture('sh', ['-c', script], {
+      ownedPosixGroup: true,
+      encoding: 'utf8',
+      env: { ...process.env, ORCA_WORKER_ENV_PROBE: 'fatal: from current env' }
+    }).catch((error: unknown) => error)
+    await expect(failure).resolves.toMatchObject({
+      code: 3,
+      message:
+        process.platform === 'darwin'
+          ? 'fatal: from current env'
+          : `Command failed: sh -c ${script}\nfatal: from current env`,
+      stderr: 'fatal: from current env'
+    })
+    expect(proxy).toHaveBeenCalledOnce()
+    proxy.mockRestore()
+  })
+
+  it('starts a launch with a start gate on main, where the gate is checked at creation', async () => {
+    await createHost()
+    const proxy = vi.spyOn(state.host!, 'spawn')
+    const { stdout } = await execFileCapture('sh', ['-c', 'printf gated'], {
+      ownedPosixGroup: true,
+      encoding: 'utf8',
+      canStart: () => true
+    })
+    expect(stdout).toBe('gated')
+    expect(proxy).not.toHaveBeenCalled()
+    proxy.mockRestore()
+  })
+
+  it('returns output far past the worker high-water mark intact', async () => {
+    await createHost()
+    const { stdout } = await execFileCapture(
+      process.execPath,
+      ['-e', 'process.stdout.write("ab".repeat(4 * 1024 * 1024))'],
+      { ownedPosixGroup: true, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }
+    )
+    expect(stdout).toBe('ab'.repeat(4 * 1024 * 1024))
+  })
+
+  it('keeps each of many concurrent launches on its own output', async () => {
+    await createHost()
+    const results = await Promise.all(
+      Array.from({ length: 48 }, (_, index) =>
+        execFileCapture('sh', ['-c', `printf ${index}`], {
+          ownedPosixGroup: true,
+          encoding: 'utf8'
+        })
+      )
+    )
+    expect(results.map((result) => result.stdout)).toEqual(
+      Array.from({ length: 48 }, (_, index) => String(index))
+    )
+  })
+
+  it("ends a lost worker's running group from main before a fenced child reports its end", async () => {
+    await createHost()
+    const lost = vi.fn()
+    const terminated = Promise.withResolvers<void>()
+    const ready = Promise.withResolvers<number>()
+    let diagnostic = ''
+    const pending = execFileCapture('sh', ['-c', 'sleep 60 & echo $! >&2; wait'], {
+      ownedPosixGroup: true,
+      encoding: 'utf8',
+      onWorkerLost: lost,
+      onChildTerminated: terminated.resolve,
+      onStderr: (chunk) => {
+        diagnostic += chunk
+        if (diagnostic.includes('\n')) {
+          ready.resolve(Number(diagnostic.trim()))
+        }
+      }
+    }).catch((error: unknown) => error)
+    const descendant = await ready.promise
+    let verified = false
+    try {
+      await workers.at(-1)?.terminate()
+      await expect(pending).resolves.toMatchObject({ code: 'ERR_ORCA_WORKER_CHILD_ABANDONED' })
+      expect(lost).toHaveBeenCalledOnce()
+      await terminated.promise
+      const left = await runProcess({
+        program: 'ps',
+        args: ['-o', 'stat=', '-p', String(descendant)]
+      })
+      expect(left.stdout.trim() === '' || left.stdout.trim().startsWith('Z')).toBe(true)
+      verified = true
+    } finally {
+      if (!verified) {
+        try {
+          process.kill(descendant, 'SIGKILL')
+        } catch {
+          /* gone */
+        }
+      }
+    }
+  })
+})
+
+describe.skipIf(process.platform === 'win32')('POSIX worker capture cancellation', () => {
   it('retires the worker-owned group after its root exited with inherited pipes still open', async () => {
     await createHost()
     const proxy = vi.spyOn(state.host!, 'spawn')
@@ -138,7 +263,6 @@ describe.skipIf(process.platform !== 'darwin')('macOS worker capture cancellatio
     `
       ],
       {
-        spawnOnWorkerThread: true,
         ownedPosixGroup: true,
         signal: controller.signal,
         timeout: 10_000,
@@ -196,30 +320,34 @@ describe.skipIf(process.platform !== 'darwin')('macOS worker capture cancellatio
     }
   })
 
-  it('does not report a queued child terminated until the worker processes its kill', async () => {
+  it('withdraws a queued launch it stops, reporting it terminated only once the worker drops it', async () => {
     const gate = new SharedArrayBuffer(4)
     await createHost(gate)
+    const launched = nextWorkerLaunch()
     const controller = new AbortController()
     const terminated = vi.fn()
     const pending = execFileCapture(process.execPath, ['-e', 'setInterval(()=>{},1000)'], {
-      spawnOnWorkerThread: true,
       ownedPosixGroup: true,
       signal: controller.signal,
       onChildTerminated: terminated
     })
     const outcome = pending.catch((error: unknown) => error)
+    const child = await launched
     controller.abort()
     await expect(outcome).resolves.toMatchObject({ name: 'AbortError' })
     expect(terminated).not.toHaveBeenCalled()
     Atomics.store(new Int32Array(gate), 0, 1)
     Atomics.notify(new Int32Array(gate), 0)
     await vi.waitFor(() => expect(terminated).toHaveBeenCalledOnce())
+    // Never created: no process existed to start the aborted command.
+    expect(child.pid).toBeUndefined()
   })
 
   it('keeps removal ownership and durable intent until an aborted worker child is actually terminated', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'orca-removal-worker-close-'))
     const gate = new SharedArrayBuffer(4)
     await createHost(gate)
+    const launched = nextWorkerLaunch()
     await prepareWorktreeRemovalsForStore({
       getProfileStorageDirectory: () => directory,
       getRepos: () => [{ id: 'repo' }]
@@ -249,6 +377,7 @@ describe.skipIf(process.platform !== 'darwin')('macOS worker capture cancellatio
       })
       void result.catch(() => {})
       await childStarted.promise
+      await launched
       let closed = false
       closing = worktreeRemovalLifetime.close().then(() => {
         closed = true
@@ -269,18 +398,19 @@ describe.skipIf(process.platform !== 'darwin')('macOS worker capture cancellatio
     }
   })
 
-  it('does not infer child termination from worker loss before a spawn acknowledgement', async () => {
+  it('reports a launch as never started when its worker is lost before it could run anything', async () => {
     const gate = new SharedArrayBuffer(4)
     await createHost(gate)
+    const launched = nextWorkerLaunch()
     const terminated = vi.fn()
     const pending = execFileCapture(process.execPath, ['-e', ''], {
-      spawnOnWorkerThread: true,
       ownedPosixGroup: true,
       onChildTerminated: terminated
     })
     const outcome = pending.catch((error: unknown) => error)
+    await launched
     await workers.at(-1)?.terminate()
     await expect(outcome).resolves.toBeInstanceOf(Error)
-    expect(terminated).not.toHaveBeenCalled()
+    expect(terminated).toHaveBeenCalledOnce()
   })
 })

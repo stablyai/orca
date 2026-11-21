@@ -10,7 +10,7 @@ export const BOT_TEMPLATES_CODING: readonly BotTemplate[] = [
       'Asks which repos to cover, then reviews the open pull requests waiting on your review and posts its findings here, with file and line. It doesn’t comment on GitHub until you say it can.',
     mascot: 'B1',
     watches: 'Pull requests waiting on your review, in the repos you pick',
-    does: 'Review each one and list risky changes and missing tests, with file and line.',
+    does: 'Reviews each one and lists risky changes and missing tests, with file and line.',
     reports: 'Here, when a review is requested',
     connectors: ['github'],
     schedules: [],
@@ -39,7 +39,7 @@ export const BOT_TEMPLATES_CODING: readonly BotTemplate[] = [
       'Give it a bug report or an issue link. It starts an agent in a new workspace that writes down how to reproduce it, then reports the cause. It writes a fix only after you agree.',
     mascot: 'H1',
     watches: 'Bug reports you hand it, and Linear issues assigned to you',
-    does: 'Reproduce the bug in a new workspace, find where it starts, and propose a fix.',
+    does: 'Reproduces the bug in a new workspace, finds where it starts, and proposes a fix.',
     reports: 'Here, when it has a repro and a cause',
     connectors: ['github', 'linear'],
     schedules: [],
@@ -68,14 +68,13 @@ export const BOT_TEMPLATES_CODING: readonly BotTemplate[] = [
       'Lists outdated and vulnerable packages in a repo you pick, most urgent first. After you agree, an agent opens one pull request per group.',
     mascot: 'M1',
     watches: 'Packages in the repos you pick',
-    does: 'List advisories and outdated packages, most urgent first; upgrade one group per pull request once agreed.',
+    does: 'Lists advisories and outdated packages, most urgent first; upgrades one group per pull request once agreed.',
     reports: 'Here, Mondays at 9 AM',
     connectors: ['github'],
     schedules: [
       {
         id: 'weekly-check',
         when: 'Mondays at 9 AM',
-        short: 'Mon 9 AM',
         what: 'New advisories and major versions',
         rrule: '0 9 * * 1',
         prompt:
@@ -98,14 +97,13 @@ export const BOT_TEMPLATES_CODING: readonly BotTemplate[] = [
       'Lists workspaces whose agent finished with changes you haven’t reviewed or turned into a pull request. Orca already tells you when an agent is waiting on you; this covers what’s done.',
     mascot: 'K2',
     watches: 'Your Orca workspaces',
-    does: 'List workspaces whose agent finished with changes nobody reviewed or opened a pull request for.',
+    does: 'Lists workspaces whose agent finished with changes nobody reviewed or opened a pull request for.',
     reports: 'Here, weekdays at 9 AM',
     connectors: [],
     schedules: [
       {
         id: 'daily-list',
         when: 'Weekdays at 9 AM',
-        short: 'Weekdays 9 AM',
         what: 'Finished work waiting for review',
         rrule: '0 9 * * 1-5',
         prompt:
@@ -128,14 +126,13 @@ export const BOT_TEMPLATES_CODING: readonly BotTemplate[] = [
       'Lists workspaces whose pull request merged or that haven’t changed in two weeks, with any uncommitted changes. It removes only the ones you pick.',
     mascot: 'J1',
     watches: 'Your Orca workspaces and their pull requests',
-    does: 'List workspaces that are done or abandoned, with uncommitted changes; remove only the ones my owner picks.',
+    does: 'Lists workspaces that are done or abandoned, with uncommitted changes; removes only the ones you pick.',
     reports: 'Here, Fridays at 4 PM',
     connectors: ['github'],
     schedules: [
       {
         id: 'weekly-list',
         when: 'Fridays at 4 PM',
-        short: 'Fri 4 PM',
         what: 'Workspaces ready to remove',
         rrule: '0 16 * * 5',
         prompt:
@@ -158,14 +155,13 @@ export const BOT_TEMPLATES_CODING: readonly BotTemplate[] = [
       'Reviews last week’s merged pull requests in a repo you pick and lists anything that needs a second look, with file and line.',
     mascot: 'N1',
     watches: 'Merged pull requests in the repos you pick',
-    does: 'Check each merged change for leaked secrets, injection, missing auth checks and unsafe defaults.',
+    does: 'Checks them for leaked secrets, injection, missing auth and unsafe defaults.',
     reports: 'Here, Mondays at 9 AM and when a pull request merges',
     connectors: ['github'],
     schedules: [
       {
         id: 'weekly-review',
         when: 'Mondays at 9 AM',
-        short: 'Mon 9 AM',
         what: 'The week’s merged changes',
         rrule: '0 9 * * 1',
         prompt:

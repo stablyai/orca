@@ -124,6 +124,7 @@ export const OPENCODE_ACP_DIALECT: AcpDialect = {
     supported: (initialized) => initialized.agentCapabilities?.sessionCapabilities?.close != null
   },
   effortChangesModel: true,
+  interactionModes: { default: 'build', plan: 'plan' },
   linksFileMentions: true,
   normalizeToolUpdate,
   notification: openCodeChildUpdate,

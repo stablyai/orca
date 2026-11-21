@@ -37,6 +37,7 @@ export type StructuredClaudeRuntimeAdapterDeps = {
   readProcessStartTime?: ClaudeStructuredSessionAdapterDeps['readProcessStartTime']
   onLifecycleEvent: (event: StructuredAgentSessionLifecycleEvent) => void
   onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']
+  onUserRenamed?: ClaudeStructuredSessionAdapterDeps['onUserRenamed']
   onChildWorkEvidence?: ClaudeStructuredSessionAdapterDeps['onChildWorkEvidence']
   onForegroundTasksChanged?: ClaudeStructuredSessionAdapterDeps['onForegroundTasksChanged']
   logger?: ClaudeStructuredSessionAdapterDeps['logger']
@@ -137,6 +138,7 @@ export function createStructuredClaudeRuntimeAdapter(
       }
     },
     ...(deps.onDispatchSettledLate ? { onDispatchSettledLate: deps.onDispatchSettledLate } : {}),
+    ...(deps.onUserRenamed ? { onUserRenamed: deps.onUserRenamed } : {}),
     ...(deps.onChildWorkEvidence ? { onChildWorkEvidence: deps.onChildWorkEvidence } : {}),
     ...(deps.onForegroundTasksChanged
       ? { onForegroundTasksChanged: deps.onForegroundTasksChanged }
@@ -168,7 +170,8 @@ export function openClaudeConnectionOf(
               {
                 command: launch.pathToClaudeCodeExecutable,
                 prefixArgs: launch.prefixArgs,
-                cwd: launch.cwd
+                cwd: launch.cwd,
+                env: launch.env ?? {}
               },
               args[0]
             )

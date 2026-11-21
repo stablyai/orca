@@ -1,6 +1,7 @@
 // A bot's message as its agent reads it: Orca's line on who asked and where, then each part of what
 // came before and the message itself, fenced under its own Orca line so no part can pose as
-// another's or as Orca, then any note of Orca's for the agent (an automation the message matched).
+// another's or as Orca, then Orca's notes for the agent (where it was asked, an automation the
+// message matched).
 // The chat shows only the message (connectorMessageShownText).
 import type {
   ConnectorAsker,
@@ -83,8 +84,10 @@ function personText(
   const name = shownPersonName(person.name)
   if (source === 'slack') {
     const id = sourceId(person.userId)
-    const mention = id === null ? null : `<@${id}>`
-    return [name, mention].filter((part) => part !== null).join(' ') || 'someone'
+    if (id === null) {
+      return name ?? 'someone'
+    }
+    return name === null ? `<@${id}>` : `<@${id}|${name}>`
   }
   // A GitHub name is the login.
   return name === null ? 'someone' : source === 'github' ? `@${name}` : name
@@ -287,7 +290,8 @@ export function connectorAskerPrompt(
         : []
     )
   ].join('\n')
-  return note ? `${prompt}\n\n${note}` : prompt
+  const notes = [asker.note, note].filter(Boolean).join('\n\n')
+  return notes ? `${prompt}\n\n${notes}` : prompt
 }
 
 /** The asker's own words in a prompt connectorAskerPrompt built, read forward so no fenced text can

@@ -3,8 +3,8 @@ import type { BotGroup } from './bot-group'
 import {
   botGroupAudience,
   botGroupDraftAudience,
-  formatBotGroupAudience,
   botGroupMentionSegments,
+  botGroupReplyMentions,
   botGroupSingleRecipient,
   botGroupReplyDraft
 } from './bot-group-mentions'
@@ -54,6 +54,21 @@ describe('group draft audience', () => {
   })
 })
 
+describe('attached files', () => {
+  it('reads a leading file reference as data, not an unknown bot', () => {
+    const mentions = room({ kind: 'mentions' })
+    expect(botGroupAudience('@/tmp/shot.avif @Sage what is this?', mentions, bots)).toEqual([
+      'sage'
+    ])
+    expect(botGroupAudience('@"C:\\My Shots\\a.avif" hi', room({ kind: 'all' }), bots)).toEqual([
+      'scout',
+      'sage',
+      'code-scout'
+    ])
+    expect(() => botGroupAudience('@Scuot hi', mentions, bots)).toThrow(/unavailable/)
+  })
+})
+
 describe('group mention segments', () => {
   const names = bots.map((bot) => bot.name)
   const mentions = (text: string) =>
@@ -77,28 +92,6 @@ describe('group mention segments', () => {
         .map((segment) => segment.text)
         .join('')
     ).toBe('hi @Sage!')
-  })
-})
-
-describe('group audience label', () => {
-  const english = (_key: string, fallback: string, values?: { count: number }) =>
-    fallback.replace('{{count}}', String(values?.count ?? ''))
-  const label = (draft: string, replyMode: BotGroup['replyMode']) =>
-    formatBotGroupAudience(
-      botGroupDraftAudience(draft, room(replyMode), bots),
-      room(replyMode),
-      bots,
-      english
-    )
-
-  it('names the reply mode, the bots a draft reaches, or an invalid mention', () => {
-    expect(label('hi', { kind: 'all' })).toBe('All bots')
-    expect(label('hi', { kind: 'mentions' })).toBe('Only when mentioned')
-    expect(label('hi', { kind: 'bot', botId: 'sage' })).toBe('Sage')
-    expect(label('@Scout hi', { kind: 'all' })).toBe('Scout')
-    expect(label('@Scout @Sage hi', { kind: 'mentions' })).toBe('2 mentioned')
-    expect(label('@everyone hi', { kind: 'mentions' })).toBe('All bots · 3')
-    expect(label('@Nobody hi', { kind: 'all' })).toBe('Correct mention')
   })
 })
 
@@ -132,7 +125,7 @@ describe('everyone-like member names', () => {
     members: named.map((bot) => ({ botId: bot.id, sessionId: bot.id }))
   }
 
-  it('addresses a member whose name starts with Everyone, not the whole room', () => {
+  it('distinguishes @everyone from longer and ambiguous member names', () => {
     expect(botGroupAudience('@Everyone Helper review this', mentionsRoom, named)).toEqual([
       'helper'
     ])
@@ -140,9 +133,7 @@ describe('everyone-like member names', () => {
       'helper',
       'other'
     ])
-  })
 
-  it('refuses a member named exactly Everyone instead of broadcasting', () => {
     const exact = [{ id: 'everyone-bot', name: 'Everyone' }, named[1]]
     const exactRoom = {
       ...mentionsRoom,
@@ -166,5 +157,62 @@ describe('reply to a turn', () => {
       botGroupAudience(botGroupReplyDraft('scout', 'go', group, renamed), group, renamed)
     ).toEqual(['scout'])
     expect(botGroupReplyDraft('gone', 'please continue', group, renamed)).toBe('please continue')
+  })
+})
+
+describe("a member's reply hand-offs", () => {
+  const members = [...bots, { id: 'ops', name: 'Ops' }, { id: 'ops-lead', name: 'Ops Lead' }]
+  const group = { members: members.map((bot) => ({ botId: bot.id, sessionId: bot.id })) }
+  const wakes = (reply: string, speaker = 'speaker') =>
+    botGroupReplyMentions(reply, group, members, speaker).map(({ id }) => id)
+
+  it('wakes whole member names anywhere in the reply, case-insensitively, in order', () => {
+    expect(wakes('Done. @sage can you check, then @SCOUT ship it?')).toEqual(['sage', 'scout'])
+    expect(wakes("I agree with @Sage's plan (@Scout).")).toEqual(['sage', 'scout'])
+  })
+
+  it('never matches inside a longer word or an address', () => {
+    expect(wakes('Page @Opsgenie, mail jo@sage.com or j.@Sage, see @Scouting')).toEqual([])
+  })
+
+  it('takes the longest name at an @', () => {
+    expect(wakes('@Ops Lead please, not @Ops.')).toEqual(['ops-lead', 'ops'])
+    expect(wakes('@Code Scout review')).toEqual(['code-scout'])
+  })
+
+  it('never wakes the speaker itself', () => {
+    expect(wakes('@Sage and @Scout', 'sage')).toEqual(['scout'])
+  })
+
+  it('ignores quoted strings and quoted room history', () => {
+    expect(
+      wakes(
+        'He said "@Sage go" and \u201c@Scout\u201d.\n<quoted_room_history>@Ops Lead</quoted_room_history>'
+      )
+    ).toEqual([])
+  })
+
+  it('says where each member is first named', () => {
+    expect(botGroupReplyMentions('ok @Sage, @Sage again', group, members, 'x')).toEqual([
+      { id: 'sage', start: 3 }
+    ])
+  })
+
+  it('reaches no one for an ambiguous name or @everyone', () => {
+    const twins = [...members, { id: 'sage-2', name: 'sage' }]
+    const room = { members: twins.map((bot) => ({ botId: bot.id, sessionId: bot.id })) }
+    expect(botGroupReplyMentions('@Sage and @everyone, @Scout', room, twins, 'x')).toEqual([
+      { id: 'scout', start: 21 }
+    ])
+  })
+
+  it('never lets an unknown name swallow the mention right after it', () => {
+    expect(wakes('cc @Former,@Sage please review')).toEqual(['sage'])
+  })
+
+  it('reads @everyone with the same end as a name, so a member named Everyone stays ambiguous', () => {
+    const everyone = [...members, { id: 'everyone', name: 'Everyone' }]
+    const room = { members: everyone.map((bot) => ({ botId: bot.id, sessionId: bot.id })) }
+    expect(botGroupReplyMentions('[@everyone] and @everyone', room, everyone, 'x')).toEqual([])
   })
 })

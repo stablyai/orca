@@ -1,74 +1,172 @@
-// The item page's comment box, docked at the bottom: it names the bot's open question, sends with the
-// chat composer's arrow, and keeps its text until a send lands (closing the panel keeps each item's draft for
-// the session). Offline, Comment waits; a dropped reply says the comment may have arrived, never resends.
-import { useImperativeHandle, useRef, useState, type Ref } from 'react'
-import { Text, TextInput, View, type TextInputInstance } from 'react-native'
-import { CornerDownRight, WifiOff } from 'lucide-react-native'
+// The item page's comment box, docked at the bottom: it sends with the chat composer's arrow, and a sent
+// comment shows in Activity at once while it goes (one that fails stays there with Retry). Closing the
+// panel keeps each item's draft, photos too, for the session. Offline, Comment waits. The ask card's
+// answer goes straight to the host; a dropped reply says it may have arrived, never resends.
+// The chat's field and mic: the session's dictation lands here while the box is its target. Photos
+// attach with the chat's + and thumbnails, each named [Image #N] in the words.
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type Ref
+} from 'react'
+import { Text, View, type HostInstance, type TextInputInstance } from 'react-native'
+import { WifiOff } from 'lucide-react-native'
 import type { BotItem } from '../../../../src/shared/bots/bot-items'
 import { ComposerSendButton } from '../../components/composer-input/ComposerSendButton'
+import { MobileNativeChatComposerAttachButton } from '../../session/native-chat/composer/attachments/MobileNativeChatComposerAttachButton'
+import { MobileNativeChatComposerAttachments } from '../../session/native-chat/composer/attachments/MobileNativeChatComposerAttachments'
 import { COMPOSER_COMPACT_CONTROL_SIZE } from '../../components/composer-input/composer-input-styles'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { triggerError } from '../../platform/haptics/haptics'
-import { useTextInputContentHeight } from '../../platform/text-input/text-input-content-height'
+import { MobileNativeChatComposerField } from '../../session/native-chat/composer/field/MobileNativeChatComposerField'
+import { MobileNativeChatComposerMic } from '../../session/native-chat/composer/dictation/MobileNativeChatComposerMic'
+import { MobileNativeChatDictationLeading } from '../../session/native-chat/composer/dictation/MobileNativeChatDictationLeading'
+import { useMobileNativeChatComposerDictation } from '../../session/native-chat/composer/dictation/use-mobile-native-chat-composer-dictation'
+import {
+  blurMobileNativeChatTextDestination,
+  focusMobileNativeChatTextDestination
+} from '../../session/native-chat/composer/drafts/mobile-native-chat-draft-inputs'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { commentOnBotItem } from './bot-item-operations'
+import { BotItemCommentMicContext } from './bot-item-comment-mic'
 import { botItemWriteFailure } from './use-bot-item-moves'
-
-const INPUT_MAX_HEIGHT = 132
+import { useBotItemCommentImages } from './use-bot-item-comment-images'
 
 // Each item's unsent text, for this app session.
 const drafts = new Map<string, string>()
+// The open box of each item, so a late photo's [Image #N] change reaches the field it shows in.
+const shownDrafts = new Map<string, (next: string) => void>()
+const NO_FILES: readonly never[] = []
 
-export type BotItemCommentBoxHandle = { focus: () => void }
+export type BotItemCommentBoxHandle = {
+  /** Post `text` as the owner's comment, as Comment does (the ask card's answer): `unknown` when the
+   *  reply dropped after sending, so it may have gone; `failed` when it surely didn't. */
+  send: (text: string) => Promise<'landed' | 'unknown' | 'failed'>
+}
 
 export function MobileBotItemCommentBox({
   client,
   item,
   online,
   hostName,
+  waitingOn = null,
+  attachTo,
+  onComment,
+  showToast,
   ref
 }: {
   client: RpcClient | null
   item: BotItem
   online: boolean
   hostName: string
+  /** The item's chat, which photos upload to; null when its comments take none. */
+  attachTo: string | null
+  /** Sends the comment: it shows in Activity until the host's read does. */
+  onComment: (text: string, paths: readonly string[]) => void
+  showToast: (message: string) => void
+  /** The agent's question waiting on the owner (what is sent is the reply): who asked, and whether it
+   *  gave quick replies. */
+  waitingOn?: { replies: boolean; asker: string } | null
   ref?: Ref<BotItemCommentBoxHandle>
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const mic = useContext(BotItemCommentMicContext)
   const [text, setTextState] = useState(() => drafts.get(item.uid) ?? '')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const input = useRef<TextInputInstance>(null)
-  useImperativeHandle(ref, () => ({ focus: () => input.current?.focus() }))
-  const contentHeight = useTextInputContentHeight(input, text)
-  const setText = (next: string) => {
-    setTextState(next)
-    setError(null)
-    if (next) {
-      drafts.set(item.uid, next)
-    } else {
-      drafts.delete(item.uid)
+  const cancelRef = useRef<HostInstance>(null)
+  const { uid } = item
+  const setText = useCallback(
+    (next: string) => {
+      setTextState(next)
+      setError(null)
+      if (next) {
+        drafts.set(uid, next)
+      } else {
+        drafts.delete(uid)
+      }
+    },
+    [uid]
+  )
+  useEffect(() => {
+    shownDrafts.set(uid, setText)
+    return () => {
+      shownDrafts.delete(uid)
     }
-  }
-  const canSend = online && text.trim().length > 0
-  const send = async () => {
-    if (!canSend || sending || !client) {
-      return
+  }, [uid, setText])
+  // A late transcript lands in this item's draft even after the box closed.
+  const insertDictation = useCallback(
+    (insert: (draft: string) => string) => setText(insert(drafts.get(uid) ?? '')),
+    [setText, uid]
+  )
+  const [caret, setCaret] = useState<{ start: number; end: number } | null>(null)
+  const placeCaret = useCallback((at: number) => setCaret({ start: at, end: at }), [])
+  const scope = `bot-item-comment:${uid}`
+  useEffect(() => () => blurMobileNativeChatTextDestination(scope), [scope])
+  const dictation = useMobileNativeChatComposerDictation({
+    draftScopeKey: scope,
+    value: text,
+    insertDictation,
+    placeCaret
+  })
+  // The mic makes this box the dictation's target before it starts, as focusing it does.
+  const target = (run: (() => void) | undefined) =>
+    run &&
+    (() => {
+      focusMobileNativeChatTextDestination(scope)
+      run()
+    })
+  const photos = useBotItemCommentImages({
+    client,
+    uid,
+    sessionId: attachTo,
+    editText: (change) => (shownDrafts.get(uid) ?? setText)(change(drafts.get(uid) ?? '')),
+    showToast
+  })
+  const micActive = mic?.micActive ?? false
+  // Send waits for every photo's upload, as on the desktop.
+  const canSend =
+    online &&
+    (text.trim().length > 0 || photos.images.length > 0) &&
+    !photos.uploading &&
+    !micActive
+  const post = async (words: string): Promise<'landed' | 'unknown' | 'failed'> => {
+    if (!online || !words || sending || !client) {
+      return 'failed'
     }
     setSending(true)
-    const outcome = await commentOnBotItem(client, item.uid, text.trim())
+    const outcome = await commentOnBotItem(client, item.uid, words)
     setSending(false)
     if (outcome.kind === 'done') {
-      setText('')
-      return
+      setError(null)
+      return 'landed'
     }
     triggerError()
     setError(botItemWriteFailure(outcome, hostName, t))
+    return outcome.kind === 'unknown' ? 'unknown' : 'failed'
   }
+  const send = () => {
+    if (canSend) {
+      onComment(
+        text.trim(),
+        photos.images.map((image) => image.path)
+      )
+      setText('')
+      photos.clear()
+    }
+  }
+  useImperativeHandle(ref, () => ({
+    send: (words) => post(words.trim())
+  }))
   const notice = !online
     ? t(
         'bots.items.comment.offline',
@@ -78,46 +176,85 @@ export function MobileBotItemCommentBox({
     : null
   return (
     <View style={styles.box}>
-      {item.question ? (
-        <View style={styles.answering}>
-          <CornerDownRight size={12} color={colors.textMuted} />
-          <Text style={styles.answeringText} numberOfLines={1}>
-            {t('bots.items.comment.answering', 'Answering:')}{' '}
-            <Text style={styles.answeringQuestion}>{item.question.text}</Text>
-          </Text>
-        </View>
-      ) : null}
+      <MobileNativeChatComposerAttachments
+        images={photos.images}
+        files={NO_FILES}
+        onRemoveImage={photos.remove}
+        numbered
+      />
       <View style={styles.row}>
-        <TextInput
-          ref={input}
-          value={text}
-          onChangeText={setText}
-          editable={!sending}
-          multiline
-          accessibilityLabel={t('bots.items.comment.label', 'Comment')}
-          placeholder={t('bots.items.comment.add', 'Add a comment…')}
-          placeholderTextColor={colors.textMuted}
-          selectionColor={colors.textPrimary}
-          style={[
-            styles.input,
-            // A web textarea opens two rows tall; it takes its text's height, as the chat composer's does.
-            contentHeight !== undefined && {
-              height: Math.min(
-                INPUT_MAX_HEIGHT,
-                Math.max(COMPOSER_COMPACT_CONTROL_SIZE, contentHeight)
-              )
-            },
-            sending && styles.inputSending
-          ]}
-        />
+        {attachTo ? (
+          <View style={styles.micSlot}>
+            <MobileNativeChatComposerAttachButton
+              onAttachImage={() => void photos.attach()}
+              onAttachFiles={undefined}
+              structured={false}
+              isAttaching={false}
+              disabled={!online || sending}
+            />
+          </View>
+        ) : null}
+        <View style={styles.field}>
+          <MobileNativeChatComposerField
+            ref={input}
+            value={text}
+            skillToken={null}
+            dictationPreview={dictation.preview}
+            onChangeText={setText}
+            onFocus={() => focusMobileNativeChatTextDestination(scope)}
+            selection={caret ?? undefined}
+            onSelectionChange={(event) => {
+              dictation.readSelection(event)
+              setCaret(null)
+            }}
+            onKeyboardSubmit={send}
+            editable={!sending}
+            multiline
+            accessibilityLabel={t('bots.items.comment.label', 'Comment')}
+            placeholder={
+              !waitingOn
+                ? t('bots.items.comment.add', 'Add a comment…')
+                : waitingOn.replies
+                  ? t('bots.items.comment.reply', 'Reply in your own words')
+                  : t('bots.items.comment.replyTo', 'Reply to {{name}}…', { name: waitingOn.asker })
+            }
+            placeholderTextColor={colors.textMuted}
+            selectionColor={colors.textPrimary}
+          />
+        </View>
+        {mic?.onMicPress ? (
+          // Centred on the compact send button's row, so the two sit level.
+          <View style={styles.micSlot}>
+            <MobileNativeChatComposerMic
+              {...mic}
+              onMicPress={target(mic.onMicPress)}
+              onMicPressIn={target(mic.onMicPressIn)}
+              cancelRef={cancelRef}
+              disabled={!online || sending}
+            />
+          </View>
+        ) : null}
         <ComposerSendButton
           size="compact"
-          onPress={() => void send()}
+          onPress={send}
           canSend={canSend}
           sending={sending}
           label={t('bots.items.comment.submit', 'Comment')}
         />
       </View>
+      {mic ? (
+        <View style={styles.dictation}>
+          <MobileNativeChatDictationLeading
+            micActive={micActive}
+            micStarting={mic.micStarting}
+            micProcessing={mic.micProcessing}
+            cancelRef={cancelRef}
+            trailing={null}
+          >
+            {null}
+          </MobileNativeChatDictationLeading>
+        </View>
+      ) : null}
       {error || notice ? (
         <View style={styles.notice}>
           {notice && !error ? <WifiOff size={12} color={colors.textSecondary} /> : null}
@@ -141,25 +278,10 @@ const styles = themedStyleSheet(() => ({
     borderColor: colors.borderSubtle,
     backgroundColor: colors.sheetGroup
   },
-  answering: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.xs
-  },
-  answeringText: { flex: 1, fontSize: typography.metaSize, color: colors.textMuted },
-  answeringQuestion: { fontWeight: '500', color: colors.textSecondary },
   row: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm },
-  input: {
-    flex: 1,
-    minHeight: COMPOSER_COMPACT_CONTROL_SIZE,
-    maxHeight: INPUT_MAX_HEIGHT,
-    paddingVertical: spacing.xs,
-    fontSize: 15,
-    lineHeight: 20,
-    color: colors.textPrimary
-  },
-  inputSending: { color: colors.textSecondary },
+  field: { flex: 1 },
+  micSlot: { height: COMPOSER_COMPACT_CONTROL_SIZE, justifyContent: 'center' },
+  dictation: { flexDirection: 'row', alignItems: 'center' },
   notice: {
     flexDirection: 'row',
     alignItems: 'flex-start',

@@ -11,7 +11,6 @@ import {
   type BotChatResetParams,
   type BotUpdateParams
 } from '../../../../shared/rpc-contract/bots-params'
-import { assertBotAgentRunsOnThisHost } from '../../../bots/bot-agent-host-refusal'
 import { googleSetupRuns } from '../../../google/google-setup-runs'
 import { readSharedBotActivity } from '../../../bots/bot-activity-host'
 import {
@@ -22,6 +21,7 @@ import {
 } from '../../../bots/bot-chat-session'
 import { readPairedBotRosters, withPairedBotRosters } from '../../../bots/paired-bot-rosters'
 import { botOfSession } from '../../../bots/bot-session-tabs'
+import { openEmptyBotChat, runtimeBotChatTreeHost } from '../../../bots/bot-chat-tree-host'
 import { forgetDeletedBotTools } from './bots-tools'
 import { composioBotsOf } from './bots-composio'
 import { ownerOnly } from './bots-caller-gates'
@@ -37,17 +37,26 @@ import { dropUnreadBotRequests } from './orchestration/messaging/bot-request-out
 import { releaseHeldBotMail } from '../../../bots/bot-paused-mail'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 import { botSkillProjectViews, relinkBotSkills } from '../../../bots/bot-skill-projects'
+import { botOwnSkillsView, linkBotOwnSkills } from '../../../bots/bot-own-skills'
+import { botHomeFolder } from '../../../bots/bot-home'
 import { listedBotsFacts } from './bots-list-facts'
 import { normalizeBotSidebarView } from '../../../../shared/bots/bot-sidebar-view'
+import { orcaSignInServer } from '../../../bots/orca-sign-in-server'
 
 async function updateBot(params: BotUpdateParams, context: RpcContext) {
   if (params.updates.slackMirror !== undefined) {
     ownerOnly(context, 'Only the owner can change what posts to Slack')
   }
-  assertBotAgentRunsOnThisHost(params.updates.agent)
+  const { members, addMembers: added, permissionMode } = params.updates
+  if (members !== undefined || added !== undefined || permissionMode !== undefined) {
+    ownerOnly(context, 'Only your owner changes your Who can ask or permissions, in Orca.')
+  }
   const bot = await context.runtime.bots.update(params.botId, params.updates)
   if (params.updates.skillProjects !== undefined) {
     relinkBotSkills(bot, context.runtime.listRepos())
+  }
+  if (params.updates.agent !== undefined) {
+    void linkBotOwnSkills(botHomeFolder(bot)).catch(() => {})
   }
   if (params.updates.paused === true) {
     await dropUnreadBotRequests(context.runtime, bot.id, 'paused')
@@ -118,9 +127,12 @@ export const BOT_METHODS = [
     // connectorNeedsSignIn: Orca Cloud refused this host's sign-in, so nothing reaches its bots.
     // connectorStatus: signed out, needs sign-in (the app is signed in but the connector refuses it),
     // can't reach Orca Cloud, refused (connectorMessage says why), or ok; absent without Orca Cloud.
+    // signInServer: this host's name when it is a headless server, whose signed-out copy names it;
+    // null with a window (an older host omits it, so the CLI can't tell which).
     handler: async (_params, { runtime }) => {
       const webhooks = runtime.getWebhooks()
       const listing = runtime.bots.listing()
+      const signInServer = orcaSignInServer(runtime)
       return {
         ...listing,
         // The host's Bot options, so a phone lists its bots as this sidebar does.
@@ -131,7 +143,8 @@ export const BOT_METHODS = [
           threadReplies: false,
           githubEvents2: false,
           githubWorkflows: false
-        })
+        }),
+        signInServer
       }
     }
   }),
@@ -186,9 +199,16 @@ export const BOT_METHODS = [
     name: 'bots.skillProjects.scan',
     permission: 'workspace',
     params: BotSkillProjectsScan,
-    handler: async (params, { runtime }) => ({
-      projects: await botSkillProjectViews(params.repoIds, runtime.listRepos())
-    })
+    handler: async (params, { runtime }) => {
+      const bot = params.botId
+        ? runtime.bots.list().find((entry) => entry.id === params.botId)
+        : undefined
+      const [projects, own] = await Promise.all([
+        botSkillProjectViews(params.repoIds, runtime.listRepos()),
+        bot ? botOwnSkillsView(botHomeFolder(bot)) : undefined
+      ])
+      return own ? { projects, own } : { projects }
+    }
   }),
   defineMethod({
     name: 'bots.avatar.upload',
@@ -253,10 +273,15 @@ export const BOT_METHODS = [
       if (!bot) {
         throw new Error('bot_not_found')
       }
-      assertBotAgentRunsOnThisHost(params.agent)
-      return {
-        sessionId: await startBotSession(runtime, botOnAgent(bot, params.agent))
-      }
+      const onAgent = botOnAgent(bot, params.agent)
+      // Like a blank page: an empty chat already open is the new chat, not one more.
+      const empty = await openEmptyBotChat(runtimeBotChatTreeHost(runtime), onAgent).catch(
+        (error: unknown) => {
+          console.error('[bots] failed to look for an empty chat to reuse:', error)
+          return null
+        }
+      )
+      return { sessionId: empty ?? (await startBotSession(runtime, onAgent)) }
     }
   })
 ]

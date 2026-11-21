@@ -18,6 +18,11 @@ const { getPathMock, homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
 }))
 
+vi.mock('../../trust/project-trust/codex-project-trust-worker-spawn', async () => ({
+  spawnCodexProjectTrustWorker: (
+    await import('../../trust/project-trust/codex-project-trust-worker.test-fixture')
+  ).codexProjectTrustTestWorker.factory
+}))
 vi.mock('electron', () => ({
   app: {
     getPath: getPathMock

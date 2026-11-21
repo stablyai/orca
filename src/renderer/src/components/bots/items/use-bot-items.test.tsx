@@ -13,11 +13,8 @@ vi.mock('@/lib/bot-hosts', async (importOriginal) => ({
   callBotRpc: (_bot: unknown, method: string, params: unknown) =>
     new Promise((resolve) => rpc.calls.push({ method, params, resolve }))
 }))
-// Two Needs you items, as the host counted them.
-vi.mock('@/lib/bot-catalog', () => ({ useListedBotItemsNeedingOwner: () => 2 }))
 
 import { emitBotsChangedWindowEvent } from '@/lib/bots-changed-window-event'
-import { useBotNeedsYouCount } from '../use-bot-now'
 import { useBotChatItems } from './use-bot-items'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reads use only these fields.
@@ -42,24 +39,9 @@ afterEach(() => {
   rpc.calls.length = 0
 })
 
-describe('useBotNeedsYouCount', () => {
-  it('says the host’s count and reads no item list, at N and 10N item and worker notices', async () => {
-    const view = renderHook(() => useBotNeedsYouCount(BOT, { needsYou: 1 }))
-    for (const notices of [5, 50]) {
-      for (let index = 0; index < notices; index += 1) {
-        notice(['items'])
-        notice(['workers'])
-      }
-      await flush()
-      expect(listReads()).toHaveLength(0)
-    }
-    expect(view.result.current).toBe(3)
-  })
-})
-
 describe('useBotChatItems', () => {
   it('keeps one read out: notices during it share one more, and the newest list shows', async () => {
-    const view = renderHook(() => useBotChatItems(BOT, 'chat-1'))
+    const view = renderHook(() => useBotChatItems(BOT, ['chat-1']))
     expect(listReads()).toHaveLength(1)
     notice(['items'])
     notice(['items'])

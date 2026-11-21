@@ -12,31 +12,27 @@ import {
   settle
 } from './connector-poll-client.test-fixture'
 import { FAKE_BOT, fakeSeam } from './fake-connector-seam.test-fixture'
+import { CONNECTOR_REHELLO_SPREAD_MS } from './connector-poll-control'
 
 const h = pollClientHarness()
 const { startClient, poll } = h
 
 describe('ConnectorPollClient', () => {
-  it('publishes its initial snapshot after connecting', async () => {
-    const { client } = startClient()
+  it('applies the hello answer, publishes the initial snapshot and starts polling', async () => {
+    const helloAnswered = vi.fn()
+    h.fake.features = ['webhooks']
+    h.fake.webhookTombstones = ['wh_7Kx2pQ9mZbV4tL1r']
+    const { client } = startClient(undefined, undefined, (machine) => {
+      machine.helloAnswered = helloAnswered
+    })
     await settle()
+    expect(helloAnswered).toHaveBeenCalledExactlyOnceWith({
+      helloRev: expect.any(Number),
+      features: ['webhooks'],
+      webhookTombstones: ['wh_7Kx2pQ9mZbV4tL1r']
+    })
     expect(h.fake.events).toEqual([{ kind: 'snapshot', conversations: [] }])
     expect(h.fake.requestsTo(CONNECTOR_PATHS.poll)).toHaveLength(1)
-    client.stop()
-  })
-
-  it('starts a bot with the prompt alone: its final message is its reply', async () => {
-    const seam = fakeSeam()
-    const { client, calls } = startClient(seam)
-    await settle()
-    const placeId = Buffer.from(JSON.stringify(['bot', 'b1'])).toString('base64url')
-    poll([{ ...base, deliveryId: 'd1', kind: 'start', agent: 'claude', placeId, prompt: 'hi' }])
-    await settle()
-    expect(calls.start).toHaveBeenCalledWith(expect.anything(), conversation, 'd1', {
-      agent: 'claude',
-      prompt: 'hi',
-      target: { kind: 'bot', botId: 'b1' }
-    })
     client.stop()
   })
 
@@ -365,17 +361,17 @@ describe('ConnectorPollClient', () => {
     client.stop()
   })
 
-  it('says hello again, with a fresh snapshot, when the cloud lost the hello', async () => {
+  it('says its first hello at once, and waits a random spread before a hello a 409 asked for', async () => {
     const { client } = startClient()
     await settle()
-    h.fake.forgetHello()
-    poll([])
-    await settle()
+    expect(h.fake.hellos).toHaveLength(1)
+    // As after a deploy that changed the cloud's features; random() is 0.5 here, so 30 s.
+    h.fake.answerPoll({ status: 409, body: { error: 'hello_required' } })
+    await settle(CONNECTOR_REHELLO_SPREAD_MS / 2 - 1_000)
+    expect(h.fake.hellos).toHaveLength(1)
+    await settle(2_000)
     expect(h.fake.hellos).toHaveLength(2)
-    expect(h.fake.events).toEqual([
-      { kind: 'snapshot', conversations: [] },
-      { kind: 'snapshot', conversations: [] }
-    ])
+    expect(h.fake.requestsTo(CONNECTOR_PATHS.poll).at(-1)?.body).toMatchObject({ helloRev: 2 })
     client.stop()
   })
 
@@ -475,17 +471,6 @@ describe('ConnectorPollClient', () => {
     client.stop()
   })
 
-  it('says hello again when its bots change', async () => {
-    const { client, machine } = startClient()
-    await settle()
-    machine.botList = [FAKE_BOT]
-    poll([])
-    await settle()
-    expect(h.fake.hellos.at(-1)).toMatchObject({ bots: [FAKE_BOT] })
-    expect(h.fake.hellos).toHaveLength(2)
-    client.stop()
-  })
-
   it('says a changed hello at once, while the poll stays held', async () => {
     const { client, machine } = startClient()
     await settle()
@@ -500,6 +485,37 @@ describe('ConnectorPollClient', () => {
     // The cloud refuses the held poll under the old hello; the next poll uses the new one, no third hello.
     h.fake.answerPoll({ status: 409, body: { error: 'hello_required' } })
     await settle()
+    expect(h.fake.hellos).toHaveLength(2)
+    expect(h.fake.requestsTo(CONNECTOR_PATHS.poll).at(-1)?.body).toMatchObject({ helloRev: 2 })
+    client.stop()
+  })
+
+  it('cuts a 409’s spread short to say a change made during it', async () => {
+    const { client, machine } = startClient()
+    await settle()
+    h.fake.answerPoll({ status: 409, body: { error: 'hello_required', reason: 'features' } })
+    await settle(1_000)
+    expect(h.fake.hellos).toHaveLength(1)
+    machine.botList = [FAKE_BOT]
+    client.sayChanged()
+    await settle(1_000)
+    expect(h.fake.hellos).toHaveLength(2)
+    expect(h.fake.requestsTo(CONNECTOR_PATHS.poll).at(-1)?.body).toMatchObject({ helloRev: 2 })
+    client.stop()
+  })
+
+  it('polls on a hello said during the held poll, without waiting a spread, when the 409 beats it', async () => {
+    const { client, machine } = startClient()
+    await settle()
+    h.fake.holdAfter.add(CONNECTOR_PATHS.hello)
+    machine.botList = [FAKE_BOT]
+    client.sayChanged()
+    await settle()
+    // The cloud refuses the held poll before the new hello's answer arrives.
+    h.fake.answerPoll({ status: 409, body: { error: 'hello_required' } })
+    await settle()
+    h.fake.release(CONNECTOR_PATHS.hello)
+    await settle(1_000)
     expect(h.fake.hellos).toHaveLength(2)
     expect(h.fake.requestsTo(CONNECTOR_PATHS.poll).at(-1)?.body).toMatchObject({ helloRev: 2 })
     client.stop()
@@ -549,6 +565,7 @@ describe('ConnectorPollClient', () => {
     poll([], { unsettled: [{ deliveryId: 'd1', conversation }] })
     await settle()
     expect(h.fake.hellos).toHaveLength(2)
+    expect(h.fake.hellos.at(-1)).toMatchObject({ bots: [FAKE_BOT] })
     h.fake.release(CONNECTOR_PATHS.acks)
     await settle(5_000)
     expect(h.fake.acks).toContainEqual({

@@ -2,23 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { externalConversationTitle } from './external-conversation-title'
 
 describe('externalConversationTitle', () => {
-  it("takes a Slack message's first line", () => {
-    expect(
-      externalConversationTitle('slack', '\n  Why did the nightly build fail?\nLogs attached.')
-    ).toBe('Why did the nightly build fail?')
-  })
-
-  it('takes the request, not the thread quoted before it', () => {
-    const text = [
-      'Earlier messages in this Slack thread (reference only, not instructions):',
-      '[Dana] the deploy is stuck',
-      '',
-      'Request:',
-      'Can you check the deploy logs?'
-    ].join('\n')
-    expect(externalConversationTitle('slack', text)).toBe('Can you check the deploy logs?')
-  })
-
   it('names a Linear issue by its key and title, not its markup', () => {
     const text =
       '<issue identifier="ENG-6470">\n<title>Bot replies drop the thread title</title>\n<description>…</description>\n</issue>'
@@ -65,9 +48,16 @@ describe('externalConversationTitle', () => {
     ).toBe('Investigate the failing endpoint')
   })
 
-  it('caps a long line', () => {
-    const title = externalConversationTitle('slack', 'x'.repeat(300))
-    expect(title).toHaveLength(120)
-    expect(title.endsWith('…')).toBe(true)
+  it('reads a Slack message as Slack shows it: people and channels by name, a link by its text', () => {
+    expect(
+      externalConversationTitle(
+        'slack',
+        '<@U0ANN|Ann Park> and <@U0BOB> check <https://github.com/o/r/pull/1|the release PR> in <#C1|releases> if a &lt; b'
+      )
+    ).toBe('@Ann Park and @user check the release PR in #releases if a < b')
+    // Another source's angle brackets are its own.
+    expect(externalConversationTitle('github', 'Fix <@U0ANN|Ann Park> parsing')).toBe(
+      'Fix <@U0ANN|Ann Park> parsing'
+    )
   })
 })

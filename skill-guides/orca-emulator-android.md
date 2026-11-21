@@ -58,7 +58,7 @@ device.
 | Attach / make active | `ORCA emulator attach <avd-name-or-serial> --json`                              | Given an AVD name, boots it first. Makes the device active for the worktree.                                              |
 | Single tap           | `ORCA emulator tap <x> <y> --json`                                              | Normalized 0..1 coordinates.                                                                                              |
 | Swipe / gesture      | `ORCA emulator gesture '<json>' --json`                                         | adb approximates the path by its endpoints, first point to last.                                                          |
-| Type text            | `ORCA emulator type "user@example.com" --json`                                  | US-ASCII, spaces handled, no newlines.                                                                                    |
+| Type text            | `ORCA emulator type "user@example.com" --json`                                  | Any text while attached; without a stream, US-ASCII on one line.                                                          |
 | Hardware button      | `ORCA emulator button back --json`                                              | `home`, `back`, `recents`, `power`, `volume_up`, `volume_down`.                                                           |
 | Rotate               | `ORCA emulator rotate landscape_left --json`                                    | Sets `user_rotation` and disables auto-rotate.                                                                            |
 | Install an APK       | `ORCA emulator install ./app-debug.apk --reinstall --json`                      | `--reinstall` passes `-r`.                                                                                                |
@@ -92,8 +92,11 @@ commands target it. Pass a selector only to override that or reach a second devi
 - All coordinates are normalized 0..1 with a top-left origin, never pixels. Orca scales them
   to the device's live resolution.
 - Prefer `tap` over `gesture` for a single tap.
-- `type` uses `adb shell input text`: US-ASCII only, spaces handled, newlines not. Use the
-  app UI directly for unicode-heavy input.
+- `type` goes over the attached emulator's stream: US keyboard text is typed as keys, and any
+  other text is pasted through the device clipboard (replacing it). Trailing newlines press Enter.
+  Chrome and WebView pages accept such a paste only within about 5 seconds of a tap, so `tap`
+  the field right before typing non-ASCII text there. Without a stream, `type` falls back to
+  `adb shell input text`, which takes US-ASCII on one line only.
 - `gesture` is a straight swipe between the first and last point, so it fits scrolling and
   swiping but not a true multi-touch path.
 - Run `kill` when you are done. A helper left running holds the device until Orca quits.

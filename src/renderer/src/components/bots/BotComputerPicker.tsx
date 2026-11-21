@@ -1,22 +1,15 @@
 // New bot's Computer field: ready computers first, then the rest with their fix (Reconnect, Update).
 import React, { useEffect, useState } from 'react'
-import { HostCombobox, type HostComboboxOption } from '@/components/host-picker/HostCombobox'
-import { HostRowIcon } from '@/components/host-picker/host-row-icon'
+import { noHostsMatchLabel } from '@/components/host-picker/host-picker-copy'
+import RunTargetCombobox from '@/components/new-workspace/run-target/RunTargetCombobox'
+import type { RunTargetHostOption } from '@/components/new-workspace/run-target/run-target-options'
 import { connectRuntimeHostAndReloadProjects } from '@/components/status-bar/host-connections/runtime-environment-explicit-connect'
 import type { Translate } from '@/i18n/use-translate'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
-import {
-  botCreateHostRows,
-  type BotCreateHostAction,
-  type BotCreateHostRow
-} from './bot-create-host-rows'
+import { botCreateHostRows, type BotCreateHostAction } from './bot-create-host-rows'
 import { useServerUpdatable, type BotCreateHostChoice } from './bot-create-hosts'
-
-// Search earns its row only once the list is long.
-const SEARCH_FROM_ROWS = 8
 
 function actionLabel(action: BotCreateHostAction, t: Translate): string {
   switch (action) {
@@ -29,37 +22,12 @@ function actionLabel(action: BotCreateHostAction, t: Translate): string {
   }
 }
 
-function rowContent(row: BotCreateHostRow, t: Translate): React.ReactNode {
-  const { host, meta, action } = row
-  return (
-    <span className="flex min-w-0 flex-1 items-center gap-2">
-      <HostRowIcon hostId={host.hostId} />
-      <span className={cn('min-w-0 truncate', host.blocked && action && 'text-muted-foreground')}>
-        {host.label}
-      </span>
-      <span className="min-w-2 flex-1" />
-      {meta ? (
-        // Shrinks well before the name does.
-        <span className="min-w-0 shrink-[100] truncate text-muted-foreground">{meta}</span>
-      ) : null}
-      {action ? (
-        <span
-          className={cn(
-            'shrink-0',
-            action === 'reconnecting' ? 'text-muted-foreground' : 'font-medium text-foreground'
-          )}
-        >
-          {actionLabel(action, t)}
-        </span>
-      ) : null}
-    </span>
-  )
-}
-
 export function BotComputerPicker({
-  hostChoice
+  hostChoice,
+  onAddHost
 }: {
   hostChoice: BotCreateHostChoice
+  onAddHost?: (mode: 'ssh' | 'server') => void
 }): React.JSX.Element {
   const t = useTranslate()
   const { host, hosts } = hostChoice
@@ -67,20 +35,25 @@ export function BotComputerPicker({
   const setUpdateDialogOpen = useAppStore((s) => s.setRemoteServerUpdateDialogOpen)
   const updatable = useServerUpdatable()
   const [readyAtOpen, setReadyAtOpen] = useState<ReadonlySet<ExecutionHostId> | null>(null)
+  // Only an open list reads servers' accounts and update state (both go over the network); its rows are
+  // built from what is already known, closed too, so a key that opens it arms the row it will show.
+  const listOpen = readyAtOpen !== null
   const [reconnecting, setReconnecting] = useState<ReadonlySet<string>>(new Set())
   const refreshUpdates = useAppStore((s) => s.refreshRemoteServerUpdates)
   const { setListing } = hostChoice
-  // Mounted while Change is open, so accounts are read before the list opens and nothing pops in.
   useEffect(() => {
-    setListing(true)
+    setListing(listOpen)
     return () => setListing(false)
-  }, [setListing])
-  const needsUpdateCheck = hosts.some(
-    (entry) =>
-      entry.blocked === 'no-bots' &&
-      entry.environmentId &&
-      !remoteServerUpdates.has(entry.environmentId)
-  )
+  }, [listOpen, setListing])
+  // The update check asks every server, so it waits for the list, as it did behind New bot's Change.
+  const needsUpdateCheck =
+    listOpen &&
+    hosts.some(
+      (entry) =>
+        entry.blocked === 'no-bots' &&
+        entry.environmentId &&
+        !remoteServerUpdates.has(entry.environmentId)
+    )
   useEffect(() => {
     if (needsUpdateCheck) {
       void refreshUpdates()
@@ -108,61 +81,38 @@ export function BotComputerPicker({
     },
     t
   )
-  const grouped =
-    rows.some((row) => row.group === 'ready') && rows.some((row) => row.group === 'unavailable')
-  const options = rows.map((row): HostComboboxOption => {
+  const options = rows.map((row): RunTargetHostOption => {
     const { host: rowHost, action } = row
     const environmentId = rowHost.environmentId
-    const onSelect =
-      action === 'reconnect' && environmentId
+    const onSelect = !rowHost.blocked
+      ? () => hostChoice.setHostId(rowHost.hostId)
+      : action === 'reconnect' && environmentId
         ? () => reconnect(environmentId)
         : action === 'update'
           ? () => setUpdateDialogOpen(true)
           : undefined
     return {
       id: rowHost.hostId,
+      hostId: rowHost.hostId,
       label: rowHost.label,
-      content: rowContent(row, t),
-      triggerContent: (
-        <span className="flex min-w-0 items-center gap-2">
-          <HostRowIcon hostId={rowHost.hostId} />
-          <span className="min-w-0 truncate">{rowHost.label}</span>
-        </span>
-      ),
-      ...(grouped
-        ? {
-            group:
-              row.group === 'ready'
-                ? t('bots.new.hostsReady', 'Ready')
-                : t('bots.new.hostsUnavailable', 'Not available')
-          }
-        : {}),
-      // A row with no fix is only there to say the computer exists.
-      disabled: Boolean(rowHost.blocked) && !onSelect,
-      ...(row.hint
-        ? {
-            description:
-              action === 'reconnect'
-                ? t('bots.new.hostHintAction', '{{hint}}. {{action}}', {
-                    hint: row.hint,
-                    action: actionLabel(action, t)
-                  })
-                : row.hint
-          }
-        : {}),
-      ...(rowHost.blocked && onSelect ? { onSelect, keepOpen: action === 'reconnect' } : {})
+      detail: action === 'reconnecting' ? actionLabel(action, t) : (row.meta ?? row.hint ?? ''),
+      description: row.meta ? (row.hint ?? undefined) : undefined,
+      group: row.group,
+      available: !rowHost.blocked,
+      onSelect,
+      keepOpen: action === 'reconnect',
+      trailing:
+        action && action !== 'reconnecting'
+          ? () => <span className="shrink-0 text-xs font-medium">{actionLabel(action, t)}</span>
+          : undefined
     }
   })
 
   return (
-    <HostCombobox
-      value={host.hostId}
-      onChange={(id) => {
-        const picked = hosts.find((entry) => entry.hostId === id)
-        if (picked) {
-          hostChoice.setHostId(picked.hostId)
-        }
-      }}
+    <RunTargetCombobox
+      selectedHostId={host.hostId}
+      fieldName={t('bots.new.computer', 'Computer')}
+      emptyMessage={noHostsMatchLabel(t)}
       onOpenChange={(open) =>
         setReadyAtOpen(
           open
@@ -170,12 +120,10 @@ export function BotComputerPicker({
             : null
         )
       }
-      options={options}
-      searchFrom={SEARCH_FROM_ROWS}
-      searchPlaceholder={t('bots.new.searchComputers', 'Search computers…')}
-      reserveCheck
-      size="sm"
-      className="w-full"
+      hostOptions={options}
+      onAddSshHost={onAddHost ? () => onAddHost('ssh') : undefined}
+      onAddRemoteServer={onAddHost ? () => onAddHost('server') : undefined}
+      truncateMiddle
     />
   )
 }

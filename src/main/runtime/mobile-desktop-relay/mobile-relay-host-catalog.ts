@@ -161,6 +161,13 @@ export class MobileRelayHostCatalog {
     return result
   }
 
+  /** Whether a phone can reach this server through the desktop now, without announcing a list. */
+  async relayReady(hostId: ExecutionHostId): Promise<boolean> {
+    return (await this.describe()).hosts.some(
+      (host) => host.hostId === hostId && host.relay === 'ready'
+    )
+  }
+
   /** Calls `changed` whenever list() would answer differently, so phones need not poll it. */
   publishListChanges(sources: RelayHostListAnnouncerSources): () => void {
     const announcer = new RelayHostListAnnouncer(

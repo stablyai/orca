@@ -6,6 +6,7 @@ import {
 } from '../../../../../shared/editor/formatting/editor-formatter'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
@@ -20,9 +21,12 @@ export function getRepositoryFormatterSearchEntry(t: Translate = translate) {
       'settings.repositoryFormatter.description',
       'Use this project’s formatter for Format on Save.'
     ),
-    keywords: [
-      t('settings.editorFormatOnSave.keywords', 'formatter format on save prettier biome gofmt')
-    ]
+    keywords: translateSearchKeyword(
+      'settings.editorFormatOnSave.keywords',
+      'formatter format on save prettier biome gofmt',
+      undefined,
+      t
+    )
   }
 }
 

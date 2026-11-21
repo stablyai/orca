@@ -1,6 +1,5 @@
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import { BridgePageReaders } from './bridge-page-readers'
-import { BRIDGE_APP_INACTIVE_FRAME } from '../bridge/page-lifecycle/bridge-app-inactive'
 
 import { BridgeCapExceededError } from './bridge-host-errors'
 import { createNativeVerbServer } from '../native-capabilities/bridge-host-native-verbs'
@@ -335,9 +334,9 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     publishUiLocale: (next) => {
       routes.publishUiLocale(next, deliverable())
     },
-    sendAppInactive: () => {
-      if (pageReaders.appInactiveFrames && deliverable()) {
-        send({ v: BRIDGE_PROTOCOL_VERSION, type: BRIDGE_APP_INACTIVE_FRAME })
+    sendAppFrame: (frame) => {
+      if (pageReaders.reads(frame.type) && deliverable()) {
+        send({ v: BRIDGE_PROTOCOL_VERSION, ...frame })
       }
     },
     sendBack: back.send,

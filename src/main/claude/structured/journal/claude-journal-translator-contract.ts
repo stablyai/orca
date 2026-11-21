@@ -1,3 +1,4 @@
+import type { ClaudeFullAccessRefusalNotice } from '../permissions/claude-full-access-refusal-notice'
 import type { ClaudeTaskInvocations } from '../../background-tasks/claude-task-invocations'
 import type { ClaudeJournalBoundDelivery } from './claude-journal-bound-delivery'
 import type { AgentSessionContextReport } from '../../../../shared/agent-session/conversation-context/agent-session-context-usage'
@@ -35,6 +36,8 @@ export type ClaudeJournalTranslatorDeps = {
   acceptStartupFailure?: (message: Record<string, unknown>) => boolean
   /** True while a send written with priority `now` has not been echoed. */
   steerAwaitingEcho?: () => boolean
+  /** The Full access refusal warning this chat is due and has not had yet, else null. */
+  fullAccessRefusalNotice?: () => ClaudeFullAccessRefusalNotice | null
 }
 
 export type ClaudeJournalTranslator = {
