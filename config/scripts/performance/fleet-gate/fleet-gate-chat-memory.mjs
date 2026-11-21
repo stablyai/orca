@@ -1,4 +1,5 @@
 // Idle-chat memory slope: main's memory growth per live idle chat, judged on NEW alone.
+import fs from 'node:fs'
 import path from 'node:path'
 import { copyProfile } from './fleet-gate-copies.mjs'
 import {
@@ -9,6 +10,7 @@ import {
 } from './fleet-gate-launch-burst.mjs'
 import { removeRunDir } from './fleet-gate-run-dirs.mjs'
 import { closeStartupDialogs } from './fleet-gate-scenarios.mjs'
+import { readFleetCensus, SEED_SHAPE } from './fleet-gate-synthetic-seed.mjs'
 
 const CHAT_MEMORY_LOW = 10
 const CHAT_MEMORY_HIGH = 200
@@ -17,6 +19,24 @@ const MAX_MAIN_MB_PER_CHAT = 0.75
 const RELEASE_WAIT_MS = 60_000
 const SAMPLE_WINDOW_MS = 60_000
 const SAMPLE_EVERY_MS = 5_000
+// Memory falling this much as 190 chats start means a reading was wrong, not that chats are free.
+const MIN_MAIN_MB_PER_CHAT = -0.25
+
+/** Chat stub processes still running: the reading only counts if every chat it started is alive. */
+function liveChatCount(launchLog) {
+  const lines = fs.existsSync(launchLog) ? fs.readFileSync(launchLog, 'utf8').split('\n') : []
+  let live = 0
+  for (const line of lines) {
+    if (!line.includes('"--input-format"')) {
+      continue
+    }
+    try {
+      process.kill(JSON.parse(line).pid, 0)
+      live += 1
+    } catch {}
+  }
+  return live
+}
 
 /**
  * Main's private footprint once V8 has handed back the freed pages of the last chat burst (a memory-pressure
@@ -43,7 +63,7 @@ async function sampleMainFootprintMb(electronApp, page) {
   return Math.round(lowest * 10) / 10
 }
 
-/** Main's footprint at 10 then 200 live idle chats, each read after the same long settle, so burst garbage has gone. */
+/** Main's footprint at 10 then 200 live idle chats on the full fleet, each read the same way once burst garbage is gone. */
 export async function chatMemoryOnce({
   launchCopy,
   arm,
@@ -70,23 +90,50 @@ export async function chatMemoryOnce({
   })
   try {
     await pointClaudeAtStub(copy.page, stub.command)
+    // A settle longer than the idle stop would read memory with the chats already stopped.
+    await copy.page.evaluate(() =>
+      window.__store.getState().updateSettings({ nativeChatIdleStopMinutes: 0 })
+    )
     await new Promise((resolve) => setTimeout(resolve, options.settleMs))
     await closeStartupDialogs(copy.page, result.incomplete)
+    const { workspaces } = await readFleetCensus(copy.page)
+    const fleet = SEED_SHAPE.worktrees + SEED_SHAPE.folders
+    if (!(workspaces >= fleet)) {
+      result.incomplete.push(
+        `chat-mem: fleet loaded ${String(workspaces)} of ${String(fleet)} workspaces`
+      )
+    }
     const step = async (count, offset) => {
       const batch = await createChatBurst(copy.page, count, offset, 'fleet gate idle turn')
-      const launched = await waitForLaunches(stub.launchLog, offset + count, 300_000)
-      if (batch.requested !== count || batch.refused.length > 0 || launched < offset + count) {
-        result.short = true
+      if (batch.requested !== count || batch.refused.length > 0) {
         result.incomplete.push(
-          `chat-mem: ${String(launched)} of ${String(offset + count)} chats started (${String(batch.refused.length)} refused)`
+          `chat-mem: ${String(batch.requested)} of ${String(count)} chats requested, ${String(batch.refused.length)} refused`
         )
+        return null
+      }
+      const launched = await waitForLaunches(stub.launchLog, offset + count, 300_000)
+      if (launched < offset + count) {
+        result.incomplete.push(
+          `chat-mem: ${String(launched)} of ${String(offset + count)} chats started`
+        )
+        return null
       }
       await new Promise((resolve) => setTimeout(resolve, options.chatSettleMs))
-      return sampleMainFootprintMb(copy.app, copy.page)
+      const footprint = await sampleMainFootprintMb(copy.app, copy.page)
+      const live = liveChatCount(stub.launchLog)
+      if (live < offset + count) {
+        result.incomplete.push(
+          `chat-mem: ${String(live)} of ${String(offset + count)} chats alive at the reading`
+        )
+        return null
+      }
+      return footprint
     }
-    result.lowMb = await step(CHAT_MEMORY_LOW, 0)
-    result.highMb = await step(CHAT_MEMORY_HIGH - CHAT_MEMORY_LOW, CHAT_MEMORY_LOW)
-    result.chats = CHAT_MEMORY_HIGH - CHAT_MEMORY_LOW
+    result.lowMb = result.incomplete.length === 0 ? await step(CHAT_MEMORY_LOW, 0) : null
+    if (result.lowMb !== null) {
+      result.highMb = await step(CHAT_MEMORY_HIGH - CHAT_MEMORY_LOW, CHAT_MEMORY_LOW)
+      result.chats = CHAT_MEMORY_HIGH - CHAT_MEMORY_LOW
+    }
   } finally {
     await copy.close()
   }
@@ -101,15 +148,18 @@ export function chatMemoryRows(results) {
     return []
   }
   const label = `main MB/idle chat (${String(CHAT_MEMORY_LOW)}→${String(CHAT_MEMORY_HIGH)})`
-  const measured = typeof run.lowMb === 'number' && typeof run.highMb === 'number' && run.chats > 0
-  const perChat = measured ? (run.highMb - run.lowMb) / run.chats : null
+  const perChat =
+    typeof run.lowMb === 'number' && typeof run.highMb === 'number' && run.chats > 0
+      ? (run.highMb - run.lowMb) / run.chats
+      : null
+  const judged = perChat !== null && run.incomplete.length === 0 && perChat >= MIN_MAIN_MB_PER_CHAT
   return [
     {
       scenario: 'chat-mem',
       metric: { label },
       old: null,
       new: perChat === null ? '—' : Math.round(perChat * 100) / 100,
-      verdict: !measured || run.short ? 'n/a' : perChat > MAX_MAIN_MB_PER_CHAT ? 'FAIL' : 'ok'
+      verdict: !judged ? 'n/a' : perChat > MAX_MAIN_MB_PER_CHAT ? 'FAIL' : 'ok'
     }
   ]
 }

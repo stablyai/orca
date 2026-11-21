@@ -75,7 +75,7 @@ export function parseArgs(argv) {
   for (const name of options.scenarios ?? []) {
     if (!Object.hasOwn(SCENARIOS, name) && name !== 'burst' && name !== 'chat-memory') {
       throw new Error(
-        `unknown scenario ${String(name)}; known: ${Object.keys(SCENARIOS).join(', ')}`
+        `unknown scenario ${String(name)}; known: ${[...Object.keys(SCENARIOS), 'burst', 'chat-memory'].join(', ')}`
       )
     }
   }
