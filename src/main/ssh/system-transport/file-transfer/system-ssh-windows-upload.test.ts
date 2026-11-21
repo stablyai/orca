@@ -182,7 +182,10 @@ describe('Windows upload over sftp', () => {
     expect(seen).toHaveLength(1)
     expect(seen[0]!.contents.toString()).toBe('1.2.3')
     // Repository payloads in shared temp directories must be private from creation.
-    expect(seen[0]!.mode).toBe(0o600)
+    // Windows stat synthesizes mode bits (0o666), so only POSIX can observe the created mode.
+    if (process.platform !== 'win32') {
+      expect(seen[0]!.mode).toBe(0o600)
+    }
     await expect(readFile(seen[0]!.path)).rejects.toThrow()
   })
 

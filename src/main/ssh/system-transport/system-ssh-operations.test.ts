@@ -3,7 +3,8 @@ import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
 
 const { accessMock, existsSyncMock, spawnMock } = vi.hoisted(() => ({
-  accessMock: vi.fn(),
+  // Windows directory uploads probe System32 tar.exe first; default to it existing.
+  accessMock: vi.fn(async () => {}),
   existsSyncMock: vi.fn(),
   spawnMock: vi.fn()
 }))
@@ -111,6 +112,7 @@ describe('spawnSystemSsh', () => {
 
 describe('system SSH operation aborts', () => {
   beforeEach(() => {
+    accessMock.mockReset()
     existsSyncMock.mockReset()
     spawnMock.mockReset()
     mockSystemSshExists()
@@ -128,6 +130,8 @@ describe('system SSH operation aborts', () => {
       '/tmp/remote-relay',
       { signal: controller.signal }
     )
+    // Windows awaits the tar.exe probe before spawning, so abort only once both children exist.
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
     controller.abort()
 
     const outcome = await Promise.race([
