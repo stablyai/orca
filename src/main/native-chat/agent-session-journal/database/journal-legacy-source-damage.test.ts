@@ -40,7 +40,9 @@ function reconcileOpen(shape: string, stored: string | undefined) {
   )
   source?.close()
   const damaged = db
-    .prepare("SELECT value FROM agent_session_store_meta WHERE key='journal.legacy-source-damaged.v1'")
+    .prepare(
+      "SELECT value FROM agent_session_store_meta WHERE key='journal.legacy-source-damaged.v1'"
+    )
     .get()
   return { read: source !== undefined, damaged: damaged && String(damaged.value) }
 }
