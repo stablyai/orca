@@ -123,7 +123,7 @@ export function NativeChatQueuedMessageList({
               aria-label={t('components.native-chat.queuedMessages.listLabel', 'Queued messages')}
               // Bound queue height to preserve transcript/composer space; allow extra room for edit thumbnails.
               className={cn(
-                'scrollbar-sleek divide-y divide-border overflow-y-auto',
+                'scrollbar-sleek divide-y divide-border overflow-y-auto [scrollbar-gutter:stable]',
                 controller.editor ? 'max-h-72' : 'max-h-40'
               )}
             >
@@ -197,7 +197,8 @@ function NativeChatQueueHeader({
   return (
     <div
       className={cn(
-        'flex items-center gap-1 rounded-t-md py-1 pr-1 pl-2.5 text-xs text-muted-foreground',
+        // Reserves the list's scrollbar gutter so its chevron shares the rows' column wherever scrollbars take width.
+        'scrollbar-sleek flex items-center gap-1 overflow-hidden rounded-t-md py-1 pr-1 pl-2.5 text-xs text-muted-foreground [scrollbar-gutter:stable]',
         pause && 'bg-muted',
         !expanded && 'rounded-b-md'
       )}

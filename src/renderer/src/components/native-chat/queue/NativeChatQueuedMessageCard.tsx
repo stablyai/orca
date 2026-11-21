@@ -243,8 +243,13 @@ export function NativeChatQueuedMessageCard({
         )}
         {drag?.grip}
       </span>
-      {/* Expanded, the actions scroll with the text they belong to. */}
-      <div className={cn('min-w-0 flex-1', expanded && 'scrollbar-sleek max-h-62 overflow-y-auto')}>
+      {/* Expanded, the actions scroll with the text; the scroller spans the row's padding so focus rings aren't clipped. */}
+      <div
+        className={cn(
+          'min-w-0 flex-1',
+          expanded && 'scrollbar-sleek -my-1 -mr-1 max-h-64 overflow-y-auto py-1 pr-1'
+        )}
+      >
         {/* Floated, one text line tall, so only the first line makes room; hidden actions keep their space so text never shifts. */}
         <div className="float-right -mb-1 ml-1 flex h-7 items-center">
           {card.images ? <QueuedMessageImageCount images={card.images} /> : null}
