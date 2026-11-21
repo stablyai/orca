@@ -1,4 +1,4 @@
-import { AgentHistoryLoadState } from './AgentHistoryLoadState'
+import { AgentHistoryEmptyList, AgentHistoryLoadState } from './AgentHistoryLoadState'
 import { scopeSegments } from './agent-history-scope-segments'
 import { openMobileAgentHistoryChat } from './open-mobile-agent-history-chat'
 import { mobileStructuredSessionOpenMessage } from '../session/native-chat/agent-session/mobile-structured-session-open-message'
@@ -7,7 +7,7 @@ import { useResumedHistoryTerminalOpener } from './open-resumed-history-terminal
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ChevronLeft, History, RefreshCw } from 'lucide-react-native'
+import { ChevronLeft, RefreshCw } from 'lucide-react-native'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileSegmentedControl } from '../components/controls/MobileSegmentedControl'
 import { NavBar } from '../components/nav-bar/NavBar'
@@ -39,7 +39,6 @@ import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-wo
 import { MobileAgentSessionHistoryList } from './MobileAgentSessionHistoryList'
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
 import { styles } from './agent-history-styles'
-import { MobileNoMatchState, MobileStateView } from '../components/feedback/MobileStateView'
 import {
   AgentHistoryInterruptedNotice,
   AgentHistoryResumeNotice,
@@ -354,33 +353,14 @@ function MobileAgentSessionHistoryPanelContent({
           onDismiss={() => setResumeMessage(null)}
         />
         {sections.length === 0 ? (
-          effectiveQuery ? (
-            <MobileNoMatchState
-              message={t('agentHistory.panel.noSearchResults', 'No sessions match your search.')}
-              onClear={() => setQuery('')}
-              bottomInset={searchBarHeight}
-            />
-          ) : !agentHistoryShowsEveryAgent(agents) ? (
-            <MobileNoMatchState
-              onClear={() => setAgents(AiVault.AI_VAULT_AGENTS)}
-              clearLabel={t('agentHistory.panel.showAllAgents', 'Show all agents')}
-              bottomInset={searchBarHeight}
-            />
-          ) : (
-            <MobileStateView
-              icon={History}
-              title={t('agentHistory.panel.noSessions', 'No agent sessions')}
-              message={
-                conversationId
-                  ? t(
-                      'agentHistory.panel.conversationUnavailable',
-                      "This conversation's history is unavailable on this host."
-                    )
-                  : t('agentHistory.panel.emptyScope', 'No past agent sessions in this scope.')
-              }
-              bottomInset={searchBarHeight}
-            />
-          )
+          <AgentHistoryEmptyList
+            query={effectiveQuery}
+            agentFiltered={!agentHistoryShowsEveryAgent(agents)}
+            conversation={Boolean(conversationId)}
+            bottomInset={searchBarHeight}
+            onClearQuery={() => setQuery('')}
+            onShowAllAgents={() => setAgents(AiVault.AI_VAULT_AGENTS)}
+          />
         ) : (
           <MobileAgentSessionHistoryList
             key={conversationId ?? 'history'}

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { History } from 'lucide-react-native'
 import {
   MobileLoadErrorState,
+  MobileNoMatchState,
   MobileOfflineState,
   MobileStateView
 } from '../components/feedback/MobileStateView'
@@ -45,4 +46,57 @@ export function AgentHistoryLoadState({
     )
   }
   return <>{children}</>
+}
+
+/** A loaded list with nothing to show: a search or agent filter to clear, or nothing in scope. */
+export function AgentHistoryEmptyList({
+  query,
+  agentFiltered,
+  conversation,
+  bottomInset,
+  onClearQuery,
+  onShowAllAgents
+}: {
+  query: string
+  agentFiltered: boolean
+  /** One conversation's history, which this host could not find. */
+  conversation: boolean
+  bottomInset: number
+  onClearQuery: () => void
+  onShowAllAgents: () => void
+}) {
+  const t = useMobileTranslation()
+  if (query) {
+    return (
+      <MobileNoMatchState
+        message={t('agentHistory.panel.noSearchResults', 'No sessions match your search.')}
+        onClear={onClearQuery}
+        bottomInset={bottomInset}
+      />
+    )
+  }
+  if (agentFiltered) {
+    return (
+      <MobileNoMatchState
+        onClear={onShowAllAgents}
+        clearLabel={t('agentHistory.panel.showAllAgents', 'Show all agents')}
+        bottomInset={bottomInset}
+      />
+    )
+  }
+  return (
+    <MobileStateView
+      icon={History}
+      title={t('agentHistory.panel.noSessions', 'No agent sessions')}
+      message={
+        conversation
+          ? t(
+              'agentHistory.panel.conversationUnavailable',
+              "This conversation's history is unavailable on this host."
+            )
+          : t('agentHistory.panel.emptyScope', 'No past agent sessions in this scope.')
+      }
+      bottomInset={bottomInset}
+    />
+  )
 }
