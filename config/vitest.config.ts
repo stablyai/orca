@@ -203,7 +203,12 @@ const sharedProjects =
             ),
             setupFiles: [
               ...runtimeProject.test.setupFiles,
-              resolve('config/scripts/test-runtime/environment/vitest-shared-worker-file-reset.mjs')
+              resolve(
+                'config/scripts/test-runtime/environment/vitest-shared-worker-file-reset.mjs'
+              ),
+              resolve(
+                'config/scripts/test-runtime/environment/vitest-structured-agent-session-host-reset.ts'
+              )
             ]
           }
         }
