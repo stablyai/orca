@@ -1,5 +1,8 @@
 import type { Repo } from '../../../../shared/repository/repo-types'
-import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal/removal'
+import {
+  assertWorktreeUnlockedForRemoval,
+  CheckoutIdentityRefusal
+} from '../../../../shared/worktree/removal/removal'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import { listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
 import { findExistingWorktreeSymlinkPaths } from '../../../git/worktrees/content-paths/worktree-symlink-detection'
@@ -113,6 +116,10 @@ export async function assertRegisteredLocalWorktreePreflight(
           : assertWorktreeCleanForRemoval(canonicalWorktreePath, force))
     }
   } catch (error) {
+    // A refusal names the path, which may itself contain text the orphan classifier matches.
+    if (error instanceof CheckoutIdentityRefusal) {
+      throw error
+    }
     if (!isOrphanCompatiblePreflightError(error)) {
       throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
     }

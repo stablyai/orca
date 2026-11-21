@@ -162,6 +162,7 @@ it('refuses before sweeping children when a checkout replaces the pinned marker 
       })
     ).rejects.toThrow('A different checkout is now at')
 
+    expect(proveOrphan).toHaveBeenCalled()
     expect(removeChild).not.toHaveBeenCalled()
     expect(unlink).not.toHaveBeenCalled()
   } finally {
@@ -187,6 +188,7 @@ it('refuses before sweeping children when a checkout replaces the pinned marker 
       })
     ).rejects.toThrow('A different checkout is now at')
 
+    expect(names).toHaveBeenCalled()
     expect(removeChild).not.toHaveBeenCalled()
     expect(unlink).not.toHaveBeenCalled()
   } finally {
