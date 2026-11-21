@@ -20,7 +20,14 @@ type ZoomStep = (zoom: number, fitScale: number) => number
 /** Movement under this many pixels still counts as a click. */
 const CLICK_SLOP = 4
 
-type PointerGesture = { start: PanZoomPoint; last: PanZoomPoint; pan: boolean; alt: boolean }
+// `moved`: once past the slop it stays a drag, even if it ends back at the start.
+type PointerGesture = {
+  start: PanZoomPoint
+  last: PanZoomPoint
+  pan: boolean
+  alt: boolean
+  moved: boolean
+}
 
 // Pinch zoom back to the fit lands near, not on, 1.
 const FIT_ZOOM_EPSILON = 1e-3
@@ -219,12 +226,16 @@ export function usePanZoomViewport({
         const point = { x: event.clientX, y: event.clientY }
         // Touch and pen have no Alt key, so they keep dragging to pan.
         const pan = event.altKey || event.pointerType === 'touch' || event.pointerType === 'pen'
-        gestureRef.current = { start: point, last: point, pan, alt: event.altKey }
+        gestureRef.current = { start: point, last: point, pan, alt: event.altKey, moved: false }
         setDragging(pan)
       },
       onPointerMove: (event) => {
         setAltHeld(event.altKey)
         const gesture = gestureRef.current
+        if (gesture && !gesture.moved) {
+          const { x, y } = gesture.start
+          gesture.moved = Math.hypot(event.clientX - x, event.clientY - y) >= CLICK_SLOP
+        }
         if (!gesture?.pan || !geometry) {
           return
         }
@@ -252,7 +263,7 @@ export function usePanZoomViewport({
           return
         }
         const moved = Math.hypot(event.clientX - gesture.start.x, event.clientY - gesture.start.y)
-        if (moved >= CLICK_SLOP) {
+        if (gesture.moved || moved >= CLICK_SLOP) {
           return
         }
         const rect = event.currentTarget.getBoundingClientRect()

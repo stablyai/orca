@@ -90,6 +90,7 @@ export function PanZoomImageDialog({
   onNext,
   onCloseAutoFocus,
   onKeyDown,
+  busy,
   ...contentProps
 }: PanZoomImageDialogProps): React.JSX.Element {
   const openerRef = useRef<Element | null>(null)
@@ -98,6 +99,7 @@ export function PanZoomImageDialog({
       <DialogContent
         aria-describedby={undefined}
         {...contentProps}
+        busy={busy}
         onKeyDown={(event) => {
           onKeyDown?.(event)
           const step =
@@ -155,6 +157,7 @@ export function PanZoomImageDialog({
           onPrevious={onPrevious}
           onNext={onNext}
           onClose={() => onOpenChange(false)}
+          closeOnBackdrop={!busy}
         />
       </DialogContent>
     </Dialog>
@@ -171,7 +174,8 @@ function PanZoomImageCanvas({
   toolbarActions,
   onPrevious,
   onNext,
-  onClose
+  onClose,
+  closeOnBackdrop
 }: Pick<
   PanZoomImageDialogProps,
   | 'src'
@@ -183,14 +187,18 @@ function PanZoomImageCanvas({
   | 'toolbarActions'
   | 'onPrevious'
   | 'onNext'
-> & { onClose: () => void }): React.JSX.Element {
+> & { onClose: () => void; closeOnBackdrop: boolean }): React.JSX.Element {
   const t = useTranslate()
   const [loaded, setLoaded] = useState<{ src: string; size: PanZoomSize } | null>(null)
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
   const imageSrc = src && src !== failedSrc ? src : null
   const content = size ?? (loaded && loaded.src === imageSrc ? loaded.size : null)
   // Fitted images stay clear of the toolbar row above them.
-  const panZoom = usePanZoomViewport({ content, fitPadding: 96, onClickOutsideContent: onClose })
+  const panZoom = usePanZoomViewport({
+    content,
+    fitPadding: 96,
+    onClickOutsideContent: closeOnBackdrop ? onClose : undefined
+  })
   useViewerZoomCommands(panZoom, 'popup')
 
   return (

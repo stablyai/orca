@@ -42,9 +42,14 @@ function Viewer(): React.JSX.Element {
   )
 }
 
-function press(from: { x: number; y: number }, to = from): void {
+type Point = { x: number; y: number }
+
+function press(from: Point, to = from, via: Point[] = []): void {
   const canvas = screen.getByTestId('pan-zoom-image-canvas')
   fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: from.x, clientY: from.y })
+  for (const point of via) {
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: point.x, clientY: point.y })
+  }
   fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: to.x, clientY: to.y })
 }
 
@@ -53,6 +58,9 @@ it('stays open for a click on the image and for a drag that ends beside it', () 
   press({ x: 500, y: 400 })
   expect(screen.queryByRole('dialog')).not.toBeNull()
   press({ x: 500, y: 400 }, { x: 50, y: 50 })
+  expect(screen.queryByRole('dialog')).not.toBeNull()
+  // A drag beside the image that comes back to where it began is still a drag.
+  press({ x: 50, y: 50 }, { x: 50, y: 50 }, [{ x: 150, y: 150 }])
   expect(screen.queryByRole('dialog')).not.toBeNull()
 })
 
