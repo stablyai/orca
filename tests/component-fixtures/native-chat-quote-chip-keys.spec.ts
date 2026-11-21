@@ -9,15 +9,16 @@ async function open(page: Page, fixture: string, caret: number): Promise<void> {
   })
   await page.locator('.ProseMirror').click()
   await page.evaluate((at) => {
-    const editor = (document.querySelector('.ProseMirror') as HTMLElement & { editor: Editor })
-      .editor
-    editor.commands.setTextSelection(at)
+    document.querySelector<EditorElement>('.ProseMirror')!.editor.commands.setTextSelection(at)
   }, caret)
 }
 
-type Editor = {
-  commands: { setTextSelection: (at: number) => void }
-  state: { selection: { anchor: number; head: number } }
+/** The editor element; the prompt editor keeps its Tiptap editor on it. */
+type EditorElement = HTMLElement & {
+  editor: {
+    commands: { setTextSelection: (at: number) => void }
+    state: { selection: { anchor: number; head: number } }
+  }
 }
 
 /** The selection after the browser and ProseMirror settle, as `anchor-head`. */
@@ -25,9 +26,8 @@ async function selection(page: Page): Promise<string> {
   // A caret the browser moves is read back by ProseMirror on selectionchange.
   await page.waitForTimeout(100)
   return page.evaluate(() => {
-    const { anchor, head } = (
-      document.querySelector('.ProseMirror') as HTMLElement & { editor: Editor }
-    ).editor.state.selection
+    const { anchor, head } =
+      document.querySelector<EditorElement>('.ProseMirror')!.editor.state.selection
     return `${anchor}-${head}`
   })
 }

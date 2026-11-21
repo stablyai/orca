@@ -169,7 +169,7 @@ it('stops the paging for a message that is not loaded when a newer link opens', 
   beginLinkOpenRequest()
   // beginNavigation aborts the history jump.
   expect(beginNavigation).toHaveBeenCalledTimes(2)
-  const settled = startHistoryJump.mock.calls[0][1] as (result: string) => void
+  const [, settled] = startHistoryJump.mock.calls[0]
   settled('aborted')
   beginLinkOpenRequest()
   expect(beginNavigation).toHaveBeenCalledTimes(2)

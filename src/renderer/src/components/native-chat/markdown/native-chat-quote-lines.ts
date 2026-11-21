@@ -1,7 +1,9 @@
 import type { Paragraph, PhrasingContent, Root, RootContent } from 'mdast'
 
 // A quote renders as a chip, which is inline content.
-const inline = (quote: RootContent) => quote as unknown as PhrasingContent
+const inline = (quote: RootContent): PhrasingContent =>
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: remark-rehype converts any node, and the blockquote renders as one inline chip.
+  quote as unknown as PhrasingContent
 
 const blankLinesBetween = (previous: RootContent, node: RootContent): number =>
   (node.position?.start.line ?? 0) - (previous.position?.end.line ?? 0) - 1
@@ -14,17 +16,18 @@ const blankLinesBetween = (previous: RootContent, node: RootContent): number =>
 export function remarkNativeChatQuoteLines() {
   return (tree: Root): void => {
     const children: RootContent[] = []
+    // The chip line of the last quote.
+    let quoteLine: Paragraph | undefined
     tree.children.forEach((node, index) => {
       const previous = tree.children[index - 1]
       const blank = previous ? blankLinesBetween(previous, node) : 0
       if (
+        quoteLine &&
         previous?.type === 'blockquote' &&
         blank === 1 &&
         (node.type === 'paragraph' || node.type === 'blockquote')
       ) {
-        ;(children.at(-1) as Paragraph).children.push(
-          ...(node.type === 'paragraph' ? node.children : [inline(node)])
-        )
+        quoteLine.children.push(...(node.type === 'paragraph' ? node.children : [inline(node)]))
         return
       }
       const typed =
@@ -37,11 +40,12 @@ export function remarkNativeChatQuoteLines() {
         return
       }
       // A div, not a p: HTML closes a p at the blockquote of the quote.
-      children.push({
+      quoteLine = {
         type: 'paragraph',
         data: { hName: 'div', hProperties: { dataNativeChatQuoteLine: '' } },
         children: [inline(node)]
-      })
+      }
+      children.push(quoteLine)
     })
     tree.children = children
   }

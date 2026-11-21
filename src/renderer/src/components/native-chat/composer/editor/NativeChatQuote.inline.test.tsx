@@ -25,10 +25,10 @@ const isQuoteChip = (node: Element): boolean =>
 
 /** What a node shows, without the spoken labels of other pills. */
 function shownText(node: Node): string {
-  if (!(node instanceof Element)) {
+  const copy = node.cloneNode(true)
+  if (!(copy instanceof Element)) {
     return node.textContent ?? ''
   }
-  const copy = node.cloneNode(true) as Element
   copy.querySelectorAll('.sr-only').forEach((label) => label.remove())
   return copy.textContent ?? ''
 }

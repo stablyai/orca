@@ -61,8 +61,10 @@ export function useNativeChatQuoteJump({
         if (!isCurrent()) {
           return
         }
-        frame++
-        deadline ||= performance.now() + SOURCE_WAIT_MS
+        frame += 1
+        if (deadline === 0) {
+          deadline = performance.now() + SOURCE_WAIT_MS
+        }
         // By the message id: a tool run's member rows use data-index too.
         const source =
           frame < 2
