@@ -254,14 +254,18 @@ export function sanitizePerWorktreePreferences(
   ui: PersistedUIState
 ): Pick<
   AppState,
-  'explorerDisplayRootByWorktree' | 'showDotfilesByWorktree' | 'notificationsMutedByWorktree'
+  | 'explorerDisplayRootByWorktree'
+  | 'showDotfilesByWorktree'
+  | 'notificationsMutedByWorktree'
+  | 'notificationsMutedByTabId'
 > {
   return {
     explorerDisplayRootByWorktree: normalizeExplorerDisplayRootByWorktree(
       ui.explorerDisplayRootByWorktree
     ),
     showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree),
-    // Same persisted shape as the dotfile map: a per-worktree boolean opt-in record.
-    notificationsMutedByWorktree: sanitizeShowDotfilesByWorktree(ui.notificationsMutedByWorktree)
+    // Same persisted shape as the dotfile map: a boolean opt-in record.
+    notificationsMutedByWorktree: sanitizeShowDotfilesByWorktree(ui.notificationsMutedByWorktree),
+    notificationsMutedByTabId: sanitizeShowDotfilesByWorktree(ui.notificationsMutedByTabId)
   }
 }

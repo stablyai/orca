@@ -83,6 +83,9 @@ export type UISlicePreferences = {
   /** Per-worktree notification mute. Missing entries inherit the default: not muted. */
   notificationsMutedByWorktree: Record<string, boolean>
   toggleWorktreeNotificationsMuted: (worktreeId: string) => void
+  /** Per-tab notification mute. Missing entries inherit the default: not muted. */
+  notificationsMutedByTabId: Record<string, boolean>
+  toggleTabNotificationsMuted: (tabId: string) => void
   filterRepoIds: readonly string[]
   setFilterRepoIds: (ids: readonly string[]) => void
   /** Agents-view scope filters, independent from workspace navigation filters. */

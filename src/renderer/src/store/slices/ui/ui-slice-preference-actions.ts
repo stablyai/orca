@@ -179,6 +179,23 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
         return { notificationsMutedByWorktree: next }
       }),
 
+    notificationsMutedByTabId: {},
+    toggleTabNotificationsMuted: (tabId) =>
+      set((s) => {
+        if (!tabId) {
+          return s
+        }
+        const nextMuted = s.notificationsMutedByTabId[tabId] !== true
+        const next = { ...s.notificationsMutedByTabId }
+        // Why: not muted is the default; only persist tab-level opt-ins.
+        if (nextMuted) {
+          next[tabId] = true
+        } else {
+          delete next[tabId]
+        }
+        return { notificationsMutedByTabId: next }
+      }),
+
     filterRepoIds: [],
     setFilterRepoIds: (ids) => set({ filterRepoIds: ids }),
 
