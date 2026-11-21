@@ -175,7 +175,7 @@ export async function proveOrphanedCheckoutGuard(
   ) {
     throw differentCheckoutAtPathError(worktreePath)
   }
-  if (before.kind === 'other') {
+  if (before.kind !== 'file') {
     return null
   }
   if (!(await prove())) {
@@ -202,7 +202,7 @@ export async function proveOrphanedCheckoutGuard(
     return {
       markerLast: true,
       forbidAnyMarker: true,
-      ...(before.kind === 'file' ? { requireMarker: true } : {}),
+      requireMarker: true,
       ...(expectedRoot ? { expectedRoot } : {})
     }
   }

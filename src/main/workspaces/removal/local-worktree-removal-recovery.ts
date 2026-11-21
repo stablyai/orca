@@ -32,6 +32,8 @@ import {
   canSafelyRemoveOrphanedWorktreeDirectory,
   isDangerousWorktreeRemovalPath
 } from './worktree-removal-safety'
+import { isWindowsAbsolutePathLike } from '../../../shared/file-access/cross-platform-path'
+import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 
 type LocalPartialRemovalRecoveryArgs = {
@@ -195,27 +197,22 @@ async function assertRemainingMarkerBelongsToRepoWorktree(
   args: LocalPartialRemovalRecoveryArgs,
   leftover: { root: CheckoutRootState; marker: CheckoutMarkerState }
 ): Promise<Omit<RemoveLocalWorktreeMarkerOptions, 'markerLast'> | null> {
+  const { canonicalWorktreePath: path, repoPath, localWorktreeGitOptions: opts, signal } = args
   const expectedMarker =
     args.expectedMarker ?? (leftover.marker.kind === 'file' ? leftover.marker.identity : undefined)
   const forbidAnyMarker = args.forbidAnyMarker || leftover.marker.kind === 'absent'
-  const access = getLocalWorktreePathAccess(
-    args.localWorktreeGitOptions,
-    args.canonicalWorktreePath
-  )
+  const access = getLocalWorktreePathAccess(opts, path)
   const [runtimePath, runtimeRepoPath] = await toLocalWorktreeRuntimePaths(
-    [args.canonicalWorktreePath, args.repoPath],
-    args.localWorktreeGitOptions,
-    args.signal
+    [path, repoPath],
+    opts,
+    signal
   )
-  throwIfSignalAborted(args.signal)
+  throwIfSignalAborted(signal)
   if (isDangerousWorktreeRemovalPath(runtimePath, runtimeRepoPath, CLIENT_REMOVAL_HOME)) {
-    throw new Error(`Refusing to delete protected worktree path: ${args.canonicalWorktreePath}`)
+    throw new Error(`Refusing to delete protected worktree path: ${path}`)
   }
-  const rootBefore = await readCheckoutRootState(
-    args.canonicalWorktreePath,
-    args.localWorktreeGitOptions
-  )
-  throwIfSignalAborted(args.signal)
+  const rootBefore = await readCheckoutRootState(path, opts)
+  throwIfSignalAborted(signal)
   if (rootBefore.kind === 'absent') {
     return null
   }
@@ -226,13 +223,10 @@ async function assertRemainingMarkerBelongsToRepoWorktree(
       rootBefore.identity &&
       rootBefore.identity !== leftover.root.identity)
   ) {
-    throw differentCheckoutAtPathError(args.canonicalWorktreePath)
+    throw differentCheckoutAtPathError(path)
   }
-  const before = await readCheckoutMarkerState(
-    args.canonicalWorktreePath,
-    args.localWorktreeGitOptions
-  )
-  throwIfSignalAborted(args.signal)
+  const before = await readCheckoutMarkerState(path, opts)
+  throwIfSignalAborted(signal)
   if (before.kind === 'absent') {
     return {
       forbidAnyMarker: true,
@@ -246,47 +240,48 @@ async function assertRemainingMarkerBelongsToRepoWorktree(
     before.kind !== 'file' ||
     (expectedMarker !== undefined && before.identity !== expectedMarker)
   ) {
-    throw differentCheckoutAtPathError(args.canonicalWorktreePath)
+    throw differentCheckoutAtPathError(path)
   }
-  const safe = await canSafelyRemoveOrphanedWorktreeDirectory(
-    runtimePath,
-    runtimeRepoPath,
-    CLIENT_REMOVAL_HOME,
-    access
-  )
-  throwIfSignalAborted(args.signal)
+  const canFallbackWin32 =
+    process.platform === 'win32' &&
+    runtimePath !== path &&
+    isWindowsAbsolutePathLike(path) &&
+    isWindowsAbsolutePathLike(repoPath) &&
+    !isWslUncPath(path) &&
+    !isWslUncPath(repoPath)
+  const safe =
+    (await canSafelyRemoveOrphanedWorktreeDirectory(
+      runtimePath,
+      runtimeRepoPath,
+      CLIENT_REMOVAL_HOME,
+      access
+    )) ||
+    // A Windows-authored drive checkout opened under a WSL project spells gitdir: as C:/...
+    (canFallbackWin32 &&
+      (await canSafelyRemoveOrphanedWorktreeDirectory(path, repoPath, CLIENT_REMOVAL_HOME)))
+  throwIfSignalAborted(signal)
   if (!safe) {
-    throw differentCheckoutAtPathError(args.canonicalWorktreePath)
+    throw differentCheckoutAtPathError(path)
   }
-  const rootAfter = await readCheckoutRootState(
-    args.canonicalWorktreePath,
-    args.localWorktreeGitOptions
-  )
-  throwIfSignalAborted(args.signal)
+  const rootAfter = await readCheckoutRootState(path, opts)
+  throwIfSignalAborted(signal)
   if (rootAfter.kind === 'absent') {
     return null
   }
-  const after = await readCheckoutMarkerState(
-    args.canonicalWorktreePath,
-    args.localWorktreeGitOptions
-  )
-  throwIfSignalAborted(args.signal)
+  const after = await readCheckoutMarkerState(path, opts)
+  throwIfSignalAborted(signal)
   if (
     rootAfter.kind !== 'directory' ||
     (rootBefore.identity && rootAfter.identity && rootAfter.identity !== rootBefore.identity)
   ) {
-    throw differentCheckoutAtPathError(args.canonicalWorktreePath)
+    throw differentCheckoutAtPathError(path)
   }
   const expectedRoot = rootAfter.identity ?? rootBefore.identity
   if (after.kind === 'absent') {
-    return {
-      forbidAnyMarker: true,
-      requireMarker: true,
-      ...(expectedRoot ? { expectedRoot } : {})
-    }
+    return { forbidAnyMarker: true, requireMarker: true, ...(expectedRoot ? { expectedRoot } : {}) }
   }
   if (after.kind !== 'file' || after.identity !== before.identity) {
-    throw differentCheckoutAtPathError(args.canonicalWorktreePath)
+    throw differentCheckoutAtPathError(path)
   }
   return {
     expectedMarker: before.identity,
