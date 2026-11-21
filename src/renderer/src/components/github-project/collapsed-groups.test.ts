@@ -1,9 +1,7 @@
+// @vitest-environment happy-dom
+
 import { beforeEach, describe, expect, it } from 'vitest'
-import {
-  STORAGE_KEY,
-  loadCollapsedGroups,
-  saveCollapsedGroups
-} from './collapsed-groups'
+import { STORAGE_KEY, loadCollapsedGroups, saveCollapsedGroups } from './collapsed-groups'
 
 describe('collapsed-groups', () => {
   beforeEach(() => {
