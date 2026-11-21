@@ -2,7 +2,8 @@
 // that no claim took (an older desktop that can't say what started a download). The file this host
 // recorded the setup's page downloading is used; otherwise the owner picks one. A file is removed
 // only after it was imported, and only if it is still the same file that was read.
-import { readdir, readFile, rm, stat } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { readdir, readFile, rename, rm, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import type { Bot } from '../../shared/bot-types'
 import type { GoogleSetupKeyCandidate } from '../../shared/rpc-contract/google-setup-params'
@@ -35,7 +36,11 @@ async function fileId(path: string): Promise<{ id: string; mtimeMs: number; size
 }
 
 /** The run's page's own download of a key, when this host recorded exactly one since it started. */
-function recordedKey(bot: Pick<Bot, 'folderWorkspaceId'>, page: string, since: number) {
+function recordedKey(
+  bot: Pick<Bot, 'folderWorkspaceId'>,
+  page: string,
+  since: number
+): { name: string; committedAt: number } | null {
   const recorded = clientDownloadCommits(
     (commit) =>
       commit.workspaceId === folderWorkspaceKey(bot.folderWorkspaceId) &&
@@ -43,7 +48,18 @@ function recordedKey(bot: Pick<Bot, 'folderWorkspaceId'>, page: string, since: n
       commit.committedAt >= since &&
       GOOGLE_KEY_FILE_NAME.test(basename(commit.workspaceRelativePath))
   )
-  return recorded.length === 1 ? basename(recorded[0].workspaceRelativePath) : null
+  return recorded.length === 1
+    ? { name: basename(recorded[0].workspaceRelativePath), committedAt: recorded[0].committedAt }
+    : null
+}
+
+// A file written after its download was committed is some other file at the same name.
+const COMMIT_CLOCK_SLACK_MS = 1_000
+
+/** Puts a file that wasn't imported back under its name, or beside it if that name is taken now. */
+async function restore(claimed: string, path: string): Promise<void> {
+  const free = (await fileId(path)) === null
+  await rename(claimed, free ? path : path.replace(/\.json$/, ` (${Date.now()}).json`))
 }
 
 async function candidates(folder: string): Promise<SavedKeyCandidate[]> {
@@ -71,9 +87,15 @@ export async function importGoogleSetupKeySavedHere(
     return { found: false, candidates: [] }
   }
   const folder = join(botHomeFolder(bot), BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY)
-  const name = pick
-    ? basename(pick.name)
-    : run.browserPageId && recordedKey(bot, run.browserPageId, run.startedAt)
+  let name = pick ? basename(pick.name) : null
+  if (!pick && run.browserPageId) {
+    const recorded = recordedKey(bot, run.browserPageId, run.startedAt)
+    const file = recorded && (await fileId(join(folder, recorded.name)))
+    // Gone, or replaced since the page downloaded it: the owner picks instead.
+    if (recorded && file && file.mtimeMs <= recorded.committedAt + COMMIT_CLOCK_SLACK_MS) {
+      name = recorded.name
+    }
+  }
   if (!name) {
     return { found: false, candidates: await candidates(folder) }
   }
@@ -85,12 +107,23 @@ export async function importGoogleSetupKeySavedHere(
   if (before.size > GOOGLE_CLIENT_FILE_MAX_BYTES) {
     throw new Error('That file is too large to be a Google app key.')
   }
-  const text = await readFile(path, 'utf8')
+  // Moved aside first, so what is read, imported and removed is this file even if another
+  // download takes its name meanwhile.
+  const claimed = join(folder, `.importing-${randomUUID()}`)
+  await rename(path, claimed)
+  const putBack = (): Promise<void> => restore(claimed, path)
+  if ((await fileId(claimed))?.id !== before.id) {
+    await putBack()
+    throw new Error('That key file changed or is gone. Pick it again.')
+  }
+  const text = await readFile(claimed, 'utf8')
   const parsed = parseGoogleClientFile(text)
   if (!parsed.ok) {
+    await putBack()
     throw new Error(parsed.message)
   }
   if (parsed.projectId && run.projectId && parsed.projectId !== run.projectId) {
+    await putBack()
     throw new Error(`That key is for project ${parsed.projectId}, not ${run.projectId}.`)
   }
   // Cancelled or started over while reading: nothing is imported, and the file stays.
@@ -99,12 +132,16 @@ export async function importGoogleSetupKeySavedHere(
     return now?.id === run.id && googleSetupAwaitsKey(now)
   }
   if (!stillWaiting()) {
+    await putBack()
     return { found: false, candidates: [] }
   }
-  await connect.importClient(text)
-  if ((await fileId(path))?.id === before.id) {
-    await rm(path, { force: true })
+  try {
+    await connect.importClient(text)
+  } catch (error) {
+    await putBack()
+    throw error
   }
+  await rm(claimed, { force: true })
   if (stillWaiting()) {
     await keyArrived()
   }

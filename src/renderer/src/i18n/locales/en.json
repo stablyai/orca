@@ -28329,6 +28329,7 @@
       "otherAccount": "Switch account",
       "keyMissed": "Downloaded the key and Orca didn’t pick it up?",
       "pickHostKey": "Pick the key file to import:",
+      "pickKeyHere": "Choose a file on this computer",
       "action": {
         "makeNewKey": "Make a new key",
         "importKey": "Import a key file",

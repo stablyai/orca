@@ -200,6 +200,17 @@ describe("a paired desktop's key download, claimed as it begins", () => {
       expect(send('t1', desktopKey())).toEqual({ workspaceRelativePath: 'Google setup in Orca' })
       await vi.waitFor(() => expect(deps.keyArrived).toHaveBeenCalledWith('ivy'))
       expect(deps.importKey).toHaveBeenCalledExactlyOnceWith(desktopKey())
+      // A late chunk of a handed-over claim never reaches the workspace path.
+      expect(() =>
+        writeClaimedClientDownload({
+          browserPageId: 'setup-page',
+          transferId: 't1',
+          pageHostGeneration: 4,
+          contentBase64: '',
+          offset: 0,
+          final: true
+        })
+      ).toThrow('browser_client_download_transfer_settled')
 
       // Started over while the desktop was still downloading: the new run never gets this key.
       expect(beginClientDownload('t2', start)).toBe(true)

@@ -107,6 +107,14 @@ function KeyImport({ bot }: { bot: BotRef }): React.JSX.Element {
               {candidate.name}
             </Button>
           ))}
+          <Button
+            variant="link"
+            size="inlineText"
+            disabled={file.busy}
+            onClick={() => void file.pickHere()}
+          >
+            {t('bots.googleSetup.pickKeyHere', 'Choose a file on this computer')}
+          </Button>
         </div>
       ) : null}
       {file.error ? (

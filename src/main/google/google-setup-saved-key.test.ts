@@ -66,6 +66,34 @@ describe('Import file on the agent’s host', () => {
     expect(existsSync(join(downloads, 'client_secret_old.json'))).toBe(true)
   })
 
+  it('asks the owner to pick when the recorded file is gone or was replaced since', async () => {
+    mocks.run = { ...mocks.run!, browserPageId: 'page-5' }
+    writeFileSync(join(downloads, 'client_secret_later.json'), key('later'))
+    recordClientDownloadCommit({
+      workspaceId: 'folder:fw-ivy',
+      browserPageId: 'page-5',
+      workspaceRelativePath: '.orca/browser-downloads/client_secret_later.json',
+      // Committed well before the file now at that name was written.
+      committedAt: Date.now() - 60_000
+    })
+    recordClientDownloadCommit({
+      workspaceId: 'folder:fw-ivy',
+      browserPageId: 'page-6',
+      workspaceRelativePath: '.orca/browser-downloads/client_secret_gone.json',
+      committedAt: Date.now()
+    })
+    expect(await importGoogleSetupKeySavedHere(BOT, async () => {})).toMatchObject({
+      found: false,
+      candidates: [{ name: 'client_secret_later.json' }]
+    })
+    mocks.run = { ...mocks.run!, browserPageId: 'page-6' }
+    expect(await importGoogleSetupKeySavedHere(BOT, async () => {})).toMatchObject({
+      found: false,
+      candidates: [{ name: 'client_secret_later.json' }]
+    })
+    expect(mocks.importClient).not.toHaveBeenCalled()
+  })
+
   it('lists the files for the owner to pick when it saw none, and takes only the exact pick', async () => {
     mocks.run = { ...mocks.run!, browserPageId: 'page-3' }
     writeFileSync(join(downloads, 'client_secret_a.json'), key('a'))

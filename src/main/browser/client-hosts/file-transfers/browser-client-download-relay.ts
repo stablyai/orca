@@ -11,6 +11,7 @@ import {
 } from '../../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
 import type { BrowserClientHostedPageInventory } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { BrowserDownloadFinishedEvent } from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
+import { hasRuntimeRpcErrorCode } from '../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import type { BrowserClientFileChannelTransport } from './browser-client-file-channel-transport'
 import type {
   BrowserClientDownloadRouteInput,
@@ -97,15 +98,16 @@ export class BrowserClientDownloadRelay {
       stagingPath: path.join(this.options.stagingRoot, transferId, 'download'),
       canceled: false,
       aborting: null,
-      begun: Promise.resolve()
+      begun: Promise.resolve(null)
     }
     try {
       this.filesystem.mkdirSync(transfer.directory)
     } catch {
       return { kind: 'unavailable' }
     }
-    // Tells the page's host what started this download before any byte arrives; an older host
-    // doesn't know the method, and the download goes the ordinary way.
+    // Tells the page's host what started this download before any byte arrives. Only an older host
+    // that lacks the method lets it go the ordinary way; any other failure fails the download, so a
+    // download the host would have claimed never lands in the workspace instead.
     transfer.begun = this.options.transport
       .request(BROWSER_CLIENT_FILE_CHANNEL_BEGIN_METHOD, {
         ...fileChannelAuthority(page),
@@ -114,8 +116,8 @@ export class BrowserClientDownloadRelay {
         documentUrl: (input.documentUrl ?? '').slice(0, 8192)
       })
       .then(
-        () => undefined,
-        () => undefined
+        () => null,
+        (error: unknown) => (hasRuntimeRpcErrorCode(error, 'method_not_found') ? null : error)
       )
     return {
       kind: 'remote',
@@ -136,7 +138,9 @@ export class BrowserClientDownloadRelay {
   ): Promise<NonNullable<BrowserDownloadFinishedEvent['remoteDestination']>> {
     const { transferId, stagingPath } = transfer
     try {
-      await transfer.begun
+      if ((await transfer.begun) !== null) {
+        throw new Error('browser_client_download_begin_failed')
+      }
       assertNotCanceled(transfer)
       if (
         (await this.filesystem.size(stagingPath)) > BROWSER_CLIENT_FILE_CHANNEL_TRANSFER_MAX_BYTES
@@ -239,7 +243,8 @@ type StagedTransfer = {
   stagingPath: string
   canceled: boolean
   aborting: Promise<void> | null
-  begun: Promise<void>
+  /** Why the host couldn't be told the download began; null when it was, or predates `begin`. */
+  begun: Promise<unknown>
 }
 
 function assertNotCanceled(transfer: StagedTransfer): void {

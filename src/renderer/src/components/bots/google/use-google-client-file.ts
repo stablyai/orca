@@ -31,6 +31,8 @@ export function useGoogleClientFile(
   busy: boolean
   error: string | null
   pick: () => Promise<void>
+  /** The picker on this computer, without asking the key's host first. */
+  pickHere: () => Promise<void>
   submit: (text: string) => Promise<void>
   dropTarget: GoogleClientFileDropTarget
 } {
@@ -54,9 +56,9 @@ export function useGoogleClientFile(
     }
   }
 
-  const pick = (): Promise<void> =>
+  const pickFrom = (askHost: boolean): Promise<void> =>
     take(async () => {
-      if (await options?.tryHost?.()) {
+      if (askHost && (await options?.tryHost?.())) {
         return null
       }
       const picked = await window.api.googleSetup.pickClientFile()
@@ -103,5 +105,12 @@ export function useGoogleClientFile(
     'data-dragging': dragging
   }
 
-  return { busy, error, pick, submit: (text) => take(async () => text), dropTarget }
+  return {
+    busy,
+    error,
+    pick: () => pickFrom(true),
+    pickHere: () => pickFrom(false),
+    submit: (text) => take(async () => text),
+    dropTarget
+  }
 }

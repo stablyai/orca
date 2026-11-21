@@ -33,6 +33,9 @@ const MAX_PENDING = 16
 
 let claimant: ClientDownloadClaimant | null = null
 const pending = new Map<string, Pending>()
+// Claimed transfers already handed over or dropped: their late chunks must never reach the workspace.
+const settled = new Set<string>()
+const MAX_SETTLED = 256
 
 export function setClientDownloadClaimant(next: ClientDownloadClaimant | null): void {
   claimant = next
@@ -47,6 +50,11 @@ function settle(key: string, download: { bytes: Buffer } | { reason: string }): 
     return
   }
   pending.delete(key)
+  settled.add(key)
+  if (settled.size > MAX_SETTLED) {
+    const [oldest] = settled
+    settled.delete(oldest)
+  }
   void entry.claim.take(download).catch((error: unknown) => {
     console.warn('[browser-downloads] a claimed download could not be handed over', error)
   })
@@ -82,6 +90,9 @@ export function writeClaimedClientDownload(chunk: {
   final: boolean
 }): { workspaceRelativePath?: string } | null {
   const key = keyOf(chunk.browserPageId, chunk.transferId)
+  if (settled.has(key)) {
+    throw new Error('browser_client_download_transfer_settled')
+  }
   const entry = pending.get(key)
   if (!entry) {
     return null
@@ -117,7 +128,7 @@ export function writeClaimedClientDownload(chunk: {
 export function abortClaimedClientDownload(browserPageId: string, transferId: string): boolean {
   const key = keyOf(browserPageId, transferId)
   if (!pending.has(key)) {
-    return false
+    return settled.has(key)
   }
   settle(key, { reason: 'the download was canceled.' })
   return true

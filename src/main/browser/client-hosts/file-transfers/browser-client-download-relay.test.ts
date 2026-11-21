@@ -142,6 +142,47 @@ describe('BrowserClientDownloadRelay', () => {
     ])
   })
 
+  it('fails a download its host could not be told about, unless the host predates that', async () => {
+    const relayFailingBegin = (error: Error) => {
+      const writes: unknown[] = []
+      const transport = new BrowserClientFileChannelTransport()
+      transport.bind({
+        fileChannelNegotiated: true,
+        fileChannelAvailability: 'negotiated',
+        sendFileChannelRequest: async (method, params) => {
+          if (method.endsWith('begin')) {
+            throw error
+          }
+          if (!method.endsWith('abort')) {
+            writes.push(params)
+          }
+          return {
+            ok: true,
+            result: { accepted: true, workspaceRelativePath: 'report.pdf' },
+            _meta: {}
+          } as never
+        }
+      })
+      const relay = new BrowserClientDownloadRelay({
+        stagingRoot: '/tmp/staging',
+        hostLabel: 'build-box',
+        transport,
+        resolvePage: () => page,
+        filesystem: memoryFilesystem(Buffer.from('abc')).filesystem
+      })
+      return { writes, route: remoteRoute(relay.route({ guestWebContentsId: 7 })) }
+    }
+    const timedOut = relayFailingBegin(new Error('request_timeout'))
+    await expect(timedOut.route.complete('report.pdf')).rejects.toThrow(
+      'browser_client_download_begin_failed'
+    )
+    expect(timedOut.writes).toEqual([])
+
+    const older = relayFailingBegin(new Error('method_not_found'))
+    await older.route.complete('report.pdf')
+    expect(older.writes).toHaveLength(2)
+  })
+
   it('stops the commit and never sends the final chunk once the transfer is aborted', async () => {
     const writes: { final: boolean }[] = []
     const aborts: unknown[] = []
