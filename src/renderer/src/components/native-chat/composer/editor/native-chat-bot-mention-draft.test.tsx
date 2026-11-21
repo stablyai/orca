@@ -20,8 +20,10 @@ import { serializeNativeChatAgentReferences } from '../pickers/native-chat-agent
 const SCOPE = 'agent-session:legacy-bot'
 const TEXT =
   'ask [Bot: Original](bot:stable-id) [Bot: Original](bot-chat:stable-id/chat-1) $review @/repo/note.txt [Image](orca-image:image-1) @Worker (Orca agent term_abc) [Bot: broken](bot:bad/id) [Bot: elsewhere](custom:foo)'
+// Loading moves the legacy image chip and its token out of the prompt; the image stays attached.
+const MIGRATED = TEXT.replace('[Image](orca-image:image-1) ', '')
 const SENT =
-  'ask [Bot: Original](bot:stable-id) [Bot: Original](bot-chat:stable-id/chat-1) $review @/repo/note.txt [Image](orca-image:image-1) @Worker [Bot: broken](bot:bad/id) [Bot: elsewhere](custom:foo)\n\n[Orca agent "Worker": term_abc — message it with orca orchestration send --to term_abc --subject "<topic>" --body "<message>"]'
+  'ask [Bot: Original](bot:stable-id) [Bot: Original](bot-chat:stable-id/chat-1) $review @/repo/note.txt @Worker [Bot: broken](bot:bad/id) [Bot: elsewhere](custom:foo)\n\n[Orca agent "Worker": term_abc — message it with orca orchestration send --to term_abc --subject "<topic>" --body "<message>"]'
 const SKILL = { type: 'nativeChatSkill', attrs: { token: '$review', path: '/repo/SKILL.md' } }
 const FILE = {
   type: 'nativeChatFileReference',
@@ -76,8 +78,6 @@ const UPGRADED: JSONContent = {
         { type: 'text', text: ' ' },
         FILE,
         { type: 'text', text: ' ' },
-        IMAGE,
-        { type: 'text', text: ' ' },
         { ...AGENT, attrs: { ...AGENT.attrs, agentType: '' } },
         { type: 'text', text: TAIL }
       ]
@@ -128,28 +128,29 @@ function mount(value: string) {
 it.each(['mount', 'adopt'])(
   'upgrades a saved legacy draft on %s without changing its send text',
   async (load) => {
-    const first = mount(load === 'mount' ? TEXT : 'earlier draft')
+    const first = mount(load === 'mount' ? MIGRATED : 'earlier draft')
     if (load === 'adopt') {
       act(() => {
-        first.input.value = TEXT
+        first.input.value = MIGRATED
       })
     }
     expect(first.editor.getJSON()).toEqual(UPGRADED)
-    expect(first.input.value).toBe(TEXT)
+    expect(first.input.value).toBe(MIGRATED)
     expect(serializeNativeChatAgentReferences(first.input.value, first.editor.getJSON())).toBe(SENT)
 
-    act(() => writeNativeChatDraftDocument(SCOPE, TEXT, first.editor.getJSON()))
+    act(() => writeNativeChatDraftDocument(SCOPE, MIGRATED, first.editor.getJSON()))
     first.unmount()
     await nativeChatComposerDraftWriteSettled(SCOPE)
-    expect(storage.drafts.get(SCOPE)?.text).toBe(TEXT)
+    expect(storage.drafts.get(SCOPE)?.text).toBe(MIGRATED)
     expect(storage.drafts.get(SCOPE)?.document).toEqual(UPGRADED)
+    expect(storage.drafts.get(SCOPE)?.images).toEqual([{ id: 'image-1', path: '/repo/image.png' }])
     clearNativeChatComposerDraftsForTests()
     setNativeChatComposerDraftStorageForTests(storage)
     await hydrateNativeChatComposerDrafts()
 
-    const second = mount(TEXT)
+    const second = mount(MIGRATED)
     expect(second.editor.getJSON()).toEqual(UPGRADED)
-    expect(second.input.value).toBe(TEXT)
+    expect(second.input.value).toBe(MIGRATED)
     expect(serializeNativeChatAgentReferences(second.input.value, second.editor.getJSON())).toBe(
       SENT
     )

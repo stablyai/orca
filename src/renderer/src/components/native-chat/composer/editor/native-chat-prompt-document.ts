@@ -103,6 +103,13 @@ export const nativeChatPromptPills = [
   NativeChatPromptPillKeys
 ]
 
+/** An editor's pills; only one given its image row holds image chips. */
+export function nativeChatPromptPillsFor(imageChips: boolean) {
+  return nativeChatPromptPills.filter(
+    (pill) => imageChips || pill.name !== NativeChatImageReference.name
+  )
+}
+
 /** Replaces text offsets `from`..`to` with a picked mention's token and a space; a bot's token
  *  becomes its pill. Its own undo step, as a picked skill is: undo gives back the typed `@query`. */
 export function insertPromptMention(

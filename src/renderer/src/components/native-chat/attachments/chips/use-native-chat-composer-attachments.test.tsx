@@ -5,6 +5,7 @@ import { renderProbe } from './native-chat-composer-attachments-test-probe'
 import { clearNativeChatAttachmentCacheForTests } from '../../drafts/native-chat-draft-reset'
 import { readNativeChatAttachmentCache } from './native-chat-attachment-draft'
 
+import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
 import { readNativeChatDraftCache } from '../../drafts/native-chat-draft-views'
 
 import type * as RemoteRuntimePtyIdModule from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
@@ -39,6 +40,61 @@ describe('useNativeChatComposerAttachments', () => {
 
     expect(probe.latest().imageAttachments).toMatchObject([{ path: '/repo/shot.png' }])
     expect(probe.draft()).toContain('@/repo/diagram.bmp')
+    act(() => probe.root.unmount())
+  })
+
+  it('keeps images outside prompt text and retains attachments when text is cleared', async () => {
+    const probe = await renderProbe('image-tray', true)
+    act(() => probe.latest().adoptDraft('Describe these images'))
+    const begun: { kept?: string | null; removed?: string | null } = {}
+    act(() => {
+      begun.kept = probe.latest().beginPendingImageAttachment()
+      begun.removed = probe.latest().beginPendingImageAttachment()
+    })
+    if (!begun.kept || !begun.removed) {
+      throw new Error('expected pending images')
+    }
+    expect(probe.draft()).toBe('Describe these images')
+    expect(probe.latest().imageAttachments.map(({ id }) => id)).toEqual([begun.kept, begun.removed])
+    act(() => probe.latest().removeImageAttachment(begun.removed!))
+    expect(probe.draft()).toBe('Describe these images')
+    act(() => probe.latest().adoptDraft(''))
+    expect(probe.latest().imageAttachments.map(({ id }) => id)).toEqual([begun.kept])
+    act(() => probe.root.unmount())
+  })
+
+  it('settles a late image upload in its own chat without inserting prompt markers', async () => {
+    const probe = await renderProbe('image-chat-a', true)
+    const fromA = probe.latest()
+    const pending: { id?: string | null } = {}
+    act(() => {
+      pending.id = fromA.beginPendingImageAttachment()
+    })
+    if (!pending.id) {
+      throw new Error('expected a pending image')
+    }
+    await probe.rerender('image-chat-b')
+    act(() => probe.latest().adoptDraft('B draft'))
+    act(() => fromA.resolvePendingImageAttachment(pending.id!, '/up/a.png'))
+    expect(readNativeChatComposerDraft('image-chat-a')).toMatchObject({
+      text: '',
+      images: [{ id: pending.id, path: '/up/a.png' }]
+    })
+    expect(probe.draft()).toBe('B draft')
+    act(() => probe.root.unmount())
+  })
+
+  it('clears a pending image on disable without putting its marker in prompt text', async () => {
+    const probe = await renderProbe('structured-1', true)
+    act(() => {
+      probe.latest().beginPendingImageAttachment()
+    })
+    expect(probe.latest().imageAttachments).toMatchObject([{ pending: true }])
+    expect(readNativeChatDraftCache('structured-1')).toBe('')
+
+    await probe.rerender('structured-1', true)
+    expect(probe.latest().imageAttachments).toEqual([])
+    expect(readNativeChatDraftCache('structured-1')).toBe('')
     act(() => probe.root.unmount())
   })
 

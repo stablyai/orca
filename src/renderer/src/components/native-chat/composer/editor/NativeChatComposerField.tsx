@@ -1,7 +1,7 @@
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import { notifyNativeChatComposerState } from '../focus/native-chat-composer-mount'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
-import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import { cn } from '@/lib/class-names'
 import { NativeChatMentionMenu, NativeChatPickerMenu } from '../pickers/NativeChatAutocompleteMenus'
@@ -91,7 +91,6 @@ export function NativeChatComposerField({
         : 0
   // Value the IME started from, and whether a programmatic clear was dropped on top of it.
   const compositionBaseRef = useRef('')
-  const imageRow = useMemo(() => imageAttachments.map(({ id }) => id), [imageAttachments])
   const droppedDraftClearRef = useRef(false)
   // Remember the editor’s last draft because chip node views can flushSync a render before its onChange publishes.
   const editorDraftRef = useRef<string | null>(null)
@@ -255,7 +254,6 @@ export function NativeChatComposerField({
               key={draftScopeKey}
               scopeKey={draftScopeKey}
               positionTarget={positionTarget}
-              imageRow={imageRow}
               inputRef={textareaRef}
               isComposing={imeEnterGesture.isComposing}
               initialValue={draft}
