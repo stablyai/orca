@@ -17,11 +17,16 @@ export function createWebGitRebaseApi(): Pick<
     },
     continueRebase: async ({ worktreePath, action, expected }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      return callRuntimeResult<ContinueRebaseResult>('git.continueRebase', {
-        worktree: toRuntimeWorktreeSelector(worktree.id),
-        action,
-        ...(expected ? { expected } : {})
-      })
+      // Same budget as the desktop runtime client: one step can run hooks and rewrite many commits.
+      return callRuntimeResult<ContinueRebaseResult>(
+        'git.continueRebase',
+        {
+          worktree: toRuntimeWorktreeSelector(worktree.id),
+          action,
+          ...(expected ? { expected } : {})
+        },
+        120_000
+      )
     },
     rebaseAutoStash: async ({ worktreePath }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
