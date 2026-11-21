@@ -29,7 +29,36 @@ export class MobileSessionSnapshotsByWorktree extends ReverseIndexedMap<
     super(collectSnapshotPtyIds, (previous, next) => previous.tabs === next.tabs)
   }
 
+  // Status-only changes owe one version bump, paid when a client frame is next built.
+  private readonly owedVersions = new Set<string>()
+
   worktreeIdsForPty(ptyId: string): ReadonlySet<string> {
     return this.keysFor(ptyId)
+  }
+
+  oweVersion(worktreeId: string): void {
+    this.owedVersions.add(worktreeId)
+  }
+
+  takeOwedVersion(worktreeId: string): boolean {
+    return this.owedVersions.delete(worktreeId)
+  }
+
+  override set(key: string, value: RuntimeMobileSessionTabsSnapshot): this {
+    const previous = super.get(key)
+    if (!previous || value.snapshotVersion > previous.snapshotVersion) {
+      this.owedVersions.delete(key)
+    }
+    return super.set(key, value)
+  }
+
+  override delete(key: string): boolean {
+    this.owedVersions.delete(key)
+    return super.delete(key)
+  }
+
+  override clear(): void {
+    this.owedVersions.clear()
+    super.clear()
   }
 }
