@@ -9,24 +9,28 @@ import {
 import { SSTOP, SZOMB } from '../../../shared/process-observation/darwin/libproc-ps-format'
 import { PROCESS_TABLE_EVIDENCE_BUDGET_MS } from '../../../shared/process-observation/tables/process-table-snapshot-reader'
 
-type ProcessIdentity = { pid: number; pgid: number; start: string; state: string; name: string }
+type ProcessIdentity = { pgid: number; identity: string }
+type Identities = ReadonlyMap<number, ProcessIdentity>
 
 // Only stop and exit change who holds the pane; run/sleep churn must not void an anchor.
 function lifecycleState(state: string): string {
   return state === 'T' || state === 't' ? 'T' : state === 'Z' || state === 'X' ? 'Z' : ''
 }
 
-type DarwinBatch = { pids: Set<number>; identities: Promise<ProcessIdentity[] | null> }
+// The addon dedups named pids pairwise; past this a kinfo-only whole-table read (the old per-round cost) is cheaper.
+const MAX_NAMED_PIDS = 256
+
+type DarwinBatch = { pids: Set<number>; identities: Promise<Identities | null> }
 let pendingDarwinBatch: DarwinBatch | null = null
 
 /** Polls arriving in one socket read share one native read, so N panes never queue N reads behind the reader's cap. */
-function readDarwinIdentities(pids: readonly number[]): Promise<ProcessIdentity[] | null> {
+function readDarwinIdentities(pids: readonly number[]): Promise<Identities | null> {
   let batch = pendingDarwinBatch
   if (!batch) {
     const created: DarwinBatch = { pids: new Set(), identities: Promise.resolve(null) }
     created.identities = new Promise<void>((resolve) => setImmediate(resolve)).then(() => {
       pendingDarwinBatch = null
-      return readDarwinRows([...created.pids].sort((a, b) => a - b))
+      return readDarwinRows(created.pids)
     })
     pendingDarwinBatch = created
     batch = created
@@ -37,34 +41,49 @@ function readDarwinIdentities(pids: readonly number[]): Promise<ProcessIdentity[
   return batch.identities
 }
 
-async function readDarwinRows(pids: readonly number[]): Promise<ProcessIdentity[] | null> {
+async function readDarwinRows(pids: ReadonlySet<number>): Promise<Identities | null> {
   const addon = loadLibprocAddon()
   if (!addon || !isNativeReaderHealthy()) {
     return null
   }
   const rows = await readFreshNativeTable(
     addon,
-    { command: false, pids },
+    pids.size > MAX_NAMED_PIDS
+      ? { command: false }
+      : { command: false, pids: [...pids].sort((a, b) => a - b) },
     registerNativeRequest(),
     monotonicNow() + PROCESS_TABLE_EVIDENCE_BUDGET_MS
   )
   if (!Array.isArray(rows)) {
     return null
   }
-  return rows.map((row) => ({
-    pid: row.pid,
-    pgid: row.pgid,
-    start: `${row.startSec}.${row.startUsec ?? ''}`,
-    state: row.status === SSTOP ? 'T' : row.status === SZOMB ? 'Z' : '',
-    name: row.comm
-  }))
+  const identities = new Map<number, ProcessIdentity>()
+  for (const row of rows) {
+    if (pids.has(row.pid)) {
+      const state = row.status === SSTOP ? 'T' : row.status === SZOMB ? 'Z' : ''
+      identities.set(row.pid, {
+        pgid: row.pgid,
+        identity: `${row.pid}@${row.startSec}.${row.startUsec ?? ''}:${state}:${row.comm}`
+      })
+    }
+  }
+  return identities
 }
 
-async function readLinuxIdentity(pid: number): Promise<ProcessIdentity | null> {
-  const [stat, cmdline] = await Promise.all([
-    readFile(`/proc/${pid}/stat`, 'utf8'),
-    readFile(`/proc/${pid}/cmdline`, 'utf8')
-  ])
+async function readLinuxIdentity(pid: number): Promise<[number, ProcessIdentity] | null> {
+  let stat: string
+  let cmdline: string
+  try {
+    ;[stat, cmdline] = await Promise.all([
+      readFile(`/proc/${pid}/stat`, 'utf8'),
+      readFile(`/proc/${pid}/cmdline`, 'utf8')
+    ])
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return null
+    }
+    throw error
+  }
   const fields = stat
     .slice(stat.lastIndexOf(')') + 1)
     .trim()
@@ -72,39 +91,40 @@ async function readLinuxIdentity(pid: number): Promise<ProcessIdentity | null> {
   const pgid = Number(fields[2])
   const start = fields[19]
   if (!Number.isSafeInteger(pgid) || !start) {
-    return null
+    throw new Error(`unparsable /proc/${pid}/stat`)
   }
-  return { pid, pgid, start, state: lifecycleState(fields[0] ?? ''), name: cmdline }
+  return [pid, { pgid, identity: `${pid}@${start}:${lifecycleState(fields[0] ?? '')}:${cmdline}` }]
 }
 
-/** Identity of the given foreground-group members from per-pid reads only (no table scan, no child process);
- * null when any is missing, outside `group`, or unreadable. */
-export async function readForegroundGroupIdentity(
+/** Identities of the given pids that are live members of `group`, from per-pid reads only (no table scan, no child
+ * process); an exited or regrouped pid is absent. Null when the read itself failed. */
+export async function readForegroundGroupMembers(
   pids: readonly number[],
   group: number
-): Promise<string | null> {
-  let identities: (ProcessIdentity | null)[] | null
+): Promise<ReadonlyMap<number, string> | null> {
+  let identities: Identities
   try {
     if (process.platform === 'darwin') {
-      identities = await readDarwinIdentities(pids)
+      const read = await readDarwinIdentities(pids)
+      if (!read) {
+        return null
+      }
+      identities = read
     } else if (process.platform === 'linux') {
-      identities = await Promise.all(pids.map(readLinuxIdentity))
+      const entries = await Promise.all(pids.map(readLinuxIdentity))
+      identities = new Map(entries.filter((entry) => entry !== null))
     } else {
       return null
     }
   } catch {
     return null
   }
-  if (!identities) {
-    return null
-  }
-  const parts: string[] = []
+  const members = new Map<number, string>()
   for (const pid of pids) {
-    const identity = identities.find((entry) => entry?.pid === pid)
-    if (!identity || identity.pgid !== group) {
-      return null
+    const entry = identities.get(pid)
+    if (entry && entry.pgid === group) {
+      members.set(pid, entry.identity)
     }
-    parts.push(`${pid}@${identity.start}:${identity.state}:${identity.name}`)
   }
-  return parts.join('|')
+  return members
 }

@@ -1,13 +1,13 @@
 import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
 import type { RemoteForegroundEvidence } from '../../../shared/terminal/pty/foreground/foreground-process-evidence'
 import type { Session } from '../sessions/session'
-import { readForegroundGroupIdentity } from './terminal-host-foreground-group-identity'
+import { readForegroundGroupMembers } from './terminal-host-foreground-group-identity'
 
 /** Full-capture identity may be reused only while the PTY's foreground group, its leader and the agent are unchanged. */
 type SteadyStateAnchor = {
   agentName: string
   foregroundGroup: number
-  /** Group leader, then the agent when a wrapper leads the group. */
+  /** The agent, plus the group leader when it is a live wrapper; a pipeline's leader may have exited. */
   pids: readonly number[]
   identity: string
   rawFallback: string | null
@@ -39,11 +39,16 @@ export async function rememberSteadyStateAnchor(
   if (session.readForegroundGroup() !== foregroundGroup) {
     return
   }
-  const pids = [...new Set([foregroundGroup, evidence.fence.process.pid])]
-  const identity = await readForegroundGroupIdentity(pids, foregroundGroup)
-  if (identity === null || session.readForegroundGroup() !== foregroundGroup) {
+  const agentPid = evidence.fence.process.pid
+  const members = await readForegroundGroupMembers(
+    [...new Set([foregroundGroup, agentPid])],
+    foregroundGroup
+  )
+  if (!members?.has(agentPid) || session.readForegroundGroup() !== foregroundGroup) {
     return
   }
+  const pids = [...members.keys()]
+  const identity = memberIdentity(members, pids)
   anchors.set(session, {
     agentName: evidence.processName,
     foregroundGroup,
@@ -63,8 +68,14 @@ export async function readAnchoredForeground(session: Session): Promise<string |
   ) {
     return null
   }
-  const identity = await readForegroundGroupIdentity(anchor.pids, anchor.foregroundGroup)
-  return identity === anchor.identity && session.readForegroundGroup() === anchor.foregroundGroup
+  const members = await readForegroundGroupMembers(anchor.pids, anchor.foregroundGroup)
+  return members !== null &&
+    memberIdentity(members, anchor.pids) === anchor.identity &&
+    session.readForegroundGroup() === anchor.foregroundGroup
     ? anchor.agentName
     : null
+}
+
+function memberIdentity(members: ReadonlyMap<number, string>, pids: readonly number[]): string {
+  return pids.map((pid) => members.get(pid) ?? `${pid}:gone`).join('|')
 }

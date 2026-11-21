@@ -360,7 +360,9 @@ it('confirms N resting agents polled together with one native read', async () =>
     setLibprocAddonForTests({
       readProcessTable: async (query) => {
         groupReads(query)
-        return (query.pids ?? []).map((pid) => ({ ...kinfo(pid, pid), comm: 'claude' }))
+        // A batch too large to name its pids reads the whole (kinfo-only) table instead.
+        const pids = query.pids ?? sessions.map((session) => session.pid + 1)
+        return pids.map((pid) => ({ ...kinfo(pid, pid), comm: 'claude' }))
       }
     })
     tables.strict.mockReset().mockResolvedValue({ rows, capturedAgeMs: 0 })
@@ -388,4 +390,47 @@ it('confirms N resting agents polled together with one native read', async () =>
   }
   expect(await steadyRoundReads(10)).toBe(1)
   expect(await steadyRoundReads(100)).toBe(1)
+  expect(await steadyRoundReads(1_000)).toBe(1)
+})
+
+it('anchors an agent whose pipeline group leader already exited', async () => {
+  const GROUP = 7000
+  const AGENT = 7001
+  const rows: ProcessTableRow[] = [
+    { ...row(SHELL, 1, SHELL, '-bash'), tpgid: GROUP, startTime: 'Mon Nov 20 10:00:00 2026' },
+    {
+      ...row(AGENT, SHELL, GROUP, 'claude'),
+      tpgid: GROUP,
+      startTime: 'Mon Nov 20 10:01:00 2026'
+    }
+  ]
+  setLibprocAddonForTests({
+    readProcessTable: async (query) => {
+      groupReads(query)
+      return (query.pids ?? [])
+        .filter((pid) => pid === AGENT)
+        .map((pid) => ({ ...kinfo(pid, GROUP), comm: 'claude' }))
+    }
+  })
+  const session = pane({
+    root: SHELL,
+    shellIsRootChild: false,
+    foregroundGroup: GROUP,
+    foreground: 'claude'
+  })
+  tables.strict.mockReset().mockResolvedValue({ rows, capturedAgeMs: 0 })
+  for (let epoch = 0; epoch < 10; epoch++) {
+    const result = await settle(
+      inspectTerminalHostProcess({
+        sessionId: 'pane-1',
+        session,
+        steadyState: true,
+        authorityGeneration: 'generation-1',
+        nextObservationEpoch: () => epoch
+      })
+    )
+    expect(result.foregroundProcess).toBe('claude')
+    vi.advanceTimersByTime(15_000)
+  }
+  expect(tables.strict).toHaveBeenCalledTimes(1)
 })
