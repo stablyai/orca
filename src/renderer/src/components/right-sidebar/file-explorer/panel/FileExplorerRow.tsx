@@ -2,7 +2,9 @@ import React from 'react'
 import { ChevronRight, CircleAlert, CircleSlash, Link, Loader2 } from 'lucide-react'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { cn } from '@/lib/class-names'
-import { FileTypeIcon, FolderIcon } from '@/components/icons/FileTypeIcon'
+import { WorkspaceFileIcon } from '@/components/WorkspaceFileIcon'
+import { FileExplorerIndentGuides } from '../../FileExplorerIndentGuides'
+import { getFileExplorerRowPadding } from '../../file-explorer-row-layout'
 import {
   encodeWorkspaceFilePaths,
   WORKSPACE_FILE_PATH_MIME,
@@ -143,12 +145,12 @@ export function FileExplorerRow({
           data-file-explorer-row=""
           data-selected={isSelected ? 'true' : undefined}
           className={cn(
-            'flex w-full items-center gap-1 rounded-sm px-2 py-1 text-left text-xs transition-colors',
+            'relative flex h-[22px] w-full items-center gap-1.5 rounded-sm px-2 text-left text-xs transition-colors',
             !isSelected && 'hover:bg-accent hover:text-foreground',
             isSelected && 'text-accent-foreground',
             isFlashing && 'bg-amber-400/20 ring-1 ring-inset ring-amber-400/70'
           )}
-          style={{ paddingLeft: `${(node.depth - displayDepthOffset) * 16 + 8}px` }}
+          style={{ paddingLeft: getFileExplorerRowPadding(node.depth - displayDepthOffset) }}
           ref={setRowDragNode}
           // The OS-drop owner reads the target folder here at drop time.
           data-file-explorer-drop-dir={rowDropDir}
@@ -192,6 +194,7 @@ export function FileExplorerRow({
           onClick={(e) => onClick(e)}
           onDoubleClick={onDoubleClick}
         >
+          <FileExplorerIndentGuides depth={Math.max(0, node.depth - displayDepthOffset)} />
           {node.isDirectory ? (
             <>
               <ChevronRight
@@ -205,11 +208,7 @@ export function FileExplorerRow({
               ) : showLoadError ? (
                 <CircleAlert className="size-3 shrink-0 text-destructive" />
               ) : (
-                <FolderIcon
-                  folderPath={node.name}
-                  open={isExpanded}
-                  className="size-3 shrink-0 text-muted-foreground"
-                />
+                <WorkspaceFileIcon path={node.relativePath || node.name} directory />
               )}
             </>
           ) : (
@@ -218,10 +217,7 @@ export function FileExplorerRow({
               {node.isSymlink ? (
                 <Link className="size-3 shrink-0 text-muted-foreground" />
               ) : (
-                React.createElement(FileTypeIcon, {
-                  filePath: node.relativePath || node.name,
-                  className: 'size-3 shrink-0 text-muted-foreground'
-                })
+                <WorkspaceFileIcon path={node.relativePath || node.name} />
               )}
             </>
           )}

@@ -49,7 +49,8 @@ describe('compact file explorer rows', () => {
           parentPath: '/project',
           type: 'rename',
           depth: 0,
-          existingName: '__fixtures__'
+          existingName: '__fixtures__',
+          isDirectory: true
         }}
         onSubmit={vi.fn()}
         onCancel={vi.fn()}

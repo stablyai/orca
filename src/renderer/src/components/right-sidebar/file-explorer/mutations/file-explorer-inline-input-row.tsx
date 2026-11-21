@@ -1,6 +1,7 @@
-import React, { useCallback, useRef } from 'react'
-import { File } from 'lucide-react'
-import { FolderIcon } from '@/components/icons/FileTypeIcon'
+import { useCallback, useRef } from 'react'
+import { WorkspaceFileIcon } from '@/components/WorkspaceFileIcon'
+import { FileExplorerIndentGuides } from '../../FileExplorerIndentGuides'
+import { FILE_EXPLORER_ROW_HEIGHT, getFileExplorerRowPadding } from '../../file-explorer-row-layout'
 import {
   isImeCompositionKeyDown,
   useImeEnterGestureOwnership
@@ -13,6 +14,7 @@ export type InlineInput = {
   depth: number
   existingName?: string
   existingPath?: string
+  isDirectory?: boolean
   operationOwner?: TreeNode['operationOwner']
 }
 
@@ -134,15 +136,15 @@ export function InlineInputRow({
 
   return (
     <div
-      className="flex items-center w-full h-[26px] px-2 gap-1"
-      style={{ paddingLeft: `${depth * 16 + 8}px` }}
+      className="relative flex w-full items-center gap-1.5 px-2"
+      style={{ height: FILE_EXPLORER_ROW_HEIGHT, paddingLeft: getFileExplorerRowPadding(depth) }}
     >
+      <FileExplorerIndentGuides depth={depth} />
       <span className="size-3 shrink-0" />
-      {inlineInput.type === 'folder' ? (
-        <FolderIcon open={false} className="size-3 shrink-0 text-muted-foreground" />
-      ) : (
-        <File className="size-3 shrink-0 text-muted-foreground" />
-      )}
+      <WorkspaceFileIcon
+        path={inlineInput.existingName ?? ''}
+        directory={inlineInput.type === 'folder' || Boolean(inlineInput.isDirectory)}
+      />
       <input
         key={inlineInputKey}
         ref={setInputRef}

@@ -102,6 +102,7 @@ export function useFileExplorerInlineInput({
         depth: node.depth,
         existingName: node.name,
         existingPath: node.path,
+        isDirectory: node.isDirectory,
         operationOwner: node.operationOwner
       }),
     []
