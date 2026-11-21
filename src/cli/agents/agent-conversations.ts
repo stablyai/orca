@@ -6,6 +6,8 @@ import {
 } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
+import { revealPairedPaneOnLocalDesktop } from '../terminals/paired-terminal-desktop-reveal'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type { RuntimeClient } from '../runtime/client'
 import { getOptionalWorktreeSelector } from '../workspace-selection/workspace-selector'
 import {
@@ -61,6 +63,34 @@ export const AGENT_CONVERSATION_HANDLERS: Record<string, CommandHandler> = {
       id: getRequiredStringFlag(flags, 'id')
     })
     printResult(result, json, formatAgentShow)
+  },
+  'agent focus': async ({ flags, client, json }) => {
+    const { result } = await callAgentMethod<AgentShowResult>(client, 'agent.show', {
+      id: getRequiredStringFlag(flags, 'id')
+    })
+    const id = `${ORCA_SESSION_ADDRESS_PREFIX}${result.orcaSessionId}`
+    const place = result.places[0]
+    const pane = place ? parsePaneKey(place.paneKey) : null
+    if (!place || !pane) {
+      throw new RuntimeClientError(
+        'agent_not_open',
+        `Agent ${id} isn't open in any workspace right now. Run \`orca agent show ${id}\` to check.`
+      )
+    }
+    const target = { worktreeId: place.worktreeId, tabId: pane.tabId, leafId: pane.leafId }
+    const activated = await client.call('session.tabs.activate', {
+      worktree: `id:${target.worktreeId}`,
+      tabId: target.tabId,
+      leafId: target.leafId,
+      navigation: 'host'
+    })
+    const navigated = client.isRemote
+      ? await revealPairedPaneOnLocalDesktop(client, async () => target)
+      : true
+    const focus: AgentFocusResult = {
+      focus: { ...target, orcaSessionId: result.orcaSessionId, navigated }
+    }
+    printResult({ ...activated, result: focus }, json, () => formatAgentFocus(place, id, navigated))
   },
   'agent read': async ({ flags, client, json }) => {
     const limit = getOptionalPositiveIntegerFlag(flags, 'limit')
@@ -147,6 +177,23 @@ function formatAgentShow(result: AgentShowResult): string {
     return `Agent ${id} (${result.kind}) isn't open in any workspace right now.`
   }
   return result.places.map(formatAgentRow).join('\n\n')
+}
+
+type AgentFocusResult = {
+  focus: {
+    orcaSessionId: string
+    worktreeId: string
+    tabId: string
+    leafId: string
+    navigated: boolean
+  }
+}
+
+function formatAgentFocus(place: AgentConversationRow, id: string, navigated: boolean): string {
+  const where = `${place.repo ? `${place.repo} › ` : ''}${place.workspace}`
+  return navigated
+    ? `Focused agent ${id} in ${where}.`
+    : `Focused agent ${id} in ${where} on its host; no desktop on this machine shows that host.`
 }
 
 function formatTool(tool: AgentReadTool): string {
