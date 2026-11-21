@@ -1,21 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store/index'
-import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import { resolveRepoSlug } from '@/lib/workspace/catalog/repo-slug-index'
 import {
   readRepoSlugCache,
   REPO_SLUG_FAILURE_TTL_MS,
   repoSlugCacheKey
 } from '@/lib/workspace/catalog/repo-slug-cache'
-import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import type { AppState } from '@/store/types'
-import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { FILE_LINK_CONTEXT_INPUT_KEYS } from '../actions/native-chat-file-link-context'
-import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
-import { authorityKey } from '../../../../../../shared/execution-host/host-authority'
-import { githubPreviewRepoAuthorityKey } from './native-chat-github-route-repo'
+import {
+  resolveWorktreeOwnerRepo,
+  type WorktreeOwnerRepoState
+} from '@/lib/workspace/ownership/worktree-owner-repo'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
-import { isUnresolvedOwnerHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   githubHostFromIdentityKey,
   githubRepoIdentityKey,
@@ -40,41 +36,7 @@ function readCachedOriginKey(repo: Repo | null): string | null {
   return cached?.hit ? cached.value : null
 }
 
-type NativeChatRepoState = Pick<
-  AppState,
-  | 'repos'
-  | 'worktreesByRepo'
-  | 'detectedWorktreesByRepo'
-  | 'folderWorkspaces'
-  | 'floatingWorkspacePath'
-> &
-  WorktreeRuntimeOwnerState
-
-function resolveNativeChatRepo(
-  state: NativeChatRepoState,
-  worktreeId: string | undefined
-): Repo | null {
-  // The same owner the chat's file links route to; twins on other hosts must not answer for it.
-  const hostId = worktreeId ? getKnownExecutionHostIdForWorktree(state, worktreeId) : null
-  if (!worktreeId || !hostId || isUnresolvedOwnerHostId(hostId)) {
-    return null
-  }
-  const worktree = findKnownWorktreeById(state, worktreeId, hostId)
-  if (!worktree) {
-    return null
-  }
-  const owner = resolveOwner(state, { workspaceId: worktreeId })
-  if (owner.kind !== 'resolved') {
-    return null
-  }
-  const owners = state.repos.filter(
-    (candidate) =>
-      candidate.id === worktree.repoId &&
-      githubPreviewRepoAuthorityKey(candidate) === authorityKey(owner.owner)
-  )
-  const found = owners.length === 1 ? owners[0] : null
-  return found && (!found.kind || found.kind === 'git') ? found : null
-}
+type NativeChatRepoState = WorktreeOwnerRepoState
 
 export function createNativeChatRepoSelector(worktreeId: string | undefined) {
   let inputs: unknown[] | null = null
@@ -83,7 +45,7 @@ export function createNativeChatRepoSelector(worktreeId: string | undefined) {
   return (state: NativeChatRepoState): Repo | null => {
     if (!inputs || FILE_LINK_CONTEXT_INPUT_KEYS.some((key, i) => state[key] !== inputs?.[i])) {
       inputs = FILE_LINK_CONTEXT_INPUT_KEYS.map((key) => state[key])
-      repo = resolveNativeChatRepo(state, worktreeId)
+      repo = resolveWorktreeOwnerRepo(state, worktreeId)
     }
     return repo
   }

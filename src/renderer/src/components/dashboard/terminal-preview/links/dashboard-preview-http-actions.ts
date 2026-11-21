@@ -130,18 +130,13 @@ export function dashboardPreviewHttpActions(
     canOpen,
     destinations,
     open,
-    ...buildHttpLinkActions(
-      destinations,
-      open,
-      canOpen
-        ? {
-            worktreeId: source.worktreeId,
-            sourceTabId: source.tabId,
-            sourceOwner: owner,
-            url,
-            openInSourceGroup: () => open('orca', true)
-          }
-        : undefined
-    )
+    // The source is known even when the browser can't open; only "Open in new tab" needs that.
+    ...buildHttpLinkActions(destinations, open, {
+      worktreeId: source.worktreeId,
+      sourceTabId: source.tabId,
+      sourceOwner: owner,
+      url,
+      ...(canOpen ? { openInSourceGroup: () => open('orca', true) } : {})
+    })
   }
 }

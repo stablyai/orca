@@ -23860,6 +23860,14 @@
       }
     },
     "link": {
+      "openInOrca": {
+        "issue": "Open issue in Orca",
+        "issueFailed": "Couldn't open issue #{{number}} in Orca.",
+        "openingIssue": "Opening issue #{{number}}…",
+        "openingPullRequest": "Opening PR #{{number}}…",
+        "pullRequest": "Open PR in Orca",
+        "pullRequestFailed": "Couldn't open PR #{{number}} in Orca."
+      },
       "routing": {
         "preference": {
           "dialog": {
