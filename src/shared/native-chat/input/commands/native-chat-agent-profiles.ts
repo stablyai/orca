@@ -116,7 +116,9 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
     skillSourceOwner: 'droid'
   },
   // Qwen lists its skills as commands once a session runs; Orca knows none of its skill folders.
-  'qwen-code': null
+  'qwen-code': null,
+  // Devin's ACP reports its commands at session start; no skill-folder scan runs for it.
+  devin: null
 }
 
 /** Whether `skill` under `source` reaches `profile`'s agent: shared roots, its own, and the skill

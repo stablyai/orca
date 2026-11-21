@@ -167,6 +167,13 @@ export const deliverQwenCodeInstructions: AcpInstructionsDelivery = async ({ tex
   return {}
 }
 
+// Devin reads the folder's AGENTS.local.md into every session's rules, so the file stays and
+// every launch rewrites it; a file the user wrote keeps their text around Orca's block.
+export const deliverDevinInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+  await writeFolderContextFile(cwd, 'AGENTS.local.md', 'Devin', text)
+  return {}
+}
+
 // Copilot rebuilds them at every start from its instruction sources, so each launch passes the folder.
 // Only an instructions file applies at once: an AGENTS.md there counts as nested and loads on demand.
 export const deliverCopilotInstructions: AcpInstructionsDelivery = async ({
