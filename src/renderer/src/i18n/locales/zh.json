@@ -26989,6 +26989,7 @@
       "webhookNotShared": "Webhook · 未分享",
       "commandNotShared": "命令 · 未分享",
       "fileLinkNotShared": "含符号链接或硬链接 · 未分享",
+      "linkedInSkill": "从项目外链接到 {{project}}",
       "tooLargeNotShared": "过大 · 未分享",
       "unreadableNotShared": "无法读取 · 未分享",
       "notShared": "未分享",

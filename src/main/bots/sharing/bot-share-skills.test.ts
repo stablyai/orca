@@ -90,13 +90,37 @@ describe("a bot's linked projects' skills in the Share dialog", () => {
     await candidates.dispose()
   })
 
-  it('offers a skill the project links in, as the bot loads it', async () => {
+  it('lists a skill the project links in from outside itself, for the owner to tick', async () => {
     await write(root, 'devex/electron/SKILL.md', skillText('electron', 'Drive the app'))
-    await mkdir(join(project, '.agents/skills'), { recursive: true })
+    await write(project, '.agents/skills/deploy/SKILL.md', skillText('deploy', 'Ship it'))
     await symlink(join(root, 'devex/electron'), join(project, '.agents/skills/electron'))
 
     const shareable = await read()
-    expect(shareable.skills.map((skill) => skill.name)).toEqual(['electron'])
+    expect(shareable.skills.map(({ name, optInFrom }) => ({ name, optInFrom }))).toEqual([
+      { name: 'deploy', optInFrom: undefined },
+      { name: 'electron', optInFrom: 'team-skills' }
+    ])
+
+    const candidates = new BotShareCandidates(join(root, 'candidates'))
+    const byDefault = await candidates.prepare({
+      bot,
+      shareable,
+      selection: {},
+      packageId: 'package-1'
+    })
+    expect(byDefault.bot.skills.map((skill) => skill.name)).toEqual(['deploy'])
+    expect(byDefault.available.skills).toContainEqual(
+      expect.objectContaining({ name: 'electron', optInFrom: 'team-skills' })
+    )
+    const ticked = await candidates.prepare({
+      bot,
+      shareable,
+      selection: { skills: ['deploy', 'electron'] },
+      packageId: 'package-1'
+    })
+    expect(ticked.bot.skills.map((skill) => skill.name)).toEqual(['deploy', 'electron'])
+    expect(ticked.files.map((file) => file.path)).toContain('skills/electron/SKILL.md')
+    await candidates.dispose()
   })
 
   it('leaves out a skill with a link inside, so the others still share by default', async () => {

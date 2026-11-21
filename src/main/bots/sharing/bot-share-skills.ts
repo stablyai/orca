@@ -2,6 +2,7 @@
 // the other agent's, then its linked projects' (as Settings lists them). Every place a skill was found
 // is checked on its own before precedence applies, so a copy reached through another folder's link
 // never hides the real one.
+import { realpath } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import type { Bot } from '../../../shared/bot-types'
 import {
@@ -27,6 +28,8 @@ export type BotShareSkill = {
   /** The skill's folder from the bot home, '/'-separated, for opening its files; null for a linked
    *  project's skill, which lives outside the home. */
   homePath: string | null
+  /** The linked project's name, for a skill it links in from outside itself: listed, not ticked. */
+  optInFrom?: string
 }
 
 /** A project the bot links for skills, on this host. */
@@ -41,6 +44,8 @@ type Source = {
   label: (folder: string) => string
   /** null: outside the home, so no file to open there. */
   homePath: (folder: string) => string | null
+  /** A project's name when the skill's folder is outside the project; the owner ticks it to share. */
+  optInFrom: (folder: string) => string | undefined
 }
 
 async function homeSources(
@@ -69,7 +74,7 @@ async function homeSources(
       leftOut.push({ kind: 'skill', name: folder, why: 'linked' })
       continue
     }
-    sources.push({ skills, root: root.own, label: homePath, homePath })
+    sources.push({ skills, root: root.own, label: homePath, homePath, optInFrom: () => undefined })
   }
   return sources
 }
@@ -79,14 +84,16 @@ async function projectSources(projects: readonly BotShareSkillProject[]): Promis
   const sources = await Promise.all(
     projects.map(async (project): Promise<Source | null> => {
       const scanned = await scanSkillProject(project.path)
-      if (!scanned) {
+      const real = await realpath(project.path).catch(() => null)
+      if (!scanned || real === null) {
         return null
       }
       return {
         skills: scanned.skills,
         root: null,
         label: () => project.name,
-        homePath: () => null
+        homePath: () => null,
+        optInFrom: (folder) => (within(real, folder) ? undefined : project.name)
       }
     })
   )
@@ -139,7 +146,8 @@ export async function readShareSkills(
         name: skill.name,
         description: skill.description,
         directory: skill.folder,
-        homePath: source.homePath(skill.folder)
+        homePath: source.homePath(skill.folder),
+        ...(source.optInFrom(skill.folder) ? { optInFrom: source.optInFrom(skill.folder) } : {})
       })
     }
   }

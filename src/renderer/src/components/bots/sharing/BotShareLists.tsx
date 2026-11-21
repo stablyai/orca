@@ -6,6 +6,7 @@ import { describeAutomationSchedule } from '../../../../../shared/automations/sc
 import { automationEventKind } from '../../../../../shared/automation-event-triggers'
 import { formatUiAutomationScheduleDescriptor } from '../../automations/details/automation-schedule-label'
 import { eventLabel } from '../bot-automation-when'
+import { pickedSkillNames } from '../../../../../shared/bots/bot-share-skill-picks'
 import {
   pickedOf,
   toggled,
@@ -51,10 +52,7 @@ function SkillsList({ ctx }: { ctx: BotShareContext }): React.JSX.Element {
     (entry) => entry.kind === 'skill' && entry.why === 'duplicate'
   )
   const unpackable = unpackableSkills(ctx.candidate.leftOut)
-  const picked = pickedOf(
-    ctx.selection.skills,
-    all.map((skill) => skill.name)
-  )
+  const picked = pickedSkillNames(ctx.selection.skills, all)
   return (
     <>
       {all.map((skill) => (
@@ -68,7 +66,13 @@ function SkillsList({ ctx }: { ctx: BotShareContext }): React.JSX.Element {
             />
           }
           title={skill.name}
-          detail={skill.description}
+          detail={
+            skill.optInFrom
+              ? t('bots.share.linkedInSkill', 'Linked into {{project}} from outside it', {
+                  project: skill.optInFrom
+                })
+              : skill.description
+          }
           onOpen={() =>
             ctx.open({
               kind: 'part',

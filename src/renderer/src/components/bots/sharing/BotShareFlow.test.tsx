@@ -214,6 +214,27 @@ it('lists a same-named skill that is left out with the folder it is in', async (
   ).toBeDefined()
 })
 
+it('lists a skill linked into a project from outside it unticked, with the project', async () => {
+  calls.skills = [
+    { name: 'deploy', description: 'Ship it', homePath: null },
+    {
+      name: 'electron',
+      description: 'Drive the app',
+      homePath: null,
+      optInFrom: 'team-skills'
+    }
+  ]
+  render(<BotShareFlow bot={bot} link={null} onClose={() => {}} />)
+  const row = await screen.findByRole('button', { name: /Skills/ })
+  expect(row.textContent).toContain('1 of 2')
+  fireEvent.click(row)
+  expect(await screen.findByText('Linked into team-skills from outside it')).toBeDefined()
+  expect(screen.getByRole('checkbox', { name: 'electron' }).getAttribute('aria-checked')).toBe(
+    'false'
+  )
+  expect(screen.getByRole('checkbox', { name: 'deploy' }).getAttribute('aria-checked')).toBe('true')
+})
+
 it('lists a skill with a symlink as not shared, and the Skills row still opens to it', async () => {
   calls.skills = []
   calls.leftOut = [{ kind: 'skill', name: 'deploy', why: 'link' }]

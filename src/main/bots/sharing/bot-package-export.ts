@@ -13,6 +13,7 @@ import {
   type BotShareCandidateSummary
 } from '../../../shared/bots/bot-package'
 import { botPackageName } from '../../../shared/bots/bot-share-status'
+import { pickedSkillNames } from '../../../shared/bots/bot-share-skill-picks'
 import { writeBotPackageArchive } from './bot-package-archive'
 import { scanBotText } from '../../../shared/bots/bot-text-scan'
 import {
@@ -59,9 +60,11 @@ export function botPackageFor(
     ...(shareable.avatar ? { avatar: shareable.avatar } : {}),
     purpose: landingLine(selection.purpose ?? shareable.purpose, BOT_PACKAGE_PURPOSE_MAX),
     agentHint: bot.agent,
-    skills: picked(shareable.skills, selection.skills, (entry) => entry.name).map(({ name }) => ({
-      name
-    })),
+    skills: picked(
+      shareable.skills,
+      pickedSkillNames(selection.skills, shareable.skills),
+      (entry) => entry.name
+    ).map(({ name }) => ({ name })),
     tools: picked(shareable.tools, selection.tools, (entry) => entry.name),
     connectors: deriveConnectors(bot, { schedules, eventSuggestions }).map((kind) => ({ kind })),
     schedules: schedules.map(strip),
