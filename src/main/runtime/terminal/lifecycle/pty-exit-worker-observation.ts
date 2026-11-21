@@ -52,6 +52,53 @@ export abstract class RuntimePtyExitWorkerObservation extends RuntimePtyExitSurf
     }
   }
 
+  /** The agent process ended and the shell kept the PTY. Tell the Dispatch without closing the terminal (#45328). */
+  protected noteProvenAgentProcessExit(ptyId: string): void {
+    const db = this._orchestrationDb
+    const surfaces: { handle: string | undefined; paneKey?: string }[] = [
+      ...this.getLeavesForPty(ptyId).map((leaf) => ({
+        handle: this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId)),
+        paneKey: this.makeRuntimePaneKey(leaf)
+      })),
+      {
+        handle: this.handleByPtyId.get(ptyId),
+        paneKey: this.paneOfPty(this.ptysById.get(ptyId)).paneKey ?? undefined
+      }
+    ]
+    const reason = 'The agent process ended while its terminal stayed open'
+    try {
+      surfaces.some(
+        ({ handle, paneKey }) =>
+          db !== null &&
+          handle !== undefined &&
+          observeTerminalWorkerExit(
+            db,
+            this.getRuntimeId(),
+            {
+              handle,
+              paneKey,
+              processIncarnation: this.getTerminalProcessIncarnation(handle),
+              error: reason,
+              options: {
+                workerProcessExited: true,
+                terminationReason: 'exited',
+                workerStage: 'process_exited'
+              },
+              processExited: true,
+              gone: {
+                reason: 'exited',
+                cause: `${reason}; its terminal is still open for inspection`,
+                lastOutput: this.readPtyLastOutput(ptyId)
+              }
+            },
+            this.workerTurnStopReportDeps
+          )
+      )
+    } catch (error) {
+      console.warn('[orchestration] failed to settle an agent that exited inside a live terminal', ptyId, error)
+    }
+  }
+
   /** Codex outlives a failed reconnect, so no PTY exit will ever settle its dispatch (#24791). */
   protected settleLostAgentSession(ptyId: string): void {
     const db = this._orchestrationDb
