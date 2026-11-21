@@ -20080,7 +20080,8 @@
           "unmuteTab": "Reactivar sonido de la pestaña"
         },
         "EditorFileTabContextMenu": {
-          "closeOthers": "Cerrar otras"
+          "closeOthers": "Cerrar otras",
+          "revealInOrcaExplorer": "Revelar en el explorador de Orca"
         },
         "CopyTabIdMenuItem": {
           "copied": "ID de pestaña copiado",

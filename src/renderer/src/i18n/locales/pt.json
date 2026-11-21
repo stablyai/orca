@@ -21884,7 +21884,8 @@
           "unmuteTab": "Reativar Som da Aba"
         },
         "EditorFileTabContextMenu": {
-          "closeOthers": "Fechar Outras"
+          "closeOthers": "Fechar Outras",
+          "revealInOrcaExplorer": "Mostrar no explorador do Orca"
         },
         "CopyTabIdMenuItem": {
           "copied": "ID da aba copiado",

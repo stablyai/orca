@@ -20679,7 +20679,8 @@
           "unmuteTab": "タブのミュートを解除"
         },
         "EditorFileTabContextMenu": {
-          "closeOthers": "その他を閉じる"
+          "closeOthers": "その他を閉じる",
+          "revealInOrcaExplorer": "Orca のエクスプローラーで表示"
         },
         "CopyTabIdMenuItem": {
           "copied": "タブ ID をコピーしました",

@@ -1,4 +1,15 @@
-import { Copy, CopyX, ExternalLink, Eye, ListX, Pencil, Pin, PinOff, X } from 'lucide-react'
+import {
+  Copy,
+  CopyX,
+  ExternalLink,
+  Eye,
+  FolderOpen,
+  ListX,
+  Pencil,
+  Pin,
+  PinOff,
+  X
+} from 'lucide-react'
 import {
   ContextMenuItem,
   ContextMenuSeparator,
@@ -89,6 +100,12 @@ export function EditorFileTabContextMenu({
     })
   )
   const revealBlocked = isRevealOrEditorOpenBlocked(revealOwner)
+  const canRevealInOrcaExplorer =
+    Boolean(file.filePath) &&
+    (file.mode === 'edit' || file.mode === 'markdown-preview') &&
+    !file.isUntitled &&
+    file.externalMutation !== 'deleted' &&
+    file.externalMutation !== 'renamed'
 
   return (
     <ContextMenuContent
@@ -193,6 +210,19 @@ export function EditorFileTabContextMenu({
             {t('auto.components.tab.bar.EditorFileTabContextMenu.52ce4f4605', 'Copy Relative Path')}
           </ContextMenuItem>
           <ContextMenuSeparator />
+          {canRevealInOrcaExplorer && (
+            <ContextMenuItem
+              onSelect={() =>
+                useAppStore.getState().revealInExplorer(file.worktreeId, file.filePath)
+              }
+            >
+              <FolderOpen className="size-3.5" />
+              {t(
+                'components.tab.bar.EditorFileTabContextMenu.revealInOrcaExplorer',
+                'Reveal in Orca Explorer'
+              )}
+            </ContextMenuItem>
+          )}
           <ContextMenuItem
             disabled={revealBlocked}
             onSelect={() => void revealInFileManager(file.filePath, revealOwner)}
