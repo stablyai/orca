@@ -117,7 +117,9 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
         | undefined
       try {
         const frames = [...snapshots].map((snapshot) => {
-          const result = this.toMobileSessionTabsResult(snapshot)
+          const result = this.toMobileSessionTabsResult(
+            this.settleOwedMobileSessionSnapshotVersion(snapshot, true)
+          )
           if (!includeAgentSenders) {
             return result
           }
@@ -170,7 +172,10 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
         return launch ? { ...result, initialSurfaceLaunch: launch } : result
       }
       const result = this.projectMobileSessionTabsForClient(
-        this.toMobileSessionTabsFrame(snapshot, options?.includeAgentSenders),
+        this.toMobileSessionTabsFrame(
+          this.settleOwedMobileSessionSnapshotVersion(snapshot, true),
+          options?.includeAgentSenders
+        ),
         clientNavigationId
       )
       const launch = options?.includeInitialSurfaceLaunch
