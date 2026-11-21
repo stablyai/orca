@@ -194,7 +194,10 @@ export function DeleteWorktreeChangesSummary({
   const fullText = note ? `${text} · ${note}` : text
   const line = (
     <span className="flex min-w-0 items-center gap-1.5" title={fullText}>
-      <span aria-hidden="true" className="flex size-3.5 shrink-0 items-center justify-center">
+      <span
+        aria-hidden="true"
+        className={`flex size-3.5 shrink-0 items-center justify-center ${tone === 'checking' ? 'text-muted-foreground' : ''}`}
+      >
         {tone === 'checking' ? (
           <LoadingSpinner className="size-3.5" />
         ) : tone === 'clean' ? (
@@ -214,7 +217,9 @@ export function DeleteWorktreeChangesSummary({
       ) : null}
       {stillChecking ? (
         <>
-          <LoadingSpinner className="size-3 shrink-0" />
+          <span aria-hidden="true" className="flex shrink-0 text-muted-foreground">
+            <LoadingSpinner className="size-3" />
+          </span>
           {changesChecking && text === checkingLabel ? null : (
             <span className="sr-only">
               {changesChecking
