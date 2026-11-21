@@ -55,6 +55,9 @@ export class ChatTurns {
         pendingPrompt: (link: ExternalConversationLink) => PendingPrompt | null
         /** Read once per ended turn. */
         chatTurnOrigin: (sessionId: string, turnAt: number | null) => ConnectorTurnOrigin
+        /** Whether every delivery the ending turn answers has reply outbox rows; read before
+         *  chatTurnOrigin, which ends the turn. */
+        chatTurnOutboxed?: (sessionId: string) => boolean
         /** Whether a delivery was sent to the chat and its turn hasn't ended. */
         chatTurnDelivered: (sessionId: string) => boolean
         /** The delivery a chat turn that began at `turnAt` answers; taken once. */
@@ -271,6 +274,7 @@ export class ChatTurns {
       return
     }
     // Read with the end's turn id in one tick so both name one turn; its message is read later.
+    const outboxed = this.deps.chatTurnOutboxed?.(news.sessionId) === true
     const origin = this.deps.chatTurnOrigin(news.sessionId, this.turnOf(paneKey))
     const ended = {
       kind: 'turn-ended' as const,
@@ -308,7 +312,7 @@ export class ChatTurns {
       return
     }
     void news.readTurn().then(async (turn) => {
-      const reply = botTurnReply(end, linked.link, turn, heard && origin === 'delivery')
+      const reply = botTurnReply(end, linked.link, turn, heard && origin === 'delivery', outboxed)
       const links = readOnce(() => this.toldLinks.next(paneKey, linked.link))
       const fill = this.deps.replyFill?.()
       const replied = await endRepliedTurn(end, turn, linked.link, links, fill, reply)

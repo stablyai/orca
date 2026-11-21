@@ -164,6 +164,7 @@ export class ExternalConversationSeam {
       onChatNews: (listener) => (host.chat ? watchChatNews(host.chat, listener) : () => {}),
       onWatchDisposed: () => this.chatDeliveries.followUnwatched(host.chat),
       chatTurnOrigin: (sessionId, turnAt) => this.chatDeliveries.origin(sessionId, turnAt),
+      chatTurnOutboxed: (sessionId) => this.chatDeliveries.answeredThroughOutbox(sessionId),
       ...(this.deps.actsForOf ? { actsForOf: this.deps.actsForOf } : {}),
       chatTurnDelivered: this.turnFacts(host.chat).delivered,
       runningTurnReported: this.turnFacts(host.chat).reported,
