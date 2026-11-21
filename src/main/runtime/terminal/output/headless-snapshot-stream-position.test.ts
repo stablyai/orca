@@ -724,15 +724,16 @@ describe('the hidden renderer after dropped output', () => {
     })
     anchorStream(runtime, 'pty-r')
     const write = HeadlessEmulator.prototype.write
-    const spy = vi
-      .spyOn(HeadlessEmulator.prototype, 'write')
-      .mockImplementation(function (this: HeadlessEmulator, data: string) {
-        const written = write.call(this, data)
-        if (data === 'OLD') {
-          runtime.notePtyDataGap('pty-r', 5)
-        }
-        return written
-      })
+    const spy = vi.spyOn(HeadlessEmulator.prototype, 'write').mockImplementation(function (
+      this: HeadlessEmulator,
+      data: string
+    ) {
+      const written = write.call(this, data)
+      if (data === 'OLD') {
+        runtime.notePtyDataGap('pty-r', 5)
+      }
+      return written
+    })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: OrcaRuntimeService inherits these protected members with exactly these types.
     const internals = runtime as unknown as {
       maybeHydrateHeadlessFromRenderer(ptyId: string): Promise<boolean> | null
