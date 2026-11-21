@@ -1,3 +1,4 @@
+import { isInheritedAgentUnavailable } from '../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import type { BranchNameWorkContext } from '../../../shared/source-control/ai/naming/branch-name-from-work'
 import type {
   BranchAutoRenameDeferredReason,
@@ -6,6 +7,18 @@ import type {
 } from '../../../shared/worktree/branch-auto-rename-attempt'
 import type { AgentGenerationFailureOutput } from '../../text-generation/failures/agent-failure-output'
 import type { FirstWorkAttempt, FirstWorkRenameVerdict } from './first-work-rename-attempts'
+
+/** Automatic attempts follow the first agent message; a retry is the user's Try again. */
+export type FirstWorkRenameOrigin = 'automatic' | 'retry'
+
+/** An automatic attempt keeps the seed name, launching nothing, when the inherited agent can't run. */
+export function skipsInheritedAgentFailure(
+  origin: FirstWorkRenameOrigin,
+  attempt: Pick<FirstWorkAttempt, 'wasJoined'>,
+  failure: Parameters<typeof isInheritedAgentUnavailable>[0]
+): boolean {
+  return origin === 'automatic' && !attempt.wasJoined() && isInheritedAgentUnavailable(failure)
+}
 
 /** What the generator names from: the event's prompt, or a click-time lookup. */
 export type FirstWorkContextResolution =

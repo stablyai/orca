@@ -334,6 +334,54 @@ describe('AutoRenameFailedDialog retry', () => {
     )
     expect(button('Dismiss')?.disabled).toBe(false)
   })
+
+  it('does not present the old error as the reason for an automatic skip', async () => {
+    await renderFailure()
+    const attempt = {
+      executionHostId: 'local' as const,
+      worktreeId: 'repo1::/path/wt1',
+      attemptId: 8
+    }
+    await act(async () => emitAttempt({ ...attempt, phase: 'started' }))
+    // The inherited-agent skip clears the stored error, then finishes as unavailable.
+    setStoredError(null)
+    await act(async () =>
+      emitAttempt({
+        ...attempt,
+        phase: 'finished',
+        outcome: { kind: 'ineligible', reason: 'unavailable' },
+        finishedAt: 1
+      })
+    )
+    const dialog = document.querySelector('[role="dialog"]')?.textContent ?? ''
+    expect(dialog).toContain("Orca can't name this branch anymore.")
+    expect(dialog).not.toContain(EXCERPT_ERROR)
+    expect(dialog).not.toContain('Error details')
+  })
+
+  it('shows a joined click as failed when the attempt events arrive before the reply', async () => {
+    await renderFailure()
+    let reply!: (result: BranchAutoRenameRetryResult) => void
+    retryBranchAutoRename.mockImplementation(() => new Promise((resolve) => (reply = resolve)))
+    await act(async () => button('Try again')?.click())
+    // The automatic attempt began before the click, but its events reach the window after it.
+    const attempt = {
+      executionHostId: 'local' as const,
+      worktreeId: 'repo1::/path/wt1',
+      attemptId: 9
+    }
+    const failed = { kind: 'failed' } as const
+    await act(async () => emitAttempt({ ...attempt, phase: 'started' }))
+    setStoredError('Choose a supported Source Control AI agent for this action')
+    await act(async () =>
+      emitAttempt({ ...attempt, phase: 'finished', outcome: failed, finishedAt: 1 })
+    )
+    await act(async () => reply({ attemptId: 9, outcome: failed, finishedAt: 1 }))
+    const dialog = document.querySelector('[role="dialog"]')
+    expect(dialog?.querySelector('h2')?.textContent).toBe('Branch auto-name failed')
+    expect(dialog?.textContent).toContain('Choose a supported Source Control AI agent')
+    expect(footerButtons()).toEqual(['Dismiss', 'Try again'])
+  })
 })
 
 describe('AutoRenameFailedDialog sessions and focus', () => {

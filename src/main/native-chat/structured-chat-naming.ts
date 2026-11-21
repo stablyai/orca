@@ -83,7 +83,7 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
         request.record,
         firstPrompt,
         request.record.conversationName ?? '',
-        request.automatic ? GENERATION_RETRY_DELAYS_MS : [],
+        request,
         () => applicable(request)
       )
       const store = deps.getStore()
@@ -127,9 +127,10 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     record: AgentSessionRecord,
     firstPrompt: string,
     forName: string,
-    retryDelays: readonly number[],
+    request: Pick<NamingRequest, 'automatic' | 'joinedByUser'>,
     stillCurrent: () => boolean
   ): Promise<string | null> {
+    const retryDelays = request.automatic ? GENERATION_RETRY_DELAYS_MS : []
     attempted.set(record.sessionId, contextId(record))
     for (let attempt = 0; stillCurrent(); attempt += 1) {
       let failure: NamingRunFailure
@@ -140,6 +141,15 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
         }
         if ('name' in result && result.name) {
           return result.name
+        }
+        // A deliberate skip launched nothing, so retrying can't help. Automatic naming runs once per
+        // context and keeps the seed; a Regenerate, including one that joined while the agent was
+        // resolving, reports why.
+        if ('skipAutomatic' in result && result.skipAutomatic) {
+          if ((!request.automatic || request.joinedByUser) && stillCurrent()) {
+            fail(record, forName, result)
+          }
+          return null
         }
         failure = 'error' in result ? result : chatNamingFailure('noName')
       } catch (error) {

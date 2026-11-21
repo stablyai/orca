@@ -1,5 +1,9 @@
 import { normalizeSourceControlAiSettings } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { resolveSourceControlActionRecipe } from '../../../../shared/source-control/ai/source-control-ai-operation-policy'
+import { isInheritedAgentUnavailable } from '../../../../shared/source-control/ai/source-control-ai-operation-resolution'
+import { listCommitMessageAgentCapabilities } from '../../../../shared/source-control/ai/generation/commit-message-agent-spec'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import { textGenerationFailure } from '../../../../shared/text-generation/text-generation-failure-copy'
 import { normalizeSourceControlActionRecipe } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import {
   renderConversationNamePrompt,
@@ -109,6 +113,18 @@ export function structuredChatNamingDeps(
           return chatNamingFailure(record.provider === 'grok' ? 'grokFailed' : 'antigravityFailed')
         }
       }
+      // Recipe normalization drops a provider id Orca doesn't know, which would hand the chat to
+      // the default agent; Use chat agent never names with a different provider.
+      if (useChatAgent && !isTuiAgent(record.provider)) {
+        const { error } = textGenerationFailure('agentCannotGenerateChatName', {
+          agent: record.provider,
+          agents: listCommitMessageAgentCapabilities('conversationName')
+            .map((capability) => capability.label)
+            .join(', ')
+        })
+        logger.warn(error, log)
+        return { error, skipAutomatic: true }
+      }
       const settings = resolveTextGenerationParams(
         useChatAgent
           ? {
@@ -131,7 +147,12 @@ export function structuredChatNamingDeps(
       )
       if (!settings.ok) {
         logger.warn(settings.error, log)
-        return { error: settings.error }
+        // A chat agent or inherited default that can't name chats launches nothing; automatic
+        // naming keeps the seed, while Regenerate still reports why.
+        const skipAutomatic =
+          (useChatAgent && settings.errorCode === 'agentCannotGenerateChatName') ||
+          isInheritedAgentUnavailable(settings)
+        return { error: settings.error, ...(skipAutomatic ? { skipAutomatic: true } : {}) }
       }
       const target = useChatAgent
         ? await chatNamingAgentTarget(

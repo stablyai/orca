@@ -47,8 +47,10 @@ import {
 import {
   failedGenerationVerdict,
   resolveFirstWorkContext,
+  skipsInheritedAgentFailure,
   verdictBuilders,
-  type FirstWorkContextSource
+  type FirstWorkContextSource,
+  type FirstWorkRenameOrigin
 } from './first-work-rename-verdicts'
 import { fenceFirstWorkDeps } from './first-work-rename-fence'
 import {
@@ -57,7 +59,7 @@ import {
   syncRenameGuards
 } from './first-work-rename-recheck'
 
-export type { FirstWorkContextSource } from './first-work-rename-verdicts'
+export type { FirstWorkContextSource, FirstWorkRenameOrigin } from './first-work-rename-verdicts'
 export {
   FIRST_WORK_BRANCH_RENAME_SETTLED_CACHE_LIMIT,
   resetFirstWorkBranchRenameState
@@ -134,23 +136,25 @@ export function runFirstWorkRename(
   worktreeId: string,
   source: FirstWorkContextSource,
   deps: FirstWorkBranchRenameDeps,
-  attempt: FirstWorkAttempt
+  attempt: FirstWorkAttempt,
+  origin: FirstWorkRenameOrigin = 'automatic'
 ): Promise<FirstWorkRenameVerdict> {
-  return runAutoRename(worktreeId, source, fenceFirstWorkDeps(deps, attempt), attempt)
+  return runAutoRename(worktreeId, source, fenceFirstWorkDeps(deps, attempt), attempt, origin)
 }
 
 async function runAutoRename(
   worktreeId: string,
   source: FirstWorkContextSource,
   deps: FirstWorkBranchRenameDeps,
-  attempt: FirstWorkAttempt
+  attempt: FirstWorkAttempt,
+  origin: FirstWorkRenameOrigin
 ): Promise<FirstWorkRenameVerdict> {
   const verdicts = verdictBuilders(worktreeId, deps)
   const { stop, defer, failed } = verdicts
 
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
-    return runFolderWorkspaceTitleAutoRename(worktreeId, source, deps, attempt, verdicts)
+    return runFolderWorkspaceTitleAutoRename(worktreeId, source, deps, attempt, verdicts, origin)
   }
 
   const repo = deps.getRepo(getRepoIdFromWorktreeId(worktreeId))
@@ -208,6 +212,11 @@ async function runAutoRename(
   const hostKey = getCommitMessageModelDiscoveryHostKey(null)
   const resolvedParams = resolveTextGenerationParams(settings, hostKey, 'branchName', repo)
   if (!resolvedParams.ok) {
+    if (skipsInheritedAgentFailure(origin, attempt, resolvedParams)) {
+      // Clear an earlier badge only while this attempt is current, so a newer failure stays.
+      const log = `inherited agent unavailable: ${resolvedParams.error}`
+      return stop('unavailable', log, attempt.isCurrent())
+    }
     deps.setRenameError(worktreeId, resolvedParams.error)
     return failed(`no generation agent: ${resolvedParams.error}`, true)
   }

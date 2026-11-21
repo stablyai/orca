@@ -8,7 +8,9 @@ import type { FirstWorkBranchRenameDeps } from './first-work-branch-rename'
 import {
   failedGenerationVerdict,
   resolveFirstWorkContext,
+  skipsInheritedAgentFailure,
   type FirstWorkContextSource,
+  type FirstWorkRenameOrigin,
   type FirstWorkVerdictBuilders
 } from './first-work-rename-verdicts'
 import type { FirstWorkAttempt, FirstWorkRenameVerdict } from './first-work-rename-attempts'
@@ -18,7 +20,8 @@ export async function runFolderWorkspaceTitleAutoRename(
   source: FirstWorkContextSource,
   deps: FirstWorkBranchRenameDeps,
   attempt: FirstWorkAttempt,
-  verdicts: FirstWorkVerdictBuilders
+  verdicts: FirstWorkVerdictBuilders,
+  origin: FirstWorkRenameOrigin
 ): Promise<FirstWorkRenameVerdict> {
   const { stop, defer, failed } = verdicts
   if (deps.isFolderWorkspaceWslMoveBlocked?.(worktreeId) === true) {
@@ -36,6 +39,10 @@ export async function runFolderWorkspaceTitleAutoRename(
   const settings = deps.getSettings()
   const resolvedParams = resolveTextGenerationParams(settings, 'local', 'branchName', null)
   if (!resolvedParams.ok) {
+    if (skipsInheritedAgentFailure(origin, attempt, resolvedParams)) {
+      const log = `inherited agent unavailable: ${resolvedParams.error}`
+      return stop('unavailable', log, attempt.isCurrent())
+    }
     deps.setRenameError(worktreeId, resolvedParams.error)
     return failed(`no generation agent: ${resolvedParams.error}`, true)
   }

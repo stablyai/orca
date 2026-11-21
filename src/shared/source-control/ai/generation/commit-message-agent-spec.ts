@@ -181,20 +181,36 @@ export function getCommitMessageAgentSpec(agentId: TuiAgent): CommitMessageAgent
   return COMMIT_MESSAGE_AGENT_SPECS[agentId]
 }
 
+/** The default launch agent an action inherits, or null when it is blank, absent or disabled. */
+export function enabledDefaultLaunchAgent(
+  defaultTuiAgent: DefaultTuiAgentPreference,
+  disabledTuiAgents?: Iterable<unknown> | null
+): TuiAgent | null {
+  return defaultTuiAgent &&
+    defaultTuiAgent !== 'blank' &&
+    isTuiAgentEnabled(defaultTuiAgent, disabledTuiAgents)
+    ? defaultTuiAgent
+    : null
+}
+
 export function resolveCommitMessageAgentChoice(
   configuredAgentId: CommitMessageAgentChoice | null | undefined,
   defaultTuiAgent: DefaultTuiAgentPreference,
-  disabledTuiAgents?: Iterable<unknown> | null
+  disabledTuiAgents?: Iterable<unknown> | null,
+  /** Pickers pass their action so an inherited naming-only agent shows as unusable outside chat names. */
+  actionId?: AiTextActionId
 ): CommitMessageAgentChoice | null {
   if (configuredAgentId) {
     return configuredAgentId
   }
-  if (
-    defaultTuiAgent &&
-    defaultTuiAgent !== 'blank' &&
-    isTuiAgentEnabled(defaultTuiAgent, disabledTuiAgents)
-  ) {
-    return getCommitMessageAgentSpec(defaultTuiAgent) ? defaultTuiAgent : null
+  const inherited = enabledDefaultLaunchAgent(defaultTuiAgent, disabledTuiAgents)
+  if (inherited) {
+    const usable =
+      getCommitMessageAgentSpec(inherited) &&
+      (actionId === undefined ||
+        actionId === 'conversationName' ||
+        !isNamingOnlyTextAgent(inherited))
+    return usable ? inherited : null
   }
   return isTuiAgentEnabled(DEFAULT_COMMIT_MESSAGE_AGENT_ID, disabledTuiAgents)
     ? DEFAULT_COMMIT_MESSAGE_AGENT_ID

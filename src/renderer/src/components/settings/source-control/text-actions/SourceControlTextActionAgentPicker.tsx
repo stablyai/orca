@@ -275,7 +275,12 @@ const TextActionPicker = memo(
         }
       }
     }
-    const resolvedAgent = resolveCommitMessageAgentChoice(props.agent, defaultAgent, disabledAgents)
+    const resolvedAgent = resolveCommitMessageAgentChoice(
+      props.agent,
+      defaultAgent,
+      disabledAgents,
+      operation
+    )
     const activeAgent = resolvedAgent && !isCustomAgentId(resolvedAgent) ? resolvedAgent : null
     const active = entries.find((entry) => entry.agent === activeAgent)
     const effective = active

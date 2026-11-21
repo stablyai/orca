@@ -25,6 +25,7 @@ import {
   type NativeFirstMessageReads
 } from './first-work-native-first-message'
 import {
+  joinRunningFirstWorkAttempt,
   runningFirstWorkAttempt,
   startFirstWorkAttempt,
   type FirstWorkAttempt
@@ -70,9 +71,10 @@ export async function retryFirstWorkRename(
       finishedAt: now()
     }
   }
-  const running = runningFirstWorkAttempt(worktreeId, incarnation)
-  if (running) {
-    return running.promise
+  // The joined attempt reports a settings problem itself, so its finished event and this reply agree.
+  const joined = joinRunningFirstWorkAttempt(worktreeId, incarnation)
+  if (joined) {
+    return joined
   }
   return startFirstWorkAttempt(
     worktreeId,
@@ -82,7 +84,8 @@ export async function retryFirstWorkRename(
         worktreeId,
         lookupSource(worktreeId, incarnation, attempt, deps),
         deps,
-        attempt
+        attempt,
+        'retry'
       ),
     deps
   ).promise
