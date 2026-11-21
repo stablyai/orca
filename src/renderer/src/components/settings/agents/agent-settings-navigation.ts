@@ -1,9 +1,8 @@
-import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-
 const AGENT_SETTINGS_ROW_PREFIX = 'settings-agent-'
 export const AGENT_SETTINGS_TARGET_WAIT_MS = 30_000
 
-export function getAgentSettingsRowId(agent: TuiAgent): string {
+/** An agent's row, or an agent copy's row by its copy id. */
+export function getAgentSettingsRowId(agent: string): string {
   return `${AGENT_SETTINGS_ROW_PREFIX}${agent}`
 }
 

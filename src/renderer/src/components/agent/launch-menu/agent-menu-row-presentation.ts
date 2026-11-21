@@ -71,12 +71,14 @@ export function rowTitle(row: NewTabAgentMenuRow, label: string, t: Translate = 
 }
 
 export function rowLabel(row: NewTabAgentMenuRow, t: Translate = translate): string {
-  const label = getAgentCatalog().find((entry) => entry.id === row.agent)?.label ?? row.agent
+  const label =
+    row.copy?.name ?? getAgentCatalog().find((entry) => entry.id === row.agent)?.label ?? row.agent
   return row.kind === 'cli'
     ? `${label} ${t('auto.components.tab.bar.QuickLaunchButton.cliTag', '(CLI)')}`
     : label
 }
 
 export function rowId(row: NewTabAgentMenuRow): string {
-  return `${row.kind === 'chat-unavailable' ? 'chat' : row.kind}:${row.agent}`
+  const id = row.copy?.id ?? row.agent
+  return `${row.kind === 'chat-unavailable' ? 'chat' : row.kind}:${id}`
 }

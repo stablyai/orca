@@ -101,6 +101,8 @@ export async function createStructuredWorkerSession(args: {
   dispatchId: string
   /** The dispatch's own `--model`/`--effort`, already narrowed to the seedable string subset. */
   options?: Readonly<Record<string, string>>
+  /** `--agent <copy id>`: the named agent copy the worker's chat runs as. */
+  agentCopy?: string
 }): Promise<{
   identity: StructuredWorkerIdentity
   host: StructuredAgentSessionHost
@@ -141,6 +143,7 @@ export async function createStructuredWorkerSession(args: {
       agent: args.agent,
       // Absent, the host seeds the user's saved selection — the same fallback a chat gets.
       ...(args.options ? { options: args.options } : {}),
+      ...(args.agentCopy ? { agentCopy: args.agentCopy } : {}),
       ...(structuredWorkerModelReplacesSavedSelection(args.agent, args.options?.model)
         ? { optionsMode: 'replace-model-selection' as const }
         : {}),

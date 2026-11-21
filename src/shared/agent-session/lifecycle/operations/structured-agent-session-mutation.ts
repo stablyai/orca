@@ -54,6 +54,7 @@ export function structuredAgentSessionCreateFingerprint(input: {
   firstMessage?: StructuredAgentSessionFirstMessage
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
+  agentCopy?: string
 }): string {
   return structuredAgentSessionPayloadFingerprint({
     method: 'agentSession.create',
@@ -68,7 +69,8 @@ export function structuredAgentSessionCreateFingerprint(input: {
       tabId: input.tabId,
       firstMessage: input.firstMessage,
       optionsMode: input.optionsMode,
-      options: input.options
+      options: input.options,
+      agentCopy: input.agentCopy
     }
   })
 }

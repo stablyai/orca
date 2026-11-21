@@ -124,6 +124,19 @@ export function useStructuredAgentSessionHostProgram(
   )
 }
 
+/** The agent copy this chat runs as, from its host; null for the agent itself or an older host. */
+export function useStructuredAgentSessionAgentCopy(
+  sessionId: string,
+  target: RuntimeClientTarget
+): string | null {
+  const { feed, subscribe } = useSessionFeed(sessionId, target)
+  return useSyncExternalStore(
+    subscribe,
+    () => feed.getSnapshot().get(sessionId)?.agentCopy ?? null,
+    () => null
+  )
+}
+
 /** Whether the host says a person's Stop is still ending the work; an older host never does. */
 export function useStructuredAgentSessionHostStopping(
   sessionId: string,

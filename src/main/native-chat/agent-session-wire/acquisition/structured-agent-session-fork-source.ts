@@ -1,3 +1,4 @@
+import type { AgentCopySettings } from '../../../../shared/agent-launch/catalog/agent-copies'
 import { isInheritedAgentSessionItem } from '../../../../shared/agent-session/lifecycle/records/agent-session-fork'
 import {
   agentJournalItemKey,
@@ -37,6 +38,8 @@ export type StructuredAgentSessionForkInput = {
   agent: StructuredAgentId
   location: AgentSessionExecutionLocation
   envelope: AgentSessionAttachParams['envelope']
+  /** Reads this host's saved agent copies, which must still hold the copy a source chat ran as. */
+  readAgentCopySettings?: () => AgentCopySettings
 }
 
 /** This catch ends before native copying begins; only authored admission failures prove no copy. */

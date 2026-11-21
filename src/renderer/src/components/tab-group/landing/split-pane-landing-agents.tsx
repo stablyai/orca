@@ -16,6 +16,11 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useNewTabAgentMenuRows } from '../../agent/launch-menu/use-new-tab-agent-menu-rows'
 import {
+  useAgentCopiesForMenu,
+  useAgentCopyMenuChatSettings
+} from '../../agent/launch-menu/AgentCopyMenuItems'
+import { agentCopyMenuRows } from '../../../../../shared/agent-launch/picker/agent-copy-menu-rows'
+import {
   QuickLaunchAgentMenuItems,
   useTabAgentMenuLaunch
 } from '../../agent/launch-menu/AgentMenuItems'
@@ -148,9 +153,14 @@ export function LandingAgentResults({
     onFocusTerminal: focusTerminalTabSurface
   })
   const catalog = getAgentCatalog()
+  const copies = useAgentCopiesForMenu()
+  const copyChatSettings = useAgentCopyMenuChatSettings()
   const matches =
     model.state === 'settled'
-      ? model.rows.filter((row) => {
+      ? [
+          ...model.rows,
+          ...agentCopyMenuRows(model.rows, copies, model.detection.detectedIds, copyChatSettings)
+        ].filter((row) => {
           if (row.kind === 'chat-unavailable') {
             return false
           }

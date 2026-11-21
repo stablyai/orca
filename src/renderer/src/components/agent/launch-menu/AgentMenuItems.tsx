@@ -14,6 +14,8 @@ import { toast } from 'sonner'
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 
 import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
+import { AGENT_COPY_OPTION_ID } from '../../../../../shared/agent-launch/catalog/agent-copies'
+import { AgentCopyMenuItems } from './AgentCopyMenuItems'
 import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import {
   agentLaunchPromptOwnership,
@@ -106,7 +108,8 @@ export function useTabAgentMenuLaunch({
       }
       const { agent } = row
       const entry = getCatalogEntry(agent)
-      const label = entry?.label ?? agent
+      const { copy } = row
+      const label = copy?.name ?? entry?.label ?? agent
       const result = launchAgentInNewTabWithOutcome({
         requestId: createNonSecureContextUuid(),
         focusIntent: captureNativeChatComposerFocusIntent(),
@@ -114,6 +117,12 @@ export function useTabAgentMenuLaunch({
           ? {
               requestedSurface: row.kind === 'chat' ? ('chat' as const) : ('terminal' as const),
               selectedExecutionHostId: row.executionHostId
+            }
+          : {}),
+        ...(copy
+          ? {
+              requestedSurface: row.kind === 'chat' ? ('chat' as const) : ('terminal' as const),
+              sessionOptions: { [AGENT_COPY_OPTION_ID]: copy.id }
             }
           : {}),
         agent,
@@ -343,6 +352,13 @@ export function ProjectedAgentMenuItems({
           )
         })
       )}
+      <AgentCopyMenuItems
+        rows={rows}
+        detectedIds={detectedIds}
+        disabled={disabled}
+        terminalPending={model.terminalPending}
+        runLaunch={runLaunch}
+      />
       <OpenAgentSettingsMenuItem />
     </>
   )

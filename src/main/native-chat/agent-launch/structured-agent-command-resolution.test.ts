@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { resolveStructuredAgentCommand } from './structured-agent-command-resolution'
+import { applyAgentCopy } from '../../../shared/agent-launch/catalog/agent-copies'
 import { rememberManagedAgentRelease } from '../../managed-agent-cli/managed-agent-cli-registry'
 import { explainConfiguredCommandExit } from '../../claude/structured/startup/claude-command-start-failure'
 import { claudeStartupError } from '../../claude/structured/startup/claude-structured-session-startup-exit'
@@ -156,3 +157,39 @@ describe('Orca’s agy', () => {
     expect(resolved).toEqual({ command: expected, prefixArgs: [] })
   })
 })
+
+describe.skipIf(process.platform === 'win32')(
+  'an agent copy on a chat-only install, with no agent CLI on this host',
+  () => {
+    const release = join('/orca-data', 'agent-runtimes', 'agy', '1.5.13')
+    const agy = join(release, process.platform === 'win32' ? 'agy.exe' : 'agy')
+    const copy = { id: 'antigravity.work', name: 'Work', agent: 'antigravity' as const }
+    const resolveAs = (settings: Parameters<typeof resolveStructuredAgentCommand>[1]) =>
+      resolveStructuredAgentCommand(
+        'antigravity',
+        settings,
+        { pathEnv: '' },
+        { command: 'agy', resolve: (name) => name }
+      )
+
+    afterEach(() => rememberManagedAgentRelease('antigravity', null))
+
+    it("starts Orca's own program as its agent does, or the copy's own Command", () => {
+      rememberManagedAgentRelease('antigravity', release)
+      const settings = { agentCmdOverrides: {}, agentCopies: [copy] }
+
+      expect(resolveAs(applyAgentCopy(settings, copy))).toEqual(resolveAs(settings))
+      expect(resolveAs(applyAgentCopy(settings, copy))).toEqual({ command: agy, prefixArgs: [] })
+      const dir = mkdtempSync(join(tmpdir(), 'orca-copy-command-'))
+      try {
+        const program = join(dir, 'agy-work')
+        writeFileSync(program, '#!/bin/sh\nexit 0\n')
+        chmodSync(program, 0o755)
+        const own = applyAgentCopy(settings, { ...copy, command: program })
+        expect(resolveAs(own).command).toBe(program)
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    })
+  }
+)

@@ -1,3 +1,4 @@
+import { normalizeAgentCopies } from '../../../../../shared/agent-launch/catalog/agent-copies'
 import type { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { parseRoutableExecutionHostId } from '../../../../../shared/execution-host/execution-host'
@@ -109,6 +110,11 @@ export async function listInstalledWorkspaceAgents(
     settings: {
       disabledTuiAgents: settings.disabledTuiAgents,
       defaultTuiAgent: settings.defaultTuiAgent
-    }
+    },
+    copies: normalizeAgentCopies(settings.agentCopies).map(({ id, name, agent }) => ({
+      id,
+      name,
+      agent
+    }))
   }
 }

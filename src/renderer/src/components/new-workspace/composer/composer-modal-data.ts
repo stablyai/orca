@@ -20,6 +20,8 @@ export type ComposerModalData = {
     draft?: AgentPickerDraft
     entry?: AgentPickerEntry
     contextKey?: string
+    /** The agent copy picked for `agent`; absent or null starts the agent itself. */
+    agentCopy?: string | null
   }
   directSetup?: DirectWorkItemSetupRequest
   prefilledName?: string
@@ -38,4 +40,18 @@ export type ComposerModalData = {
   telemetrySource?: WorkspaceCreateTelemetrySource
   contextualTourSource?: string
   setupGuideTourRequestId?: string
+}
+
+export type ComposerAgentPick = Omit<
+  NonNullable<ComposerModalData['recovery']>,
+  'note' | 'agentCopy'
+>
+
+/** The agent pick and the copy picked for it, as a Reopen snapshot left them. */
+export function composerRecoveryPicks(recovery: ComposerModalData['recovery']): {
+  pick: ComposerAgentPick
+  copy: { agent: TuiAgent; copy: string } | null
+} {
+  const { note: _note, agentCopy, ...pick } = recovery ?? { agent: null }
+  return { pick, copy: pick.agent && agentCopy ? { agent: pick.agent, copy: agentCopy } : null }
 }

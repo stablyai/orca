@@ -1,3 +1,4 @@
+import { isAgentCopyId } from './agent-launch/catalog/agent-copies'
 import * as z from 'zod'
 import { BotImportedFromSchema } from './bots/bot-import'
 import { BotSharedFromSchema } from './bots/bot-shared-from'
@@ -168,6 +169,8 @@ export const BotSchema = z.object({
   /** The bot's home folder workspace, in the hidden Bots project group. */
   folderWorkspaceId: z.string().min(1),
   agent: z.enum(BOT_AGENTS),
+  /** A named copy of `agent` the bot's chats run as; older hosts drop it and run `agent`. */
+  agentCopy: z.string().refine(isAgentCopyId).optional().catch(undefined),
   avatar: z.string().nullable(),
   /** The mascot's tile color; absent or null, its own sky blue. Older hosts drop it. */
   avatarColor: BotAvatarColorSchema.nullable().optional().catch(undefined),

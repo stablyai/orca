@@ -104,7 +104,8 @@ export async function createStructuredWorkerSessionForWorktree(args: {
     worktreeId: args.worktreeId,
     agent: args.agent,
     dispatchId: args.dispatchId,
-    ...(options ? { options } : {})
+    ...(options ? { options } : {}),
+    ...(args.launchPreferences?.agentCopy ? { agentCopy: args.launchPreferences.agentCopy } : {})
   })
   args.effects.push({
     kind: 'terminal',

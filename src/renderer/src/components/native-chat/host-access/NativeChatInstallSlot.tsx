@@ -20,7 +20,13 @@ import {
   antigravityChatSignInPrompt,
   antigravityOrcaRuntimeSignsIn
 } from '@/components/provider-accounts/antigravity-chat-runtime-sign-in-policy'
-import { useStructuredAgentSessionHostProgram } from '../session/status/structured-agent-session-status-hooks'
+import {
+  useStructuredAgentSessionAgentCopy,
+  useStructuredAgentSessionHostProgram
+} from '../session/status/structured-agent-session-status-hooks'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
+import { findAgentCopy } from '../../../../../shared/agent-launch/catalog/agent-copies'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { NativeChatStructuredViewProps } from '../native-chat-view-types'
 import type { NativeChatAntigravityAuthTarget } from '../antigravity-auth/native-chat-antigravity-auth'
 
@@ -57,15 +63,21 @@ export function useNativeChatInstallSlot(
   const hostProgram = useStructuredAgentSessionHostProgram(props.sessionId, props.target)
   // Chats on the host program follow it too: Orca's copy of agy may be what they need installed.
   const observation = useManagedRuntimeInstall(props.target, props.agent, props.isVisible)
-  const slot = nativeChatInstallSlotState(observation, layout, hostProgram)
+  const ownCommand = useAgentCopyOwnCommand(
+    props.agent,
+    useStructuredAgentSessionAgentCopy(props.sessionId, props.target),
+    props.target
+  )
+  const slot = ownCommand ? NONE : nativeChatInstallSlotState(observation, layout, hostProgram)
   // Once Orca's own runtime is ready, chats still need its sign-in; the host's agy signs itself in.
-  const signsIn =
-    props.agent === 'antigravity' &&
-    props.isVisible &&
-    !hostProgram &&
-    slot.kind === 'none' &&
-    observation.kind === 'active' &&
-    antigravityOrcaRuntimeSignsIn(observation)
+  const signsIn = chatTakesOrcaRuntimeSignIn({
+    agent: props.agent,
+    visible: props.isVisible,
+    hostProgram,
+    ownCommand,
+    slot,
+    observation
+  })
   const signInView = useAntigravityChatSignIn(signsIn ? props.target : null)
   const prompt = signsIn ? antigravityChatSignInPrompt(signInView) : null
   const signIn =
@@ -81,28 +93,65 @@ export function useNativeChatInstallSlot(
     signIn,
     sendBlockedReason: unavailableHint ?? installSlotSendBlockedReason(slot, agentLabel, t),
     unavailableHint,
-    antigravityAuth: signsIn
-      ? {
-          host: props.target,
-          backend: 'managed',
-          managedVersion:
-            observation.snapshot.kind === 'known'
-              ? observation.snapshot.state.installedVersion
-              : null
-        }
-      : props.agent === 'antigravity' && props.isVisible && hostProgram
+    antigravityAuth:
+      signsIn && observation.kind === 'active'
         ? {
             host: props.target,
-            backend: 'agy',
-            ...orcasAgy(observation),
-            // Until the host says which agy is there, or while none is, the chip names none.
-            programPending:
-              slot.kind === 'install' ||
-              observation.kind === 'pending' ||
-              (observation.kind === 'active' && observation.snapshot.kind === 'unknown')
+            backend: 'managed',
+            managedVersion:
+              observation.snapshot.kind === 'known'
+                ? observation.snapshot.state.installedVersion
+                : null
           }
-        : null
+        : props.agent === 'antigravity' && props.isVisible && hostProgram
+          ? {
+              host: props.target,
+              backend: 'agy',
+              ...orcasAgy(observation),
+              // Until the host says which agy is there, or while none is, the chip names none.
+              programPending:
+                slot.kind === 'install' ||
+                observation.kind === 'pending' ||
+                (observation.kind === 'active' && observation.snapshot.kind === 'unknown')
+            }
+          : null
   }
+}
+
+/** Only a chat on Orca's own Antigravity runtime, once installed, takes Orca's sign-in: never the
+ *  host's agy, and never a copy with its own Command, which runs neither. */
+export function chatTakesOrcaRuntimeSignIn(args: {
+  agent: string
+  visible: boolean
+  hostProgram: boolean
+  ownCommand: boolean
+  slot: NativeChatInstallSlotState
+  observation: ManagedRuntimeInstallObservation
+}): boolean {
+  const { observation } = args
+  return (
+    args.agent === 'antigravity' &&
+    args.visible &&
+    !args.hostProgram &&
+    !args.ownCommand &&
+    args.slot.kind === 'none' &&
+    observation.kind === 'active' &&
+    antigravityOrcaRuntimeSignsIn(observation)
+  )
+}
+
+/** Whether this computer's chat runs as an agent copy with a Command of its own, which the host
+ *  starts as it does an agent's own Command, so Orca's runtime is not needed. */
+export function useAgentCopyOwnCommand(
+  agent: string,
+  copyId: string | null,
+  target: RuntimeClientTarget
+): boolean {
+  return useAppStateValue((state) => {
+    const copy =
+      copyId && target.kind === 'local' ? findAgentCopy(state.settings, copyId) : undefined
+    return Boolean(copy?.command && copy.agent === agent)
+  })
 }
 
 /** Orca's installed agy is the one a chat on the host program runs; the person's own wins. */

@@ -1,3 +1,4 @@
+import { applyAgentCopyById } from '../../../../shared/agent-launch/catalog/agent-copies'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { resolveStructuredAgentSessionForkIntent } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-fork-intent'
 import {
@@ -115,7 +116,8 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
         ...input,
         forkFrom: input.forkFrom,
         host: getStructuredAgentSessionHost(),
-        location: await this.resolveStructuredAgentSessionLocation(input.worktree)
+        location: await this.resolveStructuredAgentSessionLocation(input.worktree),
+        readAgentCopySettings: () => this.requireStore().getSettings()
       })
       return hostLaunchDirectory ? { ...resolved, hostLaunchDirectory } : resolved
     }
@@ -180,12 +182,11 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     }
     await this.accounts.prepareHostAgentLaunch(input.agent)
     const settings = this.requireStore().getSettings()
-    const launchEnv = this.structuredAgentLaunchEnv(input.agent, settings)
+    // A copy's chat seeds and resolves its account from the copy's own values.
+    const seedSettings = applyAgentCopyById(settings, input.agentCopy)
+    const launchEnv = this.structuredAgentLaunchEnv(input.agent, seedSettings)
     const options = structuredLaunchSeedOptions(
-      {
-        ...settings,
-        agentLaunchChoices: input.resumeFrom ? undefined : settings.agentLaunchChoices
-      },
+      input.resumeFrom ? { ...seedSettings, agentLaunchChoices: undefined } : seedSettings,
       input.agent
     )
     const location = await this.resolveStructuredAgentSessionLocation(input.worktree)

@@ -92,6 +92,8 @@ export type AgentLaunchPreferences = {
   model?: string
   effort?: string
   mode?: string
+  /** The named agent copy to start, whose command, arguments and environment replace the agent's. */
+  agentCopy?: string
 }
 
 export type AgentPromptDelivery = 'auto-submit' | 'draft'

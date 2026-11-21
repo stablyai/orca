@@ -12,6 +12,7 @@ import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-l
 import { isAgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { requireUnownedStructuredAgentSessionAdoption } from '../../../runtime/agent-session/ownership/structured-agent-session-create-adoption'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
+import { findAgentCopy } from '../../../../shared/agent-launch/catalog/agent-copies'
 
 export async function prepareStructuredAgentSessionFork(
   input: StructuredAgentSessionForkInput
@@ -30,6 +31,14 @@ export async function prepareStructuredAgentSessionFork(
     fail,
     throughItemId
   } = await admitStructuredAgentSessionFork(input)
+  // The fork runs as the source's copy; a deleted one refuses before the provider copies anything.
+  if (
+    record.agentCopy &&
+    input.readAgentCopySettings &&
+    findAgentCopy(input.readAgentCopySettings(), record.agentCopy)?.agent !== input.agent
+  ) {
+    throw new Error(`Unknown agent copy "${record.agentCopy}"`)
+  }
   // The fork mark comes from the record's forkedFrom, so the name stays the source's own.
   const title = normalizeAgentSessionConversationName(
     agentSessionRecordShownName(host.deps.store, record) || defaultAgentChatLabel(input.agent)
@@ -131,6 +140,7 @@ export async function prepareStructuredAgentSessionFork(
         : {})
     },
     ...(record.launchArgs ? { launchArgs: record.launchArgs } : {}),
+    ...(record.agentCopy ? { agentCopy: record.agentCopy } : {}),
     adopt: { providerHandle, conversationName: title }
   }
 }

@@ -1,3 +1,4 @@
+import { agentCopyBase, isAgentCopyId } from '../agent-launch/catalog/agent-copies'
 import { botTidyUp, patchTidyUp, TIDY_UP_EVERY_CHOICES } from '../bots/bot-tidy-up'
 import * as z from 'zod'
 import { BOT_IMPORT_REPLY_MAX, BotImportFromSchema } from '../bots/bot-import'
@@ -125,6 +126,8 @@ export const BotUpdate = z.object({
     .object({
       name: BotNameSchema.optional(),
       agent: z.enum(BOT_AGENTS).optional(),
+      /** null runs the agent itself; a new agent clears it, since a copy belongs to its agent. */
+      agentCopy: z.string().refine(isAgentCopyId).nullable().optional(),
       avatar: SettableBotAvatar.optional(),
       /** null puts back the mascot's own sky blue. */
       avatarColor: BotAvatarColorSchema.nullable().optional(),
@@ -327,6 +330,7 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
   const {
     permissionMode,
     launch,
+    agentCopy,
     removeMember,
     removeMembers,
     addMembers,
@@ -387,6 +391,15 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
     next.launch = launch
   } else if (launch === null || (rest.agent !== undefined && rest.agent !== bot.agent)) {
     delete next.launch
+  }
+  if (agentCopy) {
+    next.agentCopy = agentCopy
+  } else if (agentCopy === null || (rest.agent !== undefined && rest.agent !== bot.agent)) {
+    delete next.agentCopy
+  }
+  // A copy belongs to its agent; one of another agent would refuse every chat, so it is dropped.
+  if (next.agentCopy && agentCopyBase(next.agentCopy) !== next.agent) {
+    delete next.agentCopy
   }
   return next
 }

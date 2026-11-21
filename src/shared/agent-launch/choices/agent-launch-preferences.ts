@@ -6,6 +6,7 @@ import {
   agentPermissionHasTerminalChoice
 } from '../permissions/tui-agent-permission-choice'
 import { isTuiAgent } from '../catalog/tui-agent-config'
+import { AGENT_COPY_OPTION_ID, agentCopyIdFromOptions } from '../catalog/agent-copies'
 import {
   composeAgentLaunchModel,
   hasIndependentAgentLaunchOptions
@@ -27,10 +28,12 @@ export function toAgentLaunchPreferences(
       ? sessionOptions.effort.trim()
       : undefined
   const mode = readLaunchPermissionChoice(sessionOptions)
+  const agentCopy = agentCopyIdFromOptions(sessionOptions)
   const preferences: AgentLaunchPreferences = {
     ...(model ? { model } : {}),
     ...(effort ? { effort } : {}),
-    ...(mode && isTuiAgent(agent) && agentPermissionHasTerminalChoice(agent, mode) ? { mode } : {})
+    ...(mode && isTuiAgent(agent) && agentPermissionHasTerminalChoice(agent, mode) ? { mode } : {}),
+    ...(agentCopy ? { agentCopy } : {})
   }
   return Object.keys(preferences).length > 0 ? preferences : undefined
 }
@@ -59,4 +62,20 @@ export function toAgentSessionOptionValues(values: Readonly<Record<string, unkno
             typeof entry[1] === 'string' || typeof entry[1] === 'boolean'
         )
       )
+}
+
+/** Session options for typed launch preferences; the copy rides under its reserved option id. */
+export function agentLaunchPreferenceOptions(
+  preferences: AgentLaunchPreferences | undefined
+): Record<string, string> | undefined {
+  if (!preferences) {
+    return undefined
+  }
+  const options = {
+    ...(preferences.model ? { model: preferences.model } : {}),
+    ...(preferences.effort ? { effort: preferences.effort } : {}),
+    ...(preferences.mode ? { mode: preferences.mode } : {}),
+    ...(preferences.agentCopy ? { [AGENT_COPY_OPTION_ID]: preferences.agentCopy } : {})
+  }
+  return Object.keys(options).length > 0 ? options : undefined
 }

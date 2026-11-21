@@ -1189,9 +1189,24 @@
       "chatUnavailableOnWindows": "{{value0}} Chat isn't available on Windows yet, so {{value0}} opens in a terminal on this host. Chats on a macOS or Linux host still work.",
       "undetectedCommandHint": "If the {{agent}} CLI is installed outside PATH, enter the full path to its executable on this host.",
       "agentActions": "{{agent}} actions",
+      "duplicate": "Duplicate",
+      "copyName": "Copy name",
+      "copyOf": "Copy of {{agent}}",
+      "copyId": "ID",
+      "copyIdInvalid": "Use {{agent}}. followed by lowercase letters, digits and dashes.",
+      "copyIdTaken": "Another copy has this ID.",
+      "deleteCopy": "Delete {{name}}",
+      "copyDefaultName": "{{agent}} copy",
+      "copyCreated": "Saved {{name}} as {{id}}.",
+      "copyLimit": "Orca keeps up to {{count}} agent copies. Delete one to make another.",
       "defaultAutoBadge": "Default · Auto",
       "newAgentsTitle": "New agents",
-      "defaultSurfaceServerDescription": "The default for agents {{host}} starts itself, such as from its CLI or orchestration workers. Agents you open from this computer follow This computer's choice."
+      "copyIdLabel": "Copy ID",
+      "copySaveFailed": "The agent copy could not be saved. Try again.",
+      "defaultSurfaceServerDescription": "The default for agents {{host}} starts itself, such as from its CLI or orchestration workers. Agents you open from this computer follow This computer's choice.",
+      "copyIdInUse": "Used by {{bots}}. Change what they run as first.",
+      "copySourceGone": "That copy was deleted, so nothing was duplicated.",
+      "copyIdBotsUnknown": "Orca hasn't read this computer's bots yet, so the ID can't change until it has."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "symlink",
@@ -1529,6 +1544,8 @@
       "title": "Bots",
       "description": "Your AI teammate with a name, memory and automations.",
       "slackConnected": "Connected",
+      "runsAs": "Runs as",
+      "runsAsDescription": "New conversations start with this copy's command, arguments and environment.",
       "permissionSameAsChats": "Same as chats",
       "permissionSameAsChatsDescription": "Starts like any new chat, from your chat permission setting.",
       "enable": "Enable bots",
@@ -23603,6 +23620,7 @@
       "startInTerminal": "Start {{value0}} in a terminal"
     },
     "newWorkspace": {
+      "runsAs": "Runs as",
       "agentOptional": "Agent [Optional]",
       "createDescription": "Choose the project and workspace name. Select an agent if you want to start one.",
       "setupCheckFailed": "Could not check setup configuration. Try again.",

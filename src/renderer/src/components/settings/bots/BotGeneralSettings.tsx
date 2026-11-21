@@ -5,6 +5,7 @@ import { useConfirmBotAgentSwitch } from '@/components/bots/bot-home-chat-confir
 import { useBotAgentMenu } from '@/components/bots/use-bot-agent-choices'
 import { BotAgentLaunchPicker, type BotAgentSetup } from '@/components/bots/BotAgentLaunchPicker'
 import { botErrorMessage } from '@/components/bots/bot-presentation'
+import { BotAgentCopySetting } from './BotAgentCopySetting'
 import {
   NATIVE_CHAT_PERMISSION_MODE_ICONS,
   nativeChatPermissionModeDescription,
@@ -54,27 +55,30 @@ export function BotAgentSettings({ bot, update }: { bot: Bot; update: Update }):
     await openBotChat(bot).catch((error: unknown) => toast.error(botErrorMessage(error)))
   }
   return (
-    <SettingsInsetGroup>
-      <div className="flex flex-col gap-2 px-3 py-2.5">
-        <div className="min-w-0 text-[13px]">
-          <div className="font-medium leading-[18px]">{t('settings.bots.agent', 'Agent')}</div>
-          <p className="text-xs leading-4 text-muted-foreground">
-            {t(
-              'settings.bots.agentModelDescription',
-              'Used for bot conversations and automations. A new model applies to new conversations; the Home Chat keeps its current one.'
-            )}
-          </p>
+    <>
+      <SettingsInsetGroup>
+        <div className="flex flex-col gap-2 px-3 py-2.5">
+          <div className="min-w-0 text-[13px]">
+            <div className="font-medium leading-[18px]">{t('settings.bots.agent', 'Agent')}</div>
+            <p className="text-xs leading-4 text-muted-foreground">
+              {t(
+                'settings.bots.agentModelDescription',
+                'Used for bot conversations and automations. A new model applies to new conversations; the Home Chat keeps its current one.'
+              )}
+            </p>
+          </div>
+          <BotAgentLaunchPicker
+            model={menu.model}
+            choices={menu.choices}
+            value={{ agent: bot.agent, launch: bot.launch, permissionMode: bot.permissionMode }}
+            worktreeId={folderWorkspaceKey(bot.folderWorkspaceId)}
+            withPermission={false}
+            onChange={(setup) => void setAgentSetup(setup)}
+          />
         </div>
-        <BotAgentLaunchPicker
-          model={menu.model}
-          choices={menu.choices}
-          value={{ agent: bot.agent, launch: bot.launch, permissionMode: bot.permissionMode }}
-          worktreeId={folderWorkspaceKey(bot.folderWorkspaceId)}
-          withPermission={false}
-          onChange={(setup) => void setAgentSetup(setup)}
-        />
-      </div>
-    </SettingsInsetGroup>
+      </SettingsInsetGroup>
+      <BotAgentCopySetting bot={bot} update={update} />
+    </>
   )
 }
 

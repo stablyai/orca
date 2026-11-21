@@ -33,3 +33,12 @@ describe('GitHub people per org', () => {
     expect(gitHubMembersOf(after.members, '8')).toEqual([{ ...alice, workspaceId: '8' }])
   })
 })
+
+it('drops a saved agent copy that names another agent', () => {
+  const bot = makeTestBot({ agent: 'claude', agentCopy: 'claude.code-mode' })
+  expect(applyBotUpdates(bot, { agentCopy: 'codex.fast' }).agentCopy).toBeUndefined()
+  expect(applyBotUpdates(bot, { agent: 'codex', agentCopy: 'claude.code-mode' }).agentCopy).toBe(
+    undefined
+  )
+  expect(applyBotUpdates(bot, { name: 'Renamed' }).agentCopy).toBe('claude.code-mode')
+})

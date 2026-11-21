@@ -1,3 +1,4 @@
+import { isAgentCopyId } from '../../../../../shared/agent-launch/catalog/agent-copies'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { isAgentSessionOptions } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
 import { SendBodyStructure } from '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-message-params'
@@ -63,6 +64,7 @@ export type StructuredAgentLaunchPersistedRecord = {
   explicitLaunchOptions?: Readonly<Record<string, string>>
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
+  agentCopy?: string
   createMessageSupport?: boolean
   /** A paired server's reported seed, which this machine cannot re-derive after a reload. */
   seedOptions?: Readonly<Record<string, string>>
@@ -74,7 +76,7 @@ export function structuredAgentLaunchRecordFor(
   intent: StructuredAgentSessionLaunchIntent,
   lifecycle: StructuredAgentLaunchPersistedLifecycle
 ): StructuredAgentLaunchPersistedRecord {
-  const { envelope, resumeFrom, forkFrom, tabId, firstMessage, optionsMode, options } =
+  const { envelope, resumeFrom, forkFrom, tabId, firstMessage, optionsMode, options, agentCopy } =
     intent.params
   // A local launch re-reads this machine's settings on reload; only a paired server's seed is kept.
   const pairedSeed = intent.target.kind === 'local' ? undefined : intent.seedOptions
@@ -93,6 +95,7 @@ export function structuredAgentLaunchRecordFor(
     ...(firstMessage ? { firstMessage } : {}),
     ...(optionsMode ? { optionsMode } : {}),
     ...(options ? { options } : {}),
+    ...(agentCopy ? { agentCopy } : {}),
     ...(intent.explicitLaunchOptions
       ? { explicitLaunchOptions: intent.explicitLaunchOptions }
       : {}),
@@ -155,6 +158,7 @@ export function validRecord(value: unknown): value is Omit<
     (firstMessage === undefined || validFirstMessage(firstMessage)) &&
     (optionsMode === undefined || optionsMode === 'replace-model-selection') &&
     (options === undefined || isAgentSessionOptions(options)) &&
+    (!('agentCopy' in value) || value.agentCopy === undefined || isAgentCopyId(value.agentCopy)) &&
     (!('explicitLaunchOptions' in value) ||
       value.explicitLaunchOptions === undefined ||
       isAgentSessionOptions(value.explicitLaunchOptions)) &&

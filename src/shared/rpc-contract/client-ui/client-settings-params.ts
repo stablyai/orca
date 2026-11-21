@@ -3,6 +3,7 @@ import { isTaskProvider } from '../../work-items/task-providers'
 import type { TaskProvider } from '../../work-items/task-providers'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import { normalizeDisabledTuiAgents } from '../../agent-launch/catalog/tui-agent-selection'
+import { normalizeAgentCopies } from '../../agent-launch/catalog/agent-copies'
 import {
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
@@ -121,6 +122,10 @@ export const SettingsUpdate = z
     agentDefaultEnv: z
       .unknown()
       .transform((value) => normalizeTuiAgentEnvRecord(value))
+      .optional(),
+    agentCopies: z
+      .unknown()
+      .transform((value) => normalizeAgentCopies(value))
       .optional(),
     defaultTaskSource: TaskProviderParam.optional(),
     visibleTaskProviders: z.array(TaskProviderParam).optional(),

@@ -53,6 +53,9 @@ export type NewWorkspaceComposerCardProps = {
   ) => void
   /** Where the quick agent would start; null keeps the picker's plain agent list. */
   agentRows?: ComposerAgentRows | null
+  /** The named copy of the quick agent the workspace starts; null starts the agent itself. */
+  agentCopy?: string | null
+  onAgentCopyChange?: (copyId: string | null) => void
   eligibleRepos: readonly RepoOption[]
   selectedRepo?: RepoOption | null
   repoId: string

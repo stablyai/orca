@@ -115,6 +115,7 @@ export function structuredAgentSessionStatusSummary({
     ...(providerSession ? { providerSession } : {}),
     ...(launchDirectory ? { launchDirectory } : {}),
     ...structuredSummaryHostProgram(record),
+    ...(record?.agentCopy ? { agentCopy: record.agentCopy } : {}),
     ...structuredSummaryConversationNaming(record, namingFailure),
     ...(typeof record?.sleptAt === 'number' ? { sleptAt: record.sleptAt } : {}),
     updatedAt: lastActivityAt || now()

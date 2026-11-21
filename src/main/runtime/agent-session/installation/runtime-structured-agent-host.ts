@@ -1,9 +1,14 @@
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { applyAgentCopy, findAgentCopy } from '../../../../shared/agent-launch/catalog/agent-copies'
 import { ensureStructuredAgentModelCatalogOwner } from '../model-catalog/structured-agent-model-catalog-wiring'
 import type { StructuredAgentModelCatalogDeps } from './structured-agent-runtime-registration-types'
 import { resolveStructuredCodexAccountKind } from '../environment/structured-agent-account-home'
 import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/settings/native-chat-shell-environment'
 import { claudeStructuredAuthPolicyForSettings } from '../../../claude-accounts/runtime-auth/claude-structured-auth-policy'
-import { resolveStructuredAgentCommand } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
+import {
+  resolveStructuredAgentCommand,
+  type StructuredAgentCommandSettings
+} from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { structuredAgentConfiguredArgs } from '../../../native-chat/agent-launch/structured-agent-configured-args'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
@@ -35,16 +40,23 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
     return structuredAgentLaunchEnv(agent, settings, this.accounts.hostLaunchEnvFor(agent))
   }
 
+  /** An agent's program from its Command setting, read live; a copy passes its own settings. */
+  private structuredAgentCommand(
+    agent: TuiAgent,
+    options: Parameters<NonNullable<StructuredAgentModelCatalogDeps['resolveClaudeCommand']>>[0],
+    settings: StructuredAgentCommandSettings = this.requireStore().getSettings()
+  ) {
+    return resolveStructuredAgentCommand(agent, settings, options)
+  }
+
   protected structuredAgentCatalogDependencies(): StructuredAgentModelCatalogDeps {
     return {
       stateDirectory: getProfileUserDataPath(),
       // Resolve plain folder workspaces as well as git worktrees.
       resolveWorkspacePath: async (workspaceId) =>
         (await this.resolveRuntimeFileTarget(`id:${workspaceId}`)).worktree.path,
-      resolveClaudeCommand: (options) =>
-        resolveStructuredAgentCommand('claude', this.requireStore().getSettings(), options),
-      resolveCodexCommand: (options) =>
-        resolveStructuredAgentCommand('codex', this.requireStore().getSettings(), options),
+      resolveClaudeCommand: (options) => this.structuredAgentCommand('claude', options),
+      resolveCodexCommand: (options) => this.structuredAgentCommand('codex', options),
       resolveLaunchArgs: (agent) =>
         structuredAgentConfiguredArgs(agent, this.requireStore().getSettings()),
       resolveShellEnvironmentPolicy: () =>
@@ -56,6 +68,20 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
           ? this.structuredAgentLaunchEnv(agent, this.requireStore().getSettings())
           : {},
       resolveAgentCommandSettings: () => this.requireStore().getSettings(),
+      resolveAgentCopyLaunch: (agent, copyId) => {
+        const settings = this.requireStore().getSettings()
+        const copy = findAgentCopy(settings, copyId)
+        if (!copy || copy.agent !== agent) {
+          return null
+        }
+        const copied = applyAgentCopy(settings, copy)
+        return {
+          launchEnv: this.structuredAgentLaunchEnv(copy.agent, copied),
+          commandSettings: copied,
+          launchArgs: structuredAgentConfiguredArgs(copy.agent, copied),
+          resolveCommand: (options) => this.structuredAgentCommand(copy.agent, options, copied)
+        }
+      },
       resolveCodexAccountKind: (home) =>
         resolveStructuredCodexAccountKind(home, this.requireStore().getSettings()),
       resolveAgentAccountHome: (agent) => this.resolveStructuredAgentAccountHome(agent, 'catalog'),

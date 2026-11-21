@@ -1,3 +1,7 @@
+import {
+  agentCopyIdFromLaunchOptions,
+  withAgentCopyOption
+} from '../../shared/agent-launch/catalog/agent-copies'
 import type { RuntimeTerminalCreate } from '../../shared/terminal/runtime/runtime-terminal-create-contract'
 /**
  * The factories `executeAgentLaunch` is handed: how a surface and a workspace are BUILT once the
@@ -128,9 +132,13 @@ export type AgentLaunchWorkspaceFactory = {
   createFolderWorkspace?: AgentLaunchWorkspaceFactory['createWorktree']
 }
 
-/** The options a terminal leg starts with: a caller's saved chat choice applies to it too. */
+/** The options a terminal leg starts with: a caller's saved chat choice applies to it too, and so
+ *  does an agent copy named in either map. */
 function terminalLaunchOptions(intent: Pick<AgentLaunchIntent, 'sessionOptions' | 'chatOptions'>) {
-  return intent.sessionOptions ?? intent.chatOptions
+  return withAgentCopyOption(
+    intent.sessionOptions ?? intent.chatOptions,
+    agentCopyIdFromLaunchOptions(intent.sessionOptions, intent.chatOptions)
+  )
 }
 
 /** Refuses, before anything exists, an OpenCode terminal its host cannot verify, read as that

@@ -20,10 +20,8 @@ import { makePaneKey, parsePaneKey } from '../../../../../shared/workspace-layou
 import { workspaceKindForWorktreeId } from '../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { trackRunningAgentLaunchPane } from '../../../../agent-launch/agent-launch-pane-attachment'
 import type { AgentLaunchPaneVerdict } from '../../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
-import {
-  decideAgentLaunchMode,
-  readAgentLaunchModeSettings
-} from '../../../../agent-launch/agent-launch-mode'
+import { decideAgentLaunchMode } from '../../../../agent-launch/agent-launch-mode'
+import { readAgentLaunchModeSettings } from '../../../../agent-launch/agent-launch-mode-settings'
 import type { RpcContext } from '../../core'
 import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch/agent-launch-params'
 import { agentLaunchOperationCallerKey } from './agent-launch-replay'
@@ -161,7 +159,10 @@ export async function publishAgentLaunchTabEarly(
     return null
   }
   // Before the window hears of the tab, so a pane that mounts at once already waits.
-  const running = trackRunningAgentLaunchPane({ worktreeId: workspace.id, paneKey })
+  const running = trackRunningAgentLaunchPane({
+    worktreeId: workspace.id,
+    paneKey
+  })
   let publishing: ReturnType<typeof runtime.publishAgentLaunchTab>
   try {
     const request = {
@@ -195,7 +196,11 @@ export async function publishAgentLaunchTabEarly(
     paneIsLive: () => runtime.hasLiveTerminalForPaneKey(paneKey),
     closedByUser: () => running.closedByUser(),
     report: (verdict) => {
-      const address = { worktreeId: workspace.id, tabId: pane.tabId, leafId: pane.leafId }
+      const address = {
+        worktreeId: workspace.id,
+        tabId: pane.tabId,
+        leafId: pane.leafId
+      }
       // Main withdraws panes it owns; the window still receives the verdict to release retained launch state.
       if (ORCA_LAYOUT_OWNER_IS_MAIN && verdict.kind === 'withdrawn') {
         runtime.withdrawAgentLaunchPaneInMainLayout(address)

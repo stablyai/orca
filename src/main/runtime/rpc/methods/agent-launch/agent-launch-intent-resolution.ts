@@ -10,6 +10,11 @@ import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { assertTerminalLaunchAdmissible } from '../../../../agent-launch/agent-launch-surface-factories'
 import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch/agent-launch-params'
 import { resolveAgentLaunchModeOnHost } from '../../../../agent-launch/agent-launch-mode'
+import {
+  agentCopyIdFromLaunchOptions,
+  applyAgentCopyFromOptions,
+  withAgentCopyOption
+} from '../../../../../shared/agent-launch/catalog/agent-copies'
 
 import type { EarlyAgentLaunchTab } from './agent-launch-tab-publication'
 
@@ -90,6 +95,15 @@ export async function resolveUnlaunchedIntent(
   modeOptions: { terminalOnly?: boolean; callerRendersStructured?: boolean } = {}
 ): Promise<{ intent: ResolvedAgentLaunchIntent; decidedMode: AgentLaunchModeReceipt }> {
   const intent = await agentLaunchIntent(params, runtime, early?.paneKey)
+  // A copy this host does not have refuses here, before anything is created.
+  applyAgentCopyFromOptions(
+    intent.agent,
+    runtime.requireStore().getSettings(),
+    withAgentCopyOption(
+      undefined,
+      agentCopyIdFromLaunchOptions(intent.sessionOptions, intent.chatOptions)
+    )
+  )
   await validateReusedTerminal(intent, runtime)
   const preflight = decideAgentLaunchIntentMode({ intent, runtime, ...modeOptions })
   const decidedMode =

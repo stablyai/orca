@@ -56,7 +56,11 @@ export type NewTabAgentMenuRow =
     | { kind: 'chat-unavailable'; agent: TuiAgent; reason: ChatUnavailableReason }
     | { kind: 'cli'; agent: TuiAgent; chat?: true }
     | { kind: 'terminal'; agent: TuiAgent }
-  ) & { executionHostId?: ExecutionHostId }
+  ) & {
+    executionHostId?: ExecutionHostId
+    /** A named copy of the agent, which starts with the copy's own launch setup. */
+    copy?: { id: string; name: string }
+  }
 
 export function agentMenuRowSupportsChat(row: NewTabAgentMenuRow): boolean {
   return row.kind === 'chat' || (row.kind === 'cli' && row.chat === true)

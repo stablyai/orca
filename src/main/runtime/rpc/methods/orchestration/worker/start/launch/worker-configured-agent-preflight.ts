@@ -1,16 +1,18 @@
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import { isTuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent-config'
+import { isAgentCopyId } from '../../../../../../../../shared/agent-launch/catalog/agent-copies'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
 import { prepareFederationAttachmentWorkerStart } from './worker-start-validation'
 
 type WorkerAgentTarget = { repo?: string; worktree?: string }
 
 export async function resolveWorkerConfiguredAgentParams<T extends { agent?: string }>(
-  runtime: OrcaRuntimeService,
+  runtime: Pick<OrcaRuntimeService, 'resolveOrchestrationAgentLauncherForTarget'>,
   params: T,
   resolveTarget: () => Promise<WorkerAgentTarget>
 ): Promise<T> {
-  if (!params.agent || isTuiAgent(params.agent)) {
+  // A copy id is not a command alias: worker launch resolves it against this host's saved copies.
+  if (!params.agent || isTuiAgent(params.agent) || isAgentCopyId(params.agent)) {
     return params
   }
   const agent = await runtime.resolveOrchestrationAgentLauncherForTarget(

@@ -47,6 +47,7 @@ export type LaunchTestSources = {
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
   resolveLaunchEnv?: (agent: string) => Record<string, string>
   resolveCommandSettings?: () => StructuredAgentCommandSettings
+  resolveAgentCopyLaunch?: StructuredAgentLaunchSources['resolveAgentCopyLaunch']
   prepareVisuals?: PrepareNativeChatVisuals
   resolveInstructions?: StructuredAgentLaunchSources['resolveInstructions']
   refreshAfterMissingProgram?: (askedAt: number) => Promise<void>
@@ -97,6 +98,7 @@ function launchSources(deps: LaunchTestSources): StructuredAgentLaunchSources {
     }),
     ...(deps.resolveLaunchEnv ? { resolveAgentLaunchEnv: deps.resolveLaunchEnv } : {}),
     ...(deps.resolveCommandSettings ? { resolveCommandSettings: deps.resolveCommandSettings } : {}),
+    ...(deps.resolveAgentCopyLaunch ? { resolveAgentCopyLaunch: deps.resolveAgentCopyLaunch } : {}),
     ...(deps.prepareVisuals ? { prepareVisuals: deps.prepareVisuals } : {}),
     ...(deps.resolveInstructions ? { resolveInstructions: deps.resolveInstructions } : {}),
     ...(deps.refreshAfterMissingProgram

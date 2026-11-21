@@ -8,6 +8,7 @@ import {
 } from '@/components/provider-accounts/antigravity-chat-runtime-sign-in-policy'
 import type { Bot } from '../../../../shared/bot-types'
 import {
+  useAgentCopyOwnCommand,
   nativeChatInstallSlotState,
   type NativeChatInstallSlotInstall
 } from '../native-chat/host-access/NativeChatInstallSlot'
@@ -37,7 +38,9 @@ export function useBotSetupInstall(
   // A bot on the host program follows it too: Orca's copy of agy may be what it needs installed.
   const observation = useManagedRuntimeInstall(target, bot.agent, shown)
   const slot = nativeChatInstallSlotState(observation, 'strip', hostProgram)
-  const install = shown && slot.kind === 'install' ? slot : null
+  // A bot that runs as a copy with its own Command needs Orca's runtime no more than the agent does.
+  const ownCommand = useAgentCopyOwnCommand(bot.agent, bot.agentCopy ?? null, target)
+  const install = shown && !ownCommand && slot.kind === 'install' ? slot : null
   const state =
     shown && observation.kind === 'active' && observation.snapshot.kind === 'known'
       ? observation.snapshot.state
@@ -49,6 +52,7 @@ export function useBotSetupInstall(
   const signsIn =
     bot.agent === 'antigravity' &&
     !hostProgram &&
+    !ownCommand &&
     installed &&
     observation.kind === 'active' &&
     antigravityOrcaRuntimeSignsIn(observation)
