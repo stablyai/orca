@@ -3,12 +3,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionContextClearOutstanding,
-  agentSessionTranscriptRows,
   latestAgentSessionContextClearSequence
 } from '../../../../../../shared/agent-session/conversation-context/agent-session-context-clear'
 import {
-  noteStreamedTextRevision,
-  rowsBesideStreamedText
+  rowsBesideStreamedText,
+  streamedRowsFromFloor
 } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 
 /** Matches the transcript's `duration-150` fade, so the swap happens while it is invisible. */
@@ -121,17 +120,6 @@ export function useNativeChatContextClearFloor(
   )
 
   const floor = current.floor
-  const clearedRows = useMemo(
-    () => agentSessionTranscriptRows(clearRows, floor),
-    [clearRows, floor]
-  )
-  const rows = useMemo(() => {
-    const shown = agentSessionTranscriptRows(items, floor)
-    // Streamed text never moves a row across the floor, so the cut keeps the text-only link.
-    if (shown !== clearedRows) {
-      noteStreamedTextRevision(shown, clearedRows)
-    }
-    return shown
-  }, [clearedRows, floor, items])
+  const rows = useMemo(() => streamedRowsFromFloor(items, floor), [floor, items])
   return { rows, clearing: fading !== null || awaitingDivider, clears: current.clears, onClearSent }
 }

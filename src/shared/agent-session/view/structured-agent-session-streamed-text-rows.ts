@@ -1,4 +1,5 @@
 import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
+import { agentSessionTranscriptRows } from '../conversation-context/agent-session-context-clear'
 
 // A row list maps to the earlier list it differs from only by streamed message text.
 const textOnlyBases = new WeakMap<
@@ -29,6 +30,32 @@ export function noteStreamedTextRevision(
   base: readonly AgentJournalRenderItem[]
 ): void {
   textOnlyBases.set(next, textOnlyBases.get(base) ?? base)
+}
+
+const floorCuts = new WeakMap<
+  readonly AgentJournalRenderItem[],
+  { floor: number; rows: readonly AgentJournalRenderItem[] }
+>()
+
+/** Rows at or past a `/clear` floor. Streamed text never moves a row across it, so the cut of a
+ *  text-only revision stays linked to the cut of its base, and memos over it hold while it streams. */
+export function streamedRowsFromFloor(
+  items: readonly AgentJournalRenderItem[],
+  floor: number
+): readonly AgentJournalRenderItem[] {
+  const fromFloor = (rows: readonly AgentJournalRenderItem[]) =>
+    agentSessionTranscriptRows(rows, floor)
+  const shown = fromFloor(items)
+  const base = rowsBesideStreamedText(items)
+  if (base !== items && shown !== items) {
+    let cut = floorCuts.get(base)
+    if (cut?.floor !== floor) {
+      cut = { floor, rows: fromFloor(base) }
+      floorCuts.set(base, cut)
+    }
+    noteStreamedTextRevision(shown, cut.rows)
+  }
+  return shown
 }
 
 /** Rows to give a projection that never reads assistant or reasoning text: the same list across a

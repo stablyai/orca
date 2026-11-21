@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   agentSessionContextClearOutstanding,
-  agentSessionTranscriptRows,
   latestAgentSessionContextClearSequence
 } from '../../../../../../src/shared/agent-session/conversation-context/agent-session-context-clear'
 import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
@@ -12,7 +11,10 @@ import { withNativeChatCutTurnNotices } from '../../../../../../src/shared/nativ
 import { omitNativeChatThreadGoalRows } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-thread-goal-rows'
 import { createStructuredQuestionProjection } from '../../../../../../src/shared/native-chat/transcript/messages/structured-agent-question-projection'
 import { projectStructuredAgentStartItem } from '../../../../../../src/shared/native-chat/transcript/messages/structured-agent-start-projection'
-import { rowsBesideStreamedText } from '../../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
+import {
+  rowsBesideStreamedText,
+  streamedRowsFromFloor
+} from '../../../../../../src/shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import {
   projectAutomationRunNotStartedItem,
   projectAutomationSavedItem,
@@ -66,7 +68,7 @@ export function useMobileStructuredTranscript(
   const floor = clearing ? clearSentTail + 1 : latestClear
   const transcriptItems = useMemo(
     () =>
-      withNativeChatCutTurnNotices(agentSessionTranscriptRows(state.items, floor), {
+      withNativeChatCutTurnNotices(streamedRowsFromFloor(state.items, floor), {
         agentName: agent ? (tuiAgentDisplayName(agent) ?? agent) : undefined
       }),
     [agent, floor, state.items]

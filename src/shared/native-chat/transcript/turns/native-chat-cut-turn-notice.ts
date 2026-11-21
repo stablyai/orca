@@ -214,7 +214,7 @@ export function withNativeChatCutTurnNotices(
   // Notices read no reply text, so a streaming reply's windows reuse its rows' placement.
   const rows = rowsBesideStreamedText(items)
   let placed = placedNotices.get(rows)
-  if (placed?.agentName !== context.agentName) {
+  if (!placed || placed.agentName !== context.agentName) {
     placed = { agentName: context.agentName, after: cutTurnNoticesAfter(rows, context) }
     placedNotices.set(rows, placed)
   }
