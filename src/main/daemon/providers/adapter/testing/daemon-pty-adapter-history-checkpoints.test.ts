@@ -315,5 +315,35 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         rows: 40
       })
     })
+
+    it('resumes an agent in the requested folder when its shell was last seen at the root', async () => {
+      const sessionId = 'cold-restore-agent-root'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/',
+          cols: 120,
+          rows: 40,
+          startedAt: '2026-04-15T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(join(sessionDir, 'scrollback.bin'), '$ claude\r\n')
+
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const result = await historyAdapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId,
+        cwd: historyDir,
+        command: 'claude --resume 2b7a50c6'
+      })
+
+      expect(result.startupCwdSource).toBe('request')
+      expect(lastSpawnOpts).toMatchObject({ sessionId, cwd: historyDir })
+    })
   })
 })

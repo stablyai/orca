@@ -23,7 +23,7 @@ import type { DaemonCreateOrAttachResult as CreateOrAttachResult } from '../../p
 import { normalizeWslColdRestoreCwd } from '../wsl/wsl-cold-restore-cwd'
 import { resolveWslSessionContext } from '../../pty-subprocess/wsl-session-context'
 import { resolveSafePtyDefaultCwd } from '../../../providers/working-directory/default-cwd'
-import { probeRecoveredStartupCwdDirectory } from '../../../ipc/pty/host-env/startup-cwd-directory-exists'
+import { resolveColdRestoreStartupCwd } from './cold-restore-startup-cwd'
 import { resolveUnixShellPath } from '../../../providers/local-pty/local-pty-executable-spawn'
 import type { PtySpawnOptions } from '../../../providers/pty/provider-contract'
 import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
@@ -183,20 +183,18 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
         return null
       }
       const requestedCwd = opts.cwd ?? resolveSafePtyDefaultCwd()
-      const recoveredCwd = normalizeWslColdRestoreCwd({
-        recoveredCwd: restoreInfo.cwd,
-        requestedCwd,
-        wslDistro: recoveryWslDistro
-      })
-      // Keep an unverified recovered cwd; fall back when the folder probe proves it missing.
+      // Keep an unverified recovered cwd; fall back when it is proven missing or would start an agent at a root.
       return {
         ...restoreInfo,
-        // Why one probe for WSL too: a stat over \\wsl.localhost waits for a stopped distro and
-        // fails for reasons other than absence, which woke panes blank and at the root.
-        cwd:
-          recoveredCwd && (await probeRecoveredStartupCwdDirectory(recoveredCwd)) !== false
-            ? recoveredCwd
-            : requestedCwd
+        cwd: await resolveColdRestoreStartupCwd({
+          recoveredCwd: normalizeWslColdRestoreCwd({
+            recoveredCwd: restoreInfo.cwd,
+            requestedCwd,
+            wslDistro: recoveryWslDistro
+          }),
+          requestedCwd,
+          command: opts.command
+        })
       }
     }
 
