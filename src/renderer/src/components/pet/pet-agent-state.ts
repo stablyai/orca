@@ -5,6 +5,7 @@ import {
 } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import { createAgentStatusEpochSelector } from '@/lib/agent-status/evidence/agent-status-epoch-selector'
 import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
+import type { AgentStatusProjection } from '@/store/slices/agent-status/projection/agent-status-projection'
 import type { AppState } from '@/store/types'
 
 export type PetAnimationName =
@@ -63,12 +64,13 @@ function agentStateAnimation(
   return 'idle'
 }
 
-const petAgentAnimation = createAgentStatusEpochSelector((state: AppState, _owner: object) =>
-  agentStateAnimation(
-    state.agentStatusByPaneKey.values(),
-    getAgentStatusEpochNow(state.agentStatusEpoch),
-    AGENT_STATUS_STALE_AFTER_MS
-  )
+const petAgentAnimation = createAgentStatusEpochSelector(
+  (state: AppState, _owner: AgentStatusProjection) =>
+    agentStateAnimation(
+      state.agentStatusByPaneKey.values(),
+      getAgentStatusEpochNow(state.agentStatusEpoch),
+      AGENT_STATUS_STALE_AFTER_MS
+    )
 )
 
 export function selectPetAgentAnimation(state: AppState): PetAnimationName {

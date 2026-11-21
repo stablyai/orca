@@ -5,13 +5,17 @@ import {
 } from './transcript-native-watcher'
 import { isWslUncPath } from '../../file-access/wsl-paths'
 import { queueAbandonedRolloutReadRelease } from '../providers/codex/codex-rollout-async-reads'
+import type { AntigravityBrainCache } from '../providers/antigravity/antigravity-brain-metadata'
+import type { AgentHookSource } from '../transport/agent-hook-relay'
 
 const ROOT_RECONCILIATION_MS = 5_000
+
+type TranscriptPollOwner = AntigravityBrainCache | AgentHookSource
 
 type TranscriptWakeup<T> = {
   value: T
   filePath?: string
-  owner?: object | string
+  owner?: TranscriptPollOwner
   watcher?: TranscriptNativeWatcher
   watcherBound: boolean
   nextBindAt: number
@@ -87,7 +91,7 @@ export class AgentTranscriptPollScheduler<T> {
     value: T,
     filePath?: string,
     delayMs?: number,
-    owner?: object | string
+    owner?: TranscriptPollOwner
   ): void {
     let entry = this.entries.get(key)
     if (entry && (entry.filePath !== filePath || entry.owner !== owner)) {

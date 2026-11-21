@@ -30,7 +30,7 @@ it.each([100, 1000])(
     const dir = mkdtempSync(join(tmpdir(), 'agy-history-'))
     const state = createHookListenerState()
     const pane = getOrCreateAntigravityPaneState(state, 'pane')
-    const now = Date.now()
+    const now = 1_000_000_000
     pane.rootBrainDir = join(dir, 'root')
     pane.rootConversationId = 'root'
     pane.leadObservedAt = now
@@ -38,6 +38,8 @@ it.each([100, 1000])(
     const descriptors = join(pane.rootBrainDir, '.system_generated', 'subagents')
     mkdirSync(descriptors, { recursive: true })
     try {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(now)
       for (let i = 0; i < history; i++) {
         writeFileSync(
           join(descriptors, `old-${i}.json`),
@@ -74,6 +76,7 @@ it.each([100, 1000])(
       expect(fsp.open).toHaveBeenCalledTimes(0)
       expect(fsp.stat).toHaveBeenCalledTimes(20)
     } finally {
+      vi.useRealTimers()
       rmSync(dir, { recursive: true, force: true })
     }
   }
