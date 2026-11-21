@@ -13,7 +13,7 @@ import { BotCancelledWaitSchema } from './bots/bot-cancelled-waits'
 import { BotAvatarColorSchema } from './bots/bot-avatar-color'
 
 /** Native-chat agents a bot cannot run on yet; each waits on a live check of its preamble delivery. */
-export const BOT_HELD_BACK_AGENTS = ['goose'] as const
+export const BOT_HELD_BACK_AGENTS = [] as const
 
 /** Bots run in a native chat; every native-chat agent but the held-back ones. */
 export const BOT_AGENTS = [
@@ -29,7 +29,11 @@ export const BOT_AGENTS = [
   'copilot',
   'opencode2',
   'kimi',
-  'kiro'
+  'kiro',
+  'aug',
+  'goose',
+  'kilo',
+  'mimo-code'
 ] as const satisfies readonly Exclude<NativeChatAgent, (typeof BOT_HELD_BACK_AGENTS)[number]>[]
 
 /** Agents the previous release's bot schema reads; it drops bots on any other agent when it loads. */

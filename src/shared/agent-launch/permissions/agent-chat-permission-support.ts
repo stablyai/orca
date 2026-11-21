@@ -48,7 +48,10 @@ export const NATIVE_CHAT_AGENTS = [
   'pi',
   'antigravity',
   'hermes',
-  'goose'
+  'goose',
+  'aug',
+  'kilo',
+  'mimo-code'
 ] as const
 
 export type NativeChatAgent = (typeof NATIVE_CHAT_AGENTS)[number]
@@ -72,7 +75,11 @@ const AGENT_CHAT_PERMISSION_MODES_BY_AGENT: Record<
   // Pi asks no approvals, so its chats run with every tool it has, as its terminal does.
   pi: null,
   antigravity: EDIT_ACCEPTING_CHAT_PERMISSION_MODES,
-  hermes: EDIT_ACCEPTING_CHAT_PERMISSION_MODES
+  hermes: EDIT_ACCEPTING_CHAT_PERMISSION_MODES,
+  // Auggie asks none unless its own tool permissions say so, as in its terminal.
+  aug: null,
+  kilo: ACP_CHAT_PERMISSION_MODES,
+  'mimo-code': ACP_CHAT_PERMISSION_MODES
 }
 
 export function isNativeChatAgent(agent: string): agent is NativeChatAgent {
