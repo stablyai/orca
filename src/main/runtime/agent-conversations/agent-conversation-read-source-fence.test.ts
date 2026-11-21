@@ -1,7 +1,8 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
+import { removeTempDirs } from '../../../shared/testing/remove-temp-dirs.test-support'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import { createHookListenerState } from '../../../shared/agent-hook-listener/listener-state'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
@@ -57,12 +58,20 @@ const { readAgentConversation } = await import('./agent-conversation-read')
 
 const PANE = makePaneKey('tab-0', '00000000-0000-4000-8000-000000000000')
 const cleanups: (() => void)[] = []
-afterEach(() => {
+const directories: string[] = []
+afterEach(async () => {
   io.server = null
   io.hold = null
   for (const cleanup of cleanups.splice(0)) {
     cleanup()
   }
+  // Bun on Windows keeps a hook-server temp handle until the process exits, so the delete can
+  // only fail; the OS reclaims these directories with the run.
+  if (process.platform === 'win32') {
+    directories.length = 0
+    return
+  }
+  await removeTempDirs(directories.splice(0))
 })
 
 class IdentityTestServer extends AgentHookServer {
@@ -79,7 +88,7 @@ class IdentityTestServer extends AgentHookServer {
 
 function directory(): string {
   const path = mkdtempSync(join(tmpdir(), 'agent-read-fence-'))
-  cleanups.push(() => rmSync(path, { recursive: true, force: true }))
+  directories.push(path)
   return path
 }
 
