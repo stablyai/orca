@@ -217,7 +217,10 @@ export async function writeBotHome(
 }
 
 /** The picture revision bot.json last recorded; 0 when it has none or can't be read. */
-export async function botHomeAvatarRevision(fs: BotHomeFilesystem, folder: string): Promise<number> {
+export async function botHomeAvatarRevision(
+  fs: BotHomeFilesystem,
+  folder: string
+): Promise<number> {
   const text = await fs.readText(join(folder, 'bot.json'))
   try {
     const record: unknown = text === null ? null : JSON.parse(text)

@@ -1,7 +1,11 @@
 // The bot settings picture's choices compared by value, and the save loop's state; see
 // use-bot-picture-setting.ts.
 import type { BotPictureValue } from '@/components/bots/BotPicturePicker'
-import { mascotAvatar, parseBotAvatar, PICKABLE_BOT_MASCOT_IDS } from '../../../../../shared/bot-avatar'
+import {
+  mascotAvatar,
+  parseBotAvatar,
+  PICKABLE_BOT_MASCOT_IDS
+} from '../../../../../shared/bot-avatar'
 
 export const BOT_PICTURE_SAVE_DELAY_MS = 500
 

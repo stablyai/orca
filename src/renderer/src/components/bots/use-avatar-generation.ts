@@ -63,9 +63,9 @@ export function useAvatarGeneration(
   cancel: () => void
   clearError: () => void
   /** Create took the dialog's picture: a run still going follows the bot being made. */
-  handOff: (target: Parameters<typeof handOffAvatarRequest>[1]) => ReturnType<
-    typeof handOffAvatarRequest
-  >
+  handOff: (
+    target: Parameters<typeof handOffAvatarRequest>[1]
+  ) => ReturnType<typeof handOffAvatarRequest>
   /** Releases a run still going (as unmounting does) and forgets the last result. */
   reset: () => void
   /** Names this host's picture choices for a bot not yet made, for `noteBotPictureChoice`. */

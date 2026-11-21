@@ -1,5 +1,5 @@
 // The bot settings picture: a step shows at once; one save at a time follows the latest choice.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import type { BotPictureCustom, BotPictureValue } from '@/components/bots/BotPicturePicker'
 import { useBotAvatarSrc } from '@/components/bots/bot-avatar-image'
 import { botFallback } from '../../../../../shared/bots/bot-avatar-fallback'
@@ -87,11 +87,7 @@ export function useBotPictureSetting(
   // for its revision.
   const op = useRef<{ end: () => void } | null>(null)
   const syncOp = (): void => {
-    const busy =
-      live.saving ||
-      live.timer !== null ||
-      live.desired !== live.saved ||
-      live.waits > 0
+    const busy = live.saving || live.timer !== null || live.desired !== live.saved || live.waits > 0
     if (busy && !op.current) {
       op.current = beginBotPictureOp(key)
     } else if (!busy && op.current) {
@@ -281,19 +277,20 @@ export function useBotPictureSetting(
     adopt(bot.avatar)
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- the loop state is read through its ref
   }, [bot.avatar])
+  const onAutomaticSettled = useEffectEvent(() => {
+    // A pick still waiting is sent, even of the saved picture: it came after the generated one.
+    if (live.timer || live.saving) {
+      live.force = true
+    }
+    reconcile()
+  })
   useEffect(
     () =>
       subscribeBotPictureEvents((event) => {
-        if (event.kind !== 'automatic-settled' || event.key !== key) {
-          return
+        if (event.kind === 'automatic-settled' && event.key === key) {
+          onAutomaticSettled()
         }
-        // A pick still waiting is sent, even of the saved picture: it came after the generated one.
-        if (live.timer || live.saving) {
-          live.force = true
-        }
-        reconcile()
       }),
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- the loop state is read through its ref
     [key]
   )
   // Unmounting leaves the op open: the save on close is still in flight, and ends it as it settles.

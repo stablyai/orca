@@ -77,14 +77,14 @@ export function NewBotPictureButton({
             ) : null}
             <span
               aria-hidden
-              className="absolute -right-1.5 -bottom-1.5 flex size-[22px] items-center justify-center rounded-full border border-border bg-popover text-muted-foreground shadow-[0_0_0_2px_var(--dialog-surface)] transition-colors group-hover/picture:text-foreground group-aria-expanded/picture:text-foreground"
+              className={cn(
+                'absolute -right-1.5 -bottom-1.5 flex size-[22px] items-center justify-center rounded-full border border-border bg-popover text-muted-foreground shadow-[0_0_0_2px_var(--dialog-surface)] transition-colors group-hover/picture:text-foreground group-aria-expanded/picture:text-foreground',
+                // The spinner reads at full contrast, as the pencil does on hover.
+                running && 'text-foreground'
+              )}
             >
               {/* A picture still being made, picker open or closed; it lands on its own. */}
-              {running ? (
-                <LoadingSpinner className="size-3 text-foreground" />
-              ) : (
-                <Pencil className="size-3" />
-              )}
+              {running ? <LoadingSpinner className="size-3" /> : <Pencil className="size-3" />}
             </span>
           </button>
         </PopoverTrigger>

@@ -262,7 +262,12 @@ export function handOffAvatarRequest(
       settled = true
       request.owner = { kind: 'bot', ref: { hostId: bot.hostId, id: bot.id }, name: bot.name }
       // The bot as Create (and its first picture's upload) acknowledged it.
-      request.anchor = { revision: bot.avatarRevision ?? 0, waiting: false, acked: 0, failed: false }
+      request.anchor = {
+        revision: bot.avatarRevision ?? 0,
+        waiting: false,
+        acked: 0,
+        failed: false
+      }
       notify()
       if (request.status === 'failed') {
         finish(request)

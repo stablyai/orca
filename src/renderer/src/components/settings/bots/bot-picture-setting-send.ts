@@ -28,17 +28,17 @@ type SendContext = {
 }
 
 export async function sendBotPicture(
-choice: BotPictureValue,
-{ bot, live, update, setKept }: SendContext
+  choice: BotPictureValue,
+  { bot, live, update, setKept }: SendContext
 ): Promise<boolean> {
-const key = botRefKey(bot)
-const acked = (saved: Bot | null): void => {
-  if (saved) {
-    noteBotPictureAck(key, saved.avatarRevision)
-  } else {
-    noteBotPictureFailure(key)
+  const key = botRefKey(bot)
+  const acked = (saved: Bot | null): void => {
+    if (saved) {
+      noteBotPictureAck(key, saved.avatarRevision)
+    } else {
+      noteBotPictureFailure(key)
+    }
   }
-}
   if (choice.kind === 'mascot') {
     const saved = await update({ avatar: choiceKey(choice, null) })
     acked(saved)

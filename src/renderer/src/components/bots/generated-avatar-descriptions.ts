@@ -53,7 +53,9 @@ export function keepSavedPictureDescription(
   { prefer = 'made' }: { prefer?: 'made' | 'known' } = {}
 ): void {
   const description =
-    prefer === 'known' ? (known ?? generatedPictureDescription(png)) : (generatedPictureDescription(png) ?? known)
+    prefer === 'known'
+      ? (known ?? generatedPictureDescription(png))
+      : (generatedPictureDescription(png) ?? known)
   const key = savedKey(owner)
   if (!description || !key) {
     return

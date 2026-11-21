@@ -159,19 +159,16 @@ export function ImportBotDialog({
     // The picture is taken now; a run still going, unless a newer choice was made, follows the bot.
     const handOff = face.handOff({ hostId, name: trimmedName })
     try {
-      let made: Bot
-      try {
-        made = await createBot(hostId, {
-          name: trimmedName,
-          ...agentSetup.setup,
-          avatar: picture.avatar,
-          avatarColor: picture.avatarColor,
-          importFrom
-        })
-      } catch (error) {
+      const made = await createBot(hostId, {
+        name: trimmedName,
+        ...agentSetup.setup,
+        avatar: picture.avatar,
+        avatarColor: picture.avatarColor,
+        importFrom
+      }).catch((error: unknown) => {
         handOff?.failed()
         throw error
-      }
+      })
       const bot = await picture.saveUpload(made)
       // The bot exists from here, whatever opening it does.
       handOff?.created(bot)

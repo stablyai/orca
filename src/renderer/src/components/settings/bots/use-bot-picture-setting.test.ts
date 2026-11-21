@@ -107,9 +107,7 @@ describe('useBotPictureSetting', () => {
 
   it('shows the picture set elsewhere when its own save fails', async () => {
     let refuse: () => void = () => {}
-    const update = vi.fn(
-      () => new Promise<Bot | null>((done) => (refuse = () => done(null)))
-    )
+    const update = vi.fn(() => new Promise<Bot | null>((done) => (refuse = () => done(null))))
     const { result } = renderHook(() => useBotPictureSetting(bot(), update))
     act(() => result.current.pick({ kind: 'mascot', index: 1 }))
     await act(async () => {
