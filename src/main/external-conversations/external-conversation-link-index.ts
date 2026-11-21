@@ -95,10 +95,7 @@ export function createExternalConversationLinkIndex(
     ])
     for (const hostId of hosts) {
       for (const [worktreeId, meta] of Object.entries(readAllWorktreeMetaForHost(store, hostId))) {
-        if (
-          !Array.isArray(meta.externalConversations) ||
-          meta.externalConversations.length === 0
-        ) {
+        if (!Array.isArray(meta.externalConversations) || meta.externalConversations.length === 0) {
           continue
         }
         const sshHostId = hostId === LOCAL_EXECUTION_HOST_ID ? null : hostId

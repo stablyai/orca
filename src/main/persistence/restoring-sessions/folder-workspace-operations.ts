@@ -39,14 +39,6 @@ export class FolderWorkspacePersistenceOperations {
     this.operations.scheduleSave(domains, options)
   }
 
-  private removeWorkspaceLineageForRemovedFolder(folderWorkspaceId: string): void {
-    this.operations.removeWorkspaceLineageForRemovedFolder(folderWorkspaceId)
-  }
-
-  private pruneMobileClientTabSelections(matchesWorktreeId: (worktreeId: string) => boolean): void {
-    this.operations.pruneMobileClientTabSelections(matchesWorktreeId)
-  }
-
   private hydrateRepo(repo: Repo): Repo {
     return this.operations.hydrateRepo(repo)
   }
@@ -287,8 +279,10 @@ export class FolderWorkspacePersistenceOperations {
       return false
     }
     removeWorkspaceSessionOwnerEverywhere(this.state, folderWorkspaceKey(id))
-    this.removeWorkspaceLineageForRemovedFolder(id)
-    this.pruneMobileClientTabSelections((worktreeId) => worktreeId === folderWorkspaceKey(id))
+    this.operations.removeWorkspaceLineageForRemovedFolder(id)
+    this.operations.pruneMobileClientTabSelections(
+      (worktreeId) => worktreeId === folderWorkspaceKey(id)
+    )
     this.scheduleSave(FOLDER_WORKSPACE_REMOVAL_DOMAINS)
     return true
   }
