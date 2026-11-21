@@ -55,6 +55,12 @@ export const nativeChatApi = {
       ipcRenderer.send('nativeChat:unsubscribe', { subscriptionId: args.subscriptionId })
     }
   },
+  captureFrame: (rect: {
+    x: number
+    y: number
+    width: number
+    height: number
+  }): Promise<Uint8Array> => ipcRenderer.invoke('nativeChat:captureFrame', rect),
   getConversationNameFailureOutput: (sessionId: string): Promise<string | null> =>
     ipcRenderer.invoke('nativeChat:conversationNameFailureOutput', sessionId)
 } satisfies PreloadApi['nativeChat']
