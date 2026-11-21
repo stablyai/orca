@@ -1171,6 +1171,140 @@
   cursor: pointer;
 }
 
+.rich-markdown-editor sup[data-rich-markdown-footnote-ref] {
+  line-height: 0;
+  margin-inline: 1px;
+  border-radius: 4px;
+}
+
+.rich-markdown-editor .rich-markdown-footnote-ref {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35em;
+  padding: 0 0.3em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-theme-accent) 10%, transparent);
+  color: var(--text-link, #0969da);
+  font-size: 0.78em;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+  vertical-align: 0.15em;
+  text-decoration: none;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.dark .rich-markdown-editor .rich-markdown-footnote-ref {
+  color: var(--text-link, #58a6ff);
+  background: color-mix(in srgb, var(--color-theme-accent) 16%, transparent);
+}
+
+.rich-markdown-editor .rich-markdown-footnote-ref[data-actionable] {
+  cursor: pointer;
+}
+
+.rich-markdown-editor .rich-markdown-footnote-ref[data-actionable]:hover {
+  background: color-mix(in srgb, var(--color-theme-accent) 20%, transparent);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.rich-markdown-editor .rich-markdown-footnote-def {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: start;
+  margin: 0.45em 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: var(--foreground);
+  font-size: 0.92em;
+  line-height: 1.55;
+  transition: background-color 180ms ease;
+}
+
+/* Visually separate the start of a footnotes group from preceding prose. */
+.rich-markdown-editor :not(.rich-markdown-footnote-def) + .rich-markdown-footnote-def {
+  margin-top: 1.5em;
+  padding-top: 1em;
+  border-top: 1px solid var(--border);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.rich-markdown-editor .rich-markdown-footnote-def-marker {
+  display: flex;
+  align-items: center;
+  padding-top: 0.1em;
+  user-select: none;
+}
+
+.rich-markdown-editor .rich-markdown-footnote-def-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+  color: var(--muted-foreground);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.82em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.rich-markdown-editor .rich-markdown-footnote-def-label:hover {
+  border-color: color-mix(in srgb, var(--foreground) 22%, var(--border));
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.rich-markdown-editor .rich-markdown-footnote-def-label:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+  color: var(--foreground);
+}
+
+.rich-markdown-editor .rich-markdown-footnote-def-content {
+  min-width: 0;
+}
+
+.rich-markdown-editor .rich-markdown-footnote-def-content > :first-child {
+  margin-top: 0;
+}
+
+.rich-markdown-editor .rich-markdown-footnote-def-content > :last-child {
+  margin-bottom: 0;
+}
+
+.rich-markdown-editor .rich-markdown-footnote-def.rich-markdown-footnote-jump-target {
+  background: color-mix(in srgb, var(--color-theme-accent) 12%, transparent);
+  box-shadow: inset 2px 0 0 var(--color-theme-accent);
+}
+
+.rich-markdown-editor
+  sup[data-rich-markdown-footnote-ref].rich-markdown-footnote-jump-target
+  .rich-markdown-footnote-ref {
+  background: color-mix(in srgb, var(--color-theme-accent) 26%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 70%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rich-markdown-editor .rich-markdown-footnote-ref,
+  .rich-markdown-editor .rich-markdown-footnote-def,
+  .rich-markdown-editor .rich-markdown-footnote-def-label {
+    transition: none;
+  }
+}
+
 .rich-markdown-editor img {
   max-width: 100%;
   border-radius: 8px;
