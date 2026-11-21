@@ -179,7 +179,8 @@ export class LegacyJournalRetirementReporter {
       event.error,
       event.deletes,
       event.completeness,
-      event.source_bytes_bucket,
+      // A refusal stands whatever the file's size since; only the size of a file still in play is news.
+      event.outcome === 'refused' ? null : event.source_bytes_bucket,
       this.version
     ])
     // Progress by bucket, once counts cover every page: a walk that got further is reported, a few

@@ -1,10 +1,16 @@
 import { existsSync, rmSync } from 'node:fs'
 import { expect, it, vi } from 'vitest'
 import { journalDomainImportState } from './journal-domain-import-rows'
-import { cleanup, fakeLease, profile } from './journal-legacy-retirement.test-fixture'
+import {
+  cleanup,
+  continueInOlderOrca,
+  fakeLease,
+  profile
+} from './journal-legacy-retirement.test-fixture'
 import { readJournalLegacySourceReceipt } from './database/journal-legacy-source-receipt'
 import { legacyDestinationMain } from './journal-legacy-retirement-files'
 import { journalDomainDatabasePath } from './database/journal-host-database'
+import { initializeJournalDomainDatabase } from './database/journal-domain-database'
 import {
   legacyProofFailureOutcome,
   setLegacyJournalRetirementHost,
@@ -305,4 +311,32 @@ it('reports a refusal found partway through the walk once, not again when a late
     ['refused', 'source-orphan']
   ])
   expect(companions(orphan.filename)).toContain(orphan.filename)
+})
+
+it('reports copies as partial when a quit lost a copy converted before its count was saved', async () => {
+  const events = recordEvents()
+  const continued = await profile()
+  await continued.convert('unopened')
+  continueInOlderOrca(continued.filename, 'unopened')
+  await initializeJournalDomainDatabase(continued.root)
+  const copy = String(
+    continued.db
+      .prepare(
+        "SELECT key FROM agent_session_store_meta WHERE key LIKE 'journal.legacy-copy-source:%'"
+      )
+      .get()!.key
+  ).slice('journal.legacy-copy-source:'.length)
+  // The copy converts, then the launch quits before the walk counts it.
+  const importState = continued.readers.importState
+  continued.readers.importState = async (sessionId) => {
+    if (sessionId === copy) {
+      throw new Error('legacy proof was interrupted')
+    }
+    return importState(sessionId)
+  }
+  await continued.launch('1.0.1', true, undefined, undefined, false).run()
+  expect(journalDomainImportState(continued.db, copy).state).toBe('ready')
+  continued.readers.importState = importState
+  await continued.launch('1.0.1', true, undefined, undefined, false).run()
+  expect(events.at(-1)).toMatchObject({ outcome: 'proof_complete', completeness: 'partial' })
 })

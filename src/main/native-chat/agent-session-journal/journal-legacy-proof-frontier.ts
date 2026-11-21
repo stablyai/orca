@@ -211,9 +211,13 @@ export async function completeJournalLegacyProof(
     frontier.page = undefined
     frontier.session = 0
     frontier.pages++
-    // After each copies page too: a converted copy leaves the original's mappings, so its count
-    // must be saved before a quit, or the resumed walk never sees it again.
-    if (frontier.cursor && (frontier.pages % LEGACY_PROOF_PROGRESS_PAGES === 0 || page.copies)) {
+    // Before each copies page too: a converted copy leaves the original's mappings, so a quit must
+    // resume in the copies, whose counts then read as partial, never from before them as whole.
+    if (
+      frontier.cursor &&
+      (frontier.pages % LEGACY_PROOF_PROGRESS_PAGES === 0 ||
+        frontier.cursor.table >= LEGACY_PROOF_COPIES_TABLE)
+    ) {
       await progress(frontier.cursor)
     }
   }
