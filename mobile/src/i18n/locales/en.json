@@ -211,6 +211,14 @@
         "undoAction": "Undo",
         "nothingToUndo": "Nothing left to undo: those lines changed since.",
         "empty": "No changes yet."
+      },
+      "githubStatus": {
+        "notInstalled": "Orca not installed",
+        "unlinked": "Not linked"
+      },
+      "linearStatus": {
+        "unlinked": "Not linked",
+        "notInstalled": "Orca not installed"
       }
     },
     "sharedLinks": {
@@ -6779,7 +6787,8 @@
     "host": {
       "errors": {
         "signedOut": "Sign {{host}} in to Orca Cloud to connect {{service}}.",
-        "accountChanged": "{{host}}’s Orca sign-in changed. Start again."
+        "accountChanged": "{{host}}’s Orca sign-in changed. Start again.",
+        "notRouted": "{{service}}’s page has to open in Orca’s browser for {{host}}. Reconnect {{host}}, then start again."
       }
     },
     "slack": {
@@ -6872,7 +6881,20 @@
       "onBot": "On {{bot}}",
       "noMatch": "No app matches “{{query}}”.",
       "connectors": "Connectors",
-      "add": "Add"
+      "add": "Add",
+      "composio": {
+        "connectTitle": "Connect Composio",
+        "once": "Once, for all your bots",
+        "thenApp": "Then you sign in to {{app}} on Composio’s page.",
+        "keyStoredOnHost": "Stored on {{host}}; bots never see it. Composio holds your app sign-ins.",
+        "addKey": "Add key and continue",
+        "browseAll": "Browse Composio apps"
+      },
+      "close": "Close",
+      "couldNotSignIn": "Couldn’t sign in to {{app}}",
+      "signingIn": "Signing in",
+      "openPageAgain": "Open page again",
+      "closeKeepsSigningIn": "Sign-in continues in your browser if you close this."
     },
     "connectors": {
       "back": "Back to Connectors",
@@ -6880,7 +6902,11 @@
       "addWorkspace": "Add workspace",
       "manage": "Manage",
       "emptyNote": "Let people reach {{name}} in Slack, GitHub and Linear, and let it work in your Google and other apps.",
-      "addAnotherWorkspace": "Add another workspace"
+      "addAnotherWorkspace": "Add another workspace",
+      "backShort": "Back",
+      "addGitHubAccess": "Add repositories or organizations",
+      "addBack": "Add back",
+      "addBackNamed": "Add {{name}} back"
     },
     "connector": {
       "titleSeparator": " · ",
@@ -6888,7 +6914,36 @@
       "removeFrom": "Remove from {{place}}…"
     },
     "composio": {
-      "viaComposio": "via Composio"
+      "viaComposio": "via Composio",
+      "group": "More apps with Composio",
+      "showMore": "Show more",
+      "loading": "Reading Composio’s apps…",
+      "key": {
+        "label": "Composio API key",
+        "placeholder": "Paste your key",
+        "getKey": "Get a key",
+        "checking": "Checking…"
+      },
+      "signInEnded": "The sign-in was turned down, failed, or took too long.",
+      "signInOnComposio": "Sign in to {{app}} on Composio’s page.",
+      "tryAgain": "Try again",
+      "disconnectTitle": "Disconnect {{app}}?",
+      "disconnectNote": "{{bot}} can no longer use {{app}}. You can connect it again any time.",
+      "disconnect": "Disconnect",
+      "signInAgainAs": "Needs you to sign in again · {{label}}",
+      "signInAgain": "Needs you to sign in again",
+      "connectedAs": "Connected as {{label}}",
+      "connected": "Connected",
+      "people": "People",
+      "peopleNote": "Anyone who can ask {{bot}} can use it",
+      "signInLabel": "Sign-in",
+      "signInHeld": "Held by Composio",
+      "signInAgainMenu": "Sign in again",
+      "disconnectNamed": "Disconnect {{app}}",
+      "added": "{{bot}} can now use {{app}}",
+      "signedOut": "Signed out · {{via}}",
+      "unreadShort": "Couldn’t load Composio’s apps.",
+      "reading": "Reading Composio…"
     },
     "setup": {
       "for": "for {{name}}"
@@ -7126,7 +7181,45 @@
       "whoCanAsk": {
         "needsSetup": "Finish setup to link your Linear account in {{workspace}}, then pick people here.",
         "noMatchDetail": "Members and guests of {{workspace}}’s Linear can be added. Anyone else gets a public reply to ask you."
-      }
+      },
+      "errors": {
+        "off": "Linear is coming soon.",
+        "replaced": "Linear didn’t finish. A newer Linear or GitHub connect may have replaced it. Start again.",
+        "wrongAccount": "This sign-in was started from another Orca account. Connect Linear again from this one.",
+        "alreadyLinked": "This Orca account is linked to another Linear user in that workspace. Unlink it in Settings › Bots › Linear first.",
+        "notAMember": "Only full members of the Linear workspace can pick people from it.",
+        "rateLimited": "Too many tries. Wait a minute, then try again.",
+        "unavailable": "Linear did not answer. Try again."
+      },
+      "connection": {
+        "removeNote": "People in {{workspace}} can no longer hand it issues, and its Linear people are cleared. Orca stays installed there.",
+        "removeConfirm": "Remove",
+        "finishSetup": "Finish setup"
+      },
+      "howToAskPlain": "Mention @Orca {{handle}} on an issue, or add the label bot:{{handle}}.",
+      "setup": {
+        "isOn": "{{name}} is on Linear",
+        "checking": "Checking Linear…",
+        "retry": "Try again",
+        "install": "Orca is not installed in {{workspace}} yet. A Linear admin installs it once for everyone.",
+        "copyForAdmin": "Copy admin link",
+        "installing": "Waiting for the install…",
+        "copied": "Link copied.",
+        "connectTitle": "Connect Linear",
+        "close": "Close"
+      },
+      "connect": {
+        "another": "Use another workspace",
+        "who": "{{name}} in {{workspace}}",
+        "pickWorkspace": "Sign in and pick the Linear workspace {{name}} works in.",
+        "button": "Connect Linear",
+        "handoff": "Linear’s sign-in is open in Orca’s browser there. Pick the workspace and choose Authorize; this updates when you finish.",
+        "waitingOn": "Finish signing in to Linear on {{host}}…",
+        "stuck": "Stuck on a Linear page that says “Could not find OAuth client”? Orca’s Linear app isn’t open to this workspace yet. An admin of the workspace that owns the app must make it public.",
+        "pick": "Choose a Linear workspace.",
+        "turnOn": "Turn on {{name}}"
+      },
+      "address": "linear.app/{{urlKey}}"
     },
     "github": {
       "whoCanAsk": {
@@ -7136,7 +7229,124 @@
         "found": "People on GitHub",
         "noUser": "No GitHub user named “{{query}}”",
         "typeUsername": "Type a GitHub username"
-      }
+      },
+      "errors": {
+        "off": "GitHub is coming soon.",
+        "replaced": "GitHub didn’t finish. A newer Linear or GitHub connect may have replaced it. Start again.",
+        "wrongAccount": "This sign-in was started from another Orca account. Sign in with GitHub again from this one.",
+        "alreadyLinked": "This Orca account is linked to another GitHub user. Unlink it in Settings › Bots › GitHub first.",
+        "unavailable": "GitHub did not answer. Try again."
+      },
+      "setup": {
+        "isOn": "{{name}} is on GitHub",
+        "repositories": "Repositories",
+        "checking": "Checking GitHub…",
+        "retry": "Try again",
+        "installing": "Waiting for the install, or for an owner of the organization to approve…",
+        "install": "Install the Orca app",
+        "finish": "Done",
+        "connectTitle": "Connect GitHub",
+        "close": "Close"
+      },
+      "connection": {
+        "removeNote": "People can no longer ask it on GitHub, and its GitHub people are cleared. The Orca app stays installed.",
+        "removeConfirm": "Remove",
+        "finishSetup": "Finish setup"
+      },
+      "allRepositories": "All repositories of {{account}}",
+      "account": {
+        "unlink": "Unlink GitHub account"
+      },
+      "howToAskPlain": "Mention {{mention}} {{handle}} … on an issue or pull request.",
+      "addMore": "Add repositories or an organization",
+      "checkingInstalls": "Checking GitHub for changes…",
+      "connect": {
+        "pickRepositories": "Sign in and choose which repositories {{name}} can work in.",
+        "readsOnly": "Orca only reads your GitHub username and id.",
+        "button": "Connect GitHub",
+        "handoff": "GitHub’s sign-in is open in Orca’s browser there. Sign in and choose the repositories; this updates when you finish.",
+        "waitingOn": "Finish signing in to GitHub on {{host}}…",
+        "requested": "An owner of the organization has been asked to approve the Orca app.",
+        "notInstalled": "The Orca app is not on any of your repositories yet.",
+        "turnOn": "Turn on {{name}}"
+      },
+      "allRepositoriesShort": "all repositories"
+    },
+    "connect": {
+      "finishOnHost": "Finish connecting {{service}} in Orca on {{host}}.",
+      "otherComputer": "A bot on another computer",
+      "askEachTime": "Ask which bot",
+      "account": "Account",
+      "linkedAs": "Linked as",
+      "defaultBot": "Default bot for my requests",
+      "opensOnHost": "Opens in Orca’s browser on {{host}}.",
+      "signedInAs": "Signed in as {{who}}",
+      "continueOn": "Continue on {{host}}",
+      "cancel": "Cancel"
+    },
+    "google": {
+      "isOn": "Google is on for {{name}}",
+      "continuesInChat": "Google’s setup continues in {{name}}’s chat.",
+      "file": {
+        "notAFile": "That file isn’t a Google app file. Try another."
+      },
+      "turnOn": {
+        "title": "Turn on Google for {{name}}?",
+        "confirm": "Turn on"
+      },
+      "connect": "Connect Google",
+      "cancel": "Cancel",
+      "retry": "Try again",
+      "checking": "Checking Google…",
+      "hostChoice": {
+        "continue": "Continue",
+        "description": "Choose how {{bot}} signs in to your Gmail, Calendar and Drive.",
+        "self": "Self hosted",
+        "selfNote": "You make your own Google Cloud app, so your sign-in stays on your computer. About 10 minutes.",
+        "orca": "Orca hosted",
+        "orcaNote": "Sign in with Google. Nothing to set up.",
+        "comingSoon": "Coming soon",
+        "steps": "Steps",
+        "stepApp": "{{bot}} opens Google Cloud and sets up the app",
+        "stepSignIn": "You tick Google’s terms box and sign in",
+        "stepCheck": "{{bot}} checks that Gmail, Calendar and Drive work"
+      },
+      "importFromTeam": "Import a setup file from your team",
+      "service": {
+        "contacts": "Find people by name"
+      },
+      "bot": {
+        "removeTitle": "Remove Google from {{name}}?",
+        "removeNoteOnHost": "{{name}} can no longer use your Gmail, Calendar and Drive. Google stays connected on {{host}}.",
+        "removeConfirm": "Remove",
+        "signedOutOnHost": "Not connected on {{host}}",
+        "uses": "What it can use",
+        "who": "Who can use it",
+        "whoNote": "Anyone who can ask {{name}} can have it read and send your email, calendar and files.",
+        "removeFrom": "Remove Google from {{name}}…"
+      },
+      "fix": {
+        "turnOn": "Turn on",
+        "copyForAdmin": "Copy for your admin",
+        "checkAgain": "Check again"
+      },
+      "adminRequest": "Please mark this Google app as Trusted in the Admin console (Security › API controls › Manage third-party app access): {{clientId}}",
+      "copied": "Copied. Send it to your Google admin.",
+      "state": {
+        "ready": "Ready",
+        "apiOff": "Turned off in Google Cloud",
+        "notAllowed": "You didn’t allow it",
+        "adminBlocked": "Your company’s Google admin blocked it",
+        "error": "Couldn’t check"
+      },
+      "headline": {
+        "ended": "Google access ended. Reconnect.",
+        "connected": "Google is connected",
+        "toFixOne": "Almost there: 1 thing to fix",
+        "toFix": "Almost there: {{count}} things to fix"
+      },
+      "signInOnHost": "Sign in to Google again on {{host}}",
+      "moreOnHost": "Add a service or share the setup in Orca on {{host}}."
     }
   },
   "mobileWebShell": {

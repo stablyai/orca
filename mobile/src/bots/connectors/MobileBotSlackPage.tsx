@@ -3,11 +3,8 @@
 // the phone's allowlist), and the card's menu and Remove.
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { View } from 'react-native'
 import { Ellipsis, ExternalLink, Plus, RefreshCw } from 'lucide-react-native'
 import { botMembersFrom, slackMembersOf, type BotMember } from '../../../../src/shared/bot-types'
-import { accessRequestPerson } from '../../../../src/shared/bots/bot-access-request'
-import type { ConnectorAccessRequest } from '../../../../src/shared/connector-bot-access-contract'
 import { ListRow } from '../../components/list/ListGroup'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
@@ -18,17 +15,14 @@ import { useBackClaim } from '../../navigation/use-back-claim'
 import { openExternalLink } from '../../platform/external-links/external-link'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { accessRequestGrant, accessRequestLine } from '../bot-access-request-copy'
-import { mobileBotAccessCopy } from '../mobile-bot-access-copy'
 import type { PhoneBot } from '../host-bots-operations'
-import { MobileBotAccessDecisionContent } from '../MobileBotAccessDecision'
-import { optionStyles } from '../mobile-bot-option-styles'
-import { MobileBotTextButton } from '../MobileBotTextButton'
+import type { MobileBotAccessDecisionContent } from '../MobileBotAccessDecision'
 import type { BotAccessRequests } from '../use-bot-access-requests'
 import { slackCall, slackRemove } from './bot-slack-operations'
 import { slackErrorMessage, slackRowFace } from './mobile-slack-copy'
 import { slackTeamState } from '../../../../src/shared/connector-bot-slack-contract'
 import type { PhoneSlackView } from './use-phone-bot-slack'
+import { useConnectorPeople } from './MobileConnectorAccountParts'
 
 export function MobileBotSlackPage(props: {
   client: RpcClient | null
@@ -52,10 +46,7 @@ export function MobileBotSlackPage(props: {
   const { bot, teamId, slack } = props
   const [menuOpen, setMenuOpen] = useState(false)
   const menuAnchor = useRef(null)
-  const [confirm, setConfirm] = useState<
-    { kind: 'remove' } | { kind: 'member'; member: BotMember } | null
-  >(null)
-  const [granting, setGranting] = useState<ConnectorAccessRequest | null>(null)
+  const [confirmRemove, setConfirmRemove] = useState(false)
   const [busy, setBusy] = useState(false)
   const alive = useRef(true)
   useEffect(() => {
@@ -64,65 +55,39 @@ export function MobileBotSlackPage(props: {
       alive.current = false
     }
   }, [])
-  useBackClaim(() => {
-    if (confirm || granting) {
-      setConfirm(null)
-      setGranting(null)
-    } else {
-      props.onBack()
-    }
-    return true
-  })
   const face = slackRowFace(slack.view, teamId, props.hostName, t)
   const team = slack.view.status === 'ready' ? slackTeamState(slack.view.slack, teamId) : null
   const installed = team?.state === 'installed' ? team : null
   // A workspace's page can also remove an app that was never installed.
   const removable = installed ?? (teamId !== undefined && team && 'teamId' in team ? team : null)
   const place = face.workspace ?? BOT_CONNECTOR_NAMES.slack
-  const people =
-    teamId === undefined ? botMembersFrom(bot.members, 'slack') : slackMembersOf(bot, teamId)
-  // As the desktop: requests wait on an installed workspace, where granting lets them ask.
-  const requests = installed
-    ? (props.access?.requests ?? []).filter(
-        (request) => request.source === 'slack' && request.workspaceId === installed.teamId
-      )
-    : []
+  const people = useConnectorPeople({
+    bot,
+    accessBot: props.accessBot,
+    people:
+      teamId === undefined ? botMembersFrom(bot.members, 'slack') : slackMembersOf(bot, teamId),
+    // As the desktop: requests wait on an installed workspace, where granting lets them ask.
+    requests: installed
+      ? (props.access?.requests ?? []).filter(
+          (request) => request.source === 'slack' && request.workspaceId === installed.teamId
+        )
+      : [],
+    access: props.access,
+    online: props.online,
+    removeMember: props.removeMember
+  })
+  useBackClaim(() => {
+    if (!people.dismiss() && !confirmRemove) {
+      props.onBack()
+    }
+    setConfirmRemove(false)
+    return true
+  })
 
-  if (granting && props.access) {
-    const access = props.access
-    return (
-      <MobileBotAccessDecisionContent
-        grant={accessRequestGrant(granting)}
-        bot={props.accessBot}
-        onGrant={() => void access.decide(granting, 'granted')}
-        onClose={() => setGranting(null)}
-      />
-    )
+  if (people.overlay) {
+    return people.overlay
   }
-  if (confirm?.kind === 'member') {
-    const { member } = confirm
-    return (
-      <ConfirmContent
-        title={t('bots.settings.removeConfirmTitle', 'Remove {{name}}?', { name: member.name })}
-        message={t(
-          'bots.settings.removeConfirmMessage',
-          '{{name}} can no longer ask {{botName}}.',
-          {
-            name: member.name,
-            botName: bot.name
-          }
-        )}
-        confirmLabel={t('bots.settings.remove', 'Remove')}
-        destructive
-        onCancel={() => setConfirm(null)}
-        onConfirm={() => {
-          setConfirm(null)
-          props.removeMember(member)
-        }}
-      />
-    )
-  }
-  if (confirm?.kind === 'remove') {
+  if (confirmRemove) {
     return (
       <ConfirmContent
         title={t('bots.slack.connection.removeFromTitle', 'Remove {{name}} from {{place}}?', {
@@ -135,9 +100,9 @@ export function MobileBotSlackPage(props: {
         )}
         confirmLabel={t('bots.slack.connection.removeConfirm', 'Remove')}
         destructive
-        onCancel={() => setConfirm(null)}
+        onCancel={() => setConfirmRemove(false)}
         onConfirm={() => {
-          setConfirm(null)
+          setConfirmRemove(false)
           const client = props.client
           const removeTeam = teamId
           if (!client || removeTeam === undefined) {
@@ -253,61 +218,7 @@ export function MobileBotSlackPage(props: {
           />
         </SettingsSection>
       ) : null}
-      {requests.length > 0 && props.access ? (
-        <SettingsSection title={mobileBotAccessCopy(t, 'heading')}>
-          {requests.map((request) => {
-            const person = accessRequestPerson(request)
-            return (
-              <ListRow
-                key={request.requestId}
-                title={person}
-                subtitle={accessRequestLine(request, t)}
-                accessory={
-                  <View style={optionStyles.rowActions}>
-                    <MobileBotTextButton
-                      label={mobileBotAccessCopy(t, 'decline')}
-                      accessibilityLabel={t('bots.settings.declineName', 'Decline {{name}}', {
-                        name: person
-                      })}
-                      disabled={props.access?.deciding || !props.online}
-                      onPress={() => void props.access?.decide(request, 'declined')}
-                    />
-                    <MobileBotTextButton
-                      label={mobileBotAccessCopy(t, 'review')}
-                      accessibilityLabel={t('bots.settings.reviewName', 'Review {{name}}', {
-                        name: person
-                      })}
-                      disabled={props.access?.deciding || !props.online}
-                      onPress={() => setGranting(request)}
-                    />
-                  </View>
-                }
-              />
-            )
-          })}
-        </SettingsSection>
-      ) : null}
-      <SettingsSection
-        title={t('bots.settings.whoCanAskName', 'Who can ask {{name}}', { name: bot.name })}
-      >
-        <ListRow title={t('bots.settings.you', 'You')} value={t('bots.settings.owner', 'Owner')} />
-        {people.map((member) => (
-          <ListRow
-            key={member.id}
-            title={member.name}
-            accessory={
-              <MobileBotTextButton
-                label={t('bots.settings.remove', 'Remove')}
-                accessibilityLabel={t('bots.settings.removeName', 'Remove {{name}}', {
-                  name: member.name
-                })}
-                disabled={!props.online}
-                onPress={() => setConfirm({ kind: 'member', member })}
-              />
-            }
-          />
-        ))}
-      </SettingsSection>
+      {people.section}
       {poster ? (
         <SettingsSection title={t('bots.slack.replies', 'Replies')}>
           <ListRow
@@ -326,7 +237,7 @@ export function MobileBotSlackPage(props: {
             destructive
             disabled={!props.online || busy}
             accessibilityRole="button"
-            onPress={() => setConfirm({ kind: 'remove' })}
+            onPress={() => setConfirmRemove(true)}
           />
         </SettingsSection>
       ) : null}
