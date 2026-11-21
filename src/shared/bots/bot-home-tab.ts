@@ -19,31 +19,58 @@ export function isBotHomeTab(tab: ChatTab, bot: Pick<Bot, 'chatSessionId'> | nul
 type HostedBotHome = Pick<Bot, 'chatSessionId' | 'folderWorkspaceId'> & { hostId: ExecutionHostId }
 type HostedChatTab = ChatTab & Pick<Tab, 'worktreeId' | 'executionHostId'>
 
-/** The dedicated home workspace and owning host identify its chats, never their names or order. */
-export function isHostedBotChatTab(tab: HostedChatTab, bot: HostedBotHome | null): boolean {
+/** Whether chats saved without a host in the bot's workspace are this app's: only its records can say. */
+export type HostlessChatsAreLocal = () => boolean
+const NO_HOSTLESS_CHATS: HostlessChatsAreLocal = () => false
+
+/**
+ * The dedicated home workspace and owning host identify its chats, never their names or order.
+ * A chat saved without a host is a local bot's only when `hostlessAreLocal` vouches for the
+ * workspace; a paired or SSH bot never claims one.
+ */
+export function isHostedBotChatTab(
+  tab: HostedChatTab,
+  bot: HostedBotHome | null,
+  hostlessAreLocal: HostlessChatsAreLocal = NO_HOSTLESS_CHATS
+): boolean {
   return (
     bot !== null &&
-    tab.executionHostId === bot.hostId &&
     tab.worktreeId === folderWorkspaceKey(bot.folderWorkspaceId) &&
-    tab.contentType === 'agent-session'
+    tab.contentType === 'agent-session' &&
+    (tab.executionHostId
+      ? tab.executionHostId === bot.hostId
+      : bot.hostId === LOCAL_EXECUTION_HOST_ID && hostlessAreLocal())
   )
 }
 
-export function isLocalBotChatTab(tab: HostedChatTab, bot: HostedBotHome | null): boolean {
-  return bot?.hostId === LOCAL_EXECUTION_HOST_ID && isHostedBotChatTab(tab, bot)
+export function isLocalBotChatTab(
+  tab: HostedChatTab,
+  bot: HostedBotHome | null,
+  hostlessAreLocal?: HostlessChatsAreLocal
+): boolean {
+  return bot?.hostId === LOCAL_EXECUTION_HOST_ID && isHostedBotChatTab(tab, bot, hostlessAreLocal)
 }
 
-export function isBotSideChatTab(tab: HostedChatTab, bot: HostedBotHome | null): boolean {
-  return bot?.chatSessionId != null && isHostedBotChatTab(tab, bot) && !isBotHomeTab(tab, bot)
+export function isBotSideChatTab(
+  tab: HostedChatTab,
+  bot: HostedBotHome | null,
+  hostlessAreLocal?: HostlessChatsAreLocal
+): boolean {
+  return (
+    bot?.chatSessionId != null &&
+    isHostedBotChatTab(tab, bot, hostlessAreLocal) &&
+    !isBotHomeTab(tab, bot)
+  )
 }
 
 /** Publication precedes age: a preview cannot displace the oldest ready Home. */
 export function selectLocalBotHomeTabs(
   tabs: readonly Tab[],
-  bot: HostedBotHome
+  bot: HostedBotHome,
+  hostlessAreLocal?: HostlessChatsAreLocal
 ): { home: Tab; duplicates: Tab[] } | null {
   const homes = tabs
-    .filter((tab) => isLocalBotChatTab(tab, bot) && isBotHomeTab(tab, bot))
+    .filter((tab) => isLocalBotChatTab(tab, bot, hostlessAreLocal) && isBotHomeTab(tab, bot))
     .sort(
       (left, right) =>
         Number(left.isPreview === true) - Number(right.isPreview === true) ||

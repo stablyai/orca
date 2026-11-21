@@ -15,6 +15,7 @@ import {
 } from '../../runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import { installBotHomeTabPlacement } from './bot-home-tab-placement'
 import { pairedHostStatuses } from '@/lib/bot-host-capability.test-fixture'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '../../runtime/native-chat/local-sessions/local-structured-session-owner'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -227,6 +228,63 @@ describe('bot Home tab placement', () => {
       { additionalValidWorkspaceKeys: [WT] }
     )
     expect(strips()).toEqual([['tab-home', 'tab-side-1'], ['tab-side-2']])
+  })
+
+  function restoreSessionSavedWithoutTabHosts(): void {
+    const tab = (id: string, isPinned: boolean): Tab => ({
+      id,
+      entityId: id.replace('tab-', ''),
+      groupId: 'saved',
+      worktreeId: WT,
+      contentType: 'agent-session',
+      agentSessionAgent: 'claude',
+      label: id,
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1,
+      isPinned
+    })
+    store.getState().hydrateTabsSession(
+      {
+        activeRepoId: null,
+        activeWorktreeId: WT,
+        activeTabId: null,
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {},
+        unifiedTabs: { [WT]: [tab('tab-side-1', true), tab('tab-home', false)] },
+        tabGroups: {
+          [WT]: [
+            {
+              id: 'saved',
+              worktreeId: WT,
+              activeTabId: 'tab-side-1',
+              tabOrder: ['tab-side-1', 'tab-home']
+            }
+          ]
+        },
+        activeGroupIdByWorktree: { [WT]: 'saved' }
+      },
+      { additionalValidWorkspaceKeys: [WT] }
+    )
+  }
+
+  it("pins and places a Home restored without tab hosts in this app's own workspace", () => {
+    store.setState({ folderWorkspaces: [makeFolderWorkspace({ id: 'bot-home' })] })
+    restoreSessionSavedWithoutTabHosts()
+    expect(store.getState().getTab('tab-home')?.executionHostId).toBeUndefined()
+    expect(pinnedIds()).toEqual(['tab-home'])
+    expect(strips()).toEqual([['tab-home', 'tab-side-1']])
+  })
+
+  it("leaves hostless chats alone until a record says their workspace is this app's", () => {
+    restoreSessionSavedWithoutTabHosts()
+    expect(pinnedIds()).toEqual(['tab-side-1'])
+    expect(strips()).toEqual([['tab-side-1', 'tab-home']])
+
+    store.setState({ folderWorkspaces: [makeFolderWorkspace({ id: 'bot-home' })] })
+    expect(pinnedIds()).toEqual(['tab-home'])
+    expect(strips()).toEqual([['tab-home', 'tab-side-1']])
   })
 
   it('reopens first in the top-left group whichever group it opens in', () => {

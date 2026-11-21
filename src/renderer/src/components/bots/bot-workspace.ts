@@ -8,7 +8,10 @@ import {
   folderWorkspaceKey,
   parseWorkspaceKey
 } from '../../../../shared/workspace/identity/workspace-scope'
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { botOfHomeWorkspace } from '../../../../shared/bots/bot-homes'
 import { isBotHomeTab } from '../../../../shared/bots/bot-home-tab'
 
@@ -28,19 +31,38 @@ export function findBotByWorkspace(
   )
 }
 
+/** A chat tab's bot is its host's; only a local bot can claim a chat saved without a host, so it comes first. */
+export function findBotForChatTab(
+  bots: readonly Bot[],
+  workspaceId: string | null,
+  tabHostId: ExecutionHostId | undefined
+): Bot | null {
+  return tabHostId
+    ? findBotByWorkspace(bots, workspaceId, tabHostId)
+    : (findBotByWorkspace(bots, workspaceId, LOCAL_EXECUTION_HOST_ID) ??
+        findBotByWorkspace(bots, workspaceId))
+}
+
 /** With bots off a home is a plain folder. */
 export function isBotPage(workspaceId: string): boolean {
   return readBotsEnabled() && findBotByWorkspace(readBots(), workspaceId) !== null
 }
 
 /** Only folder workspaces can be a bot's home, so other workspaces never read the bots; with bots off a home is a plain folder. */
-export function useBotForWorkspace(
-  workspaceId: string | null,
-  hostId?: ExecutionHostId
-): Bot | null {
+function useHomeWorkspaceBots(workspaceId: string | null): readonly Bot[] {
   const botsEnabled = useBotsEnabled()
-  const bots = useBots(botsEnabled && parseWorkspaceKey(workspaceId ?? '')?.type === 'folder')
-  return findBotByWorkspace(bots, workspaceId, hostId)
+  return useBots(botsEnabled && parseWorkspaceKey(workspaceId ?? '')?.type === 'folder')
+}
+
+export function useBotForWorkspace(workspaceId: string | null): Bot | null {
+  return findBotByWorkspace(useHomeWorkspaceBots(workspaceId), workspaceId)
+}
+
+export function useBotForChatTab(
+  workspaceId: string | null,
+  tabHostId: ExecutionHostId | undefined
+): Bot | null {
+  return findBotForChatTab(useHomeWorkspaceBots(workspaceId), workspaceId, tabHostId)
 }
 
 /** The group whose room lives in this folder workspace; like a bot's home, only with bots on. */
