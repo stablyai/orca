@@ -149,10 +149,18 @@ export class ClaudeAgentViewRegistryFile {
       return Promise.resolve()
     }
     this.dirty = true
+    this.startDrain()
+    return this.writing ?? Promise.resolve()
+  }
+
+  private startDrain(): void {
     this.writing ??= this.drain().finally(() => {
       this.writing = undefined
+      // A save between the loop's last check and this cleanup set dirty without a drain.
+      if (this.dirty) {
+        this.startDrain()
+      }
     })
-    return this.writing
   }
 
   private async drain(): Promise<void> {

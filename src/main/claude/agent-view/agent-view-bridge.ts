@@ -3,7 +3,9 @@ import type { z } from 'zod'
 import { claudeAgentViewChord, readClaudeAgentViewChord } from './agent-view-keybindings'
 import {
   answerPendingView,
+  claudeAgentViewSnapshot,
   clickReadableConfigDir,
+  isOlderInstance,
   ClaudeAgentViewMessage,
   type ClaudeAgentViewReply,
   type PendingView
@@ -32,6 +34,7 @@ export class ClaudeAgentViewBridge {
   subscribe(listener: (snapshot: ClaudeAgentViewSnapshot) => void): () => void {
     this.listeners.add(listener)
     listener(this.snapshot())
+    this.lastFrame = '' // this listener may hold a state the next queued frame would skip
     return () => {
       this.listeners.delete(listener)
     }
@@ -69,17 +72,7 @@ export class ClaudeAgentViewBridge {
   }
 
   private snapshot(): ClaudeAgentViewSnapshot {
-    return [...this.sessions.values()].flatMap((session) =>
-      session.view
-        ? [
-            {
-              paneKey: session.paneKey,
-              sessionId: session.sessionId,
-              ...(session.view.agentId ? { agentId: session.view.agentId } : {})
-            }
-          ]
-        : []
-    )
+    return claudeAgentViewSnapshot(this.sessions.values())
   }
 
   // One frame per task however many panes changed (a worktree removal drops many), none unchanged.
@@ -121,6 +114,9 @@ export class ClaudeAgentViewBridge {
     const message = parsed.data
     const current = this.sessions.get(message.paneKey)
     if (message.action === 'register') {
+      if (current && isOlderInstance(message.instanceId, current.instanceId)) {
+        return {} // a delayed post from a session /clear already replaced
+      }
       const chord = claudeAgentViewChord(message.keybindings)
       const configDir = clickReadableConfigDir(message.configDir, options.sameMachine)
       // A local pane stays without a binding: each click reads the binding from configDir.
@@ -192,11 +188,10 @@ export class ClaudeAgentViewBridge {
     const registered = this.sessions.get(args.paneKey)
     if (registered?.configDir && registered.sessionId === args.sessionId) {
       // An idle mod does not re-read its keybindings, so read the chord the user has bound now.
+      // Unreadable here (mid-edit, or a folder only Claude may read): keep the chord the mod sent.
       const chord = await readClaudeAgentViewChord(registered.configDir)
-      if (chord === undefined) {
-        return { status: 'unavailable' }
-      }
       if (
+        chord !== undefined &&
         this.sessions.get(args.paneKey) === registered &&
         registered.chord !== (chord ?? undefined)
       ) {
@@ -262,6 +257,7 @@ export class ClaudeAgentViewBridge {
   release(): void {
     for (const session of this.sessions.values()) {
       session.pending?.finish({ status: 'unavailable' })
+      session.pending = undefined
     }
   }
 

@@ -91,7 +91,9 @@ describe('Claude agent view delivery', () => {
           bindings: [{ context: 'Chat', bindings: { 'ctrl+alt+h': 'command:orca-agent-view' } }]
         })
       })
-      await vi.waitFor(() => expect(existsSync(file)).toBe(true))
+      await vi.waitFor(() =>
+        expect(existsSync(file) && readFileSync(file, 'utf8')).toContain('"previous"')
+      )
       before.close()
 
       // A Claude that registers while the next main is still reading the file must not erase it.

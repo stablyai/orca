@@ -1,9 +1,13 @@
 import { isAbsolute } from 'node:path'
 import { z } from 'zod'
-import { ClaudeAgentViewIdentity as Identity } from './agent-view-registry-file'
+import {
+  ClaudeAgentViewIdentity as Identity,
+  type RegisteredClaudeAgentView
+} from './agent-view-registry-file'
 import {
   ClaudeAgentViewObservation,
-  type ClaudeAgentViewResult
+  type ClaudeAgentViewResult,
+  type ClaudeAgentViewSnapshot
 } from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 
 export const ClaudeAgentViewMessage = z.discriminatedUnion('action', [
@@ -70,4 +74,27 @@ export function clickReadableConfigDir(
   sameMachine: boolean | undefined
 ): string | undefined {
   return sameMachine && configDir && isAbsolute(configDir) ? configDir : undefined
+}
+
+/** Mod instance ids start with their creation time; an older one is a delayed post from a replaced session. */
+export function isOlderInstance(incoming: string, current: string): boolean {
+  const [a, b] = [incoming, current].map((id) => Number(id.split('-')[0]))
+  return Number.isFinite(a) && Number.isFinite(b) && a < b
+}
+
+/** What renderers see: panes whose Claude has reported a view, and which agent it shows. */
+export function claudeAgentViewSnapshot(
+  sessions: Iterable<RegisteredClaudeAgentView>
+): ClaudeAgentViewSnapshot {
+  return [...sessions].flatMap((session) =>
+    session.view
+      ? [
+          {
+            paneKey: session.paneKey,
+            sessionId: session.sessionId,
+            ...(session.view.agentId ? { agentId: session.view.agentId } : {})
+          }
+        ]
+      : []
+  )
 }

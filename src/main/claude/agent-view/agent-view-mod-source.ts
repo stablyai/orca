@@ -11,7 +11,7 @@ let endedSessionId
 let observedView
 let viewRevision = 0
 let retryDelay = 0
-let timerQueued = false
+let timerToken = 0
 let announcedAt = 0
 
   async function post($, action, data = {}, session = identity) {
@@ -40,12 +40,12 @@ let announcedAt = 0
     } catch { return {} }
   }
 
+  // One live timer: a newer schedule (or a durable reply) voids the earlier one.
   function schedule($, delay) {
-    if (timerQueued) return
-    timerQueued = true
+    const token = ++timerToken
     try {
-      $.clock.after(delay, () => { timerQueued = false; return announce($) })
-    } catch { timerQueued = false }
+      $.clock.after(delay, () => token === timerToken ? announce($) : undefined)
+    } catch {}
   }
 
   // Undelivered (Orca restarting, quit or unreachable): back off 1 s doubling to 5 min.
@@ -84,6 +84,9 @@ let announcedAt = 0
       announcedAt = await $.clock.now()
       // An older Orca forgets a pane after 15 s of quiet; keep its 5 s heartbeat.
       if (!result.durable) schedule($, 5000)
+      else timerToken++
+      // A /clear during the post: announce the session that replaced this one.
+      if (identity && identity !== session) void announce($)
       return result
     } catch {
       return {}
