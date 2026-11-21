@@ -20713,7 +20713,6 @@
         "permissionAutoDescription": "Analisa os pedidos de aprovação por você",
         "permissionFullAccess": "Acesso total",
         "permissionAgentSettings": "Configurações do {{agent}}",
-        "permissionAgentSettingsHint": "Usa suas configurações de permissão do {{agent}}. O modo aparece após sua primeira mensagem.",
         "permissionAgentSettingsUsedHint": "Usa suas configurações de permissão do {{agent}}.",
         "permissionAgentSettingsUnnamedHint": "Usa suas configurações de permissão do {{agent}}. O Orca não consegue exibir este modo.",
         "permissionFromAgentSettings": "{{mode}}, conforme as configurações do {{agent}}",

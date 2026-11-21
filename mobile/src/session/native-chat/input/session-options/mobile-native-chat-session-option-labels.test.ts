@@ -3,7 +3,7 @@ import type { SessionOptionDescriptor } from '../../../../../../src/shared/nativ
 import { mobilePermissionSettingsHint } from './mobile-native-chat-session-option-labels'
 
 function permission(
-  kind: { reportedValue?: string; reportPending?: true; currentValue?: string } = {},
+  kind: { reportedValue?: string; currentValue?: string } = {},
   deferred = false
 ): SessionOptionDescriptor {
   return {
@@ -25,10 +25,9 @@ function permission(
 }
 
 describe('the mobile permission settings hint', () => {
-  it('never promises a coming report, and names an unnameable report differently', () => {
+  it('names only the settings for a missing report, and an unnameable report differently', () => {
     const missing = mobilePermissionSettingsHint(permission())
     expect(missing).toBeTruthy()
-    expect(mobilePermissionSettingsHint(permission({ reportPending: true }))).toBe(missing)
     const unnamed = mobilePermissionSettingsHint(permission({ reportedValue: 'read-only' }))
     expect(unnamed).toBeTruthy()
     expect(unnamed).not.toBe(missing)

@@ -21,13 +21,10 @@ function permissionFixture({
   width = 767,
   tooltip = false,
   chatTextPx,
-  reportPending = false,
   agent = 'claude'
 }: {
   language?: UiLanguage
   reported?: string
-  /** The host expects a report from the chat's first message. */
-  reportPending?: boolean
   agent?: string
   current?: string
   active?: string
@@ -56,7 +53,6 @@ function permissionFixture({
         type: 'select',
         currentValue: current,
         reportedValue: reported,
-        ...(reportPending ? { reportPending: true as const } : {}),
         settingsAgent: agent,
         choices: [
           { value: 'ask', label: 'Ask for approval' },
@@ -200,15 +196,9 @@ function permissionFixture({
 }
 
 export const unknown = permissionFixture()
-// Before the first message, the tooltip says the mode is coming.
-export const unknownTooltip = permissionFixture({ tooltip: true, reportPending: true })
-export const unknownTooltipNarrow = permissionFixture({
-  width: 292,
-  tooltip: true,
-  reportPending: true
-})
-// After it, with still no report, the tooltip promises nothing.
-export const unreportedTooltip = permissionFixture({ tooltip: true })
+// With no report, the tooltip names the settings and promises no mode.
+export const unknownTooltip = permissionFixture({ tooltip: true })
+export const unknownTooltipNarrow = permissionFixture({ width: 292, tooltip: true })
 // Codex in read-only reports a mode Orca has no name for.
 export const unnamedTooltip = permissionFixture({
   language: 'pt',

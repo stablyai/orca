@@ -18741,7 +18741,6 @@
         "permissionAutoDescription": "승인 요청을 대신 검토합니다",
         "permissionFullAccess": "전체 액세스",
         "permissionAgentSettings": "{{agent}} 설정",
-        "permissionAgentSettingsHint": "{{agent}} 권한 설정을 사용합니다. 첫 메시지를 보내면 모드가 표시됩니다.",
         "permissionAgentSettingsUsedHint": "{{agent}} 권한 설정을 사용합니다.",
         "permissionAgentSettingsUnnamedHint": "{{agent}} 권한 설정을 사용합니다. Orca에서 이 모드를 표시할 수 없습니다.",
         "permissionFromAgentSettings": "{{mode}}, {{agent}} 설정에서",

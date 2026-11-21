@@ -94,8 +94,6 @@ export type NativeChatPermissionModePickerProps = {
   current: string | undefined
   /** The mode the agent reports running in when `current` is Own. */
   reported?: string
-  /** No report yet, and the next message can produce one. */
-  reportPending?: boolean
   modes: readonly AgentChatPermissionMode[]
   /** Whose descriptions to show; absent describes every agent's. */
   agent?: string | null
@@ -113,7 +111,6 @@ const INHERIT_VALUE = 'inherit'
 function NativeChatPermissionModePickerInner({
   current,
   reported,
-  reportPending = false,
   modes,
   agent,
   disabled = false,
@@ -170,29 +167,22 @@ function NativeChatPermissionModePickerInner({
   const hint = agentPermissionSettingsHint({
     current,
     reported,
-    reportPending,
     deferred: activeLabel !== null
   })
   const tooltipLabel =
-    hint === 'report-pending'
+    hint === 'unnamed-report'
       ? t(
-          'components.native-chat.composer.permissionAgentSettingsHint',
-          'Uses your {{agent}} permission settings. The mode appears after your first message.',
+          'components.native-chat.composer.permissionAgentSettingsUnnamedHint',
+          "Uses your {{agent}} permission settings. Orca can't show this mode.",
           { agent: settingsAgent }
         )
-      : hint === 'unnamed-report'
+      : hint === 'settings'
         ? t(
-            'components.native-chat.composer.permissionAgentSettingsUnnamedHint',
-            "Uses your {{agent}} permission settings. Orca can't show this mode.",
+            'components.native-chat.composer.permissionAgentSettingsUsedHint',
+            'Uses your {{agent}} permission settings.',
             { agent: settingsAgent }
           )
-        : hint === 'settings'
-          ? t(
-              'components.native-chat.composer.permissionAgentSettingsUsedHint',
-              'Uses your {{agent}} permission settings.',
-              { agent: settingsAgent }
-            )
-          : described
+        : described
   // `shrink` overrides the button's shrink-0 so a narrow composer truncates the mode name.
   return (
     <DropdownMenu>
@@ -298,7 +288,6 @@ export function NativeChatComposerPermissionPicker({
     <NativeChatPermissionModePicker
       current={current}
       reported={descriptor.kind.reportedValue}
-      reportPending={descriptor.kind.reportPending === true}
       modes={modes}
       activeValue={descriptor.valueSource === 'dispatched' ? descriptor.activeValue : undefined}
       agent={agent ?? descriptor.kind.settingsAgent ?? null}

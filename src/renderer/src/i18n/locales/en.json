@@ -21253,7 +21253,6 @@
         "permissionAutoDescription": "Reviews approval requests for you",
         "permissionFullAccess": "Full access",
         "permissionAgentSettings": "{{agent}} settings",
-        "permissionAgentSettingsHint": "Uses your {{agent}} permission settings. The mode appears after your first message.",
         "permissionAgentSettingsUsedHint": "Uses your {{agent}} permission settings.",
         "permissionAgentSettingsUnnamedHint": "Uses your {{agent}} permission settings. Orca can't show this mode.",
         "permissionFromAgentSettings": "{{mode}}, from {{agent}} settings",

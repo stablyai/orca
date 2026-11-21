@@ -44,8 +44,6 @@ export type SessionOptionDescriptor = {
         placeholder?: string
         /** What the running agent reports when currentValue delegates to it; presentation only. */
         reportedValue?: string
-        /** No report yet, and the chat's first message starts an agent that reports one; presentation only. */
-        reportPending?: true
         /** The agent whose own settings an Own permission choice follows; presentation only. */
         settingsAgent?: string
       }

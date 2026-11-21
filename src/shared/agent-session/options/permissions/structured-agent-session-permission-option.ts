@@ -45,9 +45,6 @@ const AGENT_DESCRIPTIONS = new Map<string, Partial<Record<AgentChatPermissionMod
   ['antigravity', ANTIGRAVITY_DESCRIPTIONS]
 ])
 
-// Claude's initialize and Codex's thread open state the mode they start in; ACP agents may not.
-const AGENTS_REPORTING_START_MODE = new Set(['claude', 'codex'])
-
 function agentDescriptions(agent: string): Partial<Record<AgentChatPermissionMode, string>> {
   return AGENT_DESCRIPTIONS.get(agent) ?? OTHER_AGENT_DESCRIPTIONS
 }
@@ -70,7 +67,6 @@ export function structuredAgentSessionPermissionDescriptor(state: {
   launchPermissionMode?: string
   runningPermissionMode?: string
   reportedPermissionMode?: string | null
-  sessionNeverStarted?: boolean
 }): SessionOptionDescriptor | null {
   const support = agentChatPermissionModes(state.record.agent)
   const own = state.permissionMode === 'own'
@@ -81,13 +77,6 @@ export function structuredAgentSessionPermissionDescriptor(state: {
   // Own delegates to the agent, so show the mode it reports running in; the saved choice stays Own.
   const reportedValue = own ? (state.reportedPermissionMode ?? undefined) : undefined
   const shown = reportedValue ?? current
-  // Only an Own-capable host that has seen no message yet can promise a report from the next one.
-  const reportPending =
-    own &&
-    state.reportedPermissionMode === undefined &&
-    state.sessionNeverStarted === true &&
-    state.permissionOwnSupported === true &&
-    AGENTS_REPORTING_START_MODE.has(state.record.agent)
   const known = support.modes.find((mode) => mode === shown)
   const label =
     own && reportedValue === undefined
@@ -114,7 +103,6 @@ export function structuredAgentSessionPermissionDescriptor(state: {
       type: 'select',
       currentValue: current,
       ...(reportedValue !== undefined ? { reportedValue } : {}),
-      ...(reportPending ? { reportPending: true as const } : {}),
       settingsAgent: state.record.agent,
       choices: support.modes.map((value) => ({
         value,

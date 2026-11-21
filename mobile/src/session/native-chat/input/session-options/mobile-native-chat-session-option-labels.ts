@@ -136,7 +136,6 @@ export function mobilePermissionSettingsHint(
   if (descriptor?.kind.type !== 'select') {
     return undefined
   }
-  // Mobile can't tell whether a report is still coming, so a missing one promises nothing.
   const hint = agentPermissionSettingsHint({
     current: descriptor.kind.currentValue,
     reported: descriptor.kind.reportedValue,

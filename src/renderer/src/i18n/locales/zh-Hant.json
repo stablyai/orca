@@ -19253,7 +19253,6 @@
         "permissionAutoDescription": "代你審查核准要求",
         "permissionFullAccess": "完整存取權",
         "permissionAgentSettings": "{{agent}} 設定",
-        "permissionAgentSettingsHint": "使用你的 {{agent}} 權限設定。傳送第一則訊息後會顯示模式。",
         "permissionAgentSettingsUsedHint": "使用你的 {{agent}} 權限設定。",
         "permissionAgentSettingsUnnamedHint": "使用你的 {{agent}} 權限設定。Orca 無法顯示此模式。",
         "permissionFromAgentSettings": "{{mode}}，來自 {{agent}} 設定",

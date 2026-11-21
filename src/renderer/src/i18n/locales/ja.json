@@ -19772,7 +19772,6 @@
         "permissionAutoDescription": "承認リクエストを代わりに審査します",
         "permissionFullAccess": "フルアクセス",
         "permissionAgentSettings": "{{agent}} の設定",
-        "permissionAgentSettingsHint": "{{agent}} の権限設定を使用します。最初のメッセージを送信するとモードが表示されます。",
         "permissionAgentSettingsUsedHint": "{{agent}} の権限設定を使用します。",
         "permissionAgentSettingsUnnamedHint": "{{agent}} の権限設定を使用します。Orca ではこのモードを表示できません。",
         "permissionFromAgentSettings": "{{mode}}（{{agent}} の設定より）",
