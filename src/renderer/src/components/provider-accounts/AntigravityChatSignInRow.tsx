@@ -14,6 +14,8 @@ export function AntigravityChatSignInRow(props: {
   runtime?: ReactNode
   /** The Google sign-in choice's state from the host's answer. */
   googleSignIn?: AntigravityGoogleSignInState
+  /** After the sign-in method saves; the host's answer about the route is read again. */
+  onSaved?: () => void
 }): React.JSX.Element {
   const signIn = useAntigravityChatSignInControls({
     owner: props.owner,
@@ -29,6 +31,7 @@ export function AntigravityChatSignInRow(props: {
         signInError={signIn.alert}
         heading={null}
         googleSignIn={props.googleSignIn}
+        onSaved={props.onSaved}
         fieldsRow={(fields) => (
           <div data-settings-row="" className="py-3">
             {fields}
