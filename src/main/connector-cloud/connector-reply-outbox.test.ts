@@ -139,7 +139,11 @@ describe('the turn end fill', () => {
       () => store,
       () => {}
     )(end())
-    expect(covered).toEqual({ covered: new Set([SLACK.externalId]), paused: false })
+    expect(covered).toEqual({
+      covered: new Set([SLACK.externalId]),
+      paused: false,
+      answered: new Set([SLACK.externalId])
+    })
     expect(
       store.rows.map((r) => [r.deliveryId, r.fill?.outcome, r.fill?.answerDeliveryId])
     ).toEqual([

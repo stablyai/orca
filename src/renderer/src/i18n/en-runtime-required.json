@@ -722,9 +722,7 @@
           "wslUnavailable": "WSL is not available. Switch this project to Windows or repair WSL."
         },
         "ReleaseChannelSection": {
-          "adhocWarning": "Adhoc builds come from a branch that has not landed, and the Windows ones are unsigned. Whoever cut one may abandon it — keep a stable build handy.",
-          "dailyWarning": "Daily builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy.",
-          "hourlyWarning": "Hourly builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy."
+          "devChannelPlatforms": "macOS and Windows"
         },
         "RepositoryRemoveProjectSection": {
           "checkoutCount_one": "{{count}} checkout",
@@ -2143,6 +2141,10 @@
         "paused": "{{bot}} is paused."
       },
       "composer": {
+        "botCount_one": "{{count}} bot",
+        "botCount_other": "{{count}} bots",
+        "fileCount_one": "{{count}} file",
+        "fileCount_other": "{{count}} files",
         "placeholder": "Ask anything, @ to mention files, / for commands"
       },
       "composerErrors": {

@@ -90,6 +90,7 @@ export function BotItemCommentBox({
   hidden = false,
   nav,
   question,
+  onShowQuestion,
   ref
 }: {
   bot: Bot
@@ -103,6 +104,8 @@ export function BotItemCommentBox({
   hidden?: boolean
   /** The agent's question the item waits on: its first line, and whether it gave quick replies. */
   question?: BotItemWaitingQuestion | null
+  /** Brings the comment that asks the question into view, by its event id. */
+  onShowQuestion?: (eventId: string) => void
   /** The item pane's previous / next arrows, between the attach and mic buttons. */
   nav?: React.ReactNode
   ref?: Ref<BotItemCommentBoxHandle>
@@ -227,7 +230,7 @@ export function BotItemCommentBox({
     shown.current = draft
   }, [draft, ime])
 
-  const reply = useBotItemReplyMark(box, question ?? null, scopeKey)
+  const reply = useBotItemReplyMark(box, question ?? null, scopeKey, onShowQuestion)
   // Replying to a question, the text has its own row and room for an answer from the start.
   const { field, stacked, height } = useBotItemCommentStacked(draft, reply.quote !== null)
   const caretToEnd = (): void => {
@@ -372,7 +375,7 @@ export function BotItemCommentBox({
         />
       ) : null}
       <NativeChatComposerNotices notices={notices} className="mb-1.5" />
-      {reply.quote ? <BotItemReplyingTo question={reply.quote.line} onHide={reply.hide} /> : null}
+      <BotItemReplyingTo mark={reply} />
       {images.length > 0 ? (
         // Two rows of chips (fewer in a short pane), then they scroll; the padding keeps rings and × in view.
         <div className="scrollbar-sleek mb-1.5 flex max-h-[min(128px,14cqh)] flex-wrap gap-2 overflow-y-auto px-1 pb-0.5 pr-2 pt-2">

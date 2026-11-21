@@ -102,7 +102,7 @@
       "noWorkspace": "Açık bir şey yok",
       "fullPageView": "Bu sayfanın kenar çubuğunda satırı yok",
       "archived": "Arşivlenmiş çalışma alanları kenar çubuğunda listelenmez",
-      "botsOff": "Botlar kapalı, bu yüzden bu bot listelenmiyor",
+      "botsOff": "Bots kapalı, bu yüzden bu bot listelenmiyor",
       "botHidden": "Bu bot duraklatıldı ve Bot seçenekleriyle gizlendi",
       "renameBotPage": "Bir botun veya grubun sayfası bir worktree değildir. Yeniden adlandırmak için satırının menüsündeki Yeniden Adlandır’ı kullanın.",
       "renameUnlisted": "Bu çalışma alanı şu anda kenar çubuğunda listelenmiyor, bu yüzden orada yeniden adlandırılamaz."
@@ -260,6 +260,10 @@
       "existingTitle": "{{distro}} ana makinesine ekle (önerilir)",
       "existingWhy": "{{distro}} zaten ana makine olarak çalışıyor; Git, dosyalar ve terminaller Windows dosya paylaşımı yerine doğrudan Linux'ta çalışır.",
       "existingAccept": "Ana makineye ekle"
+    },
+    "cardSlot": {
+      "needYouCount": "{{count}} sizi bekliyor",
+      "needsYou": "Sizi bekliyor"
     }
   },
   "app": {
@@ -1202,6 +1206,12 @@
         "ownShort": "Kendi becerileri",
         "showMore": "{{count}} tane daha göster"
       }
+    },
+    "automaticUpdates": {
+      "title": "Otomatik güncellemeler",
+      "description": "Desteklenen masaüstü kurulumlarında Orca, düzenli denetimler sırasında uygun güncellemeleri indirir ve bunları yüklemek için otomatik olarak yeniden başlatılır.",
+      "info": "Otomatik güncellemeler hakkında",
+      "saveFailed": "Otomatik güncelleme ayarı kaydedilemedi."
     }
   },
   "menu": {
@@ -2140,6 +2150,10 @@
       "projectHostSetupOptions": {
         "hostLocalGitProject": "Bu projenin eşleşen bir Git uzak deposu yok",
         "hostLocalFolderProject": "Klasör projeleri diğer sunuculara bağlanamaz"
+      },
+      "updateCheckClickOptions": {
+        "releaseHint": "{{rcKey}}+tıklama en son sürüm adayını (RC), {{perfKey}}+tıklama ise en son performans testi derlemesini denetler.",
+        "localMacBuildHint": "⌥+tıklama yerel bir macOS derlemesi seçmenizi sağlar."
       }
     },
     "hooks": {
@@ -8246,21 +8260,21 @@
         },
         "GeneralUpdateSettingsSection": {
           "8a52ca1d02": "Sürüm notları",
-          "d89806cc89": "yüklenmeye hazır.",
-          "a6b37929dc": "Sürüm",
-          "8311da27ba": "kullanılabilir.",
           "02dc082e70": "Güncelleme indirmesi başlatılamadı.",
           "ceb579abaf": "Uygulama güncellemelerini kontrol edin ve daha yeni bir Orca sürümü yükleyin.",
           "bd79d412f0": "Güncelleme kontrolü başarısız oldu. {{value0}}",
           "b9ad70c30d": "Güncelleme hatası. {{value0}}",
-          "2a48034c4c": "v{{value0}} indiriliyor... %{{value1}}",
           "f40d88390d": "En son sürümdesiniz.",
           "31fd7150cf": "Güncellemeler kontrol ediliyor...",
           "d69a09b672": "Güncellemeler açılışta otomatik olarak kontrol edilir.",
-          "e3b9d21c07": "kullanılabilir. Orca'yı sistem paket yöneticiniz aracılığıyla güncelleyin, Orca bu sürümü kendisi yükleyemez.",
           "6d27bd46e3": "Güncellemeleri Kontrol Et",
-          "857ca887da": "Güncellemeyi İndir (",
-          "c0a8f827c7": "Güncellemek İçin Yeniden Başlat ("
+          "downloadUpdate": "Güncellemeyi indir",
+          "restartToUpdate": "Güncellemek için yeniden başlat",
+          "versionAvailable": "{{version}} sürümü kullanılabilir.",
+          "externallyManagedVersionAvailable": "{{version}} sürümü kullanılabilir. Orca bu sürümü kendi başına yükleyemediği için sistem paket yöneticisini kullanarak güncelleyin.",
+          "versionReadyToInstall": "{{version}} sürümü yüklemeye hazır.",
+          "versionInstalling": "{{version}} sürümü yükleniyor.",
+          "downloadingVersion": "{{version}} sürümü indiriliyor (%{{percent}})…"
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "Bir çalışma alanının Şunda Aç menüsünden kullanılabilir uygulamaları seçin.",
@@ -11997,7 +12011,8 @@
           "updating": "Sunucular güncelleniyor…",
           "serverCountOne": "1 eşleştirilmiş sunucu",
           "fdd271abf0": "Uzak Orca Sunucuları",
-          "e4e5937469": "Güncellemeleri Kontrol Et"
+          "e4e5937469": "Güncellemeleri Kontrol Et",
+          "newerCount": "{{value0}} tanesi bu uygulamadan daha yeni"
         },
         "RemoteServerUpdateDialog": {
           "versionUnavailable": "Sürüm kullanılamıyor",
@@ -12358,20 +12373,17 @@
           "setUpRecipes": "Tarifleri ayarla"
         },
         "ReleaseBuildPicker": {
-          "build": "Derleme",
-          "searchLabel": "Derleme ara",
-          "searchPlaceholder": "Derleme ara…",
-          "noMatches": "Eşleşen derleme yok."
+          "build": "Sürüm",
+          "searchLabel": "Sürüm ara",
+          "searchPlaceholder": "Sürüm ara…",
+          "noMatches": "Eşleşen sürüm yok."
         },
         "ReleaseChannelSection": {
           "switchFailed": "O sürüme geçilemedi.",
-          "title": "Yayın kanalı",
-          "description": "Güncelleme kanallarını değiştirin veya daha eskiler dahil yayınlanmış herhangi bir sürüme geçin. Eski sürüme dönmeye izin verilir ve incelenmemiş sürümler bozuk olabilir.",
-          "devOnly": "Yalnızca geliştirici",
-          "channelAriaLabel": "Güncelleme kanalı",
-          "hourlyWarning": "Saatlik sürümler doğrudan main'den, test kapısı olmadan yayınlanır ve Windows sürümleri imzasızdır. Kararlı bir sürümü hazır tutun.",
-          "dailyWarning": "Günlük sürümler doğrudan main'den, test kapısı olmadan yayınlanır ve Windows sürümleri imzasızdır. Kararlı bir sürümü hazır tutun.",
-          "adhocWarning": "Adhoc sürümler henüz birleştirilmemiş bir branch'ten gelir ve Windows sürümleri imzasızdır. Kim oluşturduysa onu bırakabilir, kararlı bir sürümü hazır tutun.",
+          "title": "Güncelleme kanalı",
+          "description": "Güncelleme kanalını değiştirin veya daha eski sürümler de dahil olmak üzere yayımlanmış bir sürüme geçin. Doğrulanmamış sürümler çalışmayabilir.",
+          "devOnly": "Geliştirme için",
+          "adhocWarning": "Windows sürümleri imzasızdır. Sürümü hazırlayan kişi desteği bırakabilir. Elinizin altında kararlı bir sürüm bulundurun.",
           "loadingBuilds": "Sürümler yükleniyor…",
           "noBuilds": "Sürüm bulunamadı",
           "refresh": "Sürüm listesini yenile",
@@ -12381,9 +12393,21 @@
           "willSwitch": "{{value0}} → {{value1}}",
           "webUnavailable": "Sürüm değiştirme yalnızca masaüstü uygulamasında kullanılabilir.",
           "devChannelUnsupportedAria": "{{value0}} (yalnızca {{value1}})",
-          "devChannelUnsupported": "{{value0}} sürümleri yalnızca {{value1}} için üretilir. Linux, Kararlı veya RC'de kalır.",
+          "devChannelUnsupported": "“{{value0}}” kanalındaki sürümler yalnızca {{value1}} için üretilir. Linux’ta {{stable}} ve {{rc}} kanallarını kullanabilirsiniz.",
           "downloadInstaller": "Yükleyiciyi indir",
-          "manualInstallHint": "{{value0}} sürümleri Windows'ta imzasızdır, bu yüzden uygulama içi güncelleyici bunu imzalı bir sürümün üzerine yükleyemez. İndirilen yükleyiciyi bir kez çalıştırın; Windows bilinmeyen bir yayımcı konusunda uyaracaktır ve Kararlı'ya dönüş dahil sonraki her geçiş buradan çalışır."
+          "manualInstallHint": "“{{value0}}” kanalındaki sürümler Windows'ta imzasızdır, bu yüzden uygulama içi güncelleyici bunu imzalı bir sürümün üzerine yükleyemez. İndirilen yükleyiciyi bir kez çalıştırın; Windows bilinmeyen bir yayımcı konusunda uyaracaktır ve “{{stable}}” kanalına dönüş dahil sonraki her geçiş buradan çalışır.",
+          "stableLabel": "Kararlı",
+          "stableDescription": "Genel kullanım için kararlı sürümler.",
+          "rcLabel": "RC",
+          "rcDescription": "Kararlı sürümden önce yayımlanan sürüm adayları.",
+          "hourlyLabel": "Saatlik",
+          "hourlyDescription": "main dalından her saat derlenir.",
+          "dailyLabel": "Günlük",
+          "dailyDescription": "main dalından günde bir kez derlenir.",
+          "adhocLabel": "Tek seferlik",
+          "adhocDescription": "Değişiklikleri birleştirilmeden önce denemek için bir daldan üretilen tek seferlik sürümler.",
+          "devChannelPlatforms": "macOS ve Windows",
+          "scheduledWarning": "Bu sürümler zorunlu test olmadan yayımlanır. Windows sürümleri imzasızdır. Elinizin altında kararlı bir sürüm bulundurun."
         },
         "VoiceMicrophoneSetting": {
           "systemDefault": "Sistem varsayılanı",
@@ -19683,6 +19707,10 @@
         "permissionAuto": "Benim yerime onayla",
         "permissionAutoDescription": "Onay isteklerini sizin yerinize değerlendirir",
         "permissionFullAccess": "Tam erişim",
+        "permissionAgentSettings": "{{agent}} ayarları",
+        "permissionAgentSettingsUsedHint": "{{agent}} izin ayarlarınızı kullanır.",
+        "permissionAgentSettingsUnnamedHint": "{{agent}} izin ayarlarınızı kullanır. Orca bu modu gösteremiyor.",
+        "permissionFromAgentSettings": "{{mode}}, {{agent}} ayarlarından",
         "permissionFullAccessDescription": "Düzenleme veya komutlardan önce asla sormaz",
         "permissionFullAccessCodexDescription": "Asla sormaz; tüm dosyaları düzenleyebilir ve ağı kullanabilir",
         "permissionFullAccessSharedDescription": "Düzenleme veya komutlardan önce asla sormaz",
@@ -19697,6 +19725,7 @@
         "imageUnavailable": "Önizleme kullanılamıyor",
         "exitPlanMode": "Plan modundan çık",
         "moreControls": "Diğer sohbet kontrolleri",
+        "permissionAppliesNextMessage": "{{saved}} sonraki mesajınızda geçerli olur; şu anda {{active}} kullanılıyor",
         "botFor": "Amaç: {{detail}}",
         "bots": "Botlar"
       },
@@ -22616,8 +22645,8 @@
     "failure": {
       "releaseNotReady": "Bu cihaz için daha yeni bir sürüm henüz kullanıma sunulmadı. Daha sonra tekrar kontrol edin.",
       "updateServerUnreachable": "Güncelleme sunucusuna ulaşılamadı. Birkaç dakika sonra tekrar deneyin.",
-      "channelUnsupportedPlatform": "{{channel}} sürümleri yalnızca macOS ve Windows için üretilir.",
-      "unsignedDevChannel": "{{channel}} sürümleri imzasızdır ve bu imzalı sürüm yalnızca Orca'nın yayımcısının imzaladığı güncellemeleri yükler. Yükleyiciyi sürüm sayfasından indirip bir kez çalıştırın; bundan sonra Kararlı kanalına dönüş dahil güncellemeler normal şekilde çalışır.",
+      "channelUnsupportedPlatform": "“{{channel}}” kanalındaki sürümler yalnızca macOS ve Windows için üretilir.",
+      "unsignedDevChannel": "“{{channel}}” kanalındaki sürümler imzasızdır. Geçerli imzalı sürüm yalnızca Orca’nın yayımcısının imzaladığı güncellemeleri yükler. Yükleyiciyi sürümler sayfasından indirip bir kez çalıştırın. Bundan sonra Kararlı kanalına dönüş dahil güncellemeler normal şekilde çalışır.",
       "linuxPackageMissing": "İndirilen paket artık güncelleme önbelleğinde değil. Güncellemeyi yeniden indirin veya resmi sürüm sayfasından edinin.",
       "linuxPackageNotRegular": "İndirilen paket artık güncelleme önbelleğinde geçerli bir dosya değil. Güncellemeyi yeniden indirin veya resmi sürüm sayfasından edinin.",
       "linuxPackageHashMismatch": "İndirilen paket artık doğrulanmış sürümle eşleşmediğinden Orca paketi bir paket yöneticisine aktarmayacak. Güncellemeyi yeniden indirin veya resmi sürüm sayfasından edinin.",
@@ -22632,8 +22661,8 @@
       "unknownReleaseChannel": "Bilinmeyen yayın kanalı \"{{channel}}\".",
       "invalidReleaseTag": "\"{{tag}}\" geçerli bir sürüm etiketi değil.",
       "releaseRepoNotFound": "{{repo}} adresinde sürümlerin yayımlandığı bir repo bulunamadı.",
-      "releaseListFailed": "{{channel}} sürümleri listelenemedi (HTTP {{status}}).",
-      "releaseListUnreadable": "{{channel}} sürüm listesi okunamadı.",
+      "releaseListFailed": "“{{channel}}” kanalındaki sürümler listelenemedi (HTTP {{status}}).",
+      "releaseListUnreadable": "“{{channel}}” kanalının sürüm listesi okunamadı.",
       "rateLimitedSoon": "GitHub istek sınırına ulaşıldı. Birkaç dakika sonra tekrar deneyin.",
       "rateLimitedSoonSignedOut": "GitHub istek sınırına ulaşıldı. Birkaç dakika sonra tekrar deneyin veya Orca'nın hesabınızdaki daha yüksek sınırı kullanabilmesi için `gh auth login` komutunu çalıştırın.",
       "rateLimitedInMinute": "GitHub istek sınırına ulaşıldı. Yaklaşık bir dakika sonra tekrar deneyin.",
@@ -22641,7 +22670,10 @@
       "rateLimitedInMinutes_one": "GitHub istek sınırına ulaşıldı. Yaklaşık {{count}} dakika sonra tekrar deneyin.",
       "rateLimitedInMinutes_other": "GitHub istek sınırına ulaşıldı. Yaklaşık {{count}} dakika sonra tekrar deneyin.",
       "rateLimitedInMinutesSignedOut_one": "GitHub istek sınırına ulaşıldı. Yaklaşık {{count}} dakika sonra tekrar deneyin veya Orca'nın hesabınızdaki daha yüksek sınırı kullanabilmesi için `gh auth login` komutunu çalıştırın.",
-      "rateLimitedInMinutesSignedOut_other": "GitHub istek sınırına ulaşıldı. Yaklaşık {{count}} dakika sonra tekrar deneyin veya Orca'nın hesabınızdaki daha yüksek sınırı kullanabilmesi için `gh auth login` komutunu çalıştırın."
+      "rateLimitedInMinutesSignedOut_other": "GitHub istek sınırına ulaşıldı. Yaklaşık {{count}} dakika sonra tekrar deneyin veya Orca'nın hesabınızdaki daha yüksek sınırı kullanabilmesi için `gh auth login` komutunu çalıştırın.",
+      "automaticInstallCheckpointFailed": "Orca, yeniden başlamadan önce geçerli pencereyi kaydedemedi. Güncellemeyi yeniden yüklemeyi deneyin.",
+      "automaticInstallTerminalBusy": "Yeniden başlatma bazı terminalleri kapatır. Orca daha sonraki bir güncelleme denetiminde yeniden dener.",
+      "macStagingTimeout": "macOS hâlâ güncellemeyi hazırlıyor. Bu durum sürerse Orca’dan çıkıp uygulamayı yeniden açın."
     }
   },
   "jira": {
@@ -23929,7 +23961,9 @@
       "title": "Etkinlik"
     },
     "connectors": {
-      "tab": "Bağlayıcılar"
+      "tab": "Bağlayıcılar",
+      "needYou_one": "{{count}} sizi bekliyor",
+      "needYou_other": "{{count}} sizi bekliyor"
     },
     "files": {
       "tab": "Dosyalar"
@@ -23952,24 +23986,24 @@
       "twiceDaily": "günde iki kez"
     },
     "palette": {
-      "placeholder": "Botlarda, sohbetlerde, terminallerde, çalışma alanlarında, görevlerde, ayarlarda ve işlemlerde ara...",
-      "description": "Botlarda, sohbetlerde, terminallerde, çalışma alanlarında, görevlerde, ayarlarda ve işlemlerde ara",
-      "scopedPlaceholder": "Botlarda ara...",
-      "scopedLabel": "Botlarda ara",
-      "scopeHint": "Yalnızca botları göstermek için @ yazın",
-      "chip": "Botlar",
-      "chipLabel": "Botlar, her şeyi göster",
+      "placeholder": "Bots’ta, sohbetlerde, terminallerde, çalışma alanlarında, görevlerde, ayarlarda ve işlemlerde ara...",
+      "description": "Bots’ta, sohbetlerde, terminallerde, çalışma alanlarında, görevlerde, ayarlarda ve işlemlerde ara",
+      "scopedPlaceholder": "Bots’ta ara...",
+      "scopedLabel": "Bots’ta ara",
+      "scopeHint": "Yalnızca bots’u göstermek için @ yazın",
+      "chip": "Bots",
+      "chipLabel": "Bots, her şeyi göster",
       "searchEverything": "Her yerde \"{{text}}\" ara",
       "noMatch": "\"{{text}}\" ile eşleşen bot yok",
       "noBotsYet": "Henüz bot yok",
-      "filtersPaused": "Filtreler botlara değil çalışma alanlarına uygulanır",
+      "filtersPaused": "Filtreler bots’a değil çalışma alanlarına uygulanır",
       "showEverything": "Her şeyi göster",
-      "footerBots": "Botlar",
+      "footerBots": "Bots",
       "matchesPurpose": "Amacıyla eşleşiyor.",
-      "scopedStatus_one": "Yalnızca botlar gösteriliyor. {{count}} sonuç bulundu.",
-      "scopedStatus_other": "Yalnızca botlar gösteriliyor. {{count}} sonuç bulundu.",
-      "sidebarSearchLabel": "Botlarda, çalışma alanlarında ve tarayıcı sekmelerinde ara",
-      "section": "Botlar"
+      "scopedStatus_one": "Yalnızca bots gösteriliyor. {{count}} sonuç bulundu.",
+      "scopedStatus_other": "Yalnızca bots gösteriliyor. {{count}} sonuç bulundu.",
+      "sidebarSearchLabel": "Bots’ta, çalışma alanlarında ve tarayıcı sekmelerinde ara",
+      "section": "Bots"
     },
     "templates": {
       "browse": "Şablonlara göz at",
@@ -24129,8 +24163,8 @@
       "worker": "Çalışan: {{name}}"
     },
     "panel": {
-      "needYou_one": "Sizi bekleyen: {{count}}",
-      "needYou_other": "Sizi bekleyen: {{count}}",
+      "needYou_one": "{{count}} sizi bekliyor",
+      "needYou_other": "{{count}} sizi bekliyor",
       "working": "{{count}} çalışıyor",
       "working_one": "{{count}} çalışıyor",
       "working_other": "{{count}} çalışıyor",

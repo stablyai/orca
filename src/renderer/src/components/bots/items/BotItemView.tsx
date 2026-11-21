@@ -35,6 +35,7 @@ import { BotItemActivityList } from './BotItemActivityList'
 import { BotItemCancelDialog } from './BotItemCancelDialog'
 import { BotItemClampedText } from './BotItemClampedText'
 import { BotItemCommentBox, type BotItemCommentBoxHandle } from './BotItemCommentBox'
+import { revealBotItemComment } from './bot-item-comment-reveal'
 import { BotItemHeader } from './BotItemHeader'
 import { setBotItemsStatus } from './use-bot-items'
 import { useBotItemSnoozing } from './BotItemSnooze'
@@ -388,6 +389,9 @@ export function BotItemBody({
                 attachTo={attachTo}
                 nav={nav}
                 question={waitingOn}
+                onShowQuestion={(eventId) =>
+                  revealBotItemComment(scrollRef.current, eventId, 'flash')
+                }
                 onSend={fromBox}
               />
             )}

@@ -715,8 +715,8 @@ describe('Tidy-up on ops, for a bot in the pilot', () => {
     })
   })
 
-  it('never falls back to the whole-file reply for a pilot bot whose file is mostly prose', async () => {
-    const prose = `${SHOWN}${Array.from({ length: 6 }, (_, i) => `prose ${i}`).join('\n')}\n`
+  it('never falls back to the whole-file reply for a pilot bot whose file is mostly not facts', async () => {
+    const prose = `${SHOWN}${Array.from({ length: 6 }, (_, i) => `| row ${i} |`).join('\n')}\n`
     const run = harness({ memory: prose, reply: reply(INDEX) })
     run.files.set(join(HOME, TIDY_UP_OPS_PILOT_FILE), '')
     await run.tick()

@@ -84,6 +84,10 @@ export function* sqlJournalStatusItems(
       predicates.push(
         "root=1 AND message_role='assistant' AND command_entry=0 AND assistant_prose=1"
       )
+      if (selection.turnItemId !== undefined) {
+        predicates.push('turn_item_id=?')
+        params.push(selection.turnItemId)
+      }
       break
     case 'async-question-candidates':
       // Newest first from the partial index; the shared rule decides which ones are questions.

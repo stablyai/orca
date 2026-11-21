@@ -9,6 +9,10 @@ import {
   followWorktreeLifecycleForBots
 } from './bot-change-notices'
 import { botChangeBotIds, botChangeConcerns } from '../../shared/bots/bot-change-scope'
+import {
+  BOT_ITEMS_WORKER_LINKED,
+  botItemsNoticeParts
+} from '../../shared/bots/bot-items-notice-parts'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn(() => ({})) }))
@@ -53,7 +57,8 @@ describe('BotChangeNotices', () => {
     const mixed = emit.mock.lastCall?.[0]
     expect(mixed).toEqual({
       kinds: ['workers', 'automations'],
-      kindBots: { workers: ['bot-a'] }
+      kindBots: { workers: ['bot-a'] },
+      namesItems: true
     })
     expect(botChangeConcerns(mixed, { botId: 'bot-b', kinds: ['workers'] })).toBe(false)
     expect(botChangeConcerns(mixed, { botId: 'bot-a', kinds: ['workers'] })).toBe(true)
@@ -113,6 +118,29 @@ describe('BotChangeNotices', () => {
     notices.changed({ botIds: ['bot-a'], kinds: ['items'] })
     await vi.advanceTimersByTimeAsync(0)
     expect(emit.mock.calls).toEqual([[{ botIds: ['bot-a'], kinds: ['items'] }]])
+  })
+
+  it("names each bot's changed items while every change of them named them", () => {
+    const emit = vi.fn()
+    const notices = new BotChangeNotices({ emit, hasBots: () => true })
+    notices.changed({ botIds: ['bot-a'], kinds: ['items'], itemUids: { 'bot-a': ['i1'] } })
+    notices.changed({
+      botIds: ['bot-a', 'bot-b'],
+      kinds: ['items'],
+      itemUids: { 'bot-a': ['i2'], 'bot-b': ['i3'] }
+    })
+    notices.changed({ botIds: ['bot-b'], kinds: ['items'] })
+    vi.advanceTimersByTime(0)
+    const notice = emit.mock.calls[0]![0]
+    expect(notice.itemUids).toEqual({ 'bot-a': ['i1', 'i2'] })
+    expect(botItemsNoticeParts(notice, 'bot-a')).toEqual(['i1', 'i2'])
+    expect(botItemsNoticeParts(notice, 'bot-b')).toBeNull()
+    // A workers change reads the items that link a worker; from an older host, the whole list.
+    notices.changed({ botIds: ['bot-a'], kinds: ['workers'] })
+    vi.advanceTimersByTime(500)
+    const workers = emit.mock.calls[1]![0]
+    expect(botItemsNoticeParts(workers, 'bot-a')).toEqual([BOT_ITEMS_WORKER_LINKED])
+    expect(botItemsNoticeParts({ ...workers, namesItems: undefined }, 'bot-a')).toBeNull()
   })
 
   it('stays quiet on a host without bots', () => {

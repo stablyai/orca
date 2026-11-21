@@ -116,6 +116,7 @@ export function readJournalSqlStatusState(
     latestRequest: requests.latestRequest,
     ...(turnFailure ? { turnFailure } : {}),
     ...(requests.quietAnswer ? { quietAnswer: true as const } : {}),
+    ...(requests.turnsBehind ? { turnsBehind: requests.turnsBehind } : {}),
     owesWork: status !== 'idle' && owesWork,
     pendingPromptIds: status === 'attention' ? actionable.map((item) => item.itemId) : [],
     summary: {
