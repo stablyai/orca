@@ -140,6 +140,12 @@ export class ProjectCollectionOperations {
     return getProjectGroupOperations(this).updateProjectGroup(groupId, updates)
   }
 
+  setProjectGroupParents(
+    moves: Parameters<ProjectGroupPersistenceOperations['setProjectGroupParents']>[0]
+  ): ProjectGroup[] {
+    return getProjectGroupOperations(this).setProjectGroupParents(moves)
+  }
+
   deleteProjectGroup(groupId: string): boolean {
     return getProjectGroupOperations(this).deleteProjectGroup(groupId)
   }
