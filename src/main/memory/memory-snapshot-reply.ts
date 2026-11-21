@@ -211,10 +211,10 @@ function fittingHistory(
 }
 
 /**
- * The snapshot as sent to a paired client, within `budgetBytes` of reply content. Near the limit it
- * drops older history, then all history, then everything chat sampling adds (chat lists, chat-only
- * rows, the agent total and chats' share of the totals), trying history again, and last pane keys
- * with history, so a host never sends more than its terminals alone would.
+ * The snapshot as sent to a paired client, within `budgetBytes` of reply content. Chat detail is
+ * extra, so near the limit it goes first (chat lists, chat-only rows, the agent total and chats'
+ * share of the totals); then older history, all history, and last pane keys. A host never gives up
+ * what its terminals alone would have sent.
  */
 export function toMemorySnapshotReply(
   snapshot: MemorySnapshot,
@@ -224,17 +224,17 @@ export function toMemorySnapshotReply(
   for (const worktree of snapshot.worktrees) {
     estimate += rowBytes(worktree) + worktree.history.length * HISTORY_POINT_BYTES
   }
-  // The estimate is an upper bound, so most hosts are never measured.
-  if (estimate <= budgetBytes - ESTIMATE_RESERVE_BYTES) {
+  // The estimate is an upper bound, so most hosts are never measured; a measurement stops past its limit.
+  if (
+    estimate <= budgetBytes - ESTIMATE_RESERVE_BYTES ||
+    jsonBytes(snapshot, budgetBytes) <= budgetBytes
+  ) {
     return snapshot
   }
-  // A measurement past the budget stops early, so no host pays to size more than it may send.
-  const measureLimit = budgetBytes + allHistoryJsonBytes(snapshot, Number.POSITIVE_INFINITY)
-  const full = fittingHistory(snapshot, jsonBytes(snapshot, measureLimit), budgetBytes)
-  if (full) {
-    return full
-  }
   const terminals = terminalOnlyReply(snapshot)
-  const withKeys = fittingHistory(terminals, jsonBytes(terminals, measureLimit), budgetBytes)
-  return withKeys ?? withHistory(withoutPaneKeys(terminals), 0)
+  const measureLimit = budgetBytes + allHistoryJsonBytes(terminals, Number.POSITIVE_INFINITY)
+  return (
+    fittingHistory(terminals, jsonBytes(terminals, measureLimit), budgetBytes) ??
+    withHistory(withoutPaneKeys(terminals), 0)
+  )
 }

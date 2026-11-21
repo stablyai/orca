@@ -61,11 +61,13 @@ describe('the memory snapshot sent over RPC', () => {
     expect(toMemorySnapshotReply(snapshot)).toBe(snapshot)
   })
 
-  it('keeps every row and 20 history points when the full history would not fit', () => {
+  it('gives up chat detail before any history, then keeps 20 points of every row', () => {
     const history = Array.from({ length: 200 }, () => 123_456_789_012)
-    const worktrees = Array.from({ length: 2_000 }, (_, i) => row(i, 300, history, false))
+    const worktrees = Array.from({ length: 2_000 }, (_, i) => row(i, 300, history, true))
 
     const reply = toMemorySnapshotReply(snapshotOf(worktrees, history))
+
+    expect(reply.worktrees[0]?.chats).toBeUndefined()
 
     expect(Buffer.byteLength(JSON.stringify(reply))).toBeLessThan(MIB4)
     expect(reply.worktrees).toHaveLength(2_000)

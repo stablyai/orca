@@ -37,7 +37,8 @@ function LiveTitledSessionRow({
   tabId,
   ...props
 }: SessionRowProps & { tabId: string }): React.JSX.Element {
-  const liveTitle = useAppStore((s) => firstRuntimePaneTitle(s.runtimePaneTitlesByTabId[tabId]))
+  // Select the tab's title map, not a derived string, so unrelated store writes do no scan.
+  const liveTitle = firstRuntimePaneTitle(useAppStore((s) => s.runtimePaneTitlesByTabId[tabId]))
   return (
     <SessionRowView
       {...props}
