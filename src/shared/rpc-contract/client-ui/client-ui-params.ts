@@ -185,6 +185,7 @@ export const UiUpdateFields = z
       .optional(),
     showDotfilesByWorktree: z.record(z.string(), z.boolean()).optional(),
     notificationsMutedByWorktree: z.record(z.string(), z.boolean()).optional(),
+    notificationsMutedByTabId: z.record(z.string(), z.boolean()).optional(),
     collapsedGroups: StringArray.optional(),
     uiZoomLevel: z.number().finite().optional(),
     editorFontZoomLevel: z.number().finite().optional(),
