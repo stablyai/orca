@@ -16,6 +16,8 @@ export type AgentJournalConnectorDelivery = {
  *  what its admission committed (journal_connector_replies.claim_message_id), never this list. */
 export type AgentJournalConnectorClaim = {
   cutTurnId: string
+  /** Which cut it is: a restart's, or a usage limit's. */
+  cutKind: 'restart' | 'usage_limit'
   origin: AgentJournalConnectorDelivery[]
 }
 

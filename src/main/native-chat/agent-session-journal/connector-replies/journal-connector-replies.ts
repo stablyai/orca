@@ -26,14 +26,7 @@ export function recordJournalConnectorReplies(
   queued: boolean,
   body: AgentJournalMessageItem
 ): void {
-  if (body.connectorClaim) {
-    db.prepare(`UPDATE journal_connector_replies SET claim_message_id=?
-      WHERE session_id=? AND cut_turn_id=? AND outcome IS NULL AND claim_message_id IS NULL`).run(
-      messageId,
-      target.sessionId,
-      body.connectorClaim.cutTurnId
-    )
-  }
+  claimJournalConnectorReplies(db, target, messageId, body)
   const stamp = body.connectorDelivery
   if (!stamp || !answersThroughOutbox(stamp.conversation.source)) {
     return
@@ -60,6 +53,52 @@ export function recordJournalConnectorReplies(
 const EXPECT_OPEN = 'cut_turn_id IS NULL AND claim_message_id IS NULL'
 const EXPECT_CLAIMED = 'claim_message_id=?'
 const EXPECT_CUT = 'cut_turn_id=? AND claim_message_id IS NULL'
+
+/** A continuation's admission claims the unclaimed rows its cut owes: those already cut, and the
+ *  still open ones its claim names (the cut's own deliveries, which a classification after the
+ *  launch would cut). In the admission's transaction. */
+export function claimJournalConnectorReplies(
+  db: Database.Database,
+  target: Target,
+  messageId: string,
+  body: AgentJournalMessageItem
+): void {
+  const claim = body.connectorClaim
+  if (!claim) {
+    return
+  }
+  const { cutTurnId, cutKind } = claim
+  db.prepare(`UPDATE journal_connector_replies SET claim_message_id=?
+    WHERE session_id=? AND cut_turn_id=? AND outcome IS NULL AND claim_message_id IS NULL`).run(
+    messageId,
+    target.sessionId,
+    cutTurnId
+  )
+  const open = db.prepare(`UPDATE journal_connector_replies
+    SET claim_message_id=?,cut_turn_id=?,cut_kind=?
+    WHERE session_id=? AND account=? AND delivery_id=? AND outcome IS NULL AND ${EXPECT_OPEN}`)
+  for (const stamp of claim.origin) {
+    for (const deliveryId of [stamp.deliveryId, ...(stamp.carried ?? [])]) {
+      open.run(messageId, cutTurnId, cutKind, target.sessionId, stamp.account, deliveryId)
+    }
+  }
+}
+
+/** A queued continuation's card was handed over as a send of its own id: what the card claimed is
+ *  that send's, so its turn fills them. In the handover's transaction. */
+export function repointJournalConnectorClaim(
+  db: Database.Database,
+  target: Target,
+  cardId: string,
+  messageId: string
+): void {
+  db.prepare(`UPDATE journal_connector_replies SET claim_message_id=?
+    WHERE session_id=? AND claim_message_id=? AND outcome IS NULL`).run(
+    messageId,
+    target.sessionId,
+    cardId
+  )
+}
 
 /** The first fill wins (O7): a row already filled keeps its outcome, and a row in another state than
  *  the fill expects keeps its own. */

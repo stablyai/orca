@@ -5,6 +5,7 @@ import { lifecycleFacts } from '../journal-domain-lifecycle.test-fixture'
 import { commandReceiptFixture } from '../writing/command-receipt-test-support'
 import type { JournalWriterCommand } from '../journal-writer-command'
 import {
+  claimJournalConnectorReplies,
   clearRewoundJournalConnectorReplies,
   cutJournalConnectorReplies,
   forgetJournalConnectorReplies,
@@ -12,6 +13,7 @@ import {
   readJournalConnectorReplies,
   recutJournalConnectorReplies,
   releaseJournalConnectorClaim,
+  repointJournalConnectorClaim,
   sentJournalConnectorReplies
 } from './journal-connector-replies'
 import { ensureJournalConnectorRepliesSchema } from './journal-connector-replies-schema'
@@ -221,7 +223,7 @@ it('lets only the continuation that claimed a cut’s rows fill them', async () 
     kind: 'message',
     role: 'user',
     blocks: [{ type: 'text', text: 'Continue.' }],
-    connectorClaim: { cutTurnId: 'turn-1', origin: [] }
+    connectorClaim: { cutTurnId: 'turn-1', cutKind: 'restart', origin: [] }
   }
   await f.send('continue-1', claim)
   // A second continuation of the same cut claims nothing: the first holds the rows.
@@ -269,7 +271,7 @@ it('gives a removed continuation’s rows back to their cut, and drops a cut’s
     kind: 'message',
     role: 'user',
     blocks: [{ type: 'text', text: 'Continue.' }],
-    connectorClaim: { cutTurnId: 'turn-1', origin: [] }
+    connectorClaim: { cutTurnId: 'turn-1', cutKind: 'restart', origin: [] }
   })
   f.db.exec(`CREATE TEMP TABLE IF NOT EXISTS journal_rewind_removals(item_id TEXT PRIMARY KEY)`)
   f.db.exec(`INSERT INTO journal_rewind_removals VALUES ('orca:continue-1'), ('orca:second')`)
@@ -288,4 +290,38 @@ it('gives a removed continuation’s rows back to their cut, and drops a cut’s
     ['d2', 'cleared']
   ])
   expect(rows.map((row) => row.fill?.failure)).toEqual([undefined, undefined])
+})
+
+it('claims a cut’s still-open rows its claim names, and moves a queued claim to the send it became', async () => {
+  const f = fixture()
+  await f.send('first', stamped('review', { deliveryId: 'd1', carried: ['d2'] }))
+  await f.send('other', stamped('unrelated', { deliveryId: 'd3' }))
+  // Admitted before any classification cut the rows: the claim takes the ones it names.
+  const origin = [
+    {
+      account: 'account-a',
+      conversation: SLACK,
+      deliveryId: 'd1',
+      carried: ['d2']
+    }
+  ]
+  claimJournalConnectorReplies(f.db, { sessionId: 'chat-test', epoch: 'epoch' }, 'card-1', {
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text: 'Continue.' }],
+    connectorClaim: { cutTurnId: 'turn-1', cutKind: 'restart', origin }
+  })
+  // Its card was handed over as a send of its own id.
+  repointJournalConnectorClaim(f.db, { sessionId: 'chat-test', epoch: 'epoch' }, 'card-1', 'send-1')
+  expect(
+    readJournalConnectorReplies(f.db).map((row) => [
+      row.deliveryId,
+      row.cut?.turnId,
+      row.claimMessageId
+    ])
+  ).toEqual([
+    ['d1', 'turn-1', 'send-1'],
+    ['d2', 'turn-1', 'send-1'],
+    ['d3', undefined, undefined]
+  ])
 })

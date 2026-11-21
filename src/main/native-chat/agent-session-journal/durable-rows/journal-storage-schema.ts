@@ -207,7 +207,11 @@ export const storedMessageBody = messageBody.extend({
   connectorConversation: z.object({ source: z.string(), externalId: z.string() }).optional(),
   connectorDelivery: storedConnectorDelivery.optional(),
   connectorClaim: z
-    .object({ cutTurnId: z.string(), origin: z.array(storedConnectorDelivery) })
+    .object({
+      cutTurnId: z.string(),
+      cutKind: z.enum(['restart', 'usage_limit']),
+      origin: z.array(storedConnectorDelivery)
+    })
     .optional(),
   tookOver: z
     .object({ workspace: z.string(), goal: text, home: z.literal(true).optional() })
