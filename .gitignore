@@ -163,3 +163,7 @@ ci-shards/
 /.build/windows-native-benchmark/
 
 .local/static-analysis-research/
+
+# fork: rodrillet/orca docs
+!docs/fork/
+!docs/fork/**
