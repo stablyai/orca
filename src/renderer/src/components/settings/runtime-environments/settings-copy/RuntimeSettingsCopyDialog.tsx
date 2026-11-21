@@ -32,8 +32,9 @@ export function RuntimeSettingsCopyDialog({
   const finished = state.phase === 'applied'
   return (
     <Dialog open={copy.open} onOpenChange={(open) => (open ? undefined : copy.close())}>
-      {/* A copy in progress still writes after the dialog closes, so it cannot be dismissed. */}
-      <DialogContent className="sm:max-w-md" busy={applying}>
+      {/* A copy in progress still writes after the dialog closes, so it cannot be dismissed.
+          Scrollable keeps the buttons reachable when a long list meets a short window. */}
+      <DialogContent className="sm:max-w-md" busy={applying} scrollable>
         <DialogHeader>
           <DialogTitle>
             {t('auto.components.settings.settingsCopy.title', 'Copy settings with {{name}}', {
