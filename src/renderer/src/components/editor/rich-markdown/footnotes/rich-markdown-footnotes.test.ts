@@ -302,11 +302,15 @@ describe('rich Markdown GFM footnotes', () => {
     try {
       const refElement = host.querySelector<HTMLElement>(`sup[${FOOTNOTE_REF_ATTR}="1"]`)
       const defElement = host.querySelector<HTMLElement>(`div[${FOOTNOTE_DEF_ATTR}="1"]`)
-      const backButton = defElement?.querySelector<HTMLButtonElement>(
+      const markerButton = defElement?.querySelector<HTMLButtonElement>(
         'button.rich-markdown-footnote-def-label'
       )
+      const backButton = defElement?.querySelector<HTMLButtonElement>(
+        'button.rich-markdown-footnote-def-backref'
+      )
       expect(refElement?.querySelector('span[role="link"]')?.textContent).toBe('1')
-      expect(backButton?.textContent).toBe('[^1]')
+      expect(markerButton?.textContent).toBe('1.')
+      expect(backButton?.textContent).toBe('\u21a9')
 
       const defScrollSpy = vi.fn()
       const refScrollSpy = vi.fn()
@@ -371,9 +375,11 @@ describe('rich Markdown GFM footnotes', () => {
       expect(defScrollSpy).toHaveBeenCalledTimes(3)
       expect(collectFootnoteNodes(editor).refs).toEqual(['1'])
 
-      // Clicking the definition marker jumps back to the inline reference.
-      backButton?.click()
+      // Clicking either the definition marker or backref button jumps back to the inline reference.
+      markerButton?.click()
       expect(refScrollSpy).toHaveBeenCalledTimes(1)
+      backButton?.click()
+      expect(refScrollSpy).toHaveBeenCalledTimes(2)
     } finally {
       editor.destroy()
       root.remove()

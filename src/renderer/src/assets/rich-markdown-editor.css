@@ -1174,32 +1174,27 @@
 .rich-markdown-editor sup[data-rich-markdown-footnote-ref] {
   line-height: 0;
   margin-inline: 1px;
-  border-radius: 4px;
+  border-radius: 3px;
 }
 
 .rich-markdown-editor .rich-markdown-footnote-ref {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.35em;
-  padding: 0 0.3em;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--color-theme-accent) 10%, transparent);
+  display: inline;
+  padding: 0 2px;
+  border-radius: 3px;
   color: var(--text-link, #0969da);
   font-size: 0.78em;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
-  line-height: 1.35;
-  vertical-align: 0.15em;
-  text-decoration: none;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-underline-offset: 0.2em;
   transition:
     background-color 120ms ease,
-    color 120ms ease;
+    text-decoration-color 120ms ease;
 }
 
 .dark .rich-markdown-editor .rich-markdown-footnote-ref {
   color: var(--text-link, #58a6ff);
-  background: color-mix(in srgb, var(--color-theme-accent) 16%, transparent);
 }
 
 .rich-markdown-editor .rich-markdown-footnote-ref[data-actionable] {
@@ -1207,29 +1202,28 @@
 }
 
 .rich-markdown-editor .rich-markdown-footnote-ref[data-actionable]:hover {
-  background: color-mix(in srgb, var(--color-theme-accent) 20%, transparent);
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
+  background: color-mix(in srgb, var(--color-theme-accent) 14%, transparent);
+  text-decoration-color: currentColor;
 }
 
 .rich-markdown-editor .rich-markdown-footnote-def {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  column-gap: 10px;
+  grid-template-columns: minmax(1.75em, auto) minmax(0, 1fr) auto;
+  column-gap: 8px;
   align-items: start;
-  margin: 0.45em 0;
-  padding: 6px 8px;
+  margin: 0.5em 0;
+  padding: 5px 8px;
   border-radius: 6px;
   color: var(--foreground);
-  font-size: 0.92em;
-  line-height: 1.55;
+  font-size: 0.95em;
+  line-height: 1.65;
   transition: background-color 180ms ease;
 }
 
 /* Visually separate the start of a footnotes group from preceding prose. */
 .rich-markdown-editor :not(.rich-markdown-footnote-def) + .rich-markdown-footnote-def {
-  margin-top: 1.5em;
-  padding-top: 1em;
+  margin-top: 1.75em;
+  padding-top: 1.1em;
   border-top: 1px solid var(--border);
   border-top-left-radius: 0;
   border-top-right-radius: 0;
@@ -1237,37 +1231,40 @@
 
 .rich-markdown-editor .rich-markdown-footnote-def-marker {
   display: flex;
-  align-items: center;
-  padding-top: 0.1em;
+  align-items: baseline;
+  justify-content: flex-end;
   user-select: none;
 }
 
 .rich-markdown-editor .rich-markdown-footnote-def-label {
   display: inline-flex;
-  align-items: center;
-  padding: 1px 6px;
-  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  align-items: baseline;
+  padding: 0 2px;
+  border: none;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+  background: transparent;
   color: var(--muted-foreground);
-  font-family: var(--font-mono, monospace);
-  font-size: 0.82em;
+  font-size: inherit;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
-  line-height: 1.4;
+  line-height: inherit;
   cursor: pointer;
   transition:
     background-color 120ms ease,
-    border-color 120ms ease,
     color 120ms ease;
 }
 
 .rich-markdown-editor .rich-markdown-footnote-def-label:hover {
-  border-color: color-mix(in srgb, var(--foreground) 22%, var(--border));
   background: var(--accent);
-  color: var(--foreground);
+  color: var(--text-link, #0969da);
 }
 
-.rich-markdown-editor .rich-markdown-footnote-def-label:focus-visible {
+.dark .rich-markdown-editor .rich-markdown-footnote-def-label:hover {
+  color: var(--text-link, #58a6ff);
+}
+
+.rich-markdown-editor .rich-markdown-footnote-def-label:focus-visible,
+.rich-markdown-editor .rich-markdown-footnote-def-backref:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 1px;
   color: var(--foreground);
@@ -1285,6 +1282,39 @@
   margin-bottom: 0;
 }
 
+.rich-markdown-editor .rich-markdown-footnote-def-actions {
+  display: flex;
+  align-items: center;
+  user-select: none;
+}
+
+.rich-markdown-editor .rich-markdown-footnote-def-backref {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-link, #0969da);
+  font-size: 0.92em;
+  line-height: inherit;
+  opacity: 0.72;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    opacity 120ms ease;
+}
+
+.dark .rich-markdown-editor .rich-markdown-footnote-def-backref {
+  color: var(--text-link, #58a6ff);
+}
+
+.rich-markdown-editor .rich-markdown-footnote-def-backref:hover {
+  background: var(--accent);
+  opacity: 1;
+}
+
 .rich-markdown-editor .rich-markdown-footnote-def.rich-markdown-footnote-jump-target {
   background: color-mix(in srgb, var(--color-theme-accent) 12%, transparent);
   box-shadow: inset 2px 0 0 var(--color-theme-accent);
@@ -1300,7 +1330,8 @@
 @media (prefers-reduced-motion: reduce) {
   .rich-markdown-editor .rich-markdown-footnote-ref,
   .rich-markdown-editor .rich-markdown-footnote-def,
-  .rich-markdown-editor .rich-markdown-footnote-def-label {
+  .rich-markdown-editor .rich-markdown-footnote-def-label,
+  .rich-markdown-editor .rich-markdown-footnote-def-backref {
     transition: none;
   }
 }
