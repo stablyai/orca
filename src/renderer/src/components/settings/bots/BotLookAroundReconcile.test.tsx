@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-// Review findings CS-C4-1 (an acknowledged Custom draft must not overwrite a newer saved schedule on
-// close) and CS-C4-2 (a schedule edit made while a zone choice is pending must survive close).
+// An acknowledged Custom draft must not overwrite a newer saved schedule on close, and a schedule
+// edit made while a zone choice is pending must survive close.
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useState, type ReactNode } from 'react'
 import { afterEach, beforeEach, expect, it, vi, type Mock } from 'vitest'
@@ -119,7 +119,7 @@ it.each<[string, boolean, boolean]>([
   ['after an acknowledged edit, closing', true, true],
   ['after an acknowledged edit, staying open', true, false],
   ['with no prior edit, closing', false, true]
-])('CS-C4-1: a newer saved schedule wins %s Settings', async (_name, edit, close) => {
+])('a newer saved schedule wins %s Settings', async (_name, edit, close) => {
   const settings = live(base.lookAround!)
   settings.render()
   if (edit) {
@@ -145,7 +145,7 @@ it.each<[string, boolean, boolean]>([
 })
 
 it.each([true, false])(
-  'CS-C4-2: keeps a preset chosen while a first zone is pending (close before it resolves=%s)',
+  'keeps a preset chosen while a first zone is pending (close before it resolves=%s)',
   async (close) => {
     const zone = deferred()
     mocks.probe.mockReturnValueOnce(zone.promise)
@@ -165,7 +165,7 @@ it.each([true, false])(
   }
 )
 
-it('CS-C4-2: a preset chosen while a first zone is pending saves nothing if the zone is refused', async () => {
+it('a preset chosen while a first zone is pending saves nothing if the zone is refused', async () => {
   const zone = deferred()
   mocks.probe.mockReturnValueOnce(zone.promise).mockResolvedValue(false)
   const unzoned = { ...base.lookAround!, every: 'every-4h' as const, timezone: undefined }
