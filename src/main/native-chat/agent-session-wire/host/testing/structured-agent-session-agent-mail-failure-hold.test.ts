@@ -52,11 +52,11 @@ async function mail(text: string): Promise<string> {
   return result.value.queued.messageId
 }
 
-/** Waits long enough for a drain to have run, then proves the card is still not handed over. */
+/** The chat publishes the card as held behind the failed turn, and nothing has handed it over. */
 async function stillWaiting(card: string): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 250))
+  expect(await rig.queuePause()).toEqual({ reason: 'failed' })
+  expect(await rig.drafts()).toEqual([{ messageId: card, state: 'waiting' }])
   expect(await rig.handoff(card)).toBeUndefined()
-  expect(await rig.drafts()).toEqual([expect.objectContaining({ messageId: card })])
 }
 
 async function failedChat(): Promise<void> {
