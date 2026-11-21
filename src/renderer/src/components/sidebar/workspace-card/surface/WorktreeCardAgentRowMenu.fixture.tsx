@@ -68,18 +68,33 @@ const entries: AgentStatusEntry[] = tabs.map((tab, index) => ({
   stateHistory: []
 }))
 
-type From = 'agent-row' | 'header' | 'expander'
+const childWorktree: Worktree = {
+  ...worktree,
+  id: 'shop::/preview/shop/discount',
+  instanceId: 'discount-instance',
+  path: '/preview/shop/discount',
+  displayName: 'discount',
+  branch: 'discount'
+}
+
+type From = 'agent-row' | 'header' | 'expander' | 'nested-header'
 
 function menuFrom(
   from: From,
   mode: 'compact' | 'full',
-  card: { isActive?: boolean; isMultiSelected?: boolean } = {}
+  card: {
+    isActive?: boolean
+    isMultiSelected?: boolean
+    activeSurfaceVariant?: 'primary' | 'secondary'
+    family?: boolean
+    nested?: boolean
+  } = {}
 ) {
   return defineFixture({
     width: 380,
     store: {
       repos: [repo],
-      worktreesByRepo: { [repo.id]: [worktree] },
+      worktreesByRepo: { [repo.id]: [worktree, childWorktree] },
       agentActivityDisplayMode: mode,
       unifiedTabsByWorktree: { [worktree.id]: tabs },
       agentStatusByPaneKey: acceptedAgentStatuses(entries.map((entry) => [entry.paneKey, entry]))
@@ -94,13 +109,31 @@ function menuFrom(
     render: () => (
       <ConfirmationDialogProvider>
         <div className="h-[560px] bg-worktree-sidebar p-2 text-worktree-sidebar-foreground">
-          <WorktreeCard
-            worktree={worktree}
-            repo={repo}
-            isActive={card.isActive ?? false}
-            isMultiSelected={card.isMultiSelected ?? false}
-            nativeDragEnabled={false}
-          />
+          <div
+            className={card.family ? 'worktree-sidebar-family-root' : undefined}
+            data-worktree-family-segment={card.family ? 'primary' : undefined}
+          >
+            <WorktreeCard
+              worktree={worktree}
+              repo={repo}
+              isActive={card.isActive ?? false}
+              isActiveSurface={card.activeSurfaceVariant !== undefined}
+              activeSurfaceVariant={card.activeSurfaceVariant}
+              isMultiSelected={card.isMultiSelected ?? false}
+              nativeDragEnabled={false}
+              lineageChildCount={card.nested ? 1 : 0}
+              lineageChildren={
+                card.nested ? (
+                  <WorktreeCard
+                    worktree={childWorktree}
+                    repo={repo}
+                    isActive={false}
+                    nativeDragEnabled={false}
+                  />
+                ) : undefined
+              }
+            />
+          </div>
         </div>
       </ConfirmationDialogProvider>
     ),
@@ -109,11 +142,13 @@ function menuFrom(
       const target =
         from === 'agent-row'
           ? frame.querySelectorAll(`[${WORKSPACE_AGENT_ROW_ATTR}]`)[1]
-          : from === 'expander'
-            ? Array.from(frame.querySelectorAll('span')).find(
-                (node) => node.textContent === '2 agents'
-              )
-            : frame.querySelector('[data-worktree-card-surface]')
+          : from === 'nested-header'
+            ? frame.querySelectorAll('[data-worktree-card-surface]')[1]
+            : from === 'expander'
+              ? Array.from(frame.querySelectorAll('span')).find(
+                  (node) => node.textContent === '2 agents'
+                )
+              : frame.querySelector('[data-worktree-card-surface]')
       const box = target?.getBoundingClientRect()
       target?.dispatchEvent(
         new MouseEvent('contextmenu', {
@@ -135,3 +170,17 @@ export const agentsExpander = menuFrom('expander', 'compact')
 // The outline must show over the active and multi-selected looks too.
 export const activeCardAgentRow = menuFrom('agent-row', 'compact', { isActive: true })
 export const selectedCardAgentRow = menuFrom('agent-row', 'compact', { isMultiSelected: true })
+export const activePrimaryCardAgentRow = menuFrom('agent-row', 'compact', {
+  isActive: true,
+  activeSurfaceVariant: 'primary'
+})
+export const activeSecondaryCardAgentRow = menuFrom('agent-row', 'compact', {
+  activeSurfaceVariant: 'secondary'
+})
+export const familyRootCardAgentRow = menuFrom('agent-row', 'compact', {
+  isActive: true,
+  activeSurfaceVariant: 'primary',
+  family: true
+})
+// Only the nested card whose menu is open is outlined, not its parent.
+export const nestedCardHeader = menuFrom('nested-header', 'compact', { nested: true })
