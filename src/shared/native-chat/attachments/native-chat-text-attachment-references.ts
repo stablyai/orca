@@ -21,7 +21,7 @@ const REFERENCE_TOKEN = /@"(?:\\"|[^"])*"|@'[^']*'|@[^\s]+/g
 
 // A terminal chat writes the stored file's path as typed text, spaces escaped with a backslash.
 const REFERENCE_OR_PLAIN_UPLOAD_PATH = new RegExp(
-  `${REFERENCE_TOKEN.source}|/(?:\\\\.|[^\\s\\\\])*?${AGENT_SESSION_ATTACHMENTS_DIR_NAME}/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}/(?:\\\\.|[^\\s\\\\/])+`,
+  `${REFERENCE_TOKEN.source}|(?:[a-z]:)?/(?:\\\\.|[^\\s\\\\])*?${AGENT_SESSION_ATTACHMENTS_DIR_NAME}/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}/(?:\\\\.|[^\\s\\\\/])+`,
   'gi'
 )
 

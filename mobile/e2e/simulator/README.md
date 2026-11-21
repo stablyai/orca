@@ -9,7 +9,7 @@ Maestro flow for the terminal attach menu (Select from Gallery, Files).
 - Booted iPhone simulator running the Orca dev client, paired to a desktop and sitting on a live shell terminal tab with an empty prompt.
 - Photos library holds a video as the first tile and a photo as the second (add with `xcrun simctl addmedia <udid> photo.png clip.mp4`).
 - `notes.json` and `readme.txt` copied into the simulator's `File Provider Storage` (under `Containers/Shared/AppGroup/*/`) so they appear in Files > Browse > On My iPhone.
-- `maestro` plus Java 21: `export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home PATH=$JAVA_HOME/bin:$PATH`.
+- `maestro` plus Java 21: `export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home; export PATH=$JAVA_HOME/bin:$PATH`.
 
 ## Run
 

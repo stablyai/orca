@@ -38,6 +38,7 @@ type PickedAsset = {
   readonly height?: number
   readonly name?: string | null
   readonly fileName?: string | null
+  readonly type?: string | null
 }
 
 type PickerResult = { readonly canceled: boolean; readonly assets?: readonly PickedAsset[] | null }
@@ -65,6 +66,8 @@ const CLIPBOARD_STAGED_MIME = 'image/png'
 
 const UNKNOWN_STAGED_MIME = 'application/octet-stream'
 
+const UNKNOWN_VIDEO_MIME = 'video/quicktime'
+
 const DATA_URL_PREFIX_RE = /^data:image\/[a-z0-9.+-]+;base64,/i
 
 export function createNativeMediaVerbServer(
@@ -87,7 +90,7 @@ export function createNativeMediaVerbServer(
         const name = pickedName(asset)
         staged.push({
           uri,
-          mime: asset.mimeType ?? UNKNOWN_STAGED_MIME,
+          mime: asset.mimeType ?? (isVideoAsset(asset) ? UNKNOWN_VIDEO_MIME : UNKNOWN_STAGED_MIME),
           byteLength: size,
           ...(asset.width === undefined ? {} : { width: asset.width }),
           ...(asset.height === undefined ? {} : { height: asset.height }),
@@ -265,7 +268,7 @@ export function createNativeMediaVerbServer(
 }
 
 function isVideoAsset(asset: PickedAsset): boolean {
-  return asset.mimeType?.startsWith('video/') === true
+  return asset.type === 'video' || asset.mimeType?.startsWith('video/') === true
 }
 
 function pickedName(asset: PickedAsset): string | null {

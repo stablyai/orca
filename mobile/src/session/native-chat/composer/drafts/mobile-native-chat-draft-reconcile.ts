@@ -3,6 +3,7 @@ import {
   type NativeChatMessage
 } from '../../../../../../src/shared/native-chat/native-chat-types'
 import {
+  isChatAttachmentStorePath,
   nativeChatTextWithoutUploadedFiles,
   nativeChatUploadedFilePaths
 } from '../../../../../../src/shared/native-chat/attachments/native-chat-text-attachment-references'
@@ -130,9 +131,9 @@ function textWithoutUploadedFiles(message: NativeChatMessage): string | null {
     : normalizeNativeChatUserText(nativeChatTextWithoutUploadedFiles(text))
 }
 
-function uploadedFileCount(message: NativeChatMessage): number {
+function uploadedFilePaths(message: NativeChatMessage): string[] {
   const text = normalizedNativeChatUserMessageText(message)
-  return text === null ? 0 : nativeChatUploadedFilePaths(text).length
+  return text === null ? [] : nativeChatUploadedFilePaths(text)
 }
 
 // Carry phone-local preview URIs onto authoritative rows because host paths/marker-only turns cannot display those photos.
@@ -164,11 +165,17 @@ export function findLandedImagePreviewEchoes(
       continue
     }
     const targetText = normalizeNativeChatUserText(entry.text)
+    const sentFilePaths = entry.images.filter(isChatAttachmentStorePath)
     const candidates = normalized.filter((message) => {
       if (message.role !== 'user') {
         return false
       }
-      const uploadedCount = uploadedFileCount(message)
+      const uploadedPaths = uploadedFilePaths(message)
+      const uploadedCount = uploadedPaths.length
+      // A row that carries other uploaded files is another send, even when the counts line up.
+      if (uploadedCount > 0 && !sentFilePaths.every((path) => uploadedPaths.includes(path))) {
+        return false
+      }
       if (targetText) {
         const text = textWithoutUploadedFiles(message)
         if (text === null) {

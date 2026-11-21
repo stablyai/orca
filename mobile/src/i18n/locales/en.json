@@ -3645,6 +3645,7 @@
       "downloading": "Downloading {{percent}}%",
       "fullCopyUseSave": "This attachment is too large to copy in full. Use Save to get the whole file.",
       "copyFrameUseSave": "This attachment is too large to copy. Use Save instead.",
+      "saveNativeOnly": "Saving files is not available in this view yet.",
       "binaryInfoSave": "This file is on the host and the agent can read it. It cannot be previewed here, but you can save it or open it in another app."
     },
     "agentMessage": {

@@ -4,6 +4,7 @@ import {
   type AttachmentTextRead
 } from '../../../../src/shared/attachment-text/attachment-text-source'
 import { MAX_FILE_RANGE_READ_BYTES } from '../../../../src/shared/file-content/file-range-read'
+import { createNonSecureContextUuid } from '../../../../src/shared/identifiers/non-secure-context-uuid'
 import { decodeBase64Bytes } from '../../transport/encryption/base64-byte-codec'
 
 const DOWNLOAD_FOLDER = 'orca-chat-attachments'
@@ -22,7 +23,8 @@ export async function downloadMobileChatAttachment(
     signal?: AbortSignal
   }
 ): Promise<string> {
-  const folder = new Directory(Paths.cache, DOWNLOAD_FOLDER)
+  // One folder per download keeps a second file of the same name from overwriting a copy still being shared.
+  const folder = new Directory(Paths.cache, DOWNLOAD_FOLDER, createNonSecureContextUuid())
   folder.create({ idempotent: true, intermediates: true })
   const file = new FsFile(folder, localFileName(args.path))
   file.create({ overwrite: true })

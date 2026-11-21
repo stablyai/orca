@@ -385,6 +385,11 @@ describe('phone file upload end to end', () => {
   it('stops a cancelled upload between chunks and leaves no partial file on the host', async () => {
     const path = join(root, 'cancel-me.bin')
     writeFileSync(path, fileBytes('movie.mov'))
+    const storeEntries = () =>
+      existsSync(join(root, 'store'))
+        ? readdirSync(join(root, 'store'), { recursive: true }).map(String)
+        : []
+    const before = storeEntries()
     let chunksSent = 0
     for await (const file of pickMobileFiles({
       launch: async () => ({
@@ -415,8 +420,7 @@ describe('phone file upload end to end', () => {
       ).rejects.toBeInstanceOf(MobileUploadCancelledError)
     }
     expect(chunksSent).toBe(1)
-    const stored = readdirSync(join(root, 'store'), { recursive: true }).map(String)
-    expect(stored.some((entry) => entry.includes('cancel-me.bin'))).toBe(false)
+    expect(storeEntries()).toEqual(before)
   })
 
   it('reports a request that fails because the upload was cancelled as a cancel, not a failure', async () => {

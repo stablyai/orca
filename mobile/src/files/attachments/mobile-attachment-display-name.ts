@@ -21,5 +21,7 @@ export function shortAttachmentDisplayName(
   const dot = name.lastIndexOf('.')
   const extension = dot > 0 && name.length - dot <= 8 ? name.slice(dot) : ''
   const base = name.slice(0, name.length - extension.length)
-  return `${base.slice(0, maxChars - 10)}…${base.slice(-5)}${extension}`
+  const room = Math.max(maxChars - extension.length - 1, 2)
+  const tail = Math.min(5, Math.floor(room / 3))
+  return `${base.slice(0, room - tail)}…${tail > 0 ? base.slice(-tail) : ''}${extension}`
 }
