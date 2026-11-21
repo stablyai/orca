@@ -1,163 +1,167 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+type FakeRecord = {
+  sessionId: string
+  provider: string
+  providerHandleChain: { handle: { nativeId: string } }[]
+}
 type Mocks = {
-  records: {
-    sessionId: string
-    createdAt: number
-    location: object
-    lastTurn?: object
-    launchDirectory?: string
-  }[]
-  owners: Map<string, string[]>
-  openDispatches: { id: string }[]
-  workers: { dispatchId: string; state: string }[]
-  transcripts: { agent: string; sessionId: string; filePath: string; executionHostId: string }[]
-  closed: string[]
-  forgotten: string[]
-  deleteResult: { deleted: number; failed: number; freedBytes: number }
-  shouldDelete: boolean[]
+  records: FakeRecord[]
+  loaded: Set<string>
+  /** Sessions a send reopens right after their stop, once each. */
+  reopens: Set<string>
+  stopped: string[]
+  forgets: unknown[]
+  storeAccepts: boolean
+  owesDispatch: boolean
+  bot: { id: string; chatSessionId: string } | null
+  dropped: string[]
 }
 
 const mocks = vi.hoisted((): Mocks => ({
   records: [],
-  owners: new Map(),
-  openDispatches: [],
-  workers: [],
-  transcripts: [],
-  closed: [],
-  forgotten: [],
-  deleteResult: { deleted: 1, failed: 0, freedBytes: 0 },
-  shouldDelete: []
+  loaded: new Set(),
+  reopens: new Set(),
+  stopped: [],
+  forgets: [],
+  storeAccepts: true,
+  owesDispatch: false,
+  bot: null,
+  dropped: []
 }))
 
 vi.mock('../agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => ({
+    serialize: (_id: string, task: () => Promise<unknown>) => task(),
+    hasSession: (id: string) => mocks.loaded.has(id),
+    isSessionTabVisible: () => false,
     deps: {
+      hasOpenDispatch: () => mocks.owesDispatch,
       store: {
         readOnly: false,
         getRecord: (id: string) => mocks.records.find((record) => record.sessionId === id),
-        listRecords: () => mocks.records
+        listRecords: () => mocks.records,
+        forgetChat: async (forget: unknown) => {
+          mocks.forgets.push(forget)
+          return mocks.storeAccepts
+        }
       }
     }
   })
 }))
 vi.mock(
   '../../runtime/orchestration/addressing/session-lineage/structured-session-lineage',
-  () => ({
-    readAgentSessionRecordStore: () => null
-  })
+  () => ({ readAgentSessionRecordStore: () => null })
 )
-vi.mock('../../ai-vault/structured-sessions/history-row-ownership-lookup', () => ({
-  historyRowOwnershipsLookup: () => (row: { sessionId: string }) => [
-    (mocks.owners.get(row.sessionId) ?? []).map((sessionId) => ({ sessionId }))
-  ]
+// Every record is one lineage, as a committed /clear makes it.
+vi.mock('../../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id', () => ({
+  createCanonicalOrcaSessionResolver: () => () => 'chat-root'
 }))
-vi.mock('../../ai-vault/listing/cached-session-list', () => ({
-  listAiVaultSessions: async () => ({ sessions: mocks.transcripts })
-}))
-vi.mock('../../runtime/rpc/methods/orchestration/worker/session-workers-method', () => ({
-  readDispatchWorkers: async () => mocks.workers
+vi.mock('../../../shared/agent-session/identity/orca-session-address', () => ({
+  isOrcaSessionId: () => true
 }))
 vi.mock('../../runtime/agent-session/lifecycle/structured-agent-session-close', () => ({
   closeStructuredAgentSessionChild: async (sessionId: string) => {
-    mocks.closed.push(sessionId)
+    mocks.stopped.push(sessionId)
+    mocks.loaded.delete(sessionId)
+    if (mocks.reopens.delete(sessionId)) {
+      mocks.loaded.add(sessionId)
+    }
     return { stopped: true }
   }
 }))
-vi.mock('../../workspaces/cleanup/chat-history/deleted-workspace-native-chats', () => ({
-  forgetNativeChatInLane: async (record: { sessionId: string }) => {
-    mocks.forgotten.push(record.sessionId)
-    mocks.records = mocks.records.filter((entry) => entry.sessionId !== record.sessionId)
-    for (const [key, ids] of mocks.owners) {
-      mocks.owners.set(
-        key,
-        ids.filter((id) => id !== record.sessionId)
-      )
-    }
-    return 'forgotten'
-  }
-}))
-vi.mock('../../workspaces/cleanup/chat-history/deleted-workspace-chat-history', () => ({
-  deleteHostChatTranscriptsPermanently: async (
-    _store: unknown,
-    targets: { agent: string; filePath: string }[],
-    shouldDelete: (target: { agent: string; filePath: string }) => Promise<boolean>
-  ) => {
-    for (const target of targets) {
-      mocks.shouldDelete.push(await shouldDelete(target))
-    }
-    return mocks.deleteResult
-  }
-}))
-vi.mock('../../bots/bot-session-tabs', () => ({ botOfSession: () => null }))
-vi.mock('../../bots/bot-chat-session', () => ({ runtimeBotChats: () => ({}) }))
+vi.mock('../../bots/bot-session-tabs', () => ({ botOfSession: () => mocks.bot }))
 vi.mock('../../runtime/rpc/methods/orchestration/messaging/bot-request-outcome', () => ({
-  dropUnreadBotRequests: async () => undefined
+  dropUnreadBotRequests: async (_runtime: unknown, _bot: string, _why: string, id: string) => {
+    mocks.dropped.push(id)
+  }
 }))
 
 import { deleteOrcaChat } from './orca-chat-delete'
 
 const runtime = {
   ensureStructuredAgentSessionHost: async () => undefined,
-  getOrchestrationDb: () => ({ listDispatchesCreatedByAny: () => mocks.openDispatches }),
-  requireStore: () => ({}),
-  bots: { list: () => [] }
+  bots: { list: () => [] },
+  botWork: { forget: async () => true }
 }
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every runtime member the delete reads.
 const deleteChat = (id: string) => deleteOrcaChat(runtime as never, id)
 
-const location = { executionHostId: 'local', wslDistro: null, workspaceKind: 'folder' }
+const record = (sessionId: string, nativeId: string): FakeRecord => ({
+  sessionId,
+  provider: 'claude',
+  providerHandleChain: [{ handle: { nativeId } }]
+})
 
 beforeEach(() => {
-  mocks.records = [{ sessionId: 'chat-a', createdAt: 1, location }]
-  mocks.owners = new Map()
-  mocks.openDispatches = []
-  mocks.workers = []
-  mocks.transcripts = []
-  mocks.closed = []
-  mocks.forgotten = []
-  mocks.deleteResult = { deleted: 1, failed: 0, freedBytes: 0 }
-  mocks.shouldDelete = []
+  mocks.records = [record('chat-root', 'conv-1'), record('chat-next', 'conv-2')]
+  mocks.loaded = new Set()
+  mocks.reopens = new Set()
+  mocks.stopped = []
+  mocks.forgets = []
+  mocks.storeAccepts = true
+  mocks.owesDispatch = false
+  mocks.bot = null
+  mocks.dropped = []
 })
 
 describe('deleteOrcaChat', () => {
-  it('refuses a chat with an unsettled worker it cannot prove ended, before touching it', async () => {
-    mocks.openDispatches = [{ id: 'd-1' }]
-    mocks.workers = [{ dispatchId: 'd-1', state: 'unverifiable' }]
+  it('stops a running chat, then forgets its whole /clear lineage in one commit', async () => {
+    mocks.loaded.add('chat-next')
 
-    expect(await deleteChat('chat-a')).toEqual({ outcome: 'refused', reason: 'workers' })
-    expect(mocks.closed).toEqual([])
-    expect(mocks.forgotten).toEqual([])
+    expect(await deleteChat('chat-root')).toEqual({ outcome: 'deleted' })
+    expect(mocks.stopped).toEqual(['chat-next'])
+    expect(mocks.forgets).toEqual([
+      {
+        chatId: 'chat-root',
+        sessionIds: ['chat-root', 'chat-next'],
+        conversations: [
+          { provider: 'claude', providerSessionId: 'conv-1' },
+          { provider: 'claude', providerSessionId: 'conv-2' }
+        ]
+      }
+    ])
   })
 
-  it('refuses a group room member chat, which the room still sends to', async () => {
-    mocks.records = [{ sessionId: 'bot-group-member-1', createdAt: 1, location }]
+  it('stops a chat a send reopened before the commit again, then deletes it', async () => {
+    mocks.loaded.add('chat-root')
+    mocks.reopens.add('chat-root')
+
+    expect(await deleteChat('chat-root')).toEqual({ outcome: 'deleted' })
+    expect(mocks.stopped).toEqual(['chat-root', 'chat-root'])
+    expect(mocks.forgets).toHaveLength(1)
+  })
+
+  it('keeps a worker chat an orchestration still waits on', async () => {
+    mocks.owesDispatch = true
+
+    expect(await deleteChat('chat-root')).toEqual({ outcome: 'refused', reason: 'workers' })
+    expect(mocks.forgets).toEqual([])
+  })
+
+  it('keeps a group room member chat, which the room still sends to', async () => {
+    mocks.records = [record('bot-group-member-1', 'conv-1')]
 
     expect(await deleteChat('bot-group-member-1')).toEqual({ outcome: 'refused', reason: 'group' })
-    expect(mocks.forgotten).toEqual([])
+    expect(mocks.stopped).toEqual([])
   })
 
-  it('keeps a transcript another chat still holds', async () => {
-    mocks.records.push({ sessionId: 'chat-b', createdAt: 2, location })
-    mocks.records[0] = { ...mocks.records[0], launchDirectory: '/home' }
-    mocks.transcripts = [
-      { agent: 'claude', sessionId: 'p-1', filePath: '/t/p-1.jsonl', executionHostId: 'local' }
-    ]
-    mocks.owners.set('p-1', ['chat-a', 'chat-b'])
+  it("keeps a managed agent's live Home Chat", async () => {
+    mocks.bot = { id: 'agent-1', chatSessionId: 'chat-next' }
 
-    expect(await deleteChat('chat-a')).toEqual({ outcome: 'deleted' })
-    expect(mocks.shouldDelete).toEqual([])
+    expect(await deleteChat('chat-root')).toEqual({ outcome: 'refused', reason: 'home' })
+    expect(mocks.forgets).toEqual([])
   })
 
-  it('reports a transcript it could not remove', async () => {
-    mocks.records[0] = { ...mocks.records[0], launchDirectory: '/home' }
-    mocks.transcripts = [
-      { agent: 'opencode', sessionId: 'p-1', filePath: '/t/db#p-1', executionHostId: 'local' }
-    ]
-    mocks.owners.set('p-1', ['chat-a'])
-    mocks.deleteResult = { deleted: 0, failed: 1, freedBytes: 0 }
+  it("tells unread mail of a managed agent's chat only after the commit", async () => {
+    mocks.bot = { id: 'agent-1', chatSessionId: 'other-home' }
+    mocks.storeAccepts = false
 
-    expect(await deleteChat('chat-a')).toEqual({ outcome: 'deleted', historyKept: true })
-    expect(mocks.shouldDelete).toEqual([true])
+    expect(await deleteChat('chat-root')).toEqual({ outcome: 'refused', reason: 'unavailable' })
+    expect(mocks.dropped).toEqual([])
+
+    mocks.storeAccepts = true
+    expect(await deleteChat('chat-root')).toEqual({ outcome: 'deleted' })
+    expect(mocks.dropped).toEqual(['chat-root', 'chat-next'])
   })
 })

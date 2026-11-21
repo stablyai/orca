@@ -170,8 +170,30 @@ export function deleteChatHistoryOfDeletedWorkspaces(
           { signal: scanSignal }
         )
       ).sessions,
-    deleteSessions: (targets, shouldDelete, stillGone) =>
-      deleteHostChatTranscriptsPermanently(store, targets, shouldDelete, stillGone, references),
+    deleteSessions: async (targets, shouldDelete, stillGone) => {
+      const isCodex = (target: ChatHistoryTarget): boolean => target.agent === 'codex'
+      const others = targets.filter((target) => !isCodex(target))
+      const codex = targets.filter(isCodex)
+      const empty: ChatHistorySweepResult = { deleted: 0, failed: 0, freedBytes: 0 }
+      const swept =
+        others.length > 0 ? await deleteHostAiVaultSessionsPermanently(others, shouldDelete) : empty
+      // AI Vault lists one name per rollout and refuses Codex deletes: links would bring it back.
+      const rollouts =
+        codex.length > 0
+          ? await deleteCodexRolloutsPermanently(
+              codex,
+              shouldDelete,
+              () => listHostCodexRolloutHomes(store.getSettings()),
+              references,
+              stillGone
+            )
+          : empty
+      return {
+        deleted: swept.deleted + rollouts.deleted,
+        failed: swept.failed + rollouts.failed,
+        freedBytes: swept.freedBytes + rollouts.freedBytes
+      }
+    },
     listNativeChats: listHostNativeChats,
     forgetNativeChats: forgetHostNativeChats,
     isEnabled: () => store.getSettings().deleteChatHistoryWithWorkspace === true
@@ -179,37 +201,4 @@ export function deleteChatHistoryOfDeletedWorkspaces(
     await references.save()
     await references.close()
   })
-}
-
-/** Deletes these transcripts for good: AI Vault's validated delete, and each Codex rollout under every
- *  name it has (AI Vault lists one name per rollout and refuses Codex deletes: links would bring it back). */
-export async function deleteHostChatTranscriptsPermanently(
-  store: Pick<RuntimeStore, 'getSettings'>,
-  targets: readonly ChatHistoryTarget[],
-  shouldDelete: (target: ChatHistoryTarget) => Promise<boolean>,
-  stillGone: () => Promise<boolean> = async () => true,
-  // A sweep shares one across its batches; alone, the delete reads its own.
-  references?: Parameters<typeof deleteCodexRolloutsPermanently>[3]
-): Promise<ChatHistorySweepResult> {
-  const isCodex = (target: ChatHistoryTarget): boolean => target.agent === 'codex'
-  const others = targets.filter((target) => !isCodex(target))
-  const codex = targets.filter(isCodex)
-  const empty: ChatHistorySweepResult = { deleted: 0, failed: 0, freedBytes: 0 }
-  const swept =
-    others.length > 0 ? await deleteHostAiVaultSessionsPermanently(others, shouldDelete) : empty
-  const rollouts =
-    codex.length > 0
-      ? await deleteCodexRolloutsPermanently(
-          codex,
-          shouldDelete,
-          () => listHostCodexRolloutHomes(store.getSettings()),
-          references,
-          stillGone
-        )
-      : empty
-  return {
-    deleted: swept.deleted + rollouts.deleted,
-    failed: swept.failed + rollouts.failed,
-    freedBytes: swept.freedBytes + rollouts.freedBytes
-  }
 }

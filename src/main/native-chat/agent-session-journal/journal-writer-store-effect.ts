@@ -1,3 +1,4 @@
+import { writeDeletedChat } from './journal-deleted-chats'
 import type Database from '../../sqlite/sync-database'
 import { writeAgentSessionStoreRows } from '../../runtime/agent-session/records/agent-session-record-rows'
 import type {
@@ -33,11 +34,24 @@ export function applyJournalWriterStoreEffect(
     commitAgentSessionPublicationFence(input.command.writerFence)
   }
   writeAgentSessionStoreRows(db, resolved.writes)
-  if (input.kind === 'command' && input.command.kind === 'forget-idle' && resolved.value === true) {
-    markJournalChatForgotten(db, input.command.sessionId)
-    absorbForgottenJournalLegacyChat(db, input.command.sessionId)
+  const forgotten =
+    input.kind === 'command' && resolved.value === true
+      ? input.command.kind === 'forget-idle'
+        ? [input.command.sessionId]
+        : input.command.kind === 'forget-chat'
+          ? input.command.sessionIds
+          : []
+      : []
+  for (const sessionId of forgotten) {
+    markJournalChatForgotten(db, sessionId)
+    absorbForgottenJournalLegacyChat(db, sessionId)
     // Its connector requests are owed an outcome still: the chat no longer has them.
-    forgetJournalConnectorReplies(db, input.command.sessionId, Date.now())
+    forgetJournalConnectorReplies(db, sessionId, Date.now())
+  }
+  if (input.kind === 'command' && input.command.kind === 'forget-chat' && resolved.value === true) {
+    // In the deletion's own transaction: nothing can see the records gone without the tombstone.
+    const { chatId, sessionIds, conversations } = input.command
+    writeDeletedChat(db, { chatId, sessionIds: [...sessionIds], conversations: [...conversations] })
   }
   return {
     kind: 'store',

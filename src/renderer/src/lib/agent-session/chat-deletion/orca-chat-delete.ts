@@ -30,8 +30,6 @@ export type OrcaChatDeleteTarget = {
   /** The host that owns the chat's store. */
   hostId: ExecutionHostId
   sessionId: string
-  /** A bot's live Home Chat is cleared: a fresh Home takes its place. */
-  home?: { botName: string }
   /** The pairing that listed the chat (Session History's row); else the current one when asked. */
   pairingRevision?: number
 }
@@ -47,20 +45,6 @@ function hostUpdateReason(hostLabel: string, t: Translate = translate): string {
   return t('chats.delete.updateHost', 'Update {{host}} to delete chats', { host: hostLabel })
 }
 
-/** Why Delete is off for a chat whose state is known here; null when it can be asked. */
-export function orcaChatDeleteBlockedReason(
-  state: { replying: boolean; workersRunning: boolean },
-  t: Translate = translate
-): string | null {
-  if (state.replying) {
-    return t('chats.delete.replying', 'Replying now')
-  }
-  if (state.workersRunning) {
-    return t('chats.delete.workersRunning', 'Workers still running')
-  }
-  return null
-}
-
 /** A group room's chats carry the room's messages, so Session History doesn't delete them. */
 export function orcaChatGroupDeleteReason(t: Translate = translate): string {
   return t('chats.delete.groupRoom', "A group room's chat can't be deleted")
@@ -70,8 +54,8 @@ function refusalText(reason: OrcaChatDeleteRefusal): string {
   if (reason === 'group') {
     return orcaChatGroupDeleteReason()
   }
-  return reason === 'replying' || reason === 'workers'
-    ? orcaChatDeleteBlockedReason({ replying: reason === 'replying', workersRunning: true })!
+  return reason === 'workers'
+    ? translate('chats.delete.workerOwed', 'An orchestration still waits on this chat')
     : translate('chats.delete.failed', "Couldn't delete the chat")
 }
 
@@ -104,8 +88,8 @@ export function useDeleteOrcaChat(): (target: OrcaChatDeleteTarget) => Promise<b
           ? resolveContinuedRuntimeEnvironmentRevision(environmentId, target.pairingRevision)
           : getRuntimeEnvironmentRevision(environmentId)
         : undefined
-      if (environmentId && target.pairingRevision !== undefined && pairingRevision === undefined) {
-        // The row came from a pairing since replaced by another machine.
+      if (environmentId && pairingRevision === undefined) {
+        // No pairing to pin (the row's was replaced by another machine, or none is known yet).
         toast.error(translate('chats.delete.failed', "Couldn't delete the chat"))
         return false
       }
@@ -121,35 +105,16 @@ export function useDeleteOrcaChat(): (target: OrcaChatDeleteTarget) => Promise<b
         return false
       }
       if (!state.settings?.skipDeleteChatConfirm) {
-        const undone = translate('chats.delete.undone', "This can't be undone.")
         const confirmed = await confirm({
-          ...(target.home
-            ? {
-                title: translate('chats.clear.title', 'Clear Home Chat?'),
-                description: hostLabel
-                  ? translate(
-                      'chats.clear.descriptionHost',
-                      "{{name}} starts a fresh Home Chat and keeps its soul and memory. This conversation is deleted permanently from {{host}}. This can't be undone.",
-                      { name: target.home.botName, host: hostLabel }
-                    )
-                  : translate(
-                      'chats.clear.description',
-                      "{{name}} starts a fresh Home Chat and keeps its soul and memory. This conversation is deleted. This can't be undone.",
-                      { name: target.home.botName }
-                    ),
-                confirmLabel: translate('chats.clear.action', 'Clear chat')
-              }
-            : {
-                title: translate('chats.delete.title', 'Delete this chat?'),
-                description: hostLabel
-                  ? translate(
-                      'chats.delete.descriptionHost',
-                      "It's deleted permanently from {{host}}. This can't be undone.",
-                      { host: hostLabel }
-                    )
-                  : undone,
-                confirmLabel: translate('chats.delete.action', 'Delete')
-              }),
+          title: translate('chats.delete.title', 'Delete this chat?'),
+          description: hostLabel
+            ? translate(
+                'chats.delete.descriptionHost',
+                "It's deleted permanently from {{host}}. This can't be undone.",
+                { host: hostLabel }
+              )
+            : translate('chats.delete.undone', "This can't be undone."),
+          confirmLabel: translate('chats.delete.action', 'Delete'),
           confirmVariant: 'destructive',
           dontAskAgain: {
             onConfirmed: () =>
@@ -177,14 +142,6 @@ export function useDeleteOrcaChat(): (target: OrcaChatDeleteTarget) => Promise<b
             : {}
         )
         if (result.outcome === 'deleted') {
-          if (result.historyKept) {
-            toast.warning(
-              translate(
-                'chats.delete.historyKept',
-                "Chat deleted, but its agent's own history of it couldn't be removed"
-              )
-            )
-          }
           return true
         }
         toast.error(refusalText(result.reason))

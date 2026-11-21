@@ -29046,11 +29046,9 @@
       "waitingCount": "{{count}} waiting",
       "loading": "Loading chats…",
       "readFailed": "Couldn't read this bot's chats.",
-      "clear": "Clear chat",
       "delete": "Delete chat",
       "open": "Open",
-      "actions": "Chat actions",
-      "homeNotStarted": "Not started yet"
+      "actions": "Chat actions"
     },
     "cloudSignIn": {
       "automationScheduledOnly": "Runs on its schedule only: its events are paused while signed out of Orca",
@@ -29715,21 +29713,13 @@
   "chats": {
     "delete": {
       "updateHost": "Update {{host}} to delete chats",
-      "replying": "Replying now",
-      "workersRunning": "Workers still running",
       "failed": "Couldn't delete the chat",
       "undone": "This can't be undone.",
       "title": "Delete this chat?",
       "descriptionHost": "It's deleted permanently from {{host}}. This can't be undone.",
       "action": "Delete",
       "groupRoom": "A group room's chat can't be deleted",
-      "historyKept": "Chat deleted, but its agent's own history of it couldn't be removed"
-    },
-    "clear": {
-      "title": "Clear Home Chat?",
-      "descriptionHost": "{{name}} starts a fresh Home Chat and keeps its soul and memory. This conversation is deleted permanently from {{host}}. This can't be undone.",
-      "description": "{{name}} starts a fresh Home Chat and keeps its soul and memory. This conversation is deleted. This can't be undone.",
-      "action": "Clear chat"
+      "workerOwed": "An orchestration still waits on this chat"
     }
   }
 }

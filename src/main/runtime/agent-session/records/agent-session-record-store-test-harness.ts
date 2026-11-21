@@ -11,6 +11,7 @@ import {
   journalSqlWorkerPath
 } from '../../../native-chat/agent-session-journal/journal-sql-worker-bundle.test-fixture'
 import { AgentSessionRecordStore } from './agent-session-record-store'
+import { readDeletedChats } from './agent-session-record-forgets'
 import { openAgentSessionRecordStoreOnce } from './agent-session-record-store-slot'
 import { ensureStructuredAgentSessionHost } from '../installation/structured-agent-session-runtime'
 
@@ -90,7 +91,8 @@ export async function openTestAgentSessionRecordStore(
       ? journalDatabase.loadRecords()
       : journalDatabase.installRecords()),
     hostId: options.hostId ?? TEST_HOST_ID,
-    legacySessionTabIds: options.legacySessionTabIds ?? []
+    legacySessionTabIds: options.legacySessionTabIds ?? [],
+    deletedChats: await readDeletedChats(journalDatabase)
   })
 }
 

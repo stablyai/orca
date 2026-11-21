@@ -1,5 +1,6 @@
 // A bot chat row's menu, the same from its ⋯ and a right-click, in the Chats tab and the sidebar:
-// Open, then Delete chat (Clear chat on the live Home), off with the reason while it can't go.
+// Open, then Delete chat (stopping it when it runs), off with the reason while it can't go. The live
+// Home, where the agent's mail and connectors land, has no Delete.
 import type React from 'react'
 import { ArrowUpRight, Ellipsis, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -21,12 +22,11 @@ import { MenuItemBlockedReason } from '@/components/ui/menu-item-blocked-reason'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import {
-  orcaChatDeleteBlockedReason,
   useDeleteOrcaChat,
   useOrcaChatDeleteHostReason
 } from '@/lib/agent-session/chat-deletion/orca-chat-delete'
 import type { Bot } from '../../../../shared/bot-types'
-import { chatRunningCount, type BotChatTreeChat } from '../../../../shared/bots/bot-chat-tree'
+import type { BotChatTreeChat } from '../../../../shared/bots/bot-chat-tree'
 
 type MenuKind = 'dropdown' | 'context'
 
@@ -47,46 +47,52 @@ function BotChatMenuItems({
   const Item = kind === 'context' ? ContextMenuItem : DropdownMenuItem
   const Separator = kind === 'context' ? ContextMenuSeparator : DropdownMenuSeparator
   const home = chat.origin === 'home' && !chat.closed
-  const label = home ? t('bots.chats.clear', 'Clear chat') : t('bots.chats.delete', 'Delete chat')
-  // A Home not started yet has no chat to clear (its id is empty); Open still starts it.
-  const reason = !chat.chatId
-    ? t('bots.chats.homeNotStarted', 'Not started yet')
-    : (orcaChatDeleteBlockedReason({
-        replying: chat.live === 'replying',
-        workersRunning: chat.runningTotal > 0 || chatRunningCount(chat) > 0
-      }) ?? hostReason)
+  const label = t('bots.chats.delete', 'Delete chat')
   return (
     <>
       <Item onSelect={onOpen}>
         <ArrowUpRight className="size-3.5" />
         {t('bots.chats.open', 'Open')}
       </Item>
-      <Separator />
-      <MenuItemBlockedReason
-        reason={reason}
-        label={label}
-        side={kind === 'context' ? 'right' : 'left'}
-        render={(blocked) => (
-          <Item
-            variant="destructive"
-            {...blocked}
-            onSelect={
-              reason
-                ? undefined
-                : () =>
-                    void deleteChat({
-                      hostId: bot.hostId,
-                      sessionId: chat.chatId,
-                      ...(home ? { home: { botName: bot.name } } : {})
-                    })
-            }
-          >
-            <Trash2 className="size-3.5" />
-            {label}
-          </Item>
-        )}
-      />
+      {home ? null : (
+        <>
+          <Separator />
+          <DeleteItem
+            label={label}
+            reason={hostReason}
+            kind={kind}
+            onDelete={() => void deleteChat({ hostId: bot.hostId, sessionId: chat.chatId })}
+          />
+        </>
+      )}
     </>
+  )
+}
+
+function DeleteItem({
+  label,
+  reason,
+  kind,
+  onDelete
+}: {
+  label: string
+  reason: string | null
+  kind: MenuKind
+  onDelete: () => void
+}): React.JSX.Element {
+  const Item = kind === 'context' ? ContextMenuItem : DropdownMenuItem
+  return (
+    <MenuItemBlockedReason
+      reason={reason}
+      label={label}
+      side={kind === 'context' ? 'right' : 'left'}
+      render={(blocked) => (
+        <Item variant="destructive" {...blocked} onSelect={reason ? undefined : onDelete}>
+          <Trash2 className="size-3.5" />
+          {label}
+        </Item>
+      )}
+    />
   )
 }
 

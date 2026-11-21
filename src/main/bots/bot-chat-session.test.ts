@@ -89,10 +89,7 @@ function setup(initial: Bot = makeBot()) {
     })
   })
   const closeChat = vi.fn(
-    async (
-      _sessionId: string,
-      _admit?: (work: { sessionId: string | null; state: 'idle' | 'busy' | 'unknown' }) => boolean
-    ): Promise<{ stopped: boolean; reason?: string }> => ({
+    async (_sessionId: string): Promise<{ stopped: boolean; reason?: string }> => ({
       stopped: true
     })
   )
@@ -223,34 +220,6 @@ describe('bot Chat', () => {
 
     expect(createChat).toHaveBeenCalledTimes(1)
     expect(bot().chatSessionId).toBe(before)
-  })
-
-  it('clearing the Home a delete named retires it once; a second clear of it leaves the fresh Home', async () => {
-    const { chats, bot } = setup()
-    const home = await chats.ensure('bot-1')
-
-    const [first, second] = await Promise.all([
-      chats.clearHome('bot-1', home),
-      chats.clearHome('bot-1', home)
-    ])
-
-    expect([first, second]).toEqual(['cleared', 'moved'])
-    const fresh = bot().chatSessionId
-    expect(fresh).not.toBe(home)
-    expect(await chats.ensure('bot-1')).toBe(fresh)
-  })
-
-  it('clearing a Home that is not at rest keeps it', async () => {
-    const { chats, closeChat, createChat, bot } = setup()
-    const home = await chats.ensure('bot-1')
-    closeChat.mockImplementationOnce(async (sessionId, admit) => ({
-      stopped: admit?.({ sessionId, state: 'busy' }) ?? true
-    }))
-    createChat.mockClear()
-
-    expect(await chats.clearHome('bot-1', home)).toBe('busy')
-    expect(bot().chatSessionId).toBe(home)
-    expect(createChat).not.toHaveBeenCalled()
   })
 
   it('reset starts a new Chat and closes the old one, keeping its history', async () => {

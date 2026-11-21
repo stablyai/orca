@@ -123,7 +123,7 @@ export function VaultSessionRow({
   const latestTurn = latestSessionConversationTurn(session)
   const deleteHost = useAiVaultSessionDeleteHost(session)
   const chatDeleteHostReason = useOrcaChatDeleteHostReason(session.executionHostId)
-  // An Orca chat is deleted by the host that owns it, transcript and all.
+  // An Orca chat is deleted by the host that owns it; the agent's own transcript stays.
   const deleteBlockedReason = session.structuredSession
     ? onRequestDelete
       ? isBotGroupMemberSession(session.structuredSession.sessionId)

@@ -36,7 +36,8 @@ import {
   type AgentSessionRestartProbeArgs
 } from '../ownership/agent-session-restart-reconciliation'
 import type { AgentSessionRecordCommand } from './agent-session-record-command'
-import type { AgentSessionIdleForget } from './agent-session-record-forget'
+import type { DeletedChat } from '../../../native-chat/chat-deletion/deleted-chats'
+import { AgentSessionRecordForgets } from './agent-session-record-forgets'
 import type {
   AgentSessionReserveRequest,
   AgentSessionReserveResult
@@ -50,7 +51,6 @@ import {
   heldAgentSessionIds,
   type AgentSessionStoreState
 } from './agent-session-store-state'
-import { AgentSessionRecordTabs } from './agent-session-tab-table'
 import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
 import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
 import { agentSessionOperationOutcomeReceipt } from './agent-session-operation-receipt'
@@ -68,17 +68,25 @@ import { JournalSqlConnectorReplies } from '../../../native-chat/agent-session-j
 export const AGENT_SESSION_LEASE_TTL_MS = 30_000,
   AGENT_SESSION_LEASE_RENEW_INTERVAL_MS = 10_000
 
-export class AgentSessionRecordStore extends AgentSessionRecordTabs {
+export class AgentSessionRecordStore extends AgentSessionRecordForgets {
   readonly conversationReceipts: ReturnType<typeof createAgentSessionConversationReceipts>
   private clearedFrom: { lineage: object; predecessors: Map<string, string[]> } | undefined
 
   private constructor(
     transactions: AgentSessionStoreTransactions,
     readonly hostId: string,
-    private readonly journalDatabase: JournalSqlDatabase
+    journalDatabase: JournalSqlDatabase,
+    deletedChats: readonly DeletedChat[]
   ) {
-    super(transactions)
-    this.founding = createAgentSessionFoundingStore(transactions)
+    super(transactions, journalDatabase, deletedChats)
+    const founding = createAgentSessionFoundingStore(transactions)
+    this.founding = {
+      ...founding,
+      prepare: (request) => {
+        this.refuseDeletedSession(request.sessionId)
+        return founding.prepare(request)
+      }
+    }
     this.conversationReceipts = createAgentSessionConversationReceipts(transactions)
   }
 
@@ -95,6 +103,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     records: AgentSessionStoreState
     hostId: string
     legacySessionTabIds: readonly string[]
+    deletedChats?: readonly DeletedChat[]
   }): AgentSessionRecordStore {
     const transactions = new AgentSessionStoreTransactions(
       args.journalDatabase,
@@ -102,7 +111,12 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
       args.hostId,
       args.legacySessionTabIds
     )
-    return new AgentSessionRecordStore(transactions, args.hostId, args.journalDatabase)
+    return new AgentSessionRecordStore(
+      transactions,
+      args.hostId,
+      args.journalDatabase,
+      args.deletedChats ?? []
+    )
   }
 
   private get state(): AgentSessionStoreState {
@@ -225,11 +239,12 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   isClaimKeyVerifiable = (keyId: string, now: number): boolean =>
     isAgentSessionClaimKeyVerifiable(this.state, keyId, now)
 
-  reserveOwner = (
+  reserveOwner = async (
     request: AgentSessionReserveRequest,
     check?: () => void
-  ): Promise<AgentSessionReserveResult> =>
-    this.commitStoreCommand(
+  ): Promise<AgentSessionReserveResult> => {
+    this.refuseDeletedSession(request.sessionId)
+    return this.commitStoreCommand(
       {
         kind: 'reserve',
         request: {
@@ -242,6 +257,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
       },
       check
     )
+  }
 
   readonly founding: ReturnType<typeof createAgentSessionFoundingStore>
 
@@ -358,23 +374,4 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   replaceSessionOptions = (args: AgentSessionOptionsReplacement): Promise<AgentSessionRecord> =>
     this.updateRecord(args.sessionId, { kind: 'options', args })
-
-  /** Deletes a chat at rest for good, with its tab, when `stillWanted` agrees after any conversion
-   *  of it. Its journal rows follow in background pages on the next maintenance tick, so a batch
-   *  of deletions shares one pass. The caller holds the chat's conversation lane, so nothing opens
-   *  it meanwhile. */
-  forgetIdleChat = (
-    forget: AgentSessionIdleForget,
-    stillWanted: () => Promise<boolean>
-  ): Promise<boolean> =>
-    this.journalDatabase.forgetChat(
-      forget.sessionId,
-      async () =>
-        (await stillWanted()) &&
-        this.commitStoreCommand({
-          kind: 'forget-idle',
-          ...forget,
-          legacyTabIds: this.transactions.legacySessionTabIds
-        })
-    )
 }

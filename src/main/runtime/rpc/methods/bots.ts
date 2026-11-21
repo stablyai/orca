@@ -39,7 +39,6 @@ import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 import { botSkillProjectViews, relinkBotSkills } from '../../../bots/bot-skill-projects'
 import { listedBotsFacts } from './bots-list-facts'
 import { normalizeBotSidebarView } from '../../../../shared/bots/bot-sidebar-view'
-import { deleteChatsOfDeletedAgents } from '../../../native-chat/chat-deletion/deleted-agent-chats'
 
 async function updateBot(params: BotUpdateParams, context: RpcContext) {
   if (params.updates.slackMirror !== undefined) {
@@ -233,8 +232,6 @@ export const BOT_METHODS = [
       if (bot) {
         releaseDeletedBotLinks(runtime, bot)
         await composioBotsOf(runtime).forget(bot.id)
-        // Its chats live in this host's chat store, not its folder, so they go here.
-        deleteChatsOfDeletedAgents(runtime)
       }
       await dropUnreadBotRequests(runtime, params.botId, 'deleted')
       googleSetupRuns().forget(params.botId)

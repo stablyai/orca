@@ -15,24 +15,6 @@ import {
 export function historyRowOwnershipLookup():
   | ((row: { agent: string; sessionId: string }) => StructuredProviderSessionOwnership | null)
   | null {
-  const owners = historyRowOwnershipsLookup()
-  return (
-    owners &&
-    ((row) => {
-      // Per provider the first head link, else the first link, in listing order.
-      const found = owners(row).flatMap(
-        (owned) => owned.find((ownership) => ownership.role === 'head') ?? owned[0] ?? []
-      )
-      return found.find((ownership) => ownership.role === 'head') ?? found[0] ?? null
-    })
-  )
-}
-
-/** Every chat that holds a history row's conversation, per provider that can own the row. A
- *  conversation can be held by several chats (a fork, a duplicate adoption). */
-export function historyRowOwnershipsLookup():
-  | ((row: { agent: string; sessionId: string }) => StructuredProviderSessionOwnership[][])
-  | null {
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return null
@@ -48,13 +30,32 @@ export function historyRowOwnershipsLookup():
     }
     return byKey
   }
-  return (row) =>
-    historyRowOwners(row.agent).map((owner) => {
+  return (row) => {
+    // Per provider the first head link, else the first link, in listing order.
+    const found = historyRowOwners(row.agent).flatMap((owner) => {
       const key = ownershipKey({ provider: owner, providerSessionId: row.sessionId })
-      return store
+      const owned = store
         .conversationsKeyedBy(ownershipKeys, key)
         .flatMap((view) => ownedBy(view).get(key) ?? [])
+      return owned.find((ownership) => ownership.role === 'head') ?? owned[0] ?? []
     })
+    return found.find((ownership) => ownership.role === 'head') ?? found[0] ?? null
+  }
+}
+
+/** Whether a deleted chat held the row's conversation: Orca never lists or resumes it again. */
+export function historyRowOfDeletedChat():
+  | ((row: { agent: string; sessionId: string }) => boolean)
+  | null {
+  // Absent on a store opened before any delete could be read.
+  const deleted = getStructuredAgentSessionHost()?.deps.store.deletedChats
+  if (!deleted) {
+    return null
+  }
+  return (row) =>
+    historyRowOwners(row.agent).some((provider) =>
+      deleted.hasConversation({ provider, providerSessionId: row.sessionId })
+    )
 }
 
 const ownershipKey = (ownership: { provider: string; providerSessionId: string }): string =>

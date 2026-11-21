@@ -1,4 +1,3 @@
-import { deleteChatsOfDeletedAgents } from '../native-chat/chat-deletion/deleted-agent-chats'
 import type { AgentMessageSource } from '../../shared/agent-session/journal/agent-session-message-source'
 import { chatMailPlace } from '../external-conversations/external-conversation-links'
 import * as botGroups from '../bots/bot-group-runtime'
@@ -299,8 +298,6 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   protected continueRestoredWorkerMail(db: OrchestrationDb): void {
     continueRestoredWorkerMailSoon(this, db, () => this._orchestrationDb === db)
     botGroups.startBotGroupsSoon(this, () => this._orchestrationDb === db)
-    // A deleted agent's chats a quit or a busy chat left behind.
-    deleteChatsOfDeletedAgents(this)
   }
 
   /** Read-only layout stream; layout.subscribe is not advertised yet. */
