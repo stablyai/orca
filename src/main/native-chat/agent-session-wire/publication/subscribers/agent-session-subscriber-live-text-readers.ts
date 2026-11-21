@@ -3,6 +3,7 @@ import type {
   LiveTextRead,
   LiveTextReaders
 } from '../../journal-ingress/structured-agent-session-event-sink'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import type { Subscriber } from './agent-session-subscribe-input'
 import type { SubscriberLiveRow } from './agent-session-subscriber-live-text'
 
@@ -33,11 +34,17 @@ export function liveTextFor(
   return typeof read === 'function' ? read(liveTextReadersOf(subscribers)) : read
 }
 
-/** Who would read a session's live text; null while nobody is subscribed. */
+/** Live text goes only to a viewer that opted in and says it is shown; every other subscriber,
+ *  older phones and desktops included, gets the saves alone. */
+export const receivesLiveText = (subscriber: Subscriber): boolean =>
+  subscriber.liveTextShown === true
+
+/** Who would read a session's live text; null while no subscriber takes it. */
 export function sessionLiveTextReaders(
   subscribers: ReadonlyMap<string, Subscriber> | undefined
 ): LiveTextReaders | null {
-  return subscribers?.size ? liveTextReadersOf(subscribers.values()) : null
+  const receivers = [...(subscribers?.values() ?? [])].filter(receivesLiveText)
+  return receivers.length > 0 ? liveTextReadersOf(receivers) : null
 }
 
 function liveTextReadersOf(subscribers: Iterable<Subscriber>): LiveTextReaders {
@@ -48,4 +55,52 @@ function liveTextReadersOf(subscribers: Iterable<Subscriber>): LiveTextReaders {
         appends: true,
         takes: (itemId) => appenders.some((reader) => !reader.liveShortened?.has(itemId))
       }
+}
+
+/** Live text goes only to a subscriber that has every journal row; one behind waits for catch-up. */
+export function subscriberAtHead(subscriber: Subscriber, journal: AgentSessionJournal): boolean {
+  const cursor = journal.cursor()
+  return subscriber.cursor.epoch === cursor.epoch && subscriber.cursor.sequence === cursor.sequence
+}
+
+/** Tries a shown viewer's catch-up waits behind before it is sent its newest text. */
+const SHOWN_TAIL_ATTEMPTS = 3
+
+/** Viewers saying they are shown or hidden. A viewer that becomes shown is sent the newest live
+ *  text once, in its own delivery order, after any catch-up already queued ahead of it. */
+export class LiveTextViewerShows {
+  constructor(
+    private readonly deps: {
+      subscribers: (sessionId: string) => readonly Subscriber[]
+      enqueue: (subscriber: Subscriber, deliver: () => Promise<unknown>) => void
+      journal: (sessionId: string) => AgentSessionJournal | undefined
+      sendTail: (subscriber: Subscriber, journal: AgentSessionJournal) => Promise<unknown>
+    }
+  ) {}
+
+  set(sessionId: string, viewer: string, shown: boolean): void {
+    for (const subscriber of this.deps.subscribers(sessionId)) {
+      if (subscriber.liveTextViewer === viewer && subscriber.liveTextShown !== shown) {
+        subscriber.liveTextShown = shown
+        if (shown) {
+          this.sendTail(subscriber, SHOWN_TAIL_ATTEMPTS)
+        }
+      }
+    }
+  }
+
+  private sendTail(subscriber: Subscriber, attempts: number): void {
+    this.deps.enqueue(subscriber, async () => {
+      const journal = this.deps.journal(subscriber.sessionId)
+      if (!journal || !receivesLiveText(subscriber)) {
+        return
+      }
+      // Behind a save, the catch-up already queued for it runs first, then this tries again.
+      if (!subscriberAtHead(subscriber, journal) && attempts > 1) {
+        this.sendTail(subscriber, attempts - 1)
+        return
+      }
+      await this.deps.sendTail(subscriber, journal)
+    })
+  }
 }

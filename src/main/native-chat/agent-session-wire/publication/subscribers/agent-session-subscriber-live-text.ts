@@ -6,9 +6,16 @@ import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { textExtends } from '../../../../../shared/agent-session/view/live-read/agent-session-text-append'
 import { isAppendOnlyLiveRow } from '../../journal-ingress/structured-agent-session-live-text-rows'
-import { noteShortenedRow } from './agent-session-subscriber-live-text-readers'
+import {
+  noteShortenedRow,
+  receivesLiveText,
+  subscriberAtHead
+} from './agent-session-subscriber-live-text-readers'
 export {
   liveTextFor,
+  LiveTextViewerShows,
+  receivesLiveText,
+  subscriberAtHead,
   sessionLiveTextReaders,
   type SubscriberLiveTextSource
 } from './agent-session-subscriber-live-text-readers'
@@ -177,7 +184,7 @@ export function batchWithSubscriberLiveText(
   reader: HistoryReader
 ): AgentJournalRenderItem[] {
   const live = (): readonly AgentJournalRenderItem[] => {
-    const rows = port.hooks.readLiveText?.(subscriber.sessionId) ?? []
+    const rows = liveTextOf(port, subscriber)
     forgetEndedLiveRows(subscriber, rows)
     return rows
   }
@@ -185,6 +192,14 @@ export function batchWithSubscriberLiveText(
     page.submissions,
     page.removedItemIds
   ])
+}
+
+/** The session's live text for a subscriber that takes it now; others get saves only, as before. */
+function liveTextOf(
+  port: SubscriberDeliveryPort,
+  subscriber: Subscriber
+): readonly AgentJournalRenderItem[] {
+  return receivesLiveText(subscriber) ? (port.hooks.readLiveText?.(subscriber.sessionId) ?? []) : []
 }
 
 /** A row whose stream ended is saved whole, so what was last sent of it is let go. */
@@ -208,7 +223,7 @@ export function pageWithSubscriberLiveText(
   page: SizedPage,
   reader: HistoryReader
 ): AgentJournalRenderItem[] {
-  const live = () => port.hooks.readLiveText?.(subscriber.sessionId) ?? []
+  const live = () => liveTextOf(port, subscriber)
   subscriber.liveSent = new Map()
   subscriber.liveShortened = undefined
   return subscriber.boundedFrames
@@ -231,7 +246,7 @@ export function followPageWithLiveText(
         sessionId: subscriber.sessionId,
         journal,
         fence: subscriber.fence,
-        items: port.hooks.readLiveText?.(subscriber.sessionId) ?? [],
+        items: liveTextOf(port, subscriber),
         subscribers: [subscriber],
         hostNow
       })
@@ -245,12 +260,6 @@ function fitsBoundedFrame(subscriber: Subscriber, rowBytes: number): boolean {
     subscriber.boundedFrames &&
     rowBytes + FRAME_SIZE_SLACK_BYTES <= BOUNDED_FRAME_CONTENT_BUDGET_BYTES
   )
-}
-
-/** Live text goes only to a subscriber that has every journal row; one behind waits for catch-up. */
-export function subscriberAtHead(subscriber: Subscriber, journal: AgentSessionJournal): boolean {
-  const cursor = journal.cursor()
-  return subscriber.cursor.epoch === cursor.epoch && subscriber.cursor.sequence === cursor.sequence
 }
 
 /** Ordinary equal-cursor items preserve the existing desktop and phone merge contract. */
@@ -272,7 +281,7 @@ export async function publishSubscriberLiveText(
   }
   const cursor = journal.cursor()
   for (const subscriber of subscribers) {
-    if (!subscriberAtHead(subscriber, journal)) {
+    if (!receivesLiveText(subscriber) || !subscriberAtHead(subscriber, journal)) {
       continue
     }
     const sent = subscriber.liveSent

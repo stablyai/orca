@@ -45,6 +45,7 @@ function stream(boundedFrames: boolean, holdsTextBase?: () => boolean) {
     sessionId: 's',
     cursor,
     boundedFrames,
+    liveTextShown: true,
     ...(holdsTextBase ? { holdsTextBase } : {})
   } as unknown as Subscriber
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: live publication uses only the port's hooks and emit.

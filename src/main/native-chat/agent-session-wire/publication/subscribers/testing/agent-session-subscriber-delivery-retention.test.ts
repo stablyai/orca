@@ -73,6 +73,8 @@ async function blockedSubscriber(
     sessionId,
     journal,
     fence: 1,
+    liveTextViewer: 'pane',
+    liveTextShown: true,
     emit: (event) => events.push(event),
     end: (cause) => ends.push(cause),
     projectJournalEvent: async (_journal, event) => {

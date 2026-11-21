@@ -34,6 +34,10 @@ export type AgentSessionSubscribeInput = {
   showsPromptSuggestions?: boolean
   /** Whether this stream's append transport holds a row's text; live rows go only where it does. */
   holdsTextBase?: (itemId: string) => boolean
+  /** The viewer that opted in to live text (one connection's view of the chat), and whether it
+   *  said it is shown. Without one the stream gets saves only. */
+  liveTextViewer?: string
+  liveTextShown?: boolean
 }
 
 export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void
@@ -56,6 +60,8 @@ export type Subscriber = {
   workView?: string
   historyView?: string
   holdsTextBase?: (itemId: string) => boolean
+  liveTextViewer?: string
+  liveTextShown?: boolean
   /** Live rows last sent, by row; a page that replaces the view clears it. */
   liveSent?: Map<string, SubscriberLiveRow>
   /** Streaming replies this subscriber was sent shortened; their saves carry them, not live text. */
@@ -71,6 +77,8 @@ export type AgentSessionSubscribersHooks = SubscriberFieldHooks & {
   readLiveText?: (sessionId: string) => readonly AgentJournalRenderItem[]
   readForkMarker?: (sessionId: string) => ForkMarker | undefined
   readForkJournal?: (sessionId: string) => AgentSessionJournal | undefined
+  /** The session's current journal, for a send outside a publication. */
+  readSessionJournal?: (sessionId: string) => AgentSessionJournal | undefined
   onJournalPublished?: (sessionId: string, journal: AgentSessionJournal) => void
   readCurrentWork?: (
     sessionId: string,
