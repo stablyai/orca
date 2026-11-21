@@ -1,4 +1,8 @@
-import type { JiraIssue, JiraSiteSelection } from '../../shared/jira/jira-types'
+import type {
+  JiraIssue,
+  JiraSelectedIssueFields,
+  JiraSiteSelection
+} from '../../shared/jira/jira-types'
 import type { JiraMediaFormat } from '../../shared/jira/jira-attachment-image'
 import { JiraSummaryLookupError } from '../../shared/jira/jira-summary-lookup'
 import { acquire, release } from './request-queue'
@@ -8,6 +12,7 @@ import { agileFieldIdList, getAgileFieldIds } from './jira-agile-fields'
 import {
   ISSUE_DETAIL_FIELDS,
   ISSUE_SUMMARY_FIELDS,
+  issueUrl,
   mapJiraIssue,
   type JiraAgileFieldIds
 } from './jira-issue-mapping'
@@ -17,7 +22,7 @@ import {
   prepareMediaResolver,
   type MediaRequest
 } from './jira-issue-media'
-import type { JiraRecord } from './jira-record-pages'
+import { asRecord, asString, type JiraRecord } from './jira-record-pages'
 import {
   getErrorStatus,
   requireStrictJiraSite,
@@ -93,6 +98,43 @@ export async function getIssue(
     }
   }
   return null
+}
+
+export async function getSelectedIssueFields(
+  key: string,
+  siteId: string,
+  fields: string[],
+  signal?: AbortSignal
+): Promise<JiraSelectedIssueFields> {
+  const entries = await getClients(siteId)
+  requireStrictJiraSite(entries, siteId, true)
+  const [entry] = entries
+  await acquire(signal)
+  try {
+    const query = new URLSearchParams({ fields: fields.join(',') })
+    const issue = await jiraRequest<JiraRecord>(
+      entry,
+      `${apiBasePath(entry.site)}/issue/${encodeURIComponent(key)}?${query}`,
+      { signal }
+    )
+    const returnedKey = asString(issue.key)
+    const raw = asRecord(issue.fields)
+    return {
+      key: returnedKey,
+      url: issueUrl(entry.site, returnedKey),
+      siteId: entry.site.id,
+      fields: Object.fromEntries(
+        fields.filter((id) => Object.hasOwn(raw, id)).map((id) => [id, raw[id]])
+      )
+    }
+  } catch (error) {
+    if (isAuthError(error)) {
+      await clearToken(entry)
+    }
+    throw error
+  } finally {
+    release()
+  }
 }
 
 export async function getIssueSummary(

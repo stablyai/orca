@@ -2069,7 +2069,7 @@ const ORCA_JIRA_MARKDOWN = [
   "",
   "```bash",
   "ORCA jira connection [--json]",
-  "ORCA jira issue <key> [--site <id>] [--json]",
+  "ORCA jira issue <key> [--fields <id,...>] [--site <id>] [--json]",
   "ORCA jira list [--filter assigned|reported|all|done] [--limit <n>] [--site <id>] [--json]",
   "ORCA jira search <jql> [--limit <n>] [--site <id>] [--json]",
   "ORCA jira create --project <idOrKey> --type <issueTypeId> --title <text> [--body <text> | --body-file <path|->] [--fields-json <json>] [--user-field <key>...] [--site <id>] [--json]",
