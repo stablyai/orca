@@ -33,4 +33,8 @@ describe('resolveSourceControlAiForOperation model fallback', () => {
       'proxy/fast'
     )
   })
+
+  it('replaces a saved built-in pick the CLI does not list', () => {
+    expect(resolveCodexModel({ selectedModelByAgent: { codex: 'gpt-5.5' } })).toBe('proxy/fast')
+  })
 })

@@ -229,10 +229,17 @@ export function resolveSourceControlAiForOperation(
     agentId: resolvedAgent,
     defaultModelId
   })
+  const findModel = (id: string) =>
+    spec.models.find((candidate) => candidate.id === id) ??
+    discoveredModels.find((candidate) => candidate.id === id)
+  // A saved or built-in pick the CLI does not list fails on every run; 'default' defers to the CLI's own config.
+  const isListed = (id: string) =>
+    id === 'default' ||
+    discoveredModels.length === 0 ||
+    discoveredModels.some((candidate) => candidate.id === id)
   const model =
-    spec.models.find((candidate) => candidate.id === persistedModelId) ??
-    discoveredModels.find((candidate) => candidate.id === persistedModelId) ??
-    discoveredModels.find((candidate) => candidate.id === defaultModelId) ??
+    (isListed(persistedModelId) ? findModel(persistedModelId) : undefined) ??
+    findModel(defaultModelId) ??
     getCommitMessageModel(resolvedAgent, spec.defaultModelId)
   if (!model) {
     return resolveFailure(textGenerationFailure('noModelForAgent', { label: spec.label }))
