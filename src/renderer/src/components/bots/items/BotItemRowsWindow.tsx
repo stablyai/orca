@@ -2,7 +2,8 @@
 // two with a chat line), so positions come from counts and nothing is measured. Every row keeps one keyed
 // place at every size, so a group never remounts its rows as it grows or shrinks. One row is in the Tab
 // order; arrows, Home and End move between rows, drawing the next one first. The row holding focus, the
-// group's Tab stop, and Back's row stay drawn wherever the panel scrolls.
+// group's Tab stop, and Back's row stay drawn wherever the panel scrolls. A short group draws every row
+// and leaves Tab and the keys to the panel, as a plain list does.
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import type { BotItemsViewport } from './bot-items-viewport'
@@ -77,6 +78,20 @@ function useIndexOf(items: readonly BotItem[], pick: RowPick | null): number {
   return useMemo(() => indexOfPick(items, pick), [items, pick])
 }
 
+const samePick = (a: RowPick | null, b: RowPick | null): boolean =>
+  a === b || (a !== null && b !== null && a.uid === b.uid && a.at === b.at)
+
+/** Back's row: focused and scrolled to. Back is a command, not navigation: Esc would otherwise draw
+ *  Chromium's keyboard ring here. */
+export function focusBotItemBackRow(row: HTMLElement | null | undefined): void {
+  row
+    ?.querySelector<HTMLElement>('[data-bot-item-open]')
+    ?.focus({ preventScroll: true, focusVisible: false })
+  row?.scrollIntoView({ block: 'nearest' })
+}
+
+const NAVIGATION_KEYS = new Set(['ArrowDown', 'ArrowUp', 'Home', 'End'])
+
 export function BotItemRowsWindow({
   items,
   placed,
@@ -93,7 +108,7 @@ export function BotItemRowsWindow({
   viewport: BotItemsViewport
   /** The group's name, which the list is announced by. */
   label: string
-  /** `tabbable`: the row is the group's Tab stop. */
+  /** `tabbable`: the row is in the Tab order. */
   renderRow: (item: BotItem, tabbable: boolean) => React.ReactNode
   /** Back's row: drawn until it has focus, then `onBackFocused`. */
   backUid: string | null
@@ -101,6 +116,7 @@ export function BotItemRowsWindow({
 }): React.JSX.Element {
   const container = useRef<HTMLDivElement | null>(null)
   const count = items.length
+  const all = count <= ALL_ROWS
   // Heights follow from which rows have a chat line: in one bot's list none do, so positions are a count.
   // Keyed by those heights alone, so content changes leave the positions as they were.
   const tallKey = useMemo(
@@ -114,11 +130,13 @@ export function BotItemRowsWindow({
         : uniformGeometry(count),
     [count, tallKey]
   )
-  const all = count <= ALL_ROWS
-  const [range, setRange] = useState<Range>({ start: 0, end: Math.min(count, FIRST_ROWS) })
-  // The row at the top of the panel's view, when this group spans it: rows added or removed above it
-  // move the view with them, so what the owner is reading stays put.
-  const anchor = useRef<(RowPick & { offset: number }) | null>(null)
+  const [range, setRange] = useState<Range>(() => ({
+    start: 0,
+    end: all ? count : Math.min(count, FIRST_ROWS)
+  }))
+  // The row at the top of the panel's view when this group spans it, and the scroll offset then: rows
+  // added or removed above it move the view with them, so what the owner is reading stays put.
+  const anchor = useRef<(RowPick & { offset: number; scrollTop: number }) | null>(null)
   const measure = useCallback(() => {
     const box = viewport.read()
     const element = container.current
@@ -126,9 +144,14 @@ export function BotItemRowsWindow({
     anchor.current = null
     if (box && top !== null) {
       const viewTop = box.top - top
-      if (viewTop > 0 && viewTop < geometry.total) {
+      if (box.scrollTop > 0 && viewTop > 0 && viewTop < geometry.total) {
         const at = geometry.indexAt(viewTop)
-        anchor.current = { uid: items[at]!.uid, at, offset: geometry.offset(at) }
+        anchor.current = {
+          uid: items[at]!.uid,
+          at,
+          offset: geometry.offset(at),
+          scrollTop: box.scrollTop
+        }
       }
     }
     let next: Range
@@ -148,12 +171,16 @@ export function BotItemRowsWindow({
   }, [viewport, geometry, count, all, items])
   useLayoutEffect(() => viewport.subscribe(measure), [measure, viewport])
   // After every render: an update can move this group (another group regrouped above it) or its rows
-  // without the list changing height, which no scroll or resize would report.
+  // without the list changing height, which no scroll or resize would report. The kept offset is set
+  // outright, so a browser clamp at the bottom of the panel isn't counted twice.
   useLayoutEffect(() => {
     const held = anchor.current
     const at = indexOfPick(items, held)
     if (held && at >= 0) {
-      viewport.keep(geometry.offset(at) - held.offset)
+      const moved = geometry.offset(at) - held.offset
+      if (moved !== 0) {
+        viewport.scrollTo(held.scrollTop + moved)
+      }
     }
     measure()
   })
@@ -167,12 +194,8 @@ export function BotItemRowsWindow({
   )
   // The row an arrow moved to: drawn, then focused as it mounts.
   const [target, setTarget] = useState<RowPick | null>(null)
-  const backPick = useMemo(
-    () => (backUid === null ? null : { uid: backUid, at: 0 }),
-    [backUid]
-  )
-  const stopIndex = useIndexOf(items, stop)
-  const tabStop = stopIndex >= 0 ? stopIndex : 0
+  const backPick = useMemo(() => (backUid === null ? null : { uid: backUid, at: 0 }), [backUid])
+  const tabStop = Math.max(0, useIndexOf(items, stop))
   const focusedIndex = useIndexOf(items, focused)
   const targetIndex = useIndexOf(items, target)
   const backIndex = useIndexOf(items, backPick)
@@ -200,11 +223,7 @@ export function BotItemRowsWindow({
   const focusBack = useCallback(
     (node: HTMLElement | null) => {
       if (node) {
-        // Back is a command, not navigation: Esc would otherwise draw Chromium's keyboard ring here.
-        node
-          .querySelector<HTMLElement>('[data-bot-item-open]')
-          ?.focus({ preventScroll: true, focusVisible: false })
-        node.scrollIntoView({ block: 'nearest' })
+        focusBotItemBackRow(node)
         onBackFocused()
       }
     },
@@ -212,9 +231,12 @@ export function BotItemRowsWindow({
   )
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
-    // Keys from a row's open menu reach here through its portal, and a menu trigger opens its menu on
-    // Arrow Down: the menu owns those. Modified arrows are the system's (Cmd+Up scrolls to the top).
+    // A short group leaves the keys to the panel. Keys from a row's open menu reach here through its
+    // portal, and a menu trigger opens its menu on Arrow Down: the menu owns those. Modified keys are the
+    // system's (Cmd+Up scrolls to the top).
     if (
+      all ||
+      !NAVIGATION_KEYS.has(event.key) ||
       event.defaultPrevented ||
       event.altKey ||
       event.ctrlKey ||
@@ -232,20 +254,17 @@ export function BotItemRowsWindow({
       return
     }
     const next =
-      event.key === 'ArrowDown'
-        ? Math.min(count - 1, at + 1)
-        : event.key === 'ArrowUp'
-          ? Math.max(0, at - 1)
-          : event.key === 'Home'
-            ? 0
-            : event.key === 'End'
-              ? count - 1
-              : at
-    if (next === at || !items[next]) {
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? count - 1
+          : Math.min(count - 1, Math.max(0, at + (event.key === 'ArrowDown' ? 1 : -1)))
+    const item = items[next]
+    if (next === at || !item) {
       return
     }
     event.preventDefault()
-    setTarget({ uid: items[next].uid, at: next })
+    setTarget({ uid: item.uid, at: next })
   }
 
   return (
@@ -269,17 +288,12 @@ export function BotItemRowsWindow({
             // The window keeps the reading position itself, so the browser mustn't anchor on a row.
             className="absolute inset-x-0 [overflow-anchor:none]"
             style={{ top: geometry.offset(index), height: geometry.height(index) }}
-            ref={
-              index === targetIndex
-                ? focusTarget
-                : index === backIndex
-                  ? focusBack
-                  : undefined
-            }
+            ref={index === targetIndex ? focusTarget : index === backIndex ? focusBack : undefined}
             onFocus={() => {
               const pick = { uid: item.uid, at: index }
-              setFocused(pick)
-              setStop(pick)
+              // Focus moving between a row's own controls changes nothing here.
+              setFocused((prev) => (samePick(prev, pick) ? prev : pick))
+              setStop((prev) => (samePick(prev, pick) ? prev : pick))
             }}
             onBlur={(event) => {
               if (document.hasFocus() && !event.currentTarget.contains(event.relatedTarget)) {

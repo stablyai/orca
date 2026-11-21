@@ -32,19 +32,10 @@ import { botItemGroupName } from '../../../../../shared/bots/bot-item-status-nam
 import { botItemsByBot, setBotItemsStatus } from './use-bot-items'
 import type { BotNeedView } from '../use-bot-now'
 import { useBotItemSnoozing, type BotItemSnoozing } from './BotItemSnooze'
-import { BotItemRowsWindow } from './BotItemRowsWindow'
+import { BotItemRowsWindow, focusBotItemBackRow } from './BotItemRowsWindow'
 import { useBotItemsViewport, type BotItemsViewport } from './bot-items-viewport'
 
 const foldId = (id: BotItemGroupId): BotPanelFoldId => `items-${id}`
-
-/** Back's row: focused and scrolled to. Back is a command, not navigation: Esc would otherwise draw
- *  Chromium's keyboard ring here. */
-function focusBackRow(row: HTMLElement | null | undefined): void {
-  row
-    ?.querySelector<HTMLElement>('[data-bot-item-open]')
-    ?.focus({ preventScroll: true, focusVisible: false })
-  row?.scrollIntoView({ block: 'nearest' })
-}
 
 /** A group's members' items in one list: each row acts on its own bot and shows its face. */
 export type BotItemsListMembers = {
@@ -267,32 +258,26 @@ function BotItemGroup({
   const { placeOf } = owner
   const placedOf = useCallback((item: BotItem) => placeOf(item) !== null, [placeOf])
   const section = useRef<HTMLElement | null>(null)
-  // Back's row is pending until it has focus.
-  const [focusing, setFocusing] = useState(focusIndex >= 0)
+  // Back's row until it has focus; one that left the group has nothing to return to.
+  const [backDone, setBackDone] = useState(false)
+  const backItem = backDone ? undefined : items[focusIndex]
+  const needsYouBackDone = useRef(false)
   const unfold = useLatestHandler(() => setOpen(true))
-  // Needs you's rows are all mounted; other groups' windows focus Back's row as they draw it.
+  // Needs you's rows are all mounted, so its row is focused here; other groups' windows focus it as drawn.
   useEffect(() => {
-    if (!focusing) {
-      return
-    }
-    // The row left the group before it showed: nothing to return to.
-    if (!items[focusIndex]) {
-      setFocusing(false)
+    if (!backItem || needsYouBackDone.current) {
       return
     }
     if (!open) {
       unfold()
-      return
+    } else if (id === 'needs_you') {
+      needsYouBackDone.current = true
+      focusBotItemBackRow(
+        section.current?.querySelector<HTMLElement>(`[data-bot-item="${backItem.number}"]`)
+      )
     }
-    if (id !== 'needs_you') {
-      return
-    }
-    setFocusing(false)
-    focusBackRow(
-      section.current?.querySelector<HTMLElement>(`[data-bot-item="${items[focusIndex]?.number}"]`)
-    )
-  }, [focusing, open, unfold, id, items, focusIndex])
-  const backFocused = useCallback(() => setFocusing(false), [])
+  }, [backItem, open, unfold, id])
+  const backFocused = useCallback(() => setBackDone(true), [])
   const [confirming, setConfirming] = useState(false)
   const [reading, setReading] = useState(false)
   const needsYou = id === 'needs_you'
@@ -415,7 +400,7 @@ function BotItemGroup({
             viewport={viewport}
             label={botItemGroupName(id, t)}
             renderRow={(item, tabbable) => row(item, tabbable)}
-            backUid={focusing && open ? (items[focusIndex]?.uid ?? null) : null}
+            backUid={backItem?.uid ?? null}
             onBackFocused={backFocused}
           />
           {more > 0 ? (

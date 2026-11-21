@@ -3,12 +3,20 @@
 // so groups add no scroll listeners or observers of their own.
 import { useEffect, useMemo, useRef } from 'react'
 
+export type BotItemsViewportBox = { top: number; bottom: number; scrollTop: number }
+
 export type BotItemsViewport = {
-  /** The scroller's visible box in client coordinates; null before a scroller is attached. */
-  read: () => { top: number; bottom: number } | null
+  /** The scroller's visible box in client coordinates and its scroll offset; null before a scroller is
+   *  attached. Read once per frame for every group a notice reaches. */
+  read: () => BotItemsViewportBox | null
   subscribe: (listener: () => void) => () => void
-  /** Scrolls by `delta` to keep what's at the top of the view there; at the very top it lets rows flow. */
-  keep: (delta: number) => void
+  /** Scrolls to `scrollTop`, to keep what was at the top of the view there. */
+  scrollTo: (scrollTop: number) => void
+}
+
+function readBox(scroller: HTMLElement): BotItemsViewportBox {
+  const box = scroller.getBoundingClientRect()
+  return { top: box.top, bottom: box.bottom, scrollTop: scroller.scrollTop }
 }
 
 export function useBotItemsViewport(
@@ -16,24 +24,16 @@ export function useBotItemsViewport(
   list: React.RefObject<HTMLElement | null>
 ): BotItemsViewport {
   const listeners = useRef(new Set<() => void>())
+  // This frame's box, shared by every group a notice reaches.
+  const frameBox = useRef<BotItemsViewportBox | null>(null)
   const viewport = useMemo<BotItemsViewport>(
     () => ({
-      read: () => {
-        if (!scroller) {
-          return null
-        }
-        const box = scroller.getBoundingClientRect()
-        return { top: box.top, bottom: box.bottom }
-      },
+      read: () => (scroller ? (frameBox.current ?? readBox(scroller)) : null),
       subscribe: (listener) => {
         listeners.current.add(listener)
         return () => listeners.current.delete(listener)
       },
-      keep: (delta) => {
-        if (scroller && delta !== 0 && scroller.scrollTop > 0) {
-          scroller.scrollTop += delta
-        }
-      }
+      scrollTo: (scrollTop) => scroller?.scrollTo({ top: scrollTop })
     }),
     [scroller]
   )
@@ -46,7 +46,9 @@ export function useBotItemsViewport(
       if (frame === null) {
         frame = requestAnimationFrame(() => {
           frame = null
+          frameBox.current = readBox(scroller)
           listeners.current.forEach((listener) => listener())
+          frameBox.current = null
         })
       }
     }

@@ -12,16 +12,22 @@ import { groupBotItems } from '../../../../../shared/bots/bot-item-groups'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
 import { reuseEqualJson } from '../../../../../shared/reuse-equal-json'
 
-const rowRenders = vi.hoisted(() => new Map<number, number>())
+// Each row works out its age line once per render of its item; the activity time names the row.
+const rowRenders = vi.hoisted((): { at: number[] } => ({ at: [] }))
 
 vi.mock('./use-bot-items', () => ({ setBotItemsStatus: vi.fn() }))
-vi.mock('./BotItemNumberColumn', () => ({
-  // Rendered once per row render: counts which rows rendered.
-  BotItemNumberColumn: ({ number }: { number: number }) => {
-    rowRenders.set(number, (rowRenders.get(number) ?? 0) + 1)
-    return <span>#{number}</span>
+vi.mock('@/lib/time-format/short-time-ago', async (importOriginal) => {
+  const actual = await importOriginal<{
+    formatShortTimeAgo: (ts: number, now?: number) => string
+  }>()
+  return {
+    ...actual,
+    formatShortTimeAgo: (ts: number, now?: number) => {
+      rowRenders.at.push(ts)
+      return actual.formatShortTimeAgo(ts, now)
+    }
   }
-}))
+})
 
 import { BotItemsList } from './BotItemsList'
 
@@ -70,10 +76,7 @@ function Panel({ items }: { items: readonly BotItem[] }): React.JSX.Element {
 }
 
 /** The host's answer as the read gets it: fresh objects, newest activity first. */
-function hostAnswer(
-  changed: { number: number; title: string } | null,
-  count = OPEN
-): BotItem[] {
+function hostAnswer(changed: { number: number; title: string } | null, count = OPEN): BotItem[] {
   const items = Array.from({ length: count }, (_, index) =>
     makeTestBotItem(index + 1, { status: 'planned', lastActivityAt: NOW - (index + 1) * 1000 })
   )
@@ -83,7 +86,8 @@ function hostAnswer(
   }
   // The host lists newest activity first, so the changed item moves to the top of the answer.
   items.sort((a, b) => b.lastActivityAt - a.lastActivityAt)
-  return JSON.parse(JSON.stringify(items)) as BotItem[]
+  const answer: BotItem[] = JSON.parse(JSON.stringify(items))
+  return answer
 }
 
 beforeEach(() => {
@@ -100,7 +104,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   localStorage.clear()
-  rowRenders.clear()
+  rowRenders.at = []
   vi.restoreAllMocks()
 })
 
@@ -130,10 +134,11 @@ it.each([
   async ({ count, changed }) => {
     const first = hostAnswer(null, count)
     const view = await showWholePlannedGroup(first)
-    rowRenders.clear()
+    rowRenders.at = []
     // The item gets a comment: the host's next answer is all-new objects, and it now sorts first.
     const next = reuseEqualJson(first, hostAnswer({ number: changed, title: 'Updated' }, count))
     view.rerender(<Panel items={next} />)
-    expect([...rowRenders.entries()]).toEqual([[changed, 1]])
+    // Only the changed item, whose activity is now, renders.
+    expect(rowRenders.at).toEqual([NOW])
   }
 )
