@@ -25,6 +25,12 @@ export type InlineInput = {
   operationOwner?: TreeNode['operationOwner']
 }
 
+type InputSelection = {
+  start: number
+  end: number
+  direction: NonNullable<HTMLInputElement['selectionDirection']>
+}
+
 export function InlineInputRow({
   depth,
   inlineInput,
@@ -39,6 +45,7 @@ export function InlineInputRow({
   const t = useTranslate()
   const [clipboardText, setClipboardText] = useState('')
   const menuTarget = useRef<HTMLInputElement | null>(null)
+  const menuSelection = useRef<InputSelection | null>(null)
   const menuRequest = useRef(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -71,6 +78,28 @@ export function InlineInputRow({
       inputRef.current?.focus()
     })
   }, [cancelRefocusFrame])
+
+  const captureInputSelection = useCallback((input: HTMLInputElement): void => {
+    const start = input.selectionStart ?? input.value.length
+    menuSelection.current = {
+      start,
+      end: input.selectionEnd ?? start,
+      direction: input.selectionDirection ?? 'none'
+    }
+  }, [])
+
+  const restoreInputSelection = useCallback((): void => {
+    const input = inputRef.current
+    const selection = menuSelection.current
+    menuSelection.current = null
+    if (!input) {
+      return
+    }
+    input.focus()
+    if (selection) {
+      input.setSelectionRange(selection.start, selection.end, selection.direction)
+    }
+  }, [])
 
   const clearInlineInputTimers = useCallback(() => {
     if (focusFrame.current !== null) {
@@ -163,6 +192,9 @@ export function InlineInputRow({
           setClipboardText('')
           menuTarget.current = open ? inputRef.current : null
           if (open) {
+            if (!menuSelection.current && inputRef.current) {
+              captureInputSelection(inputRef.current)
+            }
             clearBlurTimeout()
             cancelRefocusFrame()
             void window.api.ui
@@ -181,6 +213,16 @@ export function InlineInputRow({
             ref={setInputRef}
             className="flex-1 min-w-0 bg-transparent text-xs text-foreground outline-none border border-ring rounded-sm px-1"
             defaultValue={inlineInput.type === 'rename' ? inlineInput.existingName : ''}
+            onPointerDownCapture={(event) => {
+              if (event.button === 2) {
+                captureInputSelection(event.currentTarget)
+              }
+            }}
+            onContextMenuCapture={(event) => {
+              if (!menuSelection.current) {
+                captureInputSelection(event.currentTarget)
+              }
+            }}
             onKeyDown={(e) => {
               // Leave composing keys, including the IME's Enter and Escape, to the input method.
               if (imeEnter.ownsKeyDown(e) || imeEnter.isComposing() || isImeCompositionKeyDown(e)) {
@@ -219,20 +261,26 @@ export function InlineInputRow({
         <ContextMenuContent
           onCloseAutoFocus={(event) => {
             event.preventDefault()
-            inputRef.current?.focus()
+            restoreInputSelection()
           }}
         >
           {clipboardText && (
             <FileExplorerPasteMenuItem
               preview={{ kind: 'text', text: clipboardText }}
               onSelect={() => {
+                restoreInputSelection()
                 if (inputRef.current) {
                   void pasteTextIntoTextControl(inputRef.current, clipboardText)
                 }
               }}
             />
           )}
-          <ContextMenuItem onSelect={() => inputRef.current?.select()}>
+          <ContextMenuItem
+            onSelect={() => {
+              menuSelection.current = null
+              inputRef.current?.select()
+            }}
+          >
             {t('auto.components.right.sidebar.FileExplorerPaste.selectAll', 'Select All')}
           </ContextMenuItem>
         </ContextMenuContent>

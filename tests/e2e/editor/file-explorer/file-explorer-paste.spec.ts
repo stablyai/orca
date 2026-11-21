@@ -244,6 +244,22 @@ test('pastes clipboard files and images through the explorer context menus', asy
   await moveAndClick(page, page.getByRole('menuitem', { name: /^Rename/ }))
   const nameInput = shell.locator('input').filter({ visible: true }).last()
   await expect(nameInput).toHaveValue(FILE_NAME)
+  await expect
+    .poll(() =>
+      nameInput.evaluate((input: HTMLInputElement) => [input.selectionStart, input.selectionEnd])
+    )
+    .toEqual([0, 16])
+  await moveAndClick(page, nameInput, 'right', undefined, 16)
+  await expect(page.getByRole('menuitem', { name: /^Paste(?:\s|$)/ })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect
+    .poll(() =>
+      nameInput.evaluate((input: HTMLInputElement) => [input.selectionStart, input.selectionEnd])
+    )
+    .toEqual([0, 16])
+  await page.mouse.move(1400, 900)
+  videoMousePosition = { x: 1400, y: 900 }
+  await page.screenshot({ path: testInfo.outputPath('rename-selection.png') })
   await rightClickPaste(
     page,
     nameInput,
