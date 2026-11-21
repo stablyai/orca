@@ -157,8 +157,10 @@ export class AgentSessionSubscribers {
       const targets = all.filter((subscriber) => liveText.shownViewer(subscriber) === shown)
       const items = targets.some(this.isActive) ? liveText.liveTextFor(read, targets, shown) : []
       const live = { journal, fence, items, hostNow: this.now() }
-      // Checked per subscriber, in case ending one ends another mid fan-out.
-      targets.forEach((target) => this.isActive(target) && this.lanes.of(target).liveText(live))
+      // Checked per subscriber, in case ending one ends another mid fan-out. Nothing to send and
+      // nothing sent before to let go of means no delivery at all.
+      const due = (target: Subscriber) => items.length > 0 || (target.liveSent?.size ?? 0) > 0
+      targets.forEach((t) => this.isActive(t) && due(t) && this.lanes.of(t).liveText(live))
     }
   }
 
