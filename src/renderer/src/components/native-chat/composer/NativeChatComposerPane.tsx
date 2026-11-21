@@ -167,7 +167,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       setNotice
     })
 
-    const localHandle = useRef<C.NativeChatComposerHandle>(null)
+    const localHandle = fileDrops.composerHandle
     const root = useRef<HTMLDivElement>(null)
     const handlePasteEvent = useNativeChatComposerHandle(localHandle, {
       resend: (text, imagePaths) => !structuredTransport && sendPty({ text, imagePaths }),
