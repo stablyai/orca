@@ -6,7 +6,13 @@ import type { ExecutionHostId } from '../../../shared/execution-host/execution-h
 const mocks = vi.hoisted(() => ({ callRuntimeRpc: vi.fn() }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 
-import { refreshBotHostOrcaAccount, startBotHostSignIn } from './bot-host-orca-account'
+import { useAppStore } from '@/store'
+import { ORCA_CONNECTED } from '../components/bots/orca-sign-in.test-fixture'
+import {
+  readBotHostOnOwnAccount,
+  refreshBotHostOrcaAccount,
+  startBotHostSignIn
+} from './bot-host-orca-account'
 
 afterEach(() => {
   mocks.callRuntimeRpc.mockReset()
@@ -58,5 +64,28 @@ describe('startBotHostSignIn', () => {
       approveInBrowser: true,
       switchAccount: false
     })
+  })
+})
+
+describe('readBotHostOnOwnAccount', () => {
+  it('reads the host again instead of taking a read sent before it', async () => {
+    const hostId: ExecutionHostId = 'runtime:env-signed-in-since'
+    useAppStore.setState({
+      orcaProfileAuthStatus: {
+        ...ORCA_CONNECTED,
+        cloud: { cloudProfileId: 'c', userId: 'u', email: 'ada@example.com', linkedAt: 1 }
+      }
+    })
+    let answerEarlier: (status: OrcaAccountServerStatus) => void = () => {}
+    mocks.callRuntimeRpc
+      .mockImplementationOnce(() => new Promise((resolve) => (answerEarlier = resolve)))
+      .mockResolvedValueOnce(account('signed-in'))
+    const earlier = refreshBotHostOrcaAccount(hostId)
+
+    const onOwnAccount = readBotHostOnOwnAccount(hostId)
+    answerEarlier(account('signed-out'))
+    await earlier
+
+    await expect(onOwnAccount).resolves.toBe(true)
   })
 })

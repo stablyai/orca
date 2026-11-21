@@ -67,11 +67,17 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-/** Reads the host's sign-in again; an older Orca without `orcaAccount.status` reads as unknown. */
-export function refreshBotHostOrcaAccount(hostId: ExecutionHostId): Promise<void> {
+/**
+ * Reads the host's sign-in again; an older Orca without `orcaAccount.status` reads as unknown.
+ * `fresh`: a read still out may predate what the caller waits on, so it reads again once that lands.
+ */
+export function refreshBotHostOrcaAccount(
+  hostId: ExecutionHostId,
+  { fresh = false }: { fresh?: boolean } = {}
+): Promise<void> {
   const entry = entryOf(hostId)
   if (entry.reading) {
-    return entry.reading
+    return fresh ? entry.reading.then(() => refreshBotHostOrcaAccount(hostId)) : entry.reading
   }
   // A read sent before the host came back answers for a host that may have changed: dropped.
   const generation = botHostGeneration(hostId)
@@ -139,13 +145,34 @@ export function useBotHostOrcaAccountSettled(hostId: ExecutionHostId): boolean {
   return useSyncExternalStore(subscribe, () => hosts.get(hostId)?.settled ?? false)
 }
 
+function runsAsOwnAccount(
+  hostId: ExecutionHostId,
+  account: OrcaAccountServerStatus | null,
+  ownEmail: string | null
+): boolean {
+  return (
+    hostId === LOCAL_EXECUTION_HOST_ID ||
+    (account?.state === 'signed-in' && !!account.email && account.email === ownEmail)
+  )
+}
+
 /** Whether the host runs as this window's own Orca account; this app's own bots always do. */
 export function useBotHostOnOwnAccount(hostId: ExecutionHostId): boolean {
   const account = useBotHostOrcaAccount(hostId)
   const ownEmail = useAppStore((state) => state.orcaProfileAuthStatus?.cloud?.email ?? null)
-  return (
-    hostId === LOCAL_EXECUTION_HOST_ID ||
-    (account?.state === 'signed-in' && !!account.email && account.email === ownEmail)
+  return runsAsOwnAccount(hostId, account, ownEmail)
+}
+
+/** The same from a fresh read of the host's sign-in, for a step that decides once. */
+export async function readBotHostOnOwnAccount(hostId: ExecutionHostId): Promise<boolean> {
+  if (hostId === LOCAL_EXECUTION_HOST_ID) {
+    return true
+  }
+  await refreshBotHostOrcaAccount(hostId, { fresh: true })
+  return runsAsOwnAccount(
+    hostId,
+    hosts.get(hostId)?.status ?? null,
+    useAppStore.getState().orcaProfileAuthStatus?.cloud?.email ?? null
   )
 }
 
@@ -204,7 +231,10 @@ async function follow(
     if (flow.phase === 'signedIn') {
       entry.flowId = null
       setSignIn(hostId, IDLE)
-      await Promise.all([refreshBotHostOrcaAccount(hostId), refreshBotHost(hostId)])
+      await Promise.all([
+        refreshBotHostOrcaAccount(hostId, { fresh: true }),
+        refreshBotHost(hostId)
+      ])
       return
     }
     if (flow.phase === 'failed' || flow.phase === 'cancelled') {

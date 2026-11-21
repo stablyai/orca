@@ -51,7 +51,8 @@ vi.mock('@/lib/bot-host-orca-account', () => ({
         : null,
   useBotHostOrcaAccountSettled: () => true,
   refreshBotHostOrcaAccount: mocks.refreshAccount,
-  startBotHostSignIn: mocks.startHostSignIn
+  startBotHostSignIn: mocks.startHostSignIn,
+  readBotHostOnOwnAccount: async () => mocks.hostEmail === 'me@example.test'
 }))
 vi.mock('@/lib/bot-host-page', () => ({ openBotHostPageOrSay: mocks.open }))
 vi.mock('@/lib/bot-host-status', async (actual) => {
@@ -221,13 +222,18 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     expect(mocks.hosts[SERVER].setUpApp).not.toHaveBeenCalled()
   })
 
-  it('offers no hand-off when the server is signed in to this desktop’s own account', async () => {
+  it('sets the app up on the server in this desktop’s workspace when both share one Orca account', async () => {
     mocks.hostEmail = 'me@example.test'
     serverState({ state: 'not_created' })
+    mocks.hosts[SERVER].setUpApp.mockResolvedValue(
+      ok({ appId: 'A1', authorizeUrl: AUTHORIZE, expiresAt: NOW + 60_000 })
+    )
     openDialog()
 
-    await screen.findByLabelText('Configuration refresh token')
-    expect(screen.queryByRole('button', { name: 'Use it →' })).toBeNull()
+    await screen.findByRole('button', { name: 'Approve in Slack' })
+    expect(mocks.hosts[SERVER].setUpApp).toHaveBeenCalledWith({ botId: 'bot-1', teamId: 'T1' })
+    expect(mocks.hosts[SERVER].handOff).not.toHaveBeenCalled()
+    expect(screen.queryByLabelText('Configuration refresh token')).toBeNull()
   })
 
   it('offers no hand-off in a paired web client, which cannot redeem', async () => {

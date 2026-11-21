@@ -11,7 +11,7 @@ import { BOT_SLACK_DESKTOP_ERRORS } from '../../../../../shared/connector-bot-sl
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { botSlackErrorMessage } from './bot-slack-copy'
 import { useBotHostLabel } from '../use-bot-host-label'
-import { hostBots, knownSlackTeam, otherSlackTeams } from './slack-setup-teams'
+import { hostBots, knownAccountSlackTeam, otherSlackTeams } from './slack-setup-teams'
 import {
   slackInstallLink as installLink,
   slackInstallState,
@@ -242,7 +242,7 @@ export function useBotSlackSetup(
       case 'grant_expired':
         return setStep({ kind: 'token', reconnect: true, error: null, teamId: slack.teamId })
       case 'not_created': {
-        const knownTeam = teamId ?? knownSlackTeam(hostBots(bot), bot.id)
+        const knownTeam = teamId ?? (await knownAccountSlackTeam(bot))
         return knownTeam
           ? await setUp(knownTeam, mount)
           : setStep({ kind: 'token', reconnect: false, error: null })
