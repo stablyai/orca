@@ -1,6 +1,5 @@
-/** Shared liveness slots: [0] is non-zero while starting or handling work, [1] counts replies. */
-export const JOURNAL_CHECKPOINT_BUSY = 0
-export const JOURNAL_CHECKPOINT_REPLIES = 1
+/** Shared progress word: odd while starting or handling work, and it moves on every step. */
+export const JOURNAL_CHECKPOINT_PROGRESS = 0
 
 // Evaluated source travels with both host bundles, without a separate worker entry or Electron imports.
 export const journalCheckpointWorkerSource = `
@@ -12,17 +11,14 @@ let idle;
 let generation = 0;
 let nextTruncate = 0;
 let pendingTruncate;
-// The owner tells a slow checkpoint from a dead worker by these, since a native call can't answer.
-// A unit of work stays busy until its reply is counted, so no gap reads as idle and silent.
-const liveness = new Int32Array(workerData.liveness);
+// The owner tells a slow checkpoint from a dead worker by this, since a native call can't answer.
+// A unit of work ends after its reply is posted, so one load never sees a gap as idle and silent.
+const progress = new Int32Array(workerData.liveness);
 const work = (run) => {
-  Atomics.add(liveness, ${JOURNAL_CHECKPOINT_BUSY}, 1);
-  try { run(); } finally { Atomics.sub(liveness, ${JOURNAL_CHECKPOINT_BUSY}, 1); }
+  Atomics.add(progress, ${JOURNAL_CHECKPOINT_PROGRESS}, 1);
+  try { run(); } finally { Atomics.add(progress, ${JOURNAL_CHECKPOINT_PROGRESS}, 1); }
 };
-const reply = (message) => {
-  Atomics.add(liveness, ${JOURNAL_CHECKPOINT_REPLIES}, 1);
-  parentPort.postMessage(message);
-};
+const reply = (message) => parentPort.postMessage(message);
 try {
   db = new DatabaseSync(workerData.filename);
   if (db.prepare('PRAGMA journal_mode').get().journal_mode !== 'wal') {
@@ -91,8 +87,8 @@ try {
     }
     check(request.force, request.id, request.generation);
   }));
-  // Started: the owner counted startup as busy.
-  Atomics.sub(liveness, ${JOURNAL_CHECKPOINT_BUSY}, 1);
+  // Started: the owner counted startup as one unit of work.
+  Atomics.add(progress, ${JOURNAL_CHECKPOINT_PROGRESS}, 1);
 } catch (error) {
   db?.close();
   throw error;

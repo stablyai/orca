@@ -3,8 +3,7 @@ import { spawnWorkerThread } from '../../../worker-threads/worker-thread-spawn'
 import type Database from '../../../sqlite/sync-database'
 import type { WorkerRequestTransport } from '../../../worker-threads/worker-thread-transport'
 import {
-  JOURNAL_CHECKPOINT_BUSY,
-  JOURNAL_CHECKPOINT_REPLIES,
+  JOURNAL_CHECKPOINT_PROGRESS,
   journalCheckpointWorkerSource
 } from './journal-checkpoint-worker-source'
 import { JOURNAL_SIZE_LIMIT_BYTES } from './journal-database'
@@ -19,8 +18,6 @@ const HEALTH_TIMEOUT_MS = 5000
 // takes checkpoints back, and the worker is kept (terminating can't interrupt that call).
 const STUCK_MS = 60_000
 const RESTART_BASE_MS = 1000
-// Workers that die before ever answering point at a broken setup, not a transient failure.
-const MAX_NEVER_READY = 3
 // Also how long a restarted worker must stay up before its backoff starts over.
 const RESTART_MAX_MS = 60_000
 
@@ -55,9 +52,10 @@ type Attached = {
   liveness: Int32Array
   exited: Promise<void>
   spawnedAt: number
-  replies: number
+  /** The progress word when the deadline was armed. */
+  seen: number
   busySince: number | undefined
-  ready: boolean
+  stuck: boolean
   /** An idle worker silent for one deadline may just be descheduled; a second makes it dead. */
   silent: boolean
 }
@@ -92,7 +90,6 @@ export class JournalCheckpointOwner {
   private restarts = 0
   private totalOutageMs = 0
   private failedStarts = 0
-  private neverReady = 0
   private readonly now: () => number
 
   constructor(
@@ -182,13 +179,7 @@ export class JournalCheckpointOwner {
 
   private gated(urgent = false): boolean {
     const { stopped, unknown, blocked, log } = this
-    // While a busy worker is late, bulk writes take the send rule: the WAL may grow to the hard
-    // ceiling rather than conversion stalling on one slow checkpoint.
-    const late = this.current?.busySince !== undefined
-    return journalWalGated(
-      { stopped, unknown, blocked, log, truncating: !!this.truncate },
-      urgent || late
-    )
+    return journalWalGated({ stopped, unknown, blocked, log, truncating: !!this.truncate }, urgent)
   }
 
   private wake(): void {
@@ -199,10 +190,10 @@ export class JournalCheckpointOwner {
     if (this.closing) {
       return
     }
-    const liveness = new SharedArrayBuffer(2 * Int32Array.BYTES_PER_ELEMENT)
+    const liveness = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT)
     const word = new Int32Array(liveness)
     // Starting counts as busy: a thread still booting under memory pressure isn't dead.
-    Atomics.store(word, JOURNAL_CHECKPOINT_BUSY, 1)
+    Atomics.store(word, JOURNAL_CHECKPOINT_PROGRESS, 1)
     const workerData: JournalCheckpointWorkerData = {
       filename: this.filename,
       sizeLimit: JOURNAL_SIZE_LIMIT_BYTES,
@@ -219,7 +210,6 @@ export class JournalCheckpointOwner {
             workerData
           })
     } catch (error) {
-      this.neverReady++
       this.lose(error, 'spawn')
       return
     }
@@ -227,9 +217,9 @@ export class JournalCheckpointOwner {
       worker,
       liveness: word,
       spawnedAt: this.now(),
-      replies: 0,
+      seen: 1,
       busySince: undefined,
-      ready: false,
+      stuck: false,
       silent: false,
       exited: new Promise((resolve) => {
         worker.on('exit', () => {
@@ -253,9 +243,9 @@ export class JournalCheckpointOwner {
     })
     worker.unref()
     // The writer keeps its checkpoints until the worker proves it is up.
-    const replies = this.replies()
+    const progress = this.progress()
     this.send({ type: 'hello' })
-    this.armDeadline(true, replies)
+    this.armDeadline(true, progress)
   }
 
   /** Takes checkpoints from the writer; a write transaction defers it to its afterCommit. */
@@ -300,9 +290,9 @@ export class JournalCheckpointOwner {
 
   private check(): void {
     this.pending = ++this.nextRequest
-    const replies = this.replies()
+    const progress = this.progress()
     this.send({ type: 'check', id: this.pending, generation: this.generation, force: this.gated() })
-    this.armDeadline(false, replies)
+    this.armDeadline(false, progress)
   }
 
   private acknowledge(): void {
@@ -310,9 +300,9 @@ export class JournalCheckpointOwner {
       return
     }
     this.truncate.acknowledged = true
-    const replies = this.replies()
+    const progress = this.progress()
     this.send({ type: 'truncate', truncateId: this.truncate.id })
-    this.armDeadline(false, replies)
+    this.armDeadline(false, progress)
   }
 
   private send(message: unknown): void {
@@ -330,10 +320,7 @@ export class JournalCheckpointOwner {
     const attached = this.current!
     attached.busySince = undefined
     attached.silent = false
-    if (!attached.ready) {
-      attached.ready = true
-      this.neverReady = 0
-    }
+    attached.stuck = false
     if (this.stopped) {
       // A starting worker, or one stuck past STUCK_MS, answered: it takes checkpoints with fresh
       // state, then this reply is read as any other, so a truncate it asks for is still acknowledged.
@@ -409,10 +396,7 @@ export class JournalCheckpointOwner {
       this.warn(restoreError)
     }
     this.wake()
-    if (!this.outage && !this.permanent) {
-      this.outage = { since: this.now(), cause }
-    }
-    this.warn(error)
+    this.openOutage(error, cause)
     if (cause === 'slow') {
       this.armDeadline(true)
       return
@@ -421,7 +405,6 @@ export class JournalCheckpointOwner {
     this.current = undefined
     if (attached) {
       this.failedStarts = this.now() - attached.spawnedAt >= RESTART_MAX_MS ? 0 : this.failedStarts
-      this.neverReady = attached.ready ? 0 : this.neverReady + 1
       // Terminating can't stop a native call; the next worker starts only after this one exits.
       this.retiring = attached.exited
       try {
@@ -434,9 +417,6 @@ export class JournalCheckpointOwner {
   }
 
   private scheduleRestart(): void {
-    if (this.neverReady >= MAX_NEVER_READY) {
-      this.permanent = true
-    }
     if (this.permanent || this.closing || this.restartTimer) {
       return
     }
@@ -454,6 +434,13 @@ export class JournalCheckpointOwner {
       })
     }, delay)
     this.restartTimer.unref()
+  }
+
+  private openOutage(error: unknown, cause: JournalCheckpointOutage['cause']): void {
+    if (!this.outage && !this.permanent) {
+      this.outage = { since: this.now(), cause }
+    }
+    this.warn(error)
   }
 
   private recovered(): void {
@@ -507,18 +494,18 @@ export class JournalCheckpointOwner {
     }
   }
 
-  private replies(): number {
-    return this.current ? Atomics.load(this.current.liveness, JOURNAL_CHECKPOINT_REPLIES) : 0
+  private progress(): number {
+    return this.current ? Atomics.load(this.current.liveness, JOURNAL_CHECKPOINT_PROGRESS) : 0
   }
 
-  /** `replies` is the count before the request was posted, so a reply still in flight reads as alive. */
-  private armDeadline(force = false, replies = this.replies()): void {
+  /** `progress` is read before the request was posted, so a reply still in flight reads as alive. */
+  private armDeadline(force = false, progress = this.progress()): void {
     if (this.stopped && !force) {
       return
     }
     this.clearDeadline()
     if (this.current) {
-      this.current.replies = replies
+      this.current.seen = progress
     }
     this.deadline = setTimeout(() => this.expired(), this.options.timeoutMs ?? HEALTH_TIMEOUT_MS)
     this.deadline.unref()
@@ -526,7 +513,7 @@ export class JournalCheckpointOwner {
 
   /**
    * Under paging a checkpoint's fsync can outlast the deadline, so a busy worker keeps its checkpoints
-   * and admission until it is stuck past STUCK_MS; only an idle, silent worker is dead.
+   * until it is stuck past STUCK_MS; only a worker idle and silent for two deadlines is dead.
    */
   private expired(): void {
     this.deadline = undefined
@@ -534,30 +521,33 @@ export class JournalCheckpointOwner {
     if (!attached) {
       return
     }
-    const replies = Atomics.load(attached.liveness, JOURNAL_CHECKPOINT_REPLIES)
-    if (
-      Atomics.load(attached.liveness, JOURNAL_CHECKPOINT_BUSY) === 0 &&
-      replies === attached.replies
-    ) {
+    const progress = this.progress()
+    const busy = progress % 2 === 1
+    if (!busy && progress === attached.seen) {
       if (attached.silent) {
         this.lose(new Error('checkpoint worker response timed out'), 'unresponsive')
         return
       }
       attached.silent = true
-      this.armDeadline(true, replies)
+      this.armDeadline(true, progress)
       return
     }
     attached.silent = false
-    const now = this.now()
-    if (attached.busySince === undefined) {
-      attached.busySince = now
-      this.wake()
+    if (busy) {
+      const now = this.now()
+      attached.busySince ??= now
+      if (!attached.stuck && now - attached.busySince >= (this.options.stuckMs ?? STUCK_MS)) {
+        attached.stuck = true
+        const error = new Error('checkpoint worker is stuck in a checkpoint')
+        // A truncate holds SQLite's write lock for its whole run, so writes stay parked behind it.
+        if (!this.stopped && !this.truncate?.acknowledged) {
+          this.lose(error, 'slow')
+          return
+        }
+        this.openOutage(error, 'slow')
+      }
     }
-    if (!this.stopped && now - attached.busySince >= (this.options.stuckMs ?? STUCK_MS)) {
-      this.lose(new Error('checkpoint worker is stuck in a checkpoint'), 'slow')
-      return
-    }
-    this.armDeadline(true, replies)
+    this.armDeadline(true, progress)
   }
 
   private clearDeadline(): void {

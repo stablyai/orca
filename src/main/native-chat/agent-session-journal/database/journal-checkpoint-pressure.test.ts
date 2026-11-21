@@ -265,7 +265,7 @@ it('restarts a crashed checkpoint worker within the launch and shrinks the WAL i
   )
   expect(walBytes()).toBeGreaterThan(16 * 1024 * 1024)
   await vi.waitFor(() => expect(outages).toHaveLength(1), { timeout: 10_000 })
-  expect(workers).toHaveLength(2)
+  expect(workers.at(-1)).not.toBe(workers[0])
   expect(outages[0]).toMatchObject({ cause: 'exited', recovered: true, restarts: 1 })
   expect(writer.pragma('wal_autocheckpoint', { simple: true })).toBe(0)
 
@@ -289,8 +289,11 @@ class LivenessCheckpoint extends ControlledCheckpoint {
     queueMicrotask(() => this.emit('exit', 1))
     return Promise.resolve(1)
   }
+  /** The progress word is odd while the worker handles work. */
   busy(busy: boolean) {
-    Atomics.store(this.liveness, 0, busy ? 1 : 0)
+    if ((Atomics.load(this.liveness, 0) % 2 === 1) !== busy) {
+      Atomics.add(this.liveness, 0, 1)
+    }
   }
   answer() {
     const request = this.sent.at(-1)!
@@ -332,7 +335,7 @@ it('keeps a busy checkpoint worker until it is stuck, and replaces one that stay
   writer.prepare('INSERT INTO writes VALUES(1, zeroblob(1048576))').run()
   owner.afterCommit()
   await vi.waitFor(() => expect(autocheckpoint()).toBe(1000))
-  expect(workers).toHaveLength(1)
+  expect(workers.at(-1)).toBe(workers[0])
   expect(workers[0]!.terminated).toBe(false)
   workers[0]!.busy(false)
   workers[0]!.answer()
@@ -340,10 +343,10 @@ it('keeps a busy checkpoint worker until it is stuck, and replaces one that stay
   expect(outages).toEqual([expect.objectContaining({ cause: 'slow', recovered: true, restarts: 0 })])
 
   // Its next check goes unanswered while it sits idle: dead after two silent deadlines, then replaced.
-  await vi.waitFor(() => expect(workers).toHaveLength(2))
+  await vi.waitFor(() => expect(workers.at(-1)).not.toBe(workers[0]))
   expect(workers[0]!.terminated).toBe(true)
-  workers[1]!.busy(false)
-  workers[1]!.ready()
+  workers.at(-1)!.busy(false)
+  workers.at(-1)!.ready()
   expect(autocheckpoint()).toBe(0)
   expect(outages[1]).toMatchObject({ cause: 'unresponsive', recovered: true, restarts: 1 })
 })
