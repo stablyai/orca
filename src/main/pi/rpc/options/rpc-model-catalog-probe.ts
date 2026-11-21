@@ -1,68 +1,35 @@
 import { agentModelCatalogInputStamp } from '../../../native-chat/agent-model-catalog/agent-model-catalog-input-stamp'
 import {
   assertStructuredAgentResolutionCurrent,
-  type StructuredAgentResolutionOperation,
-  type StructuredAgentCommandSettings
+  type StructuredAgentResolutionOperation
 } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { homedir } from 'node:os'
 import { z } from 'zod'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import type { resolveCliCommand } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
-import {
-  readAgentCliVersion,
-  type AgentCliVersionReader
-} from '../../../agent-launch/preflight/agent-cli-version-probe'
-import { JsonlRpcAgentConnection } from '../../../jsonl-rpc/agent-connection'
+import { readAgentCliVersion } from '../../../agent-launch/preflight/agent-cli-version-probe'
 import type {
   AgentModelCatalogProgress,
   AgentModelCatalogProbe,
   AgentModelCatalogLookup
 } from '../../../native-chat/agent-model-catalog/agent-model-catalog-discovery'
 import type { AgentModelCatalogSuccess } from '../../../native-chat/agent-model-catalog/agent-model-catalog-entry'
-import { runAgentModelCatalogSession } from '../../../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
 import { AgentModelCatalogUnavailableError } from '../../../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
-import type { ProviderProcessLaunch } from '../../../provider-process/provider-process-launch'
-import { buildPiRpcLaunch, piRpcSessionlessEnvironment } from '../launch/rpc-launch'
-import { checkPiRpcVersion, resolvePiRpcInvocation } from '../launch/rpc-launch-resolution'
-import { piModelOptionId, readPiRpcModelOptions, type PiRpcRequester } from './rpc-model-options'
+import { resolvePiRpcInvocation } from '../launch/rpc-launch-resolution'
+import { piModelOptionId, readPiRpcModelOptions } from './rpc-model-options'
 import { piRpcModelSchema } from './rpc-model-schema'
-
-type PiModelCatalogConnection = PiRpcRequester & { close(): Promise<unknown> }
+import { runResolvedPiRpcCatalogSession, type PiRpcCatalogSessionDeps } from './rpc-catalog-session'
 
 const discoveryStateSchema = z.object({
   model: piRpcModelSchema.pick({ provider: true, id: true }).nullish(),
   thinkingLevel: z.unknown().optional()
 })
 
-export type PiModelCatalogProbeDeps = {
+export type PiModelCatalogProbeDeps = PiRpcCatalogSessionDeps & {
   resolveSavedEnvironment?: () => Promise<NodeJS.ProcessEnv>
-  resolveEnvironment: () => Promise<NodeJS.ProcessEnv>
-  /** Refresh once on a missing Pi binary; absent disables retry. */
-  refreshEnvironmentAfterMiss?: (askedAt: number) => Promise<void>
-  resolveCommandSettings?: () => StructuredAgentCommandSettings
-  resolveCommand?: typeof resolveCliCommand
-  probeVersion?: AgentCliVersionReader
-  connect?: (launch: ProviderProcessLaunch) => PiModelCatalogConnection
   homePath?: string
 }
 
-function connectPiModelCatalog(launch: ProviderProcessLaunch): PiModelCatalogConnection {
-  const connection: JsonlRpcAgentConnection = new JsonlRpcAgentConnection(launch, {
-    // Cancel dialogs after binding; Pi cannot read replies to session_start dialogs before binding.
-    onRecord: (frame) => {
-      if (
-        frame.type === 'extension_ui_request' &&
-        (typeof frame.id === 'string' || typeof frame.id === 'number')
-      ) {
-        void connection
-          .send({ type: 'extension_ui_response', id: frame.id, cancelled: true })
-          .catch(() => undefined)
-      }
-    }
-  })
-  return connection
-}
-
+/** Discover available models and configured defaults without creating a Pi conversation. */
 export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentModelCatalogProbe {
   const resolve = async (
     accountHome: Parameters<AgentModelCatalogProbe>[0],
@@ -98,27 +65,13 @@ export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentM
         const operation = runOperation
         const options = { signal }
         assertStructuredAgentResolutionCurrent(operation)
-        const release = await checkPiRpcVersion(
+        const success = await runResolvedPiRpcCatalogSession(
+          {
+            ...deps,
+            probeVersion:
+              deps.probeVersion ?? ((input) => readAgentCliVersion({ ...input, timeoutMs: null }))
+          },
           { command, prefixArgs, cwd, env, operation },
-          deps.probeVersion ?? ((input) => readAgentCliVersion({ ...input, timeoutMs: null }))
-        )
-        assertStructuredAgentResolutionCurrent(operation)
-        if (release.status === 'tooOld') {
-          throw new Error(`pi at ${command} does not run structured chats`)
-        }
-        const launch = buildPiRpcLaunch({
-          command,
-          prefixArgs,
-          cwd,
-          ...piRpcSessionlessEnvironment(env),
-          fullAccess: true
-        })
-        const success = await runAgentModelCatalogSession(
-          () =>
-            (deps.connect ?? connectPiModelCatalog)({
-              ...launch,
-              args: [...launch.args, '--no-session']
-            }),
           async (connection): Promise<AgentModelCatalogSuccess> => {
             let configured: AgentModelCatalogSuccess['configured']
             let unknownProvider = false
@@ -170,7 +123,7 @@ export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentM
             }
             return { models, origin: 'probe', ...(configured ? { configured } : {}) }
           },
-          { label: 'pi', signal: options?.signal, timeoutMs: null }
+          { signal: options?.signal, timeoutMs: null }
         )
         if (success.models.length === 0) {
           throw new Error('pi listed no models')
