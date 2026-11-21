@@ -1189,8 +1189,6 @@
       "undetectedCommandHint": "If the {{agent}} CLI is installed outside PATH, enter the full path to its executable on this host.",
       "agentActions": "{{agent}} actions",
       "duplicate": "Duplicate",
-      "copiesTitle": "Agent copies",
-      "copiesDescription": "Each copy runs its agent with its own command, arguments and environment. Pick it by name wherever you start an agent, or pass its ID to --agent.",
       "copyName": "Copy name",
       "copyOf": "Copy of {{agent}}",
       "copyId": "ID",
@@ -1201,7 +1199,9 @@
       "copyCreated": "Saved {{name}} as {{id}}.",
       "copyLimit": "Orca keeps up to {{count}} agent copies. Delete one to make another.",
       "defaultAutoBadge": "Default · Auto",
-      "newAgentsTitle": "New agents"
+      "newAgentsTitle": "New agents",
+      "copyIdLabel": "Copy ID",
+      "copySaveFailed": "The agent copy could not be saved. Try again."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "symlink",

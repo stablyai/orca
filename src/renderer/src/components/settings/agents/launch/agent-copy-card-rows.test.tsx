@@ -5,7 +5,12 @@ import type { AgentCatalogRowProps } from './AgentCatalogRow'
 import { agentCopyCardRows, type AgentCardScope } from './agent-copy-card-rows'
 import type { useAgentCopySettings } from './use-agent-copy-settings'
 
-const claude: AgentCatalogEntry = { id: 'claude', label: 'Claude', cmd: 'claude' }
+const claude: AgentCatalogEntry = {
+  id: 'claude',
+  label: 'Claude',
+  cmd: 'claude',
+  homepageUrl: 'https://claude.com/claude-code'
+}
 const copy = {
   id: 'claude.haiku',
   name: 'Claude Haiku',
