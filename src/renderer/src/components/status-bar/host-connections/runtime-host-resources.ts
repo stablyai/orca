@@ -33,12 +33,18 @@ export function collectRuntimeResourceEnvironmentIds(
   return [...environmentIds].sort()
 }
 
+/** Null when the reply arrives after the asking view stopped wanting it, so it is never parsed. */
 export async function readRuntimeHostResources(
   environmentId: string,
-  call: RuntimeHostResourceCall
-): Promise<RuntimeHostResourceResult> {
+  call: RuntimeHostResourceCall,
+  isWanted: () => boolean = () => true
+): Promise<RuntimeHostResourceResult | null> {
   try {
-    const worktrees = parseSnapshotWorktrees(await call(environmentId))
+    const reply = await call(environmentId)
+    if (!isWanted()) {
+      return null
+    }
+    const worktrees = parseSnapshotWorktrees(reply)
     return worktrees ? { status: 'sampled', worktrees } : { status: 'update-required' }
   } catch (error) {
     return hasErrorCode(error, 'method_not_found')

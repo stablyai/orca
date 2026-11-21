@@ -41,6 +41,11 @@ export class ProjectGroupPersistenceOperations {
     this.operations.pruneMobileClientTabSelections(matchesWorktreeId)
   }
 
+  /** One group by id, without copying and sorting the whole list. */
+  getProjectGroup(id: string): ProjectGroup | undefined {
+    return this.state.projectGroups?.find((group) => group.id === id)
+  }
+
   getProjectGroups(): ProjectGroup[] {
     return [...(this.state.projectGroups ?? [])].sort(
       (left, right) => left.tabOrder - right.tabOrder || left.name.localeCompare(right.name)

@@ -2,12 +2,14 @@ import { basename } from 'node:path'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import type { ChatAgentMemory, SessionMemory } from '../../shared/diagnostics/process-stats-types'
 import type { Store } from '../persistence/loading-store/store'
+import type { ProjectGroup } from '../../shared/project/groups/project-group-types'
 import { parseWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { folderWorkspaceRepoId } from '../../shared/folder-workspaces/folder-workspace-worktree'
 
 export type MemorySnapshotStore = Pick<Store, 'getRepo' | 'getWorktreeMeta'> &
   Partial<Pick<Store, 'getFolderWorkspace'>> & {
-    getProjectGroups?: () => Pick<ReturnType<Store['getProjectGroups']>[number], 'id' | 'name'>[]
+    getProjectGroup?: (id: string) => Pick<ProjectGroup, 'id' | 'name'> | undefined
+    getProjectGroups?: () => Pick<ProjectGroup, 'id' | 'name'>[]
   }
 
 const APP_HISTORY_KEY = '__app__'
@@ -72,6 +74,17 @@ export type WorktreeMemoryBucket = {
 export type ProjectGroupNameLookup = (projectGroupId: string) => string | undefined
 
 export function createProjectGroupNameLookup(store: MemorySnapshotStore): ProjectGroupNameLookup {
+  const { getProjectGroup } = store
+  if (getProjectGroup) {
+    // Keyed, so a sample with one folder workspace never copies and sorts every group.
+    const names = new Map<string, string | undefined>()
+    return (projectGroupId) => {
+      if (!names.has(projectGroupId)) {
+        names.set(projectGroupId, getProjectGroup.call(store, projectGroupId)?.name)
+      }
+      return names.get(projectGroupId)
+    }
+  }
   let names: Map<string, string | undefined> | null = null
   return (projectGroupId) => {
     // SAFETY: Missing optional capabilities keep the original direct-call failure.

@@ -22,7 +22,6 @@ export type DaemonSessionOwnerResolution<T extends IPtyProvider> =
 const OWNER_RESOLUTION_TIMEOUT_MS = 2_000
 const OWNER_INVENTORY_CACHE_MS = 1_000
 const FAILED_PROVIDER_COOLDOWN_MS = 1_000
-const STALE_INVENTORY_RETRIES = 3
 
 export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
   private inventoryInFlight: Promise<OwnerInventory<T>> | null = null
@@ -145,36 +144,24 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
   async listProcesses(
     opts?: Parameters<IPtyProvider['listProcesses']>[0]
   ): Promise<PtyProcessInfo[]> {
-    // Retries share the first read's budget, so a busy host still answers within one timeout.
-    const deadlineMs = opts?.deadlineMs ?? Date.now() + OWNER_RESOLUTION_TIMEOUT_MS
-    for (let attempt = 0; ; attempt++) {
-      // A re-read admitted after the budget ran out, or after the caller left, would list the daemon for no one.
-      if (attempt > 0 && (Date.now() >= deadlineMs || opts?.isWanted?.() === false)) {
-        throw new TerminalSessionOwnerUnverifiedError('inventory deadline')
-      }
-      const pending = this.inventory(false, { ...opts, deadlineMs }, true)
-      if (
-        !(await awaitDaemonWorkWithinCallerDeadline(
-          pending.then(() => {}),
-          deadlineMs
-        ))
-      ) {
-        throw new TerminalSessionOwnerUnverifiedError('inventory deadline')
-      }
-      const inventory = await pending
-      // A provider that failed would fail again; only an outdated but answered read is worth repeating.
-      if (inventory.failure) {
-        throw inventory.failure.error
-      }
-      if (inventory.epoch !== this.epoch) {
-        // A spawn or exit during the read only outdated it; the daemon itself answered.
-        if (attempt < STALE_INVENTORY_RETRIES) {
-          continue
-        }
-        throw new TerminalSessionOwnerUnverifiedError('stale inventory')
-      }
-      return selectListedDaemonProcesses(inventory, this.routes, this.routeIncarnations, opts)
+    const pending = this.inventory(false, opts, true)
+    if (
+      opts?.deadlineMs !== undefined &&
+      !(await awaitDaemonWorkWithinCallerDeadline(
+        pending.then(() => {}),
+        opts.deadlineMs
+      ))
+    ) {
+      throw new TerminalSessionOwnerUnverifiedError('inventory deadline')
     }
+    const inventory = await pending
+    if (inventory.epoch !== this.epoch) {
+      throw new TerminalSessionOwnerUnverifiedError('stale inventory')
+    }
+    if (inventory.failure) {
+      throw inventory.failure.error
+    }
+    return selectListedDaemonProcesses(inventory, this.routes, this.routeIncarnations, opts)
   }
 
   recordRoute(sessionId: string, provider: T, incarnationId?: string): void {
@@ -283,15 +270,6 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
     epoch: number,
     replaceEstablishedRoutes = false
   ): OwnerInventory<T> {
-    // Every reader discards an outdated inventory, so indexing its rows would be wasted work.
-    if (epoch !== this.epoch) {
-      return {
-        candidatesBySessionId: new Map(),
-        complete: false,
-        epoch,
-        failure: entries.find((entry) => entry.failure)?.failure
-      }
-    }
     return indexDaemonOwnerInventory(
       entries,
       epoch,

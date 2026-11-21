@@ -45,18 +45,27 @@ export function useRuntimeHostResources(
           continue
         }
         inFlight.add(environmentId)
-        void readRuntimeHostResources(environmentId, callDiagnosticsMemory).then((result) => {
-          inFlight.delete(environmentId)
-          const missed = result.status === 'unreachable' ? (misses.get(environmentId) ?? 0) + 1 : 0
-          misses.set(environmentId, missed)
-          // One slow answer keeps the last result; a server is unreachable only after two misses in a row.
-          if (!cancelled && missed !== 1) {
-            setState((prev) => ({
-              key: sessionKey,
-              results: { ...(prev.key === sessionKey ? prev.results : {}), [environmentId]: result }
-            }))
+        void readRuntimeHostResources(environmentId, callDiagnosticsMemory, () => !cancelled).then(
+          (result) => {
+            inFlight.delete(environmentId)
+            if (result === null) {
+              return
+            }
+            const missed =
+              result.status === 'unreachable' ? (misses.get(environmentId) ?? 0) + 1 : 0
+            misses.set(environmentId, missed)
+            // One slow answer keeps the last result; a server is unreachable only after two misses in a row.
+            if (!cancelled && missed !== 1) {
+              setState((prev) => ({
+                key: sessionKey,
+                results: {
+                  ...(prev.key === sessionKey ? prev.results : {}),
+                  [environmentId]: result
+                }
+              }))
+            }
           }
-        })
+        )
       }
     }
     poll()

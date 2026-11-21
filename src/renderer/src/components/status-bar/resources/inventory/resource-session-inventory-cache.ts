@@ -3,7 +3,10 @@ import {
   type PtyListedSession,
   type PtySessionLifecycle
 } from '../../../../../../shared/terminal/pty/lifecycle/pty-listed-session'
-import { isResourceViewInactive } from '../../../../../../shared/diagnostics/resource-view-admission'
+import {
+  isOutdatedSessionListing,
+  isResourceViewInactive
+} from '../../../../../../shared/diagnostics/resource-view-admission'
 import { isProvenProcessExit } from '../../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import {
   type DaemonSessionInventory,
@@ -40,14 +43,10 @@ export class ResourceSessionInventoryCache {
   private exitPublicationTimer: ReturnType<typeof setTimeout> | null = null
   private inventoryChanged = false
   private lastStarted = -Infinity
-  private inFlightRequestId: string | null = null
-  private requestCount = 0
 
   constructor(
-    private list: (requestId: string) => Promise<PtyListedSession[]>,
-    private localOnly: boolean,
-    // Tells main the dispatching view dropped the answer, so it stops re-reading for it.
-    private retire: (requestId: string) => void = () => {}
+    private list: () => Promise<PtyListedSession[]>,
+    private localOnly: boolean
   ) {}
 
   getSnapshot = () => this.state
@@ -82,10 +81,6 @@ export class ResourceSessionInventoryCache {
     this.active = active
     this.epoch++
     this.pendingRefresh = false
-    if (this.inFlightRequestId !== null) {
-      this.retire(this.inFlightRequestId)
-      this.inFlightRequestId = null
-    }
     if (!active) {
       if (this.timer) {
         clearTimeout(this.timer)
@@ -142,15 +137,13 @@ export class ResourceSessionInventoryCache {
       return Promise.resolve()
     }
     const epoch = this.epoch
-    const requestId = `${Date.now().toString(36)}-${++this.requestCount}`
     this.lastStarted = Date.now()
     const request = Promise.resolve()
       .then(() => {
         if (!this.active || epoch !== this.epoch) {
           return null
         }
-        this.inFlightRequestId = requestId
-        return this.list(requestId)
+        return this.list()
       })
       .then((sessions) => {
         if (!sessions || !this.active || epoch !== this.epoch) {
@@ -190,14 +183,17 @@ export class ResourceSessionInventoryCache {
         })
       })
       .catch((error: unknown) => {
-        if (this.active && epoch === this.epoch && !isResourceViewInactive(error)) {
-          this.publish({ sessionsError: true })
+        if (!this.active || epoch !== this.epoch || isResourceViewInactive(error)) {
+          return
         }
+        // A healthy daemon whose answer a spawn or exit outdated: read again, never show it as down.
+        if (isOutdatedSessionListing(error)) {
+          this.pendingRefresh = true
+          return
+        }
+        this.publish({ sessionsError: true })
       })
       .finally(() => {
-        if (this.inFlightRequestId === requestId) {
-          this.inFlightRequestId = null
-        }
         this.tombstones.clear()
         this.inFlight = null
         if (this.active && epoch === this.epoch) {
