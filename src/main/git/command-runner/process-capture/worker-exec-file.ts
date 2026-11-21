@@ -1,3 +1,4 @@
+import type { WorktreeCheckoutSpawnGuard } from '../../../../shared/worktree/removal/worktree-checkout-identity'
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
 import type { ChildProcess } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -11,6 +12,7 @@ import {
 } from '../../../worker-thread-child-process/worker-thread-child-process'
 
 type CaptureOptions = {
+  worktreeCheckoutGuard?: WorktreeCheckoutSpawnGuard
   cwd?: string | URL
   env?: NodeJS.ProcessEnv
   encoding?: string | null
@@ -31,10 +33,19 @@ type CaptureCallback = (
  * On POSIX, main keeps what only its launch does: canStart rechecked at creation, and a probed CLI selection run under its own name. */
 export async function capturesOnWorker(
   command: string,
-  options: { canStart?: () => boolean; spawnOnWorkerThread?: boolean }
+  options: {
+    canStart?: () => boolean
+    spawnOnWorkerThread?: boolean
+    worktreeCheckoutGuard?: WorktreeCheckoutSpawnGuard
+  }
 ): Promise<boolean> {
   if (process.platform === 'win32') {
     return options.spawnOnWorkerThread !== false && whenSpawnWorkerReady()
+  }
+  // Only the worker checks a guarded checkout's identity right before Git starts; canStart is
+  // still rechecked at dispatch, and on main the guard is refused rather than skipped.
+  if (options.worktreeCheckoutGuard) {
+    return options.spawnOnWorkerThread === true && whenSpawnWorkerReady()
   }
   if (options.canStart || hasLocalCommandSelection(command)) {
     return false
@@ -70,6 +81,9 @@ export function workerExecFile(
   return spawnedExecFile(command, options, callback, () =>
     spawnProcessOnWorkerThread({
       program: command,
+      ...(options.worktreeCheckoutGuard
+        ? { worktreeCheckoutGuard: options.worktreeCheckoutGuard }
+        : {}),
       args,
       cwd: options.cwd instanceof URL ? fileURLToPath(options.cwd) : options.cwd,
       // The worker's env is a copy from its start; send main's current one (PATH refreshes after launch).

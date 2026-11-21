@@ -1,3 +1,24 @@
+import { readWorktreeMetaForHost } from '../../../../persistence/host-qualified-worktree-meta'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
+import {
+  WorkspaceCleanupPolicyReadParams,
+  WorkspaceCleanupGuardParam,
+  WorkspaceCleanupChangeParams,
+  WorkspaceCleanupSettleParams,
+  WorkspaceCleanupInspectKeptParams,
+  WorkspaceCleanupPinBatchParams,
+  WorkspaceCleanupPinParams
+} from '../../../../../shared/rpc-contract/workspace-cleanup/workspace-cleanup-change-params'
+import {
+  settleWorkspaceCleanupPolicyWrite,
+  reserveWorkspaceCleanupPolicyWrite,
+  recoverWorkspaceCleanupPolicyWrites
+} from '../../../../workspaces/cleanup/workspace-cleanup-policy-write'
+import {
+  pinWorkspaceForCleanup,
+  pinWorkspacesForCleanup
+} from '../../../../workspaces/cleanup/workspace-cleanup-pin'
+import { hasWorkspaceCleanupAdmission } from '../../../../workspaces/cleanup/workspace-cleanup-admission'
 import {
   WorkspaceCleanupCodexHistoryDiskUsageParams,
   WorkspaceCleanupPreviewParams,
@@ -55,6 +76,92 @@ async function readCodexHistoryDiskUsage(
 
 /** The cleanup runner of the host that owns the repos; clients merge hosts themselves. */
 export const WORKSPACE_CLEANUP_RUNNER_METHODS = [
+  defineMethod({
+    name: 'workspaceCleanup.policyState',
+    permission: 'workspace',
+    params: WorkspaceCleanupPolicyReadParams,
+    handler: (params, { runtime }) =>
+      requireWorkspaceCleanupRunner(runtime).readPolicy(params.repoId)
+  }),
+  defineMethod({
+    name: 'workspaceCleanup.reservePolicyWrite',
+    permission: 'workspace',
+    params: WorkspaceCleanupGuardParam,
+    handler: (params, { runtime }) => {
+      reserveWorkspaceCleanupPolicyWrite(runtime.requireStore(), params)
+      return { reserved: true }
+    }
+  }),
+  defineMethod({
+    name: 'workspaceCleanup.recoverPolicyWrites',
+    permission: 'workspace',
+    params: WorkspaceCleanupPolicyReadParams,
+    handler: (params, { runtime }) => {
+      recoverWorkspaceCleanupPolicyWrites(runtime.requireStore())
+      return requireWorkspaceCleanupRunner(runtime).readPolicy(params.repoId)
+    }
+  }),
+  defineMethod({
+    name: 'workspaceCleanup.previewChange',
+    permission: 'workspace',
+    params: WorkspaceCleanupChangeParams,
+    handler: (params, { runtime }) =>
+      requireWorkspaceCleanupRunner(runtime).previewChange(
+        params.change,
+        params.expected,
+        params.fresh
+      )
+  }),
+  defineMethod({
+    name: 'workspaceCleanup.settlePolicyWrite',
+    permission: 'workspace',
+    params: WorkspaceCleanupSettleParams,
+    handler: (params) => ({
+      outcome: settleWorkspaceCleanupPolicyWrite(params.id, params.expiresAt)
+    })
+  }),
+  defineMethod({
+    name: 'workspaceCleanup.inspectKept',
+    permission: 'workspace',
+    params: WorkspaceCleanupInspectKeptParams,
+    handler: (params, { runtime }) => {
+      const store = runtime.requireStore()
+      if (!store.runDurableMutation) {
+        throw new Error('workspace_cleanup_pin_unsupported')
+      }
+      return store.runDurableMutation(() => {
+        const deleted: string[] = [],
+          pinned: string[] = [],
+          tooLate: string[] = []
+        for (const row of params.rows) {
+          const meta = readWorktreeMetaForHost(store, row.worktreeId, LOCAL_EXECUTION_HOST_ID)
+          if (meta?.instanceId !== row.instanceId) {
+            deleted.push(row.worktreeId)
+          } else if (hasWorkspaceCleanupAdmission(store, row.worktreeId, row.instanceId)) {
+            tooLate.push(row.worktreeId)
+          } else if (meta.isPinned) {
+            pinned.push(row.worktreeId)
+          }
+        }
+        return { value: { deleted, pinned, tooLate }, persist: 'if-dirty' }
+      })
+    }
+  }),
+  defineMethod({
+    name: 'workspaceCleanup.pinBatch',
+    permission: 'workspace',
+    params: WorkspaceCleanupPinBatchParams,
+    handler: (params, { runtime }) => pinWorkspacesForCleanup(runtime, params.rows)
+  }),
+  defineMethod({
+    name: 'workspaceCleanup.pin',
+    permission: 'workspace',
+    params: WorkspaceCleanupPinParams,
+    handler: async (params, { runtime }) => {
+      await pinWorkspaceForCleanup(runtime, params.worktreeId, params.instanceId)
+      return { pinned: true }
+    }
+  }),
   defineMethod({
     name: 'workspaceCleanup.preview',
     permission: 'workspace',

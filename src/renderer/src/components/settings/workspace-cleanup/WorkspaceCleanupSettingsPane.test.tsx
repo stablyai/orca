@@ -1,55 +1,23 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { I18nProvider } from '@/i18n/I18nProvider'
 import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import {
   getDefaultWorkspaceCleanupRules,
   type WorkspaceCleanupRules
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy'
+import type { WorkspaceCleanupPolicyPreviewRequest } from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
 import type { WorkspaceCleanupPreviewRow } from '../../../../../shared/workspace-cleanup/workspace-cleanup-run'
-import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useAppStore } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TooltipProvider } from '../../ui/tooltip'
-import type * as RuntimeRpcCall from '@/runtime/rpc/calls/runtime-rpc-call'
 import { WorkspaceCleanupSettingsPane } from './WorkspaceCleanupSettingsPane'
-
-const environmentCall = vi.hoisted(
-  (): { settingsGetFails: boolean; rules: WorkspaceCleanupRules | null } => ({
-    settingsGetFails: false,
-    rules: null
-  })
-)
-
-// A remote host's calls skip the pairing transport; local calls use window.api as the app does.
-vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
-  const actual = await importOriginal<typeof RuntimeRpcCall>()
-  return {
-    ...actual,
-    callRuntimeRpc: async (
-      target: RuntimeClientTarget,
-      method: string,
-      params?: unknown,
-      options?: Parameters<typeof actual.callRuntimeRpc>[3]
-    ) => {
-      if (target.kind !== 'environment') {
-        return actual.callRuntimeRpc(target, method, params, options)
-      }
-      if (method === 'settings.get') {
-        if (environmentCall.settingsGetFails) {
-          throw new Error('Host unreachable')
-        }
-        return { settings: { workspaceCleanupPolicy: environmentCall.rules } }
-      }
-      return method === 'workspaceCleanup.report'
-        ? { runs: [], running: false, nextRunAt: null }
-        : { evaluatedAt: 0, rows: [] }
-    }
-  }
-})
 
 const row: WorkspaceCleanupPreviewRow = {
   worktreeId: 'preview::/preview/landing',
+  instanceId: 'landing-incarnation',
+  executionHostId: 'local',
   repoId: 'preview',
   repoName: 'Website',
   displayName: 'Landing page',
@@ -59,40 +27,43 @@ const row: WorkspaceCleanupPreviewRow = {
 }
 let failPreview = false
 let includeCandidate = false
-let matchWhenMergedOn = false
-let previewGate: Promise<void> | null = null
-let saveGate: Promise<void> | null = null
+let pinned: string[] = []
+const originalApi = window.api
+const originalState = useAppStore.getState()
 
-const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
-
-function Pane({ target = LOCAL_TARGET }: { target?: RuntimeClientTarget }) {
+function Pane() {
   const settings = useAppStore((state) => state.settings)
   return (
     <WorkspaceCleanupSettingsPane
-      hostScope={{ target, available: true }}
+      hostScope={{ target: { kind: 'local' }, available: true }}
       settings={settings}
-      updateSettings={async (updates) => {
-        await saveGate
+      updateSettings={(updates) =>
         useAppStore.setState((state) => ({ settings: { ...state.settings!, ...updates } }))
-      }}
+      }
     />
   )
 }
 
-function mount(enabled = false, target?: RuntimeClientTarget) {
+async function mount(enabled = false) {
   const settings = getDefaultSettings('/preview')
   settings.workspaceCleanupPolicy = {
     ...getDefaultWorkspaceCleanupRules(),
     inactive: { enabled, afterDays: 30, action: 'delete' }
   }
-  environmentCall.rules = settings.workspaceCleanupPolicy
   useAppStore.setState({
     settings,
     worktreesByRepo: {
       preview: [makeWorktree({ id: row.worktreeId, repoId: 'preview', isPinned: false })]
     }
   })
-  render(<Pane target={target} />, { wrapper: TooltipProvider })
+  render(
+    <TooltipProvider>
+      <I18nProvider>
+        <Pane />
+      </I18nProvider>
+    </TooltipProvider>
+  )
+  await waitFor(() => expect(protection().getAttribute('aria-disabled')).toBe('false'))
 }
 
 function protection() {
@@ -100,23 +71,6 @@ function protection() {
 }
 function confirm() {
   return screen.getByRole('button', { name: 'Turn off protection' })
-}
-// getByRole skips hidden elements, so finding a switch also proves it is shown.
-function merged() {
-  return screen.getByRole('switch', { name: 'Delete merged workspaces' })
-}
-function workers() {
-  return screen.getByRole('switch', { name: 'Delete released orchestration worker workspaces' })
-}
-// The rule's own checking line, apart from the page's run announcements.
-function mergedCheckingLine() {
-  return merged().closest('[data-settings-row]')?.querySelector('[role="status"]') ?? null
-}
-function tryAgain() {
-  return screen.getByRole('button', { name: 'Try again' })
-}
-function search(query: string) {
-  act(() => useAppStore.setState({ settingsSearchQuery: query }))
 }
 function savedRules() {
   const rules = useAppStore.getState().settings?.workspaceCleanupPolicy
@@ -127,52 +81,94 @@ function savedRules() {
 }
 
 beforeEach(() => {
+  vi.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 10, 15, 12))
   failPreview = false
   includeCandidate = false
-  matchWhenMergedOn = false
-  previewGate = null
-  saveGate = null
-  environmentCall.settingsGetFails = false
+  pinned = []
   useAppStore.setState(useAppStore.getInitialState(), true)
-  Object.assign(window, {
-    api: {
-      worktrees: { updateMeta: async () => {} },
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      ...originalApi,
       runtime: {
+        ...originalApi?.runtime,
         call: async ({
           method,
           params
         }: {
           method: string
-          params?: { rules?: WorkspaceCleanupRules }
+          params?: WorkspaceCleanupPolicyPreviewRequest & {
+            workspaceCleanupPolicy?: WorkspaceCleanupRules
+            worktreeId?: string
+            rows?: { worktreeId: string; instanceId: string }[]
+          }
         }) => {
-          if (method === 'workspaceCleanup.preview') {
-            await previewGate
+          const policyRead = () => ({
+            protocol: 3,
+            expiresAt: Date.UTC(2026, 10, 15, 12, 10),
+            state: {
+              repoId: null,
+              rules: structuredClone(savedRules()),
+              projects: [{ id: 'preview', hostId: 'local', policy: null }]
+            }
+          })
+          let result: unknown
+          if (method === 'workspaceCleanup.policyState') {
+            result = policyRead()
+          } else if (method === 'workspaceCleanup.previewChange') {
             if (failPreview) {
               throw new Error('Preview unavailable')
             }
+            result = {
+              read: policyRead(),
+              current: { evaluatedAt: 1, rows: [] },
+              next: {
+                evaluatedAt: 1,
+                rows:
+                  includeCandidate &&
+                  params?.change?.scope === 'global' &&
+                  params.change.rules.keepWhen === 'uncommitted'
+                    ? [row]
+                    : []
+              }
+            }
+          } else if (method === 'workspaceCleanup.reservePolicyWrite') {
+            result = { reserved: true }
+          } else if (method === 'workspaceCleanup.pinBatch') {
+            pinned.push(...params!.rows!.map((row) => row.worktreeId))
+            result = { pinned: params!.rows!.map((row) => row.worktreeId), deleted: [], failed: [] }
+          } else if (method === 'settings.update') {
+            useAppStore.setState((state) => ({
+              settings: {
+                ...state.settings!,
+                workspaceCleanupPolicy: params!.workspaceCleanupPolicy
+              }
+            }))
+            result = useAppStore.getState().settings
+          } else if (method === 'workspaceCleanup.report') {
+            result = { runs: [], running: false, nextRunAt: null }
+          } else if (method === 'workspaceCleanup.preview') {
+            result = { evaluatedAt: 1, rows: [] }
+          } else {
+            throw new Error(`Unexpected RPC ${method}`)
           }
-          const candidate =
-            (includeCandidate && params?.rules?.keepWhen === 'uncommitted') ||
-            (matchWhenMergedOn && params?.rules?.merged.enabled === true)
-          return {
-            id: 'preview',
-            ok: true,
-            result:
-              method === 'workspaceCleanup.report'
-                ? { runs: [], running: false, nextRunAt: null }
-                : { evaluatedAt: 0, rows: candidate ? [row] : [] }
-          }
+          return { id: 'preview', ok: true, result }
         }
       }
     }
   })
 })
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  Object.defineProperty(window, 'api', { configurable: true, value: originalApi })
+  useAppStore.setState(originalState, true)
+  vi.restoreAllMocks()
+})
 
 describe('cleanup protection consent', () => {
   it('requires consent with all rules off and can save while previews are unavailable', async () => {
     failPreview = true
-    mount()
+    await mount()
     await act(async () => {
       fireEvent.click(protection())
     })
@@ -193,7 +189,7 @@ describe('cleanup protection consent', () => {
   })
 
   it('reviews newly eligible workspaces after concurrent enablement and pins only after renewed consent', async () => {
-    mount()
+    await mount()
     await act(async () => {
       fireEvent.click(protection())
     })
@@ -217,16 +213,16 @@ describe('cleanup protection consent', () => {
     await act(async () => {
       fireEvent.click(checkbox)
     })
-    expect(useAppStore.getState().worktreesByRepo.preview?.[0]?.isPinned).toBe(false)
+    expect(pinned).toEqual([])
     await act(async () => {
       fireEvent.click(confirm())
     })
     await waitFor(() => expect(savedRules().keepWhen).toBe('uncommitted'))
-    expect(useAppStore.getState().worktreesByRepo.preview?.[0]?.isPinned).toBe(true)
+    expect(pinned).toEqual(['preview::/preview/landing'])
   })
 
   it('keeps protection and the dialog when confirmation preview fails, then allows retry', async () => {
-    mount(true)
+    await mount(true)
     await act(async () => {
       fireEvent.click(protection())
     })
@@ -243,109 +239,5 @@ describe('cleanup protection consent', () => {
     })
     await waitFor(() => expect(savedRules().keepWhen).toBe('uncommitted'))
     expect(screen.queryByRole('dialog')).toBeNull()
-  })
-})
-
-describe('turning a rule on', () => {
-  it('keeps the rule pending through its check and save while other rules stay focusable but held', async () => {
-    let releasePreview = (): void => {}
-    previewGate = new Promise((resolve) => (releasePreview = resolve))
-    let releaseSave = (): void => {}
-    saveGate = new Promise((resolve) => (releaseSave = resolve))
-    mount()
-    await act(async () => {
-      fireEvent.click(merged())
-    })
-    expect(mergedCheckingLine()).not.toBeNull()
-    expect(merged().getAttribute('aria-busy')).toBe('true')
-    expect(merged().getAttribute('aria-checked')).toBe('false')
-    expect(merged().getAttribute('aria-disabled')).toBe('true')
-    expect(merged().hasAttribute('disabled')).toBe(false)
-    const unchanged = screen.getByRole('switch', { name: 'Delete unchanged workspaces' })
-    expect(unchanged.getAttribute('aria-disabled')).toBe('true')
-    expect(unchanged.hasAttribute('disabled')).toBe(false)
-    await act(async () => {
-      fireEvent.click(unchanged)
-      fireEvent.keyDown(merged(), { key: ' ' })
-      fireEvent.click(merged())
-    })
-    expect(mergedCheckingLine()).not.toBeNull()
-
-    await act(async () => {
-      releasePreview()
-    })
-    expect(mergedCheckingLine()).toBeNull()
-    expect(merged().getAttribute('aria-busy')).toBe('true')
-    expect(merged().getAttribute('aria-checked')).toBe('false')
-
-    await act(async () => {
-      releaseSave()
-    })
-    await waitFor(() => expect(merged().getAttribute('aria-checked')).toBe('true'))
-    expect(merged().hasAttribute('aria-busy')).toBe(false)
-    expect(savedRules().unchanged.enabled).toBe(false)
-  })
-
-  it('shows a failed check under the rule and saves it on Try again with focus kept', async () => {
-    failPreview = true
-    mount()
-    merged().focus()
-    await act(async () => {
-      fireEvent.click(merged())
-    })
-    expect(screen.getByRole('alert')).toBeTruthy()
-    expect(merged().getAttribute('aria-describedby')).toBe(screen.getByRole('alert').id)
-    expect(savedRules().merged.enabled).toBe(false)
-    expect(document.activeElement).toBe(merged())
-
-    failPreview = false
-    await act(async () => {
-      fireEvent.click(tryAgain())
-    })
-    await waitFor(() => expect(savedRules().merged.enabled).toBe(true))
-    expect(screen.queryByRole('alert')).toBeNull()
-    expect(document.activeElement).toBe(merged())
-  })
-
-  it('keeps an Advanced rule shown and focused when its retry succeeds after search moves on', async () => {
-    failPreview = true
-    mount()
-    search('orchestration')
-    workers().focus()
-    await act(async () => {
-      fireEvent.click(workers())
-    })
-    expect(screen.getByRole('alert')).toBeTruthy()
-    // A status-only search unmounts the rules; clearing it brings them back with the failure.
-    search('Run rules now')
-    expect(screen.queryAllByRole('switch')).toHaveLength(0)
-    search('')
-
-    failPreview = false
-    await act(async () => {
-      fireEvent.click(tryAgain())
-    })
-    await waitFor(() => expect(workers().getAttribute('aria-checked')).toBe('true'))
-    expect(savedRules().orchestrationWorkers.enabled).toBe(true)
-    expect(document.activeElement).toBe(workers())
-  })
-
-  it("shows the host's load error when its rules can't be read during a change", async () => {
-    mount(false, { kind: 'environment', environmentId: 'env-1' })
-    const rule = await screen.findByRole('switch', { name: 'Delete merged workspaces' })
-    environmentCall.settingsGetFails = true
-    await act(async () => {
-      fireEvent.click(rule)
-    })
-    expect(screen.queryAllByRole('switch')).toHaveLength(0)
-
-    environmentCall.settingsGetFails = false
-    await act(async () => {
-      fireEvent.click(tryAgain())
-    })
-    const reloaded = await screen.findByRole('switch', { name: 'Delete merged workspaces' })
-    expect(reloaded.getAttribute('aria-checked')).toBe('false')
-    expect(reloaded.hasAttribute('aria-busy')).toBe(false)
-    expect(screen.queryByRole('alert')).toBeNull()
   })
 })

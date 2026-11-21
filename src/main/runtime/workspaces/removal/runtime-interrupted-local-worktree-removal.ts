@@ -4,16 +4,14 @@ import {
 } from '../../../../shared/concurrency/abort-signal-reason'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
-import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
   releaseStartupRemovalFence,
   type BackgroundWorktreeRemovalJob
 } from '../../../workspaces/removal/worktree-background-removal'
 import {
   resolveWorktreeRemovalMetadata,
-  resolveWorktreeRemovalRepoOwner
+  resolveLocalWorktreeRemovalRepo
 } from '../../../workspaces/removal/worktree-removal-repo-owner'
-import type { RuntimePreservedBranchCleanup } from '../../repositories/runtime-preserved-branch-cleanup'
 import { listWorktreesSharedStrict as listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-scan-cache'
 import {
   authorizeWindowsCheckout,
@@ -24,7 +22,6 @@ import {
   finishUnregisteredWorktreeRemoval,
   removeWorktree
 } from '../../../git/worktrees/removal/worktree-removal'
-import { getErrorCode } from '../../../git/worktrees/worktree-operation-options'
 import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
 import { removeUnregisteredHostCheckout } from '../../../filesystem/host-tree-removal'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
@@ -41,40 +38,34 @@ import {
   isRecordedCheckout,
   differentCheckoutAtPathError
 } from '../../../workspaces/removal/worktree-removal-leftover'
-import {
-  CLIENT_REMOVAL_HOME,
-  getPathOps
-} from '../../../workspaces/removal/worktree-removal-home-guard'
+import { CLIENT_REMOVAL_HOME } from '../../../workspaces/removal/worktree-removal-home-guard'
 import { removeStaleLocalWorktreeRegistration } from '../../../workspaces/removal/local-worktree-removal-recovery'
-import {
-  getLocalWorktreePathAccess,
-  type LocalWorktreeFilesystemOptions
-} from '../../../workspaces/removal/local-worktree-filesystem'
+import { isCheckoutMissingGitLink } from './checkout-missing-git-link'
 import type { WorktreeRemovalRecord } from '../../../workspaces/removal/worktree-removal-records'
+import { WorktreeRemovalExpectation } from '../../../workspaces/removal/worktree-removal-expectation'
 import {
   cleanupRemovedWorktreePushTarget,
   finishRuntimeLocalWorktreeRemoval,
   type RuntimeLocalWorktreeRemovalFinishArgs
 } from './runtime-registered-local-worktree-removal'
-
-type InterruptedWorktreeRemovalHost = {
-  store: RuntimeStore
-  acquireWatcherRemoval: (path: string) => Promise<{ finish: (removed: boolean) => Promise<void> }>
-  closeWatchers: (path: string) => Promise<void>
-  preservedBranchCleanup: Pick<RuntimePreservedBranchCleanup, 'preserveHead' | 'remember'>
-  /** A retry's teardown: terminals opened in the folder before the user removed it. */
-  stopPtys?: () => Promise<void>
-  /** Drops the worktree's host state (metadata, history, caches), as every removal path does. */
-  purge: (record: WorktreeRemovalRecord) => void | Promise<void>
-  onRemoved: (record: WorktreeRemovalRecord) => void
-  publish: (repoId: string) => void
-}
+import type {
+  InterruptedLocalWorktreeRemovalArgs,
+  InterruptedWorktreeRemovalHost
+} from './runtime-interrupted-local-worktree-removal-types'
+import { finishGoneCheckoutBookkeeping } from './runtime-interrupted-gone-checkout-removal'
 
 /** The background job that finishes one interrupted removal on this host. */
 export function interruptedLocalWorktreeRemovalJob(
   record: WorktreeRemovalRecord,
   host: InterruptedWorktreeRemovalHost
 ): BackgroundWorktreeRemovalJob {
+  const expectation = record.expectedInstanceId
+    ? new WorktreeRemovalExpectation(host.store, {
+        worktreeId: record.worktreeId,
+        instanceId: record.expectedInstanceId,
+        checkoutIdentity: record.expectedCheckoutIdentity
+      })
+    : undefined
   const resolveRemovedPushTarget = () =>
     resolveWorktreeRemovalMetadata(
       host.store,
@@ -84,11 +75,15 @@ export function interruptedLocalWorktreeRemovalJob(
     )?.pushTarget
   return {
     run: async (stopSignal) => {
+      // A reviewed checkout Git already deleted leaves only bookkeeping, which deletes no files.
+      const checkoutGone = (await expectation?.resumeCheckout(record.worktreePath)) === 'gone'
       const removedPushTarget = resolveRemovedPushTarget()
       const result = await finishInterruptedLocalWorktreeRemoval({
         record,
         store: host.store,
         stopSignal,
+        expectation: checkoutGone ? undefined : expectation,
+        goneCheckout: checkoutGone ? expectation : undefined,
         removedPushTarget,
         acquireWatcherRemoval: (path) => {
           // Take the gate in the same tick as the loading fence so no spawn can enter between them.
@@ -101,6 +96,7 @@ export function interruptedLocalWorktreeRemovalJob(
           host.preservedBranchCleanup.preserveHead(result, fallbackHead),
         // remember() clears the cleanup target when no branch was preserved.
         finishRemoval: async (result, _rememberBranch, fallbackHead) => {
+          expectation?.check()
           host.preservedBranchCleanup.remember(
             record.worktreeId,
             undefined,
@@ -118,29 +114,19 @@ export function interruptedLocalWorktreeRemovalJob(
   }
 }
 
-type InterruptedLocalWorktreeRemovalArgs = Pick<
-  RuntimeLocalWorktreeRemovalFinishArgs,
-  'removedPushTarget' | 'closeWatchers' | 'preserveBranchHead' | 'finishRemoval'
-> & {
-  store: RuntimeStore
-  record: WorktreeRemovalRecord
-  acquireWatcherRemoval: (path: string) => Promise<{ finish: (removed: boolean) => Promise<void> }>
-  stopPtys?: () => Promise<void>
-  stopSignal: AbortSignal
-}
-
 /** Finish from current Git/disk evidence; native markerless roots permit only empty rmdir. */
 async function finishInterruptedLocalWorktreeRemoval(
   args: InterruptedLocalWorktreeRemovalArgs
 ): Promise<RemoveWorktreeResult> {
   const { record, store } = args
-  const repo = localRemovalRepo(store, record.repoId)
+  const repo = resolveLocalWorktreeRemovalRepo(store, record.repoId)
   if (!repo) {
     console.warn(`[worktrees] dropping removal of ${record.worktreePath}: its repo is gone`)
     return {}
   }
   const localOptions = getLocalProjectWorktreeGitOptions(store, repo)
   const finishArgs: RuntimeLocalWorktreeRemovalFinishArgs = {
+    expectation: args.expectation,
     store,
     removedPushTarget: args.removedPushTarget,
     closeWatchers: args.closeWatchers,
@@ -151,6 +137,9 @@ async function finishInterruptedLocalWorktreeRemoval(
     force: record.force,
     deleteBranch: record.deleteBranch,
     target: { id: record.worktreeId }
+  }
+  if (args.goneCheckout) {
+    return finishGoneCheckoutBookkeeping(args, args.goneCheckout, finishArgs)
   }
   const worktrees = await listWorktreesStrict(repo.path, {
     ...localOptions,
@@ -176,6 +165,10 @@ async function finishInterruptedLocalWorktreeRemoval(
   if (deletable && !isRecordedCheckout(deletable, record)) {
     throw differentCheckoutAtPathError(record.worktreePath)
   }
+  args.expectation?.check()
+  if (args.expectation && !deletable) {
+    throw new Error('The reviewed Git workspace is no longer registered; files were left in place.')
+  }
   const native = usesNativeWindowsRemoval(record.worktreePath, localOptions)
   // Branch and head match a checkout moved and recreated at this path; only its marker tells them apart.
   if (deletable || native) {
@@ -199,6 +192,11 @@ async function finishInterruptedLocalWorktreeRemoval(
       args.stopSignal
     ))
   ) {
+    if (args.expectation) {
+      throw new Error(
+        'The reviewed Git workspace checkout is incomplete; files were left in place.'
+      )
+    }
     throwIfSignalAborted(args.stopSignal)
     // If Git deleted .git first, it cannot remove/validate the checkout; prune registration only and keep all files for the checks below.
     await removeStaleLocalWorktreeRegistration({
@@ -291,29 +289,4 @@ async function finishInterruptedLocalWorktreeRemoval(
   // after the purge — and the Codex pretrust deletion inside it — landed.
   await args.finishRemoval(result, true, record.head)
   return result
-}
-
-/** A checkout folder still on disk whose `.git` link is gone. */
-async function isCheckoutMissingGitLink(
-  checkoutPath: string,
-  options: LocalWorktreeFilesystemOptions
-): Promise<boolean> {
-  const { statPath: stat } = getLocalWorktreePathAccess(options)
-  try {
-    await stat(checkoutPath)
-  } catch {
-    // Git removes a registration whose folder is gone; other errors are Git's to report.
-    return false
-  }
-  try {
-    await stat(getPathOps(checkoutPath).join(checkoutPath, '.git'))
-    return false
-  } catch (error) {
-    return getErrorCode(error) === 'ENOENT'
-  }
-}
-
-function localRemovalRepo(store: RuntimeStore, repoId: string) {
-  const owner = resolveWorktreeRemovalRepoOwner(store, repoId, LOCAL_EXECUTION_HOST_ID)
-  return owner.kind === 'resolved' ? owner.repo : undefined
 }

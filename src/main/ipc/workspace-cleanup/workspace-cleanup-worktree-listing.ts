@@ -1,5 +1,8 @@
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
-import { listRepoWorktrees, createFolderWorktree } from '../../workspaces/catalog/repo-worktrees'
+import {
+  listRepoWorktreeGraphForCleanup,
+  createFolderWorktree
+} from '../../workspaces/catalog/repo-worktrees'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import type {
@@ -24,7 +27,8 @@ export async function listCleanupGitWorktrees(
   store: RuntimeStore,
   repo: Repo,
   repoIsFolder: boolean,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  listingTimeoutMs = WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS
 ): Promise<{ route: WorkspaceCleanupGitRoute; gitWorktrees: GitWorktreeInfo[] }> {
   const route = resolveWorkspaceCleanupRepoGitRoute(repo)
   if (repoIsFolder) {
@@ -37,8 +41,8 @@ export async function listCleanupGitWorktrees(
   return {
     route,
     gitWorktrees: await withWorkspaceCleanupTimeout(
-      (signal) => listRepoWorktrees(repo, { ...localGitOptions, signal }),
-      WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
+      (signal) => listRepoWorktreeGraphForCleanup(repo, { ...localGitOptions, signal }),
+      listingTimeoutMs,
       'Timed out listing worktrees.',
       signal
     )

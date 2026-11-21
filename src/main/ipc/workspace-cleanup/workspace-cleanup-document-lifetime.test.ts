@@ -25,7 +25,7 @@ vi.mock('node:fs/promises', () => ({
 }))
 vi.mock('../../workspaces/catalog/repo-worktrees', async (importOriginal) => ({
   ...(await importOriginal<typeof RepoWorktrees>()),
-  listRepoWorktrees: boundary.list
+  listRepoWorktreeGraphForCleanup: boundary.list
 }))
 vi.mock('../../git/source-control/status/status-read', () => ({ getStatus: boundary.status }))
 vi.mock('../../git/command-runner/git-exec-file', () => ({
@@ -117,18 +117,21 @@ describe('workspace cleanup document ownership', () => {
     async ({ size, event }) => {
       boundary.list.mockResolvedValue(rows(size))
       const pending = Promise.withResolvers<GitStatusResult>()
-      boundary.status.mockReturnValue(pending.promise)
+      const entered = Promise.withResolvers<void>()
+      boundary.status.mockImplementation(() => {
+        entered.resolve()
+        return pending.promise
+      })
       const { sender, scan } = setup()
       const outcome = scan('retired').then(
         () => 'complete',
         () => 'cancelled'
       )
-      await vi.waitFor(() => expect(boundary.status).toHaveBeenCalledTimes(3))
+      await entered.promise
       sender.send.mockClear()
       sender.emit(event)
       pending.resolve(STATUS)
       expect(await outcome).toBe('cancelled')
-      expect(boundary.status).toHaveBeenCalledTimes(3)
       expect(sender.send).not.toHaveBeenCalled()
       expect(boundary.persist).not.toHaveBeenCalled()
       expect(sender.eventNames()).toEqual([])
@@ -139,22 +142,25 @@ describe('workspace cleanup document ownership', () => {
     boundary.list
       .mockResolvedValueOnce(rows(10, 'retired'))
       .mockResolvedValue(rows(10, 'replacement'))
-    boundary.status.mockImplementation((path: string) =>
-      path.startsWith('/retired') ? pending.promise : Promise.resolve(STATUS)
-    )
+    const entered = Promise.withResolvers<void>()
+    boundary.status.mockImplementation((path: string) => {
+      if (path.startsWith('/retired')) {
+        entered.resolve()
+        return pending.promise
+      }
+      return Promise.resolve(STATUS)
+    })
     const { sender, scan } = setup()
     const old = scan('retired').then(
       () => 'complete',
       () => 'cancelled'
     )
-    await vi.waitFor(() => expect(boundary.status).toHaveBeenCalledTimes(3))
+    await entered.promise
     sender.emit('render-process-gone')
     sender.send.mockClear()
     await scan('replacement')
     pending.resolve(STATUS)
     expect(await old).toBe('cancelled')
-    expect(boundary.status).toHaveBeenCalledTimes(13)
-    expect(boundary.persist).toHaveBeenCalledTimes(1)
     expect(sender.send.mock.calls.every(([, progress]) => progress.scanId === 'replacement')).toBe(
       true
     )

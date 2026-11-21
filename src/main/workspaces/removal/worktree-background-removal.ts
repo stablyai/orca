@@ -9,7 +9,8 @@ export { readCheckoutMarkerIdentity as markerIdentity } from './worktree-removal
 export {
   waitForPendingWorktreeRemoval,
   waitForWorktreeRemovalAcceptance,
-  finishAcceptedWorktreeRemoval
+  finishAcceptedWorktreeRemoval,
+  withAcceptedCompletion
 } from './worktree-removal-settlement'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -105,14 +106,22 @@ export function startBackgroundWorktreeRemoval(
   args: {
     removal: Pick<
       WorktreeRemovalRecord,
-      'worktreeId' | 'repoId' | 'repoPath' | 'deleteBranch' | 'force' | 'gitdir'
+      | 'worktreeId'
+      | 'repoId'
+      | 'repoPath'
+      | 'deleteBranch'
+      | 'force'
+      | 'expectedInstanceId'
+      | 'expectedCheckoutIdentity'
+      | 'gitdir'
     > & { worktree: Pick<GitWorktreeInfo, 'path' | 'branch' | 'head'> }
   } & BackgroundWorktreeRemovalJob
 ): Promise<RemoveWorktreeResult> {
   const pending = waitForPendingWorktreeRemoval(
     args.removal.worktreeId,
     undefined,
-    args.removal.deleteBranch
+    args.removal.deleteBranch,
+    args.removal.expectedInstanceId
   )
   if (pending) {
     return pending

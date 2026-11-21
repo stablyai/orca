@@ -619,7 +619,7 @@
 1 src/main/ipc/filesystem/source-control/filesystem-git-model-discovery-handlers.ts
 1 src/main/ipc/filesystem/source-control/filesystem-git-pull-request-generation-handlers.ts
 6 src/main/ipc/filesystem/source-control/filesystem-git-status-handlers.ts
-2 src/main/ipc/filesystem/source-control/filesystem-source-control-ai-targets.ts
+1 src/main/ipc/filesystem/source-control/filesystem-source-control-ai-targets.ts
 2 src/main/ipc/filesystem/watcher-process/child-lifecycle/parcel-watcher-child-launch.ts
 1 src/main/ipc/filesystem/watcher-process/child-lifecycle/parcel-watcher-child-slot.ts
 3 src/main/ipc/filesystem/watcher-process/parcel-watcher-entry-path.ts
@@ -683,25 +683,23 @@
 2 src/main/ipc/session.ts
 3 src/main/ipc/settings/settings.ts
 3 src/main/ipc/shell/shell.ts
-5 src/main/ipc/source-control/hosted-review.ts
+2 src/main/ipc/source-control/hosted-review.ts
 3 src/main/ipc/ssh/plain-ssh-terminal-handlers.ts
 2 src/main/ipc/ssh/ssh-connection-handlers.ts
 2 src/main/ipc/ssh/ssh-host-server-on-connect-wiring.ts
 2 src/main/ipc/ssh/ssh-target-crud-handlers.ts
 1 src/main/ipc/ssh/ssh.ts
 1 src/main/ipc/workspace-cleanup/workspace-cleanup-git-evidence.ts
-1 src/main/ipc/workspace-cleanup/workspace-cleanup-worktree-listing.ts
 3 src/main/ipc/worktrees.ts
 3 src/main/ipc/worktrees/create/register-worktree-create-handlers.ts
 3 src/main/ipc/worktrees/floating-workspace-directory.ts
 1 src/main/ipc/worktrees/listing/detected-provider-listing.ts
-3 src/main/ipc/worktrees/listing/detected-worktree-scan-cache.ts
+1 src/main/ipc/worktrees/listing/detected-worktree-scan-cache.ts
 11 src/main/ipc/worktrees/listing/folder-repo-git-upgrade.ts
 1 src/main/ipc/worktrees/listing/ssh-worktree-fallback.ts
 2 src/main/ipc/worktrees/removal/execute-worktree-removal.ts
 1 src/main/ipc/worktrees/removal/register-worktree-removal-handlers.ts
 1 src/main/ipc/worktrees/removal/registered-worktree-root-match.ts
-1 src/main/ipc/worktrees/removal/registered-worktree-root-probes.ts
 3 src/main/ipc/worktrees/removal/registered-worktree-roots-cache.ts
 1 src/main/ipc/worktrees/removal/remove-folder-workspace.ts
 1 src/main/ipc/worktrees/removal/remove-registered-local-worktree.ts
@@ -770,7 +768,6 @@
 1 src/main/managed-server/migration/cutover/orcad-unreachable-setup-release.ts
 1 src/main/media/local-preview-grant-file.ts
 1 src/main/media/media-preview-protocol.ts
-1 src/main/memory/hydrate-local-pty-registry.ts
 13 src/main/mimo/hook-service.ts
 1 src/main/muse-usage/muse-usage-provider.ts
 1 src/main/muse-usage/store.ts
@@ -1306,7 +1303,7 @@
 4 src/main/runtime/workspaces/creation/runtime-local-worktree-setup.ts
 2 src/main/runtime/workspaces/creation/workspace-creation.ts
 1 src/main/runtime/workspaces/lineage/runtime-worktree-lineage-controller.ts
-1 src/main/runtime/workspaces/removal/runtime-interrupted-local-worktree-removal.ts
+1 src/main/runtime/workspaces/removal/checkout-missing-git-link.ts # moved from runtime-interrupted-local-worktree-removal.ts with its path-access lookup
 4 src/main/runtime/workspaces/removal/runtime-registered-local-worktree-removal.ts
 2 src/main/runtime/workspaces/removal/runtime-unregistered-worktree-removal.ts
 2 src/main/runtime/workspaces/removal/workspace-registration-removal.ts
@@ -1474,10 +1471,7 @@
 1 src/main/workspaces/catalog/folder-upgrade-worktree-path.ts
 2 src/main/workspaces/catalog/provisioned-root-ssh-adoption.ts
 2 src/main/workspaces/catalog/repo-worktree-catalog-owner.ts
-5 src/main/workspaces/catalog/repo-worktrees.ts
 1 src/main/workspaces/cleanup/chat-history/deleted-workspace-chat-history.ts
-4 src/main/workspaces/cleanup/workspace-cleanup-removal-step.ts # folder workspace group (#44715): decideWorkspaceCleanups wraps the per-workspace decision; same orca.yaml read, now also for folder siblings in the re-check
-2 src/main/workspaces/cleanup/workspace-cleanup-runner.ts
 3 src/main/workspaces/creation/preparation/worktree-create-preparation-pool.ts
 2 src/main/workspaces/creation/preparation/worktree-create-preparation-stale-cleanup.ts
 2 src/main/workspaces/creation/preparation/worktree-create-preparation.ts
@@ -1492,7 +1486,7 @@
 1 src/main/workspaces/removal/worktree-prunable-git-file.ts
 1 src/main/workspaces/removal/worktree-removal-process-cleanup.ts
 1 src/main/workspaces/space-analysis/workspace-space-analysis.ts
-2 src/main/workspaces/space-analysis/workspace-space-repo-scan.ts
+1 src/main/workspaces/space-analysis/workspace-space-repo-scan.ts
 2 src/main/workspaces/space-analysis/workspace-space-scan-worker-client.ts
 9 src/main/wsl/discovery/distro-catalog.ts
 3 src/main/wsl/discovery/wsl-availability.ts

@@ -1,6 +1,7 @@
 import type { GitRuntimeOptions } from '../../command-runner/git-runtime-options'
 
 export type GetStatusOptions = GitRuntimeOptions & {
+  fresh?: boolean
   includeIgnored?: boolean
   includeLineStats?: boolean
   reuseLineStats?: boolean

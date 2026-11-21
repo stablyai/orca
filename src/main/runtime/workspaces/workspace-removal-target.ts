@@ -78,9 +78,14 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends Runtim
 
   protected joinPendingWorktreeRemoval(
     worktreeId: string,
-    { hostId, deleteBranch }: RemoveManagedWorktreeOptions
+    { hostId, deleteBranch, expectedWorktree }: RemoveManagedWorktreeOptions
   ): Promise<RemoveWorktreeResult> | undefined {
-    return waitForPendingWorktreeRemoval(worktreeId, parseExecutionHostId(hostId)?.id, deleteBranch)
+    return waitForPendingWorktreeRemoval(
+      worktreeId,
+      parseExecutionHostId(hostId)?.id,
+      deleteBranch,
+      expectedWorktree?.instanceId
+    )
   }
 
   /** Failed intent schedules a retry; current Git/filesystem proof still controls every deletion. */

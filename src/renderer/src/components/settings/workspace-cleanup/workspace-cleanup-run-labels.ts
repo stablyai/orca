@@ -90,6 +90,11 @@ export function formatCleanupKeepCause(
         'components.settings.workspaceCleanup.keep.folderWorkspaceSibling',
         'Another repository in this workspace is still in use'
       )
+    case 'identity-unverified':
+      return t(
+        'components.settings.workspaceCleanup.keep.identityUnverified',
+        "Couldn't verify it right before deleting, so it was kept"
+      )
     case 'waiting':
       return t('components.settings.workspaceCleanup.keep.waiting', 'Waiting')
     case 'not-removable':

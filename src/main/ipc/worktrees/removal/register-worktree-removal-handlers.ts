@@ -21,7 +21,8 @@ import { withNestedPreservedBranches } from '../../../workspaces/removal/nested-
 import {
   finishAcceptedWorktreeRemoval,
   waitForPendingWorktreeRemoval,
-  waitForWorktreeRemovalAcceptance
+  waitForWorktreeRemovalAcceptance,
+  withAcceptedCompletion
 } from '../../../workspaces/removal/worktree-background-removal'
 import { runSerializedWorktreeRemovalAcceptance } from '../../../workspaces/removal/worktree-removal-acceptance-queue'
 import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
@@ -86,9 +87,10 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
       const executionArgs = expectedCheckout ? { ...args, expectedCheckout } : args
       const accept = async (): Promise<RemoveWorktreeResult> => {
         // Another client may acquire removal while this request waits for acceptance.
-        if (waitForPendingWorktreeRemoval(args.worktreeId, removalHostId)) {
+        const joined = waitForPendingWorktreeRemoval(args.worktreeId, removalHostId)
+        if (joined) {
           await waitForWorktreeRemovalAcceptance(args.worktreeId, removalHostId)
-          return { removing: true }
+          return withAcceptedCompletion({ removing: true }, joined)
         }
         return executeWorktreeRemoval(
           context,

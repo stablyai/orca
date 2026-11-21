@@ -4,8 +4,9 @@ import {
   queueWorkspaceArchive,
   queueWorkspaceDelete
 } from '../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
-import { getEffectiveHooks } from '../../workspace-hooks/hooks'
+import { getEffectiveHooksAsync } from '../../workspace-hooks/effective-hooks-reader'
 import { errorMessage } from '../../../shared/errors/error-message'
+import { isWorktreeIdentityUnverifiable } from '../../../shared/worktree/removal/worktree-checkout-identity'
 import {
   evaluateWorkspaceCleanup,
   keepFolderWorkspaceSiblings,
@@ -18,18 +19,25 @@ import {
   collectWorkspaceCleanupWorkspaces,
   type WorkspaceCleanupWorkspace
 } from './workspace-cleanup-run-evidence'
-import { readWorkspaceCleanupTerminalActivity } from './workspace-cleanup-terminal-activity'
+import {
+  type WorkspaceCleanupTerminalActivity,
+  readWorkspaceCleanupTerminalActivity
+} from './workspace-cleanup-terminal-activity'
 import { keptRunOutcome } from './workspace-cleanup-run-summary'
+import { admitWorkspaceCleanup } from './workspace-cleanup-admission'
 
 function selectorFor(workspace: WorkspaceCleanupWorkspace): string {
   return `id:${workspace.ref.worktreeId}`
 }
 
-/** The evaluator's verdict plus the checks only a live host can make; any doubt keeps the workspace. */
-async function decideWorkspaceCleanup(
+/** The evaluator's verdict plus the checks only a live host can make; any doubt keeps the workspace.
+ * One workspace alone: a folder workspace's group hold is `keepFolderWorkspaceSiblings`' job. */
+export async function decideWorkspaceCleanup(
   runtime: OrcaRuntimeService,
   workspace: WorkspaceCleanupWorkspace,
-  now: number
+  now: number,
+  terminalActivity?: () => Promise<WorkspaceCleanupTerminalActivity>,
+  readHooks: typeof getEffectiveHooksAsync = getEffectiveHooksAsync
 ): Promise<WorkspaceCleanupEvaluation> {
   if (workspace.removing) {
     return { action: 'keep', cause: 'removing' }
@@ -42,16 +50,18 @@ async function decideWorkspaceCleanup(
   // An unattended run never runs repo scripts nobody approved, and never skips the teardown they do.
   // The checkout's own orca.yaml can add one the repo root lacks.
   if (
-    getEffectiveHooks(workspace.repo)?.scripts.archive ||
-    getEffectiveHooks(workspace.repo, workspace.ref.path)?.scripts.archive
+    (await readHooks(workspace.repo))?.scripts.archive ||
+    (await readHooks(workspace.repo, workspace.ref.path))?.scripts.archive
   ) {
     return { action: 'keep', cause: 'archive-script', reason }
   }
-  const terminals = await readWorkspaceCleanupTerminalActivity(
-    runtime,
-    workspace.ref.worktreeId,
-    workspace.paneAgentStates
-  )
+  const terminals = await (terminalActivity
+    ? terminalActivity()
+    : readWorkspaceCleanupTerminalActivity(
+        runtime,
+        workspace.ref.worktreeId,
+        workspace.paneAgentStates
+      ))
   if (terminals === 'idle') {
     return evaluation
   }
@@ -114,10 +124,15 @@ export async function removeWorkspaceForCleanup(args: {
       worktreeId: workspace.ref.worktreeId,
       withFolderSiblings: workspace.folderSiblings.length > 0,
       readPairedFolderChildren: workspace.readPairedFolderChildren,
+      captureCheckoutIdentity: true,
       signal: args.signal
     })
     if (!fresh) {
       return { outcome: 'kept', keepCause: 'git-unknown', keptOnRecheck: true }
+    }
+    // Another workspace now has this id, or the scan could not tell which one it judged: keep it this run.
+    if (!workspace.ref.instanceId || fresh.ref.instanceId !== workspace.ref.instanceId) {
+      return { outcome: 'kept', keepCause: 'identity-unverified', keptOnRecheck: true }
     }
     const [recheck] = await decideWorkspaceCleanups(runtime, [fresh, ...siblings], args.now())
     if (recheck.action === 'keep') {
@@ -129,26 +144,64 @@ export async function removeWorkspaceForCleanup(args: {
     // Only reachable once WORKSPACE_ARCHIVE_SUPPORTED is on; archive keeps the branch and the row.
     if (recheck.action === 'archive') {
       const hostId = workspace.ref.executionHostId
-      const archived = await queueWorkspaceArchive(runtime, selector, hostId, () =>
-        runtime.archiveManagedWorktree(selector, hostId ? { hostId } : {})
+      const admission = await admitWorkspaceCleanup(store, fresh.ref, () =>
+        queueWorkspaceArchive(
+          runtime,
+          selector,
+          hostId,
+          () =>
+            runtime.archiveManagedWorktree(selector, {
+              ...(hostId ? { hostId } : {}),
+              expectedWorktree: {
+                worktreeId: fresh.ref.worktreeId,
+                instanceId: fresh.ref.instanceId!,
+                checkoutIdentity: fresh.checkoutIdentity
+              }
+            }),
+          {
+            worktreeId: fresh.ref.worktreeId,
+            instanceId: fresh.ref.instanceId!,
+            checkoutIdentity: fresh.checkoutIdentity
+          }
+        )
       )
+      if (!admission.admitted) {
+        return { outcome: 'kept', keepCause: admission.cause, keptOnRecheck: true }
+      }
+      const archived = await admission.completion
       return { outcome: 'archived', reason: recheck.reason, branchKept: archived.branch }
     }
     // Never forced: Git's own dirty-checkout refusal stays the last guard.
-    const result = await queueWorkspaceDelete(
-      runtime,
-      selector,
-      workspace.ref.executionHostId,
-      {},
-      (removal) =>
-        runtime.removeManagedWorktree(selector, { ...removal, waitForBackgroundRemoval: true })
+    const admission = await admitWorkspaceCleanup(store, fresh.ref, () =>
+      queueWorkspaceDelete(
+        runtime,
+        selector,
+        workspace.ref.executionHostId,
+        {
+          expectedWorktree: {
+            worktreeId: fresh.ref.worktreeId,
+            instanceId: fresh.ref.instanceId!,
+            checkoutIdentity: fresh.checkoutIdentity
+          }
+        },
+        (removal) =>
+          runtime.removeManagedWorktree(selector, { ...removal, waitForBackgroundRemoval: true })
+      )
     )
+    if (!admission.admitted) {
+      return { outcome: 'kept', keepCause: admission.cause, keptOnRecheck: true }
+    }
+    const result = await admission.completion
     return {
       outcome: 'removed',
       reason: recheck.reason,
       ...(result.preservedBranch ? { branchKept: result.preservedBranch.branchName } : {})
     }
   } catch (error) {
+    // Where Orca can't check the checkout's identity right before Git deletes it (WSL), it keeps it.
+    if (isWorktreeIdentityUnverifiable(error)) {
+      return { outcome: 'kept', keepCause: 'identity-unverified', keptOnRecheck: true }
+    }
     return { outcome: 'failed', error: describeRemovalError(error) }
   }
 }

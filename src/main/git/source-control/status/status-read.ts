@@ -42,6 +42,9 @@ export async function getStatus(
   worktreePath: string,
   options: GetStatusOptions = {}
 ): Promise<GitStatusResult> {
+  if (options.fresh) {
+    return runGetStatus(worktreePath, options)
+  }
   // Reads preserve diff caches; mutations invalidate them and settled entries also validate input stamps.
   const cacheKey = getStatusReadKey(worktreePath, options)
   return statusReadLeaseOwner.lease(cacheKey, options.signal, (sharedSignal) =>

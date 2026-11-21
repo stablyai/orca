@@ -1,9 +1,20 @@
+import {
+  captureWorktreeCheckoutIdentity,
+  assertWorktreeCheckoutIdentity
+} from '../removal/worktree-checkout-identity'
+import type { WorktreeCheckoutIdentity } from '../../../shared/worktree/removal/worktree-checkout-identity'
+import type {
+  WorkspaceCleanupPolicyState,
+  WorkspaceCleanupPolicyChange
+} from '../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { worktreeIdentityKey } from '../../../shared/worktree/id'
 import {
   folderGroupOf,
   folderSiblingsByWorktree,
+  hasUnlistedFolderSibling,
+  projectFolderGroups,
   summaryHostId,
   summaryIdentity
 } from './workspace-cleanup-folder-membership'
@@ -11,22 +22,18 @@ import {
   pairedFolderChildrenOnce,
   type PairedFolderChildren
 } from './workspace-cleanup-paired-folder-children'
-import { listClientUnsavedEditorWorktreeIds } from './workspace-cleanup-client-unsaved-editors'
+import { dirtyEditorWorktreeIds, scanTargets } from './workspace-cleanup-run-git-evidence'
 import { runtimeVisibleRepos } from '../../runtime/workspaces/catalog/runtime-visible-catalog'
-import { scanWorkspaceCleanup } from '../../ipc/workspace-cleanup/workspace-cleanup-scan'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import type { Repo } from '../../../shared/repository/repo-types'
 import {
   isRepoOnCatalogHost,
-  LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostId
+  LOCAL_EXECUTION_HOST_ID
 } from '../../../shared/execution-host/execution-host'
 import type { RuntimeWorktreePsSummary } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import {
   getPersistedWorkspaceCleanupActivityAt,
-  WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT,
-  type WorkspaceCleanupBlocker,
-  type WorkspaceCleanupCandidate
+  type WorkspaceCleanupBlocker
 } from '../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   resolveWorkspaceCleanupPolicy,
@@ -43,9 +50,11 @@ const WORKTREE_PS_LIMIT = 100_000
 const LIVE_AGENT_STATES = new Set(['working', 'blocked', 'waiting'])
 
 export type WorkspaceCleanupWorkspace = {
+  checkoutIdentity?: WorktreeCheckoutIdentity
   ref: WorkspaceCleanupWorkspaceRef
   repo: Repo
   policy: ResolvedWorkspaceCleanupPolicy
+  nextPolicy?: ResolvedWorkspaceCleanupPolicy
   input: WorkspaceCleanupEvaluationInput
   paneAgentStates: WorkspaceCleanupPaneAgentStates
   removing: boolean
@@ -122,44 +131,6 @@ function inputWithoutGit(summary: RuntimeWorktreePsSummary): WorkspaceCleanupEva
   }
 }
 
-/** This host's own window persists its unsaved drafts in the session; remote clients report theirs. Keyed by identity so path spellings match. */
-function dirtyEditorWorktreeIds(store: RuntimeStore, runtime: OrcaRuntimeService): Set<string> {
-  const session = store.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)
-  const ids = new Set([...listClientUnsavedEditorWorktreeIds(runtime)].map(worktreeIdentityKey))
-  for (const [worktreeId, files] of Object.entries(session?.openFilesByWorktree ?? {})) {
-    if (files.some((file) => file.dirtyDraftContent !== undefined)) {
-      ids.add(worktreeIdentityKey(worktreeId))
-    }
-  }
-  return ids
-}
-
-async function scanTargets(
-  store: RuntimeStore,
-  runtime: OrcaRuntimeService,
-  worktreeIds: string[],
-  signal: AbortSignal | undefined
-): Promise<Map<string, WorkspaceCleanupCandidate>> {
-  const candidates = new Map<string, WorkspaceCleanupCandidate>()
-  for (let start = 0; start < worktreeIds.length; start += WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT) {
-    const batch = worktreeIds.slice(start, start + WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT)
-    // Re-stat activity: a time rule must not fire on a stale persisted stamp.
-    const result = await scanWorkspaceCleanup(
-      store,
-      { worktreeIds: batch, refreshActivity: true },
-      // Without the orchestration store the scan can't prove a worker was released.
-      { signal, getOrchestrationDb: () => runtime.getExistingOrchestrationDb() }
-    )
-    for (const candidate of result.candidates) {
-      // A same-id repo row on another host scans too; only this host's checkout is evidence here.
-      if (normalizeExecutionHostId(candidate.executionHostId) === LOCAL_EXECUTION_HOST_ID) {
-        candidates.set(candidate.worktreeId, candidate)
-      }
-    }
-  }
-  return candidates
-}
-
 function withHostBlockers(
   input: WorkspaceCleanupEvaluationInput,
   summary: RuntimeWorktreePsSummary,
@@ -195,6 +166,10 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
   withFolderSiblings?: boolean
   /** The scan's read of paired servers, so a re-check never asks them again. */
   readPairedFolderChildren?: () => Promise<PairedFolderChildren>
+  comparison?: { state: WorkspaceCleanupPolicyState; change: WorkspaceCleanupPolicyChange }
+  requireComplete?: boolean
+  freshInventory?: boolean
+  captureCheckoutIdentity?: boolean
   signal?: AbortSignal
 }): Promise<WorkspaceCleanupWorkspace[]> {
   const { store, runtime, globalRules, now, worktreeId, signal } = args
@@ -205,42 +180,94 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
     WORKTREE_PS_LIMIT,
     true,
     false,
-    args.withFolderSiblings ? undefined : worktreeId
+    args.withFolderSiblings ? undefined : worktreeId,
+    args.comparison?.state.repoId ?? undefined,
+    args.freshInventory
   )
   if (ps.truncated) {
     throw new Error('Could not list every workspace on this host.')
   }
   const readPairedFolderChildren =
     args.readPairedFolderChildren ?? pairedFolderChildrenOnce(runtime)
-  const folderSiblingsOf = await folderSiblingsByWorktree(
-    store,
-    ps.worktrees,
-    readPairedFolderChildren
-  )
-  const owned = ps.worktrees.filter((summary) => isOwnedSummary(summary, repos))
-  const summaries =
-    args.withFolderSiblings && worktreeId !== undefined
-      ? folderGroupOf(owned, worktreeId, folderSiblingsOf)
-      : owned
-  const policies = new Map<string, ResolvedWorkspaceCleanupPolicy>()
-  for (const summary of summaries) {
-    if (!policies.has(summary.repoId)) {
-      policies.set(
-        summary.repoId,
-        resolveWorkspaceCleanupPolicy(
-          { workspaceCleanupPolicy: globalRules },
-          repos.get(summary.repoId)!
-        )
-      )
+  const projectId = args.comparison?.state.repoId ?? undefined
+  let listed = ps.worktrees
+  let folderSiblingsOf = await folderSiblingsByWorktree(store, listed, readPairedFolderChildren)
+  if (projectId && hasUnlistedFolderSibling(listed, folderSiblingsOf)) {
+    // A folder workspace can span projects, and a run judges its worktrees as one group: a project's
+    // preview reads the other projects' members too, so it shows what the run would remove.
+    const all = await runtime.getWorktreePs(WORKTREE_PS_LIMIT, true, false)
+    if (all.truncated) {
+      throw new Error('Could not list every workspace on this host.')
     }
+    listed = [...listed, ...all.worktrees.filter((summary) => summary.repoId !== projectId)]
+    folderSiblingsOf = await folderSiblingsByWorktree(store, listed, readPairedFolderChildren)
+  }
+  const owned = listed.filter((summary) => isOwnedSummary(summary, repos))
+  const summaries =
+    worktreeId !== undefined
+      ? args.withFolderSiblings
+        ? folderGroupOf(owned, worktreeId, folderSiblingsOf)
+        : owned.filter((summary) => summary.worktreeId === worktreeId)
+      : projectId
+        ? projectFolderGroups(owned, projectId, folderSiblingsOf)
+        : owned
+  const policies = new Map<string, ResolvedWorkspaceCleanupPolicy>()
+  const nextPolicies = new Map<string, ResolvedWorkspaceCleanupPolicy>()
+  const saved = new Map(args.comparison?.state.projects.map((row) => [row.id, row.policy]))
+  for (const summary of summaries) {
+    if (policies.has(summary.repoId)) {
+      continue
+    }
+    const repo = repos.get(summary.repoId)!
+    // A project preview reviews its own saved policy; a folder sibling's project keeps its current one.
+    const policy = saved.has(repo.id) ? saved.get(repo.id) : repo.workspaceCleanupPolicy
+    const current = resolveWorkspaceCleanupPolicy(
+      { workspaceCleanupPolicy: globalRules },
+      { workspaceCleanupPolicy: policy ?? undefined }
+    )
+    policies.set(repo.id, current)
+    const change = args.comparison?.change
+    const proposed =
+      change?.scope === 'project' && change.repoId === repo.id ? change.policy : policy
+    const nextRules = change?.scope === 'global' ? change.rules : globalRules
+    nextPolicies.set(
+      repo.id,
+      resolveWorkspaceCleanupPolicy(
+        { workspaceCleanupPolicy: nextRules },
+        { workspaceCleanupPolicy: proposed ?? undefined }
+      )
+    )
   }
   const gitTargets = summaries
     .filter((summary) => {
       const rules = policies.get(summary.repoId)!.rules
-      return needsGitEvidence(summary, rules, now)
+      return (
+        needsGitEvidence(summary, rules, now) ||
+        needsGitEvidence(summary, nextPolicies.get(summary.repoId)!.rules, now)
+      )
     })
     .map((summary) => summary.worktreeId)
-  const candidates = await scanTargets(store, runtime, gitTargets, signal)
+  const target = args.captureCheckoutIdentity
+    ? summaries.find((row) => row.worktreeId === worktreeId)
+    : undefined
+  const checkoutIdentity = target?.worktreeInstanceId
+    ? await captureWorktreeCheckoutIdentity(
+        target.path,
+        target.worktreeInstanceId,
+        repos.get(target.repoId)!.path
+      )
+    : undefined
+  const candidates = await scanTargets(
+    store,
+    runtime,
+    gitTargets,
+    signal,
+    args.comparison ? listed.length : undefined,
+    args.requireComplete ?? Boolean(args.comparison)
+  )
+  if (checkoutIdentity) {
+    await assertWorktreeCheckoutIdentity(checkoutIdentity)
+  }
   const dirtyEditors = dirtyEditorWorktreeIds(store, runtime)
   const scanned = new Set(gitTargets)
   return summaries.map((summary) => {
@@ -255,8 +282,10 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
         ? { ...inputWithoutGit(summary), blockers: ['git-status-error'] }
         : inputWithoutGit(summary)
     return {
+      ...(summary.worktreeId === worktreeId && checkoutIdentity ? { checkoutIdentity } : {}),
       ref: {
         worktreeId: summary.worktreeId,
+        ...(summary.worktreeInstanceId ? { instanceId: summary.worktreeInstanceId } : {}),
         ...(candidate?.executionHostId ? { executionHostId: candidate.executionHostId } : {}),
         repoId: repo.id,
         repoName: repo.displayName,
@@ -266,6 +295,7 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
       },
       repo,
       policy: policies.get(summary.repoId)!,
+      ...(args.comparison ? { nextPolicy: nextPolicies.get(summary.repoId)! } : {}),
       input: withHostBlockers(
         baseInput,
         summary,

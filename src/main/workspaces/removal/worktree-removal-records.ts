@@ -1,3 +1,7 @@
+import {
+  parseWorktreeCheckoutIdentity,
+  type WorktreeCheckoutIdentity
+} from '../../../shared/worktree/removal/worktree-checkout-identity'
 // The sidecar persists before deletion without waiting for batched profile writes or entering profile exports.
 import {
   readSidecarSnapshot,
@@ -24,6 +28,8 @@ export type WorktreeRemovalRecord = {
   deleteBranch: boolean
   force: boolean
   requestedAt: number
+  expectedInstanceId?: string
+  expectedCheckoutIdentity?: WorktreeCheckoutIdentity
   /** Cleanup failed; files, Git ownership or metadata may still need an explicit retry. */
   failure?: WorktreeRemovalFailure
 }
@@ -64,7 +70,11 @@ function parseRecord(value: unknown): WorktreeRemovalRecord | null {
     typeof value.head !== 'string' ||
     typeof value.deleteBranch !== 'boolean' ||
     typeof value.force !== 'boolean' ||
-    typeof value.requestedAt !== 'number'
+    typeof value.requestedAt !== 'number' ||
+    (value.expectedCheckoutIdentity !== undefined &&
+      !parseWorktreeCheckoutIdentity(value.expectedCheckoutIdentity)) ||
+    (value.expectedInstanceId !== undefined &&
+      (typeof value.expectedInstanceId !== 'string' || !value.expectedInstanceId))
   ) {
     return null
   }
@@ -78,6 +88,12 @@ function parseRecord(value: unknown): WorktreeRemovalRecord | null {
     deleteBranch: value.deleteBranch,
     force: value.force,
     requestedAt: value.requestedAt,
+    ...(typeof value.expectedInstanceId === 'string'
+      ? { expectedInstanceId: value.expectedInstanceId }
+      : {}),
+    ...(value.expectedCheckoutIdentity
+      ? { expectedCheckoutIdentity: parseWorktreeCheckoutIdentity(value.expectedCheckoutIdentity)! }
+      : {}),
     ...(typeof value.gitdir === 'string' && value.gitdir ? { gitdir: value.gitdir } : {}),
     ...(failure ? { failure } : {})
   }

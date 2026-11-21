@@ -21709,9 +21709,6 @@
       "workspaceCleanup": {
         "title": "工作区清理",
         "description": "移除你已不再需要的工作区。在移除任何内容之前，Orca 会再次检查是否有未保存的工作",
-        "unsupportedHost": "此主机上的 Orca 版本不支持自动清理，请更新该主机上的 Orca 以使用这些设置",
-        "previewFailed": "无法检查此更改会匹配哪些工作区",
-        "pinFailed": "无法保留 {{name}}",
         "rules": {
           "branchNote": "已合并的分支会随工作区一起删除，未合并的分支会保留",
           "recommended": "推荐",
@@ -21740,7 +21737,9 @@
           "inactiveDescription_other": "{{count}} 天没有活动",
           "matchesCount_other": "当前匹配 {{count}} 个工作区",
           "checking": "正在检查匹配的工作区…",
-          "checkFailed": "无法检查匹配的工作区"
+          "checkFailed": "无法检查匹配的工作区",
+          "inactiveDescription_one": "1 天没有活动。",
+          "matchesCount_one": "当前匹配 1 个工作区"
         },
         "protection": {
           "title": "保护",
@@ -21771,10 +21770,15 @@
         "updateFailed": "无法保存清理规则",
         "enable": {
           "title": "开启“{{rule}}”？",
-          "description_other": "当前有 {{count}} 个工作区匹配，开启后几秒内会将其删除",
+          "description_other": "当前有 {{count}} 个工作区匹配。",
           "summary": "将删除 {{count}} 个",
           "cancel": "取消",
-          "turnOn": "开启"
+          "turnOn": "开启",
+          "description_one": "当前有 1 个工作区匹配。",
+          "summary_one": "将删除 1 个",
+          "summary_other": "将删除 {{count}} 个",
+          "keep": "保留",
+          "keepNamed": "保留 {{name}}"
         },
         "reason": {
           "merged": "已合并",
@@ -21847,8 +21851,33 @@
         },
         "change": {
           "title": "更改“{{rule}}”？",
-          "description_other": "此更改会让当前多出 {{count}} 个匹配的工作区，应用后几秒内会将其删除",
-          "apply": "应用"
+          "apply": "应用",
+          "thisHost": "此主机",
+          "oldProject": "请更新 {{host}} 上的 Orca 以更改规则。仍可选择关闭。",
+          "oldProjectUnsupported": "请更新 {{host}} 上的 Orca 以更改此处的清理设置。",
+          "oldGlobal": "请更新 {{host}} 上的 Orca 以更改清理规则。",
+          "saveFailed": "无法保存。规则未更改。",
+          "conflict": "清理规则已在别处更改。请重新检查更改。",
+          "checkingSaved": "正在检查已保存的规则…",
+          "previewFailed": "无法检查匹配的工作区。",
+          "pinFailed": "无法保留 {{name}}。规则未更改。",
+          "inheritTitle": "为 {{project}} 使用全局规则？",
+          "projectEnableTitle": "为 {{project}} 开启“{{rule}}”？",
+          "projectTitle": "更改 {{project}} 的“{{rule}}”？",
+          "inheritDescription_one": "当前有 1 个工作区匹配全局规则。",
+          "inheritDescription_other": "当前有 {{count}} 个工作区匹配全局规则。",
+          "fullDescription_one": "当前有 1 个工作区匹配。",
+          "fullDescription_other": "当前有 {{count}} 个工作区匹配。",
+          "keptDeleted": "{{name}} 已被删除。",
+          "keptDeletedCount_one": "1 个选为保留的工作区已被删除。",
+          "keptDeletedCount_other": "{{count}} 个选为保留的工作区已被删除。",
+          "moreMatches_one": "现在又有 1 个工作区匹配。请检查并再次确认。",
+          "moreMatches_other": "现在又有 {{count}} 个工作区匹配。请检查并再次确认。",
+          "new": "新增",
+          "alreadySet": "没有“新增”标记的行已被设为删除。",
+          "cancelCurrent": "即使取消，当前规则仍会删除其中一些工作区。",
+          "keepTooLate": "{{name}} 的删除已开始，无法保留。规则未更改。",
+          "proposalChanged": "清理规则已在别处更改。请检查更新后的规则：{{rules}}"
         },
         "rulesLoadFailed": "无法加载此主机的清理规则：{{error}}",
         "retry": "重试",
@@ -21864,12 +21893,10 @@
         "disableIgnoredFiles": {
           "title": "关闭被忽略文件保护？",
           "description": "对于使用这些清理规则的项目，被忽略的文件将不再阻止自动清理。.env 和本地配置这类文件可能会被删除，且无法恢复",
-          "matches_other": "如果不固定，关闭保护几秒后将额外删除 {{count}} 个工作区",
           "noMatches": "当前没有额外匹配的工作区，此设置会影响使用这些规则的项目今后的清理",
           "turnOff": "关闭保护"
         },
         "pinAndKeep": {
-          "description": "确认后会固定所选工作区，已固定的工作区在取消固定前不会被自动清理",
           "named": "固定并保留 {{name}}",
           "label": "固定并保留"
         },

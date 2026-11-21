@@ -5,12 +5,17 @@ import {
 } from './worktree-removal-leftover'
 import type { WorktreeRemovalFailure, WorktreeRemovalRecord } from './worktree-removal-records'
 import { worktreeCheckoutExists } from './worktree-removal-table'
+import { isWorktreeRemovalRefused } from '../../../shared/worktree/removal/worktree-checkout-identity'
 
 /** Keep the branch and push target until a retry removes the folder, so a half-done delete loses nothing. */
 export async function failureLeftByGit(
   record: WorktreeRemovalRecord,
   error: unknown
 ): Promise<WorktreeRemovalFailure | undefined> {
+  // Refused before Git ran: nothing was removed, so there is no half-done delete to finish.
+  if (isWorktreeRemovalRefused(error)) {
+    return undefined
+  }
   const message = error instanceof Error ? error.message : String(error)
   const failure = {
     message: message.replace(
