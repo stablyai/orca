@@ -18,6 +18,7 @@ import {
   isDashboardPaneKey,
   isDashboardRevealAgentArgs
 } from './dashboard-payload-validation'
+import { isDashboardOpenBotItemArgs } from './dashboard-bot-ask-validation'
 
 // Replay immediately on mount; clear on close to avoid showing a previous session.
 let lastSnapshot: DashboardSnapshot | null = null
@@ -37,6 +38,7 @@ export function registerDashboardPopoutHandlers(
   ipcMain.removeHandler('dashboard:getPopoutOpen')
   ipcMain.removeHandler('dashboardPopout:revealAgent')
   ipcMain.removeHandler('dashboardPopout:ackAgent')
+  ipcMain.removeHandler('dashboardPopout:openBotItem')
 
   onDashboardPopoutOpenChanged((open) => {
     if (!open) {
@@ -117,6 +119,23 @@ export function registerDashboardPopoutHandlers(
     })
   })
 
+  // Reveal the main window and hand it the request; it owns the panes, bots, and their panels.
+  const relayToMainWindow = (channel: string, args: unknown): void => {
+    const mainWindow = getTrustedUIRendererWindow()
+    if (!mainWindow) {
+      return
+    }
+    safelyRevealWindow(mainWindow)
+    mainWindow.webContents.send(channel, args)
+    if (!isBackgroundLaunch()) {
+      try {
+        app.focus({ steal: true })
+      } catch {
+        // Best-effort; the per-window focus above may still bring it forward.
+      }
+    }
+  }
+
   ipcMain.handle('dashboardPopout:revealAgent', (event, args: unknown): void => {
     if (
       !isDashboardPopoutRenderer(event.sender) ||
@@ -125,18 +144,17 @@ export function registerDashboardPopoutHandlers(
     ) {
       return
     }
-    const mainWindow = getTrustedUIRendererWindow()
-    if (!mainWindow) {
+    relayToMainWindow('ui:revealDashboardAgent', args)
+  })
+
+  ipcMain.handle('dashboardPopout:openBotItem', (event, args: unknown): void => {
+    if (
+      !isDashboardPopoutRenderer(event.sender) ||
+      !isDashboardEnabled(store) ||
+      !isDashboardOpenBotItemArgs(args)
+    ) {
       return
     }
-    safelyRevealWindow(mainWindow)
-    mainWindow.webContents.send('ui:revealDashboardAgent', args)
-    if (!isBackgroundLaunch()) {
-      try {
-        app.focus({ steal: true })
-      } catch {
-        // Best-effort; the per-window focus above may still bring it forward.
-      }
-    }
+    relayToMainWindow('ui:openDashboardBotItem', args)
   })
 }
