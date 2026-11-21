@@ -13,6 +13,7 @@ import { buildBody, postHookEvent } from '../../server.test-fixtures'
 const reads = vi.hoisted(() => ({
   started: 0,
   settled: 0,
+  pending: new Set<Promise<void>>(),
   transcripts: 0,
   descriptors: 0,
   stallTranscripts: false,
@@ -54,13 +55,14 @@ vi.mock(
           delay: number,
           onDue: (key: string, value: T, wanted: () => boolean) => void | Promise<void>
         ) {
-          super(delay, async (key, value, wanted) => {
+          super(delay, (key, value, wanted) => {
             reads.started++
-            try {
-              await onDue(key, value, wanted)
-            } finally {
+            const poll = (async () => onDue(key, value, wanted))().finally(() => {
               reads.settled++
-            }
+              reads.pending.delete(poll)
+            })
+            reads.pending.add(poll)
+            return poll
           })
         }
       }
@@ -81,9 +83,10 @@ beforeEach(async () => {
   vi.useFakeTimers({ toFake: ['Date', 'performance', 'setTimeout', 'clearTimeout'] })
 })
 
-afterEach(() => {
+afterEach(async () => {
   server.stop()
   reads.release()
+  await Promise.allSettled(reads.pending)
   vi.useRealTimers()
   rmSync(dir, { recursive: true, force: true })
 })
@@ -136,26 +139,32 @@ it.each([100, 1000])(
   'drops %s queued rows behind three stalled reads without filesystem admission',
   async (count) => {
     reads.stallTranscripts = true
-    const panes = Array.from({ length: count + 3 }, (_, index) => pane(index))
-    for (const entry of panes) {
+    for (let index = 0; index < 3; index++) {
+      await pane(index).send('PreInvocation', { initialNumSteps: 1 })
+    }
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(reads).toMatchObject({ started: 3, transcripts: 3, settled: 0 })
+
+    const queued = Array.from({ length: count }, (_, index) => pane(index + 3))
+    for (const entry of queued) {
       await entry.send('PreInvocation', { initialNumSteps: 1 })
     }
     await vi.advanceTimersByTimeAsync(1000)
     expect(reads).toMatchObject({ started: count + 3, transcripts: 3, settled: 0 })
-    for (const entry of panes.slice(3)) {
+    for (const entry of queued) {
       server.dropStatusEntry(entry.paneKey)
     }
     await vi.advanceTimersByTimeAsync(0)
     expect(reads).toMatchObject({ transcripts: 3, settled: count })
 
-    const successor = panes[3]!
+    const successor = queued[0]!
     await successor.send('PreInvocation', { lastUserInput: 'Next task', initialNumSteps: 1 })
     await vi.advanceTimersByTimeAsync(1000)
-    expect(reads.transcripts).toBe(3)
+    expect(reads).toMatchObject({ started: count + 4, transcripts: 3, settled: count })
     reads.stallTranscripts = false
     reads.release()
-    await vi.waitFor(() => expect(reads.settled).toBe(count + 4))
-    expect(reads.transcripts).toBe(4)
+    await Promise.all(reads.pending)
+    expect(reads).toMatchObject({ transcripts: 4, settled: count + 4 })
     expect(successor.row()?.model).toBe('resolved-model')
   }
 )
@@ -170,8 +179,8 @@ it('revokes a dismissed poll before it stats the next child descriptor', async (
   await vi.waitFor(() => expect(reads.descriptors).toBe(1))
   server.dropStatusEntry(entry.paneKey)
   reads.release()
-  await vi.waitFor(() => expect(reads.settled).toBe(1))
-  expect(reads.descriptors).toBe(1)
+  await Promise.all(reads.pending)
+  expect(reads).toMatchObject({ descriptors: 1, settled: 1 })
   expect(entry.row()?.subagents).toBeUndefined()
 })
 
