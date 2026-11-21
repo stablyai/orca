@@ -227,7 +227,8 @@ export function getRichMarkdownAnnotationTarget(
   const popoverTop = Math.max(
     RICH_MARKDOWN_ANNOTATION_EDGE_PADDING_PX,
     Math.min(
-      buttonTop + RICH_MARKDOWN_ANNOTATION_BUTTON_SIZE_PX + 6,
+      // Why: the draft sits in the rail beside the text, so align it with the selection's first line.
+      rect.top - rootRect.top,
       rootRect.height - RICH_MARKDOWN_ANNOTATION_POPOVER_MIN_HEIGHT_PX
     )
   )

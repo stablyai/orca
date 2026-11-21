@@ -105,6 +105,20 @@ function previewBlock(page: Page, preview: Locator, marker: string): Locator {
     .first()
 }
 
+// Why: a single good sample can land between virtual remeasures; require it to hold across frames.
+async function expectHolds(check: () => Promise<boolean>, samples = 8): Promise<void> {
+  let streak = 0
+  await expect
+    .poll(
+      async () => {
+        streak = (await check()) ? streak + 1 : 0
+        return streak
+      },
+      { intervals: [100] }
+    )
+    .toBeGreaterThanOrEqual(samples)
+}
+
 async function settledWidth(locator: Locator, expected: number): Promise<void> {
   await expect
     .poll(async () => Math.abs((await rectOf(locator)).width - expected))
@@ -339,24 +353,72 @@ test.describe('Markdown reading width', () => {
       await block.hover()
       await block.getByRole('button', { name: 'Add note', exact: true }).click()
       await expect(block.locator('.markdown-annotation-composer')).toBeVisible()
-      await expect
-        .poll(async () => Math.abs((await rectOf(block)).top - topBefore))
-        .toBeLessThanOrEqual(2)
-      await expect
-        .poll(() =>
-          preview
-            .locator('[data-preview-block-loaded]')
-            .evaluateAll((nodes) =>
-              nodes
-                .slice(1)
-                .some(
-                  (node, index) =>
-                    node.getBoundingClientRect().top <
-                    nodes[index].getBoundingClientRect().bottom - 1
-                )
-            )
-        )
-        .toBe(false)
+      await expectHolds(async () => {
+        const drift = Math.abs((await rectOf(block)).top - topBefore)
+        const overlap = await preview
+          .locator('[data-preview-block-loaded]')
+          .evaluateAll((nodes) =>
+            nodes
+              .slice(1)
+              .some(
+                (node, index) =>
+                  node.getBoundingClientRect().top < nodes[index].getBoundingClientRect().bottom - 1
+              )
+          )
+        return drift <= 2 && !overlap
+      })
+    } finally {
+      await cleanupMarkdownFixture(filePath)
+    }
+  })
+
+  test('R7 rich editor at 1200px keeps the column still while a draft and notes come and go', async ({
+    orcaPage
+  }, testInfo) => {
+    await layoutWindow(orcaPage, 1200)
+    const context = await getActiveWorktreeContext(orcaPage)
+    let filePath: string | null = null
+    try {
+      filePath = await createMarkdownFixture(
+        context,
+        FIXTURE_DIRECTORY,
+        'rich-1200',
+        testInfo.workerIndex,
+        DOCUMENT
+      )
+      await openMarkdownFixture(orcaPage, context, filePath)
+      const editor = await waitForRichMarkdownEditor(orcaPage)
+      const first = editor.locator('p').filter({ hasText: 'FIRST' }).first()
+      const second = editor.locator('p').filter({ hasText: 'SECOND' }).first()
+      await settledWidth(second, COLUMN_PX)
+      const column = await rectOf(second)
+
+      await first.click({ clickCount: 3 })
+      const addNote = orcaPage.getByRole('button', { name: 'Add review note', exact: true })
+      await expect(addNote).toBeVisible()
+      const button = await rectOf(addNote)
+      // The add button sits in the gap right of the text, before the rail's cards start.
+      expect(button.left).toBeGreaterThanOrEqual(column.right)
+      expect(button.right).toBeLessThanOrEqual(column.right + 32)
+
+      await addNote.click()
+      const draft = orcaPage.locator('.orca-diff-comment-popover')
+      await expect(draft).toBeVisible()
+      expectSameRect(await rectOf(second), column)
+      expect((await rectOf(draft)).left).toBeGreaterThanOrEqual(column.right)
+
+      await orcaPage.getByPlaceholder('Add note for the AI').fill('Reading width note')
+      await orcaPage.getByPlaceholder('Add note for the AI').press('Enter')
+      const card = orcaPage.locator('.rich-markdown-review-note-card').first()
+      await expect(card).toBeVisible()
+      expectSameRect(await rectOf(second), column)
+
+      await orcaPage.getByRole('button', { name: 'Hide review notes', exact: true }).click()
+      await expect(card).toBeHidden()
+      expectSameRect(await rectOf(second), column)
+      await orcaPage.getByRole('button', { name: 'Show review notes', exact: true }).click()
+      await expect(card).toBeVisible()
+      expectSameRect(await rectOf(second), column)
     } finally {
       await cleanupMarkdownFixture(filePath)
     }
