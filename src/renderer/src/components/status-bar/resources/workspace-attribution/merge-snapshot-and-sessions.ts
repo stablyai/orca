@@ -4,7 +4,7 @@ import type {
   MemorySnapshot,
   WorktreeMemory
 } from '../../../../../../shared/diagnostics/process-stats-types'
-import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { canonicalExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { parsePtySessionId } from '../../../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type {
@@ -156,13 +156,13 @@ export function mergeSnapshotAndSessions(
     for (const wt of host.worktrees) {
       const worktree = resolveResourceFolderWorkspace(ctx, wt.worktreeId)
       const repoId = worktree?.repoId ?? wt.repoId
-      // A worktree stamped with this host is placed here even when its repo is tracked elsewhere.
-      const recordHost = ctx.ambiguousWorktreeIds?.has(wt.worktreeId)
+      // A worktree stamped with a paired host belongs to that host alone, wherever its repo is tracked.
+      const recordHostId = ctx.ambiguousWorktreeIds?.has(wt.worktreeId)
         ? null
-        : parseExecutionHostId(ctx.worktreeById?.get(wt.worktreeId)?.hostId)
-      const owned =
-        (recordHost?.kind === 'runtime' && recordHost.id === host.hostId) ||
-        resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId).runtimeHostId === host.hostId
+        : canonicalExecutionHostId(ctx.worktreeById?.get(wt.worktreeId)?.hostId)
+      const owned = recordHostId?.startsWith('runtime:')
+        ? recordHostId === canonicalExecutionHostId(host.hostId)
+        : resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId).runtimeHostId === host.hostId
       // Keep foreign/unplaced server load host-qualified so same-ID workspaces elsewhere cannot absorb it.
       ingestSampledWorktree(wt, {
         worktreeId: owned ? wt.worktreeId : `${host.hostId}|${wt.worktreeId}`,

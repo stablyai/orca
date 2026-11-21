@@ -6,8 +6,12 @@ export const DIAGNOSTICS_METHODS = [
     name: 'diagnostics.memory',
     permission: 'workspace',
     params: null,
-    handler: async (_params, { runtime }) => {
-      return toMemorySnapshotReply(await runtime.getMemorySnapshot())
+    handler: async (_params, { runtime, caller }) => {
+      const snapshot = await runtime.getMemorySnapshot()
+      // Only remote connections cap reply size; this machine's own callers get everything.
+      return caller?.kind === 'local-cli' || caller?.kind === 'desktop'
+        ? snapshot
+        : toMemorySnapshotReply(snapshot)
     }
   })
 ]

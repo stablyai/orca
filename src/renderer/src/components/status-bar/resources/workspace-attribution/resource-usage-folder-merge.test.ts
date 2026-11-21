@@ -125,7 +125,7 @@ describe('folder Resource Manager rows', () => {
       id: 'repo-1::/remote',
       repoId: 'repo-1',
       displayName: 'Remote',
-      hostId: 'runtime:paired'
+      hostId: 'runtime:wsl:Ubuntu'
     } as Worktree
     const repos = mergeSnapshotAndSessions(
       null,
@@ -134,7 +134,7 @@ describe('folder Resource Manager rows', () => {
         worktreeById: new Map([[worktree.id, worktree]]),
         runtimeHostResources: [
           {
-            hostId: 'runtime:paired',
+            hostId: 'runtime:wsl%3AUbuntu',
             hostLabel: 'Studio',
             worktrees: [{ ...oldRow, worktreeId: worktree.id, repoId: 'repo-1', chats: [chat] }]
           }
@@ -145,7 +145,7 @@ describe('folder Resource Manager rows', () => {
     expect(repos.flatMap((repo) => repo.worktrees)).toEqual([
       expect.objectContaining({
         worktreeId: 'repo-1::/remote',
-        runtimeHostId: 'runtime:paired',
+        runtimeHostId: 'runtime:wsl%3AUbuntu',
         unplaced: undefined
       })
     ])

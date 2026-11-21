@@ -8,8 +8,11 @@ export const TYPEPERF_COUNTERS = [
   '\\Process(*)\\ID Process',
   '\\Process(*)\\Creating Process ID',
   '\\Process(*)\\Working Set',
-  '\\Process(*)\\Private Bytes'
+  '\\Process(*)\\Private Bytes',
+  '\\Process(*)\\Elapsed Time'
 ] as const
+// Elapsed seconds become start order within one sample, so a reused parent PID is detectable.
+const TYPEPERF_START_ORIGIN_TICKS = 10n ** 17n
 
 const TYPEPERF_MAX_INSTANCES = 4_096
 // Derive fields from counter count so adding counters cannot silently reduce supported processes.
@@ -45,6 +48,7 @@ type TypeperfProcessFields = {
   ppid?: number
   memory?: number
   privateMemory?: number
+  elapsedSeconds?: number
 }
 
 export function parseWindowsProcessSample(stdout: string): ParsedWindowsProcessSample {
@@ -158,6 +162,8 @@ export function parseTypeperfProcessOutput(
       row.memory = value
     } else if (path.counter === 'Private Bytes') {
       row.privateMemory = value
+    } else if (path.counter === 'Elapsed Time') {
+      row.elapsedSeconds = value
     }
     byInstance.set(path.instance, row)
   }
@@ -175,7 +181,13 @@ export function parseTypeperfProcessOutput(
       ...(row.privateMemory !== undefined && row.privateMemory >= 0
         ? { privateMemory: row.privateMemory }
         : {}),
-      ...(row.name ? { name: row.name } : {})
+      ...(row.name ? { name: row.name } : {}),
+      ...(row.elapsedSeconds !== undefined && row.elapsedSeconds >= 0 && row.elapsedSeconds < 1e9
+        ? {
+            startTicks:
+              TYPEPERF_START_ORIGIN_TICKS - BigInt(Math.round(row.elapsedSeconds * 10_000_000))
+          }
+        : {})
     })
   }
   return rows

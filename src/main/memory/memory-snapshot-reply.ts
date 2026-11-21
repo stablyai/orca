@@ -11,13 +11,16 @@ import { clampMemoryMetric, optionalCommitField } from './memory-snapshot-values
 export const MEMORY_REPLY_HISTORY_POINTS = 20
 // Room under the limit for the app section, host totals and the envelope.
 const MEMORY_REPLY_BUDGET_BYTES = REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES - 256 * 1024
+// Room under the limit for the RPC envelope around an exactly measured reply.
+const MEMORY_REPLY_MEASURED_LIMIT_BYTES = REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES - 64 * 1024
 // Upper bounds for keys, punctuation and numbers around each object's strings.
 const ROW_OVERHEAD_BYTES = 200
 const SESSION_OVERHEAD_BYTES = 160
 const CHAT_OVERHEAD_BYTES = 160
-const HISTORY_POINT_BYTES = 17
+// The longest JSON number (`-1.2345678901234567e-308`) and its comma.
+const HISTORY_POINT_BYTES = 25
 
-/** Serialized size of a JSON string, counted without encoding it; a surrogate pair counts 6. */
+/** An upper bound on a JSON string's serialized size, without encoding it; each surrogate unit counts as an escape. */
 function jsonStringBytes(value: string | null | undefined): number {
   if (!value) {
     return 4
@@ -25,7 +28,16 @@ function jsonStringBytes(value: string | null | undefined): number {
   let bytes = 2
   for (let i = 0; i < value.length; i++) {
     const code = value.charCodeAt(i)
-    bytes += code === 34 || code === 92 ? 2 : code < 32 ? 6 : code < 128 ? 1 : code < 2048 ? 2 : 3
+    bytes +=
+      code === 34 || code === 92
+        ? 2
+        : code < 32 || (code >= 0xd800 && code <= 0xdfff)
+          ? 6
+          : code < 128
+            ? 1
+            : code < 2048
+              ? 2
+              : 3
   }
   return bytes
 }
@@ -123,28 +135,29 @@ function withHistory(snapshot: MemorySnapshot, points: number): MemorySnapshot {
   }
 }
 
+function fitsMeasured(reply: MemorySnapshot): boolean {
+  return Buffer.byteLength(JSON.stringify(reply), 'utf8') <= MEMORY_REPLY_MEASURED_LIMIT_BYTES
+}
+
 /**
- * The snapshot as sent over RPC. Near the size limit it drops older history, then all history,
- * then everything chat sampling adds (chat lists, chat-only rows, pane keys, the agent total and
- * chats' share of the totals), so a host never sends more than its terminals alone would.
+ * The snapshot as sent to a paired client. Near the size limit it drops older history, then all
+ * history, then everything chat sampling adds (chat lists, chat-only rows, pane keys, the agent
+ * total and chats' share of the totals), so a host never sends more than its terminals alone would.
  */
 export function toMemorySnapshotReply(snapshot: MemorySnapshot): MemorySnapshot {
-  let rows = 0
-  let fullHistory = snapshot.app.history.length * HISTORY_POINT_BYTES
-  let shortHistory = Math.min(snapshot.app.history.length, MEMORY_REPLY_HISTORY_POINTS)
+  let bytes = snapshot.app.history.length * HISTORY_POINT_BYTES
   for (const worktree of snapshot.worktrees) {
-    rows += rowBytes(worktree)
-    fullHistory += worktree.history.length * HISTORY_POINT_BYTES
-    shortHistory += Math.min(worktree.history.length, MEMORY_REPLY_HISTORY_POINTS)
+    bytes += rowBytes(worktree) + worktree.history.length * HISTORY_POINT_BYTES
   }
-  if (rows + fullHistory <= MEMORY_REPLY_BUDGET_BYTES) {
+  // The estimate is an upper bound, so most hosts never serialize here; only large ones measure.
+  if (bytes <= MEMORY_REPLY_BUDGET_BYTES || fitsMeasured(snapshot)) {
     return snapshot
   }
-  if (rows + shortHistory * HISTORY_POINT_BYTES <= MEMORY_REPLY_BUDGET_BYTES) {
-    return withHistory(snapshot, MEMORY_REPLY_HISTORY_POINTS)
-  }
-  if (rows <= MEMORY_REPLY_BUDGET_BYTES) {
-    return withHistory(snapshot, 0)
+  for (const points of [MEMORY_REPLY_HISTORY_POINTS, 0]) {
+    const reply = withHistory(snapshot, points)
+    if (fitsMeasured(reply)) {
+      return reply
+    }
   }
   return terminalOnlyReply(snapshot)
 }
