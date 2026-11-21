@@ -1,22 +1,13 @@
 import { publishTerminalProviderCapabilityChange } from './terminal-provider-capability-revision'
 import {
   clearTerminalProviderGoneSessions,
+  markTerminalProviderSessionBound,
   pruneTerminalProviderGoneSessions,
   terminalProviderSessionIsGone
 } from './terminal-provider-gone-sessions'
 
 type SnapshotCapability = { id: string; authoritative: boolean | null }
 type SnapshotCapabilityResolver = (ids: string[]) => Promise<SnapshotCapability[]>
-export type SnapshotCapabilityTab = { id: string; ptyId?: string | null }
-export type SnapshotCapabilityBindingState = {
-  tabsByWorktree: Readonly<Record<string, readonly SnapshotCapabilityTab[]>>
-  ptyIdsByTabId: Readonly<Record<string, readonly string[]>>
-  pendingReconnectPtyIdByTabId?: Readonly<Record<string, string>>
-  terminalLayoutsByTabId?: Readonly<
-    Record<string, { ptyIdsByLeafId?: Readonly<Record<string, string>> }>
-  >
-}
-
 const authoritativeSnapshotByPtyId = new Map<string, boolean>()
 const unknownCapabilityRetryAtByPtyId = new Map<string, number>()
 const unknownCapabilityAttemptsByPtyId = new Map<string, number>()
@@ -30,31 +21,6 @@ const CAPABILITY_RESOLUTION_TIMEOUT_MS = 1_000
 let lastSynchronizedLivePtyIds: readonly string[] | null = null
 let earliestUnknownCapabilityRetryAtMs = Number.POSITIVE_INFINITY
 let synchronizationGeneration = 0
-
-export function collectTerminalProviderSnapshotPtyIds(
-  state: SnapshotCapabilityBindingState
-): string[] {
-  const ids = new Set<string>()
-  for (const worktreeTabs of Object.values(state.tabsByWorktree)) {
-    for (const tab of worktreeTabs) {
-      if (tab.ptyId) {
-        ids.add(tab.ptyId)
-      }
-      for (const ptyId of state.ptyIdsByTabId[tab.id] ?? []) {
-        ids.add(ptyId)
-      }
-    }
-  }
-  for (const ptyId of Object.values(state.pendingReconnectPtyIdByTabId ?? {})) {
-    ids.add(ptyId)
-  }
-  for (const layout of Object.values(state.terminalLayoutsByTabId ?? {})) {
-    for (const ptyId of Object.values(layout.ptyIdsByLeafId ?? {})) {
-      ids.add(ptyId)
-    }
-  }
-  return [...ids]
-}
 
 function refreshEarliestUnknownCapabilityRetry(): void {
   earliestUnknownCapabilityRetryAtMs = Number.POSITIVE_INFINITY
@@ -255,6 +221,53 @@ export function startTerminalProviderSnapshotCapabilitySynchronization(
   }
 }
 
+let revivedReaskTimer: ReturnType<typeof setTimeout> | undefined
+const revivedUnansweredPtyIds = new Set<string>()
+
+// One owner for revived ids: binds in the same burst share a request, and a newer synchronization takes over instead of competing.
+function scheduleRevivedCapabilityReask(delayMs: number): void {
+  if (revivedReaskTimer !== undefined) {
+    return
+  }
+  revivedReaskTimer = setTimeout(() => {
+    revivedReaskTimer = undefined
+    const live = lastSynchronizedLivePtyIds
+    if (!live) {
+      return
+    }
+    const generation = synchronizationGeneration + 1
+    void synchronizeTerminalProviderSnapshotCapabilities(live).then((retryDelayMs) => {
+      for (const id of revivedUnansweredPtyIds) {
+        if (authoritativeSnapshotByPtyId.has(id) || !live.includes(id)) {
+          revivedUnansweredPtyIds.delete(id)
+        }
+      }
+      // Other ids' unknown retries belong to the inventory's own loop.
+      if (retryDelayMs !== null && revivedUnansweredPtyIds.size > 0) {
+        if (generation === synchronizationGeneration) {
+          scheduleRevivedCapabilityReask(Math.max(1, retryDelayMs))
+        }
+      }
+    })
+  }, delayMs)
+}
+
+/** Spawn or attach proves the session lives; a restored id the startup ask answered false (session not yet revived) is asked again so it can park. */
+export function markTerminalProviderSessionLive(ptyId: string): void {
+  markTerminalProviderSessionBound(ptyId)
+  if (
+    authoritativeSnapshotByPtyId.get(ptyId) !== false ||
+    !lastSynchronizedLivePtyIds?.includes(ptyId)
+  ) {
+    return
+  }
+  authoritativeSnapshotByPtyId.delete(ptyId)
+  unknownCapabilityRetryAtByPtyId.set(ptyId, 0)
+  refreshEarliestUnknownCapabilityRetry()
+  revivedUnansweredPtyIds.add(ptyId)
+  scheduleRevivedCapabilityReask(0)
+}
+
 export function terminalProviderHasAuthoritativeSnapshot(ptyId: string): boolean {
   return authoritativeSnapshotByPtyId.get(ptyId) === true
 }
@@ -273,6 +286,9 @@ export function clearTerminalProviderSnapshotCapabilities(): void {
   lastSynchronizedLivePtyIds = null
   earliestUnknownCapabilityRetryAtMs = Number.POSITIVE_INFINITY
   synchronizationGeneration += 1
+  clearTimeout(revivedReaskTimer)
+  revivedReaskTimer = undefined
+  revivedUnansweredPtyIds.clear()
   if (capabilityChanged) {
     publishTerminalProviderCapabilityChange()
   }
