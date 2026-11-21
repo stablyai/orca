@@ -1,26 +1,14 @@
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { withoutNativeChatVisualDirectiveLines } from '../../../../../../shared/native-chat/visuals/native-chat-visual-directive'
-import { NATIVE_CHAT_REPLY_EXCERPT_MAX, nativeChatReplyOwnWords } from './native-chat-reply-quote'
+import { nativeChatReplyExcerpt } from './native-chat-reply-quote'
 
 const collapsed = (text: string): string => text.replace(/\s+/g, ' ').trim()
 
 /** Whether `text` is the message an excerpt was taken from, judged by the message's own words only. */
 function excerptMatches(excerpt: string, text: string): boolean {
-  const words = nativeChatReplyOwnWords(text)
-  const own = collapsed(words)
+  // The same excerpt the message would give today: a literal "…" or a cut both have to agree.
   const quoted = collapsed(excerpt)
-  if (!quoted) {
-    return false
-  }
-  if (own === quoted) {
-    return true
-  }
-  // Only a message too long to quote whole was cut to "…"; then it has to start with what was kept.
-  return (
-    words.length > NATIVE_CHAT_REPLY_EXCERPT_MAX &&
-    quoted.endsWith('…') &&
-    own.startsWith(quoted.slice(0, -1).trimEnd())
-  )
+  return quoted !== '' && collapsed(nativeChatReplyExcerpt(text)) === quoted
 }
 
 /** A reply restored from sent text that this client did not send names no message: the one message

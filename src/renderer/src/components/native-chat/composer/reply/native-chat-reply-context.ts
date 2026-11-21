@@ -62,6 +62,8 @@ export function requestNativeChatMessageReveal(
 }
 
 const LANDED_MS = 1500
+/** Each row's pending outline removal, so jumping to it again gives the new outline its full time. */
+const landedTimers = new WeakMap<Element, ReturnType<typeof setTimeout>>()
 const LANDING_FRAMES = 60
 
 /** Once the jumped-to row is drawn: outline it briefly and move focus there, so keyboard and screen-reader users land too. */
@@ -94,7 +96,11 @@ function markNativeChatRevealedMessage(
     }
     row.focus({ preventScroll: true })
   }
-  setTimeout(() => row.removeAttribute('data-native-chat-reply-landed'), LANDED_MS)
+  clearTimeout(landedTimers.get(row))
+  landedTimers.set(
+    row,
+    setTimeout(() => row.removeAttribute('data-native-chat-reply-landed'), LANDED_MS)
+  )
 }
 
 /** The transcript's side: answers reveal requests in its chat. Layout-time, so a strip's

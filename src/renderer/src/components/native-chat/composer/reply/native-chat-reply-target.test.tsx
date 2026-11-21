@@ -17,13 +17,14 @@ import {
 } from './native-chat-reply-target'
 import { nativeChatReplyOriginalId } from './native-chat-reply-original'
 import {
-  quoteNativeChatReply,
+  rememberNativeChatReplySource,
   resetNativeChatReplySourcesForTests
 } from './native-chat-reply-sources'
 import { setNativeChatComposerDraftOwnerResolver } from '../../drafts/native-chat-composer-draft-memory'
 import { nativeChatReplyDisplayText } from './NativeChatReplyQuoteChip'
 import { translate } from '@/i18n/i18n'
 import {
+  NATIVE_CHAT_REPLY_EXCERPT_MAX,
   nativeChatReplyExcerpt,
   nativeChatReplyQuoteOf,
   withNativeChatReplyContext
@@ -202,6 +203,30 @@ describe('reply strip', () => {
     expect(document.activeElement).toBe(row)
   })
 
+  it('a second jump to the same message keeps its outline for the full time', () => {
+    vi.useFakeTimers()
+    try {
+      render(<Chat messages={['m-7']} />)
+      const from = screen.getByTestId('input')
+      const row = screen.getByText('m-7')
+      const jump = () =>
+        requestNativeChatMessageReveal(
+          from,
+          { messageId: 'm-7', author: 'agent', excerpt: '' },
+          { probe: false }
+        )
+      jump()
+      vi.advanceTimersByTime(1000)
+      jump()
+      vi.advanceTimersByTime(1000)
+      expect(row.hasAttribute('data-native-chat-reply-landed')).toBe(true)
+      vi.advanceTimersByTime(600)
+      expect(row.hasAttribute('data-native-chat-reply-landed')).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('an earlier jump still waiting for its row does not take focus from a later one', () => {
     const frames: FrameRequestCallback[] = []
     const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((frame) => {
@@ -323,11 +348,12 @@ describe('reply quotes', () => {
   })
 
   it('a reply rebuilt from text this client sent keeps the exact original among identical messages', () => {
-    const sent = quoteNativeChatReply(
+    const sent = withNativeChatReplyContext(
       'Which one?',
-      { ...reply('r', 'm-first'), excerpt: 'Done.' },
+      { author: 'agent', excerpt: 'Done.' },
       'Claude'
     )
+    rememberNativeChatReplySource(sent, 'm-first')
     expect(nativeChatReplyTargetFromSentText(sent).target?.messageId).toBe('m-first')
     // Without that record two identical messages can't be told apart: the original is unavailable.
     const done = (id: string) => ({ id, role: 'assistant' as const, blocks: [text('Done.')] })
@@ -337,6 +363,43 @@ describe('reply quotes', () => {
         excerpt: 'Done.'
       })
     ).toBeNull()
+  })
+
+  it('cuts an excerpt within the cap on a whole character, and matches only the message that gives it', () => {
+    const cut = nativeChatReplyExcerpt(`${'a'.repeat(498)}😀 and the rest`)
+    expect(Array.from(cut)).toHaveLength(NATIVE_CHAT_REPLY_EXCERPT_MAX)
+    expect(cut.endsWith('😀…')).toBe(true)
+    // Cut where a space falls, the original keeps only its first 498 characters; a longer message
+    // starting with those same characters gives a different excerpt and is not the original.
+    const shared = 'a'.repeat(498)
+    const filler = ' more'.repeat(20)
+    const original = {
+      id: 'm-orig',
+      role: 'assistant' as const,
+      blocks: [text(`${shared} x${filler}`)]
+    }
+    const other = {
+      id: 'm-other',
+      role: 'assistant' as const,
+      blocks: [text(`${shared}B${filler}`)]
+    }
+    const excerpt = nativeChatReplyExcerpt(`${shared} x${filler}`)
+    expect(nativeChatReplyOriginalId([other], { author: 'agent', excerpt })).toBeNull()
+    expect(nativeChatReplyOriginalId([original, other], { author: 'agent', excerpt })).toBe(
+      'm-orig'
+    )
+  })
+
+  it('reads text as a reply only with a quote line, and keeps the words exactly as typed', () => {
+    expect(nativeChatReplyQuoteOf('> Replying to my earlier message:\n\nWhy?')).toBeNull()
+    const empty = withNativeChatReplyContext('Why?', { author: 'user', excerpt: '' }, 'Claude')
+    expect(nativeChatReplyQuoteOf(empty)?.rest).toBe('Why?')
+    const crlf = withNativeChatReplyContext(
+      'first\r\nsecond',
+      { author: 'user', excerpt: 'Old.' },
+      'Claude'
+    )
+    expect(nativeChatReplyQuoteOf(crlf)?.rest).toBe('first\r\nsecond')
   })
 
   it('a long message cut to an excerpt is still found by what was kept', () => {

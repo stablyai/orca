@@ -5,7 +5,8 @@ import {
   restoreNativeChatReplyTarget,
   settleNativeChatReplySend
 } from '../reply/native-chat-reply-target'
-import { quoteNativeChatReply } from '../reply/native-chat-reply-sources'
+import { withNativeChatReplyContext } from '../reply/native-chat-reply-quote'
+import { rememberNativeChatReplySource } from '../reply/native-chat-reply-sources'
 import {
   hasNativeChatStagedFiles,
   captureNativeChatStagedInput
@@ -146,7 +147,7 @@ export function useNativeChatStructuredComposerSend({
       // A reply is part of the message, quoted once here; commands never carry one.
       const reply = hostCommand ? null : readNativeChatReplyTarget(draftScopeKey)
       if (reply) {
-        text = quoteNativeChatReply(text, reply, formatAgentTypeLabel(agent))
+        text = withNativeChatReplyContext(text, reply, formatAgentTypeLabel(agent))
       }
       const submission = captureNativeChatComposerSubmission(draftScopeKey)
       let consumed = false
@@ -176,8 +177,9 @@ export function useNativeChatStructuredComposerSend({
         consumed = true
         // Only the reply this send captured; a newer Reply picked meanwhile stays.
         // Custody only if this send really took its reply; one picked meanwhile stays the user's.
-        if (settleNativeChatReplySend(draftScopeKey, reply?.id)) {
+        if (settleNativeChatReplySend(draftScopeKey, reply?.id) && reply) {
           replyTakenAt = nativeChatReplyCustody(draftScopeKey)
+          rememberNativeChatReplySource(text, reply.messageId)
         }
         const left = nativeChatComposerDraftLeftAfterSend(
           readNativeChatComposerDraft(draftScopeKey),

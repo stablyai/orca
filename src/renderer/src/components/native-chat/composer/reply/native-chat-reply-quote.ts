@@ -10,7 +10,7 @@ const AGENT_HEAD = /^> Replying to the earlier message from (.+):$/
 const OWN_HEAD = '> Replying to my earlier message:'
 
 /** The message's own words: an earlier reply's quote and markdown markers are left out. */
-export function nativeChatReplyOwnWords(text: string): string {
+function nativeChatReplyOwnWords(text: string): string {
   const own = nativeChatReplyQuoteOf(text)?.rest ?? text
   return own
     .split(/\r?\n/)
@@ -20,13 +20,17 @@ export function nativeChatReplyOwnWords(text: string): string {
     .trim()
 }
 
-/** The message's own words up to the cap. */
+/** The message's own words up to the cap, counted in characters; a cut one ends in "…" within it. */
 export function nativeChatReplyExcerpt(text: string): string {
   const trimmed = nativeChatReplyOwnWords(text)
-  if (trimmed.length <= NATIVE_CHAT_REPLY_EXCERPT_MAX) {
+  const characters = Array.from(trimmed)
+  if (characters.length <= NATIVE_CHAT_REPLY_EXCERPT_MAX) {
     return trimmed
   }
-  return `${trimmed.slice(0, NATIVE_CHAT_REPLY_EXCERPT_MAX).trimEnd()}…`
+  return `${characters
+    .slice(0, NATIVE_CHAT_REPLY_EXCERPT_MAX - 1)
+    .join('')
+    .trimEnd()}…`
 }
 
 /** The text a reply sends: a quote of the message it answers, written for the agent, then the user's words. */
@@ -68,20 +72,25 @@ export function nativeChatReplyQuoteOf(
   while (end < lines.length && lines[end].startsWith('>')) {
     end += 1
   }
+  // A reply always carries a quote line (a bare ">" for an empty one); a heading alone is just text.
+  if (end === 1) {
+    return null
+  }
   const excerpt = lines
     .slice(1, end)
     .map((line) => line.replace(/^>\s?/, ''))
     .join('\n')
     .trim()
-  const rest = lines.slice(end)
-  // Only the blank line the quote format adds; the user's own leading whitespace stays.
-  if (rest[0] === '') {
-    rest.shift()
+  // The words exactly as sent, line endings included, after the one blank line the format adds.
+  let offset = 0
+  for (let line = 0; line < end; line += 1) {
+    const next = text.indexOf('\n', offset)
+    offset = next === -1 ? text.length : next + 1
   }
   return {
     author: agentHead ? 'agent' : 'user',
     label: agentHead?.[1] ?? null,
     excerpt,
-    rest: rest.join('\n')
+    rest: text.slice(offset).replace(/^\r?\n/, '')
   }
 }

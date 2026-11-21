@@ -20,6 +20,12 @@ import {
   resetNativeChatReplyTargetsForTests,
   setNativeChatReplyTarget
 } from '../reply/native-chat-reply-target'
+import { withNativeChatReplyContext } from '../reply/native-chat-reply-quote'
+import {
+  nativeChatReplySourceOf,
+  rememberNativeChatReplySource,
+  resetNativeChatReplySourcesForTests
+} from '../reply/native-chat-reply-sources'
 
 vi.mock('@/components/native-chat/telemetry/native-chat-telemetry', () => ({
   emitNativeChatMessageSent: vi.fn()
@@ -230,7 +236,8 @@ describe('replying to a message from a terminal chat', () => {
   function ptySend(
     draft: string,
     classification: 'chat' | 'command' | 'unknown-token' = 'chat',
-    imagePaths: string[] = []
+    imagePaths: string[] = [],
+    inputLine = ''
   ) {
     const hook = renderHook(() =>
       useNativeChatPtyComposerSend({
@@ -242,6 +249,7 @@ describe('replying to a message from a terminal chat', () => {
         isDispatchingSessionOption: false,
         launchDraftResolved: true,
         resolveTarget: (): NativeChatResolvedTarget => ({ ptyId: 'pty-1' }),
+        readTerminalDraft: () => inputLine,
         classifySend: () => classification,
         sessionOptionsSurface: null,
         terminalTabId: 'tab-1',
@@ -329,5 +337,58 @@ describe('replying to a message from a terminal chat', () => {
       expect.anything()
     )
     expect(readNativeChatReplyTarget(ptyScope)?.id).toBe('reply-1')
+  })
+})
+
+describe('remembering which message a reply answered', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    resetNativeChatReplyTargetsForTests()
+    resetNativeChatReplySourcesForTests()
+  })
+
+  it('records nothing for a terminal send that is not sent', () => {
+    setNativeChatReplyTarget('pane:unsent', { ...target, messageId: 'm-original' })
+    const { result } = renderHook(() =>
+      useNativeChatPtyComposerSend({
+        agent: 'codex',
+        draft: 'Why blue?',
+        draftScopeKey: 'pane:unsent',
+        imageAttachments: [],
+        disabled: false,
+        isDispatchingSessionOption: false,
+        launchDraftResolved: true,
+        resolveTarget: (): NativeChatResolvedTarget => ({ ptyId: 'pty-1' }),
+        // An input line too tall to clear: the send stops with "Message not sent".
+        readTerminalDraft: () => 'line\n'.repeat(400),
+        classifySend: () => 'chat',
+        sessionOptionsSurface: null,
+        terminalTabId: 'tab-1',
+        trackPendingSend: vi.fn(),
+        setDraft: vi.fn(),
+        setCaret: vi.fn(),
+        clearSkillOrigin: vi.fn(),
+        clearImageAttachments: vi.fn(),
+        setNotice: vi.fn()
+      })
+    )
+    act(() => {
+      result.current()
+    })
+    const quoted = withNativeChatReplyContext('Why blue?', target, 'Codex')
+    expect(nativeChatReplySourceOf(quoted)).toBeUndefined()
+    expect(readNativeChatReplyTarget('pane:unsent')?.messageId).toBe('m-original')
+  })
+
+  it('claims no exact original for the same words sent in reply to two different messages', () => {
+    const sent = withNativeChatReplyContext(
+      'Which one?',
+      { author: 'agent', excerpt: 'Done.' },
+      'Claude'
+    )
+    rememberNativeChatReplySource(sent, 'm-first')
+    expect(nativeChatReplySourceOf(sent)).toBe('m-first')
+    rememberNativeChatReplySource(sent, 'm-second')
+    expect(nativeChatReplySourceOf(sent)).toBeUndefined()
   })
 })

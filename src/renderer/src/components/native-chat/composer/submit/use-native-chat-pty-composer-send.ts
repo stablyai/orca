@@ -7,7 +7,8 @@ import {
   restoreNativeChatReplyTarget,
   settleNativeChatReplySend
 } from '../reply/native-chat-reply-target'
-import { quoteNativeChatReply } from '../reply/native-chat-reply-sources'
+import { withNativeChatReplyContext } from '../reply/native-chat-reply-quote'
+import { rememberNativeChatReplySource } from '../reply/native-chat-reply-sources'
 import {
   admitNativeChatPastedText,
   resolveNativeChatPastedText
@@ -112,7 +113,7 @@ export function useNativeChatPtyComposerSend(args: {
           ? readNativeChatReplyTarget(args.draftScopeKey)
           : null
       if (reply) {
-        text = quoteNativeChatReply(text, reply, formatAgentTypeLabel(args.agent))
+        text = withNativeChatReplyContext(text, reply, formatAgentTypeLabel(args.agent))
       }
       const { sendOptions: launchSendOptions } = resolveNativeChatLaunchDraftSend({
         launchDraft: args.launchDraft,
@@ -194,6 +195,9 @@ export function useNativeChatPtyComposerSend(args: {
       })
       args.onSubmitted?.()
       if (!retry) {
+        if (reply) {
+          rememberNativeChatReplySource(text, reply.messageId)
+        }
         // A shown message returns as "not sent → Edit" with its quote; without one, nothing returns
         // the text, so a rejected write at least puts the reply back.
         if (settleNativeChatReplySend(args.draftScopeKey, reply?.id) && reply && !pendingId) {

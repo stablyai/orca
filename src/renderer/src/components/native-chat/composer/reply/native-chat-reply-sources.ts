@@ -1,15 +1,14 @@
-// Which message each sent reply answered, keyed by the exact text sent. A reply rebuilt from that text
+// Which message each accepted reply answered, keyed by the exact text sent. A reply rebuilt from that text
 // (Rewind, "not sent → Edit", a queued edit) gets its original back even when another message has
 // the same words. Small and bounded, so localStorage holds it across reloads.
-
-import { withNativeChatReplyContext } from './native-chat-reply-quote'
-import type { NativeChatReplyTarget } from './native-chat-reply-target'
 
 const STORAGE_KEY = 'orca.nativeChat.replySources.v1'
 /** Sent replies remembered at once; older ones are dropped first. */
 export const NATIVE_CHAT_REPLY_SOURCES_MAX = 200
 
 const sources = new Map<string, string>()
+/** Recorded for text sent in reply to more than one message. */
+const AMBIGUOUS = ''
 let loaded = false
 
 /** A compact key for sent text: its length and a 32-bit FNV-1a hash. */
@@ -38,38 +37,35 @@ function load(): void {
   }
 }
 
-/** The text a reply sends, remembering which message it answers. */
-export function quoteNativeChatReply(
-  text: string,
-  target: Pick<NativeChatReplyTarget, 'messageId' | 'author' | 'excerpt' | 'agentLabel'>,
-  agentLabel: string
-): string {
-  const sent = withNativeChatReplyContext(text, target, agentLabel)
-  if (target.messageId) {
-    load()
-    const key = keyOf(sent)
-    sources.delete(key)
-    sources.set(key, target.messageId)
-    while (sources.size > NATIVE_CHAT_REPLY_SOURCES_MAX) {
-      const oldest = sources.keys().next().value
-      if (oldest === undefined) {
-        break
-      }
-      sources.delete(oldest)
-    }
-    try {
-      globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify([...sources]))
-    } catch {
-      // Quota or blocked storage: this session still remembers it.
-    }
+/** A send carrying `sentText` was accepted: remember which message it answers. The same text sent
+ *  in reply to a different message is ambiguous, so neither keeps an exact original. */
+export function rememberNativeChatReplySource(sentText: string, messageId: string): void {
+  if (!messageId) {
+    return
   }
-  return sent
+  load()
+  const key = keyOf(sentText)
+  const known = sources.get(key)
+  sources.delete(key)
+  sources.set(key, known === undefined || known === messageId ? messageId : AMBIGUOUS)
+  while (sources.size > NATIVE_CHAT_REPLY_SOURCES_MAX) {
+    const oldest = sources.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    sources.delete(oldest)
+  }
+  try {
+    globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify([...sources]))
+  } catch {
+    // Quota or blocked storage: this session still remembers it.
+  }
 }
 
 /** The message a sent reply answered, when this client sent it. */
 export function nativeChatReplySourceOf(sentText: string): string | undefined {
   load()
-  return sources.get(keyOf(sentText))
+  return sources.get(keyOf(sentText)) || undefined
 }
 
 /** Test-only: forget all sources and reload from storage on next read. */

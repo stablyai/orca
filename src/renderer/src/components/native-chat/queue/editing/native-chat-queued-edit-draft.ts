@@ -5,7 +5,8 @@ import {
   restoreNativeChatReplyTarget,
   setNativeChatReplyTarget
 } from '../../composer/reply/native-chat-reply-target'
-import { quoteNativeChatReply } from '../../composer/reply/native-chat-reply-sources'
+import { withNativeChatReplyContext } from '../../composer/reply/native-chat-reply-quote'
+import { rememberNativeChatReplySource } from '../../composer/reply/native-chat-reply-sources'
 import { nativeChatQuotedPromptDocument } from './native-chat-queued-edit-quote'
 import type { AgentJournalMessageItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { withoutImageReference } from '../../../../../../shared/native-chat/attachments/native-chat-image-reference'
@@ -110,7 +111,11 @@ export function nativeChatQueuedEditInput(
     draft.images.map(({ id }) => id)
   )
   const reply = readNativeChatReplyTarget(edit.scopeKey)
-  const text = reply ? quoteNativeChatReply(words, reply, 'the agent') : words
+  const text = withNativeChatReplyContext(words, reply, 'the agent')
+  // Saving the edit sends this text in place of the queued message, which answers the same original.
+  if (reply) {
+    rememberNativeChatReplySource(text, reply.messageId)
+  }
   const images = draft.images.map(
     (image) =>
       edit.kept.find((entry) => sameQueuedEditImage(entry.image, image))?.block ?? {
@@ -174,7 +179,7 @@ export function handBackNativeChatQueuedEdit(
   const reply = dirty ? readNativeChatReplyTarget(edit.scopeKey) : null
   if (reply && !restoreNativeChatReplyTarget(edit.destination, reply)) {
     // The editor shows the rich document, so the quote goes into both or typing would drop it.
-    const quoted = quoteNativeChatReply(text, reply, 'the agent')
+    const quoted = withNativeChatReplyContext(text, reply, 'the agent')
     document = nativeChatQuotedPromptDocument(document, text, quoted)
     text = quoted
   }
