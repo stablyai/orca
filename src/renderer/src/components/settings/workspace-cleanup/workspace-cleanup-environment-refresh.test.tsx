@@ -166,3 +166,23 @@ it('keeps a saved rule when a refresh begun before the save answers after it', a
   await act(async () => refresh.resolve(policyRead(before)))
   expect(control().getAttribute('aria-checked')).toBe('false')
 })
+
+it("shows another client's change read after a save settles, even if it was announced during the save", async () => {
+  hostRules = { ...hostRules, merged: { enabled: true } }
+  renderPane()
+  await waitFor(() => expect(control().getAttribute('aria-disabled')).toBe('false'))
+  const update = hold('settings.update')
+  // Turning a rule off only keeps more, so it saves without a preview.
+  fireEvent.click(control())
+  await waitFor(() => expect(calls('settings.update')).toBe(1))
+  const readback = hold('workspaceCleanup.policyState')
+  // Another client changes the host while the save is in flight; the refresh queues behind the save.
+  announce()
+  const saved = { ...hostRules, merged: { enabled: false } }
+  await act(async () => update.resolve({ settings: { workspaceCleanupPolicy: saved } }))
+  await waitFor(() => expect(calls('workspaceCleanup.policyState')).toBe(3))
+  hostRules = { ...saved, merged: { enabled: true } }
+  await act(async () => readback.resolve(policyRead(saved)))
+  await waitFor(() => expect(calls('workspaceCleanup.policyState')).toBe(4))
+  await waitFor(() => expect(control().getAttribute('aria-checked')).toBe('true'))
+})

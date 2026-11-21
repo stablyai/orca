@@ -1,6 +1,6 @@
 import { cleanupPolicyOwnerKey } from './workspace-cleanup-write-journal'
 import { readCleanupPolicy } from './workspace-cleanup-policy-client'
-import { waitForCleanupWrite } from './workspace-cleanup-pending-write'
+import { cleanupWritePhase, waitForCleanupWrite } from './workspace-cleanup-pending-write'
 import { useEffect, useLayoutEffect, useEffectEvent, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { subscribeHostSettingsChanged } from '@/runtime/rpc/subscriptions/host-settings-changed'
@@ -14,20 +14,29 @@ export function useWorkspaceCleanupPolicyOwner(owner: RuntimeClientTarget, repoI
   const [recovering, setRecovering] = useState(false)
   const [read, setRead] = useState<WorkspaceCleanupPolicyRead | null>(null)
   const [capability, setCapability] = useState<'loading' | 'ready' | 'old' | 'error'>('loading')
-  const readLatest = async () => {
+  // Reads can finish out of order. Each is numbered when it is sent, after any pending write
+  // settles, so a read queued behind a save counts as newer than that save's readback.
+  const reads = useRef({ sent: 0, adopted: 0 })
+  const readInOrder = async () => {
     const token = generation.current
-    await waitForCleanupWrite(owner)
-    return readCleanupPolicy(
+    // A save can start while this resumes; wait it out too so the number is taken with no write pending.
+    do {
+      await waitForCleanupWrite(owner)
+    } while (cleanupWritePhase(owner) !== 'idle')
+    const order = ++reads.current.sent
+    const value = await readCleanupPolicy(
       owner,
       repoId,
-      (value) => {
+      (next) => {
         if (token === generation.current) {
-          setRecovering(value)
+          setRecovering(next)
         }
       },
       () => token === generation.current
     )
+    return { order, value }
   }
+  const readLatest = async () => (await readInOrder()).value
 
   const adopt = (value: WorkspaceCleanupPolicyRead) => {
     setRead(value)
@@ -45,13 +54,12 @@ export function useWorkspaceCleanupPolicyOwner(owner: RuntimeClientTarget, repoI
       })
     }))
   }
-  // Reads can finish out of order; an older one never replaces a newer adopted read.
-  const reads = useRef({ started: 0, adopted: 0 })
   const load = async (keepOnFailure: boolean) => {
     const token = generation.current
-    const order = ++reads.current.started
+    // A read that fails before it is sent can't be ordered; let it report only if nothing newer landed.
+    const floor = reads.current.adopted
     try {
-      const value = await readLatest()
+      const { order, value } = await readInOrder()
       if (token !== generation.current || order <= reads.current.adopted) {
         return
       }
@@ -59,16 +67,23 @@ export function useWorkspaceCleanupPolicyOwner(owner: RuntimeClientTarget, repoI
       adopt(value)
       setCapability(value.protocol === 3 ? 'ready' : 'old')
     } catch (failure) {
-      if (!keepOnFailure && token === generation.current && order > reads.current.adopted) {
+      if (!keepOnFailure && token === generation.current && reads.current.adopted === floor) {
         setCapability(hasRuntimeRpcErrorCode(failure, 'method_not_found') ? 'old' : 'error')
       }
     }
   }
   const reload = () => load(false)
-  // A saved answer is newer than any read still in flight.
-  const adoptSaved = (value: WorkspaceCleanupPolicyRead) => {
-    reads.current.adopted = reads.current.started
-    adopt(value)
+  // Call before a save starts. Its readback replaces reads sent before the save, never one
+  // sent after it settled.
+  const startSave = () => {
+    const epoch = reads.current.sent
+    return (value: WorkspaceCleanupPolicyRead) => {
+      if (reads.current.adopted > epoch) {
+        return
+      }
+      reads.current.adopted = epoch
+      adopt(value)
+    }
   }
   const reloadEffect = useEffectEvent(() => reload())
   // Another client may change this host's rules while the pane is open; writes still re-read first.
@@ -100,7 +115,7 @@ export function useWorkspaceCleanupPolicyOwner(owner: RuntimeClientTarget, repoI
     read,
     recovering,
     capability,
-    adopt: adoptSaved,
+    startSave,
     readLatest,
     generation,
     scopeKey,

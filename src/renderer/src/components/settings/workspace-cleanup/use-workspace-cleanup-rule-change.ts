@@ -45,7 +45,7 @@ export function useWorkspaceCleanupRuleChange({
   onSavedPreview?: (rules: WorkspaceCleanupRules, preview: WorkspaceCleanupPreview) => void
 }) {
   const t = useTranslate()
-  const { read, recovering, capability, adopt, readLatest, generation, scopeKey, reload } =
+  const { read, recovering, capability, startSave, readLatest, generation, scopeKey, reload } =
     useWorkspaceCleanupPolicyOwner(owner, repoId)
   const [pending, setPending] = useState<
     (WorkspaceCleanupRuleChangeRequest & { intent: CleanupChangeIntent }) | null
@@ -122,6 +122,7 @@ export function useWorkspaceCleanupRuleChange({
         onSavedPreview?.(change.rules, preview)
       }
     }
+    const adoptReadback = startSave()
     const result = await ownerWrite.send(change, latest)
     if (!result || !active(token)) {
       return
@@ -134,7 +135,7 @@ export function useWorkspaceCleanupRuleChange({
       setError(workspaceCleanupChangeMessage(result.outcome === 'failed' ? 'save' : 'conflict', t))
     }
     if (result.read) {
-      adopt(result.read)
+      adoptReadback(result.read)
     }
     finish(token, result.outcome !== 'saved', result.outcome === 'saved' || pending === null)
   }
