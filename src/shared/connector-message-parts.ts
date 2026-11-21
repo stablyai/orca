@@ -271,7 +271,8 @@ export function hiddenPartsNote(
   if (count === 0) {
     return null
   }
-  return hidden.here > 0 && alone
+  // --only shows only what the budget left out; anything past the source's limits is in Slack alone.
+  return hidden.here > 0 && hidden.anywhere === 0 && alone
     ? `[Orca: ${parts(count)} ${of} not shown here; \`orca slack read ${alone} --only\` shows it alone]`
     : `[Orca: ${parts(count)} ${of} not shown; open ${place} in Slack to see all]`
 }

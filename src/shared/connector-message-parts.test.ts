@@ -161,6 +161,15 @@ describe('a message’s parts within a budget', () => {
     )
   })
 
+  it('sends mixed omissions to Slack, since --only shows only what the budget left out', () => {
+    expect(hiddenPartsNote({ here: 16, anywhere: 4 }, 'of this message', LONG_REF)).toBe(
+      '[Orca: 20 more parts of this message not shown; open it in Slack to see all]'
+    )
+    expect(hiddenPartsNote({ here: 16, anywhere: 0 }, 'of this message', LONG_REF)).toBe(
+      `[Orca: 16 more parts of this message not shown here; \`orca slack read ${LONG_REF} --only\` shows it alone]`
+    )
+  })
+
   it('leaves ids, types and refs that fail Orca’s checks off its lines, and a bad part out alone', () => {
     const parts = readMessageParts({
       files: [

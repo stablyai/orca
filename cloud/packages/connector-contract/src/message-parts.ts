@@ -16,7 +16,8 @@ export const MESSAGE_PART_LIMITS = {
   maxLinkText: 500
 } as const
 
-// A file posted on a message: its id downloads it (`read <message> --download <id>`).
+// A file posted on a message, or inside a message shared into it: its id downloads it through that
+// message (`read <message> --download <id>`); the shared message's own channel may be closed to the bot.
 export const ConnectorMessageFileSchema = z.object({
   id: z.string(),
   // As Slack names it, whole: saving the file uses it.

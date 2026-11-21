@@ -100,6 +100,35 @@ describe('slack message parts', () => {
     expect(parts.partsLeftOut).toBe(2 + 1 + 1 + 2)
   })
 
+  it('reads a share’s fuller block words, and falls back to its ts when its thread_ts is empty', () => {
+    const blocks = [
+      {
+        type: 'rich_text',
+        elements: [
+          { type: 'rich_text_section', elements: [{ type: 'text', text: 'Deployment failed: out of memory' }] }
+        ]
+      }
+    ]
+    const parts = slackMessageParts(
+      {
+        text: 'fwd',
+        files: [file('F1')],
+        attachments: [
+          { is_share: true, channel_id: 'C2', ts: '1700000000.000100', thread_ts: '', text: 'Deployment', blocks }
+        ]
+      },
+      'T1'
+    )
+    expect(parts.files).toEqual([{ id: 'F1', name: 'F1.png', type: 'image/png', size: 2048 }])
+    expect(parts.shared).toEqual([
+      {
+        ref: 'slack:T1:C2:1700000000.000100:1700000000.000100',
+        at: 1700000000000,
+        text: 'Deployment failed: out of memory'
+      }
+    ])
+  })
+
   it('takes the words in blocks only when they say more than the text', () => {
     const blocks = [
       {

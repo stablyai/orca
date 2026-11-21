@@ -155,8 +155,7 @@ function sharedOf(
 ): { shared: ConnectorSharedMessage; files: ConnectorMessageFile[] } {
   const inner = (attachment.message_blocks ?? []).flatMap((block) => (block.message ? [block.message] : []))
   const words =
-    attachment.text ||
-    slackBlocksText(attachment.blocks) ||
+    slackMessageText(attachment) ||
     inner.map((message) => slackMessageText(message)).join('\n') ||
     attachment.fallback ||
     ''
@@ -171,7 +170,9 @@ function sharedOf(
           source: 'slack',
           workspaceId: team,
           containerId: channel,
-          threadId: threadOfLink(attachment.from_url) ?? attachment.thread_ts ?? ts,
+          threadId:
+            threadOfLink(attachment.from_url) ??
+            (attachment.thread_ts && SLACK_TS.test(attachment.thread_ts) ? attachment.thread_ts : ts),
           messageId: ts
         })
       : undefined
