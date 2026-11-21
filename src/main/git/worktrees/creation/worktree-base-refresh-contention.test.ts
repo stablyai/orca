@@ -1,12 +1,34 @@
 import { mkdtempSync, rmSync } from 'node:fs'
+import type * as FsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { gitExecFileAsyncMock } = vi.hoisted(() => ({
-  gitExecFileAsyncMock:
-    vi.fn<(args: string[], opts: { cwd: string }) => Promise<{ stdout: string }>>()
+type ExecOpts = { cwd: string; beforeStart?: () => Promise<boolean> }
+const { gitExecFileAsyncMock, stall } = vi.hoisted(() => ({
+  gitExecFileAsyncMock: vi.fn<(args: string[], opts: ExecOpts) => Promise<{ stdout: string }>>(),
+  // Holds the read of a file ending in `path` once `skip` earlier reads have passed.
+  stall: { path: '', skip: 0, started: () => {}, release: () => {} }
 }))
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FsPromises>()
+  const open: typeof actual.open = (path, ...rest) => {
+    if (
+      stall.path &&
+      String(path).replaceAll('\\', '/').endsWith(stall.path) &&
+      stall.skip-- <= 0
+    ) {
+      stall.path = ''
+      stall.started()
+      return new Promise((resolve) => {
+        stall.release = () => resolve(actual.open(path, ...rest))
+      })
+    }
+    return actual.open(path, ...rest)
+  }
+  return { ...actual, open }
+})
 
 vi.mock('../../command-runner/git-exec-file', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -21,6 +43,7 @@ vi.mock('../../command-runner/host-routing/wsl-path-translation', async (importO
 import {
   getLocalBaseRefUpdateSuggestionForWorktreeCreate,
   LOCAL_BASE_REF_REFRESH_WAIT_MS,
+  PRE_WRITE_CHECK_TIMEOUT_MS,
   refreshLocalBaseRefForWorktreeCreate
 } from './worktree-base-refresh'
 
@@ -48,7 +71,7 @@ function commandOf(args: readonly string[]): string {
 
 function installGitFake(fake: GitFake): void {
   let localMain = 'old-main'
-  gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+  gitExecFileAsyncMock.mockImplementation(async (args: string[], opts: ExecOpts) => {
     const command = commandOf(args)
     if (command === 'rev-parse') {
       if (args[1] === '--git-common-dir') {
@@ -70,6 +93,10 @@ function installGitFake(fake: GitFake): void {
       throw Object.assign(new Error('not an ancestor'), { code: 1 })
     }
     if (command === 'update-ref') {
+      // As the runner does once admitted.
+      if ((await opts.beforeStart?.()) === false) {
+        throw Object.assign(new Error('aborted'), { name: 'AbortError' })
+      }
       const result = await fake.mutate()
       localMain = 'remote-main'
       return result
@@ -91,6 +118,27 @@ function mutationCalls(): string[][] {
 describe('refreshLocalBaseRefForWorktreeCreate lock contention', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
+  })
+  afterEach(() => vi.useRealTimers())
+
+  it('gives back the Git slot and skips the write when a file stalls during the admitted check', async () => {
+    vi.useFakeTimers()
+    const mutate = vi.fn(() => Promise.resolve({ stdout: '' }))
+    installGitFake({ mutate })
+    const started = new Promise<void>((resolve) => {
+      stall.started = resolve
+    })
+    // The inspection reads main's ref once before admission; the admitted check's read stalls.
+    Object.assign(stall, { path: 'refs/heads/main', skip: 1 })
+
+    const result = refresh()
+    await started
+    await vi.advanceTimersByTimeAsync(PRE_WRITE_CHECK_TIMEOUT_MS)
+    await result
+    stall.release()
+    await vi.runAllTimersAsync()
+
+    expect(mutate).not.toHaveBeenCalled()
   })
 
   it('does not retry a failure that is not lock contention', async () => {
@@ -240,5 +288,30 @@ it('gives up on a stalled update suggestion after the bound instead of holding t
   await suggestion
 
   expect(result).toBeUndefined()
+  vi.useRealTimers()
+})
+
+it('stops an abandoned update suggestion before it runs any more Git', async () => {
+  vi.useFakeTimers()
+  gitExecFileAsyncMock.mockReset()
+  installGitFake({ mutate: () => Promise.resolve({ stdout: '' }) })
+  const started = new Promise<void>((resolve) => {
+    stall.started = resolve
+  })
+  Object.assign(stall, { path: 'refs/heads/main', skip: 0 })
+
+  const suggestion = getLocalBaseRefUpdateSuggestionForWorktreeCreate(
+    '/repo',
+    'origin/main',
+    'refs/remotes/origin/main'
+  )
+  await started
+  await vi.advanceTimersByTimeAsync(LOCAL_BASE_REF_REFRESH_WAIT_MS)
+  await expect(suggestion).resolves.toBeUndefined()
+  const callsWhenAbandoned = gitExecFileAsyncMock.mock.calls.length
+  stall.release()
+  await vi.runAllTimersAsync()
+
+  expect(gitExecFileAsyncMock.mock.calls.length).toBe(callsWhenAbandoned)
   vi.useRealTimers()
 })

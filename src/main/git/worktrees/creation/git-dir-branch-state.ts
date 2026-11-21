@@ -18,7 +18,11 @@ export type GitDirState = {
 }
 
 // Reads files only: this runs inside an admitted command, where running Git could wait on its own slot.
-export async function readGitDirState(commonDir: string): Promise<GitDirState> {
+/** `stop` ends an abandoned sweep early; it then rejects, so a partial sweep is never read as complete. */
+export async function readGitDirState(
+  commonDir: string,
+  stop: () => boolean = () => false
+): Promise<GitDirState> {
   // Fail closed: an unreadable common dir must not look like "nothing in use".
   if (!(await stat(commonDir)).isDirectory()) {
     throw new Error(`${commonDir} is not a Git directory`)
@@ -35,39 +39,56 @@ export async function readGitDirState(commonDir: string): Promise<GitDirState> {
       }
     }
     // Git follows a symlinked registration, so it counts too.
-    await forEachBounded(linked, async (gitDir) => {
-      if (await isDirectory(gitDir)) {
-        gitDirs.push(gitDir)
-      }
-    })
+    await forEachBounded(
+      linked,
+      async (gitDir) => {
+        if (await isDirectory(gitDir)) {
+          gitDirs.push(gitDir)
+        }
+      },
+      stop
+    )
   } catch (error) {
     rethrowUnlessMissing(error)
   }
   const heads = new Map<string, string>()
   const reserved = new Set<string>()
   // Bounded: thousands of worktrees must not flood the main process's file system pool.
-  await forEachBounded(gitDirs, async (gitDir) => {
-    const [head, rebaseMerge, rebaseApply, updateRefs, bisectStart] = await Promise.all([
-      NO_FOLLOW === undefined
-        ? readOptional(join(gitDir, 'HEAD'))
-        : readRefFile(join(gitDir, 'HEAD')),
-      readOptional(join(gitDir, 'rebase-merge', 'head-name')),
-      readOptional(join(gitDir, 'rebase-apply', 'head-name')),
-      readOptional(join(gitDir, 'rebase-merge', 'update-refs')),
-      readOptional(join(gitDir, 'BISECT_START'))
-    ])
-    heads.set(gitDir, normalizeHead(head))
-    for (const line of [rebaseMerge, rebaseApply, updateRefs].flatMap((text) => text.split('\n'))) {
-      if (line.startsWith('refs/heads/')) {
-        reserved.add(line.trim())
+  await forEachBounded(
+    gitDirs,
+    async (gitDir) => {
+      const [head, rebaseMerge, rebaseApply, updateRefs, bisectStart] = await Promise.all([
+        NO_FOLLOW === undefined
+          ? readOptional(join(gitDir, 'HEAD'))
+          : readRefFile(join(gitDir, 'HEAD')),
+        readOptional(join(gitDir, 'rebase-merge', 'head-name')),
+        readOptional(join(gitDir, 'rebase-apply', 'head-name')),
+        readOptional(join(gitDir, 'rebase-merge', 'update-refs')),
+        readOptional(join(gitDir, 'BISECT_START'))
+      ])
+      heads.set(gitDir, normalizeHead(head))
+      for (const line of [rebaseMerge, rebaseApply, updateRefs].flatMap((text) =>
+        text.split('\n')
+      )) {
+        if (line.startsWith('refs/heads/')) {
+          reserved.add(line.trim())
+        }
       }
-    }
-    const bisected = bisectStart.trim()
-    if (bisected) {
-      reserved.add(bisected.startsWith('refs/') ? bisected : `refs/heads/${bisected}`)
-    }
-  })
+      const bisected = bisectStart.trim()
+      if (bisected) {
+        reserved.add(bisected.startsWith('refs/') ? bisected : `refs/heads/${bisected}`)
+      }
+    },
+    stop
+  )
+  throwIfStopped(stop)
   return { heads, reserved, linksRead: NO_FOLLOW !== undefined }
+}
+
+export function throwIfStopped(stop: () => boolean): void {
+  if (stop()) {
+    throw new Error('Branch check abandoned')
+  }
 }
 
 // Git treats a symlinked HEAD or ref as a symref to the ref it links to (core.preferSymlinkRefs), and reads any other link's target content.

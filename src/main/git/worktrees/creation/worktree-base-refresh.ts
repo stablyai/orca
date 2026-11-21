@@ -30,6 +30,8 @@ import type { AddWorktreeOptions, GitWorktreeExecOptions } from '../worktree-ope
 
 // Bound the create's wait on the shared ref-only refresh.
 export const LOCAL_BASE_REF_REFRESH_WAIT_MS = 30_000
+// The admitted pre-write check takes well under a second at thousands of worktrees.
+export const PRE_WRITE_CHECK_TIMEOUT_MS = 15_000
 
 // Serialize per branch to avoid ref-lock races; coalesce only matching targets.
 const runPerLocalBaseBranch = createCoalescingKeyedRunner<LocalBaseBranchFastForwardOutcome>()
@@ -110,12 +112,14 @@ export async function getLocalBaseRefUpdateSuggestionForWorktreeCreate(
     return undefined
   }
   const refs = { repoPath, fullRef: parsed.fullRef, remoteTrackingRef }
-  const git = localBaseBranchGit(options)
-  // Advisory: a stalled file read must not hold the create, as Git's own deadline once bounded the listing.
+  let abandoned = false
+  const git = localBaseBranchGit(options, {}, () => abandoned)
+  // Advisory: a stalled file read must not hold the create; an abandoned inspection stops reading and runs no Git.
   const inspection = await waitAtMost(
     inspectLocalBaseBranch(git, refs, { occupancyOnly: true }),
     LOCAL_BASE_REF_REFRESH_WAIT_MS
   )
+  abandoned = true
   return inspection?.status === 'behind'
     ? { baseRef: parsed.baseRef, localBranch: parsed.localBranch, behind: inspection.behind }
     : undefined
@@ -123,7 +127,8 @@ export async function getLocalBaseRefUpdateSuggestionForWorktreeCreate(
 
 function localBaseBranchGit(
   options: GitWorktreeExecOptions,
-  admission: Pick<GitExecOptions, 'admissionExempt'> = {}
+  admission: Pick<GitExecOptions, 'admissionExempt'> = {},
+  abandoned: () => boolean = () => false
 ): LocalBaseBranchGit {
   // Shared refreshes cannot use any individual create's cancellation signal or timeout.
   const execOptions = (cwd: string): GitExecOptions => ({
@@ -132,6 +137,9 @@ function localBaseBranchGit(
     ...(options.admissionTier ? { admissionTier: options.admissionTier } : {}),
     ...admission
   })
+  // An abandoned inspection starts no more Git.
+  const runGit: typeof gitExecFileAsync = (args, opts) =>
+    abandoned() ? Promise.reject(new Error('Inspection abandoned')) : gitExecFileAsync(args, opts)
   // The runner may route a Windows drive repo into WSL; its Linux output paths need the same distro.
   const routed = (cwd: string) => routeLocalGitOptions({ cwd, wslDistro: options.wslDistro })
   const listWorktrees = async (repoPath: string) => {
@@ -139,15 +147,12 @@ function localBaseBranchGit(
       repoPath,
       options,
       { family: 'catalog', reason: 'creation-base-refresh', cache: 'uncached' },
-      () => gitExecFileAsync(['worktree', 'list', '--porcelain'], execOptions(repoPath))
+      () => runGit(['worktree', 'list', '--porcelain'], execOptions(repoPath))
     )
     return parseWorktreeList(translateWslOutputPaths(stdout, repoPath, routed(repoPath)))
   }
   const commonDirOf = async (repoPath: string) => {
-    const { stdout } = await gitExecFileAsync(
-      ['rev-parse', '--git-common-dir'],
-      execOptions(repoPath)
-    )
+    const { stdout } = await runGit(['rev-parse', '--git-common-dir'], execOptions(repoPath))
     // Only strip the line ending: a path may end in spaces.
     const raw = stdout.replace(/\r?\n$/, '')
     const path = isAbsolute(raw)
@@ -160,7 +165,7 @@ function localBaseBranchGit(
   const isBareRepo = (repoPath: string, commonDir: { raw: string; path: string }) => {
     const known =
       bareRepos.get(commonDir.path) ??
-      gitExecFileAsync(
+      runGit(
         [`--git-dir=${commonDir.raw}`, 'config', '--bool', '--get', 'core.bare'],
         execOptions(repoPath)
       ).then(
@@ -177,11 +182,11 @@ function localBaseBranchGit(
       translateWslOutputPath(path, repoPath, routed(repoPath))
     )
   return {
-    exec: (args, cwd) => gitExecFileAsync(args, execOptions(cwd)),
+    exec: (args, cwd) => runGit(args, execOptions(cwd)),
     // HEAD files answer the common cases; listing every worktree costs seconds at thousands of them.
     readBranchUse: async (repoPath, fullRef, occupancyOnly = false) => {
       const commonDir = await commonDirOf(repoPath)
-      const state = await readGitDirState(commonDir.path)
+      const state = await readGitDirState(commonDir.path, abandoned)
       // Only a sole direct owner is located, and it stays owners[0].
       let located: Promise<string | undefined> | undefined
       const locate = (gitDir: string) => (located ??= ownerPathOf(repoPath, gitDir, commonDir.path))
@@ -196,7 +201,8 @@ function localBaseBranchGit(
           : await resolveBranchCheckouts(state, commonDir.path, branch, {
               bareCommonDir: await bareDirOf(repoPath, commonDir),
               firstOwnerSettles: occupancyOnly,
-              canLocate: async (gitDir) => (await locate(gitDir)) !== undefined
+              canLocate: async (gitDir) => (await locate(gitDir)) !== undefined,
+              stop: abandoned
             })
       if (use.kind === 'free') {
         return { reserved: false }
@@ -235,17 +241,30 @@ function localBaseBranchGit(
           ...execOptions(repoPath),
           // Recheck from files once admitted: running Git here could wait on its own slot.
           beforeStart: async () => {
-            const state = await readGitDirState(commonDir.path)
-            const { branch, reserved } = await resolveAliasedBranch(state, commonDir.path, fullRef)
-            inUse =
-              reserved ||
-              branch === undefined ||
-              (
-                await resolveBranchCheckouts(state, commonDir.path, branch, {
-                  bareCommonDir,
-                  firstOwnerSettles: true
-                })
-              ).kind !== 'free'
+            let expired = false
+            const stop = () => expired
+            const check = (async () => {
+              const state = await readGitDirState(commonDir.path, stop)
+              const { branch, reserved } = await resolveAliasedBranch(
+                state,
+                commonDir.path,
+                fullRef
+              )
+              if (reserved || branch === undefined) {
+                return true
+              }
+              const use = await resolveBranchCheckouts(state, commonDir.path, branch, {
+                bareCommonDir,
+                firstOwnerSettles: true,
+                stop
+              })
+              return use.kind !== 'free'
+            })()
+            // Fail closed and give back the slot if the files stall; a late answer never starts the write.
+            const answer = await waitAtMost(check, PRE_WRITE_CHECK_TIMEOUT_MS)
+            expired = true
+            check.catch(() => {})
+            inUse = answer ?? true
             return !inUse
           }
         })

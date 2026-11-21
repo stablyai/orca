@@ -7,6 +7,7 @@ import {
   readRefFile,
   readRefLink,
   rethrowUnlessMissing,
+  throwIfStopped,
   UNRESOLVED_HEAD,
   type GitDirState
 } from './git-dir-branch-state'
@@ -25,6 +26,8 @@ type ResolveOptions = {
   firstOwnerSettles?: boolean
   /** Whether the files can place a checkout; a sole direct owner they cannot place goes straight to Git's listing. */
   canLocate?: (gitDir: string) => Promise<boolean>
+  /** Ends an abandoned check early; it then rejects instead of answering from partial reads. */
+  stop?: () => boolean
 }
 
 const MAX_SYMREF_HOPS = 5
@@ -38,7 +41,18 @@ export async function resolveBranchCheckouts(
   state: GitDirState,
   commonDir: string,
   fullRef: string,
-  { bareCommonDir, firstOwnerSettles = false, canLocate }: ResolveOptions
+  options: ResolveOptions
+): Promise<BranchCheckouts> {
+  const result = await resolveFromFiles(state, commonDir, fullRef, options)
+  throwIfStopped(options.stop ?? (() => false))
+  return result
+}
+
+async function resolveFromFiles(
+  state: GitDirState,
+  commonDir: string,
+  fullRef: string,
+  { bareCommonDir, firstOwnerSettles = false, canLocate, stop = () => false }: ResolveOptions
 ): Promise<BranchCheckouts> {
   // A case-insensitive file system resolves `refs/heads/Main` to a loose `main`, which the write itself may create.
   const foldRef = (await pathExists(join(commonDir, 'head')))
@@ -69,7 +83,7 @@ export async function resolveBranchCheckouts(
     }
     return true
   }
-  const settled = () => owners.length > 1 || (firstOwnerSettles && owners.length > 0)
+  const settled = () => stop() || owners.length > 1 || (firstOwnerSettles && owners.length > 0)
   for (const [gitDir, head] of state.heads) {
     if (gitDir === bareCommonDir) {
       continue
