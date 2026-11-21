@@ -150,6 +150,7 @@ export function nativeChatWorkRunEntries(
   const blocks: NativeChatBlock[] = []
   const sourceKeys = new Map<NativeChatBlock, string>()
   const used = new Set<string>()
+  const repeats = new Map<string, number>()
   const thoughtsBefore = new Map<NativeChatBlock, NativeChatMessage[]>()
   let waiting: NativeChatMessage[] = []
   for (const message of members) {
@@ -168,10 +169,14 @@ export function nativeChatWorkRunEntries(
     blocks.push(...tools)
     for (const [block, key] of nativeChatMessageBlockSourceKeys(message)) {
       // A call id repeated across members still needs one key per block.
-      let unique = key
-      for (let repeat = 1; used.has(unique); repeat += 1) {
+      // Resume from this key's last suffix, so many repeats of one call id stay linear.
+      let repeat = repeats.get(key) ?? 0
+      let unique = repeat === 0 ? key : `${key}~${repeat}`
+      while (used.has(unique)) {
+        repeat += 1
         unique = `${key}~${repeat}`
       }
+      repeats.set(key, repeat + 1)
       used.add(unique)
       sourceKeys.set(block, unique)
     }

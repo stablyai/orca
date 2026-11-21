@@ -148,10 +148,16 @@ export function useNativeChatContentAnchor<Window extends AnchoredWindowCallback
       return
     }
     // The first anchor still in its row holds the place; rekeyed or removed content falls through.
+    // One pass over the drawn anchors, so falling through many removed ones stays linear.
+    const drawn = new Map<string, HTMLElement>()
+    for (const element of container.querySelectorAll<HTMLElement>(CONTENT_ANCHOR_SELECTOR)) {
+      const key = element.dataset.nativeChatContentAnchor
+      if (key && !drawn.has(key)) {
+        drawn.set(key, element)
+      }
+    }
     for (const anchor of snapshot.anchors) {
-      const node = container.querySelector<HTMLElement>(
-        `[data-native-chat-content-anchor="${CSS.escape(anchor.key)}"]`
-      )
+      const node = drawn.get(anchor.key)
       const row = node?.closest<HTMLElement>(ROW_SELECTOR)
       if (!node || !row || placeInRow(node)?.row !== anchor.row) {
         continue

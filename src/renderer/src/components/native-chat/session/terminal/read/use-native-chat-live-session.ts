@@ -296,7 +296,6 @@ export function useNativeChatLiveSession(
     appended
   })
 
-  const prependRevision = read.phase === 'ready' ? (read.prependRevision ?? 0) : 0
   return useMemo<NativeChatLiveSession>(() => {
     const session = mergeNativeChatLiveSession({
       messages: normalizedMessages,
@@ -316,7 +315,7 @@ export function useNativeChatLiveSession(
       hasMore,
       loadingEarlier,
       olderHistoryGeneration,
-      prependRevision,
+      prependRevision: read.phase === 'ready' ? read.prependRevision : undefined,
       loadEarlier,
       trimHistory,
       readPhase: read.phase
@@ -334,7 +333,6 @@ export function useNativeChatLiveSession(
     hasMore,
     loadingEarlier,
     olderHistoryGeneration,
-    prependRevision,
     loadEarlier,
     trimHistory,
     appended
