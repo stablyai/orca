@@ -147,7 +147,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     const pty = this.ptysById.get(ptyId)
     const paint = pty?.commandPaint
     const db = this._orchestrationDb
-    if (!db || !paint?.awaitsPaintWithoutProof()) {
+    if (!db || !paint?.awaitsPaintNoHostCanRequest()) {
       return
     }
     const reported = this.heldMailReported.get(paint) ?? new Set<string>()

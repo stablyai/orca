@@ -36,8 +36,6 @@ export class TerminalCommandPaint {
   private repaintOffered = false
   /** This reattach's host answered that it cannot ask the program to redraw. */
   private repaintUnavailable = false
-  /** The quit ledger did not prove the retained frame, so nothing but a paint lifts this fence. */
-  private retainedFrameUnproven = false
   /** The last read finished a command and started the next. Its reports are stamped after this
    *  observer runs, so none of them count; at the next read they are retired by identity (a
    *  millisecond clock cannot order them) and that read's arrival starts the new command. */
@@ -236,15 +234,6 @@ export class TerminalCommandPaint {
   /** The reattach fence still waits for a paint its host cannot ask for. */
   awaitsPaintNoHostCanRequest(): boolean {
     return this.repaintUnavailable && this.awaitingPaint && this.awaitsReattachedCommand()
-  }
-
-  markRetainedFrameUnproven(): void {
-    this.retainedFrameUnproven = true
-  }
-
-  /** Nothing Orca can do lifts this fence: no repaint can be asked for and the ledger proved nothing. */
-  awaitsPaintWithoutProof(): boolean {
-    return this.retainedFrameUnproven && this.awaitsPaintNoHostCanRequest()
   }
 
   /** Whether the agent's own report at `observedAt` speaks for the command now running. */

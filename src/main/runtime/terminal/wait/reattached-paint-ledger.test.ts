@@ -109,29 +109,10 @@ it('proves a typed agent the restart identifies, with no identity recorded at qu
   expect(
     retainedFrameIsProven(entry, { ...current, reattachedSequence: 13, agent: 'hermes' })
   ).toBe(false)
-  // A recorded agent still has to match.
+  // A recorded agent still has to match, and one that isn't screen-ruled records nothing.
   const recorded = reattachedPaintEntry(hermesPane(typed), 12)
   expect(retainedFrameIsProven(recorded, { ...current, agent: 'cline' })).toBe(false)
-})
-
-it("records Claude only once its own composer painted, for hosts that can't repaint", () => {
-  const banner = Object.assign(hermesPane(), { foregroundAgent: 'claude' as const })
-  paint(banner, '\x1b]133;C\x07Claude Code v2 starting…')
-  expect(reattachedPaintEntry(banner, 30)).toBeNull()
-
-  const composer = Object.assign(hermesPane(), { foregroundAgent: 'claude' as const })
-  paint(composer, '\x1b]133;C\x07\x1b[?2031h\x1b[?2004h│ ❯\u00a0 │')
-  const entry = reattachedPaintEntry(composer, 30)
-  expect(entry).toEqual({ incarnationId: 'inc-1', sequence: 30, agent: 'claude' })
-  const current = { incarnationId: 'inc-1', reattachedSequence: 30, agent: 'claude' }
-  // A restore that reads the frame before asking for a repaint trusts only screen-ruled entries.
-  expect(retainedFrameIsProven(entry, current)).toBe(false)
-  expect(retainedFrameIsProven(entry, current, { anyRecordedAgent: true })).toBe(true)
   expect(
-    retainedFrameIsProven(entry, { ...current, reattachedSequence: 31 }, { anyRecordedAgent: true })
-  ).toBe(false)
-  // An agent not identified yet: the same process with no output since is still its frame.
-  expect(
-    retainedFrameIsProven(entry, { ...current, agent: null }, { anyRecordedAgent: true })
-  ).toBe(true)
+    reattachedPaintEntry(Object.assign(typed, { foregroundAgent: 'claude' as const }), 12)
+  ).toBeNull()
 })

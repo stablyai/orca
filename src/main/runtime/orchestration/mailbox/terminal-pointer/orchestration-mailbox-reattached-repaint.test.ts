@@ -8,10 +8,6 @@ import '../../db/messages/mailbox-routing-page'
 import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
-import {
-  ReattachedPaintLedger,
-  type ReattachedPaintEntry
-} from '../../../terminal/wait/reattached-paint-ledger'
 import type { RuntimeRepaintResult } from '../../../terminal/lifecycle/runtime-pty-controller-contract'
 import {
   createRuntime,
@@ -33,11 +29,6 @@ const CLAUDE_COMPOSER = '\x1b[?2031h\x1b[?2004h│ ❯  │\x1b[?25h'
 const HELD_SUBJECT = 'Mail to a worker is held after Orca restarted'
 // The daemon's output count when this run reattached; the harness registers this incarnation.
 const REATTACHED_SEQUENCE = 491
-const CLEAN_QUIT: ReattachedPaintEntry = {
-  incarnationId: 'mailbox-incarnation',
-  sequence: REATTACHED_SEQUENCE,
-  agent: 'claude'
-}
 
 afterEach(() => {
   vi.useRealTimers()
@@ -48,11 +39,8 @@ afterEach(() => {
 })
 
 /** A restart reattached this idle Claude worker: its composer was drawn before Orca started, its
- *  status comes back from its last hook report, and `quit` is what the last quit's ledger saved. */
-async function reattachedIdleWorker(options: {
-  repaint: RuntimeRepaintResult[]
-  quit: ReattachedPaintEntry | null
-}) {
+ *  status comes back from its last hook report. */
+async function reattachedIdleWorker(options: { repaint: RuntimeRepaintResult[] }) {
   vi.useFakeTimers()
   const db = new OrchestrationDb(':memory:')
   const harness = await createRuntime(db, { launchAgent: 'claude', foregroundProcess: 'claude' })
@@ -61,9 +49,6 @@ async function reattachedIdleWorker(options: {
     requestRepaint.mockResolvedValueOnce(result)
   }
   requestRepaint.mockResolvedValue(options.repaint.at(-1))
-  const ledgerRead = vi
-    .spyOn(ReattachedPaintLedger.prototype, 'read')
-    .mockResolvedValue(options.quit)
   const run = db.createRun({
     objective: 'Reattached worker',
     coordinatorHandle: 'term_coordinator',
@@ -102,20 +87,19 @@ async function reattachedIdleWorker(options: {
     db
       .getUnreadRunMailbox(run.id, 100, ['escalation'])
       .filter((message) => message.subject === HELD_SUBJECT)
-  return { db, ...harness, ledgerRead, send, paint, alerts }
+  return { db, ...harness, send, paint, alerts }
 }
 
 describe('mail held by a reattached idle agent', () => {
   it('asks a host that can repaint once, then delivers on the paint, as before', async () => {
-    const worker = await reattachedIdleWorker({ repaint: ['nudged'], quit: CLEAN_QUIT })
+    const worker = await reattachedIdleWorker({ repaint: ['nudged'] })
     const message = worker.send('After restart')
     expect(pointerCount(worker.write)).toBe(0)
 
-    // Rechecks while the repaint is in flight ask nothing more, read no ledger and raise nothing.
+    // Rechecks while the repaint is in flight ask nothing more and raise nothing.
     await vi.advanceTimersByTimeAsync(10_000)
     expect(worker.requestRepaint).toHaveBeenCalledTimes(1)
     expect(worker.requestRepaint).toHaveBeenCalledWith(PTY_ID)
-    expect(worker.ledgerRead).not.toHaveBeenCalled()
     expect(pointerCount(worker.write)).toBe(0)
 
     await worker.paint()
@@ -127,29 +111,13 @@ describe('mail held by a reattached idle agent', () => {
     worker.db.close()
   })
 
-  it('delivers without a paint where the host cannot repaint but the quit ledger proves the frame', async () => {
-    const worker = await reattachedIdleWorker({ repaint: ['unavailable'], quit: CLEAN_QUIT })
-    const message = worker.send('After a clean quit')
-
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(pointerCount(worker.write)).toBe(1)
-    expect(worker.db.getMessageById(message.id)?.delivered_at).toEqual(expect.any(String))
-    expect(worker.requestRepaint).toHaveBeenCalledTimes(1)
-    expect(worker.alerts()).toEqual([])
-    worker.db.close()
-  })
-
-  it('tells the coordinator once where nothing proves the frame, and delivers on a later paint', async () => {
-    // Output written while Orca was down: the reattached count is past what the quit saw.
-    const worker = await reattachedIdleWorker({
-      repaint: ['unavailable'],
-      quit: { ...CLEAN_QUIT, sequence: REATTACHED_SEQUENCE - 1 }
-    })
-    const first = worker.send('After a crash')
+  it('tells the coordinator once where the host cannot repaint, and delivers on a later paint', async () => {
+    const worker = await reattachedIdleWorker({ repaint: ['unavailable'] })
+    const first = worker.send('After a restart')
     await vi.advanceTimersByTimeAsync(10_000)
     expect(pointerCount(worker.write)).toBe(0)
     expect(worker.alerts()).toHaveLength(1)
-    expect(worker.alerts()[0]?.body).toContain("open the worker's terminal")
+    expect(worker.alerts()[0]?.body).toContain('resize its pane')
 
     worker.send('Second message, same hold')
     await vi.advanceTimersByTimeAsync(10_000)
