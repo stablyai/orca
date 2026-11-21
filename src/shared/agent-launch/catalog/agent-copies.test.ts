@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import { resolveAgentStartupPlanInputs } from '../startup/agent-startup-plan-inputs'
 import { buildAgentStartupPlan } from '../startup/tui-agent-startup'
+import { structuredLaunchSeedOptions } from '../../native-chat/input/session-options/native-chat-session-option-defaults'
+import { nativeChatPreferenceFor } from '../choices/structured-native-chat-launch-route'
 import {
   agentCopyIdFromLaunchOptions,
+  applyAgentCopy,
+  applyAgentCopyById,
+  captureAgentCopy,
   createAgentCopy,
   normalizeAgentCopies,
-  resolveAgentSelection
+  resolveAgentSelection,
+  type AgentCopy
 } from './agent-copies'
 
 const codeMode = {
@@ -102,5 +108,82 @@ describe('agent copies', () => {
     expect(() =>
       agentCopyIdFromLaunchOptions({ agentCopy: 'claude.a' }, { agentCopy: 'claude.b' })
     ).toThrow('Conflicting agent copies "claude.a" and "claude.b"')
+  })
+
+  it("fills its agent's slots with the copy's model, permission and surface, and reads them back", () => {
+    const copy: AgentCopy = {
+      ...codeMode,
+      choices: { model: 'haiku', options: { effort: 'low' } },
+      permission: 'full-access',
+      chat: true
+    }
+    const base = {
+      agentCmdOverrides: { claude: 'claude', codex: 'codex-wrapper' },
+      agentLaunchChoices: { claude: { model: 'opus' }, codex: { model: 'gpt' } },
+      agentPermissionOverrides: { claude: 'ask' as const },
+      nativeChatProviders: { claude: false, codex: true },
+      agentCopies: [copy]
+    }
+    const applied = applyAgentCopy(base, copy)
+    expect(applied.agentCmdOverrides).toEqual({
+      claude: '/opt/claude/bin/claude',
+      codex: 'codex-wrapper'
+    })
+    expect(applied.agentLaunchChoices).toEqual({
+      claude: { model: 'haiku', options: { effort: 'low' } },
+      codex: { model: 'gpt' }
+    })
+    expect(applied.agentPermissionOverrides).toEqual({ claude: 'full-access' })
+    expect(nativeChatPreferenceFor(applied, 'claude')).toBe(true)
+    expect(nativeChatPreferenceFor(applied, 'codex')).toBe(true)
+    expect(captureAgentCopy(copy, applied)).toEqual(copy)
+  })
+
+  it("leaves the agent's slot empty where the copy has no value of its own", () => {
+    const applied = applyAgentCopy(
+      {
+        agentPermissionOverrides: { claude: 'ask' as const },
+        nativeChatProviders: { claude: true }
+      },
+      { id: 'claude.plain', name: 'Plain', agent: 'claude' }
+    )
+    expect(applied.agentPermissionOverrides).toEqual({})
+    expect(applied.nativeChatProviders).toEqual({})
+  })
+
+  it("seeds a copy's chat with the copy's model and options, not its agent's", () => {
+    const copy: AgentCopy = { ...codeMode, choices: { model: 'haiku' } }
+    const settings = { agentLaunchChoices: { claude: { model: 'opus' } }, agentCopies: [copy] }
+    expect(structuredLaunchSeedOptions(applyAgentCopy(settings, copy), 'claude')?.model).toBe(
+      'haiku'
+    )
+    expect(structuredLaunchSeedOptions(settings, 'claude')?.model).toBe('opus')
+  })
+
+  it('keeps the new card values of a saved copy and drops malformed ones', () => {
+    const [copy] = normalizeAgentCopies([
+      { ...codeMode, choices: { model: 'haiku' }, permission: 'auto', chat: false, disabled: true }
+    ])
+    expect(copy).toMatchObject({
+      choices: { model: 'haiku' },
+      permission: 'auto',
+      chat: false,
+      disabled: true
+    })
+    const [bad] = normalizeAgentCopies([
+      { ...codeMode, permission: 'root', chat: 'yes', disabled: 1 }
+    ])
+    expect(bad).not.toHaveProperty('permission')
+    expect(bad).not.toHaveProperty('chat')
+    expect(bad).not.toHaveProperty('disabled')
+  })
+
+  it('applies a copy by id and leaves the settings as they are without one it knows', () => {
+    const settings = { agentCmdOverrides: {}, agentCopies: [codeMode] }
+    expect(applyAgentCopyById(settings, 'claude.code-mode').agentCmdOverrides).toEqual({
+      claude: '/opt/claude/bin/claude'
+    })
+    expect(applyAgentCopyById(settings, 'claude.gone')).toBe(settings)
+    expect(applyAgentCopyById(settings, undefined)).toBe(settings)
   })
 })

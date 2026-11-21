@@ -28,3 +28,19 @@ it('offers a copy as a chat and a CLI where its agent is, and nowhere else', () 
     'cli:grok.d'
   ])
 })
+
+it("leads with a chat only when the copy's own Chat | CLI choice says chat, and hides turned-off copies", () => {
+  const rows = agentCopyMenuRows(
+    [{ kind: 'chat', agent: 'claude' }],
+    [
+      { id: 'claude.chat', name: 'Chat', agent: 'claude', chat: true },
+      { id: 'claude.cli', name: 'CLI', agent: 'claude', chat: false },
+      { id: 'claude.off', name: 'Off', agent: 'claude', disabled: true }
+    ],
+    ['claude'],
+    { nativeChatProviders: { claude: false } }
+  )
+  expect(
+    rows.map((row) => `${row.kind}:${row.copy?.id}${'chat' in row && row.chat ? '+chat' : ''}`)
+  ).toEqual(['chat:claude.chat', 'cli:claude.chat', 'cli:claude.cli+chat'])
+})
