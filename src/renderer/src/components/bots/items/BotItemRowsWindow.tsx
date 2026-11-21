@@ -116,8 +116,6 @@ export function BotItemRowsWindow({
 }): React.JSX.Element {
   const container = useRef<HTMLDivElement | null>(null)
   const count = items.length
-  // Once long, a group keeps windowing while it's shown, so updates around 50 rows don't mount and
-  // unmount the rows out of view each time.
   // Between half and all of ALL_ROWS a group keeps the mode it has, so updates around the threshold don't
   // remount rows; well below it (filtered down, say) it's a plain list again.
   const [windowed, setWindowed] = useState(count > ALL_ROWS)
@@ -261,10 +259,10 @@ export function BotItemRowsWindow({
       ? active?.closest<HTMLElement>('[data-bot-item-row]')?.dataset.botItemRow
       : undefined
     const at = uid === undefined ? -1 : items.findIndex((item) => item.uid === uid)
-    if (uid !== undefined && at >= 0) {
-      setFocused((prev) => prev ?? { uid, at })
-      setStop((prev) => prev ?? { uid, at })
-    }
+    // Picks from an earlier long phase are stale: the row focused now, or none, is where it starts.
+    const pick = uid !== undefined && at >= 0 ? { uid, at } : null
+    setFocused(pick)
+    setStop(pick)
   })
   useLayoutEffect(() => {
     if (!all) {

@@ -1,5 +1,6 @@
 import { useContext, useMemo } from 'react'
 import { useBotHostLive } from '@/lib/bot-host-views'
+import { parseBotAvatar } from '../../../../../shared/bot-avatar'
 import type { Bot } from '../../../../../shared/bot-types'
 import { BotAvatar } from '../BotAvatar'
 import { BotItemFaceFailuresContext } from './bot-item-face-reads'
@@ -17,7 +18,8 @@ export function BotItemRowFace({
   windowed?: boolean
 }): React.JSX.Element {
   const failures = useContext(BotItemFaceFailuresContext)
-  const live = useBotHostLive(bot.hostId, windowed)
+  // Only a face showing an upload reads anything, so only it hears its host and the window.
+  const live = useBotHostLive(bot.hostId, windowed && parseBotAvatar(bot.avatar)?.kind === 'upload')
   const read = useMemo(
     () => ({ paused: !live, failures, skipFailed: windowed }),
     [live, failures, windowed]

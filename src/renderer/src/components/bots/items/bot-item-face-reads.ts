@@ -3,27 +3,43 @@
 // rows in a short group record failures too, so a group growing long doesn't read them again. Owned by
 // the group, so reopening it (or the panel) reads them again, and a host going away lets its go.
 import { createContext, useEffect, useState } from 'react'
-import { isBotHostLive, subscribeToLiveBotHosts } from '@/lib/bot-host-views'
-import { forgetBotAvatarFailures, type BotAvatarFailures } from '../bot-avatar-image'
+import { isBotHostLive, subscribeToBotHostLive } from '@/lib/bot-host-views'
+import {
+  forgetBotAvatarFailures,
+  watchBotAvatarFailureHosts,
+  type BotAvatarFailures
+} from '../bot-avatar-image'
 
 export const BotItemFaceFailuresContext = createContext<BotAvatarFailures | null>(null)
 
-/** A group's failures; `enabled` while its rows show faces. */
+/** A group's failures; `enabled` while its rows show faces. Each host with a failure is watched, and
+ *  its going away lets that host's failures go. */
 export function useBotItemFaceFailures(enabled: boolean): BotAvatarFailures {
   const [failures] = useState((): BotAvatarFailures => new Map())
   useEffect(() => {
     if (!enabled) {
       return
     }
-    const stop = subscribeToLiveBotHosts(() => {
-      for (const [key, failure] of failures) {
-        if (!isBotHostLive(failure.hostId)) {
-          failures.delete(key)
-        }
+    const stops = new Map<string, () => void>()
+    const stopWatching = watchBotAvatarFailureHosts(failures, (hostId) => {
+      if (stops.has(hostId)) {
+        return
       }
+      const stop = subscribeToBotHostLive(hostId, (wentAway) => {
+        if (!wentAway && isBotHostLive(hostId)) {
+          return
+        }
+        for (const [key, failure] of failures) {
+          if (failure.hostId === hostId) {
+            failures.delete(key)
+          }
+        }
+      })
+      stops.set(hostId, stop)
     })
     return () => {
-      stop()
+      stopWatching()
+      stops.forEach((stop) => stop())
       forgetBotAvatarFailures(failures)
     }
   }, [enabled, failures])

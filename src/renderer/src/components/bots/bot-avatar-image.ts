@@ -1,7 +1,7 @@
 // Where a bot's picture loads from: a bundled mascot, or its uploaded PNG read once per version.
 import { useEffect, useState } from 'react'
 import { readBotAvatarPng } from '@/lib/bot-catalog'
-import { readBotHostState } from '@/lib/bot-catalog-snapshot'
+import { readBotHostState, readHostBots } from '@/lib/bot-catalog-snapshot'
 import { botRefKey, type BotOnHost, type BotRef } from '@/lib/bot-hosts'
 import { parseBotAvatar } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
@@ -36,7 +36,23 @@ export function forgetBotAvatarFailures(failures: BotAvatarFailures): void {
   pendingByFailures.delete(failures)
 }
 
+// Each group's watcher of the hosts its failures are on.
+const failureHostWatchers = new WeakMap<BotAvatarFailures, (hostId: BotRef['hostId']) => void>()
+
+/** Calls `onHost` with each host a failure is noted on; returns the leave. */
+export function watchBotAvatarFailureHosts(
+  failures: BotAvatarFailures,
+  onHost: (hostId: BotRef['hostId']) => void
+): () => void {
+  failureHostWatchers.set(failures, onHost)
+  failures.forEach((failure) => onHost(failure.hostId))
+  return () => {
+    failureHostWatchers.delete(failures)
+  }
+}
+
 function noteFailure(failures: BotAvatarFailures, bot: BotRef, key: string, version: string): void {
+  failureHostWatchers.get(failures)?.(bot.hostId)
   failures.delete(key)
   failures.set(key, { version, hostId: bot.hostId })
   for (const oldest of failures.keys()) {
@@ -54,6 +70,13 @@ const uploads = new Map<string, Upload>()
 // Each group's reads in flight, which it lets go of as it leaves.
 const pendingByFailures = new WeakMap<BotAvatarFailures, Set<Upload>>()
 
+/** The bot's picture version in the catalog now; null for none or a bot not listed. */
+function currentUploadVersion(bot: BotRef): string | null {
+  const current = readHostBots(bot.hostId).find((listed) => listed.id === bot.id)
+  const parsed = parseBotAvatar(current?.avatar ?? null)
+  return parsed?.kind === 'upload' ? parsed.version : null
+}
+
 function uploadOf(key: string, version: string): Upload | undefined {
   const cached = uploads.get(key)
   return cached?.version === version ? cached : undefined
@@ -61,7 +84,12 @@ function uploadOf(key: string, version: string): Upload | undefined {
 
 function startUpload(bot: BotRef, key: string, version: string): Upload {
   const started: Upload = { version, waiting: new Set(), noted: new Set() }
-  uploads.set(key, started)
+  // A chat turn from before the picture changed asks for an old version: read for it, but kept only if
+  // the bot's current picture isn't, so rows showing the current one don't read it again.
+  const cached = uploads.get(key)
+  if (cached?.read === undefined || currentUploadVersion(bot) !== cached.version) {
+    uploads.set(key, started)
+  }
   void readBotAvatarPng(bot).then(
     (png) => {
       started.read = png ? `data:image/png;base64,${png}` : null
