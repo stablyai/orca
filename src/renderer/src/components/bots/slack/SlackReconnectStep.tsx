@@ -90,7 +90,7 @@ export function SlackReconnectStep({
             { host: hostName }
           )
         : t('bots.slack.reconnect.why', 'Slack stopped accepting this workspace’s saved token.')
-  const form = (compactProps: { onCancel?: () => void; secondary?: boolean }) => (
+  const form = (compactProps: { onCancel?: () => void; inlineSubmit?: boolean }) => (
     <SlackConfigTokenForm
       compact
       // This desktop's own token is made with this computer's Slack login.
@@ -123,11 +123,11 @@ export function SlackReconnectStep({
               isMac
                 ? t(
                     'bots.slack.reconnect.hostExpiredMac',
-                    '<host>{{host}}</host>’s expired. This Mac’s works.'
+                    '<host>{{host}}</host>’s token expired. This Mac’s works.'
                   )
                 : t(
                     'bots.slack.reconnect.hostExpired',
-                    '<host>{{host}}</host>’s expired. This computer’s works.'
+                    '<host>{{host}}</host>’s token expired. This computer’s works.'
                   )
             }
             values={{ host: hostName }}
@@ -147,7 +147,7 @@ export function SlackReconnectStep({
             </Button>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <div className="pt-3">{form({ secondary: true })}</div>
+            <div className="pt-3">{form({ inlineSubmit: true })}</div>
           </CollapsibleContent>
         </Collapsible>
         <DialogFooter>

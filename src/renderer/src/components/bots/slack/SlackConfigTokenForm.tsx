@@ -39,7 +39,7 @@ export function SlackConfigTokenForm({
   aside,
   compact = false,
   onCancel,
-  secondary = false
+  inlineSubmit = false
 }: {
   hostId: ExecutionHostId
   submitLabel: string
@@ -52,8 +52,8 @@ export function SlackConfigTokenForm({
   compact?: boolean
   /** A Cancel beside the submit button. */
   onCancel?: () => void
-  /** Another of the dialog's buttons is its main action. */
-  secondary?: boolean
+  /** Another of the dialog's buttons is its main action: a quiet submit beside the field. */
+  inlineSubmit?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const inputId = useId()
@@ -122,6 +122,40 @@ export function SlackConfigTokenForm({
     return () => window.removeEventListener('focus', onFocus)
   })
 
+  const field = (
+    <Input
+      id={inputId}
+      // Pasting is all that is left to do here, so the field takes focus.
+      autoFocus={compact && onCancel !== undefined}
+      type="password"
+      placeholder={compact ? `${SLACK_CONFIG_REFRESH_TOKEN_PREFIX}…` : undefined}
+      autoComplete="off"
+      spellCheck={false}
+      value={token}
+      aria-invalid={error !== null}
+      onChange={(event) => {
+        // What is typed wins over a clipboard read still pending.
+        reads.current++
+        setAccessPasted(false)
+        setToken(event.target.value)
+      }}
+      onPaste={(event) => {
+        if (take(event.clipboardData.getData('text'), true)) {
+          event.preventDefault()
+        }
+      }}
+    />
+  )
+  const submit = (
+    <Button
+      type="submit"
+      variant={inlineSubmit ? 'outline' : 'default'}
+      disabled={busy || !trimmed}
+    >
+      {submitLabel}
+    </Button>
+  )
+
   return (
     <form
       className="space-y-4"
@@ -173,26 +207,14 @@ export function SlackConfigTokenForm({
         <Label htmlFor={inputId} className={compact ? 'sr-only' : undefined}>
           {t('bots.slack.token.label', 'Configuration refresh token')}
         </Label>
-        <Input
-          id={inputId}
-          type="password"
-          placeholder={compact ? `${SLACK_CONFIG_REFRESH_TOKEN_PREFIX}…` : undefined}
-          autoComplete="off"
-          spellCheck={false}
-          value={token}
-          aria-invalid={error !== null}
-          onChange={(event) => {
-            // What is typed wins over a clipboard read still pending.
-            reads.current++
-            setAccessPasted(false)
-            setToken(event.target.value)
-          }}
-          onPaste={(event) => {
-            if (take(event.clipboardData.getData('text'), true)) {
-              event.preventDefault()
-            }
-          }}
-        />
+        {inlineSubmit ? (
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">{field}</div>
+            {submit}
+          </div>
+        ) : (
+          field
+        )}
         {accessPasted ? (
           <p className="text-xs text-destructive">
             {t(
@@ -204,20 +226,16 @@ export function SlackConfigTokenForm({
           <p className="text-xs text-destructive">{error}</p>
         ) : null}
       </div>
-      <DialogFooter>
-        {onCancel ? (
-          <Button type="button" variant="outline" onClick={onCancel}>
-            {t('bots.slack.setup.cancel', 'Cancel')}
-          </Button>
-        ) : null}
-        <Button
-          type="submit"
-          variant={secondary ? 'outline' : 'default'}
-          disabled={busy || !trimmed}
-        >
-          {submitLabel}
-        </Button>
-      </DialogFooter>
+      {inlineSubmit ? null : (
+        <DialogFooter>
+          {onCancel ? (
+            <Button type="button" variant="outline" onClick={onCancel}>
+              {t('bots.slack.setup.cancel', 'Cancel')}
+            </Button>
+          ) : null}
+          {submit}
+        </DialogFooter>
+      )}
     </form>
   )
 }
