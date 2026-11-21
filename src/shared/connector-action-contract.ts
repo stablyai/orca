@@ -93,6 +93,8 @@ export const ConnectorActionArgs = z
     cancel: z.string().min(1).max(64).optional(),
     // read: the id of a file on the message read, to download it.
     download: z.string().min(1).max(64).optional(),
+    // read: only the message the ref names, with what it holds; sent only to a cloud listing messageParts.
+    only: z.literal(true).optional(),
     // reply and attach, with stage: a file the CLI uploads itself, straight to the source, to the
     // URL the answer gives. Sent only to a cloud listing `files.direct`.
     upload: ConnectorUpload.optional(),
@@ -138,6 +140,8 @@ export const CONNECTOR_ACT_ERROR_CODES = [
   'cloud_lacks_search',
   'cloud_lacks_schedule',
   'cloud_lacks_slack_tools',
+  // `slack read --only`, to a cloud that reads only threads and channels.
+  'cloud_lacks_message_parts',
   'cloud_lacks_set',
   'cloud_lacks_create',
   // `bot reply` with several files, to a cloud that posts one file a message.

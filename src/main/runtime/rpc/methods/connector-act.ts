@@ -165,6 +165,12 @@ export const CONNECTOR_ACT_METHOD = defineMethod({
         "Orca Cloud can't change issues yet. Say what should change instead, and try again after Orca Cloud updates."
       )
     }
+    if (args.only && !features.has('messageParts' satisfies ConnectorCloudFeature)) {
+      throw new ConnectorActError(
+        'cloud_lacks_message_parts',
+        "Orca Cloud can't read one message alone yet. Read its thread without --only, or open it in Slack."
+      )
+    }
     if (args.search && !features.has('find.search' satisfies ConnectorCloudFeature)) {
       throw new ConnectorActError(
         'cloud_lacks_search',
@@ -251,6 +257,14 @@ export const CONNECTOR_ACT_METHOD = defineMethod({
       await noteBotRequestPost(runtime, sessionId, ref).catch((error: unknown) =>
         console.warn('[bots] could not note a post for a bot request', error)
       )
+    }
+    if (verb === 'read' && answer.value.ok && answer.value.result.messages) {
+      // Only the negotiated capability can enable single-message recovery in the CLI.
+      const { messageParts: _peerMarker, ...result } = answer.value.result
+      return {
+        ...answer.value,
+        result: features.has('messageParts') ? { ...result, messageParts: true } : result
+      }
     }
     // A reply lands in the conversation that woke the run, which the bot names as Orca does.
     return verb === 'reply' && answer.value.ok && target

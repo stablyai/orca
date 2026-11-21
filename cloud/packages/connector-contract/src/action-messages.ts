@@ -7,6 +7,7 @@ import {
   ConnectorPostNoticesSchema,
   ConnectorTurnForSchema
 } from './connector-wire-scalars.js'
+import { ConnectorMessageFileSchema, ConnectorMessagePartsFields } from './message-parts.js'
 
 // The shared verbs a bot takes in a source; a source that doesn't take one answers it as unsupported.
 // Reply is `orca bot reply`, listed so capabilities name it; it answers the run's own conversation,
@@ -245,6 +246,9 @@ export const ConnectorActionArgsSchema = z
     // read, with download: answer a link the machine streams the bytes from, not the bytes inline.
     // Sent only to a cloud listing `files.direct`.
     stream: z.literal(true).optional(),
+    // read: only the message the ref names, with all it holds, not its thread. Sent only to a cloud
+    // listing `messageParts`.
+    only: z.literal(true).optional(),
     // find: each match as what a rule or a result names (a channel, repo or team; a thread, issue or
     // pull request), leaving out matches that name neither. Sent only to a cloud listing `refs`.
     of: z.enum(['place', 'subject']).optional(),
@@ -279,21 +283,14 @@ export const ConnectorActionRequestSchema = z.object({
 })
 export type ConnectorActionRequest = z.infer<typeof ConnectorActionRequestSchema>
 
-// A file posted on a message: its id downloads it (`read <message> --download <id>`).
-export const ConnectorMessageFileSchema = z.object({
-  id: z.string(),
-  // As Slack names it, whole: saving the file uses it.
-  name: z.string().max(1024),
-  type: z.string().optional(),
-  size: z.number().int().nonnegative().optional()
-})
-
 export const ConnectorReadMessageSchema = ConnectorRefViewSchema.extend({
   author: Label,
   text: z.string(),
   at: z.number().int().nonnegative(),
   // Its web link, where the source has one.
   url: z.string().url().optional(),
+  ...ConnectorMessagePartsFields,
+  // Older endpoints can return every file on a read. The rich-parts producer caps newer replies.
   files: z.array(ConnectorMessageFileSchema).optional()
 })
 

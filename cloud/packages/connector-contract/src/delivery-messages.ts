@@ -16,6 +16,7 @@ import {
 import { hookIdOfActor, hookIdOfRule } from './webhook-names.js'
 import { WEBHOOK_NOTICE_CONDITIONS, WebhookHookIdSchema } from './webhook-messages.js'
 import { PrEventSchema } from './pr-event-messages.js'
+import { ConnectorMessagePartsFields, MESSAGE_PART_LIMITS } from './message-parts.js'
 
 // Polls, acks and events name the hello they belong to. Under any other than the current one the cloud
 // answers 409 hello_required and applies nothing; the first poll after a hello lists what is unsettled.
@@ -50,15 +51,21 @@ const PersonFields = {
 // note that the thread couldn't be read. Only to a machine that lists threadCatchUp: a post in the
 // thread by a bot (this one from another chat, or another bot) since the chat last saw it, and a
 // note that more was posted than fits.
+// Only to a machine that lists messageParts: a message's own ref and what it holds beyond its words.
+const MessageFields = {
+  messageRef: z.string().min(1).max(MESSAGE_PART_LIMITS.maxRef).optional(),
+  ...ConnectorMessagePartsFields
+}
 export const ConnectorContextItemSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('earlier'), ...PersonFields, text: z.string() }),
-  z.object({ kind: z.literal('no_access'), ...PersonFields, text: z.string() }),
+  z.object({ kind: z.literal('earlier'), ...PersonFields, text: z.string(), ...MessageFields }),
+  z.object({ kind: z.literal('no_access'), ...PersonFields, text: z.string(), ...MessageFields }),
   z.object({ kind: z.literal('issue'), text: z.string() }),
   z.object({ kind: z.literal('unreadable') }),
   z.object({
     kind: z.literal('bot'),
     name: z.string().min(1).max(CONNECTOR_LIMITS.maxDisplayTextLength).optional(),
-    text: z.string()
+    text: z.string(),
+    ...MessageFields
   }),
   z.object({ kind: z.literal('more') })
 ])
@@ -93,7 +100,9 @@ export const ConnectorAskerSchema = z.object({
     .optional(),
   // Orca's own lines for the agent on where it was asked (GitHub: the branch, how to post there),
   // which the chat doesn't show. Only to a machine that lists askerNote; any other reads it in text.
-  note: z.string().min(1).max(CONNECTOR_LIMITS.maxAskerNoteLength).optional()
+  note: z.string().min(1).max(CONNECTOR_LIMITS.maxAskerNoteLength).optional(),
+  // What the message holds beyond its words; only to a machine that lists messageParts.
+  ...ConnectorMessagePartsFields
 })
 
 // A hook's call comes only in a webhook conversation, from the hook its rule names; no other event

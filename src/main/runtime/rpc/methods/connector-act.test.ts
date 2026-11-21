@@ -422,6 +422,26 @@ describe('connector.act', () => {
     ).rejects.toMatchObject({ code, message: expect.stringContaining(says) })
   })
 
+  it('enables single-message reads in CLI output only after the cloud advertises message parts', async () => {
+    const { context } = actContext({
+      features: ['actions', 'messageParts'],
+      answers: [{ ok: true, value: { ok: true, result: { messages: [] } } }]
+    })
+    await expect(
+      run({ sessionId: 'bot-session', verb: 'read', ref: 'slack:T1:C1' }, context)
+    ).resolves.toEqual({ ok: true, result: { messages: [], messageParts: true } })
+  })
+
+  it('ignores a result marker when single-message reads were not negotiated', async () => {
+    const { context } = actContext({
+      features: ['actions'],
+      answers: [{ ok: true, value: { ok: true, result: { messages: [], messageParts: true } } }]
+    })
+    await expect(
+      run({ sessionId: 'bot-session', verb: 'read', ref: 'slack:T1:C1' }, context)
+    ).resolves.toEqual({ ok: true, result: { messages: [] } })
+  })
+
   it('retries a read the cloud did not answer', async () => {
     const answer = { ok: true, result: { messages: [] } }
     const { context, calls } = actContext({

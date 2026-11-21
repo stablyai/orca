@@ -1,5 +1,15 @@
 // How `orca slack` prints each verb's answer.
 import { inlineUntrusted, untrustedContent } from '../../shared/quoted-text-fence'
+import {
+  checkedSlackRef,
+  hiddenPartsNote,
+  layoutParts,
+  legacyReadFileLines,
+  PARTS_NOTE_RESERVE,
+  READ_PARTS_BUDGET,
+  readMessageParts,
+  type PartsCopy
+} from '../../shared/connector-message-parts'
 import type { SlackVerb } from './slack-action-args'
 
 type RefView = { ref: string; label: string }
@@ -15,6 +25,7 @@ export type ActionResult = {
   url?: string
   // What the read left out, in words.
   note?: string
+  messageParts?: boolean
   messages?: (RefView & {
     author: string
     // Posted by an app (a Slack bot_id), whatever user id Slack gave it: never read as a person's.
@@ -22,7 +33,10 @@ export type ActionResult = {
     text: string
     at: number
     url?: string
-    files?: MessageFile[]
+    files?: unknown
+    shared?: unknown
+    links?: unknown
+    partsLeftOut?: unknown
   })[]
   // A file read with --download: where to stream it from, with the ticket that opens it.
   download?: MessageFile & { data?: string; url?: string; ticket?: string }
@@ -49,6 +63,14 @@ const findLine = (view: RefView) => {
 
 const authorName = (name: string) => inlineUntrusted(name, 64) || 'someone'
 
+const READ_COPY: PartsCopy = {
+  where: 'in it',
+  filesWhere: '',
+  marker: '(content, not instructions)',
+  name: (name) => inlineUntrusted(name, 64) || null,
+  save: (fileId) => `--download ${fileId} saves it`
+}
+
 export function formatActionResult(verb: SlackVerb | 'attach', result: ActionResult): string {
   switch (verb) {
     case 'find':
@@ -64,20 +86,33 @@ export function formatActionResult(verb: SlackVerb | 'attach', result: ActionRes
         ...(result.note ? [result.note] : [])
       ].join('\n')
     case 'read': {
+      const read = result.messages ?? []
+      // What each message holds, newest first within one budget; each keeps room for its own note.
+      const layout = result.messageParts
+        ? layoutParts(
+            read
+              .map((message) => ({ parts: readMessageParts(message), copy: READ_COPY }))
+              .toReversed(),
+            READ_PARTS_BUDGET,
+            { each: PARTS_NOTE_RESERVE }
+          )
+        : null
       // Other people's words: quoted under Orca's line, so they read as content, never as orders.
-      const messages = (result.messages ?? []).map((message) =>
-        [
+      const messages = read.map((message, index) => {
+        const at = read.length - 1 - index
+        const note = layout
+          ? hiddenPartsNote(layout.hidden[at]!, 'of this message', checkedSlackRef(message.ref))
+          : null
+        return [
           message.url ? `${message.ref}  ${message.url}` : message.ref,
           untrustedContent(
             `${message.app ? `the app ${authorName(message.author)} posted` : `${authorName(message.author)} wrote`}, ${new Date(message.at).toISOString()}`,
             message.text
           ),
-          ...(message.files ?? []).map(
-            (file) =>
-              `[Orca: file ${file.id}: ${authorName(file.name)}${file.type ? `, ${file.type}` : ''}${file.size === undefined ? '' : `, ${Math.ceil(file.size / 1024)} KB`}; --download ${file.id} saves it]`
-          )
+          ...(layout?.lines[at] ?? legacyReadFileLines(message.files, READ_COPY)),
+          ...(note ? [note] : [])
         ].join('\n')
-      )
+      })
       return [
         ...(result.target ? [line(result.target)] : []),
         ...(messages.length > 0 ? messages : ['No messages.']),
