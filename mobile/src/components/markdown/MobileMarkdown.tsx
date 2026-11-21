@@ -1,6 +1,6 @@
 import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
 import { memo, useContext, useMemo, type ReactNode } from 'react'
-import { Text as NativeText, View } from 'react-native'
+import { Text as NativeText, View, type TextStyle } from 'react-native'
 import { MARKDOWN_TONES, scaledMarkdownText, styles } from './mobile-markdown-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { renderBlocks, type MarkdownBlockContext } from './blocks/mobile-markdown-blocks'
@@ -30,6 +30,7 @@ type Props = {
   lineSpacing?: number
   /** The prose's face; code keeps mono. */
   fontFamily?: string
+  fontWeight?: TextStyle['fontWeight']
   // File targets call this with relative/absolute path and optional :line(:col); omit on screens without viewer to leave paths plain.
   onOpenFile?: (pathText: string) => void
   // Enable ::orca-visual directives only in assistant native-chat prose; keep callback identity stable for memoization.
@@ -62,6 +63,7 @@ function MobileMarkdownContent({
   textScale = 1,
   lineSpacing = 1,
   fontFamily,
+  fontWeight,
   onOpenFile,
   renderVisual,
   renderImage,
@@ -95,9 +97,10 @@ function MobileMarkdownContent({
       slackPeople
     }
   )
+  const weight = fontWeight === undefined ? null : { fontWeight }
   if (!text) {
     return fallback ? (
-      <MarkdownText selectable={rangeSelectable} style={styles.paragraph}>
+      <MarkdownText selectable={rangeSelectable} style={[styles.paragraph, weight]}>
         {fallback}
       </MarkdownText>
     ) : null
@@ -114,10 +117,12 @@ function MobileMarkdownContent({
     textScale,
     lineSpacing,
     fontFamily,
+    fontWeight,
     listText: [
       styles.listText,
       scaledMarkdownText(styles.listText, textScale, lineSpacing),
       face,
+      weight,
       tone.text
     ],
     listMarker: [
@@ -140,6 +145,7 @@ function MobileMarkdownContent({
           styles.paragraph,
           scaledMarkdownText(styles.paragraph, textScale, lineSpacing),
           face,
+          weight,
           tone.text
         ],
         selectable: rangeSelectable

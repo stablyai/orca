@@ -3004,6 +3004,12 @@
       "privacyPolicy": "Politique de confidentialité",
       "support": "Assistance"
     },
+    "nativeChatText": {
+      "weight": "Graisse du texte",
+      "weightLight": "Léger",
+      "weightRegular": "Normal",
+      "weightMedium": "Moyen"
+    },
     "nativeChatSettingsScreen": {
       "defaultViewDescription": "Choisissez comment ouvrir sur cet appareil les sessions des agents compatibles (Claude, Codex et les autres agents prenant en charge le chat). Le mode « Terminal » affiche la CLI brute ; Chat UI affiche une interface de chat similaire à celle de l'application pour ordinateur. Vous pouvez toujours changer l'affichage de chaque session via son menu accessible par un appui long.",
       "defaultViewHeading": "VUE PAR DÉFAUT",

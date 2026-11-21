@@ -146,7 +146,7 @@ export function MobileNativeChatView({
   const insets = useSafeAreaInsets()
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
-  const { font, lineSpacing } = useNativeChatTextSettings()
+  const { font, fontWeight, lineSpacing } = useNativeChatTextSettings()
 
   const data = useMobileNativeChatTransientData(
     { folded, streaming, pending, imagePreviewsByMessageId },
@@ -270,7 +270,7 @@ export function MobileNativeChatView({
 
   const header = mobileNativeChatListHeader(hasMore, olderPages, loadEarlier)
   // Changing text size, face or spacing relays out every row, so preserve the page’s reading anchor.
-  const layoutKey = `${fontScale}:${font}:${lineSpacing}`
+  const layoutKey = `${fontScale}:${font}:${fontWeight}:${lineSpacing}`
   const footer = mobileNativeChatListFooter(liveStatus, turns.waitingRows, renderItem)
   const emptyState = mobileNativeChatEmptyState(status, agent, error, sessionLive, clearing)
 

@@ -2924,6 +2924,12 @@
       "privacyPolicy": "プライバシーポリシー",
       "support": "サポート"
     },
+    "nativeChatText": {
+      "weight": "文字の太さ",
+      "weightLight": "細め",
+      "weightRegular": "標準",
+      "weightMedium": "中太"
+    },
     "nativeChatSettingsScreen": {
       "defaultViewDescription": "対応する Agent セッション（Claude、Codex など、チャットに対応した Agent）をこのデバイスで開く際の表示方法を選択してください。「ターミナル」では CLI をそのまま表示し、「Chat UI」ではデスクトップアプリと同様のチャット画面を表示します。各セッションの表示方法は、長押しメニューから個別に切り替えられます。",
       "defaultViewHeading": "デフォルトの表示",

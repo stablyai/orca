@@ -1,3 +1,16 @@
+.native-chat-markdown {
+  font-weight: var(--chat-font-weight);
+}
+
+/* Keep emphasis and code independent of the body weight. */
+.native-chat-markdown :is(strong, b) {
+  font-weight: var(--font-weight-bold);
+}
+
+.native-chat-markdown :is(code, pre) {
+  font-weight: var(--font-weight-normal);
+}
+
 /* Shared markdown also renders sidebar comments, so chat styling stays opt-in. */
 /* Bold and headings stand out by weight alone, in the text color around them (body text in
    replies, the bubble's color in user messages); a theme may still color bold. :where keeps this

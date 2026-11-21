@@ -2918,6 +2918,12 @@
       "privacyPolicy": "隱私權政策",
       "support": "支援"
     },
+    "nativeChatText": {
+      "weight": "字重",
+      "weightLight": "細體",
+      "weightRegular": "一般",
+      "weightMedium": "中等"
+    },
     "nativeChatSettingsScreen": {
       "defaultViewDescription": "選擇此裝置上受支援的代理程式工作階段（Claude、Codex 及其他支援聊天的代理程式）的開啟方式。「終端機」會顯示原始 CLI；「聊天介面」則提供類似桌面版的聊天介面。您仍可透過長按選單，切換個別工作階段的顯示方式。",
       "defaultViewHeading": "預設檢視",

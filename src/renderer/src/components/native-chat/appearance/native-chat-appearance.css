@@ -127,3 +127,7 @@
     --composer-gutter: calc(var(--spacing) * 4);
   }
 }
+
+.native-chat-appearance [data-native-chat-prompt-editor] {
+  font-weight: var(--chat-font-weight);
+}

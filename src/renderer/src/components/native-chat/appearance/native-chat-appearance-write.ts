@@ -25,25 +25,32 @@ function sameAppearance(
   )
 }
 
-let appearanceWrite = Promise.resolve()
+let appearanceWrite = Promise.resolve(true)
 
 export function writeNativeChatAppearance(
   change: AppearanceChange,
   persist?: PersistAppearance
-): Promise<void> {
+): Promise<boolean> {
   appearanceWrite = appearanceWrite
     .then(async () => {
-      const { settings, updateSettings } = useAppStore.getState()
+      const { settings, updateSettingsOrThrow } = useAppStore.getState()
       if (!settings) {
-        return
+        return false
       }
       const current = normalizeNativeChatAppearanceSettings(settings.nativeChatAppearance)
       const next = normalizeNativeChatAppearanceSettings(change(current))
       if (sameAppearance(current, next)) {
-        return
+        return true
       }
-      await (persist ?? updateSettings)({ nativeChatAppearance: next })
+      await (persist ?? updateSettingsOrThrow)({ nativeChatAppearance: next })
+      return sameAppearance(
+        next,
+        normalizeNativeChatAppearanceSettings(useAppStore.getState().settings?.nativeChatAppearance)
+      )
     })
-    .catch((error) => console.error('Failed to update chat appearance:', error))
+    .catch((error) => {
+      console.error('Failed to update chat appearance:', error)
+      return false
+    })
   return appearanceWrite
 }

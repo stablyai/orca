@@ -1,3 +1,8 @@
+import {
+  DEFAULT_NATIVE_CHAT_FONT_WEIGHT,
+  normalizeNativeChatFontWeight,
+  type NativeChatFontWeight
+} from '../../../../../src/shared/native-chat/settings/native-chat-font-weight'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useEffect, useSyncExternalStore } from 'react'
 import { Dimensions } from 'react-native'
@@ -16,6 +21,7 @@ export type NativeChatTextSettings = {
   /** Points; 14 is the chat's original type scale. */
   size: number
   font: NativeChatFont
+  fontWeight: NativeChatFontWeight
   lineSpacing: NativeChatLineSpacing
 }
 
@@ -37,6 +43,7 @@ export function defaultNativeChatTextSettings(): NativeChatTextSettings {
   return {
     size: tablet ? TABLET_TEXT_SIZE : BASE_TEXT_SIZE,
     font: 'system',
+    fontWeight: DEFAULT_NATIVE_CHAT_FONT_WEIGHT,
     lineSpacing: 'default'
   }
 }
@@ -68,6 +75,9 @@ function parseSettings(raw: string | null): NativeChatTextSettings | null {
   return {
     size: typeof size === 'number' ? clampNativeChatTextSize(size) : fallback.size,
     font: font === 'system' || font === 'serif' || font === 'mono' ? font : fallback.font,
+    fontWeight: normalizeNativeChatFontWeight(
+      'fontWeight' in parsed ? parsed.fontWeight : undefined
+    ),
     lineSpacing:
       lineSpacing === 'compact' || lineSpacing === 'default' || lineSpacing === 'relaxed'
         ? lineSpacing
@@ -79,7 +89,12 @@ type Snapshot = { settings: NativeChatTextSettings; stored: boolean }
 
 // The phone default until the first storage read, which measures the screen; importing never does.
 let snapshot: Snapshot = {
-  settings: { size: BASE_TEXT_SIZE, font: 'system', lineSpacing: 'default' },
+  settings: {
+    size: BASE_TEXT_SIZE,
+    font: 'system',
+    fontWeight: DEFAULT_NATIVE_CHAT_FONT_WEIGHT,
+    lineSpacing: 'default'
+  },
   stored: false
 }
 // A change made while a read is in flight wins over that older read.
@@ -96,6 +111,7 @@ function adopt(settings: NativeChatTextSettings | null): void {
     snapshot.stored === stored &&
     held.size === next.size &&
     held.font === next.font &&
+    held.fontWeight === next.fontWeight &&
     held.lineSpacing === next.lineSpacing
   ) {
     return
@@ -215,12 +231,14 @@ export function nativeChatFontFamily(font: NativeChatFont): string | undefined {
 export function useNativeChatProseText(fontScale: number): {
   textScale: number
   fontFamily: string | undefined
+  fontWeight: NativeChatFontWeight
   lineSpacing: number
 } {
-  const { font, lineSpacing } = useNativeChatTextSettings()
+  const { font, fontWeight, lineSpacing } = useNativeChatTextSettings()
   return {
     textScale: CHAT_PROSE_SCALE * fontScale,
     fontFamily: nativeChatFontFamily(font),
+    fontWeight,
     lineSpacing: LINE_SPACING[lineSpacing]
   }
 }

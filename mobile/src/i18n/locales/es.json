@@ -3004,6 +3004,12 @@
       "privacyPolicy": "Política de privacidad",
       "support": "Soporte"
     },
+    "nativeChatText": {
+      "weight": "Grosor del texto",
+      "weightLight": "Ligero",
+      "weightRegular": "Normal",
+      "weightMedium": "Medio"
+    },
     "nativeChatSettingsScreen": {
       "defaultViewDescription": "Elige cómo se abren en este dispositivo las sesiones de agentes compatibles (Claude, Codex y otros agentes con funciones de chat). La terminal muestra la CLI tal cual; la interfaz de chat ofrece una vista como la de la app de escritorio. También puedes cambiar la vista de cada sesión desde el menú que aparece al mantenerla pulsada.",
       "defaultViewHeading": "VISTA PREDETERMINADA",

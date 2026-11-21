@@ -105,7 +105,7 @@ function renderInlineCode(
   onPress?: () => void
 ): ReactNode {
   const size = ctx.textScale !== 1 ? { fontSize: styles.inlineCode.fontSize * ctx.textScale } : null
-  const style = [outer, styles.inlineCode, size, ctx.tone.inlineCode]
+  const style = [styles.inlineCode, size, ctx.tone.inlineCode, outer]
   return onPress ? (
     <MarkdownText
       key={key}

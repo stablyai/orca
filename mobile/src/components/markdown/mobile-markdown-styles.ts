@@ -43,6 +43,7 @@ export const styles = themedStyleSheet(() => ({
     textDecorationLine: 'underline'
   },
   inlineCode: {
+    fontWeight: '400',
     fontFamily: typography.monoFamily,
     fontSize: 12,
     color: colors.textPrimary,

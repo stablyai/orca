@@ -43,6 +43,7 @@ function sameContext(a: MarkdownBlockContext, b: MarkdownBlockContext): boolean 
     a.textScale === b.textScale &&
     a.lineSpacing === b.lineSpacing &&
     a.fontFamily === b.fontFamily &&
+    a.fontWeight === b.fontWeight &&
     a.tone === b.tone &&
     a.onOpenFile === b.onOpenFile &&
     a.onOpenLink === b.onOpenLink &&

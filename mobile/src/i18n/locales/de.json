@@ -2927,6 +2927,12 @@
       "privacyPolicy": "Datenschutzerklärung",
       "support": "Hilfe"
     },
+    "nativeChatText": {
+      "weight": "Schriftstärke",
+      "weightLight": "Leicht",
+      "weightRegular": "Normal",
+      "weightMedium": "Mittel"
+    },
     "nativeChatSettingsScreen": {
       "defaultViewDescription": "Festlegen, wie Sitzungen unterstützter Agenten (Claude, Codex und anderer chatfähiger Agenten) auf diesem Gerät geöffnet werden. Das Terminal zeigt die CLI direkt an; die Chat-Oberfläche zeigt eine Chatansicht wie in der Desktop-App. Die Ansicht jeder Sitzung lässt sich weiterhin über das Menü wechseln, das durch langes Drücken geöffnet wird.",
       "defaultViewHeading": "STANDARDANSICHT",

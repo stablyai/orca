@@ -1,3 +1,7 @@
+import {
+  NATIVE_CHAT_FONT_WEIGHTS,
+  normalizeNativeChatFontWeight
+} from '../../../src/shared/native-chat/settings/native-chat-font-weight'
 import { useRouter } from 'expo-router'
 import { useState } from 'react'
 import { Platform } from 'react-native'
@@ -113,6 +117,26 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
             onPress={() => setFontPickerOpen(true)}
             testID="chat-text-font"
           />
+          <StackedRow key="weight" title={t('settings.nativeChatText.weight', 'Text weight')}>
+            <MobileSegmentedControl
+              segments={NATIVE_CHAT_FONT_WEIGHTS.map((value) => ({
+                value: String(value),
+                label:
+                  value === 300
+                    ? t('settings.nativeChatText.weightLight', 'Light')
+                    : value === 500
+                      ? t('settings.nativeChatText.weightMedium', 'Medium')
+                      : t('settings.nativeChatText.weightRegular', 'Regular')
+              }))}
+              selected={String(settings.fontWeight)}
+              onSelect={(fontWeight) =>
+                void updateNativeChatTextSettings({
+                  fontWeight: normalizeNativeChatFontWeight(Number(fontWeight))
+                })
+              }
+              fill
+            />
+          </StackedRow>
           <StackedRow
             key="spacing"
             title={t('settings.nativeChatText.lineSpacing', 'Line spacing')}

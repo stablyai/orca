@@ -2,6 +2,7 @@ import './native-chat-appearance.css'
 import { useMemo } from 'react'
 import type { CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { DEFAULT_NATIVE_CHAT_FONT_WEIGHT } from '../../../../../shared/native-chat/settings/native-chat-font-weight'
 import {
   DEFAULT_NATIVE_CHAT_FONT_SIZE,
   resolveNativeChatAppearanceSettings
@@ -201,6 +202,7 @@ export function nativeChatAppearanceStyle(
   const codeFont = matching ? font : resolveEditorFontStack(settings)
   const style: NativeChatAppearanceStyle = {
     '--chat-font-size': `${fontSize}px`,
+    '--chat-font-weight': matching ? DEFAULT_NATIVE_CHAT_FONT_WEIGHT : appearance.fontWeight,
     '--chat-ui-font-size': `${uiFontSize}px`,
     '--chat-line-height': `${nativeChatLineHeightPx(fontSize)}px`,
     '--chat-code-font-size': `${codeFontSize}px`,

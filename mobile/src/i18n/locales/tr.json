@@ -2927,6 +2927,12 @@
       "privacyPolicy": "Gizlilik Politikası",
       "support": "Destek"
     },
+    "nativeChatText": {
+      "weight": "Yazı kalınlığı",
+      "weightLight": "İnce",
+      "weightRegular": "Normal",
+      "weightMedium": "Orta"
+    },
     "nativeChatSettingsScreen": {
       "defaultViewDescription": "Desteklenen ajan oturumlarının (Claude, Codex ve sohbet destekli diğer ajanlar) bu cihazda nasıl açılacağını seçin. Terminal, CLI'yi olduğu gibi gösterir; Sohbet Arayüzü ise masaüstü uygulamasındaki gibi bir sohbet arayüzü sunar. Her oturumun görünümünü, oturuma uzun basınca açılan menüden ayrıca değiştirebilirsiniz.",
       "defaultViewHeading": "VARSAYILAN GÖRÜNÜM",
