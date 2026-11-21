@@ -38,6 +38,14 @@ async function showVideoCursor(page: Page): Promise<void> {
   videoMousePosition = { x: 30, y: 80 }
 }
 
+async function pauseForRecording(page: Page, duration: number): Promise<void> {
+  if (!RECORDING) {
+    return
+  }
+  // ast-grep-ignore: test-no-real-time-wait -- recording-only pause gives viewers time to follow settings navigation.
+  await page.waitForTimeout(duration)
+}
+
 async function moveAndClick(
   page: Page,
   locator: Locator,
@@ -146,8 +154,14 @@ test('pastes clipboard files and images through the explorer context menus', asy
     })
     const settings = page.locator('section[data-settings-section="appearance"]')
     await expect(settings).toBeVisible()
-    await settings.getByRole('button', { name: 'Advanced', exact: true }).last().click()
+    await pauseForRecording(page, 900)
+    const advanced = settings.getByRole('button', { name: 'Advanced', exact: true }).last()
+    await advanced.scrollIntoViewIfNeeded()
+    await (RECORDING ? moveAndClick(page, advanced) : advanced.click())
     return settings
+  }
+  if (RECORDING) {
+    await showVideoCursor(page)
   }
   const settings = await openAppearanceSettings()
   const thumbnailToggle = settings.getByRole('switch', {
@@ -155,15 +169,17 @@ test('pastes clipboard files and images through the explorer context menus', asy
   })
   await expect(thumbnailToggle).toBeChecked()
   await thumbnailToggle.scrollIntoViewIfNeeded()
+  await pauseForRecording(page, 900)
   await page.screenshot({ path: testInfo.outputPath('appearance-setting.png') })
-  await thumbnailToggle.click()
+  await (RECORDING ? moveAndClick(page, thumbnailToggle) : thumbnailToggle.click())
   await expect(thumbnailToggle).not.toBeChecked()
-  await page.evaluate(() => window.__store!.getState().closeSettingsPage())
+  await pauseForRecording(page, 900)
+  const closeSettings = page.getByRole('button', { name: 'Close settings' })
+  await (RECORDING
+    ? moveAndClick(page, closeSettings)
+    : page.evaluate(() => window.__store!.getState().closeSettingsPage()))
 
   await page.screenshot({ path: testInfo.outputPath('before.png') })
-  if (RECORDING) {
-    await showVideoCursor(page)
-  }
 
   await electronApp.evaluate(({ clipboard, nativeImage }, icon) => {
     clipboard.writeImage(nativeImage.createFromPath(icon).resize({ width: 128 }))
@@ -189,9 +205,14 @@ test('pastes clipboard files and images through the explorer context menus', asy
     name: 'Show clipboard image previews'
   })
   await expect(imageThumbnailToggle).not.toBeChecked()
-  await imageThumbnailToggle.click()
+  await imageThumbnailToggle.scrollIntoViewIfNeeded()
+  await pauseForRecording(page, 900)
+  await (RECORDING ? moveAndClick(page, imageThumbnailToggle) : imageThumbnailToggle.click())
   await expect(imageThumbnailToggle).toBeChecked()
-  await page.evaluate(() => window.__store!.getState().closeSettingsPage())
+  await pauseForRecording(page, 900)
+  await (RECORDING
+    ? moveAndClick(page, page.getByRole('button', { name: 'Close settings' }))
+    : page.evaluate(() => window.__store!.getState().closeSettingsPage()))
   await rightClickPaste(
     page,
     destinationRow,
