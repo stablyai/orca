@@ -32,6 +32,13 @@ function stateWith(unifiedTabsByWorktree: AppState['unifiedTabsByWorktree']): Ap
   return { ...useAppStore.getState(), unifiedTabsByWorktree }
 }
 
+// A copied owner input forces a from-scratch rebuild instead of a cache read.
+function rebuiltStateWith(unifiedTabsByWorktree: AppState['unifiedTabsByWorktree']): AppState {
+  const state = stateWith(unifiedTabsByWorktree)
+  const owners = state.restoredRuntimeHostIdByWorkspaceSessionKey
+  return { ...state, restoredRuntimeHostIdByWorkspaceSessionKey: { ...owners } }
+}
+
 function workForOneRetitle(chatCount: number): { encodes: number; visits: number } {
   const source: AppState['unifiedTabsByWorktree'] = {}
   for (let index = 0; index < chatCount; index += 1) {
@@ -67,7 +74,7 @@ it('keeps rows equal to a full rebuild across adds, moves and closes', () => {
     source[`wt-${index}`] = [chatTab(`wt-${index}`, `filler-${index}`)]
   }
   const rows = () => [...representedOrchestrationWorktrees(stateWith(source)).entries()].sort()
-  const rebuilt = () => [...representedOrchestrationWorktrees(stateWith({ ...source })).entries()]
+  const rebuilt = () => [...representedOrchestrationWorktrees(rebuiltStateWith(source)).entries()]
   rows()
   const steps: [string, Tab[] | null][][] = [
     [['wt-c', [chatTab('wt-c', 'c1')]]],
@@ -97,12 +104,16 @@ it('re-picks the alias winner when tabs sharing one chat swap order', () => {
     'wt-d': [first, second],
     'wt-e': [chatTab('wt-e', 'e1')]
   }
-  const aliases = (tabs: AppState['unifiedTabsByWorktree']) => [
-    ...rowIdentities(stateWith(tabs)).aliases.values()
-  ]
-  const initial = aliases(source)
+  const aliases = (state: AppState) => [...rowIdentities(state).aliases.values()]
+  const initial = aliases(stateWith(source))
   source = replaceTabBuckets(source, [['wt-d', [second, first]]])
-  const swapped = aliases(source)
+  const swapped = aliases(stateWith(source))
   expect(swapped).not.toEqual(initial)
-  expect(swapped).toEqual(aliases({ ...source }))
+  expect(swapped).toEqual(aliases(rebuiltStateWith(source)))
+  aliases(stateWith(source))
+  const retitled = { ...second, label: 'renamed' }
+  source = replaceTabBuckets(source, [['wt-d', [retitled, first]]])
+  const visits = visibleOrchestrationWorkForTest().visits
+  expect(aliases(stateWith(source))).toEqual(swapped)
+  expect(visibleOrchestrationWorkForTest().visits - visits).toBeLessThanOrEqual(2)
 })

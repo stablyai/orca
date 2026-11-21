@@ -183,12 +183,14 @@ function applyRowChanges(
       const count = counts.get(key) ?? 0
       return count <= 1 && count + delta <= 1
     })
-  // A kept row that shares a key can still change winner when its workspace reorders.
+  // Kept rows that share a key pick their winner by order, so only their reorder needs a rebuild.
   const shared = (entry: RowEntry) =>
     (ledger.actualCounts.get(entry.actual) ?? 0) > 1 ||
     (!!entry.host && (ledger.aliasCounts.get(aliasKey(entry.host, entry.key)) ?? 0) > 1)
+  const sharedBefore = before.filter((entry) => kept.has(entry) && shared(entry))
+  const sharedAfter = after.filter((entry) => held.has(entry) && shared(entry))
   if (
-    before.some(shared) ||
+    sharedBefore.some((entry, index) => entry !== sharedAfter[index]) ||
     !unique(ledger.actualCounts, actualDelta) ||
     !unique(ledger.aliasCounts, aliasDelta)
   ) {
