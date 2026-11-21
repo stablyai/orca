@@ -14,7 +14,7 @@ import { SettingsSection } from '../settings/settings-screen-frame'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { accessRequestLine, type PhoneAccessBot } from './bot-access-request-copy'
 import { MobileBotAccessDecisionContent } from './MobileBotAccessDecision'
-import { removeEveryoneWhoCanAsk, type SheetBot } from './bot-sheet-operations'
+import { memberRemoval, removeEveryoneWhoCanAsk, type SheetBot } from './bot-sheet-operations'
 import { optionStyles } from './mobile-bot-option-styles'
 import { MobileBotTextButton } from './MobileBotTextButton'
 import {
@@ -95,13 +95,7 @@ export function MobileBotWhoCanAskPage(props: {
         onConfirm={() => {
           const member = removing
           setRemoving(null)
-          void props.save({
-            removeMember: {
-              id: member.id,
-              source: botMemberSource(member),
-              ...(member.workspaceId ? { workspaceId: member.workspaceId } : {})
-            }
-          })
+          void props.save(memberRemoval(member))
         }}
       />
     )

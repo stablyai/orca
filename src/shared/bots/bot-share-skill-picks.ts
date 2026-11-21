@@ -37,3 +37,12 @@ export function toggledOutside(
   const others = outside.filter((pick) => pick.name !== skill.name)
   return on ? [...others, { name: skill.name, key: skill.optInKey }] : others
 }
+
+const UNPACKABLE_SKILL = new Set(['link', 'size', 'unreadable', 'limit'])
+
+/** Skills the packager can't read (a link inside, too big): shown off so the owner sees why. */
+export function unpackableSkills<Entry extends { kind: string; why: string }>(
+  leftOut: readonly Entry[]
+): Entry[] {
+  return leftOut.filter((entry) => entry.kind === 'skill' && UNPACKABLE_SKILL.has(entry.why))
+}

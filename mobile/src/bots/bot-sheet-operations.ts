@@ -112,6 +112,17 @@ export const botActivityRead = bindDeferredRpcOperation(
   })
 )
 
+/** The update that stops one person asking the bot. */
+export function memberRemoval(member: BotMember) {
+  return {
+    removeMember: {
+      id: member.id,
+      source: botMemberSource(member),
+      ...(member.workspaceId ? { workspaceId: member.workspaceId } : {})
+    }
+  }
+}
+
 /** Keep only me: one removal each, on the host, so a concurrent edit is kept and an older host
  *  takes it. Resolves to the names of whoever couldn't be removed. */
 export async function removeEveryoneWhoCanAsk(
@@ -121,17 +132,12 @@ export async function removeEveryoneWhoCanAsk(
 ): Promise<string[]> {
   const failed: string[] = []
   for (const member of bot.members) {
-    const removeMember = {
-      id: member.id,
-      source: botMemberSource(member),
-      ...(member.workspaceId ? { workspaceId: member.workspaceId } : {})
-    }
     try {
       onBot(
         botUpdate.interpret(
           await botUpdate.request(
             client,
-            { botId: bot.id, updates: { removeMember } },
+            { botId: bot.id, updates: memberRemoval(member) },
             { failWhenDisconnected: true }
           )
         ).bot

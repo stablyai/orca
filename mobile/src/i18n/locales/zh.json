@@ -861,7 +861,6 @@
       "busy": "另一个聊天或终端正在打开。请稍候，再次为 {{agent}} 聊天创建分支。",
       "unconfirmed": "{{agent}} 无法确认是否已创建分支。它可能已经打开；请先检查会话历史，再重试。",
       "failed": "{{agent}} 无法从此聊天创建分支。{{detail}}",
-      "unsupported": "此主机运行的是旧版 Orca。请更新主机上的 Orca 后重试。",
       "mark": "分支 ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "分支：{{name}}"
@@ -926,6 +925,7 @@
         "remove": "移除"
       },
       "webhook": {
+        "title": "Webhook",
         "starts": "Webhook · 启动“{{automation}}”",
         "sampleNote": "示例调用会启动一次真实运行",
         "sendSample": "发送示例调用",
@@ -1032,6 +1032,7 @@
         "done": "完成",
         "takeOver": "接下来交给机器人",
         "choice": {
+          "gmail": "Gmail",
           "calendar": "Google 日历",
           "files": "云端硬盘、文档和表格",
           "gmailDescription": "搜索和阅读邮件、撰写草稿，经你同意后发送",
@@ -1112,6 +1113,7 @@
         "askedMany": "已请求导入 {{count}} 项"
       },
       "composio": {
+        "heading": "Composio",
         "step": "第 {{index}} 步，共 {{total}} 步",
         "setUpTitle": "{{app}} 需要在 Composio 中完成一次性设置",
         "setUpDeveloperApp": "在 {{app}} 的开发者网站上创建开发者应用。Composio 的 {{app}} 页面中有操作说明",
@@ -2330,7 +2332,8 @@
       "reconnect": "重新连接",
       "tasks": "任务",
       "moreActions": "更多操作",
-      "automations": "自动化"
+      "automations": "自动化",
+      "sharedLinks": "分享链接"
     },
     "deleteConfirm": {
       "changes_other": "{{count}} 项未提交的更改",
@@ -4041,6 +4044,22 @@
       "download": "下载到此手机",
       "downloadSize": "约 {{size}} MB",
       "phoneChecking": "正在检查…"
+    },
+    "bots": {
+      "slackStatus": {
+        "notInstalled": "未安装",
+        "unknown": "无法检查",
+        "updateNeeded": "需要更新",
+        "waiting": "等待安装"
+      },
+      "addConnector": "添加连接器",
+      "connectors": "连接器",
+      "retry": "重试"
+    },
+    "sharedLinks": {
+      "title": "分享链接",
+      "bots": "机器人",
+      "description": "你发布的链接"
     }
   },
   "sourceControl": {
@@ -5514,6 +5533,50 @@
         "unsupported": "所选自动化主机不支持此项目"
       },
       "wslDistroStopped": "WSL 发行版 {{distro}} 已停止，因此本次计划运行没有启动它。请启动该发行版或使用“立即运行”；它运行期间，后续运行会照常进行"
+    },
+    "botTarget": {
+      "fieldLabel": "机器人或项目",
+      "option": "机器人 · {{name}}",
+      "deletedBot": "已删除的机器人",
+      "prompt": "它要做什么？",
+      "promptMissing": "请输入它要做什么",
+      "when": "运行时机",
+      "noSchedule": "仅由事件触发",
+      "never": "从不",
+      "onEvents": "有事件发生时…",
+      "runsIn": "运行位置",
+      "runsInNew": "每次新建对话",
+      "chat": "{{name}} 的聊天",
+      "runsInUntitledChat": "未命名的聊天",
+      "agent": "智能体",
+      "agentSameAsBot": "与 {{name}} 相同",
+      "agentInChat": "此聊天的智能体",
+      "agentInChatHelp": "在聊天中的运行会沿用该聊天的智能体",
+      "resultsTo": "结果发送到",
+      "resultsToThread": "事件所在的话题",
+      "resultsToChannel": "频道",
+      "resultsToLinear": "Linear 议题",
+      "resultsToNone": "不发送",
+      "channelPlaceholder": "#频道名或 Slack 链接",
+      "channelLabel": "频道",
+      "linearIssuePlaceholder": "议题编号（例如 ENG-123）或 Linear 链接",
+      "linearIssueLabel": "Linear 议题",
+      "channelMissing": "请输入接收结果的频道",
+      "linearIssueInvalid": "请输入接收结果的 Linear 议题，例如 ENG-123",
+      "letBotReact": "让 {{name}} 做出回应",
+      "letBotReactHelp": "每个结果都会开启一个新回合，让 {{name}} 据此采取行动",
+      "threadNeedsEvents": "仅限事件触发、每次新建对话",
+      "threadUnsupported": "Orca Cloud 暂不支持此功能",
+      "channelNeedsSlack": "请先连接 Slack",
+      "linearNeedsLinear": "请先连接 Linear",
+      "time": "时间",
+      "minute": "分钟"
+    },
+    "botEvents": {
+      "label": "事件",
+      "editInChat": "在聊天中编辑",
+      "editDraft": "修改自动化“{{name}}”： ",
+      "addDraft": "修改自动化“{{name}}”，让它在以下情况也运行： "
     }
   },
   "auto": {
@@ -5776,7 +5839,8 @@
       "newAutomation": "新建自动化",
       "runQueued": "自动化运行已排队",
       "runFailed": "无法开始运行",
-      "emptyTitle": "还没有自动化"
+      "emptyTitle": "还没有自动化",
+      "viewRuns": "查看运行记录"
     },
     "settings": {
       "remove": "移除",
@@ -5833,6 +5897,9 @@
       "useChatDefaults": "使用聊天默认设置",
       "modelDefault": "默认",
       "signInChanged": "Orca 登录已变更",
+      "whoCanAskName": "谁可以向 {{name}} 提问",
+      "you": "你",
+      "owner": "所有者",
       "sameAsChatsDetail": "使用你的聊天权限设置",
       "notifications": "通知",
       "needsPermission": "需要权限",
@@ -6188,6 +6255,7 @@
         "checksPassing": "检查通过",
         "checksFailing": "检查失败",
         "checksPending": "检查进行中",
+        "pr": "PR #{{number}}",
         "issue": "议题 #{{number}}",
         "serverPr": "服务器上的工作暂不显示 PR",
         "openInBrowser": "在浏览器中打开",
@@ -7040,6 +7108,277 @@
       "chooseAnother": "选择其他文件夹…",
       "chooseFolderRow": "选择文件夹…",
       "noFolders": "没有文件夹"
+    },
+    "host": {
+      "errors": {
+        "signedOut": "要连接 {{service}}，请先让 {{host}} 登录 Orca Cloud",
+        "accountChanged": "{{host}} 的 Orca 登录已变更。请重新开始"
+      }
+    },
+    "slack": {
+      "errors": {
+        "notAToken": "这不是配置刷新令牌。配置刷新令牌以 xoxe- 开头",
+        "grantExpired": "Slack 不再接受此工作区的令牌。请生成新令牌并粘贴",
+        "rateLimited": "尝试次数过多。请等待一分钟，然后重试",
+        "slackUnavailable": "Slack 未响应。请重试",
+        "slackRefused": "Slack 拒绝设置该应用",
+        "unknownBot": "Orca Cloud 尚未识别此机器人。请过一分钟后重试",
+        "wrongWorkspace": "此机器人的 Slack 应用位于另一个工作区。请先将其从 Slack 中移除",
+        "notInstalled": "请先将此机器人添加到 Slack",
+        "unreachable": "无法连接到 Orca Cloud。请检查网络连接，然后重试"
+      },
+      "setup": {
+        "checking": "正在检查 Slack…",
+        "isIn": "{{name}} 已加入 Slack",
+        "retry": "重试",
+        "connectAnother": "连接其他 Slack 工作区",
+        "connect": "连接 Slack",
+        "cancel": "取消",
+        "reconnectShort": "重新连接",
+        "createShort": "创建",
+        "settingUp": "正在设置你的 Slack 应用…",
+        "reconnect": "Slack 已不再接受此工作区的令牌。粘贴新令牌以重新连接",
+        "readyTitle": "你的 Slack 应用已就绪",
+        "readyDetail": "在 Slack 中批准即可完成。如果你的工作区需要管理员批准新应用，{{name}} 会在管理员批准后加入",
+        "approve": "在 Slack 中批准",
+        "waiting": "正在等待 Slack…",
+        "expired": "安装链接已过期",
+        "otherUser": "批准它的是另一个 Slack 账户。请获取新链接，并以你本人的身份批准",
+        "newLink": "获取新链接",
+        "uncertain": "Slack 可能已创建一个名为 {{name}} 的应用，但 Orca 无法使用它。如果该应用存在，请在 Slack 应用设置中将其删除，然后重新设置",
+        "uncertainChecked": "我已检查 Slack：没有这个应用，或我已将其删除",
+        "again": "重新设置"
+      },
+      "connection": {
+        "installedBy": "由 {{installer}} 安装",
+        "waiting": "正在等待在 Slack 中完成安装",
+        "none": "尚未加入 Slack",
+        "unfinished": "Slack 设置未完成",
+        "removeFromTitle": "要将 {{name}} 从 {{place}} 中移除吗？",
+        "removeNote": "移除后，它将不再接收来自 Slack 的新工作。这不会删除 Slack 中的应用",
+        "removeConfirm": "移除",
+        "add": "添加到 Slack",
+        "finish": "完成设置",
+        "update": "在 Slack 中更新",
+        "appSettings": "Slack 应用设置",
+        "updatePermissions": "更新 Slack 权限…"
+      },
+      "mentionLinePlain": "在频道或私信中提及 @{{name}}",
+      "replies": "回复",
+      "postAs": {
+        "title": "发布身份",
+        "changeOn": "在 {{host}} 上更改"
+      },
+      "token": {
+        "open": "获取配置令牌",
+        "step1": "在 Slack 应用设置中找到“Your App Configuration Tokens”，然后选择“Generate Token”",
+        "step2": "选择机器人要加入的工作区",
+        "step3": "复制 Refresh Token 并粘贴到下方",
+        "label": "配置刷新令牌",
+        "paste": "粘贴",
+        "accessPasted": "这是 Access Token。请复制它旁边的 Refresh Token",
+        "kept": "Orca Cloud 会加密保存此令牌，之后在此工作区添加机器人只需点击一下"
+      }
+    },
+    "cloudSignIn": {
+      "paused": "未登录期间已暂停",
+      "needsSignIn": "需要登录"
+    },
+    "apps": {
+      "line": {
+        "slack": "消息与提及",
+        "github": "议题和 PR 中的提及与事件",
+        "linear": "分配给它的议题与提及",
+        "google": "以你的身份使用 Gmail、日历和云端硬盘"
+      },
+      "webhooks": {
+        "line": "来自任意工具或脚本的事件"
+      },
+      "category": {
+        "coding": "编程",
+        "chat": "聊天",
+        "docs": "文档与项目",
+        "mail": "邮件与会议"
+      },
+      "search": "搜索应用",
+      "allShort": "全部",
+      "onBot": "{{bot}} 的应用",
+      "noMatch": "没有与“{{query}}”匹配的应用",
+      "connectors": "连接器",
+      "add": "添加"
+    },
+    "connectors": {
+      "back": "返回连接器",
+      "addOrg": "添加组织",
+      "addWorkspace": "添加工作区",
+      "manage": "管理",
+      "emptyNote": "让大家在 Slack、GitHub 和 Linear 中联系 {{name}}，并让它在你的 Google 及其他应用中工作",
+      "addAnotherWorkspace": "添加其他工作区"
+    },
+    "connector": {
+      "titleSeparator": " · ",
+      "actions": "{{name}} 操作",
+      "removeFrom": "从 {{place}} 移除…"
+    },
+    "composio": {
+      "viaComposio": "通过 Composio"
+    },
+    "setup": {
+      "for": "用于 {{name}}"
+    },
+    "share": {
+      "receive": {
+        "fromLink": "从链接创建",
+        "pasteDescription": "粘贴别人分享的链接",
+        "ask": "请求批准",
+        "askDetail": "从链接创建的机器人默认选用此项",
+        "full": "完全访问权限",
+        "fullDetail": "直接运行命令，无需询问",
+        "chatsDetail": "初始采用你的聊天权限设置",
+        "askLine": "运行命令前会请求批准。你自己的允许规则仍然适用",
+        "fullLine": "运行命令时不询问",
+        "chatsLine": "按你的聊天设置请求批准",
+        "origin": "来自 {{who}} 的链接",
+        "originAnonymous": "来自分享链接",
+        "back": "返回",
+        "continue": "继续",
+        "linkPlaceholder": "https://app.orca.dev/bots/share/…",
+        "link": "链接",
+        "paste": "粘贴",
+        "have": "你已拥有此机器人",
+        "haveDetail": "{{name}} · 创建于 {{date}}",
+        "open": "打开",
+        "stopped": "此链接已失效",
+        "stoppedDetail": "请向分享者索取新链接",
+        "sharedBot": "分享的机器人"
+      },
+      "binaryFile": "不是文本文件，因此不显示",
+      "linkCopied": "链接已复制",
+      "copyFailed": "无法复制链接",
+      "previewChanged": "预览已更改。请先查看再发布",
+      "movedHere": "此链接已在其他地方更新",
+      "shareBot": "分享机器人…",
+      "countOf": "已选 {{picked}}/{{all}}",
+      "removeSecret": "移除密钥后才能发布",
+      "title": "分享机器人",
+      "noPurpose": "还没有用途说明",
+      "linkStatusUnavailable": "无法检查分享链接",
+      "updatedJustNow": "刚刚更新",
+      "publishedJustNow": "刚刚发布",
+      "description": "任何拥有链接的人都可以创建副本",
+      "updatedAt": "更新于 {{date}}",
+      "upToDate": "已是最新",
+      "changedSince": "机器人此后已更改",
+      "copy": "复制",
+      "copyLink": "复制链接",
+      "secretFoundTitle": "发现密钥",
+      "secretWhere": "{{flag}}，位于 {{where}} 第 {{line}} 行",
+      "view": "查看",
+      "nextUpdate": "下次更新",
+      "sameLink": "仍发布到同一链接。已创建的副本保持不变",
+      "none": "无",
+      "soul": "灵魂",
+      "skills": "技能",
+      "automations": "自动化",
+      "tools": "工具",
+      "includeMemory": "包含记忆",
+      "notIncluded": "未包含",
+      "setupNote": "设置说明",
+      "add": "添加",
+      "safetyCheck": "安全检查",
+      "done": "完成",
+      "waitingSignIn": "正在等待在浏览器中登录",
+      "signInFor": "让 {{host}} 登录 Orca",
+      "cancelSignIn": "取消登录",
+      "signIn": "请登录 Orca 以分享",
+      "signInToPublish": "登录以发布",
+      "reload": "重新加载",
+      "updateLink": "更新链接",
+      "publishLink": "发布链接",
+      "previewFile": "预览 {{name}}",
+      "outsideSkillWith": "来自 {{project}} 外 · {{description}}",
+      "outsideSkill": "来自 {{project}} 外",
+      "duplicateSkill": "同名，位于 {{folder}} · 不会分享",
+      "all": "全部",
+      "memoryLimit": "最多 {{count}} 个文件",
+      "flagOnLine": "{{flag}}，位于第 {{line}} 行",
+      "memory": "记忆",
+      "review": {
+        "notIncluded": "未包含",
+        "reviewAgain": "重新检查",
+        "accounts": "需要连接的账户",
+        "leftOut": "已排除",
+        "none": "无",
+        "byline": "{{who}} · {{date}} · 未经审核",
+        "someone": "某人",
+        "oneFlag": "{{summary}}：{{flag}}，位于 {{where}}",
+        "oneNote": "1 条笔记",
+        "notes": "{{count}} 条笔记",
+        "updated": "{{who}} 更新了此机器人。请重新检查",
+        "theSharer": "分享者",
+        "createBot": "创建机器人…",
+        "contact": "允许它访问 {{host}}",
+        "files": "{{count}} 个文件",
+        "flagLine": "{{flag}}，第 {{line}} 行",
+        "off": "关闭",
+        "suggested": "建议 · {{when}}",
+        "memoryIndex": "它的记忆索引，包含分享的笔记"
+      },
+      "lines": "{{count}} 行",
+      "backToSharing": "返回分享",
+      "backToLinks": "返回分享链接",
+      "manageLinks": "管理链接",
+      "notShared": "未分享",
+      "loadingLinks": "正在加载分享链接…",
+      "isShared": "{{name}} 已分享",
+      "stopSharing": "停止分享",
+      "stopTitle": "要停止分享 {{name}} 吗？",
+      "stopDescription": "链接将失效",
+      "stopping": "正在停止…",
+      "stopped": "已停止分享 {{name}}",
+      "moreActions": "{{name}} 的更多操作",
+      "noLinks": "没有机器人链接。可在机器人的设置中分享它",
+      "error": {
+        "blocked": "要分享的内容中发现了密钥。请移除后重试",
+        "noteSecret": "设置说明中似乎包含密钥。请移除后重试",
+        "expired": "此分享预览已过期。请重新打开“分享机器人”",
+        "prepareAgain": "在此期间，此机器人已从另一个窗口分享。请重新打开“分享机器人”",
+        "stopped": "此链接已停用。发布即可生成新链接",
+        "moved": "此链接已在其他地方更新。请重新打开“分享机器人”查看",
+        "unavailable": "Orca Cloud 暂不支持分享机器人",
+        "avatarRefused": "Orca Cloud 拒绝了此机器人的头像。请换一张图片后重试",
+        "tooLarge": "此机器人太大，无法分享。请去掉部分记忆或技能后重试"
+      },
+      "reconnect": "请重新登录 Orca 以分享",
+      "flag": {
+        "secret": "密钥",
+        "pipeToShell": "运行下载的脚本",
+        "sudo": "以管理员身份运行",
+        "sendsFile": "发送文件",
+        "hiddenUnicode": "隐藏字符",
+        "runnable": "可运行文件"
+      },
+      "secretFound": "发现 1 个密钥",
+      "secretsFound": "发现 {{count}} 个密钥",
+      "oneWarning": "1 个警告",
+      "warnings": "{{count}} 个警告",
+      "nothingFound": "未发现问题",
+      "whereLine": "{{where}} 第 {{line}} 行",
+      "oneLine": "1 行",
+      "webhookNotShared": "Webhook · 未分享",
+      "commandNotShared": "命令 · 未分享",
+      "fileLinkNotShared": "含符号链接或硬链接 · 未分享",
+      "tooLargeNotShared": "过大 · 未分享",
+      "unreadableNotShared": "无法读取 · 未分享",
+      "overLimitNotShared": "超出技能数量上限 · 未分享",
+      "linkNoLongerAvailable": "此分享链接已不可用"
+    },
+    "settingsView": {
+      "sharing": "分享",
+      "sharingOn": "已开启"
+    },
+    "settingsPage": {
+      "off": "关闭"
     },
     "saveFailed": "无法保存",
     "sheet": {

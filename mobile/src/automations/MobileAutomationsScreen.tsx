@@ -24,16 +24,22 @@ import { automationStyles as styles } from './automation-styles'
 export function MobileAutomationsScreen() {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  const params = useLocalSearchParams<{ hostId?: string | string[]; new?: string | string[] }>()
+  const params = useLocalSearchParams<{
+    hostId?: string | string[]
+    new?: string | string[]
+    automation?: string | string[]
+    server?: string | string[]
+  }>()
   const hostId = firstParam(params.hostId)
   // Spent once the user picks another host, so switching back doesn't reopen the editor.
   const [creating, setCreating] = useState(firstParam(params.new) === '1')
+  const [opening, setOpening] = useState(firstParam(params.automation) || undefined)
   const { client } = useHostClient(hostId)
   const { hostCapabilities } = useHostProtocolGates()
   const { servers, serverClients } = useReachableServerClients(client, hostCapabilities)
   const host = useHostProfile(hostId)
   const hostTitle = useHostDisplay(host).title
-  const [authority, setAuthority] = useState('paired')
+  const [authority, setAuthority] = useState(firstParam(params.server) || 'paired')
   const [pickingHost, setPickingHost] = useState(false)
   const leaveGuard = useRef<AutomationLeaveGuard | null>(null)
   // A discard prompt may follow, so switch once the picker's sheet is gone.
@@ -83,6 +89,7 @@ export function MobileAutomationsScreen() {
         hostId={hostId}
         client={selectedClient}
         startInEditor={creating}
+        startOnAutomation={opening}
         leaveGuard={leaveGuard}
         executionHost={
           authority === 'paired' ? undefined : (normalizeExecutionHostId(authority) ?? undefined)
@@ -126,6 +133,7 @@ export function MobileAutomationsScreen() {
             hostPicker.closeThen(() =>
               leaveThrough(leaveGuard, () => {
                 setCreating(false)
+                setOpening(undefined)
                 setAuthority(next)
               })
             )

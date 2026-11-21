@@ -6,15 +6,9 @@ import { describeAutomationSchedule } from '../../../../../shared/automations/sc
 import { automationEventKind } from '../../../../../shared/automation-event-triggers'
 import { formatUiAutomationScheduleDescriptor } from '../../automations/details/automation-schedule-label'
 import { eventLabel } from '../bot-automation-when'
-import { toggledOutside } from '../../../../../shared/bots/bot-share-skill-picks'
-import {
-  pickedOf,
-  pickedSkills,
-  toggled,
-  unpackableSkills,
-  type BotShareContext,
-  type BotShareList
-} from './bot-share-pages'
+import { toggledOutside, unpackableSkills } from '../../../../../shared/bots/bot-share-skill-picks'
+import { pickedOf, toggled } from '../../../../../shared/bots/bot-share-pick-lists'
+import { pickedSkills, type BotShareContext, type BotShareList } from './bot-share-pages'
 import { MemoryList, SafetyCheckList } from './BotShareFlagPages'
 import { Tick } from './BotShareTick'
 import { BotShareItem } from './BotShareRows'

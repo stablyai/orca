@@ -21,12 +21,13 @@ import {
 import { proposalCreateParams, type BotProposal } from '../../../src/shared/bots/bot-proposal'
 import { MobileBotTemplatesSheet } from './MobileBotTemplatesSheet'
 import { MobileBotImportSheet, type BotImportFrom } from './MobileBotImportSheet'
+import { MobileBotShareReceiveSheet } from './sharing/MobileBotShareReceiveSheet'
 import { useBotImportSources } from './bot-import-host-reads'
 import { botImportNudge } from '../../../src/shared/bots/bot-import'
 import { BOT_NAME_MAX_LENGTH, type BotAgent } from '../../../src/shared/bot-types'
 import { botCreate, botUpdate } from './bot-sheet-operations'
 import { botTemplateShownName } from '../../../src/shared/bots/bot-template-text'
-import type { PhoneBot } from './host-bots-operations'
+import type { ListedBot, PhoneBot } from './host-bots-operations'
 import { MobileBotAvatar } from './MobileBotAvatar'
 import type { NewBotComputer } from './new-bot-computers'
 import {
@@ -44,8 +45,11 @@ type NewBotSheetProps = {
   computerId: string | null
   /** Runs on's choices: this computer, then each server. */
   computers: readonly NewBotComputer[]
-  /** The bots on a computer now, so a template's name is free there ("Pull request review 2"). */
-  botNamesOn: (computerId: string) => readonly string[]
+  /** The bots on a computer now, so a template's name is free there ("Pull request review 2"), and a
+   *  link one was made from offers that bot. */
+  botsOn: (computerId: string) => readonly ListedBot[]
+  /** Opens a bot already made from a pasted link; absent, From a link doesn't show. */
+  onOpenBot?: (bot: ListedBot, computer: NewBotComputer) => void
   /** The route to a computer's bots.create; null once it can't be reached. */
   clientFor: (computerId: string) => RpcClient | null
   /** The route to the paired computer that reaches it, whose Orca account a server's is compared with. */
@@ -107,6 +111,8 @@ function NewBotForm(props: NewBotSheetProps) {
   }
   // Import from another app stays under the computer and agent pickers it opens.
   const [importing, setImporting] = useState(false)
+  // From a link stays under the computer and agent pickers it opens.
+  const [receiving, setReceiving] = useState(false)
   const listed = props.computers.find((entry) => entry.id === computerId)
   // A chosen computer that drops out keeps its name, unreachable, so Runs on can move the draft.
   const [lastChosen, setLastChosen] = useState(listed)
@@ -131,7 +137,7 @@ function NewBotForm(props: NewBotSheetProps) {
   const shownName = botTemplateShownName(
     proposal?.value,
     name,
-    computer ? props.botNamesOn(computer.id) : [],
+    computer ? props.botsOn(computer.id).map((bot) => bot.name) : [],
     t
   )
   // Until the computer says which agents it has, or when it has none, it makes no bot, as the desktop's New bot.
@@ -230,7 +236,9 @@ function NewBotForm(props: NewBotSheetProps) {
     <BottomDrawerModalHost>
       <MobileBotTemplatesSheet
         visible={props.visible && picking === 'template'}
-        botNames={picking === 'template' && computer ? props.botNamesOn(computer.id) : []}
+        botNames={
+          picking === 'template' && computer ? props.botsOn(computer.id).map((bot) => bot.name) : []
+        }
         onClose={() => setPicking(null)}
         onPick={(pick) => {
           setPicking(null)
@@ -282,8 +290,28 @@ function NewBotForm(props: NewBotSheetProps) {
         onAfterClose={props.onAfterClose}
         onCreate={(importName, importFrom) => void create({ name: importName, importFrom })}
       />
+      {props.onOpenBot ? (
+        <MobileBotShareReceiveSheet
+          visible={props.visible && receiving && picking === null}
+          client={client}
+          bots={computer ? props.botsOn(computer.id) : []}
+          agent={agent}
+          runsOn={
+            <>
+              {runsOn}
+              {agentRow}
+            </>
+          }
+          ready={agentsReady}
+          onBack={() => setReceiving(false)}
+          onClose={props.onClose}
+          onAfterClose={props.onAfterClose}
+          onCreated={(bot) => computer && props.onCreated(bot, computer)}
+          onOpenBot={(bot) => computer && props.onOpenBot?.(bot, computer)}
+        />
+      ) : null}
       <BottomDrawer
-        visible={props.visible && !importing && picking === null}
+        visible={props.visible && !importing && !receiving && picking === null}
         dismissible={!creating}
         onClose={props.onClose}
         onAfterClose={props.onAfterClose}
@@ -345,6 +373,19 @@ function NewBotForm(props: NewBotSheetProps) {
                 }}
               />
             )}
+            {props.onOpenBot && !seed ? (
+              <ListRow
+                key="link"
+                title={t('bots.share.receive.fromLink', 'From a link')}
+                subtitle={t('bots.share.receive.pasteDescription', 'Paste a link someone shared.')}
+                navigates
+                onPress={() => {
+                  if (!creating) {
+                    setReceiving(true)
+                  }
+                }}
+              />
+            ) : null}
           </ListGroup>
         )}
         {runsOn}

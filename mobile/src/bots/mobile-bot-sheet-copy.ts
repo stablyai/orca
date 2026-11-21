@@ -1,4 +1,5 @@
 // The desktop bot panels' English wording, for the phone's bot header and sheet.
+import { isHostNotConnectedError } from '../query/host-query-errors'
 import type { AgentType } from '../../../src/shared/agent-status/contracts/agent-status-types'
 import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
 import { formatAutomationSchedule } from '../../../src/shared/automations/scheduling/automation-schedules'
@@ -71,7 +72,7 @@ const SOURCE_EVENT_FALLBACKS: Partial<Record<string, () => string>> = {
   webhook: () => translate('bots.events.webhookFallback', 'When its webhook is called')
 }
 
-function eventLabel(trigger: { source: string; event?: string }): string {
+export function eventLabel(trigger: { source: string; event?: string }): string {
   const known = trigger.event ? EVENT_LABELS[trigger.source]?.[trigger.event] : undefined
   return (
     (known ?? SOURCE_EVENT_FALLBACKS[trigger.source])?.() ??
@@ -144,4 +145,20 @@ export function automationWontFireNote(
   return unheard.scheduled
     ? `Runs on its schedule only: needs the ${connectors} connector`
     : `Won’t run: needs the ${connectors} connector`
+}
+
+/** Why a Settings save failed, in the owner's words. */
+export function botSaveErrorMessage(error: unknown, hostName: string): string {
+  return isHostNotConnectedError(error)
+    ? translate('bots.items.write.offline', '{{host}} is offline.', { host: hostName })
+    : error instanceof Error && error.message === 'bot_name_taken'
+      ? translate('bots.settings.nameTaken', 'Another bot already has that name.')
+      : error instanceof Error && error.message === 'bot_avatar_invalid'
+        ? translate(
+            'bots.picture.invalid',
+            'That picture could not be used. Pick a PNG or JPG image.'
+          )
+        : error instanceof Error
+          ? error.message
+          : translate('bots.saveFailed', 'Couldn’t save')
 }
