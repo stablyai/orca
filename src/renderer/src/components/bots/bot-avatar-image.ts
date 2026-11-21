@@ -19,7 +19,7 @@ type Upload = {
 }
 
 /** The latest failed read's version per bot (by botRefKey), at most MAX_FAILURES, oldest let go first. */
-export type BotAvatarFailures = Map<string, string>
+export type BotAvatarFailures = Map<string, { version: string; hostId: BotRef['hostId'] }>
 const MAX_FAILURES = 64
 
 /** `paused`: don't read now (the host is offline). `failures`: a failed read is listed there and a
@@ -32,12 +32,12 @@ export type BotAvatarRead = {
 
 /** A group's failures leaving (it folded or closed): pending reads stop holding them. */
 export function forgetBotAvatarFailures(failures: BotAvatarFailures): void {
-  uploads.forEach((upload) => upload.noted.delete(failures))
+  pending.forEach((upload) => upload.noted.delete(failures))
 }
 
-function noteFailure(failures: BotAvatarFailures, key: string, version: string): void {
+function noteFailure(failures: BotAvatarFailures, bot: BotRef, key: string, version: string): void {
   failures.delete(key)
-  failures.set(key, version)
+  failures.set(key, { version, hostId: bot.hostId })
   for (const oldest of failures.keys()) {
     if (failures.size <= MAX_FAILURES) {
       break
@@ -50,6 +50,8 @@ function noteFailure(failures: BotAvatarFailures, key: string, version: string):
 // kept, so a face drawn again (a row scrolled back into view) shows it at once; a failed read is
 // dropped, so the next face reads again.
 const uploads = new Map<string, Upload>()
+// The reads in flight, which a group leaving lets its failures go from.
+const pending = new Set<Upload>()
 
 function uploadOf(key: string, version: string): Upload | undefined {
   const cached = uploads.get(key)
@@ -59,15 +61,17 @@ function uploadOf(key: string, version: string): Upload | undefined {
 function startUpload(bot: BotRef, key: string, version: string): Upload {
   const started: Upload = { version, waiting: new Set(), noted: new Set() }
   uploads.set(key, started)
+  pending.add(started)
   void readBotAvatarPng(bot).then(
     (png) => {
       started.read = png ? `data:image/png;base64,${png}` : null
       started.noted.forEach((failures) => {
-        if (failures.get(key) === version) {
+        if (failures.get(key)?.version === version) {
           failures.delete(key)
         }
       })
       started.noted.clear()
+      pending.delete(started)
       settle(started, started.read, false)
     },
     () => {
@@ -76,9 +80,10 @@ function startUpload(bot: BotRef, key: string, version: string): Upload {
       }
       // A read that failed because its host went away is read again when the host is back.
       if (readBotHostState(bot.hostId) === 'live') {
-        started.noted.forEach((failures) => noteFailure(failures, key, version))
+        started.noted.forEach((failures) => noteFailure(failures, bot, key, version))
       }
       started.noted.clear()
+      pending.delete(started)
       settle(started, null, true)
     }
   )
@@ -103,16 +108,9 @@ function readUpload(
     entry.noted.add(failures)
   }
   if (entry.read !== undefined) {
-    const read = entry.read
-    let live = true
-    queueMicrotask(() => {
-      if (live) {
-        onRead(read, false)
-      }
-    })
-    return () => {
-      live = false
-    }
+    // Already read: given at once, which a face that started from it ignores without a render.
+    onRead(entry.read, false)
+    return () => {}
   }
   entry.waiting.add(onRead)
   return () => {
@@ -143,7 +141,7 @@ export function useBotAvatarSrc(
   const [upload, setUpload] = useState(() => finishedUpload({ hostId, id }, uploadKey))
   useEffect(() => {
     const key = botRefKey({ hostId, id })
-    if (!uploadKey || paused || (skipFailed && failures?.get(key) === uploadKey)) {
+    if (!uploadKey || paused || (skipFailed && failures?.get(key)?.version === uploadKey)) {
       return
     }
     return readUpload({ hostId, id }, uploadKey, failures, (src) => {

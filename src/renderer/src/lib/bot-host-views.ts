@@ -1,6 +1,10 @@
 // Each bot host's state for views, apart from bot-catalog so a row reads it without loading the list.
 import { useCallback, useSyncExternalStore } from 'react'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
+import {
+  isDocumentVisibilityProvenStale,
+  registerStaleDocumentVisibilityRecovery
+} from '@/components/terminal-pane/viewport/visibility/stale-document-visibility'
 import { readBotHostState, readLiveBotHostIds, subscribeToBotChanges } from './bot-catalog-snapshot'
 
 /** Whether the host's bots show from its last read because it is disconnected. */
@@ -19,7 +23,7 @@ let stopCatalog: (() => void) | null = null
 
 // While the window is hidden rows keep the hosts as they were, so a host coming back reads nothing
 // until the window shows again.
-const hidden = (): boolean => document.hidden
+const hidden = (): boolean => document.hidden && !isDocumentVisibilityProvenStale()
 
 function currentLive(): ReadonlySet<ExecutionHostId> {
   if (liveSeen !== null && stopCatalog !== null && hidden()) {
@@ -58,8 +62,11 @@ function listen(): () => void {
   if (!stopCatalog) {
     const stopBots = subscribeToBotChanges(onCatalog)
     document.addEventListener('visibilitychange', onVisibility)
+    // After display wake the window can stay wrongly `hidden`; input proving it shown catches up too.
+    const stopStale = registerStaleDocumentVisibilityRecovery(onVisibility)
     stopCatalog = () => {
       stopBots()
+      stopStale()
       document.removeEventListener('visibilitychange', onVisibility)
     }
   }

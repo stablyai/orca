@@ -45,17 +45,21 @@ function listenTo(
 ): () => void {
   let frame: number | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
+  // `byUser`: a scroll, which a hidden window never gets, so one wrongly left `hidden` (after display
+  // wake, before any click or key proves it) measures too.
+  let byUser = false
   const run = (): void => {
     frame = null
     timer = null
-    if (!botItemsDocumentHidden()) {
+    if (byUser || !botItemsDocumentHidden()) {
       onFrame()
     }
+    byUser = false
   }
-  const notify = (): void => {
-    // A hidden window measures as it shows again. One wrongly left `hidden` (after display wake) gets no
-    // frames, and one asked for just before may never come, so it measures on a timer instead.
-    if (botItemsDocumentHidden()) {
+  const schedule = (): void => {
+    // A hidden window measures as it shows again. One wrongly left `hidden` gets no frames, and one
+    // asked for just before may never come, so it measures on a timer instead.
+    if (!byUser && botItemsDocumentHidden()) {
       return
     }
     if (document.hidden && frame !== null) {
@@ -71,7 +75,12 @@ function listenTo(
       frame = requestAnimationFrame(run)
     }
   }
-  scroller.addEventListener('scroll', notify, { passive: true })
+  const notify = (): void => schedule()
+  const scrolled = (): void => {
+    byUser = true
+    schedule()
+  }
+  scroller.addEventListener('scroll', scrolled, { passive: true })
   // A hidden window measures nothing, so showing it again measures what changed meanwhile.
   const shown = (): void => {
     if (!document.hidden) {
@@ -87,7 +96,7 @@ function listenTo(
     resized.observe(list)
   }
   return () => {
-    scroller.removeEventListener('scroll', notify)
+    scroller.removeEventListener('scroll', scrolled)
     document.removeEventListener('visibilitychange', shown)
     resized.disconnect()
     stopStale()

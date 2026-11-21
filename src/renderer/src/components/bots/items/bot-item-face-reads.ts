@@ -11,18 +11,21 @@ export const BotItemFaceFailuresContext = createContext<BotAvatarFailures | null
 /** A group's failures; `enabled` while its rows show faces. */
 export function useBotItemFaceFailures(enabled: boolean): BotAvatarFailures {
   const [failures] = useState((): BotAvatarFailures => new Map())
-  useEffect(() => () => forgetBotAvatarFailures(failures), [failures])
   useEffect(() => {
     if (!enabled) {
       return
     }
-    return subscribeToLiveBotHosts(() => {
-      for (const key of failures.keys()) {
-        if (!isBotHostLive(key.slice(0, key.indexOf('\u0000')))) {
+    const stop = subscribeToLiveBotHosts(() => {
+      for (const [key, failure] of failures) {
+        if (!isBotHostLive(failure.hostId)) {
           failures.delete(key)
         }
       }
     })
+    return () => {
+      stop()
+      forgetBotAvatarFailures(failures)
+    }
   }, [enabled, failures])
   return failures
 }
