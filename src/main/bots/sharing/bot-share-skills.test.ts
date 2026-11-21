@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { chmod, link, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -121,6 +121,42 @@ describe("a bot's linked projects' skills in the Share dialog", () => {
     expect(summary.files.some((file) => file.path.startsWith('skills/deploy/'))).toBe(false)
     await candidates.dispose()
   })
+
+  it('leaves out a skill with a hard-linked file, for the same reason', async () => {
+    await write(project, '.agents/skills/deploy/SKILL.md', skillText('deploy', 'Ship it'))
+    await write(project, 'notes.md', 'Shared notes\n')
+    await link(join(project, 'notes.md'), join(project, '.agents/skills/deploy/notes.md'))
+
+    const shareable = await read()
+    expect(shareable.skills).toEqual([])
+    expect(shareable.leftOut).toContainEqual({ kind: 'skill', name: 'deploy', why: 'link' })
+  })
+
+  // A file no one can read stands in for a read: offering the skill and preparing without it must not
+  // open its files, only look at their shape.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    "reads no skill's files to list it, and none it isn't packing",
+    async () => {
+      await write(project, '.agents/skills/deploy/SKILL.md', skillText('deploy', 'Ship it'))
+      await write(project, '.agents/skills/deploy/big.md', 'Large reference\n')
+      await chmod(join(project, '.agents/skills/deploy/big.md'), 0o000)
+
+      const shareable = await read()
+      expect(shareable.skills.map((skill) => skill.name)).toEqual(['deploy'])
+
+      const candidates = new BotShareCandidates(join(root, 'candidates'))
+      const summary = await candidates.prepare({
+        bot,
+        shareable,
+        selection: { skills: [] },
+        packageId: 'package-1'
+      })
+      expect(summary.bot.skills).toEqual([])
+      expect(summary.available.skills.map((skill) => skill.name)).toEqual(['deploy'])
+      await candidates.dispose()
+      await chmod(join(project, '.agents/skills/deploy/big.md'), 0o644)
+    }
+  )
 
   it("keeps the bot's own skill when a linked project has one of the same name", async () => {
     await write(home, 'skills/triage/SKILL.md', skillText('triage', 'Own copy'))

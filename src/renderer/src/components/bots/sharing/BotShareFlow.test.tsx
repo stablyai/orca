@@ -222,7 +222,7 @@ it('lists a skill with a symlink as not shared, and the Skills row still opens t
   const row = await screen.findByRole('button', { name: /Skills/ })
   expect(row.textContent).toContain('None')
   fireEvent.click(row)
-  expect(await screen.findByText('Has a symlink · not shared')).toBeDefined()
+  expect(await screen.findByText('Has a symlink or hard link · not shared')).toBeDefined()
 })
 
 it('picks every memory file with Include memory, and All clears or picks them all', async () => {

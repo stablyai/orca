@@ -28674,7 +28674,7 @@
       "stopped": "Stopped sharing {{name}}",
       "webhookNotShared": "Webhook · not shared",
       "commandNotShared": "Command · not shared",
-      "symlinkNotShared": "Has a symlink · not shared",
+      "fileLinkNotShared": "Has a symlink or hard link · not shared",
       "tooLargeNotShared": "Too large · not shared",
       "unreadableNotShared": "Can't be read · not shared",
       "notShared": "Not shared",

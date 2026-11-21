@@ -26988,7 +26988,7 @@
       "stopped": "已停止分享 {{name}}",
       "webhookNotShared": "Webhook · 未分享",
       "commandNotShared": "命令 · 未分享",
-      "symlinkNotShared": "含符号链接 · 未分享",
+      "fileLinkNotShared": "含符号链接或硬链接 · 未分享",
       "tooLargeNotShared": "过大 · 未分享",
       "unreadableNotShared": "无法读取 · 未分享",
       "notShared": "未分享",

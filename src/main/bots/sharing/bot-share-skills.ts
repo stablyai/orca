@@ -11,6 +11,7 @@ import {
   type BotShareLeftOut
 } from '../../../shared/bots/bot-package'
 import {
+  checkSkillPackageShape,
   observeSkillPackage,
   SKILL_PACKAGE_OBSERVATION_LIMITS,
   type ObservedSkillPackage
@@ -153,20 +154,35 @@ export async function readShareSkills(
   )
 }
 
-/** The skills the packager can read: one it refuses (a link or a special file inside, too big) is
- *  left out with why, so it never stops the others from going out with the default picks. */
+/** How many skill folders are checked at once. */
+const SHAPE_CHECKS_AT_ONCE = 4
+
+/** The skills the packager would take: one it refuses (a link or a special file inside, too big) is
+ *  left out with why, so it never stops the others from going out with the default picks. Checked by
+ *  shape only, nothing read, since this runs on every pick change; the picked ones are read once,
+ *  when packed. */
 async function packable(
   skills: BotShareSkill[],
   leftOut: BotShareLeftOut[]
 ): Promise<BotShareSkill[]> {
-  const refusals = await Promise.all(
-    skills.map((skill) =>
-      ownSkillFiles(skill.directory).then(
-        () => null,
-        (error: unknown) => unpackableWhy(error)
-      )
+  const refusals: (ReturnType<typeof unpackableWhy> | null)[] = []
+  for (let start = 0; start < skills.length; start += SHAPE_CHECKS_AT_ONCE) {
+    const batch = skills.slice(start, start + SHAPE_CHECKS_AT_ONCE)
+    refusals.push(
+      ...(await Promise.all(
+        batch.map((skill) =>
+          checkSkillPackageShape(
+            skill.directory,
+            SKILL_PACKAGE_OBSERVATION_LIMITS,
+            isNestedSkill
+          ).then(
+            () => null,
+            (error: unknown) => unpackableWhy(error)
+          )
+        )
+      ))
     )
-  )
+  }
   return skills.filter((skill, index) => {
     const why = refusals[index]
     if (why !== null) {
@@ -195,7 +211,12 @@ export async function ownSkillFiles(directory: string): Promise<ObservedSkillPac
     undefined,
     process.platform,
     false,
-    async (folder) => (await admittedSkill(join(folder, 'SKILL.md'))) !== null
+    isNestedSkill
   )
   return files
+}
+
+/** A folder inside a skill that is a skill of its own: listed on its own, never read with this one. */
+async function isNestedSkill(folder: string): Promise<boolean> {
+  return (await admittedSkill(join(folder, 'SKILL.md'))) !== null
 }
