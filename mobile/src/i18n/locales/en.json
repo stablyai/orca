@@ -3347,7 +3347,10 @@
       "sessionOptions": "Session options",
       "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}",
       "permissionAppliesNextMessageCompact": "{{saved}} · next message",
-      "permissionAppliesNextMessageTiming": "Applies next message · running {{active}}"
+      "permissionAppliesNextMessageTiming": "Applies next message · running {{active}}",
+      "renderer": "Renderer",
+      "inline": "Inline",
+      "fullscreen": "Fullscreen"
     },
     "streamFrame": {
       "streamFailed": "Transcript stream failed",

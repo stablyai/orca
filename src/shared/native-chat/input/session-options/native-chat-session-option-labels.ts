@@ -10,6 +10,9 @@ export const NATIVE_CHAT_SESSION_OPTION_COPY = {
   model: 'Model',
   effort: 'Effort',
   fastMode: 'Fast mode',
+  renderer: 'Renderer',
+  inline: 'Inline',
+  fullscreen: 'Fullscreen',
   speed: 'Speed',
   thinking: 'Thinking',
   standard: 'Standard',
@@ -99,6 +102,8 @@ export function nativeChatSessionOptionLabel(
       return say('effort')
     case 'fastMode':
       return say('fastMode')
+    case 'renderer':
+      return say('renderer')
     case 'serviceTier':
       return say('speed')
     case 'thinking':
@@ -116,6 +121,9 @@ export function nativeChatSessionChoiceLabel(
   // `default` is only Standard inside a speed choice; other selects may use the value.
   if (optionId === 'serviceTier' && choice.value === 'default') {
     return say('standard')
+  }
+  if (optionId === 'renderer' && (choice.value === 'default' || choice.value === 'fullscreen')) {
+    return say(choice.value === 'default' ? 'inline' : 'fullscreen')
   }
   const id = levelId(LEVEL_IDS, choice.value)
   return id ? say(id) : choice.label

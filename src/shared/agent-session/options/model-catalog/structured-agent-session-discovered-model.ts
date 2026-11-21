@@ -113,7 +113,7 @@ export function structuredAgentSessionOptionCatalog(
       id: result.current.model,
       label: unlistedModelLabel(agent, result.current.model),
       description: result.current.model,
-      options: seed.unknownModelOptions ?? []
+      options: (seed.unknownModelOptions ?? []).filter((option) => !option.terminalSetting)
     })
   }
   return { ...seed, models, defaultModelIsCliDefault: true }

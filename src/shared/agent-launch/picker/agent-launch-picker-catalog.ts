@@ -39,6 +39,21 @@ export function agentPickerEntryOptions(
   model: string | undefined,
   surface: AgentPickerSurface
 ): CatalogOption[] {
+  const options = modelPickerEntryOptions(entry, model, surface)
+  if (surface !== 'terminal' || entry.textGeneration) {
+    return options
+  }
+  const settings = (
+    getAgentSessionOptionLaunchCatalog(entry.agent)?.unknownModelOptions ?? []
+  ).filter((option) => option.terminalSetting && !options.some(({ id }) => id === option.id))
+  return [...options, ...settings]
+}
+
+function modelPickerEntryOptions(
+  entry: ModelMenuEntry & Pick<AgentPickerEntry, 'terminal'>,
+  model: string | undefined,
+  surface: AgentPickerSurface
+): CatalogOption[] {
   if (entry.textGeneration) {
     const live = agentPickerModels(entry).find((row) => row.id === (model ?? entry.terminal.model))
     return live?.efforts.length

@@ -13,6 +13,7 @@ import {
 } from '../startup/tui-agent-startup-shell'
 import type { TuiAgent } from '../catalog/tui-agent'
 import type { ChoiceOccurrence } from './agent-launch-choices'
+import { mergeSharedSettingsRanges, settingsWithoutKeys } from './agent-choice-settings-span-merge'
 import { agentChoiceConfigString, agentChoiceConfigValue } from './agent-choice-cli-apply'
 
 export type { ChoiceOccurrence } from './agent-launch-choices'
@@ -95,6 +96,7 @@ export function analyzeChoiceArgs(
         let valueType: ChoiceOccurrence['valueType'] = 'string'
         let lift = false
         let replacement: string | undefined
+        let settingsSource: ChoiceOccurrence['settings']
         if (form.kind === 'recipe') {
           count = form.words.length
           if (!form.words.every((word, offset) => first.parsed.tokens[index + offset] === word)) {
@@ -141,8 +143,8 @@ export function analyzeChoiceArgs(
             if (!settings || (typeof choice !== 'boolean' && typeof choice !== 'string')) {
               continue
             }
-            const { [form.key]: _removed, ...remaining } = settings
-            replacement = `${name} ${quoteStartupArg(JSON.stringify(remaining), grammars[0])}`
+            settingsSource = { name, json: settings, keys: [form.key] }
+            replacement = settingsWithoutKeys(settingsSource, grammars[0])
             value = String(choice)
             valueType = typeof choice === 'boolean' ? 'boolean' : 'string'
           }
@@ -222,19 +224,23 @@ export function analyzeChoiceArgs(
             lift: lift && agreed,
             owned: agreed,
             source: sourceAgreed && valueType !== undefined,
-            ...(replacement !== undefined ? { replacement } : {})
+            ...(replacement !== undefined ? { replacement } : {}),
+            ...(settingsSource ? { settings: settingsSource } : {})
           })
         }
       }
     }
   }
   const cut = (
-    selected: readonly Pick<ChoiceOccurrence, 'start' | 'end' | 'replacement'>[]
+    selected: readonly Pick<ChoiceOccurrence, 'start' | 'end' | 'replacement' | 'settings'>[]
   ): string | null => {
     if (!first || !selected.length) {
       return selected.length ? null : text
     }
-    const ranges = [...selected].sort((a, b) => a.start - b.start)
+    const ranges = mergeSharedSettingsRanges(
+      [...selected].sort((a, b) => a.start - b.start),
+      grammars[0]
+    )
     if (ranges.some((range, index) => index > 0 && range.start < ranges[index - 1].end)) {
       return null
     }
