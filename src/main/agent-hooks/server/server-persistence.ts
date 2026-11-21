@@ -18,7 +18,7 @@ import { AgentHookServerHydration } from './server-hydration'
 import { pruneAgentExits, serializeAgentExits } from './agent-exit-evidence'
 import { LastStatusStore } from './last-status-store'
 import { KeyedDeadlines } from '../../../shared/collections/keyed-deadlines'
-import { rowsOf, selectedStatusEntries } from './last-status-saved-rows'
+import { rowKeyFor, rowsOf, selectedStatusEntries } from './last-status-saved-rows'
 import { nextRetryDelayMs } from '../../sqlite/row-cache/row-cache-failure'
 
 export abstract class AgentHookServerPersistence extends AgentHookServerHydration {
@@ -221,18 +221,24 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         this.statusPersistDirtyKeys.add(key)
       }
       const file = this.buildStatusFile([...keys], exitsDirty)
+      // Match last-status-saved-rows. ROW_KEY_SEPARATOR is not NUL: Windows truncates there.
+      const entryRowPrefix = rowKeyFor('entry', '')
+      const commitmentRowPrefix = rowKeyFor('commitment', '')
+      const exitsRowPrefix = rowKeyFor('exits', '')
       const changes = new Map<string, string | null>()
       for (const key of keys) {
-        changes.set(`entry\0${key}`, null)
-        changes.set(`commitment\0${key}`, null)
+        changes.set(`${entryRowPrefix}${key}`, null)
+        changes.set(`${commitmentRowPrefix}${key}`, null)
       }
       if (exitsDirty) {
-        changes.set('exits\0', null)
+        changes.set(exitsRowPrefix, null)
       }
       for (const row of rowsOf(file)) {
         changes.set(row.key, row.json)
       }
-      const reinsertKeys = new Set([...this.statusPersistRemovedKeys].map((key) => `entry\0${key}`))
+      const reinsertKeys = new Set(
+        [...this.statusPersistRemovedKeys].map((key) => `${entryRowPrefix}${key}`)
+      )
       store.patch(changes, () => this.buildStatusFile(), busyTimeoutMs, reinsertKeys)
       this.statusPersistDirtyKeys.clear()
       this.statusPersistRemovedKeys.clear()

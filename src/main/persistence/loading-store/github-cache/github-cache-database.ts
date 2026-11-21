@@ -16,7 +16,10 @@ export const GITHUB_CACHE_ROUTINE_BUSY_TIMEOUT_MS = 25
 export const GITHUB_CACHE_BARRIER_BUSY_TIMEOUT_MS = 500
 
 // 2: rows moved to the shared keyed row layout; a version-1 cache rebuilds empty once.
-const GITHUB_CACHE_SCHEMA_VERSION = 2
+// Version 3 stops using NUL in row keys: node:sqlite truncates TEXT there on Windows, which
+// collapsed every key to its bare kind and restored an empty cache after a restart.
+const GITHUB_CACHE_SCHEMA_VERSION = 3
+const ROW_KEY_SEPARATOR = '\u001f'
 const KINDS: readonly GitHubCacheKind[] = ['pr', 'issue']
 
 export function getGithubCacheDatabaseFile(dataFile: string): string {
@@ -68,7 +71,10 @@ export function readGitHubCacheDatabase(dataFile: string): StoredGitHubCache {
   }
   const cache: GitHubCache = { pr: {}, issue: {} }
   for (const { key: id, value } of parseKeyedJsonRows(loaded.rows)) {
-    const separator = id.indexOf('\u0000')
+    const separator = id.indexOf(ROW_KEY_SEPARATOR)
+    if (separator <= 0) {
+      continue
+    }
     const kind = KINDS.find((candidate) => candidate === id.slice(0, separator))
     if (kind) {
       Object.assign(cache[kind], { [id.slice(separator + 1)]: value })
@@ -105,7 +111,7 @@ function githubCacheRowsOf(cache: GitHubCache): KeyedJsonRow[] {
     for (const [key, entry] of Object.entries(cache[kind] ?? {})) {
       const json = JSON.stringify(entry)
       if (json !== undefined) {
-        rows.push({ key: `${kind}\u0000${key}`, json })
+        rows.push({ key: `${kind}${ROW_KEY_SEPARATOR}${key}`, json })
       }
     }
   }
