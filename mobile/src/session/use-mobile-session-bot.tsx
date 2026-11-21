@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   BOTS_ITEMS_RUNTIME_CAPABILITY,
   BOTS_MOBILE_RUNTIME_CAPABILITY
 } from '../../../src/shared/bot-runtime-capabilities'
+import { botItemUidOfPaneKey } from '../../../src/shared/bots/bot-notification-pane-keys'
 import type { BotPanelOpen } from '../bots/MobileBotPanel'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { MobileBotAvatar } from '../bots/MobileBotAvatar'
@@ -27,6 +28,7 @@ import {
 } from './tabs/pending-session-selection'
 import type { MobileSessionPanelRouteActionsModel } from './use-mobile-session-panel-route-actions'
 import type { MobileNewTabBotActions } from './tabs/MobileNewTabSheet'
+import { useSessionRouteRequest } from './use-session-route-request'
 
 /** A bot's home route: its header facts, its sheet, and its new chats from +. */
 export function useMobileSessionBot(scope: MobileSessionPanelRouteActionsModel) {
@@ -71,6 +73,16 @@ export function useMobileSessionBot(scope: MobileSessionPanelRouteActionsModel) 
     },
     [refreshRouteBot]
   )
+  // An item question's push opens its page once the bot is read.
+  const paneRequest = useSessionRouteRequest('paneKey')
+  const openedPaneRequest = useRef<typeof paneRequest>(null)
+  useEffect(() => {
+    const itemUid = botItemUidOfPaneKey(paneRequest?.value)
+    if (itemUid && itemsOnPhone && openedPaneRequest.current !== paneRequest) {
+      openedPaneRequest.current = paneRequest
+      openBotPanel({ item: itemUid })
+    }
+  }, [paneRequest, itemsOnPhone, openBotPanel])
   const now = useNow(60_000, routeBot !== null)
 
   const botStatus = useMemo(() => {

@@ -25,7 +25,7 @@ import {
   folderWorkspaceKey,
   parseWorkspaceKey
 } from '../../../../shared/workspace/identity/workspace-scope'
-import { botGroupRoomPaneKey } from '../../../../shared/bots/bot-group-room-pane-key'
+import { botGroupRoomPaneKey } from '../../../../shared/bots/bot-notification-pane-keys'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
 import { buildNotificationOptions } from '../../../ipc/notifications/notification-options'
 import type { MobileNotificationDispatchEvent } from '../../push/notifications/runtime-mobile-notification-controller'

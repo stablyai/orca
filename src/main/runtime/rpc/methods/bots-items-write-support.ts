@@ -15,6 +15,8 @@ import type { BotItemLinkInput, BotItemWriteOutcome } from '../../../bots/bot-it
 import type { BotItemsRemote } from '../../../bots/bot-items-ops'
 import type { BotItemRecord } from '../../../bots/bot-items-schema'
 import { noteBotItemWrite } from '../../../bots/bot-item-chat-notes'
+import { notifyBotItemQuestion } from '../../../bots/bot-item-question-notice'
+import { runtimeBotOwnerNotice } from '../../../bots/bot-could-not-finish'
 import { sessionCallerOf } from '../../orchestration/addressing/orchestration-caller-identity'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
@@ -64,7 +66,7 @@ export async function resolveItem(store: BotItemsRemote, ref: string): Promise<B
 }
 
 /** What a write answers with: the item as it is now, and what the write did. The writer's chat shows
- *  the write as an item note. */
+ *  the write as an item note; a write that asks the owner tells them. */
 export async function writeResult(
   runtime: OrcaRuntimeService,
   outcome: BotItemWriteOutcome,
@@ -78,7 +80,15 @@ export async function writeResult(
   runtime.botItems.changed([record.ownerBotId])
   const [item] = await runtime.botItems.views([record])
   if (outcome.eventId !== null) {
-    await noteBotItemWrite(store, writer.sessionId, record, outcome.eventId, item!.links)
+    const write = await noteBotItemWrite(
+      store,
+      writer.sessionId,
+      record,
+      outcome.eventId,
+      item!.links
+    )
+    const owner = runtime.bots.list().find((bot) => bot.id === record.ownerBotId)
+    notifyBotItemQuestion(runtimeBotOwnerNotice(runtime), owner, item!, write)
   }
   // A write from another chat of the bot owes the item's chat a mail.
   await runtime.botItems.sendOwedMail()
