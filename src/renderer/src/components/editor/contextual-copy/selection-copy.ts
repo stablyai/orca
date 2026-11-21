@@ -33,8 +33,19 @@ export function formatSelectionReference({
   selectedText
 }: FormatCopiedSelectionArgs): string {
   const { startLine, endLine } = getContextualCopyLineRange(selection)
+  return formatLineRangeReference(relativePath, startLine, endLine, selectedText, language)
+}
+
+/** `path:start-end` and the text in a code block, for any surface that knows its source lines. */
+export function formatLineRangeReference(
+  relativePath: string,
+  startLine: number,
+  endLine: number,
+  text: string,
+  language: string
+): string {
   const range = startLine === endLine ? `${startLine}` : `${startLine}-${endLine}`
-  return `${relativePath}:${range}\n${fencedCode(selectedText, getCodeFenceLanguage(language))}`
+  return `${relativePath}:${range}\n${fencedCode(text, getCodeFenceLanguage(language))}`
 }
 
 /** A fence longer than any backtick run in the text, so the text can't close it. */

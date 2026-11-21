@@ -5,8 +5,13 @@ import {
   createRichMarkdownEditorConfig,
   type EditorConfigParams
 } from './rich-markdown-editor-config'
+import { useRichMarkdownAddSelectionToLastAgent } from '../review/use-rich-markdown-add-selection-to-last-agent'
 
-export function useRichMarkdownEditorInstance(params: EditorConfigParams): Editor | null {
+export function useRichMarkdownEditorInstance(
+  ownerParams: Omit<EditorConfigParams, 'addSelectionToLastAgentRef'>
+): Editor | null {
+  const addSelectionToLastAgentRef = useRichMarkdownAddSelectionToLastAgent(ownerParams)
+  const params: EditorConfigParams = { ...ownerParams, addSelectionToLastAgentRef }
   const extensions = useMemo(
     () =>
       createRichMarkdownExtensions({

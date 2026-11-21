@@ -40,13 +40,18 @@ export function setupContextualCopy({
   copyHintNode.className =
     'pointer-events-none rounded-md border border-border/90 bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-[0_6px_18px_rgba(15,23,42,0.18)] backdrop-blur whitespace-nowrap'
   const updateCopyHintLabel = (): void => {
-    copyHintNode.textContent = translate(
+    const { keybindings } = useAppStore.getState()
+    const copyHint = translate(
       'auto.components.editor.contextualCopy.copyContextHint',
       'Copy context {{shortcut}}',
-      {
-        shortcut: formatShortcutLabel('editor.copyContext', useAppStore.getState().keybindings)
-      }
+      { shortcut: formatShortcutLabel('editor.copyContext', keybindings) }
     )
+    const agentHint = translate(
+      'auto.components.editor.contextualCopy.addToLastAgentHint',
+      'Add to agent {{shortcut}}',
+      { shortcut: formatShortcutLabel('editor.addSelectionToLastAgent', keybindings) }
+    )
+    copyHintNode.textContent = `${copyHint} · ${agentHint}`
   }
   updateCopyHintLabel()
   copyHintNode.style.display = 'none'

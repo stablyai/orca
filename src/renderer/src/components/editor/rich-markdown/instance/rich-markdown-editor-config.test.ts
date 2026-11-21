@@ -77,6 +77,7 @@ function createConfigParams(overrides: Partial<EditorConfigParams> = {}): Editor
     flushPendingSerialization: vi.fn(),
     openSearchRef: ref(vi.fn()),
     openAnnotationPopoverRef: ref(vi.fn()),
+    addSelectionToLastAgentRef: ref(() => false),
     syncAnnotationTarget: vi.fn(),
     clearAnnotationTarget: vi.fn(),
     scrollRichMarkdownReviewNoteCardIntoView: vi.fn(),

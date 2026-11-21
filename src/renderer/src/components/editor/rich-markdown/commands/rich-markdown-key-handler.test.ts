@@ -81,6 +81,7 @@ function createContext(editor: Editor, typedMarker: boolean): KeyHandlerContext 
       update: () => {}
     },
     openAnnotationPopoverRef: { current: vi.fn(() => true) },
+    addSelectionToLastAgentRef: { current: () => false },
     setIsEditingLink: vi.fn(),
     setLinkBubble: vi.fn(),
     setSelectedCommandIndex: vi.fn(),
