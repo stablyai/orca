@@ -148,6 +148,9 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       }
       pty.lastAgentStatus = agentStatus
       pty.lastAgentStatusObservedLive = true
+      if (agentStatus !== 'idle' && pty.lastExplicitAgentStatus?.restoredAtRest) {
+        pty.lastExplicitAgentStatus = null
+      }
       if (prevStatus === 'working' && agentStatus === null) {
         this.confirmPtyAgentExit(ptyId, true)
       }

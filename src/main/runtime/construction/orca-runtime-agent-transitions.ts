@@ -30,7 +30,7 @@ import {
 } from './orca-runtime-terminal-worker-restart-resume'
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 import type { AgentStatusStoreView } from '../sidebar-inputs/workspace-facts/workspace-activity-facts-producer'
-import { subscribeHookStatusTitles } from '../terminal/layout/hook-status-title-subscription'
+import { subscribeHookStatusRuntime } from '../orchestration/mailbox/terminal-pointer/hook-status-mail-wakeup'
 import {
   resolveTerminalWorkerDispatch,
   TerminalWorkerTurnStops
@@ -297,14 +297,14 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithTer
     this.crewChanges.notify(new Set(['status', 'names']))
     const detachRows = store.subscribeStatusRowMutations(() => this.worktreeRowsChanges?.changed())
     const subscribe = store.subscribeEnrichedStatus?.bind(store)
-    const detachTitles = subscribe
-      ? subscribeHookStatusTitles({ subscribeEnrichedStatus: subscribe }, this)
+    const detachEnriched = subscribe
+      ? subscribeHookStatusRuntime(subscribe, this, (row) => this.observeHookStatusForMail(row))
       : () => {}
     return () => {
       detachCrew()
       detachRows()
       this.crewChanges.notify(new Set(['status', 'names']))
-      detachTitles()
+      detachEnriched()
       detachTransitions()
     }
   }

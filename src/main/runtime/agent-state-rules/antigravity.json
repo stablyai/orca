@@ -1,7 +1,11 @@
 {
   "id": "antigravity",
   "engineVersion": 1,
-  "profile": { "screenProbeBanner": "antigravity cli", "screenSource": "trusted" },
+  "profile": {
+    "screenProbeBanner": "antigravity cli",
+    "screenSource": "trusted",
+    "hooks": "turn-end"
+  },
   "anchors": [
     {
       "id": "text_composer",

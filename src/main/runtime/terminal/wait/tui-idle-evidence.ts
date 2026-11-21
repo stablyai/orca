@@ -35,6 +35,7 @@ export type FirstPartyAgentStatus = {
   updatedAt: number
   sessionBoundary?: boolean
   programAtRest?: boolean
+  restoredAtRest?: boolean
   programSignInRequiredSince?: number
 } | null
 
@@ -52,10 +53,13 @@ export function hasFreshDoneFirstPartyStatus(
   status: FirstPartyAgentStatus,
   staleAfterMs = AGENT_STATUS_STALE_AFTER_MS
 ): boolean {
-  if (
-    status?.state !== 'done' ||
-    (status.sessionBoundary !== true && status.programAtRest !== true)
-  ) {
+  if (status?.state !== 'done') {
+    return false
+  }
+  if (status.restoredAtRest === true) {
+    return true
+  }
+  if (status.sessionBoundary !== true && status.programAtRest !== true) {
     return false
   }
   return Date.now() - status.updatedAt <= staleAfterMs
