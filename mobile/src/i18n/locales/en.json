@@ -5590,7 +5590,9 @@
     "section": {
       "title": "Bots",
       "summary": "{{title}}, {{total}} bots, {{attention}} need you, {{unread}} unread, {{working}} working",
-      "newBot": "New bot"
+      "newBot": "New bot",
+      "reorderTitle": "Reorder bots",
+      "reorder": "Reorder…"
     },
     "groups": {
       "manageMembers": "Manage members",
