@@ -137,6 +137,8 @@ export type PersistedUIState = {
   sidebarBotsHeight?: number | null
   sidebarProjectsFirst?: boolean
   syncTaskStatusFromWorkspaceBoard?: boolean
+  /** Move a workspace card to In review when its agent's turn ends, and back to In progress when a new turn starts. Absent means off. */
+  syncWorkspaceStatusFromAgentTurns?: boolean
   /** Migrate reversed defaults once; never infer later user order from IDs/labels. */
   _workspaceStatusesDefaultOrderMigrated?: boolean
   /** One-shot repair flag for the exact default payload a short-lived build persisted in reverse workflow order. */

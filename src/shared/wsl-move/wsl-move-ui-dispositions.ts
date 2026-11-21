@@ -128,6 +128,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'sidebarBotsHeight',
   'sidebarProjectsFirst',
   'syncTaskStatusFromWorkspaceBoard',
+  'syncWorkspaceStatusFromAgentTurns',
   'statusBarItems',
   'statusBarVisible',
   'usagePercentageDisplay',

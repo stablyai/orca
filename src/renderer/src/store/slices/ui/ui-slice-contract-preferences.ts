@@ -134,6 +134,8 @@ export type UISlicePreferences = {
   setSidebarProjectsFirst: (projectsFirst: boolean) => void
   syncTaskStatusFromWorkspaceBoard: boolean
   setSyncTaskStatusFromWorkspaceBoard: (enabled: boolean) => void
+  syncWorkspaceStatusFromAgentTurns: boolean
+  setSyncWorkspaceStatusFromAgentTurns: (enabled: boolean) => void
   /** Transient: the in-window Agent Dashboard companion drawer is open. Not persisted. */
   agentDashboardDrawerOpen: boolean
   setAgentDashboardDrawerOpen: (open: boolean) => void

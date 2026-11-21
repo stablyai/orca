@@ -60,6 +60,7 @@ export function getPersistedUI(
     sidebarBotsHeight: normalizeSidebarBotsHeight(state.ui?.sidebarBotsHeight) ?? undefined,
     sidebarProjectsFirst: state.ui?.sidebarProjectsFirst === true,
     syncTaskStatusFromWorkspaceBoard: state.ui?.syncTaskStatusFromWorkspaceBoard === true,
+    syncWorkspaceStatusFromAgentTurns: state.ui?.syncWorkspaceStatusFromAgentTurns === true,
     usagePercentageDisplay: normalizeUsagePercentageDisplay(state.ui?.usagePercentageDisplay),
     statusBarUsageMode: normalizeStatusBarUsageMode(state.ui?.statusBarUsageMode),
     statusBarUsageFormat: normalizeStatusBarUsageFormat(state.ui?.statusBarUsageFormat),
