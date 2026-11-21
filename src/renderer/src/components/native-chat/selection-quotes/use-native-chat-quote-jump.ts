@@ -2,6 +2,7 @@ import { createContext, useCallback, type RefObject } from 'react'
 import { nativeChatSlotIndexOf } from '../conversation/slots/native-chat-transcript-slot-selection'
 import type { NativeChatTranscriptSlot } from '../conversation/slots/native-chat-transcript-slots'
 import type { NativeChatNavigationRequest } from '../viewport/navigation/use-native-chat-transcript-navigation'
+import type { useNativeChatHistoryJump } from '../viewport/navigation/use-native-chat-history-jump'
 import { showQuotedText } from './native-chat-quote-highlight'
 import type { NativeChatQuoteJumpDeps } from './native-chat-quote-sources'
 
@@ -13,31 +14,29 @@ const SOURCE_FRAMES = 30
 /** The transcript's jump to a quoted message; null outside a transcript. */
 export const NativeChatQuoteJumpContext = createContext<NativeChatQuoteJump | null>(null)
 
-/** Scrolls to a loaded message as a rail jump does, then shows the quoted text in it. */
+/**
+ * Scrolls to the message as a rail jump does, then shows the quoted text in it. A message that is
+ * not loaded is paged in from older history first, as a link to a message is.
+ */
 export function useNativeChatQuoteJump({
   slots,
   scrollRef,
   request,
   beginNavigation,
-  readerLeavesEnd
+  readerLeavesEnd,
+  startHistoryJump
 }: {
   slots: readonly NativeChatTranscriptSlot[]
   scrollRef: RefObject<HTMLDivElement | null>
   request: Pick<NativeChatNavigationRequest, 'issue' | 'nextRequestId'>
   beginNavigation: () => void
   readerLeavesEnd: () => void
+  startHistoryJump: ReturnType<typeof useNativeChatHistoryJump>['start']
 }): NativeChatQuoteJump {
   const { issue, nextRequestId } = request
   return useCallback(
     ({ messageId, place }, text, notifyMissing, isCurrent) => {
-      const index = nativeChatSlotIndexOf(slots, messageId)
-      if (index === -1) {
-        return false
-      }
       beginNavigation()
-      readerLeavesEnd()
-      issue({ kind: 'rail', messageId, requestId: nextRequestId() })
-      // The landing scrolls in a layout effect; the row is drawn two frames later or more.
       let frame = 0
       const showWhenDrawn = (): void => {
         if (!isCurrent()) {
@@ -59,9 +58,24 @@ export function useNativeChatQuoteJump({
           notifyMissing()
         }
       }
-      requestAnimationFrame(showWhenDrawn)
+      if (nativeChatSlotIndexOf(slots, messageId) !== -1) {
+        readerLeavesEnd()
+        issue({ kind: 'rail', messageId, requestId: nextRequestId() })
+        // The landing scrolls in a layout effect; the row is drawn two frames later or more.
+        requestAnimationFrame(showWhenDrawn)
+        return true
+      }
+      // A long chat keeps only its latest messages loaded, for example after a send. The link landing
+      // takes the reader off the end.
+      startHistoryJump({ kind: 'item', id: messageId }, (result) => {
+        if (result === 'landed') {
+          requestAnimationFrame(showWhenDrawn)
+        } else if (result === 'missing' && isCurrent()) {
+          notifyMissing()
+        }
+      })
       return true
     },
-    [beginNavigation, issue, nextRequestId, readerLeavesEnd, scrollRef, slots]
+    [beginNavigation, issue, nextRequestId, readerLeavesEnd, scrollRef, slots, startHistoryJump]
   )
 }

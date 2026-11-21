@@ -106,9 +106,9 @@ export function quotedFileLocation(
 
 export type NativeChatQuoteJumpDeps = {
   /**
-   * Shows the message in this transcript and highlights the quote; false when it is not here.
-   * Calls `notifyMissing` when the message is not drawn after the jump. Each later step does
-   * nothing once `isCurrent` is false.
+   * Shows the message in this transcript and highlights the quote. It pages older history in when
+   * the message is not loaded. Calls `notifyMissing` when no page has the message, or when the
+   * message is not drawn after the jump. Each later step does nothing once `isCurrent` is false.
    */
   jumpToMessage:
     | ((
