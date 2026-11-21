@@ -248,7 +248,8 @@ export function toMemorySnapshotReply(
   const terminals = terminalOnlyReply(snapshot)
   const measureLimit = budgetBytes + allHistoryJsonBytes(terminals, Number.POSITIVE_INFINITY)
   const keyBytes = paneKeyJsonBytes(terminals)
-  const terminalBytes = jsonBytes(terminals, measureLimit + keyBytes)
+  // Dropping a key never grows the reply here, so an empty-string key can't lower the limit.
+  const terminalBytes = jsonBytes(terminals, measureLimit + Math.max(0, keyBytes))
   if (terminalBytes <= budgetBytes) {
     return terminals
   }
