@@ -282,7 +282,12 @@ export async function registerWslHostHandlers(args: WslHostHandlerArgs): Promise
     'wslHosts:connect',
     (
       _event,
-      request: { environmentId: string; intent?: unknown; withdrawPendingRemoval?: unknown }
+      request: {
+        environmentId: string
+        intent?: unknown
+        pastUncountedTerminals?: unknown
+        withdrawPendingRemoval?: unknown
+      }
     ) => wsl.connect(request.environmentId, wslHostConnectOptions(request))
   )
   const capability = (): WslHostCapability => ({
