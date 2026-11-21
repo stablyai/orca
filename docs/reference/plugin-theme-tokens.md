@@ -109,3 +109,16 @@ Panel and custom editor frames get these stable variables, set from Orca's activ
 | `--orca-radius` | `--radius` |
 | `--orca-font-sans` | `--font-sans` |
 | `--orca-font-mono` | `--font-mono` |
+| `--orca-syntax-comment` | Comments (`comment`) in the code editor's theme |
+| `--orca-syntax-keyword` | Keywords (`keyword`) in the code editor's theme |
+| `--orca-syntax-string` | Strings (`string`) in the code editor's theme |
+| `--orca-syntax-number` | Numbers (`constant.numeric`) in the code editor's theme |
+| `--orca-syntax-function` | Function names (`entity.name.function`) in the code editor's theme |
+| `--orca-syntax-type` | Type names (`entity.name.type`) in the code editor's theme |
+| `--orca-syntax-variable` | Variables (`variable`) in the code editor's theme |
+| `--orca-syntax-constant` | Constants (`constant`) in the code editor's theme |
+| `--orca-syntax-operator` | Operators (`keyword.operator`) in the code editor's theme |
+| `--orca-syntax-tag` | Markup tags (`entity.name.tag`) in the code editor's theme |
+| `--orca-syntax-attribute` | Markup attributes (`entity.other.attribute-name`) in the code editor's theme |
+
+The `--orca-syntax-*` colors are what Orca's code editor paints with: the editor theme chosen in Settings → Appearance, which can differ from the app theme and its light or dark mode. A theme's `tokenColors` reach them through the TextMate scope in parentheses; a scope the theme leaves unset is the editor's built-in color, or its text color where the editor has none.

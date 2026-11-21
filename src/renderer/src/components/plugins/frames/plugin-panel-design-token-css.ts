@@ -7,14 +7,14 @@ import {
   PANEL_SHELL_COLOR_SCHEME_PLACEHOLDER,
   PANEL_SHELL_TOKENS_PLACEHOLDER
 } from '../../../../../shared/plugins/frames/plugin-panel-shell'
-import { PANEL_DESIGN_TOKEN_ALLOWLIST } from '../../../../../shared/plugins/frames/plugin-panel-design-tokens'
+import { PANEL_FRAME_TOKENS } from '../../../../../shared/plugins/frames/plugin-panel-design-tokens'
 import type { PluginFrameWindow } from './plugin-frame-host-lanes'
 
 /** Snapshot trusted computed tokens for isolated panels; strip structural CSS characters before inserting into the shell style block. */
 export function buildPanelDesignTokenCss(): string {
   const styles = getComputedStyle(document.documentElement)
   const declarations: string[] = []
-  for (const token of PANEL_DESIGN_TOKEN_ALLOWLIST) {
+  for (const token of PANEL_FRAME_TOKENS) {
     const value = styles.getPropertyValue(token).trim()
     if (value.length > 0) {
       // Why prefixed: bare names collide with a panel's own shadcn/Tailwind variables.
