@@ -23,6 +23,11 @@ export type ProjectGroupMutationOperations = {
   pruneMobileClientTabSelections: (matchesWorktreeId: (worktreeId: string) => boolean) => void
 }
 
+const projectGroupIndexes = new WeakMap<
+  readonly ProjectGroup[],
+  { length: number; byId: Map<string, ProjectGroup> }
+>()
+
 export class ProjectGroupPersistenceOperations {
   constructor(private readonly operations: ProjectGroupMutationOperations) {}
 
@@ -44,7 +49,17 @@ export class ProjectGroupPersistenceOperations {
 
   /** One group by id, without copying and sorting the whole list. */
   getProjectGroup(id: string): ProjectGroup | undefined {
-    return this.state.projectGroups?.find((group) => group.id === id)
+    const groups = this.state.projectGroups
+    if (!groups) {
+      return undefined
+    }
+    // Rebuilt when the list is replaced or appended to in place; renames edit the indexed objects.
+    let index = projectGroupIndexes.get(groups)
+    if (!index || index.length !== groups.length) {
+      index = { length: groups.length, byId: new Map(groups.map((group) => [group.id, group])) }
+      projectGroupIndexes.set(groups, index)
+    }
+    return index.byId.get(id)
   }
 
   getProjectGroups(): ProjectGroup[] {

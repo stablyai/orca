@@ -99,7 +99,7 @@ export function mergeSnapshotAndSessions(
         incarnationId: daemonSession?.incarnationId,
         paneKey: s.paneKey,
         pid: s.pid,
-        label: resolveSnapshotSessionLabel(s, row.worktreeId, index),
+        label: resolveSnapshotSessionLabel(s, row.worktreeId, index, tabId),
         bound: ctx.workspaceSessionReady && boundPtyIds.has(s.sessionId),
         agentOwnership: daemonSession?.agentOwnership ?? 'unknown',
         tabId,

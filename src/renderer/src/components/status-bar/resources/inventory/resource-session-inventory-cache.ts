@@ -15,6 +15,8 @@ import {
 } from './resource-session-inventory'
 
 const COOLDOWN_MS = 100
+// Back-to-back outdated listings mean nonstop churn; past this many the list is reported stale.
+const OUTDATED_RETRY_LIMIT = 3
 const EXIT_PUBLICATION_MS = 50
 
 /** One request survives view epochs, but only its dispatching epoch may publish it. */
@@ -43,6 +45,7 @@ export class ResourceSessionInventoryCache {
   private exitPublicationTimer: ReturnType<typeof setTimeout> | null = null
   private inventoryChanged = false
   private lastStarted = -Infinity
+  private outdatedRetries = 0
 
   constructor(
     private list: () => Promise<PtyListedSession[]>,
@@ -177,6 +180,7 @@ export class ResourceSessionInventoryCache {
         }
         this.known = deduped
         this.identitiesByIncarnation = identitiesByIncarnation
+        this.outdatedRetries = 0
         this.publishInventory({
           sessionsError: false,
           observedAt: Date.now()
@@ -187,10 +191,12 @@ export class ResourceSessionInventoryCache {
           return
         }
         // A healthy daemon whose answer a spawn or exit outdated: read again, never show it as down.
-        if (isOutdatedSessionListing(error)) {
+        if (isOutdatedSessionListing(error) && this.outdatedRetries < OUTDATED_RETRY_LIMIT) {
+          this.outdatedRetries += 1
           this.pendingRefresh = true
           return
         }
+        this.outdatedRetries = 0
         this.publish({ sessionsError: true })
       })
       .finally(() => {
