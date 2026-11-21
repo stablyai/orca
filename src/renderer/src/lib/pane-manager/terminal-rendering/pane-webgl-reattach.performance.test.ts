@@ -22,11 +22,13 @@ vi.mock('./pane-webgl-renderer', () => ({
   },
   clearTerminalWebglAttachBackoff: () => {}
 }))
+const typingHold = { ms: 0 }
 vi.mock('./terminal-webgl-atlas-memory-rebuild', () => ({
   setTerminalWebglAtlasRebuilder: (next: typeof rebuilder) => {
     rebuilder = next
   },
-  takeCoveredDetachedPane: () => undefined
+  takeCoveredDetachedPane: () => undefined,
+  terminalWebglAtlasTypingHoldMs: () => typingHold.ms
 }))
 vi.mock('./terminal-render-pause-release', () => ({ paintReplacementCanvasNow: () => {} }))
 
@@ -50,6 +52,7 @@ describe('atlas-rebuild reattachment', () => {
     vi.useFakeTimers()
     vi.stubGlobal('requestAnimationFrame', (callback: () => void) => setTimeout(callback, 16))
     attaches.count = 0
+    typingHold.ms = 0
     vi.resetModules()
     await import('./pane-webgl-reattach')
   })
@@ -71,6 +74,25 @@ describe('atlas-rebuild reattachment', () => {
     await vi.advanceTimersByTimeAsync(16 * 4)
     expect(attaches.count).toBe(6)
     expect(fakes.every((fake) => fake.raw.webglAddon)).toBe(true)
+  })
+
+  it('creates no context while the user types mid-chain, then resumes', async () => {
+    const fakes = Array.from({ length: 3 }, fakePane)
+    rebuilder?.(
+      fakes.map((fake) => fake.pane),
+      () => true,
+      () => 'now'
+    )
+    expect(attaches.count).toBe(1)
+    typingHold.ms = 2_000
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(attaches.count).toBe(1)
+    typingHold.ms = 0
+    // The hold ends 2 s after the frame that saw it (t = 16 ms), then waits one more frame.
+    await vi.advanceTimersByTimeAsync(1_040)
+    expect(attaches.count).toBe(2)
+    await vi.advanceTimersByTimeAsync(16)
+    expect(attaches.count).toBe(3)
   })
 
   it('skips a pane that closed or got its renderer back before its frame', async () => {

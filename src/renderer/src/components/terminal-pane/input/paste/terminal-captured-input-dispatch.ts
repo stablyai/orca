@@ -1,5 +1,6 @@
 import type { IDisposable } from '@xterm/xterm'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
+import { noteTerminalWebglAtlasTyping } from '@/lib/pane-manager/terminal-rendering/terminal-webgl-atlas-memory-rebuild'
 
 type CapturedTerminalInputDispatch = {
   targetPaneMounted: boolean
@@ -34,6 +35,7 @@ export function sendCapturedTerminalInput({
   }
   const sent = capturedTransport.sendInput(data, 'driving')
   if (sent) {
+    noteTerminalWebglAtlasTyping()
     onAccepted?.()
   }
   return sent

@@ -4,6 +4,7 @@ import { canRetryPaneWebglAfterContextLoss } from './pane-webgl-context-loss-pol
 import {
   setTerminalWebglAtlasRebuilder,
   takeCoveredDetachedPane,
+  terminalWebglAtlasTypingHoldMs,
   type DeferredReattachVerdict
 } from './terminal-webgl-atlas-memory-rebuild'
 import { isXtermInstanceDisposed } from '../terminal-output/xterm-instance-disposed'
@@ -98,6 +99,15 @@ function reattachAcrossFrames(
   }
   // The pane may have closed, been reattached by reveal or fit, or lost its DOM since the rebuild.
   if (!pane.webglAddon && pane.container.isConnected && !isXtermInstanceDisposed(pane.terminal)) {
+    // Typing resumed mid-chain: the rest keep the DOM renderer until it stops, so no context is created between keystrokes.
+    const typingHold = terminalWebglAtlasTypingHoldMs()
+    if (typingHold > 0) {
+      setTimeout(
+        () => requestAnimationFrame(() => reattachAcrossFrames(panes, verdictOf, waitedFrames)),
+        typingHold
+      )
+      return
+    }
     const verdict = verdictOf(pane)
     if (verdict === 'wait' && waitedFrames < MAX_SYNC_WAIT_FRAMES) {
       requestAnimationFrame(() => reattachAcrossFrames(panes, verdictOf, waitedFrames + 1))

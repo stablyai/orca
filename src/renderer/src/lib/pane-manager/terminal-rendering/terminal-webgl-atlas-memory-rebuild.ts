@@ -289,6 +289,11 @@ export function noteTerminalWebglAtlasTyping(): void {
   lastTypedAt = performance.now()
 }
 
+/** How long a rebuild's remaining reattaches must still wait for typing to stop (0 when clear). */
+export function terminalWebglAtlasTypingHoldMs(): number {
+  return Math.max(0, lastTypedAt + ATLAS_REBUILD_QUIET_MS - performance.now())
+}
+
 /** Requests a rebuild of the grown atlas's renderers, at most every 60 s, only after PTY output into that atlas, once it pauses. */
 export function handleTerminalWebglAtlasPage(
   page: { width: number },
