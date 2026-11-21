@@ -1,7 +1,10 @@
 // When a bot's looks are: one decision the runner and every "Next look" share, from its Look around
 // times read on the schedule's wall clock, starting one interval after its first conversation. A slot
 // the host slept through is caught up until the next slot, the same day.
-import { automationScheduleCalendar } from '../../shared/automations/scheduling/automation-schedule-calendar'
+import {
+  automationScheduleCalendar,
+  type ScheduleCalendar
+} from '../../shared/automations/scheduling/automation-schedule-calendar'
 import type { BotLookAround } from '../../shared/bots/bot-look-around'
 import {
   lookAroundIntervalMs,
@@ -27,8 +30,7 @@ const GAP_STEPS_MAX = 120
 /** Each listed time once per schedule-local date: a time a spring-forward skips runs at the first
  *  instant after the gap (never on the date before, for a gap at midnight), and a time a fall-back
  *  repeats runs at its first occurrence. */
-function slotsOnDay(setting: BotLookAround, day: number): number[] {
-  const calendar = automationScheduleCalendar(lookAroundZone(setting))
+function slotsOnDay(setting: BotLookAround, calendar: ScheduleCalendar, day: number): number[] {
   const weekday = calendar.fields(day).weekday
   if (setting.weekdaysOnly && (weekday === 0 || weekday === 6)) {
     return []
@@ -65,7 +67,7 @@ function* slotsFrom(
   const calendar = automationScheduleCalendar(lookAroundZone(setting))
   let day = calendar.startOfDay(from)
   for (let index = 0; index <= days; index += 1) {
-    const slots = slotsOnDay(setting, day).sort((a, b) => (step === 1 ? a - b : b - a))
+    const slots = slotsOnDay(setting, calendar, day).sort((a, b) => (step === 1 ? a - b : b - a))
     yield* slots
     day = calendar.addDays(day, step)
   }
@@ -92,7 +94,7 @@ function nextLookSlot(setting: BotLookAround, after: number): number | null {
 /** Whether `at` is one of the schedule's slots as it stands now. */
 function isCurrentSlot(setting: BotLookAround, at: number): boolean {
   const calendar = automationScheduleCalendar(lookAroundZone(setting))
-  return slotsOnDay(setting, calendar.startOfDay(at)).includes(at)
+  return slotsOnDay(setting, calendar, calendar.startOfDay(at)).includes(at)
 }
 
 /** Each listed time's last `count` slots at or before `until`, over scheduled days only (a weekend
@@ -109,7 +111,7 @@ export function recentSlotsByTime(
   const days = Math.ceil(count * 1.5) + 3
   let day = calendar.startOfDay(until)
   for (let index = 0; index <= days; index += 1) {
-    const slots = slotsOnDay(setting, day)
+    const slots = slotsOnDay(setting, calendar, day)
     times.forEach((time, position) => {
       const slot = slots[position]
       const list = byTime.get(time)

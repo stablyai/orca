@@ -3,12 +3,8 @@ import type { Bot } from '../../shared/bot-types'
 import { makeTestBot } from './bot.test-fixture'
 import { LOOK_AROUND_DEFAULTS } from '../../shared/bots/bot-look-around'
 import { BotLookAroundStore } from './bot-look-around-store'
-import {
-  BotLookAroundRunner,
-  LOOK_FAILURES,
-  LOOK_RUN_LIMIT_MS,
-  LOOK_STOP_GRACE_MS
-} from './bot-look-around-runner'
+import { BotLookAroundRunner, LOOK_STOP_GRACE_MS } from './bot-look-around-runner'
+import { LOOK_FAILURES, LOOK_RUN_LIMIT_MS } from './bot-look-around-run-outcome'
 import type { BotTurnEnd } from './bot-run-turn-watch'
 import { runtimeBotAutomationSessions } from './bot-automation-sessions'
 import * as BotChatSession from './bot-chat-session'
