@@ -27,15 +27,17 @@ function botAgentOnHost(
   agent: BotAgent,
   model: Extract<BotAgentMenuModel, { state: 'settled' }>
 ): BotNewChatAgent {
-  const row = model.rows.find((entry) => entry.agent === agent)
-  if (!row) {
+  const own = model.rows.filter((entry) => entry.agent === agent)
+  if (own.length === 0) {
     // No row: the agent is not on this host, or the host could not be asked.
     return {
       agent,
       unavailable: model.detection.detectedIds === null ? 'check-failed' : 'not-installed'
     }
   }
-  return row.kind === 'chat-unavailable' ? { agent, unavailable: row.reason } : { agent }
+  // A bot runs a chat, so an unavailable chat row wins over the agent's CLI row wherever it sits.
+  const unavailable = own.find((entry) => entry.kind === 'chat-unavailable')
+  return unavailable ? { agent, unavailable: unavailable.reason } : { agent }
 }
 
 /** The bot's own agent first, then every other one installed here; each unavailable one says why,
