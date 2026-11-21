@@ -63,11 +63,16 @@ export async function loadBotItemsList(
     let loaded = botItemsClosedLoaded(first)
     let last: BotItemsListRead = first
     while (live() && last.nextClosedCursor && loaded < want) {
-      last = await call({
-        closedCursor: last.nextClosedCursor,
-        closedOnly: true,
-        closedLimit: Math.min(want - loaded, page)
-      })
+      try {
+        last = await call({
+          closedCursor: last.nextClosedCursor,
+          closedOnly: true,
+          closedLimit: Math.min(want - loaded, page)
+        })
+      } catch {
+        // The first page is fresh; the pages below it load again through Show more (as before).
+        return reuseEqualJson(previous, first)
+      }
       const closedRows = last.items.filter(isClosedRow)
       below.push(...closedRows)
       loaded += closedRows.length

@@ -165,6 +165,21 @@ describe('loadBotItemsList', () => {
     }
   })
 
+  it('keeps a fresh first page when a page below it fails', async () => {
+    const items = seeded()
+    const inner = host(items)
+    let read = await loadBotItemsList(inner, null, WHOLE)
+    read = await loadBotItemsList(inner, read, MORE)
+    Object.assign(items[0]!, { status: 'needs_you', version: 2 })
+    const failing: BotItemsListCall = (params) =>
+      params.closedCursor ? Promise.reject(new Error('offline')) : inner(params)
+    Object.assign(items[299]!, { lastActivityAt: 5000, version: 2 })
+    read = await loadBotItemsList(failing, read, WHOLE)
+    expect(read.items.find((item) => item.uid === 'i1')?.status).toBe('needs_you')
+    expect(read.items.filter(closed)).toHaveLength(50)
+    expect(read.nextClosedCursor).toBeDefined()
+  })
+
   it('stops paging down the depth once nothing shows the list', async () => {
     const older = host(seeded(), true)
     let read = await loadBotItemsList(older, null, WHOLE)
