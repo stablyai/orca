@@ -20061,6 +20061,7 @@
         "optionUpdateFailed": "Не удалось изменить параметр",
         "optionValue": {
           "none": "Нет",
+          "off": "Выключено",
           "fast": "Быстро",
           "minimal": "Минимальный",
           "low": "Низкий",
@@ -23363,6 +23364,9 @@
     "linkedMessageMissing": "Не удалось найти это сообщение.",
     "math": {
       "scrollDisplayEquation": "Прокрутить формулу"
+    },
+    "messageTime": {
+      "yesterday": "Вчера {{time}}"
     }
   },
   "quitAndStopAllSessions": {

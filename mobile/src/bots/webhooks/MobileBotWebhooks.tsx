@@ -277,14 +277,29 @@ function HookPages(
   if (props.step === 'delete') {
     return (
       <ConfirmContent
-        title={t('bots.webhooks.delete.title', 'Delete the webhook for “{{automation}}”?', {
-          automation: hook.automationName
-        })}
-        message={t(
-          'bots.webhooks.delete.note',
-          'Its URL stops working, and calls still waiting are cancelled. A new webhook gets a new URL.'
-        )}
-        confirmLabel={t('bots.webhooks.delete.confirm', 'Delete webhook')}
+        {...(hook.deletesAutomation
+          ? {
+              title: t(
+                'bots.webhooks.delete.withAutomation.title',
+                'Delete “{{automation}}” and its webhook?',
+                { automation: hook.automationName }
+              ),
+              message: t(
+                'bots.webhooks.delete.withAutomation.note',
+                "Nothing else starts this automation, so it's deleted with its run history. The webhook's URL stops working, and calls still waiting are cancelled."
+              ),
+              confirmLabel: t('bots.webhooks.delete.withAutomation.confirm', 'Delete both')
+            }
+          : {
+              title: t('bots.webhooks.delete.title', 'Delete the webhook for “{{automation}}”?', {
+                automation: hook.automationName
+              }),
+              message: t(
+                'bots.webhooks.delete.note',
+                'Its URL stops working, and calls still waiting are cancelled. A new webhook gets a new URL.'
+              ),
+              confirmLabel: t('bots.webhooks.delete.confirm', 'Delete webhook')
+            })}
         destructive
         onCancel={back}
         onConfirm={() =>

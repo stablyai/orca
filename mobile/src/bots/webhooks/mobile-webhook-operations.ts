@@ -40,6 +40,7 @@ const WebhookSummarySchema = z.looseObject({
   lastCall: z.looseObject({ at: z.number(), signatureValid: z.boolean() }).nullable(),
   host: z.enum(['online', 'offline']),
   automationName: z.string(),
+  deletesAutomation: z.boolean().optional(),
   resultsTo: ResultsToSchema,
   filters: FiltersSchema,
   pendingCalls: z.number(),

@@ -206,7 +206,8 @@ export function runtimeBotChatTreeHost(runtime: OrcaRuntimeService): BotChatTree
       return readAgentSessionRecordStore()
     },
     db: () => runtime.getOrchestrationDb(),
-    dispatchWorkers: (dispatchIds) => readDispatchWorkers(runtime, dispatchIds),
+    dispatchWorkers: (dispatchIds) =>
+      readDispatchWorkers(runtime, dispatchIds, { lostTerminalsEnded: true }),
     backgroundRuns: runtime.lookAround,
     agentListVerdicts: () => runtime.readAgentListPublication()?.verdicts,
     ...(runtime.botChatTreeIndex ? { index: runtime.botChatTreeIndex } : {})

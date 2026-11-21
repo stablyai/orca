@@ -5,6 +5,7 @@ import { useAppStore } from '@/store'
 import { PortalContainerContext } from '../ui/portal-container-context'
 import { BOT_TEMPLATES } from '../../../../shared/bots/bot-templates'
 import { templateProposal, type BotProposal } from '../../../../shared/bots/bot-proposal'
+import type { BotShareReview } from '../../../../shared/bots/bot-share-received'
 import { NewBotDialog } from './NewBotDialog'
 
 const dialog = () => (
@@ -103,12 +104,15 @@ function Stage({
   width,
   nudge,
   proposal,
-  height = 620
+  height = 620,
+  link
 }: {
   width: 340 | 480
   nudge?: boolean
   proposal?: BotProposal
   height?: number
+  /** Opened from a reviewed link, as the link flow opens it. */
+  link?: BotShareReview
 }): React.JSX.Element {
   const [box, setBox] = useState<HTMLElement | null>(null)
   return (
@@ -124,6 +128,9 @@ function Stage({
             onOpenChange={() => {}}
             onImport={nudge ? () => {} : undefined}
             proposal={proposal}
+            {...(link
+              ? { fromShare: { review: link, toolIds: [], onBack: () => {}, onMoved: () => {} } }
+              : {})}
           />
         </PortalContainerContext.Provider>
       ) : null}
@@ -285,3 +292,38 @@ export const schedulesOpen480 = defineFixture({
   ...templateReview(480, 'email-digest'),
   interact: openChip(/schedule/)
 })
+
+const LONGEST_LINK: BotShareReview = {
+  reviewId: 'review-1',
+  shareId: 'share-1',
+  versionId: 'version-1',
+  publisher: 'Alexandra Whitfield',
+  publishedAt: '2026-11-08T00:00:00.000Z',
+  bot: {
+    schemaVersion: 1,
+    name: 'Customer Escalations Concierge for the Platform Team',
+    avatar: { mascot: 'B1' },
+    purpose: 'Owns customer escalations.',
+    agentHint: 'claude',
+    skills: [],
+    tools: [],
+    connectors: [],
+    schedules: [],
+    eventSuggestions: [],
+    memory: []
+  },
+  files: [],
+  flags: [],
+  leftOut: [],
+  avatarDataUrl: null
+}
+
+const fromLink = (width: 340 | 480) => ({
+  width: width + 32,
+  setup: seeded(LONG_COMPUTER),
+  render: () => <Stage width={width} link={LONGEST_LINK} />
+})
+
+// The link flow's New bot: the same dialog, prefilled from the link, beside longest340/480.
+export const link340 = defineFixture(fromLink(340))
+export const link480 = defineFixture(fromLink(480))

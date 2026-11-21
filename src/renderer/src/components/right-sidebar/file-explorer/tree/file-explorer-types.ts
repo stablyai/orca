@@ -42,6 +42,7 @@ export type DirCache = {
 
 /** Retry covered dir reads after supersession, but not unreadable roots, which would add one dead transport timeout per dir. */
 export type FileExplorerTreeRefreshOutcome = 'refreshed' | 'superseded' | 'root-unreadable'
+export type FileExplorerTreeRefreshOptions = { wakeWslDistro?: boolean; restoredSnapshot?: boolean }
 
 export type UseFileExplorerTreeResult = {
   dirCache: Record<string, DirCache>

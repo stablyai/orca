@@ -23,6 +23,27 @@ export const botUpdate = bindDeferredRpcOperation(
   })
 )
 
+export const botAvatarUpload = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.avatar.upload',
+    method: 'bots.avatar.upload',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('bot-avatar-uploaded', phoneBotReply)
+  })
+)
+
+/** Its folder, soul and memory stay: the phone never sends deleteFolder, as the desktop never does. */
+export const botDelete = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.delete',
+    method: 'bots.delete',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('bot-deleted', z.looseObject({ deleted: z.boolean() }))
+  })
+)
+
 /** A New bot from the phone; the host speaks first in its Home Chat, as for one made on the desktop. */
 export const botCreate = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -63,6 +84,17 @@ export const botHomeChatReset = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('bot-chat-reset', z.looseObject({ sessionId: z.string().min(1) }))
+  })
+)
+
+/** Sends a wait's run that couldn't start into its chat, once ever; the host refuses a second. */
+export const botRunSendAgain = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.send-run-again',
+    method: 'bots.sendRunAgain',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('bot-run-sent-again', z.looseObject({ sessionId: z.string().min(1) }))
   })
 )
 

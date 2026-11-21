@@ -32,7 +32,7 @@ export const KIRO_LAUNCH_SPEC: AcpLaunchSpec = {
   env: {},
   dialect: KIRO_ACP_DIALECT,
   loginCommand: agentSessionSetupFor('kiro')?.loginCommand ?? [],
-  // V3 runs no user hooks here: only clients that opt in at initialize, like Kiro's TUI, get them.
+  // V3 reads settings, sessions and hooks from KIRO_HOME.
   account: directoryAccountBinding('KIRO_HOME', (homePath) => join(homePath, '.kiro')),
   installDirectories: ({ env, homePath }) => [
     join(homePath, '.local', 'bin'),

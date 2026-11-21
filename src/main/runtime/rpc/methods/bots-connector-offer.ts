@@ -1,5 +1,6 @@
 // `orca bot connectors --offer`: a bot that needs Slack, Linear, GitHub or Google asks Orca to put a
 // Connect card in its chat, instead of telling its owner where to click.
+import { noWindowAnswersGoogleCards } from '../../../google/google-card-reach'
 import { randomUUID } from 'node:crypto'
 import type { Bot } from '../../../../shared/bot-types'
 import {
@@ -13,6 +14,7 @@ import { BotConnectorOffer } from '../../../../shared/rpc-contract/bots-look-aro
 import { hostGoogleBotState } from '../../../bots/bot-google-access'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { LOOK_AROUND_REFUSAL } from '../../../bots/bot-look-around-policy'
+import { refuseBotGroupRoomCard } from '../../../bots/bot-group-session-access'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, InvalidArgumentError } from '../core'
@@ -42,6 +44,7 @@ export async function postConnectorOffer(
   offer: ConnectorOffer,
   runtime: Pick<OrcaRuntimeService, 'servesWithoutWindow'>
 ): Promise<void> {
+  refuseBotGroupRoomCard(callerSessionId)
   const host = getStructuredAgentSessionHost()
   // Null for a session this host doesn't run.
   const destination = await host?.captureAgentStartDestination(callerSessionId)
@@ -88,7 +91,7 @@ export const BOT_CONNECTOR_OFFER_METHOD = defineMethod({
     const answer: ReturnType<typeof connectorOfferReply> =
       source === 'google'
         ? googleOfferReply(await hostGoogleBotState(bot), {
-            headless: runtime.servesWithoutWindow(),
+            headless: noWindowAnswersGoogleCards(runtime),
             botName: bot.name
           })
         : connectorOfferReply(bot, source, workspace)

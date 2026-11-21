@@ -25,6 +25,7 @@ import { liveWorkerTerminalAutoReleaseAt } from '../../../../orchestration/termi
 import { failedWorkerStartHasOutput } from '../../../../orchestration/workers/turn-stops/failed-worker-start-report'
 import { readFederatedWorkerOutput } from '../../../../orchestration/legacy-remote-home/federated-worker-read'
 import { showFederatedWorker } from '../../../../orchestration/legacy-remote-home/federated-worker-show'
+import { settleRestartCutWorkerStart } from '../../../../orchestration/db/worker-dispatch/restart-cut-worker-start'
 import {
   WorkerDispatchParams,
   WorkerReadParams
@@ -59,19 +60,17 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
       if (!worker) {
         return showContextOnlyWorker(runtime, db, dispatch)
       }
-      if (worker.runtime_epoch && worker.runtime_epoch !== runtime.getRuntimeId()) {
-        if (worker.state === 'starting') {
-          worker = db.markWorkerStartUnknown(
-            params.dispatch,
-            worker.stage,
-            'The runtime restarted before worker-start reached a terminal receipt.'
-          )
-        } else if (worker.state === 'stopping') {
-          worker = db.markWorkerStopUnknown(
-            params.dispatch,
-            'The runtime restarted before worker-stop reached a terminal receipt.'
-          )
-        }
+      if (worker.state === 'starting') {
+        worker = settleRestartCutWorkerStart(db, params.dispatch, runtime.getRuntimeId()) ?? worker
+      } else if (
+        worker.state === 'stopping' &&
+        worker.runtime_epoch &&
+        worker.runtime_epoch !== runtime.getRuntimeId()
+      ) {
+        worker = db.markWorkerStopUnknown(
+          params.dispatch,
+          'The runtime restarted before worker-stop reached a terminal receipt.'
+        )
       }
       const observation = await inspectWorkerTerminal(runtime, db, params.dispatch)
       const resource = db.getWorkerTerminalResourceByOwner(params.dispatch)

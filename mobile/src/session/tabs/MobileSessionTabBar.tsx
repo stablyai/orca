@@ -387,3 +387,6 @@ const styles = themedStyleSheet(() => ({
     borderColor: colors.bgPanel
   }
 }))
+
+// The group room's thread bar draws its cells with these too.
+export { styles as sessionTabBarStyles }

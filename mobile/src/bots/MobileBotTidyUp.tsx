@@ -46,7 +46,7 @@ export function MobileTidyUpSection(props: {
   const last = props.view?.last ?? null
   return (
     <SettingsSection
-      title={t('bots.tidyUp.title', 'Memory upkeep')}
+      first
       footer={t(
         'bots.tidyUp.footer',
         'Changes memory files only. Uses your agent plan, like a short chat. Orca must be running on your computer.'
@@ -164,7 +164,7 @@ function Summary(props: { run: Run; busy: boolean; onUndo: (rowId: string) => vo
   )
 }
 
-/** How often, or the last run's changes, drilled into from the section. */
+/** How often, or the last run's changes, drilled into from Memory upkeep. */
 export function MobileTidyUpPage(props: {
   page: TidyUpPage
   bot: SheetBot
@@ -192,7 +192,10 @@ export function MobileTidyUpPage(props: {
             ? t('bots.tidyUp.every', 'How often')
             : t('bots.tidyUp.summaryTitle', 'Last tidy-up')
         }
-        onBack={{ label: t('bots.lookAround.back', 'Back to Settings'), onPress: props.onBack }}
+        onBack={{
+          label: t('bots.tidyUp.backToTidyUp', 'Back to Memory upkeep'),
+          onPress: props.onBack
+        }}
       />
       {props.banner}
       {props.page === 'every' ? (

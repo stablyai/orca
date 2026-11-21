@@ -202,8 +202,13 @@ export function BotItemBody({
     isVisible: true
   })
   // From the comment box or a quick reply: shown at once, then sent to the host.
-  const sendComment = (text: string, paths: readonly string[] = [], questionId?: string): void => {
-    pending.send(text, paths, view.events.at(-1)?.id ?? item.lastEventId, questionId)
+  const sendComment = (
+    text: string,
+    paths: readonly string[] = [],
+    questionId?: string,
+    plain?: boolean
+  ): void => {
+    pending.send(text, paths, view.events.at(-1)?.id ?? item.lastEventId, questionId, plain)
     jumpToLatest()
   }
   const sendLatest = useLatestHandler(sendComment)

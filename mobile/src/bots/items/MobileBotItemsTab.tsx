@@ -116,6 +116,7 @@ export function MobileBotItemsTab({
   ) : null
   const asksOnly = (
     <MobileBotNeedsYouGroup
+      botName={botName}
       asks={asks}
       items={[]}
       disabled={!online}
@@ -215,6 +216,7 @@ export function MobileBotItemsTab({
       id === 'needs_you' ? (
         <MobileBotNeedsYouGroup
           key={id}
+          botName={botName}
           asks={asks}
           items={groups.needs_you}
           disabled={disabled}
@@ -230,7 +232,7 @@ export function MobileBotItemsTab({
           items={groups[id]}
           total={id === 'closed' ? Math.max(closedTotal, groups.closed.length) : groups[id].length}
           onMoreClosed={id === 'closed' && !filter.needsYou ? items.loadMoreClosed : null}
-          seenEventId={seenEventId}
+          isUnseen={(item) => isBotItemUnseen(item, seenEventId)}
           renderItem={(item) => row(item, id)}
           onCancelAll={
             id === 'stale' && groups.stale.length > 0 && !failed && online
@@ -251,7 +253,8 @@ export function MobileBotItemsTab({
   )
 }
 
-function ReadFailed({ onRetry }: { onRetry: () => void }) {
+/** A re-read that failed, over the last good list it keeps up. */
+export function ReadFailed({ onRetry }: { onRetry: () => void }) {
   const t = useMobileTranslation()
   return (
     <ListGroup style={styles.failed}>
@@ -264,12 +267,13 @@ function ReadFailed({ onRetry }: { onRetry: () => void }) {
   )
 }
 
-function ItemGroup({
+/** One folding group under its "Name N" header, five rows then Show N more; Closed reads more pages. */
+export function ItemGroup({
   id,
   items,
   total,
   onMoreClosed,
-  seenEventId,
+  isUnseen,
   renderItem,
   onCancelAll
 }: {
@@ -277,7 +281,8 @@ function ItemGroup({
   items: BotItem[]
   total: number
   onMoreClosed: (() => Promise<unknown>) | null
-  seenEventId: string
+  /** Changed since its bot's Items were last opened. */
+  isUnseen: (item: BotItem) => boolean
   renderItem: (item: BotItem) => ReactNode
   onCancelAll: (() => void) | null
 }) {
@@ -288,7 +293,7 @@ function ItemGroup({
   if (total === 0) {
     return null
   }
-  const fresh = id === 'closed' ? items.filter((item) => isBotItemUnseen(item, seenEventId)) : []
+  const fresh = id === 'closed' ? items.filter(isUnseen) : []
   const more = total - Math.min(shown, items.length)
   const showMore = async () => {
     if (shown + BOT_ITEM_GROUP_ROWS > items.length && onMoreClosed) {

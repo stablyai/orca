@@ -16,9 +16,14 @@ import { buildPaneActivityEvents } from './activity-pane-events'
 import {
   buildActivityTabContext,
   buildActivityTabHostIndex,
+  keepsActivityTabIdentities,
+  patchActivityTabIndexes,
   type ActivityTabContext,
-  type ActivityTabHostIndex
+  type ActivityTabHostIndex,
+  type TabBucketChange
 } from './activity-event-builder-context'
+import { readTabMapChanges } from '@/store/record-transitions/keyed-record-change-reads'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { BuildActivityEventsArgs } from './activity-event-builder'
 import { KeyedRebuildPlan } from '../../../../../shared/collections/keyed-rebuild-plan'
 
@@ -70,6 +75,60 @@ export function resetActivityEventBuildCache(cache: ActivityEventBuildCache): vo
   cache.plan.reset()
 }
 
+/** The replaced buckets of an addressed write that kept the workspace set; null when it can't be read so. */
+function replacedBuckets<T extends TerminalTab | Tab>(
+  next: Record<string, T[]>,
+  previous: Record<string, T[]>
+): TabBucketChange<T>[] | null {
+  const changes = readTabMapChanges(next, previous)
+  if (!changes) {
+    return []
+  }
+  if (changes.kind !== 'addressed' || changes.workspaceSetChanged) {
+    return null
+  }
+  const buckets: TabBucketChange<T>[] = []
+  for (const worktreeId of changes.workspaceIds) {
+    const before = Object.hasOwn(previous, worktreeId) ? previous[worktreeId] : undefined
+    const after = Object.hasOwn(next, worktreeId) ? next[worktreeId] : undefined
+    if (!before || !after || !keepsActivityTabIdentities({ worktreeId, before, after })) {
+      return null
+    }
+    buckets.push({ worktreeId, before, after })
+  }
+  return buckets
+}
+
+// A title or label write replaces buckets without moving any tab, so only those buckets re-index.
+function patchedTabIndexes(
+  args: ActivityTabInputs,
+  previous: ActivityTabIndexes
+): ActivityTabIndexes | null {
+  if (
+    previous.chatNames !== args.chatNames ||
+    !previous.unifiedTabsByWorktree ||
+    !args.unifiedTabsByWorktree
+  ) {
+    return null
+  }
+  const terminal = replacedBuckets(args.tabsByWorktree, previous.tabsByWorktree)
+  const unified =
+    terminal && replacedBuckets(args.unifiedTabsByWorktree, previous.unifiedTabsByWorktree)
+  if (
+    !terminal ||
+    !unified ||
+    // Only this cache holds the indexes, so patching them in place leaves no reader behind.
+    !patchActivityTabIndexes(previous.context, previous.hosts, terminal, unified, args.chatNames)
+  ) {
+    return null
+  }
+  return {
+    ...previous,
+    tabsByWorktree: args.tabsByWorktree,
+    unifiedTabsByWorktree: args.unifiedTabsByWorktree
+  }
+}
+
 export function resolveActivityTabIndexes(
   args: ActivityTabInputs,
   cache: ActivityEventBuildCache | undefined
@@ -83,7 +142,7 @@ export function resolveActivityTabIndexes(
   ) {
     return previous
   }
-  const next: ActivityTabIndexes = {
+  const next: ActivityTabIndexes = (previous && patchedTabIndexes(args, previous)) ?? {
     tabsByWorktree: args.tabsByWorktree,
     unifiedTabsByWorktree: args.unifiedTabsByWorktree,
     chatNames: args.chatNames,

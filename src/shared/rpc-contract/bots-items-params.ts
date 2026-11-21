@@ -135,7 +135,10 @@ export const BotItemsOwnerComment = z
     requestId: z.string().min(1).max(128).optional(),
     /** The question this comment answers (a quick reply): refused with `item_changed` if the agent has
      *  since asked another. Only to a host advertising BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY. */
-    questionId: z.string().min(1).max(128).optional()
+    questionId: z.string().min(1).max(128).optional(),
+    /** A comment of its own: it answers no question the agent waits on. Only to a host advertising
+     *  BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY. */
+    plain: z.literal(true).optional()
   })
   .refine((value) => value.text.trim() || value.images?.length, 'Missing text')
 
