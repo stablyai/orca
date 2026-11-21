@@ -298,7 +298,7 @@ export function AntigravityAccountsSection({
         // Chats here run on agy, which only the Google account method does; Orca's sign-in is the
         // way to run them on Orca's server instead.
         <>
-          <AntigravityGoogleSignInChoice owner={owner} standalone />
+          <AntigravityGoogleSignInChoice owner={owner} inUse="agy" standalone />
           {runtimeRow}
         </>
       )

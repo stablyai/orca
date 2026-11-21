@@ -353,7 +353,9 @@ function AuthForm({
                 </SelectContent>
               </Select>
             </AntigravityChatAuthSettingRow>
-            {method === 'oauth-personal' && <AntigravityGoogleSignInChoice owner={owner} />}
+            {method === 'oauth-personal' && (
+              <AntigravityGoogleSignInChoice owner={owner} inUse="orca" />
+            )}
             {usesGcp && (
               <AntigravityChatGcpFields
                 id={id}

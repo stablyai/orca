@@ -118,13 +118,13 @@ export function createAcpModelCatalogProbe(
         if (release.status === 'tooOld') {
           throw new Error(`${spec.agent} at ${command} does not run structured chats`)
         }
-        await prepareAcpListingAccount(spec, env, antigravityChatAuth, () =>
-          assertStructuredAgentResolutionCurrent(operation)
-        )
         const listing = acpModelListingForRelease(discovery, release.version)
         if (listing === null) {
           throw new Error(`${spec.agent} at ${command} lists its models only through its chats`)
         }
+        await prepareAcpListingAccount(spec, env, antigravityChatAuth, () =>
+          assertStructuredAgentResolutionCurrent(operation)
+        )
         const launch = {
           command,
           args: [...prefixArgs, ...spec.args({ fullAccess: false, pluginDirs: [] })],

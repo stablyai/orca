@@ -18,8 +18,9 @@ const HostOwnedSettingsSchema = z.object({
   nativeChatShellEnvironmentVariables: z.array(z.string()),
   // Launches the host starts itself (CLI, orchestration workers); desktop launches send their own.
   agentDefaultSurface: z.enum(['chat', 'terminal']),
-  // Whose sign-in chats on the Google account method use; 'orca' runs them on Orca's server.
-  antigravityGoogleSignIn: z.enum(['agy', 'orca'])
+  // Whose sign-in chats on the Google account method use: 'auto' follows what the host has (see
+  // antigravityChatRoute), 'agy' is agy's own login, 'orca' Orca's built-in sign-in on its server.
+  antigravityGoogleSignIn: z.enum(['auto', 'agy', 'orca'])
 } satisfies { [K in keyof GlobalSettings]?: z.ZodType<NonNullable<GlobalSettings[K]>> })
 
 export type HostOwnedSettings = z.output<typeof HostOwnedSettingsSchema>
@@ -39,7 +40,7 @@ const HOST_OWNED_SETTING_FALLBACKS: HostOwnedSettings = {
   nativeChatInheritShellEnvironment: true,
   nativeChatShellEnvironmentVariables: [],
   agentDefaultSurface: 'terminal',
-  antigravityGoogleSignIn: 'agy'
+  antigravityGoogleSignIn: 'auto'
 }
 
 export const HOST_OWNED_SETTING_KEYS = HostOwnedSettingsSchema.keyof().options

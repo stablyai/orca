@@ -6,14 +6,27 @@ import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { AntigravityChatAuthSettingRow } from './AntigravityChatAuthSettingRow'
 
+/** The choice the dropdown shows: an explicit one, else the sign-in in use, so an upgraded
+ *  profile signed in through Orca reads "Orca's built-in sign-in", not the default's agy. */
+export function antigravityGoogleSignInShown(
+  saved: 'auto' | 'agy' | 'orca',
+  inUse: 'agy' | 'orca'
+): 'agy' | 'orca' {
+  return saved === 'auto' ? inUse : saved
+}
+
 /** Whose sign-in chats on the Google account method use on this host: agy's own login (agy is
  *  installed for it), or Orca's built-in browser sign-in on Orca's server. Absent on hosts too old
  *  to honor the choice. */
 export function AntigravityGoogleSignInChoice({
   owner,
+  inUse,
   standalone = false
 }: {
   owner: RuntimeClientTarget
+  /** The sign-in new Google-account chats use now (the sign-in form shows only where they run on
+   *  Orca's server), shown while the host follows its default. */
+  inUse: 'agy' | 'orca'
   /** A row of its own in the Chat group, rather than one of the sign-in form's fields. */
   standalone?: boolean
 }): React.JSX.Element | null {
@@ -40,7 +53,7 @@ export function AntigravityGoogleSignInChoice({
       label={t('accounts.antigravity.googleSignIn', 'Google account sign-in')}
     >
       <Select
-        value={setting.value}
+        value={antigravityGoogleSignInShown(setting.value, inUse)}
         onValueChange={(value) => void update(value === 'orca' ? 'orca' : 'agy')}
       >
         <SelectTrigger id={id} className="w-full">

@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   resolveAntigravityChatAuthConfig,
@@ -102,18 +103,23 @@ export const antigravityChatAccount = {
   prepare: async (
     env: Readonly<Record<string, string>>,
     config?: AntigravityChatAuthConfig,
-    assertCurrent?: () => void
+    assertCurrent?: () => void,
+    purpose: 'chat' | 'listing' = 'chat'
   ): Promise<void> => {
     const auth = resolveAntigravityChatAuthConfig(config)
     const home = env.GEMINI_HOME
     if (!home) {
       throw new Error('GEMINI_HOME is not set')
     }
-    await assertAntigravityChatCredential(auth, env)
+    const listing = purpose === 'listing'
+    // A listing never signs in, so it needs neither a credential check nor the link capture.
+    if (!listing) {
+      await assertAntigravityChatCredential(auth, env, home)
+    }
     if (!(await retained.stopFailed(home))) {
       throw new AntigravitySignInCloseUnprovenError()
     }
-    if (!(await antigravityBrowserHelperWorks())) {
+    if (!listing && !(await antigravityBrowserHelperWorks())) {
       throw new AntigravitySignInSentence(
         "Antigravity's sign-in link can't be captured on this host. Restart Orca and try again."
       )
@@ -121,12 +127,19 @@ export const antigravityChatAccount = {
     await folder.prepare?.(env)
     await linkAntigravityUserSkills(home, antigravityUserHome(env))
     const path = join(home, ANTIGRAVITY_ACP_HOME, 'settings.json')
-    const projection = { auth: { type: auth.method }, ...(await gcpProjection(auth, env)) }
+    const projection = JSON.stringify({
+      auth: { type: auth.method },
+      ...(await gcpProjection(auth, env))
+    })
+    // Unchanged settings cost no durable write, so a listing or a start mostly writes nothing.
+    if ((await readFile(path, 'utf8').catch(() => null)) === projection) {
+      return
+    }
     try {
       await writeFileDurableIfCurrent(
         durableWriteTempPath(path),
         path,
-        JSON.stringify(projection),
+        projection,
         () => {
           assertCurrent?.()
           return true

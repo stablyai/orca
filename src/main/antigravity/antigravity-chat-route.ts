@@ -102,7 +102,9 @@ async function computeAntigravityChatRoute(
   // signed-in agy does, as before Orca installed one. Unlike then, a missing secret-tool lets agy be
   // asked, since gdbus already found the keyring unlocked.
   const managedAgy = input.settings.antigravityManagedAgyEnabled !== false
-  if (!managedAgy || (await usesOrcaServer(input, server))) {
+  // Choosing agy's own sign-in takes Google-account chats to agy even where Orca's server is in use.
+  const choseAgy = input.settings.antigravityGoogleSignIn === 'agy'
+  if (!managedAgy || (!choseAgy && (await usesOrcaServer(input, server)))) {
     // A signed-in agy still takes new chats; with no login to find, agy isn't asked at all.
     const ready =
       agyResolves &&
