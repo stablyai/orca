@@ -75,9 +75,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
       if (catalogChanged) {
         this.notifyReposChanged()
       }
-      for (const listener of this.botWriteListeners) {
-        listener()
-      }
+      this.botWriteListeners.forEach((listener) => listener())
       this.botChangeNotices.changed({ kinds: ['bot'] })
     },
     createFolderWorkspace: async (input) =>
