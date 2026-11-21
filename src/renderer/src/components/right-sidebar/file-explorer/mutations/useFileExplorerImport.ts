@@ -129,10 +129,23 @@ export function useFileExplorerImport({
         return
       }
 
+      const clipboardRead = readClipboardImportPaths().catch((error: unknown) => {
+        toast.error(
+          extractIpcErrorMessage(
+            error,
+            translate(
+              'auto.components.right.sidebar.useFileExplorerImport.importFailed',
+              'Failed to import files.'
+            )
+          )
+        )
+        return null
+      })
+
       enqueueFileExplorerPasteDelivery(sequence, async () => {
         try {
-          const paths = await readClipboardImportPaths()
-          if (paths.length === 0) {
+          const paths = await clipboardRead
+          if (!paths || paths.length === 0) {
             return
           }
           const prepared = await prepareOsFileDropPaths(paths, 'main-reader')

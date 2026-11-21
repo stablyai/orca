@@ -206,3 +206,69 @@ it('pastes copied files and clipboard images into the target folder without inte
   const textPaste = pasteOn(view.getByTestId('text-input'))
   expect(textPaste.defaultPrevented).toBe(false)
 })
+
+it('captures clipboard paths before waiting for an earlier paste delivery', async () => {
+  let clipboardPath = '/source/first.ts'
+  const ui = {
+    readClipboardText: vi.fn(async () => ''),
+    readClipboardFilePaths: vi.fn(async () => [clipboardPath]),
+    clipboardHasImage: vi.fn(async () => false),
+    saveClipboardImageAsTempFile: vi.fn(async () => null)
+  }
+  vi.stubGlobal('api', {
+    fs: {
+      prepareDroppedPaths: mocks.prepare.mockImplementation(async ({ paths }) => ({
+        paths,
+        failures: []
+      }))
+    },
+    ui
+  })
+  let releaseFirstImport!: () => void
+  const firstImport = new Promise((resolve) => {
+    releaseFirstImport = () =>
+      resolve({ results: [{ status: 'imported', destPath: '/repo/app/first.ts' }] })
+  })
+  mocks.importPaths.mockReturnValueOnce(firstImport).mockResolvedValueOnce({
+    results: [{ status: 'imported', destPath: '/repo/app/second.ts' }]
+  })
+
+  function Probe() {
+    const fileExplorerImport = useFileExplorerImport({
+      worktreeId: 'wt',
+      worktreePath: '/repo',
+      displayRootPath: '/repo',
+      refreshDir: vi.fn().mockResolvedValue(undefined),
+      clearNativeDragState: vi.fn(),
+      setSelectedPath: vi.fn()
+    })
+    return (
+      <div ref={fileExplorerImport.fileDropOwnerRef}>
+        <button onClick={() => fileExplorerImport.pasteToDirectory('/repo/app')}>Paste</button>
+      </div>
+    )
+  }
+
+  const view = render(<Probe />)
+  try {
+    await act(async () => {
+      fireEvent.click(view.getByRole('button', { name: 'Paste' }))
+    })
+    await waitFor(() => expect(mocks.importPaths).toHaveBeenCalledTimes(1))
+
+    clipboardPath = '/source/second.ts'
+    await act(async () => {
+      fireEvent.click(view.getByRole('button', { name: 'Paste' }))
+    })
+    clipboardPath = '/source/changed-after-paste.ts'
+    releaseFirstImport()
+    await waitFor(() => expect(mocks.importPaths).toHaveBeenCalledTimes(2))
+
+    expect(mocks.prepare).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ paths: ['/source/second.ts'] })
+    )
+  } finally {
+    releaseFirstImport()
+  }
+})
