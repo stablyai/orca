@@ -58,8 +58,8 @@ function installGitFake(fake: GitFake): void {
     if (command === 'rev-list') {
       return { stdout: '0\t3\n' }
     }
-    if (command === 'for-each-ref') {
-      return { stdout: 'refs/heads/main\0\0\n' }
+    if (command === 'config') {
+      throw Object.assign(new Error('key unset'), { code: 1 })
     }
     if (command === 'merge-base') {
       // Local is still an ancestor of the target unless asked whether it already contains it.

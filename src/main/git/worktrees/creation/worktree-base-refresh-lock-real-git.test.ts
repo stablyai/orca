@@ -1,12 +1,12 @@
 import { execFileSync } from 'node:child_process'
-import { realpathSync } from 'node:fs'
-import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as gitRunner from '../../command-runner/git-exec-file'
 import {
   fastForwardCheckedOutLocalBaseAfterCreate,
+  getLocalBaseRefUpdateSuggestionForWorktreeCreate,
   refreshLocalBaseRefForWorktreeCreate
 } from './worktree-base-refresh'
 
@@ -275,11 +275,10 @@ describe('local base refresh reads worktree ownership from git dirs with real Gi
     return () => lists
   }
 
-  it('fast-forwards main in the linked checkout that owns it without listing worktrees', async () => {
+  it('fast-forwards main in the primary checkout that owns it without listing worktrees', async () => {
     const { repoPath, lockPath, remoteOid } = await createBehindRepo()
     await rm(lockPath, { force: true })
-    const linkedPath = join(repoPath, '..', 'linked main')
-    git(repoPath, ['worktree', 'add', '--quiet', linkedPath, 'main'])
+    git(repoPath, ['checkout', '--quiet', 'main'])
     const lists = spyOnWorktreeLists()
 
     await expect(refresh(repoPath)).resolves.toBeUndefined()
@@ -290,16 +289,27 @@ describe('local base refresh reads worktree ownership from git dirs with real Gi
       {}
     )
 
-    await vi.waitFor(() => expect(git(linkedPath, ['rev-parse', 'HEAD'])).toBe(remoteOid))
-    expect(await readFile(join(linkedPath, 'version.txt'), 'utf8')).toBe('two\n')
+    await vi.waitFor(() => expect(git(repoPath, ['rev-parse', 'HEAD'])).toBe(remoteOid))
+    expect(await readFile(join(repoPath, 'version.txt'), 'utf8')).toBe('two\n')
     expect(lists()).toBe(0)
   })
 
-  it('checks the primary checkout first when main is also force-checked-out elsewhere', async () => {
+  it('moves a main no checkout has without listing worktrees', async () => {
+    const { repoPath, lockPath, remoteOid } = await createBehindRepo()
+    await rm(lockPath, { force: true })
+    git(repoPath, ['worktree', 'add', '--quiet', join(repoPath, '..', 'linked'), '--detach'])
+    const lists = spyOnWorktreeLists()
+
+    await expect(refresh(repoPath)).resolves.toMatchObject({ status: 'updated' })
+
+    expect(git(repoPath, ['rev-parse', 'main'])).toBe(remoteOid)
+    expect(lists()).toBe(0)
+  })
+
+  it('suggests nothing while main is checked out in two places', async () => {
     const { repoPath, lockPath } = await createBehindRepo()
     await rm(lockPath, { force: true })
     git(repoPath, ['checkout', '--quiet', 'main'])
-    await writeFile(join(repoPath, 'version.txt'), 'my edit\n')
     git(repoPath, [
       'worktree',
       'add',
@@ -308,26 +318,52 @@ describe('local base refresh reads worktree ownership from git dirs with real Gi
       join(repoPath, '..', 'also-main'),
       'main'
     ])
-    const original = gitRunner.gitExecFileAsync
-    const statusDirs: string[] = []
-    vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
-      if (args.includes('status')) {
-        statusDirs.push(options.cwd)
-      }
-      return original(args, options)
-    })
 
-    fastForwardCheckedOutLocalBaseAfterCreate(
-      repoPath,
-      'origin/main',
-      'refs/remotes/origin/main',
-      {}
-    )
-
-    await vi.waitFor(() =>
-      expect(statusDirs.map((dir) => realpathSync(dir))).toEqual([realpathSync(repoPath)])
-    )
+    await expect(
+      getLocalBaseRefUpdateSuggestionForWorktreeCreate(
+        repoPath,
+        'origin/main',
+        'refs/remotes/origin/main'
+      )
+    ).resolves.toBeUndefined()
   })
+
+  it('leaves main alone while a linked checkout has it through a branch alias', async () => {
+    const { repoPath, lockPath, localOid } = await createBehindRepo()
+    await rm(lockPath, { force: true })
+    const linkedPath = join(repoPath, '..', 'aliased')
+    git(repoPath, ['symbolic-ref', 'refs/heads/alias', 'refs/heads/main'])
+    git(repoPath, ['worktree', 'add', '--quiet', linkedPath, '--detach'])
+    git(linkedPath, ['symbolic-ref', 'HEAD', 'refs/heads/alias'])
+    const spy = spyOnFastForwards()
+
+    await refresh(repoPath)
+
+    expect(spy.writes()).toBe(0)
+    expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
+  })
+
+  // Windows needs symlink privileges.
+  it.skipIf(process.platform === 'win32')(
+    'leaves main alone while a symlinked worktree registration has it checked out',
+    async () => {
+      const { repoPath, lockPath, localOid } = await createBehindRepo()
+      await rm(lockPath, { force: true })
+      const linkedPath = join(repoPath, '..', 'moved-admin')
+      git(repoPath, ['worktree', 'add', '--quiet', linkedPath, 'main'])
+      const adminDir = join(repoPath, '.git', 'worktrees', 'moved-admin')
+      const movedAdmin = join(repoPath, '..', 'admin-elsewhere')
+      await rename(adminDir, movedAdmin)
+      await symlink(movedAdmin, adminDir)
+      await writeFile(join(movedAdmin, 'commondir'), `${join(repoPath, '.git')}\n`)
+      const spy = spyOnFastForwards()
+
+      await refresh(repoPath)
+
+      expect(spy.writes()).toBe(0)
+      expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
+    }
+  )
 
   // Windows needs symlink privileges.
   it.skipIf(process.platform === 'win32')(

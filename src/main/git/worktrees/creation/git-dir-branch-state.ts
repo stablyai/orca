@@ -1,6 +1,6 @@
 import { readdir, readFile, readlink, realpath, stat } from 'node:fs/promises'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
-import { basename, dirname, join } from 'node:path'
+import { join } from 'node:path'
 
 /** A HEAD whose branch the files cannot tell: reftable leaves this placeholder, and odd symlinks map to it. */
 export const UNRESOLVED_HEAD = 'ref: refs/heads/.invalid'
@@ -21,8 +21,10 @@ export async function readGitDirState(commonDir: string): Promise<GitDirState> {
   const gitDirs = [commonDir]
   try {
     for (const entry of await readdir(join(commonDir, 'worktrees'), { withFileTypes: true })) {
-      if (entry.isDirectory()) {
-        gitDirs.push(join(commonDir, 'worktrees', entry.name))
+      const gitDir = join(commonDir, 'worktrees', entry.name)
+      // Git follows a symlinked registration, so it counts too.
+      if (entry.isDirectory() || (entry.isSymbolicLink() && (await isDirectory(gitDir)))) {
+        gitDirs.push(gitDir)
       }
     }
   } catch (error) {
@@ -98,6 +100,15 @@ function rethrowUnlessMissing(error: unknown): void {
   }
 }
 
+async function isDirectory(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory()
+  } catch (error) {
+    rethrowUnlessMissing(error)
+    return false
+  }
+}
+
 /** Same file system entry after resolving symlinks; false when either is missing. */
 export async function isSamePath(left: string, right: string): Promise<boolean> {
   try {
@@ -108,56 +119,64 @@ export async function isSamePath(left: string, right: string): Promise<boolean> 
   }
 }
 
-/** Git reports a bare repo's own HEAD as the repo, minus any `/.git`; it checks nothing out. */
-export async function locateRepoOwnHead(
-  ownerPath: string,
-  commonDir: string
-): Promise<{ isCommonDir: boolean; isRepoItself: boolean }> {
-  if (!ownerPath) {
-    return { isCommonDir: false, isRepoItself: false }
-  }
-  const realCommonDir = await realpath(commonDir).catch(() => commonDir)
-  const isCommonDir = await isSamePath(ownerPath, realCommonDir)
-  const isRepoItself =
-    isCommonDir ||
-    (basename(realCommonDir) === '.git' && (await isSamePath(ownerPath, dirname(realCommonDir))))
-  return { isCommonDir, isRepoItself }
-}
+export type BranchCheckouts =
+  | { kind: 'free' }
+  /** Git dirs whose HEAD names the branch, directly or through branch symrefs. */
+  | { kind: 'owned'; gitDirs: string[] }
+  /** The files cannot tell (reftable, odd refs or symlinks); only Git's own listing can. */
+  | { kind: 'unknown' }
 
-/** Git dirs whose HEAD names the branch, skipping a bare common dir's own HEAD. */
-export function countBranchCheckouts(
-  heads: GitDirState['heads'],
+const MAX_SYMREF_HOPS = 5
+
+/** Git's in-use rule from files; `bareCommonDir`'s own HEAD checks nothing out. Reservations are separate. */
+export async function resolveBranchCheckouts(
+  { heads }: GitDirState,
+  commonDir: string,
   fullRef: string,
   bareCommonDir: string | undefined
-): number {
-  return [...heads].filter(
-    ([gitDir, head]) => head === `ref: ${fullRef}` && gitDir !== bareCommonDir
-  ).length
-}
-
-/** Reads `for-each-ref --format=%(refname)%00%(worktreepath)%00` output; the pattern also matches refs under `<fullRef>/`. */
-export function parseWorktreePathOfRef(stdout: string, fullRef: string): string {
-  // Ref names hold no newline or NUL; paths hold no NUL.
-  const text = `\n${stdout}`
-  const at = text.indexOf(`\n${fullRef}\0`)
-  if (at === -1) {
-    return ''
+): Promise<BranchCheckouts> {
+  // A case-insensitive file system resolves `Main` to `main`; matching both only ever skips.
+  const target = fullRef.toLowerCase()
+  const looseRefs = new Map<string, Promise<string>>()
+  const readLooseRef = (ref: string) => {
+    const known =
+      looseRefs.get(ref) ?? readOptional(join(commonDir, ref)).then((text) => text.trim())
+    looseRefs.set(ref, known)
+    return known
   }
-  const from = at + fullRef.length + 2
-  return text.slice(from, text.indexOf('\0', from))
-}
-
-/** Git's in-use rule from files: a rebase/bisect reservation or a HEAD naming the branch; fails closed on a HEAD the files cannot resolve. */
-export function isBranchInUse(
-  { heads, reserved }: GitDirState,
-  fullRef: string,
-  bareCommonDir: string | undefined
-): boolean {
-  return (
-    reserved.has(fullRef) ||
-    [...heads].some(
-      ([gitDir, head]) =>
-        gitDir !== bareCommonDir && (head === `ref: ${fullRef}` || head === UNRESOLVED_HEAD)
-    )
+  // update-ref follows a symref, which would move some other branch.
+  if ((await readLooseRef(fullRef)).startsWith('ref: ')) {
+    return { kind: 'unknown' }
+  }
+  const owners: string[] = []
+  let unknown = false
+  await Promise.all(
+    [...heads].map(async ([gitDir, head]) => {
+      if (gitDir === bareCommonDir || !head.startsWith('ref: ')) {
+        return
+      }
+      let ref = head.slice('ref: '.length)
+      for (let hop = 0; hop <= MAX_SYMREF_HOPS; hop += 1) {
+        if (head === UNRESOLVED_HEAD || !ref.startsWith('refs/heads/')) {
+          unknown = true
+          return
+        }
+        if (ref.toLowerCase() === target) {
+          owners.push(gitDir)
+          return
+        }
+        // Packed and missing refs are never symrefs.
+        const loose = await readLooseRef(ref)
+        if (!loose.startsWith('ref: ')) {
+          return
+        }
+        ref = loose.slice('ref: '.length)
+      }
+      unknown = true
+    })
   )
+  if (unknown) {
+    return { kind: 'unknown' }
+  }
+  return owners.length > 0 ? { kind: 'owned', gitDirs: owners } : { kind: 'free' }
 }
