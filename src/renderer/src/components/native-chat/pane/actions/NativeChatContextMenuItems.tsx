@@ -1,8 +1,19 @@
-import { Copy, ExternalLink, FileText, Globe, Quote, Search, Trash2, Undo2 } from 'lucide-react'
+import {
+  Copy,
+  ExternalLink,
+  FileText,
+  Globe,
+  History,
+  Quote,
+  Reply,
+  Search,
+  Trash2
+} from 'lucide-react'
 import {
   useNativeChatRewindConfirm,
   useNativeChatSlackMirrorContext
 } from '../../slack-mirror/native-chat-slack-mirror'
+import { startNativeChatReply } from '../../composer/reply/native-chat-reply-context'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { formatOptionalPrimaryShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useAppStore } from '@/store'
@@ -27,7 +38,8 @@ export function NativeChatContextMenuTargetItems({
   rewind: NativeChatRewindSurface | undefined
 }): React.JSX.Element {
   const t = useTranslate()
-  const { quoteText, link, codeText, messageText, rewindItemId, slackPostedItemId } = target
+  const { quoteText, link, codeText, messageText, rewindItemId, slackPostedItemId, replyTo } =
+    target
   const slackMirror = useNativeChatSlackMirrorContext()
   const linkRows = link ? [link.primary, link.alternate, ...(link.secondaryActions ?? [])] : []
   return (
@@ -64,6 +76,12 @@ export function NativeChatContextMenuTargetItems({
         <DropdownMenuItem onSelect={() => copyText(messageText)}>
           <Copy />
           {t('components.native-chat.copyMessage.copy', 'Copy message')}
+        </DropdownMenuItem>
+      ) : null}
+      {replyTo ? (
+        <DropdownMenuItem onSelect={() => startNativeChatReply(replyTo.from, replyTo.source)}>
+          <Reply />
+          {t('components.native-chat.reply.action', 'Reply')}
         </DropdownMenuItem>
       ) : null}
       {rewindItemId && rewind ? (
@@ -107,7 +125,7 @@ function NativeChatRewindMenuItem({
       disabled={Boolean(rewind.disabledReason)}
       onSelect={() => void rewind.request(itemId, confirm)}
     >
-      <Undo2 />
+      <History />
       <span className="grid min-w-0 flex-1">
         {t('components.native-chat.rewind.action', 'Rewind to here')}
         {/* A disabled row cannot show the button's tooltip, so its reason sits under the label,

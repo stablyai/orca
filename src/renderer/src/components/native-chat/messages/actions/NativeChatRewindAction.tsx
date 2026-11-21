@@ -1,5 +1,5 @@
 import { useNativeChatRewindConfirm } from '../../slack-mirror/native-chat-slack-mirror'
-import { Undo2 } from 'lucide-react'
+import { History } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind-host'
@@ -29,7 +29,7 @@ export function NativeChatRewindAction({
             }
           }}
         >
-          <Undo2 className="size-3.5" />
+          <History className="size-3.5" />
         </button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>

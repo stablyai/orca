@@ -11,6 +11,7 @@ import {
   persistNativeChatComposerDraft
 } from './native-chat-composer-draft-persistence'
 import { releaseNativeChatStagedFiles } from './native-chat-draft-attachment-staging'
+import { clearNativeChatReplyTargetsWhere } from '../composer/reply/native-chat-reply-target'
 import type {
   StoredNativeChatComposerDraft,
   NativeChatComposerDraftOwner
@@ -21,6 +22,13 @@ export function deleteNativeChatComposerDraftsWhere(
 ): void {
   deleteLoadingNativeChatComposerDraftsWhere(matches)
   retireNativeChatComposerSubmissionsWhere(matches)
+  // A reply alone, with no text, still belongs to its workspace through the owner it was picked in.
+  clearNativeChatReplyTargetsWhere((scope, owner) =>
+    matches(
+      scope,
+      records.get(scope) ?? (owner ? { text: '', images: [], savedAt: 0, owner } : undefined)
+    )
+  )
   for (const scope of new Set([...records.keys(), ...scopeListeners.keys()])) {
     const draft = records.get(scope)
     if (matches(scope, draft)) {

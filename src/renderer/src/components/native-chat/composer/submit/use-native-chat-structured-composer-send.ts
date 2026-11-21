@@ -1,5 +1,12 @@
 import { serializeNativeChatAgentReferences } from '../pickers/native-chat-agent-reference-send'
 import {
+  readNativeChatReplyTarget,
+  nativeChatReplyCustody,
+  restoreNativeChatReplyTarget,
+  settleNativeChatReplySend
+} from '../reply/native-chat-reply-target'
+import { withNativeChatReplyContext } from '../reply/native-chat-reply-quote'
+import {
   hasNativeChatStagedFiles,
   captureNativeChatStagedInput
 } from '../../drafts/native-chat-draft-attachment-staging'
@@ -136,8 +143,14 @@ export function useNativeChatStructuredComposerSend({
           hostCommand ? 'goal' : 'message'
         )
       }
+      // A reply is part of the message, quoted once here; commands never carry one.
+      const reply = hostCommand ? null : readNativeChatReplyTarget(draftScopeKey)
+      if (reply) {
+        text = withNativeChatReplyContext(text, reply, formatAgentTypeLabel(agent))
+      }
       const submission = captureNativeChatComposerSubmission(draftScopeKey)
       let consumed = false
+      let replyTakenAt: number | undefined
       let completeAddition = false
       submission.stopObserving = subscribeToNativeChatComposerDraftAppend(
         draftScopeKey,
@@ -161,6 +174,11 @@ export function useNativeChatStructuredComposerSend({
           return
         }
         consumed = true
+        // Only the reply this send captured; a newer Reply picked meanwhile stays.
+        // Custody only if this send really took its reply; one picked meanwhile stays the user's.
+        if (settleNativeChatReplySend(draftScopeKey, reply?.id)) {
+          replyTakenAt = nativeChatReplyCustody(draftScopeKey)
+        }
         const left = nativeChatComposerDraftLeftAfterSend(
           readNativeChatComposerDraft(draftScopeKey),
           submitted
@@ -200,6 +218,12 @@ export function useNativeChatStructuredComposerSend({
           (!hostCommand || (current.text.trim() === '' && (current.images?.length ?? 0) === 0))
         )
       }
+      // A refusal after the pending hand-off restores the draft; the reply it carried comes back with it.
+      const returnReply = () => {
+        if (reply && replyTakenAt !== undefined) {
+          restoreNativeChatReplyTarget(draftScopeKey, reply, replyTakenAt)
+        }
+      }
       const prepareAttachments: StructuredAgentSessionAttachmentPreparation | undefined =
         stagedInput ? (input) => stagedInput.prepare(input, structuredTransport) : undefined
       return dispatchNativeChatStructuredComposerText(
@@ -221,6 +245,7 @@ export function useNativeChatStructuredComposerSend({
           }
           if (!accepted) {
             finishNativeChatComposerSubmission(draftScopeKey, submission, recoversDraft())
+            returnReply()
             return false
           }
           transferred = true
@@ -234,6 +259,7 @@ export function useNativeChatStructuredComposerSend({
         })
         .catch((error) => {
           finishNativeChatComposerSubmission(draftScopeKey, submission, recoversDraft())
+          returnReply()
           if (hostCommand && !isCurrent()) {
             return false
           }

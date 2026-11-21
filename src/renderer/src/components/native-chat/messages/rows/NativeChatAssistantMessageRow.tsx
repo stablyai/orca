@@ -17,6 +17,10 @@ import {
   NativeChatCodeBlock,
   NativeChatPlainCodeBlock
 } from '../../markdown/code/NativeChatCodeBlock'
+import {
+  NATIVE_CHAT_ROW_LANDING_RING,
+  NATIVE_CHAT_ROW_LANDING_RING_HANGING
+} from './native-chat-row-landing-ring'
 import { NativeChatAgentControls } from '../actions/NativeChatAgentControls'
 import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAttachments'
 import { NativeChatForkAction } from '../actions/NativeChatForkAction'
@@ -95,9 +99,12 @@ export function NativeChatAssistantMessageRow({
       ref={rowRef}
       // The context menu offers Copy message only where the row's controls offer Copy.
       data-native-chat-message-id={showControls && words.length > 0 ? message.id : undefined}
+      data-native-chat-message-author={message.role === 'assistant' ? 'agent' : undefined}
       data-native-chat-message-tone={isSystem ? 'faint' : undefined}
       className={cn(
         'group relative max-w-full select-text text-sm leading-relaxed text-chat-foreground',
+        NATIVE_CHAT_ROW_LANDING_RING,
+        showControls && actionsHang && NATIVE_CHAT_ROW_LANDING_RING_HANGING,
         isSystem && 'text-xs text-chat-foreground-faint'
       )}
     >
@@ -129,6 +136,7 @@ export function NativeChatAssistantMessageRow({
       {showControls ? (
         <NativeChatAgentControls
           markdown={words}
+          messageId={message.role === 'assistant' ? message.id : undefined}
           timestamp={message.timestamp}
           onScrollToTop={scrollToTop}
           action={

@@ -20907,6 +20907,20 @@
       },
       "automationSaved": {
         "openFullPage": "打开页面"
+      },
+      "reply": {
+        "action": "回复",
+        "showOriginal": "显示原消息",
+        "originalUnavailable": "消息不可用",
+        "cancel": "取消回复",
+        "replyingToLabel": "正在回复 {{name}}",
+        "replyingToName": "正在回复 <name>{{name}}</name>",
+        "repliedTo": "回复了 {{name}}",
+        "repliedToYou": "回复了你的消息",
+        "agentFallback": "智能体",
+        "cancelled": "已取消回复",
+        "replyingToYouLabel": "正在回复你的消息",
+        "replyingToYouName": "正在回复<name>你的消息</name>"
       }
     },
     "tab": {

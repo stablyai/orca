@@ -16,8 +16,12 @@ import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
 import { NativeChatUserMessageFold } from './NativeChatUserMessageFold'
 import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
 import { NativeChatCopyButton } from '../actions/NativeChatCopyButton'
+import { NativeChatReplyAction } from '../actions/NativeChatReplyAction'
+import { NativeChatReplyQuoteChip } from '../../composer/reply/NativeChatReplyQuoteChip'
+import { nativeChatReplyQuoteOf } from '../../composer/reply/native-chat-reply-quote'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { useFoldedIntoBotRequest } from '../../bot-request-folded-mail'
+import { NATIVE_CHAT_ROW_LANDING_RING } from './native-chat-row-landing-ring'
 import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
 import { NativeChatConnectorAskerTag } from '../../NativeChatConnectorAskerTag'
 import { NativeChatTypedByTag } from '../../NativeChatTypedByTag'
@@ -37,11 +41,13 @@ const USER_META_REVEAL =
 /** Sending replaces the timestamp without changing row height; image-only prompts offer no text copy. */
 function UserMessageMeta({
   markdown,
+  messageId,
   timestamp,
   sending,
   rewind
 }: {
   markdown: string
+  messageId: string
   timestamp: number | null
   sending: boolean
   rewind?: { itemId: string; surface: NativeChatRewindSurface }
@@ -58,6 +64,9 @@ function UserMessageMeta({
     >
       {markdown ? (
         <NativeChatCopyButton text={markdown} className={sending ? USER_META_REVEAL : undefined} />
+      ) : null}
+      {markdown && !sending ? (
+        <NativeChatReplyAction source={{ messageId, author: 'user', text: markdown }} />
       ) : null}
       {sending ? (
         <span className="text-xs whitespace-nowrap text-chat-foreground-faint">
@@ -106,14 +115,22 @@ export function NativeChatUserMessageRow({
   if (folded) {
     return <div ref={rowRef} hidden />
   }
+  // The quote a reply carries is for the agent; the user sees it as one compact line.
+  const replyQuote = from ? null : nativeChatReplyQuoteOf(markdown)
+  const shownMarkdown = replyQuote?.rest ?? markdown
   return (
     <div
       ref={rowRef}
       // Read by the context menu: only rows showing the hover copy or rewind offer them there.
       data-native-chat-message-id={markdown ? message.id : undefined}
+      data-native-chat-message-author={from ? undefined : 'user'}
       data-native-chat-rewind-item={rewind && !sending ? message.id : undefined}
       data-native-chat-slack-posted={slackPost?.state === 'posted' ? message.id : undefined}
-      className={cn('group relative flex flex-col gap-0.5', from ? 'items-start' : 'items-end')}
+      className={cn(
+        'group relative flex flex-col gap-0.5',
+        NATIVE_CHAT_ROW_LANDING_RING,
+        from ? 'items-start' : 'items-end'
+      )}
     >
       {!from && message.asker ? <NativeChatConnectorAskerTag asker={message.asker} /> : null}
       {!from && !message.asker && (message.typedByOther || slackPost?.state === 'posted') ? (
@@ -144,15 +161,16 @@ export function NativeChatUserMessageRow({
                 runtimeContext={runtimeContext}
                 enablePreview={runtimeContext !== undefined}
               />
+              {replyQuote ? <NativeChatReplyQuoteChip quote={replyQuote} /> : null}
               <NativeChatUserMessageFold
                 messageId={message.id}
-                markdown={markdown}
+                markdown={shownMarkdown}
                 onRefolded={onRefolded}
                 // List numbers hang into the bubble's padding; clipping at the text edge cut them off.
                 className="-mx-3.5 px-3.5"
               >
                 <NativeChatTextAttachments
-                  content={drawn ?? markdown}
+                  content={drawn ?? shownMarkdown}
                   structured={structuredAttachments}
                   runtimeContext={runtimeContext}
                   renderText={(text) => (
@@ -200,6 +218,7 @@ export function NativeChatUserMessageRow({
       {!from ? (
         <UserMessageMeta
           markdown={markdown}
+          messageId={message.id}
           timestamp={message.timestamp}
           sending={sending}
           {...(rewind ? { rewind: { itemId: message.id, surface: rewind } } : {})}

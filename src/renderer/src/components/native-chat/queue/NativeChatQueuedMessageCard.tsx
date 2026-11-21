@@ -1,4 +1,5 @@
 import { QueuedMessageImageCount } from '@/components/native-chat/queue/NativeChatQueuedMessageImageCount'
+import { nativeChatReplyDisplayText } from '../composer/reply/NativeChatReplyQuoteChip'
 import type { QueuedMessageDragPresentation } from '@/components/native-chat/queue/NativeChatQueuedMessageRows'
 import { useId, useState } from 'react'
 import {
@@ -163,7 +164,10 @@ export function NativeChatQueuedMessageCard({
 }): React.JSX.Element {
   const t = useTranslate()
   const caption = queuedMessageCardCaption(card, agentName, statedFailures, t)
-  const line = queuedMessageCardLine(card, nativeChatImageLabelCopy(t))
+  const cardText = queuedMessageCardLine(card, nativeChatImageLabelCopy(t))
+  const line = nativeChatReplyDisplayText(cardText, t)
+  // Expanded, the whole quote shows, so the user can check what the agent will read.
+  const fullText = nativeChatReplyDisplayText(cardText, t, true)
   const returned = card.state === 'returned'
   const attention = queuedMessageCardNeedsAttention(card)
   const sendNow = queuedMessageCardSendNow(card, agentWorking, t)
@@ -349,9 +353,9 @@ export function NativeChatQueuedMessageCard({
         <p
           id={textId}
           className="scrollbar-sleek mt-1 max-h-60 overflow-y-auto whitespace-pre-wrap break-words pl-5.5 text-sm"
-          style={nativeChatTextHasUnkernedRun(line) ? NATIVE_CHAT_UNKERNED_CSS : undefined}
+          style={nativeChatTextHasUnkernedRun(fullText) ? NATIVE_CHAT_UNKERNED_CSS : undefined}
         >
-          {line}
+          {fullText}
         </p>
       ) : null}
     </li>
