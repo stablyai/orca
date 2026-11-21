@@ -140,11 +140,9 @@ export async function getLocalBaseRefUpdateSuggestionForWorktreeCreate(
   if (!parsed) {
     return undefined
   }
-  const inspection = await inspectLocalBaseBranch(localBaseBranchGit(options), {
-    repoPath,
-    fullRef: parsed.fullRef,
-    remoteTrackingRef
-  })
+  const refs = { repoPath, fullRef: parsed.fullRef, remoteTrackingRef }
+  const git = localBaseBranchGit(options)
+  const inspection = await inspectLocalBaseBranch(git, refs, { occupancyOnly: true })
   return inspection.status === 'behind'
     ? { baseRef: parsed.baseRef, localBranch: parsed.localBranch, behind: inspection.behind }
     : undefined

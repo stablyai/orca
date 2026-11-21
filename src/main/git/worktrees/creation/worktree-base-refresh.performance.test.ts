@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import * as gitRunner from '../../command-runner/git-exec-file'
 import {
   fastForwardCheckedOutLocalBaseAfterCreate,
+  getLocalBaseRefUpdateSuggestionForWorktreeCreate,
   refreshLocalBaseRefForWorktreeCreate
 } from './worktree-base-refresh'
 
@@ -22,11 +23,14 @@ function git(cwd: string, args: string[]): string {
 }
 
 /** `main` one commit behind `origin/main`, with `linked` detached linked worktrees. */
-async function createRepo(linked: number): Promise<{ repoPath: string; remoteOid: string }> {
+async function createRepo(
+  linked: number,
+  initArgs: (root: string) => string[] = () => []
+): Promise<{ repoPath: string; remoteOid: string }> {
   const root = await mkdtemp(join(tmpdir(), 'orca-base-refresh-perf-'))
   roots.push(root)
   const repoPath = join(root, 'repo')
-  execFileSync('git', ['init', '--quiet', repoPath])
+  execFileSync('git', ['init', '--quiet', ...initArgs(root), repoPath])
   git(repoPath, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
   git(repoPath, ['config', 'user.email', 'test@example.com'])
   git(repoPath, ['config', 'user.name', 'Test User'])
@@ -113,6 +117,28 @@ it.each([3, 30])(
     const listings = countWorktreeListings()
 
     await refreshAndFollowUp(repoPath, owner, remoteOid)
+
+    expect(listings()).toBe(0)
+  }
+)
+
+it.each([3, 30])(
+  'suggests updating a checked-out main without listing %i worktrees',
+  async (linked) => {
+    const { repoPath } = await createRepo(linked, (root) => [
+      '--separate-git-dir',
+      join(root, 'repo-git')
+    ])
+    git(repoPath, ['checkout', '--quiet', 'main'])
+    const listings = countWorktreeListings()
+
+    await expect(
+      getLocalBaseRefUpdateSuggestionForWorktreeCreate(
+        repoPath,
+        'origin/main',
+        'refs/remotes/origin/main'
+      )
+    ).resolves.toEqual({ baseRef: 'origin/main', localBranch: 'main', behind: 1 })
 
     expect(listings()).toBe(0)
   }

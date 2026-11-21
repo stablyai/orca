@@ -71,13 +71,13 @@ function ownerFastForwardArgs(branch: string, targetOid: string): string[] {
   ]
 }
 
-type InspectOptions = { skipCheckedOut?: boolean; skipShared?: boolean }
+type InspectOptions = { skipCheckedOut?: boolean; skipShared?: boolean; occupancyOnly?: boolean }
 
-/** Read-only inspection of local drift. A checked-out branch is reported only when strictly behind, so its checkout stays silent otherwise; `skipCheckedOut` (or `skipShared`, for a branch several checkouts share) stops before walking its history. */
+/** Read-only inspection of local drift. A checked-out branch is reported only when strictly behind, so its checkout stays silent otherwise; `skipCheckedOut` (or `skipShared`, for a branch several checkouts share) stops before walking its history; `occupancyOnly` skips locating the owner. */
 export async function inspectLocalBaseBranch(
   git: LocalBaseBranchGit,
   refs: LocalBaseBranchRefs,
-  { skipCheckedOut = false, skipShared = false }: InspectOptions = {}
+  { skipCheckedOut = false, skipShared = false, occupancyOnly = false }: InspectOptions = {}
 ): Promise<LocalBaseBranchInspection> {
   const { repoPath, fullRef, remoteTrackingRef } = refs
   let localOid: string
@@ -98,7 +98,7 @@ export async function inspectLocalBaseBranch(
   let use: BranchUse
   try {
     // Git's in-use rule also counts a branch a rebase or bisect has reserved.
-    use = await git.readBranchUse(repoPath, fullRef, skipCheckedOut)
+    use = await git.readBranchUse(repoPath, fullRef, skipCheckedOut || occupancyOnly)
   } catch {
     return { status: 'skipped_error' }
   }
