@@ -373,6 +373,35 @@ describe('a restart cut, continued at launch', () => {
     await p.recovery.boot()
     expect(p.outcomes()).toEqual({ d1: { outcome: 'answered', prose: 'Finally.', head: 'd1' } })
   })
+
+  it('answers through a second continuation when a restart cut the first before its turn opened', async () => {
+    const p = start({ continuationsSettled: Promise.resolve() })
+    admit(p.db, 'm1', asked('d1'))
+    p.show([p.message('m1'), ...p.turn('item:t1', 'm1', 'interrupted')])
+    const first = await p.recovery.claimFor('chat-1', {
+      turnId: 'provider-item:t1',
+      kind: 'restart'
+    })
+    admit(p.db, 'c1', {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'Continue.' }],
+      connectorClaim: first!
+    })
+    // The next launch's marker names the continuation's own send: no turn took it.
+    p.show([...p.items(), p.message('c1')], [submissionOf('c1', { dispatchState: 'pending' })])
+    const second = await p.recovery.claimFor('chat-1', { turnId: 'c1', kind: 'restart' })
+    expect(second?.origin.map((stamp) => stamp.deliveryId)).toEqual(['d1'])
+    admit(p.db, 'c2', {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'Continue.' }],
+      connectorClaim: second!
+    })
+    p.show([...p.items(), p.message('c2'), ...p.turn('item:t2', 'c2', 'completed', 'Picked up.')])
+    await p.recovery.boot()
+    expect(p.outcomes()).toEqual({ d1: { outcome: 'answered', prose: 'Picked up.', head: 'd1' } })
+  })
 })
 
 describe('no positional "answered together"', () => {

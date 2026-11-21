@@ -123,11 +123,11 @@ export async function readReplyEvidence(
         submission.dispatchState === 'unknown')
     )
   }
+  // A turn cut's opener, or for a submission cut (a send no turn took yet) that send's own message.
   const cutOpener = (cutTurnId: string) => {
     const turn = readAgentJournalTurn(turnRowOf(cutTurnId)?.body)
-    return turn?.userItemId
-      ? snapshot.items.find((item) => item.itemId === turn.userItemId)
-      : undefined
+    const opener = turn?.userItemId ?? agentJournalSubmissionKey(cutTurnId)
+    return snapshot.items.find((item) => item.itemId === opener)
   }
   // A claimed row's end, read from the continuation that claimed it (Phase 1 §1.7); null waits.
   const claimVerdict = (claimMessageId: string): ReplyRecoveryVerdict | null => {
@@ -187,8 +187,10 @@ export async function claimCut(
   if (members.length > 0) {
     await journal.cut({ keys: members.map(keyOf), cut })
   }
+  // A claim is cut again when its continuation's turn is the cut, or, cut before any turn took it,
+  // when the continuation is the cut send itself (A6).
   for (const claim of new Set(unfilled.flatMap((row) => row.claimMessageId ?? []))) {
-    if (view.turnOpenedBy(claim)?.turnId === cut.turnId) {
+    if (claim === cut.turnId || view.turnOpenedBy(claim)?.turnId === cut.turnId) {
       await journal.recut(claim, cut)
     }
   }

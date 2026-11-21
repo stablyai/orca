@@ -176,7 +176,7 @@ function connectorReplyOutbox(
   store: ExternalConversationLinkStore,
   runtime: {
     getConnectorCloud?: () => { repliesFilled(): void } | null
-    structuredAgentSessionLaunchContinuation?: { done: Promise<unknown> }
+    structuredAgentSessionLaunchContinuation?: { continued: Promise<unknown> }
   },
   signal: AbortSignal
 ): { fill: ConversationReplyFill; admitted: (sessionId: string) => void } {
@@ -196,7 +196,7 @@ function connectorReplyOutbox(
     filled,
     // This start's own continuations of restart cuts claim first; whatever they left closes then.
     ...(runtime.structuredAgentSessionLaunchContinuation
-      ? { continuationsSettled: runtime.structuredAgentSessionLaunchContinuation.done }
+      ? { continuationsSettled: runtime.structuredAgentSessionLaunchContinuation.continued }
       : {})
   })
   setConnectorClaimSource((sessionId, cut) => recovery.claimFor(sessionId, cut))

@@ -137,6 +137,7 @@ export function structuredAgentSessionLaunchContinuationDeps(
 export class StructuredAgentSessionLaunchContinuationOnce {
   private started = false
   private readonly settled = Promise.withResolvers<StructuredAgentSessionLaunchContinuation>()
+  private readonly ran = Promise.withResolvers<StructuredAgentSessionLaunchContinuation>()
   private readonly reserved = Promise.withResolvers<StructuredAgentSessionResumeCandidate[]>()
   private answered = false
   private readonly retried = new Set<(settled: StructuredAgentSessionLaunchContinuation) => void>()
@@ -145,6 +146,12 @@ export class StructuredAgentSessionLaunchContinuationOnce {
 
   get done(): Promise<StructuredAgentSessionLaunchContinuation> {
     return this.settled.promise
+  }
+
+  /** Settles once a run with a host continued, a retried restoration's included: never with the
+   *  nothing a failed restoration let waiters go on with. */
+  get continued(): Promise<StructuredAgentSessionLaunchContinuation> {
+    return this.ran.promise
   }
 
   /** The chats the automatic action took, known before any agent starts, so a window can show it.
@@ -190,6 +197,7 @@ export class StructuredAgentSessionLaunchContinuationOnce {
         // Setting off or a failure before reserving took nothing.
         this.reserved.resolve([])
         this.settled.resolve(settled)
+        this.ran.resolve(settled)
         if (this.resolvedEmpty) {
           this.retriedOutcome = settled
           this.retried.forEach((listener) => listener(settled))
