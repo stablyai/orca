@@ -53,9 +53,10 @@ export class ClaudeAgentViewBridge {
     return registry.restore((saved) => {
       let changed = false
       for (const session of saved) {
+        // Saved panes go ahead of the cap: their idle Claudes can't register again.
         const keep =
           !this.sessions.has(session.paneKey) &&
-          this.sessions.size < MAX_CLAUDE_AGENT_VIEW_SESSIONS &&
+          this.sessions.size < MAX_CLAUDE_AGENT_VIEW_SESSIONS * 2 && // what the file reader accepts
           isLive(session)
         changed ||= !keep
         if (keep) {
@@ -185,6 +186,9 @@ export class ClaudeAgentViewBridge {
     trigger: (input: string, isCurrent: () => boolean) => Promise<boolean>
     signal?: AbortSignal
   }): Promise<ClaudeAgentViewResult> {
+    if (!this.sessions.has(args.paneKey)) {
+      await this.registry?.retryUnread()
+    }
     const registered = this.sessions.get(args.paneKey)
     if (registered?.configDir && registered.sessionId === args.sessionId) {
       // An idle mod does not re-read its keybindings, so read the chord the user has bound now.

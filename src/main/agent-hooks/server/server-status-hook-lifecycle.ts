@@ -43,11 +43,12 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
   /** Restored entries count only for panes whose hydrated status still shows a live Claude. The
    *  session may lag the registry after a crash; a click still needs the session to match. */
   protected restoreClaudeAgentViews(filePath: string): Promise<void> {
-    const hooksOn = this.statusHooksEnabled
+    // No hydrated rows at all (hooks off, or the status store failed to load) proves nothing dead.
+    const unchecked = !this.statusHooksEnabled || this.state.lastStatusByPaneKey.size === 0
     return this.claudeAgentViews.restore(
       filePath,
       (view) =>
-        !hooksOn ||
+        unchecked ||
         (!this.claudeAgentEnded(view.paneKey) &&
           this.getStatusSnapshotForPane(view.paneKey).some((row) => row.agentType === 'claude'))
     )

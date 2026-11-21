@@ -32,7 +32,8 @@ export type RegisteredClaudeAgentView = z.infer<typeof RegisteredView>
 
 const RegistryFile = z.object({
   version: z.literal(1),
-  sessions: z.array(RegisteredView).max(MAX_CLAUDE_AGENT_VIEW_SESSIONS)
+  // Restore admits saved panes ahead of the cap, so a file may hold up to twice it.
+  sessions: z.array(RegisteredView).max(MAX_CLAUDE_AGENT_VIEW_SESSIONS * 2)
 })
 
 /** undefined: the file exists but could not be read now (a lock), so the caller retries. */
@@ -76,6 +77,8 @@ export class ClaudeAgentViewRegistryFile {
   private restoring = false
   private savedDuringRestore = false
   private closed = false
+  private unreadMerge?: (saved: RegisteredClaudeAgentView[]) => boolean
+  private lastReadAt = 0
   private restored: Promise<void> = Promise.resolve()
 
   constructor(
@@ -100,9 +103,9 @@ export class ClaudeAgentViewRegistryFile {
     }
     this.restoring = false
     if (saved === undefined) {
-      // Still locked: never overwrite entries this run could not read. Without saves nothing is
-      // durable, so every mod keeps its 5 s check-in instead of going quiet.
-      this.closed = true
+      // Still locked: write nothing (nothing is durable) until a later read merges it.
+      this.unreadMerge = merge
+      this.lastReadAt = Date.now()
       return
     }
     if (this.closed) {
@@ -115,8 +118,29 @@ export class ClaudeAgentViewRegistryFile {
     this.savedDuringRestore = false
   }
 
+  /** After a start that could not read the file: read again (at most every 30 s), merge once it works. */
+  async retryUnread(): Promise<void> {
+    if (!this.unreadMerge || this.closed || Date.now() - this.lastReadAt < 30_000) {
+      return
+    }
+    this.lastReadAt = Date.now()
+    const saved = await readRegistry(this.filePath)
+    const merge = this.unreadMerge
+    if (saved === undefined || !merge || this.closed) {
+      return
+    }
+    this.unreadMerge = undefined
+    if (merge(saved)) {
+      void this.save()
+    }
+  }
+
   /** Whether memory is on disk, waiting up to `ms` for the restore and the writes in flight. */
   async settled(ms = 2000): Promise<boolean> {
+    if (this.unreadMerge) {
+      void this.retryUnread()
+      return false
+    }
     let timer: ReturnType<typeof setTimeout> | undefined
     const timeout = new Promise<false>((resolve) => {
       timer = setTimeout(() => resolve(false), ms)
@@ -147,7 +171,7 @@ export class ClaudeAgentViewRegistryFile {
   }
 
   save(): Promise<void> {
-    if (this.closed) {
+    if (this.closed || this.unreadMerge) {
       return this.writing ?? Promise.resolve()
     }
     if (this.restoring) {
