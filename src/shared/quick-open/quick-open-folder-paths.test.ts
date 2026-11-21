@@ -32,4 +32,25 @@ describe('withFolderPaths', () => {
       'src/components/forms/Input.tsx'
     ])
   })
+
+  const foldersOf = (files: string[]) => withFolderPaths(files).slice(files.length)
+
+  it('keeps the 256 shallowest folders of a sparse listing, in listing order', () => {
+    // 400 folders: a0/ … a199/ and a0/b/ … a199/b/.
+    const folders = foldersOf(Array.from({ length: 200 }, (_, i) => `a${i}/b/f.ts`))
+    expect(folders).toHaveLength(256)
+    expect(folders).toContain('a199/')
+    expect(folders).toContain('a55/b/')
+    expect(folders).not.toContain('a56/b/')
+  })
+
+  it('stops at the shallowest depth that fills the limit without walking deeper', () => {
+    // 6,000 folders, past the full walk's ceiling: only the first 256 top-level ones stay.
+    const folders = foldersOf(Array.from({ length: 2000 }, (_, i) => `p${i}/q/r/f.ts`))
+    expect(folders).toHaveLength(256)
+    expect(folders[0]).toBe('p0/')
+    expect(folders).toContain('p255/')
+    expect(folders).not.toContain('p256/')
+    expect(folders).not.toContain('p0/q/')
+  })
 })
