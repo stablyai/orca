@@ -20,9 +20,15 @@ function scriptUrl(name: string): string {
   return pathToFileURL(resolve('config/scripts', name)).href
 }
 
-function isLocaleCatalog(id: string): boolean {
+function isSubsetLocaleCatalog(id: string): boolean {
   const relativePath = relative(LOCALES_DIR, id)
-  return !relativePath.startsWith('..') && !relativePath.includes(sep) && id.endsWith('.json')
+  // Language pack coverage and string validation need the complete English source.
+  return (
+    relativePath !== 'en.json' &&
+    !relativePath.startsWith('..') &&
+    !relativePath.includes(sep) &&
+    id.endsWith('.json')
+  )
 }
 
 function isNamed(key: string, evidence: KeyEvidence): boolean {
@@ -58,7 +64,7 @@ function stripPluralLiterals(evidence: KeyEvidence): KeyEvidence {
   }
 }
 
-/** Ships main only the catalog keys main-process source names; missing keys fall back to English. */
+/** Limits built-in translations used by main to the catalog keys its source names. */
 export function createMainLocaleSubsetPlugin(): Plugin {
   let evidence: KeyEvidence | undefined
   let collectKeyLiterals: ExtractionScript['collectKeyLiterals'] | undefined
@@ -90,7 +96,7 @@ export function createMainLocaleSubsetPlugin(): Plugin {
       evidence = stripPluralLiterals(collected)
     },
     async load(id) {
-      if (!evidence || !isLocaleCatalog(id)) {
+      if (!evidence || !isSubsetLocaleCatalog(id)) {
         return null
       }
       const catalog: Catalog = JSON.parse(await readFile(id, 'utf8'))
