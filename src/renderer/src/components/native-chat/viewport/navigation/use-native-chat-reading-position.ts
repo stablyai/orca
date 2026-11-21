@@ -1,5 +1,6 @@
-import { useCallback, useContext, useLayoutEffect, useRef } from 'react'
+import { useCallback, useContext, useEffect, useLayoutEffect, useRef } from 'react'
 import type { HistoryJumpResult } from './use-native-chat-history-jump'
+import { nativeChatRowDrawnAbove } from '../virtualization/use-native-chat-viewport-align'
 import {
   KEPT_TRANSCRIPTS_PER_TAB,
   NativeChatViewTabContext,
@@ -41,9 +42,9 @@ function readingPositionOf(
     index === undefined
       ? waitingMessageIdAt(Number.parseInt(nativeChatWaitingIndex ?? '', 10))
       : messageIdAt(Number.parseInt(index, 10))
-  return messageId
-    ? { messageId, offset: Math.max(0, top - anchor.getBoundingClientRect().top) }
-    : null
+  // Measured from where the row draws, as a landing aligns it: a continuing row draws above its own top.
+  const drawnTop = anchor.getBoundingClientRect().top - nativeChatRowDrawnAbove(anchor)
+  return messageId ? { messageId, offset: Math.max(0, top - drawnTop) } : null
 }
 
 /** Remembers the reading position when a reader away from the end leaves; a later fresh mount jumps back to it. */
@@ -80,7 +81,30 @@ export function useNativeChatReadingPosition({
   useLayoutEffect(() => {
     latest.current = { readerAtEnd, jumpTo, messageIdAt, waitingMessageIdAt }
   })
+  // Leaving reads the rows while they are still laid out, before a hide takes them off the page.
   useLayoutEffect(() => {
+    if (!isVisible || !ready || !tab) {
+      return
+    }
+    return () => {
+      if (restoringRef.current !== null) {
+        restoringRef.current = null
+        return
+      }
+      const container = scrollRef.current
+      const next =
+        container && !latest.current.readerAtEnd()
+          ? readingPositionOf(container, latest.current.messageIdAt, latest.current.waitingMessageIdAt)
+          : null
+      if (next === null && freshMountRef.current) {
+        return
+      }
+      freshMountRef.current = false
+      writeNativeChatViewMemory(tab, key, next ?? undefined, KEPT_TRANSCRIPTS_PER_TAB)
+    }
+  }, [isVisible, ready, tab, key, scrollRef])
+  // Why passive: a reveal's passive cleanups (the history jump aborts on a visibility change) run first.
+  useEffect(() => {
     if (!isVisible || !ready || !tab) {
       return
     }
@@ -120,21 +144,7 @@ export function useNativeChatReadingPosition({
     return () => {
       cancelled = true
       cancelAnimationFrame(frame)
-      if (restoringRef.current !== null) {
-        restoringRef.current = null
-        return
-      }
-      const container = scrollRef.current
-      const next =
-        container && !latest.current.readerAtEnd()
-          ? readingPositionOf(container, latest.current.messageIdAt, latest.current.waitingMessageIdAt)
-          : null
-      if (next === null && freshMountRef.current) {
-        return
-      }
-      freshMountRef.current = false
-      writeNativeChatViewMemory(tab, key, next ?? undefined, KEPT_TRANSCRIPTS_PER_TAB)
     }
-  }, [isVisible, ready, tab, key, scrollRef])
+  }, [isVisible, ready, tab, key])
   return useCallback(() => restoringRef.current !== null, [])
 }

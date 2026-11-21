@@ -53,8 +53,10 @@ class ChatViewRetention {
   private recompute(): void {
     const shown = new Set([...this.shownByLayer.values()].flat())
     const hidden = this.order.filter((id) => !shown.has(id)).slice(0, RETAINED_HIDDEN_CHAT_VIEWS)
-    // Older entries can never come back into the hidden allowance, so the order stays bounded.
-    this.order = this.order.slice(0, shown.size + RETAINED_HIDDEN_CHAT_VIEWS)
+    // Older hidden entries can never come back into the allowance, so the order stays bounded; a shown one
+    // keeps its place for when it hides.
+    const kept = new Set(hidden)
+    this.order = this.order.filter((id) => shown.has(id) || kept.has(id))
     const held = [...this.holds.keys()].slice(-HELD_CHAT_VIEWS)
     const next = new Set([...shown, ...hidden, ...held])
     const previous = this.retained
