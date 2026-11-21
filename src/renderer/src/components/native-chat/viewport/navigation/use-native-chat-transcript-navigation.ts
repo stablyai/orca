@@ -21,7 +21,7 @@ import type { NativeChatOlderPageResult } from '../history/native-chat-paginatio
 import { nativeChatSubagentHistoryStep } from '../../subagents/native-chat-subagent-history'
 import {
   nativeChatSlotIndexOf,
-  nativeChatSlotMessageIdFrom
+  nativeChatSlotKeyAt
 } from '../../conversation/slots/native-chat-transcript-slot-selection'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 import { nativeChatRailJumpStep, useNativeChatHistoryJump } from './use-native-chat-history-jump'
@@ -50,7 +50,7 @@ function waitingRowOf(
   messageId: string
 ): HTMLElement | null {
   const index = waitingSlots.findIndex(
-    (_, at) => nativeChatSlotMessageIdFrom(waitingSlots, at) === messageId
+    (_, at) => nativeChatSlotKeyAt(waitingSlots, at) === messageId
   )
   return index < 0
     ? null
@@ -225,8 +225,8 @@ export function useNativeChatNavigation({
     ready,
     scrollRef,
     readerAtEnd,
-    messageIdAt: (index) => nativeChatSlotMessageIdFrom(slots, index),
-    waitingMessageIdAt: (index) => nativeChatSlotMessageIdFrom(waitingSlots, index),
+    messageIdAt: (index) => nativeChatSlotKeyAt(slots, index),
+    waitingMessageIdAt: (index) => nativeChatSlotKeyAt(waitingSlots, index),
     jumpTo: ({ messageId, offset }, settled) =>
       startHistoryJump({ kind: 'item', id: messageId, offset }, (result) => {
         if (result === 'missing' || result === 'failed') {

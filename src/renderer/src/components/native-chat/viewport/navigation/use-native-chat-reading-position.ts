@@ -24,8 +24,9 @@ function readingPositionOf(
 ): NativeChatReadingPosition | null {
   const top = container.getBoundingClientRect().top
   let anchor: HTMLElement | null = null
+  // Only the transcript's own rows: tool runs index their members with `data-index` too.
   for (const row of container.querySelectorAll<HTMLElement>(
-    '[data-index], [data-native-chat-waiting-index]'
+    '[data-native-chat-window] > [data-index], [data-native-chat-waiting-index]'
   )) {
     anchor = row
     if (row.getBoundingClientRect().bottom > top) {
