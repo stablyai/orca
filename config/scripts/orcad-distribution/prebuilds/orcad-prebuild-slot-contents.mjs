@@ -101,7 +101,7 @@ export function findPostBaselineNodeApiNames(binary) {
 const WINDOWS_WINPTY_FILES = ['pty.node', 'winpty.dll', 'winpty-agent.exe']
 
 // Windows source build emits only conpty.node; vendor DLL/OpenConsole payload must sit beside it as on desktop.
-// Keep upstream conpty_console_list for the non-DLL kill path and winpty binaries for Windows <18309 (10 1809/Server 2019); patch removes their build targets.
+// Keep upstream conpty_console_list for the non-DLL kill path and winpty binaries for Windows <17763; patch removes their build targets.
 export function slotSourceFiles({ platform, arch, buildDir, nodePtyDir }) {
   if (platform === 'win32') {
     const conptyRuntime = windowsConptyRuntimeDir(nodePtyDir, arch)

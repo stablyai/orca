@@ -89,7 +89,7 @@ export function orcadNodePtySlotFiles(target: string): string[] {
       'conpty_console_list.node',
       'conpty/conpty.dll',
       'conpty/OpenConsole.exe',
-      // node-pty's winpty backend, which it selects below Windows build 18309.
+      // node-pty's winpty backend, which Orca's patch selects below Windows build 17763.
       'pty.node',
       'winpty.dll',
       'winpty-agent.exe'

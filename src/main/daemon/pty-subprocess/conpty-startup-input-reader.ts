@@ -165,7 +165,7 @@ export function _resetConptyStartupTrustForTest(): void {
 
 type NodePtyWindowsPane = pty.IPty & { _agent?: { _useConpty?: boolean } }
 
-// node-pty falls back to WinPTY below Windows build 18309, which never announces an input reader.
+// Orca's patched node-pty falls back to WinPTY below build 17763 (or 18309 without the bundled DLL), which never announces an input reader.
 function runsOnWinpty(proc: pty.IPty): boolean {
   const pane: NodePtyWindowsPane = proc
   return pane._agent?._useConpty === false
