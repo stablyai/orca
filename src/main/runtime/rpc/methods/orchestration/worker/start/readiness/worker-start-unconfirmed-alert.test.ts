@@ -70,10 +70,19 @@ describe('an unconfirmed worker start', () => {
   it('tells the coordinator once, with the screen and how to submit or stop it', async () => {
     h.setup()
     typedButNeverStarted()
+    vi.spyOn(h.runtime, 'readTerminal').mockResolvedValue({
+      handle: 'term_worker',
+      status: 'running',
+      tail: ['worker output line 1', 'worker output line 2'],
+      draft: '[Pasted text #1 +40 lines]',
+      truncated: false,
+      nextCursor: '2'
+    })
     const { state, dispatchId } = await start()
     await vi.waitFor(() => expect(alerts()).toHaveLength(1))
 
     expect(state).toBe('outcome_unknown')
+    expect(alerts()[0]?.body).toContain('Text waiting in its prompt: [Pasted text #1 +40 lines]')
     const [alert] = alerts()
     expect(alert?.body).toContain("Your worker's brief may not have been submitted; check it.")
     expect(alert?.body).toContain('worker output line 2')

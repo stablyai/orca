@@ -155,7 +155,13 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
         ? {
             surface: 'terminal',
             screen: await this.readTerminal(handle, { screen: true, limit: 15 })
-              .then((view) => redactWorkerTerminalView(view).tail.join('\n'))
+              .then((view) => {
+                const { tail, draft } = redactWorkerTerminalView(view)
+                // A held paste shows as a bare prompt; the composer's draft says what waits there.
+                return [...tail, ...(draft ? [`Text waiting in its prompt: ${draft}`] : [])].join(
+                  '\n'
+                )
+              })
               .catch(() => undefined)
           }
         : { surface: 'chat' }
