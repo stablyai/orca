@@ -14,6 +14,7 @@ import {
 } from './worktree-card-send-target-inputs'
 import { useAgentPresentation, useWorktreeAgentRow } from './useWorktreeAgentRows'
 import { useHostRootKeys } from './use-worktree-agent-host-roots'
+import { useTabOrderedAgentRoots } from './use-tab-ordered-agent-roots'
 import { KeyedSummary } from './worktree-card-agent-keyed-summary'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useWorktreeAgentDisplay } from './use-worktree-agent-display'
@@ -46,10 +47,11 @@ export default React.memo(function WorktreeCardAgents({
   executionHostId,
   className
 }: Props) {
-  const allRoots = useAgentPresentation(
+  const projectedRoots = useAgentPresentation(
     `roots\0${worktreeId}`,
     useCallback((p) => p.display.roots(worktreeId), [worktreeId])
   )
+  const allRoots = useTabOrderedAgentRoots(worktreeId, projectedRoots)
   const roots = useHostRootKeys(worktreeId, executionHostId, allRoots)
   return roots.length ? (
     <WorktreeCardAgentsBody
