@@ -9,9 +9,9 @@ afterEach(closeOwnChatHost)
 
 // The two rows naming a session's party: its worker terminal and whether a Dispatch recorded it as a worker.
 const PARTY_SQL =
-  /FROM (worker_terminal_resources\s+WHERE process_incarnation|dispatch_contexts\s+WHERE assignee_orca_session_id)/
+  /(worker_terminal_resources|dispatch_contexts d?)\s+WHERE (d\.)?(process_incarnation|assignee_orca_session_id) =/
 
-it('reads the parties of every bot’s side chats in two queries per bot, however many chats', async () => {
+it('reads the parties of every bot’s side chats in one query per bot, however many chats', async () => {
   const bots = Array.from({ length: 5 }, (_, i) =>
     makeTestBot({ id: `bot-${i}`, folderWorkspaceId: `home-${i}`, chatSessionId: `home-chat-${i}` })
   )
@@ -24,6 +24,6 @@ it('reads the parties of every bot’s side chats in two queries per bot, howeve
   const prepare = vi.spyOn(host.db().db, 'prepare')
   const chats = await readBotOwnChatPanes(host)
   expect(Object.values(chats).flat()).toHaveLength(100)
-  // Two for each bot's base build and two for its ownership pass.
-  expect(prepare.mock.calls.filter(([sql]) => PARTY_SQL.test(sql))).toHaveLength(20)
+  // One for each bot's base build and one for its ownership pass.
+  expect(prepare.mock.calls.filter(([sql]) => PARTY_SQL.test(sql))).toHaveLength(10)
 })

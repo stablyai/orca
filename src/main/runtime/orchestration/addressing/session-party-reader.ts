@@ -1,5 +1,6 @@
 import type { WorkerTerminalResourceRow } from '../terminal-authority/release/worker-terminal-ownership'
 import { structuredWorkerProcessIncarnation } from '../terminal-authority/structured-sessions/structured-worker-incarnation'
+import { structuredWorkerIdentities } from '../terminal-authority/structured-sessions/structured-worker-identity'
 import type { SessionPartyRows } from '../db/worker-terminal/session-party-rows'
 
 /** The two rows naming a session's party reads: the orchestration database, or a poll's batch of them
@@ -36,14 +37,17 @@ export function prefetchedSessionParties(
   }
 }
 
-/** One batch read of these sessions' party rows: a pass over many chats asks two queries, not two each. */
+/** One batch read of these sessions' party rows: a pass over many chats asks one query, not two each. */
 export function readSessionParties(
   db: SessionPartyReader & {
     readSessionPartyRows?: (sessionIds: readonly string[]) => SessionPartyRows[]
   },
   sessionIds: readonly string[]
 ): SessionPartyReader {
-  return db.readSessionPartyRows
-    ? prefetchedSessionParties(db, db.readSessionPartyRows(sessionIds))
-    : db
+  if (!db.readSessionPartyRows) {
+    return db
+  }
+  // A worker this process holds resolves without either row, as it did before the batch.
+  const unknown = sessionIds.filter((id) => !structuredWorkerIdentities.getBySessionId(id))
+  return prefetchedSessionParties(db, db.readSessionPartyRows(unknown))
 }

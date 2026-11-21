@@ -1,7 +1,7 @@
-// The two rows naming a session's party, for many sessions in two queries: a chat list asks for every
+// The two rows naming a session's party, for many sessions in one query: a chat list asks for every
 // chat at once, and a chat is no worker, so one lookup per chat would all miss.
 import type { OrchestrationDbConnection } from '../orchestration-db'
-import { WORKER_TERMINAL_RESOURCE_COLUMN_LIST } from '../row-column-lists'
+import { selectColumns, WORKER_TERMINAL_RESOURCE_COLUMNS } from '../row-column-lists'
 import { structuredWorkerProcessIncarnation } from '../../terminal-authority/structured-sessions/structured-worker-incarnation'
 import type { WorkerTerminalResourceRow } from '../../terminal-authority/release/worker-terminal-ownership'
 
@@ -11,16 +11,21 @@ export type SessionPartyRows = {
   recordedWorker: boolean
 }
 
-// Newest first, so the first row per process is the one `getWorkerTerminalResourceByProcessIncarnation` reads.
-const RESOURCES_BY_PROCESS_SQL = `
-  SELECT ${WORKER_TERMINAL_RESOURCE_COLUMN_LIST} FROM worker_terminal_resources
-  WHERE process_incarnation IN (SELECT value FROM json_each(?1))
-  ORDER BY updated_at DESC`
-
-const RECORDED_WORKER_SQL = `
-  SELECT DISTINCT assignee_orca_session_id AS session, process_incarnation AS process
-  FROM dispatch_contexts
-  WHERE assignee_orca_session_id IN (SELECT value FROM json_each(?1))`
+// Per session, as the point lookups ask: the newest terminal row for its process, and whether any
+// Dispatch recorded it as a worker (stopping at the first, however long its history).
+const SESSION_PARTY_ROWS_SQL = `
+  SELECT json_extract(s.value, '$[0]') AS session_id, ${selectColumns(WORKER_TERMINAL_RESOURCE_COLUMNS, 'r')},
+    EXISTS (
+      SELECT 1 FROM dispatch_contexts d
+      WHERE d.assignee_orca_session_id = json_extract(s.value, '$[0]')
+        AND d.process_incarnation = json_extract(s.value, '$[1]')
+    ) AS recorded_worker
+  FROM json_each(?1) AS s
+  LEFT JOIN worker_terminal_resources r ON r.rowid = (
+    SELECT rowid FROM worker_terminal_resources
+    WHERE process_incarnation = json_extract(s.value, '$[1]')
+    ORDER BY updated_at DESC LIMIT 1
+  )`
 
 /** For each session, what `getWorkerTerminalResourceByProcessIncarnation` and
  *  `hasRecordedStructuredWorkerSession` read for it. */
@@ -32,32 +37,17 @@ export function readSessionPartyRows(
   if (sessions.length === 0) {
     return []
   }
-  const processOf = new Map(sessions.map((id) => [id, structuredWorkerProcessIncarnation(id)]))
-  const resourceByProcess = new Map<string, WorkerTerminalResourceRow>()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list is checked against WorkerTerminalResourceRow.
-  const resources = this.db
-    .prepare(RESOURCES_BY_PROCESS_SQL)
-    .all(JSON.stringify([...processOf.values()])) as WorkerTerminalResourceRow[]
-  for (const row of resources) {
-    if (row.process_incarnation !== null && !resourceByProcess.has(row.process_incarnation)) {
-      resourceByProcess.set(row.process_incarnation, row)
-    }
-  }
-  const recorded = new Set<string>()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both columns are TEXT.
-  const assignments = this.db.prepare(RECORDED_WORKER_SQL).all(JSON.stringify(sessions)) as {
-    session: string
-    process: string | null
-  }[]
-  for (const { session, process } of assignments) {
-    if (process !== null && processOf.get(session) === process) {
-      recorded.add(session)
-    }
-  }
-  return [...processOf].map(([sessionId, process]) => ({
+  const pairs = sessions.map((id) => [id, structuredWorkerProcessIncarnation(id)])
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: session_id and recorded_worker are added to the worker_terminal_resources columns.
+  const rows = this.db.prepare(SESSION_PARTY_ROWS_SQL).all(JSON.stringify(pairs)) as (Record<
+    string,
+    unknown
+  > & { session_id: string; recorded_worker: number; id: string | null })[]
+  return rows.map(({ session_id: sessionId, recorded_worker: recordedWorker, ...resource }) => ({
     sessionId,
-    resource: resourceByProcess.get(process) ?? null,
-    recordedWorker: recorded.has(sessionId)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a joined row carries every worker_terminal_resources column.
+    resource: resource.id === null ? null : (resource as WorkerTerminalResourceRow),
+    recordedWorker: recordedWorker === 1
   }))
 }
 
