@@ -42,7 +42,6 @@ import { useBotCreateHost } from '../bot-create-hosts'
 import { reviewBotShare } from './bot-share-rpc'
 import { useBotAgentSetup } from '../use-bot-agent-setup'
 import { useNewBotPicture } from '../use-new-bot-picture'
-import { wornBotOutfit } from '../../../../../shared/bots/bot-avatar-outfit'
 import { toolHost } from './bot-share-review-parts'
 import { Tick } from './BotShareTick'
 
@@ -166,7 +165,7 @@ export function NewBotFromShareDialog({
     },
     shared?.mascot,
     sharedPng,
-    { color: shared?.color, outfit: wornBotOutfit(shared?.outfit) }
+    { color: shared?.color, outfit: shared?.outfit }
   )
   const trimmedName = name.trim()
 
@@ -203,7 +202,7 @@ export function NewBotFromShareDialog({
               avatarColor: picture.avatarColor,
               avatarOutfit: picture.avatarOutfit
             }),
-        fromShare: { reviewId, toolIds }
+        fromShare: { reviewId, toolIds, lookSent: true }
       })
       bot = keepsShared ? bot : await picture.saveUpload(bot)
     } catch (cause) {

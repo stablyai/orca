@@ -8,7 +8,7 @@ import { PICKABLE_BOT_MASCOT_IDS, isBotMascotId, mascotAvatar } from '../../../.
 import type { Bot } from '../../../../shared/bot-types'
 import { botErrorMessage } from './bot-presentation'
 import { useBotMascotLook, type BotOutfitArt } from './bot-mascot-look'
-import type { BotAvatarOutfit } from '../../../../shared/bots/bot-avatar-outfit'
+import { wornBotOutfit, type BotAvatarOutfit } from '../../../../shared/bots/bot-avatar-outfit'
 import {
   generatedPictureDescription,
   keepSavedPictureDescription
@@ -52,8 +52,9 @@ export type NewBotPicture = {
   avatar: string
   /** createBot's `avatarColor`: set only when a mascot is shown on another color. */
   avatarColor: string | undefined
-  /** createBot's `avatarOutfit`: set only when a mascot is shown wearing one. */
-  avatarOutfit: BotAvatarOutfit | undefined
+  /** createBot's `avatarOutfit`: set only when a mascot is shown wearing one, or a shared one this version
+   *  doesn't draw, which the bot keeps for a newer Orca. */
+  avatarOutfit: string | undefined
   /** The upload shown, as base64 PNG; null when a mascot is. */
   shownUpload: string | null
   /** Saves an upload to the bot just made; the bot as it is afterwards. */
@@ -67,7 +68,7 @@ export function useNewBotPicture(
   host: { colors: boolean; outfits: boolean },
   mascot?: string,
   initialUpload?: string,
-  look?: { color?: string; outfit?: BotAvatarOutfit | null }
+  look?: { color?: string; outfit?: string }
 ): NewBotPicture {
   const t = useTranslate()
   const [value, setValue] = useState<BotPictureValue>(() =>
@@ -75,8 +76,8 @@ export function useNewBotPicture(
   )
   const [picked, setColor] = useState<string | null>(look?.color ?? null)
   const color = host.colors ? picked : null
-  const [pickedOutfit, setOutfit] = useState<BotAvatarOutfit | null>(look?.outfit ?? null)
-  const outfit = host.outfits ? pickedOutfit : null
+  const [pickedOutfit, setOutfit] = useState<string | null>(look?.outfit ?? null)
+  const outfit = host.outfits ? wornBotOutfit(pickedOutfit) : null
   const [upload, setUpload] = useState<NewBotUpload | null>(() =>
     initialUpload ? { png: initialUpload, after: -1 } : null
   )
@@ -114,7 +115,7 @@ export function useNewBotPicture(
     outfitArt: showingUpload ? null : mascotLook.outfit,
     avatar: mascotAvatar(mascotId),
     avatarColor: showingUpload || !color ? undefined : color,
-    avatarOutfit: showingUpload || !outfit ? undefined : outfit,
+    avatarOutfit: showingUpload || !host.outfits || !pickedOutfit ? undefined : pickedOutfit,
     shownUpload: showingUpload ? upload.png : null,
     saveUpload: async (bot) =>
       showingUpload

@@ -24,4 +24,12 @@ describe('a new bot from a shared mascot', () => {
     expect(result.current.avatarColor).toBe('#f4c4cf')
     expect(result.current.avatarOutfit).toBeUndefined()
   })
+
+  it("keeps an outfit this version doesn't draw, for a newer Orca", () => {
+    const { result } = renderHook(() =>
+      useNewBotPicture({ colors: true, outfits: true }, 'H1', undefined, { outfit: 'aviator' })
+    )
+    expect(result.current.outfit).toBeNull()
+    expect(result.current.avatarOutfit).toBe('aviator')
+  })
 })

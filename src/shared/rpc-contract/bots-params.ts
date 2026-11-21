@@ -92,7 +92,10 @@ export const BotCreate = z.object({
     .object({
       /** The review the owner opened; main holds what it showed. */
       reviewId: z.uuid(),
-      toolIds: z.array(z.string().min(1).max(64)).max(32)
+      toolIds: z.array(z.string().min(1).max(64)).max(32),
+      /** Set by a client that sends the shared mascot's look as it shows it, none included; from an
+       *  older client the host takes the package's. */
+      lookSent: z.literal(true).optional()
     })
     .optional(),
   /** A bot in another app to bring over: its first turn imports it instead of the usual setup. */

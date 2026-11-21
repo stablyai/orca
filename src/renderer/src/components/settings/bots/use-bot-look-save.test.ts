@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
+import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { saveBotLook, type BotLookUpdate } from './use-bot-look-save'
+import { saveBotLook, useBotLookSave, type BotLookUpdate } from './use-bot-look-save'
 
 describe('saveBotLook', () => {
   it('sends picks made behind a slow save as one save of the latest look', async () => {
@@ -63,5 +64,17 @@ describe('saveBotLook', () => {
     saveBotLook('local:b3', { avatarOutfit: 'tie' }, update)
     window.dispatchEvent(new Event('pagehide'))
     expect(sent).toEqual([{ avatarColor: '#f4c4cf' }, { avatarOutfit: 'tie' }])
+  })
+
+  it('sends a pick still in its pause when the window goes', () => {
+    const sent: BotLookUpdate[] = []
+    const update = (look: BotLookUpdate): Promise<unknown> => {
+      sent.push(look)
+      return Promise.resolve()
+    }
+    const { result } = renderHook(() => useBotLookSave('local:b4', update, 500))
+    act(() => result.current.pick({ avatarOutfit: 'tie' }))
+    window.dispatchEvent(new Event('pagehide'))
+    expect(sent).toEqual([{ avatarOutfit: 'tie' }])
   })
 })

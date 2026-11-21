@@ -18,9 +18,15 @@ export type BotLookHold = () => () => unknown
 
 const lookSaves = new Map<string, LookSaves>()
 
-// The window can't wait for a save on its way when it goes, so picks waiting behind one go at once, as each
-// pick did before they queued; left waiting, they would be lost on quit or reload.
-function sendWaitingLooks(): void {
+// Picks still in their pause before saving, each as the save that ends the pause early.
+const pausedPicks = new Set<() => void>()
+
+// The window can't wait for a save on its way when it goes, so paused picks and the picks waiting behind
+// a save go at once, as each pick did before they queued; left, they would be lost on quit or reload.
+function sendPicksOnLeave(): void {
+  for (const save of pausedPicks) {
+    save()
+  }
   for (const saves of lookSaves.values()) {
     const next = saves.waiting
     if (next) {
@@ -29,7 +35,13 @@ function sendWaitingLooks(): void {
     }
   }
 }
-let sendsOnLeave = false
+let listening = false
+function sendOnLeave(): void {
+  if (!listening && typeof window !== 'undefined') {
+    listening = true
+    window.addEventListener('pagehide', sendPicksOnLeave)
+  }
+}
 
 /** Saves `look` after any save already on its way; `onDrained` runs once nothing for this bot is left. */
 export function saveBotLook(
@@ -54,10 +66,7 @@ export function saveBotLook(
     drained: new Set(onDrained ? [onDrained] : [])
   }
   lookSaves.set(key, saves)
-  if (!sendsOnLeave && typeof window !== 'undefined') {
-    sendsOnLeave = true
-    window.addEventListener('pagehide', sendWaitingLooks)
-  }
+  sendOnLeave()
   const release = hold?.()
   void (async () => {
     while (saves.waiting) {
@@ -112,18 +121,22 @@ export function useBotLookSave(
     setPicked((shown) => ({ ...shown, ...change }))
     if (timer.current) {
       clearTimeout(timer.current.timer)
+      pausedPicks.delete(timer.current.save)
     }
     const save = (): void => {
-      timer.current = null
+      if (timer.current?.save === save) {
+        clearTimeout(timer.current.timer)
+        timer.current = null
+      }
+      pausedPicks.delete(save)
       saveBotLook(key, look, update, open.current ? drained.current : undefined, hold)
     }
     timer.current = { timer: setTimeout(save, delayMs), save, look }
+    pausedPicks.add(save)
+    sendOnLeave()
   }
   const flush = (): void => {
-    if (timer.current) {
-      clearTimeout(timer.current.timer)
-      timer.current.save()
-    }
+    timer.current?.save()
   }
   return { picked, pick, flush }
 }
