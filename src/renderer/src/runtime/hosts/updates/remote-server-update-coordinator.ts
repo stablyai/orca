@@ -18,6 +18,10 @@ import {
 } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { UpdateCheckOptions } from '../../../../../shared/updater/update-status-types'
+import {
+  getVersionChannel,
+  hasDedicatedReleaseRepo
+} from '../../../../../shared/updater/release-channel'
 import { waitForReplacementRuntime } from './remote-server-restart-wait'
 import { getRemoteServerNewerThanClientVersion } from './remote-server-version-skew'
 import { remoteServerUpdateErrorMessage } from './remote-server-update-errors'
@@ -195,6 +199,19 @@ export async function inspectRemoteServerUpdate(
         error: remoteServerUpdateErrorMessage(error)
       }
     }
+  }
+
+  // Why: hourly, daily, and adhoc builds publish outside the main repo. Offering this
+  // app's version asks the server updater for a build its stable feed cannot see.
+  const clientChannel = getVersionChannel(clientVersion)
+  if (clientChannel !== null && hasDedicatedReleaseRepo(clientChannel)) {
+    return inspectRemoteServerUpdate(
+      environment,
+      clientVersion,
+      transport,
+      { includePrerelease: false, includePerfPrerelease: false },
+      timing
+    )
   }
 
   return {
