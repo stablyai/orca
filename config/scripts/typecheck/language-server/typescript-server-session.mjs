@@ -17,6 +17,9 @@ const MAX_QUEUED_REQUESTS = 64
 const MAX_OPEN_REQUESTS = 4096
 // Servers given up on but not yet exited; past this, a restart fails until one exits.
 const MAX_RETIRED = 2
+// Configuration registrations hold nothing on the client, so a restarted server's repeat of one is answered here.
+const CONFIGURATION = 'workspace/didChangeConfiguration'
+const MAX_HELD_CONFIGURATIONS = 64
 // Without a running server these only update what the next one is given at start.
 const SESSION_STATE = new Set([
   'textDocument/didOpen',
@@ -50,8 +53,11 @@ export function createServerSession({
   let nextId = 0
   let replayId = null
   let shutdownId = null
-  // A server that registered capabilities with the client keeps them for the session, so it is never restarted.
+  // A server that registered other capabilities with the client keeps them for the session, so it is never restarted.
   let registered = false
+  // Configuration registrations the client accepted, by id, and the ones it is still answering, by relayed id.
+  const heldConfigurations = new Map()
+  const offeredConfigurations = new Map()
   let idleTimer
   let killTimer
   let idleExpired = false
@@ -290,6 +296,13 @@ export function createServerSession({
         const serverId = relayed.get(message.id)
         relayed.delete(message.id)
         relayedByServerId.delete(serverId)
+        const offered = offeredConfigurations.get(message.id) ?? []
+        offeredConfigurations.delete(message.id)
+        if (!message.error && heldConfigurations.size + offered.length <= MAX_HELD_CONFIGURATIONS) {
+          for (const registration of offered) {
+            heldConfigurations.set(registration.id, JSON.stringify(registration))
+          }
+        }
         server.write({ ...message, id: serverId })
       }
       return
@@ -377,6 +390,28 @@ export function createServerSession({
     relayed.set(id, message.id)
     relayedByServerId.set(message.id, id)
     toClient({ ...message, id })
+    return id
+  }
+
+  const register = (message) => {
+    const registrations = message.params?.registrations ?? []
+    if (!registrations.every((registration) => registration.method === CONFIGURATION)) {
+      registered = true
+      idleExpired = false
+      clearTimer(idleTimer)
+      relayToClient(message)
+    } else if (
+      registrations.every(
+        (registration) => heldConfigurations.get(registration.id) === JSON.stringify(registration)
+      )
+    ) {
+      server.write({ jsonrpc: '2.0', id: message.id, result: null })
+    } else {
+      const id = relayToClient(message)
+      if (id !== undefined) {
+        offeredConfigurations.set(id, registrations)
+      }
+    }
   }
 
   function fromServer(message) {
@@ -395,11 +430,13 @@ export function createServerSession({
       if (idleExpired && pending.size === 0 && state === 'ready') {
         stop()
       }
+    } else if (message.method === 'client/registerCapability' && message.id !== undefined) {
+      register(message)
     } else if (message.method && message.id !== undefined) {
-      if (message.method === 'client/registerCapability') {
-        registered = true
-        idleExpired = false
-        clearTimer(idleTimer)
+      if (message.method === 'client/unregisterCapability') {
+        for (const { id } of message.params?.unregisterations ?? []) {
+          heldConfigurations.delete(id)
+        }
       }
       relayToClient(message)
     } else if (message.method === '$/cancelRequest') {
@@ -427,6 +464,7 @@ export function createServerSession({
     pending.clear()
     relayed.clear()
     relayedByServerId.clear()
+    offeredConfigurations.clear()
     replayId = null
     shutdownId = null
     if (closed || !(expected || waking)) {
