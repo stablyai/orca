@@ -14,6 +14,7 @@ import {
   type WindowsCachedAgentJobVerdict
 } from './windows/cached-agent-revalidation'
 import { readWindowsConsoleAttachedProcessIds } from './windows/console-attached-processes'
+import { ptySpawnStartedAtMs } from '../../windows/pty-spawn-time'
 import { isWindowsPtyJobReadable, readWindowsPtyJobProcessIds } from './windows/pty-job-membership'
 
 /** Execute fresh confirmation; owners retain cache publication and lifetime fences. */
@@ -55,8 +56,9 @@ export async function confirmFreshPtyForeground(args: {
       ...(process.platform === 'win32'
         ? {
             forceProcessScan: true,
-            readWindowsConsoleAttachedProcessIds: () =>
-              readWindowsConsoleAttachedProcessIds(proc.pid)
+            paneSpawnedAtMs: ptySpawnStartedAtMs(proc),
+            readWindowsConsoleAttachedProcessIds: (memberPid?: number) =>
+              readWindowsConsoleAttachedProcessIds(memberPid ?? proc.pid)
           }
         : {})
     })

@@ -5,6 +5,7 @@ import {
   type ShellSpawnResult
 } from './local-pty-executable-spawn'
 import { reportNodePtyLoadFailure } from '../pty/node-pty-load-failure'
+import { markPtySpawnStarted } from '../../windows/pty-spawn-time'
 
 type LocalPtySpawn = (
   params: Omit<ShellSpawnParams, 'ptySpawn'> & { signal?: AbortSignal }
@@ -18,7 +19,8 @@ export async function loadLocalPtyRuntimeSpawn(): Promise<LocalPtySpawn> {
   })
   const ptySpawn: typeof pty.spawn = (file, args, options) => {
     assertWslDistroAllowed(file, args)
-    return pty.spawn(file, args, options)
+    const startedAt = Date.now()
+    return markPtySpawnStarted(pty.spawn(file, args, options), startedAt)
   }
   return (params) => spawnShellWithFallback({ ...params, ptySpawn })
 }

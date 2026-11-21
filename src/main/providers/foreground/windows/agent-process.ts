@@ -15,6 +15,7 @@ import {
   type WindowsProcessCandidate,
   type WindowsProcessRow
 } from './process-rows'
+import { findOrphanOnInheritedConsole } from './exited-root-orphans'
 
 export type AgentForegroundResolutionOptions = {
   contextPaths?: readonly string[]
@@ -22,8 +23,11 @@ export type AgentForegroundResolutionOptions = {
   fresh?: boolean
   /** Force confirmation scans even when node-pty reports a recognized name. */
   forceProcessScan?: boolean
-  /** Lazily proves which global descendants still belong to this ConPTY. */
-  readWindowsConsoleAttachedProcessIds?: () => Promise<ReadonlySet<number> | null>
+  /** Lazily proves which global descendants still belong to this ConPTY. `memberPid` names a live
+   * console member to attach through when the pane root has exited; it defaults to the root. */
+  readWindowsConsoleAttachedProcessIds?: (memberPid?: number) => Promise<ReadonlySet<number> | null>
+  /** When this pane was spawned; without it an exited root's orphans cannot be tied to the pane. */
+  paneSpawnedAtMs?: number
   /** A contradictory full-table command line proves cached anchor PID reuse. */
   anchorProcessId?: number
   /** The cached agent name the anchor pid is supposed to prove. */
@@ -59,7 +63,8 @@ export async function resolveWindowsAgentForegroundProcessWithAvailability(
   options: AgentForegroundResolutionOptions
 ): Promise<WindowsAgentForegroundResolution> {
   const inventory = await queryWindowsPaneProcessInventory(shellPid, {
-    ...(options.fresh === true ? { fresh: true } : {}),
+    fresh: options.fresh === true,
+    exitedRootPaneSpawnedAtMs: options.paneSpawnedAtMs,
     ...(options.anchorProcessId !== undefined ? { anchorPid: options.anchorProcessId } : {})
   })
   if (!inventory) {
@@ -72,10 +77,16 @@ export async function resolveWindowsAgentForegroundProcessWithAvailability(
     fallbackProcess,
     options.contextPaths
   )
+  // Orphans of an exited root may only prove an agent, read through a member of the pane console.
+  const memberPid = inventory.rootExited ? findOrphanOnInheritedConsole(candidates) : undefined
+  const { readWindowsConsoleAttachedProcessIds: readConsole } = options
+  if (inventory.rootExited && !(hasRecognizedCandidate && memberPid !== undefined && readConsole)) {
+    return { available: false, processName: null }
+  }
   let filteredCandidates = candidates
-  if (hasRecognizedCandidate && options.readWindowsConsoleAttachedProcessIds) {
+  if (hasRecognizedCandidate && readConsole) {
     // Job membership retains detached descendants; only console attachment can exclude their byte authority.
-    const consoleProcessIds = await options.readWindowsConsoleAttachedProcessIds()
+    const consoleProcessIds = await readConsole(memberPid)
     if (!consoleProcessIds) {
       return { available: false, processName: null }
     }
@@ -92,11 +103,16 @@ export async function resolveWindowsAgentForegroundProcessWithAvailability(
         anchorRecognized.processName !== options.anchorProcessName
       : // Query-denied command === name is inconclusive, never foreign proof.
         anchorRow.command !== anchorRow.name)
-  return {
-    available: true,
-    ...resolveWindowsForegroundIdentity(filteredCandidates, fallbackProcess, options.contextPaths),
-    ...(anchorPidForeign ? { anchorPidForeign: true } : {})
+  const identity = resolveWindowsForegroundIdentity(
+    filteredCandidates,
+    fallbackProcess,
+    options.contextPaths
+  )
+  // Without a live root, no or an ambiguous agent would fall back to the dead shell's name.
+  if (inventory.rootExited && !identity.processName) {
+    return { available: false, processName: null }
   }
+  return { available: true, ...identity, ...(anchorPidForeign ? { anchorPidForeign: true } : {}) }
 }
 
 function windowsCandidatesContainRecognizedAgent(
