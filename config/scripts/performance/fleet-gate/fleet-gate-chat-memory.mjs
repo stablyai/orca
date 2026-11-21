@@ -23,6 +23,8 @@ const SAMPLE_EVERY_MS = 5_000
 const MIN_MAIN_MB_PER_CHAT = -0.25
 
 const STATUS_SETTLE_MS = 2_000
+const IDLE_WAIT_MS = 300_000
+const IDLE_POLL_MS = 10_000
 
 /** Of these chats, how many the host reports idle after a successful turn with their provider running. */
 async function idleLiveChatCount(page, sessionIds) {
@@ -192,6 +194,19 @@ export async function chatMemoryOnce({
       if (launched < offset + count) {
         result.incomplete.push(
           `chat-mem: ${String(launched)} of ${String(offset + count)} chats started`
+        )
+        return null
+      }
+      // Every first turn must be over before the settle, so none finishes inside the sampling window.
+      const idleBy = Date.now() + IDLE_WAIT_MS
+      let ready = await idleLiveChatCount(copy.page, sessionIds)
+      while (ready.done < offset + count && Date.now() < idleBy) {
+        await new Promise((resolve) => setTimeout(resolve, IDLE_POLL_MS))
+        ready = await idleLiveChatCount(copy.page, sessionIds)
+      }
+      if (ready.done < offset + count) {
+        result.incomplete.push(
+          `chat-mem: ${String(ready.done)} of ${String(offset + count)} chats idle after a successful turn within ${String(IDLE_WAIT_MS / 1000)} s (${JSON.stringify(ready.seen)})`
         )
         return null
       }
