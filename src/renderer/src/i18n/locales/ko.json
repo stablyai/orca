@@ -22514,6 +22514,7 @@
       "tabNextTerminal": "다음 터미널 탭",
       "tabPreviousTerminal": "이전 터미널 탭",
       "tabOpenQuickCommandsMenu": "빠른 명령어 메뉴 전환",
+      "editorCommandPalette": "명령 팔레트",
       "editorFind": "편집기에서 찾기",
       "editorReplace": "편집기에서 바꾸기",
       "editorToggleChangesView": "변경 사항 보기 전환",

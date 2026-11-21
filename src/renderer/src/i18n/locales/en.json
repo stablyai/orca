@@ -26038,6 +26038,7 @@
       "tabNextTerminal": "Next terminal tab",
       "tabPreviousTerminal": "Previous terminal tab",
       "tabOpenQuickCommandsMenu": "Toggle Quick Commands menu",
+      "editorCommandPalette": "Command Palette",
       "editorFind": "Find in editor",
       "editorReplace": "Replace in editor",
       "editorToggleChangesView": "Toggle changes view",

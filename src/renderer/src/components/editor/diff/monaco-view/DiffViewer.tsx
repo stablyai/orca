@@ -21,6 +21,7 @@ import {
   installEditorSaveShortcut,
   installMonacoEditorFindShortcut
 } from '../../commands/editor-shortcuts'
+import { installMonacoDiffCommandPaletteShortcuts } from '../../commands/monaco-diff-command-palette-shortcuts'
 import { diffEditorScrollbarOptions } from './diff-editor-scrollbar-options'
 import { LargeDiffFallback } from '../large-files/LargeDiffFallback'
 import { getLargeDiffRenderLimit } from '../../../../../../shared/source-control/diff/large-diff-render-limit'
@@ -268,6 +269,8 @@ export default function DiffViewer({
 
       const originalEditor = diffEditor.getOriginalEditor()
       const modifiedEditor = diffEditor.getModifiedEditor()
+      const cleanupCommandPaletteShortcuts = installMonacoDiffCommandPaletteShortcuts(diffEditor)
+      diffEditor.onDidDispose(cleanupCommandPaletteShortcuts)
       modifiedEditor.onDidDispose(() => {
         if (diffEditorRef.current !== diffEditor) {
           return
