@@ -2,7 +2,8 @@
 // so the panel, not each row, asks for a member's uploaded picture: once per version, the first time a
 // face of that member is drawn, kept while the panel is open (through the shared picture cache, so a
 // picture already read costs nothing). Nothing is asked while the window is hidden or the member's host
-// is offline; a failed read is tried again when its host comes back, or when the panel reopens.
+// is offline; a failed read is tried again once a host comes or goes (its own coming back included), as
+// a face of it is drawn, or when the panel reopens.
 import { createContext, useEffect, useState } from 'react'
 import {
   readBotHostState,
@@ -22,9 +23,8 @@ type Picture = {
   /** The read's result: a data URL, or null for none. */
   src?: string | null
   reading: boolean
-  failed: boolean
-  /** The host was offline since the read failed, so its coming back reads again. */
-  hostLeft: boolean
+  /** The read failed while these hosts were live: it is tried again once a host comes or goes. */
+  failedWith: ReturnType<typeof readLiveBotHostIds> | null
   faces: Set<() => void>
 }
 
@@ -54,7 +54,7 @@ function createFacePictures(): BotGroupFacePictures {
   // One per member asked for, its latest version, and each face's handle on it.
   const pictures = new Map<string, Picture>()
   const handles = new Map<string, { version: string; handle: BotGroupFacePicture }>()
-  // Pictures that wait on the window showing, their host, or (failed) their host leaving and coming back.
+  // Pictures with a face drawn that wait on the window showing, their host, or (failed) a host coming or going.
   const waiting = new Set<Picture>()
   let stopWatching: (() => void) | null = null
   let liveHosts = readLiveBotHostIds()
@@ -75,20 +75,10 @@ function createFacePictures(): BotGroupFacePictures {
     }
   }
 
+  // Only pictures with a face drawn wait; one without is looked at again as a face returns.
   const admit = (picture: Picture): void => {
-    if (picture.src !== undefined || picture.reading) {
+    if (picture.src !== undefined || picture.reading || picture.faces.size === 0) {
       waiting.delete(picture)
-      return
-    }
-    // A failure stays watched without faces, so its host leaving is seen; other waits need a face.
-    if (picture.failed && !picture.hostLeft) {
-      waiting.add(picture)
-      return
-    }
-    if (picture.faces.size === 0) {
-      if (!picture.failed) {
-        waiting.delete(picture)
-      }
       return
     }
     // A picture the shared cache already holds shows even while the host can't be asked.
@@ -96,18 +86,21 @@ function createFacePictures(): BotGroupFacePictures {
     if (cached !== undefined) {
       waiting.delete(picture)
       picture.src = cached
-      picture.failed = false
+      picture.failedWith = null
       picture.faces.forEach((notify) => notify())
       return
     }
-    if (hostOffline(picture) || !getWindowParkVisible()) {
+    if (
+      picture.failedWith === readLiveBotHostIds() ||
+      hostOffline(picture) ||
+      !getWindowParkVisible()
+    ) {
       waiting.add(picture)
       return
     }
     waiting.delete(picture)
     picture.reading = true
-    picture.failed = false
-    picture.hostLeft = false
+    picture.failedWith = null
     void readBotUploadSrc(picture.bot, picture.version).then((src) => settle(picture, src))
   }
 
@@ -118,8 +111,7 @@ function createFacePictures(): BotGroupFacePictures {
       return
     }
     if (src === undefined) {
-      picture.failed = true
-      picture.hostLeft = hostOffline(picture)
+      picture.failedWith = readLiveBotHostIds()
       admit(picture)
     } else {
       picture.src = src
@@ -136,11 +128,7 @@ function createFacePictures(): BotGroupFacePictures {
     }
     liveHosts = now
     for (const picture of waiting) {
-      if (picture.failed && hostOffline(picture)) {
-        picture.hostLeft = true
-      } else {
-        admit(picture)
-      }
+      admit(picture)
     }
     syncWatching()
   }
@@ -168,8 +156,7 @@ function createFacePictures(): BotGroupFacePictures {
       bot: { hostId: bot.hostId, id: bot.id },
       version,
       reading: false,
-      failed: false,
-      hostLeft: false,
+      failedWith: null,
       faces: new Set()
     }
     pictures.set(key, picture)
