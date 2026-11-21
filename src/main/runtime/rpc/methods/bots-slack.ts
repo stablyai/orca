@@ -50,7 +50,7 @@ async function recordSlack(
   botId: string,
   change: Parameters<typeof nextSlackApps>[1],
   expected?: readonly BotSlackApp[]
-): Promise<void> {
+): Promise<boolean> {
   try {
     await runtime.bots.update(botId, (bot) => {
       if ('remove' in change) {
@@ -65,8 +65,13 @@ async function recordSlack(
       }
       return { slackApps: nextSlackApps(bot, change) }
     })
+    return true
   } catch (error) {
+    if (error instanceof Error && error.message === 'bot_not_found') {
+      return true
+    }
     console.error('Failed to record the bot’s Slack app:', error)
+    return false
   }
 }
 
@@ -190,8 +195,9 @@ export const BOT_SLACK_METHODS = [
           'account_inactive'
         ].includes(removed.error)
       ) {
-        await recordSlack(context.runtime, botId, { remove: teamId }, expected)
-        return { ok: true as const, value: undefined }
+        return (await recordSlack(context.runtime, botId, { remove: teamId }, expected))
+          ? { ok: true as const, value: undefined }
+          : { ok: false as const, error: BOT_SLACK_DESKTOP_ERRORS.failed }
       }
       return removed
     }

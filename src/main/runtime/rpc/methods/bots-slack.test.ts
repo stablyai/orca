@@ -274,6 +274,34 @@ describe('bots.slack', () => {
     expect(mocks.update).not.toHaveBeenCalled()
   })
 
+  it('reports a failed local removal save and allows a retry', async () => {
+    mocks.call.mockResolvedValue({ ok: true, value: { state: 'not_created' } })
+    mocks.update.mockRejectedValueOnce(new Error('home_read_only'))
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      expect(await invoke('bots.slack.remove', { botId: 'bot-1', teamId: 'T1' })).toEqual({
+        ok: false,
+        error: 'cloud_error'
+      })
+      expect(await invoke('bots.slack.remove', { botId: 'bot-1', teamId: 'T1' })).toEqual({
+        ok: true,
+        value: undefined
+      })
+      expect(editedFrom(inT1)).toEqual({ slackApps: [] })
+    } finally {
+      log.mockRestore()
+    }
+  })
+
+  it('keeps a completed Cloud removal successful if the bot was deleted meanwhile', async () => {
+    mocks.call.mockResolvedValueOnce({ ok: true, value: { state: 'not_created' } })
+    mocks.update.mockRejectedValueOnce(new Error('bot_not_found'))
+    expect(await invoke('bots.slack.remove', { botId: 'bot-1', teamId: 'T1' })).toEqual({
+      ok: true,
+      value: undefined
+    })
+  })
+
   it('takes nothing that is not a configuration refresh token', () => {
     expect(BotSlackGrant.safeParse({ refreshToken: 'xoxb-bot-token' }).success).toBe(false)
   })

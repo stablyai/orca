@@ -59,6 +59,17 @@ afterEach(async () => {
 })
 
 describe('ConnectorCloud', () => {
+  it('keeps the sign-in identity through quit fencing and follows account-change hooks', () => {
+    const cloud = connectorCloud()
+    quitting = true
+    expect(cloud.signedInAccount()).toBeNull()
+    expect(cloud.signedInAccount(true)).toBe('ada')
+    account = 'grace'
+    cloud.accountChanged()
+    expect(cloud.signedInAccount(true)).toBe('grace')
+    cloud.signOutStarted()
+    expect(cloud.signedInAccount(true)).toBeNull()
+  })
   it('holds the poll only while signed in and on, and stops on disable and sign-out', async () => {
     account = null
     const cloud = connectorCloud()
