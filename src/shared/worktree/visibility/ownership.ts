@@ -19,6 +19,8 @@ import {
 } from './visibility-sources'
 import { isLegacyRepoForExternalWorktreeVisibility } from './external-worktree-visibility'
 import { shouldShowWorktree } from './worktree-visibility-resolution'
+import { getRepoExecutionHostId } from '../../execution-host/execution-host'
+import { getHostSettingOverride } from '../../execution-host/host-setting-overrides'
 import type { GlobalSettings } from '../../settings/global-settings-types'
 import type { OrcaWorkspaceLayout } from '../paths/orca-workspace-layout'
 import type { Repo } from '../../repository/repo-types'
@@ -26,12 +28,29 @@ import type { WorktreeMeta } from '../meta-types'
 import type { DetectedWorktree, Worktree, WorktreeOwnership } from '../types'
 
 export function buildKnownOrcaWorkspaceLayouts(
-  settings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory'>,
-  repo?: Pick<Repo, 'path' | 'connectionId' | 'worktreeBasePath'>
+  settings: Pick<
+    GlobalSettings,
+    'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory' | 'hostSettingOverrides'
+  >,
+  repo?: Pick<Repo, 'path' | 'connectionId' | 'worktreeBasePath' | 'executionHostId'>
 ): OrcaWorkspaceLayout[] {
   const layouts: OrcaWorkspaceLayout[] = []
   for (const basePath of resolveConfiguredWorktreeBasePaths(repo)) {
     layouts.push({ path: basePath, nestWorkspaces: settings.nestWorkspaces })
+  }
+  if (repo) {
+    const hostLocation = getHostSettingOverride(
+      settings,
+      getRepoExecutionHostId(repo),
+      'defaultWorktreeLocation'
+    )
+    // A host directory is that host's filesystem, so the desktop-absolute exclusion does not apply.
+    if (hostLocation) {
+      layouts.push({
+        path: resolveWorkspaceLayoutPath(repo.path, hostLocation),
+        nestWorkspaces: settings.nestWorkspaces
+      })
+    }
   }
   if (settings.workspaceDir && shouldIncludeWorkspaceLayout(repo, settings.workspaceDir)) {
     layouts.push({
