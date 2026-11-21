@@ -230,13 +230,15 @@ test('pastes clipboard files and images through the explorer context menus', asy
     })
     .toBe('89504e470d0a1a0a')
 
-  await electronApp.evaluate(
-    ({ clipboard }, file) => {
-      clipboard.write({ text: file.name })
-      clipboard.writeBuffer('text/uri-list', Buffer.from(`${file.url}\r\n`))
-    },
-    { name: FILE_NAME, url: pathToFileURL(sourceFile).href }
-  )
+  const copySourceFile = () =>
+    electronApp.evaluate(
+      ({ clipboard }, file) => {
+        clipboard.write({ text: file.name })
+        clipboard.writeBuffer('text/uri-list', Buffer.from(`${file.url}\r\n`))
+      },
+      { name: FILE_NAME, url: pathToFileURL(sourceFile).href }
+    )
+  await copySourceFile()
   await expect
     .poll(() => page.evaluate(() => window.api.ui.readClipboardFilePaths()))
     .toContain(sourceFile)
@@ -254,6 +256,7 @@ test('pastes clipboard files and images through the explorer context menus', asy
   await expect(shell.getByRole('button', { name: FILE_NAME, exact: true })).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('after.png') })
 
+  await copySourceFile()
   await rightClickPaste(page, shell.locator('[data-slot="scroll-area-viewport"]'))
   await expect
     .poll(() => readFile(path.join(workspace, FILE_NAME), 'utf8').catch(() => null))

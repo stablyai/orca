@@ -156,16 +156,20 @@ export function FileExplorerRowContextMenu({
         event.preventDefault()
       }}
     >
+      {showCopyFileAction && (
+        <ContextMenuItem onSelect={handleCopyFile}>
+          <Copy />
+          {t('auto.components.right.sidebar.FileExplorerRow.98a79948b3', 'Copy')}
+        </ContextMenuItem>
+      )}
       {pastePreview ? (
-        <>
-          <FileExplorerPasteMenuItem
-            preview={pastePreview}
-            disabled={writesBlocked}
-            onSelect={() => onPasteToDirectory(node.isDirectory ? node.path : undefined)}
-          />
-          <ContextMenuSeparator />
-        </>
+        <FileExplorerPasteMenuItem
+          preview={pastePreview}
+          disabled={writesBlocked}
+          onSelect={() => onPasteToDirectory(node.isDirectory ? node.path : undefined)}
+        />
       ) : null}
+      {(showCopyFileAction || pastePreview) && <ContextMenuSeparator />}
       <ContextMenuItem
         disabled={writesBlocked}
         onSelect={() => onStartNew('file', targetDir, targetDepth)}
@@ -181,12 +185,6 @@ export function FileExplorerRowContextMenu({
         {t('auto.components.right.sidebar.FileExplorerRow.f61af83316', 'New Folder')}
       </ContextMenuItem>
       <ContextMenuSeparator />
-      {showCopyFileAction && (
-        <ContextMenuItem onSelect={handleCopyFile}>
-          <Copy />
-          {t('auto.components.right.sidebar.FileExplorerRow.98a79948b3', 'Copy')}
-        </ContextMenuItem>
-      )}
       <ContextMenuItem onSelect={() => onCopyPaths('absolute')}>
         <Copy />
         {selectionSize > 1

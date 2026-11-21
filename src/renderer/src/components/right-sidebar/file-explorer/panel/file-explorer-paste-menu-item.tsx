@@ -67,7 +67,7 @@ export function FileExplorerPasteMenuItem({
   const t = useTranslate()
   const Item = background ? DropdownMenuItem : ContextMenuItem
   return (
-    <HoverCard openDelay={250} closeDelay={100}>
+    <HoverCard openDelay={250} closeDelay={0}>
       <HoverCardTrigger asChild>
         <Item disabled={disabled} onSelect={onSelect}>
           <ClipboardPaste />

@@ -5,7 +5,31 @@ export type ClipboardPastePreview =
   | { kind: 'files'; label: string; paths: string[] }
   | { kind: 'image' }
 
+let clipboardRevision = 0
+let pastedRevision = -1
+let watchingClipboard = false
+
+export function captureExplorerClipboardRevision(): number {
+  const clipboard = navigator.clipboard
+  if (!watchingClipboard && clipboard && 'onclipboardchange' in clipboard) {
+    clipboard.addEventListener('clipboardchange', () => {
+      clipboardRevision += 1
+    })
+    watchingClipboard = true
+  }
+  return clipboardRevision
+}
+
+export function markExplorerPasteComplete(revision: number): void {
+  if (watchingClipboard && revision === clipboardRevision) {
+    pastedRevision = revision
+  }
+}
+
 export async function readClipboardPastePreview(): Promise<ClipboardPastePreview | null> {
+  if (captureExplorerClipboardRevision() === pastedRevision) {
+    return null
+  }
   let text = ''
   try {
     text = await window.api.ui.readClipboardText()

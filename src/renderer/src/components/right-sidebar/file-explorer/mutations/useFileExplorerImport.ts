@@ -13,6 +13,8 @@ import { getNativeFileDropRejectionMessage } from '@/lib/files/drop/native-file-
 import { prepareOsFileDropPaths } from '@/lib/files/drop/os-file-drop-preparation'
 import { readFileExplorerDropDir, readFileExplorerPasteDir } from './file-explorer-drop-directory'
 import {
+  captureExplorerClipboardRevision,
+  markExplorerPasteComplete,
   readClipboardPastePreview,
   readClipboardImportPaths
 } from './file-explorer-clipboard-import'
@@ -129,6 +131,7 @@ export function useFileExplorerImport({
         return
       }
 
+      const revision = captureExplorerClipboardRevision()
       const clipboardRead = readClipboardImportPaths().catch((error: unknown) => {
         toast.error(
           extractIpcErrorMessage(
@@ -155,6 +158,9 @@ export function useFileExplorerImport({
           }
           const importedPaths = await importPreparedPaths(prepared.paths, destination)
           if (importedPaths.length > 0) {
+            if (importedPaths.length === paths.length) {
+              markExplorerPasteComplete(revision)
+            }
             toast.success(
               t(
                 'auto.components.right.sidebar.useFileExplorerImport.pasteSuccess',
