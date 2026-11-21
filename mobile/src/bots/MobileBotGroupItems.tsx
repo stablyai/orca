@@ -27,7 +27,7 @@ import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { botHomeWorktreeId } from './host-bots-read'
+import { botHomeWorktreeId, hostBotsKey } from './host-bots-read'
 import type { PhoneBot } from './host-bots-operations'
 import { mobileBotAvatarSource } from './host-bot-row-facts'
 import { useOpenBotHome } from './use-open-bot-home'
@@ -294,6 +294,7 @@ export function MobileBotGroupItems({
     ) : itemUid && itemBot ? (
       <MobileBotItemPage
         client={client}
+        hostKey={hostBotsKey(hostId)}
         bot={itemBot}
         uid={itemUid}
         stepper={null}
