@@ -12,6 +12,8 @@ function gitInit(dir: string): void {
   execFileSync('git', ['init'], { cwd: dir, stdio: 'pipe' })
   execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: dir, stdio: 'pipe' })
   execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: dir, stdio: 'pipe' })
+  // Git for Windows defaults to core.autocrlf=true, which would rewrite the index bytes asserted here.
+  execFileSync('git', ['config', 'core.autocrlf', 'false'], { cwd: dir, stdio: 'pipe' })
 }
 
 function gitCommit(dir: string, message: string): void {
