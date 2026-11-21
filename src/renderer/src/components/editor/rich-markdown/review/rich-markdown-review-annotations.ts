@@ -150,7 +150,7 @@ export function getRichMarkdownCommentAnchorTop(
   }
 }
 
-function getRichMarkdownSelectionRange(editor: Editor): RichMarkdownComposerState {
+export function getRichMarkdownSelectionRange(editor: Editor): RichMarkdownComposerState {
   const blocks = getRichMarkdownCommentBlocks(editor)
   const { from, to, empty } = editor.state.selection
   const selectedBlocks = empty

@@ -113,6 +113,8 @@ const STATIC_TITLE_COPY = {
   'editor.toggleChangesView': () =>
     translate('keybindings.title.editorToggleChangesView', 'Toggle changes view'),
   'editor.copyContext': () => translate('keybindings.title.258e7f75ec', 'Copy context'),
+  'editor.addSelectionToLastAgent': () =>
+    translate('keybindings.title.editorAddSelectionToLastAgent', 'Add selection to last agent'),
   'editor.previousChange': () => translate('keybindings.title.324e886c0f', 'Go to previous change'),
   'editor.nextChange': () => translate('keybindings.title.7055c70bdb', 'Go to next change'),
   'editor.addReviewNote': () => translate('keybindings.title.9cb1023d40', 'Add review note'),

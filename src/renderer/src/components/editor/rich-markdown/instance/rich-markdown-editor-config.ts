@@ -86,6 +86,7 @@ export type EditorConfigParams = {
   flushPendingSerialization: () => boolean
   openSearchRef: MutableRefObject<() => void>
   openAnnotationPopoverRef: MutableRefObject<(requireLiveSelection?: boolean) => boolean>
+  addSelectionToLastAgentRef: MutableRefObject<() => boolean>
   syncAnnotationTarget: (editor: Editor) => void
   clearAnnotationTarget: () => void
   scrollRichMarkdownReviewNoteCardIntoView: (commentId: string) => void

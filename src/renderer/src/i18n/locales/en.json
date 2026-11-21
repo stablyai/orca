@@ -18358,6 +18358,7 @@
           "hostUnverified": "Couldn't verify which host owns this file. Reopen the file and try again."
         },
         "contextualCopy": {
+          "addToLastAgentHint": "Add to agent {{shortcut}}",
           "copyContextHint": "Copy context {{shortcut}}"
         },
         "EditorPanel": {
@@ -26093,6 +26094,7 @@
       "02dd0f77a0": "Worktree history back",
       "bb3beaeef6": "Reset size",
       "258e7f75ec": "Copy context",
+      "editorAddSelectionToLastAgent": "Add selection to last agent",
       "e0d7e6b665": "Toggle right sidebar",
       "1d2c86248c": "Delete workspace",
       "69b2b72c98": "Annotate page element",
