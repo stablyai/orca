@@ -6739,7 +6739,8 @@
     "accessDecide": {
       "expired": "此请求已被回复或已过期",
       "grantedNotAdded": "已授予访问权限，但 {{person}} 还未列出。Orca 会添加他们",
-      "signedOut": "请在电脑上登录 Orca 以回复请求"
+      "signedOut": "请在电脑上登录 Orca 以回复请求",
+      "whatTheyCanDoMany": "他们可以做什么"
     },
     "tabs": {
       "homeTitle": "主聊天"
@@ -7450,6 +7451,46 @@
       "back": "返回技能",
       "search": "搜索项目",
       "noMatch": "没有匹配搜索的项目"
+    },
+    "whoCanAsk": {
+      "cap": "此处最多 {{count}} 人",
+      "addPeople": "添加人员",
+      "addFailed": "无法添加 {{names}}",
+      "fullBot": "未添加任何人：添加 {{names}} 将超过每个机器人最多 {{count}} 人的上限",
+      "fullWorkspace": "未添加任何人：添加 {{names}} 将超过此工作区最多 {{count}} 人的上限",
+      "canAsk": "可以提问",
+      "retry": "重试",
+      "searching": "正在搜索…",
+      "cancel": "取消",
+      "selectedHeading": "已选择",
+      "you": "你",
+      "owner": "所有者",
+      "addedCount": "已添加 {{count}}/{{max}} 人",
+      "incomplete": "此处未列出所有人。可按名字搜索来查找",
+      "selected": "已选择 {{count}} 人",
+      "addOne": "添加 1 人",
+      "addMany": "添加 {{count}} 人",
+      "searchIn": "在 {{workspace}} 中搜索人员",
+      "peopleIn": "{{workspace}} 中的人员",
+      "noOneNamed": "{{workspace}} 中没有名为“{{query}}”的人",
+      "needsSlack": "请先将 {{name}} 添加到 Slack，才能从你的工作区中选择人员",
+      "noMatchDetail": "可以添加 Slack 工作区 {{workspace}} 中的成员、访客以及来自其他组织的人员。其他人会收到一条私密提示，可借此向你申请访问权限"
+    },
+    "linear": {
+      "whoCanAsk": {
+        "needsSetup": "完成设置以关联你在 {{workspace}} 中的 Linear 账户，然后在此选择人员",
+        "noMatchDetail": "可以添加 Linear 工作区 {{workspace}} 的成员和访客。其他人会收到一条公开回复，可借此向你申请访问权限"
+      }
+    },
+    "github": {
+      "whoCanAsk": {
+        "needsSetup": "完成设置以关联你的 GitHub 账户，然后在此选择人员",
+        "exactOnly": "GitHub 只能按确切的用户名查找用户",
+        "search": "按 GitHub 用户名搜索",
+        "found": "GitHub 上的人员",
+        "noUser": "没有名为“{{query}}”的 GitHub 用户",
+        "typeUsername": "输入 GitHub 用户名"
+      }
     },
     "saveFailed": "无法保存",
     "sheet": {

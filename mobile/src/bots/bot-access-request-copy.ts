@@ -21,7 +21,11 @@ import {
   type BotAccessConnector
 } from '../../../src/shared/bots/bot-access-reach'
 import type { Translate } from '../i18n/mobile-i18n'
-import { mobileBotAccessCopy, mobileBotAccessPlace } from './mobile-bot-access-copy'
+import {
+  mobileBotAccessCopy,
+  mobileBotAccessNames,
+  mobileBotAccessPlace
+} from './mobile-bot-access-copy'
 import { mobilePermissionModeCopy } from './mobile-permission-mode-copy'
 
 /** What the phone knows of a bot's access. */
@@ -61,11 +65,8 @@ export function phoneBotReachLines(
   )
 }
 
-function accessRequestPlace(request: ConnectorAccessRequest, t: Translate): string {
-  const connector = CONNECTOR_SOURCE_NAMES[request.source]
-  return request.workspaceName
-    ? mobileBotAccessCopy(t, 'place', { connector, workspace: request.workspaceName })
-    : connector
+function accessPlace(connector: string, workspace: string | null, t: Translate): string {
+  return workspace ? mobileBotAccessCopy(t, 'place', { connector, workspace }) : connector
 }
 
 /** Who the connector says they are, without a real name that only repeats their name. */
@@ -78,7 +79,10 @@ function uniqueRequestIdentity(request: ConnectorAccessRequest): string {
 
 /** Under the person's name: who the connector says they are, and where they asked. */
 export function accessRequestLine(request: ConnectorAccessRequest, t: Translate): string {
-  return [uniqueRequestIdentity(request), accessRequestPlace(request, t)]
+  return [
+    uniqueRequestIdentity(request),
+    accessPlace(CONNECTOR_SOURCE_NAMES[request.source], request.workspaceName || null, t)
+  ]
     .filter(Boolean)
     .join(' · ')
 }
@@ -91,40 +95,69 @@ export type AccessDecisionRow = {
   connector?: BotAccessConnector
 }
 
+/** Who would get access, from where: a request's asker, or the people picked to add. */
+export type PhoneAccessGrant = {
+  /** identity: who the connector says they are, when asked from a request. */
+  people: readonly { id: string; name: string; identity?: string }[]
+  connector: BotAccessConnector
+  workspace: string | null
+}
+
+export function accessRequestGrant(request: ConnectorAccessRequest): PhoneAccessGrant {
+  return {
+    people: [
+      {
+        id: request.requester.id,
+        name: accessRequestPerson(request),
+        identity: uniqueRequestIdentity(request)
+      }
+    ],
+    connector: request.source,
+    workspace: request.workspaceName || null
+  }
+}
+
 /** The desktop's "Give access" confirm: its title, who and where, the warning line in its tone, and
  *  what they reach, one line each. The bot runs on the computer, not this phone. */
 export function accessDecisionCopy(
-  request: ConnectorAccessRequest,
+  grant: PhoneAccessGrant,
   bot: PhoneAccessBot,
   t: Translate
 ): {
   title: string
-  firstName: string
+  /** The heading over the rows: what the one person can do, or what they all can. */
+  whatTheyCanDo: string
   who: string
   warning: string
   tone: 'high' | 'medium'
   rows: AccessDecisionRow[]
 } {
-  const person = accessRequestPerson(request)
-  const firstName =
-    botAccessGrantFacts({
-      botName: bot.name,
-      people: [{ id: request.requester.id, name: person }],
-      connector: CONNECTOR_SOURCE_NAMES[request.source],
-      workspace: request.workspaceName || null
-    }).firstName ?? person
+  const connector = CONNECTOR_SOURCE_NAMES[grant.connector]
+  const { person, firstName, names, count, identity } = botAccessGrantFacts({
+    botName: bot.name,
+    people: grant.people,
+    connector,
+    workspace: grant.workspace
+  })
   // Without a handle, the full name, since the title shows only the first.
-  const who = uniqueRequestIdentity(request) || (person !== firstName ? person : '')
+  const who = person
+    ? identity || (person !== firstName ? person : '')
+    : mobileBotAccessNames(names)
   const { tone, rows } = botAccessConfirm({
     permission: botStartingPermission(bot, null),
-    connector: request.source,
+    connector: grant.connector,
     // Unknown counts, as on the desktop: the phone can't read which Google areas are on.
     google: bot.google === true
   })
   return {
-    title: mobileBotAccessCopy(t, 'titleOne', { person: firstName, name: bot.name }),
-    firstName,
-    who: [who, accessRequestPlace(request, t)].filter(Boolean).join(' · '),
+    title: firstName
+      ? mobileBotAccessCopy(t, 'titleOne', { person: firstName, name: bot.name })
+      : mobileBotAccessCopy(t, 'titleMany', { count, name: bot.name }),
+    // Its own line for several people: "they" inside the one-person line doesn't translate.
+    whatTheyCanDo: firstName
+      ? mobileBotAccessCopy(t, 'whatTheyCanDo', { person: firstName })
+      : t('bots.accessDecide.whatTheyCanDoMany', 'What they can do'),
+    who: [who, accessPlace(connector, grant.workspace, t)].filter(Boolean).join(' · '),
     warning: mobileBotAccessCopy(
       t,
       'confirmWarning',
@@ -146,7 +179,9 @@ export function accessDecisionCopy(
         case 'approves':
           return {
             kind: row.kind,
-            text: mobileBotAccessCopy(t, 'confirmApproveOne', { person: firstName })
+            text: firstName
+              ? mobileBotAccessCopy(t, 'confirmApproveOne', { person: firstName })
+              : mobileBotAccessCopy(t, 'confirmApproveMany')
           }
         case 'google':
           return { kind: row.kind, text: mobileBotAccessCopy(t, 'confirmGoogle') }

@@ -6385,7 +6385,8 @@
     "accessDecide": {
       "expired": "This request was already answered or has expired.",
       "grantedNotAdded": "Access was given, but {{person}} isn’t listed yet. Orca will add them.",
-      "signedOut": "Sign in to Orca on your computer to answer requests."
+      "signedOut": "Sign in to Orca on your computer to answer requests.",
+      "whatTheyCanDoMany": "What they can do"
     },
     "tabs": {
       "homeTitle": "Home"
@@ -7096,6 +7097,46 @@
       "back": "Back to Skills",
       "search": "Search projects",
       "noMatch": "No projects match your search."
+    },
+    "whoCanAsk": {
+      "cap": "{{count}} people is the most here.",
+      "addPeople": "Add people",
+      "addFailed": "Couldn’t add {{names}}.",
+      "fullBot": "Nobody was added: {{names}} would go past the {{count}} people a bot can have.",
+      "fullWorkspace": "Nobody was added: {{names}} would go past the {{count}} people this workspace can have.",
+      "canAsk": "Can ask",
+      "retry": "Try again",
+      "searching": "Searching…",
+      "cancel": "Cancel",
+      "selectedHeading": "Selected",
+      "you": "You",
+      "owner": "Owner",
+      "addedCount": "{{count}} of {{max}} added",
+      "incomplete": "Not everyone is listed. Search by name to find someone.",
+      "selected": "{{count}} selected",
+      "addOne": "Add 1 person",
+      "addMany": "Add {{count}} people",
+      "searchIn": "Search people in {{workspace}}",
+      "peopleIn": "People in {{workspace}}",
+      "noOneNamed": "No one named “{{query}}” in {{workspace}}",
+      "needsSlack": "Add {{name}} to Slack first to pick people from your workspace.",
+      "noMatchDetail": "Members, guests and people from other organizations in {{workspace}}’s Slack can be added. Anyone else gets a private note to ask you."
+    },
+    "linear": {
+      "whoCanAsk": {
+        "needsSetup": "Finish setup to link your Linear account in {{workspace}}, then pick people here.",
+        "noMatchDetail": "Members and guests of {{workspace}}’s Linear can be added. Anyone else gets a public reply to ask you."
+      }
+    },
+    "github": {
+      "whoCanAsk": {
+        "needsSetup": "Finish setup to link your GitHub account, then pick people here.",
+        "exactOnly": "GitHub finds people by their exact username.",
+        "search": "Search by GitHub username",
+        "found": "People on GitHub",
+        "noUser": "No GitHub user named “{{query}}”",
+        "typeUsername": "Type a GitHub username"
+      }
     }
   },
   "mobileWebShell": {
