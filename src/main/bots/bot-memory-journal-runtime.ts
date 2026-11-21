@@ -1,7 +1,7 @@
 // When a bot's items change, journals the ones that closed since its last pass, one pass per bot
 // at a time and on its memory queue, so journal writes never interleave with a tidy-up's.
 import type { Bot } from '../../shared/bot-types'
-import { actsForOwner } from '../../shared/bots/bot-acts-for'
+import { actsForOwner, type BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import type { BotChangeScope } from '../../shared/bots/bot-change-scope'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { type BotHomeFilesystem, botHomeFolder, localBotHomeFilesystem } from './bot-home'
@@ -82,6 +82,22 @@ export function createBotMemoryJournal(deps: {
   }
 }
 
+/**
+ * Whether an item's chat acts for the bot's owner, read by its /clear root as every acts-for check
+ * keys it. Unrecorded chats count as the owner's (they predate the record). A recorded row with any
+ * other asker, an old event run's unknown causer included, is not the owner's, so its closes stay
+ * out of the journal.
+ */
+export function ownerChatOf(deps: {
+  root: (chatId: string) => string
+  actsFor: (root: string) => readonly BotRequestAsker[] | undefined
+}): (chatId: string) => boolean {
+  return (chatId) => {
+    const askers = deps.actsFor(deps.root(chatId))
+    return askers === undefined || actsForOwner(askers)
+  }
+}
+
 /** The host's Items notice, which also journals each bot's closed items on its memory queue. */
 export function journaledItemsNotice(
   runtime: {
@@ -106,12 +122,10 @@ export function journaledItemsNotice(
           : []
       })
     },
-    // Keyed by the conversation's /clear root, as every acts-for check reads it.
-    ownerChat: (chatId) => {
-      const root = runtime.botItems.chatRootOf(chatId)
-      const recorded = runtime.getOrchestrationDb().getBotConversationActsFor(root)
-      return !recorded || actsForOwner(recorded.actsFor)
-    },
+    ownerChat: ownerChatOf({
+      root: (chatId) => runtime.botItems.chatRootOf(chatId),
+      actsFor: (root) => runtime.getOrchestrationDb().getBotConversationActsFor(root)?.actsFor
+    }),
     folder: (bot) => botHomeFolder(bot),
     serialize: (botId, step) =>
       runtime.bots.memory.after(botId, async () => {

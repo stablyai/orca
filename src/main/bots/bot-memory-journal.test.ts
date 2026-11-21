@@ -3,7 +3,11 @@ import { describe, expect, it } from 'vitest'
 import type { BotItemLinkView } from '../../shared/bots/bot-items'
 import { makeTestBot } from './bot.test-fixture'
 import { appendJournalLines, journalLines } from './bot-memory-journal'
-import { createBotMemoryJournal, type JournalCandidate } from './bot-memory-journal-runtime'
+import {
+  createBotMemoryJournal,
+  type JournalCandidate,
+  ownerChatOf
+} from './bot-memory-journal-runtime'
 
 const CLOSED = new Date(2026, 10, 21, 15, 0).getTime()
 const pr = (number: number, state: 'open' | 'merged' | 'closed'): BotItemLinkView => ({
@@ -153,5 +157,26 @@ describe("the host's journal pass", () => {
     expect(fs.files.get(join('/home', 'memory', 'journal', '2026-11.md'))).toBe(
       '# Journal 2026-11\n- 2026-11-21 | item #1006 | PR #4417 merged | Sidebar search fix\n'
     )
+  })
+})
+
+describe("which closed items count as the owner's", () => {
+  const owner = { kind: 'owner' as const }
+  const unknown = { kind: 'unknown' as const }
+  const records = new Map([
+    ['root', [owner]],
+    ['legacy-event-run', [owner, unknown]],
+    ['teammate-root', [unknown]]
+  ])
+  const isOwner = ownerChatOf({
+    root: (chatId) => (chatId === 'cleared-child' ? 'teammate-root' : chatId),
+    actsFor: (root) => records.get(root)
+  })
+
+  it('reads a cleared chat by its root, and keeps an old event run with an unknown causer out', () => {
+    expect(isOwner('root')).toBe(true)
+    expect(isOwner('cleared-child')).toBe(false)
+    expect(isOwner('legacy-event-run')).toBe(false)
+    expect(isOwner('never-recorded')).toBe(true)
   })
 })
