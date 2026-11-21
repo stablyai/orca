@@ -48,16 +48,30 @@ function rolloutKey(name: string): string {
     : name
 }
 
+type HandledRecord = { handled?: string[]; released?: string[] }
+
 /** A source's names never copied again; each one added is journaled by the next `flush`. */
 class HandledNames {
   private readonly names: Set<string>
   private pending: string[] = []
+  // Journaled before their copy was published: no need to journal them again.
+  private readonly recorded = new Set<string>()
 
   constructor(
     private readonly source: ImportedSource,
-    private readonly record: (names: string[]) => Promise<void>
+    private readonly record: (change: HandledRecord) => Promise<void>
   ) {
     this.names = new Set(source.handled)
+  }
+
+  recordIntent(name: string): Promise<void> {
+    this.recorded.add(name)
+    return this.record({ handled: [name] })
+  }
+
+  releaseIntent(name: string): Promise<void> {
+    this.recorded.delete(name)
+    return this.record({ released: [name] })
   }
 
   has(name: string): boolean {
@@ -68,7 +82,9 @@ class HandledNames {
     if (!this.names.has(name)) {
       this.names.add(name)
       this.source.handled.push(name)
-      this.pending.push(name)
+      if (!this.recorded.delete(name)) {
+        this.pending.push(name)
+      }
     }
   }
 
@@ -76,7 +92,7 @@ class HandledNames {
     if (this.pending.length > 0) {
       const names = this.pending
       this.pending = []
-      await this.record(names)
+      await this.record({ handled: names })
     }
   }
 }
@@ -167,11 +183,8 @@ async function importFolder(
       name,
       otherFolder: otherFolder ? join(args.storeHome, otherFolder) : null,
       isHandled: () => handled.has(key),
-      // Recorded as soon as it joins the store, so a crash can't forget a copy the user then deletes.
-      recordPublished: () => {
-        handled.add(key)
-        return handled.flush()
-      }
+      recordIntent: () => handled.recordIntent(key),
+      releaseIntent: () => handled.releaseIntent(key)
     })
     if (published === 'failed') {
       return { copied, stopped: false, halt: 'failed' }
@@ -228,8 +241,8 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
         }
   ledger.sources[sourceKey] = source
   const seedOnly = source.seeding === true
-  const handled = new HandledNames(source, (names) =>
-    appendImportProgress(args.ledgerPath, { source: sourceKey, identity, handled: names })
+  const handled = new HandledNames(source, (change) =>
+    appendImportProgress(args.ledgerPath, { source: sourceKey, identity, ...change })
   )
   const listing = await listDayFolders(args.importHome)
   // A pass that skipped an unreadable folder hasn't read everything yet.

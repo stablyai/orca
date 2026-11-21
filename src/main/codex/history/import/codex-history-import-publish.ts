@@ -22,8 +22,6 @@ export type StagedImport = {
   /** The import setting is unchanged and Orca isn't quitting. */
   isCurrent: () => boolean
   isHandled: () => boolean
-  /** Called as soon as the rollout is in the store, before anything else can fail or wait. */
-  recordPublished: () => Promise<void>
 }
 
 /**
@@ -38,6 +36,24 @@ async function storeHoldsAnyForm(folders: string[], name: string): Promise<boole
     join(folder, rolloutTwinPath(name))
   ])
   return (await Promise.all(forms.map(lstatIfPresent))).some(Boolean)
+}
+
+// Removes the name the link just gave the staged copy, only while it is still that same file.
+async function unlinkOwnCopy(job: StagedImport): Promise<boolean> {
+  const [published, staged] = await Promise.all([
+    lstatIfPresent(job.final),
+    lstatIfPresent(job.staged)
+  ])
+  if (!published || !staged || published.ino !== staged.ino || published.dev !== staged.dev) {
+    return false
+  }
+  try {
+    await rm(job.final)
+    return true
+  } catch (error) {
+    console.warn(`[codex-history-import] Could not take back ${job.final}:`, error)
+    return false
+  }
 }
 
 async function linkUnlessDeleted(job: StagedImport): Promise<'copied' | 'existing' | 'refused'> {
@@ -65,7 +81,11 @@ async function linkUnlessDeleted(job: StagedImport): Promise<'copied' | 'existin
       await rm(marker, { force: true, maxRetries: 3 })
       throw error
     }
-    await job.recordPublished()
+    // The setting changed while the link ran: this copy is taken back out.
+    if (linked === 'copied' && !job.isCurrent() && (await unlinkOwnCopy(job))) {
+      await rm(marker, { force: true, maxRetries: 3 })
+      return 'refused'
+    }
     return linked
   })
   return outcome === 'held' ? 'refused' : outcome
