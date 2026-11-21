@@ -81,7 +81,8 @@ describe("a bot's Active work block", () => {
         url: 'https://example.test',
         state: 'open' as const,
         checks: null,
-        review: null
+        review: null,
+        checkedAt: null
       }
     }))
     const section = botActiveWorkSection([{ ...item(9, 'needs_you', 1), links: prs }], [])
