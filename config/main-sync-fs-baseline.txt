@@ -280,7 +280,7 @@
 7 src/main/jcode/hook-service.ts
 7 src/main/keybindings/keybinding-file-parser.ts
 1 src/main/keybindings/keybinding-file.ts
-13 src/main/kimi/hook-service.ts
+2 src/main/kimi/hook-service.ts
 3 src/main/kiro/hook-service.ts
 1 src/main/kiro/standalone-hooks.ts
 3 src/main/lib/hidden-probe-cwd.ts

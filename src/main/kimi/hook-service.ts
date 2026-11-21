@@ -1,25 +1,14 @@
-import {
-  copyFileSync,
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  statSync,
-  unlinkSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join, posix as pathPosix } from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { join, posix as pathPosix } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type {
   AgentHookInstallState,
   AgentHookInstallStatus
 } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
-import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
 import { createManagedCommandMatcher } from '../agent-hooks/installation/commands/managed-hook-command-matching'
+import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
 import { getSharedManagedScriptPath } from '../agent-hooks/installation/scripts/managed-hook-script-path'
 import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
 import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
@@ -126,46 +115,6 @@ function readConfigToml(configPath: string): string | null {
   }
 }
 
-// Atomic replacement protects interrupted writes; a rolling backup permits recovery.
-function writeConfigToml(configPath: string, text: string): void {
-  const dir = dirname(configPath)
-  mkdirSync(dir, { recursive: true })
-  // Atomic rename gives the config the temp file's mode.
-  let mode = 0o600
-  if (existsSync(configPath)) {
-    try {
-      if (readFileSync(configPath, 'utf-8') === text) {
-        return
-      }
-    } catch {}
-    try {
-      mode = statSync(configPath).mode & 0o777
-    } catch (error) {
-      // Concurrent deletion leaves no mode to preserve; other errors must propagate.
-      if (!isDefinitiveAbsence(error)) {
-        throw error
-      }
-    }
-  }
-  const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
-  try {
-    writeFileSync(tmpPath, text, { encoding: 'utf-8', mode: 0o600 })
-    chmodSync(tmpPath, mode)
-    if (existsSync(configPath)) {
-      copyFileSync(configPath, `${configPath}.bak`)
-    }
-    renameSync(tmpPath, configPath)
-  } finally {
-    if (existsSync(tmpPath)) {
-      try {
-        unlinkSync(tmpPath)
-      } catch {
-        // best effort
-      }
-    }
-  }
-}
-
 function buildStatus(present: Set<string>, configPath: string): AgentHookInstallStatus {
   const missing = KIMI_HOOK_EVENTS.filter((event) => !present.has(event))
   let state: AgentHookInstallState
@@ -219,7 +168,15 @@ export class KimiHookService {
     const command = getManagedCommand(scriptPath)
     // Write the script first so config.toml never points at a missing script.
     writeManagedScript(scriptPath, getManagedScript())
-    writeConfigToml(configPath, applyManagedKimiHooks(text, command, isManagedKimiCommand))
+    writeHooksJson(
+      configPath,
+      {},
+      {
+        serialized: applyManagedKimiHooks(text, command, isManagedKimiCommand),
+        preserveMode: true,
+        defaultMode: 0o600
+      }
+    )
     return this.getStatus()
   }
 
@@ -275,7 +232,11 @@ export class KimiHookService {
     }
     const { text: nextText, changed } = removeManagedKimiHooks(text, isManagedKimiCommand)
     if (changed) {
-      writeConfigToml(configPath, nextText)
+      writeHooksJson(
+        configPath,
+        {},
+        { serialized: nextText, preserveMode: true, defaultMode: 0o600 }
+      )
     }
     return this.getStatus()
   }
