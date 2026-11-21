@@ -1,0 +1,45 @@
+=== #8808 env-prefixed agent recognition ===
+plain: { agent: 'claude', processName: 'claude' }
+env-prefixed process: null
+env-prefixed cmdline: null
+plain cmdline: { agent: 'claude', processName: 'claude' }
+
+=== #8962 RESUMABLE_TUI_AGENTS + extract omp ===
+RESUMABLE_TUI_AGENTS: [
+  'claude',   'codex',
+  'gemini',   'antigravity',
+  'opencode', 'mimo-code',
+  'droid',    'grok',
+  'devin'
+]
+isResumableTuiAgent(omp): false
+extract omp: null
+getAgentResumeArgv omp: undefined
+
+=== #8532 wiring greps ===
+src/renderer/src/lib/floating-workspace-shortcut-policy.ts:21:  'tab.openMarkdown',
+src/renderer/src/components/floating-terminal/FloatingTerminalPanel.tsx:188:  const openMarkdownShortcut = useShortcutKeyDetails('tab.openMarkdown')
+src/renderer/src/components/floating-terminal/FloatingTerminalPanel.tsx:1012:      if (matches('tab.openMarkdown')) {
+
+=== #8577 ShortcutsPane matcher ===
+39:import { matchesSettingsSearch } from './settings-search'
+58:  const searchQuery = useAppStore((state) => state.settingsSearchQuery)
+141:  const matchesShortcutSearch = (row: ShortcutRowsByGroup['rows'][number]): boolean =>
+143:    matchesSettingsSearch(searchQuery, getShortcutSearchEntry(row)) &&
+145:  const baseVisibleRows = shortcutRows.filter((row) => matchesShortcutSearch(row))
+156:        (row) => matchesShortcutSearch(row) && matchesShortcutFilter(row, shortcutFilter)
+291:  const showPolicy = matchesSettingsSearch(searchQuery, getTerminalShortcutPolicySearchEntry())
+
+=== #8865 placeholder wiring ===
+src/renderer/src/components/sidebar/empty-project-placeholder-repos.ts:4:export function getEmptyProjectPlaceholderRepoIds(args: {
+src/renderer/src/components/sidebar/empty-project-placeholder-repos.ts:7:  worktreesByRepo: Readonly<Record<string, readonly Worktree[] | undefined>>
+src/renderer/src/components/sidebar/empty-project-placeholder-repos.ts:20:    if ((args.worktreesByRepo[repo.id]?.length ?? 0) === 0) {
+src/renderer/src/components/sidebar/WorktreeList.tsx:122:import { getEmptyProjectPlaceholderRepoIds } from './empty-project-placeholder-repos'
+src/renderer/src/components/sidebar/WorktreeList.tsx:5156:  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+src/renderer/src/components/sidebar/WorktreeList.tsx:5502:  const visibleWorktrees = useMemo(() => {
+src/renderer/src/components/sidebar/WorktreeList.tsx:5504:    const ids = computeVisibleWorktreeIds(worktreesByRepo, sortedIds, {
+src/renderer/src/components/sidebar/WorktreeList.tsx:5555:    worktreesByRepo
+src/renderer/src/components/sidebar/WorktreeList.tsx:5558:  const worktrees = visibleWorktrees
+src/renderer/src/components/sidebar/WorktreeList.tsx:5709:    return getEmptyProjectPlaceholderRepoIds({
+src/renderer/src/components/sidebar/WorktreeList.tsx:5712:      worktreesByRepo,
+src/renderer/src/components/sidebar/WorktreeList.tsx:5715:  }, [filterRepoIds, groupBy, visibleReposForRows, worktreesByRepo])

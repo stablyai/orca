@@ -1,0 +1,14 @@
+TMP=/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/tmp.PVIKlISz5P
+Cloning into '/private/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/tmp.PVIKlISz5P/parent-repo/vendor/sub'...
+Preparing worktree (detached HEAD 18dc7df)
+Cloning into '/private/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/tmp.PVIKlISz5P/linked-wt/vendor/sub'...
+=== clean status (parent) ===
+=== clean status (submodule) ===
+=== remove WITHOUT force (expect fail) ===
+fatal: working trees containing submodules cannot be moved or removed
+exit=128
+=== remove WITH force (expect success) ===
+
+exit=0
+STATUS=REPRODUCED
+Git: git version 2.44.0
