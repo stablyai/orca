@@ -8,7 +8,7 @@ const CLAUDE_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
   modes: ['ask', 'accept-edits', 'auto', 'full-access']
 }
 
-const CODEX_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
+const AUTO_REVIEW_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
   modes: ['ask', 'auto', 'full-access']
 }
 
@@ -37,6 +37,7 @@ export const NATIVE_CHAT_AGENTS = [
   'omp',
   'copilot',
   'cursor',
+  'trae',
   'kimi',
   'kiro',
   'pi',
@@ -58,13 +59,14 @@ const AGENT_CHAT_PERMISSION_MODES_BY_AGENT: Record<
   AgentChatPermissionModeSupport | null
 > = {
   claude: CLAUDE_CHAT_PERMISSION_MODES,
-  codex: CODEX_CHAT_PERMISSION_MODES,
+  codex: AUTO_REVIEW_CHAT_PERMISSION_MODES,
   grok: ACP_CHAT_PERMISSION_MODES,
   opencode: ACP_CHAT_PERMISSION_MODES,
   opencode2: ACP_CHAT_PERMISSION_MODES,
   omp: ACP_CHAT_PERMISSION_MODES,
   copilot: ACP_CHAT_PERMISSION_MODES,
   cursor: ACP_CHAT_PERMISSION_MODES,
+  trae: AUTO_REVIEW_CHAT_PERMISSION_MODES,
   kimi: ASK_WHEN_NEEDED_CHAT_PERMISSION_MODES,
   kiro: ACP_CHAT_PERMISSION_MODES,
   goose: ASK_WHEN_NEEDED_CHAT_PERMISSION_MODES,

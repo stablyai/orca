@@ -250,15 +250,11 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
             adopt: structuredAgentSessionAdoptAttach({
               definition,
               handleNamesTranscript: transcriptImport!.handleNamesTranscript,
-              ...(input.agent === 'codex'
-                ? {
-                    conversationStore:
-                      transcriptImport!.conversationStore({
-                        accountHome: adoption.accountHome,
-                        launchEnv
-                      }) ?? undefined
-                  }
-                : {}),
+              conversationStore:
+                transcriptImport!.conversationStore({
+                  accountHome: adoption.accountHome,
+                  launchEnv
+                }) ?? undefined,
               transcriptPath: adoption.transcriptPath,
               providerSessionId: input.resumeFrom.providerSessionId,
               workspaceCwd,

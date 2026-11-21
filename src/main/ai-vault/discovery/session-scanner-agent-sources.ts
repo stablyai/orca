@@ -7,6 +7,7 @@ import type { AiVaultDeletableAgent } from '../../../shared/ai-vault/contracts/a
 import { resolveGrokSessionsDir } from '../../../shared/agent-hook-listener/providers/grok/grok-session-paths'
 import { resolveKiroHomeDir } from '../../../shared/agent-launch/environment/kiro-home'
 import { uniqueCodexSessionsDirs } from '../scanners/codex/session-scanner-codex-paths'
+import { resolveTraeCliHome } from '../../trae/trae-cli-home'
 import {
   clineMessagesPathForMetadata,
   kiroTranscriptPathForMetadata
@@ -89,6 +90,13 @@ type AiVaultAgentSourceTable = Record<AiVaultDeletableAgent, AiVaultAgentSource>
 
 // OpenCode and Antigravity use dedicated discovery for their storage layouts.
 export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
+  trae: {
+    rootDirs: (_options, wslHomeDirs) => [
+      join(resolveTraeCliHome(), 'sessions'),
+      ...wslHomeSessionDirs('trae', wslHomeDirs)
+    ],
+    extensions: ['.jsonl']
+  },
   claude: {
     rootDirs: (options, wslHomeDirs) =>
       claudeProjectsRootDirs({

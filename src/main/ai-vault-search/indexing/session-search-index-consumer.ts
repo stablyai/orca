@@ -23,6 +23,7 @@ export const SELF_CONTAINED_TRANSCRIPT_AGENTS = {
   qoder: true,
   codebuddy: true,
   codex: false, // session_index.jsonl can override titles.
+  trae: false,
   gemini: true,
   copilot: true,
   cursor: false, // Sibling chat metadata enriches the transcript.

@@ -209,12 +209,12 @@ async function resolveTiered(
   }
 ): Promise<string | null> {
   const { signal } = options
-  const hit = await findFirstInDirs(agent, sessionId, hostDirs, options)
+  const hit = await findSessionFileInDirs(agent, sessionId, hostDirs, options)
   if (hit) {
     return hit
   }
   const accountDirs = (options.accountDirs?.() ?? []).filter((dir) => !hostDirs.includes(dir))
-  const accountHit = await findFirstInDirs(agent, sessionId, accountDirs, options)
+  const accountHit = await findSessionFileInDirs(agent, sessionId, accountDirs, options)
   if (accountHit || !options.wslTier) {
     return accountHit
   }
@@ -222,13 +222,13 @@ async function resolveTiered(
   // Defer WSL process/filesystem discovery until host roots miss.
   const wslDirs = (await wslAgentSessionsDirs(agent)).filter((dir) => !hostDirs.includes(dir))
   signal?.throwIfAborted()
-  return findFirstInDirs(agent, sessionId, wslDirs, options)
+  return findSessionFileInDirs(agent, sessionId, wslDirs, options)
 }
 
 type HostLookupOptions = { cwd?: string; signal?: AbortSignal; strictErrors?: boolean }
 
 // Each root finishes (cwd bucket, then every bucket) before the next, so account order still wins.
-async function findFirstInDirs(
+export async function findSessionFileInDirs(
   agent: SessionIdLookupAgent,
   sessionId: string,
   dirs: readonly string[],

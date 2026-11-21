@@ -17,15 +17,17 @@ export class AcpLoadHistory {
 
   constructor(
     private readonly providerSessionId: string,
-    private readonly onOverflow?: () => void
+    private readonly onOverflow?: () => void,
+    private readonly project?: (method: string, params: unknown) => unknown
   ) {}
 
   keep(method: string, params: unknown): void {
     if (!this.kept || sessionSchema.safeParse(params).data?.sessionId !== this.providerSessionId) {
       return
     }
-    this.bytes += Buffer.byteLength(JSON.stringify(params), 'utf8')
-    this.kept.push({ method, params })
+    const projected = this.project ? this.project(method, params) : params
+    this.bytes += Buffer.byteLength(JSON.stringify(projected), 'utf8')
+    this.kept.push({ method, params: projected })
     if (this.kept.length > LOAD_HISTORY_MAX_FRAMES || this.bytes > LOAD_HISTORY_MAX_BYTES) {
       this.kept = null
       this.onOverflow?.()
@@ -130,7 +132,8 @@ function unmarked(frame: AcpLoadHistoryFrame): AcpLoadHistoryFrame {
 export function acpHistoryTurns(
   frames: readonly AcpLoadHistoryFrame[],
   identity: AcpHistoryTurnIdentity,
-  check: () => void = () => {}
+  check: () => void = () => {},
+  keepOpeningReply = false
 ): AcpHistoryTurn[] {
   const turns: AcpHistoryTurn[] = []
   const messageIds = new Set<string>()
@@ -140,6 +143,7 @@ export function acpHistoryTurns(
   let inUser = false
   let marked = false
   let ended = false
+  const opening: AcpLoadHistoryFrame[] = []
   const nameTurn = (turn: AcpHistoryTurn, id: string | undefined) => {
     if (id === undefined || id === turn.turn) {
       return
@@ -175,7 +179,7 @@ export function acpHistoryTurns(
           turn: null,
           user: { blocks: [], boundary: unmarked(frame) },
           textOnly: true,
-          observations: [],
+          observations: opening.splice(0),
           messageIds: [],
           startedAt: meta?.agentTimestampMs ?? null
         }
@@ -228,6 +232,9 @@ export function acpHistoryTurns(
         }
       }
     } else {
+      if (keepOpeningReply) {
+        opening.push(unmarked(frame))
+      }
       continue
     }
     if (identity === 'user-message-id' && update.messageId) {

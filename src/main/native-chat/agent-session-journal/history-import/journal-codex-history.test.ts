@@ -46,6 +46,48 @@ function request(filePath: string) {
   }
 }
 
+it('imports a TRAE segmented fork only from its selected CLI store', async () => {
+  const parent = await writeCodexHistoryFixture(root, PARENT, ['earlier discussion'])
+  const child = await writeCodexHistoryFixture(root, CHILD, ['current task'], parent.position)
+  const result = await prepareLegacyTranscriptImport({
+    agent: 'trae',
+    sessionId: CHILD,
+    options: {
+      filePath: child.filePath,
+      source: { providerSessionId: CHILD, workspaceCwd: '/workspace', conversationStore: root }
+    }
+  })
+  expect(result.ok && result.items.map((item) => item.body)).toMatchObject([
+    { blocks: [{ text: 'earlier discussion' }] },
+    { blocks: [{ text: 'earlier discussion answer' }] },
+    { blocks: [{ text: 'current task' }] },
+    { blocks: [{ text: 'current task answer' }] }
+  ])
+})
+
+it('keeps complete TRAE conversation text instead of clipping it to a tool preview', async () => {
+  const parent = await writeCodexHistoryFixture(root, PARENT, [`${'a'.repeat(20000)}MESSAGE_END`])
+  const child = await writeCodexHistoryFixture(root, CHILD, ['latest request'], parent.position)
+  const result = await prepareLegacyTranscriptImport({
+    agent: 'trae',
+    sessionId: CHILD,
+    options: {
+      filePath: child.filePath,
+      source: { providerSessionId: CHILD, workspaceCwd: '/workspace', conversationStore: root }
+    }
+  })
+  expect(result.ok).toBe(true)
+  if (!result.ok) {
+    return
+  }
+  const first = result.items.find((item) => item.body.kind === 'message')?.body
+  expect(
+    first?.kind === 'message' &&
+      first.blocks[0]?.type === 'text' &&
+      first.blocks[0].text.endsWith('MESSAGE_END')
+  ).toBe(true)
+})
+
 it.each(['active', 'archive', 'compressed'] as const)(
   'imports %s ancestor prefixes oldest first and excludes later turns',
   async (location) => {

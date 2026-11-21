@@ -1,4 +1,9 @@
-import { acpEffortOption, acpInteractionModeValue, acpSelectChoices } from './acp-select-choices'
+import {
+  acpEffortOption,
+  acpInteractionModeValue,
+  acpSelectChoices,
+  acpSelectOption
+} from './acp-select-choices'
 import { acpModelMenuModels, withFastModeOption } from './acp-model-menu'
 import { acpInitializeForkSupport } from '../capabilities/acp-fork-support'
 import { acpSessionSlashCommand } from './acp-session-slash-command'
@@ -26,10 +31,6 @@ export type AcpOptionWrite =
   | { method: 'config'; configId: string; value: string }
   | { method: 'model'; modelId: string }
 
-function isSelect(option: SessionConfigOption): option is SelectOption {
-  return option.type === 'select'
-}
-
 export class AcpStructuredOptions {
   constructor(
     private readonly dialect: Pick<
@@ -44,6 +45,7 @@ export class AcpStructuredOptions {
       | 'skillDescription'
       | 'fastConfigId'
       | 'interactionModes'
+      | 'preferSessionModels'
     > = {}
   ) {}
 
@@ -333,7 +335,7 @@ export class AcpStructuredOptions {
   }
 
   private effortOption(): SelectOption | null {
-    return acpEffortOption(this.configOptions)
+    return this.dialect.preferSessionModels ? null : acpEffortOption(this.configOptions)
   }
 
   private fastOption(): SelectOption | null {
@@ -342,13 +344,10 @@ export class AcpStructuredOptions {
       return null
     }
     const option = this.configOptions.find((entry) => entry.id === id)
-    return option && isSelect(option) ? option : null
+    return option?.type === 'select' ? option : null
   }
 
   private select(category: string): SelectOption | null {
-    const option = this.configOptions.find(
-      (entry) => entry.category === category || (category === 'model' && entry.id === 'model')
-    )
-    return option && isSelect(option) ? option : null
+    return acpSelectOption(this.configOptions, category, this.dialect.preferSessionModels)
   }
 }
