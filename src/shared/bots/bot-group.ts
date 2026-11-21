@@ -8,6 +8,7 @@ import type {
 } from '../agent-session/journal/agent-session-journal-types'
 import { structuredAgentTurnAnchors } from '../native-chat/transcript/turns/native-chat-turn-membership'
 import { remoteMemberKey } from './bot-group-mentions'
+import { remoteAnswerLines, remoteMemberAsked } from './bot-group-remote-context'
 import {
   BotGroupRemoteBotsSchema as RemoteBots,
   BotGroupReplyMode,
@@ -297,9 +298,7 @@ export function botGroupContext(
       ? message.turns.some(
           (turn) => turn.sessionId === local.sessionId && !turn.mailbox && !turn.error
         )
-      : (message.remoteAsks ?? []).some(
-          (ask) => botGroupRemoteKey(ask) === remoteKey && ask.state === 'sent'
-        )
+      : remoteMemberAsked(message, remoteKey)
   )
   const lines = messages.slice(Math.max(seen, 0)).flatMap((message, index) => [
     ...(seen !== -1 && index === 0
@@ -319,13 +318,7 @@ export function botGroupContext(
         ? [{ author: { kind: 'bot' as const, id: turn.botId, name: turn.botName }, text }]
         : []
     }),
-    ...(message.remoteAsks ?? []).flatMap((ask) => {
-      const id = botGroupRemoteKey(ask)
-      const name = `${ask.name} (${ask.computer})`
-      return ask.reply?.kind === 'answer' && id !== remoteKey
-        ? [{ author: { kind: 'bot' as const, id, name }, text: ask.reply.text.slice(-16_000) }]
-        : []
-    })
+    ...remoteAnswerLines(message, remoteKey)
   ])
   return fitBotGroupContext(lines)
 }
