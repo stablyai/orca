@@ -91,6 +91,9 @@ async function withPolicyOperation<T>(
   }
 }
 
+const BASE_POLL_MS = 3_000
+const MAX_POLL_MS = 12_000
+
 export class HostTerminalPolicy {
   private defaultMaximum = DEFAULT_MAX_HOST_TERMINALS
   private savedMaximum: number | null = null
@@ -99,7 +102,9 @@ export class HostTerminalPolicy {
   private disposed = false
   private reading = false
   private initialization?: Promise<void>
-  private timer?: ReturnType<typeof setInterval>
+  private timer?: ReturnType<typeof setTimeout>
+  private unchangedPolls = 0
+  private pollEpoch = 0
   private log: (event: string, details: Record<string, unknown>) => void = () => {}
   private readonly environment: number | null
 
@@ -131,8 +136,7 @@ export class HostTerminalPolicy {
           : Math.min(Math.ceil(systemPtyLimit / 2), MAX_CONFIGURED_TERMINALS)
       await awaitDaemonValueWithinCallerDeadline(this.refresh(), Date.now() + 250)
       if (!this.disposed && this.path && this.environment === null) {
-        this.timer = setInterval(() => void this.refresh(), 3_000)
-        this.timer.unref?.()
+        this.scheduleNextPoll()
       }
     }))
   }
@@ -140,7 +144,27 @@ export class HostTerminalPolicy {
   dispose(): void {
     this.disposed = true
     this.revision += 1
-    clearInterval(this.timer)
+    clearTimeout(this.timer)
+  }
+
+  // Backs off 3s -> 6s -> 12s while the saved limit stays unchanged; any change resets it.
+  private scheduleNextPoll(): void {
+    clearTimeout(this.timer)
+    const delay = Math.min(BASE_POLL_MS * 2 ** this.unchangedPolls, MAX_POLL_MS)
+    this.timer = setTimeout(() => void this.poll(), delay)
+    this.timer.unref?.()
+  }
+
+  private async poll(): Promise<void> {
+    const before = `${this.savedMaximum}|${this.savedUnreadable}`
+    const epoch = this.pollEpoch
+    await this.refresh()
+    if (this.disposed || epoch !== this.pollEpoch) {
+      return
+    }
+    this.unchangedPolls =
+      before === `${this.savedMaximum}|${this.savedUnreadable}` ? this.unchangedPolls + 1 : 0
+    this.scheduleNextPoll()
   }
 
   private async refresh(): Promise<void> {
@@ -261,6 +285,11 @@ export class HostTerminalPolicy {
           const committed = rename.then((replaced) => {
             if (replaced && !this.disposed) {
               this.revision += 1
+              this.unchangedPolls = 0
+              this.pollEpoch += 1
+              if (this.timer) {
+                this.scheduleNextPoll()
+              }
               if (operation.isCurrent()) {
                 this.savedMaximum = maximum
                 this.setReadHealth(false)
