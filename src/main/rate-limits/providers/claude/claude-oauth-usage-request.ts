@@ -5,6 +5,7 @@ import type {
 import { ensureElectronProxyFromEnvironment } from '../../../network/proxy-settings'
 import { getMainHttpClient } from '../../../network/http-client'
 import { abortSignalWithTimeout } from '../../../lib/abort-signal-with-timeout'
+import type { NetworkProxySettings } from '../../../../shared/network/network-proxy'
 import {
   ClaudeUsageRequestError,
   createOAuthUsageError,
@@ -67,30 +68,42 @@ function mapFableWeeklyWindow(data: OAuthUsageResponse): RateLimitWindow | null 
   )
 }
 
+/** `accountProxy` is the proxy the account's own Claude uses; without it the app-wide policy applies. */
 export async function fetchClaudeOAuthUsage(
   token: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  accountProxy?: NetworkProxySettings | null
 ): Promise<ProviderRateLimits> {
   if (signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
-  await ensureProxyFromEnvironment()
+  const client = getMainHttpClient()
+  // Headless hosts have no per-request proxy and keep the app-wide policy.
+  const fetchThroughProxy = client.fetchThroughProxy
+  const fetchUsage =
+    accountProxy && fetchThroughProxy
+      ? (init: RequestInit) => fetchThroughProxy(accountProxy, OAUTH_USAGE_URL, init)
+      : null
+  if (!fetchUsage) {
+    await ensureProxyFromEnvironment()
+  }
   if (signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
 
   const requestSignal = abortSignalWithTimeout(signal, API_TIMEOUT_MS)
+  const init: RequestInit = {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'anthropic-beta': 'oauth-2025-04-20',
+      'User-Agent': 'claude-code/2.1.0'
+    },
+    signal: requestSignal
+  }
 
   let data: OAuthUsageResponse
   try {
-    const response = await getMainHttpClient().fetch(OAUTH_USAGE_URL, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'anthropic-beta': 'oauth-2025-04-20',
-        'User-Agent': 'claude-code/2.1.0'
-      },
-      signal: requestSignal
-    })
+    const response = fetchUsage ? await fetchUsage(init) : await client.fetch(OAUTH_USAGE_URL, init)
     if (!response.ok) {
       throw await createOAuthUsageError(response)
     }
