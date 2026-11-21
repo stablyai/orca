@@ -1,34 +1,28 @@
 // Native agent CLIs (chat providers, app servers) run outside terminals, under main or the agent host.
-// One per live registration, so a reused pid's late release can't touch its successor.
 type AgentRegistration = { chats: Set<string>; release: () => void }
-const roots = new Map<number, Set<AgentRegistration>>()
-// The CLI's own pid, which chats record, to its newest registration under the root whose tree is counted.
+// Live runs hold distinct pids (each root is its own wrapper or CLI), so a pid already held belongs to an exited run.
+const registrationByRoot = new Map<number, AgentRegistration>()
+// The CLI's own pid, which chats record, to the registration whose root tree is counted.
 const registrationByAgentPid = new Map<number, AgentRegistration>()
 
 /** Counts this root's process tree as agent memory until the returned release runs. */
 export function registerAgentProcess(rootPid: number, agentPid = rootPid): () => void {
-  // A live process owns its pid, so an older registration on it belongs to a process that already exited.
-  const superseded = registrationByAgentPid.get(agentPid)
-  if (superseded) {
-    superseded.release()
+  for (const pid of [rootPid, agentPid]) {
+    registrationByRoot.get(pid)?.release()
+    registrationByAgentPid.get(pid)?.release()
   }
-  const registrations = roots.get(rootPid) ?? new Set<AgentRegistration>()
   const registration: AgentRegistration = {
     chats: new Set<string>(),
     release: () => {
-      if (!registrations.delete(registration)) {
-        return
-      }
-      if (registrations.size === 0 && roots.get(rootPid) === registrations) {
-        roots.delete(rootPid)
+      if (registrationByRoot.get(rootPid) === registration) {
+        registrationByRoot.delete(rootPid)
       }
       if (registrationByAgentPid.get(agentPid) === registration) {
         registrationByAgentPid.delete(agentPid)
       }
     }
   }
-  registrations.add(registration)
-  roots.set(rootPid, registrations)
+  registrationByRoot.set(rootPid, registration)
   registrationByAgentPid.set(agentPid, registration)
   return registration.release
 }
@@ -38,19 +32,11 @@ export function noteAgentProcessChat(agentPid: number, agentSessionId: string): 
   registrationByAgentPid.get(agentPid)?.chats.add(agentSessionId)
 }
 
-/** Each live root with the one chat it belongs to; a root shared by several chats belongs to none. */
+/** Each live root with the one chat it belongs to; a root linked to several chats belongs to none. */
 export function listAgentProcessRoots(): { pid: number; agentSessionId: string | null }[] {
-  return [...roots].map(([pid, registrations]) => {
-    let only: string | null = null
-    for (const registration of registrations) {
-      for (const chat of registration.chats) {
-        if (only !== null && only !== chat) {
-          return { pid, agentSessionId: null }
-        }
-        only = chat
-      }
-    }
-    return { pid, agentSessionId: only }
+  return [...registrationByRoot].map(([pid, { chats }]) => {
+    const [only] = chats
+    return { pid, agentSessionId: chats.size === 1 ? (only ?? null) : null }
   })
 }
 
