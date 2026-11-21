@@ -7,7 +7,7 @@ import { findHostProgram } from '../acp/launch/acp-launch-command'
 import { runtimeReleaseMayBePublished } from '../node-runtime/managed-runtime-release'
 import { AntigravityChatAuthConfigSchema } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { assertAntigravityChatAuthPublished } from './antigravity-chat-auth-publication'
-import { hasSavedAntigravityGoogleSignIn } from './antigravity-chat-saved-sign-in'
+import { hasSavedAntigravityGoogleSignIn } from './antigravity-saved-google-token'
 import { ANTIGRAVITY_CHAT_HOME_FOLDER } from './antigravity-chat-home'
 import {
   agyUsesApiKey,

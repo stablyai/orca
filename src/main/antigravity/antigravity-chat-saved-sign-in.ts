@@ -7,8 +7,6 @@ import {
   hasSavedAntigravityGoogleSignIn
 } from './antigravity-saved-google-token'
 
-export { ANTIGRAVITY_OAUTH_TOKEN_FILES, hasSavedAntigravityGoogleSignIn }
-
 let seeding: Promise<void> | null = null
 
 /** Until a chat's handshake answers, a saved Google token stands for signed in, so a restart

@@ -31,7 +31,10 @@ import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/Age
 import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/capabilities/structured-chat-platform-support'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { useRecheckOnce } from './use-recheck-once'
-import { AntigravityGoogleSignInChoice } from '../../../provider-accounts/AntigravityGoogleSignInChoice'
+import {
+  AntigravityGoogleSignInChoice,
+  antigravityGoogleSignInInUse
+} from '../../../provider-accounts/AntigravityGoogleSignInChoice'
 import { AntigravityAgySignInButton } from '../../../provider-accounts/AntigravityAgySignInButton'
 import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
 import {
@@ -138,8 +141,8 @@ export function AntigravityAccountsSection({
       return
     }
     pending.current = true
-    setBusy(true)
     if (!keepShown) {
+      setBusy(true)
       setError(null)
       setUsage(null)
     }
@@ -195,7 +198,8 @@ export function AntigravityAccountsSection({
           }
         }
       }
-      if (mounted.current) {
+      // A background re-read fails quietly; the next one or Refresh shows the answer.
+      if (mounted.current && !keepShown) {
         setError(cause instanceof Error ? cause.message : 'Antigravity account action failed.')
       }
     } finally {
@@ -285,6 +289,10 @@ export function AntigravityAccountsSection({
   }
 
   const chatDescription = antigravityChatDescription(state, chatRuntime)
+  // A pick moves new chats between agy and Orca's server, which the rows' answer follows.
+  const reread = () => void run('List', undefined, true)
+  const inUse = antigravityGoogleSignInInUse(state)
+  const googleSignIn = inUse ? { inUse, changed: reread } : undefined
   const chatRows =
     chats && chatRuntime.kind === 'active' ? (
       antigravityProviderSignInShown(chatRuntime) ? (
@@ -293,12 +301,13 @@ export function AntigravityAccountsSection({
           label={label}
           disabled={antigravityChatSignInBlocked(chatRuntime)}
           runtime={runtimeRow}
+          googleSignIn={googleSignIn}
         />
       ) : (
         // Chats here run on agy, which only the Google account method does; Orca's sign-in is the
         // way to run them on Orca's server instead.
         <>
-          <AntigravityGoogleSignInChoice owner={owner} inUse="agy" standalone />
+          <AntigravityGoogleSignInChoice owner={owner} inUse="agy" changed={reread} standalone />
           {runtimeRow}
         </>
       )

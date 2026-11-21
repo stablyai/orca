@@ -37,3 +37,20 @@ it('never refuses a listing, even with no key and a saved Google login', async (
     )
   ).resolves.toBeUndefined()
 })
+
+it('never fails a listing whose account files cannot be prepared, as before', async () => {
+  root = mkdtempSync(join(tmpdir(), 'acp-listing-account-'))
+  // gcloud with no project anywhere: a chat start says so; a listing goes on.
+  await expect(
+    prepareAcpListingAccount(
+      acpLaunchSpecFor('antigravity')!,
+      {
+        GEMINI_HOME: join(root, 'antigravity-chat'),
+        HOME: root,
+        CLOUDSDK_CONFIG: join(root, 'none')
+      },
+      { method: 'agent-platform' },
+      () => {}
+    )
+  ).resolves.toBeUndefined()
+})

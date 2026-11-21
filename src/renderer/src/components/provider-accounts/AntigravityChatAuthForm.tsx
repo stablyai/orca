@@ -19,7 +19,10 @@ import {
   type AntigravityChatAuthConfig
 } from '../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { AntigravityChatAuthSettingRow } from './AntigravityChatAuthSettingRow'
-import { AntigravityGoogleSignInChoice } from './AntigravityGoogleSignInChoice'
+import {
+  AntigravityGoogleSignInChoice,
+  type AntigravityGoogleSignInState
+} from './AntigravityGoogleSignInChoice'
 import { AntigravityChatApiKeyField } from './AntigravityChatApiKeyField'
 import { AntigravityChatGcpFields } from './AntigravityChatGcpFields'
 import type { AntigravityChatApiKeyStatus } from '../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
@@ -48,6 +51,8 @@ type AuthFormProps = {
   signInError?: string | null
   /** Wraps the method and Enterprise fields, e.g. as one settings row. */
   fieldsRow?: (fields: ReactNode) => ReactNode
+  /** The Google sign-in choice's state from the host's answer; shown only where it is known. */
+  googleSignIn?: AntigravityGoogleSignInState
   children: (action: AntigravityChatAuthAction) => ReactNode
 }
 
@@ -60,6 +65,7 @@ export function AntigravityChatAuthForm({
   heading,
   signInError,
   fieldsRow,
+  googleSignIn,
   children
 }: AuthFormProps): React.JSX.Element | null {
   const capability = useStructuredAgentSessionHostCapabilityState(
@@ -93,6 +99,7 @@ export function AntigravityChatAuthForm({
       heading={heading}
       signInError={signInError}
       fieldsRow={fieldsRow}
+      googleSignIn={googleSignIn}
     >
       {children}
     </AuthForm>
@@ -107,6 +114,7 @@ function AuthForm({
   heading,
   signInError,
   fieldsRow = unwrapped,
+  googleSignIn,
   children
 }: AuthFormProps & { supported: boolean }): React.JSX.Element {
   const t = useTranslate()
@@ -353,8 +361,8 @@ function AuthForm({
                 </SelectContent>
               </Select>
             </AntigravityChatAuthSettingRow>
-            {method === 'oauth-personal' && (
-              <AntigravityGoogleSignInChoice owner={owner} inUse="orca" />
+            {method === 'oauth-personal' && googleSignIn && (
+              <AntigravityGoogleSignInChoice owner={owner} {...googleSignIn} />
             )}
             {usesGcp && (
               <AntigravityChatGcpFields

@@ -1,10 +1,12 @@
 import { expect, it } from 'vitest'
-import { antigravityGoogleSignInShown } from './AntigravityGoogleSignInChoice'
+import { antigravityGoogleSignInInUse } from './AntigravityGoogleSignInChoice'
 
-it('shows the sign-in in use while the host follows its default, and an explicit choice as made', () => {
-  // An upgraded profile signed in through Orca's sign-in on the server.
-  expect(antigravityGoogleSignInShown('auto', 'orca')).toBe('orca')
-  expect(antigravityGoogleSignInShown('auto', 'agy')).toBe('agy')
-  expect(antigravityGoogleSignInShown('agy', 'orca')).toBe('agy')
-  expect(antigravityGoogleSignInShown('orca', 'agy')).toBe('orca')
+it('shows the sign-in new Google-account chats actually use, by the host answer', () => {
+  // Orca's server is in use here and agy is signed in, so new chats run on agy (#44613).
+  expect(antigravityGoogleSignInInUse({ chatUsesAgy: true })).toBe('agy')
+  // Signed in through Orca's sign-in on the server, or agy not signed in.
+  expect(antigravityGoogleSignInInUse({ chatUsesAgy: false })).toBe('orca')
+  // The host hasn't answered yet, so the choice waits rather than guessing.
+  expect(antigravityGoogleSignInInUse({})).toBeUndefined()
+  expect(antigravityGoogleSignInInUse(null)).toBeUndefined()
 })
