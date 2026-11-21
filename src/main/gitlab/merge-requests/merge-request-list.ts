@@ -5,6 +5,7 @@ import type {
 } from '../../../shared/gitlab/gitlab-types'
 import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import { mapMRToWorkItem } from '../requests/gitlab-response-mapping'
+import { gitLabLabelsParam } from '../requests/gitlab-preload-args'
 import { acquire, glabApiWithHeaders, release } from '../requests/glab-request-admission'
 import { classifyListFetchError } from '../requests/glab-error-classification'
 import { getGlabKnownHosts, type LocalGitExecOptions } from '../projects/gitlab-known-host-probe'
@@ -72,7 +73,7 @@ export async function listMergeRequests(
   query?: string,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {},
-  { involvement }: { involvement?: GitLabMRInvolvement } = {}
+  { involvement, labels }: { involvement?: GitLabMRInvolvement; labels?: string[] } = {}
 ): Promise<ListMergeRequestsResult> {
   const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
   // Resolve the same preference-selected project as issue listings.
@@ -119,6 +120,12 @@ export async function listMergeRequests(
     // Local compatibility can infer a project omitted from authenticated known hosts.
     const stateFlag = mrListStateFlags(state)
     const searchFlag = query?.trim() ? ['--search', query.trim()] : []
+    // Why: glab reads --label as CSV, so a label containing `"` is quoted with its quotes doubled.
+    const csvLabels = labels?.map((label) =>
+      label.includes('"') ? `"${label.replaceAll('"', '""')}"` : label
+    )
+    // One argv entry, so a label starting with "-" is never read as a flag.
+    const labelFlag = csvLabels?.length ? [`--label=${csvLabels.join(',')}`] : []
     await acquire()
     try {
       const { stdout } = await glabExecFileAsync(
@@ -136,7 +143,8 @@ export async function listMergeRequests(
           '--sort',
           'desc',
           ...stateFlag,
-          ...searchFlag
+          ...searchFlag,
+          ...labelFlag
         ],
         glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
@@ -166,7 +174,7 @@ export async function listMergeRequests(
   const searchParam = query?.trim() ? `&search=${encodeURIComponent(query.trim())}` : ''
   const path =
     `projects/${encodedProject(projectRef.path)}/merge_requests?` +
-    `page=${page}&per_page=${perPage}&order_by=updated_at&sort=desc&with_merge_status_recheck=false${stateParam}${searchParam}`
+    `page=${page}&per_page=${perPage}&order_by=updated_at&sort=desc&with_merge_status_recheck=false${stateParam}${searchParam}${gitLabLabelsParam(labels)}`
   const repoId = projectRef.path
   const execOptions = glabRepoExecOptions(repoPath, connectionId, localGitOptions)
   // A filtered list pins the project's host so the user lookup and the list share one account.

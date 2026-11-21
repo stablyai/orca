@@ -25,6 +25,7 @@ import {
 } from '../../../gitlab/requests/gitlab-preload-args'
 import { getWorkItemDetails } from '../../../gitlab/work-items/work-item-details'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
+import { normalizeGitLabLabelNames } from '../../../../shared/gitlab/gitlab-label-names'
 
 type LocalGitArgs = [] | [{ wslDistro?: string }]
 
@@ -63,7 +64,8 @@ export class RuntimeGitLabQueryCommands {
     page?: number,
     perPage?: number,
     query?: string,
-    involvement?: GitLabMRInvolvement
+    involvement?: GitLabMRInvolvement,
+    labels?: string[]
   ): Promise<Awaited<ReturnType<typeof listMergeRequests>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return listMergeRequests(
@@ -75,7 +77,7 @@ export class RuntimeGitLabQueryCommands {
       query,
       getRepoRoutingConnectionId(repo),
       this.deps.getLocalGitArgs(repo)[0] ?? {},
-      { involvement }
+      { involvement, labels: normalizeGitLabLabelNames(labels) }
     )
   }
 
@@ -84,14 +86,16 @@ export class RuntimeGitLabQueryCommands {
     state?: GitLabIssueListState,
     assignee?: string,
     limit?: number,
-    page?: number
+    page?: number,
+    query?: string,
+    labels?: string[]
   ): Promise<{
     items: GitLabWorkItem[]
     totalPages: number
     error?: Awaited<ReturnType<typeof listIssues>>['error']
   }> {
     const repo = await this.deps.resolveRepo(repoSelector)
-    const normalized = normalizeGitLabIssueListArgs({ state, assignee, limit, page })
+    const normalized = normalizeGitLabIssueListArgs({ state, assignee, limit, page, query, labels })
     // Keep page after localGitOptions; spreading optional args before it shifts positions (#13538).
     const result = await listIssues(
       repo.path,
@@ -101,7 +105,9 @@ export class RuntimeGitLabQueryCommands {
       normalized.assignee,
       getRepoRoutingConnectionId(repo),
       this.deps.getLocalGitArgs(repo)[0] ?? {},
-      normalized.page
+      normalized.page,
+      normalized.query,
+      normalized.labels
     )
     // Match TaskPage's desktop preload contract on web runtime.
     const items: GitLabWorkItem[] = result.items.map((issue) => ({

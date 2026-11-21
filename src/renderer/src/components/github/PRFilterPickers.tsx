@@ -159,6 +159,7 @@ export function SingleSelectList({
   return (
     <Command shouldFilter={false}>
       <CommandInput
+        autoFocus
         placeholder={searchPlaceholder}
         value={query}
         onValueChange={setQuery}
@@ -169,7 +170,7 @@ export function SingleSelectList({
         {customValue ? (
           <CustomValueItem value={customValue} onSelect={() => onSelect(customValue)} />
         ) : null}
-        {activeValue ? (
+        {activeValue && !query.trim() ? (
           <CommandItem
             value="__clear__"
             onSelect={() => onSelect(null)}
@@ -245,6 +246,7 @@ export function MultiSelectList({
   return (
     <Command shouldFilter={false}>
       <CommandInput
+        autoFocus
         placeholder={searchPlaceholder}
         value={query}
         onValueChange={setQuery}
@@ -255,7 +257,8 @@ export function MultiSelectList({
         {customValue ? (
           <CustomValueItem value={customValue} onSelect={() => toggle(customValue)} />
         ) : null}
-        {selected.length > 0 ? (
+        {/* Why: a pinned Clear row would take Enter from a typed match and hide the loading or error text. */}
+        {selected.length > 0 && !query.trim() && filtered.length > 0 ? (
           <CommandItem
             value="__clear__"
             onSelect={() => onChange([])}

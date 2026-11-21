@@ -9,12 +9,11 @@ import {
   type GitLabCapabilityChecks
 } from '@/runtime/repository-gitlab/gitlab-owner-api'
 import { mapSettledWithConcurrency } from '../../../../../shared/concurrency/map-with-concurrency'
-import type { Repo } from '../../../../../shared/repository/repo-types'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-import type { GitLabDialogRepoSelector } from '../../gitlab-item-dialog/gitlab-item-dialog-types'
 import type { GitLabWorkItem, GitLabTodo } from '../../../../../shared/gitlab/gitlab-types'
-import { getTaskPageRepoSourceContext } from '../../../lib/work-items/task-repo-source-context'
+import { gitLabTaskRepoSelector } from './gitlab-task-repo-selector'
 import { isGitLabIssueFilter, isGitLabMRFilter } from '../task-page-source-context'
+import { useTaskSearchDebouncedApply } from '../use-task-search-debounced-apply'
 
 // Leave headroom below the runtime RPC foreground concurrency of eight for sidebar and other callers.
 export const GITLAB_TASK_FETCH_CONCURRENCY = 6
@@ -24,18 +23,18 @@ export function gitLabListQueryKey(
   view: string,
   filter: string,
   involvement: string | null,
-  reposKey: string
+  reposKey: string,
+  search: string,
+  labels: string[]
 ): string {
-  return JSON.stringify([view, filter, view === 'mrs' ? involvement : null, reposKey])
-}
-
-function gitLabTaskRepoSelector(repo: Repo): GitLabDialogRepoSelector {
-  return {
-    repoPath: repo.path,
-    repoId: repo.id,
-    sourceContext: getTaskPageRepoSourceContext(repo, 'gitlab'),
-    repoOwnerExecutionHostId: getRepoExecutionHostId(repo)
-  }
+  return JSON.stringify([
+    view,
+    filter,
+    view === 'mrs' ? involvement : null,
+    reposKey,
+    search,
+    labels
+  ])
 }
 
 type GitLabLoadingInput = Pick<
@@ -53,6 +52,10 @@ type GitLabLoadingInput = Pick<
   | 'setGitlabTodosLoading'
   | 'activeGitlabFilter'
   | 'gitlabMRInvolvement'
+  | 'gitlabSearchInput'
+  | 'appliedGitlabSearch'
+  | 'setAppliedGitlabSearch'
+  | 'gitlabLabels'
   | 'gitlabItems'
   | 'gitlabError'
   | 'gitlabLoading'
@@ -79,17 +82,26 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     setGitlabTodosLoading,
     activeGitlabFilter,
     gitlabMRInvolvement,
+    gitlabSearchInput,
+    appliedGitlabSearch,
+    setAppliedGitlabSearch,
+    gitlabLabels,
     gitlabListQueryKey,
     setGitlabListQueryKey,
     unreachableTaskSourceHostIds,
     unreachableTaskSourceHostKey,
     recheckUnreachableTaskSourceHosts
   } = model
+  // GitLab search state is not persisted across visits, so there is no resume state to wait for.
+  useTaskSearchDebouncedApply(gitlabSearchInput, true, setAppliedGitlabSearch)
+  const gitlabQuery = appliedGitlabSearch.trim()
   const currentListQueryKey = gitLabListQueryKey(
     gitlabView,
     activeGitlabFilter,
     gitlabMRInvolvement,
-    selectedReposKey
+    selectedReposKey,
+    gitlabQuery,
+    gitlabLabels
   )
   // Filter chips also bump the nonce; only a bump with the same query is Refresh.
   const lastRefreshRef = useRef({ nonce: gitlabRefreshNonce, query: '' })
@@ -126,6 +138,7 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
       return
     }
     let stale = false
+    const labelFilter = gitlabLabels.length > 0 ? { labels: gitlabLabels } : {}
     // One answer per runtime and capability for this refresh, so N projects on one server probe it once.
     const capabilityChecks: GitLabCapabilityChecks = new Map()
     setGitlabLoading(true)
@@ -135,12 +148,14 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
         ? (repo: (typeof eligibleRepos)[0]) => {
             const isAssignedToMe = activeIssueFilter === 'assigned-to-me'
             const selector = gitLabTaskRepoSelector(repo)
-            return gitLabApiFor(selector)
+            return gitLabApiFor(selector, { capabilityChecks })
               .listIssues({
                 ...selector,
                 state: 'opened',
                 assignee: isAssignedToMe ? '@me' : undefined,
-                limit: 50
+                limit: 50,
+                ...(gitlabQuery ? { query: gitlabQuery } : {}),
+                ...labelFilter
               })
               .then((result) => {
                 const typed = result as {
@@ -167,7 +182,9 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
                 state: activeMRFilter ?? 'opened',
                 ...(gitlabMRInvolvement ? { involvement: gitlabMRInvolvement } : {}),
                 page: 1,
-                perPage: 50
+                perPage: 50,
+                ...(gitlabQuery ? { query: gitlabQuery } : {}),
+                ...labelFilter
               })
               .then((result) => {
                 const typed = result as {
@@ -256,6 +273,8 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     gitlabView,
     activeGitlabFilter,
     gitlabMRInvolvement,
+    gitlabQuery,
+    gitlabLabels,
     gitlabRefreshNonce,
     selectedReposKey,
     unreachableTaskSourceHostKey,
