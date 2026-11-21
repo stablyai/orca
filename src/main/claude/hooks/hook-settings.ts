@@ -18,6 +18,7 @@ import { wrapWindowsPowerShellEncodedCommand } from '../../agent-hooks/installat
 import { quotePowerShellLiteral } from '../../../shared/shell/launch/powershell-native-argument'
 import { getWindowsNativeHookAgent } from '../../agent-hooks/installation/commands/windows-native-hook-executable'
 import {
+  isWindowsReachableHookPath,
   wrapRuntimeHomeHookCommand,
   wrapRuntimeHomePosixHookCommand
 } from '../../agent-hooks/installation/commands/runtime-home-hook-command'
@@ -106,7 +107,8 @@ export function getManagedCommand(
   scriptPath: string,
   options: { neutralJsonWhenMissing?: boolean } = {}
 ): string {
-  return wrapRuntimeHomeHookCommand(getScriptBaseName(scriptPath), options)
+  const posixOnly = !isWindowsReachableHookPath(scriptPath)
+  return wrapRuntimeHomeHookCommand(getScriptBaseName(scriptPath), { ...options, posixOnly })
 }
 
 // Claude adds the full PostCompact command to the model's context after compaction.

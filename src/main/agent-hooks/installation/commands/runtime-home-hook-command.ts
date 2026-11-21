@@ -24,14 +24,15 @@ function buildPosixBranch(
   missingScriptFallback: string,
   options: { requireHome?: boolean; requirePane?: boolean } = {}
 ): string {
-  const posixScript = `"\${HOME-}/.orca/agent-hooks/${scriptBaseName}.sh"`
+  // Name the path once; each repeat costs every installed entry about 45 bytes.
+  const posixScript = '"$orca_hook"'
   const homeGuard = options.requireHome ? '[ -n "${HOME-}" ] && ' : ''
   const paneGuard = options.requirePane ? `${POSIX_ORCA_PANE_GUARD} && ` : ''
   const parentCapture =
     scriptBaseName === 'claude-hook' || scriptBaseName === 'openclaude-hook'
       ? HOOK_PARENT_CAPTURE
       : ''
-  return `if ${paneGuard}${homeGuard}[ -f ${posixScript} ] && [ -r ${posixScript} ] && [ -x ${posixScript} ]; then ${parentCapture}/bin/sh ${posixScript}; else ${missingScriptFallback}; fi`
+  return `orca_hook="\${HOME-}/.orca/agent-hooks/${scriptBaseName}.sh"; if ${paneGuard}${homeGuard}[ -f ${posixScript} ] && [ -r ${posixScript} ] && [ -x ${posixScript} ]; then ${parentCapture}/bin/sh ${posixScript}; else ${missingScriptFallback}; fi`
 }
 
 // Claude echoes this command after /compact and the event is rare, so it stays short and unguarded.
@@ -40,9 +41,17 @@ export function wrapRuntimeHomePosixHookCommand(scriptBaseName: string): string 
   return buildPosixBranch(scriptBaseName, POSIX_HOOK_STDIN_DRAIN_COMMAND, { requireHome: true })
 }
 
+// Drive, UNC, and WSL/Cygwin drive-mount homes may also be read by a Windows agent through Git Bash.
+const WINDOWS_REACHABLE_HOME =
+  /^(?:\/?[A-Za-z]:|\\\\|\/\/|\/mnt\/[A-Za-z]\/|\/cygdrive\/[A-Za-z]\/)/
+
+export function isWindowsReachableHookPath(scriptPath: string): boolean {
+  return WINDOWS_REACHABLE_HOME.test(scriptPath)
+}
+
 export function wrapRuntimeHomeHookCommand(
   scriptBaseName: string,
-  options: { neutralJsonWhenMissing?: boolean } = {}
+  options: { neutralJsonWhenMissing?: boolean; posixOnly?: boolean } = {}
 ): string {
   assertManagedScriptBaseName(scriptBaseName)
   // Grok rejects unresolved bare variables even in untaken platform branches.
@@ -51,6 +60,13 @@ export function wrapRuntimeHomeHookCommand(
   const neutralJson = options.neutralJsonWhenMissing ? `printf '{}\\n'` : ''
   // POSIX drains before answering; Windows answers and checks Orca context before reading abandoned stdin.
   const posixMissingScriptFallback = neutralJson ? `${drain}; ${neutralJson}` : drain
+  // The Windows branch is ~2 KB per entry, so homes no Windows agent reads get only the POSIX call.
+  if (options.posixOnly) {
+    return buildPosixBranch(scriptBaseName, posixMissingScriptFallback, {
+      requireHome: true,
+      requirePane: true
+    })
+  }
   const windowsMissingScriptFallback = [
     ...(neutralJson ? [neutralJson] : []),
     WINDOWS_GIT_BASH_HOOK_ENVIRONMENT_GUARD,
