@@ -11,6 +11,10 @@ import {
 import { dashboardBucketForDotState } from '../../dashboard/snapshot/dashboard-card-bucket'
 import { dashboardCardDotState } from '../../dashboard/rows/dashboard-row-bucket'
 import { isAgentTurnUnacknowledged } from '@/attention/agent-attention-acknowledgement'
+import {
+  dashboardCardIndex,
+  replaceDashboardCards
+} from '../../dashboard/snapshot/dashboard-card-changes'
 
 export type DashboardAgentStatusPatchResult = {
   matched: boolean
@@ -38,7 +42,7 @@ export function patchDashboardSnapshotFromAgentStatus(
   if (event.providerSessionOnly || event.programStatusOnly) {
     return { matched: true, snapshot }
   }
-  const index = snapshot.cards.findIndex((card) => card.paneKey === event.paneKey)
+  const index = dashboardCardIndex(snapshot.cards, event.paneKey)
   if (index === -1) {
     return { matched: false, snapshot }
   }
@@ -93,8 +97,7 @@ export function patchDashboardSnapshotFromAgentStatus(
         : undefined,
     subagents: patchedSubagents(card, event)
   }
-  const cards = snapshot.cards.slice()
-  cards[index] = nextCard
+  const cards = replaceDashboardCards(snapshot.cards, new Map([[index, nextCard]]))
   return {
     matched: true,
     snapshot: { ...snapshot, generatedAt: Math.max(snapshot.generatedAt, event.receivedAt), cards }
