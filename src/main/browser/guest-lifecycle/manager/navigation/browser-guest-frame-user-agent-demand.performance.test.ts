@@ -24,7 +24,8 @@ import {
   countTrackedBrowserGuestFrames,
   noteBrowserGuestSubframeNavigation,
   noteBrowserGuestSubframeUnloaded,
-  trackBrowserPopupUserAgentDemand
+  trackBrowserPopupUserAgentDemand,
+  watchBrowserPopupSiteFrameRemoval
 } from './browser-guest-frame-user-agent-demand'
 
 afterEach(() => {
@@ -174,3 +175,29 @@ it('checks a site iframe a popup shows after loading a new page, then clears it 
   vi.advanceTimersByTime(2_500)
   expect([...getBrowserGuestFrameUserAgentDemand(7)]).toEqual([])
 })
+
+it.each([100, 1000])(
+  'admits a popup subframe navigation in constant work, whatever the watched site iframes (%i)',
+  (count) => {
+    vi.useFakeTimers()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: has every WebContents member the popup watcher reads.
+    const popup = Object.assign(new EventEmitter(), {
+      id: 7,
+      session: {},
+      isDestroyed: () => false
+    }) as unknown as Electron.WebContents
+    watchBrowserPopupSiteFrameRemoval(popup)
+    for (let frameTreeNodeId = 100; frameTreeNodeId < 100 + count; frameTreeNodeId += 1) {
+      setBrowserGuestFrameUserAgentDemand(popup.session, popup.id, frameTreeNodeId, true)
+      popup.emit('did-start-navigation', { isMainFrame: false, frame: { frameTreeNodeId } })
+    }
+    const lookups = vi.spyOn(Set.prototype, 'has')
+    for (let i = 0; i < 100; i += 1) {
+      popup.emit('did-start-navigation', { isMainFrame: false, frame: { frameTreeNodeId: 5 } })
+      popup.emit('did-start-navigation', { isMainFrame: false, frame: { frameTreeNodeId: 100 } })
+    }
+    // One or two set lookups per event, not one per watched iframe.
+    expect(lookups.mock.calls.length).toBeLessThanOrEqual(400)
+    lookups.mockRestore()
+  }
+)

@@ -163,9 +163,10 @@ function scheduleRemovalCheck(guest: Electron.WebContents): void {
 export function watchBrowserPopupSiteFrameRemoval(contents: Electron.WebContents): void {
   const { id, session } = contents
   let recheck: NodeJS.Timeout | null = null
-  // Site iframes whose checks already ran or are running; a page change or a check that clears
-  // one drops it, so an iframe that comes back starts over.
-  const watched = new Set<number>()
+  // Site iframes whose checks already ran or are running, for the current document's demand (a
+  // page commit replaces that set, which starts this one over).
+  let watched = new Set<number>()
+  let watchedDemand: ReadonlySet<number> | null = null
   const scheduleRecheck = (delay: number): void => {
     recheck = setTimeout(() => {
       recheck = null
@@ -190,9 +191,15 @@ export function watchBrowserPopupSiteFrameRemoval(contents: Electron.WebContents
       return
     }
     const demand = getBrowserGuestFrameUserAgentDemand(id)
-    for (const frameTreeNodeId of watched) {
-      if (!demand.has(frameTreeNodeId)) {
-        watched.delete(frameTreeNodeId)
+    if (demand !== watchedDemand) {
+      watched = new Set()
+      watchedDemand = demand
+    } else if (watched.size > demand.size) {
+      // Only cleared iframes leave watched larger than demand, so the walk runs once per clearing.
+      for (const frameTreeNodeId of watched) {
+        if (!demand.has(frameTreeNodeId)) {
+          watched.delete(frameTreeNodeId)
+        }
       }
     }
     const frameTreeNodeId = details.frame?.frameTreeNodeId
