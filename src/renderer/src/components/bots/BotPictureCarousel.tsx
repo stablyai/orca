@@ -90,6 +90,10 @@ export function BotPictureCarousel({
   // under them (Generate arriving once its agents are known, a picture taking a slot) lands in place.
   const order = faces.map((face) => face.key).join(' ')
   const [slideOver, setSlideOver] = useState<string | null>(null)
+  // A slide ends with its list, so a list put back (a refused upload) never revives it.
+  if (slideOver !== null && slideOver !== order) {
+    setSlideOver(null)
+  }
   const sliding = slideOver === order
   // Every face in view since the slide began, so faces leaving view keep their outfit until it ends.
   const [dressed, setDressed] = useState<ReadonlySet<string>>(() => new Set())
