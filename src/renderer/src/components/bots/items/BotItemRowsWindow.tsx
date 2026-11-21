@@ -298,7 +298,7 @@ export function BotItemRowsWindow({
     setFocused((prev) => (prev === focused ? relocated(prev, focusedIndex) : prev))
     setTarget((prev) => (prev === target ? relocated(prev, targetIndex) : prev))
   }, [stop, stopIndex, focused, focusedIndex, target, targetIndex, refocus])
-  const tabStop = stopIndex >= 0 ? stopIndex : 0
+  const tabStop = Math.max(0, stopIndex)
   const rowsTakeFocus = disabled && !all
   const pinned = useMemo(
     () =>

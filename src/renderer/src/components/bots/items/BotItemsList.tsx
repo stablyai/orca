@@ -97,16 +97,16 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
   // The scroller and this list, read as the list mounts (before it's painted): the scroller by its mark,
   // since its own ref is set only after this list's effects, so the panel around them needn't render again.
   const listRef = useRef<HTMLDivElement | null>(null)
-  const scrollerRef = props.scroller
+  const { scroller: panelScroller } = props
   const [boxes, setBoxes] = useState<{ scroller: HTMLElement | null; list: HTMLElement | null }>(
     NO_BOXES
   )
   useLayoutEffect(() => {
     const list = listRef.current
     const scroller =
-      scrollerRef?.current ?? list?.closest<HTMLElement>(`[${BOT_ITEMS_SCROLLER_ATTR}]`) ?? null
+      panelScroller?.current ?? list?.closest<HTMLElement>(`[${BOT_ITEMS_SCROLLER_ATTR}]`) ?? null
     setBoxes((was) => (was.scroller === scroller && was.list === list ? was : { scroller, list }))
-  }, [scrollerRef])
+  }, [panelScroller])
   const viewport = useBotItemsViewport(boxes.scroller, boxes.list)
   // A group whose size changes moves the groups below it, even with the list's height unchanged (rows
   // aging from one group into another): their windows measure again before the change is painted.
@@ -246,6 +246,9 @@ function BotItemGroup({
     focusUid ? items.findIndex((item) => item.uid === focusUid) : -1
   )
   const [shown, setShown] = useState(Math.max(BOT_ITEM_GROUP_ROWS, focusIndex + 1))
+  // Folding or showing more moves the groups below without changing any group's count: they measure
+  // again before it's painted.
+  useLayoutEffect(() => viewport.flush(), [open, shown, viewport])
   // Only an open window draws rows: a folded group, or Needs you, copies none.
   const shownItems = useMemo(
     () => (open && id !== 'needs_you' ? items.slice(0, shown) : []),
