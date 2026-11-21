@@ -77,6 +77,20 @@ export function withoutRefusedSkills(
   }
 }
 
+/** Files whose shared text isn't the home's (a SKILL.md rebuilt from its frontmatter): their line
+ *  numbers aren't the home file's, so the dialog doesn't offer to open the home file at a line. */
+export function rewrittenPaths(
+  content: BotPackageContent,
+  raw: readonly BotPackageRawFile[]
+): string[] {
+  return content.files
+    .filter((file) => {
+      const source = raw.find((entry) => entry.path === file.path)
+      return !source || Buffer.from(source.bytes).toString('utf8') !== file.text
+    })
+    .map((file) => file.path)
+}
+
 /** The files of an archive the reader verified and unpacked into `directory`. */
 export async function archiveRawFiles(
   directory: string,

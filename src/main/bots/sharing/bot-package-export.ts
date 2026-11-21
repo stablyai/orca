@@ -12,6 +12,7 @@ import {
   type BotPackageV1,
   type BotShareCandidateSummary
 } from '../../../shared/bots/bot-package'
+import type { BotShareOutsidePick } from '../../../shared/bots/bot-share-picks'
 import { botPackageName } from '../../../shared/bots/bot-share-status'
 import { pickedSkillNames } from '../../../shared/bots/bot-share-skill-picks'
 import { writeBotPackageArchive } from './bot-package-archive'
@@ -19,10 +20,11 @@ import { scanBotText } from '../../../shared/bots/bot-text-scan'
 import {
   buildBotPackageContent,
   withoutHiddenCharacters,
-  type BotPackageContent,
-  type BotPackageRawFile
+  type BotPackageContent
 } from './bot-package-content'
+import { withOutsideConsent } from './bot-share-outside-picks'
 import {
+  rewrittenPaths,
   sharerRawFiles,
   withoutRefusedSkills,
   writeContentFolder
@@ -75,17 +77,6 @@ export function botPackageFor(
   })
 }
 
-/** Files whose shared text isn't the home's (a SKILL.md rebuilt from its frontmatter): their line
- *  numbers aren't the home file's, so the dialog doesn't offer to open the home file at a line. */
-function rewrittenPaths(content: BotPackageContent, raw: readonly BotPackageRawFile[]): string[] {
-  return content.files
-    .filter((file) => {
-      const source = raw.find((entry) => entry.path === file.path)
-      return !source || Buffer.from(source.bytes).toString('utf8') !== file.text
-    })
-    .map((file) => file.path)
-}
-
 /** The note as a link carries it. */
 function cleanNote(note: string): string {
   return withoutHiddenCharacters(note.trim()).slice(0, BOT_PACKAGE_SETUP_NOTE_MAX)
@@ -130,15 +121,20 @@ export class BotShareCandidates {
     packageId: string
     /** Built in, so a candidate opened with the last published note digests as that version did. */
     setupNote?: string
+    outsideConsent?: readonly BotShareOutsidePick[]
   }): Promise<BotShareCandidateSummary> {
     return this.change(() => this.build(input))
   }
 
-  private async build(input: Parameters<BotShareCandidates['prepare']>[0]) {
+  private async build(request: Parameters<BotShareCandidates['prepare']>[0]) {
     await this.prune()
     // One candidate per bot: a rebuild (a changed tick, a reopened dialog) replaces the last one.
     const previous = [...this.candidates.entries()].filter(
-      ([, entry]) => entry.botId === input.bot.id
+      ([, entry]) => entry.botId === request.bot.id
+    )
+    const input = withOutsideConsent(
+      request,
+      previous.map(([, entry]) => entry.shareable)
     )
     await Promise.all(previous.map(([id]) => this.remove(id)))
     if (!isLandingText(input.bot.name, BOT_DISPLAY_NAME_MAX)) {

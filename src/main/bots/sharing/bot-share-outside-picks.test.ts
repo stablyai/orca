@@ -56,8 +56,18 @@ const read = (displayName = 'team-skills') => {
   return readBotShareable({ bot, home, automations: [], repos: [repo] })
 }
 
-async function packed(shareable: BotShareable, selection: BotShareSelection): Promise<string[]> {
-  const summary = await candidates.prepare({ bot, shareable, selection, packageId: 'package-1' })
+async function packed(
+  shareable: BotShareable,
+  selection: BotShareSelection,
+  outsideConsent?: BotSharePicks['outsideSkills']
+): Promise<string[]> {
+  const summary = await candidates.prepare({
+    bot,
+    shareable,
+    selection,
+    outsideConsent,
+    packageId: 'package-1'
+  })
   return summary.files.map((file) => file.path).filter((path) => path.startsWith('skills/'))
 }
 
@@ -111,7 +121,9 @@ describe('a skill linked into a project from outside it', () => {
     ])
     const last = restoredPicks(saved, await read())
     expect(last.selection.skills).toEqual(['deploy', 'electron'])
-    expect(await packed(shareable, last.selection)).toContain('skills/electron/SKILL.md')
+    expect(await packed(shareable, last.selection, saved.outsideSkills)).toContain(
+      'skills/electron/SKILL.md'
+    )
 
     // Ticked from one folder, now linked in from another: the owner ticks it again.
     const moved = restoredPicks(
@@ -119,5 +131,45 @@ describe('a skill linked into a project from outside it', () => {
       shareable
     )
     expect(moved.selection.skills).toEqual(['deploy'])
+  })
+
+  it("stays out of an open dialog's rebuilds when it moves outside after being ticked inside", async () => {
+    await write(project, '.agents/skills/electron/SKILL.md', skillText('electron', 'Old copy'))
+    const names = ['deploy', 'electron']
+    expect(await packed(await read(), { skills: names })).toContain('skills/electron/SKILL.md')
+
+    await rm(join(project, '.agents/skills/electron'), { recursive: true })
+    await linkElectronIn()
+    // The same picks rebuilt, by an unrelated toggle: the owner hasn't seen it outside yet.
+    expect(await packed(await read(), { skills: names })).toEqual(['skills/deploy/SKILL.md'])
+    // Seen outside on that candidate, then ticked: it goes out.
+    expect(await packed(await read(), { skills: names })).toContain('skills/electron/SKILL.md')
+  })
+})
+
+describe('saved picks for Update link', () => {
+  const shareable = {
+    skills: [
+      { name: 'deploy', description: '', directory: '/p/deploy', homePath: null },
+      {
+        name: 'electron',
+        description: '',
+        directory: `/${'d'.repeat(5000)}`,
+        homePath: null,
+        optInFrom: 'team-skills'
+      }
+    ]
+  }
+
+  it('drops a skill that is no longer there', () => {
+    const last = restoredPicks(
+      { selection: { skills: ['deploy', 'gone'] }, setupNote: '' },
+      shareable
+    )
+    expect(last.selection.skills).toEqual(['deploy'])
+  })
+
+  it("saves the other picks when an outside skill's folder is too long to keep", () => {
+    expect(outsideSkillPicks(['deploy', 'electron'], shareable)).toBeUndefined()
   })
 })

@@ -71,10 +71,13 @@ export class BotShareService {
       ? null
       : await this.deps.client.findPackageId(botPackageName(bot.id))
     const shareable = await this.deps.readShareable(bot)
-    const last = saved && restoredPicks(saved, shareable)
+    const restored = saved && restoredPicks(saved, shareable)
+    // The renderer gets the picks and note only: saved folders stay in the main process.
+    const last = restored && { selection: restored.selection, setupNote: restored.setupNote }
     const candidate = await this.deps.candidates.prepare({
       bot,
       shareable,
+      outsideConsent: restored?.outsideSkills,
       selection: last?.selection ?? selection,
       setupNote: last?.setupNote ?? options.setupNote,
       packageId: (found?.status === 'ok' && found.value) || randomUUID()

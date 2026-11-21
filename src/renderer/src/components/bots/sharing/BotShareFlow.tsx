@@ -230,6 +230,7 @@ function ShareBody({
         bot,
         candidate,
         selection: state.selection,
+        committed: state.committed,
         select: (change) => void state.select(change),
         spots,
         open,

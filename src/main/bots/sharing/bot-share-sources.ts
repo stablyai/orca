@@ -247,7 +247,10 @@ export async function readBotShareable(input: {
   const homePath = input.home ?? botHomeFolder(input.bot)
   const home: Home = { path: homePath, real: await realpath(homePath) }
   const skillProjects = localSkillProjects(input.bot.skillProjects ?? [], input.repos ?? []).map(
-    (repo) => ({ name: repo.displayName.trim() || basename(repo.path) || repo.id, path: repo.path })
+    (repo) => ({
+      name: repo.displayName.trim() || basename(repo.path).trim() || repo.id,
+      path: repo.path
+    })
   )
   const soulPath = await ownPath(home, 'SOUL.md')
   if (soulPath === null || soulPath === 'linked') {

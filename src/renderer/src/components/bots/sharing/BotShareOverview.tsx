@@ -17,10 +17,10 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { SettingsInsetGroup } from '../settings-view/BotSettingsRows'
 import { botShareCheckSummary } from './bot-share-flags'
-import { pickedSkillNames } from '../../../../../shared/bots/bot-share-skill-picks'
 import {
   allMemory,
   pickedOf,
+  pickedSkills,
   unpackableSkills,
   type BotShareContext,
   type BotShareList,
@@ -145,7 +145,7 @@ export function BotShareOverview({ ctx }: { ctx: BotShareContext }): React.JSX.E
   const { candidate, selection } = ctx
   const { available, leftOut } = candidate
   const list = (name: BotShareList) => () => ctx.open({ kind: 'list', list: name })
-  const skills = pickedSkillNames(selection.skills, available.skills)
+  const skills = pickedSkills(ctx)
   const events = available.eventSuggestions.filter(
     (entry, index, all) => all.findIndex((e) => e.automationId === entry.automationId) === index
   )

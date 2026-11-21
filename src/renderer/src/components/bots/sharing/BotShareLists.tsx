@@ -6,9 +6,9 @@ import { describeAutomationSchedule } from '../../../../../shared/automations/sc
 import { automationEventKind } from '../../../../../shared/automation-event-triggers'
 import { formatUiAutomationScheduleDescriptor } from '../../automations/details/automation-schedule-label'
 import { eventLabel } from '../bot-automation-when'
-import { pickedSkillNames } from '../../../../../shared/bots/bot-share-skill-picks'
 import {
   pickedOf,
+  pickedSkills,
   toggled,
   unpackableSkills,
   type BotShareContext,
@@ -52,7 +52,7 @@ function SkillsList({ ctx }: { ctx: BotShareContext }): React.JSX.Element {
     (entry) => entry.kind === 'skill' && entry.why === 'duplicate'
   )
   const unpackable = unpackableSkills(ctx.candidate.leftOut)
-  const picked = pickedSkillNames(ctx.selection.skills, all)
+  const picked = pickedSkills(ctx)
   return (
     <>
       {all.map((skill) => (
