@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Session } from '../session'
+import { SessionRepaintNudge } from '../session-repaint-nudge'
 import type { SubprocessHandle } from '../session-subprocess-handle'
 
 function createSession() {
@@ -40,8 +41,9 @@ describe.skipIf(process.platform === 'win32')('session repaint request', () => {
   it('resizes only the PTY one row smaller and back, once at a time', async () => {
     vi.useFakeTimers()
     const { session, resizes } = createSession()
-    session.requestRepaint()
-    session.requestRepaint()
+    // The second request shares the nudge in flight: both report the program was asked.
+    expect(session.requestRepaint()).toBe(true)
+    expect(session.requestRepaint()).toBe(true)
     expect(session.getAppliedSize()).toEqual({ cols: 80, rows: 24 })
     await vi.advanceTimersByTimeAsync(250)
     expect(resizes).toEqual([
@@ -75,5 +77,36 @@ describe.skipIf(process.platform === 'win32')('session repaint request', () => {
       [80, 23],
       [100, 30]
     ])
+  })
+})
+
+describe('session repaint nudge on hosts that cannot repaint', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('says so on Windows, where ConPTY would replay its own viewport', () => {
+    vi.stubGlobal('process', { ...process, platform: 'win32' })
+    const resize = vi.fn()
+    expect(
+      new SessionRepaintNudge().request(
+        () => ({ cols: 80, rows: 24 }),
+        resize,
+        () => true
+      )
+    ).toBe(false)
+    expect(resize).not.toHaveBeenCalled()
+  })
+
+  it('says so without a grid to restore', () => {
+    const resize = vi.fn()
+    expect(
+      new SessionRepaintNudge().request(
+        () => null,
+        resize,
+        () => true
+      )
+    ).toBe(false)
+    expect(resize).not.toHaveBeenCalled()
   })
 })

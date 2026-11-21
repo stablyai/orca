@@ -49,25 +49,28 @@ export class OrchestrationMailboxNotificationCoordinator<
 
   /** Whether delivery has work for this terminal: a pointer reservation to recover, or unread, undelivered mail no waiter or held batch claims. */
   hasDeliverableMail(terminal: OrchestrationMailboxTerminal): boolean {
+    return this.mailboxesWithDeliverableMail(terminal).length > 0
+  }
+
+  mailboxesWithDeliverableMail(terminal: OrchestrationMailboxTerminal): string[] {
     const db = this.deps.getDb()
-    return (
-      !!db &&
-      this.deps.mailboxOwner.resolveAll(terminal).some((mailboxHandle) => {
-        const waiters = this.deps.getMessageWaiters(mailboxHandle)
-        return (
-          // Mirrors deliver(): an unfiltered waiter preempts recovery too.
-          !hasUnfilteredOrchestrationWaiter(waiters) &&
-          (db.getPendingMailboxPointerMessages(mailboxHandle).length > 0 ||
-            selectOrchestrationPointerBatch({
-              db,
-              mailboxHandle,
-              waiters,
-              reservedTypes: undefined,
-              excludeRunOwnedDirect: mailboxHandle === terminal.handle
-            }).messages.length > 0)
-        )
-      })
-    )
+    return !db
+      ? []
+      : this.deps.mailboxOwner.resolveAll(terminal).filter((mailboxHandle) => {
+          const waiters = this.deps.getMessageWaiters(mailboxHandle)
+          return (
+            // Mirrors deliver(): an unfiltered waiter preempts recovery too.
+            !hasUnfilteredOrchestrationWaiter(waiters) &&
+            (db.getPendingMailboxPointerMessages(mailboxHandle).length > 0 ||
+              selectOrchestrationPointerBatch({
+                db,
+                mailboxHandle,
+                waiters,
+                reservedTypes: undefined,
+                excludeRunOwnedDirect: mailboxHandle === terminal.handle
+              }).messages.length > 0)
+          )
+        })
   }
 
   notifyMessageArrived(handle: string, messageType?: string): void {

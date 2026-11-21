@@ -9,7 +9,10 @@ import {
 } from '../../protocol/daemon-protocol-version'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../sessions/daemon-session-scrollback-window'
 import type { GetSnapshotResult } from '../../protocol/daemon-rpc-contract'
-import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
+import type {
+  PtyProviderBufferSnapshot,
+  PtyRepaintResult
+} from '../../../providers/pty/provider-contract'
 
 const DURABLE_HISTORY_OVERLAY_DEADLINE_MS = 5_000
 
@@ -202,10 +205,16 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
     }
   }
 
-  async requestRepaint(id: string): Promise<void> {
-    if (this.protocolVersion >= REPAINT_REQUEST_PROTOCOL_VERSION) {
-      await this.client.request('requestRepaint', { sessionId: id })
+  async requestRepaint(id: string): Promise<PtyRepaintResult> {
+    if (this.protocolVersion < REPAINT_REQUEST_PROTOCOL_VERSION) {
+      return 'unavailable'
     }
+    const reply = await this.client.request<{ nudged?: boolean }>('requestRepaint', {
+      sessionId: id
+    })
+    // A daemon from before the reply carried this nudged wherever this host's platform lets one.
+    const nudged = reply?.nudged ?? process.platform !== 'win32'
+    return nudged ? 'nudged' : 'unavailable'
   }
 
   acknowledgeDataEvent(_id: string, _charCount: number): void {}

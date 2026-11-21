@@ -17,15 +17,19 @@ export class SessionRepaintNudge {
     this.inFlight = null
   }
 
+  /** True when the program is being asked to redraw: by this nudge, or one already in flight. */
   request(
     readGrid: () => PtySize | null,
     resizePty: (cols: number, rows: number) => void,
     isLive: () => boolean
-  ): void {
+  ): boolean {
+    if (this.inFlight) {
+      return true
+    }
     const grid = readGrid()
     // Why not Windows: ConPTY answers a resize by replaying its own viewport, not the program's paint.
-    if (process.platform === 'win32' || this.inFlight || !grid || grid.cols < 1 || grid.rows < 1) {
-      return
+    if (process.platform === 'win32' || !grid || grid.cols < 1 || grid.rows < 1) {
+      return false
     }
     const { cols, rows } = grid
     const nudge = { cols, rows }
@@ -39,5 +43,6 @@ export class SessionRepaintNudge {
         }
       }
     }, REPAINT_RESTORE_MS).unref?.()
+    return true
   }
 }

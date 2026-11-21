@@ -40,7 +40,7 @@ describe.skipIf(process.platform === 'win32')('DaemonPtyAdapter.requestRepaint',
     const adapter = await start()
     const { id } = await adapter.spawn({ cols: 80, rows: 24 })
     vi.mocked(subprocess.resize).mockClear()
-    await adapter.requestRepaint(id)
+    expect(await adapter.requestRepaint(id)).toBe('nudged')
     await vi.waitFor(
       () =>
         expect(vi.mocked(subprocess.resize).mock.calls).toEqual([
@@ -58,7 +58,8 @@ describe.skipIf(process.platform === 'win32')('DaemonPtyAdapter.requestRepaint',
     const { id } = await adapter.spawn({ cols: 80, rows: 24 })
     const resize = vi.mocked(subprocess.resize)
     resize.mockClear()
-    await adapter.requestRepaint(id)
+    // Its main then tells the coordinator the mail is held.
+    expect(await adapter.requestRepaint(id)).toBe('unavailable')
     // Why no wait: a daemon that is asked shrinks the PTY before it answers.
     expect(resize).not.toHaveBeenCalled()
   })

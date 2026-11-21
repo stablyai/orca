@@ -8,6 +8,7 @@ import {
 } from '../../../../shared/agent-launch/startup/readiness/draft-paste-ready-scanner'
 import { AGENT_PAINT_SIGNALS, agentPaintSignal } from './terminal-agent-paint-signal'
 import { normalizeTerminalChunk } from '../output/terminal-ansi-normalization'
+import type { RuntimeRepaintResult } from '../lifecycle/runtime-pty-controller-contract'
 
 // eslint-disable-next-line no-control-regex -- control bytes are exactly what is not visible.
 const VISIBLE_CHARACTER_RE = /[^\s\u0000-\u001f\u007f-\u009f]/
@@ -33,6 +34,10 @@ export class TerminalCommandPaint {
   // Output lost before this process was proven could hide a boundary, so its retained frame can't be vouched.
   private gapSinceReattach = false
   private repaintOffered = false
+  /** This reattach's host answered that it cannot ask the program to redraw. */
+  private repaintUnavailable = false
+  /** Restores still reading whether the quit proves the retained frame. */
+  private restoreProofsPending = 0
   /** The last read finished a command and started the next. Its reports are stamped after this
    *  observer runs, so none of them count; at the next read they are retired by identity (a
    *  millisecond clock cannot order them) and that read's arrival starts the new command. */
@@ -218,10 +223,32 @@ export class TerminalCommandPaint {
   }
 
   /** True once per reattach while nothing has painted: the one repaint request it allows. */
-  takeReattachedRepaintRequest(): boolean {
-    const take = this.repaintRequestable
+  beginReattachedRepaintRequest(): boolean {
+    const begin = this.repaintRequestable && !this.repaintUnavailable
     this.repaintRequestable = false
-    return take
+    return begin
+  }
+
+  settleReattachedRepaintRequest(result: RuntimeRepaintResult): void {
+    this.repaintUnavailable ||= result === 'unavailable'
+  }
+
+  beginRestoreProof(): void {
+    this.restoreProofsPending += 1
+  }
+
+  settleRestoreProof(): void {
+    this.restoreProofsPending -= 1
+  }
+
+  /** The reattach fence still waits for a paint its host cannot ask for, and no proof is pending. */
+  awaitsPaintNoHostCanRequest(): boolean {
+    return (
+      this.repaintUnavailable &&
+      this.restoreProofsPending === 0 &&
+      this.awaitingPaint &&
+      this.awaitsReattachedCommand()
+    )
   }
 
   /** Whether the agent's own report at `observedAt` speaks for the command now running. */
@@ -343,12 +370,6 @@ export function hasCommandBoundarySinceReattach(record: TerminalCommandPaintReco
 
 export function isShellInFront(record: TerminalCommandPaintRecord): boolean {
   return record.commandPaint?.isBetweenCommands() ?? false
-}
-
-export function takeReattachedRepaintRequest(
-  record: TerminalCommandPaintRecord | undefined
-): boolean {
-  return record?.commandPaint?.takeReattachedRepaintRequest() ?? false
 }
 
 /** Without markers (older fish, relay zsh, unwrapped shells, cmd.exe /K startup args), any output is the only paint evidence. */

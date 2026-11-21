@@ -12,6 +12,7 @@ import {
   reattachedPaintLedger,
   retainedFrameIsProven
 } from '../wait/reattached-paint-ledger'
+import type { RuntimeRepaintResult } from '../lifecycle/runtime-pty-controller-contract'
 
 export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector {
   private readonly ptyLifecycleCancellation = new Map<string, AbortController>()
@@ -161,6 +162,22 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
       reattachedSequence: this.reattachedProviderSequenceByPtyId.get(ptyId),
       agent
     })
+  }
+
+  /** One repaint per reattach, whether restored status, a queued wait or held mail asks first. */
+  protected requestReattachedRepaint(ptyId: string): void {
+    const paint = this.ptysById.get(ptyId)?.commandPaint
+    if (!paint?.beginReattachedRepaintRequest()) {
+      return
+    }
+    const settle = (result: RuntimeRepaintResult): void =>
+      paint.settleReattachedRepaintRequest(result)
+    const request = this.ptyController?.requestRepaint?.(ptyId)
+    if (!request) {
+      settle('unavailable')
+      return
+    }
+    request.then(settle, () => settle('not-sent'))
   }
 
   synchronizePtyOutputSequenceFromProvider(

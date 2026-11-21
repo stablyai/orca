@@ -19,6 +19,7 @@ export type WorkerTurnStopReason =
   | 'exited'
   | 'lost'
   | 'start-unconfirmed'
+  | 'mail-held'
 
 export type WorkerTurnStop = {
   /** The worker's own mailbox identity: terminal handle, chat address or structured worker handle. */
