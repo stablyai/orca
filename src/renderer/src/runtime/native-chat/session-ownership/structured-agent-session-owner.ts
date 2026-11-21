@@ -12,12 +12,8 @@ import {
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
-import {
-  isTwinWorkspace,
-  namedHostForOwnerRef,
-  resolveOwner
-} from '@/lib/workspace/ownership/resolve-owner'
-import { authorityKey } from '../../../../../shared/execution-host/host-authority'
+import { isTwinWorkspace, namedHostForOwnerRef } from '@/lib/workspace/ownership/resolve-owner'
+import { recordedWorkspaceOwner } from '@/lib/workspace/ownership/recorded-workspace-owner'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '../local-sessions/local-structured-session-owner'
 import { runtimeRpcTargetForAuthorityKey } from '../../rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
@@ -82,17 +78,8 @@ export function legacyStructuredChatRenameOwner(
   if (tab.executionHostId) {
     return tab.executionHostId
   }
-  const owner = resolveOwner(
-    {
-      ...state,
-      activeWorktreeId: null,
-      activeWorkspaceExecutionHostId: null,
-      restoredRuntimeHostIdByWorkspaceSessionKey: undefined
-    },
-    { workspaceId: tab.worktreeId }
-  )
-  const host = owner.kind === 'resolved' ? parseExecutionHostId(authorityKey(owner.owner)) : null
-  return host && structuredAgentSessionTargetForHost(host.id) ? host.id : null
+  const host = recordedWorkspaceOwner(state, tab.worktreeId)
+  return host && structuredAgentSessionTargetForHost(host) ? host : null
 }
 
 /** Catalog inputs independent of the user's current workspace selection. */

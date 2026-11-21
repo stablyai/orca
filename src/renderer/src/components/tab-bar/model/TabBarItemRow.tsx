@@ -24,13 +24,14 @@ import { stripLeadingAgentTitleDecoration } from '../../../../../shared/agent-st
 import { defaultAgentChatLabel } from '../../../../../shared/agent-session/conversation-naming/agent-session-chat-label'
 import { useAppStore } from '../../../store/index'
 import { agentTypeToIconAgent } from '../../../../../shared/agent-status/presentation/agent-type-icon-agent'
-import { useBotForWorkspace } from '../../bots/bot-workspace'
+import { useBotForChatTab } from '../../bots/bot-workspace'
 import {
   isBotHomeTab,
   isBotSideChatTab,
   isHostedBotChatTab
 } from '../../../../../shared/bots/bot-home-tab'
 import { useBotHomeRuleApplies } from '@/lib/bot-host-status'
+import { hostlessChatsAreLocal } from '@/lib/workspace/ownership/recorded-workspace-owner'
 import { BotAvatar } from '../../bots/BotAvatar'
 import { BotGroupTabIcon, useBotGroupTabMembers } from '../../bots/BotGroupTabIcon'
 import { formatSimulatorTabLabel } from '@/lib/simulator/tabs/simulator-tab-label'
@@ -92,19 +93,24 @@ function TabBarItemRow({
   const namingFailure = useStructuredChatTabNamingFailure(
     item.type === 'agent-session' ? item.data : undefined
   )
-  const bot = useBotForWorkspace(
+  const bot = useBotForChatTab(
     worktreeId,
     item.type === 'agent-session' ? item.data.executionHostId : undefined
   )
-  const isBotChat = item.type === 'agent-session' && isBotHomeTab(item.data, bot)
-  const homeRule = useBotHomeRuleApplies(bot)
-  const ruledHome = useAppStore(
+  // The session names the Home; the host gate keeps a hostless tab this app may not own unlocked.
+  const isBotChat = useAppStore(
     (state) =>
-      state.workspaceSessionReady &&
+      item.type === 'agent-session' &&
+      isBotHomeTab(item.data, bot) &&
+      isHostedBotChatTab(item.data, bot, hostlessChatsAreLocal(state, worktreeId))
+  )
+  const homeRule = useBotHomeRuleApplies(bot)
+  const ruledHome = useAppStore((state) => state.workspaceSessionReady && homeRule && isBotChat)
+  const ruledSideChat = useAppStore(
+    (state) =>
       homeRule &&
       item.type === 'agent-session' &&
-      isBotChat &&
-      isHostedBotChatTab(item.data, bot)
+      isBotSideChatTab(item.data, bot, hostlessChatsAreLocal(state, worktreeId))
   )
   const roomMembers = useBotGroupTabMembers(item.type === 'room' ? item.data.entityId : null)
   // A room is unread while one of its own members' replies is; a sibling thread's stays on that tab.
@@ -213,7 +219,7 @@ function TabBarItemRow({
         fork={fork}
         closable={!isBotChat}
         sizing={isBotChat ? 'content' : 'terminal'}
-        canPin={!(homeRule && isBotSideChatTab(item.data, bot))}
+        canPin={!ruledSideChat}
         isBotHome={ruledHome}
         canContinueInTerminal={bot === null}
         identityIcon={

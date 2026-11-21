@@ -38,7 +38,7 @@ vi.mock('@/lib/bot-host-status', async () => {
   }
 })
 vi.mock('../../../bots/bot-workspace', () => ({
-  useBotForWorkspace: (workspaceId: string) =>
+  useBotForChatTab: (workspaceId: string) =>
     workspaceId === 'folder:bot-home'
       ? {
           id: 'bot-1',

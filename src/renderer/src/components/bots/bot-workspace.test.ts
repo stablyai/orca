@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Bot } from '../../../../shared/bot-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
-import { findBotByWorkspace } from './bot-workspace'
+import { findBotByWorkspace, findBotForChatTab } from './bot-workspace'
 
 function hosted(hostId: ExecutionHostId): Bot {
   const bot: Bot = {
@@ -40,5 +40,16 @@ describe('the bot behind a page', () => {
     const bots = [hosted('runtime:server')]
     expect(findBotByWorkspace(bots, 'folder:shared-home', 'local')).toBeNull()
     expect(findBotByWorkspace(bots, 'folder:shared-home')?.id).toBe('runtime:server')
+  })
+
+  it('offers a chat saved without a host to the local bot first, whatever the catalog order', () => {
+    const bots = [hosted('runtime:server'), hosted('local')]
+    expect(findBotForChatTab(bots, 'folder:shared-home', undefined)?.id).toBe('local')
+    expect(findBotForChatTab(bots, 'folder:shared-home', 'runtime:server')?.id).toBe(
+      'runtime:server'
+    )
+    expect(findBotForChatTab([hosted('runtime:server')], 'folder:shared-home', undefined)?.id).toBe(
+      'runtime:server'
+    )
   })
 })
