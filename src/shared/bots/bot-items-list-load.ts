@@ -94,22 +94,24 @@ async function readNamed(
   uids: readonly string[],
   live: () => boolean
 ): Promise<BotItemsListRead | null> {
-  let read: BotItemsListRead | null = null
+  let first: BotItemsListRead | null = null
+  const items: BotItem[] = []
+  let counts: BotItemsListRead['counts'] = {}
   for (let at = 0; at < uids.length; at += BOT_ITEM_LIMITS.listPageMax) {
-    if (read && !live()) {
+    if (first && !live()) {
       return null
     }
     const batch = uids.slice(at, at + BOT_ITEM_LIMITS.listPageMax)
     const asked = new Set(batch)
-    const answer = await call({ uids: batch })
+    const answer: BotItemsListRead = await call({ uids: batch })
     if (answer.nextClosedCursor || answer.items.some((item) => !asked.has(item.uid))) {
       return null
     }
-    read = read
-      ? { ...read, items: [...read.items, ...answer.items], counts: answer.counts }
-      : answer
+    first ??= answer
+    items.push(...answer.items)
+    counts = answer.counts
   }
-  return read
+  return first && { ...first, items, counts }
 }
 
 /** The uids the parts name, the worker-linked part as the loaded items that link a worker now. */

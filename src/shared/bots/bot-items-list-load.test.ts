@@ -137,7 +137,9 @@ describe('loadBotItemsList', () => {
       expect(read.items.filter(closed)).toHaveLength(150)
       expect(read.items.filter((item) => !closed(item))).toHaveLength(100)
       // A page per call: no answer larger than one page read alone.
-      expect(limits.every((limit) => limit === undefined || (limit as number) <= 50)).toBe(true)
+      expect(
+        limits.every((limit) => limit === undefined || (typeof limit === 'number' && limit <= 50))
+      ).toBe(true)
     }
     // Unchanged, its first page is all a whole read asks of a host, older or not.
     for (const older of [false, true]) {
@@ -201,12 +203,13 @@ describe('loadBotItemsList', () => {
       return inner(params)
     }
     let read = await loadBotItemsList(call, null, WHOLE)
-    items[1]!.links = [{ ...link, state: 'done' }]
+    items[1]!.links = [{ ...link, state: 'completed' }]
     asked.length = 0
     const worker = { whole: false, parts: [BOT_ITEMS_WORKER_LINKED], more: false }
     read = await loadBotItemsList(call, read, worker)
     expect(asked).toEqual([['i3', 'i2', 'i1']])
-    expect(read.items.find((item) => item.uid === 'i2')?.links[0]?.state).toBe('done')
+    const changed = read.items.find((item) => item.uid === 'i2')?.links[0]
+    expect(changed?.kind === 'dispatch' ? changed.state : null).toBe('completed')
     // More than one read holds: a read per hundred, however deep Closed is loaded.
     for (const item of [...items.slice(0, 100), ...items.slice(200)]) {
       item.links = [link]
@@ -215,7 +218,7 @@ describe('loadBotItemsList', () => {
     read = await loadBotItemsList(call, read, MORE)
     asked.length = 0
     await loadBotItemsList(call, read, worker)
-    expect(asked.map((uids) => (uids as string[]).length)).toEqual([100, 100])
+    expect(asked.map((uids) => (Array.isArray(uids) ? uids.length : uids))).toEqual([100, 100])
   })
 
   it('keeps loaded Closed items when an older host answers a named read whole', async () => {
