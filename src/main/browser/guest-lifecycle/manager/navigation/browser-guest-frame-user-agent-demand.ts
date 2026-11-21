@@ -218,7 +218,7 @@ export function watchBrowserPopupSiteFrameRemoval(contents: Electron.WebContents
   }
   contents.on('did-start-navigation', onSubframeStart)
   contents.on('did-redirect-navigation', onSubframeStart)
-  contents.once('destroyed', () => {
+  contents.on('destroyed', () => {
     if (recheck) {
       clearTimeout(recheck)
     }
