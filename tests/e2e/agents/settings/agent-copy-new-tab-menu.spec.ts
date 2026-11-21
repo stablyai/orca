@@ -15,6 +15,7 @@ test('an agent copy has its own submenu in the + menu and launches as the copy',
   electronApp,
   claudeStub
 }) => {
+  // Two agent launches after a cold Orca start; the default 60s is too tight on CI.
   test.setTimeout(180_000)
   // A terminal shows the environment the copy started with.
   const wrapper = path.join(path.dirname(claudeStub.command), 'claude-code-mode')
@@ -68,7 +69,6 @@ test('an agent copy has its own submenu in the + menu and launches as the copy',
     page.getByRole('combobox', { name: 'Search models' }).or(page.getByLabel('Search models'))
   ).toBeVisible({ timeout: 20_000 })
   if (SHOTS) {
-    await page.waitForTimeout(600)
     await page.screenshot({ path: path.join(SHOTS, 'copy-submenu.png') })
   }
   // The panel launches the copy with the model picked there.

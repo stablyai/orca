@@ -16,8 +16,11 @@ const claude: AgentPickerEntry = {
   terminal: {},
   structured: {},
   catalog: {
-    origin: 'cli',
-    models: [{ id: 'opus', label: 'Opus', isDefault: true, efforts: ['high'] }]
+    origin: 'probe',
+    fetchedAt: 0,
+    models: [
+      { id: 'opus', label: 'Opus', isDefault: true, efforts: [{ value: 'high', label: 'High' }] }
+    ]
   }
 }
 const entries = withAgentPickerCopyEntries(
