@@ -1,13 +1,12 @@
-import React, { useEffect, useId, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { ExternalLink, Loader2, Plus } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { BotHowToAsk, HOW_TO_ASK_ESCAPED } from './BotHowToAsk'
 import type { BotConnector } from './bot-connectors'
-import { BotAppBrandLogo } from './apps/BotAppBrandLogo'
+import { BotAppBrandLogo, BotAppBrandMark } from './apps/BotAppBrandLogo'
 import { BotAppLogoBadge } from './apps/BotAppStepParts'
 
 /** How long a trip waits before its `help` shows: past a normal sign-in, short of the trip's expiry. */
@@ -72,45 +71,6 @@ export function ConnectorMoreLink({ more }: { more: ConnectorMore }): React.JSX.
       {more.label}
       <ExternalLink />
     </Button>
-  )
-}
-
-/** One part of a setup screen under its label, e.g. Repositories or Workspace. */
-export function ConnectorSetupSection({
-  label,
-  children
-}: {
-  label: string
-  children: React.ReactNode
-}): React.JSX.Element {
-  const headingId = useId()
-  return (
-    <section aria-labelledby={headingId} className="space-y-1.5">
-      <h3 id={headingId} className="text-xs font-medium">
-        {label}
-      </h3>
-      {children}
-    </section>
-  )
-}
-
-/** The rows a section lists, e.g. a GitHub install's repositories or the Linear workspace. */
-export function ConnectorSetupList({
-  items
-}: {
-  /** `tag`: a short mark after the label, e.g. New. */
-  items: readonly { key: string; icon: React.ReactNode; label: React.ReactNode; tag?: string }[]
-}): React.JSX.Element {
-  return (
-    <ul className="divide-y divide-border rounded-lg border border-border">
-      {items.map((item) => (
-        <li key={item.key} className="flex items-center gap-2.5 px-2.5 py-1.5 text-sm">
-          <span className="flex shrink-0 text-muted-foreground">{item.icon}</span>
-          <span className="min-w-0 flex-1 break-words">{item.label}</span>
-          {item.tag ? <Badge variant="outline">{item.tag}</Badge> : null}
-        </li>
-      ))}
-    </ul>
   )
 }
 
@@ -205,7 +165,9 @@ export function ConnectorSetupHeader({
   title,
   intro,
   line,
-  done = false
+  done = false,
+  bare = false,
+  corner
 }: {
   connector: Pick<BotConnector, 'id' | 'Icon'>
   title: string
@@ -214,22 +176,41 @@ export function ConnectorSetupHeader({
   /** In place of `intro`, e.g. who signed in. */
   line?: React.ReactNode
   done?: boolean
+  /** The mark alone, with no tile, and a 12px line under the title. */
+  bare?: boolean
+  /** In place of the dialog's own corner button, centered on the title's line. */
+  corner?: React.ReactNode
 }): React.JSX.Element {
   return (
     <DialogHeader>
-      <div className="flex items-center gap-3 text-left">
+      <div
+        className={
+          bare ? 'flex items-center gap-1.5 text-left' : 'flex items-center gap-3 text-left'
+        }
+      >
         <span aria-hidden className="relative shrink-0">
-          <BotAppBrandLogo app={connector} size="lg" />
-          {done ? <BotAppLogoBadge kind="done" /> : null}
-        </span>
-        <div className="min-w-0 flex-1 space-y-0.5 pr-6">
-          <DialogTitle>
-            <span className="block truncate" title={title}>
-              {title}
+          {bare ? (
+            <span className="flex size-8 items-center justify-center">
+              <BotAppBrandMark id={connector.id} className="size-6" />
             </span>
-          </DialogTitle>
-          <DialogDescription asChild>
-            <div className="break-words">
+          ) : (
+            <BotAppBrandLogo app={connector} size="lg" />
+          )}
+          {done ? <BotAppLogoBadge kind="done" size={bare ? 'sm' : 'md'} /> : null}
+        </span>
+        <div className={corner ? 'min-w-0 flex-1 space-y-0.5' : 'min-w-0 flex-1 space-y-0.5 pr-6'}>
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <DialogTitle>
+                <span className="block truncate" title={title}>
+                  {title}
+                </span>
+              </DialogTitle>
+            </div>
+            {corner}
+          </div>
+          <DialogDescription asChild size={bare ? 'compact' : 'default'}>
+            <div className={bare ? 'min-w-0' : 'break-words'}>
               {line ?? (intro ? <BotHowToAsk text={intro} /> : null)}
             </div>
           </DialogDescription>

@@ -135,7 +135,8 @@ export function BotPeopleChips({
   owner,
   members,
   onRemove,
-  add
+  add,
+  ownerTag = true
 }: {
   /** You, or the owner's name there when this device is on another account. */
   owner: string
@@ -143,6 +144,8 @@ export function BotPeopleChips({
   onRemove: (member: BotMember) => void
   /** The Add control, last in the row. */
   add?: React.ReactNode
+  /** "· Owner" after the owner's name. */
+  ownerTag?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const [showAll, setShowAll] = useState(false)
@@ -155,9 +158,11 @@ export function BotPeopleChips({
           <BotOwnerAvatar />
         </span>
         <span className="truncate">{owner}</span>
-        <span className="shrink-0 text-muted-foreground">
-          · {t('bots.whoCanAsk.owner', 'Owner')}
-        </span>
+        {ownerTag ? (
+          <span className="shrink-0 text-muted-foreground">
+            · {t('bots.whoCanAsk.owner', 'Owner')}
+          </span>
+        ) : null}
       </li>
       {shown.map((member) => (
         <li key={member.id} className={CHIP_CLASSES}>
