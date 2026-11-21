@@ -168,6 +168,21 @@ describe('reused Pi subagent counts', () => {
     expect(filesystem.stat.mock.calls.length - stamps).toBe(1)
   })
 
+  it('recounts when a directory that read as absent comes back', async () => {
+    const root = await makeTempDir()
+    const parentPath = await writePiParentWithMessages(root)
+    await writePiChild(root, AGENT_DIR, 'run-0', 'child-1')
+    const stats = createSessionParseStats()
+
+    expect((await parsePi(parentPath, stats))?.subagentTranscriptCount).toBe(1)
+    // The stem is renamed away between its stamp and its read, so the walk reports no children.
+    filesystem.readdir.mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+    expect((await parsePi(parentPath, stats))?.subagentTranscriptCount).toBe(0)
+
+    // It is back with its children; a stamp taken before the absence must not vouch for the zero.
+    expect((await parsePi(parentPath, stats))?.subagentTranscriptCount).toBe(1)
+  })
+
   it('walks again when a child directory cannot be stamped, and never zeroes a failed read', async () => {
     const root = await makeTempDir()
     const parentPath = await writePiParentWithMessages(root)

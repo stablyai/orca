@@ -68,9 +68,6 @@ async function collectSubagentTranscripts(
 ): Promise<void> {
   // Stamp before reading: an entry created in between must force the next walk, not hide behind it.
   const stamp = await stampSubagentDir(path, walk, signal)
-  if (stamp !== null) {
-    walk.dirs?.push(stamp)
-  }
   let entries: Dirent[]
   try {
     entries = await waitForAiVaultScan(wslGatedReaddir(path, 'scan', signal), signal)
@@ -78,8 +75,14 @@ async function collectSubagentTranscripts(
     throwIfAiVaultScanCancelled(signal)
     if (!isMissingTranscriptPathError(err)) {
       forgetDirStamps(walk, path, err)
+      return
     }
+    // Absence at read time overrides a stamp just taken: a rename keeps the mtime, so the old one would lie.
+    walk.dirs?.push({ path, mtimeMs: null })
     return
+  }
+  if (stamp !== null) {
+    walk.dirs?.push(stamp)
   }
   for (const entry of entries) {
     const entryPath = join(path, entry.name)
