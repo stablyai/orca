@@ -140,6 +140,10 @@ desktop drawn in 3–5 s, 4 KB/s idle per viewer.
 Works only with the fork's `orca-server` on that machine; with a stock server the pane says the
 machine doesn't offer a computer.
 
+**MVP shipped** ([agent-computer.md](agent-computer.md)): the desktop as a systemd user service with
+noVNC on 127.0.0.1, opened through Orca's Ports panel and browser pane, and an MCP server for agents.
+The dedicated pane and control handoff above come next.
+
 ## Decisions for the owner
 
 1. Base v1.4.266 and track upstream **release tags** (not upstream `main`).
