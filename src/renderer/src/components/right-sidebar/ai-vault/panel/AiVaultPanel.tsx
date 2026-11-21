@@ -92,6 +92,7 @@ export default function AiVaultPanel({
   const listKeyboardRef = useRef<AiVaultSessionListKeyboard>(null)
   const keyboardRows = onSessionOpened !== undefined
   // Why: scope depends on current workspace/project availability, so only stable view options persist.
+  const viewOptions = usePersistedAiVaultViewOptions(initialAgents)
   const {
     agents,
     sort,
@@ -99,15 +100,17 @@ export default function AiVaultPanel({
     group,
     hideEmptySessions,
     sessionLimit,
+    groupSessionLimit,
     setSort,
     setSearchSort,
     setGroup,
     setHideEmptySessions,
     setSessionLimit,
+    setGroupSessionLimit,
     setAgentEnabled,
     setAllAgentsEnabled,
     resetViewOptions
-  } = usePersistedAiVaultViewOptions(initialAgents)
+  } = viewOptions
   const { executionHostScope, onExecutionHostScopeChange, hostScopeOptions } =
     useAiVaultPanelHostScope(activeWorktreeId ?? null, resumeTargetState)
   useAiVaultResumeCatalogs(executionHostScope)
@@ -216,12 +219,7 @@ export default function AiVaultPanel({
     targetState: resumeTargetState,
     agentCmdOverrides
   })
-  const viewAdjustmentCount = countAiVaultViewAdjustments({
-    agents,
-    group,
-    hideEmptySessions,
-    sessionLimit
-  })
+  const viewAdjustmentCount = countAiVaultViewAdjustments(viewOptions)
 
   const { filteredSessions, groups } = useAiVaultPanelSessions(sessions, listMode, group, {
     query,
@@ -278,6 +276,7 @@ export default function AiVaultPanel({
         group={group}
         hideEmptySessions={hideEmptySessions}
         sessionLimit={sessionLimit}
+        groupSessionLimit={groupSessionLimit}
         adjustmentCount={viewAdjustmentCount}
         searchInputRef={searchInputRef}
         headerAction={headerAction}
@@ -292,6 +291,7 @@ export default function AiVaultPanel({
         onGroupChange={setGroup}
         onHideEmptySessionsChange={setHideEmptySessions}
         onSessionLimitChange={setSessionLimit}
+        onGroupSessionLimitChange={setGroupSessionLimit}
         onReset={resetViewOptions}
         onRefresh={() => (searching ? search.retry() : void refresh({ force: true }))}
       />
@@ -332,6 +332,7 @@ export default function AiVaultPanel({
             searchHitHostLabels={searchHitHostLabels}
             groups={groups}
             collapsedGroups={collapsedGroups}
+            groupSessionLimit={groupSessionLimit}
             loading={searching ? search.loading : loading}
             scopePending={!searching && scopePending}
             scanProgressShown={stripProgress !== null}

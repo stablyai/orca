@@ -7,8 +7,9 @@ import {
 
 export const VAULT_GROUP_HEADER_ROW_HEIGHT = 32
 export const VAULT_SESSION_ROW_HEIGHT = 98
+export const VAULT_GROUP_MORE_ROW_HEIGHT = 28
 
-export type VaultVirtualRow = { type: 'group' | 'session' }
+export type VaultVirtualRow = { type: 'group' | 'session' | 'group-more' }
 
 export function getVaultStickyHeaderIndexes(rows: readonly VaultVirtualRow[]): number[] {
   const indexes: number[] = []
