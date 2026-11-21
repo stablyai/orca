@@ -162,13 +162,15 @@ export function useBotItemsClosedPages(
     }
     const mine = ++generation.current
     const next = await readMoreClosedItems({ hostId, id }, cursor, chats)
-    if (generation.current === mine) {
+    const now = latest.current
+    const since =
+      now && now !== read ? botItemsNamedSince(now, read) : new Map<string, BotItem | null>()
+    // What changed while this page was out is no longer known: it's dropped, and Show more reads again.
+    if (generation.current === mine && since) {
       // Items a named read refreshed while this page was out: the read's copies are the newer ones.
-      const now = latest.current
-      const since = now ? botItemsNamedSince(now, read) : null
       const inNow = new Set(now?.items.map((item) => item.uid))
       const fresh = next.items.flatMap((item) => {
-        if (!since?.has(item.uid)) {
+        if (!since.has(item.uid)) {
           return [item]
         }
         const copy = since.get(item.uid)
@@ -177,7 +179,7 @@ export function useBotItemsClosedPages(
       // A named item newly Closed within this page's span that the page didn't hold joins it too.
       const pageEnd = botItemCursorPlace(next.nextClosedCursor)
       const paged = new Set(fresh.map((item) => item.uid))
-      const joining = [...(since ?? [])].flatMap(([uid, copy]) =>
+      const joining = [...since].flatMap(([uid, copy]) =>
         copy &&
         isClosed(copy) &&
         !inNow.has(uid) &&
@@ -203,7 +205,9 @@ export function useBotItemsClosedPages(
         }
       })
     }
-    return { items: next.items, more: Boolean(next.nextClosedCursor) }
+    return since
+      ? { items: next.items, more: Boolean(next.nextClosedCursor) }
+      : { items: NONE, more: true }
   }, [read, cursor, hostId, id, chats])
 
   return {
