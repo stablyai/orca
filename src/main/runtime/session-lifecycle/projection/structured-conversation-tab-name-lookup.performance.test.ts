@@ -11,8 +11,6 @@ import type { StructuredAgentSessionHost } from '../../../native-chat/agent-sess
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
-const CHATS = 1000
-
 afterEach(() => setStructuredAgentSessionHost(null))
 
 function noConversationsHost(): StructuredAgentSessionHost {
@@ -24,59 +22,71 @@ function noConversationsHost(): StructuredAgentSessionHost {
   return host as unknown as StructuredAgentSessionHost
 }
 
-describe('chat tab titles on a workspace with many chats', () => {
-  // Guards #46247: each chat's title scanned every saved tab, ~500k reads per frame at 1,000 chats.
-  it('reads each saved tab once per projection', async () => {
-    setStructuredAgentSessionHost(noConversationsHost())
-    let savedTabReads = 0
-    const saved: Tab[] = Array.from({ length: CHATS }, (_, index) => {
-      const sessionId = `s${index}`
-      return {
-        id: `agent-session:${sessionId}`,
-        get entityId() {
-          savedTabReads++
-          return sessionId
-        },
-        groupId: 'g',
-        worktreeId: TEST_WORKTREE_ID,
-        contentType: 'agent-session',
-        label: 'Chat',
-        customLabel: index === CHATS - 1 ? 'Renamed' : null,
-        color: null,
-        sortOrder: index,
-        createdAt: 0
-      }
-    })
-    const fixture = makeRuntimeStoreWithWorkspaceSession({
-      ...getDefaultWorkspaceSession(),
-      unifiedTabs: { [TEST_WORKTREE_ID]: saved }
-    })
-    const runtime = new OrcaRuntimeService(fixture.runtimeStore)
-    const snapshot: RuntimeMobileSessionTabsSnapshot = {
-      worktree: TEST_WORKTREE_ID,
-      publicationEpoch: 'headless',
-      snapshotVersion: 1,
-      activeGroupId: null,
-      activeTabId: null,
-      activeTabType: null,
-      tabs: saved.map((tab, index) => ({
-        type: 'agent-session' as const,
-        id: tab.id,
-        title: 'Chat',
-        sessionId: `s${index}`,
-        agent: 'claude' as const,
-        isActive: false
-      }))
+/** Saves `saved` tabs (every other one a chat, the rest files), shows the first `shown` chats, and counts saved-row visits in one listing. */
+async function savedRowVisitsForOneListing(saved: number, shown: number) {
+  let visits = 0
+  const tabs: Tab[] = Array.from({ length: saved }, (_, index) => {
+    const isChat = index % 2 === 1
+    const entityId = isChat ? `s${(index - 1) / 2}` : `/file-${index}`
+    return {
+      id: isChat ? `agent-session:${entityId}` : entityId,
+      entityId,
+      groupId: 'g',
+      worktreeId: TEST_WORKTREE_ID,
+      get contentType() {
+        visits++
+        return isChat ? ('agent-session' as const) : ('editor' as const)
+      },
+      label: 'Tab',
+      customLabel: index === shown * 2 - 1 ? 'Renamed' : null,
+      color: null,
+      sortOrder: index,
+      createdAt: 0
     }
-    runtime.storeMobileSessionSnapshot(TEST_WORKTREE_ID, snapshot)
+  })
+  const fixture = makeRuntimeStoreWithWorkspaceSession({
+    ...getDefaultWorkspaceSession(),
+    unifiedTabs: { [TEST_WORKTREE_ID]: tabs }
+  })
+  const runtime = new OrcaRuntimeService(fixture.runtimeStore)
+  const snapshot: RuntimeMobileSessionTabsSnapshot = {
+    worktree: TEST_WORKTREE_ID,
+    publicationEpoch: 'headless',
+    snapshotVersion: 1,
+    activeGroupId: null,
+    activeTabId: null,
+    activeTabType: null,
+    tabs: Array.from({ length: shown }, (_, index) => ({
+      type: 'agent-session' as const,
+      id: `agent-session:s${index}`,
+      title: 'Chat',
+      sessionId: `s${index}`,
+      agent: 'claude' as const,
+      isActive: false
+    }))
+  }
+  runtime.storeMobileSessionSnapshot(TEST_WORKTREE_ID, snapshot)
+  visits = 0
+  const served = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+  const renamed = served.tabs.find((tab) => tab.id === `agent-session:s${shown - 1}`)
+  return { visits, renamedTitle: renamed?.title }
+}
 
-    savedTabReads = 0
-    const served = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+// Guards #46247: each chat's title scanned the saved tabs from the start, ~1M row visits per listing at 1,000 chats.
+describe('chat tab titles on a workspace with many saved tabs', () => {
+  it('visits each saved tab at most once per listing', async () => {
+    setStructuredAgentSessionHost(noConversationsHost())
+    expect(await savedRowVisitsForOneListing(2000, 1000)).toEqual({
+      visits: 2000,
+      renamedTitle: 'Renamed'
+    })
+  })
 
-    expect(served.tabs.find((tab) => tab.id === `agent-session:s${CHATS - 1}`)?.title).toBe(
-      'Renamed'
-    )
-    // The first chat's lookup stops at its own tab; the rest share one index.
-    expect(savedTabReads).toBe(1001)
+  it('stops at the last chat it needs', async () => {
+    setStructuredAgentSessionHost(noConversationsHost())
+    expect(await savedRowVisitsForOneListing(2000, 2)).toEqual({
+      visits: 4,
+      renamedTitle: 'Renamed'
+    })
   })
 })

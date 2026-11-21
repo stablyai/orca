@@ -8,18 +8,7 @@ export function structuredConversationTabNamer(
   workspaceId: string,
   savedTabs: () => readonly Tab[] | undefined
 ): (sessionId: string) => string | null {
-  // One lookup scans like a find; a second indexes, so a projection reads the saved tabs once, not once per chat.
-  let saved: readonly Tab[] | undefined | null = null
-  let customLabels: ReadonlyMap<string, string | null> | undefined
-  const customLabelFor = (sessionId: string): string | null | undefined => {
-    if (saved === null) {
-      saved = savedTabs()
-      return saved?.find((tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId)
-        ?.customLabel
-    }
-    customLabels ??= agentSessionTabCustomLabels(saved)
-    return customLabels.get(sessionId)
-  }
+  const customLabelFor = savedChatTabCustomLabels(savedTabs)
   return (sessionId) => {
     const store = getStructuredAgentSessionHost()?.deps?.store
     const record = store?.getConversation(sessionId)
@@ -31,16 +20,28 @@ export function structuredConversationTabNamer(
   }
 }
 
-/** The first saved chat tab's rename per session, as a first-match find would pick. */
-function agentSessionTabCustomLabels(
-  tabs: readonly Tab[] | undefined
-): ReadonlyMap<string, string | null> {
+/** First-match rename per chat; each lookup resumes the scan where the last stopped, so one pass reads each saved tab at most once. */
+function savedChatTabCustomLabels(
+  savedTabs: () => readonly Tab[] | undefined
+): (sessionId: string) => string | null | undefined {
+  let tabs: readonly Tab[] | undefined
+  let scanned = 0
   const labels = new Map<string, string | null>()
-  for (const tab of tabs ?? []) {
-    const sessionId = tab.contentType === 'agent-session' ? tab.entityId : null
-    if (sessionId !== null && !labels.has(sessionId)) {
-      labels.set(sessionId, tab.customLabel)
+  return (sessionId) => {
+    if (labels.has(sessionId)) {
+      return labels.get(sessionId)
     }
+    tabs ??= savedTabs() ?? []
+    while (scanned < tabs.length) {
+      const tab = tabs[scanned++]
+      if (tab.contentType !== 'agent-session' || labels.has(tab.entityId)) {
+        continue
+      }
+      labels.set(tab.entityId, tab.customLabel)
+      if (tab.entityId === sessionId) {
+        return tab.customLabel
+      }
+    }
+    return undefined
   }
-  return labels
 }
