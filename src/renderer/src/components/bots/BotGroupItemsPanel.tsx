@@ -19,7 +19,6 @@ import {
   type BotItemFilterScope
 } from './items/BotItemsFilter'
 import { BotItemsList } from './items/BotItemsList'
-import { BotAvatarSrcs, useBotAvatarSrcs } from './bot-avatar-image'
 import { BotItemsLoading } from './items/BotItemsLoading'
 import { BotItemsReadFailed } from './items/BotItemsReadFailed'
 import { BotItemPane } from './items/BotItemPane'
@@ -73,8 +72,6 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
   const t = useTranslate()
   const bots = useBots()
   const members = useMemo(() => botGroupMemberBots(group, bots), [group, bots])
-  // Rows draw as the list scrolls: their faces' pictures are read once here, not by each row.
-  const faceSrcs = useBotAvatarSrcs(members)
   const scopes = useMemo(() => groupScopes(group, t), [group, t])
   const [scopeKey, setScopeKey] = useState(GROUP_SCOPE)
   const [botIds, setBotIds] = useState<readonly string[] | null>(null)
@@ -218,80 +215,74 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
           named
         />
       ) : (
-        <BotAvatarSrcs.Provider value={faceSrcs}>
-          <div
-            ref={scroll}
-            data-bot-items-scroller=""
-            tabIndex={-1}
-            className="@container scrollbar-sleek flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-2 py-3 outline-none"
-          >
-            <BotGroupPanelHeader
-              group={group}
-              members={members}
-              needsYou={merged.needsYou}
-              working={merged.working}
-              next={merged.next}
+        <div
+          ref={scroll}
+          data-bot-items-scroller=""
+          tabIndex={-1}
+          className="@container scrollbar-sleek flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-2 py-3 outline-none"
+        >
+          <BotGroupPanelHeader
+            group={group}
+            members={members}
+            needsYou={merged.needsYou}
+            working={merged.working}
+            next={merged.next}
+            now={clock}
+            filter={
+              members.length > 0 ? (
+                <BotItemsFilterButton
+                  items={merged.shown}
+                  chats={[]}
+                  filter={filter}
+                  onFilter={setFilter}
+                  group={{
+                    bots: members.map((bot) => ({
+                      bot,
+                      count: merged.openCounts.get(bot.id) ?? 0
+                    })),
+                    scopes,
+                    cleared,
+                    named: named || null
+                  }}
+                />
+              ) : null
+            }
+          />
+          <fieldset disabled={merged.offline} className="contents">
+            <BotItemsList
+              bot={{
+                foldKey: `group:${group.id}`,
+                botOf: merged.botOf,
+                seenOf: merged.seenOf,
+                needBot: merged.needBot,
+                placeOf,
+                placed,
+                outside: {
+                  count: merged.outside,
+                  of:
+                    scope.key === GROUP_SCOPE ? 'group' : scope.key === group.id ? 'room' : 'thread'
+                }
+              }}
+              groups={merged.list.groups}
+              seenEventId=""
+              closedTotal={merged.list.closedTotal}
+              onMoreClosed={merged.list.loadMoreClosed}
+              staleDays={null}
               now={clock}
-              filter={
-                members.length > 0 ? (
-                  <BotItemsFilterButton
-                    items={merged.shown}
-                    chats={[]}
-                    filter={filter}
-                    onFilter={setFilter}
-                    group={{
-                      bots: members.map((bot) => ({
-                        bot,
-                        count: merged.openCounts.get(bot.id) ?? 0
-                      })),
-                      scopes,
-                      cleared,
-                      named: named || null
-                    }}
-                  />
-                ) : null
-              }
+              focusUid={returnTo}
+              onOpen={(item) => openItem(item.uid)}
+              asks={{
+                needs: merged.needs,
+                stoppedForSignIn: merged.stoppedForSignIn,
+                itemOf: merged.itemOf
+              }}
+              offline={merged.offline}
+              focusFallback={scroll}
+              scroller={scroll}
             />
-            <fieldset disabled={merged.offline} className="contents">
-              <BotItemsList
-                bot={{
-                  foldKey: `group:${group.id}`,
-                  botOf: merged.botOf,
-                  seenOf: merged.seenOf,
-                  needBot: merged.needBot,
-                  placeOf,
-                  placed,
-                  outside: {
-                    count: merged.outside,
-                    of:
-                      scope.key === GROUP_SCOPE
-                        ? 'group'
-                        : scope.key === group.id
-                          ? 'room'
-                          : 'thread'
-                  }
-                }}
-                groups={merged.list.groups}
-                seenEventId=""
-                closedTotal={merged.list.closedTotal}
-                onMoreClosed={merged.list.loadMoreClosed}
-                staleDays={null}
-                now={clock}
-                focusUid={returnTo}
-                onOpen={(item) => openItem(item.uid)}
-                asks={{
-                  needs: merged.needs,
-                  stoppedForSignIn: merged.stoppedForSignIn,
-                  itemOf: merged.itemOf
-                }}
-                offline={merged.offline}
-                focusFallback={scroll}
-                scroller={scroll}
-              />
-              {note()}
-            </fieldset>
-          </div>
-        </BotAvatarSrcs.Provider>
+            {note()}
+          </fieldset>
+        </div>
       )}
     </>
   )

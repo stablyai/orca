@@ -53,6 +53,20 @@ type BotItemRowProps = {
   listItem?: boolean
 }
 
+/** Equal by value. The long texts the row never shows are written only with the item itself, which
+ *  bumps its version, so an unchanged version skips them; joined parts (names, chat, links) always compare. */
+function sameItem(a: BotItem, b: BotItem): boolean {
+  if (a === b) {
+    return true
+  }
+  if (a.version !== b.version || a.updatedAt !== b.updatedAt) {
+    return false
+  }
+  const { description: _description, doneMeans: _doneMeans, ...rest } = a
+  const { description: _otherDescription, doneMeans: _otherDoneMeans, ...other } = b
+  return structuralValuesEqual(rest, other)
+}
+
 /** The item compares by value, as a fresh host read decodes it anew; every other prop by identity. */
 function sameRowProps(prev: BotItemRowProps, next: BotItemRowProps): boolean {
   const before: Readonly<Record<string, unknown>> = prev
@@ -61,9 +75,7 @@ function sameRowProps(prev: BotItemRowProps, next: BotItemRowProps): boolean {
   return (
     keys.length === Object.keys(before).length &&
     keys.every((key) =>
-      key === 'item'
-        ? structuralValuesEqual(prev.item, next.item)
-        : Object.is(before[key], after[key])
+      key === 'item' ? sameItem(prev.item, next.item) : Object.is(before[key], after[key])
     )
   )
 }
