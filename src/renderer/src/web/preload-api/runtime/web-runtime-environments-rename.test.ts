@@ -5,7 +5,9 @@ import type { StoredWebRuntimeEnvironment } from '../../pairing/web-runtime-envi
 
 const ENV_KEY = 'orca.web.runtimeEnvironment.v1'
 
-function storedEnvironment(overrides: Partial<StoredWebRuntimeEnvironment> = {}): StoredWebRuntimeEnvironment {
+function storedEnvironment(
+  overrides: Partial<StoredWebRuntimeEnvironment> = {}
+): StoredWebRuntimeEnvironment {
   return {
     id: 'web-env-1',
     name: 'Test runtime',
@@ -38,14 +40,15 @@ describe('runtimeEnvironments.rename', () => {
     const { api, storage } = await installApi()
     // The in-memory copy predates a re-pair that another tab already stored.
     webRuntimeState.activeEnvironment = storedEnvironment({ pairingRevision: 1 })
-    storage.setItem(ENV_KEY, JSON.stringify(storedEnvironment({ pairingRevision: 2 })))
+    const rePaired = JSON.stringify(storedEnvironment({ pairingRevision: 2 }))
+    storage.setItem(ENV_KEY, rePaired)
 
     await expect(
       api.runtimeEnvironments.rename({ selector: 'web-env-1', name: 'Renamed' })
     ).rejects.toThrow('paired Orca server changed')
 
-    const stored = JSON.parse(storage.getItem(ENV_KEY) ?? 'null')
-    expect(stored.name).toBe('Test runtime')
+    // Byte-identical: a rejected rename must not touch the stored record, not even its metadata.
+    expect(storage.getItem(ENV_KEY)).toBe(rePaired)
   })
 
   it('rejects the rename when another tab removed the pairing', async () => {
@@ -63,14 +66,14 @@ describe('runtimeEnvironments.rename', () => {
   it('rejects the rename when another tab paired a different environment', async () => {
     const { api, storage } = await installApi()
     webRuntimeState.activeEnvironment = storedEnvironment()
-    storage.setItem(ENV_KEY, JSON.stringify(storedEnvironment({ id: 'web-env-2' })))
+    const otherEnvironment = JSON.stringify(storedEnvironment({ id: 'web-env-2' }))
+    storage.setItem(ENV_KEY, otherEnvironment)
 
     await expect(
       api.runtimeEnvironments.rename({ selector: 'web-env-1', name: 'Renamed' })
     ).rejects.toThrow('paired Orca server changed')
 
-    const stored = JSON.parse(storage.getItem(ENV_KEY) ?? 'null')
-    expect(stored.id).toBe('web-env-2')
+    expect(storage.getItem(ENV_KEY)).toBe(otherEnvironment)
   })
 
   it('renames the stored record when the pairing is current', async () => {
