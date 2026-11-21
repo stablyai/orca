@@ -59,11 +59,12 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
     }
     return (groups ?? []).every((group) => {
       const active = tabs?.find((tab) => tab.id === group.activeTabId)
+      // An empty group shows its landing picker, whose search lives in the layout.
       return (
-        !active ||
-        active.contentType === 'terminal' ||
-        active.contentType === 'room' ||
-        isStructuredTab(active)
+        active !== undefined &&
+        (active.contentType === 'terminal' ||
+          active.contentType === 'room' ||
+          isStructuredTab(active))
       )
     })
   }, [tabs, groups])
