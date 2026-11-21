@@ -65,8 +65,9 @@ export function NativeChatNewRowsMarker({
       ref={ref}
       role="separator"
       aria-label={label}
+      // Nothing to click; pulled up over your bubble's copy button, it must not take its clicks or hover.
       className={cn(
-        'flex items-center gap-3 text-2xs font-semibold uppercase tracking-[0.05em] text-chat-unread transition-opacity duration-300 ease-out starting:opacity-0 motion-reduce:transition-none',
+        'pointer-events-none flex items-center gap-3 text-2xs font-semibold uppercase tracking-[0.05em] text-chat-unread transition-opacity duration-300 ease-out starting:opacity-0 motion-reduce:transition-none',
         className
       )}
     >
