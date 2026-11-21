@@ -36,7 +36,7 @@ export type CodexSharedLeaseHost = {
   /** Settles once a retried release could prove more: a turn ended, another chat left, or the
    *  server exited. */
   releaseMayProve: (lease: CodexSharedServerLease) => Promise<unknown>
-  readonly router: Pick<CodexSharedServerRouter, 'heldByOther' | 'unclaim'>
+  readonly router: Pick<CodexSharedServerRouter, 'heldByOther' | 'unclaim' | 'openSettled'>
   /** A thread that opened after its chat left: nobody will use it, so the server lets it go.
    *  Resolves whether Codex confirmed it. */
   abandon: (threadId: string, lease: CodexSharedServerLease) => Promise<boolean>

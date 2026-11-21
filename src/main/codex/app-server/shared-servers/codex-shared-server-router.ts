@@ -23,7 +23,13 @@ export class CodexSharedServerRouter {
     /** Answers a server request no chat can take, so Codex doesn't wait on it. */
     private readonly refuse: (frame: CodexSharedServerFrame) => void
   ) {
-    this.unrouted = new CodexSharedServerUnrouted(refuse)
+    this.unrouted = new CodexSharedServerUnrouted(refuse, () =>
+      [...leases()].some((lease) => lease.pendingOpens.size > 0)
+    )
+  }
+
+  openSettled(): void {
+    this.unrouted.openSettled()
   }
 
   isClaimed(threadId: string): boolean {

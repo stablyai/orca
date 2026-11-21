@@ -568,6 +568,23 @@ describe('shared Codex app-servers', () => {
     expect(a.notifications.map((n) => n.method)).toContain('item/agentMessage/delta')
   })
 
+  it("keeps a new thread's early frames while its start reply is slow", async () => {
+    vi.useFakeTimers()
+    const { servers, pool } = fakeCodex()
+    const a = chat()
+    const connA = await pool.open(launch(), a.handlers, { sessionId: 'a', skillRoots: [] })
+    const started = connA.request(
+      'thread/start',
+      { cwd: '/work', holdOpen: true },
+      { timeoutMs: null }
+    )
+    servers[0]!.handlers.onNotification?.('thread/started', { thread: { id: 'thread-1' } })
+    await vi.advanceTimersByTimeAsync(60_000)
+    servers[0]!.releaseOpen()
+    await started
+    expect(a.notifications.map((n) => n.method)).toContain('thread/started')
+  })
+
   it('lets another chat open a thread this chat failed to resume', async () => {
     const { pool } = fakeCodex()
     const connA = await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })

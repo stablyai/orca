@@ -11,8 +11,13 @@ export class CodexSharedServerUnrouted {
   private readonly buckets = new Map<string, Bucket>()
   private count = 0
   private timer: ReturnType<typeof setTimeout> | null = null
+  /** Expiry waits while a thread open is pending: its early frames are held for its reply. */
+  private deferred = false
 
-  constructor(private readonly drop: (frame: CodexSharedServerFrame) => void) {}
+  constructor(
+    private readonly drop: (frame: CodexSharedServerFrame) => void,
+    private readonly opensPending: () => boolean
+  ) {}
 
   hold(threadId: string, frame: CodexSharedServerFrame): void {
     const bucket = this.buckets.get(threadId) ?? { frames: [], since: Date.now() }
@@ -47,6 +52,7 @@ export class CodexSharedServerUnrouted {
       clearTimeout(this.timer)
       this.timer = null
     }
+    this.deferred = false
     this.buckets.clear()
     this.count = 0
   }
@@ -57,8 +63,20 @@ export class CodexSharedServerUnrouted {
     }
   }
 
+  /** A thread open settled (its reply claimed its frames first); a deferred expiry runs now. */
+  openSettled(): void {
+    if (this.deferred && !this.opensPending()) {
+      this.deferred = false
+      this.sweep()
+    }
+  }
+
   private sweep(): void {
     this.timer = null
+    if (this.opensPending()) {
+      this.deferred = true
+      return
+    }
     const cutoff = Date.now() - UNROUTED_TTL_MS
     for (const [threadId, bucket] of this.buckets) {
       if (bucket.since <= cutoff) {

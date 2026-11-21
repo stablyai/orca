@@ -126,6 +126,7 @@ export async function sendCodexLeaseRequest(
     const settle = (): void => {
       owner.pendingOpens.delete(sent)
       host.turnsChanged()
+      host.router.openSettled()
     }
     sent.then(settle, settle)
   }

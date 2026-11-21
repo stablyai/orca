@@ -78,17 +78,24 @@ export class CodexSharedServerBacklog {
       this.setPaused(true)
       if ([...this.leases, ...this.waiters].some((lease) => lease.waiting)) {
         // A grace that saw the backlog shrink starts over, up to a cap: catching up isn't stalling.
-        this.graceSince ??= Date.now()
-        const capped = Date.now() - this.graceSince >= MAX_SHED_GRACE_MS
-        if (graceOver && (this.total >= this.graceFrom || capped)) {
+        const now = Date.now()
+        this.graceSince ??= now
+        const left = MAX_SHED_GRACE_MS - (now - this.graceSince)
+        if (graceOver && (this.total >= this.graceFrom || left <= 0)) {
           this.shedUntil(half)
         } else if (!this.grace) {
           this.graceFrom = this.total
-          this.grace = setTimeout(() => {
-            this.grace = undefined
-            this.settle(true)
-          }, CODEX_SHARED_SERVER_SHED_GRACE_MS)
+          this.grace = setTimeout(
+            () => {
+              this.grace = undefined
+              this.settle(true)
+            },
+            Math.max(0, Math.min(CODEX_SHARED_SERVER_SHED_GRACE_MS, left))
+          )
         }
+      } else {
+        // Nobody waits any more; a later waiter starts its own grace.
+        this.graceSince = null
       }
     }
     if (this.total <= half) {
