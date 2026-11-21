@@ -165,7 +165,20 @@ export function useBotItemsClosedPages(
     const now = latest.current
     const since =
       now && now !== read ? botItemsNamedSince(now, read) : new Map<string, BotItem | null>()
-    // What changed while this page was out is no longer known: it's dropped, and Show more reads again.
+    if (generation.current === mine && !since) {
+      // What changed while this page was out is no longer known: the page shows, and the pages are read
+      // again from the newest read, this one's depth included.
+      setPages((prev) => {
+        const same = prev !== null && prev.chats === chats && prev.cursor === cursor
+        return {
+          base: read,
+          chats,
+          depth: (same ? prev.depth : 0) + 1,
+          items: [...(same ? prev.items : []), ...next.items],
+          cursor: next.nextClosedCursor ?? null
+        }
+      })
+    }
     if (generation.current === mine && since) {
       // Items a named read refreshed while this page was out: the read's copies are the newer ones.
       const inNow = new Set(now?.items.map((item) => item.uid))
@@ -205,9 +218,7 @@ export function useBotItemsClosedPages(
         }
       })
     }
-    return since
-      ? { items: next.items, more: Boolean(next.nextClosedCursor) }
-      : { items: NONE, more: true }
+    return { items: next.items, more: Boolean(next.nextClosedCursor) }
   }, [read, cursor, hostId, id, chats])
 
   return {

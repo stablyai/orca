@@ -59,7 +59,8 @@ export function mergeNamedBotItems(
   same &&= !movedDown
   const counts = reuseEqualJson(previous.counts, named.counts)
   // A named item this read didn't hold may sit in a loaded Closed page: its step still tells them.
-  const elsewhere = uids.some((uid) => !previous.items.some((item) => item.uid === uid))
+  const held = new Set(previous.items.map((item) => item.uid))
+  const elsewhere = uids.some((uid) => !held.has(uid))
   if (same && added.length === 0 && counts === previous.counts && !elsewhere) {
     return previous.seenEventId === named.seenEventId
       ? previous
