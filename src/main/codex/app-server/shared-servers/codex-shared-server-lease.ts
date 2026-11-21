@@ -169,6 +169,8 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
       this.releasing ||
       (this.state === 'open' &&
         !this.paused &&
+        // One still catching up on its own queue waits on itself, not on the others.
+        this.queuedBytes === 0 &&
         (this.outstanding.size > 0 || this.host.hasRunningTurn(this.threads)))
     )
   }

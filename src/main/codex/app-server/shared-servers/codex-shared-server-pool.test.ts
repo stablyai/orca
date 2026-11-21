@@ -379,6 +379,36 @@ describe('shared Codex app-servers', () => {
     expect(b.notifications.at(-1)?.method).toBe('item/agentMessage/delta')
   })
 
+  it('gives a chat that keeps catching up more time, even while another chat waits', async () => {
+    vi.useFakeTimers()
+    const { server, a, b, connA, threadA, threadB, megabyte } = await backloggedPair()
+    server.handlers.onNotification?.('turn/started', { threadId: threadB, turn: { id: 'tb' } })
+    let draining = false
+    const handlers = a.handlers.onNotification
+    a.handlers.onNotification = (method, params) => {
+      handlers?.(method, params)
+      // Its journal takes one frame, then pushes back again.
+      if (draining) {
+        connA.pauseReading?.()
+      }
+    }
+    connA.pauseReading?.()
+    // Just past the budget: the paused reader takes nothing more.
+    for (let i = 0; i < 33; i += 1) {
+      megabyte(threadA)
+    }
+    expect(server.readingPaused).toBe(true)
+    draining = true
+    // About 1 MiB a second: slow, but always moving.
+    for (let i = 0; i < 30 && server.readingPaused; i += 1) {
+      connA.resumeReading?.()
+      await vi.advanceTimersByTimeAsync(1_000)
+    }
+    expect(a.exits).toEqual([])
+    expect(b.exits).toEqual([])
+    expect(server.readingPaused).toBe(false)
+  })
+
   it("does not let a paused chat's backlog hold up another chat's close", async () => {
     vi.useFakeTimers()
     const { server, a, connA, connB, threadA, threadB, megabyte } = await backloggedPair()

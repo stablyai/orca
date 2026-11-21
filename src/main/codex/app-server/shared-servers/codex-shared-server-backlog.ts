@@ -2,7 +2,7 @@ import type { CodexAppServerConnection } from '../codex-app-server-connection-ty
 
 /** Frames all paused chats on one server may hold in Orca before the server itself waits. */
 export const CODEX_SHARED_SERVER_BACKLOG_BYTES = 32 * 1024 * 1024
-/** How long a waiting chat gives the chats holding the backlog to catch up before they're
+/** How long a waiting chat gives the chats holding the backlog to make progress before they're
  *  dropped; well inside a Stop's 5 s interrupt timeout. */
 export const CODEX_SHARED_SERVER_SHED_GRACE_MS = 1_500
 
@@ -26,6 +26,7 @@ export class CodexSharedServerBacklog {
   private paused = false
   private shedding = false
   private grace: ReturnType<typeof setTimeout> | undefined
+  private graceFrom = 0
 
   constructor(
     private readonly reader: () => Pick<
@@ -70,9 +71,11 @@ export class CodexSharedServerBacklog {
     if (this.total > (this.paused ? half : CODEX_SHARED_SERVER_BACKLOG_BYTES)) {
       this.setPaused(true)
       if ([...this.leases, ...this.waiters].some((lease) => lease.waiting)) {
-        if (graceOver) {
+        // A grace that saw the backlog shrink starts over: catching up slowly isn't stalling.
+        if (graceOver && this.total >= this.graceFrom) {
           this.shedUntil(half)
         } else if (!this.grace) {
+          this.graceFrom = this.total
           this.grace = setTimeout(() => {
             this.grace = undefined
             this.settle(true)
