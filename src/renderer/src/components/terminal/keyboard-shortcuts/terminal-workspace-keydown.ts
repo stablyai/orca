@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import type { KeybindingActionId } from '../../../../../shared/keybindings/types'
-import { matchesRecentTabSwitcherChord } from '../../../../../shared/keybindings/window-shortcut-policy'
+import { chordOwnedOutsideWorkspaceTabs } from './terminal-workspace-chord-ownership'
 import { useAppStore } from '../../../store/index'
 import {
   handleEmptyFloatingWorkspacePanelCloseShortcut,
@@ -223,7 +223,7 @@ export function handleTerminalWorkspaceKeyDown(
     return
   }
   if (
-    matchesRecentTabSwitcherChord(event, shortcutPlatform, keybindings, {
+    chordOwnedOutsideWorkspaceTabs(matchShortcut, event, shortcutPlatform, keybindings, {
       context,
       terminalShortcutPolicy
     })
