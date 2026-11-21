@@ -1,5 +1,6 @@
 import { isGooglePlayInstall, useWallAppUpdate } from '../../app-update/use-wall-app-update'
 import { openExternalLink } from '../../platform/external-links/external-link'
+import { leaveHostRoute } from '../../host-route-exit'
 import { useRouteHandoff } from '../../navigation/route-handoff'
 import { Platform, Pressable, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
@@ -194,8 +195,8 @@ export function ProtocolBlockScreen({ verdict }: Props) {
         <Pressable
           style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
           onPress={() => {
-            // Hand home replacement to shell; expo-router singleton inside page would render / in WebView instead of leaving it.
-            router.replace('/')
+            // Back to the Home under this screen, not a second one stacked on it (a page hands this to the shell).
+            leaveHostRoute(router)
           }}
         >
           <Text style={styles.secondaryButtonText}>
