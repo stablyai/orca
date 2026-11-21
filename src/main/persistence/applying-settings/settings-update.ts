@@ -81,6 +81,9 @@ export function updateSettings(
   if ('holdQuitWhileAgentsWork' in updates) {
     sanitizedUpdates.holdQuitWhileAgentsWork = updates.holdQuitWhileAgentsWork === true
   }
+  if ('linuxTilingWindowMode' in updates) {
+    sanitizedUpdates.linuxTilingWindowMode = updates.linuxTilingWindowMode === true
+  }
   if ('artifactSharingEnabled' in updates) {
     sanitizedUpdates.artifactSharingEnabled = updates.artifactSharingEnabled === true
   }

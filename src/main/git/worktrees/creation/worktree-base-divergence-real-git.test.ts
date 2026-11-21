@@ -49,24 +49,17 @@ afterEach(async () => {
 })
 
 describe('measureRetargetDivergence with real Git', () => {
-  it('allows the drift between a local branch and its remote-tracking copy', async () => {
-    const repoPath = await createRepo()
-    git(repoPath, ['update-ref', 'refs/remotes/origin/main', 'HEAD'])
-    commitEmpty(repoPath, 5)
-    git(repoPath, ['update-ref', 'refs/remotes/origin/main', 'HEAD'])
-    git(repoPath, ['reset', '--hard', '--quiet', 'HEAD~3'])
-
-    await expect(
-      measureRetargetDivergence(repoPath, 'refs/heads/main', 'refs/remotes/origin/main')
-    ).resolves.toBe('within')
-  })
-
-  it('counts drift in both directions', async () => {
+  it('accepts drift at the limit and counts one extra commit on the other branch', async () => {
     const repoPath = await createRepo()
     const forkPoint = git(repoPath, ['rev-parse', 'HEAD'])
     commitEmpty(repoPath, RETARGET_MAX_COMMIT_DIVERGENCE)
     git(repoPath, ['update-ref', 'refs/remotes/origin/main', 'HEAD'])
     git(repoPath, ['reset', '--hard', '--quiet', forkPoint])
+
+    await expect(
+      measureRetargetDivergence(repoPath, 'refs/heads/main', 'refs/remotes/origin/main')
+    ).resolves.toBe('within')
+
     commitEmpty(repoPath, 1)
 
     await expect(

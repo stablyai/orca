@@ -9,7 +9,8 @@ export const ORCHESTRATION_SESSION_WORKER_SUMMARY_MAX = 280
 export const ORCHESTRATION_SESSION_WORKERS_LIMIT = 50
 
 /** The Dispatch's lifecycle, never the agent's own state: `working` is an open Dispatch whose
- *  process is live, even while its agent waits. `stopped` covers a worker that exited without reporting. */
+ *  process is live, even while its agent waits. `stopped` covers a worker that exited without reporting and,
+ *  where only shown, one whose terminal its host can't find at all (its Dispatch may still be open). */
 export type OrchestrationSessionWorkerState =
   | 'working'
   | 'completed'

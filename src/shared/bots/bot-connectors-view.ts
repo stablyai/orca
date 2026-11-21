@@ -102,13 +102,26 @@ function googleService(
   }
 }
 
-/** Each service's row, from the bot's links and what this computer is signed in to. */
+const SLACK_NO_APP = 'Run `orca bot connectors --offer slack` to show your owner a Connect card.'
+const SLACK_NOT_INSTALLED =
+  "Your Slack app isn't installed. Ask your owner to finish its setup, or remove it, under Slack on your page in Orca."
+
+/** What Orca Cloud says a bot can act through; Slack is listed once its app is installed. */
+export type CloudSource = { source: string; approveUrl?: string }
+
+/**
+ * Each service's row, from the bot's links and what this computer is signed in to. `cloud`: Orca
+ * Cloud's sources, when it answered; without them, the Slack app this computer set up stands.
+ */
 export function botConnectorServices(
   bot: Pick<Bot, 'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'github' | 'google'>,
   local: LocalSignIns,
-  slackApproveUrl?: string
+  cloud?: readonly CloudSource[]
 ): BotConnectorService[] {
-  const slack = botSlackApps(bot).length > 0
+  const hasApp = botSlackApps(bot).length > 0
+  const cloudSlack = cloud?.find((entry) => entry.source === 'slack')
+  // A created app whose install Slack refused or nobody finished is not connected.
+  const slack = cloud ? cloudSlack !== undefined : hasApp
   return [
     {
       source: 'github',
@@ -133,11 +146,9 @@ export function botConnectorServices(
       tool: 'orca slack',
       actsAs: 'bot',
       signedIn: slack,
-      ...(slack
-        ? {}
-        : { gap: 'Run `orca bot connectors --offer slack` to show your owner a Connect card.' }),
+      ...(slack ? {} : { gap: hasApp ? SLACK_NOT_INSTALLED : SLACK_NO_APP }),
       wakes: slack,
-      ...(slackApproveUrl ? { approveUrl: slackApproveUrl } : {})
+      ...(cloudSlack?.approveUrl ? { approveUrl: cloudSlack.approveUrl } : {})
     },
     ...(local.google ? [googleService(bot, local.google, local.googleApp === true)] : [])
   ]

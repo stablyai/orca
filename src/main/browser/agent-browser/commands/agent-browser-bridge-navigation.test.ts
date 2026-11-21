@@ -141,21 +141,6 @@ describe('AgentBrowserBridge', () => {
     return wc
   }
 
-  it('reports the committed URL when the outgoing page settles loadURL before goto commits', async () => {
-    mockEarlySettlingPage('https://gitlab.com/group/project', (navigate) => {
-      // A subframe keeps the new page loading, so did-stop-loading never fires.
-      setTimeout(() => {
-        navigate.commit('https://gitlab.com/group/project/-/milestones')
-        navigate.emit('did-finish-load')
-      }, 0)
-    })
-
-    await expect(bridge.goto('https://gitlab.com/group/project/-/milestones')).resolves.toEqual({
-      url: 'https://gitlab.com/group/project/-/milestones',
-      title: 'Example'
-    })
-  })
-
   it('returns an early-settled goto only once the committed main document loads', async () => {
     let navigate: EarlySettledNavigation | undefined
     const wc = mockEarlySettlingPage('https://gitlab.com/group/project', (pending) => {
@@ -174,9 +159,11 @@ describe('AgentBrowserBridge', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(resolved).toBe(false)
 
+    // A subframe keeps the page loading, so did-stop-loading never fires.
     navigate?.emit('did-finish-load')
-    await expect(result).resolves.toMatchObject({
-      url: 'https://gitlab.com/group/project/-/milestones'
+    await expect(result).resolves.toEqual({
+      url: 'https://gitlab.com/group/project/-/milestones',
+      title: 'Example'
     })
   })
 

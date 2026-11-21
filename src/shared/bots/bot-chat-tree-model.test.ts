@@ -116,6 +116,44 @@ describe('buildBotChatTree', () => {
     expect(tree.workspaceChats).toEqual({ 'wt-1': 'slack', 'wt-2': 'slack', 'wt-handed': 'home' })
   })
 
+  it('shows an open Dispatch whose record reads ended under finished, as Activity does', () => {
+    const placed = placeBotChatDispatches(chats, [
+      dispatch('lost', { chatId: 'slack', settled: false, at: 50 }),
+      dispatch('busy', { chatId: 'slack', settled: false, at: 40 }),
+      dispatch('done', { chatId: 'slack', at: 30 }),
+      // A closed chat's open worker sits under Home; once its record reads ended it goes back to its chat.
+      dispatch('orphan', { chatId: 'old', settled: false, at: 20 })
+    ])
+    const open = { settledAt: null, liveness: 'unverifiable' } as const
+    const tree = buildBotChatTree({
+      chats,
+      placed,
+      workers: new Map([
+        // Its host can't find its terminal: read as stopped, its Dispatch still open.
+        ['lost', worker('lost', { ...open, state: 'stopped', startedAt: 50 })],
+        ['busy', worker('busy', { ...open, state: 'working', liveness: 'live', startedAt: 40 })],
+        ['done', worker('done')],
+        ['orphan', worker('orphan', { ...open, state: 'stopped', startedAt: 20 })]
+      ])
+    })
+    const slack = tree.chats.find((chat) => chat.chatId === 'slack')!
+    expect(slack.running.map((w) => w.key)).toEqual(['worker:busy'])
+    expect(slack.finished.map((w) => [w.key, w.state, w.settledAt])).toEqual([
+      ['worker:lost', 'done', undefined],
+      ['worker:done', 'done', 30]
+    ])
+    expect([slack.runningTotal, slack.finishedTotal, slack.failedTotal]).toEqual([1, 2, 0])
+    expect(slack.finished[0]).toMatchObject({ host: 'local' })
+    const home = tree.chats.find((chat) => chat.chatId === 'home')!
+    expect([home.running, home.finished]).toEqual([[], []])
+    const old = tree.chats.find((chat) => chat.chatId === 'old')!
+    expect(old.finished.map((w) => [w.key, w.state, w.note])).toEqual([
+      ['worker:orphan', 'done', undefined]
+    ])
+    // A page of that chat reads the running record too, so its history pages the same way.
+    expect(botChatTreeDispatchIds(chats, placed, [], { chatId: 'old' })).toContain('orphan')
+  })
+
   it('pages one chat from just past the last worker shown, even after another finished', () => {
     // f5 finished after f4 and f2 were shown; the next page still starts right after f2.
     const placed = placeBotChatDispatches(chats, [
@@ -174,6 +212,14 @@ describe('mergeShownFinished', () => {
     const loaded = [done('f1', 90), done('f2', 80), done('f3', 70), done('f4', 60)]
     const merged = mergeShownFinished([done('f0', 100), done('f1', 90)], loaded)
     expect(merged.map((worker) => worker.key)).toEqual(['f0', 'f1', 'f2', 'f3', 'f4'])
+  })
+
+  it('drops a row read as finished earlier that runs again', () => {
+    // f3 read as ended on a page loaded earlier; its terminal turned up, so it is running now.
+    const loaded = [done('f1', 90), done('f2', 80), done('f3', 70)]
+    const back = { ...done('f3', 70), state: 'running' as const, settledAt: undefined }
+    const merged = mergeShownFinished([done('f1', 90), done('f2', 80)], loaded, new Set([back.key]))
+    expect(merged.map((worker) => worker.key)).toEqual(['f1', 'f2'])
   })
 })
 

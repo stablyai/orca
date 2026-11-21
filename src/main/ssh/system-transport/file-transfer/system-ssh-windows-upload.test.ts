@@ -230,21 +230,6 @@ describe('Windows upload on a host with no sftp subsystem', () => {
     expect(Buffer.concat(fileWrites().map((write) => write.stdin)).equals(contents)).toBe(true)
   })
 
-  it('leaves no truncated file under the real name when a chunk fails mid-file', async () => {
-    writeFileSync(join(localDir, 'relay.js'), Buffer.alloc(WINDOWS_STDIN_WRITE_CHUNK_BYTES * 3))
-    failAtSpawn = 0
-
-    await expect(
-      uploadFileViaSystemSsh(target, join(localDir, 'relay.js'), `${remoteRoot}/relay.js`, {
-        hostPlatform
-      })
-    ).rejects.toThrow()
-
-    expect(fileWrites().length).toBeGreaterThan(0)
-    expect(fileWrites().map(writtenPath)).not.toContain(`${remoteRoot}/relay.js`)
-    expect(commands.some((command) => command.script.includes('::Move('))).toBe(false)
-  })
-
   it.each([
     ['relay.js', 'aabb9009eeff'],
     ['relay-9009.js', 'aabbccddeeff'],
@@ -263,6 +248,9 @@ describe('Windows upload on a host with no sftp subsystem', () => {
       ).rejects.toThrow('failed (exit 1)')
 
       expect(fileWrites().map((write) => write.executable)).toEqual(['pwsh.exe'])
+      expect(fileWrites().map(writtenPath)).toEqual([
+        `${remotePath}${WINDOWS_STAGED_WRITE_SUFFIX}-${nonce}`
+      ])
       expect(getWindowsRemoteWriteCapabilities(target).shouldTry('pwsh')).toBe(true)
       expect(commands.some((command) => command.script.includes('::Move('))).toBe(false)
     } finally {

@@ -52,7 +52,7 @@ it('leaves a death that a request failure reports, an expected end and a failed 
     ])
   )
   expect(r.mail().map((message) => message.subject)).toEqual([
-    expect.stringMatching(/^Agent hit an error/)
+    'Worker stopped on an error without reporting'
   ])
   for (const child of [
     ended(r, 1, { cause: 'evict' }),

@@ -88,25 +88,19 @@ describe('tui-idle over the live OSC title pipeline', () => {
     vi.useRealTimers()
   })
 
-  it('does not settle on a name-only title arriving mid-stream', async () => {
+  it('requires an explicit idle title after the name-only title arrives mid-turn', async () => {
     const { runtime, handle } = await makeRuntime('codex')
     runtime.onPtyData(E2E_PTY_ID, `${oscTitle(WORKING_TITLE)}building\n`, Date.now())
 
-    const waiting = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 250 })
+    const earlyWait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 250 })
     // The agent is mid-turn and repaints its title to the bare product name.
     runtime.onPtyData(E2E_PTY_ID, `${oscTitle(NAME_ONLY_TITLE)}more output\n`, Date.now())
 
-    const assertion = expect(waiting).rejects.toThrow('timeout')
+    const assertion = expect(earlyWait).rejects.toThrow('timeout')
     await vi.advanceTimersByTimeAsync(250)
     await assertion
-  })
-
-  it('settles when the agent reports idle explicitly', async () => {
-    const { runtime, handle } = await makeRuntime('codex')
-    runtime.onPtyData(E2E_PTY_ID, `${oscTitle(WORKING_TITLE)}building\n`, Date.now())
 
     const waiting = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 2_000 })
-    runtime.onPtyData(E2E_PTY_ID, `${oscTitle(NAME_ONLY_TITLE)}more output\n`, Date.now())
     runtime.onPtyData(E2E_PTY_ID, oscTitle(EXPLICIT_IDLE_TITLE), Date.now())
 
     await expect(waiting).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })

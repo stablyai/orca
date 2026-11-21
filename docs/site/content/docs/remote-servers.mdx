@@ -44,6 +44,13 @@ orca skills install --skill orca-cli --skill orchestration
 orca skills update --all
 ```
 
+Bots that run on the server reach Slack, GitHub, Linear and webhooks through the server's own sign-in to Orca Cloud, which a sign-in on your laptop does not carry over to. Sign the server in from its shell, where `orca auth login` prints a link and a code to approve in any browser, or from the bot's Connectors tab in the desktop app, where the button reads **Sign in on** and the server's name:
+
+```bash
+orca auth login
+orca auth status
+```
+
 ## Recommended: desktop app + Tailscale
 
 You need:

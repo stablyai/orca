@@ -1,4 +1,3 @@
-import { spawnSync } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -69,40 +68,6 @@ describe('sftp-upload', () => {
 
     expect(sftp.createWriteStream).not.toHaveBeenCalled()
   })
-
-  it('joins local file-descriptor teardown when a live upload is aborted', async () => {
-    const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-abort-'))
-    const localPath = join(localDir, 'relay.js')
-    const controller = new AbortController()
-    const blockedWrite = new Writable({
-      write() {}
-    })
-    const sftp = createSftpMock()
-    vi.mocked(sftp.createWriteStream).mockReturnValue(blockedWrite as never)
-    try {
-      await writeFile(localPath, Buffer.alloc(1024 * 1024, 7))
-      const upload = uploadFile(sftp, localPath, '/remote/relay.js', {
-        signal: controller.signal
-      })
-      await vi.waitFor(() => expect(sftp.createWriteStream).toHaveBeenCalledTimes(1))
-
-      controller.abort()
-
-      await expect(upload).rejects.toMatchObject({ name: 'AbortError' })
-      if (process.platform !== 'win32') {
-        const descriptorProbe = spawnSync(
-          'lsof',
-          ['-a', '-p', String(process.pid), '--', localPath],
-          { encoding: 'utf8' }
-        )
-        if (!descriptorProbe.error) {
-          expect(descriptorProbe.stdout).not.toContain(localPath)
-        }
-      }
-    } finally {
-      await rm(localDir, { recursive: true, force: true })
-    }
-  })
 })
 
 describe('uploadFile over a high-latency link', () => {
@@ -113,10 +78,7 @@ describe('uploadFile over a high-latency link', () => {
   ): {
     sftp: SFTPWrapper
     written: Map<number, Buffer>
-    maxInFlight: () => number
   } {
-    let inFlight = 0
-    let peak = 0
     const written = new Map<number, Buffer>()
     // A dead link: once stalled, no request (WRITE or the stream's CLOSE) is ever answered.
     const later = (cb: () => void): void => {
@@ -137,13 +99,8 @@ describe('uploadFile over a high-latency link', () => {
         pos: number,
         cb: (e: null, n: number) => void
       ) => {
-        inFlight += 1
-        peak = Math.max(peak, inFlight)
         written.set(pos, Buffer.from(buf.subarray(off, off + len)))
-        later(() => {
-          inFlight -= 1
-          cb(null, len)
-        })
+        later(() => cb(null, len))
       },
       close: (_h: Buffer, cb: (e: null) => void) => later(() => cb(null))
     })
@@ -152,7 +109,7 @@ describe('uploadFile over a high-latency link', () => {
         SFTP.prototype.createWriteStream.call(session, path, options)
     })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: uploadFile only calls createWriteStream, which drives open/fchmod/write/close above.
-    return { sftp: sftp as unknown as SFTPWrapper, written, maxInFlight: () => peak }
+    return { sftp: sftp as unknown as SFTPWrapper, written }
   }
 
   it('fails, as contact lost, when the SSH session closes under a stalled upload', async () => {

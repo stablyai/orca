@@ -10,7 +10,7 @@ const identity = {
 afterEach(() => vi.useRealTimers())
 
 describe('Claude agent view delivery', () => {
-  it('requires a matching live mod and its acknowledgement, and consumes each request once', async () => {
+  it('delivers requests once to the matching live mod and lets a parent view supersede a child', async () => {
     const bridge = new ClaudeAgentViewBridge()
     const trigger = vi.fn(async () => true)
     expect(await bridge.view({ ...identity, agentId: 'child', trigger })).toEqual({
@@ -41,21 +41,11 @@ describe('Claude agent view delivery', () => {
     bridge.receive({ ...identity, action: 'ack', ...taken, deny: 'no agent under that id' })
     expect(await result).toEqual({ status: 'denied', reason: 'no agent under that id' })
     expect(bridge.receive({ ...identity, action: 'take' })).toEqual({})
-  })
 
-  it('lets a parent click supersede a child that is still opening and ignores its late acknowledgement', async () => {
-    const bridge = new ClaudeAgentViewBridge()
-    bridge.receive({
-      ...identity,
-      action: 'register',
-      view: { agentId: 'previous', revision: 1 },
-      keybindings: JSON.stringify({
-        bindings: [{ context: 'Chat', bindings: { 'ctrl+alt+g': 'command:orca-agent-view' } }]
-      })
-    })
-    const child = bridge.view({ ...identity, agentId: 'child', trigger: async () => true })
+    const child = bridge.view({ ...identity, agentId: 'another-child', trigger })
     const takenChild = bridge.receive({ ...identity, action: 'take' })
-    const parent = bridge.view({ ...identity, trigger: async () => true })
+    expect(takenChild).toMatchObject({ agentId: 'another-child' })
+    const parent = bridge.view({ ...identity, trigger })
     expect(await child).toEqual({ status: 'busy' })
     const takenParent = bridge.receive({ ...identity, action: 'take' })
     expect(takenParent.requestId).not.toBe(takenChild.requestId)

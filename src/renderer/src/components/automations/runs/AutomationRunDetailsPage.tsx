@@ -108,7 +108,16 @@ export function AutomationRunDetailsPage({
   const startedLate =
     startedAt !== null && Math.abs(startedAt - run.scheduledFor) >= RUN_START_DRIFT_LABEL_MS
   const agentLabel = automation ? getAgentLabel(automation.agentId) : undefined
-  const errorText = automationRunErrorText(run, agentLabel)
+  const savedError = automationRunErrorText(run, agentLabel)
+  const errorText =
+    run.status === 'dispatch_failed' &&
+    run.sessionKind === 'chat' &&
+    savedError === "The bot's turn ended without finishing (failure)."
+      ? t(
+          'automations.runFailures.botProviderErrorNotSaved',
+          "The bot's turn failed, but this run did not save the provider's error. The original Chat may contain more details."
+        )
+      : savedError
   // Why: a failed run's reason has its own banner; Output shows only what the agent printed.
   const content = getAutomationRunContent(failed ? { ...run, error: null } : run, t)
   // Without the automation, the run can't be checked against its approval.

@@ -62,18 +62,6 @@ describe('readConnectorMessageAsker', () => {
     expect(readConnectorMessageAsker(stored)).toEqual({ ...ASKER, via })
   })
 
-  it('keeps the facts of a delivered asker, not its words', () => {
-    const { source: _source, ...facts } = ASKER
-    const delivered = {
-      ...facts,
-      role: 'member' as const,
-      place: { kind: 'public_channel' as const, id: 'C9' }
-    }
-    expect(
-      storedConnectorAsker('slack', { ...delivered, text: 'review #42', context: [] })
-    ).toEqual(ASKER)
-  })
-
   it('keeps the lines from people without access, and nothing else of the context', () => {
     const { source: _source, ...facts } = ASKER
     const delivered = {

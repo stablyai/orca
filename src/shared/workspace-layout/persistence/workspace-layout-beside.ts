@@ -42,6 +42,8 @@ export const SESSION_FIELD_OWNERS = {
   activeGroupIdByWorktree: 'view',
   activeConnectionIdsAtShutdown: 'carried',
   remoteSessionIdsByTabId: 'carried',
+  desktopRelayOwnerByTabId: 'carried',
+  desktopRelayAdoptionVersion: 'carried',
   lastVisitedAtByWorktreeId: 'view',
   defaultTerminalTabsAppliedByWorktreeId: 'layout',
   sleepingAgentSessionsByPaneKey: 'layout',

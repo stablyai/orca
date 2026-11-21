@@ -97,6 +97,7 @@ export function buildDefaultSettings(args: {
     terminalLigatures: 'auto',
     // Lazy image addon stays off the critical path and creates canvas layers only on first image; decoder setup still has overhead.
     terminalInlineImages: true,
+    terminalDroppedImagesPreview: true,
     terminalCursorStyle: 'block',
     terminalCursorStyleDefaultedToBlock: true,
     terminalCursorBlink: true,
@@ -181,6 +182,7 @@ export function buildDefaultSettings(args: {
     sourceControlCompareAgainstUpstream: false,
     prAutoRefresh: 'default',
     showTitlebarAppName: true,
+    linuxTilingWindowMode: false,
     showTasksButton: true,
     showAutomationsButton: true,
     artifactsEnabled: true,
@@ -200,6 +202,7 @@ export function buildDefaultSettings(args: {
     terminalShortcutPolicy: 'orca-first',
     floatingTerminalEnabled: true,
     browserClientHostedRemoteEnabled: true,
+    antigravityManagedAgyEnabled: true,
     floatingTerminalDefaultedForAllUsers: true,
     floatingTerminalCwd: '~',
     floatingTerminalTrustedCwds: [],

@@ -74,29 +74,15 @@ function sink(): AgentSessionSink & {
 }
 
 describe('AgentSessionTransitionRecorder', () => {
-  it('does not double-count a replayed status on reconnect', () => {
+  it('counts one session across repeated live statuses and reconnect replay', () => {
     const stats = new StatsCollector()
     const recorder = new AgentSessionTransitionRecorder(stats)
 
     recorder.onStatus(hook('working', T))
-    // Warm reconnect rows repeat mirrored snapshots.
+    recorder.onStatus(hook('working', T))
     recorder.onStatus(hook('working', T, { isReplay: true }))
-    recorder.onStatus(hook('working', T, { isReplay: true }))
-    recorder.onStatus(hook('working', T, { isReplay: true }))
-    // Cold replay has no prior mirror; only live-event gating prevents counting work from the earlier runtime.
+    // A replay with no existing session must not start one.
     recorder.onStatus(hook('working', T, { paneKey: 'cold-pane', isReplay: true }))
-    recorder.onStatus(hook('working', T, { paneKey: 'cold-pane', isReplay: true }))
-
-    expect(stats.getSummary().totalAgentsSpawned).toBe(1)
-  })
-
-  it('does not double-count a re-emitted live status mid-turn', () => {
-    const stats = new StatsCollector()
-    const recorder = new AgentSessionTransitionRecorder(stats)
-
-    for (let i = 0; i < 25; i++) {
-      recorder.onStatus(hook('working', T))
-    }
     recorder.onStatus(hook('done', T + 5_000))
 
     expect(stats.getSummary().totalAgentsSpawned).toBe(1)
