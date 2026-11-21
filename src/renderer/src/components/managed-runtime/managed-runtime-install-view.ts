@@ -19,6 +19,8 @@ export type ManagedRuntimeInstallView = {
   /** Settings may offer to delete the copy Orca installed: one is there and nothing runs. */
   removable: boolean
   removing: boolean
+  /** A step with no percent runs (unpacking, verifying, removing), so Settings shows a spinner. */
+  busy: boolean
   note: string | null
 }
 
@@ -33,6 +35,7 @@ const EMPTY: ManagedRuntimeInstallView = {
   prominent: false,
   removable: false,
   removing: false,
+  busy: false,
   note: null
 }
 
@@ -45,7 +48,7 @@ function runningView(
   const { phase, downloadedBytes: done, totalBytes: total } = operation
   if (phase === 'removing') {
     const status = t('components.managed-runtime.removing', 'Removing…')
-    return { ...EMPTY, status, removing: true }
+    return { ...EMPTY, status, removing: true, busy: true }
   }
   if (phase !== 'downloading' && phase !== 'extracting' && phase !== 'verifying') {
     return null
@@ -53,9 +56,9 @@ function runningView(
   const status = cancelling
     ? t('components.managed-runtime.cancelling', 'Cancelling…')
     : phase === 'extracting'
-      ? t('components.managed-runtime.extracting', 'Extracting {{agent}}.', { agent })
+      ? t('components.managed-runtime.extracting', 'Unpacking…')
       : phase === 'verifying'
-        ? t('components.managed-runtime.verifying', 'Checking the downloaded runtime.')
+        ? t('components.managed-runtime.verifying', 'Verifying {{agent}}…', { agent })
         : total === null
           ? t('components.managed-runtime.downloading', 'Downloading {{done}} MB.', {
               done: megabytes(done)
@@ -70,6 +73,7 @@ function runningView(
     ...EMPTY,
     status,
     progress: phase === 'downloading' && total ? Math.min(100, (done / total) * 100) : null,
+    busy: phase !== 'downloading',
     action: { kind: 'cancel', label, operationId: operation.id }
   }
 }
@@ -104,16 +108,12 @@ function settledView(
     note
   })
   const install = t('components.managed-runtime.installShort', 'Install')
-  // A copy found outside Orca runs; with Orca's already installed, installing again changes nothing.
+  // The host's own copy always runs while it exists, so installing Orca's would change nothing.
+  // If that copy goes away, the row falls through to Not installed · Install.
   if (state.source === 'external') {
     return view(
-      t('components.managed-runtime.external', 'Uses the copy of {{agent}} found on this host.', {
-        agent
-      }),
-      // The user's own copy outranks one Orca keeps updated, so installing Orca's adds nothing.
-      state.available && state.installedVersion === null && !state.updatesAutomatically
-        ? t('components.managed-runtime.installManaged', "Install Orca's copy")
-        : null
+      t('components.managed-runtime.external', 'Uses your own {{agent}}', { agent }),
+      null
     )
   }
   if (state.installedVersion !== null && state.updatesAutomatically) {

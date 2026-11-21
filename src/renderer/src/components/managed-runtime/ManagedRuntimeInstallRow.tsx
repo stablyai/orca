@@ -69,7 +69,7 @@ export function ManagedRuntimeInstallRow(props: {
   if (view.status !== null) {
     parts.push(
       <span key="status" className="inline-flex items-center gap-1.5">
-        {view.removing ? <LoadingSpinner className="size-3" /> : null}
+        {view.busy ? <LoadingSpinner className="size-3" /> : null}
         {said(view.status, !trailing)}
         {view.progress === null ? null : (
           <Progress
