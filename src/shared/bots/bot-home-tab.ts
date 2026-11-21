@@ -20,17 +20,21 @@ type HostedBotHome = Pick<Bot, 'chatSessionId' | 'folderWorkspaceId'> & { hostId
 type HostedChatTab = ChatTab & Pick<Tab, 'worktreeId' | 'executionHostId'>
 
 /** The dedicated home workspace and owning host identify its chats, never their names or order. */
-export function isLocalBotChatTab(tab: HostedChatTab, bot: HostedBotHome | null): boolean {
+export function isHostedBotChatTab(tab: HostedChatTab, bot: HostedBotHome | null): boolean {
   return (
-    bot?.hostId === LOCAL_EXECUTION_HOST_ID &&
-    tab.executionHostId === LOCAL_EXECUTION_HOST_ID &&
+    bot !== null &&
+    tab.executionHostId === bot.hostId &&
     tab.worktreeId === folderWorkspaceKey(bot.folderWorkspaceId) &&
     tab.contentType === 'agent-session'
   )
 }
 
+export function isLocalBotChatTab(tab: HostedChatTab, bot: HostedBotHome | null): boolean {
+  return bot?.hostId === LOCAL_EXECUTION_HOST_ID && isHostedBotChatTab(tab, bot)
+}
+
 export function isBotSideChatTab(tab: HostedChatTab, bot: HostedBotHome | null): boolean {
-  return bot?.chatSessionId != null && isLocalBotChatTab(tab, bot) && !isBotHomeTab(tab, bot)
+  return bot?.chatSessionId != null && isHostedBotChatTab(tab, bot) && !isBotHomeTab(tab, bot)
 }
 
 /** Publication precedes age: a preview cannot displace the oldest ready Home. */

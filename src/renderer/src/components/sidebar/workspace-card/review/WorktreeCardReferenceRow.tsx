@@ -26,7 +26,7 @@ const PROVIDER_MARKS: Partial<
   Jira: JiraIcon
 }
 
-const STALE_SHIMMER = 'shimmer shimmer-duration-2400 shimmer-held'
+const STALE_SHIMMER = 'shimmer shimmer-duration-2400 shimmer-steps-30'
 
 function StateGlyph({
   label,

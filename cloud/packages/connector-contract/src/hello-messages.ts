@@ -190,6 +190,9 @@ export const CONNECTOR_CLOUD_LONG_ANSWERS_FEATURE = 'answers.long'
 // The cloud takes a post's `postAt` and has the source post it then. Kept out of
 // CONNECTOR_CLOUD_FEATURES: only the code that schedules lists it.
 export const CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE = 'post.schedule'
+// The cloud takes the verbs for Slack's own surfaces (pin, canvas, list, scheduled). Kept out of
+// CONNECTOR_CLOUD_FEATURES, as post.schedule is.
+export const CONNECTOR_CLOUD_SLACK_TOOLS_FEATURE = 'slack.tools'
 // The cloud takes the `activity` event and shows it on a working thread. Kept out of
 // CONNECTOR_CLOUD_FEATURES, as prompts.audience is: only the code that reads the event lists it.
 export const CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE = 'turn.activity'

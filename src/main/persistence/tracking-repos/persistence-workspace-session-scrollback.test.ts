@@ -66,7 +66,7 @@ describe('Store', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('stores terminal scrollback snapshots beside explicit profile data files', async () => {
+  it('stores scrollback with its profile and reads older snapshots from the legacy directory', async () => {
     const profileDataDirectory = join(testState.dir, 'profiles', 'local-default')
     const profileDataFile = join(profileDataDirectory, 'orca-data.json')
     mkdirSync(profileDataDirectory, { recursive: true })
@@ -87,25 +87,18 @@ describe('Store', () => {
       store.getWorkspaceSession().terminalLayoutsByTabId['remote-tab'].scrollbackRefsByLeafId?.[
         TEST_LEAF_2
       ]
-    expect(ref).toEqual(expect.stringMatching(/^v1-[0-9a-f]{32}$/))
+    if (!ref) {
+      throw new Error('Expected a scrollback snapshot reference')
+    }
     expect(existsSync(join(profileDataDirectory, 'terminal-scrollback', `${ref}.bin`))).toBe(true)
     expect(existsSync(join(testState.dir, 'terminal-scrollback', `${ref}.bin`))).toBe(false)
-  })
+    expect(await store.readTerminalScrollbackSnapshotAsync(ref)).toBe('remote-scrollback')
 
-  it('reads legacy terminal scrollback snapshots for explicit profile data files', async () => {
-    const profileDataDirectory = join(testState.dir, 'profiles', 'local-default')
-    const profileDataFile = join(profileDataDirectory, 'orca-data.json')
-    const ref = 'v1-11111111111111111111111111111111'
+    const legacyRef = 'v1-11111111111111111111111111111111'
     const legacySnapshotDir = join(testState.dir, 'terminal-scrollback')
-    mkdirSync(profileDataDirectory, { recursive: true })
     mkdirSync(legacySnapshotDir, { recursive: true })
-    writeFileSync(join(legacySnapshotDir, `${ref}.bin`), 'legacy-scrollback', 'utf-8')
+    writeFileSync(join(legacySnapshotDir, `${legacyRef}.bin`), 'legacy-scrollback', 'utf-8')
 
-    // Legacy snapshot paths resolve through AppEnvironment; use this fixture’s userData.
-    installFakeAppEnvironment({ getPath: () => testState.dir })
-    initDataPath()
-    const store = createSqliteTestStore(Store, { dataFile: profileDataFile })
-
-    expect(await store.readTerminalScrollbackSnapshotAsync(ref)).toBe('legacy-scrollback')
+    expect(await store.readTerminalScrollbackSnapshotAsync(legacyRef)).toBe('legacy-scrollback')
   })
 })

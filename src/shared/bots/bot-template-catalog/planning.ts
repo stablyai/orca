@@ -10,7 +10,7 @@ export const BOT_TEMPLATES_PLANNING: readonly BotTemplate[] = [
       'Writes what changed, what’s blocked and what needs a decision for the projects you pick.',
     mascot: 'G1',
     watches: 'Linear projects and GitHub repos',
-    does: 'Write what changed, what’s blocked and what needs a decision.',
+    does: 'Writes what changed, what’s blocked and what needs a decision.',
     reports: 'Here, Fridays at 3 PM',
     connectors: ['github', 'linear'],
     schedules: [
@@ -39,7 +39,7 @@ export const BOT_TEMPLATES_PLANNING: readonly BotTemplate[] = [
       'Reads last week’s merged pull requests and lists docs pages that now say something wrong.',
     mascot: 'L2',
     watches: 'Merged pull requests and the docs in the repos you pick',
-    does: 'List docs pages that no longer match what merged, with the line that is now wrong.',
+    does: 'Lists docs pages that no longer match what merged, with the line that is now wrong.',
     reports: 'Here, Wednesdays at 10 AM',
     connectors: ['github'],
     schedules: [
@@ -68,7 +68,7 @@ export const BOT_TEMPLATES_PLANNING: readonly BotTemplate[] = [
       'Give it a Slack thread or a doc. It drafts a one-page spec and asks about anything left open.',
     mascot: 'T1',
     watches: 'Slack threads and docs you hand it',
-    does: 'Draft a one-page spec: problem, decision, scope, open questions.',
+    does: 'Drafts a one-page spec: problem, decision, scope, open questions.',
     reports: 'Here, when you ask',
     connectors: ['slack', 'google'],
     schedules: [],
@@ -88,7 +88,7 @@ export const BOT_TEMPLATES_PLANNING: readonly BotTemplate[] = [
       'Lists issues untouched for 60 days, likely duplicates and issues with no owner, for a team you pick.',
     mascot: 'P3',
     watches: 'Linear issues for the team you pick',
-    does: 'List stale issues, likely duplicates and issues with no owner.',
+    does: 'Lists stale issues, likely duplicates and issues with no owner.',
     reports: 'Here, on the 1st of each month',
     connectors: ['linear'],
     schedules: [

@@ -12,19 +12,18 @@ import {
   type GoogleSetupCard,
   type GoogleSetupRun
 } from '../../../../../../shared/google/google-setup-run'
+import type { GoogleServiceChoice } from '../../../../../../shared/google/google-scopes'
 import {
-  googleChoices,
-  GOOGLE_SERVICE_CHOICES,
-  type GoogleServiceChoice
-} from '../../../../../../shared/google/google-scopes'
+  googleSetupAnsweredServices,
+  googleSetupChoiceChangeable
+} from '../../../../../../shared/google/google-setup-card-view'
 import { importGoogleApp } from '../google-connect-client'
 import { GoogleServicePicker } from '../GoogleServicePicker'
 import { useGoogleClientFile } from '../use-google-client-file'
 import {
   GoogleSetupCardFrame,
   GoogleSetupChoiceRow,
-  GoogleSetupReceipt,
-  googleSetupChoiceChangeable
+  GoogleSetupReceipt
 } from './GoogleSetupCardParts'
 import {
   googleSetupPathNote,
@@ -207,14 +206,6 @@ export function GoogleSetupAccountCard({
   )
 }
 
-function answeredServices(run: GoogleSetupRun): GoogleServiceChoice[] | null {
-  const values = run.answers.services?.values
-  if (!values) {
-    return null
-  }
-  return googleChoices(GOOGLE_SERVICE_CHOICES.filter((choice) => values.includes(choice)))
-}
-
 export function GoogleSetupServicesCard({
   bot,
   run
@@ -224,7 +215,7 @@ export function GoogleSetupServicesCard({
 }): React.JSX.Element {
   const t = useTranslate()
   const { reopened, reopen, busy, answer } = useAnswer(bot, 'services')
-  const answered = answeredServices(run)
+  const answered = googleSetupAnsweredServices(run)
   const locked = answered !== null && !reopened
   const [picked, setPicked] = useState<GoogleServiceChoice[]>(answered ?? ['gmail'])
   const shown = locked && answered ? answered : picked

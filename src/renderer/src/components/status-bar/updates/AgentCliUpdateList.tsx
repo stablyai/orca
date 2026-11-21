@@ -25,7 +25,7 @@ export type AgentCliUpdateRow = {
 
 export type AgentCliUpdateGroup = {
   hostKey: string
-  /** Null when every row is on this computer, so no host heading is needed. */
+  /** Null when every row is on this computer and no other host is added, so no host heading is needed. */
   label: string | null
   rows: readonly AgentCliUpdateRow[]
 }
@@ -59,7 +59,7 @@ function AgentCliUpdateListRow({
   const { update, run } = row
   const manual = update && !update.runnable ? update.command : null
   const copyCommand = (command: string) =>
-    void navigator.clipboard.writeText(command).then(
+    void window.api.ui.writeClipboardText(command).then(
       () => toast.success(t('agentCliUpdate.commandCopied', 'Command copied')),
       () => toast.error(t('agentCliUpdate.commandNotCopied', 'Could not copy the command'))
     )

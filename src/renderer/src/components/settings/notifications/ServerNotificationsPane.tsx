@@ -3,10 +3,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import type { HostNotificationSettings } from '../../../../../shared/notifications/notification-settings-types'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
-import {
-  useServerSettingValue,
-  type HostSettingsReply
-} from '../host-scope/use-host-boolean-setting'
+import { useServerSettingValue, type HostSettingsReply } from '../host-scope/use-host-setting'
 import { NotificationSettingToggle } from './NotificationSettingToggle'
 
 function readHostNotificationSettings(

@@ -1,4 +1,5 @@
 import '../dispatch/testing/unused-default-rpc-methods.test-fixture'
+import { hostname } from 'node:os'
 import { describe, expect, it, vi } from 'vitest'
 import { BOTS_DISABLED_CODE, BotsDisabledError } from '../../../../shared/bots-switch'
 import { RpcDispatcher } from '../dispatcher'
@@ -65,12 +66,13 @@ describe('bots RPC methods with bots turned off', () => {
       create: vi.fn(),
       listing: vi.fn(() => ({ bots: [], botsEnabled: false, hideBotCreatedWorkspaces: true }))
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these methods read only runtime.bots, its webhooks, its connector cloud and the runtime id, which the stub provides.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these methods read only runtime.bots, its webhooks, its connector cloud, whether it has a window and the runtime id, which the stub provides.
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getWebhooks: () => null,
       getUIState: () => ({}),
       getConnectorCloud: () => null,
+      servesWithoutWindow: () => false,
       bots
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: BOT_METHODS })
@@ -235,12 +237,13 @@ describe('bots.list', () => {
   it("carries each bot's waits still waiting, for its sidebar row", async () => {
     const bot = makeTestBot()
     const wait = { id: 'w1', name: "Nora's reply", once: { by: 5000 }, bot: { botId: bot.id } }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: bots.list reads only runtime.bots, its webhooks, its connector cloud, its automations and its item counts, which the stub provides.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: bots.list reads only runtime.bots, its webhooks, its connector cloud, whether it has a window, its automations and its item counts, which the stub provides.
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getWebhooks: () => null,
       getUIState: () => ({}),
       getConnectorCloud: () => null,
+      servesWithoutWindow: () => false,
       bots: {
         listing: () => ({ bots: [bot], botsEnabled: true, hideBotCreatedWorkspaces: true })
       },
@@ -255,6 +258,29 @@ describe('bots.list', () => {
       result: { waits: { [bot.id]: [{ label: "Nora's reply", by: 5000 }] } }
     })
   })
+
+  it.each<[boolean, string | null]>([
+    [true, hostname().slice(0, 256)],
+    [false, null]
+  ])(
+    'names a headless server for its signed-out copy, and says null with a window (headless %s)',
+    async (headless, signInServer) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: bots.list reads only runtime.bots, its webhooks, its connector cloud, whether it has a window and its UI state, which the stub provides.
+      const runtime = {
+        getRuntimeId: () => 'test-runtime',
+        getWebhooks: () => null,
+        getUIState: () => ({}),
+        getConnectorCloud: () => null,
+        servesWithoutWindow: () => headless,
+        bots: { listing: () => ({ bots: [], botsEnabled: true, hideBotCreatedWorkspaces: true }) }
+      } as unknown as OrcaRuntimeService
+      const answer = await new RpcDispatcher({ runtime, methods: BOT_METHODS }).dispatch(
+        request('bots.list')
+      )
+      expect(answer).toMatchObject({ ok: true })
+      expect(answer).toHaveProperty('result.signInServer', signInServer)
+    }
+  )
 })
 
 describe('bots.session.start', () => {
