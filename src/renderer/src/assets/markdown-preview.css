@@ -447,7 +447,48 @@
   box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 12%, transparent);
 }
 
+/* Why last cell: a row can only hold cells, so its add button rides in the gutter beside the table. */
+.markdown-annotation-row > :last-child {
+  position: relative;
+}
+
+.markdown-annotation-row > :last-child > .markdown-annotation-add {
+  position: absolute;
+  top: 50%;
+  right: -27px;
+  left: auto;
+  transform: translateY(-50%);
+}
+
+.markdown-annotation-row:hover > :last-child > .markdown-annotation-add,
+.markdown-annotation-row:focus-within > :last-child > .markdown-annotation-add {
+  opacity: 1;
+}
+
+.markdown-annotation-row.has-review-notes {
+  cursor: pointer;
+}
+
+.markdown-annotation-row.has-review-notes > td {
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--ring) 35%, transparent);
+}
+
+.markdown-body .markdown-annotation-row-notes > td {
+  padding: 8px;
+  background: transparent;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.markdown-annotation-row-thread {
+  max-width: min(100%, 480px);
+}
+
 @container (max-width: 760px) {
+  .markdown-annotation-row > :last-child > .markdown-annotation-add {
+    right: 4px;
+  }
+
   .markdown-annotation-block,
   .markdown-annotation-list-block {
     display: block;
@@ -853,12 +894,22 @@
   background: rgba(0, 0, 0, 0.04);
 }
 
-.markdown-dark .markdown-body tr:nth-child(even):not([data-preview-table-row-even='false']) td,
+.markdown-dark
+  .markdown-body
+  tr:nth-child(even of :not(.markdown-annotation-row-notes)):not(
+    [data-preview-table-row-even='false']
+  )
+  td,
 .markdown-dark .markdown-body tr[data-preview-table-row-even='true'] td {
   background: rgba(255, 255, 255, 0.02);
 }
 
-.markdown-light .markdown-body tr:nth-child(even):not([data-preview-table-row-even='false']) td,
+.markdown-light
+  .markdown-body
+  tr:nth-child(even of :not(.markdown-annotation-row-notes)):not(
+    [data-preview-table-row-even='false']
+  )
+  td,
 .markdown-light .markdown-body tr[data-preview-table-row-even='true'] td {
   background: rgba(0, 0, 0, 0.015);
 }

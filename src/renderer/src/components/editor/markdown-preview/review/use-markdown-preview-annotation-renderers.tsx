@@ -1,5 +1,5 @@
 import { diffCommentOwnerKey } from '@/store/slices/diff-comments/diff-comment-owner'
-import { cloneElement, isValidElement, useCallback, useMemo } from 'react'
+import { Children, cloneElement, isValidElement, useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { Check, Copy, Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
@@ -16,7 +16,9 @@ import {
 } from './MarkdownPreviewAnnotationComposer'
 import {
   getMarkdownPreviewAnnotationQuote,
-  getMarkdownPreviewBlockRange
+  getMarkdownPreviewBlockRange,
+  getMarkdownPreviewTableBodyRowRanges,
+  isMarkdownPreviewTableBodyRow
 } from './markdown-preview-block-model'
 import type {
   MarkdownPreviewBlockRange,
@@ -59,12 +61,12 @@ export function useMarkdownPreviewAnnotationRenderers({
     handleCopyMarkdownReviewNote
   } = reviewActions
 
-  const renderAnnotationControls = useCallback(
+  const renderAnnotationParts = useCallback(
     (
       range: MarkdownPreviewBlockRange,
       blockKey: string,
       annotationQuote?: string
-    ): React.ReactNode => {
+    ): { addButton: React.ReactNode; thread: React.ReactNode; hasThread: boolean } | null => {
       if (!commentOwner || !sourceWorktree || sourceRelativePath === null) {
         return null
       }
@@ -99,12 +101,14 @@ export function useMarkdownPreviewAnnotationRenderers({
         return false
       }
 
-      return (
-        // Mark transient review controls for both PDF scrubbing and export CSS because they render inside the document subtree.
-        <div className="markdown-annotation-controls" data-orca-export-hide="true">
+      const isComposerOpen = activeAnnotationBlockKey === blockKey
+      return {
+        hasThread: isComposerOpen || commentsForBlock.length > 0,
+        addButton: (
           <button
             type="button"
             className="markdown-annotation-add"
+            data-orca-export-hide="true"
             aria-label={translate('auto.components.editor.MarkdownPreview.13f94d760c', 'Add note')}
             title={translate('auto.components.editor.MarkdownPreview.13f94d760c', 'Add note')}
             onClick={(event) => {
@@ -115,101 +119,105 @@ export function useMarkdownPreviewAnnotationRenderers({
           >
             <Plus className="size-3" />
           </button>
-          {activeAnnotationBlockKey === blockKey ? (
-            <MarkdownPreviewAnnotationComposer
-              key={diffCommentOwnerKey(commentOwner)}
-              lineNumber={range.endLine}
-              startLine={range.startLine === range.endLine ? undefined : range.startLine}
-              onCancel={() => setActiveAnnotationBlockKey(null)}
-              onSubmit={handleSubmit}
-            />
-          ) : null}
-          <div className="markdown-annotation-note-stack">
-            {commentsForBlock.map((comment) => (
-              <div
-                key={`${diffCommentOwnerKey(commentOwner)}:${comment.id}`}
-                data-markdown-review-note-id={comment.id}
-                className={`markdown-annotation-card ${
-                  activeReviewCommentId === comment.id ? 'is-active' : ''
-                } ${attentionReviewCommentId === comment.id ? 'is-attention' : ''}`.trim()}
-              >
-                <DiffCommentCard
-                  lineNumber={comment.lineNumber}
-                  startLine={comment.startLine}
-                  label={null}
-                  quote={
-                    formatMarkdownReviewCardQuote(comment.selectedText) ??
-                    annotationQuote ??
-                    getMarkdownReviewCardQuote(content, comment)
-                  }
-                  body={comment.body}
-                  sentAt={comment.sentAt}
-                  onDelete={() =>
-                    void (commentOwner && deleteDiffComment(commentOwner, comment.id))
-                  }
-                  onSubmitEdit={(body) =>
-                    commentOwner
-                      ? updateDiffComment(commentOwner, comment.id, body)
-                      : Promise.resolve(false)
-                  }
-                  headerActions={
-                    <>
-                      <button
-                        type="button"
-                        className="orca-diff-comment-pill-btn"
-                        title={
-                          copiedReviewNoteId === comment.id
-                            ? translate(
-                                'auto.components.editor.MarkdownPreview.94b520a96a',
-                                'Copied note'
-                              )
-                            : translate(
-                                'auto.components.editor.MarkdownPreview.f961e94057',
-                                'Copy note for agent'
-                              )
-                        }
-                        aria-label={
-                          copiedReviewNoteId === comment.id
-                            ? translate(
-                                'auto.components.editor.MarkdownPreview.94b520a96a',
-                                'Copied note'
-                              )
-                            : translate(
-                                'auto.components.editor.MarkdownPreview.f961e94057',
-                                'Copy note for agent'
-                              )
-                        }
-                        onClick={(event) => {
-                          event.preventDefault()
-                          event.stopPropagation()
-                          void handleCopyMarkdownReviewNote(comment as MarkdownReviewNote)
-                        }}
-                      >
-                        {copiedReviewNoteId === comment.id ? (
-                          <Check className="size-3" />
-                        ) : (
-                          <Copy className="size-3" />
-                        )}
-                      </button>
-                      <MarkdownPreviewSingleNoteSendMenu
-                        owner={commentOwner}
-                        worktreeId={sourceWorktree.id}
-                        filePath={filePath}
-                        content={renderedContent}
-                        note={comment as MarkdownReviewNote}
-                        modeSlot="preview-inline"
-                        onDelivered={(notes) =>
-                          void (commentOwner && clearDeliveredDiffComments(commentOwner, notes))
-                        }
-                      />
-                    </>
-                  }
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      )
+        ),
+        thread: (
+          <>
+            {isComposerOpen ? (
+              <MarkdownPreviewAnnotationComposer
+                key={diffCommentOwnerKey(commentOwner)}
+                lineNumber={range.endLine}
+                startLine={range.startLine === range.endLine ? undefined : range.startLine}
+                onCancel={() => setActiveAnnotationBlockKey(null)}
+                onSubmit={handleSubmit}
+              />
+            ) : null}
+            <div className="markdown-annotation-note-stack">
+              {commentsForBlock.map((comment) => (
+                <div
+                  key={`${diffCommentOwnerKey(commentOwner)}:${comment.id}`}
+                  data-markdown-review-note-id={comment.id}
+                  className={`markdown-annotation-card ${
+                    activeReviewCommentId === comment.id ? 'is-active' : ''
+                  } ${attentionReviewCommentId === comment.id ? 'is-attention' : ''}`.trim()}
+                >
+                  <DiffCommentCard
+                    lineNumber={comment.lineNumber}
+                    startLine={comment.startLine}
+                    label={null}
+                    quote={
+                      formatMarkdownReviewCardQuote(comment.selectedText) ??
+                      annotationQuote ??
+                      getMarkdownReviewCardQuote(content, comment)
+                    }
+                    body={comment.body}
+                    sentAt={comment.sentAt}
+                    onDelete={() =>
+                      void (commentOwner && deleteDiffComment(commentOwner, comment.id))
+                    }
+                    onSubmitEdit={(body) =>
+                      commentOwner
+                        ? updateDiffComment(commentOwner, comment.id, body)
+                        : Promise.resolve(false)
+                    }
+                    headerActions={
+                      <>
+                        <button
+                          type="button"
+                          className="orca-diff-comment-pill-btn"
+                          title={
+                            copiedReviewNoteId === comment.id
+                              ? translate(
+                                  'auto.components.editor.MarkdownPreview.94b520a96a',
+                                  'Copied note'
+                                )
+                              : translate(
+                                  'auto.components.editor.MarkdownPreview.f961e94057',
+                                  'Copy note for agent'
+                                )
+                          }
+                          aria-label={
+                            copiedReviewNoteId === comment.id
+                              ? translate(
+                                  'auto.components.editor.MarkdownPreview.94b520a96a',
+                                  'Copied note'
+                                )
+                              : translate(
+                                  'auto.components.editor.MarkdownPreview.f961e94057',
+                                  'Copy note for agent'
+                                )
+                          }
+                          onClick={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            void handleCopyMarkdownReviewNote(comment as MarkdownReviewNote)
+                          }}
+                        >
+                          {copiedReviewNoteId === comment.id ? (
+                            <Check className="size-3" />
+                          ) : (
+                            <Copy className="size-3" />
+                          )}
+                        </button>
+                        <MarkdownPreviewSingleNoteSendMenu
+                          owner={commentOwner}
+                          worktreeId={sourceWorktree.id}
+                          filePath={filePath}
+                          content={renderedContent}
+                          note={comment as MarkdownReviewNote}
+                          modeSlot="preview-inline"
+                          onDelivered={(notes) =>
+                            void (commentOwner && clearDeliveredDiffComments(commentOwner, notes))
+                          }
+                        />
+                      </>
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+          </>
+        )
+      }
     },
     [
       activeAnnotationBlockKey,
@@ -233,16 +241,38 @@ export function useMarkdownPreviewAnnotationRenderers({
     ]
   )
 
+  const renderAnnotationControls = useCallback(
+    (
+      range: MarkdownPreviewBlockRange,
+      blockKey: string,
+      annotationQuote?: string
+    ): React.ReactNode => {
+      const parts = renderAnnotationParts(range, blockKey, annotationQuote)
+      return parts ? (
+        // Mark transient review controls for both PDF scrubbing and export CSS because they render inside the document subtree.
+        <div className="markdown-annotation-controls" data-orca-export-hide="true">
+          {parts.addButton}
+          {parts.thread}
+        </div>
+      ) : null
+    },
+    [renderAnnotationParts]
+  )
+
   const wrapAnnotatedBlock = useCallback(
     (
       tagName: string,
       node: MarkdownPreviewPositionNode | undefined,
       rendered: React.ReactNode
     ): React.ReactNode => {
-      const range = getMarkdownPreviewBlockRange(node)
-      if (!range) {
+      const blockRange = getMarkdownPreviewBlockRange(node)
+      if (!blockRange) {
         return rendered
       }
+      const range =
+        tagName === 'table'
+          ? { ...blockRange, nestedRanges: getMarkdownPreviewTableBodyRowRanges(node) }
+          : blockRange
       const blockKey = `${tagName}:${range.startLine}-${range.endLine}`
       const controls = renderAnnotationControls(
         range,
@@ -276,9 +306,74 @@ export function useMarkdownPreviewAnnotationRenderers({
     [getMarkdownCommentsForRange, handleAnnotatedMarkdownBlockClick, renderAnnotationControls]
   )
 
+  const renderAnnotatedTableRow = useCallback(
+    (
+      node: MarkdownPreviewPositionNode | undefined,
+      props: React.ComponentProps<'tr'>,
+      children: React.ReactNode
+    ): React.ReactNode => {
+      const rowRange = isMarkdownPreviewTableBodyRow(node)
+        ? getMarkdownPreviewBlockRange(node)
+        : null
+      if (!rowRange) {
+        return <tr {...props}>{children}</tr>
+      }
+      const range = { ...rowRange, containedNotesOnly: true }
+      const blockKey = `tr:${range.startLine}-${range.endLine}`
+      const parts = renderAnnotationParts(
+        range,
+        blockKey,
+        getMarkdownPreviewAnnotationQuote(children)
+      )
+      if (!parts) {
+        return (
+          <tr {...props} data-source-line={range.startLine} data-source-end-line={range.endLine}>
+            {children}
+          </tr>
+        )
+      }
+      const cells = Children.toArray(children)
+      const lastCellIndex = cells.findLastIndex((cell) => isValidElement(cell))
+      const hasReviewNotes = getMarkdownCommentsForRange(range).length > 0
+      return (
+        <>
+          <tr
+            {...props}
+            className={[
+              props.className,
+              'markdown-annotation-row',
+              hasReviewNotes ? 'has-review-notes' : ''
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            data-source-line={range.startLine}
+            data-source-end-line={range.endLine}
+            data-annotation-block-key={blockKey}
+            onClick={(event) => handleAnnotatedMarkdownBlockClick(range, event)}
+          >
+            {cells.map((cell, index) =>
+              index === lastCellIndex && isValidElement<{ children?: React.ReactNode }>(cell)
+                ? cloneElement(cell, undefined, cell.props.children, parts.addButton)
+                : cell
+            )}
+          </tr>
+          {parts.hasThread ? (
+            <tr className="markdown-annotation-row-notes" data-orca-export-hide="true">
+              <td colSpan={cells.filter((cell) => isValidElement(cell)).length}>
+                <div className="markdown-annotation-row-thread">{parts.thread}</div>
+              </td>
+            </tr>
+          ) : null}
+        </>
+      )
+    },
+    [getMarkdownCommentsForRange, handleAnnotatedMarkdownBlockClick, renderAnnotationParts]
+  )
+
   return useMemo(
     () => ({
       renderAnnotationControls,
+      renderAnnotatedTableRow,
       wrapAnnotatedBlock,
       getMarkdownCommentsForRange,
       handleAnnotatedMarkdownBlockClick
@@ -287,6 +382,7 @@ export function useMarkdownPreviewAnnotationRenderers({
       getMarkdownCommentsForRange,
       handleAnnotatedMarkdownBlockClick,
       renderAnnotationControls,
+      renderAnnotatedTableRow,
       wrapAnnotatedBlock
     ]
   )
