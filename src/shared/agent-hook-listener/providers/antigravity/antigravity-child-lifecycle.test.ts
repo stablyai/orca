@@ -527,6 +527,40 @@ it.each([
   }
 )
 
+it('holds an old first-delivered phase without replacing a newer question and settles its matching result', async () => {
+  const failure =
+    'Encountered error in step execution: subagent "x" not found or not allowed to be invoked'
+  for (let step = 10; step <= 266; step++) {
+    spawn(undefined, step)
+    launchResult(step, failure, 'ERROR')
+  }
+  expect((await poll())?.payload.antigravitySpawnPending).toBeUndefined()
+
+  hook('root', 'PreInvocation', { prompt: 'Current task', modelName: 'model-b' })
+  hook('root', 'PreToolUse', {
+    stepIdx: 270,
+    toolCall: { id: 'question-270', name: 'ask_question', args: { question: 'Continue?' } }
+  })
+  const waiting = {
+    state: 'waiting',
+    toolName: 'ask_question',
+    toolInput: 'Continue?',
+    prompt: 'Current task',
+    model: 'model-b'
+  }
+  const oldLaunch = { ...launch(5), prompt: 'Earlier task', modelName: 'model-a' }
+  expect(hook('root', 'PreToolUse', oldLaunch)?.payload).toMatchObject({
+    ...waiting,
+    antigravitySpawnPending: true
+  })
+  expect(hook('root', 'PostToolUse', oldLaunch)).toBeNull()
+  launchResult(6, failure, 'ERROR')
+  expect((await poll())?.payload.antigravitySpawnPending).toBe(true)
+  launchResult(5, failure, 'ERROR')
+  expect((await poll())?.payload).toMatchObject(waiting)
+  expect(row.payload.antigravitySpawnPending).toBeUndefined()
+})
+
 it('counts only a swarm add as a spawn that holds the parent', async () => {
   transcript('child')
   descriptor('child')

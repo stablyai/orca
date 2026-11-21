@@ -135,7 +135,7 @@ export function normalizeProviderEvent(input: {
           ) ||
           ''
       }
-      payload = normalizeAntigravityEvent(
+      const event = normalizeAntigravityEvent(
         state,
         eventName,
         promptText,
@@ -143,9 +143,15 @@ export function normalizeProviderEvent(input: {
         hookPayload,
         input.antigravityOrigin ?? 'unknown'
       )
-      if (childHook) {
-        resolvedEventName =
-          payload?.state === 'done' && payload.mainAgent?.state === 'done' ? 'Stop' : undefined
+      if (event && 'liveness' in event) {
+        payload = event.liveness
+        resolvedEventName = undefined
+      } else {
+        payload = event
+        if (childHook) {
+          resolvedEventName =
+            payload?.state === 'done' && payload.mainAgent?.state === 'done' ? 'Stop' : undefined
+        }
       }
       break
     }

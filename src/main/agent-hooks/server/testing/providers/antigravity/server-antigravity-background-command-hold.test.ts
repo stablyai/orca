@@ -487,6 +487,46 @@ it('holds an unreadable root launch past the discovery lease and clears it on pr
   expect(server.getStatusSnapshot()).toHaveLength(0)
 })
 
+it('holds a delayed original Post after launch history overflows until the root process exits', async () => {
+  fakeTranscriptClock()
+  const transcriptPath = brainWithChildDescriptor([])
+  const root = { transcriptPath }
+  const steps = Array.from({ length: 257 }, (_, index) => index + 2)
+  await agyHook('PreInvocation', root)
+  for (const step of steps) {
+    await agyHook('PreToolUse', { ...root, ...invoke(step) })
+  }
+  const results = steps.map((step) =>
+    JSON.stringify({
+      step_index: step,
+      type: 'GENERIC',
+      source: 'MODEL',
+      status: 'ERROR',
+      content:
+        'Encountered error in step execution: subagent "x" not found or not allowed to be invoked'
+    })
+  )
+  appendFileSync(transcriptPath, `${results.join('\n')}\n`)
+  await waitForSettledRoster([])
+  await agyHook('Stop', { ...root, fullyIdle: true })
+  expect(state()).toBe('done')
+
+  await agyHook('PostToolUse', { ...root, ...invoke(2) })
+  expect(server.getStatusSnapshot()[0]).toMatchObject({
+    state: 'working',
+    antigravitySpawnPending: true
+  })
+  await agyHook('Stop', { ...root, fullyIdle: true })
+  programDone()
+  await vi.advanceTimersByTimeAsync(AGENT_STATUS_STALE_AFTER_MS + 60000)
+  expect(server.getStatusSnapshot()[0]).toMatchObject({
+    state: 'working',
+    antigravitySpawnPending: true
+  })
+  server.reconcileEndedProcessForPaneKeys([PANE], { confirmedExit: true })
+  expect(server.getStatusSnapshot()).toHaveLength(0)
+}, 10000)
+
 it('honors a replayed drain without the earlier roster and discards its completion on a newer turn', async () => {
   const connectionId = 'ssh-agy'
   vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })

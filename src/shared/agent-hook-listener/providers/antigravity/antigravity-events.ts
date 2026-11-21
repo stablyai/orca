@@ -86,7 +86,7 @@ export function normalizeAntigravityEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>,
   origin: AntigravityTranscriptOrigin
-): ParsedAgentStatusPayload | null {
+): ParsedAgentStatusPayload | { liveness: ParsedAgentStatusPayload } | null {
   if (!isRecognizedAntigravityEvent(eventName)) {
     return null
   }
@@ -187,6 +187,10 @@ export function normalizeAntigravityEvent(
     )
     if (disposition === 'stale') {
       return null
+    }
+    if (disposition === 'hold') {
+      const payload = buildAntigravityFoldedStatusPayload(state, paneKey, paneState, now)
+      return payload ? { liveness: payload } : null
     }
   } else {
     paneState.currentLaunch = undefined

@@ -45,6 +45,8 @@ export type AntigravityPaneChildState = {
   settledLaunches: Map<number, AntigravityLaunch>
   launchStepsByCall: Map<string, number>
   currentLaunch?: AntigravityLaunch
+  highestEvictedLaunchStep?: number
+  pendingOlderLaunchStep?: number
   expectedChildren: Set<string>
   helpersIdleAt?: number
   /** The relay dropped this pane's roster to fit a frame, so its children are unknown, not gone. */
