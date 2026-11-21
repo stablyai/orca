@@ -31,6 +31,19 @@ vi.mock('../components/bottom-drawer/BottomDrawer', () => ({ BottomDrawer: () =>
 vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
 vi.mock('../platform/media-picking/media-picker', () => ({ useMediaPicker: () => ({}) }))
 vi.mock('./MobileBotAvatar', () => ({ MobileBotAvatar: () => null }))
+vi.mock('./soul-memory/MobileBotSoulAndMemory', () => ({
+  MobileBotSoulPage: () => null,
+  MobileBotMemoryPage: () => null
+}))
+vi.mock('./soul-memory/use-bot-home-files', () => ({
+  useBotMemoryTopicNames: () => null,
+  botMemoryTopicCount: () => 0
+}))
+vi.mock('./skills/MobileBotSkills', () => ({
+  useBotSkillScan: () => null,
+  botSkillSourceCount: () => null,
+  MobileBotSkillsPage: () => null
+}))
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0 })
 }))

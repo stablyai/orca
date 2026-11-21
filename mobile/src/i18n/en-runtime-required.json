@@ -203,13 +203,23 @@
         "moveFailed_other": "Couldn’t move {{count}} items: {{why}}"
       }
     },
+    "memory": {
+      "topicLines_one": "{{count}} line",
+      "topicLines_other": "{{count}} lines"
+    },
     "panel": {
       "needYou_one": "{{count}} needs you",
       "needYou_other": "{{count}} need you"
     },
     "settings": {
+      "memoryFiles_one": "{{count}} file",
+      "memoryFiles_other": "{{count}} files",
       "requests_one": "{{count}} request",
       "requests_other": "{{count}} requests"
+    },
+    "skills": {
+      "count_one": "{{count}} skill",
+      "count_other": "{{count}} skills"
     },
     "upNext": {
       "showMore_one": "Show {{count}} more",

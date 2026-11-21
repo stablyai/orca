@@ -204,7 +204,14 @@
       },
       "addConnector": "Add a connector",
       "connectors": "Connectors",
-      "retry": "Retry"
+      "retry": "Retry",
+      "memoryHistory": {
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "undoAction": "Undo",
+        "nothingToUndo": "Nothing left to undo: those lines changed since.",
+        "empty": "No changes yet."
+      }
     },
     "sharedLinks": {
       "title": "Shared links",
@@ -5436,7 +5443,11 @@
       "signInChanged": "Orca sign-in changed",
       "whoCanAskName": "Who can ask {{name}}",
       "you": "You",
-      "owner": "Owner"
+      "owner": "Owner",
+      "soulAndMemory": "Soul and memory",
+      "memoryFiles_one": "{{count}} file",
+      "memoryFiles_other": "{{count}} files",
+      "none": "None"
     },
     "saveFailed": "Couldn’t save",
     "sheet": {
@@ -6661,6 +6672,57 @@
     },
     "settingsPage": {
       "off": "Off"
+    },
+    "memory": {
+      "source": "From {{source}}",
+      "title": "Memory",
+      "cancel": "Cancel",
+      "save": "Save",
+      "fact": "Memory",
+      "topicLines_one": "{{count}} line",
+      "topicLines_other": "{{count}} lines",
+      "topicFiles": "Topic files",
+      "add": "Add memory",
+      "addPlaceholder": "Remember something new…",
+      "lines": "{{count}} / {{cap}} lines",
+      "empty": "No facts saved yet.",
+      "edit": "Edit",
+      "forget": "Forget",
+      "tabFacts": "What it knows",
+      "tabHistory": "History"
+    },
+    "homeFile": {
+      "offline": "{{file}} opens once {{host}} is back.",
+      "retry": "Retry",
+      "reading": "Reading {{file}}…"
+    },
+    "soul": {
+      "title": "Soul",
+      "stats": "{{lines}} lines · {{words}} words",
+      "empty": "No instructions yet.",
+      "changeInChat": "Change in chat",
+      "changeDraft": "Change your SOUL.md so that "
+    },
+    "skills": {
+      "count_one": "{{count}} skill",
+      "count_other": "{{count}} skills",
+      "showMore": "Show {{count}} more",
+      "remote": "On another host. {{bot}} runs on {{host}}, so it can’t load these yet.",
+      "missing": "This project is no longer in Orca.",
+      "none": "No skills in this project yet",
+      "own": "{{bot}}’s own skills",
+      "title": "Skills",
+      "listedTitle": "{{agent}} can’t load these skills directly.",
+      "listedBody": "{{bot}} gets a list of them in its instructions and reads one when it fits. They won’t appear in its / menu.",
+      "reading": "Reading its skills…",
+      "nextChat": "Skills load in {{bot}}’s next chat.",
+      "ownNone": "No skills of its own yet.",
+      "link": "Link a project",
+      "notYet": "Not available yet",
+      "noneShort": "No skills",
+      "back": "Back to Skills",
+      "search": "Search projects",
+      "noMatch": "No projects match your search."
     }
   },
   "mobileWebShell": {

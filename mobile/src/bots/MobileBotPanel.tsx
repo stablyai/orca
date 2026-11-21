@@ -339,6 +339,7 @@ export function MobileBotPanel(props: {
             home={props.home}
             accessRequests={props.accessRequests}
             onAskInChat={props.onStartSuggestion}
+            onOpenFile={(path) => props.onOpenFile(path, showToast)}
             upNext={upNext}
           />
         </ScrollView>
