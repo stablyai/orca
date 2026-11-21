@@ -3,21 +3,19 @@
 // so groups add no scroll listeners or observers of their own, and with no group reading it nothing listens.
 import { useMemo } from 'react'
 
-export type BotItemsViewportBox = { top: number; bottom: number; scrollTop: number }
+export type BotItemsViewportBox = { top: number; bottom: number }
 
 export type BotItemsViewport = {
-  /** The scroller's visible box in client coordinates and its scroll offset; null before a scroller is
+  /** The scroller's visible box in client coordinates; null before a scroller is
    *  attached. Read once per frame for every group a notice reaches. */
   read: () => BotItemsViewportBox | null
   /** The first listener starts listening to the scroller; the last one leaving stops. */
   subscribe: (listener: () => void) => () => void
-  /** Scrolls to `scrollTop`, to keep what was at the top of the view there. */
-  scrollTo: (scrollTop: number) => void
 }
 
 function readBox(scroller: HTMLElement): BotItemsViewportBox {
   const box = scroller.getBoundingClientRect()
-  return { top: box.top, bottom: box.bottom, scrollTop: scroller.scrollTop }
+  return { top: box.top, bottom: box.bottom }
 }
 
 /** Listens to `scroller` (and `list`'s size) while anyone listens here; returns the stop. */
@@ -83,8 +81,7 @@ function createViewport(scroller: HTMLElement | null, list: HTMLElement | null):
           stop = null
         }
       }
-    },
-    scrollTo: (scrollTop) => scroller?.scrollTo({ top: scrollTop })
+    }
   }
 }
 

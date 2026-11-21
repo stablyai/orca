@@ -1,10 +1,12 @@
 // A group's shown rows, drawn only where the panel shows them. Rows have two known heights (one line, or
-// two with a chat line), so positions come from counts and nothing is measured. Every row keeps one keyed
-// place at every size, so a group never remounts its rows as it grows or shrinks. One row is in the Tab
+// two with a chat line), so positions come from counts and nothing is measured. Drawn rows are in flow,
+// with the rows not drawn standing as gaps of their height, so the browser keeps the reading position as
+// for any list. Rows keep their keys at every size, so a group never remounts its rows as it grows or
+// shrinks. One row is in the Tab
 // order; arrows, Home and End move between rows, drawing the next one first. The row holding focus, the
 // group's Tab stop, and Back's row stay drawn wherever the panel scrolls. A short group draws every row
 // and leaves Tab and the keys to the panel, as a plain list does.
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import type { BotItemsViewport } from './bot-items-viewport'
@@ -87,30 +89,6 @@ function indexOfPicks(items: readonly BotItem[]): IndexOf {
 const relocated = (pick: RowPick | null, at: number): RowPick | null =>
   pick === null || pick.at === at ? pick : at < 0 ? null : { uid: pick.uid, at }
 
-/** The rows a group drew at its last commit, and their positions. */
-type Layout = { items: readonly BotItem[]; geometry: Geometry }
-
-/** How far what the owner was reading (the rows in view, `from`..`to` px into the previous layout)
- *  moved: the median of the rows' own moves. Rows added or removed above move every row in view alike;
- *  a row an update sorts to the front moves alone, and the rows that kept their order outvote it. */
-function readingShift(
-  prev: Layout,
-  from: number,
-  to: number,
-  indexOf: IndexOf,
-  next: Geometry
-): number {
-  const shifts: number[] = []
-  for (let at = prev.geometry.indexAt(from); at <= prev.geometry.indexAt(to); at++) {
-    const index = indexOf({ uid: prev.items[at]!.uid, at })
-    if (index >= 0) {
-      shifts.push(next.offset(index) - prev.geometry.offset(at))
-    }
-  }
-  shifts.sort((a, b) => a - b)
-  return shifts[(shifts.length - 1) >> 1] ?? 0
-}
-
 const samePick = (a: RowPick | null, b: RowPick | null): boolean =>
   a === b || (a !== null && b !== null && a.uid === b.uid && a.at === b.at)
 
@@ -189,38 +167,17 @@ export function BotItemRowsWindow({
   })
   // A short group draws every row and needs no view. A long one listens once for as long as it windows.
   useLayoutEffect(() => (all ? undefined : viewport.subscribe(measure)), [all, viewport, measure])
-  const layout = useRef<Layout | null>(null)
-  // When the rows change. Rows sit at set offsets, which keeps the browser from holding the reading
-  // position, so the view moves with the rows it shows, read where the view is now. Then the drawn range
-  // follows: an update can move this group's rows without the panel scrolling or the list changing
-  // height, which no notice would report. A short group's range is every row, kept current so it
-  // starts from there if it grows long.
+  // When the rows' positions change, the drawn range follows: an update can move this group's rows
+  // without the panel scrolling or the list changing height, which no notice would report. A content
+  // change leaves the positions, so it reads nothing. A hidden window measures as it shows again. A short
+  // group's range is every row, kept current so it starts from there if it grows long.
   useLayoutEffect(() => {
-    const prev = layout.current
-    // A hidden window reads no layout; it measures as it shows again, from the layout last seen.
-    if ((prev?.items === items && prev.geometry === geometry) || document.hidden) {
-      return
-    }
-    layout.current = { items, geometry }
-    const box = prev ? viewport.read() : null
-    const element = container.current
-    if (prev && box && element && box.scrollTop > 0) {
-      const top = element.getBoundingClientRect().top
-      const from = box.top - top
-      if (from > 0 && from < prev.geometry.total) {
-        const to = Math.min(box.bottom - top, prev.geometry.total - 1)
-        const moved = readingShift(prev, from, to, indexOf, geometry)
-        if (moved !== 0) {
-          viewport.scrollTo(box.scrollTop + moved)
-        }
-      }
-    }
     if (all) {
       setRange((was) => (was.start === 0 && was.end === count ? was : { start: 0, end: count }))
-    } else {
+    } else if (!document.hidden) {
       measure()
     }
-  })
+  }, [all, count, geometry, measure])
 
   // Focus inside a row keeps it drawn; the last row focused stays the group's Tab stop. A window losing
   // focus (Orca in the background) keeps both, so the row is there when Orca comes back.
@@ -320,41 +277,54 @@ export function BotItemRowsWindow({
       role={all ? 'list' : 'grid'}
       aria-label={label}
       aria-rowcount={all ? undefined : count}
-      className="relative -mb-0.5"
-      style={{ height: geometry.total }}
+      className="-mb-0.5"
       onKeyDown={onKeyDown}
     >
-      {drawn.map((index) => {
+      {drawn.map((index, at) => {
         const item = items[index]!
+        const gap = geometry.offset(index) - (at === 0 ? 0 : geometry.offset(drawn[at - 1]! + 1))
         return (
-          <div
-            key={item.uid}
-            role={all ? 'listitem' : 'row'}
-            aria-rowindex={all ? undefined : index + 1}
-            data-bot-item-index={index}
-            // The window keeps the reading position for its rows, so the browser mustn't anchor on them.
-            className="absolute inset-x-0 [overflow-anchor:none]"
-            style={{ top: geometry.offset(index), height: geometry.height(index) }}
-            ref={index === targetIndex ? focusTarget : index === backIndex ? focusBack : undefined}
-            onFocus={() => {
-              const pick = { uid: item.uid, at: index }
-              // Focus moving between a row's own controls changes nothing here.
-              setFocused((prev) => (samePick(prev, pick) ? prev : pick))
-              setStop((prev) => (samePick(prev, pick) ? prev : pick))
-            }}
-            onBlur={(event) => {
-              if (document.hasFocus() && !event.currentTarget.contains(event.relatedTarget)) {
-                setFocused(null)
+          <Fragment key={item.uid}>
+            <BotItemRowsGap key="gap" height={gap} />
+            <div
+              key="row"
+              role={all ? 'listitem' : 'row'}
+              aria-rowindex={all ? undefined : index + 1}
+              data-bot-item-index={index}
+              style={{ height: geometry.height(index) }}
+              ref={
+                index === targetIndex ? focusTarget : index === backIndex ? focusBack : undefined
               }
-            }}
-          >
-            {/* The cell wraps the row at every size, so crossing into a grid remounts nothing. */}
-            <div role={all ? undefined : 'gridcell'}>
-              {renderRow(item, all || index === tabStop)}
+              onFocus={() => {
+                const pick = { uid: item.uid, at: index }
+                // Focus moving between a row's own controls changes nothing here.
+                setFocused((prev) => (samePick(prev, pick) ? prev : pick))
+                setStop((prev) => (samePick(prev, pick) ? prev : pick))
+              }}
+              onBlur={(event) => {
+                if (document.hasFocus() && !event.currentTarget.contains(event.relatedTarget)) {
+                  setFocused(null)
+                }
+              }}
+            >
+              {/* The cell wraps the row at every size, so crossing into a grid remounts nothing. */}
+              <div role={all ? undefined : 'gridcell'}>
+                {renderRow(item, all || index === tabStop)}
+              </div>
             </div>
-          </div>
+          </Fragment>
         )
       })}
+      <BotItemRowsGap
+        height={geometry.total - (drawn.length ? geometry.offset(drawn.at(-1)! + 1) : 0)}
+      />
     </div>
   )
+}
+
+/** Rows not drawn, as their height. Never what the browser keeps in view: it keeps a drawn row. */
+function BotItemRowsGap({ height }: { height: number }): React.JSX.Element | null {
+  return height > 0 ? (
+    <div aria-hidden className="[overflow-anchor:none]" style={{ height }} />
+  ) : null
 }

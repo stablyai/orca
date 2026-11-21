@@ -76,13 +76,19 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
   const [canceling, setCanceling] = useState<readonly BotItem[] | null>(null)
   const ordered = useMemo(() => BOT_ITEM_GROUP_IDS.flatMap((id) => groups[id]), [groups])
   // Every row's number column fits the widest number, so titles start in one column at #100 too.
-  const numberColumn: React.CSSProperties & { '--bot-item-number-chars': number } = {
-    '--bot-item-number-chars': ordered.reduce(
-      (widest, item) => Math.max(widest, formatBotItemNumber(item.number).length),
-      0
-    )
-  }
-  const selectedItems = ordered.filter((item) => selected.has(item.uid))
+  const numberColumn = useMemo(
+    (): React.CSSProperties & { '--bot-item-number-chars': number } => ({
+      '--bot-item-number-chars': ordered.reduce(
+        (widest, item) => Math.max(widest, formatBotItemNumber(item.number).length),
+        0
+      )
+    }),
+    [ordered]
+  )
+  const selectedItems = useMemo(
+    () => ordered.filter((item) => selected.has(item.uid)),
+    [ordered, selected]
+  )
   const snoozing = useBotItemSnoozing(botOf, () => setSelected(new Set()))
   // State, not a ref: a group's window subscribes before a ref here would be set.
   const [list, setList] = useState<HTMLDivElement | null>(null)
