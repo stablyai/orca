@@ -1,4 +1,4 @@
-// Idle-chat memory slope: main RSS growth per live idle chat, judged on NEW alone.
+// Idle-chat memory slope: main's memory growth per live idle chat, judged on NEW alone.
 import path from 'node:path'
 import { copyProfile } from './fleet-gate-copies.mjs'
 import {
@@ -19,10 +19,11 @@ const SAMPLE_WINDOW_MS = 60_000
 const SAMPLE_EVERY_MS = 5_000
 
 /**
- * Main RSS once V8 has handed back the freed pages of the last chat burst (a memory-pressure signal, then a
- * minute), as the lowest of 12 samples. Without it those pages linger for minutes and swamp the slope.
+ * Main's private footprint once V8 has handed back the freed pages of the last chat burst (a memory-pressure
+ * signal, then a minute), as the lowest of 12 samples. Without the signal those pages linger for minutes and
+ * swamp the slope. Footprint, not RSS: it still counts pages a loaded QA machine swapped or compressed.
  */
-async function sampleMainRssMb(electronApp, page) {
+async function sampleMainFootprintMb(electronApp, page) {
   const cdp = await page.context().newCDPSession(page)
   try {
     await cdp.send('Memory.simulatePressureNotification', { level: 'critical' })
@@ -33,14 +34,16 @@ async function sampleMainRssMb(electronApp, page) {
   let lowest = Infinity
   const deadline = Date.now() + SAMPLE_WINDOW_MS
   while (Date.now() < deadline) {
-    const rss = await electronApp.evaluate(() => process.memoryUsage().rss)
-    lowest = Math.min(lowest, rss / 1048576)
+    const kb = await electronApp.evaluate(
+      async () => (await process.getProcessMemoryInfo()).private
+    )
+    lowest = Math.min(lowest, kb / 1024)
     await new Promise((resolve) => setTimeout(resolve, SAMPLE_EVERY_MS))
   }
   return Math.round(lowest * 10) / 10
 }
 
-/** Main RSS at 10 then 200 live idle chats, each read after the same long settle, so burst garbage has gone. */
+/** Main's footprint at 10 then 200 live idle chats, each read after the same long settle, so burst garbage has gone. */
 export async function chatMemoryOnce({
   launchCopy,
   arm,
@@ -79,10 +82,10 @@ export async function chatMemoryOnce({
         )
       }
       await new Promise((resolve) => setTimeout(resolve, options.chatSettleMs))
-      return sampleMainRssMb(copy.app, copy.page)
+      return sampleMainFootprintMb(copy.app, copy.page)
     }
-    result.lowRssMb = await step(CHAT_MEMORY_LOW, 0)
-    result.highRssMb = await step(CHAT_MEMORY_HIGH - CHAT_MEMORY_LOW, CHAT_MEMORY_LOW)
+    result.lowMb = await step(CHAT_MEMORY_LOW, 0)
+    result.highMb = await step(CHAT_MEMORY_HIGH - CHAT_MEMORY_LOW, CHAT_MEMORY_LOW)
     result.chats = CHAT_MEMORY_HIGH - CHAT_MEMORY_LOW
   } finally {
     await copy.close()
@@ -98,9 +101,8 @@ export function chatMemoryRows(results) {
     return []
   }
   const label = `main MB/idle chat (${String(CHAT_MEMORY_LOW)}→${String(CHAT_MEMORY_HIGH)})`
-  const measured =
-    typeof run.lowRssMb === 'number' && typeof run.highRssMb === 'number' && run.chats > 0
-  const perChat = measured ? (run.highRssMb - run.lowRssMb) / run.chats : null
+  const measured = typeof run.lowMb === 'number' && typeof run.highMb === 'number' && run.chats > 0
+  const perChat = measured ? (run.highMb - run.lowMb) / run.chats : null
   return [
     {
       scenario: 'chat-mem',
