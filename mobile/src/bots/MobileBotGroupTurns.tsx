@@ -11,6 +11,7 @@ import { Reply, Square } from 'lucide-react-native'
 import { foldMobileNativeChatMessages } from '../session/native-chat/transcript/projection/mobile-native-chat-render-data'
 import {
   botGroupOperationAdmitted,
+  botGroupSavedReplyMessages,
   createBotGroupJournalIndexer,
   type indexBotGroupJournal,
   type BotGroupTurn,
@@ -128,14 +129,22 @@ export function MobileBotGroupTurn({
   const clock = lifecycle?.kind === 'turn' ? lifecycle : null
   const queued = session?.queued.cards.some((card) => card.messageId === turn.operationId)
   const working = clock?.state === 'running' && !turn.revoked
+  // Ended (its reply was saved then), but the member chat's loaded rows no longer hold it.
+  const saved = !clock && !turn.error && turn.reply !== undefined
   const source = useMemo(() => ({ client, sessionId: turn.sessionId }), [client, turn.sessionId])
   const rawMessages = useMemo(
     () =>
-      withBotGroupTurnAnswer(
-        transcript.messages(items).filter((message) => message.role !== 'user'),
-        { operationId: turn.operationId, answer: turn.answer }
-      ),
-    [items, turn.operationId, turn.answer]
+      saved
+        ? botGroupSavedReplyMessages({
+            operationId: turn.operationId,
+            reply: turn.reply,
+            answer: turn.answer
+          })
+        : withBotGroupTurnAnswer(
+            transcript.messages(items).filter((message) => message.role !== 'user'),
+            { operationId: turn.operationId, answer: turn.answer }
+          ),
+    [saved, items, turn.operationId, turn.reply, turn.answer]
   )
   const fullContent = useMobileNativeChatMessageDetail(rawMessages, source)
   const messages = useMemo(
@@ -183,13 +192,17 @@ export function MobileBotGroupTurn({
                     pendingLabel={
                       turn.revoked && clock?.state !== 'completed'
                         ? t('bots.groups.memberRemoved', 'Member removed')
-                        : !clock
-                          ? queued
-                            ? t('chat.queuedMessages.queuedState', 'Queued')
-                            : turn.error
-                              ? 'Not started'
-                              : 'Waiting for the native session…'
-                          : undefined
+                        : saved
+                          ? rawMessages.length > 0
+                            ? t('bots.groups.replied', 'Replied')
+                            : t('bots.groups.ended', 'Ended')
+                          : !clock
+                            ? queued
+                              ? t('chat.queuedMessages.queuedState', 'Queued')
+                              : turn.error
+                                ? 'Not started'
+                                : 'Waiting for the native session…'
+                            : undefined
                     }
                     startedAt={clock?.startedAt ?? null}
                     workedSeconds={clock && working ? null : (clock?.durationMs ?? 0) / 1000}
@@ -198,7 +211,7 @@ export function MobileBotGroupTurn({
                     onToggleExpanded={clock ? () => setExpanded(!expanded) : undefined}
                   />
                 </View>
-                {!turn.revoked && !turn.error && (working || !clock) ? (
+                {!turn.revoked && !turn.error && !saved && (working || !clock) ? (
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={t('bots.groups.stopValue', 'Stop {{value0}}', {
@@ -221,7 +234,7 @@ export function MobileBotGroupTurn({
               </View>
               {turn.error ? (
                 <Text style={styles.notice}>{turn.error}</Text>
-              ) : !clock && !queued ? (
+              ) : !clock && !queued && !saved ? (
                 <Text style={styles.notice}>
                   {t('bots.groups.waitingForTheNativeSession', 'Waiting for the native session…')}
                 </Text>

@@ -11,6 +11,7 @@ import { remoteMemberKey } from './bot-group-mentions'
 import { remoteAnswerLines, remoteMemberAsked } from './bot-group-remote-context'
 import {
   BotGroupRemoteBotsSchema as RemoteBots,
+  BOT_GROUP_SAVED_REPLY_MAX,
   BotGroupReplyMode,
   type BotGroup,
   type BotGroupMember,
@@ -18,8 +19,10 @@ import {
 } from './bot-group-schema'
 
 export {
+  BOT_GROUP_SAVED_REPLY_MAX,
   BotGroupReplyMode,
   botGroupOwnerMessageBlocks,
+  botGroupSavedReplyMessages,
   botGroupTurnReplyText,
   withBotGroupTurnAnswer
 } from './bot-group-schema'
@@ -281,7 +284,7 @@ export function botGroupCompletedReply(
         : []
     )
     .join('\n')
-  return full ? { text: full.slice(-16_000), full, completedAt } : null
+  return full ? { text: full.slice(-BOT_GROUP_SAVED_REPLY_MAX), full, completedAt } : null
 }
 
 /** What a member has not seen: posts and replies since it was last asked (all, if new), newest kept

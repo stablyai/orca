@@ -68,8 +68,12 @@ export function MobileNativeChatTurnStatus({
         }
       >
         {identity}
-        {bot?.showName ? <Text style={styles.label}>{bot.name}</Text> : null}
-        <Text style={styles.label}>{label}</Text>
+        {bot?.showName ? (
+          <Text style={styles.label} numberOfLines={1}>
+            {bot.name}
+          </Text>
+        ) : null}
+        <Text style={bot?.showName ? styles.status : styles.label}>{label}</Text>
         <View style={expanded ? styles.caretOpen : undefined}>
           <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
         </View>
@@ -80,8 +84,13 @@ export function MobileNativeChatTurnStatus({
   return (
     <View style={[styles.row, styles.bar]}>
       {identity}
-      {bot?.showName ? <Text style={styles.label}>{bot.name}</Text> : null}
-      <Text style={styles.label} numberOfLines={1}>
+      {/* A long name shortens first; the status itself is never cut. */}
+      {bot?.showName ? (
+        <Text style={styles.label} numberOfLines={1}>
+          {bot.name}
+        </Text>
+      ) : null}
+      <Text style={bot?.showName ? styles.status : styles.label} numberOfLines={1}>
         {label}
       </Text>
     </View>
@@ -107,6 +116,11 @@ const styles = themedStyleSheet(() => ({
     color: colors.textMuted,
     fontSize: typography.bodySize,
     flexShrink: 1
+  },
+  status: {
+    color: colors.textMuted,
+    fontSize: typography.bodySize,
+    flexShrink: 0
   },
   caretOpen: {
     transform: [{ rotate: '90deg' }]

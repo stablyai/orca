@@ -28100,6 +28100,8 @@
       "mentionedCount": "{{count}} mentioned",
       "correctMention": "Correct mention",
       "memberRemoved": "Member removed",
+      "replied": "Replied",
+      "ended": "Ended",
       "composerPlaceholder": "Message the group, @ to mention a bot",
       "startAConversationWithThisGroupMentionBots": "Start a conversation with this group. Mention bots with @Name or @everyone.",
       "repliesValue": "Replies: {{value0}}",

@@ -100,7 +100,8 @@ const BotGroupTurnSchema = z.object({
   error: z.string().optional(),
   revoked: z.literal(true).optional(),
   /** The finished reply, saved when the turn ended; null when it ended without one. Absent while
-   *  the turn runs, and on turns saved before replies were. */
+   *  the turn runs, and on turns saved before replies were. The room draws it when the member
+   *  chat's loaded rows no longer hold the turn. */
   reply: z.string().nullable().optional(),
   /** Its answer to another member's request: sent as mail, so its own chat shows only the call. */
   answer: z.string().optional(),
@@ -230,6 +231,42 @@ export function botGroupTurnReplyText(
     return said || null
   }
   return said ? `${said}\n\n${answer}` : answer
+}
+
+/** The most of a finished reply saved for room history: its end, when it is longer. */
+export const BOT_GROUP_SAVED_REPLY_MAX = 16_000
+
+const FENCE = /^ {0,3}(`{3,}|~{3,})/
+
+/** A reply cut to its saved end, from its next whole line: a code block the cut opened mid-way is
+ *  reopened, so the rest still reads as code and the Markdown after it as prose. */
+function savedReplyTail(reply: string): string {
+  if (reply.length < BOT_GROUP_SAVED_REPLY_MAX) {
+    return reply
+  }
+  const rest = reply.slice(reply.indexOf('\n') + 1)
+  const fences = rest.split('\n').flatMap((line) => FENCE.exec(line)?.[1] ?? [])
+  const reopen = fences.length % 2 === 1 ? `${fences[0]}\n` : ''
+  return `…\n\n${reopen}${rest}`
+}
+
+/** A finished turn's saved reply as the room draws it when its member chat's rows aren't loaded:
+ *  one message, with its answer to a member's request; none when it has no words. */
+export function botGroupSavedReplyMessages(
+  turn: Pick<BotGroupTurn, 'operationId' | 'reply' | 'answer'>
+): NativeChatMessage[] {
+  const text = botGroupTurnReplyText(turn.reply && savedReplyTail(turn.reply), turn.answer)
+  return text?.trim()
+    ? [
+        {
+          id: `${turn.operationId}:saved-reply`,
+          role: 'assistant',
+          blocks: [{ type: 'text', text }],
+          timestamp: null,
+          source: 'transcript'
+        }
+      ]
+    : []
 }
 
 /** A turn's rows as the room draws them on desktop and mobile: its answer to a member's request

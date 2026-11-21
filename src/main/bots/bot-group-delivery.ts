@@ -293,11 +293,9 @@ export function readBotGroup(
   settleDeadGroupMailTurns(groups, messages)
   return {
     group,
-    // Saved replies feed later posts' context only; the room renders each turn from its chat.
-    messages: presentPageAnswers(messages).map((message) => ({
-      ...message,
-      turns: message.turns.map(({ reply: _reply, ...turn }) => turn)
-    })),
+    // Each turn's saved reply comes too: the room draws a turn from its member chat, and from the
+    // reply when that chat's loaded rows no longer hold it. Replies are capped when saved.
+    messages: presentPageAnswers(messages),
     hasEarlier:
       messages.length > 0 &&
       groups.store.roomMessages(groupId, threadId, 1, messages[0].sequence).length > 0

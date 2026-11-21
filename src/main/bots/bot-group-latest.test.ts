@@ -52,6 +52,11 @@ describe('a group as the sidebar lists it', () => {
 
     expect(groups.store.message(asked.id)?.turns[0]?.reply).toBe('Found it')
     expect(groups.store.pendingContext(next.turns[0]!.operationId)).toContain('Found it')
+    // The room reads it too, for a turn whose rows its member chat's loaded window no longer holds.
+    const page = groups.read(group.id)
+    expect(page.messages.find((message) => message.id === asked.id)?.turns[0]?.reply).toBe(
+      'Found it'
+    )
   })
 
   it('saves that a turn ended without a reply, so later posts stop reading its chat', async () => {

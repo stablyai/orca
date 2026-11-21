@@ -105,8 +105,11 @@ export function NativeChatWorkingStatus({
   const content = (
     <>
       {identity}
-      {bot?.showName ? <span className="mr-1 text-chat-foreground">{bot.name}</span> : null}
-      <span>{label}</span>
+      {/* A long name shortens first; the status itself is never cut. */}
+      {bot?.showName ? (
+        <span className="mr-1 min-w-0 truncate text-chat-foreground">{bot.name}</span>
+      ) : null}
+      <span className="shrink-0">{label}</span>
       {caret}
     </>
   )

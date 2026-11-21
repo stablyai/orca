@@ -27261,6 +27261,8 @@
       "mentionedCount": "已提及 {{count}} 个",
       "correctMention": "更正提及",
       "memberRemoved": "成员已移除",
+      "replied": "已回复",
+      "ended": "已结束",
       "composerPlaceholder": "给分组发消息，输入 @ 提及 bot",
       "startAConversationWithThisGroupMentionBots": "在此分组中开始对话。使用 @Name 或 @everyone 提及 bots。",
       "repliesValue": "回复：{{value0}}",

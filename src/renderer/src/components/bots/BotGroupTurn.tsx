@@ -1,7 +1,7 @@
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
-import { memo, useCallback, useMemo, useState } from 'react'
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createNativeChatMessageListProjection } from '../native-chat/conversation/projection/native-chat-message-list-projection'
 import { Reply, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -21,6 +21,7 @@ import {
 import { useBotAvatarSrc } from './bot-avatar-image'
 import { botFallback } from '../../../../shared/bots/bot-avatar-fallback'
 import {
+  botGroupSavedReplyMessages,
   type BotGroupTurn as Turn,
   withBotGroupTurnAnswer
 } from '../../../../shared/bots/bot-group'
@@ -93,6 +94,8 @@ export const BotGroupTurn = memo(function BotGroupTurn({
   const working = !turn.revoked && lifecycle?.state === 'running'
   const rejection =
     turn.error ?? (submission?.dispatchState === 'rejected' ? submission.reason : null)
+  // Ended (its reply was saved then), but the member chat's loaded rows no longer hold it.
+  const saved = !lifecycle && !rejection && turn.reply !== undefined
   const status = useMemo<NativeChatTurnStatus>(
     () => ({
       thinking: false,
@@ -116,11 +119,17 @@ export const BotGroupTurn = memo(function BotGroupTurn({
   )
   const messages = useMemo(
     () =>
-      withBotGroupTurnAnswer(
-        projected.conversation.filter((message) => message.role !== 'user'),
-        { operationId: turn.operationId, answer: turn.answer }
-      ),
-    [projected.conversation, turn.operationId, turn.answer]
+      saved
+        ? botGroupSavedReplyMessages({
+            operationId: turn.operationId,
+            reply: turn.reply,
+            answer: turn.answer
+          })
+        : withBotGroupTurnAnswer(
+            projected.conversation.filter((message) => message.role !== 'user'),
+            { operationId: turn.operationId, answer: turn.answer }
+          ),
+    [saved, projected.conversation, turn.operationId, turn.reply, turn.answer]
   )
   useBotGroupTranscriptRows(roomRows, turn.operationId, messages)
   // Each room turn opens its subagents in place, as a chat pane does, keyed to this turn.
@@ -215,21 +224,39 @@ export const BotGroupTurn = memo(function BotGroupTurn({
     onRevealDiff: () => {},
     actionablePromptIds: session?.hostWork?.actionablePromptIds
   }
-  const waiting = !lifecycle && !rejection
+  const waiting = !lifecycle && !rejection && !saved
   const membershipEnded = turn.revoked && lifecycle?.state !== 'completed'
   const pendingLabel = membershipEnded
     ? t('bots.groups.memberRemoved', 'Member removed')
-    : waiting
-      ? queued
-        ? t('components.native-chat.queuedMessages.queued', 'Queued')
-        : submission?.dispatchState === 'unknown'
-          ? 'Delivery unconfirmed'
-          : submission?.handoverRecorded && !submission.handedOverAt
-            ? 'Queued'
-            : 'Starting…'
-      : rejection
-        ? 'Not started'
-        : undefined
+    : saved
+      ? messages.length > 0
+        ? t('bots.groups.replied', 'Replied')
+        : t('bots.groups.ended', 'Ended')
+      : waiting
+        ? queued
+          ? t('components.native-chat.queuedMessages.queued', 'Queued')
+          : submission?.dispatchState === 'unknown'
+            ? 'Delivery unconfirmed'
+            : submission?.handoverRecorded && !submission.handedOverAt
+              ? 'Queued'
+              : 'Starting…'
+        : rejection
+          ? 'Not started'
+          : undefined
+  const canStop = !turn.revoked && !rejection && (working || waiting)
+  const replyRef = useRef<HTMLButtonElement>(null)
+  // Stop held focus last, unless focus moved on to something else; a removed element may blur too.
+  const stopFocused = useRef(false)
+  // The turn ended under a focused Stop: focus moves to Reply rather than falling to the page.
+  useLayoutEffect(() => {
+    const dropped = !document.activeElement || document.activeElement === document.body
+    if (!canStop && stopFocused.current && dropped) {
+      replyRef.current?.focus({ preventScroll: true })
+    }
+    if (!canStop) {
+      stopFocused.current = false
+    }
+  }, [canStop])
   return (
     <BotGroupTranscriptOwner
       context={files}
@@ -249,15 +276,25 @@ export const BotGroupTurn = memo(function BotGroupTurn({
             bot={{ name: turn.botName, src, fallback: botFallback(bot), showName: true }}
             {...status}
             pendingLabel={pendingLabel}
-            workedSeconds={membershipEnded || waiting || rejection ? 0 : status.workedSeconds}
+            workedSeconds={
+              membershipEnded || waiting || rejection || saved ? 0 : status.workedSeconds
+            }
             expanded={expanded}
             onToggleExpanded={lifecycle ? () => setExpanded(!expanded) : undefined}
             actions={
               <>
-                {!turn.revoked && !rejection && (working || waiting) ? (
+                {canStop ? (
                   <Button
                     variant="ghost"
                     size="icon-xs"
+                    onFocus={() => {
+                      stopFocused.current = true
+                    }}
+                    onBlur={(event) => {
+                      if (event.relatedTarget) {
+                        stopFocused.current = false
+                      }
+                    }}
                     aria-label={t('bots.groups.stopValue', 'Stop {{value0}}', {
                       value0: turn.botName
                     })}
@@ -267,6 +304,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
                   </Button>
                 ) : null}
                 <Button
+                  ref={replyRef}
                   variant="ghost"
                   size="icon-xs"
                   aria-label={t('bots.groups.replyToValue', 'Reply to {{value0}}', {
