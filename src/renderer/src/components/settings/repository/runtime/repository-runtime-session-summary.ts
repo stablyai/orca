@@ -1,4 +1,5 @@
 import type { AppState } from '../../../../store/types'
+import { sameAcceptedStatusRevision } from '@/store/slices/agent-status/status-ownership/agent-status-revisions'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import { getTabIdToWorktreeId } from '../../../sidebar/workspace-card/activity/worktree-agent-row-selectors'
 
@@ -76,7 +77,11 @@ export function getProjectRuntimeSessionSummary(
   if (
     !cache ||
     cache.ptyIdsByTabId !== state.ptyIdsByTabId ||
-    cache.agentStatusByPaneKey !== state.agentStatusByPaneKey
+    !sameAcceptedStatusRevision(
+      cache.agentStatusByPaneKey,
+      state.agentStatusByPaneKey,
+      'runtimeTasksRevision'
+    )
   ) {
     cache = {
       ptyIdsByTabId: state.ptyIdsByTabId,

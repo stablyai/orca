@@ -2,6 +2,12 @@ import { structuralValuesEqualIgnoringUndefined as equal } from '../../../../../
 import { isAiVaultTitleAgent } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { AgentStatusProjection } from '../projection/agent-status-projection'
 import type { AgentStatusChange } from '../contracts/agent-status-contract'
+import {
+  activityFact,
+  activityDetailsFact,
+  storageActivityFact,
+  runtimeTaskFact
+} from './agent-status-revisions'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 
 export type AgentStatusReplacement = readonly [string, AgentStatusEntry | null]
@@ -12,6 +18,11 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
   titleRevision = 0
   /** Like titleRevision, but over every agent's session identity (the saved terminal names read it). */
   sessionRevision = 0
+  orchestrationRevision = 0
+  activityRevision = 0
+  activityDetailsRevision = 0
+  storageActivityRevision = 0
+  runtimeTasksRevision = 0
   private pending: Map<string, AgentStatusEntry | null> | null = null
   private operations: AgentStatusReplacement[] = []
   private moved = new Set<string>()
@@ -58,8 +69,7 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
     const draft = this.pending
       ? this
       : new AcceptedAgentStatuses(this.rows, this.projection, this.sleepingCount)
-    draft.titleRevision = this.titleRevision
-    draft.sessionRevision = this.sessionRevision
+    draft.copyRevisions(this)
     draft.pending ??= new Map()
     for (const [key, value] of replacements) {
       const prior = draft.get(key)
@@ -86,8 +96,7 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
     const draft = this.pending
       ? this
       : new AcceptedAgentStatuses(this.rows, this.projection, this.sleepingCount)
-    draft.titleRevision = this.titleRevision
-    draft.sessionRevision = this.sessionRevision
+    draft.copyRevisions(this)
     draft.pending ??= new Map()
     draft.refreshes = keys
     return draft
@@ -152,7 +161,7 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
       entry && isAiVaultTitleAgent(entry.agentType) ? sessionFact(entry) : undefined
     const changes = this.changes()
     // A moved key changes iteration order, which picks between equal-priority panes of one tab.
-    const changedBy = (read: typeof fact) =>
+    const changedBy = (read: (entry: AgentStatusEntry | undefined) => unknown) =>
       changes.some(
         (change) =>
           !equal(read(change.previous), read(change.current)) ||
@@ -160,7 +169,27 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
       )
     const titleRevision = this.titleRevision + Number(changedBy(fact))
     const sessionRevision = this.sessionRevision + Number(changedBy(sessionFact))
+    const orchestrationRevision =
+      this.orchestrationRevision +
+      Number(
+        changedBy((entry) =>
+          entry?.orchestration
+            ? [entry.paneKey, entry.connectionId, entry.worktreeId, entry.orchestration]
+            : undefined
+        )
+      )
+    const activityRevision = this.activityRevision + Number(changedBy(activityFact))
+    const activityDetailsRevision =
+      this.activityDetailsRevision + Number(changedBy(activityDetailsFact))
+    const storageActivityRevision =
+      this.storageActivityRevision + Number(changedBy(storageActivityFact))
+    const runtimeTasksRevision = this.runtimeTasksRevision + Number(changedBy(runtimeTaskFact))
     return () => {
+      this.orchestrationRevision = orchestrationRevision
+      this.activityRevision = activityRevision
+      this.activityDetailsRevision = activityDetailsRevision
+      this.storageActivityRevision = storageActivityRevision
+      this.runtimeTasksRevision = runtimeTasksRevision
       this.titleRevision = titleRevision
       this.sessionRevision = sessionRevision
       for (const [key, value] of this.operations) {
@@ -183,9 +212,18 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
       this.projection.capture(),
       this.sleepingCount
     )
-    captured.titleRevision = this.titleRevision
-    captured.sessionRevision = this.sessionRevision
+    captured.copyRevisions(this)
     return captured
+  }
+
+  private copyRevisions(source: AcceptedAgentStatuses): void {
+    this.titleRevision = source.titleRevision
+    this.sessionRevision = source.sessionRevision
+    this.orchestrationRevision = source.orchestrationRevision
+    this.activityRevision = source.activityRevision
+    this.activityDetailsRevision = source.activityDetailsRevision
+    this.storageActivityRevision = source.storageActivityRevision
+    this.runtimeTasksRevision = source.runtimeTasksRevision
   }
 
   *entries(): MapIterator<[string, AgentStatusEntry]> {

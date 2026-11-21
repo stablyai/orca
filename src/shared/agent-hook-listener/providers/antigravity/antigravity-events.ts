@@ -10,6 +10,8 @@ import { extractToolFields, isNewTurnEvent } from '../../provider-event-routing'
 import { readLastUserPromptFromTranscript } from '../../transcript-lines'
 import { readAntigravityToolCall } from './antigravity-tool-fields'
 import { isAntigravityStopStillBusy } from './antigravity-event-rules'
+import type { AntigravityTranscriptOrigin } from './antigravity-hook-identity'
+import { observeAntigravityRootModel } from './antigravity-root-model'
 
 export function isAntigravityFeedbackTool(toolName: string | undefined): boolean {
   return toolName === 'ask_question' || toolName === 'ask_permission'
@@ -65,7 +67,9 @@ export function normalizeAntigravityEvent(
   eventName: unknown,
   promptText: string,
   paneKey: string,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  origin: AntigravityTranscriptOrigin,
+  replayReceivedAt?: number
 ): ParsedAgentStatusPayload | null {
   const transcriptPath = readFirstString(hookPayload, ['transcriptPath', 'transcript_path'])
   const conversationId = readFirstString(hookPayload, ['conversationId', 'conversation_id'])
@@ -145,6 +149,13 @@ export function normalizeAntigravityEvent(
   }
 
   const resetsTurn = isNewTurnEvent('antigravity', eventName)
+  const model = observeAntigravityRootModel(
+    state.antigravityChildWorkByPaneKey.get(paneKey)?.rootModel,
+    { conversationId, transcriptPath, hookPayload, origin, resetsTurn, replayReceivedAt }
+  )
+  if (model) {
+    antigravityChildWork(state, paneKey).rootModel = model
+  }
   // Cache prompts per turn instead of rescanning large transcripts per hook.
   const cachedPrompt = resetsTurn ? undefined : state.lastPromptByPaneKey.get(paneKey)
   const effectivePrompt =
@@ -162,6 +173,7 @@ export function normalizeAntigravityEvent(
       resetOnNewTurn: resetsTurn
     }),
     agentType: 'antigravity',
+    model: model?.leadModel,
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,

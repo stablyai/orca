@@ -93,10 +93,13 @@ it.each(CHILD_HOOKS.map((_, index) => index))(
       server = new AgentHookServer()
       await server.start({ env: 'production', userDataPath: dir })
       for (const suffix of CHILD_HOOKS.slice(start)) {
-        const event = normalized(hook(childPath, CHILD, { lastUserInput: '', ...suffix }))
+        const event = normalized(
+          hook(childPath, CHILD, { lastUserInput: '', modelName: 'child-model', ...suffix })
+        )
         expect(event.providerSession).toBeUndefined()
         server.ingestRemote(event, 'host-1')
         expectResume(server)
+        expect(server.getStatusSnapshot()[0]?.model).toBe('gemini-3.8-flash-high')
       }
       server.stop()
       server = new AgentHookServer()
@@ -169,6 +172,41 @@ it('derives root identity from bounded first-record provenance, independently of
     })
     server.ingestRemote(normalized(hook(transcriptPath, CHILD)), null)
     expect(server.getStatusSnapshot()[0]?.providerSession).toBeUndefined()
+  } finally {
+    server.stop()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+it('applies relay model metadata only to the matching accepted owner without renewing evidence', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'agy-relay-model-'))
+  const rootPath = join(dir, 'root.jsonl')
+  writeFileSync(rootPath, jsonl(ROOT_ORIGIN))
+  const server = new AgentHookServer()
+  try {
+    const root = normalized(hook(rootPath, ROOT, { modelName: 'auto' }))
+    server.ingestRemote(root, 'ssh-a')
+    const before = server.getStatusSnapshotForPane(PANE)[0]!
+    const model = {
+      ...root,
+      hookEventName: undefined,
+      modelOnly: true,
+      payload: { ...root.payload, model: 'resolved-model' }
+    }
+    server.ingestRemote(model, 'ssh-b')
+    expect(server.getStatusSnapshotForPane(PANE)[0]?.model).toBeUndefined()
+    server.ingestRemote(model, 'ssh-a')
+    expect(server.getStatusSnapshotForPane(PANE)[0]).toEqual({
+      ...before,
+      model: 'resolved-model'
+    })
+    const next = normalized(hook(rootPath, 'replacement', { modelName: 'explicit-model' }))
+    server.ingestRemote(next, 'ssh-a')
+    server.ingestRemote(model, 'ssh-a')
+    expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({
+      model: 'explicit-model',
+      providerSession: { id: 'replacement' }
+    })
   } finally {
     server.stop()
     rmSync(dir, { recursive: true, force: true })

@@ -8,6 +8,7 @@ export type JsonlCursor = {
   filePath?: string
   offset: number
   carry: string
+  discardingLine?: boolean
 }
 
 export type JsonRecord = Record<string, unknown>
@@ -39,6 +40,25 @@ export function firstRecordError(error: unknown): JsonlFirstRecord {
     : 'unreadable'
 }
 
+export type JsonlFileFingerprint = {
+  dev: number
+  ino: number
+  birthtimeMs: number
+  size: number
+  mtimeMs: number
+  ctimeMs: number
+}
+
+export function sameJsonlFile(a: JsonlFileFingerprint, b: JsonlFileFingerprint): boolean {
+  return a.dev === b.dev && a.ino === b.ino && a.birthtimeMs === b.birthtimeMs
+}
+
+export function sameJsonlFingerprint(a: JsonlFileFingerprint, b: JsonlFileFingerprint): boolean {
+  return (
+    sameJsonlFile(a, b) && a.size === b.size && a.mtimeMs === b.mtimeMs && a.ctimeMs === b.ctimeMs
+  )
+}
+
 /** New bytes read against a cursor position; applying them to a cursor that has since moved is refused. */
 export type JsonlCursorBytes = {
   filePath: string
@@ -48,6 +68,9 @@ export type JsonlCursorBytes = {
   from: number
   start: number
   bytes: Buffer
+  hasMore?: true
+  reset?: true
+  fingerprint?: JsonlFileFingerprint
   /** The open or read failed after a size was seen; a shrink still resets the cursor. */
   failed?: true
 }
@@ -56,13 +79,24 @@ const NO_BYTES = Buffer.alloc(0)
 
 export function planJsonlRead(
   cursor: JsonlCursor & { filePath: string },
-  size: number
+  size: number,
+  mode: 'tail' | 'forward' = 'tail',
+  reset = false
 ): JsonlCursorBytes & { length: number } {
-  const from = size < cursor.offset ? 0 : cursor.offset
+  const from = reset || size < cursor.offset ? 0 : cursor.offset
   const length = Math.min(size - from, TRANSCRIPT_READ_MAX_BYTES)
-  const start = size - from > length ? size - length : from
+  const start = mode === 'tail' && size - from > length ? size - length : from
   const { filePath, offset, carry } = cursor
-  return { filePath, offset, carry, from, start, length, bytes: NO_BYTES }
+  return {
+    filePath,
+    offset,
+    carry,
+    from,
+    start,
+    length,
+    bytes: NO_BYTES,
+    ...(reset ? { reset: true } : {})
+  }
 }
 
 /** The part of `read` the cursor has not consumed; undefined when the read cannot serve the cursor's position. */
@@ -80,6 +114,7 @@ export function alignJsonlCursorBytes(
   const end = read.start + read.bytes.length
   if (
     read.failed ||
+    read.reset ||
     read.from !== read.offset ||
     cursor.offset < Math.max(read.start, read.offset)
   ) {
@@ -108,7 +143,11 @@ export function applyJsonlCursorBytes(
   if (!read) {
     return 'stale'
   }
-  const carry = read.from === read.offset ? read.carry : ''
+  const reset = read.reset || read.from !== read.offset
+  const carry = reset ? '' : read.carry
+  if (reset) {
+    cursor.discardingLine = false
+  }
   if (read.failed) {
     cursor.offset = read.from
     cursor.carry = carry
@@ -124,8 +163,15 @@ export function applyJsonlCursorBytes(
   const lines = content.split('\n')
   cursor.offset = read.start + read.bytes.length
   cursor.carry = lines.pop() ?? ''
-  if (skippedPrefix) {
+  const discarding = skippedPrefix || (!reset && cursor.discardingLine)
+  if (discarding && lines.length) {
     lines.shift()
+  }
+  cursor.discardingLine =
+    Boolean(discarding && !content.includes('\n')) ||
+    Buffer.byteLength(cursor.carry, 'utf8') > TRANSCRIPT_LINE_MAX_BYTES
+  if (cursor.discardingLine) {
+    cursor.carry = ''
   }
   const records: JsonRecord[] = []
   for (const line of lines) {

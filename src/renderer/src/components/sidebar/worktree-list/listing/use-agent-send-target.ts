@@ -1,4 +1,5 @@
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
+import { selectStatusByRevision } from '@/store/slices/agent-status/status-ownership/agent-status-revisions'
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
@@ -19,10 +20,15 @@ const NO_GUARDED_HOSTS: ReadonlySet<string> = new Set()
 // Force the picker’s target workspace visible only while a running agent there can receive the message.
 export function useAgentSendTargetWorktreeId(): string | null {
   const agentSendPopoverTargetMode = useAppStore((s) => s.agentSendPopoverTargetMode)
-  // Why: eligibility only matters while the picker is open; when closed, don't subscribe to wake-time layout churn.
-  const agentTargetStatusByPaneKey = useAppStore((s) =>
-    agentSendPopoverTargetMode ? s.agentStatusByPaneKey : EMPTY_AGENT_STATUS_BY_PANE_KEY
+  const selectActivity = useMemo(
+    () =>
+      agentSendPopoverTargetMode
+        ? selectStatusByRevision('activityDetailsRevision')
+        : () => EMPTY_AGENT_STATUS_BY_PANE_KEY,
+    [agentSendPopoverTargetMode]
   )
+  // Why: eligibility only matters while the picker is open; when closed, don't subscribe to wake-time layout churn.
+  const agentTargetStatusByPaneKey = useAppStore(selectActivity)
   const agentTargetStatusEpoch = useAppStore((s) =>
     agentSendPopoverTargetMode ? s.agentStatusEpoch : 0
   )

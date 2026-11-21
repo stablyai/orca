@@ -156,11 +156,17 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
   }
 
   protected publishAgentIdentityProjection(row: EnrichedAgentHookEventPayload): void {
-    // An id is no provider event: drop the row's last hook signals so no reader re-acts on them.
+    const { promptInteractionKey: _promptInteractionKey, ...projection } = row
+    this.publishAgentStatusMetadata(projection)
+    const identity = toMutationIdentity(row)
+    this.notifyStatusRowMutationListeners({ before: identity, after: identity })
+  }
+
+  protected publishAgentStatusMetadata(row: EnrichedAgentHookEventPayload): void {
+    // Metadata is no provider event: drop hook signals so no reader re-acts on them.
     const {
       hookEventName: _hookEventName,
       hasExplicitPrompt: _hasExplicitPrompt,
-      promptInteractionKey: _promptInteractionKey,
       authorityRestartId: _authorityRestartId,
       ...projection
     } = row
@@ -169,8 +175,6 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
       isReplay: true,
       identityOnly: true
     })
-    const identity = toMutationIdentity(row)
-    this.notifyStatusRowMutationListeners({ before: identity, after: identity })
   }
 
   private notifyStatusRowMutationListeners(mutation: AgentHookStatusRowMutation): void {

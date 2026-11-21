@@ -1,3 +1,5 @@
+import type { HookListenerState } from '../../../shared/agent-hook-listener/listener-state'
+import { antigravityModelPollOwner } from '../../../shared/agent-hook-listener/providers/antigravity/antigravity-root-model'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type {
   AgentHookRelayEnvelope,
@@ -57,3 +59,16 @@ export function selectReplayableCachedPanes(input: {
 
 /** How many panes keep a cached status. Bounds a long-lived relay's per-pane state. */
 export const MAX_CACHED_PANES = 256
+
+export function activateReplayedModelPolls(
+  state: HookListenerState,
+  metadata: ReadonlyMap<string, CachedPaneEnvelopeMeta>,
+  activate: (event: AgentHookEventPayload, env?: string, version?: string) => void
+): void {
+  for (const [paneKey, { source, env, version }] of metadata) {
+    const row = state.lastStatusByPaneKey.get(paneKey)
+    if (source === 'antigravity' && row && antigravityModelPollOwner(state, row)) {
+      activate(row, env, version)
+    }
+  }
+}

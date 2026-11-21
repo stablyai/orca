@@ -87,6 +87,51 @@ describe('RelayAgentHookServer', () => {
     }
   })
 
+  it('polls the current Antigravity root after replay and forwards only the model change', async () => {
+    const transcriptPath = join(dir, 'transcript.jsonl')
+    writeFileSync(
+      transcriptPath,
+      '{"source":"USER_EXPLICIT","type":"USER_INPUT","content":"Work"}\n{"type":"PLANNER_RESPONSE","model":"offline-model","step_index":2}\n'
+    )
+    mkdirSync(join(dir, 'spool'))
+    writeFileSync(
+      join(dir, 'spool', 'pane-agy.jsonl'),
+      `${JSON.stringify({
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        source: 'antigravity',
+        payload: {
+          conversationId: 'root',
+          initialNumSteps: 1,
+          lastUserInput: 'Work',
+          modelName: 'auto',
+          transcriptPath,
+          hookEventName: 'PreInvocation'
+        },
+        // ast-grep-ignore: test-no-wall-clock -- this hook must be inside the model read lease.
+        receivedAt: Date.now()
+      })}\n`
+    )
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    try {
+      await server.start()
+      await vi.waitFor(() => expect(forward).toHaveBeenCalledTimes(2), { timeout: 10000 })
+      const update = forward.mock.calls[1]![0]
+      expect(update).toMatchObject({
+        paneKey: PANE_KEY,
+        modelOnly: true,
+        payload: { state: 'working', model: 'offline-model', prompt: 'Work' },
+        providerSession: { id: 'root' }
+      })
+      expect(update.hookEventName).toBeUndefined()
+      expect(update.hasExplicitPrompt).toBeUndefined()
+      expect(update.turnEndedAt).toBeUndefined()
+    } finally {
+      server.stop()
+    }
+  })
+
   it('forwards Claude background monitoring until its authoritative inventory drains', async () => {
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })

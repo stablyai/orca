@@ -46,13 +46,14 @@ export const EMPTY_SEND_TARGET_CONTROL_INPUTS: SendTargetControlInputs = Object.
 export function selectSendTargetInputs(
   s: SendTargetInputsState,
   statuses: RuntimeStatuses,
-  worktreeId: string
+  worktreeId: string,
+  selectActivity = (state: SendTargetInputsState) => state.agentStatusByPaneKey
 ): RunningAgentTargetState {
   if (s.agentSendPopoverTargetMode?.worktreeId !== worktreeId) {
     return EMPTY_SEND_TARGET_INPUTS
   }
   return {
-    agentStatusByPaneKey: s.agentStatusByPaneKey,
+    agentStatusByPaneKey: selectActivity(s),
     tabsByWorktree: s.tabsByWorktree,
     unifiedTabsByWorktree: s.unifiedTabsByWorktree,
     terminalLayoutsByTabId: s.terminalLayoutsByTabId,

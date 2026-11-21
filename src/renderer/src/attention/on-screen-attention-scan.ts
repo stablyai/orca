@@ -16,6 +16,7 @@ import {
   setPresenceGated
 } from './agent-auto-ack-presence'
 import type { AppState } from '@/store/types'
+import { sameAcceptedStatusRevision } from '@/store/slices/agent-status/status-ownership/agent-status-revisions'
 import { selectFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
 import {
   acknowledgeViewedAutoAckTarget,
@@ -77,7 +78,7 @@ export function startOnScreenAttentionScan(
   let lastActiveGroupIds: unknown = undefined
   let lastGroups: unknown = undefined
   let lastGroupLayouts: unknown = undefined
-  let lastAgentStatus: unknown = undefined
+  let lastAgentStatus: AppState['agentStatusByPaneKey'] | undefined
   let lastAcknowledged: unknown = undefined
   let lastLayouts: unknown = undefined
   let lastUnreadTerminalTabs: unknown = undefined
@@ -119,7 +120,12 @@ export function startOnScreenAttentionScan(
       s.activeGroupIdByWorktree === lastActiveGroupIds &&
       s.groupsByWorktree === lastGroups &&
       s.layoutByWorktree === lastGroupLayouts &&
-      s.agentStatusByPaneKey === lastAgentStatus &&
+      lastAgentStatus &&
+      sameAcceptedStatusRevision(
+        lastAgentStatus,
+        s.agentStatusByPaneKey,
+        'activityDetailsRevision'
+      ) &&
       s.acknowledgedAgentsByPaneKey === lastAcknowledged &&
       s.terminalLayoutsByTabId === lastLayouts &&
       s.unreadTerminalTabs === lastUnreadTerminalTabs &&

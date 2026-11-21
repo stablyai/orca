@@ -61,7 +61,8 @@ export function ingestRelayHookSpoolRecord(
     const options: Parameters<typeof normalizeHookPayload>[4] = {
       admitOpenCodeTui: (identity) => admitRelayOpenCodeTui(host, identity),
       deferCompactOwnershipToClient: true,
-      isReplay: true
+      isReplay: true,
+      replayReceivedAt: record.receivedAt
     }
     const event = host.providerNormalization
       ? host.providerNormalization.normalize(state, record.source, body, env, options)
@@ -94,7 +95,7 @@ export function ingestRelayHookSpoolRecord(
   return pending ? pending.then(apply) : apply()
 }
 
-/** Replay the relay's spool in order; `hostOf` binds each record's host. */
+/** Replay the relay's spool in order; the accepted cache owns later activation. */
 export async function drainRelayHookSpool(
   endpointDir: string,
   state: HookListenerState,

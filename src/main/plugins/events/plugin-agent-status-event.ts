@@ -3,6 +3,32 @@ import type { PluginAgentStatusChangedPayload } from '../../../shared/plugins/ev
 import type { WorktreeMetaIdentitySource } from '../../persistence/worktree-meta-host-identity'
 import { pluginAgentWorkspaceListId } from './plugin-event-workspace-id'
 import { pluginAgentSessionId } from '../workers/host-api/plugin-workspace-projection'
+import type { createPluginAgentStatusForwarder } from '../runtime/plugin-runtime-binding'
+
+export function pluginAgentStatusListener(
+  store: WorktreeMetaIdentitySource | null | undefined,
+  forward: ReturnType<typeof createPluginAgentStatusForwarder>
+) {
+  return (enriched: EnrichedAgentHookEventPayload, previous?: EnrichedAgentHookEventPayload) => {
+    const payload = projectPluginAgentStatusChangedPayload(enriched, store)
+    if (!payload) {
+      return
+    }
+    const transcriptUpdate =
+      previous?.payload.agentType === 'antigravity' &&
+      enriched.payload.agentType === 'antigravity' &&
+      enriched.hookEventName === undefined &&
+      previous.connectionId === enriched.connectionId &&
+      previous.launchToken === enriched.launchToken &&
+      previous.terminalHandle === enriched.terminalHandle &&
+      previous.payload.model !== enriched.payload.model
+    forward(
+      payload,
+      enriched.terminalHandle,
+      transcriptUpdate ? projectPluginAgentStatusChangedPayload(previous, store) : undefined
+    )
+  }
+}
 
 /** Exclude restored rows from live automation triggers; optional mainAgent preserves old-host compatibility.
  *  `store` names each worktree by the id `workspace.list` gives it. */

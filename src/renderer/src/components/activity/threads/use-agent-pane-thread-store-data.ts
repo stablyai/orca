@@ -4,6 +4,7 @@ import {
   type StructuredTab
 } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { useAppStore } from '@/store'
+import { sameAcceptedStatusRevision } from '@/store/slices/agent-status/status-ownership/agent-status-revisions'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import type { AppState } from '@/store/types'
@@ -78,9 +79,21 @@ function selectActivityTabs(raw: AppState['unifiedTabsByWorktree']): ActivityTab
 }
 
 /** Store inputs for every Activity thread, before any view scope; compare shallowly. */
-export function selectAllAgentPaneThreadStoreData(s: AppState): AllAgentPaneThreadsStoreData {
+export function selectAllAgentPaneThreadStoreData(
+  s: AppState,
+  previous?: AllAgentPaneThreadsStoreData
+): AllAgentPaneThreadsStoreData {
+  const previousStatuses = previous?.agentStatusByPaneKey
   return {
-    agentStatusByPaneKey: s.agentStatusByPaneKey,
+    agentStatusByPaneKey:
+      previousStatuses &&
+      sameAcceptedStatusRevision(
+        previousStatuses,
+        s.agentStatusByPaneKey,
+        'activityDetailsRevision'
+      )
+        ? previousStatuses
+        : s.agentStatusByPaneKey,
     runtimeAgentOrchestrationByPaneKey: selectVisibleAgentOrchestration(s),
     migrationUnsupportedByPtyId: s.migrationUnsupportedByPtyId,
     tabsByWorktree: s.tabsByWorktree,

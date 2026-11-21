@@ -1,5 +1,12 @@
+import { createAgentStatusEpochSelector } from '@/lib/agent-status/evidence/agent-status-epoch-selector'
+import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
+import type { AgentStatusProjection } from '@/store/slices/agent-status/projection/agent-status-projection'
+import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { isAgentStatusFresh } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  isAgentStatusFresh
+} from '../../../../shared/agent-status/contracts/agent-status-freshness'
 
 export type PetAnimationName =
   | 'idle'
@@ -26,17 +33,8 @@ export function nextPetDragAnimation(
   return { animation: current, accepted: false }
 }
 
-export type PetAnimationInput = {
-  entries: AgentStatusEntry[]
-  dragging: boolean
-  dragAnimation: PetDragAnimation
-  hovering: boolean
-  now: number
-  staleAfterMs: number
-}
-
 function agentStateAnimation(
-  entries: AgentStatusEntry[],
+  entries: Iterable<AgentStatusEntry>,
   now: number,
   staleAfterMs: number
 ): PetAnimationName {
@@ -66,21 +64,16 @@ function agentStateAnimation(
   return 'idle'
 }
 
-export function selectPetAnimationName({
-  entries,
-  dragging,
-  dragAnimation,
-  hovering,
-  now,
-  staleAfterMs
-}: PetAnimationInput): PetAnimationName {
-  const base = agentStateAnimation(entries, now, staleAfterMs)
-  // Horizontal drags run toward the pointer; stationary grabs retain live agent state, and plain hover jumps.
-  if (dragging) {
-    return dragAnimation ?? base
-  }
-  if (hovering) {
-    return 'jumping'
-  }
-  return base
+const petAgentAnimation = createAgentStatusEpochSelector(
+  (state: AppState, _owner: AgentStatusProjection, _activityRevision: number) =>
+    agentStateAnimation(
+      state.agentStatusByPaneKey.values(),
+      getAgentStatusEpochNow(state.agentStatusEpoch),
+      AGENT_STATUS_STALE_AFTER_MS
+    )
+)
+
+export function selectPetAgentAnimation(state: AppState): PetAnimationName {
+  const statuses = state.agentStatusByPaneKey
+  return petAgentAnimation(state, statuses.projection, statuses.activityRevision)
 }

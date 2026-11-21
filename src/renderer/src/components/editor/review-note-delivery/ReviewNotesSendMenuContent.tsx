@@ -18,6 +18,7 @@ import {
   selectLivePtyIdsForWorktree
 } from '@/components/sidebar/workspace-card/activity/worktree-card-status-inputs'
 import { useAppStore } from '@/store/index'
+import { sameActivityStatusEntries } from '@/store/slices/agent-status/status-ownership/agent-status-revisions'
 import { selectKnownWorktreeById } from '@/store/workspaces/selection/known-worktree-selection'
 import {
   useWorktreeStructuredChatTabNames,
@@ -105,18 +106,21 @@ export function ReviewNotesSendMenuContent({
   const selectTargets = useMemo(() => {
     let inputs: unknown[] = []
     let previous: NotesSendAgentTarget[] = []
+    let liveEntries: ReturnType<typeof selectLiveAgentStatusEntriesForWorktree> = []
     return (state: ReturnType<typeof store.getState>, statuses: RuntimeStatuses) => {
+      const nextEntries = selectLiveAgentStatusEntriesForWorktree(state, worktreeId)
+      const rowsChanged = !sameActivityStatusEntries(liveEntries, nextEntries)
+      liveEntries = nextEntries
       const nextInputs = [
         state.tabsByWorktree[worktreeId],
         state.unifiedTabsByWorktree[worktreeId],
-        selectLiveAgentStatusEntriesForWorktree(state, worktreeId),
         selectTerminalLayoutsForWorktree(state, worktreeId),
         selectLivePtyIdsForWorktree(state, worktreeId),
         selectRuntimePaneTitlesForWorktree(state, worktreeId),
         selectSendApprovalGuardEnvironmentIds(statuses),
         state.agentStatusEpoch
       ]
-      if (shallow(inputs, nextInputs)) {
+      if (!rowsChanged && shallow(inputs, nextInputs)) {
         return previous
       }
       inputs = nextInputs

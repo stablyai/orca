@@ -103,7 +103,7 @@ export function projectAgentPaneConversation(
   const providerSession =
     carried?.providerSession &&
     (!source?.providerSession ||
-      providersCompatible(agent, carried.providerSession, source.providerSession))
+      agentPaneProviderSessionsCompatible(agent, carried.providerSession, source.providerSession))
       ? carried.providerSession
       : (source?.providerSession ?? (acceptance.reset ? undefined : entry.providerSession))
   const firstStateStartedAt =
@@ -139,7 +139,7 @@ export function projectAgentPaneConversation(
   })
 }
 
-function providersCompatible(
+export function agentPaneProviderSessionsCompatible(
   agent: AgentType | undefined,
   previous: AgentProviderSessionMetadata,
   incoming: AgentProviderSessionMetadata
@@ -161,7 +161,11 @@ export function classifyAgentPaneConversation(
   const providerChanged = Boolean(
     previous?.providerSession &&
     source.providerSession &&
-    !providersCompatible(entry.agentType, previous.providerSession, source.providerSession)
+    !agentPaneProviderSessionsCompatible(
+      entry.agentType,
+      previous.providerSession,
+      source.providerSession
+    )
   )
   const confirmedProvider = Boolean(
     previous?.providerSession && source.providerSession && !providerChanged
