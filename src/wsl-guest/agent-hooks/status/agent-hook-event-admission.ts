@@ -112,6 +112,10 @@ export function applyRelayHookEvent(
   if (!transitioned) {
     return undefined
   }
+  if (source === 'antigravity' && preview.exited) {
+    host.state.antigravityChildWorkByPaneKey.delete(incoming.paneKey)
+    host.state.antigravityCompletedTranscriptByPaneKey.delete(incoming.paneKey)
+  }
   const revised = withRelayClaudeTurnRevision(
     previous,
     preview.exited ? { ...transitioned, providerSessionOnly: true } : transitioned,

@@ -8,7 +8,8 @@ import { RolloutReadBatch } from '../codex/codex-rollout-async-reads'
 import { normalizeAntigravityEvent } from './antigravity-events'
 import {
   getOrCreateAntigravityPaneState,
-  recordAntigravityChildHook
+  recordAntigravityChildHook,
+  verifyAntigravityChild
 } from './antigravity-pane-state'
 import { readAntigravityChildTranscriptTail } from './antigravity-child-transcript'
 import {
@@ -22,60 +23,83 @@ it.each([10, 100])(
   'coalesces %s live child tool bursts and releases rotating workers',
   async (children) => {
     const state = createHookListenerState()
-    const root = { conversationId: 'root', lastUserInput: 'Task' }
-    normalizeAntigravityEvent(state, 'PreInvocation', 'Task', 'pane', root, 'root')
-    normalizeAntigravityEvent(
-      state,
-      'PreToolUse',
-      '',
-      'pane',
-      { ...root, toolCall: { name: 'invoke_subagent' } },
-      'root'
+    const dir = mkdtempSync(join(tmpdir(), 'agy-child-burst-'))
+    const swarm = join(dir, 'root', '.system_generated', 'swarm')
+    mkdirSync(swarm, { recursive: true })
+    writeFileSync(
+      join(swarm, 'members.json'),
+      JSON.stringify({
+        members: Object.fromEntries(
+          Array.from({ length: children }, (_, i) => [
+            `worker-${i}`,
+            { conversation_id: `child-${i}`, applied_model: 'model-b' }
+          ])
+        )
+      })
     )
-    let frames = 0
-    for (let pass = 0; pass < 10; pass++) {
-      for (let i = 0; i < children; i++) {
-        const payload = {
-          conversationId: `child-${i}`,
-          toolCall: { name: 'read_file', args: { path: `src/app-${pass}.ts` } }
-        }
-        if (normalizeAntigravityEvent(state, 'PreToolUse', '', 'pane', payload, 'child')) {
-          frames++
+    const root = {
+      conversationId: 'root',
+      lastUserInput: 'Task',
+      modelName: 'model-a',
+      artifactDirectoryPath: join(dir, 'root')
+    }
+    try {
+      normalizeAntigravityEvent(state, 'PreInvocation', 'Task', 'pane', root, 'root')
+      normalizeAntigravityEvent(
+        state,
+        'PreToolUse',
+        '',
+        'pane',
+        { ...root, toolCall: { name: 'send_message' } },
+        'root'
+      )
+      let frames = 0
+      for (let pass = 0; pass < 10; pass++) {
+        for (let i = 0; i < children; i++) {
+          const payload = {
+            conversationId: `child-${i}`,
+            toolCall: { name: 'read_file', args: { path: `src/app-${pass}.ts` } }
+          }
+          if (normalizeAntigravityEvent(state, 'PreToolUse', '', 'pane', payload, 'child')) {
+            frames++
+          }
         }
       }
-    }
-    expect(frames).toBe(0)
-    const row: AgentHookEventPayload = {
-      paneKey: 'pane',
-      connectionId: null,
-      payload: { state: 'working' as const, agentType: 'antigravity' as const, prompt: 'Task' }
-    }
-    const polled = pollAntigravityTranscriptStatus(
-      state,
-      row,
-      await readAntigravityTranscriptPoll(state, 'pane')
-    )!
-    expect(transcriptPollUpdate('antigravity', row, polled)?.payload.subagents).toHaveLength(
-      children
-    )
-    expect(
-      transcriptPollUpdate(
-        'antigravity',
-        polled,
-        pollAntigravityTranscriptStatus(
-          state,
-          polled,
-          await readAntigravityTranscriptPoll(state, 'pane')
-        )!
+      expect(frames).toBe(0)
+      const row: AgentHookEventPayload = {
+        paneKey: 'pane',
+        connectionId: null,
+        payload: { state: 'working' as const, agentType: 'antigravity' as const, prompt: 'Task' }
+      }
+      const polled = pollAntigravityTranscriptStatus(
+        state,
+        row,
+        await readAntigravityTranscriptPoll(state, 'pane')
+      )!
+      expect(transcriptPollUpdate('antigravity', row, polled)?.payload.subagents).toHaveLength(
+        children
       )
-    ).toBeUndefined()
-    const pane = state.antigravityChildWorkByPaneKey.get('pane')!
-    for (let i = 0; i < children; i++) {
-      recordAntigravityChildHook(pane, `child-${i}`, 'Stop', { fullyIdle: true }, 2)
+      expect(
+        transcriptPollUpdate(
+          'antigravity',
+          polled,
+          pollAntigravityTranscriptStatus(
+            state,
+            polled,
+            await readAntigravityTranscriptPoll(state, 'pane')
+          )!
+        )
+      ).toBeUndefined()
+      const pane = state.antigravityChildWorkByPaneKey.get('pane')!
+      for (let i = 0; i < children; i++) {
+        recordAntigravityChildHook(pane, `child-${i}`, 'Stop', { fullyIdle: true }, 2)
+      }
+      expect(pane.children.size).toBe(0)
+      expect(pane.verifiedChildren.size).toBe(0)
+      expect(pane.brainCache.transcripts.size).toBe(0)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
     }
-    expect(pane.children.size).toBe(0)
-    expect(pane.verifiedChildren.size).toBe(0)
-    expect(pane.brainCache.transcripts.size).toBe(0)
   }
 )
 
@@ -116,6 +140,7 @@ it.each([10, 100])('retires %s verified siblings without traversing the roster',
   const pane = getOrCreateAntigravityPaneState(createHookListenerState(), 'pane')
   for (let i = 0; i < children; i++) {
     recordAntigravityChildHook(pane, `child-${i}`, 'PreInvocation', {}, 1)
+    verifyAntigravityChild(pane, `child-${i}`)
   }
   const values = vi.spyOn(pane.children, 'values')
   const entries = vi.spyOn(pane.children, Symbol.iterator)
@@ -203,6 +228,7 @@ it.each([100, 1000])(
           row,
           await readAntigravityTranscriptPoll(state, 'pane')
         )
+        expect(polled?.payload.subagents).toHaveLength(workers)
         expect(polled?.payload.subagents?.every((child) => child.model === 'model-b')).toBe(true)
       }
       expect(pane.brainCache.transcripts.size).toBe(0)

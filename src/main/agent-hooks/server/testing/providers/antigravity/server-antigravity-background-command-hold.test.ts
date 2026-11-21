@@ -29,9 +29,17 @@ afterEach(() => {
 const turn = { conversationId: 'parent', lastUserInput: 'start the job' }
 
 async function agyHook(hookEventName: string, payload: Record<string, unknown>): Promise<void> {
+  const isRoot = payload.conversationId === undefined || payload.conversationId === 'parent'
   const response = await postHookEvent(
     server,
-    buildBody({ ...turn, ...payload }, { hookEventName }),
+    buildBody(
+      {
+        ...turn,
+        ...(isRoot && hookEventName === 'PreInvocation' ? { modelName: 'model-r' } : {}),
+        ...payload
+      },
+      { hookEventName }
+    ),
     '/hook/antigravity'
   )
   expect(response.status).toBe(204)
@@ -52,48 +60,53 @@ function programDone(): void {
 const state = () => server.getStatusSnapshot()[0]?.state
 const worker = (id: string) => ({ id, state: 'working' as const, startedAt: 1, description: id })
 
-it.each([
-  ['', false],
-  [' and a workflow that started no subagent', true]
-])(
-  'keeps a turn waiting on a background command%s working past the hook-silence fallback, then bounds it',
-  async (_case, workflow) => {
-    const command = {
-      stepIdx: 2,
-      toolCall: { name: 'run_command', args: { CommandLine: 'sleep 600', IsDaemon: false } }
-    }
-    await agyHook('PreInvocation', {})
-    await agyHook('PreToolUse', command)
-    if (workflow) {
-      const run = { stepIdx: 3, toolCall: { name: 'run_workflow', args: {} } }
-      await agyHook('PreToolUse', run)
-      await agyHook('PostToolUse', { ...run, error: '' })
-    }
-    await agyHook('Stop', { fullyIdle: false, terminationReason: 'NO_TOOL_CALL' })
-    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-    // agy reports this done once; only the hook-silence recheck can offer it again.
-    programDone()
-
-    vi.advanceTimersByTime(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
-    expect(state()).toBe('working')
-
-    vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS)
-    expect(state()).toBe('done')
+it('keeps a turn waiting on a background command working past the hook-silence fallback, then bounds it', async () => {
+  const command = {
+    stepIdx: 2,
+    toolCall: { name: 'run_command', args: { CommandLine: 'sleep 600', IsDaemon: false } }
   }
-)
+  await agyHook('PreInvocation', {})
+  await agyHook('PreToolUse', command)
+  await agyHook('Stop', { fullyIdle: false, terminationReason: 'NO_TOOL_CALL' })
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  // agy reports this done once; only the hook-silence recheck can offer it again.
+  programDone()
 
-const subagentCall = { stepIdx: 2, toolCall: { name: 'invoke_subagent', args: { Prompt: 'ls' } } }
+  vi.advanceTimersByTime(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
+  expect(state()).toBe('working')
+
+  vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS)
+  expect(state()).toBe('done')
+})
+
+const invoke = (stepIdx = 2) => ({
+  stepIdx,
+  toolCall: { id: `invoke-${stepIdx}`, name: 'invoke_subagent', args: { Prompt: 'ls' } }
+})
+const subagentCall = invoke()
 const child = { conversationId: 'child', lastUserInput: '' }
 
 // Order captured from agy 1.5.12: the parent stops busy and no parent hook follows its subagent's idle Stop.
-async function parentStopsWhileSubagentRuns(): Promise<void> {
-  await agyHook('PreInvocation', {})
-  await agyHook('PreToolUse', subagentCall)
-  await agyHook('PostToolUse', subagentCall)
-  await agyHook('PreInvocation', child)
+async function parentStopsWhileSubagentRuns(ids = ['child']): Promise<void> {
+  const transcriptPath = brainWithChildDescriptor(ids)
+  await agyHook('PreInvocation', { transcriptPath })
+  for (const [index, conversationId] of ids.entries()) {
+    const call = invoke(index + 2)
+    await agyHook('PreToolUse', call)
+    await agyHook('PostToolUse', call)
+    await agyHook('PreInvocation', { ...child, conversationId })
+  }
   await agyHook('PostInvocation', {})
   await agyHook('Stop', { fullyIdle: false, terminationReason: 'NO_TOOL_CALL' })
   await agyHook('PostInvocation', child)
+  await vi.waitFor(
+    () => {
+      const row = server.getStatusSnapshot()[0]
+      expect(row?.subagents).toHaveLength(ids.length)
+      expect(row?.antigravitySpawnPending).toBeUndefined()
+    },
+    { timeout: 10000 }
+  )
 }
 
 const subagentIdleStop = () =>
@@ -106,7 +119,7 @@ it.each([
   'ends the run on agy done that arrives %s its last subagent stops after the parent turn',
   async (_order, doneFirst) => {
     await parentStopsWhileSubagentRuns()
-    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'performance'] })
     if (doneFirst) {
       programDone()
     }
@@ -116,36 +129,37 @@ it.each([
     }
     expect(state()).toBe('working')
 
-    vi.advanceTimersByTime(ANTIGRAVITY_PARENT_WAKE_GRACE_MS + 1)
+    await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS + 1)
     expect(state()).toBe('done')
   }
 )
 
 it("waits out the grace after a parent's busy Stop that lands after its subagent's", async () => {
-  await agyHook('PreInvocation', {})
+  await agyHook('PreInvocation', { transcriptPath: brainWithChildDescriptor() })
   await agyHook('PreToolUse', subagentCall)
   await agyHook('PostToolUse', subagentCall)
   await agyHook('PreInvocation', child)
-  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  await vi.waitFor(() => expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(1))
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'performance'] })
   await subagentIdleStop()
-  vi.advanceTimersByTime(ANTIGRAVITY_PARENT_WAKE_GRACE_MS + 1000)
+  await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS + 1000)
   await agyHook('Stop', { fullyIdle: false, terminationReason: 'NO_TOOL_CALL' })
   programDone()
   expect(state()).toBe('working')
 
-  vi.advanceTimersByTime(ANTIGRAVITY_PARENT_WAKE_GRACE_MS + 1)
+  await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS + 1)
   expect(state()).toBe('done')
 })
 
 it("keeps the run working when agy's done lands while a sibling subagent still works", async () => {
-  await parentStopsWhileSubagentRuns()
-  await agyHook('PreInvocation', { conversationId: 'sibling', lastUserInput: '' })
-  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  await parentStopsWhileSubagentRuns(['child', 'sibling'])
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'performance'] })
   programDone()
   await subagentIdleStop()
 
   await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS * 2)
   expect(state()).toBe('working')
+  expect(server.getStatusSnapshot()[0]?.subagents?.map(({ id }) => id)).toEqual(['sibling'])
   await agyHook('Stop', { ...child, conversationId: 'sibling', fullyIdle: true })
   await vi.advanceTimersByTimeAsync(1000)
   expect(state()).toBe('working')
@@ -182,57 +196,9 @@ it('discards a refused done when the program reports new work', async () => {
   expect(state()).toBe('working')
 })
 
-it('reoffers one relayed done after the final verified child disappears', async () => {
-  const connectionId = 'ssh-agy'
-  const leadStartedAt = Date.now()
-  server.beginRemoteRelaySession(connectionId)
-  const report = (ids: string[], hookEventName?: string): void => {
-    server.ingestRemote(
-      {
-        paneKey: PANE,
-        tabId: 'tab-1',
-        worktreeId: 'wt-1',
-        source: 'antigravity',
-        providerSession: { key: 'conversation_id', id: 'remote-root' },
-        agentPresence: { agent: 'antigravity', session: 'remote-root' },
-        hookEventName,
-        payload: {
-          prompt: 'remote job',
-          state: 'working',
-          agentType: 'antigravity',
-          mainAgent: { state: 'done', stateStartedAt: leadStartedAt },
-          subagents: ids.map((id) => ({ id, state: 'working', startedAt: 1, description: id }))
-        }
-      },
-      connectionId
-    )
-  }
-  report(['a', 'b'], 'Stop')
-  expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(2)
-  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-  server.ingestTerminalStatus({
-    paneKey: PANE,
-    tabId: 'tab-1',
-    worktreeId: 'wt-1',
-    connectionId,
-    fromProgramStatus: true,
-    payload: { prompt: '', state: 'done', agentType: 'antigravity' }
-  })
-  await vi.advanceTimersByTimeAsync(4001)
-  report(['b'])
-  await vi.advanceTimersByTimeAsync(4001)
-  expect(state()).toBe('working')
-  report([])
-  await vi.advanceTimersByTimeAsync(1000)
-  report([])
-  expect(state()).toBe('working')
-  await vi.advanceTimersByTimeAsync(1001)
-  expect(state()).toBe('done')
-})
-
 it('ends the run on agy done when the finished subagent leaves the row during the grace', async () => {
-  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'performance'] })
   await parentStopsWhileSubagentRuns()
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'performance'] })
   await subagentIdleStop()
   programDone()
   // The roster poll drops the finished child from the row before the grace ends.
@@ -242,7 +208,7 @@ it('ends the run on agy done when the finished subagent leaves the row during th
   expect(state()).toBe('done')
 })
 
-function brainWithChildDescriptor(): string {
+function brainWithChildDescriptor(ids = ['child']): string {
   const brain = join(dir, 'brain', 'parent', '.system_generated')
   mkdirSync(join(brain, 'logs'), { recursive: true })
   mkdirSync(join(brain, 'subagents'), { recursive: true })
@@ -251,10 +217,22 @@ function brainWithChildDescriptor(): string {
     transcriptPath,
     `${JSON.stringify({ source: 'USER_EXPLICIT', type: 'USER_INPUT', content: 'start the job' })}\n`
   )
-  writeFileSync(
-    join(brain, 'subagents', 'child.json'),
-    JSON.stringify({ conversationId: 'child', state: 'SUBAGENT_STATE_ALIVE' })
-  )
+  for (const [index, conversationId] of ids.entries()) {
+    writeFileSync(
+      join(brain, 'subagents', `${conversationId}.json`),
+      JSON.stringify({ conversationId, state: 'SUBAGENT_STATE_ALIVE' })
+    )
+    appendFileSync(
+      transcriptPath,
+      `${JSON.stringify({
+        step_index: index + 2,
+        type: 'GENERIC',
+        source: 'MODEL',
+        status: 'DONE',
+        content: `Created the following subagent:\n${JSON.stringify({ conversationId })}\nThe subagent will send you a message when it has completed its task or requires guidance.`
+      })}\n`
+    )
+  }
   return transcriptPath
 }
 
@@ -262,7 +240,7 @@ it('keeps the run working while a second spawn has not produced its subagent', a
   const transcriptPath = brainWithChildDescriptor()
   await agyHook('PreInvocation', { transcriptPath })
   await agyHook('PreToolUse', { ...subagentCall, transcriptPath })
-  await agyHook('PreToolUse', { ...subagentCall, stepIdx: 3, transcriptPath })
+  await agyHook('PreToolUse', { ...invoke(3), transcriptPath })
   await agyHook('PreInvocation', child)
   await agyHook('Stop', { fullyIdle: false, terminationReason: 'NO_TOOL_CALL', transcriptPath })
   await vi.waitFor(() => expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(1), {
@@ -271,7 +249,8 @@ it('keeps the run working while a second spawn has not produced its subagent', a
   vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
   await subagentIdleStop()
   programDone()
-  await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS * 3)
+  await vi.advanceTimersByTimeAsync(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
+  expect(server.getStatusSnapshot()[0]?.antigravitySpawnPending).toBe(true)
   expect(state()).toBe('working')
 })
 
@@ -314,7 +293,7 @@ it('keeps a woken subagent from settling a newer spawn', async () => {
     timeout: 10000
   })
   await subagentIdleStop()
-  await agyHook('PreToolUse', { ...subagentCall, stepIdx: 3, transcriptPath })
+  await agyHook('PreToolUse', { ...invoke(3), transcriptPath })
   await agyHook('Stop', { fullyIdle: false, terminationReason: 'NO_TOOL_CALL', transcriptPath })
   await agyHook('PreInvocation', child)
   await vi.waitFor(() => expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(1), {
@@ -323,7 +302,8 @@ it('keeps a woken subagent from settling a newer spawn', async () => {
   vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
   await subagentIdleStop()
   programDone()
-  await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS * 3)
+  await vi.advanceTimersByTimeAsync(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
+  expect(server.getStatusSnapshot()[0]?.antigravitySpawnPending).toBe(true)
   expect(state()).toBe('working')
 })
 
@@ -334,7 +314,7 @@ it.each([
   const connectionId = 'ssh-agy'
   const leadStartedAt = Date.now()
   server.beginRemoteRelaySession(connectionId)
-  const report = (ids: string[], spawnPending?: true): void => {
+  const report = (ids: string[], spawnPending?: true, drained?: true): void => {
     const shed = shedRoster && spawnPending && ids.length === 0
     server.ingestRemote(
       {
@@ -343,6 +323,7 @@ it.each([
         tabId: 'tab-1',
         worktreeId: 'wt-1',
         source: 'antigravity',
+        ...(drained ? { antigravityHelpersDrained: true, isReplay: true } : {}),
         providerSession: { key: 'conversation_id', id: 'remote-root' },
         agentPresence: { agent: 'antigravity', session: 'remote-root' },
         payload: {
@@ -368,11 +349,90 @@ it.each([
     payload: { prompt: '', state: 'done', agentType: 'antigravity' }
   })
   report([], true)
-  await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS * 3)
+  await vi.advanceTimersByTimeAsync(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
+  if (!shedRoster) {
+    expect(server.getStatusSnapshot()[0]?.antigravitySpawnPending).toBe(true)
+  }
   expect(state()).toBe('working')
-  report([])
+  report([], undefined, true)
   await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS * 3)
   expect(state()).toBe('done')
+})
+
+it('holds an unreadable root launch past the discovery lease and clears it on process exit', async () => {
+  const transcriptPath = join(dir, 'parent', '.system_generated', 'logs', 'transcript.jsonl')
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'performance'] })
+  await agyHook('PreInvocation', { transcriptPath, modelName: 'auto' })
+  await agyHook('PreToolUse', {
+    stepIdx: 1,
+    toolCall: { name: 'run_command', args: { CommandLine: 'sleep 600' } }
+  })
+  await agyHook('PostToolUse', subagentCall)
+  await agyHook('Stop', { fullyIdle: false })
+  programDone()
+  await vi.advanceTimersByTimeAsync(AGENT_STATUS_STALE_AFTER_MS + 60000)
+  expect(server.getStatusSnapshot()[0]).toMatchObject({
+    state: 'working',
+    antigravitySpawnPending: true
+  })
+  await agyHook('Stop', { fullyIdle: true })
+  expect(state()).toBe('working')
+  server.reconcileEndedProcessForPaneKeys([PANE], { confirmedExit: true })
+  expect(server.getStatusSnapshot()).toHaveLength(0)
+})
+
+it('honors a replayed drain without the earlier roster and discards its completion on a newer turn', async () => {
+  const connectionId = 'ssh-agy'
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  server.beginRemoteRelaySession(connectionId)
+  const report = (root: string, drained: boolean, stateStartedAt = Date.now()) =>
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        source: 'antigravity',
+        providerSession: { key: 'conversation_id', id: root },
+        agentPresence: { agent: 'antigravity', session: root },
+        ...(drained
+          ? { isReplay: true, antigravityHelpersDrained: true }
+          : {
+              hookEventName: 'PreInvocation',
+              hasExplicitPrompt: true
+            }),
+        payload: {
+          prompt: root,
+          state: 'working',
+          agentType: 'antigravity',
+          mainAgent: { state: drained ? 'done' : 'working', stateStartedAt }
+        }
+      },
+      connectionId
+    )
+  const done = () =>
+    server.ingestTerminalStatus({
+      paneKey: PANE,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      connectionId,
+      fromProgramStatus: true,
+      payload: { prompt: '', state: 'done', agentType: 'antigravity' }
+    })
+  report('first', true)
+  done()
+  expect(state()).toBe('working')
+  await vi.advanceTimersByTimeAsync(2001)
+  expect(state()).toBe('done')
+
+  const previousTurn = Date.now()
+  report('second', true, previousTurn)
+  done()
+  await vi.advanceTimersByTimeAsync(1)
+  report('second', false)
+  report('second', true, previousTurn)
+  expect(server.getStatusSnapshot()[0]?.mainAgent?.state).toBe('working')
+  await vi.advanceTimersByTimeAsync(2001)
+  expect(state()).toBe('working')
 })
 
 it.each([

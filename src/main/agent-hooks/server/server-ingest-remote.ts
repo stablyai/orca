@@ -27,7 +27,7 @@ import {
   type RemoteAgentStatusEnvelope
 } from './server-remote-envelope-normalization'
 import { AgentHookServerIngestStructuredChildren } from './server-ingest-structured-children'
-import { reconcileRelayedAntigravityDone } from './program-status/program-status-recheck'
+import { reconcileAntigravityRelay } from './program-status/program-status-recheck'
 
 export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestStructuredChildren {
   /** Call as each relay link starts, before its first envelope. */
@@ -268,6 +268,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       hasExplicitPrompt: envelope.hasExplicitPrompt === true ? true : undefined,
       promptInteractionKey,
       hookEventName,
+      antigravityHelpersDrained: envelope.antigravityHelpersDrained === true ? true : undefined,
       providerPromptId,
       grokPromptBoundary,
       opensTurn,
@@ -308,7 +309,6 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       'hook',
       typeof age === 'number' ? Math.max(0, Date.now() - age) : undefined
     )
-    const shed = envelope.shedFields
-    reconcileRelayedAntigravityDone(this.state, this.hookSilenceRechecks, previous, applied, shed)
+    reconcileAntigravityRelay(this.state, this.hookSilenceRechecks, previous, applied, envelope)
   }
 }

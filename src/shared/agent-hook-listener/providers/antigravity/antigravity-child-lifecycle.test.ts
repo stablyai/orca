@@ -76,8 +76,26 @@ async function poll(): Promise<AgentHookEventPayload | undefined> {
   }
   return event
 }
-function spawn(): void {
-  hook('root', 'PreToolUse', { toolCall: { name: 'invoke_subagent', args: { Role: 'Research' } } })
+function launch(stepIdx = 5): Record<string, unknown> {
+  return { stepIdx, toolCall: { id: `invoke-${stepIdx}`, name: 'invoke_subagent', args: {} } }
+}
+function launchResult(step: number, content: string, status = 'DONE'): void {
+  appendFileSync(
+    join(dir, 'root', '.system_generated', 'logs', 'transcript.jsonl'),
+    `${JSON.stringify({ step_index: step, type: 'GENERIC', source: 'MODEL', status, content })}\n`
+  )
+}
+function invokeResult(id: string, step = 5): void {
+  launchResult(
+    step,
+    `Created At: 2026-11-20T03:06:21-08:00\nCompleted At: 2026-11-20T03:06:23-08:00\nCreated the following subagent:\n${JSON.stringify({ conversationId: id })}\nThe subagent will send you a message when it has completed its task or requires guidance. There is no need to poll for its response.`
+  )
+}
+function spawn(id?: string, step = 5): void {
+  hook('root', 'PreToolUse', launch(step))
+  if (id) {
+    invokeResult(id, step)
+  }
 }
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'agy-child-lifecycle-'))
@@ -87,23 +105,27 @@ beforeEach(() => {
 })
 afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
-it('keeps the run working when one of two subagents stops while the root transcript is unreadable', () => {
+it('keeps the owned sibling listed when one of two subagents stops with an unreadable root transcript', async () => {
   state = createHookListenerState()
   rmSync(join(dir, 'root', '.system_generated', 'logs', 'transcript.jsonl'))
   hook('root', 'PreInvocation', { lastUserInput: 'Task', modelName: 'model-a' })
   for (const id of ['first', 'second']) {
     transcript(id)
-    spawn()
+    descriptor(id)
     hook(id, 'PreInvocation')
   }
+  await poll()
+  expect(row.payload.subagents).toHaveLength(2)
   expect(hook('first', 'Stop', { fullyIdle: true })).toBeNull()
+  await poll()
+  expect(row.payload.subagents?.map((child) => child.id)).toEqual(['second'])
   expect(row.payload.state).toBe('working')
 })
 
 it('wakes a retired child again and releases its command hold when disk reports it killed', async () => {
   transcript('child')
   descriptor('child')
-  spawn()
+  spawn('child')
   hook('child', 'PreInvocation')
   expect((await poll())?.payload.subagents?.[0]?.id).toBe('child')
   hook('child', 'Stop', { fullyIdle: true })
@@ -141,26 +163,28 @@ it('uses fresh worker hooks ahead of cached wake modes and keeps stopped workers
   hook('worker', 'PreInvocation')
   expect((await poll())?.payload.subagents?.[0]?.id).toBe('worker')
   hook('worker', 'Stop', { fullyIdle: true })
-  expect((await poll())?.payload.subagents).toBeUndefined()
+  await poll()
+  expect(row.payload.subagents).toBeUndefined()
   writeMember('mentions')
   await poll()
   hook('worker', 'PreInvocation')
   expect((await poll())?.payload.subagents?.[0]?.id).toBe('worker')
-  expect((await poll())?.payload.subagents?.[0]?.id).toBe('worker')
+  hook('worker', 'Stop', { fullyIdle: true })
   hook('root', 'Stop', { fullyIdle: true })
   hook('root', 'PreInvocation', { lastUserInput: 'Next task' })
   hook('root', 'PreToolUse', { toolCall: { name: 'swarm_wait' } })
-  expect((await poll())?.payload.subagents).toBeUndefined()
+  await poll()
+  expect(row.payload.subagents).toBeUndefined()
 })
 
 it('keeps waiting for a new child when a prior child descriptor remains on disk', async () => {
   transcript('old')
   descriptor('old')
-  spawn()
+  spawn('old')
   hook('old', 'PreInvocation')
   await poll()
   hook('old', 'Stop', { fullyIdle: true })
-  spawn()
+  spawn(undefined, 6)
   hook('root', 'Stop', { fullyIdle: false })
   expect((await poll())?.payload.state).toBe('working')
   transcript('new')
@@ -172,7 +196,7 @@ it('keeps waiting for a new child when a prior child descriptor remains on disk'
 it('refuses another root child and fences a delayed kill read against a fresh invocation', async () => {
   transcript('child')
   descriptor('child')
-  spawn()
+  spawn('child')
   hook('child', 'PreInvocation')
   await poll()
   descriptor('child', true)
@@ -202,7 +226,7 @@ it('keeps unverified child commands and Stops from reopening a finished root', a
 it('resolves automatic models from transcripts and preserves them across automatic hooks', async () => {
   transcript('child')
   descriptor('child')
-  spawn()
+  spawn('child')
   hook('child', 'PreInvocation', { modelName: 'auto' })
   appendFileSync(
     join(dir, 'child', '.system_generated', 'logs', 'transcript.jsonl'),
@@ -263,6 +287,29 @@ it('takes an automatic model only from its own turn when agy stamps whole second
   }
 })
 
+it.each([false, true])(
+  'keeps observing an automatic turn without step indices (cold=%s)',
+  async (cold) => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(Date.parse('2030-01-01T12:00:00.600Z'))
+      if (cold) {
+        state = createHookListenerState()
+      }
+      const path = join(dir, 'root', '.system_generated', 'logs', 'transcript.jsonl')
+      appendFileSync(path, '{"model":"old-model","created_at":"2030-01-01T12:00:00Z"}\n')
+      hook('root', 'PreInvocation', { lastUserInput: 'Next', modelName: 'auto' })
+      await poll()
+      expect(row.payload.model).toBe(cold ? undefined : 'model-a')
+      appendFileSync(path, '{"model":"new-model","created_at":"2030-01-01T12:00:01Z"}\n')
+      await poll()
+      expect(row.payload.model).toBe('new-model')
+    } finally {
+      vi.useRealTimers()
+    }
+  }
+)
+
 it('keeps a root command monitoring after its child finishes', async () => {
   transcript('child')
   descriptor('child')
@@ -270,7 +317,7 @@ it('keeps a root command monitoring after its child finishes', async () => {
     stepIdx: 4,
     toolCall: { name: 'run_command', args: { CommandLine: 'long-task' } }
   })
-  spawn()
+  spawn('child')
   hook('child', 'PreInvocation')
   await poll()
   hook('root', 'Stop', { fullyIdle: false })
@@ -300,12 +347,15 @@ it('keeps a Swarm worker without a RUNNING phase listed', async () => {
 })
 
 it('shows a waiting child only once the root is proven its parent', async () => {
+  state = createHookListenerState()
+  hook('root', 'PreInvocation', { transcriptPath: undefined, lastUserInput: 'Task' })
   transcript('helper')
-  spawn()
+  hook('root', 'PreToolUse', { ...launch(), transcriptPath: undefined })
   hook('helper', 'PreInvocation')
   hook('helper', 'PreToolUse', { toolCall: { name: 'ask_question', args: {} } })
   expect((await poll())?.payload).toMatchObject({ state: 'working', subagents: undefined })
   descriptor('helper')
+  hook('root', 'PostInvocation')
   expect((await poll())?.payload).toMatchObject({
     state: 'waiting',
     subagents: [{ id: 'helper', state: 'waiting' }]
@@ -320,8 +370,8 @@ it('tracks a child that first reports after a background command finished the ro
     stepIdx: 5,
     toolCall: { name: 'run_command', args: { CommandLine: 'long-task' } }
   })
-  spawn()
-  spawn()
+  spawn('first', 6)
+  spawn('second', 7)
   hook('first', 'PreInvocation')
   await poll()
   hook('root', 'Stop', { fullyIdle: false })
@@ -337,13 +387,13 @@ it('tracks a child that first reports after a background command finished the ro
     subagents: [{ id: 'second', state: 'waiting' }]
   })
   hook('second', 'Stop', { fullyIdle: true })
-  expect((await poll())?.payload.subagents).toBeUndefined()
+  await poll()
+  expect(row.payload.subagents).toBeUndefined()
 })
 
 it('finishes the run when the only hook received from a subagent is its final Stop', async () => {
   transcript('child')
-  descriptor('child')
-  spawn()
+  spawn('child')
   expect(hook('root', 'Stop', { fullyIdle: false })?.payload.antigravitySpawnPending).toBe(true)
   hook('child', 'Stop', { fullyIdle: true })
   const polled = await poll()
@@ -351,46 +401,76 @@ it('finishes the run when the only hook received from a subagent is its final St
   expect(polled?.payload.mainAgent?.state).toBe('done')
 })
 
-it('ignores a child that wakes after the root finished', async () => {
-  transcript('child')
-  descriptor('child')
-  spawn()
-  hook('child', 'PreInvocation')
-  await poll()
-  expect(hook('root', 'Stop', { fullyIdle: true })?.payload.state).toBe('done')
-  expect(hook('child', 'PreInvocation')).toBeNull()
-  expect((await poll())?.payload.state ?? row.payload.state).toBe('done')
-  hook('root', 'PreInvocation', { lastUserInput: 'Next' })
-  spawn()
-  hook('child', 'PreInvocation')
-  expect((await poll())?.payload.subagents?.map((child) => child.id)).toEqual(['child'])
+it('keeps parallel launches and their live siblings across a root wake and an idle Stop', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  try {
+    spawn(undefined, 5)
+    spawn(undefined, 6)
+    // The first result wakes the root with the original input and invocation number.
+    hook('root', 'PreInvocation', { lastUserInput: 'Task', invocationNum: 0 })
+    for (const id of ['short', 'long']) {
+      transcript(id)
+      descriptor(id)
+      hook(id, 'PreInvocation')
+    }
+    invokeResult('short', 5)
+    await poll()
+    expect(row.payload.antigravitySpawnPending).toBe(true)
+    expect(row.payload.subagents).toHaveLength(2)
+    invokeResult('long', 6)
+    await poll()
+    expect(row.payload.antigravitySpawnPending).toBeUndefined()
+    hook('root', 'Stop', { fullyIdle: true, terminationReason: 'TERMINAL_CUSTOM_HOOK' })
+    hook('short', 'Stop', { fullyIdle: true })
+    hook('long', 'PreToolUse', { toolCall: { name: 'ask_question', args: {} } })
+    expect((await poll())?.payload).toMatchObject({
+      state: 'waiting',
+      subagents: [{ id: 'long', state: 'waiting' }]
+    })
+    hook('long', 'Stop', { fullyIdle: true })
+    expect((await poll())?.payload).toMatchObject({ state: 'working', subagents: undefined })
+    vi.advanceTimersByTime(2001)
+    expect((await poll())?.payload.state).toBe('done')
+    hook('long', 'PreInvocation')
+    expect((await poll())?.payload.state).toBe('done')
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 it('lists a subagent killed before its first poll once, then clears it', async () => {
   transcript('child')
   descriptor('child', true)
-  spawn()
+  spawn('child')
   hook('child', 'PreInvocation')
   hook('root', 'Stop', { fullyIdle: false })
   expect((await poll())?.payload.subagents?.map((child) => child.id)).toEqual(['child'])
-  expect((await poll())?.payload.subagents).toBeUndefined()
+  await poll()
+  expect(row.payload.subagents).toBeUndefined()
 })
 
-it('releases the parent when agy reports the spawn failed', () => {
-  spawn()
+it('settles only the launch whose root result reports a failure', async () => {
+  spawn(undefined, 5)
+  spawn(undefined, 6)
   expect(row.payload.antigravitySpawnPending).toBe(true)
-  const failed = hook('root', 'PostToolUse', {
-    toolCall: { name: 'invoke_subagent' },
+  hook('root', 'PostToolUse', {
+    ...launch(6),
     error: 'subagent "x" not found or not allowed to be invoked'
   })
-  expect(failed?.payload.antigravitySpawnPending).toBeUndefined()
-  expect(hook('root', 'Stop', { fullyIdle: false })?.payload.mainAgent?.state).toBe('working')
+  const error =
+    'Encountered error in step execution: subagent "x" not found or not allowed to be invoked'
+  launchResult(6, error, 'ERROR')
+  expect((await poll())?.payload.antigravitySpawnPending).toBe(true)
+  launchResult(5, error, 'ERROR')
+  expect((await poll())?.payload.antigravitySpawnPending).toBeUndefined()
+  hook('root', 'PostToolUse', launch(6))
+  expect(row.payload.antigravitySpawnPending).toBeUndefined()
 })
 
 it('counts only a swarm add as a spawn that holds the parent', async () => {
   transcript('child')
   descriptor('child')
-  spawn()
+  spawn('child')
   hook('child', 'PreInvocation')
   await poll()
   const swarm = (action: string) =>
@@ -399,13 +479,76 @@ it('counts only a swarm add as a spawn that holds the parent', async () => {
   expect(swarm('add')?.antigravitySpawnPending).toBe(true)
 })
 
+it('holds the root for every worker named by one Swarm result, including workers whose hooks have not arrived', async () => {
+  const swarm = join(dir, 'root', '.system_generated', 'swarm')
+  mkdirSync(swarm, { recursive: true })
+  hook('root', 'PostToolUse', {
+    stepIdx: 8,
+    toolCall: {
+      id: 'call-swarm',
+      name: 'swarm',
+      args: { action: 'add', tasks: ['first', 'second'] }
+    }
+  })
+  launchResult(
+    8,
+    JSON.stringify({
+      status: 'added',
+      names: ['victim-1', 'victim-2'],
+      conversation_ids: ['killed', 'running']
+    })
+  )
+  hook('root', 'Stop', { fullyIdle: true })
+  await poll()
+  expect(row.payload).toMatchObject({ state: 'working', antigravitySpawnPending: true })
+  writeFileSync(
+    join(swarm, 'members.json'),
+    JSON.stringify({
+      members: { 'victim-1': { conversation_id: 'killed', phase: 'KILLED' } }
+    })
+  )
+  transcript('foreign')
+  hook('foreign', 'PreToolUse', { toolCall: { name: 'ask_question', args: {} } })
+  await poll()
+  await poll()
+  expect(row.payload).toMatchObject({
+    state: 'working',
+    antigravitySpawnPending: true,
+    subagents: undefined
+  })
+  descriptor('running')
+  transcript('running')
+  hook('running', 'PreInvocation')
+  await poll()
+  expect(row.payload.subagents?.map(({ id }) => id)).toEqual(['running'])
+  expect(row.payload.antigravitySpawnPending).toBeUndefined()
+})
+
+it('keeps an ambiguous step held even when a root result names a child at that step', async () => {
+  spawn(undefined, 5)
+  hook('root', 'PostToolUse', {
+    stepIdx: 5,
+    toolCall: { id: 'another-call', name: 'invoke_subagent' }
+  })
+  invokeResult('child')
+  descriptor('child')
+  transcript('child')
+  hook('child', 'PreInvocation')
+  await poll()
+  hook('child', 'Stop', { fullyIdle: true })
+  hook('root', 'Stop', { fullyIdle: true })
+  await poll()
+  expect(row.payload).toMatchObject({ state: 'working', antigravitySpawnPending: true })
+})
+
 it('retries proving a stopped subagent while its spawn is pending', async () => {
   transcript('child')
   spawn()
   hook('child', 'PreInvocation')
   hook('root', 'Stop', { fullyIdle: false })
   hook('child', 'Stop', { fullyIdle: true })
-  expect((await poll())?.payload.subagents).toBeUndefined()
+  await poll()
+  expect(row.payload.subagents).toBeUndefined()
   descriptor('child')
   expect((await poll())?.payload.subagents?.map((child) => child.id)).toEqual(['child'])
 })
@@ -413,7 +556,7 @@ it('retries proving a stopped subagent while its spawn is pending', async () => 
 it('holds the parent for a proven subagent woken again by a message', async () => {
   transcript('child')
   descriptor('child')
-  spawn()
+  spawn('child')
   hook('child', 'PreInvocation')
   await poll()
   hook('child', 'Stop', { fullyIdle: true })

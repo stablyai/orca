@@ -186,7 +186,8 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
             payload,
             workingSince,
             antigravity?.helpersIdleAt,
-            antigravity?.leadObservedAt
+            antigravity?.leadObservedAt,
+            antigravity?.relayRosterShed
           )
         : undefined
     const hookOwnsAgent = yieldEndsAt !== undefined && now < yieldEndsAt
@@ -205,7 +206,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
           hookOwnsAgent &&
           previous !== undefined &&
           (payload.agentType === undefined || payload.agentType === 'antigravity') &&
-          isAntigravityHelperHeldDone(previous, payload),
+          isAntigravityHelperHeldDone(previous, payload, antigravity?.relayRosterShed),
         antigravityDone:
           previous?.payload.agentType === 'antigravity' &&
           (payload.agentType === undefined || payload.agentType === 'antigravity') &&
@@ -280,7 +281,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         ? previous.payload.mainAgent
         : undefined)
     // Terminal observations cannot establish prompt-sent telemetry.
-    this.applyNormalizedStatus(
+    const applied = this.applyNormalizedStatus(
       {
         paneKey,
         tabId,
@@ -297,5 +298,15 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       newRun,
       !preservedProviderSession
     )
+    if (
+      applied &&
+      applied !== previous &&
+      payload.sessionBoundary === true &&
+      applied.payload.agentType === 'antigravity'
+    ) {
+      this.clearTranscriptPoll(paneKey)
+      this.state.antigravityChildWorkByPaneKey.delete(paneKey)
+      this.state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
+    }
   }
 }

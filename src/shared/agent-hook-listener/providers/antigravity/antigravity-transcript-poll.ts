@@ -1,7 +1,11 @@
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../agent-status/contracts/agent-status-freshness'
 import type { AgentHookEventPayload } from '../../listener-event'
 import type { HookListenerState } from '../../listener-state'
 import { RolloutReadBatch } from '../codex/codex-rollout-async-reads'
 import { buildAntigravityFoldedStatusPayload } from './antigravity-parent-status'
+import { ANTIGRAVITY_PARENT_WAKE_GRACE_MS } from './antigravity-event-rules'
+import type { AntigravityLaunchResult } from './antigravity-launch-results'
+import { applyAntigravityLaunchResults } from './antigravity-launch-state'
 import {
   readAntigravityChildMetadata,
   readAntigravitySwarmMembers,
@@ -14,13 +18,39 @@ import {
 import {
   verifyAntigravityChild,
   retireAntigravityChild,
+  antigravityHasPendingLaunch,
+  antigravityHelpersSettled,
   type AntigravityPaneChildState,
   type TrackedAntigravityChild
 } from './antigravity-pane-state'
 
-function readsLeadModel(pane: AntigravityPaneChildState): boolean {
-  return pane.leadModel === undefined || pane.leadModelSince !== undefined
+export function antigravityDiscoveryEndsAt(pane: AntigravityPaneChildState): number {
+  return (
+    Math.max(pane.leadObservedAt ?? 0, pane.discoveryObservedAt ?? 0) + AGENT_STATUS_STALE_AFTER_MS
+  )
 }
+
+function discoversAntigravityChildren(pane: AntigravityPaneChildState): boolean {
+  return (
+    Date.now() < antigravityDiscoveryEndsAt(pane) &&
+    (pane.rootStop !== 'idle' || antigravityHasPendingLaunch(pane))
+  )
+}
+
+function canReadLeadModel(pane: AntigravityPaneChildState): boolean {
+  return (
+    (pane.leadModel === undefined || pane.leadModelSince !== undefined) &&
+    Date.now() < (pane.leadObservedAt ?? 0) + AGENT_STATUS_STALE_AFTER_MS
+  )
+}
+
+export function antigravityIdleGraceEndsAt(pane: AntigravityPaneChildState): number | undefined {
+  if (pane.rootStop === 'idle' && pane.helpersIdleAt !== undefined) {
+    return pane.helpersIdleAt + ANTIGRAVITY_PARENT_WAKE_GRACE_MS
+  }
+  return undefined
+}
+
 export function hasAntigravityPollWork(
   state: HookListenerState,
   event: AgentHookEventPayload
@@ -29,9 +59,12 @@ export function hasAntigravityPollWork(
   return Boolean(
     pane &&
     (pane.dirty ||
+      antigravityIdleGraceEndsAt(pane) !== undefined ||
       (pane.rootBrainDir &&
-        (pane.children.size > 0 ||
-          (readsLeadModel(pane) && pane.leadState === 'working' && pane.rootConversationId))))
+        (pane.verifiedChildren.size > 0 ||
+          (discoversAntigravityChildren(pane) &&
+            (pane.children.size > 0 || pane.pendingLaunches.size > 0)) ||
+          (canReadLeadModel(pane) && pane.rootStop !== 'idle' && pane.rootConversationId))))
   )
 }
 /** Every child is proven with a fixed model and nothing waits on proof, a spawn or the lead's model. */
@@ -40,16 +73,17 @@ export function isAntigravityPollSettled(state: HookListenerState, paneKey: stri
   return Boolean(
     pane &&
     !pane.dirty &&
-    pane.pendingHelperSpawns === undefined &&
-    pane.helpersIdleAt === undefined &&
-    !(readsLeadModel(pane) && pane.leadState === 'working') &&
-    [...pane.children.values()].every(
-      (child) =>
-        pane.verifiedChildren.has(child.id) &&
+    (Date.now() >= antigravityDiscoveryEndsAt(pane) || !antigravityHasPendingLaunch(pane)) &&
+    (pane.rootStop === 'idle' || !canReadLeadModel(pane)) &&
+    [...pane.verifiedChildren].every((id) => {
+      const child = pane.children.get(id)
+      return (
+        child &&
         !child.stopped &&
-        !child.modelAuto &&
-        child.model !== undefined
-    )
+        (Date.now() >= antigravityDiscoveryEndsAt(pane) ||
+          (!child.modelAuto && child.model !== undefined))
+      )
+    })
   )
 }
 export type AntigravityTranscriptPollReads = {
@@ -64,7 +98,11 @@ export type AntigravityTranscriptPollReads = {
   leadModel?: string
   leadModelAt?: number
   leadModelStep?: number
-  leadModelFence?: Pick<AntigravityPaneChildState, 'leadModel' | 'leadModelSince'>
+  leadModelFence?: Pick<
+    AntigravityPaneChildState,
+    'leadModel' | 'leadModelSince' | 'leadModelFromStep'
+  >
+  launchResults?: ReadonlyMap<number, AntigravityLaunchResult | null>
 }
 export async function readAntigravityTranscriptPoll(
   state: HookListenerState,
@@ -83,10 +121,13 @@ export async function readAntigravityTranscriptPoll(
   if (!brain) {
     return result
   }
-  const candidates = [...pane.children.values()].map((child) => ({
-    child,
-    revision: child.revision
-  }))
+  const discovering = discoversAntigravityChildren(pane)
+  const candidates = []
+  for (const child of pane.children.values()) {
+    if (discovering || pane.verifiedChildren.has(child.id)) {
+      candidates.push({ child, revision: child.revision })
+    }
+  }
   const members = candidates.length
     ? await readAntigravitySwarmMembers(brain, cache, wanted)
     : undefined
@@ -108,6 +149,7 @@ export async function readAntigravityTranscriptPoll(
     const batch = new RolloutReadBatch(current)
     try {
       const model =
+        Date.now() < antigravityDiscoveryEndsAt(pane) &&
         (child.model === undefined || child.modelAuto) &&
         metadata &&
         !metadata.model &&
@@ -127,20 +169,29 @@ export async function readAntigravityTranscriptPoll(
       batch.release()
     }
   }
-  if (readsLeadModel(pane) && pane.leadState === 'working' && pane.rootConversationId && wanted()) {
-    const fence = { leadModel: pane.leadModel, leadModelSince: pane.leadModelSince }
+  const readsModel = canReadLeadModel(pane) && pane.rootStop !== 'idle'
+  const rootId = pane.rootConversationId
+  const rootPath =
+    rootId && (pane.rootTranscriptPath ?? antigravityTranscriptFilePath(brain, rootId))
+  if (
+    rootId &&
+    rootPath &&
+    wanted() &&
+    (readsModel || (discovering && pane.pendingLaunches.size))
+  ) {
+    const fence = {
+      leadModel: pane.leadModel,
+      leadModelSince: pane.leadModelSince,
+      leadModelFromStep: pane.leadModelFromStep
+    }
     const batch = new RolloutReadBatch(wanted)
     try {
-      const tail = await readAntigravityChildTranscriptTail(
-        brain,
-        pane.rootConversationId,
-        cache,
-        batch
-      )
+      const tail = await readAntigravityChildTranscriptTail(brain, rootId, cache, batch, rootPath)
       result.leadModel = tail?.model
       result.leadModelAt = tail?.modelAt
       result.leadModelStep = tail?.modelStep
-      result.leadModelFence = fence
+      result.leadModelFence = readsModel ? fence : undefined
+      result.launchResults = tail?.launchResults
     } finally {
       batch.release()
     }
@@ -162,7 +213,8 @@ export function pollAntigravityTranscriptStatus(
     reads.leadModel &&
     fence &&
     fence.leadModel === pane.leadModel &&
-    fence.leadModelSince === pane.leadModelSince
+    fence.leadModelSince === pane.leadModelSince &&
+    fence.leadModelFromStep === pane.leadModelFromStep
   ) {
     // An automatic turn takes only a model recorded after it started; until then the last one stays.
     // Step indices order turns exactly, whereas agy's whole-second stamps cannot.
@@ -172,13 +224,15 @@ export function pollAntigravityTranscriptStatus(
       (fromStep !== undefined && reads.leadModelStep !== undefined
         ? reads.leadModelStep >= fromStep
         : (reads.leadModelAt ?? Number.NEGATIVE_INFINITY) >= pane.leadModelSince)
-    if (current || pane.leadModel === undefined) {
-      pane.leadModel = reads.leadModel
-    }
     if (current) {
+      pane.leadModel = reads.leadModel
       pane.leadModelSince = undefined
       pane.leadModelFromStep = undefined
     }
+  }
+  const now = Date.now()
+  if (reads.launchResults) {
+    applyAntigravityLaunchResults(pane, reads.launchResults, now)
   }
   const proven: string[] = []
   for (const { child, revision, metadata, model } of reads.children) {
@@ -197,16 +251,32 @@ export function pollAntigravityTranscriptStatus(
       if (child.stopped || metadata.killed) {
         proven.push(child.id)
       }
-    } else if (child.stopped && pane.pendingHelperSpawns === undefined) {
+    } else if (child.stopped && pane.pendingLaunches.size === 0) {
       // While a spawn is pending a failed read retries next poll instead of losing its proof.
       retireAntigravityChild(pane, child.id)
     }
   }
   pane.dirty = false
-  const payload = buildAntigravityFoldedStatusPayload(state, original.paneKey, pane, Date.now())
+  if (antigravityHelpersSettled(pane) && now >= (antigravityIdleGraceEndsAt(pane) ?? Infinity)) {
+    pane.helpersIdleAt = undefined
+  }
+  const payload = buildAntigravityFoldedStatusPayload(state, original.paneKey, pane, now)
+  if (payload?.state === 'done' && pane.rootStop === 'idle' && pane.rootTranscriptPath) {
+    state.antigravityCompletedTranscriptByPaneKey.set(original.paneKey, pane.rootTranscriptPath)
+  }
   // Publish a child proven after it stopped once, so relayed receivers also see it end.
   for (const id of proven) {
     retireAntigravityChild(pane, id)
   }
-  return payload ? { ...original, hookEventName: undefined, payload } : undefined
+  return payload
+    ? {
+        ...original,
+        hookEventName: undefined,
+        antigravityHelpersDrained:
+          pane.leadState === 'done' && pane.helpersIdleAt !== undefined && proven.length === 0
+            ? true
+            : undefined,
+        payload
+      }
+    : undefined
 }

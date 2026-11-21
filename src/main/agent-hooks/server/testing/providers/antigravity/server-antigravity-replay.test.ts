@@ -5,6 +5,19 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../../../agent-hook-server'
 import { buildBody, PANE, postHookEvent, recentTs } from '../../server.test-fixtures'
 
+const rootTranscriptRecords = [
+  { source: 'USER_EXPLICIT', type: 'USER_INPUT', content: 'start the job' },
+  {
+    source: 'MODEL',
+    type: 'GENERIC',
+    status: 'DONE',
+    step_index: 2,
+    content:
+      'Created the following subagent:\n{"conversationId":"child"}\nThe subagent will send you a message when it has completed its task or requires guidance.'
+  }
+]
+const rootTranscript = `${rootTranscriptRecords.map((record) => JSON.stringify(record)).join('\n')}\n`
+
 const dirs: string[] = []
 afterEach(() => {
   for (const dir of dirs.splice(0)) {
@@ -19,17 +32,17 @@ it('finishes a replayed run whose subagent stopped while Orca was closed', async
   mkdirSync(join(brain, 'logs'), { recursive: true })
   mkdirSync(join(brain, 'subagents'), { recursive: true })
   const transcriptPath = join(brain, 'logs', 'transcript.jsonl')
-  writeFileSync(
-    transcriptPath,
-    `${JSON.stringify({ source: 'USER_EXPLICIT', type: 'USER_INPUT', content: 'start the job' })}\n`
-  )
+  writeFileSync(transcriptPath, rootTranscript)
   writeFileSync(
     join(brain, 'subagents', 'child.json'),
     JSON.stringify({ conversationId: 'child', state: 'SUBAGENT_STATE_ALIVE' })
   )
   const root = { conversationId: 'parent', lastUserInput: 'start the job', transcriptPath }
   const child = { conversationId: 'child', lastUserInput: '' }
-  const spawn = { stepIdx: 2, toolCall: { name: 'invoke_subagent', args: { Prompt: 'ls' } } }
+  const spawn = {
+    stepIdx: 2,
+    toolCall: { id: 'invoke-2', name: 'invoke_subagent', args: { Prompt: 'ls' } }
+  }
   const hooks: [string, Record<string, unknown>][] = [
     ['PreInvocation', root],
     ['PreToolUse', { ...root, ...spawn }],
@@ -80,10 +93,7 @@ it('retires a subagent that ends without a hook after status hooks are turned of
   mkdirSync(join(brain, 'logs'), { recursive: true })
   mkdirSync(join(brain, 'subagents'), { recursive: true })
   const transcriptPath = join(brain, 'logs', 'transcript.jsonl')
-  writeFileSync(
-    transcriptPath,
-    `${JSON.stringify({ source: 'USER_EXPLICIT', type: 'USER_INPUT', content: 'start the job' })}\n`
-  )
+  writeFileSync(transcriptPath, rootTranscript)
   const descriptor = (state: string) =>
     writeFileSync(
       join(brain, 'subagents', 'child.json'),
@@ -91,7 +101,10 @@ it('retires a subagent that ends without a hook after status hooks are turned of
     )
   descriptor('SUBAGENT_STATE_ALIVE')
   const root = { conversationId: 'parent', lastUserInput: 'start the job', transcriptPath }
-  const spawn = { stepIdx: 2, toolCall: { name: 'invoke_subagent', args: { Prompt: 'ls' } } }
+  const spawn = {
+    stepIdx: 2,
+    toolCall: { id: 'invoke-2', name: 'invoke_subagent', args: { Prompt: 'ls' } }
+  }
   const server = new AgentHookServer()
   await server.start({ env: 'production', userDataPath: dir })
   try {

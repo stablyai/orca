@@ -1,9 +1,12 @@
 import { agentSubagentsEqual } from '../agent-status/contracts/agent-status-subagent-snapshot'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../agent-status/contracts/agent-status-freshness'
 import type { AgentHookSource } from './transport/agent-hook-relay'
 import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
 import {
   hasAntigravityPollWork,
+  antigravityDiscoveryEndsAt,
+  antigravityIdleGraceEndsAt,
   isAntigravityPollSettled
 } from './providers/antigravity/antigravity-transcript-poll'
 import { hasCodexTranscriptSubagents } from './providers/codex/codex-state'
@@ -59,6 +62,15 @@ export function nextHookTranscriptPollDelay(
 ): number | undefined {
   if (source !== 'muse' && source !== 'antigravity') {
     return undefined
+  }
+  const pane =
+    source === 'antigravity' ? state.antigravityChildWorkByPaneKey.get(paneKey) : undefined
+  if (pane && pane.verifiedChildren.size === 0) {
+    const deadline = antigravityIdleGraceEndsAt(pane) ?? antigravityDiscoveryEndsAt(pane)
+    return Math.min(
+      nextMusePollDelay(previousMs, quiet, AGENT_STATUS_STALE_AFTER_MS),
+      Math.max(1, deadline - Date.now())
+    )
   }
   const settled = source === 'antigravity' && isAntigravityPollSettled(state, paneKey)
   return nextMusePollDelay(
@@ -132,7 +144,8 @@ export function transcriptPollUpdate<T extends AgentHookEventPayload>(
       polled.payload.workingMode !== original.payload.workingMode ||
       polled.payload.model !== original.payload.model ||
       polled.payload.mainAgent?.state !== original.payload.mainAgent?.state ||
-      polled.payload.antigravitySpawnPending !== original.payload.antigravitySpawnPending
+      polled.payload.antigravitySpawnPending !== original.payload.antigravitySpawnPending ||
+      polled.antigravityHelpersDrained !== original.antigravityHelpersDrained
     if (!changed) {
       return undefined
     }

@@ -39,6 +39,8 @@ export type AgentHookEventPayload = {
   promptInteractionKey?: string
   /** Raw agent hook event name, used by main-process transition guards. */
   hookEventName?: string
+  /** The execution host saw the last Antigravity child hold drain in this turn. */
+  antigravityHelpersDrained?: true
   /** Provider-owned turn identity (Claude UUID or opaque Grok prompt id). */
   providerPromptId?: string
   /** This row belongs to an observed Grok prompt boundary even when its opaque id is absent. */

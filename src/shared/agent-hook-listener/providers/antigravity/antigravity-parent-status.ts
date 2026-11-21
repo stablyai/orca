@@ -6,6 +6,7 @@ import type { AgentSubagentSnapshot } from '../../../agent-status/contracts/agen
 import type { AgentChildWorkLiveness } from '../../../agent-status/child-work/agent-status-child-work-liveness'
 import { foldAgentLeadStatus } from '../../../agent-status/lifecycle/agent-lead-status-fold'
 import type { HookListenerState } from '../../listener-state'
+import { antigravityHasPendingLaunch } from './antigravity-pane-state'
 import {
   reconcileAntigravityActiveSubagents,
   type AntigravityPaneChildState
@@ -24,17 +25,14 @@ export function buildAntigravityFoldedStatusPayload(
   const hasWaitingSubagent = subagents.some((subagent) => subagent.state === 'waiting')
   const hasCommands = (paneState.commands?.size ?? 0) > 0
   const childrenEnded = paneState.helpersIdleAt !== undefined
-  // A background command outranks a spawn no subagent has proven: a workflow that starts none
-  // would otherwise hold the run past the command's hook-silence bound.
+  const launchPending = antigravityHasPendingLaunch(paneState)
   const liveness: AgentChildWorkLiveness = hasWaitingSubagent
     ? 'waiting'
-    : subagents.length > 0 || childrenEnded
+    : subagents.length > 0 || launchPending || childrenEnded
       ? 'working'
       : hasCommands
         ? 'monitoring'
-        : leadState === 'done' && paneState.pendingHelperSpawns !== undefined
-          ? 'working'
-          : null
+        : null
   const folded = foldAgentLeadStatus({ leadState, childWorkLiveness: liveness })
   const snapshot = state.lastToolByPaneKey.get(paneKey)
   const prompt = state.lastPromptByPaneKey.get(paneKey) ?? ''
@@ -51,7 +49,7 @@ export function buildAntigravityFoldedStatusPayload(
     lastAssistantMessage: snapshot?.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot?.lastAssistantMessageIsToolOutput,
     subagents: subagents.length > 0 ? subagents : undefined,
-    antigravitySpawnPending: paneState.pendingHelperSpawns !== undefined ? true : undefined,
+    antigravitySpawnPending: launchPending ? true : undefined,
     mainAgent: { state: leadState, stateStartedAt: leadStateStartedAt }
   })
 }

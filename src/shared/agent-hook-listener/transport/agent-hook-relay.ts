@@ -73,6 +73,7 @@ export type AgentHookRelayEnvelope = {
   promptInteractionKey?: string
   /** Hook discriminator preserved for main-process transition rules. */
   hookEventName?: string
+  antigravityHelpersDrained?: true
   /** Provider-owned turn identity (Claude UUID or opaque Grok prompt id). */
   providerPromptId?: string
   /** The row belongs to an observed Grok prompt boundary whose opaque id may be absent. */

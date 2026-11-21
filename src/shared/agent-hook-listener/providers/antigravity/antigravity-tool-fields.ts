@@ -10,6 +10,7 @@ import { readLastAssistantFromTranscript } from '../../transcript-lines'
 import { isAntigravityStopStillBusy } from './antigravity-event-rules'
 
 export function readAntigravityToolCall(hookPayload: Record<string, unknown>): {
+  toolCallId?: string
   toolName?: string
   toolInputSource?: unknown
 } {
@@ -19,6 +20,7 @@ export function readAntigravityToolCall(hookPayload: Record<string, unknown>): {
   }
   const record = toolCall as Record<string, unknown>
   return {
+    toolCallId: readFirstString(record, ['id']),
     toolName: readFirstString(record, ['name', 'toolName', 'tool_name']),
     toolInputSource: record.args
   }

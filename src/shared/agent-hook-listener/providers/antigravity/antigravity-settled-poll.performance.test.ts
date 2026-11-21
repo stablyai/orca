@@ -47,10 +47,7 @@ async function paneWithSubagent(index: number, proven: boolean): Promise<string>
       'production'
     )
   hook(root, 'PreInvocation', { transcriptPath, lastUserInput: 'Task', modelName: 'model-r' })
-  const row = hook(root, 'PreToolUse', {
-    transcriptPath,
-    toolCall: { name: 'invoke_subagent', args: {} }
-  })
+  const row = hook(root, 'PreToolUse', { transcriptPath, toolCall: { name: 'send_message' } })
   hook(`child-${index}`, 'PreInvocation', { lastUserInput: '', modelName: 'model-c' })
   if (!row) {
     throw new Error('missing Antigravity row')
@@ -80,7 +77,7 @@ it.each([100, 1000])(
     const unproven = await paneWithSubagent(panes, false)
 
     expect(keys.reduce((total, key) => total + quietPollsIn(key, 300_000), 0)).toBe(13 * panes)
-    expect(quietPollsIn(unproven, 300_000)).toBe(61)
+    expect(quietPollsIn(unproven, 300_000)).toBe(8)
     expect(
       nextHookTranscriptPollDelay(state, { source: 'antigravity', delayMs: 30_000 }, keys[0], false)
     ).toBe(1_000)

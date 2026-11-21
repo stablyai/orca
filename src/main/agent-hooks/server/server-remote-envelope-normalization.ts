@@ -47,6 +47,7 @@ export type RemoteAgentStatusEnvelope = {
   /** Fields shed to fit the relay frame; validate before restoration. */
   shedFields?: unknown
   claudeRunningNonAgentTask?: unknown
+  antigravityHelpersDrained?: unknown
   /** Producing peer capabilities; absent on older peers, which use legacy defaults. */
   advertisedAgentStatusCapabilities?: readonly string[]
   statusUnavailable?: unknown

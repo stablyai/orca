@@ -7,15 +7,35 @@ import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pa
 import { buildBody, postHookEvent } from '../../server.test-fixtures'
 import type * as BrainMetadata from '../../../../../../shared/agent-hook-listener/providers/antigravity/antigravity-brain-metadata'
 import type * as BoundedFileReader from '../../../../../../shared/file-content/node-bounded-file-reader'
+import type * as PollScheduler from '../../../../../../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
 
 const reads = vi.hoisted(() => ({
   members: 0,
   finished: 0,
   descriptors: 0,
   files: 0,
+  callbacks: 0,
   released: Promise.resolve(),
   release: (): void => {}
 }))
+
+vi.mock(
+  '../../../../../../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof PollScheduler>()
+    return {
+      ...actual,
+      AgentTranscriptPollScheduler: class<T> extends actual.AgentTranscriptPollScheduler<T> {
+        constructor(delay: number, onDue: (key: string, value: T) => void | Promise<void>) {
+          super(delay, (key, value) => {
+            reads.callbacks++
+            return onDue(key, value)
+          })
+        }
+      }
+    }
+  }
+)
 
 vi.mock(
   '../../../../../../shared/agent-hook-listener/providers/antigravity/antigravity-brain-metadata',
@@ -64,6 +84,7 @@ beforeEach(async () => {
   reads.finished = 0
   reads.descriptors = 0
   reads.files = 0
+  reads.callbacks = 0
   reads.released = new Promise((resolve) => (reads.release = resolve))
   dir = mkdtempSync(join(tmpdir(), 'orca-agy-poll-teardown-'))
   server = new AgentHookServer()
@@ -111,5 +132,97 @@ it.each([10, 100])(
     await vi.waitFor(() => expect(reads.finished).toBe(panes), { timeout: 10000 })
     await vi.advanceTimersByTimeAsync(30_000)
     expect(reads).toMatchObject({ members: panes, descriptors: 0, files: 0 })
+  }
+)
+
+it.each([100, 1000])(
+  'ends polling for %s completed or never-active panes and caps unresolved discovery',
+  async (panes) => {
+    reads.release()
+    vi.useFakeTimers({ toFake: ['Date', 'performance', 'setTimeout', 'clearTimeout'] })
+    const hooks: { paneKey: string; tabId: string; root: Record<string, unknown> }[] = []
+    const send = async (index: number, hookEventName: string, payload: Record<string, unknown>) => {
+      const pane = hooks[index]!
+      expect(
+        (
+          await postHookEvent(
+            server,
+            buildBody(payload, { paneKey: pane.paneKey, tabId: pane.tabId, hookEventName }),
+            '/hook/antigravity'
+          )
+        ).status
+      ).toBe(204)
+    }
+    for (let index = 0; index < panes; index++) {
+      const leaf = `${index.toString(16).padStart(8, '0')}-0000-4000-8000-000000000000`
+      const generated = join(dir, `root-${index}`, '.system_generated')
+      mkdirSync(join(generated, 'logs'), { recursive: true })
+      mkdirSync(join(generated, 'subagents'), { recursive: true })
+      const transcriptPath = join(generated, 'logs', 'transcript.jsonl')
+      writeFileSync(transcriptPath, '{"source":"USER_EXPLICIT","type":"USER_INPUT"}\n')
+      writeFileSync(
+        join(generated, 'subagents', 'child.json'),
+        '{"conversationId":"child","state":"SUBAGENT_STATE_ALIVE"}'
+      )
+      hooks.push({
+        paneKey: makePaneKey(`tab-${index}`, leaf),
+        tabId: `tab-${index}`,
+        root: {
+          conversationId: `root-${index}`,
+          lastUserInput: 'Task',
+          transcriptPath,
+          modelName: 'root-model'
+        }
+      })
+      await send(index, 'PreInvocation', hooks[index]!.root)
+      await send(index, 'PreInvocation', {
+        conversationId: 'child',
+        lastUserInput: '',
+        modelName: 'child-model'
+      })
+    }
+    await vi.advanceTimersByTimeAsync(1000)
+    await vi.waitFor(
+      () =>
+        expect(server.getStatusSnapshot().filter((row) => row.subagents?.length)).toHaveLength(
+          panes
+        ),
+      { timeout: 30000 }
+    )
+    for (let index = 0; index < panes; index++) {
+      await send(index, 'Stop', { conversationId: 'child', lastUserInput: '', fullyIdle: true })
+    }
+    await vi.advanceTimersByTimeAsync(1000)
+    await vi.waitFor(() => expect(reads.finished).toBe(reads.members), { timeout: 30000 })
+    const afterChildren = reads.callbacks
+    await vi.advanceTimersByTimeAsync(600_000)
+    expect(reads.callbacks).toBe(afterChildren)
+    for (let index = 0; index < panes; index++) {
+      await send(index, 'Stop', { ...hooks[index]!.root, fullyIdle: true })
+    }
+    const afterIdle = reads.callbacks
+    await vi.advanceTimersByTimeAsync(600_000)
+    expect(reads.callbacks).toBe(afterIdle)
+    // A pane that has never run agy owns no transcript poll.
+    server.ingestTerminalStatus({
+      paneKey: makePaneKey('never', 'ffffffff-0000-4000-8000-000000000000'),
+      payload: { state: 'done', prompt: '', agentType: 'claude' }
+    })
+    await vi.advanceTimersByTimeAsync(600_000)
+    expect(reads.callbacks).toBe(afterIdle)
+    for (let index = 0; index < panes; index++) {
+      await send(index, 'PreInvocation', { ...hooks[index]!.root, modelName: 'auto' })
+      await send(index, 'PreInvocation', { conversationId: 'unproven', lastUserInput: '' })
+    }
+    const beforeDiscovery = reads.callbacks
+    // Advancing in small steps lets real filesystem reads settle between scheduled probes.
+    for (let tick = 0; tick < 1801; tick++) {
+      await vi.advanceTimersByTimeAsync(1000)
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    }
+    expect(reads.callbacks - beforeDiscovery).toBeLessThanOrEqual(12 * panes)
+    const afterExpiry = reads.callbacks
+    await vi.advanceTimersByTimeAsync(3_600_000)
+    expect(reads.callbacks).toBe(afterExpiry)
   }
 )

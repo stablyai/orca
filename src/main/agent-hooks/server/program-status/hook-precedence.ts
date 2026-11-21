@@ -2,12 +2,12 @@ import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status/c
 import { isAgentStatusHeldOpenByChildWork } from '../../../../shared/agent-status/lifecycle/agent-lead-status-fold'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { EnrichedAgentHookEventPayload } from '../server-types'
+import { ANTIGRAVITY_PARENT_WAKE_GRACE_MS } from '../../../../shared/agent-hook-listener/providers/antigravity/antigravity-event-rules'
+
+export { ANTIGRAVITY_PARENT_WAKE_GRACE_MS }
 
 // Long tool calls can be hook-silent; allow sustained disagreement before yielding to OSC 7501.
 export const HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS = 2 * 60 * 1000
-
-// Captured agy 1.5 runs woke the parent about 100 ms after its subagent's Stop; this leaves slack.
-export const ANTIGRAVITY_PARENT_WAKE_GRACE_MS = 2000
 
 /** Re-offered agy done reports, so one that arrived before its subagent's Stop is retried only once. */
 type TerminalStatusEventIdentity = { paneKey: string }
@@ -15,15 +15,22 @@ const retriedAntigravityDones = new WeakSet<TerminalStatusEventIdentity>()
 
 export function isAntigravityHelperHeldDone(
   previous: EnrichedAgentHookEventPayload,
-  payload: ParsedAgentStatusPayload
+  payload: ParsedAgentStatusPayload,
+  rosterShed?: true
 ): boolean {
   return (
     payload.state === 'done' &&
     payload.sessionBoundary !== true &&
     previous.payload.agentType === 'antigravity' &&
-    previous.payload.workingMode !== 'monitoring' &&
-    isAgentStatusHeldOpenByChildWork(previous.payload)
+    (rosterShed ||
+      hasAntigravityChildHold(previous) ||
+      (previous.payload.workingMode !== 'monitoring' &&
+        isAgentStatusHeldOpenByChildWork(previous.payload)))
   )
+}
+
+function hasAntigravityChildHold(previous: EnrichedAgentHookEventPayload): boolean {
+  return Boolean(previous.payload.antigravitySpawnPending || previous.payload.subagents?.length)
 }
 
 /** agy's done can beat its subagent's Stop hook (PTY vs HTTP), so a refused one is retried after the grace. */
@@ -66,7 +73,8 @@ export function programStatusHookYieldEndsAt(
   payload: ParsedAgentStatusPayload,
   programWorkingSince?: number,
   antigravityHelpersIdleAt?: number,
-  antigravityLeadObservedAt?: number
+  antigravityLeadObservedAt?: number,
+  antigravityRosterShed?: true
 ): number | undefined {
   if (previous?.observation?.origin !== 'hook' || previous.providerSessionOnly === true) {
     return undefined
@@ -90,7 +98,17 @@ export function programStatusHookYieldEndsAt(
     sameAgent &&
     previous.payload.agentType === 'antigravity' &&
     payload.state !== 'done' &&
-    isAgentStatusHeldOpenByChildWork(previous.payload)
+    (antigravityRosterShed ||
+      hasAntigravityChildHold(previous) ||
+      isAgentStatusHeldOpenByChildWork(previous.payload))
+  ) {
+    return Infinity
+  }
+  if (
+    payload.state === 'done' &&
+    payload.sessionBoundary !== true &&
+    previous.payload.agentType === 'antigravity' &&
+    (antigravityRosterShed || hasAntigravityChildHold(previous))
   ) {
     return Infinity
   }

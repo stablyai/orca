@@ -10,6 +10,7 @@ import { readNodeFileWithinLimit } from '../../../file-content/node-bounded-file
 import { readFirstString } from '../../interactive-tool'
 import { parseAgentHookJson } from '../../request-body'
 import type { JsonlCursor } from '../codex/codex-rollout-jsonl-format'
+import type { AntigravityLaunchResult } from './antigravity-launch-results'
 
 const BRAIN_METADATA_MAX_BYTES = 256 * 1024
 const TRANSCRIPT_SUFFIX_RE = /[\\/]\.system_generated[\\/]logs[\\/]transcript(?:_full)?\.jsonl$/
@@ -34,7 +35,7 @@ export type AntigravityBrainCache = {
       model?: string
       modelAt?: number
       modelStep?: number
-      startedAt?: number
+      launchResults?: Map<number, AntigravityLaunchResult | null>
     }
   >
   swarm?: { record: Record<string, unknown>; members: Map<string, AntigravityChildMetadata> }

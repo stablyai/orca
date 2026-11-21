@@ -17,14 +17,14 @@ import { isAntigravityFeedbackTool, isAntigravityStopStillBusy } from './antigra
 import { readAntigravityToolCall } from './antigravity-tool-fields'
 import { antigravityTranscriptFilePath } from './antigravity-child-transcript'
 
+type AntigravityLaunch = { callId: string; toolName: string; swarmSize?: number }
+
 export type TrackedAntigravityChild = {
   id: string
   startedAt: number
   revision: number
   state: 'working' | 'waiting'
   stopped?: true
-  /** Tracked again after it retired: its proof does not settle a newer spawn. */
-  wokeAgain?: true
   description?: string
   agentType?: string
   model?: string
@@ -36,17 +36,19 @@ export type AntigravityPaneChildState = {
   rootConversationId?: string
   rootBrainDir?: string
   rootTranscriptPath?: string
-  discoversChildren?: boolean
-  /** Helper spawns the root started whose child no poll has proven yet. */
-  pendingHelperSpawns?: number
+  pendingLaunches: Map<number | undefined, AntigravityLaunch | null>
+  settledLaunches: Map<number, AntigravityLaunch>
+  launchStepsByCall: Map<string, number>
+  expectedChildren: Set<string>
   helpersIdleAt?: number
   /** The relay dropped this pane's roster to fit a frame, so its children are unknown, not gone. */
   relayRosterShed?: true
-  /** How the root's last hook stopped: busy while background work runs, idle at the run's end. */
+  /** The root can stop idle while its children still have work. */
   rootStop?: 'busy' | 'idle'
   leadState?: AgentStatusState
   leadStateStartedAt?: number
   leadObservedAt?: number
+  discoveryObservedAt?: number
   leadModel?: string
   /** Start of an automatic-model turn whose transcript has not reported its model yet. */
   leadModelSince?: number
@@ -68,6 +70,10 @@ export function getOrCreateAntigravityPaneState(
   if (!pane) {
     pane = {
       children: new Map(),
+      pendingLaunches: new Map(),
+      settledLaunches: new Map(),
+      launchStepsByCall: new Map(),
+      expectedChildren: new Set(),
       verifiedChildren: new Set(),
       retiredChildren: new Map(),
       brainCache: createAntigravityBrainCache()
@@ -78,6 +84,7 @@ export function getOrCreateAntigravityPaneState(
 }
 export function retireAntigravityChild(pane: AntigravityPaneChildState, id: string): void {
   const verified = pane.verifiedChildren.delete(id)
+  const expected = pane.expectedChildren.delete(id)
   pane.retiredChildren.delete(id)
   pane.retiredChildren.set(id, verified)
   if (pane.retiredChildren.size > 4096) {
@@ -95,18 +102,27 @@ export function retireAntigravityChild(pane: AntigravityPaneChildState, id: stri
     }
   }
   pane.dirty = true
-  if (verified && antigravityHelpersSettled(pane)) {
-    pane.helpersIdleAt = Date.now()
+  if (verified || expected) {
+    recordAntigravityHelpersDrain(pane)
   }
 }
-/** No proven child, tracked command or unsettled spawn is left, so the parent's grace may start. */
+
+export function antigravityHasPendingLaunch(pane: AntigravityPaneChildState): boolean {
+  return pane.pendingLaunches.size > 0 || pane.expectedChildren.size > 0
+}
+
 export function antigravityHelpersSettled(pane: AntigravityPaneChildState): boolean {
   return (
-    pane.verifiedChildren.size === 0 &&
-    !pane.commands?.size &&
-    pane.pendingHelperSpawns === undefined
+    pane.verifiedChildren.size === 0 && !pane.commands?.size && !antigravityHasPendingLaunch(pane)
   )
 }
+
+export function recordAntigravityHelpersDrain(pane: AntigravityPaneChildState): void {
+  if (antigravityHelpersSettled(pane)) {
+    pane.helpersIdleAt ??= Date.now()
+  }
+}
+
 export function recordAntigravityChildHook(
   pane: AntigravityPaneChildState,
   id: string,
@@ -114,16 +130,23 @@ export function recordAntigravityChildHook(
   payload: Record<string, unknown>,
   now: number
 ): void {
+  if (
+    pane.rootStop === 'idle' &&
+    !pane.verifiedChildren.has(id) &&
+    !pane.expectedChildren.has(id) &&
+    pane.pendingLaunches.size === 0
+  ) {
+    return
+  }
   if (pane.retiredChildren.has(id) && eventName !== 'PreInvocation') {
     return
   }
+  pane.discoveryObservedAt = now
   const existing = pane.children.get(id)
   if (eventName === 'Stop' && !isAntigravityStopStillBusy(payload)) {
-    if (existing && pane.verifiedChildren.has(id)) {
+    if (pane.verifiedChildren.has(id) || pane.expectedChildren.has(id)) {
       retireAntigravityChild(pane, id)
     } else if (!existing?.stopped) {
-      // Retire only after the poll proves ownership, so a verified finish still starts the parent's grace.
-      // A Stop whose earlier hooks were missed is tracked too, or its spawn would never settle.
       const child: TrackedAntigravityChild = existing ?? {
         id,
         startedAt: now,
@@ -141,13 +164,12 @@ export function recordAntigravityChildHook(
     return
   }
   const provenBefore = pane.retiredChildren.get(id) === true
-  const wokeAgain = pane.retiredChildren.delete(id) && !existing ? true : undefined
+  pane.retiredChildren.delete(id)
   const child: TrackedAntigravityChild = existing ?? {
     id,
     startedAt: now,
     revision: 0,
-    state: 'working',
-    wokeAgain
+    state: 'working'
   }
   if (eventName === 'PreInvocation' && existing) {
     existing.stopped = undefined
@@ -181,15 +203,15 @@ export function recordAntigravityChildHook(
     pane.children.set(id, child)
     pane.dirty = true
   }
-  if (!pane.rootBrainDir || (wokeAgain && provenBefore)) {
+  if (provenBefore) {
     verifyAntigravityChild(pane, id)
   }
   if (pane.verifiedChildren.has(id)) {
     pane.helpersIdleAt = undefined
   }
 }
-/** Proof of ownership settles one pending spawn, so each spawn holds the parent until its child is proven. */
 export function verifyAntigravityChild(pane: AntigravityPaneChildState, id: string): void {
+  pane.expectedChildren.delete(id)
   if (pane.verifiedChildren.has(id)) {
     return
   }
@@ -200,14 +222,6 @@ export function verifyAntigravityChild(pane: AntigravityPaneChildState, id: stri
     pane.leadState = 'done'
     pane.leadStateStartedAt = Date.now()
   }
-  if (!pane.children.get(id)?.wokeAgain) {
-    settleAntigravityHelperSpawn(pane)
-  }
-}
-/** A spawn settles when its child is proven or when agy reports the spawn failed. */
-export function settleAntigravityHelperSpawn(pane: AntigravityPaneChildState): void {
-  const pending = (pane.pendingHelperSpawns ?? 0) - 1
-  pane.pendingHelperSpawns = pending > 0 ? pending : undefined
 }
 export function trackAntigravityBackgroundCommand(
   pane: AntigravityPaneChildState,

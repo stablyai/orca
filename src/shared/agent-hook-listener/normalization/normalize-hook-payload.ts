@@ -282,6 +282,12 @@ export function normalizeHookPayload(
           ),
     promptInteractionKey: dispatched.promptInteractionKey,
     hookEventName: typeof dispatched.eventName === 'string' ? dispatched.eventName : undefined,
+    antigravityHelpersDrained:
+      source === 'antigravity' &&
+      transportPayload.mainAgent?.state === 'done' &&
+      state.antigravityChildWorkByPaneKey.get(paneKey)?.helpersIdleAt !== undefined
+        ? true
+        : undefined,
     providerPromptId:
       source === 'grok' ? (grokActiveTurn?.promptId ?? providerPromptId) : providerPromptId,
     grokPromptBoundary: grokActiveTurn ? true : undefined,

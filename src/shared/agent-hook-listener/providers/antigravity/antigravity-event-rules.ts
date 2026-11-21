@@ -1,6 +1,8 @@
 // Antigravity lifecycle predicates shared by normalization, child tracking, and result discovery.
 import { isRecord } from '../../../agent-status/child-work/agent-status-child-work-value-guards'
 
+export const ANTIGRAVITY_PARENT_WAKE_GRACE_MS = 2000
+
 export function isAntigravityStopStillBusy(hookPayload: Record<string, unknown>): boolean {
   return hookPayload.fullyIdle === false || hookPayload.fully_idle === false
 }

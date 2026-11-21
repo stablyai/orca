@@ -18,7 +18,10 @@ function antigravityTurn(row: AgentHookEventPayload | undefined) {
     ? {
         owner: row.hostTurn?.owner,
         key: row.hostTurn?.currentTurnKey,
-        leadStartedAt: row.payload.mainAgent?.stateStartedAt,
+        leadDoneAt:
+          row.payload.mainAgent?.state === 'done'
+            ? row.payload.mainAgent.stateStartedAt
+            : undefined,
         sessionId: row.providerSession?.id,
         launchToken: row.launchToken,
         connectionId: row.connectionId,
@@ -45,7 +48,7 @@ function sameAntigravityTurn(row: AgentHookEventPayload, turn: AntigravityTurn):
   return (
     inAntigravityTurn(row, turn) &&
     row.payload.mainAgent?.state === 'done' &&
-    row.payload.mainAgent.stateStartedAt === turn.leadStartedAt
+    (turn.leadDoneAt === undefined || row.payload.mainAgent.stateStartedAt === turn.leadDoneAt)
   )
 }
 
@@ -109,7 +112,11 @@ export function wakeAntigravityDone(
     return
   }
   const pane = state.antigravityChildWorkByPaneKey.get(paneKey)
-  if (pane?.helpersIdleAt !== undefined && antigravityHelpersSettled(pane)) {
+  if (
+    pane?.leadState === 'done' &&
+    pane.helpersIdleAt !== undefined &&
+    antigravityHelpersSettled(pane)
+  ) {
     rechecks.wake(paneKey)
   }
 }
@@ -133,15 +140,17 @@ export function discardAntigravityDone(
     if (applied.connectionId && applied.payload.state === 'done') {
       state.antigravityChildWorkByPaneKey.delete(applied.paneKey)
     }
+  } else if (applied !== previous && !applied?.connectionId && incoming.antigravityHelpersDrained) {
+    wakeAntigravityDone(state, 'antigravity', incoming.paneKey, rechecks)
   }
 }
 
-export function reconcileRelayedAntigravityDone(
+export function reconcileAntigravityRelay(
   state: HookListenerState,
   rechecks: PaneTimers,
   previous: AgentHookEventPayload | undefined,
   applied: AgentHookEventPayload | undefined,
-  shedFields?: unknown
+  envelope: { source?: unknown; shedFields?: unknown; antigravityHelpersDrained?: unknown }
 ): void {
   if (
     !applied?.connectionId ||
@@ -155,14 +164,10 @@ export function reconcileRelayedAntigravityDone(
     return
   }
   const pane = getOrCreateAntigravityPaneState(state, applied.paneKey)
-  const sameTurn =
-    previous?.connectionId === applied.connectionId &&
-    previous.providerSession?.id === applied.providerSession?.id &&
-    previous.launchToken === applied.launchToken &&
-    previous.payload.mainAgent?.stateStartedAt === applied.payload.mainAgent?.stateStartedAt &&
-    previous.hostTurn?.owner === applied.hostTurn?.owner &&
-    previous.hostTurn?.currentTurnKey === applied.hostTurn?.currentTurnKey
-  if (!sameTurn || applied.hasExplicitPrompt || applied.payload.mainAgent?.state !== 'done') {
+  const previousTurn = antigravityTurn(previous)
+  const sameTurn = previousTurn !== undefined && sameAntigravityTurn(applied, previousTurn)
+  const doneLead = applied.payload.mainAgent?.state === 'done' && !applied.hasExplicitPrompt
+  if (!sameTurn || !doneLead) {
     pane.helpersIdleAt = undefined
   }
   const now = Date.now()
@@ -170,11 +175,13 @@ export function reconcileRelayedAntigravityDone(
     pane.leadObservedAt = now
   }
   const heldBefore =
-    previous?.payload.subagents?.length ||
-    previous?.payload.antigravitySpawnPending ||
-    pane.relayRosterShed
+    previous?.payload.subagents?.length || previous?.payload.antigravitySpawnPending
+  const drained = envelope.source === 'antigravity' && envelope.antigravityHelpersDrained === true
+  const rosterShed = hasShedSubagentsField(envelope.shedFields) && !applied.payload.subagents
   pane.relayRosterShed =
-    hasShedSubagentsField(shedFields) && !applied.payload.subagents ? true : undefined
+    rosterShed || (sameTurn && pane.relayRosterShed && !applied.payload.subagents && !drained)
+      ? true
+      : undefined
   // A pending spawn holds the run; its settling ends child work like a subagent leaving the row.
   if (
     applied.payload.subagents?.length ||
@@ -182,8 +189,8 @@ export function reconcileRelayedAntigravityDone(
     pane.relayRosterShed
   ) {
     pane.helpersIdleAt = undefined
-  } else if (sameTurn && heldBefore && applied.payload.mainAgent?.state === 'done') {
-    pane.helpersIdleAt = now
+  } else if (doneLead && (drained || (sameTurn && heldBefore && !applied.isReplay))) {
+    pane.helpersIdleAt ??= now
   }
   if (pane.helpersIdleAt !== undefined) {
     rechecks.wake(applied.paneKey)
