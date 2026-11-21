@@ -77,7 +77,7 @@ export async function sendToBot(
     /** About something in the addressed chat (a comment on its item): lands there, a teammate's
      *  request included, instead of in a conversation of its own. */
     keepChat?: boolean
-  } & Pick<SendBotRequestArgs, 'senderSnapshot' | 'images'>
+  } & Pick<SendBotRequestArgs, 'senderSnapshot' | 'images' | 'onAdmitted'>
 ): Promise<{ receipt: unknown; nudge: () => void } | null> {
   const { runtime } = context
   const db = runtime.getOrchestrationDb()
@@ -132,6 +132,8 @@ type SendBotRequestArgs = {
   images?: readonly string[]
   /** Nudges the sender runs later instead of now. */
   held?: (() => void)[]
+  /** Commits with the request's admission, before anyone is woken for it. */
+  onAdmitted?: () => void
 }
 
 /** Every refusal, from the first check to a blocked admission, leaves the owner's card. */
@@ -281,8 +283,8 @@ async function admitBotRequestMail(
       answerSenderSnapshot: args.senderSnapshot
     }
     const admission: BotRequestAdmission = reserved
-      ? { kind: 'sent', message: db.admitReservedBotRequest(mail) }
-      : db.admitBotRequest({ ...request, message: mail })
+      ? { kind: 'sent', message: db.admitReservedBotRequest(mail, args.onAdmitted) }
+      : db.admitBotRequest({ ...request, message: mail, onAdmitted: args.onAdmitted })
     if (admission.kind !== 'sent') {
       return blockedReceipt(admission)
     }

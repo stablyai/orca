@@ -1255,7 +1255,10 @@
 8 src/main/runtime/rpc/methods/mobile-delivery/mobile-web-bundle.ts
 1 src/main/runtime/rpc/methods/native-chat/native-chat.ts
 1 src/main/runtime/rpc/methods/orcad/orcad-migration.ts
+2 src/main/runtime/rpc/methods/orchestration/messaging/bot-request-sender-notice.ts # one savepoint around orchestration DB writes that were already synchronous, so an answer or notice and its mail commit together
 1 src/main/runtime/rpc/methods/orchestration/messaging/check-mail-reconciliation.ts
+1 src/main/runtime/rpc/methods/orchestration/messaging/peer-mail-reply.ts # one savepoint around orchestration DB writes that were already synchronous, so an answer or notice and its mail commit together
+1 src/main/runtime/rpc/methods/orchestration/messaging/reply-method.ts # one savepoint around orchestration DB writes that were already synchronous, so an answer or notice and its mail commit together
 1 src/main/runtime/rpc/methods/orchestration/runs/runs.ts
 1 src/main/runtime/rpc/methods/terminal/session-terminal-scrollback.ts
 1 src/main/runtime/rpc/methods/workspaces/worktree.ts
