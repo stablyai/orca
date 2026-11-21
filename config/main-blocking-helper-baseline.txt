@@ -439,7 +439,7 @@
 20 src/main/daemon/launch/daemon-out-of-process-launcher.ts
 5 src/main/daemon/launch/daemon-protocol-cleanup.ts
 13 src/main/daemon/launch/daemon-replacement-preflight.ts
-6 src/main/daemon/launch/daemon-spawner.ts
+7 src/main/daemon/launch/daemon-spawner.ts # why: clearing a leftover pid record runs once per daemon start, before the daemon serves anything
 8 src/main/daemon/launch/daemon-stale-kill.ts
 4 src/main/daemon/launch/local-terminal-daemon-stop.ts
 1 src/main/daemon/observability/daemon-file-log.ts

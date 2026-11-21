@@ -136,19 +136,52 @@ describe('daemon PID publication', () => {
     const dir = createTestDir()
     const pidPath = join(dir, 'daemon.pid')
     try {
+      // A live owner's record must never be replaced.
       publishDaemonPidFile(pidPath, {
-        pid: 101,
+        pid: process.pid,
         startedAtMs: 1_000,
         launchNonce: 'launch-a'
       })
 
       expect(() =>
         publishDaemonPidFile(pidPath, {
-          pid: 202,
+          pid: process.pid,
           startedAtMs: 2_000,
           launchNonce: 'launch-b'
         })
       ).toThrow()
+      expect(JSON.parse(readFileSync(pidPath, 'utf8'))).toMatchObject({
+        launchNonce: 'launch-a'
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('replaces an empty leftover record whose owner is gone', () => {
+    const dir = createTestDir()
+    const pidPath = join(dir, 'daemon.pid')
+    try {
+      // A crash can leave a 0-byte pid file; treating it as fatal blocked every later start.
+      writeFileSync(pidPath, '')
+
+      publishDaemonPidFile(pidPath, { pid: process.pid, startedAtMs: 2_000, launchNonce: 'b' })
+
+      expect(JSON.parse(readFileSync(pidPath, 'utf8'))).toMatchObject({ launchNonce: 'b' })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('replaces a record naming a process that is no longer running', () => {
+    const dir = createTestDir()
+    const pidPath = join(dir, 'daemon.pid')
+    try {
+      writeFileSync(pidPath, JSON.stringify({ pid: 999_999, startedAtMs: 1_000 }))
+
+      publishDaemonPidFile(pidPath, { pid: process.pid, startedAtMs: 2_000, launchNonce: 'c' })
+
+      expect(JSON.parse(readFileSync(pidPath, 'utf8'))).toMatchObject({ launchNonce: 'c' })
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

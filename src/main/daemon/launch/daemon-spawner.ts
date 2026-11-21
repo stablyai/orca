@@ -12,6 +12,7 @@ import {
 import { join } from 'node:path'
 import { PROTOCOL_VERSION } from '../protocol/daemon-protocol-version'
 import { resolveDaemonUnixSocketPath } from '../endpoint/publication/daemon-socket-endpoint-path'
+import { isProcessAlive } from '../endpoint/identity/daemon-process-inspection'
 import { DaemonCrashLoopError, DaemonRespawnThrottle } from './daemon-respawn-throttle'
 
 export type DaemonConnectionInfo = {
@@ -147,11 +148,54 @@ function isMissingFileError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
 }
 
+/**
+ * Exclusive publication, so a live owner's record is never replaced. A leftover record that names
+ * no live process (a crash can leave a 0-byte file) is claimed and cleared instead: treating it as
+ * fatal made one dead start block every later one, across restarts, for the daemon's whole life.
+ */
 export function publishDaemonPidFile(pidPath: string, pidFile: DaemonPidFile): void {
-  writeFileSync(pidPath, serializeDaemonPidFile(pidFile), {
-    mode: 0o600,
-    flag: 'wx'
-  })
+  const content = serializeDaemonPidFile(pidFile)
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      writeFileSync(pidPath, content, { mode: 0o600, flag: 'wx' })
+      return
+    } catch (error) {
+      // One retry: a live record still fails the second write, which is the caller's answer.
+      if (
+        attempt > 0 ||
+        !isFileExistsError(error) ||
+        // True only when the leftover record named no live owner and has been cleared.
+        !claimAndUnlinkOwnedFile(pidPath, (leftover) => !daemonPidFileOwnerIsAlive(leftover))
+      ) {
+        throw error
+      }
+    }
+  }
+}
+
+function daemonPidFileOwnerIsAlive(content: string): boolean {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(content.trim())
+  } catch {
+    // Unparseable records name no owner; a crash can leave an empty file, and a torn one holds no
+    // usable PID either. Only non-empty junk is kept, since it may describe a starting daemon.
+    return content.trim().length > 0
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    // Legacy records stored a bare integer.
+    return typeof parsed === 'number' && Number.isSafeInteger(parsed) && isProcessAlive(parsed)
+  }
+  const pid = 'pid' in parsed ? parsed.pid : undefined
+  // An unknown shape keeps the record: guessing could overwrite another daemon's live claim.
+  if (typeof pid !== 'number' || !Number.isSafeInteger(pid) || pid <= 0) {
+    return true
+  }
+  return isProcessAlive(pid)
+}
+
+function isFileExistsError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'EEXIST'
 }
 
 /** Avoid released age-only sweeper patterns: a claim may hold the sole copy of a live owner's record. */
