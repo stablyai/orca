@@ -406,6 +406,23 @@ describe('hidden Chromium native popup request compatibility', () => {
     await page.locator('#link').evaluate((link) => link.setAttribute('href', '/docs'))
   })
 
+  it('keeps window.opener for a clicked window.open(url) and opens target=_blank links as tabs', async () => {
+    const page = guest('local')
+    const tabs = status().tabOpens.length
+    await installScriptedPopupProbe(page, '/scripted-opener')
+    await page.locator('#scripted-native').click()
+    await expect
+      .poll(() => page.locator('body').getAttribute('data-message'))
+      .toBe('callback:synthetic_session=local')
+    expect(status().tabOpens.length).toBe(tabs)
+    await closeChildren(page)
+    const before = receipts.length
+    await page.locator('#link').click()
+    await expect.poll(() => status().tabOpens.length).toBe(tabs + 1)
+    expect(status().tabOpens.at(-1)).toEqual({ url: `${origin}/docs`, activate: true })
+    expect(receipts.slice(before).some((receipt) => receipt.path === '/docs')).toBe(false)
+  })
+
   it('prepares modifier-clicked local script window.open children before their first request', async () => {
     const page = guest('local')
     const oauthPath = `/authorize-scripted?client_id=synthetic&redirect_uri=${origin}/callback&response_type=code`

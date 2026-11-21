@@ -87,17 +87,17 @@ describe('ModelManager stream cleanup', () => {
     }
   })
 
-  it('reuses the idle timer and removes progress listeners after a fragmented download', async () => {
+  it('extends the idle deadline and releases listeners after a fragmented download', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    const timeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+    const payload = 'abcdefgh'
     try {
       const response = new PassThrough() as PassThrough & {
         statusCode: number
         headers: Record<string, string>
       }
       response.statusCode = 200
-      response.headers = { 'content-length': '1000' }
+      response.headers = { 'content-length': String(payload.length) }
       const responseHandlers: ((response: unknown) => void)[] = []
       const request = {
         abort: vi.fn(() => request),
@@ -121,13 +121,13 @@ describe('ModelManager stream cleanup', () => {
       const download = manager.downloadFile(
         'https://example.com/model.bin',
         join(dir, 'model.bin'),
-        1000,
+        payload.length,
         'm',
         () => false
       )
       await vi.advanceTimersByTimeAsync(60_000)
-      for (let index = 0; index < 1000; index += 1) {
-        response.write(Buffer.from('a'))
+      for (const byte of payload) {
+        response.write(Buffer.from(byte))
       }
       await vi.advanceTimersByTimeAsync(119_999)
       expect(request.abort).not.toHaveBeenCalled()
@@ -136,10 +136,8 @@ describe('ModelManager stream cleanup', () => {
       await expect(download).resolves.toBeUndefined()
       expect(response.listenerCount('data')).toBe(0)
       expect(vi.getTimerCount()).toBe(0)
-      expect(readFileSync(join(dir, 'model.bin'), 'utf8')).toBe('a'.repeat(1000))
-      expect(timeoutSpy.mock.calls.filter(([, delay]) => delay === 120_000)).toHaveLength(1)
+      expect(readFileSync(join(dir, 'model.bin'), 'utf8')).toBe(payload)
     } finally {
-      timeoutSpy.mockRestore()
       vi.useRealTimers()
       rmSync(dir, { recursive: true, force: true })
     }

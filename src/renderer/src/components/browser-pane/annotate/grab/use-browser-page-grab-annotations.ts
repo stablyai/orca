@@ -14,7 +14,9 @@ import { browserAnnotationLimitMessage } from '../delivery/browser-annotation-li
 import {
   createBrowserAnnotationId,
   createBrowserAnnotationPayload,
-  DEFAULT_BROWSER_ANNOTATION_PRIORITY
+  DEFAULT_BROWSER_ANNOTATION_PRIORITY,
+  forgetBrowserOverlayTarget,
+  mapGuestRectToContainer
 } from '../../describe-page/browser-annotation-geometry'
 import { useBrowserPageAnnotationViewportTracking } from '../viewport/use-browser-page-annotation-viewport-tracking'
 import { runBrowserGrabActionShortcut } from './browser-page-grab-action'
@@ -49,7 +51,7 @@ export function useBrowserPageGrabAnnotations({
   containerRef,
   trackingContainer,
   trackingScroller,
-  webviewRef,
+  guestSurfaceRef,
   setBrowserOverlayViewport,
   browserAnnotationsLength
 }: BrowserPageGrabAnnotationsOptions): BrowserPageGrabAnnotations {
@@ -106,14 +108,15 @@ export function useBrowserPageGrabAnnotations({
       let below = true
       const containerRect = containerRef.current?.getBoundingClientRect()
       if (payload) {
-        const rect = payload.target.rectViewport
-        const webview = webviewRef.current
-        const webviewRect = webview?.getBoundingClientRect()
-        const offsetX = (webviewRect?.left ?? 0) - (containerRect?.left ?? 0)
-        const offsetY = (webviewRect?.top ?? 0) - (containerRect?.top ?? 0)
-        x = offsetX + rect.x + rect.width / 2
-        const elementBottom = offsetY + rect.y + rect.height
-        const elementTop = offsetY + rect.y
+        const rect = mapGuestRectToContainer(
+          payload.target.rectViewport,
+          containerRect,
+          guestSurfaceRef.current?.getBoundingClientRect(),
+          payload.page.viewportWidth
+        )
+        x = rect.x + rect.width / 2
+        const elementBottom = rect.y + rect.height
+        const elementTop = rect.y
         const containerHeight = containerRect?.height ?? 0
         below = elementBottom + 52 < containerHeight
         y = below ? elementBottom : elementTop
@@ -126,7 +129,7 @@ export function useBrowserPageGrabAnnotations({
       setGrabToast({ message, type, x, y, below, payload: payload ?? null })
       grabToastTimerRef.current = setTimeout(() => dismissGrabToast(), 2000)
     },
-    [claimGrabToast, containerRef, dismissGrabToast, mountedRef, webviewRef]
+    [claimGrabToast, containerRef, dismissGrabToast, guestSurfaceRef, mountedRef]
   )
 
   const showGrabScreenshotToast = useCallback(
@@ -156,9 +159,7 @@ export function useBrowserPageGrabAnnotations({
         grabPayloadRef.current === grab.payload ? grab.payload : null
       )
       // The live box measured for the previous selection must not place this one's card.
-      setBrowserOverlayViewport((current) =>
-        current.target ? { ...current, target: undefined } : current
-      )
+      setBrowserOverlayViewport(forgetBrowserOverlayTarget)
       return
     }
     if (!grab.contextMenu) {

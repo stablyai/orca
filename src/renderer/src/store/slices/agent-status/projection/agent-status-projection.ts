@@ -161,6 +161,9 @@ export class AgentStatusProjection {
   row(key: string): DashboardAgentRow | undefined {
     return this.data.rows.get(key)
   }
+  rowOwnersRevision(): number {
+    return this.data.rowOwnersRevision
+  }
   rowWorktree(key: string): string | undefined {
     return this.data.ownerForSource.get(key) ?? this.data.rows.get(key)?.tab.worktreeId
   }

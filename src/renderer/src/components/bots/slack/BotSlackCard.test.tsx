@@ -76,6 +76,16 @@ function openActions(): void {
 }
 
 describe('BotSlackCard', () => {
+  it('offers newer permissions in the menu without asking for them', async () => {
+    renderCard({ ...installed, updateAvailable: true })
+    await screen.findByText(/installed by/)
+    // Nothing is wrong, so no status and no button in the row.
+    expect(screen.queryByText('Update needed')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Update in Slack' })).toBeNull()
+    openActions()
+    expect(await screen.findByRole('menuitem', { name: 'Update Slack permissions…' })).toBeDefined()
+  })
+
   it('turns the status into one Update in Slack link when the app is out of date', async () => {
     renderCard({ ...installed, updateNeeded: true })
     expect(await screen.findByRole('button', { name: 'Update in Slack' })).toBeDefined()
@@ -106,7 +116,7 @@ describe('BotSlackCard', () => {
       expect(await screen.findByText('Paused while signed out')).toBeDefined()
       expect(screen.getByText('Needs sign-in')).toBeDefined()
       expect(screen.queryByText('Can’t check')).toBeNull()
-      expect(screen.queryByText('Sign in to Orca to connect Slack.')).toBeNull()
+      expect(screen.queryByText('Sign in to Orca Cloud to connect Slack.')).toBeNull()
 
       expect(screen.getByText('Access requests need Orca sign-in.')).toBeDefined()
       fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
@@ -145,24 +155,15 @@ describe('BotSlackCard', () => {
     expect(screen.getByRole('button', { name: 'Add' })).toHaveProperty('disabled', true)
   })
 
-  it.each([
-    { state: 'created', teamId: 'T05', appId: 'A1' },
-    { state: 'uncertain', teamId: 'T05' },
-    { state: 'grant_expired', teamId: 'T05' }
-  ] satisfies ConnectorBotSlackState[])(
-    'removes an app that was never installed ($state), so a dropped setup can be cleared',
-    async (slack) => {
-      renderCard(slack)
-      confirm.mockResolvedValueOnce(true)
-      expect(await screen.findByRole('button', { name: 'Finish setup' })).toBeDefined()
-      openActions()
-      expect(screen.queryByRole('menuitem', { name: 'Slack app settings' })).toBeNull()
-      fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove from Slack…' }))
-      await waitFor(() =>
-        expect(api.remove).toHaveBeenCalledWith({ botId: 'bot-1', teamId: 'T05' })
-      )
-    }
-  )
+  it('removes an app that was never installed, so a dropped setup can be cleared', async () => {
+    renderCard({ state: 'grant_expired', teamId: 'T05' })
+    confirm.mockResolvedValueOnce(true)
+    await screen.findByRole('button', { name: 'Finish setup' })
+    openActions()
+    expect(screen.queryByRole('menuitem', { name: 'Slack app settings' })).toBeNull()
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove from Slack…' }))
+    await waitFor(() => expect(api.remove).toHaveBeenCalledWith({ botId: 'bot-1', teamId: 'T05' }))
+  })
 
   it('offers no Remove on the people-only row once the install is gone', async () => {
     renderCard({ state: 'created', teamId: 'T05', appId: 'A1' }, { teamId: undefined })

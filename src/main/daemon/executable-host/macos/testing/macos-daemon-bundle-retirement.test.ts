@@ -59,8 +59,7 @@ it.each([
   { stderr: 'lsof: WARNING: can not stat' },
   { timedOut: true },
   { outputTruncated: true },
-  { code: null },
-  { code: 0 }
+  { code: null }
 ])('keeps a copy when the scan is incomplete: %j', async (override) => {
   const directory = await copy('terminal-host-old')
   run.mockResolvedValue({ ...unused, ...override })

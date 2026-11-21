@@ -128,7 +128,7 @@ Module._extensions['.node'] = (m, file) => file.endsWith('windows-process-tree.n
     expect(await op('snapshot-capture', empty, snapshot)).toBe('EMPTY')
     expect(existsSync(lockDir())).toBe(false)
 
-    symlinkSync(join(root, 'daemon'), join(root, 'profiles', 'p1', 'linked'))
+    symlinkSync(join(root, 'daemon'), join(root, 'profiles', 'p1', 'linked'), 'junction')
     expect(await op('snapshot-capture', root, snapshot)).toBe('FAILED')
     expect(existsSync(lockDir())).toBe(false)
   })

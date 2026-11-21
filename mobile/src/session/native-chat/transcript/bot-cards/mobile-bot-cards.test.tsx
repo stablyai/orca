@@ -22,6 +22,7 @@ vi.mock('react-native', async () => {
       React.createElement(name, props, children)
   return {
     Platform: { OS: 'ios' },
+    AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
     Pressable: host('Pressable'),
     Text: host('Text'),
     View: host('View'),
@@ -414,5 +415,43 @@ describe('webhook card', () => {
     )
     expect(card.text()).toContain('Webhook “Deploy finished” is live.')
     expect(card.text()).not.toContain(hook.url)
+  })
+})
+
+describe('Google setup card', () => {
+  const run = (revision: number, steps: Record<string, unknown>) => ({
+    run: {
+      id: 'run-1',
+      botId: 'atlas',
+      state: 'running',
+      mode: 'guide-browser',
+      steps,
+      answers: {},
+      startedAt: 1,
+      updatedAt: 1,
+      revision
+    },
+    blocker: null
+  })
+
+  it('answers a step from the phone and folds to its receipt', async () => {
+    state.bots = [atlas]
+    answer({
+      'bots.googleSetup.read': run(1, { project: { status: 'needs-user' } }),
+      'bots.googleSetup.answer': run(2, { project: { status: 'done', by: 'user' } })
+    })
+    const step = await render(
+      mobileNativeChatBotCard(
+        { googleSetup: { botId: 'atlas', runId: 'run-1', card: 'step', step: 'project' } },
+        context
+      )
+    )
+    expect(step.text()).toContain('Create a project')
+    await step.press('Done')
+    expect(sent('bots.googleSetup.answer')).toEqual([
+      { botId: 'atlas', card: 'step', values: ['done', 'project'] }
+    ])
+    expect(step.text()).toContain('✓ Done')
+    expect(step.buttons()).toEqual([])
   })
 })

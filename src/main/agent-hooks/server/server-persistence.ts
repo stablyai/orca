@@ -38,7 +38,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     const entries: Record<string, PersistedAgentHookEventPayload> = {}
     const authorityCommitments: Record<string, PersistedAgentHookAuthorityCommitment> = {}
     const conflictedCommitments = new Set<string>()
-    // Restart drops anything older than the TTL, so saving it would only carry dead rows forward.
+    // Restart drops rows older than the TTL unless a placed pane still holds them.
     const ttlCutoff = Date.now() - HYDRATE_MAX_AGE_MS
     for (const [paneKey, commitment] of selectedStatusEntries(
       this.persistedAuthorityCommitmentsByPaneKey,
@@ -67,7 +67,9 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       // Journal projections must not compete with unconfirmed copies hydrated from this cache.
       if (
         enrichedPayload.structuredHost ||
-        (!enrichedPayload.paneSleep && enrichedPayload.receivedAt < ttlCutoff)
+        (!enrichedPayload.paneSleep &&
+          enrichedPayload.receivedAt < ttlCutoff &&
+          !this.placementKeepsRow(enrichedPayload))
       ) {
         continue
       }

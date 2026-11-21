@@ -56,7 +56,7 @@ describe('orchestration migration behavior', () => {
     expect(db.getTask(task.id)?.status).toBe('ready')
   })
 
-  it('formats legacy terminal inspection as read-only without consuming mail', async () => {
+  it('allows legacy mail inspection and refuses consumption or replies without effects', async () => {
     const { db, runtime } = createRuntime()
     const message = db.insertMessage({
       runId: 'run_legacy_local',
@@ -77,20 +77,9 @@ describe('orchestration migration behavior', () => {
     expect(inspected.formatted).toContain('Tests are running.')
     expect(inspected.formatted).not.toContain('[Reply:')
     expect(db.getMessageById(message.id)?.read).toBe(0)
-  })
 
-  it('rejects acknowledgment of legacy mail without effects', async () => {
-    const { db, runtime } = createRuntime()
     // A consuming check refuses a handle with no live pane before it reads any mail.
     vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_legacy:leaf_legacy')
-    const message = db.insertMessage({
-      runId: 'run_legacy_local',
-      from: 'term_worker',
-      to: 'term_coord',
-      subject: 'still working'
-    })
-    const check = ORCHESTRATION_METHODS.find((method) => method.name === 'orchestration.check')!
-
     await expect(
       check.handler(check.params!.parse({ terminal: 'term_coord' }), { runtime })
     ).rejects.toMatchObject({
@@ -99,16 +88,7 @@ describe('orchestration migration behavior', () => {
     })
     expect(db.getMessageById(message.id)?.read).toBe(0)
     expect(db.getInbox(100)).toHaveLength(1)
-  })
 
-  it('rejects replies to legacy mail without marking or inserting rows', async () => {
-    const { db, runtime } = createRuntime()
-    const message = db.insertMessage({
-      runId: 'run_legacy_local',
-      from: 'term_worker',
-      to: 'term_coord',
-      subject: 'legacy question'
-    })
     const reply = ORCHESTRATION_METHODS.find((method) => method.name === 'orchestration.reply')!
 
     await expect(
@@ -167,7 +147,7 @@ describe('orchestration migration behavior', () => {
     expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
   })
 
-  it('rejects a connected server missing the contract before home or remote effects', async () => {
+  it('rejects either missing server capability before changing the task', async () => {
     const { db, runtime } = createRuntime()
     const run = db.createRun({
       objective: 'mixed-version worker',
@@ -180,11 +160,12 @@ describe('orchestration migration behavior', () => {
       name: 'windows',
       peerFingerprint: 'windows_peer'
     })
-    vi.spyOn(runtime, 'callOrchestrationWorkerServer').mockResolvedValue({
-      capabilities: [ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY]
-    })
+    const serverStatus = vi
+      .spyOn(runtime, 'callOrchestrationWorkerServer')
+      .mockResolvedValueOnce({ capabilities: [ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY] })
+      .mockResolvedValueOnce({ capabilities: [ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY] })
 
-    await expect(
+    const start = () =>
       startFederatedWorker({
         params: {
           task: task.id,
@@ -207,56 +188,19 @@ describe('orchestration migration behavior', () => {
           payloadHash: 'payload'
         }
       })
-    ).rejects.toMatchObject({
+    await expect(start()).rejects.toMatchObject({
       code: 'orchestration_migration_required',
       data: { reason: 'runtime_capability_missing', effectsApplied: false }
     })
     expect(db.getTask(task.id)?.status).toBe('ready')
     expect(db.getDispatchContext(task.id)).toBeUndefined()
-  })
 
-  it('rejects a connected server missing federation support before Task mutation', async () => {
-    const { db, runtime } = createRuntime()
-    const run = db.createRun({
-      objective: 'unsupported worker',
-      coordinatorHandle: 'term_coord',
-      coordinatorPaneKey: 'tab_coord:leaf_coord'
-    })
-    const task = db.createTask({ spec: 'remote work', runId: run.id })
-    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockResolvedValue({
-      environmentId: 'environment_windows',
-      name: 'windows',
-      peerFingerprint: 'windows_peer'
-    })
-    vi.spyOn(runtime, 'callOrchestrationWorkerServer').mockResolvedValue({
-      capabilities: [ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY]
-    })
-
-    await expect(
-      startFederatedWorker({
-        params: {
-          task: task.id,
-          from: 'term_coord',
-          on: 'windows',
-          worktree: 'new-top-level',
-          repo: 'id:windows-repo',
-          name: 'remote-work',
-          agent: 'codex'
-        },
-        runtime,
-        db,
-        bindRunId: () => run.id,
-        taskDeps: undefined,
-        task,
-        orchestrationMutation: {
-          callerFingerprint: 'caller',
-          requestId: 'remote_start',
-          method: 'orchestration.workerStart',
-          payloadHash: 'payload'
-        }
-      })
-    ).rejects.toMatchObject({ code: 'capability_unsupported' })
+    await expect(start()).rejects.toMatchObject({ code: 'capability_unsupported' })
     expect(db.getTask(task.id)?.status).toBe('ready')
     expect(db.getDispatchContext(task.id)).toBeUndefined()
+    expect(serverStatus.mock.calls.map(([, method]) => method)).toEqual([
+      'status.get',
+      'status.get'
+    ])
   })
 })

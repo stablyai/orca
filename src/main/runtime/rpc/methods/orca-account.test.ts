@@ -42,24 +42,7 @@ describe('Orca account RPC methods', () => {
     ).rejects.toThrow('Signing in to Orca is not available on this host. Update Orca on it.')
   })
 
-  it('refuses a flow to a transport that cannot name its caller', async () => {
-    installOrcaServerSignIn(
-      new OrcaServerSignIn({
-        account: {
-          getAuthStatus: vi.fn(),
-          signInWithCode: vi.fn(),
-          selectOrg: vi.fn(),
-          signOut: vi.fn(),
-          refreshAuth: vi.fn()
-        }
-      })
-    )
-    await expect(
-      requestMethod('orcaAccount.signIn.start').handler({}, { runtime, clientKind: 'runtime' })
-    ).rejects.toThrow('This client cannot sign this host in.')
-  })
-
-  it('starts the flow for the calling device', async () => {
+  it('requires a named caller and starts the flow for that device', async () => {
     const server = new OrcaServerSignIn({
       account: {
         getAuthStatus: vi.fn(),
@@ -77,7 +60,13 @@ describe('Orca account RPC methods', () => {
     })
     installOrcaServerSignIn(server)
 
-    await requestMethod('orcaAccount.signIn.start').handler(
+    const { handler: startSignIn } = requestMethod('orcaAccount.signIn.start')
+    await expect(startSignIn({}, { runtime, clientKind: 'runtime' })).rejects.toThrow(
+      'This client cannot sign this host in.'
+    )
+    expect(start).not.toHaveBeenCalled()
+
+    await startSignIn(
       { switchAccount: true },
       { runtime, caller: { kind: 'paired-device', deviceId: 'phone-1' } }
     )
@@ -85,7 +74,7 @@ describe('Orca account RPC methods', () => {
     expect(start).toHaveBeenCalledWith('phone-1', 'switch-account', {
       approveInBrowser: undefined
     })
-    await requestMethod('orcaAccount.signIn.start').handler(
+    await startSignIn(
       { approveInBrowser: true },
       { runtime, caller: { kind: 'paired-device', deviceId: 'phone-1' } }
     )

@@ -73,8 +73,7 @@ export abstract class OrcaRuntimeWithStructuredSessionTabProjection extends Orca
       if (!nextSnapshot) {
         continue
       }
-      this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
-      this.emitMobileSessionTabsSnapshot(nextSnapshot)
+      this.emitMobileSessionTabsSnapshot(this.storeMobileSessionSnapshot(worktreeId, nextSnapshot))
       retired = true
     }
     return retired

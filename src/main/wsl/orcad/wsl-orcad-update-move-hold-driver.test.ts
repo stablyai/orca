@@ -209,7 +209,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
   resetWslMoveDesktopRewriteStoresForTests()
-  removeWslMoveRigDirs()
+  await removeWslMoveRigDirs()
 })
 
 /** A move run stopped where it first stages on the host, after it has journaled its cutover. */
