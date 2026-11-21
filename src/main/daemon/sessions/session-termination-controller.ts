@@ -1,6 +1,10 @@
 import { PhysicalExitTracker } from '../../../shared/process-observation/physical-exit-tracker'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import {
+  IdlePtyTeardownRefusal,
+  type PosixIdlePtyGuard
+} from '../../pty/process-retirement/idle-pty-teardown-refusal'
+import {
   IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS,
   SESSION_FORCE_KILL_RETRY_MS
 } from './immediate-kill-reply-budget'
@@ -80,7 +84,8 @@ export class SessionTerminationController {
   }
 
   async forceKillAndWaitForExit(
-    timeoutMs = IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS
+    timeoutMs = IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS,
+    idleGuard?: PosixIdlePtyGuard
   ): Promise<void> {
     if (this.deps.isExited()) {
       return
@@ -90,7 +95,7 @@ export class SessionTerminationController {
       this.deps.releaseProducerPause({ resume: true })
     }
     // Escalate now rather than spend the physical-exit budget waiting for graceful shutdown.
-    await this.requestForceKillWithRetry()
+    await this.requestForceKillWithRetry(idleGuard)
     try {
       await this.waitForPhysicalExit(timeoutMs)
     } catch (error) {
@@ -146,12 +151,12 @@ export class SessionTerminationController {
   }
 
   /** Joiners await the in-flight request so their exit budget starts after signals are sent. */
-  private requestForceKill(): Promise<void> {
+  private requestForceKill(idleGuard?: PosixIdlePtyGuard): Promise<void> {
     if (this.deps.isExited()) {
       return Promise.resolve()
     }
     if (!this.forceKillRequest) {
-      const request = this.sendForceKill()
+      const request = this.sendForceKill(idleGuard)
       this.forceKillRequest = request
       // A refused signal releases the claim so a retry can send again.
       request.catch(() => {
@@ -163,17 +168,20 @@ export class SessionTerminationController {
     return this.forceKillRequest
   }
 
-  private async sendForceKill(): Promise<void> {
-    await this.deps.subprocess.forceKill()
+  private async sendForceKill(idleGuard?: PosixIdlePtyGuard): Promise<void> {
+    await (idleGuard ? this.deps.subprocess.forceKill(idleGuard) : this.deps.subprocess.forceKill())
   }
 
-  private async requestForceKillWithRetry(): Promise<void> {
+  private async requestForceKillWithRetry(idleGuard?: PosixIdlePtyGuard): Promise<void> {
     let lastError: unknown
     for (let attempt = 0; attempt < SESSION_FORCE_KILL_MAX_ATTEMPTS; attempt++) {
       try {
-        await this.requestForceKill()
+        await this.requestForceKill(idleGuard)
         return
       } catch (error) {
+        if (error instanceof IdlePtyTeardownRefusal) {
+          throw error
+        }
         lastError = error
       }
       if (attempt + 1 < SESSION_FORCE_KILL_MAX_ATTEMPTS) {

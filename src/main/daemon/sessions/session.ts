@@ -1,3 +1,4 @@
+import type { PosixIdlePtyGuard } from '../../pty/process-retirement/idle-pty-teardown-refusal'
 import { createSessionInitialOutput } from './session-initial-output'
 import { isValidPtySize } from '../protocol/daemon-pty-size'
 import type { SessionOutputPlane, AttachedClient } from './session-output-plane'
@@ -39,7 +40,7 @@ export class Session extends SessionProcessInspection {
   private readonly shellReady: SessionShellReadyBarrier
   private readonly termination: SessionTerminationController
   readonly startupIngress: PtyStartupIngress
-  private readonly recoveryBarrier: TerminalShellRecoveryBarrier
+  protected readonly recoveryBarrier: TerminalShellRecoveryBarrier
   private readonly focusReport = new SessionFocusReport()
 
   constructor(opts: SessionOptions) {
@@ -139,6 +140,7 @@ export class Session extends SessionProcessInspection {
   write(data: string): void {
     // Human input must reach rc-file readers while automatic startup commands wait for readiness.
     if (this.isAlive && !this._disposed && !this.startupIngress.answerLiveQueryReply(data)) {
+      this.recoveryBarrier.forgetIdlePromptOnInput()
       this.focusReport.observeInput(data, this.recoveryBarrier.focusReportingArming)
       this.shellReady.observeTypedInput(data)
       this.subprocess.write(data)
@@ -194,9 +196,11 @@ export class Session extends SessionProcessInspection {
     this.termination.scheduleForceDisposeFallback()
   }
 
-  async forceKillAndWaitForExit(timeoutMs?: number): Promise<void> {
-    await this.termination.forceKillAndWaitForExit(timeoutMs)
+  forceKillAndWaitForExit(timeoutMs?: number, idleGuard?: PosixIdlePtyGuard): Promise<void> {
+    return this.termination.forceKillAndWaitForExit(timeoutMs, idleGuard)
   }
+
+  cancelTermination = (): void => this.termination.clearTerminating()
 
   signal(sig: string): void {
     this.termination.signal(sig)
@@ -247,10 +251,6 @@ export class Session extends SessionProcessInspection {
 
   getCwd(): string | null {
     return this.output.getCwd()
-  }
-
-  confirmShellForeground(): Promise<boolean> {
-    return this.recoveryBarrier.confirmOwnerSettled()
   }
 
   async settleShellOwnershipConfirmation(): Promise<void> {

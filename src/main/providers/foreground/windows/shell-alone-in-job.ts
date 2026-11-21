@@ -32,7 +32,11 @@ export async function isWindowsShellAloneInJob(
   if (!isLauncher && !readConsoleAttachedProcessIds) {
     return false
   }
-  const rows = (await readIdentityTable()).filter((row) => jobProcessIds.has(row.pid))
+  const index = getProcessTableIndex(await readIdentityTable())
+  const rows = [...jobProcessIds].flatMap((pid) => {
+    const row = index.byPid.get(pid)
+    return row ? [row] : []
+  })
   // A member missing from the table exited or was never readable: no proof either way.
   if (rows.length !== jobProcessIds.size) {
     return false

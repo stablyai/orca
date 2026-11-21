@@ -1,7 +1,15 @@
 import { killWithDescendantSweep } from '../../pty/process-retirement/pty-descendant-termination'
+import {
+  IdlePtyTeardownRefusal,
+  type PosixIdlePtyGuard
+} from '../../pty/process-retirement/idle-pty-teardown-refusal'
 import { excludeShellBackgroundJobs } from '../../pty/process-retirement/pty-shell-job-preservation'
 import { terminateShutdownDescendants } from '../sessions/terminal-descendant-shutdown'
 import type { Session } from '../sessions/session'
+import type { TerminalHostTombstones } from './terminal-host-tombstones'
+import { getAliveTerminalHostSession } from './terminal-host-session-access'
+
+export type TerminalKillOptions = { immediate?: boolean; idleGuard?: PosixIdlePtyGuard }
 
 type TeardownOperation = {
   promise: Promise<void>
@@ -18,6 +26,33 @@ export class TerminalSessionTeardown {
   private operations = new Map<string, TeardownOperation>()
 
   constructor(private sessions: ReadonlyMap<string, Session>) {}
+
+  kill(
+    sessionId: string,
+    { immediate, idleGuard }: TerminalKillOptions,
+    killedTombstones: TerminalHostTombstones
+  ): Promise<void> {
+    const pending = this.get(sessionId)
+    if (pending) {
+      return immediate && !idleGuard ? (this.requestImmediate(sessionId) ?? pending) : pending
+    }
+    const session = getAliveTerminalHostSession(this.sessions, sessionId)
+    if (idleGuard) {
+      const { verifyIdle } = idleGuard
+      idleGuard = {
+        ...idleGuard,
+        verifyIdle: () => {
+          verifyIdle()
+          killedTombstones.record(sessionId)
+        }
+      }
+    }
+    const killed = this.killSession(sessionId, session, immediate === true, idleGuard)
+    if (!idleGuard) {
+      killedTombstones.record(sessionId)
+    }
+    return Promise.resolve(killed)
+  }
 
   get(sessionId: string): Promise<void> | undefined {
     return this.operations.get(sessionId)?.promise
@@ -68,7 +103,12 @@ export class TerminalSessionTeardown {
     await Promise.all(this.requestImmediateAll())
   }
 
-  killSession(sessionId: string, session: Session, immediate: boolean): void | Promise<void> {
+  killSession(
+    sessionId: string,
+    session: Session,
+    immediate: boolean,
+    idleGuard?: PosixIdlePtyGuard
+  ): void | Promise<void> {
     if (!session.launchAgent && !immediate && process.platform === 'win32') {
       // The PTY job would also end `start /b` and GUI children, which a graceful close leaves running.
       if (session.beginTermination()) {
@@ -82,13 +122,21 @@ export class TerminalSessionTeardown {
       return
     }
     // Hand-typed agents carry no launch metadata, yet their detached tools outlive the shell's SIGHUP.
-    if (session.launchAgent || !immediate) {
+    if (!idleGuard && (session.launchAgent || !immediate)) {
       return this.killAfterDescendantSnapshot(sessionId, session, immediate)
     }
     // Track the async probe so a concurrent create waits instead of treating the terminating ID as absent (#18046).
-    return this.track(sessionId, session, immediate, () =>
-      this.forceKillPlainShellSession(sessionId, session)
-    )
+    return this.track(sessionId, session, immediate, async (entry) => {
+      try {
+        await this.forceKillPlainShellSession(sessionId, session, idleGuard)
+      } catch (error) {
+        if (!(error instanceof IdlePtyTeardownRefusal) || !entry.immediatePromise) {
+          throw error
+        }
+        // An explicit kill or daemon shutdown joined the guarded operation and can still proceed.
+        await this.forceKillPlainShellSession(sessionId, session)
+      }
+    })
   }
 
   private track(
@@ -122,16 +170,43 @@ export class TerminalSessionTeardown {
   }
 
   /** Immediate close must reach detached tools even when startup did not identify an agent. */
-  private async forceKillPlainShellSession(sessionId: string, session: Session): Promise<void> {
-    session.beginTermination()
-    await killWithDescendantSweep(session.pid, () => {}, {
-      ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive,
-      terminateOwnedTree: () => session.terminateOwnedTree(),
-      terminateDescendants: (snapshot) =>
-        terminateShutdownDescendants(snapshot, session.shellIsRootChild),
-      awaitEscalation: true
-    })
-    await session.forceKillAndWaitForExit()
+  private async forceKillPlainShellSession(
+    sessionId: string,
+    session: Session,
+    idleGuard?: PosixIdlePtyGuard
+  ): Promise<void> {
+    if (!session.beginTermination() && idleGuard) {
+      throw new IdlePtyTeardownRefusal('unverifiable')
+    }
+    try {
+      await killWithDescendantSweep(session.pid, () => {}, {
+        ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive,
+        terminateOwnedTree: () => session.terminateOwnedTree(),
+        terminateDescendants: (snapshot) =>
+          idleGuard ? undefined : terminateShutdownDescendants(snapshot, session.shellIsRootChild),
+        ...(idleGuard && {
+          verifySnapshot: (snapshot) => {
+            if (!snapshot?.root && session.isAlive) {
+              throw new IdlePtyTeardownRefusal('unverifiable')
+            }
+            if (
+              snapshot?.descendants.some(
+                ({ pid, zombie }) => !idleGuard.shellPids.has(pid) && !zombie
+              )
+            ) {
+              throw new IdlePtyTeardownRefusal('running_work')
+            }
+          }
+        }),
+        awaitEscalation: true
+      })
+      await session.forceKillAndWaitForExit(undefined, idleGuard)
+    } catch (error) {
+      if (error instanceof IdlePtyTeardownRefusal) {
+        session.cancelTermination()
+      }
+      throw error
+    }
   }
 
   private killAfterDescendantSnapshot(

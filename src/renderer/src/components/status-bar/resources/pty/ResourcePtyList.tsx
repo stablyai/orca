@@ -1,109 +1,90 @@
-import { useMemo } from 'react'
+import type React from 'react'
 import { VirtualizedList } from '@/components/ui/virtualized-list'
-import { useTranslate } from '@/i18n/use-translate'
 import type { ResourcePtyGroup, ResourcePtyRow as PtyRow } from './resource-pty-view-model'
+import { ResourcePtyGroupRow, ResourcePtyLabelContext } from './ResourcePtyGroupRow'
 import { ResourcePtyRow } from './ResourcePtyRow'
+import type { ResourcePtyActionStatus } from './resource-pty-action-status'
+import type { useResourcePtyEndableGroups } from './use-resource-pty-endable-groups'
 
-type ListItem =
-  | { kind: 'project'; key: string; name: string | null; count: number }
-  | { kind: 'workspace'; key: string; name: string; count: number }
-  | { kind: 'session'; key: string; row: PtyRow }
+export type ResourcePtyListItem =
+  | { kind: 'group'; key: string; group: ResourcePtyGroup; open: boolean }
+  | { kind: 'session'; key: string; row: PtyRow; showWorkspace: boolean }
+
+const itemKey = (item: ResourcePtyListItem): string => item.key
 
 export function ResourcePtyList({
-  groups,
+  items,
   scrollElement,
   observedAt,
   unverifiable,
-  ending,
-  errors,
+  status,
+  endableGroups,
+  checkingGroup,
+  labelForRow,
   selected,
-  onSelect,
+  openDetails,
+  onToggleGroup,
+  onEndAll,
+  onActivate,
   onEnd,
   onNavigate
 }: {
-  groups: readonly ResourcePtyGroup[]
+  items: readonly ResourcePtyListItem[]
   scrollElement: HTMLDivElement | null
   observedAt: number | null
   unverifiable: boolean
-  ending: ReadonlySet<string>
-  errors: ReadonlyMap<string, string>
+  status: ResourcePtyActionStatus
+  endableGroups: ReturnType<typeof useResourcePtyEndableGroups>
+  checkingGroup: string | null
+  labelForRow: (row: PtyRow) => string
   selected: ReadonlySet<string>
-  onSelect: (row: PtyRow) => void
+  openDetails: ReadonlySet<string>
+  onToggleGroup: (key: string) => void
+  onEndAll: (group: ResourcePtyGroup, source: Element) => void
+  onActivate: (row: PtyRow, event: React.MouseEvent, canSelect: boolean) => void
   onEnd: (row: PtyRow) => void
   onNavigate: (tabId: string, paneKey: string | null) => void
 }) {
-  const t = useTranslate()
-  const items = useMemo(() => {
-    const result: ListItem[] = []
-    for (const group of groups) {
-      result.push({
-        kind: 'project',
-        key: JSON.stringify(['project', group.id]),
-        name: group.name,
-        count: group.workspaces.reduce((count, workspace) => count + workspace.rows.length, 0)
-      })
-      for (const workspace of group.workspaces) {
-        if (workspace.name) {
-          result.push({
-            kind: 'workspace',
-            key: JSON.stringify(['workspace', group.id, workspace.id]),
-            name: workspace.name,
-            count: workspace.rows.length
-          })
-        }
-        for (const row of workspace.rows) {
-          result.push({ kind: 'session', key: row.identity, row })
-        }
-      }
-    }
-    return result
-  }, [groups])
   return (
-    <VirtualizedList
-      rows={items}
-      getRowKey={(item) => item.key}
-      scrollElement={scrollElement}
-      estimateRowHeightPx={40}
-      announceListPosition
-      renderRow={(item) => {
-        switch (item.kind) {
-          case 'project':
-            return (
-              <h3
-                key={item.key}
-                className="flex justify-between px-3 pt-3 pb-1 text-2xs font-semibold uppercase tracking-wide"
-              >
-                <span>{item.name ?? t('resourceManager.pty.unassigned', 'Unassigned')}</span>
-                <span>{item.count}</span>
-              </h3>
-            )
-          case 'workspace':
-            return (
-              <div
-                key={item.key}
-                className="flex justify-between py-1 pr-4 pl-3 text-xs text-muted-foreground"
-              >
-                <span className="truncate">{item.name}</span>
-                <span>{item.count}</span>
-              </div>
-            )
-          case 'session':
-            return (
-              <ResourcePtyRow
-                key={item.key}
-                row={item.row}
-                observedAt={observedAt}
-                unverifiable={unverifiable}
-                ending={!!item.row.session.exiting || ending.has(item.row.identity)}
-                error={errors.get(item.row.identity)}
-                selected={selected.has(item.row.identity)}
-                onSelect={onSelect}
-                onEnd={onEnd}
-                onNavigate={onNavigate}
-              />
-            )
+    <ResourcePtyLabelContext value={labelForRow}>
+      <VirtualizedList
+        rows={items}
+        getRowKey={itemKey}
+        scrollElement={scrollElement}
+        estimateRowHeightPx={26}
+        announceListPosition
+        renderRow={(item) =>
+          item.kind === 'group' ? (
+            <ResourcePtyGroupRow
+              key={item.key}
+              group={item.group}
+              open={item.open}
+              allowEndAll={
+                !unverifiable && (checkingGroup === null || item.group.kind === 'unbound')
+              }
+              endableGroups={endableGroups}
+              checking={checkingGroup === item.key}
+              onToggle={onToggleGroup}
+              onEndAll={onEndAll}
+            />
+          ) : (
+            <ResourcePtyRow
+              key={item.key}
+              row={item.row}
+              title={labelForRow(item.row)}
+              showWorkspace={item.showWorkspace}
+              observedAt={observedAt}
+              unverifiable={unverifiable}
+              status={status}
+              selected={selected.has(item.row.identity)}
+              detailsOpen={openDetails.has(item.row.identity)}
+              onActivate={onActivate}
+              onEnd={onEnd}
+              onNavigate={onNavigate}
+            />
+          )
         }
-      }}
-    />
+      />
+    </ResourcePtyLabelContext>
   )
 }

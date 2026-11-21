@@ -1,9 +1,12 @@
-import type { TerminalForegroundObservation } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
-import { pruneRetiredPtyIncarnations } from '../../../shared/terminal/pty/lifecycle/retired-pty-incarnations'
 import { getInspectableTerminalHostSession } from './terminal-host-session-access'
 import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
-import type { PtyChildProcessVerdict } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
+import type {
+  HostProcessInspection,
+  PtyChildProcessVerdict
+} from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
+import type { ClaimedAgentPtyOwnerRegistry } from '../../../shared/agent-session/lifecycle/leases/claimed-agent-pty-owner'
+import { observedRunningWork } from './terminal-host-running-work'
 import type { RemoteForegroundEvidence } from '../../../shared/terminal/pty/foreground/foreground-process-evidence'
 import { getCheapProcessTableSnapshot } from '../../../shared/process-observation/tables/cheap-process-table-snapshot-reader'
 import { getStrictProcessTableSnapshotWithAge } from '../../../shared/process-observation/tables/process-table-snapshot-reader'
@@ -24,12 +27,10 @@ import {
   type PtyProcessInspectionOptions
 } from '../../providers/pty/process-inspection'
 
-export type TerminalHostProcessInspection = {
-  foregroundObservation?: TerminalForegroundObservation
-  foregroundProcess: string | null
-  hasChildProcesses: boolean
-  childProcessEvidence?: PtyChildProcessVerdict
-  foregroundProcessEvidence?: RemoteForegroundEvidence
+export type TerminalHostProcessInspection = HostProcessInspection
+export type TerminalHostProcessInspectionOptions = PtyProcessInspectionOptions & {
+  /** Retain the inspected launch chain for an automatic teardown's final fence. */
+  onIdleShellChain?: (pids: ReadonlySet<number>) => void
 }
 
 type RetiredIncarnation = { incarnationId: string; code: number; expiresAt: number }
@@ -43,6 +44,9 @@ export async function inspectTerminalHostProcess(args: {
   currentSession?: () => Session | undefined
   expectedIncarnationId?: string
   foregroundOnly?: boolean
+  runningWorkSinceMs?: number
+  signal?: AbortSignal
+  onIdleShellChain?: (pids: ReadonlySet<number>) => void
   /** The caller is a self-correcting poll that only reads the process name, never evidence. */
   steadyState?: boolean
   /** A steady poll from a pane tracking no agent; Windows skips the Store-shell table read. */
@@ -53,6 +57,7 @@ export async function inspectTerminalHostProcess(args: {
   nextObservationEpoch: () => number
   onTier?: (tier: TerminalHostInspectionTier) => void
 }): Promise<TerminalHostProcessInspection> {
+  args.signal?.throwIfAborted()
   const { sessionId, session, expectedIncarnationId, retiredIncarnation } = args
   if (!session || !session.isAlive) {
     if (
@@ -129,40 +134,58 @@ export async function inspectTerminalHostProcess(args: {
 
   const windowsDecision = process.platform === 'win32' && args.steadyState !== true
   let foregroundProcess = windowsDecision ? null : session.getForegroundProcess()
-  let childProcessEvidence: PtyChildProcessVerdict | undefined = session.processNameIsSpawnFile
+  const decidingRunningWork = args.runningWorkSinceMs !== undefined
+  const scanChildProcesses = session.processNameIsSpawnFile || decidingRunningWork
+  let childProcessEvidence: PtyChildProcessVerdict | undefined = scanChildProcesses
     ? 'unverifiable'
     : undefined
   let evidence: RemoteForegroundEvidence
   if (!incarnationMatches) {
     evidence = unverifiableEvidence(args, session, 'incarnation_mismatch')
   } else if (process.platform === 'win32') {
-    if (windowsDecision || session.processNameIsSpawnFile) {
+    if (!decidingRunningWork && (windowsDecision || session.processNameIsSpawnFile)) {
       foregroundProcess = await session.confirmForegroundProcess(
         windowsDecision ? { decision: true } : undefined
       )
     }
     // A steady-state poll never decides adoption or close, so it may read the cached process table.
-    childProcessEvidence = await session.inspectChildProcesses(
-      args.steadyState !== true,
-      args.ignoreDetached === true,
-      steadyPollJudgesByJobMembership(args, foregroundProcess)
-    )
+    // A job can miss guest work and the children of packaged shells.
+    childProcessEvidence =
+      decidingRunningWork &&
+      (session.wslDistro || /(?:^|[\\/])WindowsApps[\\/]/i.test(session.shellPath ?? ''))
+        ? 'unverifiable'
+        : await session.inspectChildProcesses(
+            args.steadyState !== true,
+            args.ignoreDetached === true,
+            steadyPollJudgesByJobMembership(args, foregroundProcess),
+            args.runningWorkSinceMs,
+            args.signal
+          )
     // Windows cannot provide this POSIX evidence; avoid spawning an MSYS ps.exe console.
     evidence = unverifiableEvidence(args, session, 'windows_ssh_foreground_unavailable')
   } else {
     try {
       const outputChunks = session.outputChunks
-      const snapshot = await getStrictProcessTableSnapshotWithAge()
+      const snapshot = await getStrictProcessTableSnapshotWithAge(
+        args.runningWorkSinceMs,
+        args.signal
+      )
       if (process.platform === 'darwin' && !session.processNameIsSpawnFile) {
         rememberIdleShellProof(session, snapshot.rows, snapshot.capturedAgeMs, outputChunks)
       }
-      if (session.processNameIsSpawnFile) {
+      if (scanChildProcesses) {
         const observed = resolveSpawnFileForegroundFromRows(snapshot.rows, session.pid)
         foregroundProcess = observed.available ? observed.processName : foregroundProcess
         childProcessEvidence = inspectSpawnFileChildProcessesFromRows(
           snapshot.rows,
           session.pid,
-          session.getForegroundProcess({ rawFallback: true })
+          session.getForegroundProcess({ rawFallback: true }),
+          decidingRunningWork
+            ? {
+                shellIsRootChild: session.shellIsRootChild,
+                onIdleShellChain: args.onIdleShellChain
+              }
+            : undefined
         )
         if (observed.available && observed.processName && !isShellProcess(observed.processName)) {
           childProcessEvidence = 'children'
@@ -180,8 +203,11 @@ export async function inspectTerminalHostProcess(args: {
         },
         snapshot.rows
       )
-      await rememberSteadyStateAnchor(session, evidence, snapshot.rows)
+      if (!args.signal?.aborted) {
+        await rememberSteadyStateAnchor(session, evidence, snapshot.rows)
+      }
     } catch {
+      args.signal?.throwIfAborted()
       evidence = unverifiableEvidence(args, session, 'process_table_unreadable')
       clearSteadyStateAnchor(session)
     }
@@ -252,18 +278,18 @@ export function inspectTerminalHostSession(
   sessions: ReadonlyMap<string, Session>,
   retired: Map<string, RetiredIncarnation>,
   sessionId: string,
-  options: PtyProcessInspectionOptions | undefined,
+  options: TerminalHostProcessInspectionOptions | undefined,
   authorityGeneration: string,
-  nextObservationEpoch: () => number
+  nextObservationEpoch: () => number,
+  owners?: ClaimedAgentPtyOwnerRegistry
 ): Promise<TerminalHostProcessInspection> {
-  pruneRetiredPtyIncarnations(retired)
   const session = getInspectableTerminalHostSession(
     sessions,
     retired,
     sessionId,
     options?.expectedIncarnationId
   )
-  return inspectTerminalHostProcess({
+  const inspection = inspectTerminalHostProcess({
     sessionId,
     currentSession: () => sessions.get(sessionId),
     session: session?.isAlive ? session : null,
@@ -272,4 +298,19 @@ export function inspectTerminalHostSession(
     authorityGeneration,
     nextObservationEpoch
   })
+  const incarnationId = options?.expectedIncarnationId
+  const runningWorkSinceMs = options?.runningWorkSinceMs
+  if (runningWorkSinceMs === undefined || !incarnationId) {
+    return inspection
+  }
+  return inspection.then((result) => ({
+    ...result,
+    runningWork: observedRunningWork(
+      result,
+      incarnationId,
+      session?.isAlive === true && sessions.get(sessionId) === session,
+      owners ? () => owners.listForPty(sessionId).length > 0 : undefined,
+      session?.getCommandActivity(runningWorkSinceMs) ?? 'unknown'
+    )
+  }))
 }

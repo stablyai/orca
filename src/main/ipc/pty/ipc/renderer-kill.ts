@@ -160,6 +160,7 @@ async function stopFencedRendererPty(
     !args.expectedIncarnationId ||
     typeof args.requireNoAgentOwner !== 'boolean' ||
     typeof args.requireUnattached !== 'boolean' ||
+    (args.requireIdle !== undefined && args.requireIdle !== true) ||
     isRemoteRuntimePtyId(args.id) ||
     resolvePtyExecutionHost(args.id) !== LOCAL_EXECUTION_HOST_ID
   ) {

@@ -174,10 +174,13 @@ export type PtyApi = {
     options?: {
       expectedIncarnationId?: string
       scanChildProcesses?: boolean
+      runningWorkSinceMs?: number
+      runningWorkCheckId?: string
       steadyState?: boolean
       jobMembershipOnly?: boolean
     }
   ) => Promise<TerminalProcessInspection>
+  cancelRunningWorkCheck: (checkId: string) => void
   confirmForegroundProcess: (id: string) => Promise<string | null>
   /** Local panes only; never joined for any other pane. */
   isCodexOnSharedServer: (id: string) => Promise<CodexSharedServerStatus>

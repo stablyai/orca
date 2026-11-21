@@ -13,6 +13,12 @@ import {
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
+import {
+  beforeDeadline,
+  DEADLINE_PASSED,
+  monotonicNow
+} from '../../../../shared/concurrency/deadline-settle-notifier'
 import { installPtySessionListingIpcHandler } from './session-listing'
 import { ptySizes } from '../delivery/visibility-state'
 import { isValidPaneKey } from '../pane/key-state'
@@ -28,6 +34,13 @@ export function installPtyInspectIpcHandlers(deps: {
 }): void {
   const ipcMain = getPtyIpc()
   const { getLocalPtyProviderStartupPromise } = deps
+  const runningWorkChecks = new Map<string, { controller: AbortController; requests: number }>()
+  ipcMain.removeAllListeners('pty:cancelRunningWorkCheck')
+  ipcMain.on('pty:cancelRunningWorkCheck', (event, checkId: unknown) => {
+    if (typeof checkId === 'string') {
+      runningWorkChecks.get(`${event.sender.id}:${checkId}`)?.controller.abort()
+    }
+  })
 
   // Await daemon ownership handoff for local IDs; renderer-kill inlines this to preserve same-turn teardown without a barrier.
   const awaitSwapWindow = async (id: string): Promise<void> => {
@@ -139,11 +152,13 @@ export function installPtyInspectIpcHandlers(deps: {
   ipcMain.handle(
     'pty:inspectProcess',
     async (
-      _event,
+      event,
       args: {
         id: string
         expectedIncarnationId?: string
         scanChildProcesses?: boolean
+        runningWorkSinceMs?: number
+        runningWorkCheckId?: string
         steadyState?: boolean
         jobMembershipOnly?: boolean
       }
@@ -152,22 +167,56 @@ export function installPtyInspectIpcHandlers(deps: {
       if (typeof args?.id !== 'string' || !args.id || isRemoteRuntimePtyId(args.id)) {
         return clientOnlyUnverifiableInspection('terminal_gone')
       }
-      // Completion-sensitive inspection must wait for the provider that owns restored daemon sessions.
-      await awaitSwapWindow(args.id)
-      if (!hasPtyProviderForInspection(args.id)) {
-        return clientOnlyUnverifiableInspection('terminal_gone')
-      }
       const options = {
         ...(args.expectedIncarnationId
           ? { expectedIncarnationId: args.expectedIncarnationId }
           : {}),
         ...(args.scanChildProcesses === true ? { scanChildProcesses: true } : {}),
+        ...(args.expectedIncarnationId &&
+        typeof args.runningWorkSinceMs === 'number' &&
+        Number.isSafeInteger(args.runningWorkSinceMs) &&
+        resolvePtyExecutionHost(args.id) === LOCAL_EXECUTION_HOST_ID
+          ? { runningWorkSinceMs: args.runningWorkSinceMs }
+          : {}),
         ...(args.steadyState === true ? { steadyState: true } : {}),
         ...(args.jobMembershipOnly === true ? { jobMembershipOnly: true } : {})
       }
-      return Object.keys(options).length > 0
-        ? inspectPtyProviderProcessForRenderer(getProviderForPty(args.id), args.id, options)
-        : inspectPtyProviderProcessForRenderer(getProviderForPty(args.id), args.id)
+      const inspection = async (signal?: AbortSignal) => {
+        // Restored terminals need the provider that owns their daemon.
+        const startup = waitForPromiseWithSignal(awaitSwapWindow(args.id), signal)
+        if (options.runningWorkSinceMs === undefined) {
+          await startup
+        } else if ((await beforeDeadline(startup, monotonicNow() + 750)) === DEADLINE_PASSED) {
+          return clientOnlyUnverifiableInspection('timeout')
+        }
+        if (!hasPtyProviderForInspection(args.id)) {
+          return clientOnlyUnverifiableInspection('terminal_gone')
+        }
+        const provider = getProviderForPty(args.id)
+        return Object.keys(options).length > 0
+          ? inspectPtyProviderProcessForRenderer(provider, args.id, { ...options, signal })
+          : inspectPtyProviderProcessForRenderer(provider, args.id)
+      }
+      if (options.runningWorkSinceMs === undefined || !args.runningWorkCheckId) {
+        return inspection()
+      }
+      const key = `${event.sender.id}:${args.runningWorkCheckId}`
+      const batch = runningWorkChecks.get(key) ?? { controller: new AbortController(), requests: 0 }
+      runningWorkChecks.set(key, batch)
+      batch.requests += 1
+      const signal = batch.controller.signal
+      try {
+        return await waitForPromiseWithSignal(inspection(signal), signal)
+      } catch (error) {
+        if (!signal.aborted) {
+          throw error
+        }
+        return clientOnlyUnverifiableInspection('timeout')
+      } finally {
+        if (--batch.requests === 0) {
+          runningWorkChecks.delete(key)
+        }
+      }
     }
   )
 

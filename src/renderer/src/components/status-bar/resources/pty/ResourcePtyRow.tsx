@@ -1,152 +1,204 @@
-import { memo } from 'react'
-import { ArrowUpRight, ChevronRight } from 'lucide-react'
+import { memo, useCallback, useSyncExternalStore } from 'react'
+import type React from 'react'
+import { AlertCircle, ArrowUpRight, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { cn } from '@/lib/class-names'
-import type { ResourcePtyRow as PtyRow } from './resource-pty-view-model'
-import { ResourcePtyDetails, resourcePtyBindingLabel } from './ResourcePtyDetails'
+import {
+  resourcePtyProcessBaseName,
+  type ResourcePtyRow as PtyRow
+} from './resource-pty-view-model'
+import { ResourcePtyDetails } from './ResourcePtyDetails'
+import { ResourcePtyProcessIcon } from './ResourcePtyProcessIcon'
 import { ptyTerminationReason } from './use-resource-pty-actions'
+import type { ResourcePtyActionStatus } from './resource-pty-action-status'
+
+// An unbound PTY's title is often just its process name, which the icon already shows.
+function titleRepeatsProcess(title: string, foreground: string | undefined): boolean {
+  const process = resourcePtyProcessBaseName(foreground)
+  return !!process && resourcePtyProcessBaseName(title.trim().split(' ')[0]) === process
+}
 
 export const ResourcePtyRow = memo(function ResourcePtyRow({
   row,
+  title,
+  showWorkspace,
   observedAt,
   unverifiable,
-  ending,
-  error,
+  status,
   selected,
-  onSelect,
+  detailsOpen,
+  onActivate,
   onEnd,
   onNavigate
 }: {
   row: PtyRow
+  title: string
+  showWorkspace: boolean
   observedAt: number | null
   unverifiable: boolean
-  ending: boolean
-  error?: string
+  status: ResourcePtyActionStatus
   selected: boolean
-  onSelect: (row: PtyRow) => void
+  detailsOpen: boolean
+  onActivate: (row: PtyRow, event: React.MouseEvent, canSelect: boolean) => void
   onEnd: (row: PtyRow) => void
   onNavigate: (tabId: string, paneKey: string | null) => void
 }) {
   const t = useTranslate()
   useUiLanguageRevision()
+  const subscribe = useCallback(
+    (listener: () => void) => status.subscribeRow(row.identity, listener),
+    [row.identity, status]
+  )
+  const getStatus = useCallback(() => status.getStatus(row.identity), [row.identity, status])
+  const action = useSyncExternalStore(subscribe, getStatus)
+  const ending = !!row.session.exiting || action === 'ending'
+  const error = action === 'ending' ? undefined : action
   const endUnavailable = unverifiable
     ? t('resourceManager.pty.refreshBeforeEnd', 'End is unavailable until PTYs are refreshed.')
     : !row.session.incarnationId || !row.session.fencedTermination
       ? ptyTerminationReason('unsupported', t)
       : null
-  const processName = row.session.foregroundProcess?.trim()
-  const context = processName
-    ? t('resourceManager.pty.lastProcess', 'Last seen process: {{process}}', {
-        process: processName
-      })
-    : null
-  const folder = !row.workspace ? row.session.cwd : null
+  const process = row.session.foregroundProcess?.trim()
+  const swapForWorkspace = showWorkspace && !!row.workspace && titleRepeatsProcess(title, process)
+  const label = swapForWorkspace ? row.workspace : title
+  const workspace = showWorkspace && !swapForWorkspace ? row.workspace : null
+  const errorReason = error ? ptyTerminationReason(error, t) : null
+  const showAgentRunning = error === 'agent_running'
   return (
-    <div
-      data-resource-pty-row={row.identity}
-      data-selected={selected}
-      className={cn('rounded-md px-2 py-1', selected && 'bg-accent text-accent-foreground')}
-    >
-      <Collapsible>
-        <div className="flex min-w-0 items-center gap-1">
-          <Checkbox
-            className="ml-1"
-            checked={selected}
-            disabled={ending || !!endUnavailable}
-            aria-label={t('resourceManager.pty.selectNamed', 'Select {{terminal}}', {
-              terminal: row.label
-            })}
-            onCheckedChange={() => onSelect(row)}
-          />
-          <CollapsibleTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="group min-w-0 flex-1 justify-start"
-              aria-label={t('resourceManager.pty.detailsNamed', 'Details for {{terminal}}', {
-                terminal: row.label
-              })}
-            >
-              <ChevronRight className="size-3 shrink-0 transition-transform group-data-[state=open]:rotate-90" />
-              <span className="truncate text-xs">{row.label}</span>
-            </Button>
-          </CollapsibleTrigger>
-          {row.binding === 'unbound' && (
-            <span className="shrink-0 text-2xs text-muted-foreground">
-              {resourcePtyBindingLabel(row.binding, t)}
-            </span>
-          )}
-          {row.tabId && (
+    <div data-resource-pty-row={row.identity} data-selected={selected}>
+      <div
+        className={cn(
+          'group/row flex h-[26px] items-center gap-1.5 pr-2',
+          selected
+            ? 'bg-[color-mix(in_srgb,var(--foreground)_13%,var(--background))] text-accent-foreground ring-1 ring-foreground/20 ring-inset dark:bg-accent'
+            : 'hover:bg-accent/50',
+          ending && 'text-muted-foreground'
+        )}
+      >
+        <button
+          type="button"
+          aria-expanded={detailsOpen}
+          onClick={(event) => onActivate(row, event, !endUnavailable && !ending)}
+          className="flex h-full min-w-0 flex-1 items-center gap-1.5 pl-6 text-left text-xs outline-none select-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        >
+          {process ? (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={t('resourceManager.pty.openNamed', 'Open {{terminal}}', {
-                    terminal: row.label
-                  })}
-                  onClick={() => {
-                    if (row.tabId) {
-                      onNavigate(row.tabId, row.paneKey)
-                    }
-                  }}
-                >
-                  <ArrowUpRight className="size-3" />
-                </Button>
+                <span className="inline-flex size-3.5 shrink-0 items-center justify-center">
+                  <ResourcePtyProcessIcon process={process} />
+                </span>
               </TooltipTrigger>
-              <TooltipContent>
-                {t('resourceManager.pty.goToTerminal', 'Go to terminal')}
+              <TooltipContent side="top" sideOffset={4}>
+                {process}
               </TooltipContent>
             </Tooltip>
+          ) : (
+            <ResourcePtyProcessIcon process={undefined} />
           )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-flex" tabIndex={endUnavailable ? 0 : undefined}>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  disabled={ending || !!endUnavailable}
-                  aria-label={t('resourceManager.pty.endNamed', 'End {{terminal}}', {
-                    terminal: row.label
-                  })}
-                  onClick={() => onEnd(row)}
-                >
-                  {ending
-                    ? t('resourceManager.pty.ending', 'Ending…')
-                    : t('resourceManager.pty.endShort', 'End')}
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              {endUnavailable ??
-                t('resourceManager.pty.endHint', 'End this terminal and its child processes.')}
-            </TooltipContent>
-          </Tooltip>
+          <span className="min-w-0 truncate">{label}</span>
+          {workspace && (
+            <span className="min-w-0 flex-1 truncate text-muted-foreground">{workspace}</span>
+          )}
+          {selected && (
+            <span className="sr-only">{t('resourceManager.pty.selected', 'Selected')}</span>
+          )}
+        </button>
+        <div
+          className={cn(
+            'flex shrink-0 items-center justify-end gap-0.5',
+            showAgentRunning ? 'w-[94px]' : 'w-[72px]'
+          )}
+        >
+          {ending ? (
+            <span className="flex items-center gap-1 text-2xs text-muted-foreground">
+              <Loader2
+                aria-hidden
+                className="size-4 shrink-0 animate-spin motion-reduce:animate-none"
+              />
+              <span className="truncate">{t('resourceManager.pty.ending', 'Ending…')}</span>
+            </span>
+          ) : (
+            <>
+              {errorReason && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      tabIndex={0}
+                      className="flex min-w-0 items-center gap-1 rounded-sm text-2xs text-destructive outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <AlertCircle aria-hidden className="size-3 shrink-0" />
+                      <span className="truncate group-has-[:focus-visible]/row:sr-only group-hover/row:sr-only">
+                        {showAgentRunning
+                          ? errorReason
+                          : t('resourceManager.pty.notEnded', 'Not ended')}
+                      </span>
+                      {!showAgentRunning && <span className="sr-only">{errorReason}</span>}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={4}>
+                    {errorReason}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              <div className="hidden shrink-0 items-center gap-0.5 group-has-[:focus-visible]/row:flex group-hover/row:flex">
+                {row.tabId && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="size-5"
+                        aria-label={t('resourceManager.pty.openNamed', 'Open {{terminal}}', {
+                          terminal: title
+                        })}
+                        onClick={() => {
+                          if (row.tabId) {
+                            onNavigate(row.tabId, row.paneKey)
+                          }
+                        }}
+                      >
+                        <ArrowUpRight className="size-3" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" sideOffset={4}>
+                      {t('resourceManager.pty.goToTerminal', 'Go to terminal')}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex" tabIndex={endUnavailable ? 0 : undefined}>
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        className="h-5 px-1.5 text-2xs hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/15"
+                        disabled={!!endUnavailable}
+                        aria-label={t('resourceManager.pty.endNamed', 'End {{terminal}}', {
+                          terminal: title
+                        })}
+                        onClick={() => onEnd(row)}
+                      >
+                        {t('resourceManager.pty.endShort', 'End')}
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" sideOffset={4}>
+                    {endUnavailable ??
+                      t(
+                        'resourceManager.pty.endHint',
+                        'End this terminal and its child processes.'
+                      )}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </>
+          )}
         </div>
-        {(context || folder) && (
-          <p
-            className="truncate px-2.5 pb-1 text-xs text-muted-foreground"
-            title={folder || context || undefined}
-          >
-            {context}
-            {context && folder ? ' · ' : ''}
-            {folder}
-          </p>
-        )}
-        <CollapsibleContent>
-          <ResourcePtyDetails row={row} observedAt={observedAt} />
-        </CollapsibleContent>
-        {error && (
-          <p role="alert" className="px-2.5 pb-1 text-xs text-destructive">
-            {error}
-          </p>
-        )}
-      </Collapsible>
+      </div>
+      {detailsOpen && <ResourcePtyDetails row={row} observedAt={observedAt} />}
     </div>
   )
 })

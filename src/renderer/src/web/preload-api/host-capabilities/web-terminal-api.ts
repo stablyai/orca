@@ -46,6 +46,7 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     hasChildProcesses: () => Promise.resolve(false),
     getForegroundProcess: () => Promise.resolve(null),
     inspectProcess: () => Promise.reject(new Error('terminal_liveness_unavailable')),
+    cancelRunningWorkCheck: () => {},
     // Why: paired web panes cannot provide a local post-boundary process scan.
     confirmForegroundProcess: () => Promise.resolve(null),
     // Why: a paired client's terminals belong to the host, whose Codex settings this client does not own.

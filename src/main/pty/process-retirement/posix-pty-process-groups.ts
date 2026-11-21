@@ -1,4 +1,5 @@
 import { hasControllingTty } from '../../../shared/terminal/pty/native-process/posix-controlling-terminal'
+import { IdlePtyTeardownRefusal, type PosixIdlePtyGuard } from './idle-pty-teardown-refusal'
 import { recordSelfInitiatedTreeKill } from '../../crash-reporting/process-exits/self-initiated-tree-kill-log'
 import {
   parseProcessRows,
@@ -26,6 +27,7 @@ export type PosixPtyProcessGroupSignalDeps = PosixPtyGroupSignalDeps & {
   readProcessSessionId?: (pid: number) => Promise<number | null>
   /** False once the root has exited; its pid and TTY may then belong to another terminal. */
   ownsRoot?: () => boolean
+  idleGuard?: PosixIdlePtyGuard
 }
 
 export function isPosixPtyRootStopped(output: string, rootPid: number): boolean {
@@ -40,7 +42,8 @@ export function getPosixPtyProcessGroups(
   output: string,
   rootPid: number,
   currentPid = process.pid,
-  readSessionId?: (pid: number) => number | null
+  readSessionId?: (pid: number) => number | null,
+  idleShellPids?: ReadonlySet<number>
 ): number[] | null {
   const rows = parseProcessRows(output)
   const root = rows.find((row) => row.pid === rootPid)
@@ -62,6 +65,15 @@ export function getPosixPtyProcessGroups(
   const groups = new Set(members.map((row) => row.pgid))
   if (!groups.has(root.pgid)) {
     return null
+  }
+  if (
+    idleShellPids &&
+    members.some(({ pid, state }) => !idleShellPids.has(pid) && !state?.startsWith('Z'))
+  ) {
+    throw new IdlePtyTeardownRefusal('running_work')
+  }
+  if (idleShellPids && [...idleShellPids].some((pid) => !members.some((row) => row.pid === pid))) {
+    throw new IdlePtyTeardownRefusal('unverifiable')
   }
   return [...groups].sort((left, right) => {
     if (left === root.pgid) {
@@ -118,14 +130,22 @@ export async function signalPosixPtyProcessGroups(
       table,
       rootPid,
       deps.currentPid ?? process.pid,
-      readSessionId ? await readSessionIds(table, rootPid, readSessionId) : undefined
+      readSessionId ? await readSessionIds(table, rootPid, readSessionId) : undefined,
+      deps.idleGuard?.shellPids
     )
-  } catch {
+  } catch (error) {
+    if (error instanceof IdlePtyTeardownRefusal) {
+      throw error
+    }
     groups = null
   }
   if (deps.ownsRoot && !deps.ownsRoot()) {
     return
   }
+  if (deps.idleGuard && !groups) {
+    throw new IdlePtyTeardownRefusal('unverifiable')
+  }
+  deps.idleGuard?.verifyIdle()
   deliverPosixPtyGroupSignal(groups, signal, fallback, deps)
 }
 

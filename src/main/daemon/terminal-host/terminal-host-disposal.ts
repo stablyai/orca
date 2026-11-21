@@ -44,6 +44,7 @@ export async function disposeTerminalHostSessions({
     ),
     ...existingTeardowns
   ])
+  sessions.clear()
   killedTombstones.clear()
 }
 

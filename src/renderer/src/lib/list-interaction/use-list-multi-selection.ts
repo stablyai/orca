@@ -15,6 +15,8 @@ export type ListMultiSelection<T> = {
   getItemForKey: (key: string) => T | undefined
   toggleSelection: (item: T) => void
   setAllSelected: (selected: boolean) => void
+  /** Empties the selection; a given item becomes the anchor for a following Shift-click. */
+  clearSelection: (anchor?: T) => void
   /** Returns true for selection-only gestures (Cmd/Ctrl/Shift), which must not navigate. */
   updateSelectionForGesture: (
     event: Pick<React.MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey'>,
@@ -28,13 +30,23 @@ export type ListMultiSelection<T> = {
 export function useListMultiSelection<T>({
   items,
   getKey,
-  getScope
+  getScope,
+  getRetainedItem,
+  canSelectKey,
+  additiveRange = false
 }: {
   items: readonly T[]
   getKey: (item: T) => string
   /** Pointerdowns outside this element clear the selection. */
   getScope: () => Element | null
+  /** Keeps already selected items when folded away. Ranges still use visible order. */
+  getRetainedItem?: (key: string) => T | undefined
+  /** Prunes temporarily unavailable keys without rebuilding the ordered list. */
+  canSelectKey?: (key: string) => boolean
+  additiveRange?: boolean
 }): ListMultiSelection<T> {
+  'use no memo' // The compiler skips memoization for this render-time selection reset.
+
   // Reuse equal ordered-ID arrays so gesture callbacks stay stable and row memoization survives epoch bumps.
   const entryByKey = useMemo(() => {
     const entries = new Map<string, { item: T; index: number }>()
@@ -53,9 +65,23 @@ export function useListMultiSelection<T>({
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
   const [selectionAnchorKey, setSelectionAnchorKey] = useState<string | null>(null)
 
-  const prunedSelection = pruneSelection(selectedKeys, selectionAnchorKey, visibleKeySet)
+  const prunedSelection = useMemo(() => {
+    const pruned = pruneSelection(
+      selectedKeys,
+      selectionAnchorKey,
+      visibleKeySet,
+      getRetainedItem ? (key) => getRetainedItem(key) !== undefined : undefined,
+      canSelectKey
+    )
+    return {
+      selectedIds: areSelectionsEqual(selectedKeys, pruned.selectedIds)
+        ? selectedKeys
+        : pruned.selectedIds,
+      anchorId: pruned.anchorId
+    }
+  }, [selectedKeys, selectionAnchorKey, visibleKeySet, getRetainedItem, canSelectKey])
   // Why: filters/grouping can hide selected rows; prune during render so nothing sees stale ids for unrendered items.
-  if (!areSelectionsEqual(selectedKeys, prunedSelection.selectedIds)) {
+  if (selectedKeys !== prunedSelection.selectedIds) {
     setSelectedKeys(prunedSelection.selectedIds)
   }
   if (selectionAnchorKey !== prunedSelection.anchorId) {
@@ -70,10 +96,15 @@ export function useListMultiSelection<T>({
         const entry = entryByKey.get(key)
         if (entry) {
           selected.push(entry)
+        } else {
+          const retained = getRetainedItem?.(key)
+          if (retained !== undefined) {
+            selected.push({ item: retained, index: Infinity })
+          }
         }
       }
       return selected.sort((a, b) => a.index - b.index).map(({ item }) => item)
-    }, [entryByKey, selectedKeys])
+    }, [entryByKey, selectedKeys, getRetainedItem])
   )
   const getItemForKey = useCallback((key: string) => entryByKey.get(key)?.item, [entryByKey])
 
@@ -117,14 +148,15 @@ export function useListMultiSelection<T>({
         previousSelectedIds: latest.selectedKeys,
         previousAnchorId: latest.selectionAnchorKey,
         targetId: getKey(item),
-        intent
+        intent,
+        additiveRange
       })
       setSelectedKeys(result.selectedIds)
       setSelectionAnchorKey(result.anchorId)
       // Plain click navigates; modifier gestures are selection-only so a batch can build without switching away.
       return intent !== 'replace'
     },
-    [getKey]
+    [additiveRange, getKey]
   )
 
   const selectForContextMenu = useCallback(
@@ -166,6 +198,15 @@ export function useListMultiSelection<T>({
     [visibleKeys]
   )
 
+  // Stable across visibleKeys changes so memoized rows can hold it.
+  const clearSelection = useCallback(
+    (anchor?: T): void => {
+      setSelectedKeys((previous) => (previous.size === 0 ? previous : new Set()))
+      setSelectionAnchorKey(anchor === undefined ? null : getKey(anchor))
+    },
+    [getKey]
+  )
+
   return {
     visibleKeys,
     selectedKeys,
@@ -173,6 +214,7 @@ export function useListMultiSelection<T>({
     getItemForKey,
     toggleSelection,
     setAllSelected,
+    clearSelection,
     updateSelectionForGesture,
     selectForContextMenu
   }

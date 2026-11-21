@@ -1,10 +1,12 @@
 import type { DaemonLaunchNoteChange } from '../protocol/daemon-launch-note-protocol'
 import { terminalSessionExitCode } from './terminal-host-returned-process'
 import { runTerminalCreation, type PendingTerminalCreation } from './terminal-creation-work'
-import { beginTerminalHostFencedTermination } from './terminal-host-fenced-termination'
+import {
+  beginTerminalHostFencedTermination,
+  type FencedPosixIdleEvidence
+} from './terminal-host-fenced-termination'
 import type { PtyFencedTerminationRequest } from '../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { Session } from '../sessions/session'
-import type { PtyProcessInspectionOptions } from '../../providers/pty/process-inspection'
 import type { SessionInfo } from '../protocol/daemon-session-info'
 import type { TakePendingOutputResult } from '../protocol/daemon-rpc-contract'
 import type { TerminalSnapshot } from '../protocol/terminal-snapshot'
@@ -14,7 +16,7 @@ import { recordTerminalHostSessionExit } from './terminal-host-session-exit'
 import { disposeTerminalHostSessions, killLiveSessionGroupsSync } from './terminal-host-disposal'
 import { getAliveTerminalHostSession } from './terminal-host-session-access'
 import { writeSessionInput } from '../sessions/session-input-path'
-import { TerminalSessionTeardown } from './terminal-session-teardown'
+import { TerminalSessionTeardown, type TerminalKillOptions } from './terminal-session-teardown'
 import { ClaimedAgentPtyOwnerRegistry } from '../../../shared/agent-session/lifecycle/leases/claimed-agent-pty-owner'
 import {
   createOrAttachClaimedAgentSession,
@@ -33,7 +35,8 @@ import { TerminalAttachCanceledError } from '../protocol/daemon-errors'
 import { randomUUID } from 'node:crypto'
 import {
   inspectTerminalHostSession,
-  type TerminalHostProcessInspection
+  type TerminalHostProcessInspection,
+  type TerminalHostProcessInspectionOptions
 } from './terminal-host-process-inspection'
 
 import {
@@ -169,25 +172,20 @@ export class TerminalHost {
     this.sessions.get(sessionId)?.resumeProducer(source)
   }
 
-  kill(sessionId: string, opts: { immediate?: boolean } = {}): Promise<void> {
-    const pending = this.sessionTeardown.get(sessionId)
-    if (pending) {
-      return Promise.resolve(
-        opts.immediate ? this.sessionTeardown.requestImmediate(sessionId) : pending
-      )
-    }
-    const session = getAliveTerminalHostSession(this.sessions, sessionId)
-    const killed = this.sessionTeardown.killSession(sessionId, session, opts.immediate === true)
-    this.killedTombstones.record(sessionId)
-    return Promise.resolve(killed)
+  kill(sessionId: string, opts: TerminalKillOptions = {}): Promise<void> {
+    return this.sessionTeardown.kill(sessionId, opts, this.killedTombstones)
   }
 
-  beginFencedTermination(request: PtyFencedTerminationRequest) {
+  beginFencedTermination(
+    request: PtyFencedTerminationRequest,
+    idleEvidence?: FencedPosixIdleEvidence
+  ) {
     return beginTerminalHostFencedTermination(request, {
       sessions: this.sessions,
       pendingCreations: this.pendingCreations,
       owners: this.agentSessionOwners,
-      kill: (id, options) => this.kill(id, options)
+      kill: (id, options) => this.kill(id, options),
+      idleEvidence
     })
   }
 
@@ -234,15 +232,12 @@ export class TerminalHost {
   // A vanished pane has no agent icon to display.
   getForegroundProcess(sessionId: string): string | null {
     const session = this.sessions.get(sessionId)
-    if (!session || !session.isAlive) {
-      return null
-    }
-    return session.getForegroundProcess()
+    return session?.isAlive ? session.getForegroundProcess() : null
   }
 
   inspectProcess(
     sessionId: string,
-    options?: PtyProcessInspectionOptions
+    options?: TerminalHostProcessInspectionOptions
   ): Promise<TerminalHostProcessInspection> {
     return inspectTerminalHostSession(
       this.sessions,
@@ -250,7 +245,8 @@ export class TerminalHost {
       sessionId,
       options,
       this.authorityGeneration,
-      () => ++this.observationEpoch
+      () => ++this.observationEpoch,
+      this.agentSessionOwners
     )
   }
 

@@ -1,6 +1,10 @@
 import type { DisposableNativePty } from './native-pty-spawn'
 import type * as pty from 'node-pty'
 import { forceKillPosixPtyProcessGroups } from '../../pty/process-retirement/posix-pty-process-groups'
+import {
+  IdlePtyTeardownRefusal,
+  type PosixIdlePtyGuard
+} from '../../pty/process-retirement/idle-pty-teardown-refusal'
 import { PendingPtyGroupSweep } from '../../pty/process-retirement/pending-pty-group-sweep'
 import { killConptyNow, terminatePtyJob } from '../../windows/windows-pty-job'
 import { SessionTerminationController } from '../sessions/session-termination-controller'
@@ -34,15 +38,21 @@ export function createDaemonPtyPhysicalOwner(proc: pty.IPty, shellPath: string) 
       throw signalError
     }
   }
-  const forceKillPosix = async (): Promise<void> => {
+  const forceKillPosix = async (idleGuard?: PosixIdlePtyGuard): Promise<void> => {
     if (exit) {
       return
     }
     // A reaped root frees its pid and TTY for reuse, so a table read that outlives it signals nothing.
     await groupSweep.track(
-      forceKillPosixPtyProcessGroups(proc.pid, killRoot, { ownsRoot: () => exit === null }).catch(
-        fallBackToNodePtyKill
-      )
+      forceKillPosixPtyProcessGroups(proc.pid, killRoot, {
+        ownsRoot: () => exit === null,
+        idleGuard
+      }).catch((error: unknown) => {
+        if (error instanceof IdlePtyTeardownRefusal) {
+          throw error
+        }
+        fallBackToNodePtyKill(error)
+      })
     )
   }
   const kill = (): void => {
@@ -70,7 +80,8 @@ export function createDaemonPtyPhysicalOwner(proc: pty.IPty, shellPath: string) 
     kill()
   }
 
-  const forceKill = () => (process.platform === 'win32' ? forceKillConpty() : forceKillPosix())
+  const forceKill = (idleGuard?: PosixIdlePtyGuard) =>
+    process.platform === 'win32' ? forceKillConpty() : forceKillPosix(idleGuard)
   const dispose = (): void => {
     if (disposed) {
       return

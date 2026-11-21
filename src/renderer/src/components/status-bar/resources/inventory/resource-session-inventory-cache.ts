@@ -7,8 +7,10 @@ import { isResourceViewInactive } from '../../../../../../shared/diagnostics/res
 import { isProvenProcessExit } from '../../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import {
   type DaemonSessionInventory,
+  type ListedIncarnations,
   EMPTY_DAEMON_SESSION_INVENTORY,
-  inventoryFromSessions
+  inventoryFromSessions,
+  reconcileResourceSessionListing
 } from './resource-session-inventory'
 
 const COOLDOWN_MS = 100
@@ -28,8 +30,10 @@ export class ResourceSessionInventoryCache {
     loading: false
   }
   private listeners = new Set<() => void>()
+  private removalListeners = new Map<(identity: string) => void, () => boolean>()
   private known = new Map<string, PtyListedSession>()
-  private identitiesByIncarnation = new Map<string, Set<string>>()
+  private readonly identitiesByIncarnation: ListedIncarnations = new Map()
+  private listing = 0
   // Suppression belongs only to the current listing, never to later authoritative results.
   private tombstones = new Set<string>()
   private epoch = 0
@@ -50,6 +54,14 @@ export class ResourceSessionInventoryCache {
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
+  }
+  hasSession = (identity: string): boolean => this.known.has(identity)
+  subscribeRemoval = (
+    listener: (identity: string) => void,
+    hasTrackedIdentities: () => boolean
+  ): (() => void) => {
+    this.removalListeners.set(listener, hasTrackedIdentities)
+    return () => this.removalListeners.delete(listener)
   }
 
   private publish(patch: Partial<typeof this.state>): void {
@@ -146,38 +158,37 @@ export class ResourceSessionInventoryCache {
         if (!sessions || !this.active || epoch !== this.epoch) {
           return
         }
-        const deduped = new Map<string, PtyListedSession>()
-        const identitiesByIncarnation = new Map<string, Set<string>>()
-        for (const session of sessions) {
-          const identity = ptySessionIdentity(session)
-          const incarnation = ptySessionIdentity({
-            id: session.id,
-            incarnationId: session.incarnationId
-          })
-          deduped.set(identity, session)
-          const identities = identitiesByIncarnation.get(incarnation) ?? new Set<string>()
-          identities.add(identity)
-          identitiesByIncarnation.set(incarnation, identities)
-        }
-        for (const [incarnation, identities] of identitiesByIncarnation) {
-          if (!this.tombstones.has(incarnation)) {
-            continue
-          }
-          if (identities.size > 1) {
-            this.pendingRefresh = true
-            continue
-          }
-          for (const identity of identities) {
-            deduped.delete(identity)
-          }
-          identitiesByIncarnation.delete(incarnation)
-        }
-        this.known = deduped
-        this.identitiesByIncarnation = identitiesByIncarnation
-        this.publishInventory({
+        const previous = this.known
+        const trackRemovals =
+          previous.size > 0 &&
+          this.removalListeners.values().some((hasTrackedIdentities) => hasTrackedIdentities())
+        const { deduped, unchanged, retained, pendingRefresh } = reconcileResourceSessionListing(
+          sessions,
+          previous,
+          this.identitiesByIncarnation,
+          ++this.listing,
+          this.tombstones,
+          { compareExisting: !this.inventoryChanged, trackRemovals }
+        )
+        this.pendingRefresh ||= pendingRefresh
+        const patch = {
           sessionsError: false,
           observedAt: Date.now()
-        })
+        }
+        if (unchanged && deduped.size === previous.size) {
+          this.publish(patch)
+          return
+        }
+        this.known = deduped
+        // A title change or addition never needs to walk the old identities.
+        if (trackRemovals && retained < previous.size) {
+          for (const identity of previous.keys()) {
+            if (!deduped.has(identity)) {
+              this.publishRemoval(identity)
+            }
+          }
+        }
+        this.publishInventory(patch)
       })
       .catch((error: unknown) => {
         if (this.active && epoch === this.epoch && !isResourceViewInactive(error)) {
@@ -216,7 +227,7 @@ export class ResourceSessionInventoryCache {
     if (event.ptySourceDisowned || !isProvenProcessExit(event.code)) {
       return
     }
-    const identities = this.identitiesByIncarnation.get(ptySessionIdentity(event))
+    const identities = this.identitiesByIncarnation.get(ptySessionIdentity(event))?.identities
     if (
       !event.incarnationId &&
       (this.localOnly ||
@@ -241,7 +252,7 @@ export class ResourceSessionInventoryCache {
 
   private removeIdentity(id: string, incarnationId?: string): boolean {
     const incarnation = ptySessionIdentity({ id, incarnationId })
-    const identities = this.identitiesByIncarnation.get(incarnation)
+    const identities = this.identitiesByIncarnation.get(incarnation)?.identities
     if (identities && identities.size > 1) {
       this.invalidate()
       return false
@@ -254,7 +265,17 @@ export class ResourceSessionInventoryCache {
     if (identity === undefined) {
       return false
     }
-    return this.known.delete(identity)
+    const removed = this.known.delete(identity)
+    if (removed) {
+      this.publishRemoval(identity)
+    }
+    return removed
+  }
+
+  private publishRemoval(identity: string): void {
+    for (const listener of this.removalListeners.keys()) {
+      listener(identity)
+    }
   }
 
   remove(id: string, incarnationId?: string): void {
