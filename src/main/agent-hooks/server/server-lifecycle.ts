@@ -4,6 +4,7 @@ import {
 } from '../../../shared/agent-hook-listener/transport/agent-hook-startup'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
+import { join } from 'node:path'
 
 import {
   CLAUDE_STATUSLINE_PATHNAME,
@@ -48,6 +49,9 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     if (options?.userDataPath) {
       // Namespace dev endpoints per instance; packaged endpoints stay stable for PTY reconnect.
       this.configureEndpointPaths(options.userDataPath, options.endpointNamespace)
+    }
+    if (this.endpointDir) {
+      void this.claudeAgentViews.restore(join(this.endpointDir, 'claude-agent-views.json'))
     }
     this.token = randomUUID()
     this.endpointFileWritten = false
@@ -218,7 +222,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
   /** Quit retains status until chat teardown reads resumable child and background work. */
   stop(options?: { keepStatus?: boolean }): void {
     this.startup.stop()
-    this.claudeAgentViews.clear()
+    this.claudeAgentViews.close()
     this.claudePermissionHooks.drain()
     // Terminal status may still have a pending write while hook ingress is disabled.
     if (this.statusHooksEnabled || this.statusPersistTimer) {

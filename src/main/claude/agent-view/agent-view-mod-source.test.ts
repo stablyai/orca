@@ -33,7 +33,7 @@ it.each(['not-json'])(
       }
     })
     let sessionId = 'session-before-clear'
-    let heartbeat: (() => Promise<unknown>) | undefined
+    let retry: (() => Promise<unknown>) | undefined
     let pendingTake: Promise<void> | undefined
     let takeStarted: (() => void) | undefined
     const posts: {
@@ -43,7 +43,7 @@ it.each(['not-json'])(
       view?: { agentId?: string; revision: number }
     }[] = []
     const view = vi.fn(async () => ({}))
-    const now = 1_700_000_000_000
+    let now = 1_700_000_000_000
     const api = {
       env: {
         get: async (key: string) =>
@@ -71,8 +71,11 @@ it.each(['not-json'])(
       session: { id: async () => sessionId },
       clock: {
         now: async () => now,
-        every: (_ms: number, callback: () => Promise<unknown>) => {
-          heartbeat = callback
+        every: () => {
+          throw new Error('an idle Claude must not poll Orca')
+        },
+        after: (_ms: number, callback: () => Promise<unknown>) => {
+          retry = callback
         }
       },
       command: { register: vi.fn() },
@@ -136,7 +139,11 @@ it.each(['not-json'])(
       props: { view: { agentId: 'keyboard-child' } }
     })
     expect(posts).toHaveLength(count)
-    await heartbeat?.()
+    await invoke('turn.start')
+    expect(posts).toHaveLength(count)
+    now += 30_000
+    await invoke('turn.start')
+    await vi.waitFor(() => expect(posts).toHaveLength(count + 1))
     expect(posts.at(-1)).toMatchObject({
       action: 'register',
       view: { agentId: 'keyboard-child', revision: 2 }
@@ -154,23 +161,36 @@ it.each(['not-json'])(
     await invoke('session.end', { reason: 'clear', sessionId })
     releaseTake()
     await command
-    await heartbeat?.()
+    await invoke('turn.start')
     await invoke('command.run')
     expect(posts.at(-1)?.action).toBe('end')
     expect(view).not.toHaveBeenCalled()
     expect(posts.filter(({ action }) => action === 'ack')).toHaveLength(0)
     sessionId = 'session-after-clear'
-    await heartbeat?.()
+    await invoke('session.start', { isInteractive: true, surface: 'terminal' })
     await vi.waitFor(() => expect(posts.at(-1)).toMatchObject({ action: 'register', sessionId }))
     expect(posts.at(-1)?.instanceId).not.toBe(firstInstance)
     expect(posts.at(-1)?.view).toBeUndefined()
     await invoke('command.run')
     expect(view).toHaveBeenCalledWith({ agentId: 'child' })
     expect(posts.at(-1)).toMatchObject({ action: 'ack', sessionId })
+    const fetch = api.http.fetch
     api.http.fetch = async () => {
       throw new Error('Orca is unavailable')
     }
     await expect(invoke('command.run')).resolves.toEqual({})
+    await invoke('ui.render', {
+      surface: 'terminal',
+      props: { view: { agentId: 'offline-child' } }
+    })
+    await vi.waitFor(() => expect(retry).toBeDefined())
+    api.http.fetch = fetch
+    await retry?.()
+    expect(posts.at(-1)).toMatchObject({
+      action: 'register',
+      sessionId,
+      view: { agentId: 'offline-child' }
+    })
     api.http.fetch = async () => new Promise(() => {})
     await expect(
       invoke('ui.render', { surface: 'terminal', props: { view: { agentId: 'another-child' } } })
