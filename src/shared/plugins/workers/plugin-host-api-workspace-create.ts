@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isBranchNameValid } from '../../git/branch-switch-target'
 import { RESUMABLE_TUI_AGENTS } from '../../agent-session/lifecycle/agent-session-resume'
 import { pluginAgentSessionIdSchema } from './plugin-host-api-panel-methods'
 import { pluginResumeKey } from './plugin-agent-resume-key'
@@ -21,8 +22,17 @@ const workspaceCreateParams = z
     projectId: z.string().min(1).max(PLUGIN_HOST_ID_MAX_LENGTH),
     /** The project's host, as `project.list` gives it; needed only when two hosts have it. */
     hostId: z.string().min(1).max(PLUGIN_HOST_ID_MAX_LENGTH).optional(),
-    /** The workspace's name, which its branch takes too; Orca picks one when absent. */
+    /** The workspace's name, which its branch takes too unless `branch`; Orca picks one when absent. */
     name: pluginLabelNameSchema.optional(),
+    /** The Git branch name to use instead of the prefixed one Orca derives from `name`. */
+    branch: z
+      .string()
+      .max(255)
+      .refine(
+        (name) => name !== 'HEAD' && isBranchNameValid(name) && isPluginPlainLine(name),
+        'branch must be a valid Git branch name'
+      )
+      .optional(),
     /** The branch or ref to start from; the project's default when absent. */
     baseBranch: z
       .string()
@@ -74,8 +84,9 @@ const agentResumeResult = z.object({
 export const PLUGIN_WORKSPACE_CREATE_API = {
   'workspace.create': spec({
     summary:
-      "Creates a workspace (a new branch and worktree) in a Git project, local or SSH, and returns its id; with `agent`, starts that agent there once setup has run, in the background unless `open`; if the agent fails after the workspace exists, the error names its id. Orca's workspace-create and agent hooks run as for any create.",
+      "Creates a workspace (a new branch and worktree) in a Git project, local or SSH, and returns its id; with `agent`, starts that agent there once setup has run, in the background unless `open`; if the agent fails after the workspace exists, the error names its id. Orca's workspace-create and agent hooks run as for any create. `branch` needs host API 1.11; older hosts refuse it with `invalid_params`. As with `orca worktree create --branch`, Orca may add a `-N` suffix to `branch` or reuse an idle existing branch of that name at the base.",
     since: 8,
+    paramsSince: { branch: 11 },
     scope: 'any-workspace',
     capability: 'workspace:create',
     paramCapabilities: { agent: 'agent:launch' },
