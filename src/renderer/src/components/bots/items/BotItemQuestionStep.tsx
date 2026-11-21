@@ -32,25 +32,33 @@ export const BOT_ITEM_OPEN_QUESTION =
 /** The picked reply of a line reopened. */
 const CHIP_PICKED = 'flex items-center gap-1.5 border-foreground/28 bg-foreground/8 text-foreground'
 
+/** A chip's tooltip: Recommended on the filled chip, over the reply's own detail. */
+export function botItemChipTitle(
+  reply: BotItemQuickReply,
+  recommended: string | null
+): string | undefined {
+  return [recommended, reply.detail].filter(Boolean).join('\n') || undefined
+}
+
 export function BotItemChipWords({
   reply,
   filled = false
 }: {
   reply: BotItemQuickReply
-  /** The filled recommended chip: Recommended trails the label on the fill, one line like its siblings. */
+  /** The filled recommended chip: a star leads the label; Recommended is in its name and tooltip. */
   filled?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const recommended = t('bots.items.ask.recommended', 'Recommended')
   if (filled) {
-    // The no-break space keeps "· Recommended" on the label's last line instead of alone below it.
+    // A text star, not an icon: no line break falls between it and the label's first word.
     return (
       <span className="[overflow-wrap:anywhere]">
-        {reply.label}
-        <span className="whitespace-nowrap text-xs text-background/65">
-          {'\u00a0· '}
-          {recommended}
+        <span aria-hidden className="mr-[5px] text-[11px] opacity-80">
+          ★
         </span>
+        {reply.label}
+        <span className="sr-only">, {recommended}</span>
       </span>
     )
   }
@@ -147,6 +155,7 @@ export function BotItemQuestionStep({
   actions: BotItemQuickReplyActions
 }): React.JSX.Element {
   const t = useTranslate()
+  const recommended = t('bots.items.ask.recommended', 'Recommended')
   const { current } = steps
   const decision = shape.decisions[current]!
   const held = steps.held[current] ?? null
@@ -189,7 +198,7 @@ export function BotItemQuestionStep({
               <button
                 key={reply.label}
                 type="button"
-                title={reply.detail}
+                title={botItemChipTitle(reply, filled ? recommended : null)}
                 aria-pressed={picked}
                 className={cn(
                   BOT_ITEM_CHIP,

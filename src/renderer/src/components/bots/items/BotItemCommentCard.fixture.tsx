@@ -192,7 +192,7 @@ function TwoPending(): React.JSX.Element {
 export const twoPending = defineFixture({ width: 560, render: () => <TwoPending /> })
 export const twoPendingNarrow = defineFixture({ width: 340, render: () => <TwoPending /> })
 
-// The recommended reply among its siblings: one line, the same pill, Recommended after the label.
+// The recommended reply among its siblings: the same pill, filled, a star before the label.
 const ROTATED: BotItemAsk = {
   context: 'The deploy token showed up in the run transcript.',
   questions: [
@@ -244,4 +244,36 @@ export const recommendedLong = defineFixture({
 export const recommendedLongWide = defineFixture({
   width: 560,
   render: () => <Recommended data={ROTATED_LONG} />
+})
+export const recommendedNarrow = defineFixture({
+  width: 260,
+  render: () => <Recommended data={ROTATED} />
+})
+export const recommendedLongNarrow = defineFixture({
+  width: 260,
+  render: () => <Recommended data={ROTATED_LONG} />
+})
+export const recommendedShortNarrow = defineFixture({
+  width: 260,
+  render: () => <Recommended data={MERGE} />
+})
+
+// One unbroken label: the star stays with it when it wraps.
+const TOKEN: BotItemAsk = {
+  ...ROTATED,
+  questions: [
+    {
+      ...ROTATED.questions[0]!,
+      options: [{ label: 'TOKEN_PRODUCTION_US_EAST_1' }, { label: 'Not yet' }],
+      recommended: 0
+    }
+  ]
+}
+export const recommendedToken = defineFixture({
+  width: 340,
+  render: () => <Recommended data={TOKEN} />
+})
+export const recommendedTokenNarrow = defineFixture({
+  width: 260,
+  render: () => <Recommended data={TOKEN} />
 })

@@ -22,6 +22,7 @@ import {
   BOT_ITEM_CHIP,
   BotItemAnswerLine,
   BotItemChipWords,
+  botItemChipTitle,
   BOT_ITEM_CHIP_RECOMMENDED,
   BOT_ITEM_OPEN_QUESTION,
   BotItemQuestionStep
@@ -58,6 +59,7 @@ export function BotItemQuestionLines({
   className?: string
 }): React.JSX.Element {
   const t = useTranslate()
+  const recommended = t('bots.items.ask.recommended', 'Recommended')
   const steps = actions?.steps?.askId === askId ? actions.steps : null
   const several = shape.decisions.length > 1
   // Answers held for an ask the agent no longer waits on (it asked again): its draft, until sent.
@@ -128,7 +130,7 @@ export function BotItemQuestionLines({
                     <button
                       key={reply.label}
                       type="button"
-                      title={reply.detail}
+                      title={botItemChipTitle(reply, reply.recommended ? recommended : null)}
                       className={cn(
                         BOT_ITEM_CHIP,
                         'outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
