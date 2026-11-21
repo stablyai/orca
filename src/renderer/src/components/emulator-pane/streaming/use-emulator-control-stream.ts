@@ -35,6 +35,22 @@ function decodeServeSimOrientation(data: unknown): EmulatorStreamOrientation | u
   }
 }
 
+// Android keycode names (see android-input-mapping.ts) for the named keys; others type as text.
+export const ANDROID_KEY_BUTTONS: Readonly<Record<string, string>> = {
+  Enter: 'enter',
+  Tab: 'tab',
+  Backspace: 'backspace',
+  Delete: 'forward_delete',
+  ArrowUp: 'dpad_up',
+  ArrowDown: 'dpad_down',
+  ArrowLeft: 'dpad_left',
+  ArrowRight: 'dpad_right',
+  Home: 'move_home',
+  End: 'move_end',
+  PageUp: 'page_up',
+  PageDown: 'page_down'
+}
+
 export type ScrcpyKeyboard = {
   sendKey: (name: string, shift: boolean) => void
   sendText: (text: string) => Promise<boolean>
