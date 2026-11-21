@@ -86,6 +86,7 @@ function fakeHost(
       const terminal = terminals.get(id)
       return terminal
         ? {
+            owner_dispatch_id: id,
             origin_dispatch_id: terminal.origin,
             prior_owner_dispatch_ids: JSON.stringify(terminal.prior)
           }

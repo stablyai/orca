@@ -80,7 +80,7 @@ export class BotItemWorkerLinks {
     const refs =
       linkedRefs.size === 0
         ? []
-        : [...new Set(ids.flatMap((id) => workerContinues(db, id)))].filter((ref) =>
+        : [...new Set(ids.flatMap((id) => workerContinues(db, id, lineageOf)))].filter((ref) =>
             linkedRefs.has(ref)
           )
     const linked = refs.length > 0 ? await store.remote.linksTo('dispatch', refs) : []
