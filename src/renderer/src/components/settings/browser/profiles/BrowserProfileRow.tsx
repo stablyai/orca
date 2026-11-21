@@ -95,6 +95,8 @@ export function BrowserProfileRow({
       .importCookiesFromBrowser(profile.id, browserFamily, browserProfile)
     if (result.ok) {
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
+      const profileName =
+        browser?.profiles.find((p) => p.directory === browserProfile)?.name ?? browserProfile
       emitBrowserCookieImportToast(
         result.summary,
         browserProfile
@@ -104,7 +106,7 @@ export function BrowserProfileRow({
               {
                 value0: result.summary.importedCookies,
                 value1: browser?.label ?? browserFamily,
-                value2: browserProfile,
+                value2: profileName,
                 value3: translateBrowserSessionProfileLabel(profile.label, profile.id)
               }
             )
