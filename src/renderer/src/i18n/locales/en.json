@@ -1193,7 +1193,7 @@
       "copyName": "Copy name",
       "copyOf": "Copy of {{agent}}",
       "copyId": "ID",
-      "copyIdInvalid": "Use {{agent}}. followed by lowercase letters, digits and dashes.",
+      "copyIdInvalid": "Use lowercase letters, digits and dashes.",
       "copyIdTaken": "Another copy has this ID.",
       "deleteCopy": "Delete {{name}}",
       "copyDefaultName": "{{agent}} copy",
