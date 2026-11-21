@@ -41,7 +41,7 @@ it("opens the worker from its name in the row, without unfolding the row's messa
         id: 'mail',
         role: 'user',
         source: 'transcript',
-        blocks: [{ type: 'text', text: 'The cards are built.' }],
+        blocks: [{ type: 'text', text: 'The cards are built.\n\nScreens are in the PR.' }],
         timestamp: 1,
         from
       }}
@@ -57,5 +57,5 @@ it("opens the worker from its name in the row, without unfolding the row's messa
 
   expect(openAgentMessageSender).toHaveBeenCalledTimes(1)
   expect(screen.getByRole('button', { expanded: false })).toBeInTheDocument()
-  expect(screen.queryByText('The cards are built.')).not.toBeInTheDocument()
+  expect(screen.queryByText('Screens are in the PR.')).not.toBeInTheDocument()
 })
