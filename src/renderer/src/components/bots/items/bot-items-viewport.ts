@@ -2,6 +2,7 @@
 // when scrolling, resizing or the list's own height moves it. Each long group reads its rows' window from it,
 // so groups add no scroll listeners or observers of their own, and with no group reading it nothing listens.
 import { useMemo } from 'react'
+import { flushSync } from 'react-dom'
 import {
   isDocumentVisibilityProvenStale,
   registerStaleDocumentVisibilityRecovery
@@ -52,7 +53,8 @@ function listenTo(
     frame = null
     timer = null
     if (byUser || !botItemsDocumentHidden()) {
-      onFrame()
+      // The rows a scroll brings into view commit before this frame paints, so it shows no gap.
+      flushSync(onFrame)
     }
     byUser = false
   }
