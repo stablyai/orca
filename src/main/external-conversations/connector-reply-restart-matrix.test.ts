@@ -50,17 +50,27 @@ const facts = {
 }
 
 let dir = ''
+// Windows refuses to delete a directory whose SQLite file a connection still holds.
+const openedDatabases: Database[] = []
 beforeEach(() => {
   vi.useFakeTimers()
   dir = mkdtempSync(join(tmpdir(), 'orca-reply-matrix-'))
 })
 afterEach(() => {
   vi.useRealTimers()
+  for (const db of openedDatabases.splice(0)) {
+    try {
+      db.close()
+    } catch {
+      // Already closed by the case itself.
+    }
+  }
   rmSync(dir, { recursive: true, force: true })
 })
 
 function openJournal() {
   const db = new Database(join(dir, 'journal.db'))
+  openedDatabases.push(db)
   migrateJournalDomainSchema(db)
   ensureAgentSessionAttachmentClaimTables(db)
   db.prepare(

@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { ChevronDown, Settings2 } from 'lucide-react'
+import { ChevronDown, PencilRuler, Settings2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -16,6 +16,8 @@ import {
   isAgentChatPermissionMode,
   type AgentChatPermissionMode
 } from '../../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { agentPermissionSettingsSourceName } from '../../../../../../../shared/agent-launch/permissions/agent-permission-settings-source'
+import { nativeChatPermissionSettingsHint } from './native-chat-permission-settings-hint'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
@@ -88,6 +90,8 @@ export function NativeChatPermissionModeItems({
 
 export type NativeChatPermissionModePickerProps = {
   current: string | undefined
+  /** The mode the agent reports running in when `current` is Own. */
+  reported?: string
   modes: readonly AgentChatPermissionMode[]
   /** Whose descriptions to show; absent describes every agent's. */
   agent?: string | null
@@ -104,6 +108,7 @@ const INHERIT_VALUE = 'inherit'
 
 function NativeChatPermissionModePickerInner({
   current,
+  reported,
   modes,
   agent,
   disabled = false,
@@ -116,23 +121,66 @@ function NativeChatPermissionModePickerInner({
   const t = useTranslate()
   useUiLanguageRevision()
   const title = nativeChatPermissionPickerTitle(t)
-  const selectedLabel = isAgentChatPermissionMode(current)
-    ? nativeChatPermissionModeLabel(current, t)
-    : current === 'own'
-      ? t('settings.agents.permissionOwnAll', "Agents' own settings")
-      : (currentLabel ?? inherit?.label ?? title)
+  // Own shows the mode the agent reports when it has a translated name; until then it names the agent's settings.
+  const own = current === 'own'
+  const shown = own && isAgentChatPermissionMode(reported) ? reported : current
+  const ownPlan = own && reported === 'plan'
+  const settingsAgent = agentPermissionSettingsSourceName(agent)
+  const ownSettings = t(
+    'components.native-chat.composer.permissionAgentSettings',
+    '{{agent}} settings',
+    {
+      agent: settingsAgent
+    }
+  )
+  const selectedLabel = isAgentChatPermissionMode(shown)
+    ? nativeChatPermissionModeLabel(shown, t)
+    : ownPlan
+      ? t('components.native-chat.composer.planMode', 'Plan')
+      : own
+        ? ownSettings
+        : (currentLabel ?? inherit?.label ?? title)
+  const Icon = ownPlan ? PencilRuler : Settings2
   const activeLabel = isAgentChatPermissionMode(activeValue)
     ? nativeChatPermissionModeLabel(activeValue, t)
     : activeValue === 'own'
-      ? t('settings.agents.permissionOwnAll', "Agents' own settings")
+      ? ownSettings
       : null
   const label = activeLabel
     ? t(
         'components.native-chat.composer.permissionAppliesNextMessage',
-        '{{saved}} applies to your next message; running {{active}}',
+        '{{saved}} applies to your next message; currently using {{active}}',
         { saved: selectedLabel, active: activeLabel }
       )
     : selectedLabel
+  // A reported mode is not an explicit pick, so its tooltip and name say where it comes from.
+  const described =
+    own && !activeLabel && (shown !== current || ownPlan)
+      ? t(
+          'components.native-chat.composer.permissionFromAgentSettings',
+          '{{mode}}, from {{agent}} settings',
+          { mode: label, agent: settingsAgent }
+        )
+      : label
+  const hint = nativeChatPermissionSettingsHint({
+    current,
+    reported,
+    deferred: activeLabel !== null
+  })
+  const tooltipLabel =
+    hint === 'unnamed-report'
+      ? t(
+          'components.native-chat.composer.permissionAgentSettingsUnnamedHint',
+          "Uses your {{agent}} permission settings. Orca can't show this mode.",
+          { agent: settingsAgent }
+        )
+      : hint === 'settings'
+        ? t(
+            'components.native-chat.composer.permissionAgentSettingsUsedHint',
+            'Uses your {{agent}} permission settings.',
+            { agent: settingsAgent }
+          )
+        : described
   // `shrink` overrides the button's shrink-0 so a narrow composer truncates the mode name.
   return (
     <DropdownMenu>
@@ -146,19 +194,17 @@ function NativeChatPermissionModePickerInner({
               aria-label={t(
                 'components.native-chat.composer.pillAccessibleName',
                 '{{value0}} {{value1}}',
-                { value0: title, value1: label }
+                { value0: title, value1: described }
               )}
               className={
-                appearance === 'form'
-                  ? 'h-8 w-64 max-w-full justify-between'
-                  : 'max-w-40 min-w-0 shrink'
+                appearance === 'form' ? 'h-8 w-64 max-w-full justify-between' : 'min-w-0 shrink'
               }
             >
-              {isAgentChatPermissionMode(current) ? (
-                <NativeChatPermissionModeName mode={current} label={label} truncate />
+              {isAgentChatPermissionMode(shown) ? (
+                <NativeChatPermissionModeName mode={shown} label={label} truncate />
               ) : (
                 <>
-                  <Settings2 className="size-3.5 shrink-0" aria-hidden />
+                  <Icon className="size-3.5 shrink-0" aria-hidden />
                   <span data-composer-label className="truncate">
                     {label}
                   </span>
@@ -168,8 +214,13 @@ function NativeChatPermissionModePickerInner({
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={4}>
-          {label}
+        <TooltipContent
+          side="top"
+          sideOffset={4}
+          collisionPadding={8}
+          className="max-w-(--radix-tooltip-content-available-width)"
+        >
+          <span className="block max-w-72 break-words">{tooltipLabel}</span>
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="start" side="top" collisionPadding={8} className="w-72">
@@ -234,9 +285,10 @@ export function NativeChatComposerPermissionPicker({
   return (
     <NativeChatPermissionModePicker
       current={current}
+      reported={descriptor.kind.reportedValue}
       modes={modes}
       activeValue={descriptor.valueSource === 'dispatched' ? descriptor.activeValue : undefined}
-      agent={agent ?? null}
+      agent={agent ?? descriptor.kind.settingsAgent ?? null}
       disabled={!descriptor.settable}
       onSelect={(mode) => {
         // The report can match a new explicit pick while the chat still follows agent settings.

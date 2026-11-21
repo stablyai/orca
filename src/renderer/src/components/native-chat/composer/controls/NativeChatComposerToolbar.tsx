@@ -10,6 +10,8 @@ export type NativeChatComposerControl = {
   content: ReactNode
   /** Lower priorities give way first; absent pins a control beside Send. */
   priority?: number
+  /** Grows into spare row space; counts at its natural width, up to max-w-64, when compacting. */
+  shrink?: boolean
   overflow?: (close: () => void) => ReactNode
 }
 
@@ -69,9 +71,14 @@ export function NativeChatComposerToolbar({
     // Probe the same mounted controls before paint; hidden controls retain their natural measure.
     for (const compact of open ? [true] : [false, true]) {
       bar.dataset.compact = String(compact)
+      // Shrinkable controls are measured at natural width, not their squeezed width, capped at
+      // max-w-64 so the cap scales with chat text. Every shipped permission name fits that cap, so
+      // the toolbar compacts rather than truncating a name; only a longer deferred sentence truncates.
+      bar.dataset.measuring = 'true'
       for (const node of nodes) {
         widths.set(node.dataset.composerControl!, node.getBoundingClientRect().width)
       }
+      bar.dataset.measuring = 'false'
       next = { compact, hidden: open ? [...menuControls.current] : [], terminal: false }
       if (required(next.hidden) <= bar.clientWidth) {
         break
@@ -170,7 +177,7 @@ export function NativeChatComposerToolbar({
         data-composer-control={item.id}
         aria-hidden={hidden || undefined}
         inert={hidden || undefined}
-        className={`inline-flex w-max shrink-0 ${hidden ? 'pointer-events-none invisible absolute' : ''}`}
+        className={`inline-flex w-max ${item.shrink ? 'min-w-0 shrink group-data-[measuring=true]/toolbar:max-w-64 group-data-[measuring=true]/toolbar:shrink-0' : 'shrink-0'} ${hidden ? 'pointer-events-none invisible absolute' : ''}`}
       >
         {item.content}
       </div>
@@ -184,7 +191,7 @@ export function NativeChatComposerToolbar({
       data-terminal={layout.terminal}
       className="group/toolbar flex w-full items-center justify-between gap-2 text-chat-foreground-faint data-[terminal=true]:flex-wrap data-[terminal=true]:justify-end data-[terminal=true]:[&_[data-composer-primary-label]]:hidden data-[terminal=true]:[&_[data-composer-primary-icon]]:block data-[terminal=false]:[&_[data-composer-primary-icon]]:hidden data-[compact=true]:[&_[data-composer-label]]:invisible data-[compact=true]:[&_[data-composer-label]]:absolute data-[compact=true]:[&_[data-composer-label]]:w-max data-[compact=true]:[&_[data-composer-compact-icon]]:block data-[compact=false]:[&_[data-composer-compact-icon]]:hidden"
     >
-      <div className="flex shrink-0 items-center gap-0.5 group-data-[terminal=true]/toolbar:contents">
+      <div className="flex min-w-0 flex-1 items-center gap-0.5 group-data-[terminal=true]/toolbar:contents">
         {left.map(renderControl)}
         <Popover
           open={open}

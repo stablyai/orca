@@ -212,6 +212,8 @@ export type AcpDialect = {
   authenticationRequired?(error: AcpAgentError): boolean
   /** The agent dropped this session; only a new child can reopen it. */
   sessionLost?(error: AcpAgentError, sessionId: string): boolean
+  /** A mapped failure notice says the agent dropped this session, though its prompt ends normally. */
+  sessionLostNotice?(notice: string): boolean
   /** The agent refused to reopen this session from `cwd` because it keeps it in another folder. */
   sessionInOtherFolder?(error: AcpAgentError, sessionId: string, cwd: string): boolean
   /** Reopening moves a session into the folder it is reopened from, so reopen it where it is listed. */

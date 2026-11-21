@@ -1048,6 +1048,37 @@
     },
     "sharedLinks": {
       "keywordBots": "機器人"
+    },
+    "automaticUpdates": {
+      "title": "自動更新",
+      "description": "在支援此功能的桌面版安裝中，Orca 會在定期檢查時下載符合條件的更新，並自動重新啟動以完成安裝。",
+      "info": "關於自動更新",
+      "saveFailed": "無法儲存自動更新設定。"
+    },
+    "general": {
+      "about": {
+        "title": "關於",
+        "version": "Orca {{version}}"
+      }
+    },
+    "updateDelay": {
+      "1b4d825e0e": "更新延遲",
+      "ab7e864374": "關於更新延遲",
+      "ee1d96f74a": "略過這次延遲",
+      "description": "新版本發行後，Orca 會等待所選天數再提供更新。",
+      "none": "無",
+      "availableSoon": "{{relative}}可更新",
+      "availableOn": "於 {{date}}（{{relative}}）開放更新",
+      "clearedTitle": "Orca {{version}} 已可更新",
+      "heldTitle": "Orca {{version}} 暫緩提供",
+      "released": "發行於 {{released}}",
+      "progress": "距離 Orca {{version}} 開放更新的剩餘時間",
+      "skipDelayOnceHint": "立即檢查這個版本，保留原有的延遲設定。",
+      "upToDateWithHeld": "目前使用的是最新可用版本。較新的版本將延至 {{date}} 提供。",
+      "heldReleaseReady": "有較新的版本可用。檢查更新即可取得。",
+      "keywordDelay": "延遲",
+      "keywordCooldown": "等待",
+      "keywordSecurity": "安全性"
     }
   },
   "menu": {
@@ -1990,6 +2021,10 @@
         "mergeRequest": "合併請求",
         "linkedIssue": "連結的議題",
         "listeningPort": "監聽連接埠"
+      },
+      "updateCheckClickOptions": {
+        "releaseHint": "按住 {{rcKey}} 並點一下可檢查最新候選版本（RC），按住 {{perfKey}} 並點一下可檢查最新效能測試版。",
+        "localMacBuildHint": "按住 ⌥ 並點一下可選擇本機的 macOS 版本。"
       }
     },
     "hooks": {
@@ -7961,21 +7996,21 @@
         },
         "GeneralUpdateSettingsSection": {
           "8a52ca1d02": "發行說明",
-          "d89806cc89": "已準備好安裝。",
-          "a6b37929dc": "版本",
-          "8311da27ba": "可用。",
           "02dc082e70": "無法開始更新下載。",
           "ceb579abaf": "檢查應用程式更新並安裝較新的 Orca 版本。",
           "bd79d412f0": "更新檢查失敗。 {{value0}}",
           "b9ad70c30d": "更新錯誤。 {{value0}}",
-          "2a48034c4c": "正在下載 v{{value0}}... {{value1}}%",
           "f40d88390d": "您使用的是最新版本。",
-          "31fd7150cf": "正在檢查更新...",
+          "31fd7150cf": "正在檢查更新…",
           "d69a09b672": "啟動時會自動檢查更新。",
-          "e3b9d21c07": "可用。透過系統套件管理員更新 Orca — Orca 無法自行安裝此版本。",
           "6d27bd46e3": "檢查更新",
-          "857ca887da": "下載更新（",
-          "c0a8f827c7": "重新啟動以更新（"
+          "downloadUpdate": "下載更新",
+          "restartToUpdate": "重新啟動以更新",
+          "versionAvailable": "版本 {{version}} 已可使用。",
+          "externallyManagedVersionAvailable": "版本 {{version}} 已可使用。Orca 無法自行安裝此版本，請透過系統的套件管理程式更新。",
+          "versionReadyToInstall": "版本 {{version}} 已可安裝。",
+          "versionInstalling": "正在安裝版本 {{version}}。",
+          "downloadingVersion": "正在下載版本 {{version}}（{{percent}}%）…"
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "選擇工作區「開啟方式」選單中可用的應用程式。",
@@ -11708,7 +11743,8 @@
           "updating": "正在更新伺服器…",
           "serverCountOne": "1 台已配對的伺服器",
           "fdd271abf0": "遠端 Orca 伺服器",
-          "e4e5937469": "檢查更新"
+          "e4e5937469": "檢查更新",
+          "newerCount": "{{value0}} 台伺服器的版本比此應用程式更新"
         },
         "RemoteServerUpdateDialog": {
           "versionUnavailable": "無法取得版本資訊",
@@ -12069,32 +12105,41 @@
           "setUpRecipes": "設定配方"
         },
         "ReleaseBuildPicker": {
-          "build": "建置版本",
-          "searchLabel": "搜尋建置版本",
-          "searchPlaceholder": "搜尋建置版本…",
-          "noMatches": "沒有符合條件的建置版本。"
+          "build": "版本",
+          "searchLabel": "搜尋版本",
+          "searchPlaceholder": "搜尋版本…",
+          "noMatches": "找不到符合的版本"
         },
         "ReleaseChannelSection": {
-          "switchFailed": "無法切換到該版本。",
-          "title": "發布頻道",
-          "description": "切換更新頻道，或切換到任何已發布的建置，包括舊版本。允許降級，未經驗證的建置可能無法正常執行。",
-          "devOnly": "僅開發",
-          "channelAriaLabel": "更新頻道",
-          "hourlyWarning": "每小時建置直接從 main 分支發布，未經測試把關，且 Windows 建置未簽署。請保留一個穩定版本以備使用。",
-          "dailyWarning": "每日建置直接從 main 分支發布，未經測試把關，且 Windows 建置未簽署。請保留一個穩定版本以備使用。",
-          "adhocWarning": "Adhoc 版本來自尚未合併的分支，且 Windows 版本未簽署。發布者可能不再維護該版本，請保留一個穩定版本以備使用。",
-          "loadingBuilds": "正在載入建置...",
-          "noBuilds": "未找到任何建置",
-          "refresh": "重新整理建置清單",
-          "cacheHint": "版本清單會快取 5 分鐘。重新整理以檢查新版本。",
-          "switchTo": "切換到建置",
-          "alreadyRunning": "這是您正在執行的建置。",
+          "switchFailed": "無法切換至此版本。",
+          "title": "更新管道",
+          "description": "可更換更新管道，也可切換至任何已發行版本，包括舊版。未經驗證的版本可能無法正常運作。",
+          "devOnly": "僅供開發",
+          "adhocWarning": "Windows 版未簽署。發行者可能停止維護，請保留一個穩定版備用。",
+          "loadingBuilds": "正在載入版本…",
+          "noBuilds": "找不到版本",
+          "refresh": "重新整理版本清單",
+          "cacheHint": "版本清單會快取 5 分鐘。重新整理清單可查看是否有新版本。",
+          "switchTo": "切換至此版本",
+          "alreadyRunning": "目前正在執行此版本。",
           "willSwitch": "{{value0}} → {{value1}}",
-          "webUnavailable": "切換版本僅在桌面應用程式中可用。",
+          "webUnavailable": "只能在桌面應用程式中切換版本。",
           "devChannelUnsupportedAria": "{{value0}}（僅 {{value1}}）",
-          "devChannelUnsupported": "{{value0}} 版本僅針對 {{value1}} 產生。 Linux 保持穩定版或 RC 版。",
+          "devChannelUnsupported": "「{{value0}}」管道僅適用於 {{value1}}。Linux 仍可使用 {{stable}} 或 {{rc}}。",
           "downloadInstaller": "下載安裝程式",
-          "manualInstallHint": "{{value0}} 版本在 Windows 上未簽署，因此應用程式內的更新程式無法將其覆蓋安裝到已簽署的版本上。請先執行一次下載的安裝程式 — Windows 會警告發布者不明 — 之後每次切換（包括切回穩定版）都可在此完成。"
+          "manualInstallHint": "「{{value0}}」管道的 Windows 版本未簽署，應用程式無法透過內建更新功能將它安裝在已簽署的版本上。請執行一次下載的安裝程式，Windows 會顯示發行者不明的警告。之後即可從這裡切換版本，包括切回{{stable}}。",
+          "stableLabel": "穩定版",
+          "stableDescription": "適合日常使用的穩定版本。",
+          "rcLabel": "RC",
+          "rcDescription": "穩定版發行前提供的候選版本。",
+          "hourlyLabel": "每小時版",
+          "hourlyDescription": "每小時從 main 分支封裝一次。",
+          "dailyLabel": "每日版",
+          "dailyDescription": "每天從 main 分支封裝一次。",
+          "adhocLabel": "分支版",
+          "adhocDescription": "從個別分支封裝，可試用尚未合併的變更。",
+          "devChannelPlatforms": "macOS 和 Windows",
+          "scheduledWarning": "此管道的版本無須通過測試即可發行。Windows 版未簽署。請保留一個穩定版備用。"
         },
         "VoiceMicrophoneSetting": {
           "systemDefault": "系統預設",
@@ -19270,6 +19315,10 @@
         "permissionAuto": "替我核准",
         "permissionAutoDescription": "代你審查核准要求",
         "permissionFullAccess": "完整存取權",
+        "permissionAgentSettings": "{{agent}} 設定",
+        "permissionAgentSettingsUsedHint": "使用你的 {{agent}} 權限設定。",
+        "permissionAgentSettingsUnnamedHint": "使用你的 {{agent}} 權限設定。Orca 無法顯示此模式。",
+        "permissionFromAgentSettings": "{{mode}}，來自 {{agent}} 設定",
         "permissionFullAccessDescription": "編輯或執行命令前從不詢問",
         "permissionFullAccessCodexDescription": "從不詢問；可以編輯任何檔案並使用網路",
         "permissionFullAccessSharedDescription": "編輯或執行命令前從不詢問",
@@ -19284,6 +19333,7 @@
         "imageUnavailable": "無法預覽",
         "moreControls": "更多聊天控制項",
         "exitPlanMode": "結束計畫模式",
+        "permissionAppliesNextMessage": "{{saved}} 將從下一則訊息生效；目前使用 {{active}}",
         "botFor": "用途：{{detail}}",
         "bots": "機器人",
         "backToBots": "返回機器人",
@@ -22143,8 +22193,8 @@
     "failure": {
       "releaseNotReady": "此裝置尚無可用的較新版本。請稍後再檢查。",
       "updateServerUnreachable": "無法連線至更新伺服器。請稍候幾分鐘再試。",
-      "channelUnsupportedPlatform": "{{channel}} 建置版本僅針對 macOS 和 Windows 提供。",
-      "unsignedDevChannel": "{{channel}} 建置版本未經簽署，而目前已簽署的建置版本只會安裝由 Orca 發行者簽署的更新。請從發行版本頁面下載安裝程式並執行一次，之後更新即可正常運作，包括切回穩定版。",
+      "channelUnsupportedPlatform": "「{{channel}}」管道僅適用於 macOS 和 Windows。",
+      "unsignedDevChannel": "「{{channel}}」管道的版本未簽署。目前版本已簽署，只能安裝由 Orca 發行者簽署的更新。請從版本發行頁面下載並執行一次安裝程式，之後即可正常更新，包括切回穩定版。",
       "linuxPackageMissing": "下載的套件已不在更新快取中。請重新下載更新，或從官方發行版本頁面取得。",
       "linuxPackageNotRegular": "更新快取中下載的套件已不再是有效檔案。請重新下載更新，或從官方發行版本頁面取得。",
       "linuxPackageHashMismatch": "下載的套件已不再符合驗證過的發行版本，因此 Orca 不會將其交給套件管理員。請重新下載更新，或從官方發行版本頁面取得。",
@@ -22159,14 +22209,17 @@
       "unknownReleaseChannel": "未知的發布頻道「{{channel}}」。",
       "invalidReleaseTag": "「{{tag}}」不是有效的發行版本標籤。",
       "releaseRepoNotFound": "在 {{repo}} 找不到發行版本存放庫。",
-      "releaseListFailed": "無法列出 {{channel}} 建置版本（HTTP {{status}}）。",
-      "releaseListUnreadable": "無法讀取 {{channel}} 的發行版本清單。",
+      "releaseListFailed": "無法取得「{{channel}}」管道的版本清單（HTTP {{status}}）。",
+      "releaseListUnreadable": "無法讀取「{{channel}}」管道的版本清單。",
       "rateLimitedSoon": "已達 GitHub 速率限制。請稍候幾分鐘再試。",
       "rateLimitedSoonSignedOut": "已達 GitHub 速率限制。請稍候幾分鐘再試，或執行 `gh auth login`，讓 Orca 使用您帳戶的較高額度。",
       "rateLimitedInMinute": "已達 GitHub 速率限制。請約一分鐘後再試。",
       "rateLimitedInMinuteSignedOut": "已達 GitHub 速率限制。請約一分鐘後再試，或執行 `gh auth login`，讓 Orca 使用您帳戶的較高額度。",
       "rateLimitedInMinutes_other": "已達 GitHub 速率限制。請約 {{count}} 分鐘後再試。",
-      "rateLimitedInMinutesSignedOut_other": "已達 GitHub 速率限制。請約 {{count}} 分鐘後再試，或執行 `gh auth login`，讓 Orca 使用您帳戶的較高額度。"
+      "rateLimitedInMinutesSignedOut_other": "已達 GitHub 速率限制。請約 {{count}} 分鐘後再試，或執行 `gh auth login`，讓 Orca 使用您帳戶的較高額度。",
+      "automaticInstallCheckpointFailed": "Orca 無法在重新啟動前儲存目前的視窗。請再次嘗試安裝更新。",
+      "automaticInstallTerminalBusy": "重新啟動會結束部分終端機工作階段。Orca 會在之後檢查更新時重試。",
+      "macStagingTimeout": "macOS 仍在準備更新。如果此狀態持續，請結束並重新開啟 Orca。"
     }
   },
   "jira": {
