@@ -24,5 +24,5 @@ const recordsPids =
     : false
 serveWorkerThreadChildProcesses(parentPort, {
   closeInheritedFds: typeof helper === 'string',
-  records: recordsPids && typeof helper !== 'string' ? openSpawnRecords() : null
+  records: recordsPids ? openSpawnRecords() : null
 })

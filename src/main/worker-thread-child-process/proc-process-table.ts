@@ -77,15 +77,23 @@ export async function groupHasLiveMember(groupId: number): Promise<boolean | nul
     return null
   }
   let live: boolean | null = false
+  let member = false
   await inBatches(pids, async (pid) => {
     const procStat = await readProcStat(pid)
     if (procStat === null) {
       live = live === true ? true : null
-    } else if (procStat !== 'gone' && procStat.pgid === groupId && procStat.state !== 'Z') {
-      live = true
+    } else if (procStat !== 'gone' && procStat.pgid === groupId) {
+      member = true
+      live = procStat.state !== 'Z' ? true : live
     }
   })
-  return live
+  // The group exists but /proc shows none of it (hidepid): a hidden member may still be running.
+  return member ? live : null
+}
+
+async function sessionLeaderGone(sid: number): Promise<boolean> {
+  const leader = await readProcStat(sid)
+  return leader === 'gone' || leader?.state === 'Z'
 }
 
 export type KeyedProcess = ProcStat & { pid: number; key: string }
@@ -204,7 +212,7 @@ export function createKeyScan(
         launcher &&
         procStat.sid !== launcher.sid &&
         pid !== procStat.sid &&
-        (await readProcStat(procStat.sid)) !== 'gone'
+        !(await sessionLeaderGone(procStat.sid))
       ) {
         return
       }

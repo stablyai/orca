@@ -152,7 +152,11 @@ export function installElectronChildSpawnerHost(): void {
       ),
       name: 'orca-child-process-spawner',
       workerData: { recordSpawns: true },
-      inProcessWorkerData: { fdClosingHelper: resolveProviderExecPath('linux') }
+      // Only a worker in the launcher records pids; in main its messages can't be lost in transit.
+      inProcessWorkerData: {
+        fdClosingHelper: resolveProviderExecPath('linux'),
+        recordSpawns: false
+      }
     })
   )
   void pruneOrphanedSpawnRecords()
