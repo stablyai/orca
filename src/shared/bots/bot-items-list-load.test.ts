@@ -93,11 +93,29 @@ describe('loadBotItemsList', () => {
     expect(new Set(uids).size).toBe(259)
     expect(read.items.filter((item) => !closed(item))).toHaveLength(41)
 
-    // Read to its end, a list keeps every Closed row as more close: there is no end to push past.
+    // Read to its end, a list keeps room for the pages it took, on a named read and a whole one.
     Object.assign(items[60]!, { status: 'done', lastActivityAt: 3000, version: 2 })
     read = await loadBotItemsList(call, read, { whole: false, parts: ['i61'], more: false })
     expect(read.items.filter(closed)).toHaveLength(260)
     expect(read.nextClosedCursor).toBeUndefined()
+    for (const item of items.slice(61, 81)) {
+      Object.assign(item, { status: 'done', lastActivityAt: 4000 + item.number, version: 2 })
+    }
+    read = await loadBotItemsList(call, read, WHOLE)
+    expect(read.items.filter(closed)).toHaveLength(280)
+  })
+
+  it('keeps a first page read to its end to one page as more items close', async () => {
+    const items = seeded().slice(98, 149)
+    const call = host(items)
+    let read = await loadBotItemsList(call, null, WHOLE)
+    expect(read.nextClosedCursor).toBeUndefined()
+    for (const item of items.filter((entry) => !closed(entry))) {
+      Object.assign(item, { status: 'done', lastActivityAt: 1000 + item.number, version: 2 })
+    }
+    read = await loadBotItemsList(call, read, { whole: false, parts: ['i99', 'i100'], more: false })
+    expect(read.items.filter(closed)).toHaveLength(50)
+    expect(read.nextClosedCursor).toBeDefined()
   })
 
   it('reads the loaded depth again on a whole read, page by page from an older host', async () => {
@@ -111,6 +129,17 @@ describe('loadBotItemsList', () => {
       expect(read.items.filter(closed)).toHaveLength(150)
       expect(read.items.filter((item) => !closed(item))).toHaveLength(100)
     }
+    // Unchanged, an older host's first page is all a whole read asks of it.
+    const older = host(items, true)
+    let read = await loadBotItemsList(older, null, WHOLE)
+    read = await loadBotItemsList(older, read, MORE)
+    let calls = 0
+    const counted: BotItemsListCall = (params) => {
+      calls += 1
+      return older(params)
+    }
+    expect(await loadBotItemsList(counted, read, WHOLE)).toBe(read)
+    expect(calls).toBe(1)
   })
 
   it('stops paging down the depth once nothing shows the list', async () => {

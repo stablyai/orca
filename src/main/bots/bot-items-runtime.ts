@@ -11,7 +11,11 @@ import {
 } from '../../shared/bots/bot-items'
 import { botItemsNeedingOwnerByBot } from '../../shared/bots/bot-item-groups'
 import { botItemQuestionView } from '../../shared/bots/bot-item-ask'
-import type { BotChangeScope, BotNeedsYouCounts } from '../../shared/bots/bot-change-scope'
+import {
+  botItemsChangeScope,
+  type BotChangeScope,
+  type BotNeedsYouCounts
+} from '../../shared/bots/bot-change-scope'
 import { isOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { allLinks } from '../external-conversations/external-conversation-links'
@@ -81,7 +85,7 @@ export class BotItemsHost {
       starter: (dispatchId) => dispatchStarter(db(), dispatchId, deps.chatRoot),
       linksOf: async (item) => (await this.views([item]))[0]?.links,
       sendOwedMail: () => this.sendOwedMail(),
-      changed: (store, uids) => this.changedItems(store, uids),
+      changed: (items, workers) => this.changed(items, workers),
       // Which items it touched is unknown: every bot's lists read whole.
       unnamed: () => this.deps.notify({ kinds: ['items'] }),
       warn
@@ -168,16 +172,12 @@ export class BotItemsHost {
     return { id, kind: source.kind, title: this.deps.chatTitle(id) ?? source.title, ...gone }
   }
 
-  /** These items changed: their bots' lists re-read just them. */
-  changed(items: readonly Pick<BotItemRecord, 'uid' | 'ownerBotId'>[]): void {
-    if (items.length === 0) {
-      return
+  /** These items changed (`workers`: only the workers they link): their bots' lists re-read just them. */
+  changed(items: readonly Pick<BotItemRecord, 'uid' | 'ownerBotId'>[], workers = false): void {
+    const scope = botItemsChangeScope(items, workers)
+    if (scope) {
+      this.deps.notify(scope)
     }
-    const itemUids: Record<string, string[]> = {}
-    for (const { uid, ownerBotId } of items) {
-      ;(itemUids[ownerBotId] ??= []).push(uid)
-    }
-    this.deps.notify({ botIds: Object.keys(itemUids), kinds: ['items'], itemUids })
   }
 
   /** Mail every change still owed. One pass at a time; a call during one makes it run again,
@@ -293,14 +293,6 @@ export class BotItemsHost {
   /** Settles once the items linked to the Dispatch have been told of; never rejects. */
   dispatchChanged(dispatchId: string | null): Promise<void> {
     return dispatchId === null ? Promise.resolve() : this.workerLinks.dispatchChanged(dispatchId)
-  }
-
-  private async changedItems(store: BotItemsRemote, uids: readonly string[]): Promise<void> {
-    if (uids.length === 0) {
-      return
-    }
-    const rows = await store.viewRows([...new Set(uids)])
-    this.changed(rows.items)
   }
 }
 

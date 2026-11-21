@@ -27,6 +27,14 @@ export function botItemsClosedLoaded(read: BotItemsListRead): number {
   return read.items.filter(isClosedItem).length
 }
 
+/** The Closed rows a read keeps room for: those loaded (a page at least), or for a read to its end
+ *  the pages it took, as many as reading each loaded page again would hold. */
+export function botItemsClosedDepth(read: BotItemsListRead): number {
+  const page = BOT_ITEM_LIMITS.listPage
+  const loaded = botItemsClosedLoaded(read)
+  return Math.max(page, read.nextClosedCursor ? loaded : Math.ceil(loaded / page) * page)
+}
+
 /** A list read with the named items read again, shaped as a whole read of the same depth: each named
  *  one replaced, dropped when the read no longer has it (deleted), or added; every open item and the
  *  loaded Closed depth, its end moved to match. Every other item keeps its identity. `previous` itself
@@ -71,11 +79,8 @@ export function mergeNamedBotItems(
       b.lastActivityAt - a.lastActivityAt ||
       b.number - a.number
   )
-  // No deeper than it was loaded (a page at least): rows pushed past the end wait behind Show more.
-  // A list read to its end has no end to push past.
-  const depth = previous.nextClosedCursor
-    ? Math.max(BOT_ITEM_LIMITS.listPage, botItemsClosedLoaded(previous))
-    : Infinity
+  // No deeper than it was loaded: rows pushed past the end wait behind Show more.
+  const depth = botItemsClosedDepth(previous)
   const firstClosed = ordered.findIndex(isClosedItem)
   const keep = (firstClosed === -1 ? ordered.length : firstClosed) + depth
   const page = ordered.slice(0, keep)

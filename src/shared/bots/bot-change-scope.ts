@@ -39,12 +39,31 @@ export type BotChangeScope = {
   kinds?: readonly BotChangeKind[]
   kindBots?: Readonly<Partial<Record<BotChangeKind, readonly string[]>>>
   needsYou?: BotNeedsYouCounts
-  /** An `items` change's items, by bot: a bot listed here had only these change, so its list reads
-   *  just them. A bot left out (and an older host's notice) re-reads whole. */
+  /** An `items` change's items (and those a named `workers` change touched), by bot: a bot listed
+   *  here had only these change, so its list reads just them. A bot left out of an `items` change
+   *  (and an older host's notice) re-reads whole. */
   itemUids?: Readonly<Record<string, readonly string[]>>
   /** Every `workers` change it covers also reached item lists as an items notice naming the items it
    *  touched, so those lists need not read for it. Absent: an older host, or a change it can't name. */
   workersNamed?: true
+}
+
+/** The notice of these changed items (`workers`: only the workers they link), by bot; null for none. */
+export function botItemsChangeScope(
+  items: readonly { uid: string; ownerBotId: string }[],
+  workers: boolean
+): BotChangeScope | null {
+  const itemUids: Record<string, string[]> = {}
+  for (const { uid, ownerBotId } of items) {
+    ;(itemUids[ownerBotId] ??= []).push(uid)
+  }
+  const botIds = Object.keys(itemUids)
+  if (botIds.length === 0) {
+    return null
+  }
+  return workers
+    ? { botIds, kinds: ['workers'], itemUids, workersNamed: true }
+    : { botIds, kinds: ['items'], itemUids }
 }
 
 /** What a reader re-reads for: its bot (absent for a host-wide reader) and the kinds it shows. */
@@ -151,14 +170,17 @@ export function addBotChange(pending: PendingBotChanges, scope: BotChangeScope):
   if (kinds.includes('workers') || kinds.includes(ANY_KIND)) {
     pending.workersNamed = (pending.workersNamed ?? true) && scope.workersNamed === true
   }
-  if (!kinds.includes('items') || !scope.botIds) {
+  const items = kinds.includes('items')
+  if (!scope.botIds || (!items && !scope.itemUids)) {
     return
   }
   for (const botId of scope.botIds) {
     const named = scope.itemUids?.[botId]
     const uids = pending.itemUids.get(botId)
     if (!named || uids === null) {
-      pending.itemUids.set(botId, null)
+      if (items) {
+        pending.itemUids.set(botId, null)
+      }
       continue
     }
     const next = uids ?? new Set<string>()

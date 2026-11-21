@@ -21,8 +21,8 @@ export type BotItemWorkerLinksDeps = {
   /** An item's links as the wire shows them, which name a write's new links. */
   linksOf: (item: BotItemRecord) => Promise<readonly BotItemLinkView[] | undefined>
   sendOwedMail: () => Promise<void>
-  /** These items changed; their bots' panels re-read. */
-  changed: (store: BotItemsRemote, uids: readonly string[]) => Promise<void>
+  /** These items changed (`workers`: only the workers they link); their bots' panels re-read. */
+  changed: (items: readonly Pick<BotItemRecord, 'uid' | 'ownerBotId'>[], workers: boolean) => void
   /** A change whose items couldn't be told of: readers can't know which changed. */
   unnamed: () => void
   warn: (error: unknown) => void
@@ -82,7 +82,19 @@ export class BotItemWorkerLinks {
         ? []
         : [...new Set(ids.flatMap(lineageOf))].filter((ref) => linkedRefs.has(ref))
     const linked = refs.length > 0 ? await store.remote.linksTo('dispatch', refs) : []
-    await this.deps.changed(store.remote, [...touched, ...linked.map((link) => link.itemUid)])
+    await this.tell(store.remote, touched, false)
+    const linkedUids = linked.map((link) => link.itemUid).filter((uid) => !touched.includes(uid))
+    await this.tell(store.remote, linkedUids, true)
+  }
+
+  private async tell(
+    store: BotItemsRemote,
+    uids: readonly string[],
+    workers: boolean
+  ): Promise<void> {
+    if (uids.length > 0) {
+      this.deps.changed((await store.viewRows([...new Set(uids)])).items, workers)
+    }
   }
 
   private async link(

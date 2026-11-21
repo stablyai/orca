@@ -7,6 +7,7 @@ import {
   appendBotItemsClosedPage,
   botItemCursorPlace,
   botItemReaches,
+  botItemsClosedDepth,
   botItemsClosedLoaded,
   mergeNamedBotItems
 } from './bot-item-merge'
@@ -46,10 +47,16 @@ export async function loadBotItemsList(
   if (ask.whole || !previous) {
     // The depth loaded so far, a page more when asked: in one read, or page by page from a host
     // before `closedLimit` (it answers one page).
-    const loaded = previous ? botItemsClosedLoaded(previous) : 0
     const more = ask.more && previous?.nextClosedCursor ? page : 0
-    const want = Math.max(page, loaded) + more
+    const want = (previous ? botItemsClosedDepth(previous) : page) + more
     let value = await call({ closedLimit: Math.min(want, BOT_ITEM_LIMITS.closedLoadMax) })
+    // A host before `closedLimit` answered one page: when that page is as loaded, the pages below it
+    // are read again only once it moves (as before `closedLimit`; no more asked).
+    if (previous && !more && value.nextClosedCursor && botItemsClosedLoaded(value) < want) {
+      if (sameFirstPage(previous, value)) {
+        return previous
+      }
+    }
     if (show && previous && value.nextClosedCursor && botItemsClosedLoaded(value) < want) {
       show(reuseEqualJson(previous, withLoadedBelow(value, previous)))
     }
@@ -92,4 +99,18 @@ function withLoadedBelow(first: BotItemsListRead, previous: BotItemsListRead): B
     items: [...first.items, ...below],
     ...(previous.nextClosedCursor ? { nextClosedCursor: previous.nextClosedCursor } : {})
   }
+}
+
+/** Whether `first` (a host's one-page answer) holds just what `previous` holds down to that page's end. */
+function sameFirstPage(previous: BotItemsListRead, first: BotItemsListRead): boolean {
+  const isClosed = (item: { status: string }) =>
+    item.status === 'done' || item.status === 'canceled'
+  const closedCount = botItemsClosedLoaded(first)
+  const open = previous.items.filter((item) => !isClosed(item))
+  const head = [...open, ...previous.items.filter(isClosed).slice(0, closedCount)]
+  return (
+    reuseEqualJson(head, first.items) === head &&
+    reuseEqualJson(previous.counts, first.counts) === previous.counts &&
+    previous.seenEventId === first.seenEventId
+  )
 }

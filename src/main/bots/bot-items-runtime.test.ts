@@ -243,7 +243,7 @@ describe('bot items host', () => {
     await heartbeats(host, 'ctx_2', 1)
 
     expect(fake.notified).toEqual([
-      { botIds: ['bot-a'], kinds: ['items'], itemUids: { 'bot-a': [uid] } }
+      { botIds: ['bot-a'], kinds: ['workers'], itemUids: { 'bot-a': [uid] }, workersNamed: true }
     ])
   })
 
@@ -261,7 +261,7 @@ describe('bot items host', () => {
     await heartbeats(host, 'ctx_1', 1)
 
     expect(fake.notified).toEqual([
-      { botIds: ['bot-a'], kinds: ['items'], itemUids: { 'bot-a': [uid] } }
+      { botIds: ['bot-a'], kinds: ['workers'], itemUids: { 'bot-a': [uid] }, workersNamed: true }
     ])
   })
 })

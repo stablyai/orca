@@ -138,6 +138,22 @@ describe('BotChangeNotices', () => {
     ).toEqual(['i1', 'i2'])
   })
 
+  it("names the items a worker change touched without an items change, so Home doesn't re-read", () => {
+    const emit = vi.fn()
+    const notices = new BotChangeNotices({ emit, hasBots: () => true })
+    notices.changed({ botIds: ['bot-a'], kinds: ['status', 'workers'], workersNamed: true })
+    notices.changed({
+      botIds: ['bot-a'],
+      kinds: ['workers'],
+      itemUids: { 'bot-a': ['i1'] },
+      workersNamed: true
+    })
+    vi.advanceTimersByTime(0)
+    const notice = emit.mock.calls[0]![0]
+    expect(notice.kinds).toEqual(['status', 'workers'])
+    expect(botItemsNoticeParts(notice, 'bot-a')).toEqual(['i1'])
+  })
+
   it('stays quiet on a host without bots', () => {
     const emit = vi.fn()
     new BotChangeNotices({ emit, hasBots: () => false }).changed()

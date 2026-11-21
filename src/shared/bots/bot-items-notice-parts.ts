@@ -6,9 +6,9 @@ import {
   type BotChangeScope
 } from './bot-change-scope'
 
-/** Those the notice names for the bot; none for a change of its workers the host already named as
- *  items. Null when the list must read whole: the notice names nothing, its items or workers change
- *  names no items (an older host, a reset), or a kind this build doesn't know changed. */
+/** Those the notice names for the bot (a named change of its workers: the items they link, or none).
+ *  Null when the list must read whole: the notice names nothing, its items or workers change names
+ *  no items (an older host, a reset), or a kind this build doesn't know changed. */
 export function botItemsNoticeParts(
   scope: BotChangeScope | undefined,
   botId: string
@@ -26,8 +26,7 @@ export function botItemsNoticeParts(
   if (concerns('workers') && !scope.workersNamed) {
     return null
   }
-  if (!concerns('items')) {
-    return []
-  }
-  return scope.itemUids?.[botId] ?? null
+  // A named workers change lists the items it touched, or none.
+  const named = scope.itemUids?.[botId]
+  return concerns('items') ? (named ?? null) : (named ?? [])
 }
