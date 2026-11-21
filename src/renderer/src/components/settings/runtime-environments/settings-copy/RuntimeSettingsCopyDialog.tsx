@@ -28,10 +28,12 @@ export function RuntimeSettingsCopyDialog({
   const here = t('auto.components.settings.settingsCopy.thisComputer', 'this computer')
   const [source, target] = direction === 'send' ? [here, name] : [name, here]
   const canApply = state.phase === 'ready' && state.preview.changed.length > 0
+  const applying = state.phase === 'applying'
   const finished = state.phase === 'applied'
   return (
     <Dialog open={copy.open} onOpenChange={(open) => (open ? undefined : copy.close())}>
-      <DialogContent className="sm:max-w-md">
+      {/* A copy in progress still writes after the dialog closes, so it cannot be dismissed. */}
+      <DialogContent className="sm:max-w-md" busy={applying}>
         <DialogHeader>
           <DialogTitle>
             {t('auto.components.settings.settingsCopy.title', 'Copy settings with {{name}}', {
@@ -53,7 +55,7 @@ export function RuntimeSettingsCopyDialog({
           className="w-full"
           aria-label={t('auto.components.settings.settingsCopy.directionLabel', 'Copy direction')}
           value={direction}
-          disabled={state.phase === 'applying' || finished}
+          disabled={applying || finished}
           onValueChange={(value) => {
             if (value === 'send' || value === 'receive') {
               copy.chooseDirection(value)
@@ -69,7 +71,13 @@ export function RuntimeSettingsCopyDialog({
         </ToggleGroup>
         <SettingsCopyPreviewBody state={state} name={name} source={source} target={target} />
         <DialogFooter>
-          <Button type="button" variant="outline" size="sm" onClick={copy.close}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={applying}
+            onClick={copy.close}
+          >
             {finished
               ? t('auto.components.settings.serverList.done', 'Done')
               : t('auto.components.settings.serverList.cancel', 'Cancel')}
@@ -81,7 +89,7 @@ export function RuntimeSettingsCopyDialog({
           ) : null}
           {finished || state.phase === 'failed' ? null : (
             <Button type="button" size="sm" disabled={!canApply} onClick={copy.apply}>
-              {state.phase === 'applying' ? <LoadingSpinner /> : null}
+              {applying ? <LoadingSpinner /> : null}
               {t('auto.components.settings.settingsCopy.apply', 'Copy to {{target}}', { target })}
             </Button>
           )}

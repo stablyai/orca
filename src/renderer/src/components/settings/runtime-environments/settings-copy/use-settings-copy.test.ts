@@ -3,24 +3,37 @@ import { describe, expect, it, vi } from 'vitest'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
+import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { runtimeEnvironmentPairingChangedError } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
+import type * as RevisionModule from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { useSettingsCopy } from './use-settings-copy'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: vi.fn() }))
+vi.mock(
+  '@/runtime/rpc/environment-revisions/runtime-environment-revision',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof RevisionModule>()),
+    captureRuntimeEnvironmentRequestRevision: vi.fn()
+  })
+)
 
-type Answer = (params: unknown) => unknown
+type CallOptions = { expectedEnvironmentPairingRevision?: number }
+type Answer = (params: unknown, options?: CallOptions) => unknown
+type Call = { side: string; method: string; params: unknown; options?: CallOptions }
 
 /** Answers RPCs keyed by `local` or the environment id, then the method; records every call. */
-function fakeRpc(
-  answers: Record<string, Record<string, Answer>>
-): { side: string; method: string; params: unknown }[] {
-  const calls: { side: string; method: string; params: unknown }[] = []
-  vi.mocked(callRuntimeRpc).mockImplementation(async (target, method, params) => {
+function fakeRpc(answers: Record<string, Record<string, Answer>>): Call[] {
+  const calls: Call[] = []
+  vi.mocked(callRuntimeRpc).mockImplementation(async (target, method, params, options) => {
     const side = target.kind === 'local' ? 'local' : target.environmentId
-    calls.push({ side, method, params })
-    return answers[side]?.[method]?.(params)
+    calls.push({ side, method, params, options })
+    return answers[side]?.[method]?.(params, options)
   })
   return calls
 }
+
+const isWrite = (params: unknown): boolean =>
+  typeof params === 'object' && params !== null && 'dryRun' in params && params.dryRun === false
 
 describe('useSettingsCopy', () => {
   it('previews on the paired Orca, then sends exactly the previewed settings', async () => {
@@ -77,7 +90,9 @@ describe('useSettingsCopy', () => {
     })
     // The replaced check may still finish its dry run; it must not reach the dialog or write.
     expect(
-      calls.filter(({ side, method }) => side === 'local' && method === 'settings.importPortable')
+      calls
+        .filter(({ side, method }) => side === 'local' && method === 'settings.importPortable')
+        .map(({ side, method, params }) => ({ side, method, params }))
     ).toEqual([
       {
         side: 'local',
@@ -120,5 +135,65 @@ describe('useSettingsCopy', () => {
     expect(calls).not.toContainEqual(
       expect.objectContaining({ params: expect.objectContaining({ dryRun: false }) })
     )
+  })
+
+  it('stays open while the copy is being written, then closes', async () => {
+    let finishWrite: (value: unknown) => void = () => {}
+    fakeRpc({
+      local: { 'settings.exportPortable': () => ({ settings: { theme: 'dark' }, skipped: [] }) },
+      work: {
+        'settings.importPortable': (params) =>
+          isWrite(params)
+            ? new Promise((resolve) => (finishWrite = resolve))
+            : { changed: ['theme'], skipped: [] }
+      }
+    })
+    const { result } = renderHook(() => useSettingsCopy('work'))
+    act(() => result.current.start())
+    await waitFor(() => expect(result.current.state.phase).toBe('ready'))
+    act(() => result.current.apply())
+    // Escape, an outside press or Cancel all call close: the write would finish unseen.
+    act(() => result.current.close())
+    expect(result.current.open).toBe(true)
+    expect(result.current.state.phase).toBe('applying')
+
+    await act(async () => finishWrite({ changed: ['theme'], skipped: [] }))
+    expect(result.current.state.phase).toBe('applied')
+    act(() => result.current.close())
+    expect(result.current.open).toBe(false)
+  })
+
+  it('writes only to the pairing the preview checked, and asks again after a re-pair', async () => {
+    let pairing = 3
+    vi.mocked(captureRuntimeEnvironmentRequestRevision).mockImplementation(() => pairing)
+    const calls = fakeRpc({
+      local: { 'settings.exportPortable': () => ({ settings: { theme: 'dark' }, skipped: [] }) },
+      work: {
+        'settings.importPortable': (_params, options) => {
+          // A paired Orca refuses a call pinned to an older pairing, as main does.
+          if (options?.expectedEnvironmentPairingRevision !== pairing) {
+            throw runtimeEnvironmentPairingChangedError()
+          }
+          return { changed: ['theme'], skipped: [] }
+        }
+      }
+    })
+    const { result } = renderHook(() => useSettingsCopy('work'))
+    act(() => result.current.start())
+    await waitFor(() => expect(result.current.state.phase).toBe('ready'))
+
+    pairing = 4
+    act(() => result.current.apply())
+    await waitFor(() => expect(result.current.state.phase).toBe('failed'))
+    expect(result.current.state).toMatchObject({ pairingChanged: true, unsupported: false })
+    expect(calls.filter(({ params }) => isWrite(params)).map(({ options }) => options)).toEqual([
+      { expectedEnvironmentPairingRevision: 3 }
+    ])
+
+    act(() => result.current.retry())
+    await waitFor(() => expect(result.current.state.phase).toBe('ready'))
+    act(() => result.current.apply())
+    await waitFor(() => expect(result.current.state.phase).toBe('applied'))
+    vi.mocked(captureRuntimeEnvironmentRequestRevision).mockReset()
   })
 })

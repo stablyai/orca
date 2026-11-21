@@ -40,19 +40,25 @@ export function SettingsCopyPreviewBody({
   if (state.phase === 'failed') {
     return (
       <p className="text-sm text-destructive" role="alert">
-        {state.unsupported
+        {state.pairingChanged
           ? t(
-              'auto.components.settings.settingsCopy.unsupported',
-              'Orca on {{name}} can’t copy settings yet. Update Orca there and try again.',
+              'auto.components.settings.settingsCopy.pairingChanged',
+              '{{name}} was paired again after the check, so nothing was copied. Try again to see what would change.',
               { name }
             )
-          : t(
-              'auto.components.settings.settingsCopy.failed',
-              'Couldn’t copy settings: {{message}}',
-              {
-                message: state.message
-              }
-            )}
+          : state.unsupported
+            ? t(
+                'auto.components.settings.settingsCopy.unsupported',
+                'Orca on {{name}} can’t copy settings yet. Update Orca there and try again.',
+                { name }
+              )
+            : t(
+                'auto.components.settings.settingsCopy.failed',
+                'Couldn’t copy settings: {{message}}',
+                {
+                  message: state.message
+                }
+              )}
       </p>
     )
   }

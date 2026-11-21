@@ -7,7 +7,8 @@ const preview: SettingsCopyPreview = {
   settings: {},
   changed: ['terminalFontSize', 'terminalThemeDark', 'editorWordWrap', 'diffDefaultView'],
   skipped: [],
-  notSent: ['terminalThemeLight']
+  notSent: ['terminalThemeLight'],
+  pairingRevision: 1
 }
 
 function controller(
@@ -54,5 +55,10 @@ export const settingsCopyApplied = fixture(
 )
 
 export const settingsCopyUnsupported = fixture(
-  controller({ phase: 'failed', message: 'Unknown method', unsupported: true })
+  controller({
+    phase: 'failed',
+    message: 'Unknown method',
+    unsupported: true,
+    pairingChanged: false
+  })
 )

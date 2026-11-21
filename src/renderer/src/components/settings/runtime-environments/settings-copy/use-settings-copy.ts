@@ -4,6 +4,7 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { PortableSettingsImportResult } from '../../../../../../shared/portable-settings'
 import {
   applySettingsCopy,
+  isSettingsCopyPairingChanged,
   isSettingsCopyUnsupported,
   previewSettingsCopy,
   type SettingsCopyCall,
@@ -16,8 +17,11 @@ export type SettingsCopyState =
   | { phase: 'ready'; preview: SettingsCopyPreview }
   | { phase: 'applying'; preview: SettingsCopyPreview }
   | { phase: 'applied'; preview: SettingsCopyPreview; result: PortableSettingsImportResult }
-  /** `unsupported` means the paired Orca predates settings copy and needs an update. */
-  | { phase: 'failed'; message: string; unsupported: boolean }
+  /**
+   * `unsupported`: the paired Orca predates settings copy and needs an update.
+   * `pairingChanged`: it was paired again after the preview, which must run again.
+   */
+  | { phase: 'failed'; message: string; unsupported: boolean; pairingChanged: boolean }
 
 export type SettingsCopyController = {
   open: boolean
@@ -30,13 +34,15 @@ export type SettingsCopyController = {
   close: () => void
 }
 
-const call: SettingsCopyCall = (target, method, params) => callRuntimeRpc(target, method, params)
+const call: SettingsCopyCall = (target, method, params, options) =>
+  callRuntimeRpc(target, method, params, options)
 
 function failedState(error: unknown): SettingsCopyState {
   return {
     phase: 'failed',
     message: error instanceof Error ? error.message : String(error),
-    unsupported: isSettingsCopyUnsupported(error)
+    unsupported: isSettingsCopyUnsupported(error),
+    pairingChanged: isSettingsCopyPairingChanged(error)
   }
 }
 
@@ -89,13 +95,17 @@ export function useSettingsCopy(environmentId: string): SettingsCopyController {
       }
       const { preview } = state
       setState({ phase: 'applying', preview })
-      track(applySettingsCopy(call, environmentId, direction, preview.settings), (result) => ({
+      track(applySettingsCopy(call, environmentId, direction, preview), (result) => ({
         phase: 'applied',
         preview,
         result
       }))
     },
     close: () => {
+      // The write cannot be taken back, so the dialog stays until it reports the result.
+      if (state.phase === 'applying') {
+        return
+      }
       requestIdRef.current++
       setOpen(false)
     }
