@@ -1237,7 +1237,6 @@
       "resetDefaults": "恢复默认设置",
       "resetDescription": "按原始顺序显示所有内置快捷键",
       "moreKeys": "更多按键",
-      "moreKeysDescription": "这些按键位于终端按键栏的 ⋯ 下。切换按键以显示或隐藏，按住拖动柄可调整顺序。已在按键栏中的按键（如 Esc 或方向键）不会显示在 ⋯ 下。",
       "directionPad": "方向键盘",
       "showDirectionPad": "显示方向键盘",
       "showDirectionPadDescription": "将方向键盘固定在侧边栏。关闭后，侧边栏会列出各个方向键。",

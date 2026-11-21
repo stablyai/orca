@@ -1253,7 +1253,6 @@
       "resetDefaults": "Restaurar Padrões",
       "resetDescription": "Mostrar todas as teclas de atalho integradas na ordem original",
       "moreKeys": "MAIS TECLAS",
-      "moreKeysDescription": "Estas teclas ficam em ⋯ na linha de teclas do terminal. Ative ou desative as teclas para mostrá-las ou ocultá-las e segure a alça para arrastá-las até a ordem desejada. Uma tecla que já esteja na linha, como Esc ou as setas, não aparece em ⋯.",
       "directionPad": "DIRECIONAL",
       "showDirectionPad": "Mostrar direcional",
       "showDirectionPadDescription": "Fixe o direcional de setas na barra lateral. Sem ele, a barra lista as teclas de seta.",

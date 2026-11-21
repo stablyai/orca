@@ -3,7 +3,11 @@ import { persistMirrored } from '../../storage/mirrored-storage-keys'
 
 import './terminal-accessory-keys'
 import type { TerminalAccessoryKey } from './terminal-accessory-keys'
-import { TERMINAL_ACCESSORY_KEY_DEFINITIONS as TERMINAL_ACCESSORY_KEYS } from './terminal-key-definitions'
+import {
+  TERMINAL_ACCESSORY_KEY_DEFINITIONS as TERMINAL_ACCESSORY_KEYS,
+  TERMINAL_KEY_ROW_CONTROLS,
+  type TerminalKeyRowControl
+} from './terminal-key-definitions'
 
 export const TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY = 'orca:terminal-accessory-layout'
 
@@ -19,8 +23,15 @@ export type TerminalAccessoryLayoutPreference = TerminalAccessoryLayout & {
   version: 2
 }
 
+// Controls keep the spots they had before they could be reordered: display mode and paste lead, the modifiers follow Tab.
 function builtInIds(): string[] {
-  return TERMINAL_ACCESSORY_KEYS.map((key) => key.id)
+  return [
+    'displayMode',
+    'paste',
+    ...TERMINAL_ACCESSORY_KEYS.flatMap((key) =>
+      key.id === 'tab' ? ['tab', 'shift', 'ctrl', 'alt'] : [key.id]
+    )
+  ]
 }
 
 function defaultPreference(
@@ -232,18 +243,30 @@ export function reorderTerminalAccessoryBuiltInIds(
   }
 }
 
-export function getVisibleTerminalAccessoryKeys(
-  visibleBuiltInIds: string[],
+export type TerminalKeyRowItem = TerminalAccessoryKey | TerminalKeyRowControl
+
+export function getTerminalKeyRowItems(
+  ids: string[],
   includeDirectionKeys = false
-): TerminalAccessoryKey[] {
-  const ids = includeDirectionKeys
-    ? [...visibleBuiltInIds, ...builtInIds().filter((id) => id.startsWith('arrow'))]
-    : visibleBuiltInIds
-  const byId = new Map(TERMINAL_ACCESSORY_KEYS.map((key) => [key.id, key]))
-  return dedupeKnownIds(ids, new Set(byId.keys())).flatMap((id) => {
-    const key = byId.get(id)
-    return key ? [key] : []
+): TerminalKeyRowItem[] {
+  const rowIds = includeDirectionKeys
+    ? [...ids, ...builtInIds().filter((id) => id.startsWith('arrow'))]
+    : ids
+  const byId = new Map<string, TerminalKeyRowItem>(
+    [...TERMINAL_KEY_ROW_CONTROLS, ...TERMINAL_ACCESSORY_KEYS].map((item) => [item.id, item])
+  )
+  return dedupeKnownIds(rowIds, new Set(byId.keys())).flatMap((id) => {
+    const item = byId.get(id)
+    return item ? [item] : []
   })
+}
+
+export function getVisibleTerminalAccessoryKeys(
+  visibleBuiltInIds: string[]
+): TerminalAccessoryKey[] {
+  return getTerminalKeyRowItems(visibleBuiltInIds).filter(
+    (item): item is TerminalAccessoryKey => 'bytes' in item
+  )
 }
 
 // Throws only when the store can't be read; a malformed value reads as the defaults.

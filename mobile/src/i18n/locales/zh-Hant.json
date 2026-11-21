@@ -1129,7 +1129,6 @@
       "resetDefaults": "還原預設值",
       "resetDescription": "依原始順序顯示所有內建快速鍵",
       "moreKeys": "更多按鍵",
-      "moreKeysDescription": "這些按鍵位於終端機按鍵列的 ⋯ 下。切換按鍵以顯示或隱藏，按住拖曳控制柄即可調整順序。已在按鍵列中的按鍵（例如 Esc 或方向鍵）不會顯示在 ⋯ 下。",
       "directionPad": "方向鍵盤",
       "showDirectionPad": "顯示方向鍵盤",
       "showDirectionPadDescription": "將方向鍵盤固定在側邊欄。關閉後，側邊欄會列出各個方向鍵。",

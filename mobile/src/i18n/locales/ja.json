@@ -1126,7 +1126,6 @@
       "resetDefaults": "初期設定に戻す",
       "resetDescription": "すべての組み込みショートカットキーを元の順序で表示",
       "moreKeys": "その他のキー",
-      "moreKeysDescription": "これらのキーは、ターミナルのキー列にある ⋯ の下に表示されます。キーの表示・非表示を切り替え、ハンドルを長押ししてドラッグすると順序を変更できます。Esc や矢印キーなど、キー列にすでにあるキーは ⋯ に表示されません。",
       "directionPad": "方向パッド",
       "showDirectionPad": "方向パッドを表示",
       "showDirectionPadDescription": "矢印パッドをサイドレールに固定します。オフの場合、レールに各矢印キーが表示されます。",

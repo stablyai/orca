@@ -1126,7 +1126,6 @@
       "resetDefaults": "기본값 복원",
       "resetDescription": "모든 기본 단축키를 원래 순서로 표시",
       "moreKeys": "더 많은 키",
-      "moreKeysDescription": "이 키는 터미널 키 행의 ⋯ 아래에 있습니다. 키의 표시 여부를 전환하고 핸들을 길게 눌러 원하는 순서로 끌어 놓으세요. Esc나 화살표처럼 이미 행에 있는 키는 ⋯에 표시되지 않습니다.",
       "directionPad": "방향 패드",
       "showDirectionPad": "방향 패드 표시",
       "showDirectionPadDescription": "화살표 패드를 사이드 레일에 고정합니다. 끄면 레일에 개별 화살표 키가 표시됩니다.",

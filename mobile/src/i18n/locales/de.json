@@ -1132,7 +1132,6 @@
       "resetDefaults": "Auf Standard zurücksetzen",
       "resetDescription": "Alle integrierten Tastenkürzel in der ursprünglichen Reihenfolge anzeigen",
       "moreKeys": "WEITERE TASTEN",
-      "moreKeysDescription": "Diese Tasten befinden sich unter ⋯ in der Terminal-Tastenleiste. Blende Tasten ein oder aus und halte den Griff gedrückt, um sie in die gewünschte Reihenfolge zu ziehen. Tasten, die bereits in der Leiste sind, etwa Esc oder die Pfeiltasten, erscheinen nicht unter ⋯.",
       "directionPad": "STEUERKREUZ",
       "showDirectionPad": "Steuerkreuz anzeigen",
       "showDirectionPadDescription": "Das Steuerkreuz in der Seitenleiste anheften. Andernfalls werden dort die einzelnen Pfeiltasten angezeigt.",

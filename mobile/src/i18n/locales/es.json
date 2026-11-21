@@ -1172,7 +1172,6 @@
       "resetDefaults": "Restablecer valores predeterminados",
       "resetDescription": "Mostrar todas las teclas de atajo integradas en su orden original",
       "moreKeys": "MÁS TECLAS",
-      "moreKeysDescription": "Estas teclas están bajo ⋯ en la fila de teclas del terminal. Activa o desactiva las teclas para mostrarlas u ocultarlas y mantén pulsado el asa para arrastrarlas al orden que quieras. Las teclas que ya están en la fila, como Esc o las flechas, no aparecen en ⋯.",
       "directionPad": "CRUCETA",
       "showDirectionPad": "Mostrar cruceta",
       "showDirectionPadDescription": "Fija la cruceta en la barra lateral. Si está desactivada, la barra muestra las teclas de flecha.",

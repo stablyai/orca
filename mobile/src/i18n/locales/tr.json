@@ -1132,7 +1132,6 @@
       "resetDefaults": "Varsayılanlara Sıfırla",
       "resetDescription": "Tüm yerleşik kısayol tuşlarını özgün sırayla göster",
       "moreKeys": "DİĞER TUŞLAR",
-      "moreKeysDescription": "Bu tuşlar, terminal tuş satırındaki ⋯ altında bulunur. Tuşları göstermek veya gizlemek için açıp kapatın; istediğiniz sıraya sürüklemek için tutamacı basılı tutun. Esc veya oklar gibi satırda zaten bulunan tuşlar ⋯ altında gösterilmez.",
       "directionPad": "YÖN TUŞ TAKIMI",
       "showDirectionPad": "Yön tuş takımını göster",
       "showDirectionPadDescription": "Ok takımını yan çubuğa sabitleyin. Kapalıyken çubukta ayrı ok tuşları listelenir.",

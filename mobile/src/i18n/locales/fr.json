@@ -1172,7 +1172,6 @@
       "resetDefaults": "Rétablir les valeurs par défaut",
       "resetDescription": "Afficher toutes les touches de raccourci intégrées dans l'ordre initial",
       "moreKeys": "PLUS DE TOUCHES",
-      "moreKeysDescription": "Ces touches se trouvent sous ⋯ dans la rangée de touches du terminal. Activez ou désactivez les touches pour les afficher ou les masquer, puis maintenez la poignée pour les réordonner. Les touches déjà présentes dans la rangée, comme Échap ou les flèches, ne figurent pas sous ⋯.",
       "directionPad": "PAVÉ DIRECTIONNEL",
       "showDirectionPad": "Afficher le pavé directionnel",
       "showDirectionPadDescription": "Épingler le pavé de flèches dans la barre latérale. Sinon, la barre affiche les touches fléchées.",

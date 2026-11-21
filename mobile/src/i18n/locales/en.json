@@ -1500,11 +1500,11 @@
       "addShortcut": "Add Custom Shortcut…",
       "addDescription": "Create key combo or text macro",
       "moreKeys": "MORE KEYS",
-      "moreKeysDescription": "These keys sit under ⋯ on the terminal key row. Toggle keys to show or hide them, and hold the grip to drag a key into the order you want. A key already on the row, like Esc or the arrows, is left out of ⋯.",
       "directionPad": "DIRECTION PAD",
       "showDirectionPad": "Show D-pad",
       "showDirectionPadDescription": "Pin the arrow pad in the side rail. Without it, the rail lists the arrow keys.",
-      "showShortcut": "Show {{label}} shortcut"
+      "showShortcut": "Show {{label}} shortcut",
+      "keyRowDescription": "These keys and buttons sit on the terminal key row. Toggle one to show or hide it, and hold the grip to drag it into the order you want. When the keys move to the side rail, the keys it leaves out sit under ⋯."
     },
     "voiceModelList": {
       "modelSize": "{{size}} MB",
@@ -5291,7 +5291,9 @@
       "startOfLine": "Start of line",
       "endOfLine": "End of line",
       "deleteWordBackward": "Delete word backward",
-      "clearLineBeforeCursor": "Clear line before cursor"
+      "clearLineBeforeCursor": "Clear line before cursor",
+      "displayModeLabel": "Phone/Desktop",
+      "displayMode": "Switch phone or desktop width"
     },
     "webviewEngineErrorState": {
       "status": "status {{statusCode}}",
