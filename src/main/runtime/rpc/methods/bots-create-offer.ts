@@ -1,11 +1,14 @@
 // `orca bot create --offer`: a bot proposes a new bot, and Orca puts a card in its chat. Nothing is
-// created until the owner presses Create bot on it.
+// created until the owner presses Create bot on it. A group room draws only its turns, so an offer
+// made there goes to the bot's Home chat.
 import { randomUUID } from 'node:crypto'
 import { parseBotAvatar, randomMascotAvatar } from '../../../../shared/bot-avatar'
 import { botCreateOfferBody } from '../../../../shared/bots/bot-proposal'
+import { isBotGroupMemberSession } from '../../../../shared/bots/bot-group'
 import { BotCreateOfferRequest } from '../../../../shared/rpc-contract/bots-params'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { LOOK_AROUND_REFUSAL } from '../../../bots/bot-look-around-policy'
+import { runtimeBotChats } from '../../../bots/bot-chat-session'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { defineMethod, InvalidArgumentError } from '../core'
 
@@ -30,9 +33,11 @@ export const BOT_CREATE_OFFER_METHOD = defineMethod({
         message: `Your owner already has a bot named ${proposal.name}; no card was shown. Pick another name.`
       }
     }
+    const inRoom = isBotGroupMemberSession(callerSessionId)
+    const chat = inRoom ? await runtimeBotChats(runtime).ensure(bot.id) : callerSessionId
     const host = getStructuredAgentSessionHost()
     // Null for a session this host doesn't run.
-    const destination = await host?.captureAgentStartDestination(callerSessionId)
+    const destination = await host?.captureAgentStartDestination(chat)
     if (!host || !destination) {
       throw new InvalidArgumentError('Run this from your chat in Orca.')
     }
@@ -57,7 +62,7 @@ export const BOT_CREATE_OFFER_METHOD = defineMethod({
     )
     return {
       offered: true,
-      message: `Your owner now sees a card proposing ${proposal.name}. Nothing is created until they press Create bot; if they create it, it starts with this purpose in its SOUL.md${proposal.worktrees?.length ? ' and takes over those workspaces' : ''}. A "Dismiss" comes back as a message.`
+      message: `Your owner now sees a card proposing ${proposal.name}${inRoom ? ' in your Home chat, not in this group room; say so here' : ''}. Nothing is created until they press Create bot; if they create it, it starts with this purpose in its SOUL.md${proposal.worktrees?.length ? ' and takes over those workspaces' : ''}. A "Dismiss" comes back as a message${inRoom ? ' to your Home chat' : ''}.`
     }
   }
 })

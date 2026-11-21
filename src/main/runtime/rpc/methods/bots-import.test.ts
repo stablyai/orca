@@ -10,7 +10,7 @@ import { BOT_IMPORT_METHODS } from './bots-import'
 const cards = vi.hoisted((): unknown[] => [])
 vi.mock('../../../bots/bot-session-tabs', () => ({
   botOfSession: (bots: { list: () => Bot[] }, sessionId: string) =>
-    sessionId === 'bot-chat' || sessionId === 'look' ? bots.list()[0] : null
+    ['bot-chat', 'look', 'bot-group-member-room-1'].includes(sessionId) ? bots.list()[0] : null
 }))
 vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => ({
@@ -76,6 +76,15 @@ describe('bot import cards', () => {
         await dispatcher.dispatch(request('bots.import.plan', { callerSessionId, plan }))
       ).toMatchObject({ ok: false })
     }
+    expect(cards).toEqual([])
+  })
+
+  it('refuses cards from a group room, which shows none, and points the bot to its Home chat', async () => {
+    const dispatcher = importRuntime(makeTestBot({ id: 'b1' }))
+    const callerSessionId = 'bot-group-member-room-1'
+    expect(
+      await dispatcher.dispatch(request('bots.import.plan', { callerSessionId, plan }))
+    ).toMatchObject({ ok: false, error: { message: expect.stringContaining('Home chat') } })
     expect(cards).toEqual([])
   })
 

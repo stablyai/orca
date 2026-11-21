@@ -10,6 +10,7 @@ import {
   BotImportSources
 } from '../../../../shared/rpc-contract/bots-import-params'
 import { findBotImportSources } from '../../../bots/bot-import-sources'
+import { isBotGroupMemberSession } from '../../../../shared/bots/bot-group'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { LOOK_AROUND_REFUSAL } from '../../../bots/bot-look-around-policy'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
@@ -29,6 +30,12 @@ function callingBot(
   }
   if (runtime.lookAround.botOfLook(callerSessionId)) {
     throw new InvalidArgumentError(LOOK_AROUND_REFUSAL)
+  }
+  // A group room draws only its turns, and the owner's answer would reach the card's chat.
+  if (isBotGroupMemberSession(callerSessionId)) {
+    throw new InvalidArgumentError(
+      'A group room shows no import cards. Run the import from your Home chat.'
+    )
   }
   return bot
 }
