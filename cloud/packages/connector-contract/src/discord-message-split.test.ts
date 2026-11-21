@@ -53,4 +53,12 @@ describe('splitDiscordMessage', () => {
       'comes plain text'
     ])
   })
+
+  it('ends, within the limit and losing nothing, when a fence is too long to reopen', () => {
+    const fence = '`'.repeat(700)
+    const parts = splitDiscordMessage(`${fence}\n${'x'.repeat(2000)}\n${fence}`)
+    expect(parts).toHaveLength(2)
+    expect(parts.every((part) => part.length <= 2000)).toBe(true)
+    expect(parts.join('').split('x')).toHaveLength(2001)
+  })
 })

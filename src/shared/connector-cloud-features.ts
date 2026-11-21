@@ -13,9 +13,6 @@ export const CONNECTOR_CLOUD_FEATURES = [
   'triggers.people',
   // A bot's own Slack app in several workspaces; an older cloud refuses a second one.
   'slack.teams',
-  // Discord: Discord rows (with roles and channels) in a bot's hello, Discord conversations and the
-  // bot's discord routes (connector-bot-discord-contract.ts).
-  'discord',
   // `connector.act` places, and a whole workspace (linear:<org>:workspace) as a rule's place.
   'places',
   // find's `search` (connector-action-contract.ts), on the sources whose find capability lists it.
@@ -54,6 +51,11 @@ export const CONNECTOR_CLOUD_PROMPTS_AUDIENCE_FEATURE = 'prompts.audience'
 /** The cloud marks a thread reply that @mentions the bot (`mentioned`), which is what brings back a
  *  bot that left the thread; without it no bot leaves a thread on that cloud. */
 export const CONNECTOR_CLOUD_MENTIONED_FEATURE = 'sends.mentioned'
+
+/** Discord rows (with roles and channels) in a bot's hello, Discord conversations and the bot's
+ *  discord routes (connector-bot-discord-contract.ts). Its own constant, as the cloud's contract
+ *  keeps it: without it this Orca sends no Discord rows. */
+export const CONNECTOR_CLOUD_DISCORD_FEATURE = 'discord'
 
 /** The cloud takes a turn's answer up to maxLongAnswerBytes; without it this Orca keeps to
  *  maxLastAssistantMessageBytes. Its own constant, as the cloud's contract keeps it. */

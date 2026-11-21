@@ -181,9 +181,6 @@ export const CONNECTOR_CLOUD_FEATURES = [
   'refs',
   'triggers.people',
   'slack.teams',
-  // Discord rows in a bot's sharedAppWorkspaces (with their roles and channels), Discord
-  // conversations and the bot's discord routes (discord-messages.ts).
-  'discord',
   // The places verb, and workspace refs (slack:T1:workspace) as a rule's place.
   'places',
   // find's `search`, on the sources whose find capability lists it.
@@ -211,6 +208,10 @@ export const CONNECTOR_CLOUD_WEBHOOKS_FEATURE = 'webhooks'
 // its conversation didn't ask for may be sent. Kept out of CONNECTOR_CLOUD_FEATURES: only the code
 // that honours raisedBy lists it, so a contract bump alone never advertises it.
 export const CONNECTOR_CLOUD_PROMPTS_AUDIENCE_FEATURE = 'prompts.audience'
+// Discord rows in a bot's sharedAppWorkspaces (with their roles and channels), Discord conversations
+// and the discord routes (discord-messages.ts). Kept out of CONNECTOR_CLOUD_FEATURES: only the cloud
+// code that honours them lists it.
+export const CONNECTOR_CLOUD_DISCORD_FEATURE = 'discord'
 // The cloud takes a turn's answer up to maxLongAnswerBytes; a machine sends one over
 // maxLastAssistantMessageBytes only to a cloud that lists it.
 export const CONNECTOR_CLOUD_LONG_ANSWERS_FEATURE = 'answers.long'

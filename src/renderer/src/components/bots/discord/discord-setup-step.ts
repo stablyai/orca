@@ -33,9 +33,13 @@ export function botDiscordSetupStep(
     return { kind: 'token', broken: state.state === 'broken' ? state.reason : null }
   }
   const { known, target } = choice
-  const joined = known === null ? [] : state.guilds.filter((g) => !known.includes(g.guildId))
-  const repaired = state.guilds.filter((guild) => guild.guildId === target)
-  const done = joined.length > 0 ? joined : repaired
+  // A repair is done only once its own server is reachable; another server joining doesn't count.
+  const done =
+    target !== null
+      ? state.guilds.filter((guild) => guild.guildId === target)
+      : known === null
+        ? []
+        : state.guilds.filter((guild) => !known.includes(guild.guildId))
   return done.length > 0
     ? { kind: 'done', guilds: done, botName: state.botName }
     : { kind: 'invite', applicationId: state.applicationId, botName: state.botName }

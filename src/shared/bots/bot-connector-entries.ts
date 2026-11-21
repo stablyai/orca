@@ -178,11 +178,13 @@ export function botConnectorEntries<Connection extends ComposioSignIn, Tool exte
   const { discordNeedsOwner } = facts
   if (bot.discord && discordNeedsOwner) {
     const guilds = botDiscordGuilds(bot)
-    for (const guild of guilds.length > 0 ? guilds : [null]) {
+    for (const [index, guild] of (guilds.length > 0 ? guilds : [null]).entries()) {
       add(
         {
           kind: 'discord',
-          key: guild ? `discord:${guild.guildId}` : 'discord',
+          // The first row keeps one key from "in no server" to its first server, so its card (and the
+          // setup it has open) stays mounted when that server joins; its page target follows it.
+          key: index === 0 || !guild ? 'discord' : `discord:${guild.guildId}`,
           guild,
           needsOwner: discordNeedsOwner(guild)
         },

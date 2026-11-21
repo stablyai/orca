@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useTranslate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { DiscordIcon } from '@/components/icons/DiscordIcon'
 import {
   awaitDiscordChange,
@@ -21,7 +21,7 @@ import { botDiscordCalls } from '@/lib/bot-connector-host-calls'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { BotHostSignInButton } from '../BotHostSignInButton'
 import { useBotHostLabel } from '../use-bot-host-label'
-import type { Bot } from '../../../../../shared/bot-types'
+import { discordMembersOf, type Bot } from '../../../../../shared/bot-types'
 import {
   BOT_DISCORD_OFF,
   DISCORD_DEVELOPER_PORTAL_URL,
@@ -182,10 +182,7 @@ export function BotDiscordSetupFlow({
                 server: step.guilds[0].name
               })}
               ways={[{ key: 'mention', shown: mention, copy: mention }]}
-              note={t(
-                'bots.discord.setup.whoNote',
-                'Only you can ask it until you add people or roles under Discord on its page.'
-              )}
+              note={discordAccessNote(bot, step.guilds[0].guildId, t)}
             />
             <DialogFooter>
               <Button
@@ -212,6 +209,39 @@ export function BotDiscordSetupFlow({
       {body}
     </>
   )
+}
+
+// Shown by name up to this many; the rest as a count.
+const ACCESS_NAMES_SHOWN = 4
+
+/** Who can ask the bot in that server as its record stands: a repaired server keeps its people and roles. */
+function discordAccessNote(bot: Bot, guildId: string, t: Translate): string {
+  const guild = bot.discord?.guilds.find((entry) => entry.guildId === guildId)
+  const names = [
+    ...discordMembersOf(bot.members, guildId).map((member) => member.name || member.id),
+    ...(guild?.roles ?? []).map((role) =>
+      t('bots.discord.setup.anyoneWithRole', 'anyone with {{role}}', { role: role.name || role.id })
+    )
+  ]
+  if (names.length === 0) {
+    return t(
+      'bots.discord.setup.whoNote',
+      'Only you can ask it until you add people or roles under Discord on its page.'
+    )
+  }
+  const shown = names.slice(0, ACCESS_NAMES_SHOWN).join(', ')
+  return names.length > ACCESS_NAMES_SHOWN
+    ? t(
+        'bots.discord.setup.whoNoteMore',
+        'Who can ask it here: you, {{names}} and {{count}} more.',
+        {
+          names: shown,
+          count: names.length - ACCESS_NAMES_SHOWN
+        }
+      )
+    : t('bots.discord.setup.whoNoteListed', 'Who can ask it here: you, {{names}}.', {
+        names: shown
+      })
 }
 
 /** Make the application in Discord's Developer Portal, then paste its bot token; it is cleared once sent. */

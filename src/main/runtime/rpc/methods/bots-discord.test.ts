@@ -54,4 +54,26 @@ describe('nextBotDiscord', () => {
     expect(nextBotDiscord(bot, { state: 'not_created' })).toBeNull()
     expect(nextBotDiscord({}, { state: 'not_created' })).toBeUndefined()
   })
+
+  it('keeps at most eight servers, the recorded ones first, so the bot still loads', () => {
+    const reported = Array.from({ length: 10 }, (_, i) => ({ guildId: `9${i}`, name: `S${i}` }))
+    const bot = { discord: { applicationId: '555', guilds: [{ guildId: '99', guildName: 'S9' }] } }
+    const next = nextBotDiscord(bot, {
+      state: 'ready',
+      applicationId: '555',
+      botUserId: '556',
+      botName: 'Triage',
+      guilds: reported
+    })
+    expect(next?.guilds.map((guild) => guild.guildId)).toEqual([
+      '99',
+      '90',
+      '91',
+      '92',
+      '93',
+      '94',
+      '95',
+      '96'
+    ])
+  })
 })

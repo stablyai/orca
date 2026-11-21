@@ -6,7 +6,11 @@ import {
   BotDiscordMembers,
   BotDiscordSetUp
 } from '../../../../shared/rpc-contract/bots-connector-setup-params'
-import type { Bot, BotDiscord } from '../../../../shared/bot-types'
+import {
+  BOT_MAX_CONNECTOR_WORKSPACES,
+  type Bot,
+  type BotDiscord
+} from '../../../../shared/bot-types'
 import {
   discordBotToken,
   type ConnectorBotDiscordState,
@@ -20,7 +24,9 @@ import { withHostCloudClient } from './bots-slack'
 
 /**
  * The bot's Discord record after the cloud's answer: the servers it is in now, each keeping the
- * roles and channels the owner limited it to there. Undefined when nothing changes.
+ * roles and channels the owner limited it to there. Undefined when nothing changes. At most
+ * BOT_MAX_CONNECTOR_WORKSPACES servers are kept, those already recorded first, since a record over
+ * that cap fails the bot schema and the bot would be dropped on the next load.
  */
 export function nextBotDiscord(
   bot: Pick<Bot, 'discord'>,
@@ -36,9 +42,14 @@ export function nextBotDiscord(
       : { applicationId: state.applicationId, guilds: [] }
   }
   const had = bot.discord?.guilds ?? []
+  const recorded = (guildId: string): boolean => had.some((entry) => entry.guildId === guildId)
+  const kept = [
+    ...state.guilds.filter((guild) => recorded(guild.guildId)),
+    ...state.guilds.filter((guild) => !recorded(guild.guildId))
+  ].slice(0, BOT_MAX_CONNECTOR_WORKSPACES)
   const next: BotDiscord = {
     applicationId: state.applicationId,
-    guilds: state.guilds.map((guild) => {
+    guilds: kept.map((guild) => {
       const was = had.find((entry) => entry.guildId === guild.guildId)
       return { ...was, guildId: guild.guildId, guildName: guild.name }
     })

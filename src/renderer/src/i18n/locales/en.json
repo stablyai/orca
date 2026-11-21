@@ -30824,7 +30824,10 @@
         "tryIt": "Try it in {{server}}",
         "whoNote": "Only you can ask it until you add people or roles under Discord on its page.",
         "openDiscord": "Open Discord",
-        "finish": "Done"
+        "finish": "Done",
+        "anyoneWithRole": "anyone with {{role}}",
+        "whoNoteMore": "Who can ask it here: you, {{names}} and {{count}} more.",
+        "whoNoteListed": "Who can ask it here: you, {{names}}."
       },
       "invite": {
         "text": "Add {{botName}} to a server you manage. Discord asks which one, and what it may do there.",

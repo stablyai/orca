@@ -48,6 +48,11 @@ function breakAt(text: string, limit: number): [number, number] {
   return [cut, cut]
 }
 
+// What the next part starts with to reopen a block; an opener too long to repeat goes without its language.
+function reopenFor(fence: Fence, max: number): string {
+  return `${fence.opener.length <= max / 4 ? fence.opener : fence.marker}\n`
+}
+
 /**
  * `text` as Discord messages of at most `max` characters (UTF-16 units, which never undercounts
  * Discord's own count). A code block a split falls inside is closed at the end of one part and
@@ -72,11 +77,16 @@ export function splitDiscordMessage(text: string, max = DISCORD_MESSAGE_MAX_LENG
       // Room for the closing fence on its own line.
       ;[end, next] = breakAt(body, max - fence.marker.length - 1)
       fence = openFence(body.slice(0, end))
+      // Each part must carry more than the next one repeats; a fence too long for that splits as
+      // plain text, so the loop always moves on.
+      if (fence && next <= reopenFor(fence, max).length) {
+        ;[end, next] = breakAt(body, max)
+        fence = null
+      }
     }
     const head = body.slice(0, end).trimEnd()
     parts.push(fence ? `${head}\n${fence.marker}` : head)
-    // An opener too long to repeat goes back without its language.
-    reopen = fence ? `${fence.opener.length <= max / 4 ? fence.opener : fence.marker}\n` : ''
+    reopen = fence ? reopenFor(fence, max) : ''
     rest = body.slice(next)
     if (!fence) {
       rest = rest.replace(/^\n+/, '')

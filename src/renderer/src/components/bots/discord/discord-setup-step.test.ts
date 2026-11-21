@@ -61,4 +61,14 @@ describe('botDiscordSetupStep', () => {
       botDiscordSetupStep(ready(acme), 'b1', { ...fresh, known: ['900'], target: '900' })
     ).toEqual({ kind: 'done', guilds: [acme], botName: 'Triage' })
   })
+
+  it('does not finish a repair when only another server joined', () => {
+    expect(
+      botDiscordSetupStep(ready(beta), 'b1', { ...fresh, known: ['900'], target: '900' })
+    ).toEqual({
+      kind: 'invite',
+      applicationId: '5',
+      botName: 'Triage'
+    })
+  })
 })

@@ -230,7 +230,10 @@ export function botChatPlace(chat: BotChatTreeChat): string | null {
   if (chat.originLabel && !chat.title.startsWith(chat.originLabel)) {
     return chat.originLabel
   }
-  return chat.origin === 'slack' || chat.origin === 'linear' || chat.origin === 'github'
+  return chat.origin === 'slack' ||
+    chat.origin === 'discord' ||
+    chat.origin === 'linear' ||
+    chat.origin === 'github'
     ? CONNECTOR_SOURCE_NAMES[chat.origin]
     : null
 }

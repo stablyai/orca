@@ -80,7 +80,8 @@ export const CONNECTOR_CLIENT_LIMITS = {
   maxReviewComments: 30,
   maxReviewPathLength: 256,
   maxReviewCommentChars: 1_000,
-  // One per Linear workspace or GitHub installation.
+  // One per Linear workspace, Discord server or GitHub installation; a bot over its hello share
+  // drops GitHub rows, then Discord rows, from the end (connector-places.ts).
   maxBotWorkspaces: 8,
   // Slack's rows beside those, from a cloud with `slack.teams`: together at most maxBotMembers people.
   maxBotSlackWorkspaces: 8,
