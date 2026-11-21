@@ -1,3 +1,8 @@
+import { RunOpenCodeSessionBinding } from '../orchestration/addressing/run-opencode-session-binding'
+import {
+  createRuntimeMailboxPointerDelivery,
+  type RuntimeMailboxPointerHost
+} from './runtime-mailbox-pointer-delivery'
 import { CrewChanges } from '../orchestration/crew/crew-changes'
 import { OrchestrationStructuredMailboxPointerDelivery } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery'
 
@@ -30,7 +35,6 @@ import { RuntimeTerminalAgentStatusQuery } from '../terminal/query/runtime-termi
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import { OrchestrationMailboxOwner } from '../orchestration/mailbox/routing/mailbox-owner'
 import { OrchestrationMailboxDeliveryTarget } from '../orchestration/mailbox/routing/mailbox-delivery-target'
-import { OrchestrationMailboxPointerDelivery } from '../orchestration/mailbox/terminal-pointer/mailbox-pointer-delivery'
 import { OrchestrationMailboxNotificationCoordinator } from '../orchestration/mailbox/notifications/mailbox-notification-coordinator'
 import { RuntimeMessageWaiters } from '../orchestration/mailbox/runtime-message-waiters'
 import type { RuntimeMessageWaiter } from '../orchestration/mailbox/runtime-message-waiters'
@@ -240,21 +244,15 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId)
   })
 
-  protected readonly orchestrationMailboxPointerDelivery = new OrchestrationMailboxPointerDelivery({
-    mailboxOwner: this.orchestrationMailboxOwner,
-    deliveryTarget: this.orchestrationMailboxDeliveryTarget,
-    getDb: () => this._orchestrationDb,
-    getTerminal: (ptyId) => this.getOrchestrationMailboxTerminal(ptyId),
-    isAgentSettledForDelivery: (ptyId) => this.checkDeliverySettledAndArmRecheck(ptyId),
-    isPtyAwaitingUserInput: (ptyId) => this.isPtyAwaitingUserInput(ptyId),
-    getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),
-    getCliCommand: (terminalHandle) => this.getTerminalOrchestrationCliCommand(terminalHandle),
-    resolveSubmitTarget: (ptyId) => this.resolveOrchestrationPointerSubmitTarget(ptyId),
-    isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
-    redriveMailbox: (mailboxHandle, reservedTypes) =>
-      this.deliverPendingMessagesForHandle(mailboxHandle, reservedTypes),
-    writePty: (ptyId, data) => this.writeOrchestrationPointerPty(ptyId, data)
+  readonly openCodeSessionBinding = new RunOpenCodeSessionBinding({
+    getTerminalPaneKey: (handle) => this.getTerminalPaneKey(handle),
+    getAgentStatusSnapshotForPane: (paneKey) => this.getAgentStatusSnapshotForPaneFn?.(paneKey)
   })
+
+  protected readonly orchestrationMailboxPointerDelivery = createRuntimeMailboxPointerDelivery(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: structural view of this runtime's own members; no value conversion.
+    this as unknown as RuntimeMailboxPointerHost
+  )
 
   protected readonly orchestrationStructuredMailboxPointerDelivery =
     new OrchestrationStructuredMailboxPointerDelivery<RuntimeMessageWaiter>({

@@ -32,4 +32,6 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
   redriveMailbox: (mailboxHandle: string, reservedTypes?: ReadonlySet<string>) => void
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
+  /** Session-scoped prompt for a Run coordinator whose TUI can hold several sessions. */
+  getRunSessionPrompt?: (runId: string) => ((text: string) => Promise<boolean>) | null
 }
