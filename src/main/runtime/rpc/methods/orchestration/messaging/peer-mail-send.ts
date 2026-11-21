@@ -18,6 +18,7 @@ import type { SendParams } from './send-params'
 import type { SendRecipientWarning } from './recipient-routing'
 import { uploadPeerMailFiles } from './peer-mail-files'
 import { PeerMailMessageType } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
+import { recordPeerQuestionOut } from '../../../../orchestration/federation/peer-mail/peer-questions-out'
 
 const NOTHING_SENT = { effectsApplied: false } as const
 
@@ -124,6 +125,17 @@ export async function sendPeerMail(args: {
     attachments,
     sender: peerMailSender(runtime, caller.address)
   })
+  if (type === 'question') {
+    // Kept until its answer or notice comes back, so an unpair can tell the asker none will.
+    recordPeerQuestionOut(runtime.getOrchestrationDb(), {
+      messageId: id,
+      conversationId: conversation.conversation_id,
+      environmentId: server.environmentId,
+      peerFingerprint: conversation.peer_fingerprint,
+      asker: caller.address,
+      threadId: params.threadId
+    })
+  }
   return recordReceiptBeforeNudge(
     args.recordMutationReceipt,
     { message: { id, to }, server: server.name, ...(warnings.length > 0 ? { warnings } : {}) },

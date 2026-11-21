@@ -1,11 +1,12 @@
 /** The notice writer for every question a taker holds: bot questions tell their asking agent, and
- *  worker asks tell their worker. */
+ *  worker asks tell their worker, here or on the paired computer that runs it. */
 
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { QuestionNoticeWriter } from '../../../../orchestration/mailbox/questions/question-reconcile'
 import type { ChatStateReader } from '../../../../../native-chat/agent-session-wire/observations/chat-turn-running'
 import { botQuestionNotices } from './bot-question-notices'
 import { workerAskNotices } from './worker-ask-notices'
+import { remoteAskNotices } from './remote-ask-notices'
 
 export async function agentQuestionNotices(
   runtime: OrcaRuntimeService,
@@ -23,5 +24,15 @@ export async function agentQuestionNotices(
   // A taker holding only worker asks skips the bot wording, which reads its chat.
   const bot = botIds.length > 0 ? await botQuestionNotices(runtime, taker, botIds, readChat) : null
   const worker = workerAskNotices(runtime, taker)
-  return (notice) => (notice.kind === 'bot' ? (bot?.(notice) ?? 'unverified') : worker(notice))
+  const remote = remoteAskNotices(runtime, taker)
+  return (notice) => {
+    switch (notice.kind) {
+      case 'bot':
+        return bot?.(notice) ?? 'unverified'
+      case 'remote-ask':
+        return remote(notice)
+      case 'worker-ask':
+        return worker(notice)
+    }
+  }
 }
