@@ -8,8 +8,12 @@ const { filename, target } = require('node:worker_threads').workerData;
 if (!target) {
   const db = new DatabaseSync(filename);
   try {
-    // Drained without the writer lock first, so the truncation holds it only for a moment, and never waits.
-    db.exec('PRAGMA busy_timeout = 0; PRAGMA wal_checkpoint(PASSIVE); PRAGMA wal_checkpoint(TRUNCATE)');
+    // As the checkpoint thread: 3.51.0-3.51.2 can corrupt a WAL reset that overlaps another checkpoint.
+    const [major, minor, patch] = db.prepare('SELECT sqlite_version() AS v').get().v.split('.').map(Number);
+    if (major > 3 || (major === 3 && (minor > 51 || (minor === 51 && patch >= 3)))) {
+      // Drained without the writer lock first, so the truncation holds it only for a moment, and never waits.
+      db.exec('PRAGMA busy_timeout = 0; PRAGMA wal_checkpoint(PASSIVE); PRAGMA wal_checkpoint(TRUNCATE)');
+    }
   } finally {
     db.close();
   }
