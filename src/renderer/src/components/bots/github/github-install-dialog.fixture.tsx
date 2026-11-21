@@ -77,6 +77,7 @@ function stubGitHub(
     with?: ConnectorGitHubInstallation[]
   } = {}
 ): void {
+  delete document.documentElement.dataset.githubDialogShot
   installations = options.with ?? [stablyai]
   account = options.signedIn === false ? null : { userId: '42', login: 'carol-gh' }
   shownBot = options.bot ?? marketing
@@ -185,6 +186,19 @@ async function clickWhenShown(name: string): Promise<void> {
   }
 }
 
+async function clickAddRepositories(): Promise<void> {
+  for (let tries = 0; tries < 80; tries++) {
+    const button = document.querySelector<HTMLButtonElement>(
+      'button[aria-label="Add repositories or an organization"]'
+    )
+    if (button) {
+      button.click()
+      return
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+}
+
 const settle = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
 export const before = defineFixture({
@@ -225,7 +239,7 @@ export const inOrcaMinimized = defineFixture({
   store: inOrcaStore,
   setup: () => stubGitHub(),
   render: () => <Scene />,
-  interact: () => clickWhenShown('Add repositories or an organization')
+  interact: () => clickAddRepositories()
 })
 
 // GitHub reported the save: the pill says what was added, before it expands.
@@ -235,7 +249,7 @@ export const inOrcaDone = defineFixture({
   setup: () => stubGitHub(),
   render: () => <Scene />,
   interact: async () => {
-    await clickWhenShown('Add repositories or an organization')
+    await clickAddRepositories()
     installations = afterGitHub
     // The next poll (every 3 s) sees the change.
     await settle(3300)
@@ -249,7 +263,7 @@ export const inOrcaExpanded = defineFixture({
   setup: () => stubGitHub(),
   render: () => <Scene />,
   interact: async () => {
-    await clickWhenShown('Add repositories or an organization')
+    await clickAddRepositories()
     installations = afterGitHub
     await settle(5200)
   }
@@ -259,5 +273,136 @@ export const systemBrowserWaiting = defineFixture({
   width: 1100,
   setup: () => stubGitHub(),
   render: () => <Scene />,
-  interact: () => clickWhenShown('Add repositories or an organization')
+  interact: () => clickAddRepositories()
 })
+
+// The redesign's review shots: the dialog alone at a fixed width, pinned into the frame.
+const SHOT_STYLE = `
+html[data-github-dialog-shot] [data-slot='dialog-overlay'] { display: none; }
+html[data-github-dialog-shot] [data-slot='dialog-content'] {
+  top: 16px; left: 16px; translate: none; transform: none; animation: none;
+  width: var(--github-dialog-shot-width); max-width: var(--github-dialog-shot-width);
+}`
+
+const repos = (owner: string, names: string[]): { fullName: string }[] =>
+  names.map((name) => ({ fullName: `${owner}/${name}` }))
+
+const SHOT_REPOS: Record<'one' | 'seven' | 'twoOrgs' | 'long', ConnectorGitHubInstallation[]> = {
+  one: [{ installationId: '1', accountLogin: 'acme', repositories: repos('acme', ['widgets']) }],
+  seven: [
+    {
+      installationId: '1',
+      accountLogin: 'acme',
+      repositories: repos('acme', [
+        'widgets',
+        'marketing-website',
+        'internal',
+        'cloud',
+        'plugins',
+        'devex',
+        'private'
+      ])
+    }
+  ],
+  twoOrgs: [
+    {
+      installationId: '1',
+      accountLogin: 'acme',
+      repositories: repos('acme', ['widgets', 'cloud', 'devex'])
+    },
+    {
+      installationId: '2',
+      accountLogin: 'carol-labs',
+      repositories: repos('carol-labs', ['press-kit'])
+    }
+  ],
+  long: [
+    {
+      installationId: '1',
+      accountLogin: 'acme',
+      repositories: repos('acme', [
+        'marketing-website-v2-staging-preview-environment-for-the-launch',
+        'widgets'
+      ])
+    },
+    {
+      installationId: '2',
+      accountLogin: 'very-long-organization-name-incorporated-worldwide',
+      repositories: repos('very-long-organization-name-incorporated-worldwide', ['handbook'])
+    }
+  ]
+}
+
+// Made-up people with no GitHub picture, so their initials show.
+const TWO_PEOPLE = [
+  { id: 'maya-chen', name: 'maya-chen', source: 'github' },
+  { id: 'raj-patel', name: 'raj-patel', source: 'github' }
+]
+
+function dialogShot(options: {
+  width: 440 | 340
+  repos: keyof typeof SHOT_REPOS
+  people?: boolean
+  expand?: string
+}): ReturnType<typeof defineFixture> {
+  return defineFixture({
+    width: options.width + 32,
+    setup: () => {
+      stubGitHub({
+        bot: { ...marketing, members: options.people ? TWO_PEOPLE : [] },
+        with: SHOT_REPOS[options.repos]
+      })
+      if (!document.getElementById('github-dialog-shot')) {
+        const style = document.createElement('style')
+        style.id = 'github-dialog-shot'
+        style.textContent = SHOT_STYLE
+        document.head.append(style)
+      }
+      document.documentElement.dataset.githubDialogShot = ''
+      document.documentElement.style.setProperty('--github-dialog-shot-width', `${options.width}px`)
+    },
+    render: () => <Setup />,
+    interact: async (frame) => {
+      await clickAddRepositoriesShown()
+      if (options.expand) {
+        await clickWhenShown(options.expand)
+      }
+      await settle(100)
+      const dialog = document.querySelector<HTMLElement>('[data-slot="dialog-content"]')
+      if (dialog) {
+        frame.style.height = `${dialog.offsetHeight + 32}px`
+      }
+    }
+  })
+}
+
+/** Waits for the signed-in step without clicking anything. */
+async function clickAddRepositoriesShown(): Promise<void> {
+  for (let tries = 0; tries < 80; tries++) {
+    if (document.querySelector('button[aria-label="Add repositories or an organization"]')) {
+      return
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+}
+
+export const shotOneRepo = dialogShot({ width: 440, repos: 'one' })
+export const shotOneRepoNarrow = dialogShot({ width: 340, repos: 'one' })
+export const shotSeven = dialogShot({ width: 440, repos: 'seven' })
+export const shotSevenNarrow = dialogShot({ width: 340, repos: 'seven' })
+export const shotSevenOpen = dialogShot({ width: 440, repos: 'seven', expand: 'acme7 repos' })
+export const shotSevenOpenNarrow = dialogShot({ width: 340, repos: 'seven', expand: 'acme7 repos' })
+export const shotTwoOrgs = dialogShot({ width: 440, repos: 'twoOrgs' })
+export const shotTwoOrgsNarrow = dialogShot({ width: 340, repos: 'twoOrgs' })
+export const shotLongNames = dialogShot({
+  width: 440,
+  repos: 'long',
+  expand: 'acme2 repos'
+})
+export const shotLongNamesNarrow = dialogShot({
+  width: 340,
+  repos: 'long',
+  expand: 'acme2 repos'
+})
+export const shotPeople = dialogShot({ width: 440, repos: 'twoOrgs', people: true })
+export const shotPeopleNarrow = dialogShot({ width: 340, repos: 'twoOrgs', people: true })

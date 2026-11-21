@@ -228,7 +228,7 @@ describe('BotGitHubSetupDialog', () => {
     )
     await screen.findByText('Ranger is on GitHub')
     expect(screen.getByText('2 repositories in acme')).toBeDefined()
-    expect(screen.queryByRole('button', { name: 'Turn on Ranger' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Add' })).toBeNull()
     // The mention to type is set as code.
     for (const mention of screen.getAllByText('@orca-bots ranger …')) {
       expect(mention.tagName).toBe('CODE')
@@ -245,7 +245,7 @@ describe('BotGitHubSetupDialog', () => {
       await elsewhere
     })
     renderDialog()
-    expect(await screen.findByRole('button', { name: 'Turn on Ranger' })).toBeDefined()
+    expect(await screen.findByRole('button', { name: 'Add' })).toBeDefined()
     expect(mocks.updateBot).not.toHaveBeenCalled()
   })
 
@@ -253,7 +253,7 @@ describe('BotGitHubSetupDialog', () => {
     api.botGitHub.state.mockResolvedValue({ ok: true, value: state() })
     renderDialog()
     fireEvent.click(await screen.findByRole('button', { name: /Connect GitHub/ }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Minimize' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Close' }))
     expect(await screen.findByRole('status', PILL)).toBeDefined()
     expect(screen.queryByRole('dialog')).toBeNull()
 
@@ -277,7 +277,7 @@ describe('BotGitHubSetupDialog', () => {
         'An owner of the organization has been asked to approve the Orca app.'
       )
     ).toBeDefined()
-    fireEvent.click(screen.getByRole('button', { name: /Install the Orca app/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Install app/ }))
     // Per Orca's link setting, like every GitHub install button.
     expect(openAppHttpLink).toHaveBeenCalledWith(installUrl)
     expect(api.shell.openUrl).not.toHaveBeenCalledWith(installUrl)
@@ -293,7 +293,7 @@ describe('BotGitHubSetupDialog', () => {
     })
     await act(async () => finishTrip({ ok: true, value: link('installed') }))
     expect(await screen.findByText('Signed in as @dana')).toBeDefined()
-    expect(screen.getByRole('button', { name: 'Turn on Ranger' })).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDefined()
   })
 
   it('"Not you?" unlinks, then starts a trip that lets the owner pick another account', async () => {
@@ -328,9 +328,7 @@ describe('BotGitHubSetupDialog', () => {
       ok: true,
       value: state({ account: dana, installations: [acme, globex] })
     })
-    expect(
-      await screen.findByText('All repositories of globex', {}, { timeout: 5000 })
-    ).toBeDefined()
+    expect(await screen.findByText('globex', {}, { timeout: 5000 })).toBeDefined()
   })
 
   it('minimizes to the pill by itself when GitHub opens in Orca, with no overlay left over the window', async () => {
@@ -363,7 +361,7 @@ describe('BotGitHubSetupDialog', () => {
     expect(openAppHttpLink).toHaveBeenCalledTimes(2)
     expect(openAppHttpLink).toHaveBeenLastCalledWith(installUrl)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Minimize' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
     expect(await screen.findByRole('status', PILL)).toBeDefined()
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(overlay()).toBeNull()
@@ -378,7 +376,7 @@ describe('BotGitHubSetupDialog', () => {
     fireEvent.click(
       await screen.findByRole('button', { name: /Add repositories or an organization/ })
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Minimize' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
     await screen.findByRole('status', PILL)
     first.unmount()
 
@@ -477,7 +475,7 @@ describe('BotGitHubSetupDialog', () => {
 
       // Expanding and minimizing again keeps the same wait instead of starting another.
       fireEvent.click(screen.getByRole('button', { name: 'Expand' }))
-      fireEvent.click(await screen.findByRole('button', { name: 'Minimize' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'Close' }))
       before = reads()
       await act(async () => vi.advanceTimersByTimeAsync(3_000))
       expect(reads()).toBe(before + 1)
@@ -615,7 +613,7 @@ describe('BotGitHubSetupDialog', () => {
     expect(readGitHubAwait('local')).toBe(null)
   })
 
-  it('Close ends the wait and its focus listener', async () => {
+  it('Cancel ends the wait and its focus listener', async () => {
     openAppHttpLink.mockReturnValue('system-browser')
     api.botGitHub.state.mockResolvedValue(stateWith([acme]))
     renderDialog()
@@ -623,7 +621,7 @@ describe('BotGitHubSetupDialog', () => {
       await screen.findByRole('button', { name: /Add repositories or an organization/ })
     )
     expect(readGitHubAwait('local')).toBe('checking')
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(screen.queryByRole('status', PILL)).toBeNull()
     expect(readGitHubAwait('local')).toBe(null)
@@ -659,7 +657,7 @@ describe('BotGitHubSetupDialog', () => {
     act(() => {
       awaitGitHubChange('local')
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Minimize' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Stop adding Ranger to GitHub' }))
     expect(readGitHubAwait('local')).toBe('checking')
   })

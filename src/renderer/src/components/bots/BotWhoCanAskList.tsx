@@ -1,7 +1,8 @@
 import React from 'react'
-import { Loader2, Plus, TriangleAlert, Undo2 } from 'lucide-react'
+import { Info, Loader2, Plus, TriangleAlert, Undo2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { refreshAccessRequests, type HostAccessRequest } from '@/lib/bot-access-requests'
 import type { Bot, BotMember } from '../../../../shared/bot-types'
@@ -9,6 +10,7 @@ import type { BotSlackResult } from '../../../../shared/connector-bot-slack-cont
 import { BOT_ACCESS_COPY } from '../../../../shared/bots/bot-access-copy'
 import { BotConnectorSection, BotPeopleChips } from './bot-connector-people'
 import { BotAccessDetails, BotAccessSummary } from './BotAccessReach'
+import { BotAccessWarningLine } from './BotAccessWarningLine'
 import type { BotAccessConnector } from '../../../../shared/bots/bot-access-reach'
 import { AttentionDot } from './AttentionDot'
 import { BotWhoCanAskPicker } from './BotWhoCanAskPicker'
@@ -97,10 +99,14 @@ function AccessRequestRows({
  *  the people with Add, then advice and what they reach. Adding is always confirmed first. */
 export function BotWhoCanAskList({
   bot,
-  service
+  service,
+  compact = false
 }: {
   bot: Bot
   service: BotWhoCanAskService
+  /** A setup dialog's version: chips under a short label, outsiders behind ⓘ, and one warning line
+   *  once someone else is added in place of the summary and what they reach. */
+  compact?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const {
@@ -121,6 +127,7 @@ export function BotWhoCanAskList({
     keepOnlyMe,
     decline
   } = useBotWhoCanAsk(bot, service)
+  const others = listed.map((member) => member.name || member.id)
   return (
     <>
       {requests.length > 0 ? (
@@ -134,20 +141,49 @@ export function BotWhoCanAskList({
           onSignedIn={refreshAccessRequests}
         />
       ) : null}
+      {compact ? (
+        <div className="flex h-5.5 items-center gap-1">
+          <h3 className="text-xs font-medium text-muted-foreground">
+            {t('bots.whoCanAsk.caption', 'Who can ask')}
+          </h3>
+          {service.outsiders ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={service.outsiders}
+                  className="flex size-5 items-center justify-center rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  <Info className="size-3.5" aria-hidden />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-72">
+                {service.outsiders}
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+        </div>
+      ) : null}
       <BotConnectorSection
-        title={t('bots.access.whoCanAsk', BOT_ACCESS_COPY.whoCanAsk, { name: bot.name })}
+        title={
+          compact
+            ? undefined
+            : t('bots.access.whoCanAsk', BOT_ACCESS_COPY.whoCanAsk, { name: bot.name })
+        }
       >
-        <BotAccessSummary bot={bot} others={listed.map((member) => member.name || member.id)} />
+        {compact ? null : <BotAccessSummary bot={bot} others={others} />}
         <BotPeopleChips
           owner={owner}
           members={listed}
           onRemove={remove}
+          ownerTag={!compact}
           add={
             <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
               <PopoverTrigger asChild>
                 <Button
                   size="xs"
-                  variant="outline"
+                  variant={compact ? 'ghost' : 'outline'}
+                  aria-label={compact ? t('bots.whoCanAsk.addPeople', 'Add people') : undefined}
                   disabled={service.outsiders === null || capped || saving}
                   title={
                     capped
@@ -208,14 +244,25 @@ export function BotWhoCanAskList({
             {t('bots.whoCanAsk.cap', '{{count}} people is the most here.', { count: cap })}
           </p>
         ) : null}
+        {compact && listed.length > 0 ? <BotAccessWarningLine bot={bot} others={others} /> : null}
       </BotConnectorSection>
-      <BotAccessDetails
-        bot={bot}
-        others={listed.length}
-        connector={service.kind}
-        onKeepOnlyMe={keepOnlyMe}
-      />
-      <p className="mt-2.5 text-xs text-muted-foreground">{service.outsiders ?? service.notYet}</p>
+      {compact ? (
+        service.outsiders ? null : (
+          <p className="mt-2 text-xs text-muted-foreground">{service.notYet}</p>
+        )
+      ) : (
+        <>
+          <BotAccessDetails
+            bot={bot}
+            others={listed.length}
+            connector={service.kind}
+            onKeepOnlyMe={keepOnlyMe}
+          />
+          <p className="mt-2.5 text-xs text-muted-foreground">
+            {service.outsiders ?? service.notYet}
+          </p>
+        </>
+      )}
     </>
   )
 }
