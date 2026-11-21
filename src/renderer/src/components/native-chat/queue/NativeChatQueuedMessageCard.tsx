@@ -178,6 +178,21 @@ export function NativeChatQueuedMessageCard({
   ) : card.typedByOther ? (
     <NativeChatTypedByQueuedLine typist={card.typedByOther} />
   ) : null
+  const captionLine = caption ? (
+    <p
+      className={
+        returned ? 'truncate text-xs text-destructive' : 'truncate text-xs text-muted-foreground'
+      }
+    >
+      {attention && drag?.grip ? (
+        <AlertCircle
+          className="mr-1 inline size-3.5 align-text-bottom text-destructive"
+          aria-hidden
+        />
+      ) : null}
+      {caption}
+    </p>
+  ) : null
   if (editor) {
     return (
       // The editor fills the row, so a drop anywhere on the card reaches it.
@@ -230,8 +245,8 @@ export function NativeChatQueuedMessageCard({
       </span>
       {/* Expanded, the actions scroll with the text they belong to. */}
       <div className={cn('min-w-0 flex-1', expanded && 'scrollbar-sleek max-h-62 overflow-y-auto')}>
-        {/* Floated so only the first line makes room; the hidden actions keep their space so text never shifts. */}
-        <div className="float-right ml-1 flex h-7 items-center">
+        {/* Floated, one text line tall, so only the first line makes room; hidden actions keep their space so text never shifts. */}
+        <div className="float-right -mb-1 ml-1 flex h-7 items-center">
           {card.images ? <QueuedMessageImageCount images={card.images} /> : null}
           {/* Nothing acts on a send still on its way: the host holds no card for it yet. */}
           {card.hold === 'sending' ? null : (
@@ -327,10 +342,12 @@ export function NativeChatQueuedMessageCard({
           )}
         </div>
         {sender}
+        {/* Expanded, the status stays above the text so it isn't scrolled out of view. */}
+        {expanded ? captionLine : null}
         {expanded ? (
           <p
             id={textId}
-            className="py-1 text-sm whitespace-pre-wrap break-words"
+            className="py-1 text-sm whitespace-pre-wrap wrap-anywhere"
             style={nativeChatTextHasUnkernedRun(line) ? NATIVE_CHAT_UNKERNED_CSS : undefined}
           >
             {line}
@@ -340,23 +357,7 @@ export function NativeChatQueuedMessageCard({
             {line}
           </p>
         )}
-        {caption ? (
-          <p
-            className={
-              returned
-                ? 'truncate text-xs text-destructive'
-                : 'truncate text-xs text-muted-foreground'
-            }
-          >
-            {attention && drag?.grip ? (
-              <AlertCircle
-                className="mr-1 inline size-3.5 align-text-bottom text-destructive"
-                aria-hidden
-              />
-            ) : null}
-            {caption}
-          </p>
-        ) : null}
+        {expanded ? null : captionLine}
       </div>
     </li>
   )
