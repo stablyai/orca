@@ -223,4 +223,22 @@ describe("a paired desktop's key download, claimed as it begins", () => {
       setClientDownloadClaimant(null)
     }
   })
+
+  it('fails a claimed download whose desktop goes quiet, so the agent hears it never arrived', async () => {
+    vi.useFakeTimers()
+    const { deps } = setup([run()])
+    setClientDownloadClaimant(googleSetupClientDownloadClaimant(deps))
+    try {
+      expect(beginClientDownload('t3', start)).toBe(true)
+      await vi.advanceTimersByTimeAsync(3 * 60_000 + 1)
+      expect(deps.keyRefused).toHaveBeenCalledExactlyOnceWith(
+        'ivy',
+        'the download stopped arriving from the desktop.'
+      )
+      expect(deps.importKey).not.toHaveBeenCalled()
+    } finally {
+      setClientDownloadClaimant(null)
+      vi.useRealTimers()
+    }
+  })
 })

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -108,6 +108,37 @@ describe('Import file on the agent’s host', () => {
       importGoogleSetupKeySavedHere(BOT, async () => {}, { ...picked, id: `${picked.id}-stale` })
     ).rejects.toThrow('changed or is gone')
     expect(existsSync(join(downloads, 'client_secret_a.json'))).toBe(true)
+  })
+
+  it('brings back a key an interrupted import left hidden, so the owner can pick it', async () => {
+    mocks.run = { ...mocks.run!, browserPageId: 'page-7' }
+    const crashedAt = Date.now() - 5 * 60_000
+    writeFileSync(join(downloads, `.importing-${crashedAt}-dead`), key('stranded'))
+    expect(await importGoogleSetupKeySavedHere(BOT, async () => {})).toMatchObject({
+      found: false,
+      candidates: [{ name: `client_secret_recovered-${crashedAt}.json` }]
+    })
+  })
+
+  it('still finishes the step when the imported key file can’t be deleted', async () => {
+    mocks.run = { ...mocks.run!, browserPageId: 'page-8' }
+    writeFileSync(join(downloads, 'client_secret_c.json'), key('c'))
+    const [picked] = (
+      (await importGoogleSetupKeySavedHere(BOT, async () => {})) as {
+        candidates: { name: string; id: string }[]
+      }
+    ).candidates
+    // The folder turns read-only during the import, so the cleanup that follows fails.
+    mocks.importClient.mockImplementationOnce(async () => chmodSync(downloads, 0o555))
+    const arrived = vi.fn(async () => {})
+    try {
+      expect(await importGoogleSetupKeySavedHere(BOT, arrived, picked)).toEqual({ found: true })
+      expect(arrived).toHaveBeenCalledOnce()
+      // The cleanup really failed: the claimed copy is still there.
+      expect(readdirSync(downloads).some((name) => name.startsWith('.importing-'))).toBe(true)
+    } finally {
+      chmodSync(downloads, 0o755)
+    }
   })
 
   it('keeps the file when the import fails', async () => {

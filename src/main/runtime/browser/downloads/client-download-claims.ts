@@ -26,7 +26,12 @@ type Pending = {
   chunks: Buffer[]
   received: number
   tooLarge: boolean
+  /** Fails a download whose desktop went quiet (a dropped connection sends no abort). */
+  idle: ReturnType<typeof setTimeout> | null
 }
+
+// The same quiet spell after which the workspace path gives up on a transfer.
+const IDLE_MS = 3 * 60_000
 
 // A desktop that begins and then vanishes must not hold memory forever.
 const MAX_PENDING = 16
@@ -50,6 +55,9 @@ function settle(key: string, download: { bytes: Buffer } | { reason: string }): 
     return
   }
   pending.delete(key)
+  if (entry.idle) {
+    clearTimeout(entry.idle)
+  }
   settled.add(key)
   if (settled.size > MAX_SETTLED) {
     const [oldest] = settled
@@ -58,6 +66,17 @@ function settle(key: string, download: { bytes: Buffer } | { reason: string }): 
   void entry.claim.take(download).catch((error: unknown) => {
     console.warn('[browser-downloads] a claimed download could not be handed over', error)
   })
+}
+
+function armIdle(key: string, entry: Pending): void {
+  if (entry.idle) {
+    clearTimeout(entry.idle)
+  }
+  entry.idle = setTimeout(
+    () => settle(key, { reason: 'the download stopped arriving from the desktop.' }),
+    IDLE_MS
+  )
+  entry.idle.unref?.()
 }
 
 /** Resolves whether a claimant took the download as it began. */
@@ -70,13 +89,10 @@ export function beginClientDownload(transferId: string, start: ClientDownloadSta
     const [oldest] = pending.keys()
     settle(oldest, { reason: 'the download was dropped while too many were waiting.' })
   }
-  pending.set(keyOf(start.browserPageId, transferId), {
-    start,
-    claim,
-    chunks: [],
-    received: 0,
-    tooLarge: false
-  })
+  const entry: Pending = { start, claim, chunks: [], received: 0, tooLarge: false, idle: null }
+  const key = keyOf(start.browserPageId, transferId)
+  pending.set(key, entry)
+  armIdle(key, entry)
   return true
 }
 
@@ -104,6 +120,7 @@ export function writeClaimedClientDownload(chunk: {
     settle(key, { reason: 'the download stream broke.' })
     throw new Error('browser_client_download_transfer_stale')
   }
+  armIdle(key, entry)
   const bytes = Buffer.from(chunk.contentBase64, 'base64')
   entry.received += bytes.byteLength
   if (entry.received > entry.claim.maxBytes) {

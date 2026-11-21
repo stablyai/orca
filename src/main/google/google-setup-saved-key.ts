@@ -62,6 +62,20 @@ async function restore(claimed: string, path: string): Promise<void> {
   await rename(claimed, free ? path : path.replace(/\.json$/, ` (${Date.now()}).json`))
 }
 
+const CLAIM_PREFIX = '.importing-'
+// An import holds its claim for moments; one older than this was cut short (a crash).
+const STRANDED_CLAIM_MS = 60_000
+
+/** Puts back keys an interrupted import left under a hidden claim name, so the owner sees them. */
+async function recoverStrandedClaims(folder: string): Promise<void> {
+  for (const name of await readdir(folder).catch(() => [])) {
+    const startedAt = Number(name.slice(CLAIM_PREFIX.length).split('-')[0])
+    if (name.startsWith(CLAIM_PREFIX) && Date.now() - startedAt > STRANDED_CLAIM_MS) {
+      await restore(join(folder, name), join(folder, `client_secret_recovered-${startedAt}.json`))
+    }
+  }
+}
+
 async function candidates(folder: string): Promise<SavedKeyCandidate[]> {
   const names = (await readdir(folder).catch(() => [])).filter((name) =>
     GOOGLE_KEY_FILE_NAME.test(name)
@@ -87,6 +101,7 @@ export async function importGoogleSetupKeySavedHere(
     return { found: false, candidates: [] }
   }
   const folder = join(botHomeFolder(bot), BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY)
+  await recoverStrandedClaims(folder)
   let name = pick ? basename(pick.name) : null
   if (!pick && run.browserPageId) {
     const recorded = recordedKey(bot, run.browserPageId, run.startedAt)
@@ -109,14 +124,20 @@ export async function importGoogleSetupKeySavedHere(
   }
   // Moved aside first, so what is read, imported and removed is this file even if another
   // download takes its name meanwhile.
-  const claimed = join(folder, `.importing-${randomUUID()}`)
+  const claimed = join(folder, `${CLAIM_PREFIX}${Date.now()}-${randomUUID()}`)
   await rename(path, claimed)
   const putBack = (): Promise<void> => restore(claimed, path)
   if ((await fileId(claimed))?.id !== before.id) {
     await putBack()
     throw new Error('That key file changed or is gone. Pick it again.')
   }
-  const text = await readFile(claimed, 'utf8')
+  let text: string
+  try {
+    text = await readFile(claimed, 'utf8')
+  } catch (error) {
+    await putBack()
+    throw error
+  }
   const parsed = parseGoogleClientFile(text)
   if (!parsed.ok) {
     await putBack()
@@ -141,7 +162,10 @@ export async function importGoogleSetupKeySavedHere(
     await putBack()
     throw error
   }
-  await rm(claimed, { force: true })
+  // The key is in: a failed cleanup is logged, and the setup still moves on.
+  await rm(claimed, { force: true }).catch((error: unknown) => {
+    console.error('[google-setup] could not delete the imported key file', error)
+  })
   if (stillWaiting()) {
     await keyArrived()
   }
