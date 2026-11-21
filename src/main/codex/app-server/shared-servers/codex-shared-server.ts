@@ -114,6 +114,20 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   hasRunningTurn = (threads: Iterable<string>): boolean =>
     [...threads].some((threadId) => this.turns.runningOn(threadId) !== undefined)
 
+  releaseMayProve(lease: CodexSharedServerLease): Promise<boolean> {
+    const others = this.leases.size
+    const threads = (): string[] => [...lease.threads, ...lease.abandonedThreads]
+    return this.turns.waitUntil(
+      () =>
+        this.hasExited ||
+        this.leases.size < others ||
+        (lease.pendingOpens.size === 0 &&
+          !this.turns.anyStartPending(threads()) &&
+          !this.hasRunningTurn(threads())),
+      null
+    )
+  }
+
   trackTurnStart(threadId: string, request: Promise<unknown>): void {
     this.turns.trackStart(threadId, request)
   }
@@ -160,6 +174,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
         this.releases.delete(lease)
       } else {
         this.leases.delete(lease)
+        this.turns.changed()
         this.onEnded(this)
       }
       for (const threadId of fenced) {

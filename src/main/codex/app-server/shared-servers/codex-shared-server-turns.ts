@@ -53,8 +53,9 @@ export class CodexSharedServerTurns {
     return threads.some((threadId) => this.pendingStarts.has(threadId))
   }
 
-  /** true once `done()` holds, false at the deadline; re-checked whenever a turn or start ends. */
-  waitUntil(done: () => boolean, ms: number): Promise<boolean> {
+  /** true once `done()` holds, false at the deadline (none when null); re-checked whenever a turn,
+   *  start or open ends, or a chat leaves. */
+  waitUntil(done: () => boolean, ms: number | null): Promise<boolean> {
     if (done()) {
       return Promise.resolve(true)
     }
@@ -69,7 +70,7 @@ export class CodexSharedServerTurns {
           finish(true)
         }
       }
-      const timer = setTimeout(() => finish(done()), ms)
+      const timer = ms === null ? undefined : setTimeout(() => finish(done()), ms)
       this.waiters.add(check)
     })
   }

@@ -2,24 +2,30 @@ import type { CodexAppServerConnection } from '../codex-app-server-connection-ty
 
 /** Frames all paused chats on one server may hold in Orca before the server itself waits. */
 export const CODEX_SHARED_SERVER_BACKLOG_BYTES = 32 * 1024 * 1024
+/** How long a waiting chat gives the chats holding the backlog to catch up before they're
+ *  dropped; well inside a Stop's 5 s interrupt timeout. */
+export const CODEX_SHARED_SERVER_SHED_GRACE_MS = 1_500
 
 type BacklogLease = {
-  /** Reading, and owed a reply or a running turn's frames: a paused reader would stall it. */
+  /** Owed a reply or a running turn's frames, or cleaning up: a paused reader would stall it. */
   readonly waiting: boolean
   /** Drops this chat's queue and ends it alone; it reconnects on its next send. */
   shed: () => void
 }
 
 /** Bytes queued by the paused chats on one server, bounded however many chats stall. Past the
- *  budget, with every chat paused (a journal stall), the shared reader pauses and Codex waits as
- *  it would on a dedicated chat's pipe; nothing is dropped. With a chat waiting on the server, the
- *  chats holding the backlog are dropped instead, largest first, so one laggard never stalls the
- *  rest. */
+ *  budget the shared reader pauses, so Codex waits as it would on a dedicated chat's pipe. With
+ *  every chat paused (a journal stall) that is all: nothing is dropped. If a chat needs the server
+ *  meanwhile, the chats holding the backlog get a short grace to catch up, then are dropped,
+ *  largest first, so one laggard can't stall the rest. */
 export class CodexSharedServerBacklog {
   private readonly bytes = new Map<BacklogLease, number>()
+  /** Chats that said they wait, including ones cleaning up after they left the server's set. */
+  private readonly waiters = new Set<BacklogLease>()
   private total = 0
   private paused = false
   private shedding = false
+  private grace: ReturnType<typeof setTimeout> | undefined
 
   constructor(
     private readonly reader: () => Pick<
@@ -29,7 +35,7 @@ export class CodexSharedServerBacklog {
     private readonly leases: Iterable<BacklogLease>
   ) {}
 
-  /** A chat's queue grew or shrank, or it started or stopped waiting (delta 0). */
+  /** A chat's queue grew or shrank, or it may have started waiting (delta 0). */
   change(lease: BacklogLease, deltaBytes: number): void {
     if (deltaBytes !== 0) {
       const held = (this.bytes.get(lease) ?? 0) + deltaBytes
@@ -40,58 +46,83 @@ export class CodexSharedServerBacklog {
       }
       this.total += deltaBytes
     }
-    if (this.shedding) {
-      return
+    if (lease.waiting) {
+      this.waiters.add(lease)
+    } else {
+      this.waiters.delete(lease)
     }
-    const limit = this.paused
-      ? CODEX_SHARED_SERVER_BACKLOG_BYTES / 2
-      : CODEX_SHARED_SERVER_BACKLOG_BYTES
-    if (this.total > limit && [...this.leases].some((other) => other.waiting)) {
-      this.shedUntil(CODEX_SHARED_SERVER_BACKLOG_BYTES / 2)
-    }
-    if (!this.paused && this.total > CODEX_SHARED_SERVER_BACKLOG_BYTES) {
-      this.paused = true
-      this.reader()?.pauseReading?.()
-    } else if (this.paused && this.total <= CODEX_SHARED_SERVER_BACKLOG_BYTES / 2) {
-      this.paused = false
-      this.reader()?.resumeReading?.()
+    if (!this.shedding) {
+      this.settle(false)
     }
   }
 
   dispose(): void {
+    clearTimeout(this.grace)
+    this.grace = undefined
     this.bytes.clear()
+    this.waiters.clear()
     this.total = 0
     this.paused = false
+  }
+
+  private settle(graceOver: boolean): void {
+    const half = CODEX_SHARED_SERVER_BACKLOG_BYTES / 2
+    if (this.total > (this.paused ? half : CODEX_SHARED_SERVER_BACKLOG_BYTES)) {
+      this.setPaused(true)
+      if ([...this.leases, ...this.waiters].some((lease) => lease.waiting)) {
+        if (graceOver) {
+          this.shedUntil(half)
+        } else if (!this.grace) {
+          this.grace = setTimeout(() => {
+            this.grace = undefined
+            this.settle(true)
+          }, CODEX_SHARED_SERVER_SHED_GRACE_MS)
+        }
+      }
+    }
+    if (this.total <= half) {
+      clearTimeout(this.grace)
+      this.grace = undefined
+      this.setPaused(false)
+    }
+  }
+
+  private setPaused(paused: boolean): void {
+    if (this.paused !== paused) {
+      this.paused = paused
+      const reader = this.reader()
+      if (paused) {
+        reader?.pauseReading?.()
+      } else {
+        reader?.resumeReading?.()
+      }
+    }
   }
 
   private shedUntil(target: number): void {
     this.shedding = true
     try {
-      this.shedLargestUntil(target)
-    } finally {
-      this.shedding = false
-    }
-  }
-
-  private shedLargestUntil(target: number): void {
-    while (this.total > target) {
-      let largest: BacklogLease | undefined
-      let largestBytes = 0
-      for (const [lease, held] of this.bytes) {
-        if (held > largestBytes) {
-          largest = lease
-          largestBytes = held
+      while (this.total > target) {
+        let largest: BacklogLease | undefined
+        let largestBytes = 0
+        for (const [lease, held] of this.bytes) {
+          if (held > largestBytes) {
+            largest = lease
+            largestBytes = held
+          }
+        }
+        if (!largest) {
+          return
+        }
+        // shed() reports its dropped bytes through change(); one that reports nothing is dropped here.
+        largest.shed()
+        if (this.bytes.get(largest) === largestBytes) {
+          this.bytes.delete(largest)
+          this.total -= largestBytes
         }
       }
-      if (!largest) {
-        return
-      }
-      // shed() reports its dropped bytes through change(); a chat that already ended is dropped here.
-      largest.shed()
-      if (this.bytes.get(largest) === largestBytes) {
-        this.bytes.delete(largest)
-        this.total -= largestBytes
-      }
+    } finally {
+      this.shedding = false
     }
   }
 }

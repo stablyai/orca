@@ -7,10 +7,7 @@ import type {
   CodexAppServerConnectionHandlers
 } from '../codex-app-server-connection-types'
 import { codexSharedServerSpec } from './codex-shared-server-key'
-import {
-  CODEX_SHARED_STOP_RETRY_DELAYS_MS,
-  CodexSharedServerLease
-} from './codex-shared-server-lease'
+import { CodexSharedServerLease } from './codex-shared-server-lease'
 import { CodexSharedServer } from './codex-shared-server'
 import type { CodexSharedServerProcessSweep } from './codex-shared-server-chat-workload'
 import { CodexSharedServerMemoryCeiling } from './codex-shared-server-memory-ceiling'
@@ -35,6 +32,8 @@ export class CodexSharedServerPool {
   private readonly idleTimers = new Map<CodexSharedServer, ReturnType<typeof setTimeout>>()
   /** Out of selection, kept until their exit is proven so none is orphaned. */
   private readonly stopping = new Set<CodexSharedServer>()
+  /** Stops that couldn't prove an exit, retried when the next chat opens. */
+  private readonly unproven = new Set<CodexSharedServer>()
   private readonly ceiling = new CodexSharedServerMemoryCeiling(
     () => this.allServers(),
     (server) => this.onServerFreed(server)
@@ -56,6 +55,9 @@ export class CodexSharedServerPool {
       options.codexVersion ?? null
     )
     this.ceiling.sampleIfStale()
+    for (const stale of this.unproven) {
+      this.stop(stale)
+    }
     const server = this.serverWithRoom(spec.key) ?? this.startServer(spec)
     this.cancelIdleStop(server)
     // Reserved before the server is ready, so concurrent opens respect the cap.
@@ -103,6 +105,7 @@ export class CodexSharedServerPool {
     if (server.exited) {
       this.remove(server)
       this.stopping.delete(server)
+      this.unproven.delete(server)
       return
     }
     if (server.leases.size > 0) {
@@ -132,24 +135,18 @@ export class CodexSharedServerPool {
     }
   }
 
-  private stop(server: CodexSharedServer, attempt = 0): void {
+  private stop(server: CodexSharedServer): void {
     this.remove(server)
     this.stopping.add(server)
+    this.unproven.delete(server)
     void server.stop().then((proven) => {
       if (proven || server.exited || server.leases.size > 0) {
         this.stopping.delete(server)
         return
       }
-      // Retried until proven, at the slowest pace once the backoff runs out.
-      const delay =
-        CODEX_SHARED_STOP_RETRY_DELAYS_MS[
-          Math.min(attempt, CODEX_SHARED_STOP_RETRY_DELAYS_MS.length - 1)
-        ]!
-      if (attempt === CODEX_SHARED_STOP_RETRY_DELAYS_MS.length - 1) {
-        console.warn(`[codex-shared-server] pid ${server.pid ?? '?'} has not proven its exit`)
-      }
-      const timer = setTimeout(() => this.stop(server, attempt + 1), delay)
-      timer.unref?.()
+      // No timer: its exit clears it, and the next chat to open retries the stop.
+      console.warn(`[codex-shared-server] pid ${server.pid ?? '?'} has not proven its exit`)
+      this.unproven.add(server)
     })
   }
 

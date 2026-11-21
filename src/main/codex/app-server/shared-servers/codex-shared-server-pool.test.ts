@@ -45,6 +45,7 @@ function fakeCodex(
   ): Promise<CodexAppServerConnection> => {
     let closed = false
     let closeResult: CodexAppServerConnection['closeResult'] = null
+    const held: (() => void)[] = []
     const server: FakeServer = {
       pid: 5000 + servers.length,
       handlers,
@@ -72,6 +73,10 @@ function fakeCodex(
         return closeResult
       },
       request: async (method, params, options) => {
+        // A paused reader gets no replies, as on a real pipe.
+        while (server.readingPaused) {
+          await new Promise<void>((resume) => held.push(resume))
+        }
         server.requests.push({ method, ...(params ? { params } : {}) })
         if (method === 'turn/start' && params?.hang === true) {
           // A send Codex has not answered yet.
@@ -138,6 +143,9 @@ function fakeCodex(
       },
       resumeReading: () => {
         server.readingPaused = false
+        for (const resume of held.splice(0)) {
+          resume()
+        }
       },
       notify: () => {},
       respond: () => {},
@@ -309,8 +317,7 @@ describe('shared Codex app-servers', () => {
     expect(b.notifications.at(-1)?.method).toBe('item/started')
   })
 
-  it('makes the server wait while every chat is paused, dropping no one', async () => {
-    vi.useFakeTimers()
+  async function backloggedPair() {
     const { servers, pool } = fakeCodex()
     const a = chat()
     const b = chat()
@@ -318,56 +325,99 @@ describe('shared Codex app-servers', () => {
     const connB = await pool.open(launch(), b.handlers, { sessionId: 'b', skillRoots: [] })
     const threadA = await startThread(connA)
     const threadB = await startThread(connB)
+    const megabyte = (threadId: string): void =>
+      servers[0]!.handlers.onNotification?.('item/agentMessage/delta', {
+        threadId,
+        delta: 'x'.repeat(1024 * 1024)
+      })
+    return { server: servers[0]!, a, b, connA, connB, threadA, threadB, megabyte }
+  }
+
+  it('makes the server wait while every chat is paused, dropping no one', async () => {
+    vi.useFakeTimers()
+    const { server, a, b, connA, connB, threadA, threadB, megabyte } = await backloggedPair()
     connA.pauseReading?.()
     connB.pauseReading?.()
-    const delta = { delta: 'x'.repeat(1024 * 1024) }
     for (let i = 0; i < 20; i += 1) {
-      servers[0]!.handlers.onNotification?.('item/agentMessage/delta', {
-        threadId: threadA,
-        ...delta
-      })
-      servers[0]!.handlers.onNotification?.('item/agentMessage/delta', {
-        threadId: threadB,
-        ...delta
-      })
+      megabyte(threadA)
+      megabyte(threadB)
     }
     // 40 MiB queued across the two chats: past the 32 MiB server budget, Codex now waits.
-    expect(servers[0]!.readingPaused).toBe(true)
+    expect(server.readingPaused).toBe(true)
     await vi.advanceTimersByTimeAsync(60_000)
     expect(a.exits).toEqual([])
-    expect(b.exits).toEqual([])
     connB.resumeReading?.()
+    // Replayed a 64 KiB chunk per task, as a pipe read would, not 20 MiB at once.
+    expect(b.notifications.filter((n) => n.method === 'item/agentMessage/delta')).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(100)
     expect(b.notifications.filter((n) => n.method === 'item/agentMessage/delta')).toHaveLength(20)
     // A alone still holds 20 MiB, above the 16 MiB the server resumes at; B now asks for something.
-    expect(servers[0]!.readingPaused).toBe(true)
+    expect(server.readingPaused).toBe(true)
     void connB.request('thread/read', { threadId: threadB })
-    await vi.waitFor(() => expect(a.exits).toHaveLength(1))
-    expect(servers[0]!.readingPaused).toBe(false)
+    // A gets a grace to catch up before it is dropped.
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(a.exits).toEqual([])
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(a.exits).toHaveLength(1)
+    expect(server.readingPaused).toBe(false)
     expect(connB.closed).toBe(false)
   })
 
-  it('drops a lagging chat at once when another chat on its server is running a turn', async () => {
-    const { servers, pool } = fakeCodex()
-    const a = chat()
-    const b = chat()
-    const connA = await pool.open(launch(), a.handlers, { sessionId: 'a', skillRoots: [] })
-    const connB = await pool.open(launch(), b.handlers, { sessionId: 'b', skillRoots: [] })
-    const threadA = await startThread(connA)
-    const threadB = await startThread(connB)
-    servers[0]!.handlers.onNotification?.('turn/started', { threadId: threadB, turn: { id: 'tb' } })
+  it('drops a lagging chat after a short grace when another chat on its server runs a turn', async () => {
+    vi.useFakeTimers()
+    const { server, a, b, connA, threadA, threadB, megabyte } = await backloggedPair()
+    server.handlers.onNotification?.('turn/started', { threadId: threadB, turn: { id: 'tb' } })
     connA.pauseReading?.()
-    const delta = { delta: 'x'.repeat(1024 * 1024) }
     for (let i = 0; i < 40; i += 1) {
-      servers[0]!.handlers.onNotification?.('item/agentMessage/delta', {
-        threadId: threadA,
-        ...delta
-      })
+      megabyte(threadA)
     }
-    await vi.waitFor(() => expect(a.exits).toHaveLength(1))
-    // B never waited on the laggard.
-    expect(servers[0]!.readingPaused).toBe(false)
-    servers[0]!.handlers.onNotification?.('item/agentMessage/delta', { threadId: threadB })
+    expect(server.readingPaused).toBe(true)
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(a.exits).toHaveLength(1)
+    expect(server.readingPaused).toBe(false)
+    server.handlers.onNotification?.('item/agentMessage/delta', { threadId: threadB })
     expect(b.notifications.at(-1)?.method).toBe('item/agentMessage/delta')
+  })
+
+  it("does not let a paused chat's backlog hold up another chat's close", async () => {
+    vi.useFakeTimers()
+    const { server, a, connA, connB, threadA, threadB, megabyte } = await backloggedPair()
+    connA.pauseReading?.()
+    connB.pauseReading?.()
+    for (let i = 0; i < 40; i += 1) {
+      megabyte(threadA)
+    }
+    void threadB
+    expect(server.readingPaused).toBe(true)
+    const closing = connB.close()
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(a.exits).toHaveLength(1)
+    expect(server.readingPaused).toBe(false)
+    await expect(closing).resolves.toBe(true)
+  })
+
+  it('retries a dropped chat whose turn ignores Stop only when that turn ends, never on a clock', async () => {
+    vi.useFakeTimers()
+    const { servers, pool } = fakeCodex('ignored')
+    const a = chat()
+    const connA = await pool.open(launch(), a.handlers, { sessionId: 'a', skillRoots: [] })
+    const connB = await pool.open(launch(), chat().handlers, { sessionId: 'b', skillRoots: [] })
+    const threadA = await startThread(connA)
+    servers[0]!.handlers.onNotification?.('turn/started', { threadId: threadA, turn: { id: 't' } })
+    connA.pauseReading?.()
+    for (let i = 0; i <= CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES; i += 1) {
+      servers[0]!.handlers.onNotification?.('item/agentMessage/delta', { threadId: threadA })
+    }
+    await vi.advanceTimersByTimeAsync(24 * 60 * 60 * 1000)
+    const interrupts = servers[0]!.requests.filter((r) => r.method === 'turn/interrupt')
+    expect(interrupts).toHaveLength(1)
+    expect(a.exits).toEqual([])
+    servers[0]!.handlers.onNotification?.('turn/completed', {
+      threadId: threadA,
+      turn: { id: 't', status: 'interrupted' }
+    })
+    await vi.waitFor(() => expect(a.exits).toHaveLength(1))
+    expect(connB.closed).toBe(false)
   })
 
   it('interrupts a turn whose start is still queued behind a paused chat', async () => {

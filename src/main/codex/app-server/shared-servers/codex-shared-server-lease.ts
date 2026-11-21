@@ -17,8 +17,9 @@ export const CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES = 20_000
  *  a retry), and whether its commands are proven gone. */
 export type CodexLeaseRelease = { writerStopped: boolean; workloadGone: boolean }
 
-/** Retries of an unproven stop back off, then hold the slowest pace until proven. */
-export const CODEX_SHARED_STOP_RETRY_DELAYS_MS = [2_000, 10_000, 60_000, 300_000]
+/** A paused chat that resumes replays this much of its queue per task, then yields, as a pipe
+ *  read would. */
+const DRAIN_CHUNK_BYTES = 64 * 1024
 
 /** What a lease needs from the server it rides on. */
 export type CodexSharedLeaseHost = {
@@ -32,6 +33,9 @@ export type CodexSharedLeaseHost = {
   hasRunningTurn: (threads: Iterable<string>) => boolean
   /** A thread open or turn start settled, so a wait on them can re-check. */
   turnsChanged: () => void
+  /** Settles once a retried release could prove more: a turn ended, another chat left, or the
+   *  server exited. */
+  releaseMayProve: (lease: CodexSharedServerLease) => Promise<unknown>
   readonly router: Pick<CodexSharedServerRouter, 'heldByOther' | 'unclaim'>
   /** A thread that opened after its chat left: nobody will use it, so the server lets it go.
    *  Resolves whether Codex confirmed it. */
@@ -70,6 +74,9 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   private queuedBytes = 0
   /** Dropped for falling behind: its frames are discarded until it ends. */
   private shedding = false
+  /** Its cleanup is running and needs the shared reader. */
+  private releasing = false
+  private drainScheduled = false
 
   constructor(
     readonly host: CodexSharedLeaseHost,
@@ -119,17 +126,9 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
     return sendCodexLeaseRequest(this, method, params, options)
   }
 
-  claim(threadId: string): void {
-    this.host.claim(threadId, this)
-  }
-
-  heldByOther(threadId: string): boolean {
-    return this.host.router.heldByOther(threadId, this)
-  }
-
-  unclaim(threadId: string): void {
-    this.host.router.unclaim(threadId, this)
-  }
+  claim = (threadId: string): void => this.host.claim(threadId, this)
+  heldByOther = (threadId: string): boolean => this.host.router.heldByOther(threadId, this)
+  unclaim = (threadId: string): void => this.host.router.unclaim(threadId, this)
 
   abandon(threadId: string): void {
     void this.host.abandon(threadId, this)
@@ -167,9 +166,10 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   /** Reading and owed frames: a paused shared reader would stall this chat. */
   get waiting(): boolean {
     return (
-      this.state === 'open' &&
-      !this.paused &&
-      (this.outstanding.size > 0 || this.host.hasRunningTurn(this.threads))
+      this.releasing ||
+      (this.state === 'open' &&
+        !this.paused &&
+        (this.outstanding.size > 0 || this.host.hasRunningTurn(this.threads)))
     )
   }
 
@@ -208,25 +208,36 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
     this.queuedBytes = 0
   }
 
+  private get canDrain(): boolean {
+    return !this.paused && this.queueHead < this.queue.length && this.state !== 'ended'
+  }
+
   private drainQueue(): void {
     if (this.draining) {
       return
     }
     this.draining = true
-    let drained = 0
+    let budget = DRAIN_CHUNK_BYTES
     try {
-      while (!this.paused && this.queueHead < this.queue.length && this.state !== 'ended') {
+      while (budget > 0 && this.canDrain) {
         const { frame, bytes } = this.queue[this.queueHead]!
         this.queueHead += 1
         this.queuedBytes -= bytes
-        drained += bytes
+        budget -= bytes
+        this.host.backlog(this, -bytes)
         this.dispatch(frame)
       }
     } finally {
-      this.host.backlog(this, -drained)
       this.queue.splice(0, this.queueHead)
       this.queueHead = 0
       this.draining = false
+    }
+    if (!this.drainScheduled && this.canDrain) {
+      this.drainScheduled = true
+      setImmediate(() => {
+        this.drainScheduled = false
+        this.drainQueue()
+      })
     }
   }
 
@@ -275,10 +286,14 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
 
   /** Ends the lease once the server proves its turns stopped; false while one still runs. */
   private releaseOnHost(error: Error, expected: boolean): Promise<boolean> {
+    this.releasing = true
+    this.noteWaiting()
     return this.host
       .release(this)
       .catch((): CodexLeaseRelease => ({ writerStopped: true, workloadGone: false }))
       .then(({ writerStopped, workloadGone }) => {
+        this.releasing = false
+        this.noteWaiting()
         if (!writerStopped && this.state !== 'ended') {
           return false
         }
@@ -319,26 +334,23 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
       return
     }
     // The chat hears its exit only after its turns are stopped, so a recovery can't race them; a
-    // close meanwhile waits on this same cleanup.
-    const attempt = (tries: number): Promise<boolean> => {
+    // close meanwhile waits on this same cleanup. No timer: it retries when something that could
+    // prove it changes (a turn ends, another chat leaves, the server exits).
+    const attempt = (): Promise<boolean> => {
       const closing = this.releaseOnHost(error, false).then((ended) => {
         if (!ended && this.closing === closing) {
           this.closing = null
-          const delays = CODEX_SHARED_STOP_RETRY_DELAYS_MS
-          setTimeout(
-            () => {
-              if (this.state === 'closing' && !this.closing) {
-                this.closing = attempt(tries + 1)
-              }
-            },
-            delays[Math.min(tries, delays.length - 1)]
-          ).unref?.()
+          void this.host.releaseMayProve(this).then(() => {
+            if (this.state === 'closing' && !this.closing) {
+              this.closing = attempt()
+            }
+          })
         }
         return ended
       })
       return closing
     }
-    this.closing = attempt(0)
+    this.closing = attempt()
   }
 
   private finish(
