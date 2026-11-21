@@ -4,6 +4,11 @@ import {
   readJournalLegacySource,
   type LegacySourceRefusalReason
 } from './journal-legacy-retention-error'
+import {
+  isRetiredSourceTable,
+  legacySourceCarriesRetiredShape,
+  legacySourceColumnsAccounted
+} from './journal-legacy-source-columns'
 import { readStoredQueuedMessageRow } from './queued-messages/queued-message-stored-row'
 import {
   readLegacyClaimsPage,
@@ -27,18 +32,6 @@ const CONTENT_TABLES: readonly string[] = [
   'journal_outcomes',
   'queued_messages'
 ]
-const SOURCE_COLUMNS: Readonly<Record<string, string>> = {
-  journal_sessions: 'session_id workspace_id epoch',
-  journal_rows: 'session_id epoch seq ts row_json',
-  journal_outcome_generations: 'generation session_id epoch',
-  journal_outcome_epochs: 'session_id epoch generation format through_seq prefix_seq',
-  journal_outcomes: 'generation seq field entry_key format ordinal value_json deleted',
-  queued_messages:
-    'session_id message_id position body_json fingerprint created_at host_instance state hold_reason returned_reason returned_rejection settled_at settled_by_op consumed_as carried_from queued_epoch queued_sequence options_json'
-}
-const PROFILE_COLUMNS = new Map(
-  JOURNAL_DOMAIN_PROFILE_TABLES.map(({ name, columns }) => [name, new Set<unknown>(columns)])
-)
 const RECOVERY_TABLES = ['journal_repairs', 'journal_imports', 'journal_set_aside']
 const COPIES = LEGACY_PROOF_COPIES_TABLE
 if (COPIES !== CONTENT_TABLES.length + 2) {
@@ -62,6 +55,8 @@ export type LegacyProofPage = {
   sessions: LegacySourceSession[]
   retained?: string
   reason?: LegacySourceRefusalReason
+  /** On the first page: the original carries a shape earlier builds refuse (see the layouts). */
+  historical?: true
   /** Claims only the original holds, for chats kept here, taken in before it retires. */
   claims?: LegacyClaim[]
   /** Copies of chats an older Orca continued, converted from the original before it retires. */
@@ -78,7 +73,12 @@ export function readJournalLegacyProofPage(
   if (cursor.check || (cursor.table === 0 && cursor.after === null)) {
     assertLegacyStoreReady(db, destination, !cursor.check)
   }
-  return readJournalLegacySource(() => readSourcePage(db, cursor, destination))
+  return readJournalLegacySource(() => {
+    const page = readSourcePage(db, cursor, destination)
+    return cursor.table === 0 && cursor.after === null && legacySourceCarriesRetiredShape(db)
+      ? { ...page, historical: true }
+      : page
+  })
 }
 
 function readSourcePage(
@@ -101,31 +101,26 @@ function readSourcePage(
       )
     }
     for (const table of tables) {
-      const columns =
-        PROFILE_COLUMNS.get(table) ??
-        (SOURCE_COLUMNS[table] ? new Set(SOURCE_COLUMNS[table]!.split(' ')) : undefined)
-      if (columns) {
-        if (
-          db
-            .prepare(`PRAGMA table_info(${table})`)
-            .all()
-            .some((column) => !columns.has(column.name))
-        ) {
-          throw new JournalLegacyRetentionError(
-            'legacy source has unaccounted columns',
-            'source-inventory'
-          )
-        }
+      const quoted = `"${table.replaceAll('"', '""')}"`
+      const present = db
+        .prepare(`PRAGMA table_info(${quoted})`)
+        .all()
+        .map((column) => String(column.name))
+      if (!legacySourceColumnsAccounted(table, present)) {
+        throw new JournalLegacyRetentionError(
+          'legacy source has unaccounted columns',
+          'source-inventory'
+        )
       }
 
       if (
         PROFILE_TABLES.has(table) ||
         CONTENT_TABLES.includes(table) ||
+        isRetiredSourceTable(table) ||
         table === 'journal_sessions'
       ) {
         continue
       }
-      const quoted = `"${table.replaceAll('"', '""')}"`
       // Per-chat import markers (#23613) were left behind when #26038 removed those imports. One
       // whose rows all landed in journal_rows, or whose epoch a later /clear replaced (its rows
       // were discarded then), records nothing the journal still holds.

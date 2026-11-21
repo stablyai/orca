@@ -18,7 +18,7 @@ import {
   compareAppVersions,
   isValidAppVersion
 } from '../../../shared/app-lifecycle/identity/app-version'
-import { LEGACY_PROOF_LAYOUT, type LegacySourceRetiring } from './journal-legacy-retirement-state'
+import type { LegacySourceRetiring } from './journal-legacy-retirement-state'
 import {
   readJournalLegacySourceReceipt,
   sameJournalLegacySource
@@ -190,7 +190,7 @@ export class JournalLegacyRetirement {
       const retiring: LegacySourceRetiring = {
         version: 2,
         phase: 'retiring',
-        layout: LEGACY_PROOF_LAYOUT,
+        layout: this.proof.layout,
         proof: observation.proof,
         store: observation.store
       }

@@ -6,8 +6,12 @@ import {
 import {
   decodeLegacySourceProving,
   decodeLegacySourceRefusal,
+  isLegacyProofLayout,
   LEGACY_PROOF_COPIES_TABLE,
+  LEGACY_PROOF_HISTORICAL_LAYOUT,
   LEGACY_PROOF_LAYOUT,
+  type LegacyProofLayout,
+  LEGACY_SOURCE_INVENTORY,
   LEGACY_SOURCE_REFUSAL_POLICY,
   type LegacySourceProving,
   type LegacySourceRefusal
@@ -66,8 +70,16 @@ export class JournalLegacyProof {
       this.frontier.cursor.after === null
     const at = fresh ? savedCursor(saved, observation) : null
     if (at) {
-      this.frontier = createLegacyProofFrontier({ ...at, check: true })
+      this.frontier = {
+        ...createLegacyProofFrontier({ ...at.cursor, check: true }),
+        historical: at.layout === LEGACY_PROOF_HISTORICAL_LAYOUT
+      }
     }
+  }
+
+  /** The layout this proof's progress and retiring records are saved under. */
+  get layout(): LegacyProofLayout {
+    return this.frontier.historical ? LEGACY_PROOF_HISTORICAL_LAYOUT : LEGACY_PROOF_LAYOUT
   }
 
   /** True when this exact original was refused before; the proof isn't run again for it. */
@@ -108,7 +120,8 @@ export class JournalLegacyProof {
           policy: LEGACY_SOURCE_REFUSAL_POLICY,
           proof: observation.proof,
           store: observation.store,
-          reason: error.reason
+          reason: error.reason,
+          inventory: LEGACY_SOURCE_INVENTORY
         }
         await this.saveRefusal()
       }
@@ -124,7 +137,7 @@ export class JournalLegacyProof {
     const proving: LegacySourceProving = {
       version: 2,
       phase: 'proving',
-      layout: LEGACY_PROOF_LAYOUT,
+      layout: this.layout,
       proof: observation.proof,
       store: observation.store,
       cursor
@@ -157,16 +170,20 @@ export class JournalLegacyProof {
 function savedCursor(
   saved: string | null,
   observation: LegacyProofObservation
-): LegacyProofCursor | null {
+): { cursor: LegacyProofCursor; layout: LegacyProofLayout } | null {
   const proving = decodeLegacySourceProving(saved)
   if (proving) {
     if (proving.proof !== observation.proof || proving.store !== observation.store) {
       return null
     }
     // Copies the reconcile keeps can sort anywhere, so their pages are always walked whole.
-    return proving.cursor.table >= LEGACY_PROOF_COPIES_TABLE
-      ? { table: LEGACY_PROOF_COPIES_TABLE, after: null }
-      : proving.cursor
+    return {
+      cursor:
+        proving.cursor.table >= LEGACY_PROOF_COPIES_TABLE
+          ? { table: LEGACY_PROOF_COPIES_TABLE, after: null }
+          : proving.cursor,
+      layout: proving.layout
+    }
   }
   let retiring: unknown
   try {
@@ -174,16 +191,16 @@ function savedCursor(
   } catch {
     return null
   }
-  const proven =
-    typeof retiring === 'object' &&
+  return typeof retiring === 'object' &&
     retiring !== null &&
     'phase' in retiring &&
     retiring.phase === 'retiring' &&
     'layout' in retiring &&
-    retiring.layout === LEGACY_PROOF_LAYOUT &&
+    isLegacyProofLayout(retiring.layout) &&
     'proof' in retiring &&
     retiring.proof === observation.proof &&
     'store' in retiring &&
     retiring.store === observation.store
-  return proven ? { table: LEGACY_PROOF_COPIES_TABLE, after: null } : null
+    ? { cursor: { table: LEGACY_PROOF_COPIES_TABLE, after: null }, layout: retiring.layout }
+    : null
 }
