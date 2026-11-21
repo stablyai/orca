@@ -246,13 +246,13 @@ describe('new-bot offer card', () => {
     }
   }
 
-  it('offers Dismiss, Edit and Create bot, and creates from the offer', async () => {
+  it('offers Not now, Edit and Create bot, and creates from the offer', async () => {
     state.bots = [atlas]
     answer({ 'bots.create': { bot: { ...atlas, id: 'release', name: 'Release' } } })
     const card = await render(mobileNativeChatBotCard({ botCreateOffer: offer }, context))
     expect(card.text()).toContain('Release')
     expect(card.text()).toContain('Takes over 2 workspaces')
-    expect(card.text()).toContain('Dismiss')
+    expect(card.text()).toContain('Not now')
     expect(card.text()).toContain('Edit')
     expect(card.text()).not.toContain('Issues labelled 1.5')
     await card.press('Release')
@@ -263,12 +263,12 @@ describe('new-bot offer card', () => {
     ])
   })
 
-  it('claims a Dismiss on the host before telling the bot', async () => {
+  it('claims a Not now on the host before telling the bot Dismiss', async () => {
     state.bots = [atlas]
     answer({ 'bots.update': { bot: atlas } })
     const send = vi.fn(async () => true)
     const card = await render(mobileNativeChatBotCard({ botCreateOffer: offer }, context), send)
-    await card.press('Dismiss')
+    await card.press('Not now')
     expect(sent('bots.update')).toEqual([
       {
         botId: 'atlas',
@@ -281,7 +281,7 @@ describe('new-bot offer card', () => {
   it('reads dismissed, name taken and created from the bots there are', async () => {
     state.bots = [{ ...atlas, offerAnswers: [{ cardId: 'card-1', dismissed: true }] }]
     const dismissed = await render(mobileNativeChatBotCard({ botCreateOffer: offer }, context))
-    expect(dismissed.text()).not.toContain('Dismiss')
+    expect(dismissed.text()).not.toContain('Not now')
     expect(dismissed.text()).toContain('Create bot')
 
     state.bots = [atlas, { ...finance, id: 'other', name: 'release' }]
