@@ -133,7 +133,11 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
           state.emulator.resize(rendered.cols, rendered.rows)
         }
         await state.emulator.write(rendered.data)
-        if (this.headlessTerminals.get(ptyId) !== state) {
+        // A gap during the seed write keeps this state but owns it now: finishing would clear its provider preference.
+        if (
+          this.headlessTerminals.get(ptyId) !== state ||
+          this.rendererScreenToken(ptyId) !== rendererToken
+        ) {
           return
         }
         // Why: the renderer parsed live bytes queued behind this seed while serializing; writing them again doubles TUI frames and splits escapes.

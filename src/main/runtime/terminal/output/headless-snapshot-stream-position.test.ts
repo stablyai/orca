@@ -1,4 +1,5 @@
 import { assert, describe, expect, it, vi } from 'vitest'
+import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 import type {
@@ -707,6 +708,44 @@ describe('the hidden renderer after dropped output', () => {
     replyOld()
     expect(await after).toBeNull()
     await runtime.onPtyExit('pty-r', 0)
+  })
+
+  it('leaves a gap that lands during the renderer seed write to recovery', async () => {
+    const runtime = createRuntime()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      getSize: () => grid,
+      hasRendererSerializer: () => true,
+      serializeBuffer: async () => ({ data: 'OLD', ...grid }),
+      // Recovery's capture stays in flight: the screen is still being rebuilt when the seed finishes.
+      serializeProviderBuffer: () => new Promise<PtyProviderBufferSnapshot>(() => {})
+    })
+    anchorStream(runtime, 'pty-r')
+    const write = HeadlessEmulator.prototype.write
+    const spy = vi
+      .spyOn(HeadlessEmulator.prototype, 'write')
+      .mockImplementation(function (this: HeadlessEmulator, data: string) {
+        const written = write.call(this, data)
+        if (data === 'OLD') {
+          runtime.notePtyDataGap('pty-r', 5)
+        }
+        return written
+      })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: OrcaRuntimeService inherits these protected members with exactly these types.
+    const internals = runtime as unknown as {
+      maybeHydrateHeadlessFromRenderer(ptyId: string): Promise<boolean> | null
+      providerSnapshotPreferredPtys: Set<string>
+    }
+    try {
+      expect(await internals.maybeHydrateHeadlessFromRenderer('pty-r')).toBe(false)
+      expect(internals.providerSnapshotPreferredPtys.has('pty-r')).toBe(true)
+      expect(headlessOf(runtime).readWholeScreenModel('pty-r')).toBeNull()
+    } finally {
+      spy.mockRestore()
+      await runtime.onPtyExit('pty-r', 0)
+    }
   })
 })
 
