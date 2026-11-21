@@ -64,6 +64,7 @@ describe('bot memory lines', () => {
       '~~~',
       'tilde inner',
       '```',
+      '~~~not-a-close',
       '~~~',
       'after the fence'
     ].join('\n')
@@ -170,6 +171,14 @@ describe('bot memory lines', () => {
 
   it('dates by the local calendar', () => {
     expect(botMemoryDate(new Date(2026, 0, 5, 23, 59))).toBe('2026-01-05')
+  })
+})
+
+describe('a line a removed fence uncovers', () => {
+  it("is new, so it gets the writer's mark", () => {
+    expect(tagBotMemoryChanges('~~~\ndeploys at noon\n~~~\n', 'deploys at noon\n', 'Slack')).toBe(
+      'deploys at noon · from: Slack\n'
+    )
   })
 })
 

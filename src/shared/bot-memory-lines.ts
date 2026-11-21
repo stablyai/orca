@@ -52,7 +52,14 @@ function lineFacts(lines: readonly string[]): (FactParts | null)[] {
   let open: string | null = null
   return lines.map((raw) => {
     const fence = FENCE.exec(raw)?.[1]
-    if (fence && (open === null || (fence[0] === open[0] && fence.length >= open.length))) {
+    // A closer is the same character, at least as long, with nothing but spaces after it.
+    const closes =
+      open !== null &&
+      fence !== undefined &&
+      fence[0] === open[0] &&
+      fence.length >= open.length &&
+      raw.trim() === fence
+    if (fence && (open === null || closes)) {
       open = open === null ? fence : null
       return null
     }
@@ -107,7 +114,10 @@ export function tagBotMemoryChanges(before: string, after: string, label: string
   const known = new Map<string, string | null>()
   const was = splitLines(before).lines
   lineFacts(was).forEach((fact, index) => {
-    earlier.set(was[index], (earlier.get(was[index]) ?? 0) + 1)
+    // Only facts count as already there: a line a fence hid before is new once it is a fact.
+    if (fact) {
+      earlier.set(was[index], (earlier.get(was[index]) ?? 0) + 1)
+    }
     if (fact && !known.has(factKey(fact.text))) {
       known.set(factKey(fact.text), fact.source)
     }
