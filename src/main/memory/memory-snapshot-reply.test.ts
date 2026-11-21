@@ -51,8 +51,18 @@ describe('the memory snapshot sent over RPC', () => {
     expect(toMemorySnapshotReply(snapshot)).toBe(snapshot)
   })
 
-  it('keeps every row and 20 history points when the full history would not fit', () => {
+  it('keeps the full history of a large host whose reply still fits', () => {
     const history = Array.from({ length: 60 }, () => 123_456_789_012)
+    const snapshot = snapshotOf(
+      Array.from({ length: 2_000 }, (_, i) => row(i, 300, history, false)),
+      history
+    )
+
+    expect(toMemorySnapshotReply(snapshot)).toBe(snapshot)
+  })
+
+  it('keeps every row and 20 history points when the full history would not fit', () => {
+    const history = Array.from({ length: 200 }, () => 123_456_789_012)
     const worktrees = Array.from({ length: 2_000 }, (_, i) => row(i, 300, history, false))
 
     const reply = toMemorySnapshotReply(snapshotOf(worktrees, history))
