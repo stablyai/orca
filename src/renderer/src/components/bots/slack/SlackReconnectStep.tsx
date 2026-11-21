@@ -99,26 +99,17 @@ export function SlackReconnectStep({
         : t('bots.slack.reconnect.why', 'Slack stopped accepting this workspace’s saved token.')
   const pasteRef = useRef<HTMLDivElement>(null)
   const pasteId = useId()
-  const form = (compactProps: {
-    onCancel?: () => void
-    inlineSubmit?: boolean
-    autoFocusField?: boolean
-  }) => (
-    <SlackConfigTokenForm
-      compact
-      // This desktop's own token is made with this computer's Slack login.
-      hostId={mine ? LOCAL_EXECUTION_HOST_ID : bot.hostId}
-      submitLabel={t('bots.slack.reconnect.submit', 'Reconnect')}
-      busy={false}
-      error={error}
-      onSubmit={onSubmit}
-      {...compactProps}
-    />
+  const offered = offer !== null && hostName !== null
+  const kept = t(
+    'bots.slack.reconnect.kept',
+    'Orca Cloud keeps the new token encrypted, so your next bots here need one click.'
   )
 
-  if (offer && hostName) {
-    return (
-      <div className="space-y-4">
+  // One form at one place in the tree for both versions: an offer that arrives or goes while the
+  // step is open only changes its props, so a token typed into it is kept.
+  return (
+    <div className="space-y-4">
+      {offered ? (
         <LineWithWhy
           label={t('bots.slack.reconnect.about', 'About Slack tokens')}
           truncating={hostName}
@@ -153,7 +144,20 @@ export function SlackReconnectStep({
             }}
           />
         </LineWithWhy>
-        <div>
+      ) : (
+        <LineWithWhy
+          label={t('bots.slack.reconnect.about', 'About Slack tokens')}
+          why={[why, kept]}
+        >
+          {mine
+            ? isMac
+              ? t('bots.slack.reconnect.mineMac', 'This Mac’s token expired. Paste a new one.')
+              : t('bots.slack.reconnect.mine', 'This computer’s token expired. Paste a new one.')
+            : t('bots.slack.reconnect.paste', 'Paste a new token to reconnect.')}
+        </LineWithWhy>
+      )}
+      <div>
+        {offered ? (
           <Button
             type="button"
             variant="link-muted"
@@ -172,12 +176,36 @@ export function SlackReconnectStep({
             {t('bots.slack.reconnect.pasteInstead', 'Paste a token instead')}
             <ChevronRight className={cn('transition-transform', pasting && 'rotate-90')} />
           </Button>
-          {/* Hidden, not unmounted, while closed: a token typed before closing it is still there. */}
-          <div id={pasteId} ref={pasteRef} hidden={!pasting} className="pt-3">
-            {/* A refused paste comes back open, with focus on the field and its error. */}
-            {form({ inlineSubmit: true, autoFocusField: error !== null })}
-          </div>
+        ) : null}
+        {/* Hidden, not unmounted, while closed: a token typed before closing it is still there. */}
+        <div
+          id={pasteId}
+          ref={pasteRef}
+          hidden={offered && !pasting}
+          className={offered ? 'pt-3' : undefined}
+        >
+          <SlackConfigTokenForm
+            compact
+            // This desktop's own token is made with this computer's Slack login.
+            hostId={mine ? LOCAL_EXECUTION_HOST_ID : bot.hostId}
+            submitLabel={t('bots.slack.reconnect.submit', 'Reconnect')}
+            busy={false}
+            error={error}
+            onSubmit={onSubmit}
+            // A token already in the paste-only field stays in view when an offer arrives.
+            onTokenChange={(token) => {
+              if (!offered && token) {
+                setPasting(true)
+              }
+            }}
+            // A refused paste comes back open, with focus on the field and its error; the
+            // paste-only step focuses the field.
+            autoFocusField={offered ? error !== null : true}
+            {...(offered ? { inlineSubmit: true } : { onCancel })}
+          />
         </div>
+      </div>
+      {offered ? (
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onCancel}>
             {t('bots.slack.setup.cancel', 'Cancel')}
@@ -187,24 +215,7 @@ export function SlackReconnectStep({
             {t('bots.slack.reconnect.use', 'Use it')}
           </Button>
         </DialogFooter>
-      </div>
-    )
-  }
-
-  const kept = t(
-    'bots.slack.reconnect.kept',
-    'Orca Cloud keeps the new token encrypted, so your next bots here need one click.'
-  )
-  return (
-    <div className="space-y-4">
-      <LineWithWhy label={t('bots.slack.reconnect.about', 'About Slack tokens')} why={[why, kept]}>
-        {mine
-          ? isMac
-            ? t('bots.slack.reconnect.mineMac', 'This Mac’s token expired. Paste a new one.')
-            : t('bots.slack.reconnect.mine', 'This computer’s token expired. Paste a new one.')
-          : t('bots.slack.reconnect.paste', 'Paste a new token to reconnect.')}
-      </LineWithWhy>
-      {form({ onCancel, autoFocusField: true })}
+      ) : null}
     </div>
   )
 }

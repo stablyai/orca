@@ -40,7 +40,8 @@ export function SlackConfigTokenForm({
   compact = false,
   onCancel,
   inlineSubmit = false,
-  autoFocusField = false
+  autoFocusField = false,
+  onTokenChange
 }: {
   hostId: ExecutionHostId
   submitLabel: string
@@ -57,10 +58,16 @@ export function SlackConfigTokenForm({
   inlineSubmit?: boolean
   /** The field takes focus when it appears: pasting is what is left to do. */
   autoFocusField?: boolean
+  /** Told each time the field's token changes, typed, pasted, read off the clipboard or sent. */
+  onTokenChange?: (token: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const inputId = useId()
-  const [token, setToken] = useState('')
+  const [token, setTokenState] = useState('')
+  const setToken = (value: string): void => {
+    setTokenState(value)
+    onTokenChange?.(value)
+  }
   const [accessPasted, setAccessPasted] = useState(false)
   const trimmed = token.trim()
   // Set once Slack's page is opened from here: the token copied there fills the field on the way back.

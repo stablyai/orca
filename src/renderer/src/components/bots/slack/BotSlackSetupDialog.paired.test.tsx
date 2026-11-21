@@ -283,6 +283,27 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     expect(screen.queryByRole('button', { name: 'Use it' })).toBeNull()
   })
 
+  it('keeps a token typed into the paste-only step, in view, when this desktop’s offer arrives late', async () => {
+    serverState({ state: 'grant_expired', teamId: 'T1' })
+    // This desktop's own account isn't read yet, so there is nothing to offer at first.
+    const signedIn = useAppStore.getState().orcaProfileAuthStatus
+    useAppStore.setState({ orcaProfileAuthStatus: { ...ORCA_CONNECTED, cloud: undefined } })
+    openDialog()
+
+    fireEvent.change(await screen.findByLabelText('Configuration refresh token'), {
+      target: { value: 'xoxe-typed' }
+    })
+    act(() => useAppStore.setState({ orcaProfileAuthStatus: signedIn }))
+
+    await screen.findByRole('button', { name: 'Use it' })
+    const field = screen.getByLabelText('Configuration refresh token')
+    expect(field).toHaveProperty('value', 'xoxe-typed')
+    expect(field.closest('[hidden]')).toBeNull()
+    expect(
+      screen.getByRole('button', { name: /Paste a token instead/ }).getAttribute('aria-expanded')
+    ).toBe('true')
+  })
+
   it('offers no hand-off when the server is signed in to this desktop’s own account', async () => {
     mocks.hostEmail = 'me@example.test'
     serverState({ state: 'not_created' })
