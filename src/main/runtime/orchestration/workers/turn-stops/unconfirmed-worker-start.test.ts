@@ -93,4 +93,23 @@ describe('an unconfirmed worker start', () => {
     expect(alerts()).toEqual([])
     expect(db.getWorkerDispatch(dispatchId)?.state).toBe('ready')
   })
+
+  it('marks the start ready on a rest seen with no turn start before it', () => {
+    const { db, dispatchId, target, deps } = unknownStart('turn_start_unobserved')
+
+    observeWorker(
+      db,
+      target,
+      {
+        presence: 'at-rest',
+        fence: 'term_worker:1',
+        legacyStopKey: 'rest',
+        rest: { from: 'term_worker', reason: 'needs-input', lastOutput: undefined }
+      },
+      deps
+    )
+
+    expect(db.getWorkerDispatch(dispatchId)?.state).toBe('ready')
+    expect(db.getTask(target.dispatch.task_id)?.status).toBe('dispatched')
+  })
 })
