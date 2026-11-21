@@ -31,6 +31,8 @@ export const BOT_GROUP_HANDOFF_LIMIT = 6
 export type SendBotGroupMessageOptions = {
   /** This host's own window sent: local dropped images are copied into the store. */
   local?: boolean
+  /** Orca posts for the owner to this member alone, whatever the text or reply mode says. */
+  to?: string
 }
 
 export async function sendBotGroupMessage(
@@ -66,11 +68,13 @@ export async function sendBotGroupMessage(
       group.members.map((member) => member.botId)
     )
     const requestedImages = input.images ?? []
-    const audience = botGroupAudience(
-      stripSentImagePromptMarkers(input.text, requestedImages.length),
-      group,
-      bots
-    )
+    const audience = options.to
+      ? bots.filter((bot) => bot.id === options.to).map((bot) => bot.id)
+      : botGroupAudience(
+          stripSentImagePromptMarkers(input.text, requestedImages.length),
+          group,
+          bots
+        )
     if (requestedImages.length > 0 || hasAttachmentStoreReference(input.text)) {
       await groups.runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
     }

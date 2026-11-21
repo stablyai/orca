@@ -85,6 +85,7 @@ export function fixture() {
     getOrchestrationDb: () => ({
       db,
       getMessageById: (id: string) => mails.get(id) ?? orchestration.getMessageById(id),
+      markAsReadAndDelivered: (ids: string[]) => orchestration.markAsReadAndDelivered(ids),
       getBotRequest: (id: string) => requests.get(id),
       getActiveDispatchForIdentity: (handle: string) =>
         orchestration.getActiveDispatchForIdentity(handle),
