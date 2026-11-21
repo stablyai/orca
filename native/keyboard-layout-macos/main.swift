@@ -100,6 +100,15 @@ func readStableSnapshot() -> KeyboardLayoutSnapshot? {
   )
 }
 
+if CommandLine.arguments.dropFirst().first == "--watch-quit-chord" {
+  guard CommandLine.arguments.count == 3,
+        let (_, keyCode) = domKeyCodes.first(where: { $0.0 == CommandLine.arguments[2] }) else {
+    exit(64)
+  }
+  watchQuitChord(keyCode: keyCode)
+  exit(0)
+}
+
 for _ in 0..<2 {
   if let snapshot = readStableSnapshot() {
     let encoded = try JSONEncoder().encode(snapshot)

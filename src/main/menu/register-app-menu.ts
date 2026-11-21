@@ -9,6 +9,7 @@ import { createAppMenuQuitItems, type AppMenuQuitHandlers } from './app-menu-qui
 import { createAppMenuReloadAndDevToolsItems } from './app-menu-reload-devtools-items'
 import { labeledAppMenuRole } from './labeled-app-menu-role'
 import { createAppWindowMenu } from './app-menu-window'
+import { createMacApplicationMenu } from './mac-application-menu'
 
 export type AppearanceMenuState = {
   showTasksButton: boolean
@@ -126,22 +127,12 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     click: (_menuItem, window) => onOpenCrashReport(window)
   }
 
-  const macAppMenu: Electron.MenuItemConstructorOptions = {
+  const macAppMenu = createMacApplicationMenu({
     label: options.appMenuLabel ?? app.name,
-    submenu: [
-      labeledAppMenuRole('about', 'menu.about', 'About Orca'),
-      checkForUpdatesItem,
-      settingsItem,
-      { type: 'separator' },
-      labeledAppMenuRole('services', 'menu.services', 'Services'),
-      { type: 'separator' },
-      labeledAppMenuRole('hide', 'menu.hide', 'Hide Orca'),
-      labeledAppMenuRole('hideOthers', 'menu.hideOthers', 'Hide Others'),
-      labeledAppMenuRole('unhide', 'menu.unhide', 'Show All'),
-      { type: 'separator' },
-      ...createAppMenuQuitItems(options, options.appMenuLabel ?? app.name)
-    ]
-  }
+    checkForUpdates: checkForUpdatesItem,
+    settings: settingsItem,
+    quit: createAppMenuQuitItems(options, options.appMenuLabel ?? app.name)
+  })
 
   const fileMenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.file', 'File'),

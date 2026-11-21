@@ -155,7 +155,7 @@ function GeneralRootSettings({
 }: GeneralPaneProps & { query: string; showNavigation: boolean }): React.JSX.Element {
   const t = useTranslate()
   const nestWorkspaces = useNestWorkspacesSetting(hostScope, settings, updateSettings)
-  const tabsEntries = getGeneralNavigationSearchEntries()
+  const tabsEntries = getGeneralNavigationSearchEntries({ showHoldQuit: false })
   const runtimeEntries = getGeneralProjectRuntimeSearchEntries()
   const showRuntime = shouldShowProjectRuntimeSection(wslSupportedPlatform, query, runtimeEntries)
   const autoSaveEntries = getGeneralEditorSearchDescriptors()

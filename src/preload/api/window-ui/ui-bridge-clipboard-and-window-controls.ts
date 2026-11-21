@@ -16,8 +16,18 @@ import type {
   AgentPaneActivityRequest
 } from '../../../shared/agent-status/presentation/agent-list-status'
 import type { PreloadApi } from '../../api-types'
+import type { HoldQuitNotice } from '../../../shared/mac-hold-quit'
 
 export const uiClipboardAndWindowControlsApi = {
+  onHoldQuitNotice: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, notice: HoldQuitNotice): void =>
+      callback(notice)
+    ipcRenderer.on('ui:holdQuitNotice', listener)
+    return () => ipcRenderer.off('ui:holdQuitNotice', listener)
+  },
+  setHoldQuitActivity: (busy: boolean): void => {
+    ipcRenderer.send('ui:holdQuitActivity', busy)
+  },
   onOpenDiffFromMobile: (
     callback: (data: {
       worktreeId: string

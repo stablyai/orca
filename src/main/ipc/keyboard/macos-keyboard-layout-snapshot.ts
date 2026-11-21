@@ -13,16 +13,20 @@ const MAX_HELPER_OUTPUT_BYTES = 64 * 1024
 let cachedHelperPath: Promise<string | null> | undefined
 let readInFlight: Promise<KeyboardLayoutSnapshot | null> | null = null
 
+// Why no existence check: the quit-chord watch spawns this path, and a missing helper fails closed there.
+export function resolveMacKeyboardHelperPath(): string | null {
+  return process.platform === 'darwin' ? join(dirname(process.execPath), HELPER_EXECUTABLE) : null
+}
+
 function resolveHelperPath(): Promise<string | null> {
   if (cachedHelperPath === undefined) {
-    const candidate = join(dirname(process.execPath), HELPER_EXECUTABLE)
-    cachedHelperPath =
-      process.platform === 'darwin'
-        ? access(candidate).then(
-            () => candidate,
-            () => null
-          )
-        : Promise.resolve(null)
+    const candidate = resolveMacKeyboardHelperPath()
+    cachedHelperPath = candidate
+      ? access(candidate).then(
+          () => candidate,
+          () => null
+        )
+      : Promise.resolve(null)
   }
   return cachedHelperPath
 }

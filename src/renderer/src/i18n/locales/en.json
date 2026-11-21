@@ -889,6 +889,13 @@
       "uiZoom": {
         "zoomOut": "Zoom out",
         "zoomIn": "Zoom in"
+      },
+      "holdQuit": {
+        "title": "Hold ⌘Q while agents are working",
+        "description": "Hold for about a second to quit during active work. When agents finish, a quick press quits normally.",
+        "keyword": {
+          "quit": "quit"
+        }
       }
     },
     "browser": {
@@ -29816,6 +29823,10 @@
       "previous": "Previous month",
       "next": "Next month"
     }
+  },
+  "holdQuit": {
+    "hint": "Agents are still working. Hold ⌘Q to quit.",
+    "unavailable": "Hold-to-quit is unavailable. Use the application menu to quit."
   },
   "appRail": {
     "navigationLabel": "App navigation",
