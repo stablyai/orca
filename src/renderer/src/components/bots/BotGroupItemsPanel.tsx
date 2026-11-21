@@ -128,9 +128,19 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
   }, [unowned, closeItem])
   const asking = merged.needs.length + merged.stoppedForSignIn.length > 0
   const rows = merged.shown.length > 0 || asking
-  const groupIds = new Set(scopes[0]!.chatIds)
-  const placeOf = (item: BotItem): string | null =>
-    filter.chatIds === null && !groupIds.has(item.chat.id) ? botItemChatName(item.chat, t) : null
+  // Stable while the scope is, so the list's row heights aren't recomputed on every render.
+  const filterChatIds = filter.chatIds
+  const { placeOf, placed } = useMemo(() => {
+    const groupIds = new Set(scopes[0]!.chatIds)
+    // A chat filter shows only the group's own chats, so then no row names another.
+    const outsideGroup =
+      filterChatIds === null ? (item: BotItem): boolean => !groupIds.has(item.chat.id) : null
+    return {
+      placeOf: (item: BotItem): string | null =>
+        outsideGroup?.(item) ? botItemChatName(item.chat, t) : null,
+      placed: outsideGroup
+    }
+  }, [scopes, filterChatIds, t])
   const note = (): React.ReactNode => {
     if (members.length === 0) {
       return null
@@ -207,6 +217,7 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
       ) : (
         <div
           ref={scroll}
+          data-bot-items-scroller=""
           tabIndex={-1}
           className="@container scrollbar-sleek flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-2 py-3 outline-none"
         >
@@ -245,6 +256,7 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
                 seenOf: merged.seenOf,
                 needBot: merged.needBot,
                 placeOf,
+                placed,
                 outside: {
                   count: merged.outside,
                   of:
@@ -266,6 +278,7 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
               }}
               offline={merged.offline}
               focusFallback={scroll}
+              scroller={scroll}
             />
             {note()}
           </fieldset>

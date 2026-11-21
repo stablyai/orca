@@ -36,6 +36,8 @@ import { routeNativeChatHref } from '../../../../shared/native-chat/file-access/
 import type { BotGroupRoomLinks } from './use-bot-group-room-links'
 import { type BotGroupTranscriptRows, useBotGroupTranscriptRows } from './bot-group-transcript-rows'
 const noItems: never[] = []
+// A turn's picture as it was when posted; the host only has the bot's current one.
+const HISTORICAL_AVATAR = { historical: true }
 export const BotGroupTurn = memo(function BotGroupTurn({
   hostId,
   turn,
@@ -77,7 +79,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
     }),
     [hostId, turn.botId, turn.botName, turn.avatar, turn.avatarColor]
   )
-  const src = useBotAvatarSrc(bot)
+  const src = useBotAvatarSrc(bot, HISTORICAL_AVATAR)
   const submissions = session?.submissions ?? noItems
   const readTurn = session?.groupTurnItems
   const items = useMemo(
