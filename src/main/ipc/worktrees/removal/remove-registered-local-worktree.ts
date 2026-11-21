@@ -263,7 +263,8 @@ async function finishLocalWorktreeRemoval({
           canonicalWorktreePath,
           localWorktreeGitOptions,
           (path) => context.runtime.closeFileWatchersForRemoval(path),
-          checkoutDeleteSignal
+          checkoutDeleteSignal,
+          guard.markerOptions
         )
         await pruneGitWorktrees({ cwd: repo.path, ...localWorktreeGitOptions }).catch(() => {})
         await purgeRemoved(false)

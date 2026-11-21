@@ -258,7 +258,8 @@ export async function finishRuntimeLocalWorktreeRemoval(
           canonicalPath,
           localOptions,
           args.closeWatchers,
-          checkoutDeleteSignal
+          checkoutDeleteSignal,
+          markerOptions
         )
         await pruneGitWorktrees({ cwd: repo.path, ...localOptions }).catch(() => {})
         await cleanupRemovedWorktreePushTarget(args)

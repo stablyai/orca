@@ -108,4 +108,13 @@ it('binds orphan ownership proof to the initial marker and forbids new markers i
     return true
   })
   expect(vanishedGuard).toEqual({ markerLast: true, forbidAnyMarker: true })
+
+  const pinned = await acceptCheckout('accepted')
+  await writeFile(
+    join(worktreePath, '.git'),
+    'gitdir: /repo/.git/worktrees/restored-before-proof\n'
+  )
+  await expect(
+    proveOrphanedCheckoutGuard(worktreePath, {}, async () => true, { expectedMarker: pinned })
+  ).rejects.toThrow('A different checkout is now at')
 })

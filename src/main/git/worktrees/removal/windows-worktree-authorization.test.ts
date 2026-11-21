@@ -1,3 +1,6 @@
+import { lstatSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   throwIfSignalAborted,
@@ -5,15 +8,18 @@ import {
 } from '../../../../shared/concurrency/abort-signal-reason'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 
-const { graph, stat, names, removeChild, unlink, rmdir, clean } = vi.hoisted(() => ({
-  graph: vi.fn(),
-  stat: vi.fn(),
-  names: vi.fn(),
-  removeChild: vi.fn(),
-  unlink: vi.fn(),
-  rmdir: vi.fn(),
-  clean: vi.fn()
-}))
+const { graph, stat, names, removeChild, unlink, rmdir, clean, readMarker, proveOrphan } =
+  vi.hoisted(() => ({
+    graph: vi.fn(),
+    stat: vi.fn(),
+    names: vi.fn(),
+    removeChild: vi.fn(),
+    unlink: vi.fn(),
+    rmdir: vi.fn(),
+    clean: vi.fn(),
+    readMarker: vi.fn(),
+    proveOrphan: vi.fn()
+  }))
 vi.mock('../catalog/worktree-list-reader', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   readTranslatedWorktreeGraph: graph
@@ -27,11 +33,11 @@ vi.mock('../../../filesystem/asar-transparent-fs', () => ({
 }))
 vi.mock('node:fs/promises', async (original) => ({
   ...(await original<Record<string, unknown>>()),
-  readFile: async () => 'gitdir: C:/repo/.git/worktrees/feature'
+  readFile: readMarker
 }))
 vi.mock('../../../workspaces/removal/worktree-removal-safety', async (original) => ({
   ...(await original<Record<string, unknown>>()),
-  canSafelyRemoveOrphanedWorktreeDirectory: async () => true
+  canSafelyRemoveOrphanedWorktreeDirectory: proveOrphan
 }))
 vi.mock('./worktree-removal-preflight', () => ({ assertWorktreeCleanForRemoval: clean }))
 
@@ -64,6 +70,8 @@ beforeEach(() => {
   unlink.mockResolvedValue(undefined)
   rmdir.mockResolvedValue(undefined)
   clean.mockResolvedValue(undefined)
+  readMarker.mockResolvedValue('gitdir: C:/repo/.git/worktrees/feature')
+  proveOrphan.mockResolvedValue(true)
 })
 afterEach(() => {
   Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
@@ -109,4 +117,31 @@ it('joins held children before cancelling the real repeated delete-time authoriz
   expect(await outcome).toBe(reason)
   expect(unlink).not.toHaveBeenCalled()
   expect(rmdir).not.toHaveBeenCalled()
+})
+
+it('refuses before sweeping children when a checkout replaces the pinned marker during ownership proof', async () => {
+  const scratch = mkdtempSync(join(tmpdir(), 'orca-win-auth-race-'))
+  try {
+    const gitFile = join(scratch, '.git')
+    writeFileSync(gitFile, 'gitdir: C:/repo/.git/worktrees/feature\n')
+    const initialIno = lstatSync(gitFile, { bigint: true }).ino
+    graph.mockResolvedValue([])
+    proveOrphan.mockImplementationOnce(async () => {
+      unlinkSync(gitFile)
+      writeFileSync(gitFile, 'gitdir: C:/repo/.git/worktrees/restored\n')
+      readMarker.mockResolvedValue('gitdir: C:/repo/.git/worktrees/restored\n')
+      return true
+    })
+
+    await expect(
+      removeWindowsCheckout('C:/repo', scratch, true, {
+        expectedMarker: `C:/repo/.git/worktrees/feature#${initialIno}`
+      })
+    ).rejects.toThrow('A different checkout is now at')
+
+    expect(removeChild).not.toHaveBeenCalled()
+    expect(unlink).not.toHaveBeenCalled()
+  } finally {
+    rmSync(scratch, { recursive: true, force: true })
+  }
 })

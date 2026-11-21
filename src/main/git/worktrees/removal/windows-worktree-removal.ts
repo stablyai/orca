@@ -60,6 +60,8 @@ export async function removeWindowsCheckout(
         const initial = await readCheckoutMarkerState(root, options)
         if (initial.kind === 'file') {
           pinnedMarker = initial.identity
+        } else if (initial.kind === 'other') {
+          throw differentCheckoutAtPathError(root)
         }
       }
       return authorizeWindowsCheckout(
@@ -190,15 +192,27 @@ async function authorizeWindowsCheckoutReads(
     }
     return false
   }
-  if (options.forbidAnyMarker) {
-    throw differentCheckoutAtPathError(root)
-  }
-  if (options.expectedMarker !== undefined) {
-    const markerState = await readCheckoutMarkerState(root, options)
-    checkStopped()
-    if (markerState.kind !== 'file' || markerState.identity !== options.expectedMarker) {
-      throw differentCheckoutAtPathError(root)
+  const verifyPinnedMarker = async (): Promise<boolean> => {
+    if (options.forbidAnyMarker) {
+      if (!(await nativeWindowsMarkerMissing(root, options))) {
+        throw differentCheckoutAtPathError(root)
+      }
+      return false
     }
+    if (options.expectedMarker !== undefined) {
+      const markerState = await readCheckoutMarkerState(root, options)
+      checkStopped()
+      if (markerState.kind === 'absent') {
+        return false
+      }
+      if (markerState.kind !== 'file' || markerState.identity !== options.expectedMarker) {
+        throw differentCheckoutAtPathError(root)
+      }
+    }
+    return true
+  }
+  if (!(await verifyPinnedMarker())) {
+    return false
   }
   const safe = await canSafelyRemoveOrphanedWorktreeDirectory(root, repo, CLIENT_REMOVAL_HOME)
   checkStopped()
@@ -231,6 +245,9 @@ async function authorizeWindowsCheckoutReads(
     await assertWorktreeCleanForRemoval(root, force, options, admin)
     checkStopped()
     return authorizeWindowsCheckoutReads(repo, root, force, options, beforeTeardown, false)
+  }
+  if (!(await verifyPinnedMarker())) {
+    return false
   }
   checkStopped()
   return true

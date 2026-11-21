@@ -19,7 +19,8 @@ export async function cleanupLocalOrphanedWorktreeDirectory(
   path: string,
   options: LocalWorktreeFilesystemOptions,
   closeWatchers: (path: string) => Promise<void>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  markerOptions: { expectedMarker?: string; forbidAnyMarker?: boolean } = {}
 ): Promise<void> {
   throwIfSignalAborted(signal)
   const access = getLocalWorktreePathAccess(options, path)
@@ -28,13 +29,17 @@ export async function cleanupLocalOrphanedWorktreeDirectory(
     options,
     signal
   )
-  const guard = await proveOrphanedCheckoutGuard(path, options, () =>
-    canSafelyRemoveOrphanedWorktreeDirectory(
-      runtimePath,
-      runtimeRepoPath,
-      CLIENT_REMOVAL_HOME,
-      access
-    )
+  const guard = await proveOrphanedCheckoutGuard(
+    path,
+    options,
+    () =>
+      canSafelyRemoveOrphanedWorktreeDirectory(
+        runtimePath,
+        runtimeRepoPath,
+        CLIENT_REMOVAL_HOME,
+        access
+      ),
+    markerOptions
   )
   throwIfSignalAborted(signal)
   if (guard) {

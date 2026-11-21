@@ -110,9 +110,21 @@ export async function captureAcceptedCheckoutGuard(
 export async function proveOrphanedCheckoutGuard(
   worktreePath: string,
   options: LocalWorktreeFilesystemOptions,
-  prove: () => Promise<boolean>
+  prove: () => Promise<boolean>,
+  markerOptions: { expectedMarker?: string; forbidAnyMarker?: boolean } = {}
 ): Promise<ProvenOrphanCheckoutGuard | null> {
+  const { expectedMarker, forbidAnyMarker = false } = markerOptions
   const before = await readCheckoutMarkerState(worktreePath, options)
+  if (before.kind !== 'absent' && forbidAnyMarker) {
+    throw differentCheckoutAtPathError(worktreePath)
+  }
+  if (
+    expectedMarker !== undefined &&
+    before.kind !== 'absent' &&
+    (before.kind !== 'file' || before.identity !== expectedMarker)
+  ) {
+    throw differentCheckoutAtPathError(worktreePath)
+  }
   if (before.kind === 'other') {
     return null
   }
@@ -123,10 +135,16 @@ export async function proveOrphanedCheckoutGuard(
   if (after.kind === 'absent') {
     return { markerLast: true, forbidAnyMarker: true }
   }
-  if (before.kind !== 'file' || after.kind !== 'file' || after.identity !== before.identity) {
+  const requiredIdentity = expectedMarker ?? (before.kind === 'file' ? before.identity : undefined)
+  if (
+    forbidAnyMarker ||
+    requiredIdentity === undefined ||
+    after.kind !== 'file' ||
+    after.identity !== requiredIdentity
+  ) {
     throw differentCheckoutAtPathError(worktreePath)
   }
-  return { markerLast: true, expectedMarker: before.identity }
+  return { markerLast: true, expectedMarker: requiredIdentity }
 }
 
 /** A checkout folder still on disk whose `.git` link is gone. */
