@@ -39,7 +39,8 @@ function BotItemsStaleRow({
 }): React.JSX.Element {
   const t = useTranslate()
   const value = bot.itemsStale ?? BOT_ITEM_DEFAULT_STALE_DAYS
-  const title = t('bots.settingsView.itemsStale.title', 'Mark items stale after')
+  const title = t('bots.settingsView.itemsStale.shortTitle', 'Stale after')
+  const choiceLabel = t('bots.settingsView.itemsStale.title', 'Mark items stale after')
   const label = (choice: BotItemsStale): string =>
     choice === 'never'
       ? t('bots.settingsView.itemsStale.never', 'Never')
@@ -48,10 +49,6 @@ function BotItemsStaleRow({
     <SettingsInsetRow
       icon={<Hourglass />}
       title={title}
-      detail={t(
-        'bots.settingsView.itemsStale.detail',
-        'No activity for this long. Planned items get 3 times as long.'
-      )}
       end={
         <Select
           value={String(value)}
@@ -62,7 +59,7 @@ function BotItemsStaleRow({
             }
           }}
         >
-          <SelectTrigger size="xs" aria-label={title}>
+          <SelectTrigger size="xs" aria-label={choiceLabel}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

@@ -51,6 +51,8 @@ type SettingsInsetRowProps = {
   detail?: React.ReactNode
   /** The second line wraps instead of truncating, for descriptions. */
   wrapDetail?: boolean
+  /** A short muted value at the row's end, such as "Local Mac"; it truncates before the title does. */
+  value?: string | null
   /** A control at the row's end (a switch, a button). Without one, `onOpen` draws a chevron. */
   end?: React.ReactNode
   onOpen?: () => void
@@ -63,17 +65,18 @@ type SettingsInsetRowProps = {
 }
 
 const ROW =
-  'flex min-h-11 w-full min-w-0 items-center gap-2.5 py-2 pr-2.5 pl-3 in-data-bot-settings-root:py-1 text-left text-[13px] outline-none'
+  'flex min-h-11 w-full min-w-0 items-center gap-2.5 py-2 pr-2.5 pl-3 in-data-bot-settings-root:min-h-9 in-data-bot-settings-root:py-1 text-left text-[13px] outline-none'
 
 function RowText({
   icon,
   title,
   detail,
   wrapDetail,
+  value,
   muted
 }: Pick<
   SettingsInsetRowProps,
-  'icon' | 'title' | 'detail' | 'wrapDetail' | 'muted'
+  'icon' | 'title' | 'detail' | 'wrapDetail' | 'value' | 'muted'
 >): React.JSX.Element {
   return (
     <>
@@ -87,7 +90,8 @@ function RowText({
           {icon}
         </span>
       ) : null}
-      <span className="min-w-0 flex-1">
+      {/* With a value, the title keeps its width up to 70% and the value gives way first. */}
+      <span className={cn('min-w-0', value ? 'max-w-[70%] flex-[1_0_auto]' : 'flex-1')}>
         <span
           className={cn(
             'block truncate font-medium leading-[18px]',
@@ -107,6 +111,16 @@ function RowText({
           </span>
         ) : null}
       </span>
+      {value ? (
+        <span
+          title={value}
+          className="ml-auto min-w-0 truncate text-right text-xs text-muted-foreground"
+        >
+          {/* Screen readers hear "Computer, Local Mac" as the row's name. */}
+          <span className="sr-only">, </span>
+          {value}
+        </span>
+      ) : null}
     </>
   )
 }
