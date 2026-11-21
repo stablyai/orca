@@ -204,8 +204,11 @@ export class TerminalWorkerTurnStops {
 
 /** The typed failure a terminal agent's turn ended on; null when it named none Orca words. */
 function terminalRequestError(row: AgentStatusIpcPayload): WorkerRequestError | null {
+  // A time-only reset is read against when the turn stopped: a pane restored later keeps that day.
   const fact =
-    row.agentType === 'claude' ? claudeStopFailureFact(row.mainAgent?.failure, Date.now()) : null
+    row.agentType === 'claude'
+      ? claudeStopFailureFact(row.mainAgent?.failure, row.mainAgent?.stateStartedAt ?? Date.now())
+      : null
   if (!fact) {
     return null
   }
