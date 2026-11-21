@@ -45,13 +45,13 @@ import {
   type TidyUpChat,
   type TidyUpMemoryFile,
   tidyUpOwed,
-  tidyUpPrompt,
   tidyUpRunSummary,
   type TidyUpApplied,
   tidyNowRefusal,
   tidyUpState
 } from './bot-memory-tidy-up'
-import { applyTidyUpDraft } from './bot-memory-tidy-up-apply'
+import { TIDY_UP_OPS_PILOT_FILE } from './bot-memory-ops'
+import { tidyUpFormat } from './bot-memory-tidy-up-format'
 import type { BotTurnWatch } from './bot-run-turn-watch'
 
 export type BotTidyUpRunnerDeps = {
@@ -221,6 +221,7 @@ export class BotTidyUpRunner {
       chatCount = chats.length
       const memory = (await this.deps.fs.readText(join(folder, 'MEMORY.md'))) ?? ''
       const files = await this.deps.memoryFiles(folder)
+      const pilot = (await this.deps.fs.readText(join(folder, TIDY_UP_OPS_PILOT_FILE))) !== null
       // Checked again after reading, as near the start as it can be: an owner turn may have begun.
       if (!this.idle(bot)) {
         return
@@ -233,7 +234,7 @@ export class BotTidyUpRunner {
       // The ten minutes run from here, through the reply; the apply after is local and is never
       // cut off midway, though a sleep in it still makes the run missed.
       watch = watchBackgroundRun(this.deps.power, sessionId)
-      const text = tidyUpPrompt({ memory, files, chats, today })
+      const format = tidyUpFormat({ memory, files, chats, today, pilot })
       start = startWithinLimit(
         watch,
         {
@@ -242,7 +243,7 @@ export class BotTidyUpRunner {
             await gate.beforeFirstMessage()
             const send = await this.deps.sessions.startConversation(bot, {
               sessionId,
-              text,
+              text: format.prompt,
               beforeFirstMessage: gate.beforeFirstMessage,
               beforeDelivery: gate.beforeDelivery,
               title: 'Tidy-up',
@@ -260,13 +261,7 @@ export class BotTidyUpRunner {
       const outcome =
         'error' in reply
           ? reply
-          : await applyTidyUpDraft(this.deps, {
-              botId: bot.id,
-              folder,
-              memory,
-              reply: reply.text,
-              today
-            })
+          : await format.apply(this.deps, { botId: bot.id, folder, reply: reply.text })
       if ('error' in outcome) {
         ended = outcome
       } else {

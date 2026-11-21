@@ -67,7 +67,9 @@ export const BotTidyUpSummarySchema = z.object({
   /** Old lines moved to the archive. */
   moved: z.number(),
   /** Repeats merged into one line. */
-  merged: z.number()
+  merged: z.number(),
+  /** Why each op a tidy-up on operations asked for was skipped; absent on other tidy-ups. */
+  skipped: z.array(z.string()).optional()
 })
 
 export type BotTidyUpSummary = z.infer<typeof BotTidyUpSummarySchema>

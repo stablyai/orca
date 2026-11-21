@@ -1,0 +1,105 @@
+// How Orca compares a memory line's words: whether a rewrite says only what its sources said, and how
+// alike two lines are, so a model's merge can't add a claim and a moved line can't come back renamed.
+
+const STOPWORDS = new Set(
+  'a an the and or but of to in on at for by with from as is are was were be been being it its this that these those then than so if into over under via per their they them our we you your i he she his her has have had will would can could may might also just there here which who what when where how all any each every one'.split(
+    ' '
+  )
+)
+
+/** Negations and modals flip a line's meaning, so a rewrite may use one only when a source does. */
+const MEANING_WORDS = new Set([
+  'not',
+  'no',
+  'never',
+  'always',
+  'must',
+  'only',
+  "don't",
+  'dont',
+  "can't",
+  'cant',
+  'cannot',
+  'should',
+  'instead',
+  "won't",
+  'without'
+])
+
+const MAX_NEW_WORDS = 3
+const MAX_NEW_SHARE = 0.15
+
+export function lineWords(text: string): string[] {
+  return (
+    text
+      .toLowerCase()
+      .replace(/[’]/g, "'")
+      .match(/[a-z0-9][a-z0-9'_-]*/g) ?? []
+  )
+}
+
+/** A word's plain stem, so "merged" and "merges" read as "merge". */
+function stem(word: string): string {
+  return word.replace(/(?:'s|ing|ed|es|s)$/, '') || word
+}
+
+const SPECIAL = /https?:\/\/\S+|`[^`]+`|@[\w-]+|[\w.-]*\/[\w./-]+|\d[\d.,:]*/g
+
+/** Capitalized words past a sentence's start: names. */
+function names(text: string): string[] {
+  return [...text.matchAll(/(?<![.!?:]\s|^)(?<=\s|\()([A-Z][\w-]+)/g)].map((m) =>
+    m[1].toLowerCase()
+  )
+}
+
+/**
+ * Whether `text` says only what `sources` say: every number, link, path, @name, code span and name
+ * in it is in them, every negation or modal is too, and at most a few other words are new.
+ */
+export function isDerivable(text: string, sources: readonly string[]): boolean {
+  const source = sources.join('\n')
+  const lower = source.toLowerCase()
+  if ((text.match(SPECIAL) ?? []).some((piece) => !lower.includes(piece.toLowerCase()))) {
+    return false
+  }
+  const known = new Set(lineWords(source))
+  const stems = new Set([...known].map(stem))
+  if (names(text).some((name) => !known.has(name))) {
+    return false
+  }
+  const words = lineWords(text)
+  if (words.some((word) => MEANING_WORDS.has(word) && !known.has(word))) {
+    return false
+  }
+  const fresh = words.filter(
+    (word) => !STOPWORDS.has(word) && !known.has(word) && !stems.has(stem(word))
+  )
+  return fresh.length <= Math.min(MAX_NEW_WORDS, Math.floor(words.length * MAX_NEW_SHARE))
+}
+
+const keyWords = (text: string): Set<string> =>
+  new Set(
+    lineWords(text)
+      .filter((word) => !STOPWORDS.has(word))
+      .map(stem)
+  )
+
+/** Jaccard similarity of two lines' key words. */
+export function lineSimilarity(a: string, b: string): number {
+  const [x, y] = [keyWords(a), keyWords(b)]
+  if (x.size === 0 || y.size === 0) {
+    return 0
+  }
+  const shared = [...x].filter((word) => y.has(word)).length
+  return shared / (x.size + y.size - shared)
+}
+
+/** How much of `line`'s key words `words` holds: 1 when every one is there. */
+export function lineCoverage(line: string, words: string): number {
+  const wanted = keyWords(line)
+  if (wanted.size === 0) {
+    return 0
+  }
+  const have = keyWords(words)
+  return [...wanted].filter((word) => have.has(word)).length / wanted.size
+}

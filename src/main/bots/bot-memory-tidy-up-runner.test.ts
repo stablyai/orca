@@ -4,12 +4,15 @@ import type { Bot } from '../../shared/bot-types'
 import { makeTestBot } from './bot.test-fixture'
 import { BotLookAroundStore } from './bot-look-around-store'
 import { createBotMemoryHistory } from './bot-memory-history'
-import { createBotMemoryRecord } from './bot-memory-record'
+import { createBotMemoryRecord, tagBotMemoryFile } from './bot-memory-record'
 import { TIDY_UP_FAILURES, type TidyUpChat } from './bot-memory-tidy-up'
 import { ASLEEP_RETRY_AFTER_MS } from './bot-look-around-state'
 import { BotTidyUpRunner } from './bot-memory-tidy-up-runner'
 import { testRunPower } from './bot-background-run.test-fixture'
 import type { BotTurnEnd } from './bot-run-turn-watch'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { memorySnapshot, TIDY_UP_OPS_PILOT_FILE } from './bot-memory-ops'
+import { readdGuard } from './bot-memory-readd-guard'
 
 const HOME = '/home/me/.orca/bots/scout'
 const MEMORY = join(HOME, 'MEMORY.md')
@@ -157,6 +160,7 @@ function harness(
   }
   return {
     runner,
+    fs,
     host,
     release,
     delivered,
@@ -655,5 +659,97 @@ describe('Tidy-up on a sleeping host', () => {
     end.resolve({ outcome: 'success', message: reply(INDEX, REPLACED) })
     await vi.waitFor(() => expect(h.runs()[0]?.endedAt).toBeDefined())
     expect(h.runs()[0]?.error).toBeUndefined()
+  })
+})
+
+describe('Tidy-up on ops, for a bot in the pilot', () => {
+  const STATUS = '- 2026-11-02 #4417 merged at a1b2c3d4; follow-up waiting on review'
+  const OLD = [
+    '# Memory',
+    '- 2026-10-02 times in Eastern',
+    '- 2026-10-03 times are in Eastern',
+    STATUS,
+    '- 2026-10-06 PRs open ready, not draft',
+    ''
+  ].join('\n')
+  const SHOWN = OLD.replace(`${STATUS}\n`, '')
+  const merge = (): string => {
+    const [first, second] = memorySnapshot(SHOWN)
+    return `Done.\n[{"op":"merge","lines":["${first.ref}","${second.ref}"],"text":"all times are in Eastern"}]`
+  }
+  const JOURNAL = join(HOME, 'memory', 'journal', '2026-11.md')
+  const TIDIED =
+    '# Memory\n- 2026-10-02 all times are in Eastern\n- 2026-10-06 PRs open ready, not draft\n'
+
+  it('moves status to the journal and applies the ops as one History row', async () => {
+    const run = harness({ memory: OLD, reply: merge() })
+    run.files.set(join(HOME, TIDY_UP_OPS_PILOT_FILE), '')
+    await run.tick()
+
+    const shownRef = `${memorySnapshot(SHOWN)[0].ref} - 2026-10-02 times in Eastern`
+    expect(run.startConversation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ text: expect.stringContaining(shownRef) })
+    )
+    expect(run.startConversation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ text: expect.not.stringContaining('#4417') })
+    )
+    expect(run.files.get(MEMORY)).toBe(TIDIED)
+    expect(run.files.get(JOURNAL)).toBe(`# Status moved out of MEMORY.md, 2026-11\n${STATUS}\n`)
+    expect(run.files.get(ARCHIVE)).toBe(
+      '# Archive\n- 2026-10-02 times in Eastern · merged 2026-11-06\n- 2026-10-03 times are in Eastern · merged 2026-11-06\n'
+    )
+    expect(await run.rows()).toHaveLength(1)
+    expect(run.last()).toMatchObject({
+      filed: [{ topic: 'journal/2026-11', count: 1 }],
+      merged: 1,
+      moved: 0,
+      skipped: []
+    })
+  })
+
+  it('stays on the whole-file reply off the pilot', async () => {
+    const run = harness({ memory: OLD, reply: merge() })
+    await run.tick()
+    expect(run.files.get(MEMORY)).toBe(OLD)
+    expect(run.runs()[0].error).toBe(TIDY_UP_FAILURES.noDraft)
+  })
+
+  it("keeps a stale chat's rewrite from putting moved lines back, unless its owner asked", async () => {
+    const run = harness({ memory: OLD, reply: merge() })
+    run.files.set(join(HOME, TIDY_UP_OPS_PILOT_FILE), '')
+    await run.tick()
+    const owner = (text: string): AgentJournalRenderItem => ({
+      itemId: 'i1',
+      revision: 1,
+      sequence: 1,
+      observedAt: run.now(),
+      turnScope: { kind: 'turn', turnItemId: 't1' },
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }
+    })
+    // The chat read OLD at its start and writes it back whole, with one new line of its own.
+    const rewrite = async (turn: AgentJournalRenderItem[]) => {
+      run.files.set(MEMORY, `${OLD}- 2026-11-06 Lesson: check worker liveness after a restart\n`)
+      const record = { history: async () => run.rows() }
+      const keepOut = await readdGuard(
+        run.fs,
+        { botId: 'b1', folder: HOME },
+        record,
+        turn,
+        run.now()
+      )
+      return tagBotMemoryFile(run.fs, HOME, TIDIED, async () => null, keepOut)
+    }
+
+    const tagged = await rewrite([owner('Thanks, carry on')])
+    expect(tagged?.text).toBe(
+      `${TIDIED}- 2026-11-06 Lesson: check worker liveness after a restart\n`
+    )
+    expect(run.files.get(ARCHIVE)).toContain(`${STATUS} · kept out 2026-11-06`)
+    expect(run.files.get(ARCHIVE)).toContain('- 2026-10-02 times in Eastern · kept out 2026-11-06')
+
+    const asked = await rewrite([owner('Put the #4417 merged at a1b2c3d4 follow-up line back')])
+    expect(asked?.text).toContain(STATUS)
   })
 })

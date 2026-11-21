@@ -1,0 +1,64 @@
+// The move of status lines (PR numbers, review rounds, worker and message ids, SHAs, "pending") out
+// of MEMORY.md into the month's journal file, word for word and without a model. It rides in a
+// Tidy-up's one History row, so Undo puts every line back.
+import { botMemoryLineKey } from '../../shared/bot-memory-lines'
+import { botMemoryLineKind, isOwnerRuleLine } from '../../shared/bot-memory-line-kinds'
+import type { TidyUpPlan } from './bot-memory-tidy-up-draft'
+import { memorySnapshot } from './bot-memory-ops'
+
+/** Lines one run moves, oldest first; the rest wait for the next run. */
+export const STATUS_MIGRATION_MAX_LINES = 1_000
+
+const STATUS_MARKERS = [
+  /(?:(?<![\w/])#|\/pull\/)\d{2,6}\b|\bPR\s*#?\d{2,6}\b/i,
+  /(?<![\w-])[0-9a-f]{7,40}(?![\w-])/,
+  /\b(?:ctx|msg|task|dispatch|term|wf)_[0-9a-z]{6,}\b/,
+  /\b(?:UX-[DI]\d|[CDR]\d)\b/,
+  /\bround\s*\d\b/i,
+  /\bitems?\s+#?\d{2,5}\b/i,
+  /\b(?:pending|waiting)\b/i,
+  /\b(?:merged|CI green|CI red|head)\b/i
+]
+
+export function statusMarkerCount(text: string): number {
+  return STATUS_MARKERS.filter((marker) => marker.test(text)).length
+}
+
+/** Status, by two or more different markers; never a typed line or an owner rule. */
+export function isStatusLine(text: string): boolean {
+  return (
+    statusMarkerCount(text) >= 2 && botMemoryLineKind(text).kind === null && !isOwnerRuleLine(text)
+  )
+}
+
+export function journalTopic(today: string): string {
+  return `journal/${today.slice(0, 7)}`
+}
+
+/** Moves the dated status lines to this month's journal; null when there are none. Undated lines
+ *  stay, as every tidy-up keeps them. */
+export function statusMigrationPlan(memory: string, today: string): TidyUpPlan | null {
+  const status = memorySnapshot(memory)
+    .filter(({ fact }) => fact.date !== null && isStatusLine(fact.text))
+    .toSorted((a, b) => (a.fact.date ?? '').localeCompare(b.fact.date ?? ''))
+    .slice(0, STATUS_MIGRATION_MAX_LINES)
+  if (status.length === 0) {
+    return null
+  }
+  const topic = journalTopic(today)
+  return {
+    change: { added: [], removed: status.map(({ raw, after }) => ({ line: raw, after })) },
+    kept: new Map(),
+    topics: new Map([
+      [
+        topic,
+        [
+          `# Status moved out of MEMORY.md, ${today.slice(0, 7)}`,
+          ...status.map(({ raw }) => raw.trimEnd())
+        ]
+      ]
+    ]),
+    filed: new Set(status.flatMap(({ raw }) => botMemoryLineKey({ line: raw, after: null }) ?? [])),
+    replaced: new Set()
+  }
+}
