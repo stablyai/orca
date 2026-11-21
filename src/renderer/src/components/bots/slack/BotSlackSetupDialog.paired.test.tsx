@@ -347,6 +347,71 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     expect(openUrl).toHaveBeenCalledTimes(1)
   })
 
+  describe('a launch that answers late', () => {
+    const SECOND = 'https://slack.com/oauth/v2/authorize?x=second'
+    let launches: (() => void)[] = []
+    beforeEach(() => {
+      launches = []
+      mocks.bots.push(bot({ id: 'other', slack: { appId: 'A9', teamId: 'T1' } }))
+      serverState({ state: 'not_created' })
+      mocks.hosts[SERVER].setUpApp
+        .mockResolvedValueOnce(
+          ok({ appId: 'A1', authorizeUrl: AUTHORIZE, expiresAt: NOW + 60_000 })
+        )
+        .mockResolvedValueOnce(ok({ appId: 'A1', authorizeUrl: SECOND, expiresAt: NOW + 60_000 }))
+      openUrl.mockImplementation(() => new Promise<void>((resolve) => launches.push(resolve)))
+    })
+    const approveFirstThenInstallAgain = async (): Promise<void> => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Approve in Slack' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'Install again' }))
+      await screen.findByRole('button', { name: 'Approve in Slack' })
+    }
+
+    it('leaves Install again’s new link in place, and Copy link copies it', async () => {
+      openDialog()
+      await approveFirstThenInstallAgain()
+      await act(async () => launches[0]())
+      expect(screen.queryByText('Waiting for Slack…')).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+      await screen.findByText('Link copied')
+      expect(writeClipboardText).toHaveBeenLastCalledWith(SECOND)
+    })
+
+    it('launches a second Approve only once, even after the first answers', async () => {
+      openDialog()
+      await approveFirstThenInstallAgain()
+      const approve = screen.getByRole('button', { name: 'Approve in Slack' })
+      fireEvent.click(approve)
+      await act(async () => launches[0]())
+      fireEvent.click(approve)
+      expect(openUrl).toHaveBeenCalledTimes(2)
+      expect(openUrl).toHaveBeenLastCalledWith(SECOND)
+    })
+
+    it('never moves a dialog opened again', async () => {
+      openDialog()
+      fireEvent.click(await screen.findByRole('button', { name: 'Approve in Slack' }))
+      cleanup()
+      openDialog()
+      await screen.findByRole('button', { name: 'Approve in Slack' })
+      await act(async () => launches[0]())
+      expect(screen.queryByText('Waiting for Slack…')).toBeNull()
+      expect(screen.getByRole('button', { name: 'Approve in Slack' })).toBeTruthy()
+    })
+
+    it('keeps Link copied when Copy link and the launch land together', async () => {
+      openDialog()
+      fireEvent.click(await screen.findByRole('button', { name: 'Approve in Slack' }))
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+        launches[0]()
+      })
+      expect(screen.getByText('Link copied')).toBeTruthy()
+      expect(writeClipboardText).toHaveBeenCalledWith(AUTHORIZE)
+    })
+  })
+
   it('keeps a reconnect to its workspace when the pasted token is for another one', async () => {
     serverState({ state: 'grant_expired', teamId: 'T1' })
     mocks.hostEmail = 'me@example.test'

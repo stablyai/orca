@@ -10,7 +10,8 @@ import { botSlackApps, type Bot } from '../../../../../shared/bot-types'
 import { BOT_SLACK_DESKTOP_ERRORS } from '../../../../../shared/connector-bot-slack-contract'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { botSlackErrorMessage } from './bot-slack-copy'
-import { isSlackAuthorizeUrl, NOT_SLACK_LINK, openSlackApprovalHere } from './slack-page-here'
+import { isSlackAuthorizeUrl, NOT_SLACK_LINK } from './slack-page-here'
+import { useSlackApprove } from './use-slack-approve'
 import { openBotHostPageOrSay } from '@/lib/bot-host-page'
 import { shownSlackSetupStep } from './slack-setup-shown-step'
 import { useBotHostLabel } from '../use-bot-host-label'
@@ -53,7 +54,7 @@ export type BotSlackSetupStep =
    *  computer's own account failed, not the bot's host's. */
   | { kind: 'failed'; code: string; local?: true }
 
-type OpenedSlackPage = { returnUrl: string | null; link: SlackInstallLink }
+export type OpenedSlackPage = { returnUrl: string | null; link: SlackInstallLink }
 
 // Slack's page already open (or its link copied) for this bot and workspace in this open of the
 // dialog: the flow mounts anew when it comes back from the pill, and must not open Slack again.
@@ -61,7 +62,7 @@ const openedSlackPages = new Map<string, OpenedSlackPage>()
 const openedKey = (bot: Bot, teamId: string): string => `${bot.hostId}\0${bot.id}\0${teamId}`
 
 /** One open of the dialog; compared by identity. `started`: its setup ran, which it does once. */
-type SetupMount = { readonly openedAt: number; started: boolean }
+export type SetupMount = { readonly openedAt: number; started: boolean }
 
 /** `teamId`: finish or update the bot's app in that workspace; none: its first, or another one. */
 export function useBotSlackSetup(
@@ -291,30 +292,7 @@ export function useBotSlackSetup(
     [step, bot.hostId, hostName, setUp, handOff]
   )
 
-  // One launch per step, and it moves on only from the step it began on, in the dialog it began
-  // in: a later Install again, Copy link or close wins over a launch that answers late.
-  const launching = useRef<BotSlackSetupStep | null>(null)
-  const latest = useRef(step)
-  useEffect(() => {
-    latest.current = step
-  }, [step])
-  const approve = useCallback(() => {
-    const at = step
-    if ((at.kind !== 'ready' && at.kind !== 'waiting') || !at.link || launching.current === at) {
-      return
-    }
-    const [mount, link] = [mounted.current, at.link]
-    launching.current = at
-    // Waits only once this computer's browser took Slack's page; a failed launch stays here.
-    void openSlackApprovalHere(link.authorizeUrl).then((opened) => {
-      if (launching.current === at) {
-        launching.current = null
-      }
-      if (opened && latest.current === at && mounted.current === mount) {
-        wait(at.teamId, link, false)
-      }
-    })
-  }, [step, wait])
+  const approve = useSlackApprove(step, setStep, mounted, remember)
 
   const copyLink = useCallback(async () => {
     if ((step.kind !== 'ready' && step.kind !== 'waiting') || !step.link) {

@@ -107,6 +107,31 @@ describe('SlackConfigTokenForm', () => {
     await waitFor(() => expect(field.value).toBe(REFRESH))
   })
 
+  it.each([
+    ['first launch answers first', [0, 1]],
+    ['second launch answers first', [1, 0]]
+  ])('reads once across two launches, never over what was typed (%s)', async (_, order) => {
+    const { readClipboardText } = shown(REFRESH)
+    const settle: (() => void)[] = []
+    vi.stubGlobal('api', {
+      ui: { readClipboardText },
+      shell: { openUrl: () => new Promise<void>((resolve) => settle.push(resolve)) }
+    })
+    const open = screen.getByRole('button', { name: /Get config token/ })
+    fireEvent.click(open)
+    fireEvent.click(open)
+    await act(async () => settle[order[0]]())
+    fireEvent.focus(window)
+    const field = screen.getByLabelText<HTMLInputElement>('Configuration refresh token')
+    await waitFor(() => expect(field.value).toBe(REFRESH))
+    fireEvent.change(field, { target: { value: 'xoxe-typed-by-hand' } })
+    await act(async () => settle[order[1]]())
+    fireEvent.focus(window)
+    await act(async () => {})
+    expect(readClipboardText).toHaveBeenCalledTimes(1)
+    expect(field.value).toBe('xoxe-typed-by-hand')
+  })
+
   it('drops a read still pending when another token is pasted', async () => {
     let resolve: (text: string) => void = () => {}
     const { onSubmit, readClipboardText } = shown('')
