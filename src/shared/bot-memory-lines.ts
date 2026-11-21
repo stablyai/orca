@@ -130,12 +130,17 @@ export function tagBotMemoryChanges(before: string, after: string, label: string
       earlier.set(raw, seen - 1)
       const fact = seen > 0 ? null : facts[index]
       // A separator lookalike left in the text would read as a source.
-      const text = fact ? oneLine(defusedSeparators(fact.text)) : ''
+      const text = fact ? defusedSeparators(fact.text) : ''
       if (!fact || !text) {
         return raw
       }
       const kept = known.get(factKey(fact.text))
-      return factLine(fact.prefix, fact.date, text, kept === undefined ? label : kept)
+      const mark = kept === undefined ? label : kept
+      // With no source or lookalike to take out, the line stays as written, its mark appended.
+      if (!raw.includes('·')) {
+        return mark ? `${raw.trimEnd()}${BOT_MEMORY_SOURCE_SEPARATOR}${mark}` : raw
+      }
+      return factLine(fact.prefix, fact.date, text, mark)
     })
     .join(eol)
 }
@@ -156,7 +161,7 @@ export function dropBotMemoryFact(text: string, fact: string): { text: string; d
 /** A fact line, and the non-blank line it followed (null: the top of the file). */
 export type BotMemoryLine = { line: string; after: string | null }
 
-/** What a write did to MEMORY.md's facts, by their words: dates, marks and spacing aside. */
+/** What a write did to MEMORY.md's facts, by their words: dates and marks aside. */
 export type BotMemoryChange = { added: BotMemoryLine[]; removed: BotMemoryLine[] }
 
 export function isEmptyBotMemoryChange(change: BotMemoryChange): boolean {
@@ -264,7 +269,7 @@ export function botMemorySourceLink(source: string): { text: string; url: string
   return linked ? { text: linked[1], url: linked[2] } : { text: source, url: null }
 }
 
-/** A fact's identity: its text without Orca's mark, spacing aside. */
+/** A fact's identity: its text without Orca's mark, exactly, since its spacing can be the value. */
 function factKey(text: string): string {
   return oneLine(text)
 }
@@ -291,9 +296,9 @@ export function findBotMemoryFact(text: string, fact: BotMemoryFact): BotMemoryF
   return facts.find((entry) => same(entry) && entry.line === fact.line) ?? facts.find(same)
 }
 
-/** One fact is one line. */
+/** One fact is one line: its line breaks become spaces, and every other space stays. */
 function oneLine(fact: string): string {
-  return fact.replace(/\s+/g, ' ').trim()
+  return fact.replace(/[ \t]*[\n\r\v\f\u2028\u2029]+[ \t]*/g, ' ').trim()
 }
 
 function factLine(

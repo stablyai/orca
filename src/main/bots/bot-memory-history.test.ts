@@ -373,3 +373,25 @@ describe("a bot's memory history", () => {
     expect(read()).toBe('# Memory\n')
   })
 })
+
+describe('a value whose spacing matters', () => {
+  it("keeps its spaces through a chat's turn end", async () => {
+    const { read, turnEnded, write } = bot(OLD)
+    const spaced = `${OLD}2026-11-06:  header is  X-Token  abc\n- 2026-11-06 sep is "a  b"\n`
+    write(spaced)
+    await turnEnded()
+    expect(read()).toBe(spaced)
+  })
+
+  it('forgets only the named one of two lines that differ in spacing, and undo puts it back', async () => {
+    const file = '# Memory\n- sep is a  b\n- sep is a b\n'
+    const { forget, read, rows, turnEnded, undo } = bot(file)
+    expect(await forget('sep is a  b')).toBe(true)
+    expect(read()).toBe('# Memory\n- sep is a b\n')
+    await turnEnded()
+    expect(read()).toBe('# Memory\n- sep is a b\n')
+
+    expect(await undo((await rows())[0].id)).toBe(true)
+    expect(read()).toBe(file)
+  })
+})
