@@ -176,8 +176,8 @@ export const ptySessionControlApi = {
   setRendererPtyVisible: (id: string, visible: boolean): void => {
     ipcRenderer.send('pty:setRendererPtyVisible', { id, visible })
   },
-  setHiddenRendererPty: (id: string, hidden: boolean): void => {
-    ipcRenderer.send('pty:setHiddenRendererPty', { id, hidden })
+  setHiddenRendererPty: (id: string, hidden: boolean, retainGraphics?: boolean): void => {
+    ipcRenderer.send('pty:setHiddenRendererPty', { id, hidden, retainGraphics })
   },
   setPtyDeliveryInterest: (id: string, interested: boolean): void => {
     ipcRenderer.send('pty:setPtyDeliveryInterest', { id, interested })
@@ -187,8 +187,12 @@ export const ptySessionControlApi = {
   },
   killFenced: (request: PtyFencedTerminationRequest): Promise<PtyFencedTerminationOutcome> =>
     ipcRenderer.invoke('pty:killFenced', request),
-  kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
-    ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
+  kill: (id: string, opts?: { keepHistory?: boolean; replaced?: boolean }): Promise<void> =>
+    ipcRenderer.invoke('pty:kill', {
+      id,
+      keepHistory: opts?.keepHistory ?? false,
+      replaced: opts?.replaced ?? false
+    }),
   listSessions: (
     scope?: PtySessionListScope,
     admission?: ResourceViewAdmission

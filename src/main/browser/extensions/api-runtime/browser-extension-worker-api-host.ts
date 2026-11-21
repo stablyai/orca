@@ -121,6 +121,17 @@ function initiatingExtension(sess: Electron.Session, request: Request): Electron
   return origin ? sess.extensions.getExtension(origin.extensionId) : null
 }
 
+/** Worker calls main is still handling, per extension: an unload cuts them off mid-change. */
+const callsInFlight = new WeakMap<HostSessionState, Map<string, number>>()
+
+export function hasBrowserExtensionWorkerCallsInFlight(
+  sess: Electron.Session,
+  extensionId: string
+): boolean {
+  const state = getHostSessionState(sess)
+  return (state ? callsInFlight.get(state)?.get(extensionId) : undefined) !== undefined
+}
+
 export async function handleBrowserExtensionWorkerRequest(
   sess: Electron.Session,
   state: HostSessionState,
@@ -133,6 +144,27 @@ export async function handleBrowserExtensionWorkerRequest(
   if (!extension) {
     return refuse(403)
   }
+  const counts = callsInFlight.get(state) ?? new Map<string, number>()
+  callsInFlight.set(state, counts)
+  counts.set(extension.id, (counts.get(extension.id) ?? 0) + 1)
+  try {
+    return await handleExtensionWorkerRequest(sess, state, request, extension)
+  } finally {
+    const left = (counts.get(extension.id) ?? 1) - 1
+    if (left > 0) {
+      counts.set(extension.id, left)
+    } else {
+      counts.delete(extension.id)
+    }
+  }
+}
+
+async function handleExtensionWorkerRequest(
+  sess: Electron.Session,
+  state: HostSessionState,
+  request: Request,
+  extension: Electron.Extension
+): Promise<Response> {
   const lifetime = getBrowserExtensionContextSignal(state, extension.id)
   const text = await readBoundedText(request)
   if (lifetime.aborted || getHostSessionState(sess) !== state) {

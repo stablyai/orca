@@ -99,8 +99,11 @@ describe('E2EE text reply backpressure', () => {
 
     expect(first.onError).not.toHaveBeenCalled()
     expect(second.onError).toHaveBeenCalledWith(1013, 'Outbound reply buffer overflow')
+    // Names the limit that fired and the request whose replies filled the backlog.
     expect(trackMock).toHaveBeenCalledWith('remote_outbound_budget_close', {
-      emitter: 'queue'
+      emitter: 'queue',
+      cap: 'claimQueuedBytes',
+      top_method: 'status.get'
     })
     first.channel.destroy()
     expect(outboundMemoryBudget.evidence().queuedBytes).toBe(0)

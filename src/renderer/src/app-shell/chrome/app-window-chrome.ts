@@ -1,5 +1,6 @@
 import {
   isPairedWebClientWindow,
+  canUseLinuxTilingWindowMode,
   shouldRenderDesktopWindowChrome
 } from '@/app-shell/chrome/desktop-window-chrome'
 
@@ -7,10 +8,12 @@ export const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')
 export const shortcutPlatform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
 // Custom chrome belongs to Windows/Linux desktops; paired browser tabs need no window controls.
-export const hasCustomTitleBar = shouldRenderDesktopWindowChrome({
+const windowChrome = {
   platform: shortcutPlatform,
   isWebClient: isPairedWebClientWindow()
-})
+}
+export const hasCustomTitleBar = shouldRenderDesktopWindowChrome(windowChrome)
+export const supportsLinuxTilingWindowMode = canUseLinuxTilingWindowMode(windowChrome)
 
 // Offset surfaces by three 46px controls and their 36px titlebar.
 export const WINDOW_CONTROLS_WIDTH = hasCustomTitleBar ? '138px' : '0px'

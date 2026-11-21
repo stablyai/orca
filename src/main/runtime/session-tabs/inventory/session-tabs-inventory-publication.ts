@@ -3,6 +3,22 @@ import { parseExecutionHostId } from '../../../../shared/execution-host/executio
 import { OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees } from './session-tabs-inventory'
 
 export abstract class RuntimeSessionTabsInventoryPublication extends OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees {
+  /** A workspace's chat tabs, from the tab state alone: no PTY inventory, which only terminal tabs need.
+   *  Bot reads (chats tree, Activity, Look around) ask this for a bot home, which has no terminals. */
+  async listChatSessionTabs(worktreeId: string): Promise<{ sessionId: string; title: string }[]> {
+    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
+      allowAttachedWindow: true,
+      onlyRuntimeOwnedTerminals: true
+    })
+    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
+    const snapshot = await this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+      includeAgentSenders: false
+    })
+    return snapshot.tabs.flatMap((tab) =>
+      tab.type === 'agent-session' ? [{ sessionId: tab.sessionId, title: tab.title }] : []
+    )
+  }
+
   protected waitForSessionTabsInventoryPublication(signal?: AbortSignal): Promise<void> {
     if (this.getAuthoritativeSessionTabsInventoryEpoch() !== null) {
       return Promise.resolve()
@@ -28,6 +44,26 @@ export abstract class RuntimeSessionTabsInventoryPublication extends OrcaRuntime
         onPublished()
       }
     })
+  }
+
+  protected abstract performMobileSessionPtyRecordsRefresh(
+    targetWorktreeId: string | null
+  ): Promise<PtyControllerInventory | null>
+
+  /** The receipt stays current only while the same controller and published graph own the census. */
+  async refreshAuthoritativeTerminalInventory(): Promise<(() => boolean) | null> {
+    const epoch = this.getAuthoritativeSessionTabsInventoryEpoch()
+    if (epoch === null || !this.ptyController) {
+      return null
+    }
+    const generation = this.ptyControllerGeneration
+    const inventory = await this.performMobileSessionPtyRecordsRefresh(null)
+    if (!this.isCompleteSessionTabsPtyCensus(inventory)) {
+      return null
+    }
+    return () =>
+      this.ptyControllerGeneration === generation &&
+      this.getAuthoritativeSessionTabsInventoryEpoch() === epoch
   }
 
   protected getAuthoritativeSessionTabsInventoryEpoch(): number | null {

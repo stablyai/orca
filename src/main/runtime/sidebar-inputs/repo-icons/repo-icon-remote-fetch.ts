@@ -1,4 +1,6 @@
 import { isKnownRasterImageMimeType } from '../../../../shared/file-preview/raster-image-preview-limits'
+import { getMainHttpClient } from '../../../network/http-client'
+import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 
 export const REPO_ICON_FETCH_MAX_BYTES = 64 * 1024
 export const REPO_ICON_FETCH_MAX_REDIRECTS = 3
@@ -8,6 +10,12 @@ const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
 
 export type RepoIconFetch = (url: string, init: RequestInit) => Promise<Response>
 export type FetchedRepoIcon = { mimeType: string; bytes: Uint8Array }
+
+/** This host's fetch for icons; the desktop net.fetch wrapper rejects manual redirects. */
+export const runtimeIconFetch: RepoIconFetch = (url, init) => {
+  const manualRedirectFetch = getRuntimeDesktopSurface().fetchRepoIcon
+  return manualRedirectFetch ? manualRedirectFetch(url, init) : getMainHttpClient().fetch(url, init)
+}
 
 function httpsUrl(raw: string, base?: URL): URL | null {
   try {
@@ -50,14 +58,16 @@ async function readCappedBody(response: Response): Promise<Uint8Array | null> {
   return Buffer.concat(chunks)
 }
 
-/** Fetch HTTPS without cookies, at most three HTTPS redirects and 64KiB under one deadline. Failure returns null for fallback, without retry. */
+/** Fetch HTTPS without cookies, at most three HTTPS redirects and 64KiB under one deadline. Failure returns null for fallback, without retry. `allows` vets every hop. */
 export async function fetchRemoteRepoIcon(
   rawUrl: string,
   fetch: RepoIconFetch,
-  timeoutMs = REPO_ICON_FETCH_TIMEOUT_MS
+  timeoutMs = REPO_ICON_FETCH_TIMEOUT_MS,
+  allows: (url: URL) => boolean = () => true
 ): Promise<FetchedRepoIcon | null> {
   const signal = AbortSignal.timeout(timeoutMs)
-  let url = httpsUrl(rawUrl)
+  const allowed = (url: URL | null): URL | null => (url && allows(url) ? url : null)
+  let url = allowed(httpsUrl(rawUrl))
   try {
     for (let redirects = 0; url; redirects += 1) {
       const response = await fetch(url.href, { redirect: 'manual', credentials: 'omit', signal })
@@ -72,7 +82,10 @@ export async function fetchRemoteRepoIcon(
       }
       const location = response.headers.get('location')
       await discardBody(response)
-      url = location && redirects < REPO_ICON_FETCH_MAX_REDIRECTS ? httpsUrl(location, url) : null
+      url =
+        location && redirects < REPO_ICON_FETCH_MAX_REDIRECTS
+          ? allowed(httpsUrl(location, url))
+          : null
     }
     return null
   } catch {

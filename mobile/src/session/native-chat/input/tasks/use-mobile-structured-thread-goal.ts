@@ -9,7 +9,7 @@ import type {
   AgentSessionThreadGoalResult
 } from '../../../../../../src/shared/agent-session/thread-goals/agent-session-thread-goal-wire'
 import { agentSessionWriteNoticeParts } from '../../../../../../src/shared/agent-session/failures/agent-session-refusal-notice'
-import type { AgentJournalThreadGoal } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionGoalDisplay } from '../../../../../../src/shared/agent-session/thread-goals/agent-session-goal-check-display'
 import type { AgentSessionOptionsResult } from '../../../../../../src/shared/agent-session/options/protocol/agent-session-options-result'
 import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { StructuredAgentSessionComposerOptions } from '../../../../../../src/shared/agent-session/view/structured-agent-session-composer'
@@ -24,7 +24,7 @@ import { useRouteRelaysCapability } from '../../../../worktree/execution-hosts/w
 export type MobileStructuredThreadGoal = {
   /** Scopes the strip's expansion to the conversation. */
   sessionKey: string
-  goal: AgentJournalThreadGoal | null
+  goal: AgentSessionGoalDisplay | null
   /** `host`: the host's goal method; `agent`: only the agent's own /goal, which clears and has no pause; null: an older host refuses the phone's changes. */
   changes: 'host' | 'agent' | null
   /** A change is out, or the chat can't take one now. */

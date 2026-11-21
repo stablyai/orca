@@ -63,6 +63,7 @@ export function runtimeStub(overrides: Record<string, unknown> = {}) {
   return {
     ...presentation,
     getRuntimeId: () => 'runtime-1',
+    bots: { list: () => [] },
     getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
     ensureStructuredAgentSessionHost: async () => undefined,
     prepareStructuredAgentSessionRevealWorkspace: vi.fn(availableRevealWorkspace),

@@ -57,17 +57,17 @@ export async function openMainWindow(options: MainWindowOpenOptions = {}): Promi
   const revealInBackground =
     options.revealInBackground ??
     (!state.hasOpenedMainWindow && argvRequestsBackgroundOpen(process.argv))
-  const { store, keybindings } = requireMainWindowServices({
+  const { keybindings } = requireMainWindowServices({
     store: state.store,
-    runtime: state.runtime,
-    stats: state.stats,
-    rateLimits: state.rateLimits,
-    automations: state.automations,
-    codexAccounts: state.codexAccounts,
-    codexRuntimeHome: state.codexRuntimeHome,
-    claudeAccounts: state.claudeAccounts,
-    claudeRuntimeAuth: state.claudeRuntimeAuth,
-    keybindings: state.keybindings
+    runtime: state.core.runtime,
+    stats: state.core.stats,
+    rateLimits: state.core.rateLimits,
+    automations: state.core.automations,
+    codexAccounts: state.core.codexAccounts,
+    codexRuntimeHome: state.core.codexRuntimeHome,
+    claudeAccounts: state.core.claudeAccounts,
+    claudeRuntimeAuth: state.core.claudeRuntimeAuth,
+    keybindings: state.core.keybindings
   })
   if (process.platform === 'win32') {
     logStartupMilestone('acl-grant-start')
@@ -97,7 +97,7 @@ export async function openMainWindow(options: MainWindowOpenOptions = {}): Promi
   if (state.isServeMode) {
     applyServeDesktopWindowActivationPolicy({ warn: console.warn, background: revealInBackground })
   }
-  const window = createMainWindow(store, {
+  const window = createMainWindow(state.nativeSettings, {
     getIsQuitting: () => state.isQuitting,
     onQuitAborted: () => {
       state.isQuitting = false
@@ -254,7 +254,7 @@ export async function openMainWindow(options: MainWindowOpenOptions = {}): Promi
       })
   })
   logStartupMilestone('load-start')
-  loadMainWindow(window)
+  loadMainWindow(window, options.loadObserver)
   hostInitialization.resolve()
   return window
 }

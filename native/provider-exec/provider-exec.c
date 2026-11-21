@@ -7,8 +7,13 @@
 // Usage: orca-provider-exec --cli-input-fd7 <stdinEndGraceMs> <sigtermGraceMs> <session|one-shot>
 //          <stdin-end|stdin-end-and-sigterm> -- <command> [args...]
 // The fixed --cli-input-fd7 prefix identifies the private input protocol.
+// Linux also: orca-provider-exec --exec-without-inherited-fds -- <command> [args...] execs in place
+// keeping only fds 0-2 and NODE_CHANNEL_FD, so a durable child can't hold the launcher's sockets.
 #if !defined(__APPLE__)
 #define _POSIX_C_SOURCE 200809L
+#endif
+#if defined(__linux__)
+#define _DEFAULT_SOURCE
 #endif
 
 #include <errno.h>
@@ -23,7 +28,10 @@
 #include <time.h>
 #include <unistd.h>
 #if defined(__linux__)
+#include <dirent.h>
+#include <limits.h>
 #include <sys/prctl.h>
+#include <sys/syscall.h>
 #endif
 #if defined(__APPLE__)
 #include <limits.h>
@@ -120,10 +128,12 @@ static int parse_ms(const char *text, unsigned max, unsigned *out) {
         if (*c < '0' || *c > '9') {
             return -1;
         }
-        value = value * 10 + (unsigned)(*c - '0');
-        if (value > max) {
+        unsigned digit = (unsigned)(*c - '0');
+        // Checked before multiplying so a long input can't wrap back under `max`.
+        if (value > (max - digit) / 10) {
             return -1;
         }
+        value = value * 10 + digit;
     }
     *out = value;
     return 0;
@@ -137,6 +147,67 @@ static int set_cloexec(int fd, int enabled) {
     flags = enabled ? flags | FD_CLOEXEC : flags & ~FD_CLOEXEC;
     return fcntl(fd, F_SETFD, flags);
 }
+
+#if defined(__linux__)
+#ifndef CLOSE_RANGE_CLOEXEC
+#define CLOSE_RANGE_CLOEXEC (1U << 2)
+#endif
+// Older glibc headers lack SYS_close_range even when the kernel headers have the number.
+#if !defined(SYS_close_range) && defined(__NR_close_range)
+#define SYS_close_range __NR_close_range
+#endif
+
+// Marks every fd above 2 close-on-exec; walks /proc where close_range is missing or filtered.
+static int cloexec_inherited_fds(void) {
+#if defined(SYS_close_range)
+    if (syscall(SYS_close_range, 3U, ~0U, CLOSE_RANGE_CLOEXEC) == 0) {
+        return 0;
+    }
+    if (errno != ENOSYS && errno != EINVAL && errno != EPERM) {
+        return -1;
+    }
+#endif
+    DIR *dir = opendir("/proc/self/fd");
+    if (dir == NULL) {
+        return -1;
+    }
+    int failed = 0;
+    struct dirent *entry;
+    // readdir returns NULL for both the end and an error; only errno tells them apart.
+    for (errno = 0; (entry = readdir(dir)) != NULL; errno = 0) {
+        unsigned fd;
+        if (parse_ms(entry->d_name, INT_MAX, &fd) == 0 && fd > 2 && (int)fd != dirfd(dir) &&
+                set_cloexec((int)fd, 1) != 0 && errno != EBADF) {
+            failed = 1;
+        }
+    }
+    if (errno != 0) {
+        failed = 1;
+    }
+    closedir(dir);
+    return failed ? -1 : 0;
+}
+
+// Fails closed: an unproven cleanup or a malformed NODE_CHANNEL_FD never execs.
+static int exec_without_inherited_fds(char *argv[]) {
+    const char *channel = getenv("NODE_CHANNEL_FD");
+    unsigned channel_fd = 0;
+    if (channel != NULL &&
+            (parse_ms(channel, INT_MAX, &channel_fd) != 0 || channel_fd < 3 ||
+                fcntl((int)channel_fd, F_GETFD) < 0)) {
+        fputs("orca-provider-exec: NODE_CHANNEL_FD is not an open descriptor\n", stderr);
+        return EXIT_USAGE;
+    }
+    if (cloexec_inherited_fds() != 0 ||
+            (channel != NULL && set_cloexec((int)channel_fd, 0) != 0)) {
+        fputs("orca-provider-exec: could not close inherited descriptors\n", stderr);
+        return EXIT_BOOTSTRAP;
+    }
+    execvp(argv[0], argv);
+    fprintf(stderr, "orca-provider-exec: exec %s failed: %s\n", argv[0], strerror(errno));
+    return EXIT_EXEC_FAILED;
+}
+#endif
 
 static void reap_watcher(void) {
     if (watcher_pid <= 0) {
@@ -637,6 +708,13 @@ int main(int argc, char *argv[]) {
         return print_process_row(argv[2]);
     }
 #endif
+#if defined(__linux__)
+    if (argc >= 4 && strcmp(argv[1], "--exec-without-inherited-fds") == 0) {
+        return strcmp(argv[2], "--") == 0 && argv[3][0] != '\0'
+                   ? exec_without_inherited_fds(&argv[3])
+                   : EXIT_USAGE;
+    }
+#endif
     unsigned stdin_end_grace_ms;
     unsigned sigterm_grace_ms;
     // A fixed protocol discriminator rejects mismatched helpers before a CLI can execute.
@@ -651,6 +729,13 @@ int main(int argc, char *argv[]) {
     for (int fd = 0; fd <= INPUT_FD; fd++) {
         if (fcntl(fd, F_GETFD) < 0) {
             return EXIT_USAGE;
+        }
+    }
+    // A host passes its own nonblocking sockets; the gate, status and CLI stdio expect blocking ones.
+    for (int fd = 1; fd <= INPUT_FD; fd++) {
+        int flags = fcntl(fd, F_GETFL);
+        if (flags < 0 || ((flags & O_NONBLOCK) && fcntl(fd, F_SETFL, flags & ~O_NONBLOCK) != 0)) {
+            return EXIT_BOOTSTRAP;
         }
     }
 

@@ -2,10 +2,11 @@ import { markdownParserAliases } from './config/build-plugins/markdown-parser-ex
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { defineConfig, type UserConfig } from 'electron-vite'
-import type { Plugin, Rollup } from 'vite'
+import type { Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { createBootstrapFatalExitBanner } from './config/build-plugins/bootstrap-fatal-exit-banner'
+import { createInheritedOrcaIdentityFirstGuardPlugin } from './config/build-plugins/inherited-orca-identity-banner'
+import { createMainEntryPostBanner } from './config/build-plugins/main-entry-post-banner'
 import {
   createSandboxedScriptBundlesPlugin,
   ONE_BYTE_UNMINIFIED_OUTPUT
@@ -177,18 +178,6 @@ function createStartupDiagnosticsBanner(chunkName: string): string {
 `
 }
 
-// postBanner lands after minification and Rolldown shifts index.js.map past it, keeping crash traces on the right line.
-function createMainBootstrapPostBanner(chunk: Rollup.RenderedChunk): string {
-  if (chunk.fileName !== 'index.js') {
-    return ''
-  }
-  if (!chunk.moduleIds.some((id) => resolve(id) === MAIN_BUILD_ENTRY_POINTS.index)) {
-    throw new Error('Main startup must stay in index.js so __dirname resolves app assets')
-  }
-  // Source guards run after Rollup’s require prelude, too late to handle missing bootstrap dependencies.
-  return createBootstrapFatalExitBanner() + createStartupDiagnosticsBanner(chunk.fileName)
-}
-
 // Dev-only unminified main bundle exposes function names in V8 profiles; releases and pnpm build never read this flag.
 const MAIN_MINIFY: 'oxc' | false = process.env.ORCA_UNMINIFIED_MAIN === '1' ? false : 'oxc'
 
@@ -223,10 +212,11 @@ export const electronViteConfig: UserConfig = {
           format: 'cjs',
           entryFileNames: '[name].js',
           chunkFileNames: 'chunks/[name]-[hash].js',
-          postBanner: createMainBootstrapPostBanner
+          postBanner: (chunk) => createMainEntryPostBanner(chunk, createStartupDiagnosticsBanner)
         },
         plugins: [
           createPlainNodeEntryGuardPlugin(),
+          createInheritedOrcaIdentityFirstGuardPlugin(),
           createProcessHostDevRebuildPlugin(),
           createDarkBuildMarkerPlugin(),
           createSandboxedScriptBundlesPlugin(),
@@ -267,6 +257,10 @@ export const electronViteConfig: UserConfig = {
     resolve: {
       alias: {
         ...markdownParserAliases,
+        // Pin the browser-safe UMD entry so an unpatched package.json cannot bundle lib/addon-ligatures.mjs (which imports node:diagnostics_channel).
+        '@xterm/addon-ligatures': resolve(
+          'node_modules/@xterm/addon-ligatures/lib/addon-ligatures.js'
+        ),
         '@renderer': resolve('src/renderer/src'),
         '@': resolve('src/renderer/src')
       }

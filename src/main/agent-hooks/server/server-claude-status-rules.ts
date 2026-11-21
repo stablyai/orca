@@ -85,7 +85,8 @@ export function shouldKeepClaudePermissionVisible(
   ) {
     return false
   }
-  if (next.hasExplicitPrompt === true) {
+  // A new turn, by its prompt or its new prompt_id, ends the old turn's request.
+  if (next.hasExplicitPrompt === true || next.opensTurn === true) {
     return false
   }
   if (isClaudePermissionOwningChildEnding(previous, next)) {

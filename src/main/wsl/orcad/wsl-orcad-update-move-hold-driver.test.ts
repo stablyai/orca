@@ -144,8 +144,7 @@ function transport(target: WslOrcadHostTarget): OrcadHostTransport {
   return { getTarget: () => target } as unknown as OrcadHostTransport
 }
 
-/** The host's server launched from Settings (Update) or by a connect (its activation). */
-function launchServer(intent: 'update' | 'connect') {
+function launchServer(intent: 'update' | 'connect' | 'force') {
   return deployAndLaunchWslOrcad(DISTRO, {
     intent,
     holder: holder(),
@@ -210,7 +209,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
   resetWslMoveDesktopRewriteStoresForTests()
-  removeWslMoveRigDirs()
+  await removeWslMoveRigDirs()
 })
 
 /** A move run stopped where it first stages on the host, after it has journaled its cutover. */
@@ -251,7 +250,7 @@ async function moveAtStage(): Promise<{
 
 async function expectHeld(): Promise<void> {
   expect(isWslMoveUnderwayOnHost(rig.userDataPath, DISTRO)).toBe(true)
-  for (const intent of ['update', 'connect'] as const) {
+  for (const intent of ['update', 'connect', 'force'] as const) {
     const launched = await launchServer(intent)
     // The running server keeps serving the move; Settings shows the code as "Not done: a project
     // is moving onto this server…".

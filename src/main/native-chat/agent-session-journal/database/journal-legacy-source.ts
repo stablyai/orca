@@ -90,6 +90,7 @@ export function journalLegacyChatRevisionKey(sessionId: string): string {
   return `journal.legacy-revision:${sessionId}`
 }
 
+/** Absorbing history clears its failure; refused upload custody remains independent. */
 export function recordJournalLegacyChatRevision(
   db: Database.Database,
   sessionId: string,
@@ -98,5 +99,87 @@ export function recordJournalLegacyChatRevision(
   db.prepare('INSERT OR REPLACE INTO agent_session_store_meta (key, value) VALUES (?, ?)').run(
     journalLegacyChatRevisionKey(sessionId),
     revision
+  )
+  clearJournalLegacyHistoryFailure(db, sessionId)
+}
+
+/** A chat, or a copy's history, that could not be kept, with its error; not retried by itself. */
+export function journalLegacyFailureKey(sessionId: string): string {
+  return `journal.legacy-failed:${sessionId}`
+}
+
+export type JournalLegacyFailureRecord = {
+  revision: string | null
+  error: string
+  claims?: string
+  adoption?: true
+}
+
+export function readJournalLegacyFailure(
+  db: Database.Database,
+  sessionId: string
+): JournalLegacyFailureRecord | undefined {
+  const row = db
+    .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
+    .get(journalLegacyFailureKey(sessionId))
+  try {
+    const value: unknown = row && JSON.parse(String(row.value))
+    if (!value || typeof value !== 'object' || !('error' in value)) {
+      return undefined
+    }
+    return {
+      revision: 'revision' in value && typeof value.revision === 'string' ? value.revision : null,
+      error: String(value.error),
+      ...('claims' in value && typeof value.claims === 'string' ? { claims: value.claims } : {}),
+      ...('adoption' in value && value.adoption === true ? { adoption: true as const } : {})
+    }
+  } catch {
+    return undefined
+  }
+}
+
+function clearJournalLegacyHistoryFailure(db: Database.Database, sessionId: string): void {
+  const failure = readJournalLegacyFailure(db, sessionId)
+  const key = journalLegacyFailureKey(sessionId)
+  if (failure?.claims) {
+    db.prepare('UPDATE agent_session_store_meta SET value=? WHERE key=?').run(
+      JSON.stringify({ ...failure, revision: null, adoption: undefined }),
+      key
+    )
+  } else {
+    db.prepare('DELETE FROM agent_session_store_meta WHERE key=?').run(key)
+  }
+}
+
+/** A copy kept for an original chat an older Orca continued converts its history from that chat. */
+export function journalLegacyCopySourceKey(copyId: string): string {
+  return `journal.legacy-copy-source:${copyId}`
+}
+
+/** The original chat a copy converts from, or the chat itself. */
+export function journalLegacyConversionSource(db: Database.Database, sessionId: string): string {
+  const row = db
+    .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
+    .get(journalLegacyCopySourceKey(sessionId))
+  return row === undefined ? sessionId : String(row.value)
+}
+
+/** The copy kept for an original chat that hasn't converted here yet. */
+export function journalLegacyPendingCopyKey(sessionId: string): string {
+  return `journal.legacy-pending-copy:${sessionId}`
+}
+
+/** Once a copy is ready here its history no longer reads from the original. */
+export function settleJournalLegacyCopy(db: Database.Database, copyId: string): void {
+  const key = journalLegacyCopySourceKey(copyId)
+  const original = db.prepare('SELECT value FROM agent_session_store_meta WHERE key=?').get(key)
+  if (original === undefined) {
+    return
+  }
+  db.prepare('DELETE FROM agent_session_store_meta WHERE key=?').run(key)
+  clearJournalLegacyHistoryFailure(db, copyId)
+  db.prepare('DELETE FROM agent_session_store_meta WHERE key=? AND value=?').run(
+    journalLegacyPendingCopyKey(String(original.value)),
+    copyId
   )
 }

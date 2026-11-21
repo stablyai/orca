@@ -48,6 +48,8 @@ export const WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND = {
   activeGroupIdByWorktree: 'owner-keyed',
   activeConnectionIdsAtShutdown: 'none',
   remoteSessionIdsByTabId: 'none',
+  desktopRelayOwnerByTabId: 'none',
+  desktopRelayAdoptionVersion: 'none',
   lastVisitedAtByWorktreeId: 'owner-keyed',
   defaultTerminalTabsAppliedByWorktreeId: 'owner-keyed',
   sleepingAgentSessionsByPaneKey: 'row-record',

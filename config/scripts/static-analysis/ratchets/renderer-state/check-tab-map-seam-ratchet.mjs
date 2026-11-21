@@ -30,6 +30,8 @@ export const CONSUMERS = new Map([
       coldPaths: new Set(['reconcileFromSnapshot']),
       helpers: {
         getStructuredAgentSessionTabs: ['reconcileFromSnapshot'],
+        // A bot's tabless sessions plus every tab: the same whole-map walk.
+        withBotSessions: ['reconcileFromSnapshot'],
         reconcileFromSnapshot: ['reconcile']
       },
       imports: new Set([
@@ -52,7 +54,13 @@ export const CONSUMERS = new Map([
         'createStructuredSessionStatusBurst',
         'sameCapturedInput',
         'sameStatusInput',
-        'sameSemanticTab'
+        'sameSemanticTab',
+        'readBotBackgroundSessionTabs',
+        'subscribeBotBackgroundSessionTabs',
+        'withBotSessions',
+        // Read only the named sessions' members, never a tab map.
+        'subscribeHostGroupStatus',
+        'sessionMembers'
       ])
     }
   ],

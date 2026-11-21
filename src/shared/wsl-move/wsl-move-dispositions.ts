@@ -99,6 +99,16 @@ export const PERSISTED_STATE_DISPOSITIONS = {
   automationRuns: moveDisposition(19, {
     note: "An in-flight run in scope blocks the move. The desktop's history stays as written, beside its automation."
   }),
+  bots: notApplicableDisposition(
+    62,
+    "A bot's hidden project group is never offered for a move; the bot stays with its host."
+  ),
+  botsNewerAgents: notApplicableDisposition(62, 'Bots on newer agents; same as bots.'),
+  botOrder: notApplicableDisposition(62, 'Bot order; same as bots.'),
+  botsPermissionDefaultMigrated: notApplicableDisposition(
+    62,
+    'A one-time migration marker for bots.'
+  ),
   orcadMigrationImportReceipts: notApplicableDisposition(67, 'Mover-owned.'),
   orcadMigrationEvictedReceipts: notApplicableDisposition(67, 'Mover-owned.'),
   orcadMigrationStagedCatalogs: notApplicableDisposition(68, 'Mover-owned.'),
@@ -144,6 +154,8 @@ export const WORKSPACE_SESSION_DISPOSITIONS = {
   terminalLayoutsByTabId: moveDisposition(23),
   localOnlyScrollbackByTabId: moveDisposition(25, { newManifestSection: true }),
   remoteSessionIdsByTabId: { disposition: 'drop-pty-binding', item: 36 },
+  desktopRelayOwnerByTabId: { disposition: 'drop-pty-binding', item: 36 },
+  desktopRelayAdoptionVersion: { disposition: 'drop-pty-binding', item: 36 },
   browserPagesByWorkspace: moveDisposition(29),
   markdownFrontmatterVisible: moveDisposition(28, {
     rewriteDesktopCopy: true,

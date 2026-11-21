@@ -119,13 +119,15 @@ describe('stageWorktreeChanges', () => {
   })
 
   describe('Orca shared symlinks', () => {
-    async function createSharedLinkWorktree(): Promise<{ repo: string; owner: string }> {
+    // The default directory-only rule does not match the worktree's symlink.
+    async function createSharedLinkWorktree(
+      ignoreRule = 'node_modules/'
+    ): Promise<{ repo: string; owner: string }> {
       const repo = await createRepo()
       const owner = await mkdtemp(path.join(tmpdir(), 'orca-stage-owner-'))
       tempRoots.push(owner)
       await mkdir(path.join(owner, 'node_modules'))
-      // Directory-only ignore rules do not match the worktree's symlink.
-      await writeFile(path.join(repo, '.gitignore'), 'node_modules/\n')
+      await writeFile(path.join(repo, '.gitignore'), `${ignoreRule}\n`)
       git(repo, ['add', '.'])
       git(repo, ['commit', '-q', '-m', 'initial'])
       await symlink(path.join(owner, 'node_modules'), path.join(repo, 'node_modules'))
@@ -141,6 +143,15 @@ describe('stageWorktreeChanges', () => {
       expect(receipt).toEqual({ stagedScope: 'all' })
       expect(names(repo, ['diff', '--cached', '--name-only'])).toEqual(['new.txt'])
       expect(names(repo, ['ls-files', '--others', '--exclude-standard'])).toEqual(['node_modules'])
+    })
+
+    it('stages around a shared link that a rule without a trailing slash ignores', async () => {
+      const { repo } = await createSharedLinkWorktree('node_modules')
+
+      const receipt = await stageWorktreeChanges(repo, 'all', { sharedLinkPaths: ['node_modules'] })
+
+      expect(receipt).toEqual({ stagedScope: 'all' })
+      expect(names(repo, ['diff', '--cached', '--name-only'])).toEqual(['new.txt'])
     })
 
     // Shared Paths preserves typed spellings; Git reports canonical relative names.
@@ -168,5 +179,24 @@ describe('stageWorktreeChanges', () => {
         ])
       })
     })
+  })
+
+  it('stages the rest when a shared link lives inside a tracked submodule', async () => {
+    // Git refuses any pathspec under a submodule, so naming the link to check-ignore or add fails all.
+    const child = await createRepo()
+    await writeFile(path.join(child, 'README.md'), 'child\n')
+    git(child, ['add', '.'])
+    git(child, ['commit', '-q', '-m', 'child'])
+    const repo = await createRepo()
+    git(repo, ['-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', child, 'vendor/sub'])
+    git(repo, ['commit', '-q', '-m', 'submodule'])
+    const outside = await mkdtemp(path.join(tmpdir(), 'orca-sub-outside-'))
+    tempRoots.push(outside)
+    await symlink(outside, path.join(repo, 'vendor', 'sub', 'node_modules'), 'junction')
+    await writeFile(path.join(repo, 'new.txt'), 'new\n')
+
+    await stageWorktreeChanges(repo, 'all', { sharedLinkPaths: ['vendor/sub/node_modules'] })
+
+    expect(names(repo, ['diff', '--cached', '--name-only'])).toEqual(['new.txt'])
   })
 })

@@ -1,14 +1,17 @@
+import type { BotChatIdentity } from '../../../bots/use-bot-chat-identity'
 import { memo, useContext } from 'react'
 import { cn } from '@/lib/class-names'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { NativeChatResolutionReceipt } from '../../prompts/NativeChatResolutionReceipt'
 import { NativeChatWorkingStatus } from '../../conversation/turns/NativeChatWorkingStatus'
+import { NativeChatQuietTurnLeave } from '../../conversation/turns/NativeChatQuietTurnLeave'
 import { NativeChatTurnDiffRollup } from '../../tools/diffs/NativeChatTurnDiffRollup'
 import { NativeChatOpenedPullRequestCard } from '../../tools/pull-requests/NativeChatOpenedPullRequestCard'
 import { NativeChatSubagentHead } from '../../subagents/NativeChatSubagentHead'
 import type { NativeChatTaskListPredecessors } from '../../../../../../shared/native-chat/input/task-lists/native-chat-task-list-history'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
+import { nativeChatSlotLeavesWhole } from '../../conversation/slots/native-chat-quiet-turn-rows'
 import type { NativeChatTimedRow } from '../../conversation/slots/native-chat-timed-rows'
 import type {
   NativeChatDiffReveal,
@@ -24,6 +27,7 @@ import type { NativeChatNewRowsMarkerState } from '../../viewport/new-rows/nativ
 
 /** Memoize shared context so unchanged rows keep their props during transcript updates. */
 export type NativeChatTranscriptRowContext = {
+  turnBot?: BotChatIdentity | null
   agentName?: string
   /** The prompts the host says still wait on the person; absent from an older host. */
   actionablePromptIds?: readonly string[] | undefined
@@ -43,6 +47,7 @@ export type NativeChatTranscriptRowContext = {
   /** Opens a subagent's own view; absent where the transcript has none to open. */
   onOpenSubagent?: (agentId: string) => void
   onScrollMessageToTop: (element: HTMLElement) => void
+  readerAtEnd: () => boolean
   onRevealDiff: (target: NativeChatDiffTarget) => void
 }
 
@@ -51,7 +56,8 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   slot,
   context,
   newRowsMarker,
-  newRowsMarkerBelow = false
+  newRowsMarkerBelow = false,
+  joinsNotesAbove = false
 }: {
   slot: NativeChatTranscriptSlot
   context: NativeChatTranscriptRowContext
@@ -59,6 +65,8 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   newRowsMarker?: NativeChatNewRowsMarkerState
   /** The "New" marker opens the next row: left-side, so this row's actions keep their own height. */
   newRowsMarkerBelow?: boolean
+  /** Carries on the notes of the row above, 4 px below them (`nativeChatSlotJoinsNotesAbove`). */
+  joinsNotesAbove?: boolean
 }): React.JSX.Element {
   // Offered only on the conversation's own turn-opening prompts (`nativeChatRowOffersRewind`).
   const rewind = useContext(NativeChatRewindContext)
@@ -72,15 +80,23 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       />
     )
   }
-  const { message, turnKey, status, receipt, turnDiff, openedPullRequests, workRun } = slot
+  const { message, turnKey, status, receipt, turnDiff, openedPullRequests, workRun, itemNotes } =
+    slot
   const deliveryNotice = context.deliveryNotices?.get(message.id)
   const predecessors = context.taskListPredecessors.get(message.id)
   const expanded = turnKey ? context.expandedTurnIds.has(turnKey) : undefined
   const marker = newRowsMarker ? (
-    <NativeChatNewRowsMarker marker={newRowsMarker} onReveal={context.onScrollMessageToTop} />
+    <NativeChatNewRowsMarker
+      marker={newRowsMarker}
+      readerAtEnd={context.readerAtEnd}
+      onReveal={context.onScrollMessageToTop}
+    />
   ) : null
-  const statusRow = status ? (
+  // A settling quiet turn's bar fades alone, or with its whole row when nothing else draws in it.
+  const leavesWhole = nativeChatSlotLeavesWhole(slot)
+  const bar = status ? (
     <NativeChatWorkingStatus
+      bot={context.turnBot}
       startedAt={status.startedAt}
       workedSeconds={status.workedSeconds}
       verdict={status.verdict}
@@ -90,20 +106,41 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       }
     />
   ) : null
-  return (
+  const statusRow =
+    bar && slot.leaving === 'bar' && !leavesWhole ? (
+      <NativeChatQuietTurnLeave gap={slot.statusAbove ? 'below' : 'above'}>
+        {bar}
+      </NativeChatQuietTurnLeave>
+    ) : (
+      bar
+    )
+  const row = (
     // The negative margin shortens the measured row, which is what moves the next one up.
     // A row that holds its response's actions keeps the gap whole: they stay in flow above the
     // agent's next step (`actionsHang` is unset there), which then sits a full gap below them.
     <div
       className={cn(
         'flex flex-col gap-5',
-        slot.continuesTurn && !(slot.endsResponse && !slot.activeTurnIsWorking) && '-mb-3'
+        slot.continuesTurn && !(slot.endsResponse && !slot.activeTurnIsWorking) && '-mb-3',
+        // Into the row gap (gap-5) all but the notes' own gap (gap-1).
+        joinsNotesAbove && '-mt-4'
       )}
     >
       {newRowsMarker?.place === 'above-row' ? marker : null}
       {/* A turn with no user bubble carries its bar above its first row. */}
       {slot.statusAbove ? statusRow : null}
-      {!slot.drawsMessage ? null : receipt ? (
+      {!slot.drawsMessage ? null : itemNotes ? (
+        <div className="flex flex-col gap-1">
+          {itemNotes.map((note) => (
+            <MessageRow
+              key={note.id}
+              message={note}
+              expandSignal={context.expandSignal}
+              onScrollMessageToTop={context.onScrollMessageToTop}
+            />
+          ))}
+        </div>
+      ) : receipt ? (
         <NativeChatResolutionReceipt
           body={receipt}
           disclosureId={message.id}
@@ -127,6 +164,8 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           activeTurnIsWorking={slot.activeTurnIsWorking}
           trailingRun={slot.trailingRun}
           continuesTurn={slot.continuesTurn}
+          inAutomationTurn={slot.inAutomationTurn === true}
+          inActingTurn={slot.inActingTurn === true}
           endsResponse={slot.endsResponse}
           latestResponse={slot.latestResponse === true}
           actionsHang={slot.actionsHang === true && !newRowsMarkerBelow}
@@ -158,11 +197,17 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       {slot.statusAbove ? null : statusRow}
       {turnDiff ? <NativeChatTurnDiffRollup diff={turnDiff} /> : null}
       {openedPullRequests ? (
-        <NativeChatOpenedPullRequestCard pullRequests={openedPullRequests} />
+        <NativeChatOpenedPullRequestCard
+          pullRequests={openedPullRequests}
+          timestamp={message.timestamp}
+        />
       ) : null}
-      {context.timedRows?.get(message.id)?.map(({ key, node }) => (
-        <div key={key}>{node}</div>
-      ))}
+      {(itemNotes ?? [message]).flatMap(
+        (member) =>
+          context.timedRows?.get(member.id)?.map(({ key, node }) => <div key={key}>{node}</div>) ??
+          []
+      )}
     </div>
   )
+  return leavesWhole ? <NativeChatQuietTurnLeave gap="row">{row}</NativeChatQuietTurnLeave> : row
 })

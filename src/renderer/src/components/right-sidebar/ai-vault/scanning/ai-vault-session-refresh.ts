@@ -58,7 +58,17 @@ export function useAiVaultSessionRefresh(
   /** The depth the sessions on screen came from, which trails the selected one during a rescan. */
   loadedSessionLimit: AiVaultSessionLimit | null
 } {
-  const { scan, applyScan } = useAppliedAiVaultScan()
+  const scanScopeKey = `${aiVaultSessionResultCacheKey(executionHostScope, scopePaths, scopeOnly)}\n${sessionLimit}`
+  // A return to the panel opens on the list this scope already holds instead of a skeleton.
+  const { scan, applyScan } = useAppliedAiVaultScan(() => {
+    const result = readCachedAiVaultSessionList({
+      scopePaths,
+      scopeOnly,
+      executionHostScope,
+      sessionLimit
+    })
+    return result && { result, limit: sessionLimit, scopeKey: scanScopeKey, scopeOnly }
+  })
   const associations = useAiVaultAssociationObservation(executionHostScope)
   const associationsRef = useRef(associations)
   const [loading, setLoading] = useState(false)
@@ -77,7 +87,6 @@ export function useAiVaultSessionRefresh(
   const mountedRef = useRef(true)
   const publicationGateRef = useRef<AiVaultSessionPublicationGate>(undefined!)
   publicationGateRef.current ??= new AiVaultSessionPublicationGate()
-  const scanScopeKey = `${aiVaultSessionResultCacheKey(executionHostScope, scopePaths, scopeOnly)}\n${sessionLimit}`
   // Workspace or Project rows would pass for All's list while it loads or after it fails; the filter narrows the rest.
   const shown = scan?.scopeOnly && !scopeOnly ? null : scan
   // Kept through rescans so a repeat failure doesn't blink; shown only for the scope that failed.
@@ -240,7 +249,6 @@ export function useAiVaultSessionRefresh(
 
   useEffect(() => {
     mountedRef.current = true
-    const requestToken = requestTokenRef.current
     const publicationGate = publicationGateRef.current
     return () => {
       mountedRef.current = false
@@ -250,9 +258,7 @@ export function useAiVaultSessionRefresh(
       pendingBackgroundRef.current = true
       refreshIdRef.current += 1
       refreshInFlightRef.current = false
-      void window.api.aiVault.cancelListSessions({
-        requestToken
-      })
+      // The scan keeps running so the host caches it; the next visit joins it rather than restarting.
     }
   }, [])
 
