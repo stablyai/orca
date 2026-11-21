@@ -21,6 +21,7 @@ export const AgentJournalSubmissionSchema = z.object({
   recovered: z.literal(true).optional(),
   handoverRecorded: z.literal(true).optional(),
   handedOverAt: z.number().optional(),
+  writtenAt: z.number().optional(),
   rejection: AgentSessionFailureFactSchema.optional(),
   queuedMessageId: z.string().min(1).optional(),
   // The kind only; an object's other keys (a sender) are stripped, never published.

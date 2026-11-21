@@ -16,7 +16,10 @@ import type { AgentSessionExecutionOptions } from '../../../../shared/agent-sess
 import { isAbortSignalReason } from '../../../../shared/concurrency/abort-signal-reason'
 import { isAgentSessionOptionRejectedError } from '../options/structured-agent-session-option-error'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
-import { resolveHandover } from '../operations/structured-agent-session-operation-settlement'
+import {
+  markHandoverWritten,
+  resolveHandover
+} from '../operations/structured-agent-session-operation-settlement'
 import { readContextStructuredAgentSessionTurnScope } from '../observations/structured-agent-session-read-work'
 import type { AgentSessionDispatchOutcome } from '../providers/structured-agent-session-adapter'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -202,6 +205,9 @@ export async function beginSubmissionHandover(
         // Provider proof must precede the host tail that may be closing its child.
         if (outcome?.state !== 'unknown' && (!unwritten || !closing)) {
           await resolveHandover(ctx, clientMessageId, outcome)
+        }
+        if (outcome?.state === 'admitted' && outcome.written && !unwritten) {
+          await markHandoverWritten(ctx, clientMessageId)
         }
         await commit(async () => {
           if (outcome?.state === 'unknown') {

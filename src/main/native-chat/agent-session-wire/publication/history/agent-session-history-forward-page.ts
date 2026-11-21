@@ -112,6 +112,9 @@ export function readAgentSessionForwardHistory(
     page: buildAgentSessionHistoryPage({
       snapshot,
       submissions: projected.batch.submissions,
+      stampedSubmissionIds: new Set(
+        rows.flatMap((row) => (row.kind === 'outcome' ? (row.writtenSubmissionIds ?? []) : []))
+      ),
       direction: 'after',
       items: items.map(({ item }) => item),
       removedItemIds: projected.batch.removedItemIds,

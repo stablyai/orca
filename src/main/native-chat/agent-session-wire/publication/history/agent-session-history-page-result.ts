@@ -15,8 +15,10 @@ export function buildAgentSessionHistoryPage(input: HistoryPageInput): AgentSess
     direction: input.direction,
     items: input.items,
     removedItemIds: input.removedItemIds ?? [],
-    submissions: (input.submissions ?? input.snapshot.submissions).filter((submission) =>
-      pageItemIds.has(agentJournalSubmissionKey(submission.clientMessageId))
+    submissions: (input.submissions ?? input.snapshot.submissions).filter(
+      (submission) =>
+        pageItemIds.has(agentJournalSubmissionKey(submission.clientMessageId)) ||
+        input.stampedSubmissionIds?.has(submission.clientMessageId)
     ),
     window: {
       oldest: oldest ? { epoch, sequence: oldest.sequence } : null,

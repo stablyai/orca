@@ -39,8 +39,12 @@ export function projectJournalBatch(input: {
   }
   const aliases = input.canonicalItemId ? undefined : submissionAliases(input.snapshot.submissions)
   const touchedItemIds = new Set<string>()
+  const writtenKeys = new Set<string>()
   for (const row of input.rows) {
     if (row.kind === 'outcome') {
+      for (const clientMessageId of row.writtenSubmissionIds ?? []) {
+        writtenKeys.add(agentJournalSubmissionKey(clientMessageId))
+      }
       for (const itemId of row.itemIds) {
         touchedItemIds.add(input.canonicalItemId?.(itemId) ?? aliases?.get(itemId) ?? itemId)
       }
@@ -107,7 +111,10 @@ export function projectJournalBatch(input: {
       }
     }
   }
-  const snapshot = input.readSnapshot?.(touchedItemIds) ?? input.snapshot
+  const snapshot =
+    input.readSnapshot?.(
+      writtenKeys.size === 0 ? touchedItemIds : new Set([...touchedItemIds, ...writtenKeys])
+    ) ?? input.snapshot
   const live = journalItemsById(snapshot.items)
   const items = [...touchedItemIds]
     .map((itemId) => live.get(itemId))
@@ -119,9 +126,10 @@ export function projectJournalBatch(input: {
       cursor: input.snapshot.cursor,
       items,
       removedItemIds: [...touchedItemIds].filter((itemId) => !live.has(itemId)),
-      submissions: snapshot.submissions.filter((submission) =>
-        touchedItemIds.has(agentJournalSubmissionKey(submission.clientMessageId))
-      )
+      submissions: snapshot.submissions.filter((submission) => {
+        const key = agentJournalSubmissionKey(submission.clientMessageId)
+        return touchedItemIds.has(key) || writtenKeys.has(key)
+      })
     }
   }
 }

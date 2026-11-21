@@ -7,6 +7,7 @@ import { agentSessionFailureStatedByRow } from '../../../../../../../shared/agen
 import { classifyDispatchRejection } from '../../../../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { agentJournalSubmissionKey } from '../../../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalSubmission } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionAwaitsAgent } from '../../../../../../../shared/agent-session/requests/agent-session-queued-submission'
 import { structuredAgentSessionRejectionParts } from '../../../../../../../shared/agent-session/failures/structured-agent-session-rejection-words'
 import { structuredAgentSessionRejectedShownInPlace } from '../../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { agentSessionWriteNotDoneParts } from '../../../../../../../shared/agent-session/failures/agent-session-refusal-notice'
@@ -45,7 +46,9 @@ export function structuredAgentSessionDeliveryNotices(args: {
   for (const submission of submissions) {
     const id = agentJournalSubmissionKey(submission.clientMessageId)
     if (submission.dispatchState === 'pending') {
-      notices.set(id, STRUCTURED_AGENT_SESSION_DELIVERY_SENDING)
+      if (agentJournalSubmissionAwaitsAgent(submission)) {
+        notices.set(id, STRUCTURED_AGENT_SESSION_DELIVERY_SENDING)
+      }
     } else if (submission.dispatchState === 'rejected' && shown.has(id)) {
       // A failed start's words, unless its row carries them; other sentences quote their own.
       const fact = readWholeAgentSessionFailureFact(submission.rejection)

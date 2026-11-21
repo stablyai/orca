@@ -129,7 +129,7 @@ export class PiRpcPromptDelivery {
       this.acknowledgements.push(submission)
       this.waiting.push(submission)
       await this.deps.send(frame)
-      return { state: 'admitted' }
+      return { state: 'admitted', written: true }
     } catch {
       this.remove(submission)
       this.deps.refused?.()

@@ -7,6 +7,7 @@ import type {
 } from './agent-session-journal-approval-subject'
 import type { AgentJournalCursor, AgentJournalItemIdentity } from './agent-session-journal-identity'
 import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
+import type { AgentJournalWrittenStamp } from './agent-session-journal-written-stamp'
 import type { AgentSessionProviderContextBoundary } from '../conversation-context/agent-session-provider-context'
 // Persist/republish plain JSON only. Append-only rows are upcast on read, never rewritten;
 // unreadable versions/kinds must refuse writes rather than be skipped or compacted away.
@@ -227,7 +228,7 @@ export const AGENT_JOURNAL_TURN_LIFECYCLE_STATES = [
 ] as const
 export type AgentJournalTurnLifecycleState = (typeof AGENT_JOURNAL_TURN_LIFECYCLE_STATES)[number]
 
-export type AgentJournalTurnLifecycle = {
+export type AgentJournalTurnLifecycle = AgentJournalWrittenStamp & {
   turnId: string
   state: AgentJournalTurnLifecycleState
   /** Absent/unrecognized verdict means unknown, never success. completed alone proves nothing: provider API errors also finish turns. */
@@ -409,7 +410,7 @@ export type AgentJournalDispatchState = (typeof AGENT_JOURNAL_DISPATCH_STATES)[n
 
 /** The write-ahead submission row, projected. `unknown` is a displayed state:
  *  the turn reads as delivery unconfirmed, never as sent and never as failed. */
-export type AgentJournalSubmission = {
+export type AgentJournalSubmission = AgentJournalWrittenStamp & {
   clientMessageId: string
   /** Execution fence of the latest dispatch attempt or recovery. */
   fence: number

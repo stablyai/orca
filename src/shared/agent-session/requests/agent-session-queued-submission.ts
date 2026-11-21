@@ -25,3 +25,10 @@ export function agentJournalSubmissionProvenUnwritten(
       !submission.answeredInTurn)
   )
 }
+
+/** Still "Sending…" until the host has written it to an idle agent; a send written into a running turn waits for its echo. */
+export function agentJournalSubmissionAwaitsAgent(
+  submission: Pick<AgentJournalSubmission, 'dispatchState' | 'writtenAt'>
+): boolean {
+  return submission.dispatchState === 'pending' && submission.writtenAt === undefined
+}

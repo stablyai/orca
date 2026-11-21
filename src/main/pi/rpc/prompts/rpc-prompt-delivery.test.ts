@@ -48,7 +48,7 @@ describe('Pi pending prompt delivery bounds and ownership', () => {
     h.delivery.consumeNext()
     await expect(
       h.delivery.submit('after-consumption', 130, { type: 'prompt', message: 'next' })
-    ).resolves.toEqual({ state: 'admitted' })
+    ).resolves.toEqual({ state: 'admitted', written: true })
   })
 
   it('bounds retained retry payload bytes before journal dispatch admission', async () => {
@@ -65,7 +65,8 @@ describe('Pi pending prompt delivery bounds and ownership', () => {
     expect(before).not.toHaveBeenCalled()
     h.delivery.consumeNext()
     await expect(h.delivery.submit('fits-after-consumption', 6, frame)).resolves.toEqual({
-      state: 'admitted'
+      state: 'admitted',
+      written: true
     })
   })
 
