@@ -41,8 +41,8 @@ vi.mock('./recipient-routing', async (importOriginal) =>
   )
 )
 
-// A Home Chat whose last turn failed holds other agents' mail until its owner sends, so a request
-// by the bot's name must not wait there unread.
+// A Home Chat whose last turn failed holds other agents' mail until its owner continues it, so a
+// request by the agent's name queues there with the owner's own follow-ups.
 describe("a request by a bot's name when its Home Chat's last turn failed", () => {
   const h = createOrchestrationRpcHarness()
   let runtime: OrcaRuntimeService
@@ -56,33 +56,27 @@ describe("a request by a bot's name when its Home Chat's last turn failed", () =
   })
   afterEach(() => h.cleanup())
 
-  it('starts a chat of its own that wakes the bot, and tells the Home Chat where it went', async () => {
+  it('queues in the Home Chat, opens no chat, notes nothing, and tells the sender why it waits', async () => {
     failureHeldChats.add(DOCS_CHAT)
     const receipt = await sent(RANGER_THREAD, { to: 'bot:Docs', type: 'question' })
-    expect(receipt.message.to_handle).toBe(`orca_session_id:${DOCS_REQUEST}`)
+    expect(receipt.message.to_handle).toBe(`orca_session_id:${DOCS_CHAT}`)
+    // Its mail goes to the Home Chat's mailbox, which queues it behind the failed turn.
     expect(runtime.notifyMessageArrived).toHaveBeenCalledWith(
-      `orca_session_id:${DOCS_REQUEST}`,
+      `orca_session_id:${DOCS_CHAT}`,
       'question'
     )
-    expect(runtime.notifyMessageArrived).not.toHaveBeenCalledWith(
-      `orca_session_id:${DOCS_CHAT}`,
-      expect.anything()
-    )
-    expect(notes).toEqual([
-      'Request from Ranger, for you; it runs in its own conversation: Ranger: update the install docs'
-    ])
-    expect(noteChats).toEqual([DOCS_CHAT])
-    // The sender is told where it went, so follow-ups go there.
-    expect(receipt.next).toContain(
-      `Docs's chat ${DOCS_CHAT} is stopped after a failed turn, so this went to a new chat of Docs instead (--chat ${DOCS_REQUEST}).`
+    expect(startBotSession).not.toHaveBeenCalled()
+    expect(notes).toEqual([])
+    expect(receipt.next).toMatch(
+      /^Docs's Home chat is paused after a failed turn, so this is queued there and runs when that chat continues\. /
     )
     // The answer still finds its way back to the asker.
     await expect(
-      reply(DOCS_REQUEST, { id: receipt.message.id, body: 'the answer' })
+      reply(DOCS_CHAT, { id: receipt.message.id, body: 'the answer' })
     ).resolves.toMatchObject({ message: { to_handle: `orca_session_id:${RANGER_THREAD}` } })
   })
 
-  it('notes the Home Chat it chose when a new Home Chat replaced the one the bot named', async () => {
+  it('queues in the Home Chat the store chose when a new one replaced the one on record', async () => {
     const newHome = '66666666-6666-4666-8666-666666666666'
     // The bot still names its old Home Chat; the store hands over the new one.
     for (const bot of bots.filter((entry) => entry.id === 'docs')) {
@@ -93,17 +87,18 @@ describe("a request by a bot's name when its Home Chat's last turn failed", () =
     )
     failureHeldChats.add(newHome)
     const receipt = await sent(RANGER_THREAD, { to: 'bot:Docs', type: 'question' })
-    expect(receipt.message.to_handle).toBe(`orca_session_id:${DOCS_REQUEST}`)
-    expect(noteChats).toEqual([newHome])
+    expect(receipt.message.to_handle).toBe(`orca_session_id:${newHome}`)
+    expect(receipt.next).toContain('paused after a failed turn')
+    expect(noteChats).toEqual([])
   })
 
-  it('opens one chat when the same send is retried', async () => {
+  it('queues once when the same send is retried', async () => {
     failureHeldChats.add(DOCS_CHAT)
     await sent(RANGER_THREAD, { to: 'bot:Docs', type: 'handoff' })
     await expect(sent(RANGER_THREAD, { to: 'bot:Docs', type: 'handoff' })).resolves.toMatchObject({
       duplicate: true
     })
-    expect(startBotSession).toHaveBeenCalledTimes(1)
+    expect(startBotSession).not.toHaveBeenCalled()
   })
 
   it('lands in the Home Chat as before once it is not held', async () => {
