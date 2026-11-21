@@ -92,7 +92,9 @@ export function BotPictureButton({
             onIntakeStart={picture.beginIntake}
           />
           {bot.slack ? (
-            <p className="text-center text-xs text-muted-foreground">
+            // 8px under the field (whose own 12px bottom inset this pulls up), and the popover's 12px
+            // inset under it.
+            <p className="-mt-1 pb-3 text-center text-xs text-muted-foreground">
               {t('settings.bots.avatarSlackNote', "Changes your bot's picture in Slack too.")}
             </p>
           ) : null}

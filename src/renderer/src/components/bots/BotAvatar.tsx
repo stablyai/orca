@@ -89,7 +89,7 @@ export function BotAvatarTile({
 /** Over a picture being replaced by one still being made. */
 export function BotPictureGeneratingVeil(): React.JSX.Element {
   return (
-    <span className="absolute inset-0 flex items-center justify-center rounded-[inherit] bg-black/30 text-white">
+    <span className="absolute inset-0 flex items-center justify-center rounded-[inherit] bg-black/40 text-white">
       <LoadingSpinner className="size-1/2 max-h-4 max-w-4" />
     </span>
   )
