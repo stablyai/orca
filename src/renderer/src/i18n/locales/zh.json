@@ -26920,7 +26920,7 @@
       "pasteHint": "使用 {{shortcut}} 粘贴图片",
       "changePicture": "更换图片",
       "identityWatches": "关注{{what}}",
-      "identityReports": "汇报{{what}}",
+      "identityReports": "汇报：{{what}}",
       "parts": {
         "olderHost": "{{host}} 需要更新 Orca 才能添加技能和计划",
         "skillsKept_other": "{{kept}}/{{count}} 个技能",
