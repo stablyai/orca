@@ -389,15 +389,21 @@ describe('BotSlackSetupDialog on a paired computer', () => {
       expect(openUrl).toHaveBeenLastCalledWith(SECOND)
     })
 
-    it('never moves a dialog opened again', async () => {
+    it('lets a dialog opened again set up afresh when the old launch answers while closed', async () => {
       openDialog()
       fireEvent.click(await screen.findByRole('button', { name: 'Approve in Slack' }))
       cleanup()
-      openDialog()
-      await screen.findByRole('button', { name: 'Approve in Slack' })
+      // The browser answers with no dialog open; the server now has the app made.
       await act(async () => launches[0]())
+      serverState({ state: 'created', teamId: 'T1', appId: 'A1' })
+      openDialog()
+
+      await screen.findByRole('button', { name: 'Approve in Slack' })
+      expect(mocks.hosts[SERVER].setUpApp).toHaveBeenCalledTimes(2)
       expect(screen.queryByText('Waiting for Slack…')).toBeNull()
-      expect(screen.getByRole('button', { name: 'Approve in Slack' })).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+      await screen.findByText('Link copied')
+      expect(writeClipboardText).toHaveBeenLastCalledWith(SECOND)
     })
 
     it('keeps Link copied when Copy link and the launch land together', async () => {
