@@ -19972,6 +19972,7 @@
         "optionUpdateFailed": "无法更新选项",
         "optionValue": {
           "none": "无",
+          "off": "关闭",
           "fast": "快速",
           "minimal": "最小",
           "low": "低",

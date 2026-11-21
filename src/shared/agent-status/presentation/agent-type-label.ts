@@ -24,6 +24,7 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   'command-code': 'Command Code',
   grok: 'Grok',
   hermes: 'Hermes',
+  goose: 'Goose',
   devin: 'Devin',
   ante: 'Ante',
   trae: 'Trae',
