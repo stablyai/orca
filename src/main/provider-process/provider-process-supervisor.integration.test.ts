@@ -61,6 +61,7 @@ type LaunchOptions = {
   command?: string
   cwd?: string
   env?: NodeJS.ProcessEnv
+  envToDelete?: string[]
   captureOutput?: boolean
   spawn?: ProviderProcessSpawner
 }
@@ -73,12 +74,13 @@ function launch(
     command = process.execPath,
     cwd = state.root,
     env = process.env,
+    envToDelete,
     captureOutput = true,
     spawn
   }: LaunchOptions = {}
 ) {
   const spec = createProviderSpawnSpec(
-    { command, args: ['-e', script, '--', ...args], cwd },
+    { command, args: ['-e', script, '--', ...args], cwd, envToDelete },
     env,
     process.platform,
     options
@@ -215,6 +217,27 @@ describe.runIf(process.platform !== 'win32')('direct provider ownership', () => 
     expect(run.child.groupVerdict).toBe('exited')
     expect(await readdir(join(state.root, 'provider-processes'))).toEqual([])
   })
+
+  it.each([
+    { requested: '1', deleted: false, expected: '1' },
+    { requested: '0', deleted: false, expected: null },
+    { requested: undefined, deleted: false, expected: null },
+    { requested: '1', deleted: true, expected: null }
+  ])(
+    'passes the final Electron Node mode to the provider for %j',
+    async ({ requested, deleted, expected }) => {
+      const run = launch(
+        `process.stdout.write(JSON.stringify({ nodeMode: process.env.ELECTRON_RUN_AS_NODE ?? null }))`,
+        { lifetime: 'one-shot' },
+        {
+          env: { ...process.env, ELECTRON_RUN_AS_NODE: requested },
+          envToDelete: deleted ? ['ELECTRON_RUN_AS_NODE'] : []
+        }
+      )
+      await expect(run.exit).resolves.toEqual({ code: 0, signal: null })
+      expect(JSON.parse(run.output())).toEqual({ nodeMode: expected })
+    }
+  )
 
   it('retains final bytes for readers attached after lifecycle exit', async () => {
     const run = launch(

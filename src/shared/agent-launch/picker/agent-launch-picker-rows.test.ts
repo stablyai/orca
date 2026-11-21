@@ -2,6 +2,18 @@ import { expect, it } from 'vitest'
 import { buildNewTabAgentMenuRows, type ChatProgramObservation } from './agent-launch-picker-rows'
 import type { TuiAgent } from '../catalog/tui-agent'
 
+it('offers a runnable chat-only provider when terminal is the default', () => {
+  expect(
+    buildNewTabAgentMenuRows({
+      settings: { agentDefaultSurface: 'terminal' },
+      detectedOnHost: [],
+      chatAgents: ['zcode'],
+      hostChatAnswer: () => 'yes',
+      chatProgram: () => 'available'
+    })
+  ).toEqual([{ kind: 'chat', agent: 'zcode' }])
+})
+
 const rowsFor = (detected: TuiAgent[] | null, program: ChatProgramObservation) =>
   buildNewTabAgentMenuRows({
     settings: { agentDefaultSurface: 'chat' },

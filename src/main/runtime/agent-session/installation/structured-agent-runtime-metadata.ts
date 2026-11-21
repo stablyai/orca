@@ -1,3 +1,4 @@
+import { ZCODE_RUNTIME_METADATA } from '../../../zcode/zcode-runtime-registration'
 import { agentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { applyStructuredCodexWorkspaceTrust } from '../../../agent-launch/trust/agent-workspace-trust-spawn'
 import { ACP_LAUNCH_SPECS } from '../../../acp/launch/acp-launch-registry'
@@ -41,7 +42,7 @@ import type {
 } from './structured-agent-runtime-registration-types'
 
 export type StructuredAgentRuntimeCatalogEntry =
-  | { kind: 'pi' | 'codex' | 'claude'; metadata: StructuredAgentRuntimeMetadata }
+  | { kind: 'pi' | 'codex' | 'claude' | 'zcode'; metadata: StructuredAgentRuntimeMetadata }
   | { kind: 'acp'; metadata: StructuredAgentRuntimeMetadata; spec: AcpLaunchSpec }
 
 // Why the host's data folder: a start runs Orca's installed release before PATH.
@@ -200,7 +201,8 @@ export const STRUCTURED_AGENT_RUNTIME_CATALOG: readonly StructuredAgentRuntimeCa
     kind: 'acp',
     metadata: acpMetadata(spec),
     spec
-  }))
+  })),
+  { kind: 'zcode', metadata: ZCODE_RUNTIME_METADATA }
 ]
 
 export const STRUCTURED_AGENT_RUNTIME_METADATA: readonly StructuredAgentRuntimeMetadata[] =

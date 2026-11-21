@@ -65,7 +65,11 @@ type AiVaultVirtualRowProps = {
   onJumpToWorktree: (worktreeId: string) => void
   onResume: (session: AiVaultSession, worktreeId: string) => void
   onContinueInNewSession: (session: AiVaultSession, worktreeId: string) => void
-  onResumeInNewChat: (session: AiVaultSession, worktreeId: string) => void
+  onResumeInNewChat: (
+    session: AiVaultSession,
+    worktreeId: string,
+    route?: 'structured' | 'history'
+  ) => void
   onResumeInNewCli: (session: AiVaultSession, worktreeId: string) => void
   onCopyResume: (session: AiVaultSession, worktreeId?: string | null) => void
   onCopyId: (session: AiVaultSession) => void
@@ -164,6 +168,7 @@ export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
     resumeDisabled,
     resumeWorktreeId,
     resumeInNewChatWorkspaceId,
+    resumeInNewChatRoute,
     resumeInNewCliWorktreeId
   } =
     row.type === 'session'
@@ -180,6 +185,7 @@ export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
           resumeDisabled: true,
           resumeWorktreeId: null,
           resumeInNewChatWorkspaceId: null,
+          resumeInNewChatRoute: null,
           resumeInNewCliWorktreeId: null
         }
   const canOpenLocalSessionPaths =
@@ -273,7 +279,12 @@ export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
           }
           onResumeInNewChat={
             resumeInNewChatWorkspaceId
-              ? () => onResumeInNewChat(row.session, resumeInNewChatWorkspaceId)
+              ? () =>
+                  onResumeInNewChat(
+                    row.session,
+                    resumeInNewChatWorkspaceId,
+                    resumeInNewChatRoute ?? undefined
+                  )
               : undefined
           }
           onResumeInNewCli={
