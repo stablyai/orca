@@ -94,9 +94,9 @@ it('the hover card age follows a language switch without remounting', async () =
       />
     </p>
   )
-  expect(screen.getByTestId('hover').textContent).toContain('5 minutes ago')
+  expect(screen.getByTestId('hover').textContent).toBe('5 minutes ago · Shipped it')
 
   await switchToZh()
 
-  expect(screen.getByTestId('hover').textContent).not.toContain('5 minutes ago')
+  expect(screen.getByTestId('hover').textContent).toBe('5分钟前 · Shipped it')
 })
