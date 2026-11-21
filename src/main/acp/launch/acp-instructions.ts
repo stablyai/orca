@@ -148,6 +148,13 @@ export const deliverGooseInstructions: AcpInstructionsDelivery = async ({ text, 
   return {}
 }
 
+// Gemini ignores `_meta` and builds its context from the folder's GEMINI.md at every start, a
+// reopen and each compression included, but reads it only in a trusted folder, so the launch trusts it.
+export const deliverGeminiInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+  await writeFolderContextFile(cwd, 'GEMINI.md', 'Gemini', text)
+  return { env: { GEMINI_CLI_TRUST_WORKSPACE: 'true' } }
+}
+
 // Copilot rebuilds them at every start from its instruction sources, so each launch passes the folder.
 // Only an instructions file applies at once: an AGENTS.md there counts as nested and loads on demand.
 export const deliverCopilotInstructions: AcpInstructionsDelivery = async ({

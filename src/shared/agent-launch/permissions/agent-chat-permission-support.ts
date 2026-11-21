@@ -51,7 +51,8 @@ export const NATIVE_CHAT_AGENTS = [
   'goose',
   'aug',
   'kilo',
-  'mimo-code'
+  'mimo-code',
+  'gemini'
 ] as const
 
 export type NativeChatAgent = (typeof NATIVE_CHAT_AGENTS)[number]
@@ -79,7 +80,8 @@ const AGENT_CHAT_PERMISSION_MODES_BY_AGENT: Record<
   // Auggie asks none unless its own tool permissions say so, as in its terminal.
   aug: null,
   kilo: ACP_CHAT_PERMISSION_MODES,
-  'mimo-code': ACP_CHAT_PERMISSION_MODES
+  'mimo-code': ACP_CHAT_PERMISSION_MODES,
+  gemini: ACP_CHAT_PERMISSION_MODES
 }
 
 export function isNativeChatAgent(agent: string): agent is NativeChatAgent {

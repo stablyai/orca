@@ -24676,6 +24676,9 @@
     "linkedMessageMissing": "找不到该消息。",
     "math": {
       "scrollDisplayEquation": "滚动显示公式"
+    },
+    "messageTime": {
+      "yesterday": "昨天 {{time}}"
     }
   },
   "quitAndStopAllSessions": {
@@ -26417,7 +26420,7 @@
         "links": "链接",
         "showLess": "收起",
         "showMore": "展开",
-        "sub": "条目 {{number}} · {{chat}} · {{when}}",
+        "subWhere": "条目 {{number}} · {{chat}}",
         "showEarlier": "显示更早的内容",
         "place": "{{index}} / {{total}}",
         "deleted": "此条目已删除。",

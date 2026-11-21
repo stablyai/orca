@@ -17,7 +17,6 @@ import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGro
 import { MobileEdgeFade } from '../../components/list/MobileEdgeFade'
 import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
 import { useRouteCapability } from '../../worktree/execution-hosts/use-route-capability'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
@@ -42,6 +41,7 @@ import { useNow } from '../../hooks/use-now'
 import { usePhoneBotItemView } from './use-phone-bot-item-view'
 import type { PhoneBotItemStepper } from './use-phone-bot-item-walk'
 import { MobileBotItemPageHeader } from './MobileBotItemPageHeader'
+import { MobileBotItemSubtitle } from './MobileBotItemSubtitle'
 import { usePhoneBotItemPendingComments } from './use-phone-bot-item-pending-comments'
 
 const DESCRIPTION_LINES_HEIGHT = 3 * 20
@@ -180,16 +180,7 @@ export function MobileBotItemPage({
               <Text style={styles.number}>{formatBotItemNumber(item.number)} </Text>
               {item.title}
             </Text>
-            <Text style={styles.sub} numberOfLines={1}>
-              {t('bots.items.view.chatAndWhen', '{{chat}} · {{when}}', {
-                chat: chatTitle,
-                when: new Intl.DateTimeFormat(getUiIntlLocale(), {
-                  weekday: 'short',
-                  hour: 'numeric',
-                  minute: '2-digit'
-                }).format(item.createdAt)
-              })}
-            </Text>
+            <MobileBotItemSubtitle item={item} chatTitle={chatTitle} />
             {item.description ? <ClampedDescription text={item.description} /> : null}
           </View>
           {view.failed ? (
@@ -382,7 +373,6 @@ const styles = themedStyleSheet(() => ({
   head: { paddingHorizontal: spacing.xs, gap: spacing.xs },
   title: { fontSize: typography.titleSize, fontWeight: '600', color: colors.textPrimary },
   number: { fontWeight: '400', color: colors.textMuted, fontVariant: ['tabular-nums'] },
-  sub: { fontSize: typography.metaSize, color: colors.textMuted },
   description: { marginTop: spacing.xs, gap: spacing.xs },
   clamped: { maxHeight: DESCRIPTION_LINES_HEIGHT, overflow: 'hidden' },
   showMore: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },

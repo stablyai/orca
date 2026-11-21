@@ -108,6 +108,8 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
   kilo: null,
   'mimo-code': null,
   omp: null,
+  // No folder scan until Gemini's ACP is checked to load a picked skill.
+  gemini: null,
   // ZCode invokes a `/name` mention by running its own Skill tool, so the text passes through.
   zcode: {
     skillPrefix: '/',

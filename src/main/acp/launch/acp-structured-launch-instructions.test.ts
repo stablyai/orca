@@ -49,7 +49,8 @@ const SPECS = {
   kiro: acpLaunchSpecFor('kiro')!,
   goose: acpLaunchSpecFor('goose')!,
   kilo: acpLaunchSpecFor('kilo')!,
-  'mimo-code': acpLaunchSpecFor('mimo-code')!
+  'mimo-code': acpLaunchSpecFor('mimo-code')!,
+  gemini: acpLaunchSpecFor('gemini')!
 }
 
 const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome']> = {
@@ -64,7 +65,8 @@ const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome'
   kiro: { variable: 'KIRO_HOME', path: '/home/user/.kiro' },
   goose: { variable: 'GOOSE_PATH_ROOT', path: '/home/user/.config/goose' },
   kilo: { variable: 'XDG_DATA_HOME', path: '/home/user/.local/share' },
-  'mimo-code': { variable: 'XDG_DATA_HOME', path: '/home/user/.local/share' }
+  'mimo-code': { variable: 'XDG_DATA_HOME', path: '/home/user/.local/share' },
+  gemini: { variable: 'GEMINI_CLI_HOME', path: '/home/user' }
 }
 
 const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
@@ -76,7 +78,8 @@ const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
   kiro: '3.1.0',
   goose: '1.60.2',
   kilo: '7.8.32',
-  'mimo-code': '0.1.17'
+  'mimo-code': '0.1.17',
+  gemini: '0.70.0'
 }
 
 let dataDirectory = ''
@@ -345,6 +348,22 @@ describe('ACP launch: standing instructions', () => {
       const written = await readFile(join(home, '.kimi-code', 'AGENTS.md'), 'utf8')
       expect(written.slice(written.indexOf('\n\n') + 2)).toBe(`${PREAMBLE}\n`)
       expect(await readFile(join(home, 'AGENTS.md'), 'utf8')).toBe('Workspace instructions')
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
+  })
+
+  it("writes them to Gemini's GEMINI.md in the folder it runs in, trusting it only for a launch that has them", async () => {
+    const home = await mkdtemp(join(tmpdir(), 'acp-instructions-gemini-'))
+    try {
+      const plain = await launch('gemini', { workspacePath: home })
+      expect(plain.env.GEMINI_CLI_TRUST_WORKSPACE).toBeUndefined()
+      expect(await readdir(home)).toEqual([])
+
+      const resolved = await launch('gemini', { instructions: PREAMBLE, workspacePath: home })
+      expect(resolved.env.GEMINI_CLI_TRUST_WORKSPACE).toBe('true')
+      const written = await readFile(join(home, 'GEMINI.md'), 'utf8')
+      expect(written.slice(written.indexOf('\n\n') + 2)).toBe(`${PREAMBLE}\n`)
     } finally {
       await rm(home, { recursive: true, force: true })
     }
