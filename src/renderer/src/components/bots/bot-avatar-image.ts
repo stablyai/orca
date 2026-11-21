@@ -77,6 +77,16 @@ function currentUploadVersion(bot: BotRef): string | null {
   return parsed?.kind === 'upload' ? parsed.version : null
 }
 
+/** A chat turn from before the picture changed asks for an old version, which the host can't give: it
+ *  reads the bot's current picture. So the current one, already read, is what that turn shows, and the
+ *  rows showing the current one keep it. */
+function currentFor(bot: BotRef, key: string): Upload | undefined {
+  const cached = uploads.get(key)
+  return cached?.read !== undefined && currentUploadVersion(bot) === cached.version
+    ? cached
+    : undefined
+}
+
 function uploadOf(key: string, version: string): Upload | undefined {
   const cached = uploads.get(key)
   return cached?.version === version ? cached : undefined
@@ -84,12 +94,7 @@ function uploadOf(key: string, version: string): Upload | undefined {
 
 function startUpload(bot: BotRef, key: string, version: string): Upload {
   const started: Upload = { version, waiting: new Set(), noted: new Set() }
-  // A chat turn from before the picture changed asks for an old version: read for it, but kept only if
-  // the bot's current picture isn't, so rows showing the current one don't read it again.
-  const cached = uploads.get(key)
-  if (cached?.read === undefined || currentUploadVersion(bot) !== cached.version) {
-    uploads.set(key, started)
-  }
+  uploads.set(key, started)
   void readBotAvatarPng(bot).then(
     (png) => {
       started.read = png ? `data:image/png;base64,${png}` : null
@@ -131,7 +136,7 @@ function readUpload(
   onRead: (src: string | null, failed: boolean) => void
 ): () => void {
   const key = botRefKey(bot)
-  const entry = uploadOf(key, version) ?? startUpload(bot, key, version)
+  const entry = uploadOf(key, version) ?? currentFor(bot, key) ?? startUpload(bot, key, version)
   if (failures && entry.read === undefined) {
     entry.noted.add(failures)
     const reads = pendingByFailures.get(failures) ?? new Set<Upload>()
@@ -152,7 +157,8 @@ function finishedUpload(
   bot: BotRef,
   version: string | null
 ): { key: string; src: string | null } | null {
-  const cached = version ? uploadOf(botRefKey(bot), version) : undefined
+  const key = botRefKey(bot)
+  const cached = version ? (uploadOf(key, version) ?? currentFor(bot, key)) : undefined
   return version && cached?.read !== undefined ? { key: version, src: cached.read } : null
 }
 
