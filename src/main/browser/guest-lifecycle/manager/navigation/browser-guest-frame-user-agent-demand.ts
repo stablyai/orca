@@ -37,6 +37,11 @@ function track(guest: Electron.WebContents, frame: Electron.WebFrameMain, demand
   }
 }
 
+/** Frames held for one guest's site iframes; a perf contract keeps it flat across navigations. */
+export function countTrackedBrowserGuestFrames(guest: Electron.WebContents): number {
+  return trackedFrames.get(guest)?.size ?? 0
+}
+
 // Removed, or replaced by a document that never committed to this frame.
 function frameGone(frame: Electron.WebFrameMain | undefined): boolean {
   try {

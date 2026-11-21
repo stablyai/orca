@@ -2,13 +2,25 @@ import type { Session } from 'electron'
 import { afterEach, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ webFrameMain: { fromId: vi.fn() } }))
+vi.mock('../../../identity/browser-process-user-agent', () => ({
+  getBrowserProcessUserAgentIdentity: () => ({})
+}))
+vi.mock('../../../identity/browser-tab-identity', () => ({ resolveBrowserTabIdentity: () => ({}) }))
+// Only a Teams address needs a header rewrite here.
+vi.mock('./browser-manager-navigation', () => ({
+  rewritesRequestHeaders: (url: string) => url.startsWith('https://teams.microsoft.com/')
+}))
 
 import {
   clearBrowserGuestUserAgentDemand,
   setBrowserGuestFrameUserAgentDemand,
   setBrowserGuestPageUserAgentDemand
 } from '../../../identity/requests/browser-session-ua-demand'
-import { noteBrowserGuestSubframeUnloaded } from './browser-guest-frame-user-agent-demand'
+import {
+  countTrackedBrowserGuestFrames,
+  noteBrowserGuestSubframeNavigation,
+  noteBrowserGuestSubframeUnloaded
+} from './browser-guest-frame-user-agent-demand'
 
 afterEach(() => {
   clearBrowserGuestUserAgentDemand(7)
@@ -57,5 +69,42 @@ it.each([100, 1000])(
       vi.advanceTimersByTime(300)
     }
     expect(reads()).toBe(0)
+  }
+)
+
+it.each([30, 300])(
+  'keeps tracked site iframes flat across %i page visits with a Teams iframe each',
+  (visits) => {
+    vi.useFakeTimers()
+    const { guest } = guestWithFrames(10)
+    let checks = 0
+    const siteFrame = (frameTreeNodeId: number) => {
+      const frame = {
+        frameTreeNodeId,
+        detached: false,
+        isDestroyed: () => {
+          checks += 1
+          return false
+        }
+      }
+      return frame as typeof frame & Electron.WebFrameMain
+    }
+    const teams = 'https://teams.microsoft.com/v2/'
+    let nextId = 100
+    for (let visit = 0; visit < visits; visit += 1) {
+      const frame = siteFrame(nextId++)
+      noteBrowserGuestSubframeNavigation(guest, teams, frame)
+      vi.advanceTimersByTime(300)
+      // The next page commits: its predecessor's iframes are gone.
+      frame.detached = true
+      setBrowserGuestPageUserAgentDemand(guest.session, guest.id, false, 'clear')
+    }
+    checks = 0
+    // A page with two Teams iframes holds only those two, and its sweep visits only them.
+    noteBrowserGuestSubframeNavigation(guest, teams, siteFrame(nextId++))
+    noteBrowserGuestSubframeNavigation(guest, teams, siteFrame(nextId++))
+    vi.advanceTimersByTime(300)
+    expect(countTrackedBrowserGuestFrames(guest)).toBe(2)
+    expect(checks).toBe(2)
   }
 )
