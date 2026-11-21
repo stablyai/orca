@@ -216,6 +216,22 @@ export function releasePendingMailboxPointerForPty(this: OrchestrationDb, ptyId:
   this.pendingPointerPtyIds.delete(ptyId)
 }
 
+/** An exited PTY leaves the release gate once SQLite holds no pointer for it, so the set tracks live work. */
+export function forgetSettledPointerPty(this: OrchestrationDb, ptyId: string): void {
+  if (!this.pendingPointerPtyIds.has(ptyId)) {
+    return
+  }
+  const pending = this.db
+    .prepare(
+      `SELECT 1 FROM messages
+       WHERE pointer_enter_pending > 0 AND pointer_pty_id = ? LIMIT 1`
+    )
+    .get(ptyId)
+  if (!pending) {
+    this.pendingPointerPtyIds.delete(ptyId)
+  }
+}
+
 function mutatePointerMessages(
   db: OrchestrationDb,
   ids: string[],
@@ -259,6 +275,7 @@ export type MailboxPointerEnterStateMethods = {
   settleMailboxPointerEnter: typeof settleMailboxPointerEnter
   releaseMailboxPointerEnter: typeof releaseMailboxPointerEnter
   releasePendingMailboxPointerForPty: typeof releasePendingMailboxPointerForPty
+  forgetSettledPointerPty: typeof forgetSettledPointerPty
 }
 
 export function attachMailboxPointerEnterState(ctor: { prototype: object }): void {
@@ -271,6 +288,7 @@ export function attachMailboxPointerEnterState(ctor: { prototype: object }): voi
     markMailboxPointerEnterAttempted,
     settleMailboxPointerEnter,
     releaseMailboxPointerEnter,
-    releasePendingMailboxPointerForPty
+    releasePendingMailboxPointerForPty,
+    forgetSettledPointerPty
   })
 }

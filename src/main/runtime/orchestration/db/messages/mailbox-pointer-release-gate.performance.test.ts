@@ -100,4 +100,21 @@ describe('mailbox pointer release gate', () => {
       pointer_pty_id: null
     })
   })
+
+  it('forgets an exited PTY whose pointer was settled, but keeps one still pending', () => {
+    const db = open()
+    const read = stagePointer(db, 'pty_settled', 'term_a')
+    db.markAsRead([read])
+    const pending = stagePointer(db, 'pty_pending', 'term_b')
+    db.forgetSettledPointerPty('pty_settled')
+    db.forgetSettledPointerPty('pty_pending')
+    const statements = countStatements(db)
+    db.releasePendingMailboxPointerForPty('pty_settled')
+    expect(statements.count).toBe(0)
+    db.releasePendingMailboxPointerForPty('pty_pending')
+    expect(db.getMessageById(pending)).toMatchObject({
+      pointer_enter_pending: 0,
+      pointer_pty_id: null
+    })
+  })
 })

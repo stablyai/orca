@@ -177,6 +177,8 @@ export class InMemoryOrchestrationMessages {
     this.clearMailboxPointerEnter(released)
   }
 
+  forgetSettledPointerPty(_ptyId: string): void {}
+
   releasePendingMailboxPointerForPty(ptyId: string): void {
     const reservedIds = new Set(
       this.messages
