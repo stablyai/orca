@@ -156,20 +156,6 @@ export function FileExplorerRowContextMenu({
         event.preventDefault()
       }}
     >
-      {showCopyFileAction && (
-        <ContextMenuItem onSelect={handleCopyFile}>
-          <Copy />
-          {t('auto.components.right.sidebar.FileExplorerRow.98a79948b3', 'Copy')}
-        </ContextMenuItem>
-      )}
-      {pastePreview ? (
-        <FileExplorerPasteMenuItem
-          preview={pastePreview}
-          disabled={writesBlocked}
-          onSelect={() => onPasteToDirectory(node.isDirectory ? node.path : undefined)}
-        />
-      ) : null}
-      {(showCopyFileAction || pastePreview) && <ContextMenuSeparator />}
       <ContextMenuItem
         disabled={writesBlocked}
         onSelect={() => onStartNew('file', targetDir, targetDepth)}
@@ -184,43 +170,14 @@ export function FileExplorerRowContextMenu({
         <FolderPlus />
         {t('auto.components.right.sidebar.FileExplorerRow.f61af83316', 'New Folder')}
       </ContextMenuItem>
-      <ContextMenuSeparator />
-      <ContextMenuItem onSelect={() => onCopyPaths('absolute')}>
-        <Copy />
-        {selectionSize > 1
-          ? t('auto.components.right.sidebar.FileExplorerRow.f9d7ca753d', 'Copy Paths')
-          : t('auto.components.right.sidebar.FileExplorerRow.b5d436aa30', 'Copy Path')}
-        {copyPathShortcutLabel !== 'Unassigned' ? (
-          <ContextMenuShortcut>{copyPathShortcutLabel}</ContextMenuShortcut>
-        ) : null}
+      <ContextMenuItem
+        disabled={revealBlocked}
+        onSelect={() => void revealInFileManager(node.path, revealOwner)}
+      >
+        <ExternalLink />
+        {getRevealInFileManagerLabel(t)}
+        {revealBlocked ? <LocalOnlyMenuHint /> : null}
       </ContextMenuItem>
-      <ContextMenuItem onSelect={() => onCopyPaths('relative')}>
-        <Copy />
-        {selectionSize > 1
-          ? t('auto.components.right.sidebar.FileExplorerRow.42e10cbf57', 'Copy Relative Paths')
-          : t('auto.components.right.sidebar.FileExplorerRow.66a29dde82', 'Copy Relative Path')}
-        {copyRelativePathShortcutLabel !== 'Unassigned' ? (
-          <ContextMenuShortcut>{copyRelativePathShortcutLabel}</ContextMenuShortcut>
-        ) : null}
-      </ContextMenuItem>
-      {!node.isDirectory && (
-        <ContextMenuItem disabled={writesBlocked} onSelect={() => onDuplicate(node)}>
-          <Files />
-          {t('auto.components.right.sidebar.FileExplorerRow.0fec99bfd7', 'Duplicate')}
-        </ContextMenuItem>
-      )}
-      {canAddAsProject && (
-        <ContextMenuItem onSelect={onAddFolderAsProject}>
-          <FolderPlus />
-          {t('auto.components.right.sidebar.FileExplorerRow.1bb9be455c', 'Add as Project...')}
-        </ContextMenuItem>
-      )}
-      {shouldShowOpenInTerminalAction(node) && (
-        <ContextMenuItem onSelect={onOpenInTerminal}>
-          <SquareTerminal />
-          {t('auto.components.right.sidebar.FileExplorerRow.e887fa4b2e', 'Open in Terminal')}
-        </ContextMenuItem>
-      )}
       {shouldShowViewFileAction(node) && (
         <ContextMenuItem onSelect={onViewFile}>
           <File />
@@ -248,6 +205,13 @@ export function FileExplorerRowContextMenu({
           {t('auto.components.right.sidebar.FileExplorerRow.d87a4c42e1', 'Open Markdown Preview')}
         </ContextMenuItem>
       )}
+      <OpenInContextSubmenu path={node.path} workspaceId={activeWorktreeId} owner={revealOwner} />
+      {shouldShowOpenInTerminalAction(node) && (
+        <ContextMenuItem onSelect={onOpenInTerminal}>
+          <SquareTerminal />
+          {t('auto.components.right.sidebar.FileExplorerRow.e887fa4b2e', 'Open in Terminal')}
+        </ContextMenuItem>
+      )}
       {showRemoteDownloadAction && (
         <ContextMenuItem onSelect={handleDownload}>
           <Download />
@@ -256,12 +220,7 @@ export function FileExplorerRowContextMenu({
             : t('auto.components.right.sidebar.FileExplorerRow.c2112579f6', 'Download')}
         </ContextMenuItem>
       )}
-      {canCollapseFolderSubtree && shouldShowCollapseFolderAction(node, isExpanded) && (
-        <ContextMenuItem onSelect={onCollapseFolderSubtree}>
-          <ListCollapse />
-          {t('auto.components.right.sidebar.FileExplorerRow.d6a25618aa', 'Collapse Folder')}
-        </ContextMenuItem>
-      )}
+      <ContextMenuSeparator />
       {shouldShowFindInFolderAction(node) && (
         <ContextMenuItem onSelect={onFindInFolder}>
           <Search />
@@ -271,14 +230,60 @@ export function FileExplorerRowContextMenu({
           ) : null}
         </ContextMenuItem>
       )}
-      <OpenInContextSubmenu path={node.path} workspaceId={activeWorktreeId} owner={revealOwner} />
-      <ContextMenuItem
-        disabled={revealBlocked}
-        onSelect={() => void revealInFileManager(node.path, revealOwner)}
-      >
-        <ExternalLink />
-        {getRevealInFileManagerLabel(t)}
-        {revealBlocked ? <LocalOnlyMenuHint /> : null}
+      {canCollapseFolderSubtree && shouldShowCollapseFolderAction(node, isExpanded) && (
+        <ContextMenuItem onSelect={onCollapseFolderSubtree}>
+          <ListCollapse />
+          {t('auto.components.right.sidebar.FileExplorerRow.d6a25618aa', 'Collapse Folder')}
+        </ContextMenuItem>
+      )}
+      {canAddAsProject && (
+        <ContextMenuItem onSelect={onAddFolderAsProject}>
+          <FolderPlus />
+          {t('auto.components.right.sidebar.FileExplorerRow.1bb9be455c', 'Add as Project...')}
+        </ContextMenuItem>
+      )}
+      {(shouldShowFindInFolderAction(node) ||
+        canAddAsProject ||
+        (canCollapseFolderSubtree && shouldShowCollapseFolderAction(node, isExpanded))) && (
+        <ContextMenuSeparator />
+      )}
+      {showCopyFileAction && (
+        <ContextMenuItem onSelect={handleCopyFile}>
+          <Copy />
+          {t('auto.components.right.sidebar.FileExplorerRow.98a79948b3', 'Copy')}
+        </ContextMenuItem>
+      )}
+      {pastePreview ? (
+        <FileExplorerPasteMenuItem
+          preview={pastePreview}
+          disabled={writesBlocked}
+          onSelect={() => onPasteToDirectory(node.isDirectory ? node.path : undefined)}
+        />
+      ) : null}
+      {!node.isDirectory && (
+        <ContextMenuItem disabled={writesBlocked} onSelect={() => onDuplicate(node)}>
+          <Files />
+          {t('auto.components.right.sidebar.FileExplorerRow.0fec99bfd7', 'Duplicate')}
+        </ContextMenuItem>
+      )}
+      {(showCopyFileAction || pastePreview || !node.isDirectory) && <ContextMenuSeparator />}
+      <ContextMenuItem onSelect={() => onCopyPaths('absolute')}>
+        <Copy />
+        {selectionSize > 1
+          ? t('auto.components.right.sidebar.FileExplorerRow.f9d7ca753d', 'Copy Paths')
+          : t('auto.components.right.sidebar.FileExplorerRow.b5d436aa30', 'Copy Path')}
+        {copyPathShortcutLabel !== 'Unassigned' ? (
+          <ContextMenuShortcut>{copyPathShortcutLabel}</ContextMenuShortcut>
+        ) : null}
+      </ContextMenuItem>
+      <ContextMenuItem onSelect={() => onCopyPaths('relative')}>
+        <Copy />
+        {selectionSize > 1
+          ? t('auto.components.right.sidebar.FileExplorerRow.42e10cbf57', 'Copy Relative Paths')
+          : t('auto.components.right.sidebar.FileExplorerRow.66a29dde82', 'Copy Relative Path')}
+        {copyRelativePathShortcutLabel !== 'Unassigned' ? (
+          <ContextMenuShortcut>{copyRelativePathShortcutLabel}</ContextMenuShortcut>
+        ) : null}
       </ContextMenuItem>
       <ContextMenuSeparator />
       <ContextMenuItem disabled={writesBlocked} onSelect={() => onStartRename(node)}>
