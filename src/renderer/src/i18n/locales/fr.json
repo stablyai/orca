@@ -7679,6 +7679,10 @@
         "BrowserUseEnableSwitch": {
           "ce4d6f80d8": "Activer Agent Browser Use"
         },
+        "BrowserLinkRoutingExistingTabSetting": {
+          "title": "Ouvrir les liens dans l'onglet de navigateur actuel",
+          "description": "Les liens du terminal, du chat et du markdown se chargent dans le dernier onglet de navigateur utilisé au lieu d'un nouvel onglet ou d'une nouvelle division."
+        },
         "BrowserUseExamples": {
           "1199258ace": "Copier",
           "1188e56af4": "Copier l'exemple de prompt",
@@ -9891,7 +9895,11 @@
             "5a70844e54": "Moteur de recherche par défaut",
             "f1da035bcb": "Session & cookies",
             "f6de9e25a0": "Zoom par défaut",
-            "1c2aff8f82": "Page d'accueil par défaut"
+            "1c2aff8f82": "Page d'accueil par défaut",
+            "linkRoutingExistingTab": {
+              "reuse": "réutiliser",
+              "split": "diviser"
+            }
           },
           "use": {
             "search": {
