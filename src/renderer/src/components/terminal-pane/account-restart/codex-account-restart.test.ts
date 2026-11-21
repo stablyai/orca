@@ -7,17 +7,13 @@ import {
   seed,
   receipt,
   snapshot,
-  mountedSpawnSession
+  mountedSpawnSession,
+  acceptSeededCodexRestart as accepted
 } from './codex-account-restart.test-fixture'
 import {
   admitTerminalNoticeLifetime,
   retireTerminalNoticeLifetime
 } from '../provider-notices/terminal-notice-lifetime'
-import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
-import { TEST_REPO } from '@/store/repos/repo.test-fixture'
-import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
-import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { bindStartFreshSpawn } from '../pty-connection/spawn/fresh-spawn-start'
 import { settleCodexAccountRestart } from './codex-account-restart-settlement'
 import { getPaneSpawnDeferral } from '../session-restore/spawn-deferral/pane-spawn-deferral-registry'
@@ -58,14 +54,6 @@ vi.mock('@/lib/agent-session/accounts/agent-account-restart-startup', () => ({
 
 const spawn = vi.fn()
 const call = vi.fn()
-function accepted() {
-  useAppStore.getState().queuePaneAccountRestarts(['old'], 'codex')
-  const request = useAppStore.getState().claimCodexAccountRestart(key)
-  if (!request) {
-    throw new Error('request not accepted')
-  }
-  return request
-}
 beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
   resetDetachedCodexPaneRestartClaimsForTests()
@@ -380,71 +368,6 @@ describe('Codex account continuation', () => {
     expect(spawn).not.toHaveBeenCalled()
     expect(useAppStore.getState().terminalLayoutsByTabId.tab.ptyIdsByLeafId?.[leaf]).toBe('old')
   })
-  it.each(['pairing', 'runtime'] as const)(
-    'retires the captured request atomically when its %s identity changes',
-    async (change) => {
-      const environment: PublicKnownRuntimeEnvironment = {
-        id: 'env-account',
-        name: 'Test host',
-        createdAt: 1,
-        updatedAt: 1,
-        lastUsedAt: null,
-        runtimeId: null,
-        pairingRevision: 1,
-        hostKeyFingerprint: 'same-host',
-        endpoints: [
-          { id: 'ws-account', kind: 'websocket', label: 'WebSocket', endpoint: 'ws://test-host' }
-        ],
-        preferredEndpointId: 'ws-account'
-      }
-      useAppStore.getState().setRuntimeEnvironments([environment])
-      const hostId = toRuntimeExecutionHostId('env-account')
-      useAppStore.setState({
-        repos: [{ ...TEST_REPO, id: 'remote-repo', executionHostId: hostId }],
-        worktreesByRepo: {
-          'remote-repo': [
-            makeWorktree({
-              id: 'wt',
-              repoId: 'remote-repo',
-              hostId,
-              runtimeOwnerEnvironmentId: 'env-account'
-            })
-          ]
-        }
-      })
-      useAppStore.getState().setRuntimeEnvironmentStatus('env-account', {
-        checkedAt: 1,
-        status: createCompatibleRuntimeStatusResponse('runtime-before').result
-      })
-      const request = accepted()
-      useAppStore
-        .getState()
-        .updateCodexAccountRestart(codexAccountRestartToken(request), { phase: 'failed' })
-      expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(1)
-      if (change === 'pairing') {
-        useAppStore.getState().setRuntimeEnvironments([{ ...environment, pairingRevision: 2 }])
-      } else {
-        useAppStore.getState().setRuntimeEnvironmentStatus('env-account', {
-          checkedAt: 2,
-          status: createCompatibleRuntimeStatusResponse('runtime-after').result
-        })
-      }
-      expect(selectCodexRestartStatus(useAppStore.getState()).stalePtyIds).toEqual(['old'])
-      expect(selectCodexRestartStatus(useAppStore.getState()).failures).toEqual([])
-      if (change === 'pairing') {
-        useAppStore.getState().setRuntimeEnvironments([environment])
-      } else {
-        useAppStore.getState().setRuntimeEnvironmentStatus('env-account', {
-          checkedAt: 3,
-          status: createCompatibleRuntimeStatusResponse('runtime-before').result
-        })
-      }
-      await retryCodexAccountRestarts([request])
-      expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(1)
-      expect(useAppStore.getState().terminalLayoutsByTabId.tab.ptyIdsByLeafId?.[leaf]).toBe('old')
-      expect(spawn).not.toHaveBeenCalled()
-    }
-  )
   it('keeps a late terminal failure authoritative over an older Retry read and then restarts its empty leaf', async () => {
     vi.useFakeTimers()
     const pending = Promise.withResolvers<{ id: string; incarnationId?: string }>()

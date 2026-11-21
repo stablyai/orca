@@ -4,6 +4,7 @@ import {
   reconcileRetiredCodexNotices
 } from '@/store/terminals/codex-account-restart-continuation'
 import { releaseRetiredAccountRestartSlots } from '@/components/terminal-pane/account-restart/detached/detached-pane-restart-slots'
+import { resolveContinuedRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { RuntimeStatusStoreSetState, RuntimeStatusStoreState } from './runtime-status-types'
 import { openStatusTransactionFor } from '../../status-transaction/status-transaction'
 import type { HostStatusReplacement } from './host-status-transaction-draft'
@@ -46,17 +47,34 @@ function retireChangedRuntimeRequests(
     const previous = state.runtimeEnvironments.find((e) => e.id === request.environmentId)
     const expectedRevision =
       request.pairingRevision ?? previous?.pairingRevision ?? previous?.createdAt
-    const revisionChanged =
-      catalog &&
-      (!environment || (environment.pairingRevision ?? environment.createdAt) !== expectedRevision)
+    const nextRevision = environment && (environment.pairingRevision ?? environment.createdAt)
+    const revisionChanged = catalog && (!environment || nextRevision !== expectedRevision)
     const runtimeId = lastVerifiedRuntimeStatus(
       writtenRuntimeStatus(patch, staged, request.environmentId)
     )?.runtimeId
-    if (!revisionChanged && !(request.runtimeId && runtimeId && runtimeId !== request.runtimeId)) {
+    const runtimeChanged = Boolean(
+      request.runtimeId && runtimeId && runtimeId !== request.runtimeId
+    )
+    if (!revisionChanged && !runtimeChanged) {
+      continue
+    }
+    // Why: a re-pair proven to be the same machine keeps the request (and a failed pane's Retry).
+    const sameHostRotation =
+      !runtimeChanged &&
+      nextRevision !== undefined &&
+      expectedRevision !== undefined &&
+      resolveContinuedRuntimeEnvironmentRevision(request.environmentId, expectedRevision) ===
+        nextRevision
+    if (sameHostRotation && request.pairingRevision === undefined) {
       continue
     }
     if (requests === state.pendingPaneAccountRestarts) {
       requests = { ...requests }
+    }
+    if (sameHostRotation) {
+      // Re-stamp so later reads compare against the pairing the request now continues on.
+      requests[key] = { ...request, pairingRevision: nextRevision }
+      continue
     }
     delete requests[key]
     const notice = notices?.[request.oldPtyId]

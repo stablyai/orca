@@ -9,6 +9,16 @@ export const leaf = '00000000-0000-4000-8000-000000000001'
 export const sibling = '00000000-0000-4000-8000-000000000002'
 export const key = `tab:${leaf}`
 export const notice = { previousAccountLabel: 'old', nextAccountLabel: 'new' }
+
+export function acceptSeededCodexRestart(): CodexAccountRestart {
+  useAppStore.getState().queuePaneAccountRestarts(['old'], 'codex')
+  const request = useAppStore.getState().claimCodexAccountRestart(key)
+  if (!request) {
+    throw new Error('request not accepted')
+  }
+  return request
+}
+
 export function seed() {
   useAppStore.setState({
     tabsByWorktree: {
