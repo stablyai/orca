@@ -23,6 +23,7 @@ import {
   resolveEnvironmentHermesSkillsRoot,
   resolveEnvironmentSkillProviderRoots
 } from '../providers/skill-provider-runtime-roots'
+import { resolvePiAgentDir } from './pi-package-skill-sources'
 
 export type SkillScanRoot = Omit<SkillDiscoverySource, 'exists' | 'skippedReason'>
 type SkillDiscoveryPathApi = Pick<typeof posix, 'basename' | 'join'>
@@ -111,7 +112,8 @@ const PROJECT_SKILL_FOLDERS: readonly (readonly [AgentType, string, SkillProvide
   ['cursor', '.cursor', ['agent-skills']],
   ['copilot', '.github', ['agent-skills']],
   ['qoder', '.qoder', ['agent-skills']],
-  ['opencode', '.opencode', ['agent-skills']]
+  ['opencode', '.opencode', ['agent-skills']],
+  ['pi', '.pi', ['agent-skills']]
 ]
 
 export function buildSkillDiscoverySources(
@@ -133,6 +135,9 @@ export function buildSkillDiscoverySources(
   const hermesSkillsRoot = args.pathApi
     ? pathApi.join(home, '.hermes', 'skills')
     : (resolveEnvironmentHermesSkillsRoot() ?? resolveDefaultHermesSkillsRoot({ homeDir: home }))
+  const piSkillsRoot = args.pathApi
+    ? pathApi.join(home, '.pi', 'agent', 'skills')
+    : pathApi.join(resolvePiAgentDir({ homeDir: home }), 'skills')
   const roots: SkillScanRoot[] = [
     // Why: Codex reads `.agents/skills` today; this legacy home still holds older installs.
     source(
@@ -172,14 +177,7 @@ export function buildSkillDiscoverySources(
       ['agent-skills'],
       'opencode'
     ),
-    source(
-      'home-pi',
-      'Pi home',
-      pathApi.join(home, '.pi', 'agent', 'skills'),
-      'home',
-      ['agent-skills'],
-      'pi'
-    ),
+    source('home-pi', 'Pi home', piSkillsRoot, 'home', ['agent-skills'], 'pi'),
     source(
       'home-omp',
       'OMP home',

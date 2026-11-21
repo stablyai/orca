@@ -31,11 +31,14 @@ vi.mock('./skill-root-file-walk', async (importOriginal) => {
 beforeEach(() => {
   // Reset shared scans because each case owns a different tree.
   clearSkillRootScanCache()
-  // HERMES_HOME can escape the fixture; isolate it from developer installs.
+  // HERMES_HOME and Pi agent dir envs can escape the fixture; isolate them from developer installs.
   vi.stubEnv('HERMES_HOME', '')
   vi.stubEnv('LOCALAPPDATA', '')
   vi.stubEnv('CLAUDE_CONFIG_DIR', '')
   vi.stubEnv('GROK_HOME', '')
+  vi.stubEnv('PI_CODING_AGENT_DIR', '')
+  vi.stubEnv('ORCA_PI_SOURCE_AGENT_DIR', '')
+  vi.stubEnv('ORCA_PI_CODING_AGENT_DIR', '')
   vi.spyOn(console, 'info').mockImplementation(() => undefined)
 })
 
@@ -318,6 +321,140 @@ describe('skill discovery', () => {
     expect(reviews).toHaveLength(1)
     expect(reviews[0].rootPaths?.slice().sort()).toEqual(
       [codexSkills, join(home, '.agents', 'skills')].sort()
+    )
+  })
+  it('discovers Pi skills from git and npm packages in user settings.json', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const piAgentDir = join(home, '.pi', 'agent')
+    const gitPkgRoot = join(piAgentDir, 'git', 'github.com', 'DietrichGebert', 'ponytail')
+    const npmSkillsPkgRoot = join(piAgentDir, 'npm', 'node_modules', 'pi-skill-pack')
+    const npmExtOnlyPkgRoot = join(piAgentDir, 'npm', 'node_modules', 'pi-simplify')
+
+    await mkdir(join(gitPkgRoot, 'skills', 'ponytail'), { recursive: true })
+    await mkdir(join(gitPkgRoot, 'skills', 'ponytail-review'), { recursive: true })
+    await mkdir(join(npmSkillsPkgRoot, 'skills', 'quick-fix'), { recursive: true })
+    await mkdir(join(npmExtOnlyPkgRoot, 'skills', 'ignored-skill'), { recursive: true })
+
+    await writeFile(
+      join(gitPkgRoot, 'package.json'),
+      JSON.stringify({
+        name: '@dietrichgebert/ponytail',
+        pi: { extensions: ['./pi-extension/index.js'], skills: ['./skills'] }
+      })
+    )
+    await writeFile(
+      join(gitPkgRoot, 'skills', 'ponytail', 'SKILL.md'),
+      '---\nname: ponytail\ndescription: Lazy senior dev mode.\n---\n'
+    )
+    await writeFile(
+      join(gitPkgRoot, 'skills', 'ponytail-review', 'SKILL.md'),
+      '---\nname: ponytail-review\ndescription: Quality review.\n---\n'
+    )
+    await writeFile(
+      join(npmSkillsPkgRoot, 'skills', 'quick-fix', 'SKILL.md'),
+      '---\nname: quick-fix\ndescription: Apply quick fixes.\n---\n'
+    )
+    await writeFile(
+      join(npmExtOnlyPkgRoot, 'package.json'),
+      JSON.stringify({
+        name: 'pi-simplify',
+        pi: { extensions: ['dist/index.js'] }
+      })
+    )
+    await writeFile(
+      join(npmExtOnlyPkgRoot, 'skills', 'ignored-skill', 'SKILL.md'),
+      '# ignored-skill\n\nShould not be loaded when pi manifest omits skills.'
+    )
+    await writeFile(
+      join(piAgentDir, 'settings.json'),
+      JSON.stringify({
+        packages: [
+          'git:github.com/DietrichGebert/ponytail',
+          'npm:pi-skill-pack@^1.0.0',
+          'npm:pi-simplify'
+        ]
+      })
+    )
+
+    const result = await discoverSkills({ homeDir: home, cwd: join(root, 'missing-cwd') })
+
+    const names = result.skills.map((skill) => skill.name).sort()
+    expect(names).toEqual(['ponytail', 'ponytail-review', 'quick-fix'])
+    const ponytail = result.skills.find((skill) => skill.name === 'ponytail')
+    expect(ponytail).toBeDefined()
+    expect(isNativeChatSkillForAgent('pi', ponytail!, result)).toBe(true)
+    expect(isNativeChatSkillForAgent('claude', ponytail!, result)).toBe(false)
+  })
+
+  it('discovers Pi skills from project .pi/settings.json local packages and .pi/skills', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const project = join(root, 'project')
+    const localPkg = join(project, 'local-pi-pkg')
+
+    await mkdir(join(project, '.pi', 'skills', 'proj-skill'), { recursive: true })
+    await mkdir(join(localPkg, 'custom-skills', 'local-pkg-skill'), { recursive: true })
+    await writeFile(
+      join(project, '.pi', 'skills', 'proj-skill', 'SKILL.md'),
+      '---\nname: proj-skill\ndescription: Project Pi skill.\n---\n'
+    )
+    await writeFile(
+      join(localPkg, 'package.json'),
+      JSON.stringify({ name: 'local-pi-pkg', pi: { skills: ['./custom-skills'] } })
+    )
+    await writeFile(
+      join(localPkg, 'custom-skills', 'local-pkg-skill', 'SKILL.md'),
+      '---\nname: local-pkg-skill\ndescription: Local package skill.\n---\n'
+    )
+    await writeFile(
+      join(project, '.pi', 'settings.json'),
+      JSON.stringify({ packages: ['../local-pi-pkg'] })
+    )
+
+    const result = await discoverSkills({ homeDir: home, cwd: project, repos: [] })
+
+    expect(result.skills.map((skill) => skill.name).sort()).toEqual([
+      'local-pkg-skill',
+      'proj-skill'
+    ])
+    for (const skill of result.skills) {
+      expect(isNativeChatSkillForAgent('pi', skill, result)).toBe(true)
+    }
+  })
+
+  it('respects PI_CODING_AGENT_DIR and ORCA_PI_SOURCE_AGENT_DIR and deduplicates symlinked skills', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const customPiDir = join(root, 'custom-pi')
+    const sourcePiDir = join(root, 'source-pi')
+    const gitPkgSkills = join(sourcePiDir, 'git', 'github.com', 'org', 'pkg', 'skills')
+
+    await mkdir(join(gitPkgSkills, 'shared-skill'), { recursive: true })
+    await mkdir(join(sourcePiDir, 'skills'), { recursive: true })
+    await writeFile(
+      join(gitPkgSkills, 'shared-skill', 'SKILL.md'),
+      '---\nname: shared-skill\ndescription: Shared skill.\n---\n'
+    )
+    await symlink(
+      join(gitPkgSkills, 'shared-skill'),
+      join(sourcePiDir, 'skills', 'shared-skill'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    )
+    await writeFile(
+      join(sourcePiDir, 'settings.json'),
+      JSON.stringify({ packages: ['git:github.com/org/pkg'] })
+    )
+
+    vi.stubEnv('PI_CODING_AGENT_DIR', customPiDir)
+    vi.stubEnv('ORCA_PI_SOURCE_AGENT_DIR', sourcePiDir)
+
+    const result = await discoverSkills({ homeDir: home, cwd: join(root, 'missing-cwd') })
+
+    const shared = result.skills.filter((skill) => skill.name === 'shared-skill')
+    expect(shared).toHaveLength(1)
+    expect(shared[0].rootPaths?.slice().sort()).toEqual(
+      [join(sourcePiDir, 'skills'), gitPkgSkills].sort()
     )
   })
 })

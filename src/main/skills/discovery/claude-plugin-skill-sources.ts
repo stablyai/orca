@@ -1,10 +1,8 @@
-import { open, stat } from 'node:fs/promises'
 import { basename, isAbsolute, join, relative, sep, type posix } from 'node:path'
 import { stablePathId } from './skill-discovery-classification'
 import type { SkillScanRoot } from './skill-discovery-sources'
+import { parseSkillMetadataJsonObject, readSkillMetadataFile } from './skill-metadata-json'
 import { stripUnsafeDisplayCharacters } from '../../../shared/text/display-text-safety'
-
-const MAX_PLUGIN_METADATA_BYTES = 4 * 1024 * 1024
 
 export type SkillDiscoveryPathApi = Pick<
   typeof posix,
@@ -42,24 +40,10 @@ export function getClaudePluginMetadataPaths(
   }
 }
 
-function parseJsonObject(content: string | null): Record<string, unknown> | null {
-  if (!content) {
-    return null
-  }
-  try {
-    const parsed: unknown = JSON.parse(content)
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : null
-  } catch {
-    return null
-  }
-}
-
 function readEnabledPlugins(settingsContents: readonly (string | null)[]): Map<string, boolean> {
   const enabled = new Map<string, boolean>()
   for (const content of settingsContents) {
-    const settings = parseJsonObject(content)
+    const settings = parseSkillMetadataJsonObject(content)
     const configured = settings?.enabledPlugins
     if (!configured || typeof configured !== 'object' || Array.isArray(configured)) {
       continue
@@ -162,7 +146,7 @@ function resolveClaudePluginSkillInstalls(
   args: ClaudePluginResolveArgs
 ): ClaudePluginSkillInstall[] {
   const pathApi = args.pathApi ?? defaultPathApi
-  const installed = parseJsonObject(args.metadata.installedPlugins)?.plugins
+  const installed = parseSkillMetadataJsonObject(args.metadata.installedPlugins)?.plugins
   if (!installed || typeof installed !== 'object' || Array.isArray(installed)) {
     return []
   }
@@ -201,30 +185,6 @@ export function resolveClaudePluginSkillSources(args: ClaudePluginResolveArgs): 
   return resolveClaudePluginSkillInstalls(args).map(({ root }) => root)
 }
 
-async function readMetadataFile(pathValue: string, signal?: AbortSignal): Promise<string | null> {
-  try {
-    signal?.throwIfAborted()
-    const fileStat = await stat(pathValue)
-    signal?.throwIfAborted()
-    if (!fileStat.isFile() || fileStat.size > MAX_PLUGIN_METADATA_BYTES) {
-      return null
-    }
-    const file = await open(pathValue, 'r')
-    try {
-      signal?.throwIfAborted()
-      const buffer = Buffer.alloc(fileStat.size)
-      const { bytesRead } = await file.read(buffer, 0, buffer.length, 0)
-      signal?.throwIfAborted()
-      return buffer.toString('utf8', 0, bytesRead)
-    } finally {
-      await file.close()
-    }
-  } catch {
-    signal?.throwIfAborted()
-    return null
-  }
-}
-
 type ClaudePluginDiscoveryArgs = { homeDir: string; cwd: string; signal?: AbortSignal }
 
 export async function discoverClaudePluginSkillInstalls(
@@ -232,7 +192,9 @@ export async function discoverClaudePluginSkillInstalls(
 ): Promise<ClaudePluginSkillInstall[]> {
   const paths = getClaudePluginMetadataPaths(args.homeDir, args.cwd)
   const [installedPlugins, ...settings] = await Promise.all(
-    [paths.installedPlugins, ...paths.settings].map((path) => readMetadataFile(path, args.signal))
+    [paths.installedPlugins, ...paths.settings].map((path) =>
+      readSkillMetadataFile(path, args.signal)
+    )
   )
   return resolveClaudePluginSkillInstalls({
     metadata: { installedPlugins, settings },
@@ -253,11 +215,11 @@ export async function applyClaudePluginManifestNames(
 ): Promise<SkillScanRoot[]> {
   return Promise.all(
     installs.map(async ({ root, installPath }) => {
-      const manifest = await readMetadataFile(
+      const manifest = await readSkillMetadataFile(
         join(installPath, '.claude-plugin', 'plugin.json'),
         signal
       )
-      const manifestName = parseJsonObject(manifest)?.name
+      const manifestName = parseSkillMetadataJsonObject(manifest)?.name
       return typeof manifestName === 'string' && manifestName
         ? { ...root, pluginName: manifestName }
         : root

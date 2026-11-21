@@ -9,6 +9,7 @@ import {
 import { toWindowsWslPath } from '../../../shared/file-access/wsl-paths'
 import { discoverClaudePluginSkillSources } from '../discovery/claude-plugin-skill-sources'
 import { discoverClaudePluginSkillSourcesInWsl } from '../discovery/claude-plugin-skill-sources-wsl'
+import { discoverPiPackageSkillSources } from '../discovery/pi-package-skill-sources'
 import {
   buildSkillDiscoverySources,
   type SkillScanRoot
@@ -53,6 +54,10 @@ export async function buildSkillDeleteRootSet(input: {
 
   const home = input.homeDir ?? homedir()
   const cwd = input.target.cwd
+  const [claudePluginRoots, piPackageRoots] = await Promise.all([
+    cwd ? discoverClaudePluginSkillSources({ homeDir: home, cwd }).catch(() => []) : [],
+    discoverPiPackageSkillSources({ homeDir: home, ...(cwd ? { cwd } : {}) }).catch(() => [])
+  ])
   return {
     roots: [
       // Match discovery's cwd exclusivity and process.cwd fallback; clearing repos alone does not exclude other workspace roots.
@@ -62,7 +67,8 @@ export async function buildSkillDeleteRootSet(input: {
         repos: cwd ? [] : [...input.repos],
         providerRootOverrides: input.providerRootOverrides
       }),
-      ...(cwd ? await discoverClaudePluginSkillSources({ homeDir: home, cwd }).catch(() => []) : [])
+      ...claudePluginRoots,
+      ...piPackageRoots
     ],
     semantics: nativeSkillPathSemantics(),
     toFilesystemPath: (path) => path
