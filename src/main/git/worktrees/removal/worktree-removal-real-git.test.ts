@@ -105,10 +105,13 @@ describe('worktree removal against the real Git binary', () => {
         }
       }
     })
-    await vi.waitFor(() => expect(_queuedWorktreeDeletesForTests()).toBe(1))
-    // Swapped while the request queued for a slot.
-    replaced = true
-    releaseSlots()
+    try {
+      await vi.waitFor(() => expect(_queuedWorktreeDeletesForTests()).toBe(1))
+    } finally {
+      // Swapped while the request queued for a slot; always free the slots so a failed wait cannot starve later tests.
+      replaced = true
+      releaseSlots()
+    }
     await Promise.all(holders)
 
     await expect(removal).rejects.toThrow('different checkout')
