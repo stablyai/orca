@@ -339,4 +339,30 @@ describe('writeFileAtomically', () => {
       cleanup()
     }
   })
+
+  it('updates only over the expected bytes on a filesystem with no hard links (STA-16341)', () => {
+    setup()
+    const link = fsMock.linkSync.getMockImplementation()!
+    try {
+      const target = join(dir, 'config.toml')
+      writeFileSync(target, 'user edit\n')
+      fsMock.linkSync.mockImplementation(() => {
+        throw Object.assign(new Error('operation not supported'), { code: 'ENOTSUP' })
+      })
+
+      expect(writeFileAtomicallyIfUnchanged(target, 'stale\n', 'mirror\n')).toBe(false)
+      expect(readFileSync(target, 'utf-8')).toBe('user edit\n')
+      expect(writeFileAtomicallyIfUnchanged(target, 'user edit\n', 'mirror\n')).toBe(true)
+      expect(readFileSync(target, 'utf-8')).toBe('mirror\n')
+      expect(writeFileAtomicallyIfUnchanged(target, null, 'fresh\n')).toBe(false)
+      expect(readFileSync(target, 'utf-8')).toBe('mirror\n')
+      rmSync(target)
+      expect(writeFileAtomicallyIfUnchanged(target, null, 'fresh\n')).toBe(true)
+      expect(readFileSync(target, 'utf-8')).toBe('fresh\n')
+      expect(readdirSync(dir)).toEqual(['config.toml'])
+    } finally {
+      fsMock.linkSync.mockImplementation(link)
+      cleanup()
+    }
+  })
 })

@@ -234,7 +234,7 @@
 7 src/main/emulator/serve-sim-execution.ts
 17 src/main/emulator/serve-sim-runtime-materializer.ts
 12 src/main/external-editors/external-editor-launch.ts
-13 src/main/filesystem/atomic-file-publication.ts
+12 src/main/filesystem/atomic-file-publication.ts
 9 src/main/filesystem/durable-file-write.ts
 3 src/main/filesystem/file-content-observation.ts # Existing reads/existence checks relocated from observed callers; no new synchronous I/O.
 2 src/main/filesystem/local-file-io/filesystem-path-containment.ts
