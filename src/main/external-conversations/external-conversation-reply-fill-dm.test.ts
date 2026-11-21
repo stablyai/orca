@@ -185,4 +185,18 @@ describe('the owner proof of a row its stamps don’t mark', () => {
     )
     expect(quiet.answered).toEqual(new Set())
   })
+
+  it('counts a row an earlier fill already answered for this turn, but not one of another turn', async () => {
+    const filledBy = (turnItemId: string): JournalConnectorReplyRow => ({
+      ...row('r1'),
+      fill: { outcome: 'answered', answerDeliveryId: 'r1', turnItemId, prose: 'Done.', filledAt: 1 }
+    })
+    const stamps = [{ account: 'acct', conversation: DM, deliveryId: 'r1' }]
+    expect(
+      (await fill([filledBy('turn-1')]).run(turn('Done.\n\nNO_REPLY', stamps))).answered
+    ).toEqual(new Set([DM.externalId]))
+    expect(
+      (await fill([filledBy('turn-0')]).run(turn('Done.\n\nNO_REPLY', stamps))).answered
+    ).toEqual(new Set())
+  })
 })

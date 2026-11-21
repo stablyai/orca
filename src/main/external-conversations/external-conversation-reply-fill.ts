@@ -147,7 +147,14 @@ export function conversationReplyFill(
       }
     }
     const fills: JournalConnectorReplyFill[] = []
-    const answered = new Set<string>()
+    // Rows an earlier fill (recovery's, say) already answered for this same turn count too.
+    const answered = new Set(
+      rows
+        .filter(
+          (row) => row.fill?.outcome === 'answered' && row.fill.turnItemId === turn.turnItemId
+        )
+        .map((row) => row.conversation.externalId)
+    )
     for (const row of own) {
       // Decided per request: the marker can't silence an answer to its owner's own DM (recovery
       // fills here too); a member's DM, or a thread, keeps today's silence.
