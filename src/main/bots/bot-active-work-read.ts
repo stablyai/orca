@@ -14,7 +14,6 @@ const FRESH_MS = 15_000
 const WORKING_READ = 12
 /** Waiting items are read whole, a page at a time, so the oldest wait is never the one cut. */
 const PAGE = 100
-const MAX_PAGES = 5
 
 type Listed = Pick<BotItemRecord, 'number' | 'lastActivityAt'>
 type Shown = Parameters<typeof botActiveWorkSection>[0][number]
@@ -33,27 +32,28 @@ export type BotActiveWorkReads<R extends Listed = BotItemRecord> = {
 
 type Cached = { at: number; section: Promise<BotActiveWorkSection> }
 
-/** A reader whose failures reject (a turn then keeps what it last had) and that returns null only
- *  when the turn doesn't act for the owner, which also never reads or caches anything. */
+/** A reader that settles who the turn acts for first: null when it isn't only the owner (nothing is
+ *  read or cached), else the section's read, which rejects on a failure so the turn keeps what it
+ *  last had. */
 export function createBotActiveWorkReader() {
   const cache = new Map<string, Cached>()
   return async <R extends Listed>(
     botId: string,
     reads: BotActiveWorkReads<R>,
     now = Date.now()
-  ): Promise<BotActiveWorkSection | null> => {
+  ): Promise<{ section: Promise<BotActiveWorkSection> } | null> => {
     if (!actsForOwner(await reads.askers())) {
       return null
     }
     const hit = cache.get(botId)
     if (hit && now - hit.at < FRESH_MS) {
-      return hit.section
+      return { section: hit.section }
     }
     const section = (async () => {
       const waiting: R[] = []
       let page = await reads.items('needs_you', PAGE)
       waiting.push(...page.items)
-      for (let more = 1; page.items.length === PAGE && more < MAX_PAGES; more += 1) {
+      while (page.items.length === PAGE) {
         const last = page.items.at(-1)!
         page = await reads.items('needs_you', PAGE, {
           at: last.lastActivityAt,
@@ -77,7 +77,7 @@ export function createBotActiveWorkReader() {
     cache.set(botId, { at: now, section })
     // A failed read is tried again on the next turn, never kept.
     section.catch(() => cache.get(botId)?.section === section && cache.delete(botId))
-    return section
+    return { section }
   }
 }
 
@@ -89,7 +89,7 @@ export function readBotActiveWork(
   botId: string,
   sessionId: string,
   message: AgentJournalMessageItem
-): Promise<BotActiveWorkSection | null> {
+): Promise<{ section: Promise<BotActiveWorkSection> } | null> {
   const reader = readers.get(runtime) ?? createBotActiveWorkReader()
   readers.set(runtime, reader)
   return reader(botId, {

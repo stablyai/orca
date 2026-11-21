@@ -173,29 +173,31 @@ describe("a bot's Active work reads", () => {
         throw new Error('down')
       }
     })
-    await expect(reader('b1', failing, 1_000)).rejects.toThrow('down')
-    expect((await reader('b1', reads(), 2_000))?.key).toBe('[]')
+    await expect((await reader('b1', failing, 1_000))?.section).rejects.toThrow('down')
+    expect((await (await reader('b1', reads(), 2_000))?.section)?.key).toBe('[]')
   })
 
-  it('reads every waiting item, so the oldest wait is shown and the rest counted', async () => {
-    const waiting = Array.from({ length: 130 }, (_, i) => record(i + 1, 10_000 - i))
+  it('reads every waiting item, past 500 too, so the oldest wait is shown and the rest counted', async () => {
+    const waiting = Array.from({ length: 501 }, (_, i) => record(i + 1, 10_000 - i))
     const reader = createBotActiveWorkReader()
-    const section = await reader(
-      'b1',
-      reads({
-        items: async (status, limit, cursor) => {
-          if (status === 'working') {
-            return { items: [], counts: {} }
+    const section = await (
+      await reader(
+        'b1',
+        reads({
+          items: async (status, limit, cursor) => {
+            if (status === 'working') {
+              return { items: [], counts: {} }
+            }
+            const from = cursor ? waiting.findIndex((r) => r.number === cursor.number) + 1 : 0
+            return { items: waiting.slice(from, from + limit), counts: { needs_you: 501 } }
           }
-          const from = cursor ? waiting.findIndex((r) => r.number === cursor.number) + 1 : 0
-          return { items: waiting.slice(from, from + limit), counts: { needs_you: 130 } }
-        }
-      }),
-      1_000
-    )
+        }),
+        1_000
+      )
+    )?.section
     const lines = section?.text.split('\n') ?? []
-    expect(lines[2]).toBe('#130 needs you: "Item 130"')
-    expect(lines.some((line) => line.startsWith('(118 more:'))).toBe(true)
+    expect(lines[2]).toBe('#501 needs you: "Item 501"')
+    expect(lines.some((line) => line.startsWith('(489 more:'))).toBe(true)
   })
 })
 
@@ -204,5 +206,29 @@ describe('snoozed items', () => {
     const snoozed = { ...item(4, 'needs_you', 1), snoozedUntil: 5_000 }
     expect(botActiveWorkSection([snoozed], [], { now: 1_000 }).key).toBe('[]')
     expect(botActiveWorkSection([snoozed], [], { now: 6_000 }).key).not.toBe('[]')
+  })
+})
+
+describe('the Active work block, kept honest', () => {
+  it("keeps a worker whose state can't be read, rather than saying its work ended", () => {
+    const section = botActiveWorkSection([], [worker('ctx_unknown', null)])
+    expect(section.text).toContain("dispatch:ctx_unknown state can't be read")
+  })
+
+  it('resends when only the number of hidden rows changes', () => {
+    const items = Array.from({ length: 13 }, (_, index) => item(index + 1, 'working', index))
+    const thirteen = botActiveWorkSection(items, [])
+    const twelve = botActiveWorkSection(items.slice(1), [])
+    expect(twelve.key).not.toBe(thirteen.key)
+  })
+
+  it('stays within its byte budget with titles in a multibyte script', () => {
+    const wide = Array.from({ length: 12 }, (_, index) => ({
+      ...item(index + 1, 'working', index),
+      title: '\u6771'.repeat(60)
+    }))
+    expect(Buffer.byteLength(botActiveWorkSection(wide, []).text, 'utf8')).toBeLessThanOrEqual(
+      1_500
+    )
   })
 })
