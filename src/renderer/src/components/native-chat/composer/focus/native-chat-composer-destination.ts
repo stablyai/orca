@@ -10,6 +10,7 @@ type Destination = {
   handle: { current: NativeChatComposerHandle | null }
   active: number
   primary: boolean
+  scopeKey?: string
 }
 const destinations = new WeakMap<HTMLElement, Destination>()
 const descendants = new WeakMap<HTMLElement, Set<Destination>>()
@@ -24,11 +25,12 @@ export function registerNativeChatComposerDestination(
   scopeKey?: string
 ): () => void {
   const previous = destinations.get(root)
-  const entry = {
+  const entry: Destination = {
     root,
     handle,
     active: 0,
-    primary
+    primary,
+    ...(scopeKey ? { scopeKey } : {})
   }
   destinations.set(root, entry)
   const destination = scopeKey ? captureLaunchDraftDestination(scopeKey) : undefined
@@ -72,6 +74,20 @@ export function registerNativeChatComposerDestination(
       destinations.delete(root)
     }
   }
+}
+
+/** The chat's own message box under `root`, never a queued-message editor; null while it is not shown. */
+export function nativeChatPrimaryComposer(
+  root: HTMLElement | null
+): { scopeKey: string; handle: NativeChatComposerHandle } | null {
+  for (const entry of (root ? descendants.get(root) : undefined) ?? []) {
+    const handle = entry.handle.current
+    // Not while a question card hides it: Reply then does nothing.
+    if (entry.primary && entry.scopeKey && handle && !entry.root.closest('[hidden], [inert]')) {
+      return { scopeKey: entry.scopeKey, handle }
+    }
+  }
+  return null
 }
 
 export function nativeChatComposerDestination(

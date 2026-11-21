@@ -6,7 +6,7 @@ import {
 } from '@/lib/agent-session/open/bot-link-item-target'
 // One navigation at a time — a rail pick or a diff reveal — pinned until it lands; rail picks and a subagent view's history page through one cancellable history loop.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { latestAgentSessionContextClearSequence } from '../../../../../../shared/agent-session/conversation-context/agent-session-context-clear'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSubagentRoster } from '../../../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
@@ -23,6 +23,11 @@ import { nativeChatSlotIndexOf } from '../../conversation/slots/native-chat-tran
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 import { nativeChatRailJumpStep, useNativeChatHistoryJump } from './use-native-chat-history-jump'
 import { useNativeChatRailJumpLanding } from './use-native-chat-rail-jump-landing'
+import {
+  useNativeChatMessageRevealAnswer,
+  type NativeChatRevealMessage
+} from '../../composer/reply/native-chat-reply-context'
+import { nativeChatReplyRevealId } from '../../composer/reply/native-chat-reply-original'
 import type { NativeChatAlignEdge } from '../virtualization/use-native-chat-viewport-align'
 
 type NavigationRequest =
@@ -211,6 +216,33 @@ export function useNativeChatNavigation({
     beginNavigation()
     scrollToBottom()
   }, [beginNavigation, scrollToBottom])
+  // Any loaded message, not only a rail prompt: the window keeps its slot drawn until the jump lands.
+  // A known id that isn't loaded is unavailable; only a reply restored from sent text matches by words.
+  const revealMessage = useCallback(
+    (message: NativeChatRevealMessage, probe: boolean): string | null => {
+      const found = nativeChatReplyRevealId(
+        message,
+        (messageId) => nativeChatSlotIndexOf(slots, messageId) >= 0,
+        () => slots.flatMap((slot) => (slot.kind === 'message' ? [slot.message] : []))
+      )
+      if (!found) {
+        return null
+      }
+      if (!probe) {
+        beginNavigation()
+        readerLeavesEnd()
+        issue({ kind: 'rail', messageId: found, requestId: nextRequestId() })
+      }
+      return found
+    },
+    [beginNavigation, issue, nextRequestId, readerLeavesEnd, slots]
+  )
+  // Answers a composer's "show the original"; a subagent's view holds no conversation messages.
+  useNativeChatMessageRevealAnswer(scrollRef, subagentId === null ? revealMessage : null)
+  // Marks a subagent's view, whose rows offer no Reply; every render, as the scroller can mount late.
+  useLayoutEffect(() => {
+    scrollRef.current?.toggleAttribute('data-native-chat-subagent-view', subagentId !== null)
+  })
   useNativeChatRailJumpLanding({
     railJump: request.railJump,
     slots,
@@ -225,6 +257,7 @@ export function useNativeChatNavigation({
     selectRailItem,
     revealDiff,
     jumpToLatest,
+    revealMessage,
     pendingRailId: historyJump.pending?.kind === 'rail' ? historyJump.pending.id : null
   }
 }

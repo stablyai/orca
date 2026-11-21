@@ -4,6 +4,7 @@ import type { NativeChatFileLinkContext } from '../../links/actions/native-chat-
 import { nativeChatLinkActions } from '../../links/actions/native-chat-link-target-actions'
 import { readNativeChatQuotableSelection } from '../../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 import type { NativeChatMessageListHandle } from '../../messages/actions/use-native-chat-reveal-latest'
+import type { NativeChatReplySource } from '../../composer/reply/native-chat-reply-context'
 
 export type NativeChatContextMenuTarget = {
   /** The selection the "Add to chat" offer would quote. */
@@ -14,6 +15,8 @@ export type NativeChatContextMenuTarget = {
   rewindItemId: string | null
   /** A message of the owner's posted to the chat's Slack thread, which Delete from Slack takes back. */
   slackPostedItemId: string | null
+  /** The message a Reply would answer, and where in the chat it was right-clicked. */
+  replyTo: { source: NativeChatReplySource; from: Element } | null
 }
 
 export const noNativeChatContextMenuTarget: NativeChatContextMenuTarget = {
@@ -22,7 +25,8 @@ export const noNativeChatContextMenuTarget: NativeChatContextMenuTarget = {
   codeText: null,
   messageText: null,
   rewindItemId: null,
-  slackPostedItemId: null
+  slackPostedItemId: null,
+  replyTo: null
 }
 
 export type NativeChatLinkContextResolver = (
@@ -47,9 +51,10 @@ export function readNativeChatContextMenuTarget(
   // The attribute, not the resolved `href` property, which rewrites chat file links into page URLs.
   const link = element?.closest('a[href], [data-native-chat-link-href]')
   const href = link?.getAttribute('data-native-chat-link-href') ?? link?.getAttribute('href')
-  const messageId = element
-    ?.closest('[data-native-chat-message-id]')
-    ?.getAttribute('data-native-chat-message-id')
+  const messageRow = element?.closest('[data-native-chat-message-id]')
+  const messageId = messageRow?.getAttribute('data-native-chat-message-id')
+  const author = messageRow?.getAttribute('data-native-chat-message-author')
+  const messageText = (messageId && messageList?.messageCopyText?.(messageId)) || null
   return {
     quoteText: quotable?.text ?? null,
     link:
@@ -63,7 +68,7 @@ export function readNativeChatContextMenuTarget(
       element
         ?.closest('[data-native-chat-code-block]')
         ?.querySelector('[data-native-chat-code-content]')?.textContent || null,
-    messageText: (messageId && messageList?.messageCopyText?.(messageId)) || null,
+    messageText,
     rewindItemId:
       element
         ?.closest('[data-native-chat-rewind-item]')
@@ -71,6 +76,15 @@ export function readNativeChatContextMenuTarget(
     slackPostedItemId:
       element
         ?.closest('[data-native-chat-slack-posted]')
-        ?.getAttribute('data-native-chat-slack-posted') ?? null
+        ?.getAttribute('data-native-chat-slack-posted') ?? null,
+    replyTo:
+      element &&
+      messageId &&
+      messageText &&
+      (author === 'agent' || author === 'user') &&
+      // A subagent's own messages are not this chat's to reply to.
+      !element.closest('[data-native-chat-subagent-view]')
+        ? { source: { messageId, author, text: messageText }, from: element }
+        : null
   }
 }

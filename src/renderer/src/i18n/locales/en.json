@@ -22572,6 +22572,20 @@
         "agyItem": "agy's own login",
         "agyHint": "This chat runs the Antigravity CLI on this host. Another method applies to new chats.",
         "confirmSignIn": "Sign in with Google?"
+      },
+      "reply": {
+        "showOriginal": "Show the original message",
+        "originalUnavailable": "Message unavailable",
+        "cancel": "Cancel reply",
+        "replyingToLabel": "Replying to {{name}}",
+        "action": "Reply",
+        "repliedTo": "Replied to {{name}}",
+        "repliedToYou": "Replied to your message",
+        "agentFallback": "Agent",
+        "cancelled": "Reply cancelled",
+        "replyingToName": "Replying to <name>{{name}}</name>",
+        "replyingToYouLabel": "Replying to your message",
+        "replyingToYouName": "Replying to <name>your message</name>"
       }
     },
     "tab": {

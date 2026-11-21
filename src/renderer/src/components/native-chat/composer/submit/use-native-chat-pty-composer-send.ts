@@ -1,5 +1,14 @@
 import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
+import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import { serializeNativeChatAgentReferences } from '../pickers/native-chat-agent-reference-send'
+import {
+  nativeChatReplyCustody,
+  readNativeChatReplyTarget,
+  restoreNativeChatReplyTarget,
+  settleNativeChatReplySend
+} from '../reply/native-chat-reply-target'
+import { withNativeChatReplyContext } from '../reply/native-chat-reply-quote'
+import { rememberNativeChatReplySource } from '../reply/native-chat-reply-sources'
 import {
   admitNativeChatPastedText,
   resolveNativeChatPastedText
@@ -24,6 +33,7 @@ import {
 } from './native-chat-composer-target'
 import { isSlashCommandDraft } from '../../../../../../shared/native-chat/input/commands/native-chat-slash-commands'
 import type { NativeChatPickerState } from '../pickers/use-native-chat-picker-state'
+import type { NativeChatSendClassification } from '../../../../../../shared/native-chat/input/commands/native-chat-slash-commands'
 import type { NativeChatSendLifecycle } from '../../session/terminal/send/use-native-chat-send-lifecycle'
 import type { NativeChatPtySessionOptionsSurface } from '../../../../../../shared/native-chat/input/session-options/native-chat-pty-session-options'
 import type { NativeChatOptimisticSendOutcome } from '../../session/terminal/delivery/native-chat-optimistic-send-outcome'
@@ -31,6 +41,14 @@ import {
   answerNativeChatCommandInComposer,
   type NativeChatLocalCommandAnswer
 } from '../../session/options/terminal/use-native-chat-local-command-answer'
+
+/** How a terminal chat delivers a send: slash-like text alone is typed as a command; anything with images is a message. */
+export function nativeChatPtySendRoute(
+  classification: NativeChatSendClassification,
+  imageCount: number
+): 'command' | 'message' {
+  return classification !== 'chat' && imageCount === 0 ? 'command' : 'message'
+}
 
 export function useNativeChatPtyComposerSend(args: {
   agent: AgentType
@@ -87,6 +105,16 @@ export function useNativeChatPtyComposerSend(args: {
       text = retry
         ? resolveNativeChatPastedText(args.draftScopeKey, text)
         : serializeNativeChatAgentReferences(text, submitted.document, submitted.pastedTextFiles)
+      // Quoted once into the sent text; a retry resends that text and never reads the current reply.
+      const route = nativeChatPtySendRoute(classification, imagePaths.length)
+      // Only a message carries the reply; a real command keeps it for the next message.
+      const reply =
+        !retry && route === 'message' && classification !== 'command'
+          ? readNativeChatReplyTarget(args.draftScopeKey)
+          : null
+      if (reply) {
+        text = withNativeChatReplyContext(text, reply, formatAgentTypeLabel(args.agent))
+      }
       const { sendOptions: launchSendOptions } = resolveNativeChatLaunchDraftSend({
         launchDraft: args.launchDraft,
         launchDraftResolved: args.launchDraftResolved,
@@ -116,7 +144,7 @@ export function useNativeChatPtyComposerSend(args: {
           : launchSendOptions
       let pendingHandle: NativeChatSendHandle | null = null
       // Why: slash-like text must not silently drop its attached images.
-      if (classification !== 'chat' && imagePaths.length === 0) {
+      if (route === 'command') {
         pendingHandle =
           args.agent === 'codex' && isSlashCommandDraft(text)
             ? sendNativeChatTypedCommand(target.ptyId, text, launchSendOptions)
@@ -167,6 +195,30 @@ export function useNativeChatPtyComposerSend(args: {
       })
       args.onSubmitted?.()
       if (!retry) {
+        if (reply) {
+          // A shown message that isn't sent comes back as "not sent → Edit", rebuilt from this text,
+          // so it keeps its exact original. Otherwise only a write the terminal took answers it.
+          const outcome = pendingId ? undefined : pendingHandle?.outcome
+          if (outcome) {
+            void outcome.then((result) => {
+              if (result !== 'not-submitted') {
+                rememberNativeChatReplySource(args.draftScopeKey, text, reply.messageId)
+              }
+            })
+          } else {
+            rememberNativeChatReplySource(args.draftScopeKey, text, reply.messageId)
+          }
+        }
+        // A shown message returns as "not sent → Edit" with its quote; without one, nothing returns
+        // the text, so a rejected write at least puts the reply back.
+        if (settleNativeChatReplySend(args.draftScopeKey, reply?.id) && reply && !pendingId) {
+          const takenAt = nativeChatReplyCustody(args.draftScopeKey)
+          void pendingHandle?.outcome?.then((outcome) => {
+            if (outcome === 'not-submitted') {
+              restoreNativeChatReplyTarget(args.draftScopeKey, reply, takenAt)
+            }
+          })
+        }
         args.setDraft('')
         args.setCaret(0)
         args.clearSkillOrigin()

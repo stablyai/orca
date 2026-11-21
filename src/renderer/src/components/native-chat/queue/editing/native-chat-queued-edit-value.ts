@@ -1,3 +1,4 @@
+import { readNativeChatReplyTarget } from '../../composer/reply/native-chat-reply-target'
 import type {
   NativeChatComposerDraft,
   NativeChatComposerDraftImage
@@ -34,6 +35,8 @@ export function nativeChatQueuedEditValueKey(
       .filter(([id]) => draft.text.includes(nativeChatPastedTextToken(id)))
       .sort(([a], [b]) => a.localeCompare(b)),
     resolveNativeChatPastedText(scope, draft.text),
-    pending
+    pending,
+    // Cancelling the card's reply is an edit too.
+    readNativeChatReplyTarget(scope)?.id ?? null
   ])
 }

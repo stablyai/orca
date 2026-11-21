@@ -20247,6 +20247,20 @@
           "plugin": "Plugin",
           "session": "Sitzung"
         }
+      },
+      "reply": {
+        "action": "Antworten",
+        "showOriginal": "Ursprüngliche Nachricht anzeigen",
+        "originalUnavailable": "Nachricht nicht verfügbar",
+        "cancel": "Antwort abbrechen",
+        "replyingToLabel": "Antwort an {{name}}",
+        "replyingToName": "Antwort an <name>{{name}}</name>",
+        "repliedTo": "Antwort an {{name}}",
+        "repliedToYou": "Antwort auf deine Nachricht",
+        "agentFallback": "Agent",
+        "cancelled": "Antwort abgebrochen",
+        "replyingToYouLabel": "Antwort auf deine Nachricht",
+        "replyingToYouName": "Antwort auf <name>deine Nachricht</name>"
       }
     },
     "tab": {

@@ -10,7 +10,7 @@ import type { Translate } from '../../../../i18n/use-translate'
 
 /** A row's blocks as it draws them, with Orca's stopped-send line in the reader's words. */
 export function nativeChatMessageRowBlocks(
-  message: NativeChatMessage,
+  message: Pick<NativeChatMessage, 'role' | 'blocks'>,
   t?: Translate
 ): NativeChatBlock[] {
   return nativeChatBlocksInOwnWords(

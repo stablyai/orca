@@ -108,6 +108,12 @@ export type StructuredAgentSessionAttachment = {
 
 export class SkillRefLimitError extends Error {}
 
+/** The words a send stores: its text without trailing whitespace. Reading the message back (Rewind,
+ *  a queued edit) gives exactly this. */
+export function structuredAgentSessionStoredText(text: string): string {
+  return text.trimEnd()
+}
+
 /** Text then images, retaining only picked skills still mentioned by $name. */
 export function structuredAgentSessionSendBody(
   text: string,
@@ -122,7 +128,9 @@ export function structuredAgentSessionSendBody(
     kind: 'message',
     role: 'user',
     blocks: [
-      ...(text.trim().length > 0 ? [{ type: 'text' as const, text: text.trimEnd() }] : []),
+      ...(text.trim().length > 0
+        ? [{ type: 'text' as const, text: structuredAgentSessionStoredText(text) }]
+        : []),
       ...attachments.map((attachment) => ({ type: 'image-ref' as const, path: attachment.path }))
     ],
     ...(picked.length > 0 ? { skills: picked } : {})

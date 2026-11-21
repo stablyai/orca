@@ -19502,6 +19502,20 @@
           "plugin": "플러그인",
           "session": "세션"
         }
+      },
+      "reply": {
+        "action": "답장",
+        "showOriginal": "원본 메시지 보기",
+        "originalUnavailable": "메시지를 사용할 수 없음",
+        "cancel": "답장 취소",
+        "replyingToLabel": "{{name}}에게 답장 중",
+        "replyingToName": "<name>{{name}}</name>에게 답장 중",
+        "repliedTo": "{{name}}에게 답장함",
+        "repliedToYou": "내 메시지에 답장함",
+        "agentFallback": "에이전트",
+        "cancelled": "답장이 취소됨",
+        "replyingToYouLabel": "내 메시지에 답장 중",
+        "replyingToYouName": "<name>내 메시지</name>에 답장 중"
       }
     },
     "tab": {

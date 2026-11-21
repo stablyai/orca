@@ -21833,6 +21833,20 @@
           "plugin": "Plugin",
           "session": "Sessão"
         }
+      },
+      "reply": {
+        "action": "Responder",
+        "showOriginal": "Mostrar a mensagem original",
+        "originalUnavailable": "Mensagem indisponível",
+        "cancel": "Cancelar resposta",
+        "replyingToLabel": "Respondendo a {{name}}",
+        "replyingToName": "Respondendo a <name>{{name}}</name>",
+        "repliedTo": "Resposta a {{name}}",
+        "repliedToYou": "Resposta à sua mensagem",
+        "agentFallback": "Agente",
+        "cancelled": "Resposta cancelada",
+        "replyingToYouLabel": "Respondendo à sua mensagem",
+        "replyingToYouName": "Respondendo à <name>sua mensagem</name>"
       }
     },
     "tab": {

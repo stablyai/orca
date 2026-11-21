@@ -20015,6 +20015,20 @@
           "plugin": "Plugin",
           "session": "Sesión"
         }
+      },
+      "reply": {
+        "action": "Responder",
+        "showOriginal": "Mostrar el mensaje original",
+        "originalUnavailable": "Mensaje no disponible",
+        "cancel": "Cancelar respuesta",
+        "replyingToLabel": "Respondiendo a {{name}}",
+        "replyingToName": "Respondiendo a <name>{{name}}</name>",
+        "repliedTo": "Respuesta a {{name}}",
+        "repliedToYou": "Respuesta a tu mensaje",
+        "agentFallback": "Agente",
+        "cancelled": "Respuesta cancelada",
+        "replyingToYouLabel": "Respondiendo a tu mensaje",
+        "replyingToYouName": "Respondiendo a <name>tu mensaje</name>"
       }
     },
     "tab": {

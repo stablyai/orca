@@ -2,17 +2,21 @@ import { ArrowUp } from 'lucide-react'
 import { cn } from '../../../../lib/class-names'
 import { useTranslate } from '../../../../i18n/use-translate'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
+import { NativeChatReplyAction } from './NativeChatReplyAction'
 import { NativeChatMessageTimestamp } from '../rows/NativeChatMessageTimestamp'
 import { withoutNativeChatVisualDirectiveLines } from '../../../../../../shared/native-chat/visuals/native-chat-visual-directive'
 
 export function NativeChatAgentControls({
   markdown,
+  messageId,
   timestamp,
   onScrollToTop,
   action,
   className
 }: {
   markdown: string
+  /** Offers Reply when set; image-only responses have nothing to quote. */
+  messageId?: string
   timestamp: number | null
   onScrollToTop: () => void
   /** A row action of its own, drawn beside Copy (Fork). */
@@ -28,6 +32,15 @@ export function NativeChatAgentControls({
           response has nothing to copy, so it has no Copy. */}
       {markdown.length > 0 ? (
         <NativeChatCopyButton text={withoutNativeChatVisualDirectiveLines(markdown)} />
+      ) : null}
+      {messageId && markdown.length > 0 ? (
+        <NativeChatReplyAction
+          source={{
+            messageId,
+            author: 'agent',
+            text: withoutNativeChatVisualDirectiveLines(markdown)
+          }}
+        />
       ) : null}
       {action}
       <button

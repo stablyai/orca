@@ -19936,6 +19936,20 @@
           "plugin": "外掛",
           "session": "工作階段"
         }
+      },
+      "reply": {
+        "action": "回覆",
+        "showOriginal": "顯示原始訊息",
+        "originalUnavailable": "訊息無法使用",
+        "cancel": "取消回覆",
+        "replyingToLabel": "正在回覆 {{name}}",
+        "replyingToName": "正在回覆 <name>{{name}}</name>",
+        "repliedTo": "已回覆 {{name}}",
+        "repliedToYou": "已回覆你的訊息",
+        "agentFallback": "代理程式",
+        "cancelled": "已取消回覆",
+        "replyingToYouLabel": "正在回覆你的訊息",
+        "replyingToYouName": "正在回覆<name>你的訊息</name>"
       }
     },
     "tab": {

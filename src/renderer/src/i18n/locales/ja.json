@@ -20643,6 +20643,20 @@
           "plugin": "プラグイン",
           "session": "セッション"
         }
+      },
+      "reply": {
+        "action": "返信",
+        "showOriginal": "元のメッセージを表示",
+        "originalUnavailable": "メッセージを表示できません",
+        "cancel": "返信をキャンセル",
+        "replyingToLabel": "{{name}} に返信中",
+        "replyingToName": "<name>{{name}}</name> に返信中",
+        "repliedTo": "{{name}} への返信",
+        "repliedToYou": "自分のメッセージへの返信",
+        "agentFallback": "Agent",
+        "cancelled": "返信をキャンセルしました",
+        "replyingToYouLabel": "自分のメッセージに返信中",
+        "replyingToYouName": "<name>自分のメッセージ</name>に返信中"
       }
     },
     "tab": {

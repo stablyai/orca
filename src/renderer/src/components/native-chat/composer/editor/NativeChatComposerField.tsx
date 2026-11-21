@@ -7,6 +7,7 @@ import { cn } from '@/lib/class-names'
 import { NativeChatMentionMenu, NativeChatPickerMenu } from '../pickers/NativeChatAutocompleteMenus'
 import { NativeChatComposerActions } from '../controls/NativeChatComposerActions'
 import { NativeChatComposerNotices } from '../controls/NativeChatComposerNotices'
+import { NativeChatReplyStrip } from '../reply/NativeChatReplyStrip'
 import { NativeChatImageAttachmentPreview } from '../../attachments/chips/NativeChatImageAttachmentPreview'
 
 import { useNativeChatComposerDraftUnsaved } from '../../drafts/use-native-chat-draft-unsaved'
@@ -238,6 +239,7 @@ export function NativeChatComposerField({
               glowing && 'native-chat-composer-glow'
             )}
           >
+            <NativeChatReplyStrip scopeKey={draftScopeKey} agent={agent} onDone={focusComposer} />
             {imageAttachments.length > 0 ? (
               <div className="mb-2 flex flex-wrap gap-2 px-1 pt-1.5">
                 {imageAttachments.map((attachment, index) => (

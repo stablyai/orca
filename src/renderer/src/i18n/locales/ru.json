@@ -20917,6 +20917,20 @@
           "plugin": "Плагин",
           "session": "Сессия"
         }
+      },
+      "reply": {
+        "action": "Ответить",
+        "showOriginal": "Показать исходное сообщение",
+        "originalUnavailable": "Сообщение недоступно",
+        "cancel": "Отменить ответ",
+        "replyingToLabel": "Ответ для {{name}}",
+        "replyingToName": "Ответ для <name>{{name}}</name>",
+        "repliedTo": "Ответ для {{name}}",
+        "repliedToYou": "Ответ на ваше сообщение",
+        "agentFallback": "Агент",
+        "cancelled": "Ответ отменён",
+        "replyingToYouLabel": "Ответ на ваше сообщение",
+        "replyingToYouName": "Ответ на <name>ваше сообщение</name>"
       }
     },
     "tab": {

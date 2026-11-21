@@ -20394,6 +20394,20 @@
           "plugin": "Eklenti",
           "session": "Oturum"
         }
+      },
+      "reply": {
+        "action": "Yanıtla",
+        "showOriginal": "Asıl mesajı göster",
+        "originalUnavailable": "Mesaj kullanılamıyor",
+        "cancel": "Yanıtı iptal et",
+        "replyingToLabel": "Yanıtlanan: {{name}}",
+        "replyingToName": "Yanıtlanan: <name>{{name}}</name>",
+        "repliedTo": "Yanıt verilen: {{name}}",
+        "repliedToYou": "Kendi mesajınıza yanıt",
+        "agentFallback": "Ajan",
+        "cancelled": "Yanıt iptal edildi",
+        "replyingToYouLabel": "Kendi mesajınıza yanıt veriliyor",
+        "replyingToYouName": "<name>Kendi mesajınıza</name> yanıt veriliyor"
       }
     },
     "tab": {
