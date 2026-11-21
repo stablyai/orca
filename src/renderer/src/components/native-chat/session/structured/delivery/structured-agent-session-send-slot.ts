@@ -25,6 +25,7 @@ export type StructuredAgentSessionSendInput = {
   attachments?: readonly StructuredAgentSessionAttachment[]
   /** Asks the host to hold it as a card while the agent works; decided once, at the send. */
   delivery?: 'queue-if-active'
+  steer?: true
   /** The composer's model and effort for the turn it starts, read once at the send. */
   selection?: Readonly<Record<string, string>>
   options?: Readonly<Record<string, string>>
@@ -47,9 +48,10 @@ export type StructuredAgentSessionSendRequest = Pick<
   | 'onCreated'
   | 'prepareAttachments'
 > & {
-  onSettled?: (outcome: StructuredAgentSessionSendOutcome) => void
-  /** Do the other thing than the follow-up setting: Cmd/Ctrl+Enter, or the phone's hold menu. */
+  /** An explicit keyboard choice overrides the Enter preference for this draft. */
+  delivery?: 'immediate' | 'queue-if-active'
   alternate?: true
+  onSettled?: (outcome: StructuredAgentSessionSendOutcome) => void
 }
 
 /** Reserve the chat’s single unanswered-send slot; return null while occupied. */
@@ -67,6 +69,7 @@ export function takeStructuredAgentSessionSendSlot(
     previewUris: attachments.map((attachment) => attachment.previewUri),
     queuedAt: input.now ?? Date.now(),
     ...(input.delivery ? { delivery: input.delivery } : {}),
+    ...(input.steer ? { steer: input.steer } : {}),
     ...(input.options ? { options: { ...input.options } } : {}),
     ...(input.selection !== undefined ? { selection: { ...input.selection } } : {}),
     ...(input.usageLimitContinuationOfTurnItemId

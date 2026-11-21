@@ -27,8 +27,8 @@ const NO_SUBMISSIONS: readonly AgentJournalSubmission[] = []
 
 type PromptAnswerOperation = NativeChatAnswerOperation & { promptKey: string }
 
-/** Async questions leave the composer usable; the next ordinary send answers them, and Skip hides
- *  them on every device where the host saves it, else on this screen only. */
+/** Async questions keep the composer usable; card answers reach the current turn immediately, and
+ *  Skip hides them on every device where the host saves it, else on this screen only. */
 export function NativeChatStructuredAsyncQuestion({
   paneKey,
   skip,

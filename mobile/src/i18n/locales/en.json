@@ -3316,7 +3316,6 @@
       "closed": "Not sent before Orca closed"
     },
     "sessionOptionPickers": {
-      "workingAnnouncement": "Agent is working. Model settings unlock when this turn finishes.",
       "modelFullAccessLabel": "Model, {{value}}, full access",
       "modelLabel": "Model, {{value}}",
       "permissionsLabel": "Permissions, {{value}}",
@@ -3328,7 +3327,9 @@
       "applying": "Applying…",
       "onAttach": "Applies when the chat attaches",
       "heldPickRefused": "{{picked}} isn't available in this chat. Kept {{kept}}.",
-      "optionsSection": "Options"
+      "optionsSection": "Options",
+      "futureMessages": "Choices apply to future messages.",
+      "workingWithDescription": "Agent is working. {{description}}"
     },
     "sessionOptionRows": {
       "defaultMarker": "Default",
@@ -3391,7 +3392,8 @@
       "sessionOptions": "Session options",
       "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}",
       "permissionAppliesNextMessageCompact": "{{saved}} · next message",
-      "permissionAppliesNextMessageTiming": "Applies next message · running {{active}}"
+      "permissionAppliesNextMessageTiming": "Applies next message · running {{active}}",
+      "futureOptionsRequireUpdate": "Update Orca on this host to change future-turn choices while the agent works."
     },
     "streamFrame": {
       "streamFailed": "Transcript stream failed",

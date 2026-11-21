@@ -1,4 +1,7 @@
 import type { NativeChatMcpTrayState } from '@/components/native-chat/mcp/use-native-chat-mcp-tray'
+import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
+import type { StructuredAgentSessionQueueDelivery } from '../../queue/structured-agent-session-queue-request'
+import type { StructuredAgentSessionHostCapabilityState } from '../../../../../../shared/agent-session/capabilities/structured-agent-session-host-capability'
 import type { CaptureStructuredAgentSessionPresentation } from '../../session/structured/writes/use-structured-agent-session-mutate'
 import type { AgentSessionConversationCommand } from '../../../../../../shared/agent-session/conversation-context/agent-session-conversation-command'
 import type { NativeChatComposerImageAttachment } from '../../attachments/chips/native-chat-image-attachment'
@@ -19,6 +22,9 @@ import type { NativeChatComposerErrorDetail } from '../controls/native-chat-comp
 import type { NativeChatSideChat } from '../../messages/actions/use-native-chat-side-chat'
 
 export type NativeChatStructuredComposerTransport = {
+  queue?: StructuredAgentSessionQueueDelivery
+  isWorking?: boolean
+  steerCapability?: StructuredAgentSessionHostCapabilityState
   capturePresentation: CaptureStructuredAgentSessionPresentation
   conversationCommands?: readonly AgentSessionConversationCommand[]
   compactInstructions?: boolean
@@ -80,3 +86,20 @@ export type NativeChatStructuredComposerTransport = {
   sessionPending?: boolean
   sessionPendingNotice?: string
 }
+
+export type UseNativeChatStructuredComposerSendArgs = {
+  agent: AgentType
+  draftScopeKey: string
+  imageAttachments: readonly NativeChatComposerImageAttachment[]
+  structuredTransport?: NativeChatStructuredComposerTransport
+  isComposing: () => boolean
+  clearSkillOrigin: () => void
+  setDraft: (value: string) => void
+  setCaret: (caret: number) => void
+}
+
+export type NativeChatStructuredComposerSend = (
+  text: string,
+  attachments?: readonly NativeChatComposerImageAttachment[],
+  request?: StructuredAgentSessionSendRequest
+) => Promise<boolean>
