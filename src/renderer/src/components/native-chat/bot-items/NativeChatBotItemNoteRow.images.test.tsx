@@ -68,18 +68,19 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-it("shows an item comment's image in chat once a failed read succeeds on retry, with no file-name caption", async () => {
+it("reads an item comment's failed image again when the window is shown without focus, with no file-name caption", async () => {
   mocks.readRuntimeFilePreview
-    .mockRejectedValueOnce(new Error('busy'))
+    .mockRejectedValueOnce(new Error('EBUSY'))
     .mockResolvedValue({ content: 'AA==', isBinary: true, mimeType: 'image/png' })
   render(<OwnerComment />)
 
   await waitFor(() => expect(mocks.readRuntimeFilePreview).toHaveBeenCalledTimes(1))
   expect(document.querySelector('img')).toBeNull()
 
-  await waitFor(
-    () => expect(document.querySelector('img')?.getAttribute('src')).toBe('blob:comment-image'),
-    { timeout: 3000 }
+  vi.spyOn(document, 'hasFocus').mockReturnValue(false)
+  document.dispatchEvent(new Event('visibilitychange'))
+  await waitFor(() =>
+    expect(document.querySelector('img')?.getAttribute('src')).toBe('blob:comment-image')
   )
   expect(document.querySelector('img')?.getAttribute('alt')).toBe(NAME)
   expect(screen.queryByText(NAME)).toBeNull()

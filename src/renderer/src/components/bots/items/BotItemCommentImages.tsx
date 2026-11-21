@@ -1,6 +1,7 @@
 // A comment's images, fitted to the card: one at its own size, two side by side, more in rows of three,
-// read from the bot's host. One or two carry their file names, except in chat, where images go unnamed. Past six, five show with a "+N" tile that
-// shows the rest. A click opens chat's viewer over all of the comment's images.
+// read from the bot's host. One or two carry their file names, except in chat, where images go unnamed.
+// Past six, five show with a "+N" tile that shows the rest. A click opens chat's viewer over all of the
+// comment's images.
 import { useContext, useMemo, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
