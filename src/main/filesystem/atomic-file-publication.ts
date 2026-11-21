@@ -5,7 +5,7 @@ import {
   observeFilePublication
 } from './file-content-observation'
 import { createHash, randomUUID } from 'node:crypto'
-import { constants, copyFileSync, linkSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { linkSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { grantDirAcl } from '../windows/windows-directory-acl'
 import { isPermissionError } from './permission-errors'
@@ -19,37 +19,38 @@ export function writeFileAtomically(
   contents: string | Uint8Array,
   options?: { mode?: number }
 ): void {
-  const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
   // Rechecked before every rename attempt: a Windows retry waits, and another writer can save meanwhile.
   const stillCurrent = (): boolean => {
     assertGuardedFileCurrent(targetPath)
     return true
   }
-  try {
-    writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
-    renameFileWithWindowsRetry(tmpPath, targetPath, stillCurrent)
-    observeFilePublication(targetPath, contents)
-  } catch (error) {
-    rmSync(tmpPath, { force: true })
-    // Chromium can reset inherited userData ACLs after startup; repair the parent and retry once.
-    if (isPermissionError(error) && process.platform === 'win32') {
+  let firstError: unknown
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
+    try {
+      writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
+      renameFileWithWindowsRetry(tmpPath, targetPath, stillCurrent)
+      observeFilePublication(targetPath, contents)
+      return
+    } catch (error) {
+      rmSync(tmpPath, { force: true })
+      if (attempt > 0) {
+        break
+      }
+      firstError = error
+      if (!isPermissionError(error) || process.platform !== 'win32') {
+        break
+      }
       try {
+        // Chromium can reset inherited userData ACLs after startup; repair the parent and retry once.
         grantDirAcl(dirname(targetPath))
-        const retryTmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
-        try {
-          writeFileSync(retryTmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
-          renameFileWithWindowsRetry(retryTmpPath, targetPath, stillCurrent)
-          observeFilePublication(targetPath, contents)
-          return
-        } catch {
-          rmSync(retryTmpPath, { force: true })
-        }
       } catch {
         // Preserve the original write error when ACL repair fails.
+        break
       }
     }
-    throw error
   }
+  throw firstError
 }
 
 /**
@@ -67,15 +68,17 @@ export function writeFileAtomicallyIfUnchanged(
   // Guarded recovery moves files through a held name; keep those passes eligible for retry.
   invalidateFileObservation(targetPath)
   assertGuardedFileCurrent(targetPath)
-  let published: boolean
-  try {
-    published = attemptGuardedAtomicWrite(targetPath, expectedContents, contents, options)
-  } catch (error) {
-    if (!isPermissionError(error) || process.platform !== 'win32') {
-      throw error
+  let published = false
+  for (let attempt = 0; ; attempt++) {
+    try {
+      published = attemptGuardedAtomicWrite(targetPath, expectedContents, contents, options)
+      break
+    } catch (error) {
+      if (attempt > 0 || !isPermissionError(error) || process.platform !== 'win32') {
+        throw error
+      }
+      grantDirAcl(dirname(targetPath))
     }
-    grantDirAcl(dirname(targetPath))
-    published = attemptGuardedAtomicWrite(targetPath, expectedContents, contents, options)
   }
   if (published) {
     recordGuardedPublication(targetPath, () => digestFileContent(contents))
@@ -93,7 +96,7 @@ export function removeFileAtomicallyIfUnchanged(
   const keep = !options?.credential
   restoreMovedFileWithoutOverwrite(heldPath, targetPath, true, keep)
   try {
-    assertGuardedPublicationSupported(targetPath, targetPath)
+    assertHardLinkPublicationSupported(targetPath, targetPath)
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return false
@@ -231,10 +234,31 @@ function attemptGuardedAtomicWrite(
   let restoreHeld: boolean | null = null
   try {
     writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
-    if (expectedContents === null) {
-      return publishFileWithoutOverwrite(tmpPath, targetPath)
+    try {
+      if (expectedContents === null) {
+        return publishFileWithoutOverwrite(tmpPath, targetPath)
+      }
+      assertHardLinkPublicationSupported(tmpPath, targetPath)
+    } catch (error) {
+      if (!isHardLinkUnsupported(error)) {
+        throw error
+      }
+      // Why: \\wsl$ shares and FAT/exFAT have no hard links. Publish as atomic saves usually do:
+      // check the bytes, then rename a complete file over them (rechecked before each retry).
+      const stillExpected = (): boolean => {
+        try {
+          return (
+            expectedContents !== null && nodeFileContentsEqualSync(targetPath, expectedContents)
+          )
+        } catch (readError) {
+          if (!isDefinitiveAbsence(readError)) {
+            throw readError
+          }
+          return expectedContents === null
+        }
+      }
+      return renameFileWithWindowsRetry(tmpPath, targetPath, stillExpected)
     }
-    assertGuardedPublicationSupported(tmpPath, targetPath)
     try {
       renameFileWithWindowsRetry(targetPath, heldPath)
     } catch (error) {
@@ -269,7 +293,7 @@ function attemptGuardedAtomicWrite(
   }
 }
 
-function assertGuardedPublicationSupported(sourcePath: string, targetPath: string): void {
+function assertHardLinkPublicationSupported(sourcePath: string, targetPath: string): void {
   const probePath = `${targetPath}.${process.pid}.${randomUUID()}.link-probe`
   try {
     if (!publishFileWithoutOverwrite(sourcePath, probePath)) {
@@ -281,31 +305,24 @@ function assertGuardedPublicationSupported(sourcePath: string, targetPath: strin
 }
 
 export function publishFileWithoutOverwrite(sourcePath: string, targetPath: string): boolean {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      linkSync(sourcePath, targetPath)
-      return true
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-        return false
-      }
-      if (attempt === 0 && isPermissionError(error) && process.platform === 'win32') {
-        grantDirAcl(dirname(targetPath))
-        continue
-      }
-      if (!isHardLinkUnsupported(error)) {
-        throw error
-      }
-      break
-    }
-  }
-  // Why: \\wsl$ shares and FAT/exFAT have no hard links; an exclusive copy still never overwrites.
   try {
-    copyFileSync(sourcePath, targetPath, constants.COPYFILE_EXCL)
+    linkSync(sourcePath, targetPath)
     return true
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
       return false
+    }
+    if (isPermissionError(error) && process.platform === 'win32') {
+      grantDirAcl(dirname(targetPath))
+      try {
+        linkSync(sourcePath, targetPath)
+        return true
+      } catch (retryError) {
+        if ((retryError as NodeJS.ErrnoException).code === 'EEXIST') {
+          return false
+        }
+        throw retryError
+      }
     }
     throw error
   }
@@ -316,9 +333,6 @@ function isHardLinkUnsupported(error: unknown): boolean {
   if (code === 'ENOTSUP' || code === 'EOPNOTSUPP' || code === 'ENOSYS') {
     return true
   }
-  // A \\wsl$ share refuses Windows links ("Incorrect function"), which Node reports as EISDIR,
-  // EINVAL or UNKNOWN; Linux vfat/exfat refuse link() with EPERM.
-  return process.platform === 'win32'
-    ? code === 'EISDIR' || code === 'EINVAL' || code === 'UNKNOWN'
-    : code === 'EPERM'
+  // Windows reports a share's "Incorrect function" as EISDIR; Linux vfat/exfat refuse link() with EPERM.
+  return process.platform === 'win32' ? code === 'EISDIR' : code === 'EPERM'
 }
