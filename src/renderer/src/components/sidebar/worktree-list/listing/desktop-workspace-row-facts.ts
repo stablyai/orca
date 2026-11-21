@@ -20,6 +20,7 @@ import {
   type HiddenProjects
 } from '../../../../../../shared/project/catalog/hidden-projects'
 import { isInactiveWorkspace } from '@/lib/workspace/activity/worktree-activity-state'
+import { isDoneWorkspaceStatus } from '../../../../../../shared/workspace/status/workspace-statuses'
 
 export type DesktopWorkspaceRowFactInputs = {
   repoMap: ReadonlyMap<string, Repo>
@@ -56,6 +57,7 @@ export function buildDesktopWorkspaceRowFactReader(
     isAutomationCreated: isAutomationGeneratedWorkspace,
     isCliCreated: isCliCreatedWorkspace,
     isDetachedHead: isDetachedHeadWorkspace,
+    isDone: (worktree) => isDoneWorkspaceStatus(worktree.workspaceStatus),
     isMainWorktree: (worktree) => worktree.isMainWorktree,
     isSleeping: (worktree) =>
       inputs.sleepingSweepExemptWorktreeIds?.has(worktree.id) !== true &&

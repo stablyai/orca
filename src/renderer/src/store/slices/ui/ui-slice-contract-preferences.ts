@@ -71,6 +71,8 @@ export type UISlicePreferences = {
   setBotChatFold: (hostId: string, botId: string, chatId: string, fold: BotChatFold | null) => void
   hideDetachedHeadWorkspaces: boolean
   setHideDetachedHeadWorkspaces: (v: boolean) => void
+  hideDoneWorkspaces: boolean
+  setHideDoneWorkspaces: (v: boolean) => void
   hideWorkspacesFromOtherDevices: boolean
   setHideWorkspacesFromOtherDevices: (v: boolean) => void
   alwaysShowDefaultBranchWorkspace: boolean

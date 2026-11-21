@@ -6,6 +6,7 @@ import {
   isCliCreatedWorkspace,
   isDetachedHeadWorkspace
 } from '../../../../../shared/worktree/visibility/workspace-kinds'
+import { isDoneWorkspaceStatus } from '../../../../../shared/workspace/status/workspace-statuses'
 import { revealRepoInProjectFilter } from '@/components/sidebar/worktree-list/controls/project-filter-reveal'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { buildVisibleWorktreeOptionsFromState } from '@/components/sidebar/worktree-list/listing/visible-worktree-options-from-state'
@@ -37,5 +38,8 @@ export function liftSidebarFiltersHidingWorktree(wt: Worktree): void {
   }
   if (state.hideDetachedHeadWorkspaces && isDetachedHeadWorkspace(wt)) {
     state.setHideDetachedHeadWorkspaces(false)
+  }
+  if (state.hideDoneWorkspaces && isDoneWorkspaceStatus(wt.workspaceStatus)) {
+    state.setHideDoneWorkspaces(false)
   }
 }
