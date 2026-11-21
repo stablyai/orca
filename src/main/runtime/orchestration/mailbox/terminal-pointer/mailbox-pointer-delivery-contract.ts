@@ -38,4 +38,6 @@ export type OrchestrationPointerPty = {
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
   /** Enter's delay after `pointer` when the PTY's host is Windows; null keeps the default. */
   getWindowsPointerEnterDelayMs: (ptyId: string, pointer: string) => number | null
+  /** Session-scoped prompt for a Run coordinator whose TUI can hold several sessions. */
+  getRunSessionPrompt?: (runId: string) => ((text: string) => Promise<boolean>) | null
 }
