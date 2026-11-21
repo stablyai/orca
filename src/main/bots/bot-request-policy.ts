@@ -34,8 +34,8 @@ export function isBotRequestPurpose(type: string | undefined): type is BotReques
   return BOT_REQUEST_PURPOSES.some((purpose) => purpose === type)
 }
 
-/** The bot an address names, or why none: an unknown name lists the bots there are. Given `paired`, a
- *  send's miss also names the paired computers last read to have it, with the `--on` that reaches each. */
+/** Why an address names no one here, listing who is. Given `paired`, a send's miss also names the
+ *  paired computers last read to have that name, with the `--on` that reaches each. */
 export function botNotFound(
   name: string,
   bots: readonly Pick<Bot, 'name'>[],
