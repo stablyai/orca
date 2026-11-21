@@ -254,6 +254,7 @@ async function resolvePtySpawnHostEnvForAct(args: PtySpawnHostEnvArgs): Promise<
       skipCodexHomeEnv,
       stripInheritedOrcaCodexHome: hostEnv.stripInheritedOrcaCodexHome,
       launchCommand,
+      cwd: args.cwd,
       launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
       shellPath: args.shellOverride,
       isWsl,

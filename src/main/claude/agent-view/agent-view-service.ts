@@ -1,3 +1,6 @@
+import { prewarmClaudeTerminalSideload } from './claude-terminal-sideload'
+import { claudeConfigDirEnvPatch } from '../structured/launch/claude-config-dir-pin'
+import { resolveStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
@@ -29,6 +32,7 @@ type ServiceDeps = {
   ensurePlugin: typeof ensureClaudeAgentViewPluginAsync
   listProfiles: typeof listClaudeProfileHomesAsync
   loginEnv: typeof resolveLoginShellEnvironment
+  prewarm?: typeof prewarmClaudeTerminalSideload
   claudeOnPath: (settings: NavigationSettings) => Promise<boolean>
 }
 
@@ -61,7 +65,8 @@ export class ClaudeAgentViewService {
       ensurePlugin: ensureClaudeAgentViewPluginAsync,
       listProfiles: listClaudeProfileHomesAsync,
       loginEnv: resolveLoginShellEnvironment,
-      claudeOnPath: isClaudeOnPath
+      claudeOnPath: isClaudeOnPath,
+      prewarm: prewarmClaudeTerminalSideload
     }
   ) {}
 
@@ -104,6 +109,11 @@ export class ClaudeAgentViewService {
       const root = enabled ? await this.deps.ensurePlugin(this.userDataPath) : undefined
       if (generation === this.generation) {
         this.pluginRoot = root
+        if (root) {
+          for (const dir of this.configs) {
+            this.prewarm(dir, root, env)
+          }
+        }
       }
     })
   }
@@ -117,6 +127,9 @@ export class ClaudeAgentViewService {
     return this.enqueue(async () => {
       if (this.writesConfig) {
         await this.deps.reconcileConfig(join(dir, 'settings.json'), this.enabled)
+      }
+      if (this.pluginRoot) {
+        this.prewarm(dir, this.pluginRoot)
       }
     })
   }
@@ -148,6 +161,25 @@ export class ClaudeAgentViewService {
     return this.pluginRoot && this.configs.has(resolve(configDir))
       ? { pluginDir: this.pluginRoot, configDir }
       : undefined
+  }
+
+  private prewarm(configDir: string, root: string, captured?: NodeJS.ProcessEnv): void {
+    void (async () => {
+      const source = captured ?? (await this.deps.loginEnv())
+      const env = Object.fromEntries(
+        Object.entries(source).filter((entry): entry is [string, string] => entry[1] !== undefined)
+      )
+      Object.assign(env, claudeConfigDirEnvPatch(configDir, { env }), {
+        ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR: root,
+        ORCA_CLAUDE_CONFIG_DIR: configDir
+      })
+      await this.deps.prewarm?.({
+        env,
+        command: 'claude',
+        cwd: homedir(),
+        shell: resolveStartupShell(process.platform)
+      })
+    })().catch(() => {})
   }
 
   private enqueue(run: () => Promise<void>): Promise<void> {

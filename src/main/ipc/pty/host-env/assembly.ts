@@ -1,3 +1,4 @@
+import { prepareClaudeTerminalHooks } from '../../../claude/agent-view/claude-terminal-sideload'
 import { applyClaudeAgentViewEnv } from './claude-agent-view'
 import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import {
@@ -319,5 +320,6 @@ export function buildPtyHostEnv(
   if (!opts.isWsl) {
     ensureOpenCodeStartupPromptForLaunch(baseEnv)
   }
+  prepareClaudeTerminalHooks(baseEnv, opts)
   return baseEnv
 }

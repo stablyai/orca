@@ -17,6 +17,7 @@ export type BuildPtyHostEnvOptions = {
   stripInheritedOrcaCodexHome?: boolean
   /** Explicit launch command selects Pi/OMP extension targets; never infer agent identity from directories on disk. */
   launchCommand?: string
+  cwd?: string
   /** Trusted agent identity for wrapped commands that cannot be recognized from text. */
   launchAgent?: TuiAgent
   /** Selected execution shell, which may differ from inherited SHELL. */

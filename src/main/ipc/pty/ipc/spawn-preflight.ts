@@ -1,3 +1,4 @@
+import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { mintPtySessionId } from '../../../daemon/sessions/pty-session-id'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
@@ -82,7 +83,9 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
       }
     }
   }
-  ctx.isClaudeLaunch = !ctx.preAdoptedStablePane && isClaudeLaunchCommand(args.command)
+  ctx.isClaudeLaunch =
+    !ctx.preAdoptedStablePane &&
+    isClaudeLaunchCommand(resolveSetupAgentSequenceLaunchCommand(args.env ?? {}, args.command))
   // Stable caller IDs preserve reconnect state; failure cleanup must remove only IDs minted by this request.
   const target = await resolvePtySpawnStartupTarget({
     worktreeId: args.worktreeId,
