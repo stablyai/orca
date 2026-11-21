@@ -1,6 +1,6 @@
 // Instant jumps still settle as virtualized rows are measured; retain the target until arrival.
 
-import { useCallback, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import type { VirtualItem, Virtualizer } from '@tanstack/react-virtual'
 import type { ProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
 
@@ -51,7 +51,8 @@ export function useNativeChatViewportAlign({
   virtualizer,
   finishReaderTakeover,
   programmaticScrollMarks,
-  holdJumpDrawnAbove
+  holdJumpDrawnAbove,
+  itemKeys
 }: {
   scrollRef: React.RefObject<HTMLDivElement | null>
   virtualizer: Virtualizer<HTMLDivElement, Element>
@@ -59,6 +60,8 @@ export function useNativeChatViewportAlign({
   programmaticScrollMarks: ProgrammaticScrollMarks
   /** Keeps the virtualizer's `scrollPaddingStart` at the held jump's `drawnAbove` across renders. */
   holdJumpDrawnAbove: (px: number) => void
+  /** The rows' keys, in order: an older page inserted before a held jump's row moves it. */
+  itemKeys: readonly string[]
 }): {
   /** `end` brings the row's end to the viewport's bottom instead, for the newest of a run. */
   alignToViewportTop: (element: HTMLElement, edge?: NativeChatAlignEdge) => void
@@ -86,6 +89,22 @@ export function useNativeChatViewportAlign({
       })
     | null
   >(null)
+
+  // Rows drawn before a held jump's row shift its index; the virtualizer keeps reconciling the old
+  // index, which now names another row. Runs after its own prepend write, before paint.
+  useLayoutEffect(() => {
+    const held = alignRef.current
+    if (held === null || !('index' in held) || itemKeys[held.index] === held.key) {
+      return
+    }
+    const moved = itemKeys.indexOf(String(held.key))
+    if (moved === -1) {
+      alignRef.current = null
+      return
+    }
+    held.index = moved
+    virtualizer.scrollToIndex(moved, { align: held.edge, behavior: 'auto' })
+  }, [itemKeys, virtualizer])
 
   const alignToViewportTop = useCallback(
     (element: HTMLElement, edge: NativeChatAlignEdge = 'start') => {

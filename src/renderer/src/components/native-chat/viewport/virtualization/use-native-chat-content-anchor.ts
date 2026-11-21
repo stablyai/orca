@@ -18,7 +18,7 @@ export type NativeChatContentSnapshot = {
 }
 
 /** What the window's size rule needs from the anchor. `landing`: a page is being drawn in this
- *  commit and the virtualizer's own scroll write for it has not landed yet. `row`: the row whose
+ *  commit, no jump is held, and the only pending scroll write is the virtualizer's own. `row`: the row whose
  *  in-row growth the anchor corrects; `correcting` admits that one handed-over change. */
 export type NativeChatAnchorState = {
   landing: boolean
@@ -122,9 +122,11 @@ export function useNativeChatContentAnchor<Window extends AnchoredWindowCallback
 
   const snapshotContent = useCallback((): NativeChatContentSnapshot | null => {
     const container = scrollRef.current
-    // Called before a page's rows mutate; the commit's reconcile ends the landing.
-    anchorState.landing = true
-    if (!container || !isVisible || isAlignHeld()) {
+    // Called before a page's rows mutate; the commit's reconcile ends the landing. A held jump
+    // (a rail or find reveal) may have its own write in flight, so it keeps the unseen-write guard.
+    const jumping = isAlignHeld()
+    anchorState.landing = !jumping
+    if (!container || !isVisible || jumping) {
       return null
     }
     return readNativeChatContentSnapshot(container)
@@ -160,18 +162,24 @@ export function useNativeChatContentAnchor<Window extends AnchoredWindowCallback
       const hold = () => {
         const place = node.isConnected ? placeInRow(node) : null
         const index = Number(row.dataset.index)
-        const size = virtualizer.measurementsCache[index]?.size
-        if (!place || place.row !== anchor.row || size === undefined) {
+        if (!place || place.row !== anchor.row || !Number.isInteger(index)) {
           return
         }
         const delta = place.inset - inset
         inset = place.inset
-        if (Math.abs(delta) > SUBPIXEL_PX) {
-          // The virtualizer shifts by exactly this and keeps its offset in step for later rows.
-          anchored.correcting = true
-          virtualizer.resizeItem(index, size + delta)
-          anchored.correcting = false
+        if (Math.abs(delta) <= SUBPIXEL_PX) {
+          return
         }
+        // The virtualizer's own adjustment moves the scroll in step with its offset; its row
+        // observer may already have cached the new height or not yet. Start from the measured
+        // height, shift by exactly the growth above the anchor, then leave the measured height
+        // cached, so the growth counts once in either order and the row keeps its real size.
+        const measured = virtualizer.options.measureElement(row, undefined, virtualizer)
+        virtualizer.resizeItem(index, measured)
+        anchored.correcting = true
+        virtualizer.resizeItem(index, measured + delta)
+        anchored.correcting = false
+        virtualizer.resizeItem(index, measured)
       }
       hold()
       // Resize callbacks run before paint, so later growth inside the row is undone in its frame.

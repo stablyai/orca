@@ -29,6 +29,7 @@ describe('where a jump lands a row', () => {
 describe('a jump to a row drawn above its own top', () => {
   const ROW_PX = 50
   const VIEWPORT_PX = 400
+  const ROW_KEYS = Array.from({ length: 40 }, (_, index) => `row-${index}`)
 
   beforeEach(() => {
     vi.useFakeTimers({
@@ -40,14 +41,15 @@ describe('a jump to a row drawn above its own top', () => {
   })
 
   /** A scroll container without layout: scroll writes land as given, within the virtual size. */
-  function scroller(): {
+  function scroller(keys: readonly string[] = ROW_KEYS): {
     container: HTMLDivElement
     virtualizer: Virtualizer<HTMLDivElement, Element>
   } {
     const container = document.createElement('div')
     let top = 0
     const virtualizer = new Virtualizer<HTMLDivElement, Element>({
-      count: 40,
+      count: keys.length,
+      getItemKey: (index) => keys[index] ?? index,
       getScrollElement: () => container,
       estimateSize: () => ROW_PX,
       scrollToFn: elementScroll,
@@ -93,7 +95,8 @@ describe('a jump to a row drawn above its own top', () => {
         virtualizer,
         finishReaderTakeover: () => {},
         programmaticScrollMarks: createProgrammaticScrollMarks(),
-        holdJumpDrawnAbove: () => {}
+        holdJumpDrawnAbove: () => {},
+        itemKeys: ROW_KEYS
       })
     )
     // Row 20 where the window draws it in the unscrolled container, its first note 16 px higher.
@@ -107,5 +110,39 @@ describe('a jump to a row drawn above its own top', () => {
     vi.advanceTimersToNextFrame()
 
     expect(container.scrollTop).toBe(20 * ROW_PX + 40 - 16)
+  })
+
+  it('stays on its row when an older page draws rows before it', () => {
+    const { container, virtualizer } = scroller()
+    const { result, rerender } = renderHook(
+      ({ itemKeys }) =>
+        useNativeChatViewportAlign({
+          scrollRef: { current: container },
+          virtualizer,
+          finishReaderTakeover: () => {},
+          programmaticScrollMarks: createProgrammaticScrollMarks(),
+          holdJumpDrawnAbove: () => {},
+          itemKeys
+        }),
+      { initialProps: { itemKeys: ROW_KEYS } }
+    )
+    const target = row(20 * ROW_PX, 20 * ROW_PX)
+    target.dataset.index = '20'
+    result.current.alignToViewportTop(target)
+    expect(container.scrollTop).toBe(20 * ROW_PX)
+
+    // Ten older rows land before the jump settles: its row is now at index 30.
+    const prepended = [...Array.from({ length: 10 }, (_, index) => `older-${index}`), ...ROW_KEYS]
+    virtualizer.setOptions({
+      ...virtualizer.options,
+      count: prepended.length,
+      getItemKey: (index) => prepended[index] ?? index
+    })
+    rerender({ itemKeys: prepended })
+    vi.advanceTimersToNextFrame()
+    vi.advanceTimersToNextFrame()
+
+    expect(container.scrollTop).toBe(30 * ROW_PX)
+    expect(result.current.isAlignHeld()).toBe(true)
   })
 })

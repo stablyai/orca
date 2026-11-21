@@ -193,7 +193,8 @@ export function useNativeChatTranscriptWindow({
     virtualizer,
     finishReaderTakeover,
     programmaticScrollMarks,
-    holdJumpDrawnAbove: setJumpDrawnAbovePx
+    holdJumpDrawnAbove: setJumpDrawnAbovePx,
+    itemKeys
   })
 
   // Compensate rows above the reader, excluding visible/first jump-target measurements, unseen scroll writes and backward-reader scrolling; preserve landed jumps.

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import type { NativeChatOlderHistoryAutoload } from './use-native-chat-older-history-autoload'
@@ -27,21 +27,57 @@ export function NativeChatOlderHistoryRow({
   loadingEarlier: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  // The scroller that keyboard focus returns to when the focused manual button goes away.
-  const focusOwner = useRef<HTMLElement | null>(null)
-  const restoreFocus = useCallback(() => {
-    const scroller = focusOwner.current
-    focusOwner.current = null
-    scroller?.focus({ preventScroll: true })
-  }, [])
   const failed = olderHistory.loadFailed && !loadingEarlier
-  // Auto-loading and the failure row both replace the manual button.
+  const shown = failed ? 'retry' : olderHistory.isAutoLoadEnabled ? 'status' : 'load'
+  // Keyboard continuity for Load and Retry: a focused control replaced by another hands focus to
+  // it; replaced by nothing, focus waits on the scroller until the pending load settles, and goes
+  // to a new Retry if that load fails again. Once the reader moves focus, nothing is moved.
+  const control = useRef<HTMLButtonElement | null>(null)
+  const focusedFrom = useRef<HTMLElement | null>(null)
+  const parkedOn = useRef<HTMLElement | null>(null)
   useLayoutEffect(() => {
-    if (olderHistory.isAutoLoadEnabled || failed) {
-      restoreFocus()
+    const active = document.activeElement
+    const lost = !active || active === document.body
+    const scroller = focusedFrom.current
+    if (scroller && lost) {
+      focusedFrom.current = null
+      if (control.current) {
+        control.current.focus({ preventScroll: true })
+      } else {
+        scroller.focus({ preventScroll: true })
+        parkedOn.current = scroller
+      }
+      return
     }
-    return restoreFocus
-  }, [failed, olderHistory.isAutoLoadEnabled, restoreFocus])
+    const parked = parkedOn.current
+    if (!parked) {
+      return
+    }
+    if (active !== parked) {
+      parkedOn.current = null
+    } else if (shown === 'retry' && control.current) {
+      parkedOn.current = null
+      control.current.focus({ preventScroll: true })
+    } else if (!loadingEarlier) {
+      parkedOn.current = null
+    }
+  }, [loadingEarlier, shown])
+  // The row itself goes away once the history is complete; its focused control hands back too.
+  useLayoutEffect(
+    () => () => {
+      focusedFrom.current?.focus({ preventScroll: true })
+    },
+    []
+  )
+  const focusHandlers = {
+    ref: control,
+    onFocus: (event: React.FocusEvent<HTMLButtonElement>) => {
+      focusedFrom.current = event.currentTarget.closest('[data-native-chat-scroll]')
+    },
+    onBlur: () => {
+      focusedFrom.current = null
+    }
+  }
   return (
     // Stay out of flow so adding or removing the history row cannot shift the transcript.
     <div
@@ -58,6 +94,7 @@ export function NativeChatOlderHistoryRow({
             size="xs"
             className="shrink-0"
             onClick={olderHistory.loadEarlierManually}
+            {...focusHandlers}
           >
             {t('components.native-chat.loadEarlierRetry', 'Retry')}
           </Button>
@@ -73,12 +110,7 @@ export function NativeChatOlderHistoryRow({
           onClick={loadingEarlier ? undefined : olderHistory.loadEarlierManually}
           aria-disabled={loadingEarlier}
           aria-busy={loadingEarlier}
-          onFocus={(event) => {
-            focusOwner.current = event.currentTarget.closest('[data-native-chat-scroll]')
-          }}
-          onBlur={() => {
-            focusOwner.current = null
-          }}
+          {...focusHandlers}
         >
           {loadingEarlier
             ? t('components.native-chat.loadingEarlier', 'Loading…')
