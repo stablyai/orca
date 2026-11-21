@@ -28,6 +28,11 @@ export const UNVERIFIABLE_ORCAD_TERMINAL_CENSUS: Readonly<OrcadTerminalCensus> =
   daemonProtocolVersion: null
 })
 
+/** Whether a server answered this census; clients return the frozen unverifiable census itself for no answer. */
+export function isAnsweredOrcadTerminalCensus(census: OrcadTerminalCensus): boolean {
+  return census !== UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
+}
+
 /** The longest a census may close terminal admission; the stop that follows takes seconds. */
 export const ORCAD_TERMINAL_ADMISSION_MAX_FENCE_MS = 5 * 60_000
 

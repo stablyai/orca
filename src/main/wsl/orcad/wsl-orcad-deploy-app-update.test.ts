@@ -228,9 +228,10 @@ describe('deployAndLaunchWslOrcad across an app update (E1)', () => {
       code: 'orcad_update_terminal_census_unavailable',
       reason: 'no census'
     })
+    // Force passes only once the candidate proves no daemon is running.
     await expect(launch()).resolves.toMatchObject({
       outcome: 'deferred',
-      forceable: false
+      forceable: true
     })
   })
 

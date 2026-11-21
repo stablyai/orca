@@ -56,6 +56,7 @@ import { isSnapshotCaptureCommand } from '../activation/testing/orcad-snapshot-c
 import { NODE_RUNTIME_PIN } from '../../../shared/node-runtime/node-runtime-pin'
 import { serializeOrcadActivationTransaction } from '../activation/orcad-activation-transaction'
 import { createOrcadActivationTransaction } from '../activation/orcad-activation-transaction-transitions'
+import { UNVERIFIABLE_ORCAD_TERMINAL_CENSUS } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 
 const mockExec = vi.mocked(execCommand)
 const NEW_VERSION = '0.2.0+bb0100000000'
@@ -119,6 +120,8 @@ type HostScript = {
   comparisonResult?: string
   candidateStopResult?: string
   orcadLog?: string
+  /** What the candidate's daemon probe finds, when it is asked. */
+  liveDaemonProtocols?: number[] | null
 }
 
 function scriptHost(script: HostScript): void {
@@ -159,7 +162,10 @@ function scriptHost(script: HostScript): void {
           runtimeVersion: NODE_RUNTIME_PIN.version,
           sqliteVersion: '3.51.0',
           artifactVersion: NEW_VERSION,
-          revision: 1
+          revision: 1,
+          ...(script.liveDaemonProtocols !== undefined && text.includes("'/home/u/.orca'")
+            ? { liveDaemonProtocols: script.liveDaemonProtocols }
+            : {})
         })
       )
     }
@@ -400,6 +406,47 @@ describe('deployOrcad', () => {
       code: 'orcad_update_terminal_census_unavailable'
     })
     expect(script.log).toEqual([])
+  })
+
+  it('forces an update past a daemon the candidate proves is not running', async () => {
+    const script: HostScript = {
+      activationRecord: ACTIVE_OLD,
+      readiness: { [NEW_VERSION]: readyLine({}) },
+      log: [],
+      liveDaemonProtocols: []
+    }
+    scriptHost(script)
+    // The incumbent answers, but its daemon never started, so it counts no daemon sessions.
+    const census = { ...UNVERIFIABLE_ORCAD_TERMINAL_CENSUS, inProcessSessions: 0 }
+    expect(await deployOrcad(options({ census, force: true }))).toMatchObject({
+      outcome: 'installed-and-activated',
+      fullVersion: NEW_VERSION
+    })
+    expect(script.log).toContain(`stop:${OLD_VERSION}`)
+  })
+
+  it('keeps a forced update deferred when the recount before the stop goes unanswered', async () => {
+    const script: HostScript = {
+      activationRecord: ACTIVE_OLD,
+      readiness: { [NEW_VERSION]: readyLine({}) },
+      log: [],
+      liveDaemonProtocols: []
+    }
+    scriptHost(script)
+    const census = { ...UNVERIFIABLE_ORCAD_TERMINAL_CENSUS, inProcessSessions: 0 }
+    expect(
+      await deployOrcad(
+        options({
+          census,
+          force: true,
+          recountCensus: async () => UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
+        })
+      )
+    ).toMatchObject({
+      outcome: 'installed-not-activated',
+      code: 'orcad_update_daemon_protocol_unverifiable'
+    })
+    expect(script.log).toEqual(['preflight'])
   })
 
   it('installs but does not activate when terminals are running', async () => {

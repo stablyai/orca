@@ -3,11 +3,12 @@ import { emptyOrcadActivationRecord } from './orcad-activation-record'
 import { planOrcadUpdate } from './orcad-update-plan'
 import { UNVERIFIABLE_ORCAD_TERMINAL_CENSUS } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 
-const plan = (force: boolean, hostDaemonProtocols?: readonly number[]) =>
+const plan = (force: boolean, hostDaemonProtocols?: readonly number[], inProcessSessions = 0) =>
   planOrcadUpdate({
     record: { ...emptyOrcadActivationRecord(), active: '0.1.0+e2c8eab1a4b9' },
     candidateVersion: '0.1.0+8cc9da34df17',
-    census: UNVERIFIABLE_ORCAD_TERMINAL_CENSUS,
+    // An answer from an orcad whose daemon never started.
+    census: { ...UNVERIFIABLE_ORCAD_TERMINAL_CENSUS, inProcessSessions },
     candidateDaemonProtocol: { protocolVersion: 61, previousProtocolVersions: [60] },
     ...(hostDaemonProtocols ? { hostDaemonProtocols } : {}),
     force
@@ -29,6 +30,11 @@ describe('planOrcadUpdate with a daemon that cannot answer the census', () => {
     expect(plan(true, [52])).toMatchObject({
       action: 'defer',
       code: 'orcad_update_daemon_protocol_unverifiable'
+    })
+    // Terminals orcad runs itself end with it, so force cannot pass them.
+    expect(plan(true, [], 2)).toMatchObject({
+      action: 'defer',
+      code: 'orcad_update_ends_in_process_terminals'
     })
   })
 })

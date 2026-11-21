@@ -15,6 +15,7 @@ import {
 import { launchAndJudgeOrcadSlot } from './orcad-candidate-launch-verdict'
 import { planOrcadUpdate } from './orcad-update-plan'
 import {
+  isAnsweredOrcadTerminalCensus,
   type OrcadTerminalCensus,
   UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
 } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
@@ -123,8 +124,10 @@ export async function activateInstalledOrcad(
   if (refusal) {
     return notActivated(ORCAD_ACTIVATION_POLICY_REFUSED_CODE, refusal)
   }
-  // Hosts predating the census protocol set cannot name mixed generations, and a dead daemon answers no census; the candidate can.
-  const asksCandidate = censusNeedsHostDaemonProtocols(census) || census.liveSessions === null
+  // Old hosts cannot name mixed generations, nor a dead daemon count; the candidate can. Only full force probes the latter.
+  const uncounted = census.liveSessions === null && isAnsweredOrcadTerminalCensus(census)
+  const asksCandidate =
+    censusNeedsHostDaemonProtocols(census) || (options.force === true && uncounted)
   if (
     plan.action === 'defer' &&
     !(asksCandidate && plan.code === 'orcad_update_daemon_protocol_unverifiable')

@@ -39,7 +39,12 @@ import { wslHostStatusDetailMessage } from '../../../sidebar/host-admission/wsl/
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { DropdownMenuItem } from '../../../ui/dropdown-menu'
-import { managedServerOutcomeLabel } from '../../runtime-environments/managed-servers/managed-server-copy'
+import {
+  managedServerOutcomeLabel,
+  uncountedForceUpdateMessage
+} from '../../runtime-environments/managed-servers/managed-server-copy'
+import { ConfirmStrip } from '../../runtime-environments/managed-servers/managed-server-row-content'
+import { isOrcadUncountedTerminalsDeferral } from '../../../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import { ServerListRow, ServerRowChip, type ServerRowStatus } from '../../host-rows/ServerListRow'
 import { WslMoveOrchestratorStatusLine } from '../../../wsl-move/WslMoveOrchestratorStatusLine'
 import { wslMoveOrchestratorLine } from '../../../wsl-move/wsl-move-orchestrator-copy'
@@ -106,6 +111,8 @@ export function WslHostsSection({
   const [dialogMode, setDialogMode] = useState<AddRemoteHostMode | null>(null)
   const [connectingId, setConnectingId] = useState<string | null>(null)
   const [removing, setRemoving] = useState<PublicKnownRuntimeEnvironment | null>(null)
+  // Forcing past an uncounted census may end terminals the server runs itself, so it asks first.
+  const [confirmingForceId, setConfirmingForceId] = useState<string | null>(null)
   const hosts = environments.filter(isWslHostRuntimeEnvironment)
   // Retain disabled hosts so projects cannot appear to vanish; rows explain their idle state.
   if (!wslHostsAvailable() || (!enabled && hosts.length === 0)) {
@@ -211,7 +218,26 @@ export function WslHostsSection({
                   </span>
                 }
                 status={getWslHostRowStatus(status, unavailableLabel !== null, t)}
-                footer={moveLine ? <WslMoveOrchestratorStatusLine distro={distro} /> : undefined}
+                footer={
+                  confirmingForceId === environment.id && deferred?.forceable ? (
+                    <ConfirmStrip
+                      message={uncountedForceUpdateMessage(t)}
+                      confirmLabel={t(
+                        'auto.components.settings.managedServers.row.updateAnyway',
+                        'Update anyway'
+                      )}
+                      keepLabel={t('auto.components.settings.managedServers.row.notNow', 'Not now')}
+                      disabled={connectingId !== null}
+                      onConfirm={() => {
+                        setConfirmingForceId(null)
+                        void connect(environment.id, 'force')
+                      }}
+                      onKeep={() => setConfirmingForceId(null)}
+                    />
+                  ) : moveLine ? (
+                    <WslMoveOrchestratorStatusLine distro={distro} />
+                  ) : undefined
+                }
                 primaryAction={
                   // A newer Orca's host refuses Update; Force stays in the menu.
                   deferred && deferred.code !== ORCAD_HOST_NEWER_DEFERRAL_CODE ? (
@@ -244,7 +270,11 @@ export function WslHostsSection({
                     {deferred?.forceable ? (
                       <DropdownMenuItem
                         disabled={connectingId !== null}
-                        onSelect={() => void connect(environment.id, 'force')}
+                        onSelect={() =>
+                          isOrcadUncountedTerminalsDeferral(deferred.code)
+                            ? setConfirmingForceId(environment.id)
+                            : void connect(environment.id, 'force')
+                        }
                       >
                         {t('auto.components.settings.wslHosts.forceUpdate', 'Force update')}
                       </DropdownMenuItem>

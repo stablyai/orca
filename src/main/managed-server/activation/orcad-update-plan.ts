@@ -1,5 +1,8 @@
 import type { OrcadActivationRecord } from './orcad-activation-record'
-import type { OrcadTerminalCensus } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
+import {
+  isAnsweredOrcadTerminalCensus,
+  type OrcadTerminalCensus
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import {
   assessOrcadLiveDaemonCrossing,
   describeDaemonProtocols
@@ -32,7 +35,7 @@ export function planOrcadUpdate(input: {
   candidateVersion: string
   census: OrcadTerminalCensus
   candidateDaemonProtocol: OrcadDaemonProtocolFacts
-  /** Daemon generations the candidate found alive on the host; consulted only when the census cannot name them or is uncounted. */
+  /** Daemon generations the candidate found alive on the host; consulted when the census cannot name them, or under force when it is uncounted. */
   hostDaemonProtocols?: readonly number[]
   force?: OrcadUpdateForce
 }): OrcadUpdateDecision {
@@ -42,15 +45,16 @@ export function planOrcadUpdate(input: {
       reason: `${input.candidateVersion} is already the active version; nothing to restart.`
     }
   }
+  // An uncounted or pre-field in-process count stays unknown here; only force may pass it, below.
   const inProcess = input.census.inProcessSessions ?? 0
-  // In-process terminals cannot survive restart; force cannot override this even if daemon census is empty.
+  // In-process terminals cannot survive restart; force cannot override a counted one, with or without a daemon.
   if (inProcess > 0) {
     return {
       action: 'defer',
       code: 'orcad_update_ends_in_process_terminals',
       reason:
         `${inProcess} terminal${inProcess === 1 ? ' runs' : 's run'} inside the orcad process ` +
-        'itself because its terminal daemon is degraded. Any restart ends ' +
+        'itself because its terminal daemon is degraded or not running. Any restart ends ' +
         `${inProcess === 1 ? 'it' : 'them'}, and forcing the update cannot keep ` +
         `${inProcess === 1 ? 'it' : 'them'} alive. Close ${inProcess === 1 ? 'it' : 'them'}, ` +
         'then update.'
@@ -73,14 +77,21 @@ export function planOrcadUpdate(input: {
     }
   }
   const { liveSessions } = input.census
-  // The candidate proved every daemon generation dead, so no daemon terminal can be stranded.
-  if (liveSessions === null && input.force === true && input.hostDaemonProtocols?.length === 0) {
+  // The census answered and the candidate proved every daemon generation dead: no daemon terminal can be stranded.
+  if (
+    liveSessions === null &&
+    input.force === true &&
+    input.hostDaemonProtocols?.length === 0 &&
+    isAnsweredOrcadTerminalCensus(input.census)
+  ) {
     return {
       action: 'proceed',
       preservesLiveDaemon: false,
       notes: [
-        'Forced while no terminal daemon is running on this host, so no daemon terminal can be ' +
-          'stranded. Terminals the current orcad runs itself end with the restart.'
+        input.census.inProcessSessions === 0
+          ? 'Forced while no terminal daemon is running and orcad runs no terminals itself.'
+          : 'Forced while no terminal daemon is running. This orcad cannot count the terminals ' +
+            'it runs itself, and they end with the restart.'
       ]
     }
   }
@@ -91,7 +102,7 @@ export function planOrcadUpdate(input: {
       reason:
         'The terminal daemon did not report its protocol, so this update cannot show that ' +
         `orcad ${input.candidateVersion} will reach the terminals it is forced past. Retry ` +
-        'when the daemon answers.'
+        'when the daemon answers or has stopped.'
     }
   }
   if (liveSessions === null) {
@@ -101,8 +112,8 @@ export function planOrcadUpdate(input: {
         code: 'orcad_update_terminal_census_unavailable',
         reason:
           'The terminal daemon did not answer a session count, so this update cannot tell ' +
-          'whether work is running on the host. Retry, or force the update knowing terminals ' +
-          'may be mid-flight.'
+          'whether work is running on the host. Retry, or force the update: it goes ahead only ' +
+          'if no terminal daemon is running, and terminals orcad runs itself end.'
       }
     }
     return {

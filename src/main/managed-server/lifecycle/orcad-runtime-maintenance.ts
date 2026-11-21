@@ -55,7 +55,12 @@ export async function updateManagedOrcadEnvironment(
             ? "This host's server changed since the update was confirmed. Review it and update again."
             : admitIntent(record, candidateVersion)
       : admitIntent
-    const force: OrcadUpdateForce | undefined = pastLiveTerminals ? 'live-terminals' : args.force
+    // A confirmed uncounted census needs full force, which still requires proof no daemon is running.
+    const force: OrcadUpdateForce | undefined = pastLiveTerminals
+      ? pastLiveTerminals.uncounted
+        ? true
+        : 'live-terminals'
+      : args.force
     const result = await runManagedOrcadUpdate(
       userDataPath,
       managed,

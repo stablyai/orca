@@ -1,5 +1,8 @@
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
-import { ORCAD_UPDATE_TERMINALS_RUNNING_CODE } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
+import {
+  isOrcadUncountedTerminalsDeferral,
+  ORCAD_UPDATE_TERMINALS_RUNNING_CODE
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import {
   getOrcadSshDeployment,
   type KnownRuntimeEnvironment,
@@ -149,7 +152,7 @@ export function managedOrcadDeployPolicy(
   }
 }
 
-// Force can override live terminal counts, never unknown census or protocol deferrals.
+// Force can override live terminal counts, and an uncounted census only once the planner proves no daemon is running.
 export function isForceableOrcadDeferral(code: string): boolean {
-  return code === ORCAD_UPDATE_TERMINALS_RUNNING_CODE
+  return code === ORCAD_UPDATE_TERMINALS_RUNNING_CODE || isOrcadUncountedTerminalsDeferral(code)
 }
