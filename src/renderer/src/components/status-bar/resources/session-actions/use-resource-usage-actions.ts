@@ -137,9 +137,12 @@ export function useResourceUsageActions({
   )
 
   // The opener activates whatever it opens (a group member opens its room), so nothing is activated first.
-  const openChat = useCallback((worktreeId: string, agentSessionId: string): void => {
-    openResourceChat(worktreeId, agentSessionId)
-  }, [])
+  const openChat = useCallback(
+    (worktreeId: string, agentSessionId: string, runtimeHostId?: string): void => {
+      openResourceChat(worktreeId, agentSessionId, runtimeHostId)
+    },
+    []
+  )
 
   const deleteWorktree = useCallback(
     (worktreeId: string): void => {

@@ -86,6 +86,7 @@ export function mergeSnapshotAndSessions(
       worktreeName: string
       hostLabel?: string
       readOnly?: true
+      runtimeHostId?: string
       unplaced?: true
     }
   ): void {
@@ -120,6 +121,7 @@ export function mergeSnapshotAndSessions(
       hasLocalSamples: true,
       isRemote: row.isRemote,
       ...(row.hostLabel ? { hostLabel: row.hostLabel } : {}),
+      runtimeHostId: row.runtimeHostId,
       unplaced: row.unplaced,
       sessions,
       chats: wt.chats,
@@ -162,6 +164,7 @@ export function mergeSnapshotAndSessions(
         isRemote: true,
         hostLabel: host.hostLabel,
         readOnly: true,
+        runtimeHostId: host.hostId,
         // A repo placed on this host isn't enough: a worktree the catalog hasn't listed yet can't be selected.
         unplaced: owned && ctx.worktreeById?.has(wt.worktreeId) ? undefined : true
       })

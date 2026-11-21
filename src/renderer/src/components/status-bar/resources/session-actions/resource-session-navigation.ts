@@ -1,5 +1,6 @@
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { toast } from 'sonner'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { BotGroupRoomUnavailableError } from '@/lib/bot-group-catalog'
 
@@ -44,11 +45,21 @@ export function navigateResourceSessionToTab(
 }
 
 /** Opens a chat row the way a history click does: a background chat is revealed, a group member opens its room. */
-export function openResourceChat(worktreeId: string, agentSessionId: string): void {
+export function openResourceChat(
+  worktreeId: string,
+  agentSessionId: string,
+  /** The paired host that sampled the row; a same-id local checkout never takes the open. */
+  runtimeHostId?: string
+): void {
+  const host = parseExecutionHostId(runtimeHostId)
   // Openers toast their own outcomes; only a thrown message, such as a missing group room, reaches here.
-  void activateAiVaultStructuredSession({
-    structuredSession: { workspaceId: worktreeId, sessionId: agentSessionId }
-  }).catch((error: unknown) => {
+  void activateAiVaultStructuredSession(
+    { structuredSession: { workspaceId: worktreeId, sessionId: agentSessionId } },
+    undefined,
+    host?.kind === 'runtime'
+      ? { kind: 'environment', environmentId: host.environmentId }
+      : undefined
+  ).catch((error: unknown) => {
     if (!(error instanceof BotGroupRoomUnavailableError && error.userNotified)) {
       toast.error(error instanceof Error ? error.message : String(error))
     }

@@ -126,7 +126,7 @@ export function WorktreeRow({
   onDelete: () => void
   onKillSession: (session: UnifiedSessionRow) => void
   navigateToTab: (tabId: string, paneKey: string | null) => void
-  onOpenChat: (worktreeId: string, agentSessionId: string) => void
+  onOpenChat: (worktreeId: string, agentSessionId: string, runtimeHostId?: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const hasResources =
@@ -264,7 +264,8 @@ export function WorktreeRow({
             onOpen={
               worktree.unplaced
                 ? undefined
-                : (agentSessionId) => onOpenChat(worktree.worktreeId, agentSessionId)
+                : (agentSessionId) =>
+                    onOpenChat(worktree.worktreeId, agentSessionId, worktree.runtimeHostId)
             }
           />
         ))}
