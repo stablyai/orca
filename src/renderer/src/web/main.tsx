@@ -24,6 +24,9 @@ import { useTranslate } from '@/i18n/use-translate'
 import { installOsFileDropCancellationGuard } from '../lib/files/drop/os-file-drop-cancellation-guard'
 import { installBodyOverlayAttributes } from '../lib/overlay-interaction/body-overlay-attributes'
 import { installAppKeyboardRouter } from '../lib/keyboard/app-keyboard-router'
+import { isTauriNativeHost } from './tauri-native-host'
+import { installTauriWindowDragBridge } from './tauri-native-bridge'
+import { initializeTauriRuntime } from './tauri-runtime-startup'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
@@ -33,10 +36,17 @@ installAppKeyboardRouter()
 const App = lazy(() => import('../App'))
 
 function WebRoot(): React.JSX.Element {
-  const initialPairingInput = useMemo(() => readPairingInputFromLocation(window.location), [])
+  const isTauri = isTauriNativeHost()
+  const initialPairingInput = useMemo(
+    () => (isTauri ? null : readPairingInputFromLocation(window.location)),
+    [isTauri]
+  )
   // Why: current runtime links carry scope metadata. Runtime-scope offers keep
   // the instant save path; mobile/legacy-unknown offers must be shown/probed.
   const startupDecision = useMemo(() => {
+    if (isTauri) {
+      return { kind: 'use-stored-environment' as const }
+    }
     const decision = decideWebPairingStartup({
       initialPairingInput,
       storedEnvironment: readStoredWebRuntimeEnvironment()
@@ -49,8 +59,11 @@ function WebRoot(): React.JSX.Element {
       clearPairingInputFromAddressBar()
     }
     return decision
-  }, [initialPairingInput])
+  }, [initialPairingInput, isTauri])
   const [hasEnvironment, setHasEnvironment] = useState(() => {
+    if (isTauri) {
+      return true
+    }
     if (startupDecision.kind === 'auto-save-runtime-offer') {
       saveStoredWebRuntimeEnvironment(
         createStoredWebRuntimeEnvironment({
@@ -74,7 +87,10 @@ function WebRoot(): React.JSX.Element {
             : null
         }
         confirmReplacingSavedServer={startupDecision.kind === 'confirm-replace-saved-server'}
-        onConnected={() => setHasEnvironment(true)}
+        onConnected={() => {
+          installWebPreloadApi()
+          setHasEnvironment(true)
+        }}
       />
     )
   }
@@ -85,7 +101,7 @@ function WebRoot(): React.JSX.Element {
       <Suspense fallback={<div className="min-h-dvh bg-background" />}>
         <App />
       </Suspense>
-      <WebPairingSecurityNotice />
+      {!isTauri && <WebPairingSecurityNotice />}
     </>
   )
 }
@@ -108,16 +124,32 @@ function WebRootBoundary(): React.JSX.Element {
   )
 }
 
-// Why await: where a new pairing may be stored depends on what this browser can keep secret.
-void initWebDeviceKeySupport()
-  .catch((error: unknown) => console.warn('[web] Device key probe failed', error))
-  .finally(() => {
-    ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
-      <I18nProvider>
-        <WebRootBoundary />
-      </I18nProvider>
-    )
-  })
+async function bootstrap(): Promise<void> {
+  if (isTauriNativeHost()) {
+    installTauriWindowDragBridge()
+    try {
+      await initializeTauriRuntime()
+    } catch (error) {
+      console.error('[tauri] Failed to initialize Tauri runtime', error)
+    }
+  } else {
+    try {
+      await initWebDeviceKeySupport()
+    } catch (error) {
+      console.warn('[web] Device key probe failed', error)
+    }
+  }
+
+  installWebPreloadApi()
+
+  ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
+    <I18nProvider>
+      <WebRootBoundary />
+    </I18nProvider>
+  )
+}
+
+void bootstrap()
 
 // Prime WebGL here because web hosts terminals too; dynamic import keeps the App/pane-manager graph out of startup.
 void import('../lib/pane-manager/terminal-rendering/pane-webgl-renderer')

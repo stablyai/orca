@@ -1,4 +1,3 @@
-import type { PreloadApi } from '../../../preload/api-types'
 import { invokeNative, isTauriNativeHost } from './tauri-native-host'
 import { createTauriNativeRepositoriesApi } from './tauri-native-repositories-api'
 import {
@@ -7,6 +6,9 @@ import {
 } from './tauri-native-platform-app-api'
 import { createTauriNativeShellApi } from './tauri-native-shell-api'
 import { createTauriNativeCliApi } from './tauri-native-cli-api'
+import { createTauriNativeUiApi } from './tauri-native-ui-api'
+import { createTauriNativeSettingsApi } from './tauri-native-settings-api'
+import { createTauriNativeBrowserApi } from './tauri-native-browser-api'
 
 export { createTauriNativeFilesystemDropApi } from './tauri-native-filesystem-drop-api'
 export { createTauriNativeFilesystemApi } from './tauri-native-filesystem-api'
@@ -78,13 +80,28 @@ export function installTauriWindowDragBridge(): void {
   )
 }
 
-export function createTauriNativePreloadApi(): Partial<PreloadApi> {
+export function createTauriNativePreloadApi(): {
+  shell?: ReturnType<typeof createTauriNativeShellApi>
+  ui?: ReturnType<typeof createTauriNativeUiApi>
+  settings?: ReturnType<typeof createTauriNativeSettingsApi>
+  browser?: ReturnType<typeof createTauriNativeBrowserApi>
+  platform?: ReturnType<typeof createTauriNativePlatformNamespaceApi>['platform']
+  app?: ReturnType<typeof createTauriNativeAppNamespaceApi>['app']
+  repos?: ReturnType<typeof createTauriNativeRepositoriesApi>['repos']
+  cli?: ReturnType<typeof createTauriNativeCliApi>
+} {
   if (!isTauriNativeHost()) {
     return {}
   }
   const shell = createTauriNativeShellApi()
+  const ui = createTauriNativeUiApi()
+  const settings = createTauriNativeSettingsApi()
+  const browser = createTauriNativeBrowserApi()
   return {
     ...(shell ? { shell } : {}),
+    ...(ui ? { ui } : {}),
+    ...(settings ? { settings } : {}),
+    ...(browser ? { browser } : {}),
     ...createTauriNativePlatformNamespaceApi(),
     ...createTauriNativeAppNamespaceApi(),
     ...createTauriNativeRepositoriesApi(),

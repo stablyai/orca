@@ -60,6 +60,7 @@ import { createWebLinkPreviewApi } from './preload-api/browser/web-link-preview-
 import { createWebWorkspaceSessionApi } from './preload-api/workspaces/web-workspace-session-api'
 import { createWorktreesApi } from './preload-api/workspaces/web-worktrees-api'
 import { readStoredWebRuntimeEnvironment } from './pairing/web-runtime-environment'
+import { createTauriNativePreloadApi } from './tauri-native-bridge'
 
 export function installWebPreloadApi(): void {
   webRuntimeState.activeEnvironment = readStoredWebRuntimeEnvironment()
@@ -73,7 +74,12 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins'
   plugins: Partial<PreloadApi['plugins']>
   speech: Partial<PreloadApi['speech']>
 } {
-  return {
+  type WebPreloadApiResult = Omit<Partial<PreloadApi>, 'settings' | 'plugins' | 'speech'> & {
+    settings: Partial<PreloadApi['settings']>
+    plugins: Partial<PreloadApi['plugins']>
+    speech: Partial<PreloadApi['speech']>
+  }
+  const baseApi: WebPreloadApiResult = {
     ...createWebAppApi(),
     ...createWebStarNagApi(),
     ...createWebPlatformApi(),
@@ -187,5 +193,25 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins'
     ...createWebAgentStatusApi(),
     ...createWebMobileApi(),
     ...createWebTelemetryApi()
+  }
+  const tauriNative = createTauriNativePreloadApi()
+  if (baseApi.settings && tauriNative.settings) {
+    Object.assign(baseApi.settings, tauriNative.settings)
+  }
+  if (baseApi.ui && tauriNative.ui) {
+    Object.assign(baseApi.ui, tauriNative.ui)
+  }
+  if (baseApi.shell && tauriNative.shell) {
+    Object.assign(baseApi.shell, tauriNative.shell)
+  }
+  if (baseApi.browser && tauriNative.browser) {
+    Object.assign(baseApi.browser, tauriNative.browser)
+  }
+  return {
+    ...baseApi,
+    ...(tauriNative.app ? { app: tauriNative.app } : {}),
+    ...(tauriNative.platform ? { platform: tauriNative.platform } : {}),
+    ...(tauriNative.repos ? { repos: tauriNative.repos } : {}),
+    ...(tauriNative.cli ? { cli: tauriNative.cli } : {})
   }
 }
