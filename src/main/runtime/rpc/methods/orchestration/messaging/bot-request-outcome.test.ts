@@ -9,6 +9,7 @@ import {
   settleBotRequestFailure,
   settleBotRequestTurn
 } from './bot-request-outcome'
+import { createOrcaSessionId } from '../../../../../../shared/agent-session/identity/orca-session-address'
 import { installSenderHost, removeSenderHost } from './bot-request-sender-host.test-fixture'
 import type { AgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../../../shared/agent-session/failures/agent-session-failure-words'
@@ -29,8 +30,10 @@ vi.mock('./bot-recipient', () => ({
 }))
 vi.mock('../../../../../bots/bot-session-tabs', () => ({
   botOfSession: (_bots: unknown, sessionId: string) =>
-    sessionId === 'docs-session' ? { id: 'docs', agent: 'codex' } : null
+    sessionId === 'docs-session' || sessionId === DOCS_CHAT ? { id: 'docs', agent: 'codex' } : null
 }))
+
+const DOCS_CHAT = createOrcaSessionId(() => '22222222-2222-4222-8222-222222222222')
 
 const record: BotRequestRecord = {
   fromBotId: 'ranger',
@@ -81,7 +84,8 @@ describe('how a bot request ends', () => {
   function request(
     purpose: 'status' | 'handoff' | 'question' = 'handoff',
     root = 'root',
-    askers: BotRequestRecord['askers'] = record.askers
+    askers: BotRequestRecord['askers'] = record.askers,
+    to = `orca_session_id:${DOCS_CHAT}`
   ): string {
     const admitted = db.admitBotRequest({
       rootKey: `${root}-${purpose}`,
@@ -92,7 +96,7 @@ describe('how a bot request ends', () => {
       record: JSON.stringify({ ...record, purpose, askers }),
       message: {
         from: 'orca_session_id:11111111-1111-4111-8111-111111111111',
-        to: 'orca_session_id:22222222-2222-4222-8222-222222222222',
+        to,
         subject: 'update the docs',
         type: purpose
       }
@@ -194,6 +198,78 @@ describe('how a bot request ends', () => {
     acting.requestIds = [id]
     await settleBotRequestTurn(runtime, 'docs-session')
     expect(mailToRanger()).toEqual([])
+  })
+
+  /** A question the chat read, delivered at `at` (seconds into the day). */
+  function readQuestion(root: string, at: number, to?: string): string {
+    const id = request('question', root, record.askers, to)
+    db.markAsReadAndDelivered([id])
+    db.db.prepare('UPDATE messages SET delivered_at = ? WHERE id = ?').run(time(at), id)
+    return id
+  }
+  /** A worker the chat started at `at`. */
+  function worker(id: string, at: number, status = 'dispatched'): void {
+    db.db
+      .prepare(
+        `INSERT INTO dispatch_contexts (id, task_id, status, creator_orca_session_id, created_at)
+         VALUES (?, 'task', ?, ?, ?)`
+      )
+      .run(id, status, DOCS_CHAT, time(at))
+  }
+  const time = (at: number) => `2026-11-20 05:00:${String(at).padStart(2, '0')}`
+  const toldAbout = () => mailToRanger().map((mail) => mail.subject)
+
+  it('tells the sender even while a worker the chat started before the question is still open', async () => {
+    worker('ctx_earlier', 1)
+    acting.requestIds = [readQuestion('q', 5)]
+    await settleBotRequestTurn(runtime, DOCS_CHAT)
+    expect(toldAbout()).toEqual(['Re: update the docs'])
+  })
+
+  it('waits for a worker started for the question, even with an older one still open', async () => {
+    worker('ctx_earlier', 1)
+    const id = readQuestion('q', 5)
+    acting.requestIds = [id]
+    worker('ctx_for_question', 6)
+    await settleBotRequestTurn(runtime, DOCS_CHAT)
+    expect(toldAbout()).toEqual([])
+    db.db
+      .prepare(`UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?`)
+      .run('ctx_for_question')
+    await settleBotRequestTurn(runtime, DOCS_CHAT)
+    expect(db.getBotRequestOutcome(id)).toBe('unanswered')
+    expect(toldAbout()).toHaveLength(1)
+  })
+
+  it('holds only the question a new worker was started for when a turn took two', async () => {
+    const first = readQuestion('a', 5)
+    worker('ctx_for_first', 6)
+    const second = readQuestion('b', 10)
+    acting.requestIds = [first, second]
+    await settleBotRequestTurn(runtime, DOCS_CHAT)
+    expect(db.getBotRequestOutcome(first)).toBeNull()
+    expect(db.getBotRequestOutcome(second)).toBe('unanswered')
+  })
+
+  it("tells a held question's sender once its worker closes, though a later question's turn is newest", async () => {
+    const run = db.createRun({
+      objective: 'chat run',
+      coordinatorHandle: null,
+      coordinatorPaneKey: null,
+      coordinatorOrcaSessionId: DOCS_CHAT
+    })
+    const held = readQuestion('a', 5, `run:${run.id}`)
+    acting.requestIds = [held]
+    worker('ctx_for_held', 6)
+    await settleBotRequestTurn(runtime, DOCS_CHAT)
+    expect(toldAbout()).toEqual([])
+    db.db
+      .prepare(`UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?`)
+      .run('ctx_for_held')
+    acting.requestIds = [readQuestion('b', 20, `run:${run.id}`)]
+    await settleBotRequestTurn(runtime, DOCS_CHAT)
+    expect(db.getBotRequestOutcome(held)).toBe('unanswered')
+    expect(toldAbout()).toHaveLength(2)
   })
 
   it('tells the sender of requests a paused bot never read', async () => {

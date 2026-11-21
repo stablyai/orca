@@ -11,6 +11,7 @@ import { CrewChanges } from '../../orchestration/crew/crew-changes'
 import { OrcaRuntimeWithWebhookOperations } from './webhook-operations'
 import { subscribeWorkerApprovals } from '../../orchestration/crew/worker-approval-stream'
 import { readCrewApprovals } from '../../orchestration/crew/crew-query'
+import { orcaSessionMailboxes } from '../../orchestration/addressing/orca-session-mailboxes'
 import { parseOrcaSessionAddress } from '../../../../shared/agent-session/identity/orca-session-address'
 import type { OrchestrationWorkerApprovalsFrame } from '../../../../shared/orchestration/orchestration-crew'
 
@@ -77,14 +78,7 @@ export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithWebho
       {
         mailboxes: () => {
           const db = this._orchestrationDb
-          return db && orcaSessionId
-            ? [
-                party,
-                ...db
-                  .runsBoundToCoordinator({ orcaSessionId, paneKey: null, terminalHandle: null })
-                  .map((run) => `run:${run.id}`)
-              ]
-            : []
+          return db && orcaSessionId ? orcaSessionMailboxes(db, orcaSessionId) : []
         },
         approvals: (mailboxes) => {
           const db = this._orchestrationDb
