@@ -178,6 +178,12 @@ export async function chatMemoryOnce({
       result.highMb = await step(CHAT_MEMORY_HIGH - CHAT_MEMORY_LOW, CHAT_MEMORY_LOW)
       result.chats = CHAT_MEMORY_HIGH - CHAT_MEMORY_LOW
     }
+    if (
+      result.highMb != null &&
+      (result.highMb - result.lowMb) / result.chats < MIN_MAIN_MB_PER_CHAT
+    ) {
+      result.incomplete.push('chat-mem: memory fell as chats started, so a reading was wrong')
+    }
   } finally {
     await copy.close()
   }
