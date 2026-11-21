@@ -66,14 +66,6 @@ export function serveWorkerThreadChildProcesses(
     { id, spec }: Extract<WorkerThreadChildRequest, { type: 'spawn' }>,
     selection: NativeExecutableSelection | undefined
   ): void => {
-    const key = spec.env?.[SPAWN_KEY_ENV]
-    const recordKey = key && records?.reserve(key) ? key : undefined
-    if (key && records && !recordKey) {
-      // Main reads a missing record as "never started", so a child it can't record never starts.
-      const error = { message: `Could not record the child before starting ${spec.program}` }
-      port.postMessage({ type: 'spawn-error', id, error })
-      return
-    }
     let child: ChildProcessWithoutNullStreams
     try {
       child = spawnProcess(
@@ -85,14 +77,13 @@ export function serveWorkerThreadChildProcesses(
         selection
       )
     } catch (error) {
-      if (recordKey) {
-        records?.remove(recordKey)
-      }
       port.postMessage({ type: 'spawn-error', id, error: toErrorPayload(error) })
       return
     }
-    const recorded =
-      recordKey !== undefined && child.pid !== undefined && records?.write(recordKey, child.pid)
+    const key = records && child.pid !== undefined ? spec.env?.[SPAWN_KEY_ENV] : undefined
+    const recordKey =
+      key && child.pid !== undefined && records?.write(key, child.pid) ? key : undefined
+    const recorded = recordKey !== undefined
     // A failed creation has no pid and reports through 'error'; Node's own 'spawn' event would come a turn later.
     if (child.pid !== undefined) {
       port.postMessage({

@@ -19,8 +19,6 @@ export type SpawnRecords = {
   launcherCmdline: string
   /** This process's start time: every child it spawns started after it. */
   launcherStartTicks: number
-  /** Before the spawn: an empty record says a child may exist from here on. */
-  reserve(key: string): boolean
   /** False when no record could be written; main then falls back to the child's key. */
   write(key: string, pid: number): boolean
   remove(key: string): void
@@ -49,17 +47,6 @@ export function openSpawnRecords(): SpawnRecords | null {
     dir,
     launcherCmdline,
     launcherStartTicks,
-    reserve(key) {
-      try {
-        if (!SPAWN_KEY_PATTERN.test(key)) {
-          return false
-        }
-        writeFileSync(join(dir, key), '', { mode: 0o600 })
-        return true
-      } catch {
-        return false
-      }
-    },
     write(key, pid) {
       try {
         const stat = parseProcStat(readFileSync(`/proc/${pid}/stat`, 'latin1'))

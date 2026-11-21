@@ -90,34 +90,68 @@ export type KeyedProcess = ProcStat & { pid: number; key: string }
 
 const SLOW_READ_MS = 1_000
 // Reads that can wait on a memory lock hold one of main's 4 libuv threadpool threads each until
-// they return; this many at most, counting abandoned slow ones, leaves the rest for main.
-const MAX_OUTSTANDING_SLOW_READS = 2
+// they return. All recoveries share these slots, so main always keeps threads of its own.
+const READ_SLOTS = 2
+let slotsInUse = 0
+let stuckReads = 0
+const stuckTargets = new Set<string>()
+const waitingForSlot: (() => void)[] = []
+
+function releaseSlot(): void {
+  slotsInUse -= 1
+  waitingForSlot.shift()?.()
+}
 
 /**
- * Reads /proc/<pid>/<file> where the read can wait on the process's memory lock. A read is never
- * issued twice for one pid nor past the outstanding cap, and one still running after a second is
- * left to finish on its own; each of those answers 'unproven' instead.
+ * Reads /proc/<pid>/<file> where the read can wait on the process's memory lock. Reads take turns
+ * on the shared slots; one still running after a second keeps its slot until it returns, and is
+ * not issued again meanwhile. Only when every slot is held that way does a read answer
+ * 'unproven' at once, so a scan stays unproven rather than waiting on a stuck process.
  */
-function createGuardedReader() {
-  const outstanding = new Set<number>()
-  return async (pid: number, file: string): Promise<string | 'unproven' | 'none'> => {
-    if (outstanding.has(pid) || outstanding.size >= MAX_OUTSTANDING_SLOW_READS) {
+export async function readGuarded(
+  pid: number,
+  file: string
+): Promise<string | 'unproven' | 'none'> {
+  const target = `${pid}/${file}`
+  if (stuckTargets.has(target)) {
+    return 'unproven'
+  }
+  while (slotsInUse >= READ_SLOTS) {
+    if (stuckReads >= READ_SLOTS) {
       return 'unproven'
     }
-    outstanding.add(pid)
-    const read = readFile(`/proc/${pid}/${file}`, 'latin1').finally(() => outstanding.delete(pid))
-    read.catch(() => undefined)
-    try {
-      const result = await Promise.race([
-        read,
-        new Promise<'unproven'>((resolve) =>
-          setTimeout(() => resolve('unproven'), SLOW_READ_MS).unref?.()
-        )
-      ])
-      return result === 'unproven' ? 'unproven' : result
-    } catch (error) {
-      return readFailureProvesNothing(error) ? 'unproven' : 'none'
+    await new Promise<void>((resolve) => waitingForSlot.push(resolve))
+  }
+  slotsInUse += 1
+  let stuck = false
+  const read = readFile(`/proc/${target}`, 'latin1').finally(() => {
+    if (stuck) {
+      stuckReads -= 1
+      stuckTargets.delete(target)
     }
+    releaseSlot()
+  })
+  read.catch(() => undefined)
+  try {
+    const result = await Promise.race([
+      read,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), SLOW_READ_MS).unref?.())
+    ])
+    if (result !== null) {
+      return result
+    }
+    stuck = true
+    stuckReads += 1
+    stuckTargets.add(target)
+    if (stuckReads >= READ_SLOTS) {
+      // Every slot is stuck: let the waiters see it and answer 'unproven' instead of waiting.
+      for (const wake of waitingForSlot.splice(0)) {
+        wake()
+      }
+    }
+    return 'unproven'
+  } catch (error) {
+    return readFailureProvesNothing(error) ? 'unproven' : 'none'
   }
 }
 
@@ -133,7 +167,6 @@ export function createKeyScan(
   launcher: { pid: number; cmdline: string } | null
 ) {
   const uid = process.getuid?.()
-  const read = createGuardedReader()
   return async (): Promise<{
     found: KeyedProcess[]
     forks: KeyedProcess[]
@@ -163,7 +196,7 @@ export function createKeyScan(
       if (procStat === 'gone' || procStat.state === 'Z' || procStat.startTicks < sinceTicks) {
         return
       }
-      const environ = await read(pid, 'environ')
+      const environ = await readGuarded(pid, 'environ')
       if (environ === 'unproven') {
         complete = false
         return
@@ -186,7 +219,7 @@ export function createKeyScan(
       ) {
         return
       }
-      const cmdline = await read(pid, 'cmdline')
+      const cmdline = await readGuarded(pid, 'cmdline')
       if (cmdline === 'unproven') {
         complete = false
       } else if (cmdline === launcher.cmdline) {
@@ -202,17 +235,20 @@ export function createKeyScan(
  * spawned program, compared by name since PATH may resolve it and an interpreter (a script's
  * `#!` line) may run it.
  */
-export async function runsArgv(pid: number, argv: readonly string[]): Promise<boolean> {
-  try {
-    const running = (await readFile(`/proc/${pid}/cmdline`, 'latin1')).split('\0').slice(0, -1)
-    const args = argv.slice(1)
-    const head = running.slice(0, running.length - args.length)
-    return (
-      head.length > 0 &&
-      running.slice(head.length).every((arg, index) => arg === args[index]) &&
-      head.some((arg) => basename(arg) === basename(argv[0] ?? ''))
-    )
-  } catch {
-    return false
+export async function runsArgv(
+  pid: number,
+  argv: readonly string[]
+): Promise<boolean | 'unproven'> {
+  const cmdline = await readGuarded(pid, 'cmdline')
+  if (cmdline === 'unproven' || cmdline === 'none') {
+    return cmdline === 'unproven' ? 'unproven' : false
   }
+  const running = cmdline.split('\0').slice(0, -1)
+  const args = argv.slice(1)
+  const head = running.slice(0, running.length - args.length)
+  return (
+    head.length > 0 &&
+    running.slice(head.length).every((arg, index) => arg === args[index]) &&
+    head.some((arg) => basename(arg) === basename(argv[0] ?? ''))
+  )
 }

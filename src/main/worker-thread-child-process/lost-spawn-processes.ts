@@ -67,10 +67,10 @@ function proofFor(spawn: LostSpawn, record: RecordRead, recordDir: string | null
       ? { kind: 'group', groupId: record.pid, leaderStartTicks: record.startTicks }
       : { kind: 'root', pid: record.pid, startTicks: record.startTicks }
   }
-  // The launcher reserves a record before it spawns and removes it only after that child, and an
-  // owned group, has ended: none means it never started or has ended. Unless main heard a pid
-  // without hearing it was recorded, which means the launcher couldn't write one.
-  if (record === 'absent' && recordDir && (spawn.recorded || spawn.pid === undefined)) {
+  // The launcher removes a record only after that child, and an owned group, has ended, so a
+  // missing one proves that only for a child main heard was recorded. Any other is found by its
+  // key, or before its exec as a fork of the launcher.
+  if (record === 'absent' && recordDir && spawn.recorded) {
     return { kind: 'record' }
   }
   // Main heard this barrier child's pid, and it leads its own group: end that group as a local stop would.
@@ -107,9 +107,13 @@ async function advanceKeyProof(
       // A session leader is this barrier child only if it runs what was spawned; otherwise it
       // detached into its own session (a daemon such as an ssh control master), which a local
       // stop would leave alone too.
-      if (spawn.ownsGroup && entry.pid === entry.pgid && (await runsArgv(entry.pid, spawn.argv))) {
+      const runs =
+        spawn.ownsGroup && entry.pid === entry.pgid ? await runsArgv(entry.pid, spawn.argv) : false
+      if (runs === true) {
         return { kind: 'group', groupId: entry.pid, leaderStartTicks: entry.startTicks }
       }
+      // Unreadable: it may be this child, so nothing is proven this scan.
+      left ||= runs === 'unproven'
       continue
     }
     left = true
