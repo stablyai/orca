@@ -403,3 +403,31 @@ describe('recovery, round 4', () => {
     expect(f.rows[0]?.fill).toMatchObject({ outcome: 'answered', prose: 'X done.' })
   })
 })
+
+describe('recovery of a bot’s answer to its owner’s DM', () => {
+  const DM = { source: 'slack', externalId: 'T05BHT77GUF:D0CH5QFFC2C:D0CH5QFFC2C:U0CGB82KBC2' }
+
+  it('decides as the live fill does: the DM gets the words before the marker, a thread stays quiet', async () => {
+    const answer = "I started fixes for Neil's items.\n\nNO_REPLY"
+    const f = fixture(
+      {
+        items: [asked('d1', 1), asked('d2', 2), said(answer, 3, TURN_KEY), turn(4, 'd1')],
+        submissions: [submission('d2', { answeredInTurn: { turnItemId: TURN_KEY, via: 'steer' } })]
+      },
+      {
+        bot: true,
+        rows: [
+          { ...row('d1'), conversation: SLACK },
+          { ...row('d2'), conversation: DM }
+        ]
+      }
+    )
+    await f.recovery.boot()
+    expect(f.rows[0]?.fill).toMatchObject({ outcome: 'quiet' })
+    expect(f.rows[0]?.fill).not.toHaveProperty('prose')
+    expect(f.rows[1]?.fill).toMatchObject({
+      outcome: 'answered',
+      prose: "I started fixes for Neil's items."
+    })
+  })
+})

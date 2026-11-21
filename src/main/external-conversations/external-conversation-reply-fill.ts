@@ -11,6 +11,7 @@ import type { ConnectorWorkLink } from '../../shared/connector-work-link-contrac
 import type { ConnectorReplyJournal } from '../connector-cloud/connector-reply-outbox'
 import { capAnswer } from '../connector-cloud/connector-snapshot'
 import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { isSlackDirectMessage } from '../../shared/connectors/slack-direct-message'
 
 export type EndedTurnReplies = {
   sessionId: string
@@ -74,11 +75,6 @@ export function conversationReplyFill(
           (order.get(keyOf(a.account, a.deliveryId)) ?? 0) -
           (order.get(keyOf(b.account, b.deliveryId)) ?? 0)
       )
-    const { outcome, prose } = connectorReplyTurnOutcome({
-      outcome: turn.outcome,
-      prose: turn.prose,
-      bot: turn.bot
-    })
     // The group's head keys its answer: its earliest stamp per conversation, filled or sent or not,
     // so a partial fill or a deleted row never moves the key.
     const answers = new Map<string, string>()
@@ -98,7 +94,7 @@ export function conversationReplyFill(
       (row) => !row.fill && (claimedHere(row) || (row.claimMessageId === undefined && !row.cut))
     )
     const paused =
-      outcome === 'failed' && turn.failure?.category === 'usage_limit' && own.length > 0
+      turn.outcome === 'failure' && turn.failure?.category === 'usage_limit' && own.length > 0
         ? await pause?.(turn, own)
         : false
     if (paused) {
@@ -106,6 +102,13 @@ export function conversationReplyFill(
     }
     const fills: JournalConnectorReplyFill[] = []
     for (const row of own) {
+      // Decided per request: the bot's marker can't silence an answer to a DM (recovery fills here too).
+      const { outcome, prose } = connectorReplyTurnOutcome({
+        outcome: turn.outcome,
+        prose: turn.prose,
+        bot: turn.bot,
+        addressed: isSlackDirectMessage(row.conversation)
+      })
       const conversation = JSON.stringify([row.account, row.conversation])
       const answerDeliveryId = answers.get(conversation) ?? row.deliveryId
       fills.push({

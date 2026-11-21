@@ -11,7 +11,6 @@ import type { ExternalConversationLink } from '../../shared/connectors/external-
 import { chatPaneKey, type ChatNews } from './external-conversation-chat'
 import { promptRaisedBy } from './external-conversation-prompt-audience'
 import { PromptTurns } from './external-conversation-prompt-turns'
-import { connectorFailure } from './external-conversation-failure'
 import type { LinkedConversation } from './external-conversation-links'
 import { conversationPane } from './external-conversation-types'
 import { isConversationReport } from './external-conversation-turn-opener'
@@ -21,7 +20,9 @@ import {
   endAdoptedTurn,
   endMirroredTurn,
   endRepliedTurn,
+  legacyTurnWords,
   readOnce,
+  turnFailure,
   botTurnReply,
   type ChatTurnEnd,
   type ChatTurnReplies,
@@ -306,15 +307,15 @@ export class ChatTurns {
     if (shared && !heard) {
       return
     }
-    // A bot's quiet message is not posted: it said there is nothing to tell.
     void news.readTurn().then(async (turn) => {
-      const { failure } = turn
-      const message = botTurnReply(end, linked.link, turn, heard && origin === 'delivery')
+      const reply = botTurnReply(end, linked.link, turn, heard && origin === 'delivery')
       const links = readOnce(() => this.toldLinks.next(paneKey, linked.link))
       const fill = this.deps.replyFill?.()
-      if (await endRepliedTurn(end, turn, linked.link, links, fill, message)) {
+      const replied = await endRepliedTurn(end, turn, linked.link, links, fill, reply)
+      if (replied === 'told') {
         return
       }
+      const words = legacyTurnWords(turn, linked.link, replied, reply)
       // Mail finishing what its conversation asked (its workers' reports, another bot's answer to its
       // request) woke the chat, so the answer goes back there; other mail is answered in Orca.
       const opener = turn.opener ?? turn.latestOpener
@@ -336,10 +337,8 @@ export class ChatTurns {
         ...ended,
         ...end.turnFor(turn),
         origin: reported ? 'delivery' : origin,
-        ...(message ? { lastAssistantMessage: message } : {}),
-        ...(news.outcome === 'failure'
-          ? { failure: connectorFailure(failure, linked.link.agent) }
-          : {}),
+        ...(words ? { lastAssistantMessage: words } : {}),
+        ...turnFailure(end, turn),
         ...(workLinks.length > 0 ? { links: workLinks } : {})
       })
     })
