@@ -10,6 +10,7 @@ import { showsFloatingRightSidebarToggle } from '@/components/right-sidebar/visi
 import Sidebar from '../components/sidebar/index'
 import { AppRail } from '../components/app-rail/AppRail'
 import RightSidebar from '../components/right-sidebar/RightSidebar'
+import { useMeasuredWidth } from '../components/right-sidebar/layout/right-sidebar-measured-width'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
 import { FloatingTerminalToggleButton } from '../components/floating-terminal/trigger/FloatingTerminalToggleButton'
 import { TerminalWorkbenchContainer } from '../components/terminal/workbench/TerminalWorkbenchContainer'
@@ -178,6 +179,16 @@ export function AppWorkspaceShell(props: {
   const scrollOffsetRef = useRef(0)
   const scrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
   const sidebarScrollRefs = { scrollOffsetRef, scrollAnchorRef }
+  const workspaceBoardAreaRef = useMeasuredWidth(
+    useCallback((width) => {
+      const style = document.documentElement.style
+      if (width === null) {
+        style.removeProperty('--workspace-board-available-width')
+      } else {
+        style.setProperty('--workspace-board-available-width', `${width}px`)
+      }
+    }, [])
+  )
   const { setOpenWithFocus } = floatingWorkspace
   // `orca plugin shot` captures the right sidebar, which the parked launcher floats over.
   const capturingPluginShot = usePluginViewCaptureStore((s) => s.capturing)
@@ -220,7 +231,10 @@ export function AppWorkspaceShell(props: {
               }
               list={<WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />}
             />
-            <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
+            <div
+              ref={workspaceBoardAreaRef}
+              className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden"
+            >
               {/* Automations/artifacts own their headers; another titlebar would leave an empty stripe. */}
               {layout.stackedSidebarOpen &&
               layout.activeView !== 'automations' &&
