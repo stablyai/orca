@@ -247,10 +247,15 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   },
   kimi: {
     preflightTrust: 'kimi',
-    // The kimi launcher runs as kimi-code; recognize the alias for reuse and dispatch --inject.
+    // Why: the launcher runs as kimi-code, so the alias catches both spellings. Kimi has no flag
+    // or env var that seeds the composer (verified against its 2.6.2 flag set and source), so
+    // unlike claude/pi it cannot skip the paste-after-ready race.
     detectCmd: 'kimi',
     detectCmdAliases: ['kimi-code'],
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
+    // Why: the default quiet window arms at byte 22 of a cold boot, long before the composer
+    // exists at byte 1696, so it fires into whatever overlay is on screen (#23817).
+    draftPasteReadySignal: 'kimi-composer-prompt'
   },
   'mistral-vibe': {
     // Installers expose vibe; keep mistral-vibe for wrapped installs.
