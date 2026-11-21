@@ -50,6 +50,16 @@
     padding-top: max(48px, calc(10 * var(--spacing)));
   }
 
+  /* While older history can load, its row (10 spacing tall) gets its own band and sits centered
+     between the pill's bottom (40px) and the first message, touching neither. */
+  [data-native-chat-older-history] {
+    top: calc(20px + max(24px, calc(5 * var(--spacing))));
+  }
+
+  [data-native-chat-older-history] + .native-chat-transcript-inset {
+    padding-top: calc(max(48px, calc(10 * var(--spacing))) + 10 * var(--spacing));
+  }
+
   /* Open Find below the pill (8px + 32px) instead of over its lower edge. */
   [data-native-chat-find-bar] {
     --native-chat-find-top-inset: 40px;

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { stubBots } from '../../component-fixtures/fixture-bots'
 import type { Bot } from '../../../../shared/bot-types'
@@ -51,6 +52,9 @@ const tab: Tab = {
   createdAt: 1
 }
 
+const sideTab: Tab = { ...tab, id: 'fixture-side-tab', entityId: 'fixture-side', label: 'Side' }
+const SIDE_OWNER = { ...OWNER, sessionId: sideTab.entityId }
+
 const STARTED_AT = new Date().setHours(8, 50, 0, 0)
 
 function text(
@@ -85,26 +89,84 @@ function messages(intro: string): NativeChatMessage[] {
   ]
 }
 
-function Chat({ intro }: { intro: string }): React.JSX.Element {
+/** A later page of a long chat, scrolled to its top while older messages load or fail to. */
+function laterMessages(): NativeChatMessage[] {
+  return [
+    text('u7', 'user', 'Did the parser fix land?', 30),
+    text('a7', 'assistant', 'Yes. Both PRs merged and the error case has a test now.', 31),
+    text('u8', 'user', 'Great, what is next on the list?', 40)
+  ]
+}
+
+/** Holds the last page until the scene has scrolled and measured; each render gets a fresh gate. */
+let lastPageGate = Promise.withResolvers<void>()
+
+/** A long chat whose last older page is still to load. */
+function longMessages(): NativeChatMessage[] {
+  return Array.from({ length: 24 }, (_, index) =>
+    text(
+      `l${index}`,
+      index % 2 === 0 ? 'user' : 'assistant',
+      `Message ${index + 1}: notes on the parser review.`,
+      60 + index
+    )
+  )
+}
+
+function oldestMessages(): NativeChatMessage[] {
+  return [
+    text('o1', 'user', 'Orca: the oldest page.', 0),
+    text('o2', 'assistant', 'This is where the chat began.', 1)
+  ]
+}
+
+type OlderHistory = 'loading' | 'failed' | 'lastPage'
+
+function Chat({
+  intro,
+  side = false,
+  olderHistory
+}: {
+  intro: string
+  side?: boolean
+  olderHistory?: OlderHistory
+}): React.JSX.Element {
+  const chatTab = side ? sideTab : tab
+  const [oldest, setOldest] = useState<NativeChatMessage[] | null>(null)
+  const lastPage = olderHistory === 'lastPage'
   const session: NativeChatLiveSession = {
-    messages: messages(intro),
+    messages: lastPage
+      ? [...(oldest ?? []), ...longMessages()]
+      : olderHistory
+        ? laterMessages()
+        : messages(intro),
     agent: 'claude',
-    sessionId: 'fixture',
+    sessionId: chatTab.entityId,
     status: 'ready',
     readPhase: 'ready',
-    hasMore: false,
-    loadingEarlier: false,
+    hasMore: lastPage ? oldest === null : olderHistory !== undefined,
+    loadingEarlier: olderHistory === 'loading',
     olderHistoryGeneration: 0,
-    loadEarlier: async () => 'applied'
+    loadEarlier: async () => {
+      if (olderHistory === 'failed') {
+        return 'failed'
+      }
+      if (lastPage) {
+        await lastPageGate.promise
+        setOldest(oldestMessages())
+        return 'exhausted'
+      }
+      return 'applied'
+    }
   }
   return (
-    <NativeChatVisualOwnerContext.Provider value={OWNER}>
+    <NativeChatVisualOwnerContext.Provider value={side ? SIDE_OWNER : OWNER}>
       <div className="native-chat-appearance relative flex h-[460px] flex-col bg-background">
         <NativeChatPaneHeader
-          tabId={tab.id}
+          tabId={chatTab.id}
           worktreeId={OWNER.worktreeId}
-          groupId={tab.groupId}
-          nativeChat={{ sessionId: OWNER.sessionId, agent: 'claude' }}
+          groupId={chatTab.groupId}
+          nativeChat={{ sessionId: chatTab.entityId, agent: 'claude' }}
           focused
           colorScheme={undefined}
         />
@@ -119,6 +181,12 @@ function Chat({ intro }: { intro: string }): React.JSX.Element {
             ])
           }
         />
+        {lastPage ? (
+          <div
+            data-last-page-measurement=""
+            className="absolute bottom-1 left-2 z-30 text-2xs text-muted-foreground"
+          />
+        ) : null}
       </div>
     </NativeChatVisualOwnerContext.Provider>
   )
@@ -142,6 +210,79 @@ function introScene(width: number, bot: Bot, greeting = GREETING) {
   })
 }
 
+/** The older-history row sits below the floating pill, never under it. */
+function olderHistoryScene(width: number, olderHistory: OlderHistory, side = false) {
+  return defineFixture({
+    width,
+    store: {
+      workspaceSessionReady: true,
+      unifiedTabsByWorktree: { [OWNER.worktreeId]: [tab, sideTab] }
+    },
+    setup: () => stubBots([SHORT]),
+    render: () => <Chat intro={GREETING} side={side} olderHistory={olderHistory} />,
+    // The loading label waits 200ms so quick local reads don't flash it.
+    interact: () => new Promise<void>((resolve) => window.setTimeout(resolve, 400))
+  })
+}
+
 export const intro = introScene(640, SHORT)
 export const introNarrowLongName = introScene(300, LONG)
 export const introLongGreeting = introScene(640, SHORT, OLD_GREETING)
+
+export const olderHistoryLoading = olderHistoryScene(720, 'loading')
+export const olderHistoryLoadingNarrow = olderHistoryScene(300, 'loading')
+export const olderHistoryFailed = olderHistoryScene(720, 'failed')
+export const olderHistoryFailedNarrow = olderHistoryScene(300, 'failed')
+export const sideOlderHistoryLoading = olderHistoryScene(720, 'loading', true)
+export const sideOlderHistoryLoadingNarrow = olderHistoryScene(300, 'loading', true)
+export const sideOlderHistoryFailed = olderHistoryScene(720, 'failed', true)
+export const sideOlderHistoryFailedNarrow = olderHistoryScene(300, 'failed', true)
+
+const nextFrame = (): Promise<void> =>
+  new Promise((resolve) => window.requestAnimationFrame(() => resolve()))
+const wait = (ms: number): Promise<void> => new Promise((resolve) => window.setTimeout(resolve, ms))
+
+/** Scrolled up, the last page lands and its row leaves; the rows the reader sees must not move. */
+function lastPageScene(width: number, side = false) {
+  return defineFixture({
+    width,
+    store: {
+      workspaceSessionReady: true,
+      unifiedTabsByWorktree: { [OWNER.worktreeId]: [tab, sideTab] }
+    },
+    setup: () => {
+      lastPageGate = Promise.withResolvers<void>()
+      stubBots([SHORT])
+    },
+    render: () => <Chat intro={GREETING} side={side} olderHistory="lastPage" />,
+    interact: async (frame) => {
+      const scroller = frame.querySelector<HTMLElement>('[data-native-chat-scroll]')!
+      await wait(300)
+      scroller.dispatchEvent(new WheelEvent('wheel', { deltaY: -900, bubbles: true }))
+      // Near the top the last page starts loading. It lands once the reader has moved past the
+      // rows it adds, so their first measurement can't move the view and only the row's space counts.
+      scroller.scrollTop = 500
+      await wait(200)
+      scroller.scrollTop = 800
+      await wait(200)
+      await nextFrame()
+      await nextFrame()
+      const top = scroller.getBoundingClientRect().top
+      const target = [...frame.querySelectorAll<HTMLElement>('[data-native-chat-message-id]')].find(
+        (element) => element.getBoundingClientRect().top >= top + 60
+      )!
+      const before = target.getBoundingClientRect().top
+      lastPageGate.resolve()
+      await wait(1200)
+      const after = target.isConnected ? target.getBoundingClientRect().top : Number.NaN
+      frame.querySelector<HTMLElement>('[data-last-page-measurement]')!.textContent =
+        `history row shown: ${frame.querySelector('[data-native-chat-older-history]') !== null} · ` +
+        `visible rows moved ${Math.round(after - before)}px`
+    }
+  })
+}
+
+export const olderHistoryLastPage = lastPageScene(720)
+export const olderHistoryLastPageNarrow = lastPageScene(300)
+export const sideOlderHistoryLastPage = lastPageScene(720, true)
+export const sideOlderHistoryLastPageNarrow = lastPageScene(300, true)
