@@ -18,7 +18,14 @@ import {
 import { GoogleBrandingLinks } from '../GoogleBrandingLinks'
 import { googleConsoleStepUrl } from '../../../../../../shared/google/google-console-setup'
 import type { GoogleSetupKeyCandidate } from '../../../../../../shared/rpc-contract/google-setup-params'
-import { importGoogleApp, openInMyBrowser, refreshGoogle } from '../google-connect-client'
+import { withTimeout } from '../../../../../../shared/concurrency/promise-timeout-fallback'
+import type { GoogleSetupFoundKey } from '../../../../../../shared/google/google-setup-ipc-types'
+import {
+  type GoogleHostView,
+  importGoogleApp,
+  openInMyBrowser,
+  refreshGoogle
+} from '../google-connect-client'
 import { googleKeyRefusalHeadline, googleStepNotes } from '../google-copy'
 import { useGoogleClientFile } from '../use-google-client-file'
 import { GoogleSetupBlockerPanel } from './GoogleSetupBlockerPanel'
@@ -49,6 +56,40 @@ async function saveKey(bot: BotRef, text: string): Promise<void> {
     )
   })
   await answerGoogleSetup(bot, 'step', ['done', 'client'])
+}
+
+const DONE_KEY_READ_TIMEOUT_MS = 3000
+
+/** Whether a key found in Downloads replaces the host's saved one: only a newer file does (Make a
+ *  new key), so a key saved elsewhere, or one Google no longer knows, isn't re-imported. No host
+ *  view counts as no saved key. */
+function importsFoundKey(found: GoogleSetupFoundKey, host: GoogleHostView | null): boolean {
+  const google = host?.status === 'ready' ? host.google : null
+  return !google?.client || found.modifiedAt > google.client.savedAt
+}
+
+/** A step card answer. Done on the key step in the person's own browser saves a key already in
+ *  Downloads first: the watch only sees files that land while its card is on screen. */
+async function answerStepCard(bot: BotRef, run: GoogleSetupRun, values: string[]): Promise<void> {
+  if (values[0] === 'done' && values[1] === 'client' && keySource(run, true)) {
+    // Each read has its own limit, so a slow host doesn't drop a found key; a stalled Downloads mount
+    // answers Done as before.
+    const [found, host] = await Promise.all([
+      withTimeout(
+        window.api.googleSetup.findDownloadedKey({
+          since: run.startedAt,
+          ...(run.projectId ? { projectId: run.projectId } : {})
+        }),
+        DONE_KEY_READ_TIMEOUT_MS,
+        null
+      ),
+      withTimeout(refreshGoogle(botTarget(bot)), DONE_KEY_READ_TIMEOUT_MS, null)
+    ])
+    if (found && importsFoundKey(found, host)) {
+      return saveKey(bot, found.text)
+    }
+  }
+  await answerGoogleSetup(bot, 'step', values)
 }
 
 /** Saves the app key the moment it lands in Downloads, from the person's own browser. */
@@ -291,7 +332,7 @@ export function GoogleSetupStepCard({
   const notes = step === 'account' || step === 'connect' ? [] : googleStepNotes(step, run.kind)
   const send = (values: string[]): void => {
     setBusy(true)
-    void answerGoogleSetup(bot, 'step', values)
+    void answerStepCard(bot, run, values)
       .catch((error: unknown) =>
         toast.error(error instanceof Error ? error.message : String(error))
       )
