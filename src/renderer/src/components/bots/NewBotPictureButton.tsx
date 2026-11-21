@@ -43,10 +43,10 @@ export function NewBotPictureButton({
     observer.observe(dialog)
     return () => observer.disconnect()
   }, [])
-  const widthStyle = {
+  const widthStyle: React.CSSProperties & Record<'--new-bot-picture-width', string> = {
     '--new-bot-picture-width':
       dialogWidth === null ? '20rem' : `${dialogWidth - 2 * DIALOG_PADDING_PX}px`
-  } as React.CSSProperties
+  }
   return (
     <div ref={rootRef} className="flex items-center gap-3">
       <Popover onOpenChange={(open) => open && line.kind === 'error' && intake.dismiss()}>
@@ -81,10 +81,15 @@ export function NewBotPictureButton({
           style={widthStyle}
           // A window too short for the open picker scrolls the card; any other fits it whole.
           wheelScroll
-          className="w-[min(20rem,var(--new-bot-picture-width),var(--radix-popover-content-available-width))] scrollbar-sleek overflow-y-auto overscroll-contain"
+          className="flex w-[min(20rem,var(--new-bot-picture-width),var(--radix-popover-content-available-width))] flex-col"
         >
           {/* The whole popover takes a dropped picture, so all of it is outlined while one is dragged. */}
-          <div className={cn(BOT_PICTURE_DROP_OUTLINE, 'pt-3')}>
+          <div
+            className={cn(
+              BOT_PICTURE_DROP_OUTLINE,
+              'scrollbar-sleek min-h-0 overflow-y-auto overscroll-contain pt-3'
+            )}
+          >
             <BotPicturePicker
               value={picture.value}
               custom={picture.custom}
