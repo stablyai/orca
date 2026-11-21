@@ -1,4 +1,5 @@
 import { app, shell } from 'electron'
+import { hasExternalAppHandler } from '../../../external-apps/protocol-handler'
 
 import { DOC_PREVIEW_SCHEME } from '../../../../shared/document-preview/doc-preview-scheme'
 import { BROWSER_EXTENSION_API_SCHEME } from '../../../../shared/browser/extensions/browser-extension-worker-api'
@@ -112,14 +113,6 @@ function pageUrl(contents: Electron.WebContents): string | null {
     return contents.getURL()
   } catch {
     return null
-  }
-}
-
-function hasExternalAppHandler(url: string): boolean {
-  try {
-    return app.getApplicationNameForProtocol(url) !== ''
-  } catch {
-    return false
   }
 }
 

@@ -26,6 +26,9 @@ export const shellApi = {
   ): Promise<ShellOpenExternalEditorResult> =>
     ipcRenderer.invoke('shell:openInExternalEditor', request),
 
+  isQwenWorkAvailable: (): Promise<boolean> => ipcRenderer.invoke('shell:isQwenWorkAvailable'),
+  openQwenWork: (): Promise<void> => ipcRenderer.invoke('shell:openQwenWork'),
+
   openUrl: (url: string): Promise<void> => ipcRenderer.invoke('shell:openUrl', url),
 
   openFilePath: (

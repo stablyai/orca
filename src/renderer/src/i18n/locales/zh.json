@@ -20169,7 +20169,10 @@
       "stop": "停止代理",
       "copyMessage": {
         "copied": "已复制",
-        "copy": "复制消息"
+        "copy": "复制消息",
+        "copyFailed": "未能复制消息",
+        "openQwenWork": "复制并打开千问办公",
+        "qwenWorkOpenFailed": "消息已复制，但未能打开千问办公。"
       },
       "scrollMessageToTop": "将此消息滚动到顶部",
       "loadingEarlier": "正在加载…",

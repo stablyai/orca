@@ -36,6 +36,7 @@ import {
   validateLocalPathTarget
 } from './shell-owned-path-target'
 import { inspectLinkedFile } from './linked-file-inspection'
+import { registerQwenWorkDesktopHandoff } from './qwenwork-desktop-handoff'
 import { registerShellPathExistenceHandlers } from './shell-path-existence-handlers'
 
 const REPO_ICON_IMAGE_MIME_TYPES: Record<string, string> = {
@@ -206,6 +207,7 @@ export function registerShellHandlers(
     }
   )
 
+  registerQwenWorkDesktopHandoff()
   registerShellPathExistenceHandlers()
 
   ipcMain.handle(

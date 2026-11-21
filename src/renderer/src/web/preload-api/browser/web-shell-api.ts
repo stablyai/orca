@@ -30,6 +30,8 @@ export function createShellApi(): NonNullable<Partial<PreloadApi>['shell']> {
       Promise.resolve(window.open(path, '_blank', 'noopener,noreferrer') as never),
     openInFileManager: () => Promise.resolve(openResult),
     openInExternalEditor: () => Promise.resolve(openResult),
+    isQwenWorkAvailable: () => Promise.resolve(false),
+    openQwenWork: () => Promise.reject(new Error('QwenWork requires the desktop app')),
     openUrl: (url) => Promise.resolve(window.open(url, '_blank', 'noopener,noreferrer') as never),
     openFilePath: () => Promise.resolve(false),
     openFileUri: (uri) => {

@@ -19,6 +19,8 @@ export type ShellApi = {
   openInExternalEditor: (
     request: ShellOpenExternalEditorRequest
   ) => Promise<ShellOpenExternalEditorResult>
+  isQwenWorkAvailable: () => Promise<boolean>
+  openQwenWork: () => Promise<void>
   openUrl: (url: string) => Promise<void>
   openFilePath: (
     path: string,

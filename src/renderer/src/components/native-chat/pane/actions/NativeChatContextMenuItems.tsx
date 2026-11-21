@@ -1,3 +1,4 @@
+import { NativeChatQwenWorkMenuItem } from './NativeChatQwenWorkMenuItem'
 import { Copy, ExternalLink, FileText, Globe, Quote, Search, Trash2, Undo2 } from 'lucide-react'
 import {
   useNativeChatRewindConfirm,
@@ -66,6 +67,7 @@ export function NativeChatContextMenuTargetItems({
           {t('components.native-chat.copyMessage.copy', 'Copy message')}
         </DropdownMenuItem>
       ) : null}
+      {messageText ? <NativeChatQwenWorkMenuItem text={messageText} /> : null}
       {rewindItemId && rewind ? (
         <NativeChatRewindMenuItem itemId={rewindItemId} rewind={rewind} />
       ) : null}
