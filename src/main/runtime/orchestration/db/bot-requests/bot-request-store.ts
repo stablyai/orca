@@ -76,8 +76,11 @@ function withinAdmission<T>(db: OrchestrationDb, write: () => T): T {
     db.db.exec(`RELEASE ${SAVEPOINT}`)
     return result
   } catch (error) {
-    db.db.exec(`ROLLBACK TO ${SAVEPOINT}`)
-    db.db.exec(`RELEASE ${SAVEPOINT}`)
+    // An I/O error can end the whole transaction first; rolling back then would hide it.
+    if (db.db.isTransaction) {
+      db.db.exec(`ROLLBACK TO ${SAVEPOINT}`)
+      db.db.exec(`RELEASE ${SAVEPOINT}`)
+    }
     throw error
   }
 }

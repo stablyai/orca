@@ -164,10 +164,13 @@ function senderLineageUnproven(from: string): boolean {
   }
   try {
     const found = lookupOrcaAgentSession(store, sessionId)
-    return (
-      found.kind === 'found' &&
-      resolveLineageRunningSession(store, found.record.sessionId).kind === 'unverifiable'
-    )
+    const known =
+      found.kind === 'found'
+        ? found.record.sessionId
+        : found.kind === 'provider-id'
+          ? found.orcaSessionId
+          : null
+    return known !== null && resolveLineageRunningSession(store, known).kind === 'unverifiable'
   } catch {
     return true
   }
