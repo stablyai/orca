@@ -155,9 +155,12 @@ describe("Orca's checks on a tidy-up's ops", () => {
     ).toEqual(['retire 2: takes out more lines than one tidy-up may'])
   })
 
-  it('runs ops only on a file that is list lines, a few prose lines aside', () => {
+  it('runs ops only on a file whose lines are facts, a few other lines aside', () => {
     expect(memoryFitsOps(`# M\nIntro.\n${MEMORY}`)).toBe(true)
-    expect(memoryFitsOps(Array.from({ length: 6 }, (_, i) => `prose ${i}`).join('\n'))).toBe(false)
+    // Every line with words is a fact; table rows are not.
+    expect(memoryFitsOps(Array.from({ length: 6 }, (_, i) => `| row ${i} |`).join('\n'))).toBe(
+      false
+    )
   })
 
   it('reads the one array of ops, and nothing when there are several or none whole', () => {
