@@ -70,7 +70,13 @@ describe('how a bot request ends', () => {
     runtime = {
       getOrchestrationDb: () => db,
       bots: { list: () => [{ id: 'docs' }] },
-      notifyMessageArrived: (to: string) => notified.push(to),
+      // As the real nudge does: it routes mail in its own transaction.
+      notifyMessageArrived: (to: string) => {
+        if (db.db.isTransaction) {
+          throw new Error('cannot start a transaction within a transaction')
+        }
+        notified.push(to)
+      },
       getLiveTerminalPaneKey: () => null,
       ensureStructuredAgentSessionHost: async () =>
         installSenderHost(['11111111-1111-4111-8111-111111111111'])
