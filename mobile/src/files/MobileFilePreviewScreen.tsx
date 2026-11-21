@@ -6,13 +6,14 @@ import {
 import { MobileChatAttachmentPreview } from './attachments/MobileChatAttachmentPreview'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Alert, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaFrame } from 'react-native-safe-area-context'
 import { ChevronLeft, Save } from 'lucide-react-native'
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { getWorktreeLabel } from '../worktree/row-presentation/worktree-label'
+import { spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useForceReconnect } from '../transport/connection/host-client-hooks'
 import { useWorkspaceClient } from '../worktree/execution-hosts/use-workspace-client'
@@ -40,6 +41,7 @@ import {
   isEditableMobileTerminalArtifactPreview,
   shouldKeepDirtyDraftOnPreviewLoadResult
 } from './terminal-artifacts/mobile-file-preview-editability'
+import { useMobileLineNumbersPreference } from './mobile-line-numbers-preference'
 import { filePreviewStyles as styles } from './preview/mobile-file-preview-styles'
 import { mobileMarkdownFileLink } from './markdown/mobile-markdown-file-link'
 import { useMobileFilePreviewBack } from './preview/use-mobile-file-preview-back'
@@ -90,6 +92,7 @@ function MobileFilePreviewDocument({ route }: Props) {
   const [savedContent, setSavedContent] = useState('')
   const [saveError, setSaveError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [showLineNumbers, setShowLineNumbers] = useMobileLineNumbersPreference()
   const savingRef = useRef(false)
   const saveRevisionRef = useRef(0)
   useLayoutEffect(
@@ -101,6 +104,7 @@ function MobileFilePreviewDocument({ route }: Props) {
   const draftContentRef = useRef(draftContent)
   const savedContentRef = useRef(savedContent)
   const draftSourceKeyRef = useRef<string | null>(null)
+  const { width, height } = useSafeAreaFrame()
   const routePreviewSource = useMemo(
     () => (previewParams ? previewSourceFromRoute(previewParams) : null),
     [previewParams]
@@ -112,6 +116,11 @@ function MobileFilePreviewDocument({ route }: Props) {
     [routePreviewSource]
   )
   const previewSourceKeyRef = useRef(previewSourceKey)
+  const lineSeqRef = useRef(0)
+  const lineParam = previewParams?.line
+  useEffect(() => {
+    lineSeqRef.current += 1
+  }, [lineParam])
   // Grant-only refreshes keep the source key, so loads read the source here instead of re-running.
   const previewSourceRef = useRef(previewSource)
   const previewLoadRevisionRef = useRef(0)
@@ -372,6 +381,11 @@ function MobileFilePreviewDocument({ route }: Props) {
         draftContent={draftContent}
         saveError={saveError}
         lineColumn={lineColumn}
+        initialLineSeq={lineSeqRef.current}
+        showLineNumbers={showLineNumbers}
+        onToggleLineNumbers={() => setShowLineNumbers((prev) => !prev)}
+        imageWidth={Math.max(1, width - spacing.md * 2)}
+        imageHeight={Math.max(240, height - 160)}
         onDraftChange={setDraftContent}
         onImageError={() =>
           setPreview({
