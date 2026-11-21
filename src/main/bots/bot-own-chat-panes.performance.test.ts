@@ -1,12 +1,18 @@
 // Every bot's own side chats are classed with one party read per bot, not two SQLite lookups per
 // chat: a host with many chats spent hundreds of milliseconds of main-thread time per refresh (PR #46120).
 import { afterEach, expect, it, vi } from 'vitest'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
+import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { buildBotChatBase, readBotChatInputs } from './bot-chat-tree-base'
 import { readBotOwnChatPanes } from './bot-own-chat-panes'
 import { bot, closeOwnChatHost, homeRecord, ownChatHost } from './bot-own-chat-panes.test-fixture'
 import { makeTestBot } from './bot.test-fixture'
 
-afterEach(closeOwnChatHost)
+afterEach(() => {
+  setStructuredAgentSessionHost(null)
+  closeOwnChatHost()
+})
 
 // The two rows naming a session's party: its worker terminal and whether a Dispatch recorded it as a worker.
 const PARTY_SQL =
@@ -45,4 +51,49 @@ it('asks nothing of the database for chats running on another host', async () =>
   )
   expect(build.chats.size).toBe(20)
   expect(prepare.mock.calls.filter(([sql]) => PARTY_SQL.test(sql))).toHaveLength(0)
+})
+
+it('reads a chat a /clear continued into another session from the batch', async () => {
+  const first = homeRecord('chat-alpha', 'Cleared chat')
+  const cleared = {
+    ...first,
+    conversationCommand: {
+      command: 'clear' as const,
+      runtimeFence: 8,
+      operationId: 'op-clear-chat-alpha',
+      callerKey: 'renderer',
+      phase: 'committed' as const,
+      state: 'completed' as const,
+      replacementSessionId: 'chat-beta'
+    }
+  }
+  const records = [cleared, homeRecord('chat-beta', 'Cleared chat')]
+  const host = ownChatHost(records)
+  const store = await host.sessionRecords()
+  const views = new Map(records.map((r) => [r.sessionId, agentSessionConversationView(r)]))
+  // The runtime's record store, which the party lookup canonicalizes through; the same records the
+  // build reads, as in the app.
+  const runtimeHost = {
+    deps: {
+      store: {
+        getConversation: (id: string) => views.get(id) ?? null,
+        listConversations: () => [...views.values()],
+        getVisibleSessionTabIndex: () => ({ present: false, sessionIds: [] })
+      }
+    }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the lineage reader reads only deps.store; any other call fails the test.
+  setStructuredAgentSessionHost(runtimeHost as unknown as StructuredAgentSessionHost)
+  const prepare = vi.spyOn(host.db().db, 'prepare')
+  const build = buildBotChatBase(
+    { db: host.db(), backgroundRuns: host.backgroundRuns },
+    store,
+    readBotChatInputs(host, bot),
+    store?.listRecords() ?? []
+  )
+  expect(
+    [...build.chats.values()].map((chat) => [chat.chatId, chat.liveSessionId, chat.closed])
+  ).toEqual([['chat-alpha', 'chat-beta', false]])
+  // The batch alone: a lookup that missed it would add two point reads.
+  expect(prepare.mock.calls.filter(([sql]) => PARTY_SQL.test(sql))).toHaveLength(1)
 })
