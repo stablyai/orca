@@ -12,6 +12,8 @@ export function rowTabStops(row: HTMLElement, inOrder = true): HTMLElement[] {
   ].filter(
     (control) =>
       (inOrder ? control.tabIndex >= 0 : control.tabIndex >= -1) &&
+      // Hidden form mirrors (a checkbox's native input) are never Tab stops.
+      !control.closest('[aria-hidden="true"]') &&
       !control.matches(':disabled') &&
       control.getClientRects().length > 0 &&
       getComputedStyle(control).visibility !== 'hidden'
