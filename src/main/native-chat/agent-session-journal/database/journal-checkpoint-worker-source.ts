@@ -1,5 +1,21 @@
 /** Shared progress word: odd while starting or handling work, and it moves on every step. */
 export const JOURNAL_CHECKPOINT_PROGRESS = 0
+/** Shared truncate slot: the owner grants or revokes a truncate; the worker runs it only if still granted. */
+export const JOURNAL_CHECKPOINT_TRUNCATE = 1
+export const JOURNAL_TRUNCATE_GRANTED = 1
+export const JOURNAL_TRUNCATE_RUNNING = 2
+export const JOURNAL_TRUNCATE_REVOKED = 3
+
+/** A reply from the checkpoint worker. */
+export type CheckpointResponse = {
+  type: 'checked' | 'truncate-request' | 'hello'
+  id?: number
+  generation: number
+  truncateId?: number
+  log: number
+  checkpointed: number
+  blocked: boolean
+}
 
 // Evaluated source travels with both host bundles, without a separate worker entry or Electron imports.
 export const journalCheckpointWorkerSource = `
@@ -64,17 +80,22 @@ try {
     if (request.type === 'truncate') {
       if (!pendingTruncate || request.truncateId !== pendingTruncate.truncateId) return;
       const pending = pendingTruncate;
-      let busy;
-      const timeout = db.prepare('PRAGMA busy_timeout').get().timeout;
-      db.exec('PRAGMA busy_timeout = 0;');
-      try {
-        busy = truncate.get().busy !== 0;
-      } finally {
-        db.exec('PRAGMA busy_timeout = ' + timeout);
+      // A revoked truncate never starts: the owner already gave the writer its lock back.
+      let busy = true;
+      if (Atomics.compareExchange(progress, ${JOURNAL_CHECKPOINT_TRUNCATE}, ${JOURNAL_TRUNCATE_GRANTED}, ${JOURNAL_TRUNCATE_RUNNING}) === ${JOURNAL_TRUNCATE_GRANTED}) {
+        const timeout = db.prepare('PRAGMA busy_timeout').get().timeout;
+        db.exec('PRAGMA busy_timeout = 0;');
+        try {
+          busy = truncate.get().busy !== 0;
+        } finally {
+          Atomics.store(progress, ${JOURNAL_CHECKPOINT_TRUNCATE}, 0);
+          db.exec('PRAGMA busy_timeout = ' + timeout);
+        }
       }
       const state = frames.get();
-      // A truncate that succeeded left an empty WAL; stat it only after one that didn't.
-      const blocked = (ceiling(state) && (busy || state.checkpointed < state.log)) || (busy && oversized());
+      // Nothing that touches the filesystem runs between a truncate and its reply; one that didn't
+      // succeed is reported blocked, and the worker's next retry measures the WAL again.
+      const blocked = busy || (ceiling(state) && state.checkpointed < state.log);
       pendingTruncate = undefined;
       reply({ type: 'checked', id: pending.id, generation: pending.generation,
         truncateId: pending.truncateId, ...state, blocked });

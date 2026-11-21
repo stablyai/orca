@@ -1,20 +1,11 @@
 import type Database from '../../../sqlite/sync-database'
-import { JournalWalWaiters, journalWalGated } from './journal-wal-admission'
+import { JournalWalWaiters, journalWalFrameCounts, journalWalGated } from './journal-wal-admission'
 import type { JournalCheckpointOutage } from './journal-checkpoint-outages'
+import type { CheckpointResponse } from './journal-checkpoint-worker-source'
 import {
   JournalCheckpointWorkerSupervisor,
   type JournalCheckpointWorkerOptions
 } from './journal-checkpoint-worker-supervisor'
-
-type CheckpointResponse = {
-  type: 'checked' | 'truncate-request' | 'hello'
-  id?: number
-  generation: number
-  truncateId?: number
-  log: number
-  checkpointed: number
-  blocked: boolean
-}
 
 /** One writer observes outside transactions; the checkpoint thread never races an admitted truncate. */
 export class JournalCheckpointOwner {
@@ -55,12 +46,7 @@ export class JournalCheckpointOwner {
       options
     )
     try {
-      const version = String(writer.prepare('SELECT sqlite_version() AS version').get()?.version)
-      const [major = 0, minor = 0] = version.split('.').map(Number)
-      if (major < 3 || (major === 3 && minor < 51)) {
-        throw new Error(`SQLite ${version} lacks NOOP checkpoints`)
-      }
-      this.frames = writer.prepare('PRAGMA wal_checkpoint(NOOP)')
+      this.frames = journalWalFrameCounts(writer)
     } catch (error) {
       this.worker.disable()
       this.lose(error, 'spawn')
@@ -192,6 +178,7 @@ export class JournalCheckpointOwner {
       return
     }
     this.truncate.acknowledged = true
+    this.worker.grantTruncate()
     this.worker.post({ type: 'truncate', truncateId: this.truncate.id })
   }
 
@@ -267,7 +254,7 @@ export class JournalCheckpointOwner {
       return
     }
     // A retired worker may still be inside the truncate it was sent, holding SQLite's write lock.
-    const truncating = this.truncate?.acknowledged === true
+    const truncating = this.truncate?.acknowledged === true && this.worker.revokeTruncate()
     this.release()
     this.worker.fail(error, cause)
     if (truncating) {
@@ -284,15 +271,23 @@ export class JournalCheckpointOwner {
   }
 
   /**
-   * A busy worker keeps its checkpoints while nothing waits on it. Once writes are parked behind it, or
-   * it is stuck, the writer takes them back until it answers; a truncate keeps them, since SQLite holds
-   * the write lock for that whole call anyway.
+   * A busy worker keeps its checkpoints while nothing waits on it. Once a request or parked write waits
+   * on it, the writer takes them back until it answers. A truncate it is inside keeps them, since SQLite
+   * holds the write lock for that whole call; one it hasn't started is revoked.
    */
   private late(stuck: boolean): void {
-    if (!this.stopped && !this.truncate?.acknowledged && (stuck || this.gated())) {
-      this.release()
-      this.wake()
+    if (this.stopped) {
+      return
     }
+    if (this.truncate?.acknowledged) {
+      if (this.worker.revokeTruncate()) {
+        return
+      }
+    } else if (!stuck && this.pending === undefined && !this.gated()) {
+      return
+    }
+    this.release()
+    this.wake()
   }
 
   private release(): void {

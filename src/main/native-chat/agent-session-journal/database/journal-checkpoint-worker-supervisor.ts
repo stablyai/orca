@@ -3,6 +3,10 @@ import { spawnWorkerThread } from '../../../worker-threads/worker-thread-spawn'
 import type { WorkerRequestTransport } from '../../../worker-threads/worker-thread-transport'
 import {
   JOURNAL_CHECKPOINT_PROGRESS,
+  JOURNAL_CHECKPOINT_TRUNCATE,
+  JOURNAL_TRUNCATE_GRANTED,
+  JOURNAL_TRUNCATE_REVOKED,
+  JOURNAL_TRUNCATE_RUNNING,
   journalCheckpointWorkerSource
 } from './journal-checkpoint-worker-source'
 import { JOURNAL_SIZE_LIMIT_BYTES } from './journal-database'
@@ -68,7 +72,6 @@ export class JournalCheckpointWorkerSupervisor<Message> {
   private restartTimer: ReturnType<typeof setTimeout> | undefined
   private closed = false
   private permanent = false
-  private warned = false
   private failedStarts = 0
   private readonly now: () => number
   private readonly outages: JournalCheckpointOutages
@@ -84,6 +87,27 @@ export class JournalCheckpointWorkerSupervisor<Message> {
 
   get running(): boolean {
     return this.current !== undefined
+  }
+
+  /** Lets the worker run the truncate about to be sent. */
+  grantTruncate(): void {
+    if (this.current) {
+      Atomics.store(this.current.liveness, JOURNAL_CHECKPOINT_TRUNCATE, JOURNAL_TRUNCATE_GRANTED)
+    }
+  }
+
+  /** Takes back a granted truncate the worker hasn't started; true when it is inside one now. */
+  revokeTruncate(): boolean {
+    const liveness = this.current?.liveness
+    return (
+      liveness !== undefined &&
+      Atomics.compareExchange(
+        liveness,
+        JOURNAL_CHECKPOINT_TRUNCATE,
+        JOURNAL_TRUNCATE_GRANTED,
+        JOURNAL_TRUNCATE_REVOKED
+      ) === JOURNAL_TRUNCATE_RUNNING
+    )
   }
 
   /** Settles once every retired worker thread has exited. */
@@ -104,7 +128,7 @@ export class JournalCheckpointWorkerSupervisor<Message> {
     if (this.closed) {
       return
     }
-    const liveness = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT)
+    const liveness = new SharedArrayBuffer(2 * Int32Array.BYTES_PER_ELEMENT)
     const word = new Int32Array(liveness)
     // Starting counts as busy: a thread still booting under memory pressure isn't dead.
     Atomics.store(word, JOURNAL_CHECKPOINT_PROGRESS, 1)
@@ -211,24 +235,11 @@ export class JournalCheckpointWorkerSupervisor<Message> {
   }
 
   recovered(): void {
-    if (this.outages.end(true)) {
-      this.warned = false
-    }
+    this.outages.end(true)
   }
 
   warn(error: unknown): void {
-    if (this.warned) {
-      return
-    }
-    this.warned = true
-    try {
-      console.warn(
-        '[agent-session-journal] checkpoint worker unavailable; writer checkpoints',
-        error
-      )
-    } catch {
-      // A diagnostic must never turn a committed write into an apparent failure.
-    }
+    this.outages.warn(error)
   }
 
   /** Stops timers and reports an open outage at once; the promise settles once the thread exits. */

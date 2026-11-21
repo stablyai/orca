@@ -312,6 +312,7 @@ class LivenessCheckpoint extends ControlledCheckpoint {
 
 it('keeps a busy checkpoint worker until it is stuck, and replaces one that stays silent', async () => {
   const { filename, writer } = fixture()
+  writer.pragma('wal_autocheckpoint = 1000')
   const workers: LivenessCheckpoint[] = []
   const outages: JournalCheckpointOutage[] = []
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)

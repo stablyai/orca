@@ -12,6 +12,7 @@ export class JournalCheckpointOutages {
   restarts = 0
   private open: { since: number; cause: JournalCheckpointOutage['cause'] } | undefined
   private totalOutageMs = 0
+  private warned = false
 
   constructor(
     private readonly now: () => number,
@@ -22,13 +23,31 @@ export class JournalCheckpointOutages {
     this.open ??= { since: this.now(), cause }
   }
 
-  /** Returns whether an outage was open. */
-  end(recovered: boolean): boolean {
+  /** Warns once until a worker recovers. */
+  warn(error: unknown): void {
+    if (this.warned) {
+      return
+    }
+    this.warned = true
+    try {
+      console.warn(
+        '[agent-session-journal] checkpoint worker unavailable; writer checkpoints',
+        error
+      )
+    } catch {
+      // A diagnostic must never turn a committed write into an apparent failure.
+    }
+  }
+
+  end(recovered: boolean): void {
     const open = this.open
     if (!open) {
-      return false
+      return
     }
     this.open = undefined
+    if (recovered) {
+      this.warned = false
+    }
     const outageMs = Math.max(0, this.now() - open.since)
     this.totalOutageMs += outageMs
     try {
@@ -42,6 +61,5 @@ export class JournalCheckpointOutages {
     } catch {
       // Telemetry never affects checkpoints.
     }
-    return true
   }
 }
