@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from 'react'
+import { useCallback, useState, useSyncExternalStore } from 'react'
 import {
   installWindowVisibilityInterval,
   type WindowVisibilityIntervalTimer
@@ -72,9 +72,11 @@ function getSharedNowClock(intervalMs: number): SharedNowClock {
 // Disabled callers read the shared frozen snapshot without retaining its timer or subscribing to ticks.
 const subscribeWhileDisabled = (): (() => void) => () => {}
 
-/** Share coarse label ticks across rows to avoid N timers/commits. Disabled callers activate through a passive effect and may first read arbitrarily stale time; deadlines must use Date.now() in the acting effect. */
+/** Share coarse label ticks across rows to avoid N timers/commits. The value is never older than the mount; a caller enabled later may still first read a stale tick until its subscribe tick lands. Deadlines must use Date.now() in the acting effect. */
 export function useNow(intervalMs: number, enabled = true): number {
-  return useNowSnapshot(intervalMs, readNow, enabled)
+  // Why: an idle shared clock is frozen at its last tick, possibly hours old; mount time bounds it like the per-hook state it replaced.
+  const [mountedAt] = useState(() => Date.now())
+  return Math.max(mountedAt, useNowSnapshot(intervalMs, readNow, enabled))
 }
 
 const readNow = (now: number): number => now

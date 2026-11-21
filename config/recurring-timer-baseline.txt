@@ -86,13 +86,11 @@
 1 src/renderer/src/components/status-bar/host-connections/use-runtime-host-resources.ts
 1 src/renderer/src/components/tab-bar/strip/tab-strip-drag-scroll.ts
 1 src/renderer/src/components/terminal-pane/pty-transport/delivery/terminal-delivery-watchdog.ts
-1 src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/recovery/RemoteRuntimeRecoveryCard.tsx
 1 src/renderer/src/components/terminal-pane/render-health/terminal-render-desync-sentinel.ts
 1 src/renderer/src/lib/window-activity/use-now.ts
 1 src/renderer/src/lib/agent-session/hibernation/agent-hibernation-coordinator.ts
 1 src/renderer/src/diagnostics/crash-reporting/crash-diagnostics.ts
 1 src/renderer/src/lib/window-activity/window-visibility-interval.ts
-1 src/renderer/src/runtime/agent-orchestration/worker-auto-close.ts
 1 src/renderer/src/runtime/hosts/wsl/wsl-refused-read-watch.ts
 1 src/shared/remote-runtime/control/remote-runtime-shared-control-app-heartbeat.ts
 1 src/shared/remote-runtime/remote-runtime-socket-liveness.ts
