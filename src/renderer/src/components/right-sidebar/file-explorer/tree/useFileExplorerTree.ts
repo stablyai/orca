@@ -13,6 +13,7 @@ import {
 import {
   keepOpenedDirectoryLinks,
   clearFailedOpenedDirectoryLink,
+  markOpenedPathAsDirectory,
   canFollowFolderLink,
   readFileExplorerDirectory
 } from './file-explorer-directory-listing'
@@ -29,6 +30,12 @@ import {
   withPendingFileExplorerDirCacheEntries
 } from './file-explorer-dir-load-state'
 import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
+import {
+  fileExplorerTreeOwner,
+  keepFileExplorerTree,
+  switchFileExplorerTree,
+  type FileExplorerTreeOwner
+} from './file-explorer-worktree-snapshots'
 
 /** Owns worktree-addressed directory caches and load tokens; display scoping changes traversal rather than cache identity. */
 const FOLLOW_LINK = { followProjectFolderLink: true } as const
@@ -66,14 +73,19 @@ export function useFileExplorerTree(
   const refreshGenerationRef = useRef(0)
   // Distinguish root failure from supersession because loadDir returns false for both.
   const rootReadFailedRef = useRef(false)
+  // The workspace dirCache was listed for, which trails worktreePath until the next reset.
+  const treeOwnerRef = useRef<FileExplorerTreeOwner | null>(null)
 
   useEffect(() => {
     const tracker = dirLoadTrackerRef.current
     const refreshGeneration = refreshGenerationRef
+    const treeOwner = treeOwnerRef
+    const cache = dirCacheRef
     return () => {
       // A replaced host must not keep launching the old tree's queued directory reads.
       refreshGeneration.current++
       tracker?.reset()
+      keepFileExplorerTree(treeOwner.current, cache.current)
     }
   }, [])
 
@@ -153,29 +165,10 @@ export function useFileExplorerTree(
     [activeWorktreeId, updateLoadingDirPaths, worktreePath]
   )
 
-  const markPathAsDirectory = useCallback((path: string) => {
-    setDirCache((prev) => {
-      let changed = false
-      const next: Record<string, DirCache> = {}
-      for (const [dirPath, cache] of Object.entries(prev)) {
-        let cacheChanged = false
-        const children = cache.children.map((child) => {
-          if (child.path !== path || child.isDirectory) {
-            return child
-          }
-          changed = true
-          cacheChanged = true
-          return {
-            ...child,
-            isDirectory: true,
-            isDirectoryFromOpenedLink: child.isSymlink === true
-          }
-        })
-        next[dirPath] = cacheChanged ? { ...cache, children } : cache
-      }
-      return changed ? next : prev
-    })
-  }, [])
+  const markPathAsDirectory = useCallback(
+    (path: string) => setDirCache((prev) => markOpenedPathAsDirectory(prev, path)),
+    []
+  )
 
   const statPath = useCallback(
     async (path: string) => {
@@ -197,58 +190,69 @@ export function useFileExplorerTree(
     [activeWorktreeId, worktreePath]
   )
 
-  const refreshTree = useCallback(async (): Promise<FileExplorerTreeRefreshOutcome> => {
-    if (!worktreePath) {
-      // No read means superseded; root-unreadable tells callers to drop pending refreshes.
-      return 'superseded'
-    }
-    const refreshGeneration = ++refreshGenerationRef.current
-    // Retain children to prevent virtualizer jumps; union stale marks before reading because supersession may skip verification, and prune uncached paths to bound marks.
-    for (const dirPath of staleDirsRef.current) {
-      if (dirCacheRef.current[dirPath] === undefined) {
-        staleDirsRef.current.delete(dirPath)
+  const refreshTree = useCallback(
+    async (options?: { wakeWslDistro?: boolean }): Promise<FileExplorerTreeRefreshOutcome> => {
+      if (!worktreePath) {
+        // No read means superseded; root-unreadable tells callers to drop pending refreshes.
+        return 'superseded'
       }
-    }
-    // Callers use the latest callback, so expanded reflects the current traversal.
-    for (const dirPath of collectStaleDirCachePaths(dirCacheRef.current, worktreePath, expanded)) {
-      staleDirsRef.current.add(dirPath)
-    }
-    const refreshSession = dirLoadTrackerRef.current.getSession()
-    rootReadFailedRef.current = false
-    // Propagate root failure before expanded waves; 200 dead dirs would otherwise impose about 50 sequential transport timeouts.
-    const rootLoadCompleted = await loadDir(worktreePath, -1, { force: true, failOnError: true })
-    if (!rootLoadCompleted || !dirLoadTrackerRef.current.isSessionCurrent(refreshSession)) {
-      // Callers handle root failure and supersession differently; neither verified the expanded dirs.
-      return rootReadFailedRef.current ? 'root-unreadable' : 'superseded'
-    }
-    // Exclude the root already force-loaded above to avoid reading it twice.
-    const expandedDirs = Array.from(expanded)
-      .filter((dirPath) => dirPath !== worktreePath)
-      .map((dirPath) => ({ dirPath, depth: fileExplorerDirDepth(worktreePath, dirPath) }))
-    const allDirsCommitted = await refreshFileExplorerExpandedDirs({
-      dirs: expandedDirs,
-      worktreePath,
-      dirLoadTracker: dirLoadTrackerRef.current,
-      setDirCache,
-      updateLoadingDirPaths,
-      readDirectory: (dirPath) =>
-        readFileExplorerDirectory(activeWorktreeId, worktreePath, dirPath, {
-          paged: dirCacheRef.current[dirPath]?.paged,
-          minEntries: dirCacheRef.current[dirPath]?.children.length,
-          ...(canFollowFolderLink(dirCacheRef.current, dirPath, false) ? FOLLOW_LINK : {})
-        }),
-      maxConcurrentReads: fileExplorerRefreshConcurrency(
-        getFileExplorerOperationOwner(activeWorktreeId)
-      ),
-      onDirCommitted: (dirPath) => {
-        // An older expanded read must not clear a newer collapsed-directory stale mark.
-        if (refreshGenerationRef.current === refreshGeneration) {
+      const refreshGeneration = ++refreshGenerationRef.current
+      // Retain children to prevent virtualizer jumps; union stale marks before reading because supersession may skip verification, and prune uncached paths to bound marks.
+      for (const dirPath of staleDirsRef.current) {
+        if (dirCacheRef.current[dirPath] === undefined) {
           staleDirsRef.current.delete(dirPath)
         }
       }
-    })
-    return allDirsCommitted ? 'refreshed' : 'superseded'
-  }, [activeWorktreeId, expanded, loadDir, updateLoadingDirPaths, worktreePath])
+      // Callers use the latest callback, so expanded reflects the current traversal.
+      for (const dirPath of collectStaleDirCachePaths(
+        dirCacheRef.current,
+        worktreePath,
+        expanded
+      )) {
+        staleDirsRef.current.add(dirPath)
+      }
+      const refreshSession = dirLoadTrackerRef.current.getSession()
+      rootReadFailedRef.current = false
+      // Propagate root failure before expanded waves; 200 dead dirs would otherwise impose about 50 sequential transport timeouts.
+      const rootLoadCompleted = await loadDir(worktreePath, -1, {
+        force: true,
+        failOnError: true,
+        wakeWslDistro: options?.wakeWslDistro
+      })
+      if (!rootLoadCompleted || !dirLoadTrackerRef.current.isSessionCurrent(refreshSession)) {
+        // Callers handle root failure and supersession differently; neither verified the expanded dirs.
+        return rootReadFailedRef.current ? 'root-unreadable' : 'superseded'
+      }
+      // Exclude the root already force-loaded above to avoid reading it twice.
+      const expandedDirs = Array.from(expanded)
+        .filter((dirPath) => dirPath !== worktreePath)
+        .map((dirPath) => ({ dirPath, depth: fileExplorerDirDepth(worktreePath, dirPath) }))
+      const allDirsCommitted = await refreshFileExplorerExpandedDirs({
+        dirs: expandedDirs,
+        worktreePath,
+        dirLoadTracker: dirLoadTrackerRef.current,
+        setDirCache,
+        updateLoadingDirPaths,
+        readDirectory: (dirPath) =>
+          readFileExplorerDirectory(activeWorktreeId, worktreePath, dirPath, {
+            paged: dirCacheRef.current[dirPath]?.paged,
+            minEntries: dirCacheRef.current[dirPath]?.children.length,
+            ...(canFollowFolderLink(dirCacheRef.current, dirPath, false) ? FOLLOW_LINK : {})
+          }),
+        maxConcurrentReads: fileExplorerRefreshConcurrency(
+          getFileExplorerOperationOwner(activeWorktreeId)
+        ),
+        onDirCommitted: (dirPath) => {
+          // An older expanded read must not clear a newer collapsed-directory stale mark.
+          if (refreshGenerationRef.current === refreshGeneration) {
+            staleDirsRef.current.delete(dirPath)
+          }
+        }
+      })
+      return allDirsCommitted ? 'refreshed' : 'superseded'
+    },
+    [activeWorktreeId, expanded, loadDir, updateLoadingDirPaths, worktreePath]
+  )
 
   const refreshDir = useCallback(
     async (dirPath: string, options?: { wakeWslDistro?: boolean }) => {
@@ -283,15 +287,23 @@ export function useFileExplorerTree(
       // Reset tokens so previous-worktree responses cannot repopulate the cleared tree.
       dirLoadTrackerRef.current.reset()
       staleDirsRef.current.clear()
-      setDirCache({})
-      setSourceWorkspaceId(null)
+      const owner = fileExplorerTreeOwner(activeWorktreeId, worktreePath)
+      // A same-workspace reset (setting change, error retry) finds no snapshot and lists afresh.
+      const snapshot = switchFileExplorerTree(treeOwnerRef.current, dirCacheRef.current, owner)
+      treeOwnerRef.current = owner
+      dirCacheRef.current = snapshot ?? {}
+      setDirCache(dirCacheRef.current)
+      setSourceWorkspaceId(snapshot ? activeWorktreeId?.trim() || null : null)
       updateLoadingDirPaths(() => EMPTY_FILE_EXPLORER_LOADING_DIRS)
       setRootError(null)
-      if (worktreePath) {
+      if (snapshot) {
+        // Nothing applied this workspace's file changes while it was away, so recheck the snapshot.
+        void refreshTree({ wakeWslDistro: options?.wakeWslDistro })
+      } else if (worktreePath) {
         void loadDir(worktreePath, -1, { force: true, wakeWslDistro: options?.wakeWslDistro })
       }
     },
-    [worktreePath, loadDir, updateLoadingDirPaths]
+    [activeWorktreeId, worktreePath, loadDir, refreshTree, updateLoadingDirPaths]
   )
 
   return {

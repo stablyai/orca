@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { getRuntimeGitIgnoredPaths } from '@/runtime/source-control/git/runtime-git-status-client'
 import { getWorktreeGitOwnerTarget } from '../../source-control/sync/worktree-git-owner-target'
+import {
+  createFileExplorerWorktreeSnapshots,
+  fileExplorerWorktreeSnapshotKey
+} from './file-explorer-worktree-snapshots'
 
 const EMPTY_IGNORED_PATHS: readonly string[] = []
 export const FILE_EXPLORER_IGNORED_QUERY_DEBOUNCE_MS = 300
@@ -10,6 +14,12 @@ export type IgnoredPathResult = {
   activeWorktreeId: string
   paths: string[]
   worktreePath: string
+}
+
+const lastIgnoredPathResults = createFileExplorerWorktreeSnapshots<IgnoredPathResult>()
+
+function lastIgnoredPathResult(key: string | null): IgnoredPathResult | null {
+  return key ? (lastIgnoredPathResults.peek(key) ?? null) : null
 }
 
 export function getEffectiveFileExplorerIgnoredPaths({
@@ -49,7 +59,15 @@ export function useFileExplorerIgnoredPaths({
   shouldDebounceIgnoredQuery: boolean
   worktreePath: string | null
 }): readonly string[] {
-  const [ignoredPathResult, setIgnoredPathResult] = useState<IgnoredPathResult | null>(null)
+  const key =
+    activeWorktreeId && worktreePath
+      ? fileExplorerWorktreeSnapshotKey(activeWorktreeId, worktreePath)
+      : null
+  // Opens on the workspace's last answer, kept past unmounts and switches, until git replies again.
+  const [shown, setShown] = useState(() => ({ key, result: lastIgnoredPathResult(key) }))
+  if (shown.key !== key) {
+    setShown({ key, result: lastIgnoredPathResult(key) })
+  }
 
   useEffect(() => {
     if (!canLoadIgnoredPaths || !activeWorktreeId || !worktreePath) {
@@ -57,6 +75,12 @@ export function useFileExplorerIgnoredPaths({
     }
 
     let canceled = false
+    const show = (paths: string[]): void => {
+      const resultKey = fileExplorerWorktreeSnapshotKey(activeWorktreeId, worktreePath)
+      const result = { activeWorktreeId, paths, worktreePath }
+      lastIgnoredPathResults.keep(resultKey, result)
+      setShown({ key: resultKey, result })
+    }
     const refresh = (): void => {
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
       const target = getWorktreeGitOwnerTarget(activeWorktreeId)
@@ -74,12 +98,12 @@ export function useFileExplorerIgnoredPaths({
       )
         .then((paths) => {
           if (!canceled) {
-            setIgnoredPathResult({ activeWorktreeId, paths, worktreePath })
+            show(paths)
           }
         })
         .catch(() => {
           if (!canceled) {
-            setIgnoredPathResult({ activeWorktreeId, paths: [], worktreePath })
+            show([])
           }
         })
     }
@@ -109,7 +133,7 @@ export function useFileExplorerIgnoredPaths({
   return getEffectiveFileExplorerIgnoredPaths({
     activeWorktreeId,
     canLoadIgnoredPaths,
-    ignoredPathResult,
+    ignoredPathResult: shown.result,
     worktreePath
   })
 }
