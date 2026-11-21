@@ -232,20 +232,12 @@ export function reportedCodexPermissionMode(reply: Record<string, unknown>): str
   if (approval === 'never' && reviewer === 'user' && full) {
     return 'full-access'
   }
-  if (sandboxType === 'readOnly' || sandboxType === 'read-only') {
+  if (readOnly) {
     return 'read-only'
   }
-  if (
-    (sandboxType === 'dangerFullAccess' || sandboxType === 'danger-full-access') &&
-    approval === 'never'
-  ) {
+  if (full && approval === 'never') {
     return 'full-access'
   }
-  if (
-    (sandboxType === 'workspaceWrite' || sandboxType === 'workspace-write') &&
-    approval === 'on-request'
-  ) {
-    return reviewer === 'auto_review' ? 'auto' : reviewer === 'user' ? 'ask' : null
-  }
+  // Orca's Ask is read-only, so a writable workspace is never named Ask: it edits without asking.
   return null
 }
