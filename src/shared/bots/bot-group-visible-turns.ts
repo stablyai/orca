@@ -180,7 +180,12 @@ export function visibleBotGroupMessages(
       }
       return !isQuietEmptyBotGroupMailTurn(turn, items)
     })
-    if (message.author.kind === 'owner' || message.pausedAfter || turns.length > 0) {
+    if (
+      message.author.kind === 'owner' ||
+      message.pausedAfter ||
+      turns.length > 0 ||
+      (message.remoteAsks?.length ?? 0) > 0
+    ) {
       visible.push(turns.length === message.turns.length ? message : { ...message, turns })
     }
   }

@@ -143,7 +143,7 @@
 1 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
 7 src/main/codex/configuration/toml/config-toml-atomic-write.ts # compare-before-publish re-read of config.toml so a save made after Orca read it is never overwritten (moved here from the worker-only trust transaction)
 4 src/main/codex/history/backfill/codex-session-backfill-marker.ts
-17 src/main/codex/history/bridges/codex-session-bridge.ts
+14 src/main/codex/history/bridges/codex-session-bridge.ts
 5 src/main/codex/history/index/codex-session-index-heal-state.ts
 2 src/main/codex/history/index/codex-state-db.ts
 2 src/main/codex/history/resume/codex-session-resume-home.ts
@@ -522,6 +522,7 @@
 1 src/main/warp-themes/discovery.ts
 1 src/main/webhooks/webhook-call-file.ts
 2 src/main/webhooks/webhook-host-ledger.ts
+1 src/main/webhooks/webhook-host-newer-agent-hooks.ts # one read of the small newer-agent hooks file per signed-in account, next to the ledger's own read (STA-16837)
 1 src/main/window/desktop-integration/custom-app-icon.ts
 3 src/main/window/desktop-integration/macos-press-and-hold-default.ts
 1 src/main/windows/windows-administrator-restart.ts

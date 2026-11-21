@@ -36,6 +36,7 @@ import type { ConversationEvent, ConversationSnapshot } from './external-convers
 import { HOST_CLOCK, type ExternalConversationHost } from './external-conversation-host'
 import { harness, installedChats } from './external-conversation-seam.test-fixture'
 import { WORKTREE } from './external-conversation.test-fixture'
+import { StructuredAgentSessionTurnCompletionFeed } from '../native-chat/agent-session-wire/observations/structured-agent-session-turn-completion-feed'
 import type { ConversationKey } from './external-conversation-types'
 
 // Reproduction: worker status at 16:25:51 holds the answer's completion until NO_REPLY at 16:25:54.
@@ -218,7 +219,17 @@ async function providerTurn(
     ...(outcome ? { outcome } : {})
   })
   await host.flushStreamedEvents(HOST_TEST_SESSION)
+  // The feed counts a held turn only if it reads this end before the next turn starts.
+  await eventually(() => expect(feedSawEnded(turnId)).toBe(true))
 }
+
+const feedSawEnded = (turnId: string) =>
+  vi
+    .mocked(StructuredAgentSessionTurnCompletionFeed.prototype.observeProjection)
+    .mock.calls.some(([, { state }]) => {
+      const request = state.latestRequest
+      return request?.id === turnId && request.turnState !== 'running'
+    })
 
 const ended = (events: (ConversationEvent | ConversationSnapshot)[]) =>
   events.filter(
@@ -241,6 +252,7 @@ beforeEach(() => {
   outboxPath = mkdtempSync(join(tmpdir(), 'orca-coalesced-quiet-'))
   vi.useFakeTimers({ toFake: ['Date'], now: HOST_TEST_NOW })
   vi.spyOn(console, 'info').mockImplementation(() => undefined)
+  vi.spyOn(StructuredAgentSessionTurnCompletionFeed.prototype, 'observeProjection')
 })
 
 afterEach(async () => {

@@ -35,6 +35,7 @@ import { useBotGroupLinkContextFor, type BotGroupRoomLinks } from './use-bot-gro
 import { MessageRow } from '../native-chat/messages/rows/NativeChatMessageRow'
 import { BotGroupSessionReader, type BotGroupSession } from './BotGroupSessionReader'
 import { BotGroupTurn } from './BotGroupTurn'
+import { BotGroupRemoteAsk } from './BotGroupRemoteAsk'
 import { BotGroupTranscriptRows, useBotGroupTranscriptRows } from './bot-group-transcript-rows'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { BotGroupApprovalDock } from './BotGroupApprovalDock'
@@ -172,7 +173,14 @@ export function BotGroupChat({
   useBotGroupTranscriptRows(rows, 'room', ownerRowList)
   const follow = useBotTranscriptFollow({
     messageCopyText: rows.messageCopyText,
-    itemCount: visibleMessages.reduce((count, message) => count + 1 + message.turns.length, 0),
+    itemCount: visibleMessages.reduce(
+      (count, message) =>
+        count +
+        1 +
+        message.turns.length +
+        (message.remoteAsks?.filter((ask) => ask.reply).length ?? 0),
+      0
+    ),
     isWorking: working,
     isVisible
   })
@@ -332,6 +340,9 @@ export function BotGroupChat({
                           onReply={reply}
                           scrollMessageToTop={follow.scrollMessageToTop}
                         />
+                      ))}
+                      {message.remoteAsks?.map((ask) => (
+                        <BotGroupRemoteAsk key={ask.requestId} ask={ask} />
                       ))}
                     </div>
                   ))

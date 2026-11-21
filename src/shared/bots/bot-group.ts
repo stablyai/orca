@@ -7,7 +7,10 @@ import type {
   AgentJournalSnapshot
 } from '../agent-session/journal/agent-session-journal-types'
 import { structuredAgentTurnAnchors } from '../native-chat/transcript/turns/native-chat-turn-membership'
+import { remoteMemberKey } from './bot-group-mentions'
+import { remoteAnswerLines, remoteMemberAsked } from './bot-group-remote-context'
 import {
+  BotGroupRemoteBotsSchema as RemoteBots,
   BotGroupReplyMode,
   type BotGroup,
   type BotGroupMember,
@@ -26,6 +29,8 @@ export type {
   BotGroupMember,
   BotGroupMessage,
   BotGroupMessageImage,
+  BotGroupRemoteAsk,
+  BotGroupRemoteMember,
   BotGroupThread,
   BotGroupTurn
 } from './bot-group-schema'
@@ -101,13 +106,17 @@ export function isBotGroupMemberSession(sessionId: string | null | undefined): s
   return sessionId?.startsWith('bot-group-member-') === true
 }
 
+/** A remote member's id in mentions and reply audiences: bot ids are unique only per computer. */
+export const botGroupRemoteKey = remoteMemberKey
+
 const GroupId = z.object({ groupId: z.string().min(1) })
 /** A room in the group: one of its threads, or the original room when absent. */
 const Room = GroupId.extend({ threadId: z.string().min(1).optional() })
 const Revision = GroupId.extend({ revision: z.number().int().positive() })
 export const BotGroupCreate = z.object({
   name: BotNameSchema,
-  botIds: z.array(z.string().min(1)).min(1).max(32)
+  botIds: z.array(z.string().min(1)).min(1).max(32),
+  remoteBots: RemoteBots.optional()
 })
 export const BotGroupRead = Room.extend({
   beforeSequence: z.number().int().positive().optional()
@@ -115,6 +124,8 @@ export const BotGroupRead = Room.extend({
 export const BotGroupUpdate = Revision.extend({
   name: BotNameSchema.optional(),
   botIds: z.array(z.string().min(1)).min(1).max(32).optional(),
+  /** The whole remote roster when present; absent keeps it. */
+  remoteBots: RemoteBots.optional(),
   replyMode: BotGroupReplyMode.optional()
 })
 export const BotGroupReorder = GroupId.extend({ sidebarOrder: z.number().int().nonnegative() })
@@ -274,17 +285,21 @@ export function botGroupCompletedReply(
   return full ? { text: full.slice(-16_000), full, completedAt } : null
 }
 
-/** What a member's own session has not seen: room posts and peer replies since its last delivered
- *  turn (everything for a new member), newest kept under the cap. Replies are keyed by operation. */
+/** What a member has not seen: posts and replies since it was last asked (all, if new), newest kept
+ *  under the cap. Local replies are keyed by operation; remote answers ride on their post. */
 export function botGroupContext(
   messages: readonly BotGroupMessage[],
   completed: ReadonlyMap<string, string>,
-  member: Pick<BotGroupMember, 'botId' | 'sessionId'>
+  member: Pick<BotGroupMember, 'botId' | 'sessionId'> | { remoteKey: string }
 ): string {
+  const local = 'sessionId' in member ? member : null
+  const remoteKey = 'remoteKey' in member ? member.remoteKey : null
   const seen = messages.findLastIndex((message) =>
-    message.turns.some(
-      (turn) => turn.sessionId === member.sessionId && !turn.mailbox && !turn.error
-    )
+    local
+      ? message.turns.some(
+          (turn) => turn.sessionId === local.sessionId && !turn.mailbox && !turn.error
+        )
+      : remoteMemberAsked(message, remoteKey)
   )
   const lines = messages.slice(Math.max(seen, 0)).flatMap((message, index) => [
     ...(seen !== -1 && index === 0
@@ -300,10 +315,11 @@ export function botGroupContext(
         ]),
     ...message.turns.flatMap((turn) => {
       const text = completed.get(turn.operationId)
-      return text && turn.botId !== member.botId
+      return text && turn.botId !== local?.botId
         ? [{ author: { kind: 'bot' as const, id: turn.botId, name: turn.botName }, text }]
         : []
-    })
+    }),
+    ...remoteAnswerLines(message, remoteKey)
   ])
   return fitBotGroupContext(lines)
 }

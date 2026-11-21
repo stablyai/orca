@@ -5,6 +5,7 @@ import { BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY } from '../../../src/shared/bot-ru
 import type { BotUpdateParams } from '../../../src/shared/rpc-contract/bots-params'
 import { lookAroundSupported, type BotLookAround } from '../../../src/shared/bots/bot-look-around'
 import type { BotTidyUp } from '../../../src/shared/bots/bot-tidy-up'
+import { UNSAVED_DRAFTS_REMOVAL_REFUSAL } from '../../../src/shared/worktree/removal/removal'
 import { agentChatPermissionModeCopy } from '../../../src/shared/agent-session/options/permissions/structured-agent-session-permission-option'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../components/sheets/ConfirmModal'
@@ -157,7 +158,13 @@ export function MobileBotSettingsTab(props: {
       props.showToast(
         isHostNotConnectedError(error)
           ? errorMessage(error)
-          : t('bots.settings.deleteFailed', 'Something went wrong. Try again.'),
+          : error instanceof Error && error.message === UNSAVED_DRAFTS_REMOVAL_REFUSAL
+            ? t(
+                'bots.settings.deleteUnsavedDrafts',
+                'Its folder has unsaved editor changes. Save or close them on {{host}}, then delete again.',
+                { host: props.hostName }
+              )
+            : t('bots.settings.deleteFailed', 'Something went wrong. Try again.'),
         1800
       )
     } finally {
