@@ -5,6 +5,7 @@ import {
   botMemoryChange,
   botMemoryDate,
   editBotMemoryFact,
+  isEmptyBotMemoryChange,
   parseBotMemoryFacts
 } from '../../../../shared/bot-memory-lines'
 import {
@@ -75,10 +76,14 @@ export const BOT_MEMORY_METHODS = [
         { kind: 'owner' },
         (file) => {
           if (params.fact === undefined) {
-            return botMemoryChange(
-              file,
-              addBotMemoryFact(file, params.text, botMemoryDate(new Date()))
-            )
+            const next = addBotMemoryFact(file, params.text, botMemoryDate(new Date()))
+            const added = botMemoryChange(file, next)
+            // A file that already states the fact comes back as it was; any other add that adds
+            // nothing would say it saved a fact it dropped.
+            if (next !== file && isEmptyBotMemoryChange(added)) {
+              throw new Error('Could not add that to MEMORY.md; nothing was saved.')
+            }
+            return added
           }
           const fact = parseBotMemoryFacts(file).find((entry) => entry.text === params.fact)
           if (!fact) {

@@ -46,25 +46,44 @@ export function countBotMemoryLines(text: string): number {
 
 type FactParts = Omit<BotMemoryFact, 'line'> & { prefix: string }
 
+/** For each place between lines (0: above the first, `lines.length`: below the last), the line
+ *  opening the code fence that place is in, or -1: a line put there in a fence reads as code. */
+function fenceOpeners(lines: readonly string[]): number[] {
+  // The open fence, if any: it closes only on the same character at least as many times.
+  let open: { fence: string; line: number } | null = null
+  const openers = [-1]
+  lines.forEach((raw, line) => {
+    const fence = FENCE.exec(raw)?.[1]
+    if (fence && open === null) {
+      open = { fence, line }
+    } else if (
+      // A closer is the same character, at least as long, with nothing but spaces after it.
+      fence &&
+      open !== null &&
+      fence[0] === open.fence[0] &&
+      fence.length >= open.fence.length &&
+      raw.trim() === fence
+    ) {
+      open = null
+    }
+    openers.push(open?.line ?? -1)
+  })
+  return openers
+}
+
 /** Each line's fact, or null: a line in a code fence is never one, whatever it looks like. */
 function lineFacts(lines: readonly string[]): (FactParts | null)[] {
-  // The open fence, if any: it closes only on the same character at least as many times.
-  let open: string | null = null
-  return lines.map((raw) => {
-    const fence = FENCE.exec(raw)?.[1]
-    // A closer is the same character, at least as long, with nothing but spaces after it.
-    const closes =
-      open !== null &&
-      fence !== undefined &&
-      fence[0] === open[0] &&
-      fence.length >= open.length &&
-      raw.trim() === fence
-    if (fence && (open === null || closes)) {
-      open = open === null ? fence : null
-      return null
-    }
-    return open !== null ? null : factParts(raw)
-  })
+  const openers = fenceOpeners(lines)
+  // A fence's opener opens the place after it; its closer is in the place before it.
+  return lines.map((raw, line) =>
+    openers[line] === -1 && openers[line + 1] === -1 ? factParts(raw) : null
+  )
+}
+
+/** `index`, or above the code fence a line put at `index` would be in: a fact never goes in one. */
+function outsideFence(lines: readonly string[], index: number): number {
+  const opener = fenceOpeners(lines)[index]
+  return opener === -1 ? index : opener
 }
 
 export function parseBotMemoryFacts(text: string): BotMemoryFact[] {
@@ -253,7 +272,7 @@ export function applyBotMemoryChange(text: string, change: BotMemoryChange): str
     present.add(key)
     const anchor = after === null ? -1 : kept.lastIndexOf(after)
     const end = kept.findLastIndex((raw) => raw.trim() !== '') + 1
-    kept.splice(after === null || anchor !== -1 ? anchor + 1 : end, 0, line)
+    kept.splice(outsideFence(kept, after === null || anchor !== -1 ? anchor + 1 : end), 0, line)
   }
   return kept.join(eol)
 }
@@ -330,7 +349,8 @@ export function forgetBotMemoryFact(text: string, fact: BotMemoryFact): string {
   return editBotMemoryFact(text, fact, '')
 }
 
-/** Newest first: above the first fact, else at the end. */
+/** Newest first: above the first fact, else at the end, or above a code fence the end is in. The
+ *  text as it was when it already states the fact. */
 export function addBotMemoryFact(text: string, fact: string, date: string): string {
   const next = oneLine(fact)
   if (next === '') {
@@ -338,11 +358,17 @@ export function addBotMemoryFact(text: string, fact: string, date: string): stri
   }
   const { lines, eol } = splitLines(text)
   const line = factLine('- ', date, next)
-  // Above the first list line, so prose a file opens with stays first.
   const facts = lineFacts(lines)
+  const key = rawFactKey(line)
+  if (facts.some((parts) => parts !== null && factKey(parts.text) === key)) {
+    return text
+  }
+  // Above the first list line, so prose a file opens with stays first; with none, above a fence
+  // left open to the end, where below it the line would read as code.
   const first = lines.findIndex((raw, index) => FACT_LINE.test(raw) && facts[index] !== null)
-  if (first !== -1) {
-    lines.splice(first, 0, line)
+  const at = first !== -1 ? first : outsideFence(lines, lines.length)
+  if (at !== lines.length) {
+    lines.splice(at, 0, line)
     return lines.join(eol)
   }
   const body = text.trimEnd()

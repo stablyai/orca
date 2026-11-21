@@ -179,6 +179,26 @@ describe("a bot's memory history", () => {
     expect(read()).toBe(OLD)
   })
 
+  it('puts a fact a chat lost back above an open code fence the file now ends in', async () => {
+    const { read, turnEnded, write } = bot(OLD)
+    write('```sh\npnpm build\n')
+    await turnEnded()
+    expect(read()).toBe('- 2026-11-01 owner fact\n```sh\npnpm build\n')
+    await turnEnded()
+    expect(read()).toBe('- 2026-11-01 owner fact\n```sh\npnpm build\n')
+  })
+
+  it('undoes a Forget above an open code fence the file now ends in', async () => {
+    const { forget, read, rows, turnEnded, undo, write } = bot(OLD)
+    expect(await forget('owner fact')).toBe(true)
+    write('```sh\npnpm build\n')
+    await turnEnded()
+    const forgot = (await rows()).find((row) => row.change.removed.length > 0)
+
+    expect(await undo(forgot?.id ?? '')).toBe(true)
+    expect(read()).toBe('- 2026-11-01 owner fact\n```sh\npnpm build\n')
+  })
+
   it("deletes rows past 90 days from disk, and every bot's on a host's first use", async () => {
     const { forget, history, later, reopened, stored } = bot(OLD)
     await forget('owner fact')
