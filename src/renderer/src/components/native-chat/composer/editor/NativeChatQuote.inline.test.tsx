@@ -109,7 +109,7 @@ it.each(TABLE)('shows %s the same way when sent', (_name, text, lines) => {
 })
 
 it('marks each sent chip line, so it takes no paragraph gap above or below it', () => {
-  const root = renderSent('above\n\n> a\n\nc1\n\n> b\n\nc2')
+  const root = renderSent('above\n> a\n\nc1\n> b\n\nc2')
   expect(
     [...root.children].map((block) => block.hasAttribute('data-native-chat-quote-line'))
   ).toEqual([false, true, true])
