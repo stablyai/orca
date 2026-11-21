@@ -92,6 +92,7 @@ export function useNativeChatHistoryJump({
       target: NativeChatHistoryJumpTarget,
       signal: AbortSignal
     ): Promise<HistoryJumpResult> => {
+      let superseded = false
       for (let pages = 0; ; pages += 1) {
         if (signal.aborted) {
           return 'aborted'
@@ -104,9 +105,16 @@ export function useNativeChatHistoryJump({
           return 'missing'
         }
         const result = await committedRef.current.loadEarlier()
-        if (signal.aborted || result === 'superseded') {
+        if (signal.aborted) {
           return 'aborted'
         }
+        // A trim or a new read moved the history: page once more from the committed one.
+        if (result === 'superseded' && !superseded) {
+          superseded = true
+          await nextCommit(signal)
+          continue
+        }
+        superseded = false
         if (result !== 'applied') {
           return 'missing'
         }

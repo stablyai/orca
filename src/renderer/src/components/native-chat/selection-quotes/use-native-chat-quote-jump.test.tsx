@@ -37,7 +37,8 @@ function jump(scroller: HTMLDivElement) {
       request: { issue, nextRequestId: () => 7 },
       beginNavigation: vi.fn(),
       readerLeavesEnd: vi.fn(),
-      startHistoryJump
+      startHistoryJump,
+      sessionKey: 'claude:s1'
     })
   )
   return { issue, startHistoryJump, jumpTo: result.current }

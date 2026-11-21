@@ -218,7 +218,8 @@ export function useNativeChatNavigation({
     request,
     beginNavigation,
     readerLeavesEnd,
-    startHistoryJump
+    startHistoryJump,
+    sessionKey
   })
   useNativeChatRailJumpLanding({
     railJump: request.railJump,

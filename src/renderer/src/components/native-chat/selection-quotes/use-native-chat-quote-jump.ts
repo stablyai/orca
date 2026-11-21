@@ -1,4 +1,4 @@
-import { createContext, useCallback, type RefObject } from 'react'
+import { createContext, useCallback, useLayoutEffect, type RefObject } from 'react'
 import { nativeChatSlotIndexOf } from '../conversation/slots/native-chat-transcript-slot-selection'
 import type { NativeChatTranscriptSlot } from '../conversation/slots/native-chat-transcript-slots'
 import type { NativeChatNavigationRequest } from '../viewport/navigation/use-native-chat-transcript-navigation'
@@ -24,7 +24,8 @@ export function useNativeChatQuoteJump({
   request,
   beginNavigation,
   readerLeavesEnd,
-  startHistoryJump
+  startHistoryJump,
+  sessionKey
 }: {
   slots: readonly NativeChatTranscriptSlot[]
   scrollRef: RefObject<HTMLDivElement | null>
@@ -32,10 +33,19 @@ export function useNativeChatQuoteJump({
   beginNavigation: () => void
   readerLeavesEnd: () => void
   startHistoryJump: ReturnType<typeof useNativeChatHistoryJump>['start']
+  /** This chat; a source from another chat is not here, so its jump pages nothing. */
+  sessionKey: string
 }): NativeChatQuoteJump {
   const { issue, nextRequestId } = request
+  // "Add to chat" reads the chat of a quote from its transcript's scroller.
+  useLayoutEffect(() => {
+    scrollRef.current?.setAttribute('data-native-chat-quote-chat', sessionKey)
+  })
   return useCallback(
-    ({ messageId, place }, text, notifyMissing, isCurrent) => {
+    ({ messageId, place, chat }, text, notifyMissing, isCurrent) => {
+      if (chat !== undefined && chat !== sessionKey) {
+        return false
+      }
       beginNavigation()
       let frame = 0
       const showWhenDrawn = (): void => {
@@ -76,6 +86,15 @@ export function useNativeChatQuoteJump({
       })
       return true
     },
-    [beginNavigation, issue, nextRequestId, readerLeavesEnd, scrollRef, slots, startHistoryJump]
+    [
+      beginNavigation,
+      issue,
+      nextRequestId,
+      readerLeavesEnd,
+      scrollRef,
+      sessionKey,
+      slots,
+      startHistoryJump
+    ]
   )
 }

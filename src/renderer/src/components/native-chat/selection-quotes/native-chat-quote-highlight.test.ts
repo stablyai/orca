@@ -4,6 +4,7 @@ import {
   placeRange,
   quotePlace,
   quotedTextRange,
+  quoteSourceOf,
   showQuotedText
 } from './native-chat-quote-highlight'
 
@@ -137,4 +138,16 @@ it('keeps the part of a selection that is in the reply when it starts before the
   const place = quotePlace(reply, range)
   expect(place.offset).toBe(0)
   expect(placeRange(reply, place)?.toString()).toBe('The reply')
+})
+
+it("records the quote's message and the chat of the transcript it is in", () => {
+  document.body.innerHTML =
+    '<div data-native-chat-quote-chat="claude:s1"><p data-native-chat-quote-source="m1">Hello</p></div>' +
+    '<p data-native-chat-quote-source="m2">Hello</p>'
+  const [inChat, alone] = document.querySelectorAll('p')
+  const range = document.createRange()
+  range.selectNodeContents(inChat)
+  expect(quoteSourceOf(inChat, range)).toMatchObject({ messageId: 'm1', chat: 'claude:s1' })
+  range.selectNodeContents(alone)
+  expect(quoteSourceOf(alone, range)).not.toHaveProperty('chat')
 })

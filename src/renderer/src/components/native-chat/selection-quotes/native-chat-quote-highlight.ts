@@ -50,10 +50,18 @@ export function quotePlace(source: Element, range: Range): QuotePlace {
   return { offset: before.toString().length, length: text.length, hash: textHash(text) }
 }
 
-/** The message and the place a selection in `sourceElement` quotes, or null for a message with no id. */
+/**
+ * The message, its chat and the place a selection in `sourceElement` quotes, or null for a message
+ * with no id.
+ */
 export function quoteSourceOf(sourceElement: Element, range: Range): QuoteSource | null {
   const messageId = sourceElement.getAttribute('data-native-chat-quote-source')
-  return messageId ? { messageId, place: quotePlace(sourceElement, range) } : null
+  const chat = sourceElement
+    .closest('[data-native-chat-quote-chat]')
+    ?.getAttribute('data-native-chat-quote-chat')
+  return messageId
+    ? { messageId, place: quotePlace(sourceElement, range), ...(chat ? { chat } : {}) }
+    : null
 }
 
 /** The range at `place` in the text of `root`, while the text there is still the quoted text. */
