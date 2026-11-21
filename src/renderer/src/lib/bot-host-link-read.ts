@@ -28,6 +28,12 @@ export function botHostGeneration(hostId: ExecutionHostId): number {
   return generations.get(hostId) ?? 0
 }
 
+/** The host's comings-back, re-read when it comes back, so a view can retry what failed while it was away. */
+export function useBotHostGeneration(hostId: ExecutionHostId): number {
+  const read = (): number => botHostGeneration(hostId)
+  return useSyncExternalStore(subscribe, read, read)
+}
+
 /** A bots.list read is being sent; its ticket goes to noteBotHostLinkRead once it lands or fails. */
 export function sendBotHostLinkRead(hostId: ExecutionHostId): BotHostLinkReadTicket {
   lastSent += 1
