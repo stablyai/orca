@@ -53,7 +53,7 @@ describe('ModelManager Windows model path handling', () => {
     restoreEnvironment()
   })
 
-  it('migrates existing ready model files from a non-ASCII Windows default cache', async () => {
+  it('migrates a non-ASCII cache and keeps a deleted model gone after restart', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
     try {
       setPlatform('win32')
@@ -66,9 +66,11 @@ describe('ModelManager Windows model path handling', () => {
       const manifest = SPEECH_MODEL_CATALOG.find(
         (model) => model.id === 'zipformer-streaming-zh-14m'
       )
-      expect(manifest?.files).toBeDefined()
-      const legacyModelDir = join(userDataDir, 'speech-models', manifest!.id)
-      for (const file of manifest!.downloadFiles ?? []) {
+      if (!manifest?.files) {
+        throw new Error('Missing speech model fixture')
+      }
+      const legacyModelDir = join(userDataDir, 'speech-models', manifest.id)
+      for (const file of manifest.downloadFiles ?? []) {
         const filePath = join(legacyModelDir, file.name)
         mkdirSync(dirname(filePath), { recursive: true })
         writeFileSync(filePath, '')
@@ -76,56 +78,23 @@ describe('ModelManager Windows model path handling', () => {
       }
 
       const manager = new ModelManager(undefined, openElectronSpeechDownloadRequest)
-      const migratedModelDir = manager.getModelDir(manifest!.id)
-
-      expect(migratedModelDir).not.toContain(userDataDir)
-      // State reads await asynchronous migration.
-      await expect(manager.getModelState(manifest!.id)).resolves.toEqual({
-        id: manifest!.id,
+      await expect(manager.getModelState(manifest.id)).resolves.toEqual({
+        id: manifest.id,
         status: 'ready'
       })
-      for (const file of manifest!.files ?? []) {
+      const migratedModelDir = manager.getModelDir(manifest.id)
+      expect(migratedModelDir).not.toContain(userDataDir)
+      for (const file of manifest.files) {
         expect(existsSync(join(migratedModelDir, file))).toBe(true)
       }
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
-
-  it('deleting a migrated model removes the legacy copy so it is not resurrected on next launch', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
-    try {
-      setPlatform('win32')
-      const programDataDir = join(dir, 'ProgramData')
-      const userDataDir = join(dir, '用户', 'Orca')
-      process.env.PROGRAMDATA = programDataDir
-      appGetPathMock.mockImplementation((name: string) =>
-        name === 'userData' ? userDataDir : join(dir, name)
-      )
-      const manifest = SPEECH_MODEL_CATALOG.find(
-        (model) => model.id === 'zipformer-streaming-zh-14m'
-      )
-      const legacyModelDir = join(userDataDir, 'speech-models', manifest!.id)
-      for (const file of manifest!.downloadFiles ?? []) {
-        const filePath = join(legacyModelDir, file.name)
-        mkdirSync(dirname(filePath), { recursive: true })
-        writeFileSync(filePath, '')
-        truncateSync(filePath, file.sizeBytes)
-      }
-
-      const manager = new ModelManager(undefined, openElectronSpeechDownloadRequest)
-      await expect(manager.getModelState(manifest!.id)).resolves.toEqual({
-        id: manifest!.id,
-        status: 'ready'
-      })
-      await manager.deleteModel(manifest!.id)
+      await manager.deleteModel(manifest.id)
 
       // Deletion must prevent migration from resurrecting the model after restart.
       expect(existsSync(legacyModelDir)).toBe(false)
 
       const restarted = new ModelManager(undefined, openElectronSpeechDownloadRequest)
-      await expect(restarted.getModelState(manifest!.id)).resolves.toEqual({
-        id: manifest!.id,
+      await expect(restarted.getModelState(manifest.id)).resolves.toEqual({
+        id: manifest.id,
         status: 'not-downloaded'
       })
     } finally {

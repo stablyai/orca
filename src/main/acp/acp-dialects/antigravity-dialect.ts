@@ -153,10 +153,14 @@ function promptErrorDetail(error: AcpAgentError): string | undefined {
 // agy 1.5+ retries an empty model reply until it gets output, sending this text each time.
 const RETRY_NOTICE = /^\s*\u26a0 (Model produced invalid output\.)\s*$/
 
-// agy ends a turn whose request outlived its OAuth token with a one-line notice; Orca's server
-// answers a rejected Gemini API key or missing gcloud credentials the same way, as its whole reply.
-const AUTH_FAILURE_NOTICE =
-  /^\s*(?:\u26a0 UNAUTHENTICATED \(code 401\): [^\n]*|API key not valid\. Please pass a valid API key\.|Agent execution error: failed to create Gemini client: [^\n]*)\s*$/
+// Notices that end a turn as failed: agy's when a request outlived its OAuth token, its
+// executor-error line when it couldn't run the turn at all (a rejected Gemini API key, quota, a
+// server error), and the one when it could not rebuild its agent, whose reason may span lines;
+// Orca's server answers a rejected key or missing gcloud credentials the same way.
+const TURN_FAILURE_NOTICE =
+  /^\s*(?:\u26a0 (?:UNAUTHENTICATED \(code 401\)|agent executor error): [^\n]*|API key not valid\. Please pass a valid API key\.|Agent execution error: failed to create Gemini client: [^\n]*|Agent connection was lost and could not be re-established: Failed to rebuild agent: [\s\S]*)\s*$/
+// agy drops a session whose agent it cannot rebuild; later prompts find no session.
+const REBUILD_FAILED = 'Failed to rebuild agent: '
 export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   // With forms, ask_question carries a write-in field per question; permissions cannot carry text.
   clientCapabilities: { elicitation: { form: {} } },
@@ -168,8 +172,16 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   reactiveWakeups: true,
   normalizeToolUpdate,
   promptErrorDetail,
+  sessionLost: (error, sessionId) => {
+    const detail = acpErrorDataWords(error.data)
+    return (
+      detail === `Session not found: ${sessionId}` || detail?.startsWith(REBUILD_FAILED) === true
+    )
+  },
+  // A rebuild that fails mid-turn arrives as a reply notice, and the prompt then ends normally.
+  sessionLostNotice: (notice) => notice.includes(REBUILD_FAILED),
   // Not marked signed out: agy may already hold a refreshed token for the next prompt.
-  notification: (method, params) => acpReplyNoticeFailure(method, params, AUTH_FAILURE_NOTICE),
+  notification: (method, params) => acpReplyNoticeFailure(method, params, TURN_FAILURE_NOTICE),
   providerRetry: (text) => RETRY_NOTICE.exec(text)?.[1],
   // Avoid using the full command line as the tool name.
   toolName: (update) => (update.kind === 'execute' ? 'execute' : undefined),

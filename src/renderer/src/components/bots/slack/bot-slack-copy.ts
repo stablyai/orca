@@ -47,7 +47,7 @@ export function botSlackErrorMessage(code: string, hostName: string | null): str
     case 'not_installed':
       return translate('bots.slack.errors.notInstalled', 'Add this bot to Slack first.')
     case 'signed_out':
-      return translate('bots.slack.errors.signedOut', 'Sign in to Orca to connect Slack.')
+      return translate('bots.slack.errors.signedOut', 'Sign in to Orca Cloud to connect Slack.')
     case 'cloud_unreachable':
       return translate(
         'bots.slack.errors.unreachable',

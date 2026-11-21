@@ -6,14 +6,14 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import type { LayoutEditorView } from '../../../../shared/workspace-layout/editor-tabs/layout-editor-view'
-import type { Store } from '../../../persistence/loading-store/store'
 import { WindowSession } from '../../../persistence/terminal-topology/testing/terminal-topology-window-session-fixture'
 import {
   emptyTerminalSessionProfile,
   FIXTURE_FOLDER_WORKTREE_ID as FOLDER,
   FIXTURE_GIT_WORKTREE_ID as WT,
   openTopologyStore,
-  reopenTopologyStore
+  reopenTopologyStore,
+  closeTrackedTopologyStores
 } from '../../../persistence/terminal-topology/testing/terminal-topology-profile-fixture'
 import { OrcaRuntimeService } from '../../orca-runtime'
 
@@ -32,12 +32,9 @@ const DIFF_VIEW: LayoutEditorView = {
   file: { filePath: '/fixture/local/a.ts', relativePath: 'a.ts', language: 'typescript' }
 }
 const directories: string[] = []
-const stores: Store[] = []
 
 afterEach(async () => {
-  for (const store of stores.splice(0)) {
-    await store.freezeWritesAsync()
-  }
+  await closeTrackedTopologyStores()
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }
@@ -47,7 +44,6 @@ async function harness() {
   const directory = mkdtempSync(join(tmpdir(), 'orca-editor-view-apply-'))
   directories.push(directory)
   const store = await openTopologyStore(directory, emptyTerminalSessionProfile())
-  stores.push(store)
   const window = new WindowSession(getDefaultWorkspaceSession())
   window.addTab(WT, 'term-1', '11111111-1111-4111-8111-111111111111')
   window.addTab(FOLDER, 'term-2', '22222222-2222-4222-8222-222222222222')
@@ -94,7 +90,6 @@ describe("main's Store apply keeps an editor tab's in-memory view", () => {
     await runtime.applyLayoutCommand({ ...openDiff('d2'), preview: undefined })
     expect(JSON.stringify(store.getWorkspaceSession())).not.toContain('view-only-marker')
     const reopened = await reopenTopologyStore(store, directory)
-    stores.push(reopened)
     expect(JSON.stringify(reopened.getWorkspaceSession())).not.toContain('view-only-marker')
     subscription.unsubscribe()
   })

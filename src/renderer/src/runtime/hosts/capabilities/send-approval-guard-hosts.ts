@@ -1,4 +1,4 @@
-import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId
@@ -7,20 +7,20 @@ import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/
 import { TERMINAL_SEND_APPROVAL_GUARD_RUNTIME_CAPABILITY } from '../../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 
 let cached: {
-  statuses: AppState['runtimeStatusByEnvironmentId'] | null
+  statuses: RuntimeStatuses | null
   key: string
   ids: ReadonlySet<string>
 } = { statuses: null, key: '', ids: new Set() }
 
 /** Paired hosts whose send guard refuses mid-turn agents that hide approvals; stable identity while that set is unchanged. */
 export function selectSendApprovalGuardEnvironmentIds(
-  runtimeStatusByEnvironmentId: AppState['runtimeStatusByEnvironmentId']
+  statuses: RuntimeStatuses
 ): ReadonlySet<string> {
-  if (runtimeStatusByEnvironmentId === cached.statuses) {
+  if (statuses === cached.statuses) {
     return cached.ids
   }
   const ids: string[] = []
-  for (const [environmentId, entry] of runtimeStatusByEnvironmentId) {
+  for (const [environmentId, entry] of statuses) {
     if (
       lastVerifiedRuntimeStatus(entry)?.capabilities?.includes(
         TERMINAL_SEND_APPROVAL_GUARD_RUNTIME_CAPABILITY
@@ -31,7 +31,7 @@ export function selectSendApprovalGuardEnvironmentIds(
   }
   const key = ids.sort().join('\n')
   cached = {
-    statuses: runtimeStatusByEnvironmentId,
+    statuses,
     key,
     ids: key === cached.key ? cached.ids : new Set(ids)
   }

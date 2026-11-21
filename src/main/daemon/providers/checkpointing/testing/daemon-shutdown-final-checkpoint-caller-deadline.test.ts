@@ -159,34 +159,6 @@ describe('STA-4228 keep-history stop bounds only the caller wait on the final ch
     return `${restore?.scrollbackAnsi ?? ''}${restore?.snapshotAnsi ?? ''}`
   }
 
-  it('lets a later keep-history stop settle while an earlier final checkpoint is wedged', async () => {
-    const wedgedId = await spawnWithOutput('wedged-session', 'WEDGED_OUTPUT\r\n')
-    const laterId = await spawnWithOutput('later-session', 'LATER_OUTPUT\r\n')
-    const stall = stallCheckpointFor(wedgedId)
-
-    expect(
-      await withinBudget(rejectionOf(stopKeepingHistory(wedgedId)), STOP_BUDGET_MS)
-    ).toBeInstanceOf(FinalCheckpointWaitExpiredError)
-    // Start the second stop while the abandoned checkpoint still owns the exclusive tail.
-    expect(
-      await withinBudget(rejectionOf(stopKeepingHistory(laterId)), STOP_BUDGET_MS)
-    ).toBeInstanceOf(FinalCheckpointWaitExpiredError)
-    stall.release()
-  }, 30_000)
-
-  it('leaves the unverified pty alive instead of falling through to the kill', async () => {
-    const wedgedId = await spawnWithOutput('alive-session', 'ALIVE_OUTPUT\r\n')
-    const stall = stallCheckpointFor(wedgedId)
-
-    expect(
-      await withinBudget(rejectionOf(stopKeepingHistory(wedgedId)), STOP_BUDGET_MS)
-    ).toBeInstanceOf(FinalCheckpointWaitExpiredError)
-
-    expect(await adapter.probePtyLiveness(wedgedId)).toBe(true)
-    expect(adapter.hasPty(wedgedId)).toBe(true)
-    stall.release()
-  }, 30_000)
-
   it('still commits every abandoned final checkpoint once the wedged history write completes', async () => {
     const wedgedId = await spawnWithOutput('committing-session', 'COMMITTING_OUTPUT\r\n')
     const laterId = await spawnWithOutput('queued-session', 'QUEUED_OUTPUT\r\n')
@@ -198,6 +170,9 @@ describe('STA-4228 keep-history stop bounds only the caller wait on the final ch
     expect(
       await withinBudget(rejectionOf(stopKeepingHistory(laterId)), STOP_BUDGET_MS)
     ).toBeInstanceOf(FinalCheckpointWaitExpiredError)
+
+    expect(await adapter.probePtyLiveness(wedgedId)).toBe(true)
+    expect(adapter.hasPty(wedgedId)).toBe(true)
 
     stall.release()
     await vi.waitFor(async () => {

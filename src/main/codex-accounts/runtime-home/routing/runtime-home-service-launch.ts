@@ -153,6 +153,8 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     await this.startLegacyWslAuthDrain(wslTarget, { throwOnFailure: true })
     // Codex must start on linked history (and the guest's sqlite_home line) in this home.
     await this.prepareWslAccountHistory(wslTarget, homePath)
+    // WSL moves aren't counted, but an install with only WSL homes still reports how many.
+    this.accountHistoryPasses.reportMoves()
     this.finishWslLaunchPreparation(wslTarget, homePath)
     return homePath
   }

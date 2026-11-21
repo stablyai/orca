@@ -1,6 +1,6 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createAcpModelCatalogProbe,
@@ -8,11 +8,7 @@ import {
 } from '../acp/discovery/acp-model-catalog-probe'
 import { resolveAcpLaunchInvocation } from '../acp/launch/acp-structured-launch-resolution'
 import { ANTIGRAVITY_LAUNCH_SPEC } from './antigravity-acp-launch-spec'
-import {
-  antigravityHostAccountHome,
-  hasAgyCredential,
-  isCompatibleAntigravityHostAcp
-} from './antigravity-host-acp'
+import { antigravityHostAccountHome, isCompatibleAntigravityHostAcp } from './antigravity-host-acp'
 
 const homes: string[] = []
 afterEach(() => {
@@ -41,17 +37,6 @@ describe('isCompatibleAntigravityHostAcp', () => {
     expect(isCompatibleAntigravityHostAcp(agyInitialize({ antigravity: { tier: true } }))).toBe(
       false
     )
-  })
-})
-
-describe('hasAgyCredential', () => {
-  it('leaves a keyring-fallback marker to the ACP readiness probe', async () => {
-    const home = mkdtempSync(join(tmpdir(), 'agy-home-'))
-    homes.push(home)
-    const marker = join(home, '.gemini/antigravity-cli/cache/antigravity-keyring-unavailable')
-    mkdirSync(dirname(marker), { recursive: true })
-    writeFileSync(marker, '1794977777')
-    await expect(hasAgyCredential(home)).resolves.toBe(true)
   })
 })
 

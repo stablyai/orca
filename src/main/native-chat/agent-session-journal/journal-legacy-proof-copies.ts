@@ -4,7 +4,8 @@ import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
 import type { LegacyProofCursor, LegacyProofPage } from './journal-legacy-source-proof'
 import {
   journalLegacyCopySourceKey,
-  journalLegacyFailureKey
+  journalLegacyFailureKey,
+  readJournalLegacyFailure
 } from './database/journal-legacy-source'
 import {
   JOURNAL_LEGACY_COMPARE,
@@ -61,7 +62,8 @@ function assertNoLegacyFailures(source: Database.Database, store: Database.Datab
   for (const row of store
     .prepare('SELECT key FROM agent_session_store_meta WHERE key>? AND key<?')
     .iterate(prefix, prefixEnd(prefix))) {
-    if (held.get(String(row.key).slice(prefix.length))?.held) {
+    const id = String(row.key).slice(prefix.length)
+    if (held.get(id)?.held || readJournalLegacyFailure(store, id)?.claims) {
       throw new JournalLegacyRetentionError(
         'an older Orca chat could not be kept in this store',
         'source-failed'

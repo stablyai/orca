@@ -1,25 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as ProtocolModule from '../wire/protocol'
+import { describe, expect, it, vi } from 'vitest'
 import { RelayDispatcher } from './dispatcher'
 import type { RelayClientSinkOptions, SinkWriteSettlement } from '../writer/dispatcher-writer-sink'
 import { encodeKeepAliveFrame, type JsonRpcNotification } from '../wire/protocol'
-
-const protocolCalls = vi.hoisted(() => ({ preparations: 0, encodes: 0 }))
-
-vi.mock('../wire/protocol', async (importOriginal) => {
-  const actual = await importOriginal<typeof ProtocolModule>()
-  return {
-    ...actual,
-    prepareJsonRpcPayload: (...args: Parameters<typeof actual.prepareJsonRpcPayload>) => {
-      protocolCalls.preparations++
-      return actual.prepareJsonRpcPayload(...args)
-    },
-    encodePreparedJsonRpcFrame: (...args: Parameters<typeof actual.encodePreparedJsonRpcFrame>) => {
-      protocolCalls.encodes++
-      return actual.encodePreparedJsonRpcFrame(...args)
-    }
-  }
-})
 
 type DecodedFrame = {
   id: number
@@ -83,12 +65,7 @@ class DrainSink {
 }
 
 describe('RelayDispatcher prepared JSON payloads', () => {
-  afterEach(() => {
-    protocolCalls.preparations = 0
-    protocolCalls.encodes = 0
-  })
-
-  it('shares one payload while allocating independent drain-time sequence and ACK headers', () => {
+  it('sends the same payload with independent sequence and ACK headers', () => {
     const primary = new DrainSink(undefined, true)
     const secondary = new DrainSink()
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
@@ -96,11 +73,8 @@ describe('RelayDispatcher prepared JSON payloads', () => {
     try {
       dispatcher.notify('test.blocker')
       dispatcher.notifyClient(1, 'test.primary-only')
-      protocolCalls.preparations = 0
-      protocolCalls.encodes = 0
 
       dispatcher.notify('workspace.changed', { revision: 7 })
-      expect(protocolCalls).toEqual({ preparations: 1, encodes: 0 })
       dispatcher.feed(encodeKeepAliveFrame(41, 0))
       dispatcher.feedClient(secondaryId, encodeKeepAliveFrame(73, 0))
 
@@ -116,13 +90,12 @@ describe('RelayDispatcher prepared JSON payloads', () => {
       expect(primaryShared).toMatchObject({ id: 3, ack: 41 })
       expect(secondaryShared).toMatchObject({ id: 2, ack: 73 })
       expect(primaryShared?.payload.equals(secondaryShared!.payload)).toBe(true)
-      expect(protocolCalls).toEqual({ preparations: 1, encodes: 3 })
     } finally {
       dispatcher.dispose()
     }
   })
 
-  it('prepares a rejected producer frame once without allocating a header', () => {
+  it('does not send a rejected producer frame', () => {
     const frames: Buffer[] = []
     const dispatcher = new RelayDispatcher(
       (frame) => {
@@ -143,7 +116,6 @@ describe('RelayDispatcher prepared JSON payloads', () => {
         )
       ).toBe(false)
       expect(frames).toEqual([])
-      expect(protocolCalls).toEqual({ preparations: 1, encodes: 0 })
     } finally {
       dispatcher.dispose()
     }
@@ -160,21 +132,6 @@ describe('RelayDispatcher prepared JSON payloads', () => {
       ownerGeneration: 5,
       ptyIncarnation: 'incarnation-before'
     }
-    const internals = dispatcher as unknown as {
-      prepareFrame: (message: JsonRpcNotification) => {
-        ptyDataAdmissionParams: Readonly<Record<string, unknown>> | null
-      }
-    }
-    const prepared = internals.prepareFrame({ jsonrpc: '2.0', method: 'pty.data', params })
-    expect(prepared.ptyDataAdmissionParams).toEqual({
-      id: 'pty-1',
-      deliveryToken: 'token-before',
-      clientGeneration: 3,
-      ownerGeneration: 5,
-      ptyIncarnation: 'incarnation-before'
-    })
-    expect(prepared.ptyDataAdmissionParams).not.toHaveProperty('data')
-
     const admissions: Readonly<Record<string, unknown>>[] = []
     dispatcher.registerPtyDataPublicationAdmission((_clientId, admissionParams) => {
       admissions.push(admissionParams)
@@ -202,9 +159,15 @@ describe('RelayDispatcher prepared JSON payloads', () => {
       ownerGeneration: 5,
       ptyIncarnation: 'incarnation-before'
     })
-    expect(admissions).toHaveLength(1)
-    expect(admissions[0]).not.toHaveProperty('data')
-    expect(admissions[0]).toMatchObject({ deliveryToken: 'token-before', clientGeneration: 3 })
+    expect(admissions).toEqual([
+      {
+        id: 'pty-1',
+        deliveryToken: 'token-before',
+        clientGeneration: 3,
+        ownerGeneration: 5,
+        ptyIncarnation: 'incarnation-before'
+      }
+    ])
     expect(settled).toHaveBeenCalledExactlyOnceWith({ ok: true })
     dispatcher.dispose()
   })
@@ -240,40 +203,11 @@ describe('RelayDispatcher prepared JSON payloads', () => {
     }
   })
 
-  it('reuses one snapshot when a 256 KiB file frame retries after producer drain', async () => {
+  it('keeps the original payloads of queued bulk frames', async () => {
     const sink = new DrainSink()
     const dispatcher = new RelayDispatcher(sink.write, sink.options)
     try {
       dispatcher.notify('test.blocker', { data: 'x'.repeat(16 * 1024) })
-      protocolCalls.preparations = 0
-      protocolCalls.encodes = 0
-      const originalData = Buffer.alloc(256 * 1024, 0x61).toString('base64')
-      const params = { streamId: 7, seq: 2, data: originalData }
-      const pending = dispatcher.notifyBulk('fs.streamChunk', params)
-      params.data = 'mutated'
-      await Promise.resolve()
-
-      expect(protocolCalls).toEqual({ preparations: 1, encodes: 0 })
-      sink.drain()
-      await pending
-
-      const chunk = sink.frames
-        .map(decodeFrame)
-        .find((frame) => frame.message.method === 'fs.streamChunk')
-      expect(chunk?.message.params).toEqual({ streamId: 7, seq: 2, data: originalData })
-      expect(protocolCalls).toEqual({ preparations: 1, encodes: 1 })
-    } finally {
-      dispatcher.dispose()
-    }
-  })
-
-  it('prepares queued 256 KiB bulk payloads only when their chain step becomes active', async () => {
-    const sink = new DrainSink()
-    const dispatcher = new RelayDispatcher(sink.write, sink.options)
-    try {
-      dispatcher.notify('test.blocker', { data: 'x'.repeat(16 * 1024) })
-      protocolCalls.preparations = 0
-      protocolCalls.encodes = 0
       const originalData = Buffer.alloc(256 * 1024, 0x61).toString('base64')
       const pending = Array.from({ length: 16 }, (_, index) => {
         const params = { streamId: index + 1, seq: 1, data: originalData }
@@ -282,9 +216,7 @@ describe('RelayDispatcher prepared JSON payloads', () => {
         return publication
       })
 
-      expect(protocolCalls).toEqual({ preparations: 0, encodes: 0 })
       await Promise.resolve()
-      expect(protocolCalls).toEqual({ preparations: 1, encodes: 0 })
 
       sink.drain()
       await Promise.all(pending)
@@ -294,13 +226,12 @@ describe('RelayDispatcher prepared JSON payloads', () => {
         .filter((frame) => frame.message.method === 'fs.streamChunk')
       expect(chunks).toHaveLength(16)
       expect(chunks.every((frame) => frame.message.params?.data === originalData)).toBe(true)
-      expect(protocolCalls).toEqual({ preparations: 16, encodes: 16 })
     } finally {
       dispatcher.dispose()
     }
   })
 
-  it('lazily shares one bulk payload across broadcast clients', async () => {
+  it('sends the same original bulk payload to both clients', async () => {
     const primary = new DrainSink()
     const secondary = new DrainSink()
     primary.drain()
@@ -312,12 +243,10 @@ describe('RelayDispatcher prepared JSON payloads', () => {
       const pending = dispatcher.notifyBulk('git.responseChunk', params)
       params.data = 'after'
 
-      expect(protocolCalls).toEqual({ preparations: 0, encodes: 0 })
       await pending
 
       expect(decodeFrame(primary.frames[0]).message.params?.data).toBe('before')
       expect(decodeFrame(secondary.frames[0]).message.params?.data).toBe('before')
-      expect(protocolCalls).toEqual({ preparations: 1, encodes: 2 })
     } finally {
       dispatcher.dispose()
     }

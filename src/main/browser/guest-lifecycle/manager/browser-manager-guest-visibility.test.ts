@@ -60,7 +60,7 @@ describe('browserManager', () => {
     vi.useRealTimers()
   })
 
-  it.each<string>(['acquire'])('cleans capture ownership after renderer %s fails', (failure) => {
+  it('cleans capture ownership after the renderer fails to acquire it', () => {
     vi.useFakeTimers()
     const guest = {
       ...guestNavigationMethods(),
@@ -91,21 +91,10 @@ describe('browserManager', () => {
       webContentsId: guest.id,
       rendererWebContentsId
     })
-    const fail = (): never => {
+    renderer.setBackgroundThrottling.mockImplementationOnce(() => {
       throw new Error('renderer unavailable')
-    }
-    if (failure === 'release') {
-      const release = browserManager.holdPaintForCapture(guest.id)
-      renderer.send.mockImplementationOnce(fail)
-      expect(release).not.toThrow()
-    } else if (failure === 'notify') {
-      renderer.send.mockImplementationOnce(fail)
-      const release = browserManager.holdPaintForCapture(guest.id)
-      expect(release).not.toThrow()
-    } else {
-      renderer.setBackgroundThrottling.mockImplementationOnce(fail)
-      expect(() => browserManager.holdPaintForCapture(guest.id)).toThrow('renderer unavailable')
-    }
+    })
+    expect(() => browserManager.holdPaintForCapture(guest.id)).toThrow('renderer unavailable')
     vi.runAllTimers()
     expect(guest.setBackgroundThrottling.mock.calls).toEqual([[false], [true]])
 

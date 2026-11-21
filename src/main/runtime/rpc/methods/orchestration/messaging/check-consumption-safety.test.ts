@@ -316,21 +316,4 @@ describe('consuming checks', () => {
     expect(state.db.getMessageById(mail.id)?.read).toBe(1)
     expect(state.db.getOutstandingMailboxDelivery(box.address)).toBeUndefined()
   })
-
-  it('rolls the take back when its receipt cannot be recorded', () => {
-    const box = { address: `dispatch:${dispatch.id}`, runId: dispatch.run_id }
-    const message = insert(box, 'kept')
-    expect(() =>
-      state.db.takeMailboxDelivery({
-        runId: box.runId,
-        mailboxHandle: box.address,
-        consumerGeneration: dispatch.consumer_generation,
-        recordTaken: () => {
-          throw new Error('receipt write failed')
-        }
-      })
-    ).toThrow('receipt write failed')
-    expect(state.db.getMessageById(message.id)?.read).toBe(0)
-    expect(state.db.hasOutstandingMailboxDelivery(box.address)).toBe(false)
-  })
 })

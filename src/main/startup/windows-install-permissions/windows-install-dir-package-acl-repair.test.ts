@@ -80,20 +80,6 @@ describe('repairWindowsInstallDirPackageAcl', () => {
     runProcessSyncMock.mockClear()
   })
 
-  it('runs once and then never grants again for the same install and version', async () => {
-    const userDataPath = userDataDir()
-    const first = fakePackageGrant()
-    await repair({ userDataPath, grants: first.grants })
-    expect(first.passes).toHaveLength(2)
-
-    resetWindowsInstallDirAclRepairForTest()
-    const second = fakePackageGrant()
-    const { result, data } = await repair({ userDataPath, grants: second.grants })
-    expect(second.passes).toHaveLength(0)
-    expect(result).toEqual({ mode: 'marker-hit', alreadyRepaired: true })
-    expect(data.reason).toBe('marker-hit')
-  })
-
   it('re-runs after an update and after a reinstall to another directory', async () => {
     const userDataPath = userDataDir()
     await repair({ userDataPath })
@@ -150,14 +136,17 @@ describe('repairWindowsInstallDirPackageAcl', () => {
     resetWindowsInstallDirAclRepairForTest()
     await repair({ userDataPath, grants: deniedGrant().grants })
     resetWindowsInstallDirAclRepairForTest()
-    expect((await repair({ userDataPath })).result).toEqual({ mode: 'repaired' })
+    const repaired = fakePackageGrant()
+    expect((await repair({ userDataPath, grants: repaired.grants })).result).toEqual({
+      mode: 'repaired'
+    })
+    expect(repaired.passes.map(({ pass }) => pass)).toEqual(['root', 'tree'])
 
     resetWindowsInstallDirAclRepairForTest()
     const after = fakePackageGrant()
-    expect((await repair({ userDataPath, grants: after.grants })).result).toEqual({
-      mode: 'marker-hit',
-      alreadyRepaired: true
-    })
+    const { result, data } = await repair({ userDataPath, grants: after.grants })
+    expect(result).toEqual({ mode: 'marker-hit', alreadyRepaired: true })
+    expect(data.reason).toBe('marker-hit')
     expect(after.passes).toHaveLength(0)
   })
 })

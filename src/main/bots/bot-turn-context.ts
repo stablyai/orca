@@ -35,6 +35,7 @@ import { botContextNoteBody, type BotContextChange } from '../../shared/bots/bot
 import { readBotHomeFiles } from './bot-preamble'
 import type { BotHomeFilesystem } from './bot-home'
 import { type BotMemoryRecord, createBotMemoryRecord, tagBotMemoryFile } from './bot-memory-record'
+import { readdGuard } from './bot-memory-readd-guard'
 
 import { writeBotTurnMemoryReceipt } from './bot-turn-memory-receipt'
 
@@ -54,7 +55,7 @@ const NO_FIRST_RUN: BotFirstRun = { rules: () => null, ownerTurnEnded: () => {} 
 
 export function createBotTurnContext(
   fs: Pick<BotHomeFilesystem, 'readText' | 'replaceText' | 'writeText'> &
-    Partial<Pick<BotHomeFilesystem, 'listNames' | 'statFile'>>,
+    Partial<Pick<BotHomeFilesystem, 'listNames' | 'statFile' | 'makeDirectory'>>,
   /** A new bot's first run in a session: its rules ride each turn there, until the owner's turn ends. */
   firstRun: BotFirstRun = NO_FIRST_RUN,
   /** Any conversation's rows, so a turn end hears of outside turns still running beside it. */
@@ -67,7 +68,7 @@ export function createBotTurnContext(
   /** Each bot's MEMORY.md as Orca last recorded it, which Forget also updates. */
   record: Pick<
     BotMemoryRecord,
-    'started' | 'version' | 'changedBesides' | 'after' | 'noted'
+    'started' | 'version' | 'changedBesides' | 'after' | 'noted' | 'history'
   > = createBotMemoryRecord(fs),
   linkedSkills: BotTurnLinkedSkills = NO_BOT_TURN_LINKED_SKILLS,
   /** What the bot's other chats did lately, as this turn's message may hear of it. */
@@ -266,7 +267,8 @@ export function createBotTurnContext(
             }
             // Not known yet: everything in the file is new.
             const before = recorded ?? ''
-            const tagged = await tagBotMemoryFile(fs, entry.folder, before, label)
+            const keepOut = await readdGuard(fs, entry, record, turn)
+            const tagged = await tagBotMemoryFile(fs, entry.folder, before, label, keepOut)
             await writeBotTurnMemoryReceipt(
               {
                 botId: entry.botId,
@@ -300,8 +302,8 @@ export function createBotTurnContext(
             const changed =
               memoryAtStart !== null &&
               memory !== memoryAtStart &&
-              // Not when facts were put back: its next turn is sent them.
-              tagged.kept.added.length === 0 &&
+              // Not when facts were put back or kept out: its next turn is sent them.
+              isEmptyBotMemoryChange(tagged.kept) &&
               edited
             const ranAlone = changed && (await alone())
             const now = given.get(sessionId) ?? entry

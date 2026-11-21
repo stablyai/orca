@@ -1,12 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
 import { createTestStore } from '../../testing/app-store-test-fixture'
+import { pairedHostStatuses } from '@/lib/bot-host-capability.test-fixture'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/bot-catalog-snapshot', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   readBots: () => [
-    { id: 'bot-1', hostId: 'local', folderWorkspaceId: 'bot-home', chatSessionId: 'home' }
+    { id: 'bot-1', hostId: 'local', folderWorkspaceId: 'bot-home', chatSessionId: 'home' },
+    { id: 'bot-1', hostId: 'runtime:new', folderWorkspaceId: 'bot-home', chatSessionId: 'home' },
+    { id: 'bot-1', hostId: 'runtime:old', folderWorkspaceId: 'bot-home', chatSessionId: 'home' }
   ]
 }))
 
@@ -48,29 +52,27 @@ describe('pinning on a bot page', () => {
     expect(pinned(store, 'other-chat')).toBe(true)
   })
 
-  it('keeps paired and SSH chat pinning unchanged even in a workspace with the same id', () => {
+  it('refuses side chats only on paired servers that keep the Home rule', () => {
     const store = createTestStore()
-    store.getState().createUnifiedTab(BOT_PAGE, 'agent-session', {
-      id: 'paired',
-      entityId: 'side-session',
-      executionHostId: 'runtime:paired',
-      label: 'Side'
+    store.setState({
+      runtimeStatusByEnvironmentId: pairedHostStatuses({ new: ['bots.home-pin.v1'], old: [] })
     })
-    store.getState().createUnifiedTab(BOT_PAGE, 'agent-session', {
-      id: 'ssh',
-      entityId: 'side-session',
-      executionHostId: 'ssh:server',
-      label: 'Side'
-    })
-    store.getState().createUnifiedTab(BOT_PAGE, 'agent-session', {
-      id: 'unknown-owner',
-      entityId: 'side-session',
-      label: 'Side'
-    })
-    store.getState().pinTab('paired')
-    store.getState().pinTab('ssh')
-    store.getState().pinTab('unknown-owner')
-    expect(pinned(store, 'paired')).toBe(true)
+    const chat = (id: string, executionHostId?: ExecutionHostId) =>
+      store.getState().createUnifiedTab(BOT_PAGE, 'agent-session', {
+        id,
+        entityId: 'side-session',
+        ...(executionHostId ? { executionHostId } : {}),
+        label: 'Side'
+      })
+    chat('new-server', 'runtime:new')
+    chat('old-server', 'runtime:old')
+    chat('ssh', 'ssh:server')
+    chat('unknown-owner')
+    for (const id of ['new-server', 'old-server', 'ssh', 'unknown-owner']) {
+      store.getState().pinTab(id)
+    }
+    expect(pinned(store, 'new-server')).toBe(false)
+    expect(pinned(store, 'old-server')).toBe(true)
     expect(pinned(store, 'ssh')).toBe(true)
     expect(pinned(store, 'unknown-owner')).toBe(true)
   })

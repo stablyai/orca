@@ -81,7 +81,7 @@ function settled(
 const BOTH = settled([
   { kind: 'chat', agent: 'codex' },
   { kind: 'chat', agent: 'claude' },
-  { kind: 'chat', agent: 'gemini' }
+  { kind: 'chat', agent: 'aider' }
 ])
 
 function openMenu(model: NewTabAgentMenuModel = BOTH, forBot: Bot = bot): void {
@@ -205,6 +205,14 @@ describe('botNewChatAgents', () => {
     ])
   })
 
+  it('reports an agent’s unavailable chat even when its CLI row comes first', () => {
+    const model = settled([
+      { kind: 'cli', agent: 'claude' },
+      { kind: 'chat-unavailable', agent: 'claude', reason: 'ssh' }
+    ])
+    expect(botNewChatAgents(bot, model)).toEqual([{ agent: 'claude', unavailable: 'ssh' }])
+  })
+
   it('keeps the bot’s own agent before and after discovering other installed agents', () => {
     const current = { agent: 'opencode' } as const
     expect(botNewChatAgents(current, { state: 'loading' })).toEqual([{ agent: 'opencode' }])
@@ -224,7 +232,7 @@ describe('botAgentChoices', () => {
   const model = settled([
     { kind: 'chat', agent: 'codex' },
     { kind: 'chat', agent: 'opencode' },
-    { kind: 'chat', agent: 'kimi' }
+    { kind: 'chat', agent: 'aider' }
   ])
 
   it('keeps the bot’s current agent even when this computer lacks it', () => {

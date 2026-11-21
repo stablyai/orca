@@ -1,6 +1,7 @@
 // Every way a picture comes in (file chooser, paste, drop) ends as one Blob cropped to a 512 px PNG.
 import { BOT_AVATAR_SOURCE_TYPES, MAX_BOT_AVATAR_SOURCE_BYTES } from '../../../../shared/bot-avatar'
-import { BOT_AVATAR_TOO_SMALL, squareAvatarPng } from './bot-avatar-upload'
+import { BOT_AVATAR_TOO_SMALL } from '../../../../shared/bots/bot-avatar-square'
+import { squareAvatarPng } from './bot-avatar-upload'
 
 /** Why a pasted or dropped picture was not used. */
 export type BotAvatarIntakeError = 'too_big' | 'type' | 'too_small'

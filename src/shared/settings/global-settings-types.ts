@@ -271,6 +271,14 @@ export type GlobalSettings = GlobalSettingsBase & {
   floatingTerminalEnabled: boolean
   /** Main-side new-page kill switch for paired Electron client-hosted browser placement. */
   browserClientHostedRemoteEnabled?: boolean
+  /** Main-side kill switch for Orca's copy of agy. Off, it runs no chat and isn't updated: new
+   *  chats use the user's own signed-in agy or Orca's server, and chats already on agy run the
+   *  user's own agy (same history) or, where there is none, refuse as agy not found. Absent means on. */
+  antigravityManagedAgyEnabled?: boolean
+  /** How chats on the Google account method sign in: agy's own login, or Orca's built-in sign-in
+   *  on Google's ACP server. Absent or 'auto': the server where Orca's sign-in is already in use,
+   *  else agy. */
+  antigravityGoogleSignIn?: 'auto' | 'agy' | 'orca'
   /** Browser profile new tabs in a workspace use; missing = 'shared' (the Default profile). */
   browserProfileScope?: BrowserProfileScope
   /** Profile new tabs use per browser host when no repo/workspace profile applies; missing = Default. */

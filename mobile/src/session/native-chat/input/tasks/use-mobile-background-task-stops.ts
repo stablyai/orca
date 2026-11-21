@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { triggerSelection } from '../../../../platform/haptics/haptics'
 import {
   structuredSessionConfirmedStopsStillListed,
   structuredSessionListedTaskRun
@@ -35,6 +36,7 @@ export function useMobileBackgroundTaskStops(
     if (taskId ? current.taskIds.has(taskId) : current.all) {
       return
     }
+    triggerSelection()
     // A provider may reuse the row's id for the task's next run, which this Stop did not end.
     const run = taskId ? structuredSessionListedTaskRun(view, taskId) : null
     updateStopping({
