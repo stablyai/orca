@@ -259,15 +259,16 @@ Old runtimes that predate these existing fields may ignore them; verify with `wo
 ## Terminals
 
 When `orcaTabId: <id>` came from a terminal tab, run `ORCA terminal list --json` in the relevant
-worktree and match the full ID exactly against `terminals[].unifiedTabId`. Locally created
-terminal tabs normally use UUID v4 IDs. Copy Tab ID preserves the tab's ID exactly, so keep
-every character. Other tab types and mirrored or caller-supplied terminal tabs can use different
-ID formats. The terminal `handle` is a different ID. For rows missing
-`unifiedTabId`, try an exact `tabId` match. If the result has `truncated: true`, rerun the same
-command with `--limit <totalCount>` from the result before reporting that the ID could not be
-resolved. Read the matching pane with
+worktree. If the result has `truncated: true`, rerun it with `--limit <totalCount>` before
+choosing a pane or deciding there is no match. Then match the full ID exactly against
+`terminals[].unifiedTabId`. Locally created terminal tabs normally use UUID v4 IDs. Copy Tab ID
+preserves the tab's ID exactly, so keep every character. Other tab types and mirrored or
+caller-supplied terminal tabs can use different ID formats. The terminal `handle` is a different
+ID. If `unifiedTabId` is missing, this runtime cannot reliably map the copied workspace tab ID;
+`tabId` identifies the backing terminal tab and is not a dependable fallback. Read the matching
+pane with
 `ORCA terminal read --terminal <handle> --json` using its `handle`. If multiple panes share
-the tab ID, use `--include-visual-layouts` on the list command to identify the intended pane.
+the tab ID, use `--include-visual-layouts` on the complete list to identify the intended pane.
 
 Common commands:
 
