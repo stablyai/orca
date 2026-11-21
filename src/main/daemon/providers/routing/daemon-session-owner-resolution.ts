@@ -180,6 +180,10 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
     return this.routeIncarnations.get(sessionId)
   }
 
+  hasRoute(sessionId: string): boolean {
+    return this.routes.has(sessionId)
+  }
+
   getVerifiedRoute(sessionId: string): IPtyProvider | undefined {
     return this.routeIncarnations.has(sessionId) ? this.routes.get(sessionId) : undefined
   }

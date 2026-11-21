@@ -67,6 +67,12 @@ export async function attemptStablePaneAttach(
       // Main-started views reuse the bound ID and its terminal history.
       throw new Error(PANE_NOT_LIVE_ERROR)
     }
+    // A newer daemon may still run this id; keep its binding rather than retire it for a fresh start.
+    // The attach above already searched every compatible daemon and found it absent.
+    const held = provider.refuseHeldSpawn?.({ sessionId: owner.ptyId, ownerSearched: true })
+    if (held) {
+      await held
+    }
     // The adoption holds the pane's reservation, so its fresh bind can swap the dead binding.
     const kept = args.keepAbsentBinding ? keepAbsentPaneBindingForSwap(args, owner) : null
     if (kept) {

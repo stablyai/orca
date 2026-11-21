@@ -3,10 +3,18 @@ import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
+import {
+  attachHeldSession,
+  HeldOwnerAdmissions,
+  heldSessionId,
+  heldSpawnRefusal,
+  resolveHeldOwner
+} from './daemon-router-newer-daemon-hold'
 
 export class DegradedDaemonOwnerRecovery {
   private readonly attachResolver: DaemonSessionOwnerResolver<IPtyProvider>
   private readonly livenessResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>
+  private readonly heldOwners = new HeldOwnerAdmissions()
 
   constructor(
     providers: readonly IPtyProvider[],
@@ -21,9 +29,38 @@ export class DegradedDaemonOwnerRecovery {
   resolveFencedOwner = (id: string, incarnationId: string) =>
     this.attachResolver.resolveTermination(id, incarnationId)
 
+  /** The newer-daemon hold, which the fallback's fresh starts would otherwise skip. */
+  refuseHeldSpawn = heldSpawnRefusal(
+    (id) => this.livenessResolver.hasRoute(id),
+    async (opts) => {
+      const owner = await this.resolveHeldOwner(opts.sessionId)
+      if (owner) {
+        this.heldOwners.admit(opts.sessionId, owner)
+      }
+    }
+  )
+
+  private resolveHeldOwner = (sessionId: string) =>
+    resolveHeldOwner(sessionId, this.livenessResolver, this.daemonAdapters)
+
   spawn = async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
     if (opts.attachOnly && opts.sessionId) {
       return await this.attachResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
+    }
+    const heldId = heldSessionId(opts, false)
+    // A saved id routed to a daemon is attached under the hold too; one routed to the fallback is this run's own.
+    const routed = heldId ? this.routes.get(heldId) : undefined
+    const routedDaemon = this.daemonAdapters.find((adapter) => adapter === routed)
+    const owner =
+      heldId && (!routed || routedDaemon)
+        ? (routedDaemon ?? this.heldOwners.take(heldId) ?? (await this.resolveHeldOwner(heldId)))
+        : undefined
+    if (owner) {
+      const attached = await attachHeldSession(owner, opts)
+      if (!attached.exitedBeforeSpawnReply) {
+        this.recordRoute(attached.id, owner, attached.incarnationId)
+      }
+      return attached
     }
     const result = await this.spawnFresh(opts)
     const provider = this.routes.get(result.id)

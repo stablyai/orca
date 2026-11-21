@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as EndpointProbeModule from '../../../endpoint/publication/daemon-endpoint-probe'
+import type * as ProcessInspectionModule from '../../../endpoint/identity/daemon-process-inspection'
 
 const probes = vi.hoisted(() => ({
   identity: vi.fn<(pid: number, socketPath: string) => Promise<'match' | 'mismatch' | 'unknown'>>(),
@@ -15,7 +16,12 @@ const probes = vi.hoisted(() => ({
       tokenPath: string,
       protocolVersion: number
     ) => Promise<{ killed: boolean; liveOwnerSurvived: boolean }>
-  >()
+  >(),
+  liveness: vi.fn(() => ({ status: 'exited' as const }))
+}))
+vi.mock('../../../endpoint/identity/daemon-process-inspection', async (importOriginal) => ({
+  ...(await importOriginal<typeof ProcessInspectionModule>()),
+  inspectProcessLiveness: probes.liveness
 }))
 vi.mock('../../../endpoint/identity/daemon-pid-identity', () => ({
   inspectDaemonProcessIdentity: probes.identity

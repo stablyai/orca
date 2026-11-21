@@ -89,6 +89,8 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     this.freshSpawns.canProvideSnapshot(id)
 
   spawn = (opts: PtySpawnOptions): Promise<PtySpawnResult> => this.ownerRecovery.spawn(opts)
+  refuseHeldSpawn: IPtyProvider['refuseHeldSpawn'] = (opts) =>
+    this.ownerRecovery.refuseHeldSpawn(opts)
 
   attach = (id: string): ReturnType<IPtyProvider['attach']> =>
     attachDaemonOwnedSession(this.providerFor(id), this.fallback, id)
