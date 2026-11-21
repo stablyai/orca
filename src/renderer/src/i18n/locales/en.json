@@ -25812,6 +25812,7 @@
       "destinationChanged": "Earlier projects from {{distro}} moved to a different WSL host. Connect that host to move more.",
       "hostUnavailable": "The {{distro}} host is not connected. Connect it in Settings, then try again.",
       "hostUpdateRequired": "The {{distro}} host runs an older version of Orca. Update it in Settings, then try again.",
+      "hostLaunchUnproven": "The Orca server in {{distro}} runs this version of Orca but can't take these projects, so updating won't help. It may have been started outside WSL hosts, such as by an SSH host. Remove the {{distro}} host in Settings, then add it again.",
       "hostNotWslLaunched": "The Orca server in {{distro}} was not started as a WSL host (an SSH host for this distro usually started it), so it can't take these projects. Updating won't help. Choose Restart as WSL host on the {{distro}} host in Settings, then try again. Orca also restarts it on its own when it next connects with no terminals running.",
       "terminalsBlocked": "Some terminals, agents or automations in these projects are busy. Nothing was moved.",
       "exportIncomplete": "Some saved state in these projects cannot move yet, so nothing was moved:",

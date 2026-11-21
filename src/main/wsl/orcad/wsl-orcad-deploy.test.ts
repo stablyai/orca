@@ -88,8 +88,12 @@ vi.mock('../../managed-server/lifecycle/orcad-managed-runtime-context', async (i
 
 import { deployAndLaunchWslOrcad } from './wsl-orcad-deploy'
 import { resetOrcadUpdateFailuresForTests } from '../../managed-server/lifecycle/orcad-managed-update-failure-memory'
+import { forgetWslHostRelaunchesForTests } from './wsl-orcad-host-relaunch'
 
-beforeEach(() => resetOrcadUpdateFailuresForTests())
+beforeEach(() => {
+  resetOrcadUpdateFailuresForTests()
+  forgetWslHostRelaunchesForTests()
+})
 
 const host = getRemoteHostPlatform('linux-x64')
 const READINESS = {
@@ -240,5 +244,39 @@ describe('deployAndLaunchWslOrcad', () => {
       outcome: 'ready',
       deferredUpdate: { code: 'orcad_not_started_as_wsl_host', forceable: false }
     })
+  })
+
+  it('offers the restart when an SSH host wakes the server first, and never stops it twice', async () => {
+    sshStartedServer(0)
+    // The SSH client's wake holds the fence; the probe after it still finds no marker.
+    mocks.wake.mockResolvedValueOnce({ outcome: 'fenced' })
+    mocks.launchMode.mockReturnValueOnce('other')
+    await expect(launch()).resolves.toMatchObject({
+      outcome: 'ready',
+      deferredUpdate: { code: 'orcad_not_started_as_wsl_host' }
+    })
+    expect(mocks.stopIdle).toHaveBeenCalledOnce()
+
+    // A later connect this session only offers the restart: no count, no second stop.
+    mocks.deploy.mockResolvedValueOnce({ outcome: 'already-active', fullVersion: '1.5.0+ab' })
+    mocks.wake.mockResolvedValueOnce({ outcome: 'serving' })
+    mocks.launchMode.mockReturnValueOnce('other')
+    await expect(launch()).resolves.toMatchObject({
+      outcome: 'ready',
+      deferredUpdate: { code: 'orcad_not_started_as_wsl_host' }
+    })
+    expect(mocks.incumbent).toHaveBeenCalledOnce()
+    expect(mocks.stopIdle).toHaveBeenCalledOnce()
+  })
+
+  it('does not report a server ready when its restart stop was held', async () => {
+    sshStartedServer(0)
+    mocks.stopIdle.mockReset()
+    mocks.stopIdle.mockResolvedValueOnce({ state: 'kept', reason: 'held', mayBeStopping: true })
+    await expect(launch()).resolves.toMatchObject({
+      outcome: 'deferred',
+      code: 'orcad_not_started_as_wsl_host'
+    })
+    expect(mocks.wake).toHaveBeenCalledTimes(1)
   })
 })

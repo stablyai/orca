@@ -38,7 +38,7 @@ import { createWslDistroHolder } from '../discovery/wsl-distro-holder'
 import { wslDistroHolderKey } from '../discovery/wsl-distro-holder-record'
 import { readWslDistroRegistryIdShared } from '../discovery/wsl-distro-registry-id'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
-import { createWslOrcadHostTransport, type WslOrcadHostTransport } from './wsl-orcad-host-transport'
+import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { holdWslDistroWithContext } from './wsl-orcad-held-context'
 import { deployWslOrcadWithOneFence } from './wsl-orcad-one-fence-deploy'
 import { removeFailedFreshWslOrcadInstall } from './wsl-orcad-failed-install-removal'
@@ -80,7 +80,7 @@ export async function deployAndLaunchWslOrcad(
     distro: name,
     label: options.label ?? name
   }
-  const conn = (options.createTransport ?? defaultTransport)(target)
+  const conn = options.createTransport?.(target) ?? createWslOrcadHostTransport({ target })
   try {
     return await launchOverTransport(name, target, conn, options)
   } finally {
@@ -268,17 +268,20 @@ async function launchOverTransport(
     // Started without the WSL host marker (#43632): restart it as one when no terminal runs.
     if (launch.mode === 'other') {
       const relaunch = await relaunchAsWslHost({
+        environmentId: target.id,
         context,
         slot,
         fullVersion: deployed.fullVersion,
         paired: options.pairedOffer ?? null,
-        readIncumbent: options.readIncumbent
+        moveRunning: isWslMoveUnderwayOnHost(userDataPath(), name),
+        readIncumbent: options.readIncumbent,
+        reprobe: async () => ({ readiness: await probe(), launch: launch.mode })
       })
-      if (relaunch.outcome === 'restarted') {
-        readiness = await probe()
-      } else {
-        notWslHost = relaunch.deferredUpdate
+      if (!relaunch.ready) {
+        return { outcome: 'deferred', distro: name, ...relaunch.deferredUpdate }
       }
+      readiness = relaunch.readiness ?? readiness
+      notWslHost = relaunch.deferredUpdate
     }
   } else {
     readiness = await probe()
@@ -315,10 +318,6 @@ async function launchOverTransport(
         : {})
     }
   }
-}
-
-function defaultTransport(target: WslOrcadHostTarget): WslOrcadHostTransport {
-  return createWslOrcadHostTransport({ target })
 }
 
 function userDataPath(): string {

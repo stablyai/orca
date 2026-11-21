@@ -5,6 +5,7 @@
  */
 import {
   WSL_MOVE_FINISH_PENDING_DETAIL,
+  WSL_MOVE_HOST_LAUNCH_UNPROVEN_DETAIL,
   WSL_MOVE_HOST_NOT_WSL_LAUNCHED_DETAIL,
   type WslMoveDroppedProject,
   type WslMoveRefusal,
@@ -237,7 +238,11 @@ export async function prepareWslMove(
     // An up-to-date server lacking the capability was started outside WSL hosts (#43632).
     return refusal(
       'wsl_move_host_update_required',
-      host.updatePending === false ? { detail: WSL_MOVE_HOST_NOT_WSL_LAUNCHED_DETAIL } : {}
+      host.serverState === 'restart-offered'
+        ? { detail: WSL_MOVE_HOST_NOT_WSL_LAUNCHED_DETAIL }
+        : host.serverState === 'current'
+          ? { detail: WSL_MOVE_HOST_LAUNCH_UNPROVEN_DETAIL }
+          : {}
     )
   }
   const unsettled = settleInterrupted

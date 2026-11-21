@@ -17,7 +17,7 @@ import { defaultWslOrcadEnvironmentId } from '../../wsl/orcad/wsl-orcad-deploy'
 import { getRuntimeEnvironmentStatus } from '../runtime-environments/status/runtime-environment-status-probe'
 import {
   connectWslMoveHostService,
-  wslMoveHostUpdatePending,
+  wslMoveHostServerState,
   type WslMoveHostConnectMode
 } from './wsl-move-host-connect'
 
@@ -50,7 +50,7 @@ export async function connectWslMoveHost(
     name: environment.name,
     ...(distroGuid ? { distroGuid } : {}),
     capabilities: status.result.capabilities ?? [],
-    ...wslMoveHostUpdatePending(service, environmentId),
+    ...wslMoveHostServerState(service, environmentId),
     ...(notCarried ? { browserLoginsNotCarried: notCarried } : {}),
     catalog: orcadMigrationDestinationFor(environment),
     commitWithBlobs: (manifest, expectedBlobs) =>

@@ -1,6 +1,7 @@
 /**
  * A host without the WSL-source capability refuses the move. Only a host with an update waiting
- * is called old; one already up to date was started outside WSL hosts, such as over SSH (#43632).
+ * is called old; one already up to date was started outside WSL hosts, such as over SSH (#43632),
+ * and only a host whose row offers Restart as WSL host gets copy naming it.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/orcad-runtime-capabilities'
@@ -13,6 +14,7 @@ import {
 } from '../../__fixtures__/wsl-mover/wsl-move-kill-rig'
 import { resetWslMoveDesktopRewriteStoresForTests } from '../desktop-state/wsl-move-desktop-rewrite-stores'
 import { previewWslMove } from './wsl-move-driver-preview'
+import type { WslMoveHostServerState } from './wsl-move-driver-ports'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -41,7 +43,7 @@ afterEach(async () => {
   await removeWslMoveRigDirs()
 })
 
-async function previewWithoutWslCapability(updatePending: boolean): Promise<unknown> {
+async function previewWithoutWslCapability(serverState: WslMoveHostServerState): Promise<unknown> {
   const connect = rig.world.deps.connectHost
   rig.world.deps.connectHost = async (distro) => {
     const host = await connect(distro)
@@ -51,7 +53,7 @@ async function previewWithoutWslCapability(updatePending: boolean): Promise<unkn
         capabilities: host.capabilities.filter(
           (capability) => capability !== ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY
         ),
-        updatePending
+        serverState
       }
     )
   }
@@ -59,13 +61,18 @@ async function previewWithoutWslCapability(updatePending: boolean): Promise<unkn
 }
 
 describe('WSL move host readiness', () => {
-  it('blames the launch, not the version, when the host has no update waiting', async () => {
-    expect(await previewWithoutWslCapability(false)).toEqual({
+  it('blames the launch, not the version, and names the restart only when the row offers it', async () => {
+    expect(await previewWithoutWslCapability('restart-offered')).toEqual({
       outcome: 'refused',
       code: 'wsl_move_host_update_required',
       detail: 'host-not-started-as-wsl-host'
     })
-    expect(await previewWithoutWslCapability(true)).toEqual({
+    expect(await previewWithoutWslCapability('current')).toEqual({
+      outcome: 'refused',
+      code: 'wsl_move_host_update_required',
+      detail: 'host-launch-unproven'
+    })
+    expect(await previewWithoutWslCapability('update-pending')).toEqual({
       outcome: 'refused',
       code: 'wsl_move_host_update_required'
     })

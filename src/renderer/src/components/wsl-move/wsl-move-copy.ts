@@ -1,8 +1,8 @@
 /** Plain-language copy for the WSL move dialog: no "manifest", "orcad" or "UNC". */
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import { wslMoveHostUpdateRequiredMessage } from './wsl-move-host-copy'
 import {
-  WSL_MOVE_HOST_NOT_WSL_LAUNCHED_DETAIL,
   WSL_MOVE_MAPPED_DRIVE_UNVERIFIABLE_DETAIL,
   type WslMoveBlockerKind,
   type WslMoveProgressStep,
@@ -106,18 +106,7 @@ export function wslMoveRefusalMessage(
             { distro }
           )
     case 'wsl_move_host_update_required':
-      if (refusal.detail === WSL_MOVE_HOST_NOT_WSL_LAUNCHED_DETAIL) {
-        return t(
-          'wslMove.refusal.hostNotWslLaunched',
-          "The Orca server in {{distro}} was not started as a WSL host (an SSH host for this distro usually started it), so it can't take these projects. Updating won't help. Choose Restart as WSL host on the {{distro}} host in Settings, then try again. Orca also restarts it on its own when it next connects with no terminals running.",
-          { distro }
-        )
-      }
-      return t(
-        'wslMove.refusal.hostUpdateRequired',
-        'The {{distro}} host runs an older version of Orca. Update it in Settings, then try again.',
-        { distro }
-      )
+      return wslMoveHostUpdateRequiredMessage(refusal.detail, distro, t)
     case 'wsl_move_terminals_blocked':
       return t(
         'wslMove.refusal.terminalsBlocked',

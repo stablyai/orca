@@ -40,12 +40,21 @@ export async function connectWslHostForUser(
     return
   }
   port.removing.add(environmentId)
+  let refused: unknown = null
   try {
     await stopServerForRestart(port.connector, record)
+  } catch (error) {
+    refused = error
   } finally {
     port.removing.delete(environmentId)
   }
-  await port.connector.connect(distro)
+  // The stop closed the bridge even when it refused: reconnect, so the host is never left off.
+  if (!refused) {
+    await port.connector.connect(distro)
+    return
+  }
+  await port.connector.connect(distro).catch(() => {})
+  throw refused
 }
 
 async function stopServerForRestart(

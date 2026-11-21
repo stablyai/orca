@@ -4,7 +4,6 @@
  */
 import {
   WSL_MOVE_FINISH_PENDING_DETAIL,
-  WSL_MOVE_HOST_NOT_WSL_LAUNCHED_DETAIL,
   type WslMovePreview,
   type WslMoveRefusalCode,
   type WslMoveResult
@@ -39,7 +38,7 @@ export const WSL_MOVE_ORCHESTRATOR_UNCOUNTED_WAIT_LIMIT =
   (24 * 60 * 60_000) / WSL_MOVE_ORCHESTRATOR_UNCOUNTED_RETRY_MS
 /** An in-flight refusal whose earlier move could not be checked is a failed attempt after all. */
 const IN_FLIGHT_UNVERIFIABLE = 'wsl_move_already_in_flight_unverifiable'
-/** An up-to-date server started outside WSL hosts: an update never fixes it, so it never parks as one. */
+/** An up-to-date server (any detail) lacking the capability: an update never fixes it, so it never parks as one. */
 const HOST_NOT_WSL_LAUNCHED = 'wsl_move_host_not_wsl_launched'
 
 /**
@@ -95,10 +94,7 @@ function refusalOutcome(
     case 'wsl_move_host_update_required':
       return {
         next: 'transient',
-        reason:
-          'detail' in preview && preview.detail === WSL_MOVE_HOST_NOT_WSL_LAUNCHED_DETAIL
-            ? HOST_NOT_WSL_LAUNCHED
-            : code
+        reason: 'detail' in preview && preview.detail !== undefined ? HOST_NOT_WSL_LAUNCHED : code
       }
     case 'wsl_move_host_unavailable':
     case 'wsl_move_pause_failed':

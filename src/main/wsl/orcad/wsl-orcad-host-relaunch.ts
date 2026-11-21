@@ -16,28 +16,68 @@ import { stopIdleOrcadForRestart } from '../../managed-server/lifecycle/orcad-id
 import { wakeStoppedManagedOrcad } from '../../managed-server/lifecycle/orcad-managed-wake'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import { readWslOrcadIncumbent } from './wsl-orcad-incumbent'
+import type { WslOrcadLaunchMode } from './wsl-orcad-active-probe'
+import type { ServeReadiness } from '../../server/serve-readiness'
 
+/** What the connect serves after checking a server started without the WSL host marker. */
 export type WslOrcadHostRelaunch =
-  | { outcome: 'restarted' }
-  | { outcome: 'deferred'; deferredUpdate: WslHostDeferredUpdate }
+  | {
+      ready: true
+      /** Set when the server restarted and was probed again. */
+      readiness: ServeReadiness | null
+      /** Set when it still lacks the marker: the host row offers Restart as WSL host. */
+      deferredUpdate: WslHostDeferredUpdate | null
+    }
+  /** A stop may have been sent or is held: the connect must not report this server ready. */
+  | { ready: false; deferredUpdate: WslHostDeferredUpdate }
+
+// Environments this run already restarted once: if the server comes back without the marker (an
+// SSH client woke it first), later connects only offer the restart instead of bouncing it again.
+const restartedThisSession = new Set<string>()
+
+export function forgetWslHostRelaunchesForTests(): void {
+  restartedThisSession.clear()
+}
+
+function wslHostNotWslLaunchedDeferral(fullVersion: string, reason: string): WslHostDeferredUpdate {
+  return {
+    candidateVersion: fullVersion,
+    code: ORCAD_NOT_WSL_HOST_LAUNCH_DEFERRAL_CODE,
+    reason,
+    // Its own action, Restart as WSL host, ends the terminals; Force update would not help.
+    forceable: false
+  }
+}
+
+const WSL_HOST_RELAUNCH_LOST_REASON =
+  'This host’s Orca server was restarted as a WSL host, but it came back without the WSL host ' +
+  'marker, likely because an SSH host started it again. Disconnect that SSH host, then restart it now.'
 
 export async function relaunchAsWslHost(args: {
+  environmentId: string
   context: OrcadRemoteContext<WslOrcadHostTarget>
   slot: OrcadSlotOptions
   fullVersion: string
   paired: PairingOffer | null
+  /** A project move to this distro runs here: a restart would cut it off, as an update would. */
+  moveRunning: boolean
   readIncumbent?: typeof readWslOrcadIncumbent
+  /** Reads the restarted server again: its readiness, and whether it carries the marker now. */
+  reprobe: () => Promise<{ readiness: ServeReadiness; launch: WslOrcadLaunchMode }>
 }): Promise<WslOrcadHostRelaunch> {
-  const deferred = (reason: string): WslOrcadHostRelaunch => ({
-    outcome: 'deferred',
-    deferredUpdate: {
-      candidateVersion: args.fullVersion,
-      code: ORCAD_NOT_WSL_HOST_LAUNCH_DEFERRAL_CODE,
-      reason,
-      // Its own action, Restart as WSL host, ends the terminals; Force update would not help.
-      forceable: false
-    }
+  const deferred = (reason: string): Extract<WslOrcadHostRelaunch, { ready: true }> => ({
+    ready: true,
+    readiness: null,
+    deferredUpdate: wslHostNotWslLaunchedDeferral(args.fullVersion, reason)
   })
+  if (restartedThisSession.has(args.environmentId)) {
+    return deferred(WSL_HOST_RELAUNCH_LOST_REASON)
+  }
+  if (args.moveRunning) {
+    return deferred(
+      'A project is moving to this host; its server restarts as a WSL host once the move finishes.'
+    )
+  }
   const incumbent = await (args.readIncumbent ?? readWslOrcadIncumbent)({
     context: args.context,
     slot: args.slot,
@@ -56,18 +96,32 @@ export async function relaunchAsWslHost(args: {
     return deferred(terminalsRunning(stopped.liveSessions))
   }
   if (stopped.state === 'kept') {
-    return deferred(stopped.reason)
+    // As the SSH restart: not restarted, and a server that may be stopping is never reported ready.
+    return {
+      ready: false,
+      deferredUpdate: wslHostNotWslLaunchedDeferral(args.fullVersion, stopped.reason)
+    }
   }
+  restartedThisSession.add(args.environmentId)
   // The WSL transport starts it detached, with the marker.
   const wake = await wakeStoppedManagedOrcad(args.slot)
-  if (wake.outcome !== 'started' && wake.outcome !== 'serving') {
+  // Fenced: another client (an SSH host) is starting it now; the probe that follows decides.
+  if (wake.outcome !== 'started' && wake.outcome !== 'serving' && wake.outcome !== 'fenced') {
     throw new Error(
       wake.outcome === 'recovery-refused'
         ? wake.reason
         : `This host’s Orca server stopped to restart as a WSL host but did not start again (${wake.outcome}); connect to start it.`
     )
   }
-  return { outcome: 'restarted' }
+  const { readiness, launch } = await args.reprobe()
+  // An SSH client woke it first: offer the restart rather than bouncing it again.
+  return launch === 'other'
+    ? { ...deferred(WSL_HOST_RELAUNCH_LOST_REASON), readiness }
+    : {
+        ready: true,
+        readiness,
+        deferredUpdate: null
+      }
 }
 
 function terminalsRunning(liveSessions: number | null): string {

@@ -43,12 +43,15 @@ function pidCommand(context: WslContext, fullVersion: string): string {
   return `cat ${pidFile(context, fullVersion)} 2>/dev/null || true`
 }
 
-/** The readiness file says nothing of the launch, so read the process's own environment. */
+/**
+ * The readiness file says nothing of the launch, so read the process's own environment. An
+ * unreadable or empty one (another user's process, a kernel thread) prints nothing: unknown.
+ */
 function launchModeCommand(context: WslContext, fullVersion: string): string {
-  const environ = '"/proc/$orcad_lp/environ"'
   return (
     `orcad_lp=$(cat ${pidFile(context, fullVersion)} 2>/dev/null); case "$orcad_lp" in "" | *[!0-9]*) ;; ` +
-    `*) if [ -r ${environ} ]; then if tr '\\0' '\\n' < ${environ} | ` +
+    `*) orcad_le=$(tr '\\0' '\\n' 2>/dev/null < "/proc/$orcad_lp/environ"); ` +
+    `if [ -n "$orcad_le" ]; then if printf '%s\\n' "$orcad_le" | ` +
     `grep -qx ${quotePosixShell(`${ORCAD_WSL_HOST_ENV}=1`)}; then echo ${WSL_HOST_LAUNCH}; ` +
     `else echo ${OTHER_LAUNCH}; fi; fi;; esac`
   )
