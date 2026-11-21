@@ -18,7 +18,11 @@ const removalChecks = new Map<number, { again: boolean }>()
 // The frame each tracked site iframe was last seen as, so a check visits only those frames.
 const trackedFrames = new WeakMap<Electron.WebContents, Map<number, Electron.WebFrameMain>>()
 
-function track(guest: Electron.WebContents, frame: Electron.WebFrameMain, demanding: boolean): void {
+function track(
+  guest: Electron.WebContents,
+  frame: Electron.WebFrameMain,
+  demanding: boolean
+): void {
   let frames = trackedFrames.get(guest)
   if (!frames) {
     frames = new Map()

@@ -29,7 +29,9 @@ async function load(win: BrowserWindow, run: () => Promise<unknown>): Promise<st
   // The raw header, so a format change is easy to read in the failure output.
   const history = win.webContents.navigationHistory
   const state = history.getEntryAtIndex(history.getActiveIndex())?.pageState ?? ''
-  process.stderr.write(`${win.webContents.getURL()} ${Buffer.from(state, 'base64').subarray(0, 16).toString('hex')}\n`)
+  process.stderr.write(
+    `${win.webContents.getURL()} ${Buffer.from(state, 'base64').subarray(0, 16).toString('hex')}\n`
+  )
   return readBrowserPageStateFormData(state)
 }
 

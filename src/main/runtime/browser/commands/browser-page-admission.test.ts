@@ -162,7 +162,9 @@ it('runs production reload after a failed cold restore, then admits an ordinary 
       reload: reloadNative,
       loadURL: () => load,
       navigationHistory: {
-        getAllEntries: () => [{ url: 'https://example.test/', title: 'Original', pageState: GET_PAGE_STATE }],
+        getAllEntries: () => [
+          { url: 'https://example.test/', title: 'Original', pageState: GET_PAGE_STATE }
+        ],
         getActiveIndex: () => 0,
         restore: vi.fn(() => load)
       },

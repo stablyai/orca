@@ -90,7 +90,9 @@ export async function attach(pageId: string, rendererId = 99) {
     debugger: { isAttached: () => false },
     loadURL: async () => {},
     navigationHistory: {
-      getAllEntries: () => [{ url: 'https://example.test/', title: 'Page', pageState: GET_PAGE_STATE }],
+      getAllEntries: () => [
+        { url: 'https://example.test/', title: 'Page', pageState: GET_PAGE_STATE }
+      ],
       getActiveIndex: () => 0
     },
     close: () => {

@@ -3,7 +3,10 @@ import {
   getBrowserProcessUserAgentIdentity,
   stripElectronToken
 } from './browser-process-user-agent'
-import { isChromeShapedSiteHost, isTeamsHost } from '../../../shared/browser/identity/browser-site-hosts'
+import {
+  isChromeShapedSiteHost,
+  isTeamsHost
+} from '../../../shared/browser/identity/browser-site-hosts'
 
 // Restrict the Electron identity to sign-in hosts; post-auth apps retain the profile identity.
 const GOOGLE_AUTH_HOSTS = new Set(['accounts.google.com', 'accounts.youtube.com'])

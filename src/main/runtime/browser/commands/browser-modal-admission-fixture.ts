@@ -82,7 +82,9 @@ export function createModalAdmissionFixture(
       debugger: Object.assign(new EventEmitter(), { isAttached: () => false }),
       loadURL: load,
       navigationHistory: {
-        getAllEntries: () => [{ url: 'https://localhost/app', title: 'Modal', pageState: GET_PAGE_STATE }],
+        getAllEntries: () => [
+          { url: 'https://localhost/app', title: 'Modal', pageState: GET_PAGE_STATE }
+        ],
         getActiveIndex: () => 0,
         restore: () => new Promise<void>(() => {})
       },
