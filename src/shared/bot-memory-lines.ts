@@ -1,6 +1,12 @@
 // MEMORY.md as the owner sees it: one fact per list line, optionally dated, everything else kept byte for byte.
 // Orca, not the bot, writes where a fact came from after " · from: "; plain text, so any reader shows it.
 
+import {
+  BOT_MEMORY_FENCE,
+  botMemoryFenceOpeners,
+  insertBotMemoryNonFenceLine
+} from './bot-memory-fences'
+
 /** Lines of MEMORY.md a session loads at start; the rest stays on disk for the bot to read. */
 export const BOT_MEMORY_INDEX_LINE_CAP = 200
 
@@ -22,7 +28,6 @@ export const BOT_MEMORY_SEED_INTRO =
   'One line per fact, newest first. Longer notes go in memory/<topic>.md.'
 // Headings ("# x", never "#123"), table rows, HTML comments and rules (---, ***, ===, * * *).
 const NOT_A_FACT = /^(?:#{1,6}(?:\s|$)|\||<!--|[\s*_=:-]+$)/
-const FENCE = /^\s*(`{3,}|~{3,})/
 const DATED_TEXT = /^(\d{4}-\d{2}-\d{2})(?:\s*[:\u2013\u2014-]\s*|\s+)(.*)$/
 
 function splitLines(text: string): { lines: string[]; eol: string } {
@@ -46,44 +51,13 @@ export function countBotMemoryLines(text: string): number {
 
 type FactParts = Omit<BotMemoryFact, 'line'> & { prefix: string }
 
-/** For each place between lines (0: above the first, `lines.length`: below the last), the line
- *  opening the code fence that place is in, or -1: a line put there in a fence reads as code. */
-function fenceOpeners(lines: readonly string[]): number[] {
-  // The open fence, if any: it closes only on the same character at least as many times.
-  let open: { fence: string; line: number } | null = null
-  const openers = [-1]
-  lines.forEach((raw, line) => {
-    const fence = FENCE.exec(raw)?.[1]
-    if (fence && open === null) {
-      open = { fence, line }
-    } else if (
-      // A closer is the same character, at least as long, with nothing but spaces after it.
-      fence &&
-      open !== null &&
-      fence[0] === open.fence[0] &&
-      fence.length >= open.fence.length &&
-      raw.trim() === fence
-    ) {
-      open = null
-    }
-    openers.push(open?.line ?? -1)
-  })
-  return openers
-}
-
 /** Each line's fact, or null: a line in a code fence is never one, whatever it looks like. */
 function lineFacts(lines: readonly string[]): (FactParts | null)[] {
-  const openers = fenceOpeners(lines)
+  const openers = botMemoryFenceOpeners(lines)
   // A fence's opener opens the place after it; its closer is in the place before it.
   return lines.map((raw, line) =>
     openers[line] === -1 && openers[line + 1] === -1 ? factParts(raw) : null
   )
-}
-
-/** `index`, or above the code fence a line put at `index` would be in: a fact never goes in one. */
-function outsideFence(lines: readonly string[], index: number): number {
-  const opener = fenceOpeners(lines)[index]
-  return opener === -1 ? index : opener
 }
 
 export function parseBotMemoryFacts(text: string): BotMemoryFact[] {
@@ -103,7 +77,7 @@ export function parseBotMemoryFacts(text: string): BotMemoryFact[] {
 function factParts(raw: string): FactParts | null {
   // A list line, or any other line with words in it: every line of MEMORY.md is one fact.
   const plain = raw.trim()
-  if (plain === BOT_MEMORY_SEED_INTRO || NOT_A_FACT.test(plain) || FENCE.test(plain)) {
+  if (plain === BOT_MEMORY_SEED_INTRO || NOT_A_FACT.test(plain) || BOT_MEMORY_FENCE.test(plain)) {
     return null
   }
   const listed = FACT_LINE.exec(raw)
@@ -264,6 +238,9 @@ export function applyBotMemoryChange(text: string, change: BotMemoryChange): str
     return key === null || !gone.has(key)
   })
   const present = new Set(lineKeys(kept))
+  const openers = botMemoryFenceOpeners(kept)
+  // A fact line is no fence, so a file with none keeps none and needs no tracking.
+  const fenced = openers.some((opener) => opener !== -1)
   for (const { line, after } of change.added) {
     const key = rawFactKey(line)
     if (key === null || present.has(key)) {
@@ -272,7 +249,12 @@ export function applyBotMemoryChange(text: string, change: BotMemoryChange): str
     present.add(key)
     const anchor = after === null ? -1 : kept.lastIndexOf(after)
     const end = kept.findLastIndex((raw) => raw.trim() !== '') + 1
-    kept.splice(outsideFence(kept, after === null || anchor !== -1 ? anchor + 1 : end), 0, line)
+    const place = after === null || anchor !== -1 ? anchor + 1 : end
+    const at = !fenced || openers[place] === -1 ? place : openers[place]
+    kept.splice(at, 0, line)
+    if (fenced) {
+      insertBotMemoryNonFenceLine(openers, at)
+    }
   }
   return kept.join(eol)
 }
@@ -366,7 +348,8 @@ export function addBotMemoryFact(text: string, fact: string, date: string): stri
   // Above the first list line, so prose a file opens with stays first; with none, above a fence
   // left open to the end, where below it the line would read as code.
   const first = lines.findIndex((raw, index) => FACT_LINE.test(raw) && facts[index] !== null)
-  const at = first !== -1 ? first : outsideFence(lines, lines.length)
+  const open = botMemoryFenceOpeners(lines)[lines.length]
+  const at = first !== -1 ? first : open === -1 ? lines.length : open
   if (at !== lines.length) {
     lines.splice(at, 0, line)
     return lines.join(eol)
