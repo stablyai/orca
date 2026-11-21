@@ -43,7 +43,9 @@ vi.mock('./BotItemActivityList', () => ({
   }) => (
     <ol>
       {events.map((event) => (
-        <li key={event.id}>{event.id}</li>
+        <li key={event.id} data-bot-item-comment-id={event.id}>
+          {event.id}
+        </li>
       ))}
       {quickReplies ? (
         <>
@@ -360,6 +362,35 @@ it('holds the answers to an ask of several questions and posts them as one comme
     'e1',
     false
   )
+})
+
+it('shows the question "Replying to" names with focus kept in the box, and its × hides the mark without scrolling', () => {
+  const scrolledTo: Element[] = []
+  const scrollIntoView = Element.prototype.scrollIntoView
+  Element.prototype.scrollIntoView = function (this: Element) {
+    scrolledTo.push(this)
+  }
+  try {
+    show(3, WAITING)
+    render(<BotItemView bot={BOT} uid="uid-6" />)
+    const box = screen.getByRole('textbox', { name: 'Comment' })
+    const chip = screen.getByRole('button', { name: /^Replying to: Which flow should ship\?/ })
+
+    chip.focus()
+    fireEvent.click(chip)
+
+    const question = screen.getByText('e3')
+    expect(scrolledTo).toEqual([question])
+    expect(question.hasAttribute('data-flash')).toBe(true)
+    expect(document.activeElement).toBe(box)
+
+    scrolledTo.length = 0
+    fireEvent.click(screen.getByRole('button', { name: 'Hide' }))
+    expect(screen.queryByRole('button', { name: /^Replying to:/ })).toBeNull()
+    expect(scrolledTo).toEqual([])
+  } finally {
+    Element.prototype.scrollIntoView = scrollIntoView
+  }
 })
 
 it("puts a quick reply's words in the comment box to add to, without sending", () => {

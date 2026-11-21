@@ -21,10 +21,8 @@ function patchedSubagents(
   card: DashboardCard,
   event: AgentStatusIpcPayload
 ): DashboardCardSubagent[] | undefined {
-  if (event.subagents === undefined) {
-    return card.subagents
-  }
-  return event.subagents.map((subagent) => ({
+  // Producers omit the field when the roster is empty, so absent means none, as the store reads it.
+  return event.subagents?.map((subagent) => ({
     id: `${card.paneKey}\u0000subagent:${subagent.id}`,
     name: subagent.description || subagent.agentType || 'unknown',
     dotState: dashboardCardDotState(subagent.state)

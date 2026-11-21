@@ -29323,6 +29323,8 @@
         "replyOrPick": "Reply in your own words, or pick an option",
         "replyingTo": "Replying to:",
         "hideReplyingTo": "Hide",
+        "replyingToShow": "Replying to: {{question}}. Show question",
+        "showQuestion": "Show question",
         "replyTo": "Reply to {{name}}…"
       },
       "empty": {
