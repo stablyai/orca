@@ -35,7 +35,9 @@ export function JiraIssueWorkspaceHeader({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
             <span className="font-mono">{displayed.key}</span>
-            {displayed.siteName ? <span>{displayed.siteName}</span> : null}
+            {displayed.updatedBy?.displayName?.trim() ? (
+              <span>{displayed.updatedBy.displayName.trim()}</span>
+            ) : null}
             <span>{displayed.project.key}</span>
             <span>{formatUiRelativeTimeFromDate(displayed.updatedAt, undefined, intlLocale)}</span>
             {issueLoading ? <LoaderCircle className="size-3 animate-spin" /> : null}
