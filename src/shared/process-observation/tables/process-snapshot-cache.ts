@@ -81,7 +81,7 @@ export function createProcessTableSnapshotReader<T = string>(
   }
 
   async function captureAfter(afterMs: number): Promise<T> {
-    if (cached && cached.capturedAtMs >= afterMs && deps.now() - cached.completedAtMs < ttlMs) {
+    if (cached && cached.capturedAtMs >= afterMs) {
       return cached.value
     }
     if (inFlight && inFlightCapturedAtMs >= afterMs) {

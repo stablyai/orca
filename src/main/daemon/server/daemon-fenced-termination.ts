@@ -7,7 +7,6 @@ import type {
 import type { TerminalHost } from '../terminal-host/terminal-host'
 import type { DaemonPtySpawnPreparations } from './daemon-pty-spawn-preparations'
 import type { DaemonSessionAttachments } from './daemon-session-attachments'
-import { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } from '../../../shared/process-observation/tables/process-table-snapshot'
 import { recheckPosixTerminalIdle } from '../terminal-host/terminal-host-running-work'
 
 type FencedOwner<T extends IPtyProvider> = DaemonSessionOwnerResolution<T> | { kind: 'replaced' }
@@ -58,10 +57,7 @@ export async function handleDaemonFencedTermination(
         : idleGuardStartedAt
       const inspection = await deps.host.inspectProcess(payload.sessionId, {
         expectedIncarnationId: payload.expectedIncarnationId,
-        runningWorkSinceMs: Math.max(
-          boundary,
-          idleGuardStartedAt - PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
-        )
+        runningWorkSinceMs: boundary
       })
       const runningWork =
         inspection.runningWork === 'idle' && process.platform !== 'win32'
