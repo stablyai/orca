@@ -5,7 +5,10 @@ import type {
   DaemonSessionOwnerResolver
 } from './daemon-session-owner-resolution'
 
-vi.mock('./daemon-newer-protocol-hold', () => ({ isHoldingForNewerProtocolDaemon: () => true }))
+vi.mock('./daemon-newer-protocol-hold', () => ({
+  isHoldingForNewerProtocolDaemon: () => true,
+  recheckNewerProtocolHold: async () => true
+}))
 
 const { LegacyDaemonExitProof } = await import('./daemon-legacy-exit-proof')
 const { heldSpawnRefusal, resolveHeldOwner, routeSpawnOrHold } =
@@ -24,16 +27,17 @@ function dispatch(ownerResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>) {
 function refusal(resolution: DaemonSessionOwnerResolution<DaemonPtyAdapter>) {
   return heldSpawnRefusal(
     () => false,
-    (opts) => resolveHeldOwner(opts.sessionId, resolver(resolution))
+    (opts) => resolveHeldOwner(opts.sessionId, resolver(resolution), [])
   )
 }
 
 function resolver(
   resolution: DaemonSessionOwnerResolution<DaemonPtyAdapter>
 ): DaemonSessionOwnerResolver<DaemonPtyAdapter> {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hold reads only hasRoute and resolve.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hold reads only these three.
   return {
     hasRoute: () => false,
+    recordRoute: () => undefined,
     resolve: async () => resolution
   } as unknown as DaemonSessionOwnerResolver<DaemonPtyAdapter>
 }

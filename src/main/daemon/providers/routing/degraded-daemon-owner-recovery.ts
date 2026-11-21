@@ -25,7 +25,7 @@ export class DegradedDaemonOwnerRecovery {
   /** The newer-daemon hold, which the fallback's fresh starts would otherwise skip. */
   refuseHeldSpawn = heldSpawnRefusal(
     (id) => this.livenessResolver.hasRoute(id),
-    (opts) => resolveHeldOwner(opts.sessionId, this.livenessResolver)
+    (opts) => resolveHeldOwner(opts.sessionId, this.livenessResolver, this.daemonAdapters)
   )
 
   spawn = async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {

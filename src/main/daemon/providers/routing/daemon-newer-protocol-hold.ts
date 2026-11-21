@@ -25,10 +25,38 @@ export async function discoverNewerProtocolHolds(runtimeDir: string): Promise<vo
     versions.map((version) => classifyDaemonGeneration(runtimeDir, version))
   )
   heldProtocols = versions.filter((_, index) => verdicts[index] !== 'exited')
+  holdRecheck = null
 }
 
 export function isHoldingForNewerProtocolDaemon(): boolean {
   return heldProtocols.length > 0
+}
+
+// A restore burst shares one re-read; a held daemon that exits later is noticed within this window.
+const HOLD_RECHECK_MS = 5_000
+let holdRecheck: { at: number; stillHolding: Promise<boolean> } | null = null
+
+/** Whether the hold still stands, re-reading held daemons that may have exited since startup. */
+export function recheckNewerProtocolHold(runtimeDir = getDaemonRuntimeDir()): Promise<boolean> {
+  if (heldProtocols.length === 0) {
+    return Promise.resolve(false)
+  }
+  if (holdRecheck && Date.now() - holdRecheck.at < HOLD_RECHECK_MS) {
+    return holdRecheck.stillHolding
+  }
+  const versions = heldProtocols
+  const stillHolding = Promise.all(
+    versions.map((version) => classifyDaemonGeneration(runtimeDir, version))
+  ).then(
+    (verdicts) => {
+      const exited = new Set(versions.filter((_, index) => verdicts[index] === 'exited'))
+      heldProtocols = heldProtocols.filter((version) => !exited.has(version))
+      return heldProtocols.length > 0
+    },
+    () => true
+  )
+  holdRecheck = { at: Date.now(), stillHolding }
+  return stillHolding
 }
 
 /** Read the held session's saved screen without spawning. */

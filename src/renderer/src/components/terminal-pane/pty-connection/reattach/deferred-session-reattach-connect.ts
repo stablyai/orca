@@ -188,7 +188,7 @@ function connectDeferredSessionReattach(
             connectDeferredSessionReattach(session, deferredReattachSessionId, { userAct: true })
           )
         } else if (isCurrentReattach()) {
-          holdForNewerDaemon(session, deferredReattachSessionId, () =>
+          holdForNewerDaemon(session, deferredReattachSessionId, Boolean(resumeStartup), () =>
             connectDeferredSessionReattach(session, deferredReattachSessionId)
           )
         }

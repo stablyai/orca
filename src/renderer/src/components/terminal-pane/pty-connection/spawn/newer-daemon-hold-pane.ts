@@ -14,6 +14,7 @@ export function holdForNewerDaemon(
   session: ConnectPanePtySession,
   // Null when main refused a saved id the renderer never had; such a pane has no screen to paint.
   sessionId: string | null,
+  resumable: boolean,
   reconnect: () => Promise<HeldPaneReopenOutcome>
 ): void {
   recordPtyConnectDiagnostic(`pane=${session.pane.id} -> HELD FOR NEWER DAEMON ${sessionId}`)
@@ -33,11 +34,11 @@ export function holdForNewerDaemon(
   const forget = holdPaneForNewerDaemon(
     session.cacheKey,
     {
-      resumable: Boolean(session.buildColdRestoreAgentResumeStartup()),
+      resumable,
       release: async () => {
         held = false
         if (!isCurrent()) {
-          forget()
+          dropTeardown()
           return { reopened: false, agentResumed: false }
         }
         terminal.options.disableStdin = false
@@ -45,12 +46,21 @@ export function holdForNewerDaemon(
           session.writeReplayData(CLEAR_HELD_SCREEN)
         }
         // Forgotten after the attempt, so a pane retried in place keeps its banner until it settles.
-        return reconnect().finally(forget)
+        return reconnect().finally(dropTeardown)
       }
     },
     host
   )
-  session.waitTeardowns.push(forget)
+  // Why removed on release: a pane retried in place registers a new hold, and each would leave a teardown.
+  const teardown = (): void => forget()
+  session.waitTeardowns.push(teardown)
+  const dropTeardown = (): void => {
+    const index = session.waitTeardowns.indexOf(teardown)
+    if (index !== -1) {
+      session.waitTeardowns.splice(index, 1)
+    }
+    forget()
+  }
   // Why: a remote pane's layout restore already painted its saved buffer; local panes keep none.
   if (
     !sessionId ||

@@ -2,24 +2,19 @@ import { useSyncExternalStore } from 'react'
 import { NEWER_DAEMON_HOLD_ERROR } from '../../../../src/shared/terminal/daemon/newer-daemon-hold'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 
-// Terminal tabs the host refused because a newer Orca there may still run them; any later answer clears one.
-let heldTabKeys: ReadonlySet<string> = new Set()
+// Only the shown pending tab needs the notice, so one slot is kept; any later answer for it clears it.
+let heldTabKey: string | null = null
 const listeners = new Set<() => void>()
 
-const heldTabKey = (worktreeId: string, tabId: string): string => `${worktreeId}\u0000${tabId}`
+const tabKey = (worktreeId: string, tabId: string): string => `${worktreeId}\u0000${tabId}`
 
 function setHeld(worktreeId: string, tabId: string, held: boolean): void {
-  const key = heldTabKey(worktreeId, tabId)
-  if (held === heldTabKeys.has(key)) {
+  const key = tabKey(worktreeId, tabId)
+  const next = held ? key : heldTabKey === key ? null : heldTabKey
+  if (next === heldTabKey) {
     return
   }
-  const next = new Set(heldTabKeys)
-  if (held) {
-    next.add(key)
-  } else {
-    next.delete(key)
-  }
-  heldTabKeys = next
+  heldTabKey = next
   listeners.forEach((listener) => listener())
 }
 
@@ -51,6 +46,6 @@ export function useTerminalTabHeldByNewerVersion(
 ): boolean {
   return useSyncExternalStore(
     subscribe,
-    () => tabId !== undefined && heldTabKeys.has(heldTabKey(worktreeId, tabId))
+    () => tabId !== undefined && heldTabKey === tabKey(worktreeId, tabId)
   )
 }

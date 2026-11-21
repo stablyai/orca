@@ -1,6 +1,9 @@
 import { NEWER_DAEMON_HOLD_ERROR } from '../../../../shared/terminal/daemon/newer-daemon-hold'
 import type { PtyHeldSpawnRequest } from '../../../providers/pty/provider-contract'
-import { isHoldingForNewerProtocolDaemon } from './daemon-newer-protocol-hold'
+import {
+  isHoldingForNewerProtocolDaemon,
+  recheckNewerProtocolHold
+} from './daemon-newer-protocol-hold'
 import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
 import type { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
 import type { LegacyDaemonExitProof } from './daemon-legacy-exit-proof'
@@ -15,16 +18,42 @@ function heldSessionId(opts: PtyHeldSpawnRequest, routed: boolean): string | nul
     : sessionId
 }
 
-export async function resolveHeldOwner(
-  sessionId: string,
-  ownerResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>
-): Promise<DaemonPtyAdapter> {
-  // Unknown inventory cannot authorize a duplicate shell or agent.
-  const resolution = await ownerResolver.resolve(sessionId)
-  if (resolution.kind !== 'owner') {
+/** No compatible daemon runs the id: refuse, unless every held newer daemon has exited since startup. */
+async function holdUnlessNewerDaemonsExited(): Promise<void> {
+  if (await recheckNewerProtocolHold()) {
     throw new Error(NEWER_DAEMON_HOLD_ERROR)
   }
-  return resolution.provider
+}
+
+/**
+ * The compatible daemon that runs a held saved id, recorded as its route so exits and identity
+ * changes revoke it; refuses when none does. Each daemon is asked for this id first, and only an
+ * unanswered or ambiguous answer reads the full inventory.
+ */
+export async function resolveHeldOwner(
+  sessionId: string,
+  ownerResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>,
+  adapters: readonly DaemonPtyAdapter[]
+): Promise<DaemonPtyAdapter | undefined> {
+  const verdicts = await Promise.all(
+    adapters.map((adapter) => adapter.probePtyLiveness(sessionId).catch(() => null))
+  )
+  const live = adapters.filter((_, index) => verdicts[index] === true)
+  if (live.length === 1) {
+    ownerResolver.recordRoute(sessionId, live[0])
+    return live[0]
+  }
+  if (live.length === 0 && verdicts.every((verdict) => verdict === false)) {
+    await holdUnlessNewerDaemonsExited()
+    return undefined
+  }
+  // Unknown inventory cannot authorize a duplicate shell or agent.
+  const resolution = await ownerResolver.resolve(sessionId)
+  if (resolution.kind === 'owner') {
+    return resolution.provider
+  }
+  await holdUnlessNewerDaemonsExited()
+  return undefined
 }
 
 type DaemonRouterDispatch = {
@@ -35,27 +64,34 @@ type DaemonRouterDispatch = {
   ownerResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>
 }
 
-/** Spawn dispatch's target: the routed owner, else a probed current or legacy owner, else the newer-daemon hold. */
-export async function routeSpawnOrHold(
+/** Spawn dispatch's target, and the daemon proven to run the saved id when one was found. */
+async function dispatchTarget(
   opts: PtyHeldSpawnRequest,
   router: DaemonRouterDispatch
-): Promise<DaemonPtyAdapter> {
+): Promise<{ target: DaemonPtyAdapter; owner?: DaemonPtyAdapter }> {
   const { sessionAdapters, current, legacy, exitProof, ownerResolver } = router
   const owner =
     (opts.sessionId ? sessionAdapters.get(opts.sessionId) : undefined) ??
     (await findLegacySessionOwner(opts, current, legacy, exitProof))
   const sessionId = heldSessionId(opts, owner !== undefined)
   if (sessionId === null) {
-    return owner ?? current
+    return { target: owner ?? current, owner }
   }
-  // With older daemons the lookup already asked every one of them; with none it skipped the current one.
-  const live =
-    legacy.length > 0 ? false : await current.probePtyLiveness(sessionId).catch(() => null)
-  if (live === false) {
-    throw new Error(NEWER_DAEMON_HOLD_ERROR)
+  if (legacy.length > 0) {
+    // The lookup above already asked the current daemon and every older one.
+    await holdUnlessNewerDaemonsExited()
+    return { target: current }
   }
-  // Only an unanswered probe needs the full inventory.
-  return live ? current : resolveHeldOwner(sessionId, ownerResolver)
+  const held = await resolveHeldOwner(sessionId, ownerResolver, [current])
+  return { target: held ?? current, owner: held }
+}
+
+/** Spawn dispatch's target: the routed owner, else a probed current or legacy owner, else the newer-daemon hold. */
+export async function routeSpawnOrHold(
+  opts: PtyHeldSpawnRequest,
+  router: DaemonRouterDispatch
+): Promise<DaemonPtyAdapter> {
+  return (await dispatchTarget(opts, router)).target
 }
 
 /** The same hold, answered before main prepares anything under the saved id; undefined when none applies. */
@@ -71,37 +107,22 @@ export function heldSpawnRefusal(
   }
 }
 
-// Long enough to cover spawn preparation; an older answer is probed again.
-const ADMITTED_OWNER_TTL_MS = 10_000
-
-/** The router's dispatch and its early hold; an owner the early hold admitted is handed to its spawn, so it is probed once. */
+/** The router's dispatch and its early hold; an owner the early hold finds becomes a route its spawn reuses. */
 export class DaemonRouterHeldSpawnGate {
-  private readonly admitted = new Map<string, { owner: DaemonPtyAdapter; at: number }>()
-
   constructor(private readonly dispatch: () => DaemonRouterDispatch) {}
 
-  target = (opts: PtyHeldSpawnRequest): Promise<DaemonPtyAdapter> => {
-    const admitted = opts.sessionId ? this.admitted.get(opts.sessionId) : undefined
-    if (opts.sessionId && admitted) {
-      this.admitted.delete(opts.sessionId)
-      if (!opts.isNewSession && Date.now() - admitted.at < ADMITTED_OWNER_TTL_MS) {
-        return Promise.resolve(admitted.owner)
-      }
-    }
-    return routeSpawnOrHold(opts, this.dispatch())
-  }
+  target = (opts: PtyHeldSpawnRequest): Promise<DaemonPtyAdapter> =>
+    routeSpawnOrHold(opts, this.dispatch())
 
   refuse = heldSpawnRefusal(
     (id) => this.dispatch().sessionAdapters.has(id),
     async (opts) => {
-      const owner = await routeSpawnOrHold(opts, this.dispatch())
-      const now = Date.now()
-      for (const [id, entry] of this.admitted) {
-        if (now - entry.at >= ADMITTED_OWNER_TTL_MS) {
-          this.admitted.delete(id)
-        }
+      const router = this.dispatch()
+      const { owner } = await dispatchTarget(opts, router)
+      // A proven owner becomes a route, so its spawn reuses it unless an exit or identity change revokes it.
+      if (owner && !router.sessionAdapters.has(opts.sessionId)) {
+        router.ownerResolver.recordRoute(opts.sessionId, owner)
       }
-      this.admitted.set(opts.sessionId, { owner, at: now })
     }
   )
 }

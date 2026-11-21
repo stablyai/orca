@@ -40,7 +40,8 @@ export function awaitSpawnRefusal(
   if (refusal === 'newer-daemon') {
     // Main kept this pane's saved binding, which the renderer never had, so no saved screen paints.
     // Why no resumed count: a fresh start may drop its resume arguments and still return a PTY.
-    holdForNewerDaemon(session, null, async () => ({
+    const resumable = Boolean(startupOverride && 'launchConfig' in startupOverride)
+    holdForNewerDaemon(session, null, resumable, async () => ({
       reopened: (await retry()) !== null,
       agentResumed: false
     }))

@@ -91,10 +91,12 @@ export function holdPaneForNewerDaemon(
       pendingHolds.delete(paneKey)
       return
     }
+    const shown = newerDaemonHoldStore.getState().panes[paneKey]
+    // A stale teardown (its pane already released or re-held) must not publish a write.
+    if (shown?.host !== host || shown.release !== pane.release) {
+      return
+    }
     newerDaemonHoldStore.setState(({ panes }) => {
-      if (panes[paneKey]?.host !== host || panes[paneKey]?.release !== pane.release) {
-        return {}
-      }
       const { [paneKey]: _forgotten, ...rest } = panes
       return { panes: rest }
     })
@@ -220,6 +222,8 @@ export async function reopenHeldTerminals(paneKey: string): Promise<void> {
     updatePanes(attemptKeys, { phase: 'failed' })
     return
   }
+  // A pane refused while the stop ran is still batched; it is released with the rest.
+  flushPendingHolds()
   // A server's panes stay Reopening until its frames stop holding them.
   if (host !== LOCAL_HOLD_HOST) {
     return

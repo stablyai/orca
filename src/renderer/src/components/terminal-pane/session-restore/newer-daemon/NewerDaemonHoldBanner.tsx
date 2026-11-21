@@ -53,7 +53,7 @@ export function NewerDaemonHoldBanner({
               'This terminal was opened in a newer version of Orca'
             )
       }
-      body={failed ? undefined : resumeNote ? `${consequence} ${resumeNote}` : consequence}
+      body={!failed && resumeNote ? `${consequence} ${resumeNote}` : consequence}
       primaryAction={
         !hold.canReopen ? (
           <Button

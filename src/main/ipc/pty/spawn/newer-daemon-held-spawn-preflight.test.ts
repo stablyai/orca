@@ -23,7 +23,8 @@ vi.mock('../pane/absent-pane-owner', async (importOriginal) => ({
   releaseAbsentPaneOwner: mocks.releaseAbsentOwner
 }))
 vi.mock('../../../daemon/providers/routing/daemon-newer-protocol-hold', () => ({
-  isHoldingForNewerProtocolDaemon: () => true
+  isHoldingForNewerProtocolDaemon: () => true,
+  recheckNewerProtocolHold: async () => true
 }))
 vi.mock('../provider/registry', async (importOriginal) => ({
   ...(await importOriginal<typeof RegistryModule>()),
@@ -58,7 +59,7 @@ beforeEach(() => {
   mocks.provider = {
     refuseHeldSpawn: heldSpawnRefusal(
       () => false,
-      (opts) => resolveHeldOwner(opts.sessionId, noOwner)
+      (opts) => resolveHeldOwner(opts.sessionId, noOwner, [])
     )
   } as unknown as IPtyProvider
 })
