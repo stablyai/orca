@@ -1,4 +1,12 @@
-import { ChevronLeft, ChevronRight, Copy, Download, MessageSquare, X } from 'lucide-react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  ExternalLink,
+  Download,
+  MessageSquare,
+  X
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/class-names'
 import { Button } from '@/components/ui/button'
@@ -26,8 +34,11 @@ export function NativeChatMediaViewerChrome({
   annotateHidden,
   onAnnotate,
   onShowNotes,
-  onClose
+  onClose,
+  onOpenInEditor
 }: {
+  /** A video: opens its editor tab in place of Copy and Download, which only work on an image. */
+  onOpenInEditor?: () => void
   title: string
   src: string | null
   annotating: boolean
@@ -153,33 +164,48 @@ export function NativeChatMediaViewerChrome({
             <span className="tabular-nums">{noteCount}</span>
           </Button>
         ) : null}
-        <Button
-          type="button"
-          onClick={() => void copy()}
-          aria-disabled={!src}
-          aria-label={t('components.native-chat.notes.copy', 'Copy image')}
-          title={t('components.native-chat.notes.copy', 'Copy image')}
-          variant="media-tool"
-          size="icon-sm"
-        >
-          <Copy className="size-3.5" />
-        </Button>
-        <Button
-          asChild
-          variant="media-tool"
-          size="icon-sm"
-          aria-disabled={!src}
-          className={cn(!src && 'pointer-events-none')}
-        >
-          <a
-            href={src ?? undefined}
-            download={title}
-            aria-label={t('components.native-chat.notes.download', 'Download')}
-            title={t('components.native-chat.notes.download', 'Download')}
+        {onOpenInEditor ? (
+          <Button
+            type="button"
+            onClick={onOpenInEditor}
+            aria-label={t('components.native-chat.notes.openInEditor', 'Open in editor')}
+            title={t('components.native-chat.notes.openInEditor', 'Open in editor')}
+            variant="media-tool"
+            size="icon-sm"
           >
-            <Download className="size-3.5" />
-          </a>
-        </Button>
+            <ExternalLink className="size-3.5" />
+          </Button>
+        ) : (
+          <>
+            <Button
+              type="button"
+              onClick={() => void copy()}
+              aria-disabled={!src}
+              aria-label={t('components.native-chat.notes.copy', 'Copy image')}
+              title={t('components.native-chat.notes.copy', 'Copy image')}
+              variant="media-tool"
+              size="icon-sm"
+            >
+              <Copy className="size-3.5" />
+            </Button>
+            <Button
+              asChild
+              variant="media-tool"
+              size="icon-sm"
+              aria-disabled={!src}
+              className={cn(!src && 'pointer-events-none')}
+            >
+              <a
+                href={src ?? undefined}
+                download={title}
+                aria-label={t('components.native-chat.notes.download', 'Download')}
+                title={t('components.native-chat.notes.download', 'Download')}
+              >
+                <Download className="size-3.5" />
+              </a>
+            </Button>
+          </>
+        )}
         <Button
           type="button"
           onClick={onClose}

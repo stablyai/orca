@@ -1,20 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/class-names'
-import { isMacPlatform } from '@/components/native-chat/pane/routing/native-chat-shortcut'
+import { handleNativeChatMediaViewerKey } from './native-chat-media-viewer-keys'
 import { useTranslate } from '@/i18n/use-translate'
 import { usePanZoomViewport } from '@/components/editor/viewer-viewport/use-pan-zoom-viewport'
-import type { PanZoomSize } from '../../../../../../shared/document-preview/pan-zoom-view'
+import type { NativeChatMediaLoaded } from './native-chat-notes-handoff'
+import { NativeChatImageStage } from './NativeChatImageStage'
+import { NativeChatVideoStage } from './video/NativeChatVideoStage'
 import { NativeChatMediaMarks } from './NativeChatMediaMarks'
 import { NativeChatMediaNotesPanel } from './NativeChatMediaNotesPanel'
 import {
-  NativeChatMediaImageLoader,
   NativeChatMediaViewerChrome,
   NativeChatMediaViewerZoom,
   NativeChatNotesSendButton as SendButton
 } from './NativeChatMediaViewerChrome'
 import { useNativeChatNotesEditor } from './use-native-chat-notes-editor'
-import { nativeChatNoteTimesNeedTenths, type NativeChatMediaNote } from './native-chat-media-notes'
+import {
+  nativeChatNoteTimesNeedTenths,
+  type NativeChatMediaNote,
+  type NativeChatNoteMark
+} from './native-chat-media-notes'
 import type { NativeChatNotesSource } from './native-chat-attachment-notes'
 import { useNativeChatNotesDelivery } from './use-native-chat-notes-delivery'
 import { useViewerZoomCommands } from '@/components/editor/viewer-viewport/use-viewer-zoom-commands'
@@ -56,6 +61,10 @@ export type NativeChatMediaViewerProps = {
   /** Which of the message's images this is. */
   position?: { index: number; count: number }
   onNext?: (() => void) | null
+  /** A video: played under its frame, with each note on the frame it was made on. */
+  kind?: 'image' | 'video'
+  /** A video opened from a link: its editor tab instead. */
+  onOpenInEditor?: () => void
 }
 
 /** Full-window image viewer with notes: Annotate, numbered pins and boxes, a Notes panel and Send. */
@@ -85,14 +94,21 @@ function ViewerBody({
   copySrc,
   onPrevious,
   onNext,
-  position
+  position,
+  kind = 'image',
+  onOpenInEditor
 }: NativeChatMediaViewerProps): React.JSX.Element {
   const editor = useNativeChatNotesEditor({ notes: initialNotes ?? [], offset })
   const [annotating, setAnnotating] = useState(Boolean(initialNotes?.length))
   const [panelHidden, setPanelHidden] = useState(false)
   const [narrow, setNarrow] = useState(() => window.innerWidth < NARROW_WIDTH)
-  const [loaded, setLoaded] = useState<{ size: PanZoomSize; image: HTMLImageElement } | null>(null)
-  const panZoom = usePanZoomViewport({ content: loaded?.size ?? null, contain: true })
+  const [loaded, setLoaded] = useState<NativeChatMediaLoaded | null>(null)
+  // A video isn't zoomed: its frames are captured as shown, whole.
+  const panZoom = usePanZoomViewport({
+    content: kind === 'image' ? (loaded?.size ?? null) : null,
+    contain: true
+  })
+  const placeAtFrame = useRef<((mark: NativeChatNoteMark) => void) | null>(null)
   // ⌘+ ⌘− ⌘0 zoom here as in Orca's other image viewers.
   useViewerZoomCommands(panZoom, 'popup')
   const [broken, setBroken] = useState(false)
@@ -170,6 +186,11 @@ function ViewerBody({
     return editor.place(mark, time)
   }
 
+  const openNote = (id: string): void => {
+    setPanelHidden(false)
+    editor.open(id)
+  }
+
   return (
     <DialogContent
       aria-describedby={undefined}
@@ -209,54 +230,21 @@ function ViewerBody({
           void close()
         }
       }}
-      onKeyDown={(event) => {
-        const typing =
-          event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLInputElement
-        if (event.key === 'Enter' && (isMacPlatform() ? event.metaKey : event.ctrlKey)) {
-          event.preventDefault()
-          void send()
-        } else if (
-          !typing &&
-          event.key.toLowerCase() === 'z' &&
-          (isMacPlatform() ? event.metaKey : event.ctrlKey)
-        ) {
-          // ⌘Z / Ctrl+Z undoes any change to the notes; with Shift it redoes, as in Orca's markup.
-          if (event.shiftKey ? editor.redo() : editor.undo()) {
-            event.preventDefault()
-          }
-        } else if (
-          !typing &&
-          event.key === 'c' &&
-          !event.metaKey &&
-          !event.ctrlKey &&
-          canAnnotate
-        ) {
-          event.preventDefault()
-          if (annotating) {
-            finishAnnotating()
-          } else {
-            setAnnotating(true)
-            focusNativeChatMediaViewportSoon(viewportRef.current)
-          }
-        } else if (!typing && step && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
-          const go = event.key === 'ArrowLeft' ? step.previous : step.next
-          if (go && !event.altKey && !event.metaKey && !event.ctrlKey) {
-            event.preventDefault()
-            go()
-          }
-        } else if (
-          !typing &&
-          event.key === 'C' &&
-          event.shiftKey &&
-          !event.metaKey &&
-          !event.ctrlKey &&
-          !event.altKey &&
-          annotating
-        ) {
-          event.preventDefault()
-          setPanelHidden((hidden) => !hidden)
-        }
-      }}
+      onKeyDown={(event) =>
+        handleNativeChatMediaViewerKey(event, {
+          send: () => void send(),
+          undo: editor.undo,
+          redo: editor.redo,
+          canAnnotate,
+          annotating,
+          toggleAnnotating: () =>
+            annotating
+              ? finishAnnotating()
+              : (setAnnotating(true), focusNativeChatMediaViewportSoon(viewportRef.current)),
+          step,
+          togglePanel: () => setPanelHidden((hidden) => !hidden)
+        })
+      }
     >
       <DialogTitle className="sr-only">{title}</DialogTitle>
       <NativeChatMediaViewerChrome
@@ -276,6 +264,7 @@ function ViewerBody({
         }
         onShowNotes={() => setPanelHidden(false)}
         onClose={() => void close()}
+        onOpenInEditor={onOpenInEditor}
       />
       <div
         className={cn(
@@ -289,7 +278,7 @@ function ViewerBody({
             viewportRef.current = element
             setCanvas(element)
           }}
-          {...canvasHandlers}
+          {...(kind === 'image' ? canvasHandlers : {})}
           tabIndex={0}
           role={annotating ? 'application' : undefined}
           aria-label={
@@ -301,7 +290,9 @@ function ViewerBody({
               : title
           }
           onKeyDown={(event) => {
-            if (handleNativeChatMediaViewportKey(event, { panZoom, annotating, onPlace: place })) {
+            const onPlace =
+              kind === 'video' ? (mark: NativeChatNoteMark) => placeAtFrame.current?.(mark) : place
+            if (handleNativeChatMediaViewportKey(event, { panZoom, annotating, onPlace })) {
               event.preventDefault()
               event.stopPropagation()
             }
@@ -311,54 +302,69 @@ function ViewerBody({
             !annotating && cursor === 'grab' && 'cursor-grab'
           )}
         >
-          {src && viewOffset && loaded ? (
-            <div
-              className="absolute top-0 left-0"
-              style={{
-                width: loaded.size.width * scale,
-                height: loaded.size.height * scale,
-                transform: `translate(${viewOffset.x}px, ${viewOffset.y}px)`
+          {kind === 'video' ? (
+            <NativeChatVideoStage
+              src={src}
+              title={title}
+              annotating={annotating}
+              notes={notes}
+              focusTime={editor.editing?.time}
+              marks={{
+                pending: editor.pending,
+                selectedId: editor.editing?.id ?? editor.pending?.id ?? null,
+                annotating,
+                onOpen: openNote,
+                onMove: editor.move
               }}
-            >
-              <img
-                src={src}
-                alt={title}
-                draggable={false}
-                className="pointer-events-none size-full select-none rounded-sm"
-              />
-              <div className="absolute inset-0">
+              onLoaded={setLoaded}
+              onBroken={() => setBroken(true)}
+              broken={broken}
+              fallback={fallback}
+              placeRef={placeAtFrame}
+              place={(mark, time) => void place(mark, time)}
+              onCaptureFailed={() =>
+                editor.setStatus({
+                  kind: 'error',
+                  message: t(
+                    'components.native-chat.notes.captureFailed',
+                    'Couldn’t capture this frame. Try again.'
+                  )
+                })
+              }
+            />
+          ) : (
+            <NativeChatImageStage
+              src={src}
+              title={title}
+              loaded={loaded}
+              onLoaded={setLoaded}
+              broken={broken}
+              onBroken={() => setBroken(true)}
+              fallback={fallback}
+              scale={scale}
+              offset={viewOffset}
+              marks={
                 <NativeChatMediaMarks
                   notes={notes}
                   pending={editor.pending}
                   selectedId={editor.editing?.id ?? editor.pending?.id ?? null}
                   annotating={annotating}
-                  onPlace={(mark) => place(mark)}
-                  onOpen={(id) => {
-                    setPanelHidden(false)
-                    editor.open(id)
-                  }}
+                  onPlace={(mark) => void place(mark)}
+                  onOpen={openNote}
                   onMove={editor.move}
                 />
-              </div>
-            </div>
-          ) : null}
-          {src && !loaded && !broken ? (
-            <NativeChatMediaImageLoader
-              src={src}
-              onLoaded={setLoaded}
-              onError={() => setBroken(true)}
+              }
             />
-          ) : null}
-          {!src || broken ? (
-            <div className="flex size-full items-center justify-center">{fallback}</div>
-          ) : null}
+          )}
         </div>
       </div>
       {/* Above the narrow sheet while it is open, so zoom and Fit stay at hand. */}
-      <NativeChatMediaViewerZoom
-        panZoom={panZoom}
-        aboveSheet={narrow && annotating && !panelHidden}
-      />
+      {kind === 'image' ? (
+        <NativeChatMediaViewerZoom
+          panZoom={panZoom}
+          aboveSheet={narrow && annotating && !panelHidden}
+        />
+      ) : null}
       {annotating && !panelHidden ? (
         <div
           className={cn(

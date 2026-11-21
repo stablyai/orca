@@ -1,10 +1,16 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { translate } from '@/i18n/i18n'
-import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
+import {
+  appendToNativeChatComposerDraft,
+  readNativeChatComposerDraft
+} from '../../drafts/native-chat-composer-draft-store'
+import {
+  NativeChatVideoFrameUnavailable,
+  nativeChatVideoNotesAsText
+} from './video/use-native-chat-video-frames'
 import { showNativeChatNotesNotice } from './native-chat-notes-notice'
 import { NATIVE_CHAT_NOTES_ERROR_ID } from './NativeChatMediaNotesPanel'
 import { useTranslate } from '@/i18n/use-translate'
-import type { PanZoomSize } from '../../../../../../shared/document-preview/pan-zoom-view'
 import type { NativeChatMediaNote } from './native-chat-media-notes'
 import type { NativeChatNotesSource } from './native-chat-attachment-notes'
 import type { useNativeChatNotesEditor } from './use-native-chat-notes-editor'
@@ -16,6 +22,7 @@ import {
   nativeChatNotesScopeKey,
   nativeChatNotesStillInDraft,
   watchNativeChatNotesLeaveDraft,
+  type NativeChatMediaLoaded,
   type NativeChatNotesComposer
 } from './native-chat-notes-handoff'
 import { holdNativeChatNotes, takeHeldNativeChatNotes } from './native-chat-held-notes'
@@ -40,7 +47,7 @@ export function useNativeChatNotesDelivery({
   onRestored
 }: {
   opener: React.RefObject<Element | null>
-  loaded: { size: PanZoomSize; image: HTMLImageElement } | null
+  loaded: NativeChatMediaLoaded | null
   editor: Editor
   title: string
   source: NativeChatNotesSource
@@ -132,11 +139,11 @@ export function useNativeChatNotesDelivery({
         const ids = await attachNativeChatNotes({
           composer,
           mediaName: title,
-          kind: 'image',
+          kind: loaded.kind,
           source,
           notes,
           offset,
-          frame: async () => ({ image: loaded.image, ...loaded.size })
+          frame: loaded.frame
         })
         const restore = onAttached?.(ids) ?? undefined
         handed = true
@@ -161,6 +168,22 @@ export function useNativeChatNotesDelivery({
           )
         }
       } catch (error) {
+        if (error instanceof NativeChatVideoFrameUnavailable) {
+          // Option B: a frame of a recording with no known length is gone after a restart. The
+          // words still go to the message, as text; only the drawn marks are lost.
+          appendToNativeChatComposerDraft(composer.scopeKey, {
+            text: nativeChatVideoNotesAsText(title, notes)
+          })
+          showNativeChatNotesNotice(composer.scopeKey, {
+            text: t(
+              'components.native-chat.notes.addedAsText',
+              'Notes added as text: this video’s frames can’t be shown again.'
+            )
+          })
+          busyRef.current = false
+          setBusy(false)
+          return true
+        }
         editor.setStatus({
           kind: 'error',
           message: t(

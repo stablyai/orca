@@ -22642,7 +22642,17 @@
         "undo": "Undo",
         "zoom": "Zoom",
         "zoomIn": "Zoom in",
-        "zoomOut": "Zoom out"
+        "zoomOut": "Zoom out",
+        "captureFailed": "Couldn’t capture this frame. Try again.",
+        "openInEditor": "Open in editor",
+        "addedAsText": "Notes added as text: this video’s frames can’t be shown again.",
+        "videoUnavailable": "This video can’t be played here.",
+        "videoLoading": "Loading video…",
+        "cantSeek": "Can’t seek this video",
+        "pause": "Pause",
+        "play": "Play",
+        "seek": "Position",
+        "speed": "Playback speed {{speed}}×"
       }
     },
     "tab": {
