@@ -12570,7 +12570,7 @@
           "removeWithChildrenGit_other": "Remover <target/> e <descendants>{{count}} espaços de trabalho filhos</descendants> do git e excluir suas pastas de espaço de trabalho.",
           "removeWithChildrenGit_many": "Remover <target/> e <descendants>{{count}} espaços de trabalho filhos</descendants> do git e excluir suas pastas de espaço de trabalho.",
           "removeSingleFolderFromOrca": "Remove-o do Orca. A pasta no disco é mantida.",
-          "deleteSingleWorktreeAndBranch": "Exclui o worktree e sua branch (mantida se não mesclada)."
+          "deleteSingleWorktreeAndBranch": "Exclui o worktree e as alterações locais. A branch também é excluída se já tiver sido mesclada."
         },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "Mostrar worktree",

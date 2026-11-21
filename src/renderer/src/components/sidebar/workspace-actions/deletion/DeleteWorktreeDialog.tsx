@@ -198,11 +198,6 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     deleteStateByWorktreeId,
     repoMap
   })
-  // Per-target hints only warn once changes are known; pending or failed checks still lose data.
-  const hasUnknownChangeState = [...dirtyChanges.checkStates].some(
-    ([key, state]) => state !== 'complete' && !dirtyChanges.counts.has(key)
-  )
-
   const handleOpenChange = useDeleteWorktreeDialogDismissal({
     isOpen,
     isDeleting,
@@ -308,6 +303,11 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   )
   const errorToShow = isMainWorktree ? null : (detachError ?? deleteError)
   const hasTargetList = isBatchDelete || childWorkspaceCount > 0
+  const hasUnknownLineageChanges =
+    childWorkspaceCount > 0 &&
+    [...dirtyChanges.checkStates].some(
+      ([key, state]) => state !== 'complete' && !dirtyChanges.counts.has(key)
+    )
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
@@ -329,11 +329,10 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         />
 
         {isMainWorktree ? null : (
-          // Keep file checks from moving the footer. Only the user can expand the compact preview.
           <div
-            className={`scrollbar-sleek flex max-h-[50vh] min-w-0 flex-col overflow-y-auto ${hasTargetList ? 'h-48 gap-3' : 'h-16 gap-1 has-[button[aria-expanded=true]]:h-auto'}`}
+            className={`scrollbar-sleek flex max-h-[50vh] min-w-0 flex-col overflow-y-auto ${hasTargetList ? 'h-48 gap-3' : 'gap-1 empty:hidden'}`}
           >
-            {!isBatchDelete && hasUnknownChangeState && <DeleteWorktreeUnknownChangesWarning />}
+            {hasUnknownLineageChanges && <DeleteWorktreeUnknownChangesWarning />}
             {isBatchDelete ? (
               <DeleteWorktreeTargetPreview
                 isBatchDelete
@@ -354,6 +353,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
                 dirtyChanges={dirtyChanges}
                 unsavedFiles={unsavedFiles}
                 atRiskLocalFilesByIdentity={atRiskLocalFilesByIdentity}
+                showChecking={hasTargetList}
               />
             ) : null}
 

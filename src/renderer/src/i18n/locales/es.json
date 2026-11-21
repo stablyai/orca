@@ -5643,7 +5643,7 @@
           "removeWithChildrenGit_other": "Eliminar <target/> y <descendants>{{count}} espacios de trabajo secundarios</descendants> de git y borrar sus carpetas de espacio de trabajo.",
           "removeWithChildrenGit_many": "Eliminar <target/> y <descendants>{{count}} espacios de trabajo secundarios</descendants> de git y borrar sus carpetas de espacio de trabajo.",
           "removeSingleFolderFromOrca": "Lo quita de Orca. La carpeta en el disco se conserva.",
-          "deleteSingleWorktreeAndBranch": "Elimina el worktree y su rama (se conserva si no está fusionada)."
+          "deleteSingleWorktreeAndBranch": "Elimina el worktree y los cambios locales. También elimina su rama si ya se fusionó."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Mostrar rutas cargadas",

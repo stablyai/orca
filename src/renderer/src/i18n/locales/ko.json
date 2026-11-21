@@ -5418,7 +5418,7 @@
           "removeWithChildrenMixed_other": "Orca에서 <target/> 및 <descendants>하위 워크스페이스 {{count}}개</descendants>를 제거합니다. Git 워크트리는 git과 디스크에서도 제거됩니다. 폴더 워크스페이스는 Orca 항목만 제거됩니다.",
           "removeWithChildrenGit_other": "git에서 <target/> 및 <descendants>하위 워크스페이스 {{count}}개</descendants>를 제거하고 해당 워크스페이스 폴더를 삭제합니다.",
           "removeSingleFolderFromOrca": "Orca에서 제거합니다. 디스크의 폴더는 유지됩니다.",
-          "deleteSingleWorktreeAndBranch": "워크트리와 해당 브랜치를 삭제합니다(병합되지 않은 브랜치는 유지)."
+          "deleteSingleWorktreeAndBranch": "워크트리와 로컬 변경 사항을 삭제합니다. 브랜치는 병합된 경우 삭제합니다."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "불러온 경로 표시",
