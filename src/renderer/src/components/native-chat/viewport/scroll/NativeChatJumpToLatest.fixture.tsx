@@ -35,7 +35,7 @@ function Transcript({ settings }: { settings?: Partial<GlobalSettings> }): React
 
 export const overTranscript = defineFixture({ width: 640, render: () => <Transcript /> })
 
-export const narrow = defineFixture({ width: 360, render: () => <Transcript /> })
+export const narrow = defineFixture({ width: 300, render: () => <Transcript /> })
 
 // Chat-only Match Terminal derives its own surfaces from a dim terminal palette, outside the theme check.
 export const matchTerminal = defineFixture({
