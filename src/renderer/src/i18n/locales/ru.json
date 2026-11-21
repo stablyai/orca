@@ -23442,6 +23442,7 @@
       "fileExplorerCopyPath": "Скопировать путь к файлу",
       "fileExplorerCopyRelativePath": "Скопировать относительный путь к файлу",
       "fileExplorerDelete": "Удалить файл",
+      "fileExplorerRename": "Переименовать файл",
       "fileExplorerRedo": "Повторить операцию с файлом",
       "fileExplorerUndo": "Отменить операцию с файлом",
       "newAgentTab": "Создать вкладку {{agent}}",

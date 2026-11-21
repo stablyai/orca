@@ -22887,6 +22887,7 @@
       "fileExplorerCopyPath": "Dateipfad kopieren",
       "fileExplorerCopyRelativePath": "Relativen Dateipfad kopieren",
       "fileExplorerDelete": "Datei löschen",
+      "fileExplorerRename": "Datei umbenennen",
       "terminalCopySelection": "Terminal-Auswahl kopieren",
       "terminalSelectAll": "Gesamten Terminal-Text auswählen",
       "terminalPaste": "Ins Terminal einfügen",

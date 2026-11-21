@@ -24,7 +24,7 @@ import {
   ContextMenuShortcut
 } from '@/components/ui/context-menu'
 import { useAppStore } from '@/store/index'
-import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
+import { useOptionalShortcutLabel, useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { openFileInBrowserTab } from '@/lib/browser/documents/file-preview'
 import { useTranslate } from '@/i18n/use-translate'
@@ -48,8 +48,6 @@ import {
 } from './file-explorer-row-action-visibility'
 import { copyFileToOsClipboard, downloadRemoteFile } from './file-explorer-row-file-transfer'
 import { fileExplorerNodeTabRelativePath } from '../tree/file-explorer-directory-listing'
-
-const isMac = navigator.userAgent.includes('Mac')
 
 type FileExplorerRowContextMenuProps = Pick<
   FileExplorerRowProps,
@@ -103,6 +101,7 @@ export function FileExplorerRowContextMenu({
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const copyPathShortcutLabel = useShortcutLabel('fileExplorer.copyPath')
+  const renameShortcutLabel = useOptionalShortcutLabel('fileExplorer.rename')
   const copyRelativePathShortcutLabel = useShortcutLabel('fileExplorer.copyRelativePath')
   const findInFolderShortcutLabel = useShortcutLabel('sidebar.search.toggle')
   const showRemoteDownloadAction = shouldShowRemoteDownloadAction(
@@ -267,9 +266,9 @@ export function FileExplorerRowContextMenu({
       <ContextMenuItem disabled={writesBlocked} onSelect={() => onStartRename(node)}>
         <Pencil />
         {t('auto.components.right.sidebar.FileExplorerRow.fc747429bf', 'Rename')}
-        <ContextMenuShortcut>
-          {isMac ? '↩' : t('auto.components.right.sidebar.FileExplorerRow.a06551beee', 'Enter')}
-        </ContextMenuShortcut>
+        {renameShortcutLabel ? (
+          <ContextMenuShortcut>{renameShortcutLabel}</ContextMenuShortcut>
+        ) : null}
       </ContextMenuItem>
       <ContextMenuItem variant="destructive" disabled={writesBlocked} onSelect={onRequestDelete}>
         <Trash2 />

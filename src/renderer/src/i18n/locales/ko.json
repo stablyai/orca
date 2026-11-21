@@ -22414,6 +22414,7 @@
       "fileExplorerCopyPath": "파일 경로 복사",
       "fileExplorerCopyRelativePath": "파일 상대 경로 복사",
       "fileExplorerDelete": "파일 삭제",
+      "fileExplorerRename": "파일 이름 바꾸기",
       "terminalCopySelection": "터미널 선택 영역 복사",
       "terminalSelectAll": "터미널 텍스트 모두 선택",
       "terminalPaste": "터미널에 붙여넣기",

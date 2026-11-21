@@ -22872,6 +22872,7 @@
       "fileExplorerCopyPath": "Dosya yolunu kopyala",
       "fileExplorerCopyRelativePath": "Göreli dosya yolunu kopyala",
       "fileExplorerDelete": "Dosyayı sil",
+      "fileExplorerRename": "Dosyayı yeniden adlandır",
       "terminalCopySelection": "Terminaldeki seçimi kopyala",
       "terminalSelectAll": "Terminaldeki tüm metni seç",
       "terminalPaste": "Terminale yapıştır",

@@ -22389,6 +22389,7 @@
       "fileExplorerCopyPath": "複製檔案路徑",
       "fileExplorerCopyRelativePath": "複製檔案的相對路徑",
       "fileExplorerDelete": "刪除檔案",
+      "fileExplorerRename": "重新命名檔案",
       "terminalCopySelection": "複製終端機中選取的內容",
       "terminalSelectAll": "全選終端機文字",
       "terminalPaste": "貼上至終端機",

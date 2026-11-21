@@ -218,7 +218,7 @@ export function useFileExplorerKeys(opts: {
           selectedNodeRef.current
         // Rows listed through an outside folder link are browse-only; main refuses their writes.
         if (node && !node.outsideProject) {
-          if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+          if (keybindingMatchesAction('fileExplorer.rename', e, platform, keybindings)) {
             e.preventDefault()
             startRenameRef.current(node)
             return

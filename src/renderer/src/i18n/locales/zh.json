@@ -24729,6 +24729,7 @@
       "fileExplorerCopyPath": "复制文件路径",
       "fileExplorerCopyRelativePath": "复制文件相对路径",
       "fileExplorerDelete": "删除文件",
+      "fileExplorerRename": "重命名文件",
       "terminalCopySelection": "复制终端选中内容",
       "terminalSelectAll": "全选终端文本",
       "terminalPaste": "粘贴到终端",

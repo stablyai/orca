@@ -23950,6 +23950,7 @@
       "fileExplorerCopyPath": "ファイルパスをコピー",
       "fileExplorerCopyRelativePath": "ファイルの相対パスをコピー",
       "fileExplorerDelete": "ファイルを削除",
+      "fileExplorerRename": "ファイル名を変更",
       "terminalCopySelection": "ターミナルの選択範囲をコピー",
       "terminalSelectAll": "ターミナルのテキストをすべて選択",
       "terminalPaste": "ターミナルに貼り付け",
