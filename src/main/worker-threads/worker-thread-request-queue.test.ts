@@ -63,7 +63,10 @@ const MAX_CONSECUTIVE_DEATHS = 3
 
 function makeQueue(
   workers: FakeWorker[],
-  options: { awaitRetirement?: boolean; makeWorker?: () => FakeWorker } = {}
+  options: {
+    awaitRetirement?: boolean
+    makeWorker?: () => FakeWorker
+  } = {}
 ): WorkerThreadRequestQueue<Request, Response> {
   return new WorkerThreadRequestQueue<Request, Response>({
     awaitRetirement: options.awaitRetirement,
@@ -351,41 +354,6 @@ describe('WorkerThreadRequestQueue', () => {
     }
   })
 
-  it('keeps retirement refusals out of the owner failure budget', async () => {
-    vi.useFakeTimers()
-    const workers: FakeWorker[] = []
-    let finish: (code: number) => void = () => {}
-    const first = new FakeWorker()
-    first.exit = new Promise((resolve) => {
-      finish = resolve
-    })
-    const queue = makeQueue(workers, {
-      awaitRetirement: true,
-      makeWorker: () => (workers.length === 0 ? first : new FakeWorker())
-    })
-    const owner = { signal: new AbortController().signal }
-    try {
-      const failed = settle(send(queue, 'first', owner))
-      first.emit('error', new Error('first-fault'))
-      await failed
-      for (let attempt = 0; attempt < 4; attempt++) {
-        await expect(settle(send(queue, 'not-executed', owner))).resolves.toMatchObject({
-          message: 'unavailable: previous worker still exiting'
-        })
-      }
-      expect(workers).toHaveLength(1)
-      finish(1)
-      await vi.advanceTimersByTimeAsync(0)
-      const recovered = send(queue, 'recovered', owner)
-      expect(workers).toHaveLength(2)
-      workers[1].respond()
-      await expect(recovered).resolves.toMatchObject({ label: 'recovered' })
-    } finally {
-      finish(1)
-      queue.dispose()
-    }
-  })
-
   describe('awaitRetirement', () => {
     function stalledExit(): { worker: FakeWorker; finish: (code: number) => void } {
       const worker = new FakeWorker()
@@ -396,7 +364,7 @@ describe('WorkerThreadRequestQueue', () => {
       return { worker, finish }
     }
 
-    it('fails calls closed until the timed-out worker exits, then spawns again', async () => {
+    it('blocks calls until retirement without charging the owner fault budget', async () => {
       vi.useFakeTimers()
       const workers: FakeWorker[] = []
       const stalled = stalledExit()
@@ -405,12 +373,13 @@ describe('WorkerThreadRequestQueue', () => {
         makeWorker: () => (workers.length === 0 ? stalled.worker : new FakeWorker())
       })
 
-      const first = settle(send(queue, 'stuck'))
+      const owner = { signal: new AbortController().signal }
+      const first = settle(send(queue, 'stuck', owner))
       await vi.advanceTimersByTimeAsync(TIMEOUT_MS)
       expect(await first).toMatchObject({ message: `timed out after ${TIMEOUT_MS}ms` })
 
-      for (const label of ['a', 'b', 'c']) {
-        expect(await settle(send(queue, label))).toMatchObject({
+      for (const label of ['a', 'b', 'c', 'd']) {
+        expect(await settle(send(queue, label, owner))).toMatchObject({
           message: 'unavailable: previous worker still exiting'
         })
       }
@@ -418,7 +387,7 @@ describe('WorkerThreadRequestQueue', () => {
 
       stalled.finish(1)
       await vi.advanceTimersByTimeAsync(0)
-      const recovered = send(queue, 'recovered')
+      const recovered = send(queue, 'recovered', owner)
       expect(workers).toHaveLength(2)
       workers[1].respond()
       await expect(recovered).resolves.toMatchObject({ label: 'recovered' })
@@ -434,6 +403,7 @@ describe('WorkerThreadRequestQueue', () => {
       await vi.advanceTimersByTimeAsync(TIMEOUT_MS)
       expect(await first).toMatchObject({ message: `timed out after ${TIMEOUT_MS}ms` })
 
+      await expect(queue.retired()).resolves.toBeUndefined()
       const next = send(queue, 'next')
       expect(workers).toHaveLength(2)
       workers[1].respond()

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
-import { buildStructuredJournalArchive } from './structured-worker-journal-archive'
+import { boundStructuredJournalTail } from './structured-worker-journal-archive'
 import { foldToolMessages } from '../../../../../shared/native-chat/tools/native-chat-tool-fold'
 import { pairToolBlocks } from '../../../../../shared/native-chat/tools/native-chat-tool-pairs'
 
@@ -28,27 +28,16 @@ function longJournal(count: number): AgentJournalRenderItem[] {
   )
 }
 
-function archive(items: AgentJournalRenderItem[], hasOlder = false) {
-  return buildStructuredJournalArchive({
-    agent: 'claude',
-    processIncarnation: 'structured:session-1',
-    items,
-    hasOlder
-  })
-}
+const archive = boundStructuredJournalTail
 
-describe('buildStructuredJournalArchive', () => {
-  it('keeps the worker final answer when the journal exceeds the bound', () => {
+describe('boundStructuredJournalTail', () => {
+  it('keeps the worker final answer within the durable archive size limit', () => {
     // Forward bounding keeps early exploration; archive tail bounding must retain the final answer.
     const items = longJournal(200)
     const built = archive(items)
     expect(built.limited).toBe(true)
     expect(built.messages.at(-1)?.id).toBe('item-199')
     expect(built.messages[0]?.id).not.toBe('item-0')
-  })
-
-  it('stays inside the durable bound', () => {
-    const built = archive(longJournal(200))
     expect(Buffer.byteLength(JSON.stringify(built.messages), 'utf8')).toBeLessThanOrEqual(
       STRUCTURED_ARCHIVE_MAX_BYTES
     )

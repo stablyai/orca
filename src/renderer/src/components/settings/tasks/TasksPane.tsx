@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Github, Gitlab } from 'lucide-react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 import {
   type TaskProvider,
@@ -26,7 +26,7 @@ import {
   LINEAR_INTEGRATION_SECTION_ID
 } from '../../integrations/task-trackers/task-provider-integration-section-ids'
 import { getTasksPaneSearchKeywords } from './tasks-search'
-import { useIntegrationProviderStatusRefresh } from '../../../hooks/use-integration-provider-status-refresh'
+import { useIntegrationProviderStatusRefresh } from '../../../runtime/hosts/observations/use-integration-provider-status-refresh'
 import { useTaskSourceProviderReadiness } from './use-task-source-provider-readiness'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
@@ -174,7 +174,7 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
       ) : null}
 
       <SearchableSetting
-        title={t('auto.components.settings.TasksPane.f71d8a9dd3', 'Task Providers')}
+        title={t('auto.components.settings.TasksPane.30255b39dc', 'Task providers')}
         description={t(
           'auto.components.settings.TasksPane.providersDescription',
           'Each card walks through connection (and skill, for Linear) plus whether it appears in Tasks.'

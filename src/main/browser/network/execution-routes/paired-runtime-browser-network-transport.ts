@@ -16,7 +16,7 @@ import {
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY
-} from '../../../../shared/browser-runtime-capabilities'
+} from '../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { BrowserNetworkTunnelClient } from '../tunnels/browser-network-tunnel-client'
 import type { BrowserNetworkTunnelOutboundMemoryLease } from '../tunnels/browser-network-tunnel-outbound-memory-budget'
 import {

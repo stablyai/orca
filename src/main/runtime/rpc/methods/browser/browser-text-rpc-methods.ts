@@ -1,6 +1,10 @@
 import { defineMethod } from '../../core'
-import { assertRpcClipboardTextWriteWithinLimit } from '../../rpc-clipboard-text-validation'
-import { Fill, KeyboardInsert, Type } from '../../../../../shared/rpc-contract/browser-params'
+import { assertRpcClipboardTextWriteWithinLimit } from '../../clipboard/rpc-clipboard-text-validation'
+import {
+  Fill,
+  KeyboardInsert,
+  Type
+} from '../../../../../shared/rpc-contract/browser/browser-params'
 
 export const BROWSER_TEXT_METHODS = [
   defineMethod({

@@ -5,8 +5,8 @@ import {
 import {
   seedClaudeLeadTurnFromPersistedStatus,
   seedClaudeSubagentRosterFromSnapshots
-} from '../../../shared/agent-hook-listener/providers/claude-roster-state'
-import { seedCodexStateFromSnapshot } from '../../../shared/agent-hook-listener/providers/codex-state'
+} from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-roster-state'
+import { seedCodexStateFromSnapshot } from '../../../shared/agent-hook-listener/providers/codex/codex-state'
 import { AGENT_STATUS_PERSISTED_HYDRATION_MODE } from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
 import { AGENT_STATUS_HYDRATE_MAX_AGE_MS as HYDRATE_MAX_AGE_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
 import { LAST_STATUS_FILE_VERSION, STATUS_FLUSH_BUSY_TIMEOUT_MS } from './server-constants'
@@ -60,6 +60,7 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
     } else {
       this.admitSavedStatus(saved.document)
     }
+    this.pruneUnplacedSleepingPanes()
     // Repairs and a migrated legacy file are saved now; an unchanged store writes nothing.
     this.runStatusPersist()
   }
@@ -96,7 +97,17 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
           ? rawEntry
           : { ...(rawEntry as Record<string, unknown>), paneKey: resolvedPaneKey }
       const entry = sanitizeHydratedEntry(resolvedPaneKey, rawResolvedEntry)
-      if (entry && entry.receivedAt >= ttlCutoff) {
+      if (entry && (entry.paneSleep || entry.receivedAt >= ttlCutoff)) {
+        // A shared host still runs this conversation after the restart.
+        if (
+          entry.providerSession &&
+          typeof rawResolvedEntry === 'object' &&
+          rawResolvedEntry !== null &&
+          'executionHost' in rawResolvedEntry &&
+          rawResolvedEntry.executionHost === 'shared'
+        ) {
+          entry.executionHost = 'shared'
+        }
         const launchTokenHash = readPersistedLaunchTokenHash(rawResolvedEntry)
         if (launchTokenHash) {
           this.hydratedLaunchTokenHashByPaneKey.set(resolvedPaneKey, launchTokenHash)

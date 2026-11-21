@@ -52,9 +52,7 @@ function makeCandidate(
     displayName: 'Feature',
     branch: 'feature',
     path: '/repo-feature',
-    tier: 'ready',
-    selectedByDefault: true,
-    reasons: ['idle-clean'],
+    reasons: ['inactive'],
     blockers: [],
     lastActivityAt: NOW - 40 * 24 * 60 * 60 * 1000,
     localContext: {
@@ -63,7 +61,7 @@ function makeCandidate(
       browserTabCount: 0,
       diffCommentCount: 0,
       newestDiffCommentAt: null,
-      retainedDoneAgentCount: 0
+      finishedAgentCount: 0
     },
     git: { clean: true, upstreamAhead: 0, upstreamBehind: 0, checkedAt: NOW },
     fingerprint: '2|feature|abc123|clean|19675',
@@ -147,7 +145,7 @@ describe('workspace cleanup scan snapshot', () => {
       makeBroadResult([stale, other])
     )
 
-    const rescanned = makeCandidate({ tier: 'protected', blockers: ['dirty-files'] })
+    const rescanned = makeCandidate({ blockers: ['dirty-files'] })
     await persistWorkspaceCleanupScanResult(
       userDataDirHolder.dir,
       { worktreeId: stale.worktreeId },
@@ -221,7 +219,7 @@ describe('workspace cleanup scan snapshot', () => {
     expect(snapshotWriteSpy).not.toHaveBeenCalled()
   })
 
-  it('does not let a scan started before a bulk removal restore pruned rows', async () => {
+  it('admits recreated rows using the original removal time, even after a delayed flush', async () => {
     const local = makeCandidate()
     const remote = makeCandidate({
       worktreeId: 'repo-1::/remote-feature',
@@ -229,52 +227,38 @@ describe('workspace cleanup scan snapshot', () => {
       executionHostId: 'ssh:ssh-1',
       path: '/remote-feature'
     })
-    const staleResult = {
-      ...makeBroadResult([local, remote]),
-      scannedAt: Date.now() - 1
-    }
-    await pruneWorkspaceCleanupScanSnapshots(userDataDirHolder.dir, [
-      { worktreeId: local.worktreeId, executionHostId: 'local' },
-      { worktreeId: remote.worktreeId, executionHostId: 'ssh:ssh-1' }
-    ])
-
-    await persistWorkspaceCleanupScanResult(
-      userDataDirHolder.dir,
-      { includeAllWorkspaces: true },
-      staleResult
-    )
-    expect((await readWorkspaceCleanupScanSnapshot(userDataDirHolder.dir))?.candidates).toEqual([])
-
-    const recreated = { ...staleResult, scannedAt: Date.now() + 1 }
-    await persistWorkspaceCleanupScanResult(
-      userDataDirHolder.dir,
-      { includeAllWorkspaces: true },
-      recreated
-    )
-    expect((await readWorkspaceCleanupScanSnapshot(userDataDirHolder.dir))?.candidates).toEqual([
-      local,
-      remote
-    ])
-  })
-
-  it('keeps the original tombstone time when a removal batch flushes', async () => {
-    const candidate = makeCandidate()
-    const target = { worktreeId: candidate.worktreeId, executionHostId: 'local' as const }
+    const remoteTarget = { worktreeId: remote.worktreeId, executionHostId: 'ssh:ssh-1' as const }
+    const result = makeBroadResult([local, remote])
     const now = vi.spyOn(Date, 'now').mockReturnValue(100)
-    registerWorkspaceCleanupScanSnapshotPruneTombstones(userDataDirHolder.dir, [target])
-    now.mockReturnValue(200)
+    try {
+      await pruneWorkspaceCleanupScanSnapshots(userDataDirHolder.dir, [
+        { worktreeId: local.worktreeId, executionHostId: 'local' }
+      ])
+      registerWorkspaceCleanupScanSnapshotPruneTombstones(userDataDirHolder.dir, [remoteTarget])
+      now.mockReturnValue(200)
+      await finalizeWorkspaceCleanupScanSnapshotPrunes(userDataDirHolder.dir, [remoteTarget])
 
-    await finalizeWorkspaceCleanupScanSnapshotPrunes(userDataDirHolder.dir, [target])
-    await persistWorkspaceCleanupScanResult(
-      userDataDirHolder.dir,
-      { includeAllWorkspaces: true },
-      { ...makeBroadResult([candidate]), scannedAt: 150 }
-    )
+      await persistWorkspaceCleanupScanResult(
+        userDataDirHolder.dir,
+        { includeAllWorkspaces: true },
+        { ...result, scannedAt: 99 }
+      )
+      expect((await readWorkspaceCleanupScanSnapshot(userDataDirHolder.dir))?.candidates).toEqual(
+        []
+      )
 
-    expect((await readWorkspaceCleanupScanSnapshot(userDataDirHolder.dir))?.candidates).toEqual([
-      candidate
-    ])
-    now.mockRestore()
+      await persistWorkspaceCleanupScanResult(
+        userDataDirHolder.dir,
+        { includeAllWorkspaces: true },
+        { ...result, scannedAt: 150 }
+      )
+      expect((await readWorkspaceCleanupScanSnapshot(userDataDirHolder.dir))?.candidates).toEqual([
+        local,
+        remote
+      ])
+    } finally {
+      now.mockRestore()
+    }
   })
 
   it('patches and prunes host-colliding workspace ids independently', async () => {
@@ -292,7 +276,6 @@ describe('workspace cleanup scan snapshot', () => {
 
     const rescannedRemote = makeCandidate({
       ...remote,
-      tier: 'protected',
       blockers: ['dirty-files']
     })
     await persistWorkspaceCleanupScanResult(

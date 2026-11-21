@@ -3,17 +3,26 @@ import { installRealWorkerThreadChildProcesses } from '../../../worker-thread-ch
 // macOS chflags uchg makes owner files undeletable; worktree-failed-removal.test.ts covers the same rules with mocked Git.
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises'
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  symlink,
+  writeFile
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
-import { removeTree } from '../../../../shared/windows-transient-lock-removal'
+import { removeTree } from '../../../../shared/file-write/windows-transient-lock-removal'
 import type { Store } from '../../../persistence/loading-store/store'
 import type * as HostTreeRemoval from '../../../filesystem/host-tree-removal'
-import { removeHostTree } from '../../../filesystem/host-tree-removal'
+import { removeHostCheckout } from '../../../filesystem/host-tree-removal'
 import { listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
 import { removeWorktree } from '../../../git/worktrees/removal/worktree-removal'
 import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
@@ -28,6 +37,7 @@ import {
   resumeInterruptedWorktreeRemovals,
   retryFailedWorktreeRemoval,
   startBackgroundWorktreeRemoval,
+  markerIdentity as readCheckoutMarkerIdentity,
   waitForPendingWorktreeRemoval
 } from '../../../workspaces/removal/worktree-background-removal'
 import { withUnregisteredRemovalCheckouts } from '../../../workspaces/removal/worktree-removal-listing'
@@ -46,7 +56,7 @@ vi.mock('../../../workspaces/execution-host/project-runtime-git-options', () => 
 }))
 vi.mock('../../../filesystem/host-tree-removal', async (importOriginal) => {
   const actual = await importOriginal<typeof HostTreeRemoval>()
-  return { ...actual, removeHostTree: vi.fn(actual.removeHostTree) }
+  return { ...actual, removeHostCheckout: vi.fn(actual.removeHostCheckout) }
 })
 
 const execFileAsync = promisify(execFile)
@@ -126,7 +136,11 @@ function jobHost(purged: string[], stopPtys = vi.fn(async () => {}), pushTarget?
 }
 
 /** Delete on the row, as desktop and runtime run it: Git's listing first, then the retry. */
-async function deleteRow(purged: string[], stopPtys = vi.fn(async () => {})): Promise<unknown> {
+async function deleteRow(
+  purged: string[],
+  stopPtys = vi.fn(async () => {}),
+  pushTarget?: GitPushTarget
+): Promise<unknown> {
   const listed = await listWorktreesStrict(repoPath)
   const retried = await retryFailedRemovalUnlessRegistered(
     worktreeId,
@@ -135,7 +149,7 @@ async function deleteRow(purged: string[], stopPtys = vi.fn(async () => {})): Pr
     {},
     () =>
       retryFailedWorktreeRemoval(worktreeId, 'local', (record) =>
-        interruptedLocalWorktreeRemovalJob(record, jobHost(purged, stopPtys))
+        interruptedLocalWorktreeRemovalJob(record, jobHost(purged, stopPtys, pushTarget))
       )
   ).catch((reason: unknown) => reason)
   if (retried !== true) {
@@ -148,9 +162,6 @@ async function deleteRow(purged: string[], stopPtys = vi.fn(async () => {})): Pr
   await _settlePendingWorktreeRemovalsForTests()
   return error
 }
-
-const refusal = (): string =>
-  `${worktreePath} is no longer a Git worktree, so its folder was left on disk. Delete the folder yourself to finish removing this workspace.`
 
 /** A delete a quit interrupted, finished at the next start, where Git fails on the locked file. */
 function failStartupFinish(): Promise<unknown> {
@@ -166,6 +177,7 @@ async function finishAtStartup(purged: string[], pushTarget?: GitPushTarget): Pr
     worktreePath,
     branch: 'feature',
     head: (await git(['rev-parse', 'feature'])).trim(),
+    gitdir: await readCheckoutMarkerIdentity(worktreePath),
     deleteBranch: true,
     force: true,
     requestedAt: 1
@@ -192,6 +204,7 @@ async function failInSession(): Promise<unknown> {
       repoId: repo.id,
       repoPath,
       worktree: { path: worktreePath, branch: 'refs/heads/feature', head: 'abc' },
+      gitdir: await readCheckoutMarkerIdentity(worktreePath),
       deleteBranch: true,
       force: true
     },
@@ -236,7 +249,7 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
 
   afterEach(async () => {
     _resetPendingWorktreeRemovalsForTests()
-    vi.mocked(removeHostTree).mockClear()
+    vi.mocked(removeHostCheckout).mockClear()
     vi.restoreAllMocks()
     vi.unstubAllEnvs()
     await setImmutable(false, scratchDir)
@@ -248,10 +261,10 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
     const error = await failStartupFinish()
 
     expect(String(error)).toMatch(LOCKED_FILE_ERROR)
-    // Git removed registration and merged branch but left checkout files and Orca metadata.
+    // Git removed registration but left checkout files; the branch waits for the folder.
     expect(await isRegistered(worktreePath)).toBe(false)
     expect(existsSync(lockedFile)).toBe(true)
-    expect(await git(['branch', '--list', 'feature'])).toBe('')
+    expect(await git(['branch', '--list', 'feature'])).not.toBe('')
     expect(await listedRows()).toEqual([
       {
         path: worktreePath,
@@ -276,25 +289,20 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
     expect(await listedRows()).toHaveLength(1)
   })
 
-  it('Delete refuses while the leftover is there, and finishes metadata and record once the user removed it', async () => {
-    await failInSession()
-    await setImmutable(false)
+  it('Delete finishes the leftover once nothing holds it, then deletes the merged branch', async () => {
+    expect(String(await failInSession())).toMatch(/Operation not permitted/)
+    expect(await isRegistered(worktreePath)).toBe(false)
     const purged: string[] = []
-    const stopPtys = vi.fn(async () => {})
 
-    expect(String(await deleteRow(purged, stopPtys))).toBe(`Error: ${refusal()}`)
-    expect(existsSync(lockedFile)).toBe(true)
-    expect(stopPtys).not.toHaveBeenCalled()
+    expect(String(await deleteRow(purged))).toMatch(LOCKED_FILE_ERROR)
+    expect(existsSync(join(worktreePath, '.git'))).toBe(true)
+    expect(await git(['branch', '--list', 'feature'])).not.toBe('')
     expect(purged).toEqual([])
-    expect(await listedRows()).toEqual([
-      { path: worktreePath, removalError: expect.stringMatching(/Operation not permitted/) }
-    ])
 
-    await rm(worktreePath, { recursive: true })
-    expect(await deleteRow(purged, stopPtys)).toBeUndefined()
+    await setImmutable(false)
+    expect(await deleteRow(purged)).toBeUndefined()
 
-    expect(stopPtys).toHaveBeenCalledTimes(1)
-    expect(removeHostTree).not.toHaveBeenCalled()
+    expect(existsSync(worktreePath)).toBe(false)
     expect(await git(['branch', '--list', 'feature'])).toBe('')
     expect(purged).toEqual([worktreeId])
     expect(await readWorktreeRemovalRecords(recordsDir)).toEqual([])
@@ -309,10 +317,10 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
     await writeFile(join(worktreePath, 'notes.txt'), 'mine\n')
     const purged: string[] = []
 
-    expect(String(await deleteRow(purged))).toBe(`Error: ${refusal()}`)
+    expect(await deleteRow(purged)).toBeInstanceOf(Error)
 
     expect(await readFile(join(worktreePath, 'notes.txt'), 'utf8')).toBe('mine\n')
-    expect(removeHostTree).not.toHaveBeenCalled()
+    expect(removeHostCheckout).not.toHaveBeenCalled()
     expect(purged).toEqual([])
     expect(await listedRows()).toEqual([
       { path: worktreePath, removalError: expect.stringMatching(/Operation not permitted/) }
@@ -336,7 +344,7 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
     expect(await git(['status', '--porcelain'], other)).toBe('?? wip.txt\n')
   })
 
-  it('removes the push-target remote Orca added when a runtime delete fails', async () => {
+  it('keeps the branch and push-target remote when a runtime delete fails, and Delete finishes both', async () => {
     const pushTarget = await addOrcaPushTargetRemote()
     const worktree = (await listWorktreesStrict(repoPath)).find((row) =>
       areWorktreePathsEqual(row.path, worktreePath)
@@ -373,8 +381,49 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
     await _settlePendingWorktreeRemovalsForTests()
 
     expect(String(error)).toMatch(LOCKED_FILE_ERROR)
-    expect(await git(['remote'])).not.toContain(pushTarget.remoteName)
+    expect(await git(['remote'])).toContain(pushTarget.remoteName)
+    expect(await git(['branch', '--list', 'feature'])).not.toBe('')
     expect(existsSync(lockedFile)).toBe(true)
+    expect(existsSync(join(worktreePath, '.git'))).toBe(true)
+
+    await setImmutable(false)
+    const purged: string[] = []
+    expect(await deleteRow(purged, undefined, pushTarget)).toBeUndefined()
+
+    expect(existsSync(worktreePath)).toBe(false)
+    expect(await git(['branch', '--list', 'feature'])).toBe('')
+    expect(await git(['remote'])).not.toContain(pushTarget.remoteName)
+    expect(purged).toEqual([worktreeId])
+  })
+
+  it('keeps a worktree Git registers inside the leftover while Delete stops terminals', async () => {
+    await failInSession()
+    await setImmutable(false)
+    const nested = join(worktreePath, 'sub')
+    const stopPtys = vi.fn(async () => {
+      await git(['worktree', 'add', '-q', nested, '-b', 'nested'])
+      await writeFile(join(nested, 'unsaved.txt'), 'work\n')
+    })
+
+    expect(String(await deleteRow([], stopPtys))).toContain(
+      `contains another registered worktree: ${nested}`
+    )
+
+    expect(await readFile(join(nested, 'unsaved.txt'), 'utf8')).toBe('work\n')
+    expect(await isRegistered(nested)).toBe(true)
+  })
+
+  it('never follows a leftover path that was replaced by a symlink', async () => {
+    await failInSession()
+    await setImmutable(false)
+    const moved = join(scratchDir, 'recovered')
+    await rename(worktreePath, moved)
+    await symlink(moved, worktreePath)
+
+    expect(await deleteRow([])).toBeInstanceOf(Error)
+
+    expect(existsSync(join(moved, 'node_modules', 'a', 'LICENSE'))).toBe(true)
+    expect(existsSync(join(moved, '.git'))).toBe(true)
   })
 
   it('keeps an unmerged branch when the delete fails, as a normal delete does', async () => {
@@ -405,11 +454,11 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
     const retried = retryFailedWorktreeRemoval(worktreeId, 'local', (record) =>
       interruptedLocalWorktreeRemovalJob(record, jobHost(purged))
     )
-    await expect(retried).rejects.toThrow(refusal())
+    await expect(retried).rejects.toThrow(/folder was left on disk/)
     await _settlePendingWorktreeRemovalsForTests()
 
     expect(existsSync(join(worktreePath, 'unsaved.txt'))).toBe(true)
-    expect(removeHostTree).not.toHaveBeenCalled()
+    expect(removeHostCheckout).not.toHaveBeenCalled()
     expect(purged).toEqual([])
     expect(await readWorktreeRemovalRecords(recordsDir)).toEqual([])
     expect(await listedRows()).toEqual([])
@@ -419,8 +468,7 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
     await failStartupFinish()
     await setImmutable(false)
     await rm(worktreePath, { recursive: true })
-    // The failed delete already deleted the merged branch; the user makes it again.
-    await git(['worktree', 'add', '-q', worktreePath, '-b', 'feature'])
+    await git(['worktree', 'add', '-q', worktreePath, 'feature'])
     await writeFile(join(worktreePath, 'unsaved.txt'), 'work\n')
     const purged: string[] = []
 
@@ -462,7 +510,7 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
 
     expect(existsSync(join(nested, 'unsaved.txt'))).toBe(true)
     expect(await isRegistered(nested)).toBe(true)
-    expect(removeHostTree).not.toHaveBeenCalled()
+    expect(removeHostCheckout).not.toHaveBeenCalled()
     expect(purged).toEqual([])
     expect(await listedRows()).toContainEqual({ path: worktreePath, removalError: nestedRefusal })
     // Delete's own check names it as well, before any job runs.
@@ -481,10 +529,10 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
       await writeFile(join(worktreePath, 'notes.txt'), 'mine\n')
     })
 
-    expect(String(await deleteRow(purged, stopPtys))).toBe(`Error: ${refusal()}`)
+    expect(await deleteRow(purged, stopPtys)).toBeInstanceOf(Error)
 
     expect(await readFile(join(worktreePath, 'notes.txt'), 'utf8')).toBe('mine\n')
-    expect(removeHostTree).not.toHaveBeenCalled()
+    expect(removeHostCheckout).not.toHaveBeenCalled()
     expect(purged).toEqual([])
   })
 
@@ -493,21 +541,22 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
     await rm(join(worktreePath, '.git'))
     const purged: string[] = []
 
-    expect(String(await finishAtStartup(purged))).toBe(`Error: ${refusal()}`)
+    expect(await finishAtStartup(purged)).toBeInstanceOf(Error)
 
     expect(existsSync(join(worktreePath, '.git'))).toBe(false)
     expect(existsSync(lockedFile)).toBe(true)
-    expect(removeHostTree).not.toHaveBeenCalled()
+    expect(removeHostCheckout).not.toHaveBeenCalled()
     expect(await isRegistered(worktreePath)).toBe(false)
-    expect(await git(['branch', '--list', 'feature'])).toBe('')
+    expect(await git(['branch', '--list', 'feature'])).not.toBe('')
     expect(purged).toEqual([])
-    expect(await listedRows()).toEqual([{ path: worktreePath, removalError: refusal() }])
+    expect(await listedRows()).toEqual([{ path: worktreePath, removalError: expect.any(String) }])
 
-    expect(String(await deleteRow(purged))).toBe(`Error: ${refusal()}`)
+    expect(await deleteRow(purged)).toBeInstanceOf(Error)
     expect(existsSync(lockedFile)).toBe(true)
 
     await rm(worktreePath, { recursive: true })
     expect(await deleteRow(purged)).toBeUndefined()
+    expect(await git(['branch', '--list', 'feature'])).toBe('')
     expect(purged).toEqual([worktreeId])
     expect(await readWorktreeRemovalRecords(recordsDir)).toEqual([])
     expect(await listedRows()).toEqual([])

@@ -12,8 +12,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
-import type { DiffComment } from '../../../../../../shared/diff-comment-types'
+import { cn } from '@/lib/class-names'
+import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
 import type { PendingDiffCommentsClear } from './diff-comments-clear-dialog-state'
 import { DiffCommentsInlineList } from './diff-comments-list'
 

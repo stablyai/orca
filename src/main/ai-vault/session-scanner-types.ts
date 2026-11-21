@@ -5,13 +5,14 @@ import type {
   AiVaultSession,
   AiVaultSessionPreviewMessage
 } from '../../shared/ai-vault/contracts/ai-vault-types'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import type {
   TranscriptMessageSink,
   TranscriptSessionIdentity
 } from './transcripts/session-transcript-consumers'
 import type { SessionSidecarObservation } from './parse-cache/session-sidecar-stat'
 import type { OpenCodeWslRuntime } from './scanners/opencode/reader-transport/session-scanner-opencode-wsl-runtime'
+import type { SessionDiscoveryStatCache } from './discovery/session-discovery-stat-cache'
 
 export type AiVaultScanOptions = {
   claudeProjectsDir?: string
@@ -40,7 +41,8 @@ export type AiVaultScanOptions = {
   zcodeDbPath?: string
   grokSessionsDir?: string
   devinTranscriptsDir?: string
-  hermesSessionsDir?: string
+  /** Hermes home whose state.db and profiles/<name>/state.db are scanned. */
+  hermesHome?: string
   rovoSessionsDir?: string
   openclawStateDir?: string
   openclawLegacyStateDir?: string
@@ -63,6 +65,8 @@ export type AiVaultScanOptions = {
   scopeOnly?: boolean
   platform?: NodeJS.Platform
   executionHostId?: ExecutionHostId
+  /** Search indexing reuses stats of quiet files between complete sweeps. */
+  statCache?: SessionDiscoveryStatCache
   signal?: AbortSignal
 }
 
@@ -88,6 +92,19 @@ export type SessionFileCandidate = {
   antigravityHistoryPath?: string
 }
 
+// Pass-local wrapper; only its original physical candidates may reach parsers or IPC.
+export type SessionFileChoice = SessionFileCandidate & {
+  alternatives?: readonly SessionFileCandidate[]
+  /** Proven duplicates parsers never read; search retires their rows. */
+  outrankedCopies?: readonly SessionFileCandidate[]
+}
+
+export function physicalSessionCandidates(
+  choice: SessionFileChoice
+): readonly SessionFileCandidate[] {
+  return choice.alternatives ?? [choice]
+}
+
 export type SessionFileDiscovery = {
   agent: AiVaultAgent
   rootDir: string
@@ -99,6 +116,7 @@ export type SessionFileDiscovery = {
 }
 
 export type SessionParseResult = {
+  sourceFailed?: boolean
   session: AiVaultSession | null
   issue: AiVaultScanIssue | null
 }

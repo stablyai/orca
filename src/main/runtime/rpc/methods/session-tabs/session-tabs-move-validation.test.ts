@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../../orca-runtime'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 function setMobileSessionSnapshot(
   runtime: OrcaRuntimeService,
@@ -170,7 +170,7 @@ describe('session tab move validation', () => {
 
     moveSessionTab.mockClear()
     // Renderer rows stay listed without a live page only while their window exists.
-    Object.assign(runtime, { getAvailableAuthoritativeWindow: () => ({}) })
+    Object.assign(runtime, { hasAuthoritativeWindow: () => true })
     const headlessSnapshot = runtime['mobileSessionTabsByWorktree'].get('wt-1')!
     setMobileSessionSnapshot(runtime, {
       ...headlessSnapshot,

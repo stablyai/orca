@@ -1,20 +1,14 @@
 import { toast } from 'sonner'
-import {
-  parseRoutableExecutionHostId,
-  type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+import { parseRoutableExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
-import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { agentLabel } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-filters'
-import {
-  CLI_CONVERSATION_ADOPTING_AGENTS,
-  type CliConversationRowAgent
-} from '../../../../../../shared/structured-agent-cli-conversation-adoption'
-import { hasRuntimeRpcErrorCode } from '../../../../../../shared/runtime-rpc-error-code'
+import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
+import type { CliConversationRowAgent } from '../../../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
+import { hasRuntimeRpcErrorCode } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { prepareAiVaultSessionForResume } from '@/lib/agent-session/resume/history/ai-vault-session-resume-preparation'
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
-import type { AgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import {
   beginStructuredAgentSessionProvisionalLaunch,
@@ -22,10 +16,13 @@ import {
 } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { admitStructuredLaunchOnHost } from '@/lib/agent-session/launch/structured-agent-session-host-admission'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
-import { cliConversationExitGuidance } from '@/lib/cli-conversation-exit-guidance'
+import { cliConversationExitGuidance } from '@/lib/agent-session/resume/history/cli-conversation-exit-guidance'
 import { structuredLaunchFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
+import { agentSessionWriteFailureText } from '@/components/native-chat/messages/notices/agent-session-write-notice-text'
 import { workspaceHasSleepingAgentSessions } from '@/lib/workspace/activation/worktree-agent-activation-gate'
 import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent'
+import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
+
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { StructuredAgentLaunchSettlement } from '@/lib/agent-session/launch/continuation/structured-agent-launch-settlement'
 import type { NativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
@@ -54,7 +51,7 @@ export async function resumeAiVaultSessionInNewChat(
   session: AiVaultSession,
   rowAgent: CliConversationRowAgent,
   worktreeId: string,
-  requestId: AgentLaunchRequestId,
+  requestId: string,
   replacing?: AiVaultChatReplacement
 ): Promise<void> {
   try {
@@ -189,6 +186,11 @@ function notifyAiVaultSessionResumeInChatFailure(
         { agent: agentLabel(rowAgent) }
       )
     )
+    return
+  }
+  // The host refuses this before any chat opens, so the toast says where it was saved.
+  if (failure?.code === 'agent_session_identity_required' && failure.details?.otherFolder) {
+    toast.error(agentSessionWriteFailureText(failure, 'read-history'))
     return
   }
   if (

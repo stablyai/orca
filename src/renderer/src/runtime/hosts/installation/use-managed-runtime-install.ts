@@ -1,20 +1,21 @@
 import {
   useAppStateViewActive,
-  useAppViewExternalStore,
-  useAppStateValue
+  useAppViewExternalStore
 } from '@/store/retained-views/app-state-view'
+import { useRuntimeHostStatusViewSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useCallback, useEffect, useMemo } from 'react'
-import { isAgentSessionHandleProvider } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { useAppStore } from '@/store'
+import { isAgentSessionHandleProvider } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY,
   MANAGED_RUNTIME_REMOVE_RUNTIME_CAPABILITY
-} from '../../../../../shared/managed-runtime-install'
+} from '../../../../../shared/agent-launch/installation/managed-runtime-install'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   hostStructuredAgentsReadFailed,
   loadHostStructuredAgents,
@@ -50,6 +51,9 @@ export type ManagedRuntimeInstallObservation =
       removable: boolean
     }
 
+// Installs and removals whose agent list was read again; shared by every observer of one.
+const reDetectedAfter = new Set<string>()
+
 const INACTIVE: ManagedRuntimeInstallObservation = { kind: 'inactive' }
 const PENDING: ManagedRuntimeInstallObservation = { kind: 'pending' }
 const READ_FAILED: ManagedRuntimeInstallSnapshot = { kind: 'readFailed' }
@@ -72,21 +76,17 @@ export function useManagedRuntimeInstall(
   const record = useHostStructuredAgent(target, agent)
   const managed = record?.managedRuntime === true
   const environmentId = target.kind === 'environment' ? target.environmentId : null
-  const remote = useAppStateValue((state) =>
-    environmentId === null
-      ? null
-      : lastVerifiedRuntimeStatus(state.runtimeStatusByEnvironmentId.get(environmentId))
+  const remote = useRuntimeHostStatusViewSelector(environmentId, (entry) =>
+    environmentId === null ? null : lastVerifiedRuntimeStatus(entry)
   )
   // The entry's own status clears on a lost contact; the verified one above outlives it.
-  const reachable = useAppStateValue(
-    (state) =>
-      environmentId === null ||
-      Boolean(state.runtimeStatusByEnvironmentId.get(environmentId)?.status)
+  const reachable = useRuntimeHostStatusViewSelector(
+    environmentId,
+    (entry) => environmentId === null || Boolean(entry?.status)
   )
-  const contactEpoch = useAppStateValue((state) =>
-    environmentId === null
-      ? 0
-      : (state.runtimeStatusByEnvironmentId.get(environmentId)?.hostContactEpoch ?? 0)
+  const contactEpoch = useRuntimeHostStatusViewSelector(
+    environmentId,
+    (entry) => entry?.hostContactEpoch ?? 0
   )
   const localCapable = useAppViewExternalStore(
     subscribeLocalRuntimeCapabilitiesKnown,
@@ -140,6 +140,27 @@ export function useManagedRuntimeInstall(
   }, [subject, contactEpoch, viewActive])
   const read = useCallback(() => (subject ? readManagedRuntimeInstall(subject) : null), [subject])
   const snapshot = useAppViewExternalStore(subscribeManagedRuntimeInstalls, read, read)
+  const settled =
+    snapshot?.kind === 'known' && snapshot.state.operation?.phase === 'succeeded'
+      ? snapshot.state.operation.id
+      : null
+  // Orca's installed copy is an installed agent, so every agent list of that host is dropped and
+  // the surfaces showing one read it again; a surface opened later catches an unobserved settle.
+  useEffect(() => {
+    if (!settled || reDetectedAfter.has(settled)) {
+      return
+    }
+    reDetectedAfter.add(settled)
+    const store = useAppStore.getState()
+    // Readers outside a hook (Settings, the status bar) read the host's own list, so ask for it.
+    if (environmentId === null) {
+      store.clearLocalDetectedAgents()
+      void store.ensureNativeDetectedAgents().catch(() => {})
+    } else {
+      store.clearRuntimeDetectedAgents(environmentId)
+      void store.ensureRuntimeDetectedAgents(environmentId).catch(() => {})
+    }
+  }, [settled, environmentId])
   const observation = useMemo((): ManagedRuntimeInstallObservation => {
     if (capable === false || (list === 'loaded' && !managed)) {
       return INACTIVE

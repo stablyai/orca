@@ -15,8 +15,8 @@ import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { lock } from 'proper-lockfile'
 import { reclaimReleaseTestCaches } from './reclaim-release-test-caches.mjs'
-import { withReleaseSourceLease } from '../../../tests/e2e/cross-version-wire/release-source-retention'
-import { CHECKOUT_FORMAT } from '../../../tests/e2e/cross-version-wire/release-checkout-publication'
+import { withReleaseSourceLease } from '../../../tests/e2e/cross-version-wire/release-checkouts/release-source-retention'
+import { CHECKOUT_FORMAT } from '../../../tests/e2e/cross-version-wire/release-checkouts/release-checkout-publication'
 
 const roots: string[] = []
 const commit = 'c'.repeat(40)

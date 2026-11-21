@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -9,11 +12,31 @@ import {
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { CODEX_USER_INPUT_METHOD } from '../prompts/codex-prompt-registry'
 import type { CodexStructuredSessionEvent } from '../session-lifecycle/codex-structured-session-state'
-import { deferredTarget } from './codex-deferred-sink-target-test-support'
-import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { journalTarget } from './codex-deferred-sink-target-test-support'
+import {
+  readTestJournalItems,
+  readTestJournalSnapshot
+} from '../../../native-chat/agent-session-journal/journal-observation.test-support'
+import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 
 const SESSION_ID = 'session-1'
 const THREAD_ID = 'thread-abc'
+const journals = createTrackedJournalOpener()
+let root: string
+
+beforeEach(async () => {
+  root = await mkdtemp(join(tmpdir(), 'orca-codex-translation-'))
+})
+
+afterEach(async () => {
+  await journals.closeAll()
+  await rm(root, { recursive: true, force: true })
+})
+
+async function savedBodies(target: { journal: Parameters<typeof readTestJournalItems>[0] }) {
+  return (await readTestJournalItems(target.journal)).map((item) => item.body)
+}
 
 type Row = { key: string; body: AgentJournalItemBody }
 
@@ -63,7 +86,6 @@ function pausedDeferred() {
 
 describe('codex journal translation', () => {
   it('admits authoritative item completion while the deferred sink pauses reading', async () => {
-    const bodies: AgentJournalItemBody[] = []
     const publishes: string[] = []
     const readingControl = { pauseReading: vi.fn(), resumeReading: vi.fn() }
     const deferred = createDeferredStructuredAgentSessionEventSink({
@@ -98,11 +120,11 @@ describe('codex journal translation', () => {
     expect(deferred.state()).toMatchObject({ backpressured: true })
     expect(readingControl.pauseReading).toHaveBeenCalled()
 
-    deferred.bind(deferredTarget(bodies, publishes))
+    const target = await journalTarget(journals, root, publishes)
+    deferred.bind(target)
     await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
 
-    expect(bodies).toEqual([
-      expect.objectContaining({ kind: 'tool-call', state: 'running' }),
+    expect(await savedBodies(target)).toEqual([
       expect.objectContaining({
         kind: 'tool-call',
         state: 'completed',
@@ -119,15 +141,14 @@ describe('codex journal translation', () => {
       })
     )
     await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
-    expect(bodies.at(-1)).toMatchObject({
+    expect((await savedBodies(target)).at(-1)).toMatchObject({
       kind: 'message',
       blocks: [{ type: 'text', text: 'next turn still works' }]
     })
   })
 
-  it('admits user-input prompt questions and their publish while the sink pauses reading', async () => {
-    const bodies: AgentJournalItemBody[] = []
-    const publishes: string[] = []
+  it('publishes distinct and repeated question IDs while the sink pauses reading', async () => {
+    const published: ReturnType<typeof readTestJournalSnapshot>[] = []
     const bound: [string, string, string][] = []
     const deferred = pausedDeferred()
     const translator = createCodexJournalTranslator({
@@ -144,7 +165,8 @@ describe('codex journal translation', () => {
       params: {
         questions: [
           { id: 'q1', question: 'Which branch?', options: [{ label: 'main' }] },
-          { id: 'q2', question: 'Proceed?', options: [{ label: 'yes' }] }
+          { id: 'q2', question: 'Proceed?', options: [{ label: 'yes' }] },
+          { id: 'q1', question: 'Use the release branch?', options: [{ label: 'release' }] }
         ]
       },
       codexItemId: 'exec-1',
@@ -154,18 +176,36 @@ describe('codex journal translation', () => {
     expect(admission).toEqual({ accepted: true })
     expect(bound.map(([journalItemId]) => journalItemId)).toEqual([
       'orca:codex-prompt%3Athread-abc%3Ainput-hard-watermark%3Aq1',
-      'orca:codex-prompt%3Athread-abc%3Ainput-hard-watermark%3Aq2'
+      'orca:codex-prompt%3Athread-abc%3Ainput-hard-watermark%3Aq2',
+      'orca:codex-prompt%3Athread-abc%3Ainput-hard-watermark%3Aq1'
     ])
     expect(deferred.state()).toMatchObject({ backpressured: true })
 
-    deferred.bind(deferredTarget(bodies, publishes))
+    const target = await journalTarget(journals, root)
+    deferred.bind({
+      ...target,
+      publish: () => {
+        published.push(readTestJournalSnapshot(target.journal))
+      }
+    })
     await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
 
-    expect(bodies).toEqual([
-      expect.objectContaining({ kind: 'question', question: 'Which branch?' }),
-      expect.objectContaining({ kind: 'question', question: 'Proceed?' })
-    ])
-    expect(publishes).toHaveLength(1)
+    const saved = await readTestJournalItems(target.journal)
+    expect(saved).toHaveLength(2)
+    expect(saved).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          revision: 2,
+          body: expect.objectContaining({ kind: 'question', question: 'Use the release branch?' })
+        }),
+        expect.objectContaining({
+          revision: 1,
+          body: expect.objectContaining({ kind: 'question', question: 'Proceed?' })
+        })
+      ])
+    )
+    expect(deferred.state().failed).toBe(false)
+    expect(await Promise.all(published)).toEqual([await readTestJournalSnapshot(target.journal)])
   })
 
   it('refuses an untranslated user-input prompt without binding live state', () => {

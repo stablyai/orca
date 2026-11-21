@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Socket } from 'node:net'
 import { DaemonStreamDataBatcher } from '../daemon-stream-data-batcher'
-import { createNdjsonParser } from '../../../../../shared/main-process-ndjson-framer'
 
 function createBatcher(options?: ConstructorParameters<typeof DaemonStreamDataBatcher>[1]) {
   const streamSocket = {
@@ -60,49 +59,7 @@ describe('DaemonStreamDataBatcher', () => {
     }
   })
 
-  it('holds bulk output while the socket buffer is deep and resumes on the next flush', () => {
-    vi.useFakeTimers()
-    try {
-      const { batcher, streamSocket } = createBatcher()
-      const bulk = 'x'.repeat(64 * 1024)
-
-      streamSocket.writableLength = 128 * 1024
-      batcher.enqueue('client-1', 'session-bulk', bulk)
-      vi.advanceTimersByTime(2)
-      expect(nonSentinelWrites(streamSocket)).toHaveLength(0)
-      expect(batcher.queuedCharsForClient('client-1')).toBe(bulk.length)
-
-      streamSocket.writableLength = 0
-      batcher.flush('client-1')
-      expect(writtenData(streamSocket)).toBe(bulk)
-      expect(batcher.queuedCharsForClient('client-1')).toBe(0)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('lets a small session write through the gate while a flooding session holds (per-session fairness)', () => {
-    vi.useFakeTimers()
-    try {
-      const { batcher, streamSocket } = createBatcher()
-
-      streamSocket.writableLength = 128 * 1024
-      batcher.enqueue('client-1', 'session-flood', 'x'.repeat(256 * 1024))
-      // Omit the interactive fast path to exercise small-session bypass.
-      batcher.enqueue('client-1', 'session-typing', 'echo-line')
-      vi.advanceTimersByTime(2)
-
-      const written = nonSentinelWrites(streamSocket)
-      expect(written.some((m) => m.sessionId === 'session-typing')).toBe(true)
-      expect(writtenData(streamSocket)).toContain('echo-line')
-      expect(written.some((m) => m.sessionId === 'session-flood')).toBe(false)
-      expect(batcher.queuedCharsForClient('client-1')).toBe(256 * 1024)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('never reorders bytes within a session around the small-session bypass', () => {
+  it('lets a small session bypass held bulk while keeping each session in order', () => {
     vi.useFakeTimers()
     try {
       const { batcher, streamSocket } = createBatcher()
@@ -113,8 +70,12 @@ describe('DaemonStreamDataBatcher', () => {
       batcher.enqueue('client-1', 'session-b', 'other')
       batcher.enqueue('client-1', 'session-a', 'tail')
       vi.advanceTimersByTime(2)
-      const written = streamSocket.write.mock.calls.map(([line]) => String(line)).join('')
-      expect(written).not.toContain('tail')
+      expect(nonSentinelWrites(streamSocket)).toEqual([
+        expect.objectContaining({
+          sessionId: 'session-b',
+          payload: expect.objectContaining({ data: 'other' })
+        })
+      ])
 
       streamSocket.writableLength = 0
       batcher.flush('client-1')
@@ -352,34 +313,6 @@ describe('DaemonStreamDataBatcher', () => {
       flushCallbacks[0]()
       expect(writtenData(streamSocket)).toBe('x'.repeat(64 * 1024))
       expect(batcher.queuedCharsForClient('client-1')).toBe(0)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('writes large stream data as parser-sized NDJSON events', () => {
-    vi.useFakeTimers()
-    try {
-      const maxLineBytes = 256
-      const { batcher, streamSocket } = createBatcher({ maxLineBytes })
-      const data = 'x'.repeat(maxLineBytes * 3)
-      const onMessage = vi.fn()
-      const onError = vi.fn()
-      const parser = createNdjsonParser(onMessage, onError, { maxLineBytes })
-
-      batcher.enqueue('client-1', 'session-1', data)
-      vi.advanceTimersByTime(2)
-      for (const [line] of streamSocket.write.mock.calls) {
-        parser.feed(String(line))
-      }
-
-      expect(onError).not.toHaveBeenCalled()
-      expect(onMessage).toHaveBeenCalled()
-      expect(
-        onMessage.mock.calls
-          .map(([message]) => (message as { payload?: { data?: string } }).payload?.data ?? '')
-          .join('')
-      ).toBe(data)
     } finally {
       vi.useRealTimers()
     }

@@ -1,7 +1,7 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
-import type { Repo } from '../../../../shared/repo-types'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   HOST_DEFAULT_AGENT_DETECTION,
   resolveWorkspaceAgentDetectionHost,

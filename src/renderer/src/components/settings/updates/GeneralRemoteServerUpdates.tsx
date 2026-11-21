@@ -1,10 +1,13 @@
 import type React from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
-import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
-import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
+import {
+  getUpdateCheckClickOptions,
+  getUpdateCheckHint
+} from '@/app-shell/updates/update-check-click-options'
+import { getRemoteServerNewerThanClientVersion } from '@/runtime/hosts/updates/remote-server-version-skew'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 
 export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
@@ -17,10 +20,6 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   const setDialogOpen = useAppStore((state) => state.setRemoteServerUpdateDialogOpen)
   const updateCheckHint = getUpdateCheckHint()
 
-  useEffect(() => {
-    void refresh()
-  }, [refresh])
-
   if (entries.length === 0) {
     return null
   }
@@ -30,9 +29,10 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   ).length
   const manual = entries.filter((entry) => entry.phase === 'manual').length
   const offline = entries.filter((entry) => entry.phase === 'offline').length
-  const current = entries.filter(
-    (entry) => entry.phase === 'current' || entry.phase === 'updated'
-  ).length
+  const settled = entries.filter((entry) => entry.phase === 'current' || entry.phase === 'updated')
+  // A newer server needs nothing from its own updater; this app is the one behind.
+  const newer = settled.filter((entry) => getRemoteServerNewerThanClientVersion(entry)).length
+  const current = settled.length - newer
   const summary = [
     entries.length === 1
       ? t('auto.components.settings.GeneralRemoteServerUpdates.serverCountOne', '1 paired server')
@@ -55,6 +55,13 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
           { value0: current }
         )
       : null,
+    newer > 0
+      ? t(
+          'auto.components.settings.GeneralRemoteServerUpdates.newerCount',
+          '{{value0}} newer than this app',
+          { value0: newer }
+        )
+      : null,
     manual > 0
       ? t('auto.components.settings.GeneralRemoteServerUpdates.manualCount', '{{value0}} manual', {
           value0: manual
@@ -73,7 +80,10 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
 
   return (
     <SearchableSetting
-      title={t('auto.components.settings.GeneralRemoteServerUpdates.title', 'Remote Orca Servers')}
+      title={t(
+        'auto.components.settings.GeneralRemoteServerUpdates.fdd271abf0',
+        'Remote Orca servers'
+      )}
       description={t(
         'auto.components.settings.GeneralRemoteServerUpdates.description',
         'Check and update paired Orca servers from this client.'
@@ -83,7 +93,10 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
     >
       <div className="space-y-0.5">
         <div className="text-sm font-medium">
-          {t('auto.components.settings.GeneralRemoteServerUpdates.title', 'Remote Orca Servers')}
+          {t(
+            'auto.components.settings.GeneralRemoteServerUpdates.fdd271abf0',
+            'Remote Orca servers'
+          )}
         </div>
         <p className="text-xs text-muted-foreground">
           {t(
@@ -113,8 +126,8 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
           {running
             ? t('auto.components.settings.GeneralRemoteServerUpdates.updating', 'Updating servers…')
             : t(
-                'auto.components.settings.GeneralRemoteServerUpdates.reviewServers',
-                'Check for Server Updates'
+                'auto.components.settings.GeneralRemoteServerUpdates.e4e5937469',
+                'Check for updates'
               )}
         </Button>
       </div>

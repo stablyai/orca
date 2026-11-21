@@ -1,7 +1,7 @@
 import type { AppState } from '@/store/types'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import type { ProspectiveWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { readAgentLaunchChoice } from '@/lib/host-chat-program'
+import { readAgentLaunchChoice } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { resolveSourceControlActionRecipe } from '../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import type {
   SourceControlActionId,
@@ -12,16 +12,19 @@ import {
   readSourceControlLaunchRecipeAgentId
 } from '../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import { isTuiAgentEnabled } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
-import type { Repo } from '../../../../../shared/repo-types'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../../shared/execution-host'
-import { isFolderRepo } from '../../../../../shared/repo-kind'
+import type { Repo } from '../../../../../shared/repository/repo-types'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
+import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
+import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import type {
   AgentMenuRowsTarget,
   NewTabAgentMenuModel
-} from '@/components/tab-bar/new-tab-agent-menu-model'
-import type { resolveAgentMenuSelection } from '@/lib/agent-menu-selection'
+} from '@/components/agent/launch-menu/new-tab-agent-menu-model'
+import type { resolveAgentMenuSelection } from '@/lib/agent-session/launch/routing/agent-menu-selection'
 import type { AgentPickerEntry } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import { resolveSourceControlActionPreferredSurface } from '../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'

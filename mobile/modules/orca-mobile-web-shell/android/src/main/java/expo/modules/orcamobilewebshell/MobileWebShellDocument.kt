@@ -201,7 +201,7 @@ internal class MobileWebShellDocument(private val context: Context) {
     view.destroy()
   }
 
-  // Keep explicit settings for the Chromium 83 floor, even where newer WebViews ignore deprecated options.
+  // Keep explicit settings even where newer WebViews ignore deprecated options; the floor is Chromium 101.
   // B4 requires device proofs: no network, persistent state, file/content access, cleartext or navigation escape.
   @Suppress("DEPRECATION")
   private fun createWebView(): WebView {
@@ -295,6 +295,11 @@ internal class MobileWebShellDocument(private val context: Context) {
       hasRangeHeader = request.requestHeaders.keys.any { it.equals("Range", ignoreCase = true) }
     )
     val path = resolveMobileWebShellRequestPath(parts, current.originHost) ?: return null
+    if (path == MOBILE_WEB_SHELL_CHAT_VISUAL_FRAME_PATH) {
+      val bytes = MOBILE_WEB_SHELL_CHAT_VISUAL_FRAME_DOCUMENT
+      val headers = mobileWebShellResponseHeaders(path, bytes.size)
+      return WebResourceResponse("text/html", "utf-8", 200, "OK", headers, ByteArrayInputStream(bytes))
+    }
     val asset = current.generation.entries[path] ?: return null
     val bytes = runCatching { asset.file.readBytes() }.getOrNull() ?: return null
     val headers = mobileWebShellResponseHeaders(path, bytes.size)

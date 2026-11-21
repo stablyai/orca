@@ -2,8 +2,8 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import { requestNativeChatCoverPaste } from './native-chat-cover-paste'
-import { getConnectionId } from '@/lib/connection-context'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { pasteTerminalClipboard } from '../../clipboard/terminal-clipboard-paste'
 import { createTerminalClipboardCopiedFiles } from '../../clipboard/terminal-clipboard-copied-files'
 import type { TerminalPasteSource, TerminalPasteTextOptions } from './terminal-paste-model'
@@ -16,9 +16,11 @@ import { isTerminalPanePasteTargetCurrent } from './terminal-paste-target-state'
 import { pasteTextIntoTerminalPane } from './terminal-pane-paste-dispatch'
 import { scheduleImagePasteWebglAtlasRecovery } from '../../render-health/terminal-webgl-atlas-recovery'
 import { useAppStore } from '@/store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
 import { resolveTerminalInputHostPlatform } from '../terminal-input-host-platform'
 import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
+import { recordRecentTerminalImage } from '../recent-terminal-images'
 
 export type TerminalPaneMenuPasteContext = {
   managerRef: React.RefObject<PaneManager | null>
@@ -119,11 +121,13 @@ export const pasteTerminalPaneMenuClipboard = async (
     }),
     connectionId,
     runtimeEnvironmentId,
+    onLocalImagePasted: (path) => recordRecentTerminalImage(pane.terminal, path, true),
     protectedMultilineTextPasteOptions: resolveProtectedMultilinePasteOptionsForPane({
       isWindowsClient: forceBracketedMultilineTextPaste,
       hostPlatform: resolveTerminalInputHostPlatform({
         clientPlatform: getShortcutPlatform(),
         state,
+        statuses: readRuntimeStatuses(),
         worktreeId,
         transport
       }),

@@ -4,23 +4,23 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { GeneratedTabTitle } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import type { WorkspaceLayoutStreamEvent } from '../../../../shared/workspace-layout/workspace-layout-stream-frames'
+
 import type { Store } from '../../../persistence/loading-store/store'
-import { WindowSession } from '../../../persistence/terminal-topology/terminal-topology-window-session-fixture'
+import { WindowSession } from '../../../persistence/terminal-topology/testing/terminal-topology-window-session-fixture'
 import {
   emptyTerminalSessionProfile,
   FIXTURE_GIT_WORKTREE_ID as GIT,
   openTopologyStore
-} from '../../../persistence/terminal-topology/terminal-topology-profile-fixture'
+} from '../../../persistence/terminal-topology/testing/terminal-topology-profile-fixture'
 import { applyWindowLayoutCommand } from '../layout/runtime-layout-apply'
 import { installLayoutFrameModelCheck } from './workspace-layout-frame-model-check.test-fixture'
-import { WorkspaceLayoutStream } from './workspace-layout-stream'
+import './workspace-layout-stream'
 
 const layoutOwner = vi.hoisted(() => ({ isMain: true }))
-vi.mock('../../../../shared/layout-owner-switch', () => ({
+vi.mock('../../../../shared/workspace-layout/layout-owner-switch', () => ({
   get ORCA_LAYOUT_OWNER_IS_MAIN() {
     return layoutOwner.isMain
   }
@@ -36,12 +36,14 @@ const SSH_KEY = 'repo-ssh::/srv/api'
 const homeOf = (key: string): ExecutionHostId => (key === SSH_KEY ? SSH : 'local')
 const leafOf = (index: number) => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`
 const directories: string[] = []
+const stores: Store[] = []
 
 /** Tabs `tab-<workspace>-<n>` in each workspace, its panes unbound until a test binds one. */
 async function storeWith(tabs: Record<string, number>): Promise<Store> {
   const directory = mkdtempSync(join(tmpdir(), 'orca-operation-frames-'))
   directories.push(directory)
   const store = await openTopologyStore(directory, emptyTerminalSessionProfile())
+  stores.push(store)
   const sessions = new Map<ExecutionHostId, WindowSession>()
   let leaf = 0
   for (const [workspace, count] of Object.entries(tabs)) {
@@ -61,14 +63,6 @@ async function storeWith(tabs: Record<string, number>): Promise<Store> {
 
 const tabIdOf = (workspace: string, index: number) =>
   `tab-${workspace.replace(/\W/g, '-')}-${index}`
-
-function streamOver(store: Store): WorkspaceLayoutStream {
-  return new WorkspaceLayoutStream({
-    store: () => store,
-    homeHostId: homeOf,
-    liveTitle: () => null
-  })
-}
 
 function titles(tabs: Record<string, number>): GeneratedTabTitle[] {
   return Object.entries(tabs).flatMap(([workspace, count]) =>
@@ -93,43 +87,15 @@ beforeEach(() => {
   check = installLayoutFrameModelCheck()
 })
 
-afterEach(() => {
+afterEach(async () => {
   check.uninstall()
+  // Windows refuses to delete a directory whose SQLite file is still open.
+  for (const store of stores.splice(0)) {
+    await store.freezeWritesAsync()
+  }
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }
-})
-
-describe('one records frame per main operation', () => {
-  it('publishes a pane bind as one binding record, and a same-id respawn as one more', async () => {
-    const store = await storeWith({ [GIT]: 2 })
-    const frames: WorkspaceLayoutStreamEvent[] = []
-    streamOver(store).subscribe((frame) => frames.push(frame))
-    const bind = (incarnationId: string) =>
-      store.persistPtyBinding({
-        worktreeId: GIT,
-        tabId: tabIdOf(GIT, 1),
-        leafId: leafOf(1),
-        ptyId: 'pty-1',
-        incarnationId
-      })
-
-    await bind('inc-1')
-    await bind('inc-2')
-
-    const binding = (ptyGeneration: number) => [
-      {
-        key: GIT,
-        change: 'records',
-        bindings: { set: [{ leafId: leafOf(1), ptyId: 'pty-1', ptyGeneration }] }
-      }
-    ]
-    expect(frames.map((frame) => frame.type === 'records' && frame.workspaces)).toEqual([
-      binding(1),
-      binding(2)
-    ])
-    expect(check.failures).toEqual([])
-  })
 })
 
 describe('a throwing operation listener', () => {

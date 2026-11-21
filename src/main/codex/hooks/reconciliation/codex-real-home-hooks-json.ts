@@ -1,6 +1,10 @@
-import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { mkdirSync } from 'node:fs'
+import {
+  observedExistsSync as existsSync,
+  readObservedFileSync as readFileSync
+} from '../../../filesystem/file-content-observation'
 import { join } from 'node:path'
-import { writeFileAtomically } from '../../../codex-accounts/fs-utils'
+import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
 import type { HooksConfig } from '../../../agent-hooks/installation/configuration/hook-config-schema'
 import { resolveHooksJsonWritePath } from '../../../agent-hooks/installation/configuration/hook-config-write-path'
 import {

@@ -2,13 +2,20 @@ import type {
   CommitMessageAgentCapability,
   CommitMessageModelCapability
 } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
-import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../../shared/source-control/ai/generation/commit-message-host-key'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import {
+  getCommitMessageModelDiscoveryHostKeyForScope,
+  getRepoCommitMessageModelDiscoveryHostKey
+} from '../../../../../shared/source-control/ai/generation/commit-message-host-key'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import {
+  pickCommitMessageGenerationSettings,
+  type CommitMessageGenerationSettings
+} from '../../../../../shared/source-control/ai/generation/commit-message-generation-settings'
 import type { HostedReviewProvider } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { splitWorktreeIdForFilesystem } from '../../../../../shared/worktree/id'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { TextGenerationFailureFields } from '../../../../../shared/text-generation-failure-copy'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { TextGenerationFailureFields } from '../../../../../shared/text-generation/text-generation-failure-copy'
 
 export type RuntimeGenerateCommitMessageResult =
   | { success: true; message: string; agentLabel?: string }
@@ -37,12 +44,7 @@ export type RuntimePullRequestGenerationInput = {
 }
 
 /** Generation preferences only; routing comes from the context's `target`. */
-export type RuntimeGitPrefs = Partial<
-  Pick<
-    GlobalSettings,
-    'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides' | 'defaultTuiAgent'
-  >
->
+export type RuntimeGitPrefs = CommitMessageGenerationSettings
 
 export type RuntimeDiscoverCommitMessageModelsResult =
   | {
@@ -85,16 +87,23 @@ export function getRuntimeGitScope(
   return target.kind === 'environment' ? `runtime:${target.environmentId}` : connectionId
 }
 
+/** The host key a repo's text-model picks are saved under, so generation reads the pick the picker wrote. */
+export function getRuntimeGitRepoDiscoveryHostKey(
+  target: RuntimeClientTarget,
+  repo: { connectionId?: string | null; executionHostId?: string | null } | null | undefined,
+  connectionId: string | null | undefined
+): string {
+  // Why: without a loaded repo record only the connection can say where it runs; unknown keeps no host's pick.
+  return target.kind !== 'environment' && repo
+    ? getRepoCommitMessageModelDiscoveryHostKey(repo)
+    : getCommitMessageModelDiscoveryHostKeyForScope(getRuntimeGitScope(target, connectionId))
+}
+
 export function getRuntimeCommitMessageSettings(
   target: RuntimeClientTarget,
   settings: RuntimeGitPrefs | null | undefined,
   connectionId?: string
-): Partial<
-  Pick<
-    GlobalSettings,
-    'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides' | 'defaultTuiAgent'
-  >
-> & {
+): CommitMessageGenerationSettings & {
   commitMessageDiscoveryHostKey?: string
 } {
   const scope = getRuntimeGitScope(target, connectionId)
@@ -103,18 +112,7 @@ export function getRuntimeCommitMessageSettings(
     return { commitMessageDiscoveryHostKey: getCommitMessageModelDiscoveryHostKeyForScope(scope) }
   }
   return {
-    ...(settings.commitMessageAi !== undefined
-      ? { commitMessageAi: settings.commitMessageAi }
-      : {}),
-    ...(settings.sourceControlAi !== undefined
-      ? { sourceControlAi: settings.sourceControlAi }
-      : {}),
-    ...(settings.agentCmdOverrides !== undefined
-      ? { agentCmdOverrides: settings.agentCmdOverrides }
-      : {}),
-    ...(settings.defaultTuiAgent !== undefined
-      ? { defaultTuiAgent: settings.defaultTuiAgent }
-      : {}),
+    ...pickCommitMessageGenerationSettings(settings),
     commitMessageDiscoveryHostKey: getCommitMessageModelDiscoveryHostKeyForScope(scope)
   }
 }

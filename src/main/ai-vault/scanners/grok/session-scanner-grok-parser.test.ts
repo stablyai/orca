@@ -1,127 +1,66 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
-import { withFullFirstUserPromptCapture } from '../../session-scanner-first-user-prompt-capture'
-import { parseGrokSessionFile } from './session-scanner-grok-parser'
+import { expect, it } from 'vitest'
 import type { TranscriptMessage } from '../../transcripts/session-transcript-consumers'
+import { parseGrokSessionFile } from './session-scanner-grok-parser'
 
-let tempRoots: string[] = []
+async function parseGrokHistory(rows: Record<string, unknown>[]) {
+  const dir = await mkdtemp(join(tmpdir(), 'orca-grok-history-'))
+  try {
+    const path = join(dir, 'summary.json')
+    await writeFile(path, JSON.stringify({ info: { id: 'session-1' } }))
+    await writeFile(
+      join(dir, 'chat_history.jsonl'),
+      rows.map((row) => JSON.stringify(row)).join('\n')
+    )
+    const messages: TranscriptMessage[] = []
+    const session = await parseGrokSessionFile(
+      { path, mtimeMs: 0, modifiedAt: '1970-01-01T00:00:00.000Z' },
+      'darwin',
+      { active: true, push: (message) => messages.push(message) }
+    )
+    return { session, messages: messages.map(({ role, text }) => [role, text]) }
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+}
 
-afterEach(async () => {
-  await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
-  tempRoots = []
+it('excludes runtime-injected user rows from search but keeps text the user wrote', async () => {
+  const { session, messages } = await parseGrokHistory([
+    {
+      type: 'user',
+      synthetic_reason: 'system_reminder',
+      content: [{ type: 'text', text: '<system-reminder>Internal note</system-reminder>' }]
+    },
+    {
+      type: 'user',
+      content: [{ type: 'text', text: '<user_query>Find the invoice</user_query>' }]
+    },
+    { type: 'assistant', content: 'The invoice is ready.' },
+    {
+      type: 'user',
+      synthetic_reason: 'interjection',
+      content: '<note>\n<user_query>\nUse the March total\n</user_query>\n<reminder>'
+    },
+    { type: 'user', synthetic_reason: ' ', content: 'Show the total' }
+  ])
+  expect(messages).toEqual([
+    ['user', 'Find the invoice'],
+    ['assistant', 'The invoice is ready.'],
+    ['user', 'Use the March total'],
+    ['user', 'Show the total']
+  ])
+  expect(session?.title).toBe('Find the invoice')
 })
 
-describe('AI Vault Grok session parser', () => {
-  it.each([false, true])(
-    'bounds preview scanning while preserving full turns with capture %s',
-    async (active) => {
-      const root = await mkdtemp(join(tmpdir(), 'orca-grok-preview-budget-'))
-      tempRoots.push(root)
-      const path = join(root, 'summary.json')
-      await writeFile(path, JSON.stringify({ info: { id: 'grok-preview-budget' } }))
-      const hidden = `<system-reminder>${'x'.repeat(4057)}</system-reminder>`
-      const text = `${hidden}ask😀tail`
-      const userText = `ask${' '.repeat(4093)}tail`
-      const turns = [
-        { type: 'user', content: `<user_query>${userText}</user_query>` },
-        { type: 'assistant', content: text },
-        {
-          type: 'assistant',
-          content: [
-            { type: 'text', text: ' '.repeat(2048) },
-            { type: 'text', text: `${' '.repeat(2048)}outside preview budget` }
-          ]
-        }
-      ]
-      await writeFile(
-        join(root, 'chat_history.jsonl'),
-        turns.map((turn) => JSON.stringify(turn)).join('\n')
-      )
-      const messages: TranscriptMessage[] = []
-      const session = await withFullFirstUserPromptCapture(() =>
-        parseGrokSessionFile(
-          { path, mtimeMs: 1, modifiedAt: '2026-05-01T00:00:00.000Z' },
-          'linux',
-          { active, push: (message) => messages.push(message) }
-        )
-      )
-
-      expect(session?.previewMessages.map((message) => message.text)).toEqual(['ask', 'ask'])
-      expect(session?.firstUserPrompt).toBe(userText)
-      expect(messages).toEqual(
-        active
-          ? [
-              { role: 'user', text: userText, timestamp: null },
-              { role: 'assistant', text, timestamp: null },
-              {
-                role: 'assistant',
-                text: `${' '.repeat(2048)}\n${' '.repeat(2048)}outside preview budget`,
-                timestamp: null
-              }
-            ]
-          : []
-      )
-    }
-  )
-
-  it('stores the unwrapped user_query as firstUserPrompt under full capture', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-grok-first-'))
-    tempRoots.push(root)
-    const sessionDir = join(root, 'session-1')
-    await mkdir(sessionDir, { recursive: true })
-    const summaryPath = join(sessionDir, 'summary.json')
-    await writeFile(
-      summaryPath,
-      JSON.stringify({
-        info: { id: 'session-1', cwd: '/repo/app' },
-        generated_title: 'Grok title',
-        created_at: '2026-05-01T10:00:00.000Z',
-        updated_at: '2026-05-01T10:05:00.000Z'
-      })
-    )
-    const realAsk = 'fix i18n keep ko workspace worktree and primary'
-    await writeFile(
-      join(sessionDir, 'chat_history.jsonl'),
-      [
-        JSON.stringify({
-          type: 'user',
-          content: [
-            {
-              type: 'text',
-              text: [
-                '<user_info>',
-                'OS Version: macos',
-                'Shell: /opt/homebrew/bin/bash',
-                'Workspace Path: /Users/ada/repo',
-                "Today's date: 2026-08-01",
-                'Note: Prefer using relative paths over absolute paths as tool call args when possible.',
-                '</user_info>',
-                `<user_query>\n${realAsk}\n</user_query>`
-              ].join('\n')
-            }
-          ],
-          timestamp: '2026-05-01T10:00:01.000Z'
-        }),
-        JSON.stringify({
-          type: 'assistant',
-          content: 'On it.',
-          timestamp: '2026-05-01T10:00:02.000Z'
-        })
-      ].join('\n')
-    )
-
-    const session = await withFullFirstUserPromptCapture(() =>
-      parseGrokSessionFile({
-        path: summaryPath,
-        mtimeMs: Date.now(),
-        modifiedAt: new Date().toISOString()
-      })
-    )
-
-    expect(session?.firstUserPrompt).toBe(realAsk)
-    expect(session?.firstUserPrompt).not.toContain('user_info')
-    expect(session?.firstUserPrompt).not.toContain('OS Version')
-  })
-})
+it.each(['agent_message', 'parent_agent_message'])(
+  'keeps a message relayed from a parent session searchable (%s)',
+  async (syntheticReason) => {
+    const { session, messages } = await parseGrokHistory([
+      { type: 'user', synthetic_reason: syntheticReason, content: 'Review the billing module' }
+    ])
+    expect(messages).toEqual([['user', 'Review the billing module']])
+    expect(session?.title).toBe('Review the billing module')
+  }
+)

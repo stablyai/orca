@@ -1,12 +1,16 @@
-import type { ListAccessibleProjectsArgs } from '../../../shared/github/project-request-types'
-import type { ListAccessibleProjectsResult } from '../../../shared/github/project-result-types'
+import type { ListAccessibleProjectsArgs } from '../../../shared/github/projects/project-request-types'
+import type {
+  GitHubProjectViewError,
+  ListAccessibleProjectsResult
+} from '../../../shared/github/projects/project-result-types'
 import type {
   GitHubProjectOwnerType,
   GitHubProjectSummary
-} from '../../../shared/github/project-types'
-import { githubProjectHost } from '../../../shared/github/project-identity'
-import { projectGhExecOptions, runGraphql, type GraphqlVars } from './internals'
-import { driftError } from './project-error-classification'
+} from '../../../shared/github/projects/project-types'
+import { githubProjectHost } from '../../../shared/github/projects/project-identity'
+import { projectGhExecOptions } from './project-host-execution'
+import { runGraphql, type GraphqlVars } from './project-graphql'
+import { driftError, projectAuthErrorMessage } from './project-error-classification'
 import { rememberOwnerType } from './project-view-cache'
 
 // Bound organization discovery to avoid 504s/quota drain; overflow projects remain accessible by URL.
@@ -18,6 +22,7 @@ const DISCOVERY_PROJECTS_PER_ORG = 20
 type RawViewerDiscovery = {
   viewer?: {
     login?: string
+    url?: string
     projectsV2?: {
       pageInfo?: { hasNextPage?: boolean; endCursor?: string | null }
       nodes?: ({
@@ -44,7 +49,10 @@ type RawViewerDiscovery = {
 export async function listAccessibleProjects(
   args?: ListAccessibleProjectsArgs
 ): Promise<ListAccessibleProjectsResult> {
-  const host = githubProjectHost(args?.host)
+  const pinnedHost = args?.host?.trim()
+  // Unpinned, gh picks its own default host (GH_HOST, its only login, else github.com); viewer.url names it.
+  const exec = pinnedHost ? projectGhExecOptions(pinnedHost) : {}
+  let host = githubProjectHost(pinnedHost)
   const viewerProjects: GitHubProjectSummary[] = []
   const orgProjects: GitHubProjectSummary[] = []
   const partialFailures: { owner: string; message: string }[] = []
@@ -59,7 +67,7 @@ export async function listAccessibleProjects(
     const query = `
       query${afterVar ? `(${afterVar})` : ''} {
         viewer {
-          login
+          login url
           projectsV2(first:${DISCOVERY_PROJECTS_PER_ORG}${afterArg}) {
             pageInfo { hasNextPage endCursor }
             nodes {
@@ -74,16 +82,19 @@ export async function listAccessibleProjects(
     if (viewerCursor) {
       vars.after = viewerCursor
     }
-    const res = await runGraphql<RawViewerDiscovery>(query, vars, projectGhExecOptions(host))
+    const res = await runGraphql<RawViewerDiscovery>(query, vars, exec)
     if (!res.ok) {
       // Viewer discovery failure is fatal; organization failures can preserve partial results.
-      return { ok: false, error: res.error }
+      return { ok: false, error: discoveryError(res.error, pinnedHost) }
     }
     if (!res.data.viewer) {
       return { ok: false, error: driftError('viewer missing') }
     }
     if (viewerLogin === null) {
       viewerLogin = res.data.viewer.login ?? null
+      if (!pinnedHost) {
+        host = URL.parse(res.data.viewer.url ?? '')?.host || host
+      }
     }
     const nodes = res.data.viewer.projectsV2?.nodes ?? []
     for (const n of nodes) {
@@ -140,10 +151,10 @@ export async function listAccessibleProjects(
     if (orgCursor) {
       vars.orgAfter = orgCursor
     }
-    const res = await runGraphql<RawViewerDiscovery>(query, vars, projectGhExecOptions(host))
+    const res = await runGraphql<RawViewerDiscovery>(query, vars, exec)
     if (!res.ok) {
       // Preserve viewer projects and mark the organization-list failure for the partial-results banner.
-      partialFailures.push({ owner: '*', message: res.error.message })
+      partialFailures.push({ owner: '*', message: discoveryError(res.error, pinnedHost).message })
       break
     }
     const orgs = res.data.viewer?.organizations?.nodes ?? []
@@ -194,4 +205,17 @@ export async function listAccessibleProjects(
     projects: [...viewerProjects, ...orgProjects],
     ...(partialFailures.length > 0 ? { partialFailures } : {})
   }
+}
+
+// Unpinned calls are classified as github.com, but gh used its own default host; drop the hostname.
+function discoveryError(
+  error: GitHubProjectViewError,
+  pinnedHost: string | undefined
+): GitHubProjectViewError {
+  if (pinnedHost) {
+    return error
+  }
+  return error.type === 'auth_required' || error.type === 'scope_missing'
+    ? { type: error.type, message: projectAuthErrorMessage(error.type, undefined) }
+    : error
 }

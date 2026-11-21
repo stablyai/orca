@@ -10,20 +10,19 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import { observeOffscreenAnimation } from '@/lib/offscreen-animation-pause'
+import { cn } from '@/lib/class-names'
+import { SpinnerFrame } from '@/components/ui/LoadingSpinner'
 import { useTranslate } from '@/i18n/use-translate'
-import { CHECK_COLOR, CHECK_ICON } from './check-presentation'
+import { CHECK_COLOR, CHECK_ICON, checkPresentationKey } from './check-presentation'
 import { CheckRunDetails } from './check-run-details'
 import { CheckRunTime } from './check-run-time'
 import { getCheckStatusLabel } from '@/components/github/pr-check-presentation'
-import { getCheckConclusion } from '@/components/pr-check-counts'
 import { type ChecksListProps, useChecksListState } from '../refresh/use-checks-list-state'
 import {
   openAppHttpLink,
   openAppHttpLinkFromAnchor
 } from '@/lib/browser/navigation/app-http-link-open'
-import type { PRCheckDetail } from '../../../../../../shared/github/check-types'
+import type { PRCheckDetail } from '../../../../../../shared/github/checks/check-types'
 
 export function ChecksList(props: ChecksListProps): React.JSX.Element {
   const t = useTranslate()
@@ -147,13 +146,11 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
           >
             {rows.map((row) => {
               const check = row.check
-              const conclusion = getCheckConclusion(check)
               const expanded = expandedCheckKeys.has(row.key)
               const openUrl = check.url
               return (
                 <div key={row.key} className="min-w-0">
                   <div
-                    ref={conclusion === 'pending' ? observeOffscreenAnimation : undefined}
                     className={cn(
                       'group/check-row @container flex min-w-0 cursor-pointer items-center gap-2 px-3 py-1.5 transition-colors hover:bg-accent/40',
                       expanded && 'bg-accent/25'
@@ -249,20 +246,20 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
 // The icon already shows the state, so its word lives in the icon's tooltip and accessible name, not beside it.
 function CheckStatusIcon({ check }: { check: PRCheckDetail }): React.JSX.Element {
   const t = useTranslate()
-  const conclusion = getCheckConclusion(check)
+  const conclusion = checkPresentationKey(check)
   const Icon = CHECK_ICON[conclusion] ?? CircleDashed
   const label = getCheckStatusLabel(check, t)
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span role="img" aria-label={label} className="flex shrink-0">
-          <Icon
-            className={cn(
-              'size-3.5',
-              CHECK_COLOR[conclusion] ?? 'text-muted-foreground',
-              conclusion === 'pending' && 'animate-spin motion-reduce:animate-none'
-            )}
-          />
+          {conclusion === 'pending' ? (
+            <SpinnerFrame>
+              <Icon className={cn('block size-3.5', CHECK_COLOR[conclusion])} />
+            </SpinnerFrame>
+          ) : (
+            <Icon className={cn('size-3.5', CHECK_COLOR[conclusion] ?? 'text-muted-foreground')} />
+          )}
         </span>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
@@ -274,7 +271,6 @@ function CheckStatusIcon({ check }: { check: PRCheckDetail }): React.JSX.Element
 
 // The parent pipeline opens on the provider; it has no inline job log to expand.
 function PipelineCheckRow({ check }: { check: PRCheckDetail }): React.JSX.Element {
-  const conclusion = getCheckConclusion(check)
   const content = (
     <>
       <CheckStatusIcon check={check} />
@@ -286,10 +282,8 @@ function PipelineCheckRow({ check }: { check: PRCheckDetail }): React.JSX.Elemen
     </>
   )
   const className = '@container flex min-w-0 items-center gap-2 border-b border-border px-3 py-1.5'
-  const animationRef = conclusion === 'pending' ? observeOffscreenAnimation : undefined
   return check.url ? (
     <a
-      ref={animationRef}
       href={check.url}
       onClick={openAppHttpLinkFromAnchor}
       className={cn(className, 'transition-colors hover:bg-accent/40')}
@@ -297,8 +291,6 @@ function PipelineCheckRow({ check }: { check: PRCheckDetail }): React.JSX.Elemen
       {content}
     </a>
   ) : (
-    <div ref={animationRef} className={className}>
-      {content}
-    </div>
+    <div className={className}>{content}</div>
   )
 }

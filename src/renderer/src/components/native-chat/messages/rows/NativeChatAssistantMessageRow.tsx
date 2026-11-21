@@ -1,14 +1,18 @@
 import { useContext } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
+import { quietBotAnswer } from '../../../../../../shared/bot-quiet-result'
 import { isRootAgentJournalItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
 import { NativeChatForkSlotContext } from '../actions/native-chat-fork-context'
 import { nativeChatAgentRowWords } from './native-chat-message-row-words'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import type { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/native-chat-row-content'
+import type { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import type { MessageRowProps } from './NativeChatMessageRow'
+import { withLegacyNativeChatIdeasAsList } from '../../../../../../shared/native-chat/visuals/native-chat-visual-directive'
 import { NativeChatPacedMarkdown } from '../../markdown/NativeChatPacedMarkdown'
-import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from '../../selection-quotes/native-chat-quote-selection'
+import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from '../../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 import { NativeChatToolRun } from '../../tools/runs/NativeChatToolRun'
+import { useBotForWorkspace } from '../../../bots/bot-workspace'
+import { useNativeChatVisualOwner } from '../../media/visuals/native-chat-visual-owner'
 import {
   NativeChatCodeBlock,
   NativeChatPlainCodeBlock
@@ -52,7 +56,8 @@ export function NativeChatAssistantMessageRow({
     trailingRun,
     continuesTurn = false,
     endsResponse,
-    inSubagentSection = false,
+    latestResponse = true,
+    actionsHang = false,
     runtimeContext,
     fork
   } = props
@@ -61,6 +66,15 @@ export function NativeChatAssistantMessageRow({
   const isSystem = message.role === 'system'
   // The same words slot construction chooses the turn's action holder by; Copy needs them.
   const words = nativeChatAgentRowWords(message, t)
+  const streaming = messageIsStreaming(message, activeTurnIsWorking, trailingRun)
+  const inBotHome = useBotForWorkspace(useNativeChatVisualOwner()?.worktreeId ?? null) !== null
+  const quiet = quietBotAnswer(words, {
+    botAnswer: inBotHome && message.role === 'assistant',
+    streaming,
+    inAutomationTurn: props.inAutomationTurn === true,
+    inActingTurn: props.inActingTurn === true
+  })
+  const shownWords = withLegacyNativeChatIdeasAsList(quiet.words)
   // Hide controls on system asides and the still-working frontier, where more content may arrive. In
   // a turn they belong to its holder, which may draw only images when folding hid its words.
   const showControls =
@@ -74,18 +88,12 @@ export function NativeChatAssistantMessageRow({
     message.role === 'assistant' &&
     message.source === 'transcript' &&
     !message.agentStart &&
-    !inSubagentSection &&
     isRootAgentJournalItem(message)
-  // A row whose fork is opening keeps its controls up so the spinner stays visible.
-  const revealOnHover =
-    fork?.pendingItemId === message.id
-      ? 'mt-1 w-fit select-none'
-      : 'mt-1 w-fit select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100'
 
   return (
     <div
       ref={rowRef}
-      // The context menu offers Copy message only where the hover controls offer Copy.
+      // The context menu offers Copy message only where the row's controls offer Copy.
       data-native-chat-message-id={showControls && words.length > 0 ? message.id : undefined}
       data-native-chat-message-tone={isSystem ? 'faint' : undefined}
       className={cn(
@@ -98,10 +106,10 @@ export function NativeChatAssistantMessageRow({
         runtimeContext={runtimeContext}
         enablePreview={runtimeContext !== undefined}
       />
-      {words ? (
+      {shownWords ? (
         <NativeChatPacedMarkdown
           rowKey={message.id}
-          content={words}
+          content={shownWords}
           variant="document"
           className="text-sm"
           renderCodeBlock={isSystem ? NativeChatPlainCodeBlock : NativeChatCodeBlock}
@@ -109,8 +117,13 @@ export function NativeChatAssistantMessageRow({
           {...(isSystem ? {} : NATIVE_CHAT_QUOTE_SOURCE_PROPS)}
           visualMessageId={message.role === 'assistant' ? message.id : undefined}
           // Only the live turn’s prose frontier can be mid-sentence; structured rows have no per-row streaming flag.
-          streaming={messageIsStreaming(message, activeTurnIsWorking, trailingRun)}
+          streaming={streaming}
         />
+      ) : null}
+      {quiet.nothingToReport ? (
+        <p className="text-xs text-chat-foreground-faint">
+          {t('bots.chat.nothingToReport', 'Nothing to report')}
+        </p>
       ) : null}
       {toolRun ? <NativeChatToolRun {...toolRun} /> : null}
       {showControls ? (
@@ -126,9 +139,13 @@ export function NativeChatAssistantMessageRow({
             ) : null
           }
           className={cn(
-            revealOnHover,
-            // They hang into the gap below; a section keeps them inside its border instead.
-            !inSubagentSection && '-mb-5'
+            'w-fit select-none',
+            !latestResponse &&
+              fork?.pendingItemId !== message.id &&
+              'transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100',
+            // They hang into the gap below only above the next turn's opening row. Never in a
+            // section, which keeps them inside its border.
+            actionsHang && '-mb-1'
           )}
         />
       ) : null}
@@ -156,8 +173,7 @@ function toolRunProps(
     revealedDiff: run ? run.revealedDiff : props.revealedDiff,
     onRevealDiff: props.onScrollMessageToTop,
     subagentGroups: content.subagentGroups,
-    subagentRoster: props.subagentRoster,
-    subagentDisclosure: props.subagentDisclosure,
+    onOpenSubagent: props.onOpenSubagent,
     backgroundTasks: content.backgroundTasks,
     followsProse: content.markdown.length > 0 || content.hasImages,
     expandSignal: props.expandSignal,

@@ -20,11 +20,13 @@ vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', (
   resolveEnvironment: resolveEnvironmentMock
 }))
 
-import { registerRuntimeEnvironmentConnectivityHandlers } from './runtime-environment-connectivity-handlers'
+import { registerRuntimeEnvironmentConnectivityHandlers } from './connectivity/runtime-environment-connectivity-handlers'
 
 const environment = { id: 'environment-a', name: 'desk', runtimeId: 'runtime-a', endpoints: [] }
 
-function renameHandler(): (event: unknown, args: { selector: string; name: string }) => unknown {
+function renameHandler():
+  | ((event: unknown, args: { selector: string; name: string }) => Promise<unknown>)
+  | undefined {
   const call = handleMock.mock.calls.find(([channel]) => channel === 'runtimeEnvironments:rename')
   expect(call).toBeTruthy()
   return call![1]
@@ -43,18 +45,18 @@ beforeEach(() => {
 })
 
 describe('runtime environment rename argument guard', () => {
-  it('rejects a non-string name before touching the store', () => {
-    expect(() => renameHandler()(null, { selector: 'environment-a', name: 42 as never })).toThrow(
-      'Renaming a server requires a name.'
-    )
+  it('rejects a non-string name before touching the store', async () => {
+    await expect(
+      renameHandler()!(null, { selector: 'environment-a', name: 42 as never })
+    ).rejects.toThrow('Renaming a server requires a name.')
     expect(resolveEnvironmentMock).not.toHaveBeenCalled()
     expect(renameEnvironmentMock).not.toHaveBeenCalled()
   })
 
-  it('passes a string name through to the store rename', () => {
-    expect(
-      renameHandler()(null, { selector: 'environment-a', name: 'desk-2' })
-    ).toMatchObject({ environment: { name: 'desk-2' } })
+  it('passes a string name through to the store rename', async () => {
+    await expect(
+      renameHandler()!(null, { selector: 'environment-a', name: 'desk-2' })
+    ).resolves.toMatchObject({ environment: { name: 'desk-2' } })
     expect(renameEnvironmentMock).toHaveBeenCalledWith('/tmp/orca-user-data', 'environment-a', {
       name: 'desk-2'
     })

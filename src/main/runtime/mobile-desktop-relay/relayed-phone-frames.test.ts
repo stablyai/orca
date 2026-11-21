@@ -1,4 +1,4 @@
-import { nativeChatPreferenceFor } from '../../../shared/structured-native-chat-launch-route'
+import { nativeChatPreferenceFor } from '../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import {
   readAgentLaunchModeSettings,
   decideAgentLaunchMode
@@ -12,16 +12,19 @@ import {
 import {
   BrowserScreencastOpcode,
   encodeBrowserScreencastFrame
-} from '../../../shared/browser-screencast-protocol'
+} from '../../../shared/browser/screencast/browser-screencast-protocol'
 import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
-import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../shared/browser-runtime-capabilities'
+import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../shared/browser/runtime/browser-runtime-capabilities'
 import {
   declareRelayedPhoneCapabilities,
   RelayedPhoneReplies,
   relayedPhoneCapabilities,
   rewriteRelayedPhoneRequest,
-  withRelayedLaunchChatDefault
+  withRelayedLaunchChatDefault,
+  withRelayedSourceControlAiSettings
 } from './relayed-phone-frames'
+import { GitGenerateCommitMessage } from '../../../shared/rpc-contract/source-control/git-params'
+import { getDefaultSourceControlAiSettings } from '../../../shared/source-control/ai/settings/source-control-ai-settings'
 
 const DESKTOP_TOKEN = 'a'.repeat(48)
 const HOST_TOKEN = 'b'.repeat(48)
@@ -156,7 +159,7 @@ it.each(['chat', 'terminal'] as const)(
       const frame = JSON.stringify({
         id: agent,
         method: 'agent.launch',
-        params: { agent, nativeChatDefault: false }
+        params: { agent }
       })
       const stamped = JSON.parse(
         withRelayedLaunchChatDefault(frame, 'agent.launch', (id) =>
@@ -188,3 +191,41 @@ it.each(['chat', 'terminal'] as const)(
     }
   }
 )
+
+it("keeps the phone's own Chat or CLI pick over the desktop default", () => {
+  const frame = JSON.stringify({
+    id: 'pi',
+    method: 'agent.launchReplay',
+    params: { agent: 'pi', nativeChatDefault: true }
+  })
+  const stamped = JSON.parse(withRelayedLaunchChatDefault(frame, 'agent.launchReplay', () => false))
+  expect(stamped.params.nativeChatDefault).toBe(true)
+})
+
+describe('withRelayedSourceControlAiSettings', () => {
+  const sourceControlAi = { ...getDefaultSourceControlAiSettings(), agentId: 'codex' as const }
+  const desktop = () => ({
+    sourceControlAi,
+    agentCmdOverrides: { codex: '/opt/codex' },
+    defaultTuiAgent: 'blank' as const
+  })
+
+  it("sends the desktop's AI settings and its key for this server with a relayed generation", () => {
+    const frame = JSON.stringify({
+      id: 'g1',
+      method: 'git.generateCommitMessage',
+      params: { worktree: 'id:w1' }
+    })
+    const params = JSON.parse(
+      withRelayedSourceControlAiSettings(frame, 'git.generateCommitMessage', 'env-1', desktop)
+    ).params
+    expect(params).toEqual({
+      worktree: 'id:w1',
+      sourceControlAi,
+      agentCmdOverrides: { codex: '/opt/codex' },
+      defaultTuiAgent: null,
+      commitMessageDiscoveryHostKey: 'runtime:env-1'
+    })
+    expect(GitGenerateCommitMessage.safeParse(params).success).toBe(true)
+  })
+})

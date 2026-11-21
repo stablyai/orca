@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
-import type { BrowserPopupEvent } from '../../../../shared/browser-guest-events'
+import type { BrowserPopupEvent } from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
 
-/** Facts the browser manager resolves to their owning page: a tab it asked for, a popup outcome, a download. */
+/** Facts the browser manager resolves to their owning page: a tab it asked for, a popup outcome, a download, a refused print. */
 export type BrowserPageEvent =
   | { kind: 'tab'; url: string }
   | {
@@ -10,6 +10,7 @@ export type BrowserPageEvent =
       origin: string
     }
   | { kind: 'download'; filename: string; origin: string }
+  | { kind: 'print'; origin: string }
 
 /** Keyed by browser page id. */
 export class BrowserPageEvents {

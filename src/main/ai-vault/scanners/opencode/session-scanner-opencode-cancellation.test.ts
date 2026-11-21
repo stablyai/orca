@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import type * as workerSpawn from './reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import type { SessionFileDiscovery } from '../../session-scanner-types'
 import type { TranscriptReadOutcome } from '../../transcripts/session-transcript-consumers'
-import { createAccumulator, finalizeSession } from '../../session-scanner-accumulator'
+import { createAccumulator, finalizeSession } from '../../parsing/session-scanner-accumulator'
 
 const readers = vi.hoisted(() => ({
   parse: vi.fn<typeof workerSpawn.parseOpenCodeSqliteSessionViaWorker>(),
@@ -14,11 +14,9 @@ const readers = vi.hoisted(() => ({
 }))
 vi.mock('./reader-transport/session-scanner-opencode-sqlite-worker-spawn', () => ({
   parseOpenCodeSqliteSessionViaWorker: readers.parse,
-  parseOpenCode2SqliteSessionViaWorker: readers.parse,
-  captureOpenCodeSqliteSessionViaWorker: readers.capture,
-  captureOpenCode2SqliteSessionViaWorker: readers.capture
+  captureOpenCodeSqliteSessionViaWorker: readers.capture
 }))
-vi.mock('../../session-scanner-source-discovery', () => ({
+vi.mock('../../discovery/session-scanner-source-discovery', () => ({
   discoverAiVaultSessionSources: readers.discover
 }))
 import { scanAiVaultSessions } from '../../session-scanner'
@@ -49,7 +47,9 @@ afterEach(() => {
   resetSessionParseCacheForTests()
 })
 
-function configure(agent: 'opencode' | 'opencode2') {
+const agent = 'opencode'
+
+function configure() {
   readers.discover.mockResolvedValue([{ agent, rootDir: '/fixture', files: [file] }])
   const accumulator = createAccumulator({ agent, file, sessionId: 'session' })
   accumulator.title = 'SQLite session'
@@ -69,12 +69,12 @@ function untilAborted(signal: AbortSignal | undefined): Promise<never> {
   })
 }
 
-describe.each(['opencode', 'opencode2'] as const)('%s scan cancellation', (agent) => {
+describe('OpenCode SQLite scan cancellation', () => {
   it('reports a deadline while retaining completed sessions and other agents, then retries', async () => {
     vi.useFakeTimers()
     const root = mkdtempSync(join(tmpdir(), 'orca-scan-deadline-'))
     try {
-      const session = configure(agent)
+      const session = configure()
       const blocked = { ...file, path: '/fixture/opencode.db#blocked' }
       const claudePath = join(root, 'claude.jsonl')
       writeFileSync(
@@ -124,7 +124,7 @@ describe.each(['opencode', 'opencode2'] as const)('%s scan cancellation', (agent
 
   it('marks a deadline capture incomplete instead of caching a failed history', async () => {
     vi.useFakeTimers()
-    const session = configure(agent)
+    const session = configure()
     const outcomes: TranscriptReadOutcome[] = []
     registerTranscriptConsumer({
       beginRead: () => ({ message() {}, finish: (outcome) => outcomes.push(outcome) })
@@ -147,43 +147,8 @@ describe.each(['opencode', 'opencode2'] as const)('%s scan cancellation', (agent
     expect(outcomes.at(-1)?.incomplete).toBe(false)
   })
 
-  it.each(['parse', 'capture'] as const)(
-    'cancels an active %s and retries the uncached read',
-    async (mode) => {
-      const session = configure(agent)
-      const outcomes: TranscriptReadOutcome[] = []
-      if (mode === 'capture') {
-        registerTranscriptConsumer({
-          beginRead: () => ({ message() {}, finish: (outcome) => outcomes.push(outcome) })
-        })
-        readers.capture.mockImplementationOnce(({ signal }) => untilAborted(signal))
-      } else {
-        readers.parse.mockImplementationOnce(({ signal }) => untilAborted(signal))
-      }
-      const controller = new AbortController()
-      const pending = scanAiVaultSessions({ platform: 'linux', signal: controller.signal })
-      const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
-      await vi.waitFor(() => expect(readers[mode]).toHaveBeenCalledOnce())
-      controller.abort(new Error('Cancelled SQLite scan'))
-      await rejected
-      if (mode === 'capture') {
-        expect(outcomes).toEqual([
-          { session: null, byteOffset: 0, incomplete: true, cancelled: true }
-        ])
-      }
-      readers.parse.mockResolvedValue(session)
-      readers.capture.mockResolvedValue({ session, messages })
-      const retried = await scanAiVaultSessions({ platform: 'linux' })
-      expect(readers[mode]).toHaveBeenCalledTimes(2)
-      expect(retried.sessions).toHaveLength(1)
-      if (mode === 'capture') {
-        expect(outcomes.at(-1)?.incomplete).toBe(false)
-      }
-    }
-  )
-
   it('marks a partially delivered capture incomplete and never caches it', async () => {
-    const session = configure(agent)
+    const session = configure()
     const controller = new AbortController()
     const outcomes: TranscriptReadOutcome[] = []
     const received: string[] = []

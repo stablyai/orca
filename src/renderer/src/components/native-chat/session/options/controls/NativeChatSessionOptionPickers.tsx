@@ -6,10 +6,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { sortNativeChatSessionOptions } from '../../../../../../../shared/native-chat/input/native-chat-session-option-snapshot'
+import { sortNativeChatSessionOptions } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-snapshot'
 import {
   sessionOptionDispatchUnconfirmed,
   type SessionOptionDescriptor,
+  type SessionOptionsCliUpdate,
   type SessionOptionsSurface,
   type SessionOptionValue
 } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
@@ -18,8 +19,10 @@ import {
   nativeChatOptionValuesLabel,
   nativeChatOptionsPillTitle,
   nativeChatSessionOptionActionLabel,
+  nativeChatSessionChoiceLabel,
+  selectedNativeChatChoice,
   nativeChatSessionOptionDisabledReason
-} from '../../../../../../../shared/native-chat/input/native-chat-session-option-labels'
+} from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-labels'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import type { NativeChatOptionPickerRequest } from './native-chat-option-picker-request'
 import { runSessionOptionSurfaceCall } from './native-chat-session-option-surface-call'
@@ -81,6 +84,7 @@ function PickerTrigger(props: {
   /** The options' values, shown after the model; empty when there are none to show. */
   optionsLabel: string
   accessibleName: string
+  tooltipLabel: string
   disabled: boolean
   disabledReason: string | null
   dispatched: boolean
@@ -88,22 +92,32 @@ function PickerTrigger(props: {
   onKeyDown: React.KeyboardEventHandler<HTMLButtonElement>
 }): React.JSX.Element {
   const t = useTranslate()
-  const [tooltipOpen, setTooltipOpen] = useState(false)
-  // Keep the tooltip mounted but closed unless informative; changing wrapper identity would detach the open picker.
-  const informative = props.disabledReason !== null || props.dispatched
   return (
-    <Tooltip open={informative && tooltipOpen} onOpenChange={setTooltipOpen}>
+    <Tooltip>
       <TooltipTrigger asChild>
-        <PopoverTrigger asChild disabled={props.disabled}>
+        <PopoverTrigger asChild>
           <Button
             ref={props.triggerRef}
             type="button"
             variant="ghost"
             size="xs"
             aria-label={props.accessibleName}
-            disabled={props.disabled}
+            aria-disabled={props.disabled || undefined}
             className="max-w-64"
-            onKeyDown={props.onKeyDown}
+            onClick={(event) => {
+              if (props.disabled) {
+                event.preventDefault()
+              }
+            }}
+            onKeyDown={(event) => {
+              if (props.disabled) {
+                if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
+                  event.preventDefault()
+                }
+                return
+              }
+              props.onKeyDown(event)
+            }}
           >
             <span data-composer-label className="flex min-w-0 items-center gap-1">
               <span className="truncate text-chat-foreground">{props.modelLabel}</span>
@@ -116,6 +130,7 @@ function PickerTrigger(props: {
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
         <div className="space-y-0.5">
+          <div className="line-clamp-2 max-w-64 break-words">{props.tooltipLabel}</div>
           {props.disabledReason ? <div>{props.disabledReason}</div> : null}
           {props.dispatched ? (
             <div>
@@ -133,6 +148,7 @@ function PickerTrigger(props: {
 
 function SessionOptionPopover(props: {
   demandModelCatalog?: () => void
+  cliUpdate?: SessionOptionsCliUpdate
   model: SessionOptionDescriptor
   options: readonly SessionOptionDescriptor[]
   isWorking: boolean
@@ -173,7 +189,19 @@ function SessionOptionPopover(props: {
   const focusReturn = useNativeChatPickerFocusReturn(props.focusComposer)
   const modelTitle = t('components.native-chat.composer.model', 'Model')
   const modelLabel = nativeChatModelPillLabel(model, say)
-  const modelName = pillAccessibleName(modelTitle, modelLabel, t)
+  const effort = options.find((option) => option.id === 'effort')
+  const effortChoice =
+    effort && effort.valueSource !== 'unknown' ? selectedNativeChatChoice(effort) : null
+  const knownModel = model.valueSource !== 'unknown' && selectedNativeChatChoice(model)
+  const tooltipLabel = knownModel
+    ? effortChoice
+      ? t('components.native-chat.composer.modelAndEffortValue', '{{model}} · {{effort}}', {
+          model: modelLabel,
+          effort: nativeChatSessionChoiceLabel(effortChoice, say, 'effort')
+        })
+      : modelLabel
+    : t('components.native-chat.composer.modelAndEffort', 'Model and effort')
+  const modelName = knownModel ? pillAccessibleName(modelTitle, tooltipLabel, t) : tooltipLabel
   const optionsTitle = nativeChatOptionsPillTitle(options, say)
   const optionsLabel = nativeChatOptionValuesLabel(options, say)
   const modelReason = nativeChatSessionOptionDisabledReason(model.disabledReason, say)
@@ -192,10 +220,11 @@ function SessionOptionPopover(props: {
     if (descriptor.id === 'effort') {
       setOpen(false)
     }
+    // During a provider fallback, picking the saved model is a real change.
     if (
       descriptor.valueSource === 'unknown' ||
       descriptor.valueSource === 'default' ||
-      descriptor.kind.currentValue !== value
+      (descriptor.fallbackModel ?? descriptor.kind.currentValue) !== value
     ) {
       props.onSet(descriptor, value)
     }
@@ -217,6 +246,7 @@ function SessionOptionPopover(props: {
       <PickerTrigger
         modelLabel={modelLabel}
         optionsLabel={optionsLabel}
+        tooltipLabel={tooltipLabel}
         accessibleName={
           optionsLabel
             ? `${modelName}, ${pillAccessibleName(optionsTitle, optionsLabel, t)}`
@@ -276,11 +306,12 @@ function SessionOptionPopover(props: {
         {model.kind.type === 'select' && !model.action ? (
           <NativeChatModelCombobox
             choices={model.kind.choices}
-            currentValue={model.kind.currentValue}
+            currentValue={model.fallbackModel ?? model.kind.currentValue}
             readOnly={!model.settable}
             readOnlyReason={modelReason}
             busy={pendingIds.has(model.id)}
             onSelect={(value) => set(model, value)}
+            cliUpdate={props.cliUpdate}
           />
         ) : (
           <NativeChatSessionOptionWriteGroup
@@ -350,6 +381,7 @@ function NativeChatSessionOptionPickersInner({
     <div className="flex min-w-0 items-center text-chat-foreground-faint">
       <SessionOptionPopover
         demandModelCatalog={surface.demandModelCatalog}
+        cliUpdate={surface.cliUpdate}
         model={model}
         options={options}
         isWorking={isWorking}

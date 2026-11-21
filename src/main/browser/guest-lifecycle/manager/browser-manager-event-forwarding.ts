@@ -1,8 +1,11 @@
 import type {
+  BrowserLoadStall,
+  BrowserLoadStallEvent,
   BrowserPermissionDeniedEvent,
   BrowserPopupEvent
-} from '../../../../shared/browser-guest-events'
-import { redactKagiSessionToken } from '../../../../shared/browser-url'
+} from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
+// oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { BrowserManagerBindings } from './browser-manager-bindings'
 
 export type PendingPermissionEvent = Omit<BrowserPermissionDeniedEvent, 'browserPageId'>
@@ -104,6 +107,27 @@ export abstract class BrowserManagerEventForwarding extends BrowserManagerBindin
       browserPageId: browserTabId,
       ...event
     } satisfies BrowserPopupEvent)
+  }
+
+  protected sendLoadStall(
+    browserPageId: string,
+    webContentsId: number,
+    stall: BrowserLoadStall | null
+  ): void {
+    this.resolveRendererForBrowserTab(browserPageId)?.send('browser:load-stall', {
+      browserPageId,
+      webContentsId,
+      stall: stall && { host: stall.host }
+    } satisfies BrowserLoadStallEvent)
+  }
+
+  protected flushPendingLoadStall(browserTabId: string, guestWebContentsId: number): void {
+    const stall = this.pendingLoadStallsByGuestId.get(guestWebContentsId)
+    if (stall) {
+      this.pendingLoadStallsByGuestId.delete(guestWebContentsId)
+      this.loadStallPageIdByGuestId.set(guestWebContentsId, browserTabId)
+      this.sendLoadStall(browserTabId, guestWebContentsId, stall)
+    }
   }
 
   protected flushPendingLoadFailure(browserTabId: string, guestWebContentsId: number): void {

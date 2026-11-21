@@ -5,7 +5,7 @@ import { basename, join } from 'node:path'
 import type * as NodeFsPromises from 'node:fs/promises'
 import '../../../ai-vault/scanners/codex/codex-session-root-dedup'
 import { prepareLegacySharedCodexSessionResume } from './codex-legacy-session-resume'
-import '../../../codex-accounts/host-codex-managed-home-ownership'
+import '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 
 const lstatFaults = vi.hoisted(() => ({
   path: null as string | null,
@@ -68,21 +68,18 @@ describe('prepareLegacySharedCodexSessionResume', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
-  it('materializes an immediate legacy resume into the real home', async () => {
-    const result = await prepare()
+  it('refuses an occupied legacy resume path and materializes once it is free', async () => {
     const targetPath = targetRolloutPath()
+    mkdirSync(join(targetPath, '..'), { recursive: true })
+    writeFileSync(targetPath, '{"different":true}\n', 'utf-8')
+    await expect(prepare()).rejects.toThrow(/Retry resume/)
+    expect(readFileSync(targetPath, 'utf-8')).toBe('{"different":true}\n')
 
+    rmSync(targetPath)
+    const result = await prepare()
     expect(result).toEqual({ useRealCodexHome: true })
     expect(readFileSync(targetPath, 'utf-8')).toBe('{"type":"session_meta"}\n')
     expect(statSync(targetPath).ino).toBe(statSync(rolloutPath).ino)
-  })
-
-  it('fails closed when a different rollout already owns the target path', async () => {
-    mkdirSync(join(targetRolloutPath(), '..'), { recursive: true })
-    writeFileSync(targetRolloutPath(), '{"different":true}\n', 'utf-8')
-
-    await expect(prepare()).rejects.toThrow(/Retry resume/)
-    expect(readFileSync(targetRolloutPath(), 'utf-8')).toBe('{"different":true}\n')
   })
 
   function prepare() {

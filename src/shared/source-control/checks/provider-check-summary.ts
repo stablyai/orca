@@ -1,8 +1,15 @@
-import type { CheckStatus, ProviderCheckSummary } from '../../github/pull-request-types'
+import type {
+  CheckStatus,
+  ProviderCheckSummary
+} from '../../github/pull-requests/pull-request-types'
 
 export type CheckOutcome = 'passed' | 'failed' | 'pending' | 'neutral'
 
-export type CheckOutcomeInput = { status?: string | null; conclusion?: string | null }
+export type CheckOutcomeInput = {
+  status?: string | null
+  conclusion?: string | null
+  gitlabAllowedFailure?: boolean
+}
 
 // Skipped means not applicable; count it passing everywhere so desktop/mobile agree on the same PR.
 const PASSED_CONCLUSIONS = new Set(['success', 'skipped'])
@@ -23,6 +30,9 @@ export function classifyCheckOutcome(check: CheckOutcomeInput): CheckOutcome {
   const status = (check.status ?? '').toLowerCase()
   if (FAILED_CONCLUSIONS.has(conclusion)) {
     return 'failed'
+  }
+  if (check.gitlabAllowedFailure === true && conclusion === 'neutral' && status === 'completed') {
+    return 'passed'
   }
   if (PASSED_CONCLUSIONS.has(conclusion)) {
     return 'passed'

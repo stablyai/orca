@@ -1,23 +1,23 @@
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { AppState } from '../../types'
 import type { StoreApi } from 'zustand'
-import { githubTaskIdentity } from '@/lib/github-task-target'
-import { getWorkItemRepo } from '@/lib/work-item-repo-row'
-import { lookupReposBySlugFromCache } from '@/lib/repo-slug-cache'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import { structuralValuesEqual } from '../../../../../shared/structural-value-equality'
+import { githubTaskIdentity } from '@/lib/work-items/github/github-task-target'
+import { getWorkItemRepo } from '@/lib/work-items/work-item-repo-row'
+import { lookupReposBySlugFromCache } from '@/lib/workspace/catalog/repo-slug-cache'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { structuralValuesEqual } from '../../../../../shared/collections/structural-value-equality'
 import { projectViewSourceScope } from '../cache/cache-identity'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
 import { patchGitHubProjectRowContent } from '../projects/project-row-actions'
-import { buildProjectWorkItem } from '@/components/github-project/project-work-item'
+import { buildProjectWorkItem } from '@/components/github-project/row-actions/project-work-item'
 import { isEmptyTaskChange, type TaskChange, type TaskFacts } from './task-change'
 import type {
   GitHubProjectRow,
   GitHubProjectTable
-} from '../../../../../shared/github/project-types'
+} from '../../../../../shared/github/projects/project-types'
 import {
   PROJECT_ASSIGNEE_LIMIT,
   PROJECT_LABEL_LIMIT,
@@ -32,6 +32,7 @@ import {
   type AcceptedTask
 } from './task-record-model'
 import { TaskRecordReads } from './task-record-reads'
+import { runtimeStatusSubscriptionsFor } from '../../slices/runtime-status/views/runtime-status-subscriptions'
 
 /** The shared task record cache: owners and reads, plus the Project board surfaces of the same records. */
 export class GitHubTaskRecordCache extends TaskRecordReads {
@@ -228,10 +229,12 @@ export class GitHubTaskRecordCache extends TaskRecordReads {
 
 export function createGitHubTaskRecordCache(store: StoreApi<AppState>) {
   const cache = new GitHubTaskRecordCache(store)
+  runtimeStatusSubscriptionsFor(store).subscribeStatusChanges((change) =>
+    cache.syncRuntimeEnvironments(change.ids)
+  )
   store.subscribe((state, previous) => {
     if (
       state.repos !== previous.repos ||
-      state.runtimeStatusByEnvironmentId !== previous.runtimeStatusByEnvironmentId ||
       state.runtimeEnvironments !== previous.runtimeEnvironments ||
       state.sshConnectionStates !== previous.sshConnectionStates ||
       state.sshStateByEnvironment !== previous.sshStateByEnvironment

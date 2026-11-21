@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react'
 import { SquareArrowOutUpRight } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useSourceControlState } from '../panel/worktree-scope'
+import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import {
   gitGraphScope,
   gitGraphSupport,
   gitGraphUpdateMessage,
   openGitGraph,
   probeGitGraphSupport
-} from '@/lib/git-graph-tab'
+} from '@/lib/source-control/graph/git-graph-tab'
 import { toSourceControlRowOpenEvent, type SourceControlRowOpenEvent } from '../listing/split-open'
 import { useTranslate } from '@/i18n/use-translate'
 import { CommitsHeaderIconButton } from './commits-header-icon-button'
@@ -25,9 +26,9 @@ export function GitGraphOpenButton({
   const owner = useSourceControlState((state) =>
     JSON.stringify([worktreeId, gitGraphScope(worktreeId, state)?.route])
   )
-  const status = useSourceControlState((state) => {
+  const status = useAppStateValueWithHostStatuses((state, statuses) => {
     const environmentId = gitGraphScope(worktreeId, state)?.route.runtimeEnvironmentId
-    return environmentId ? state.runtimeStatusByEnvironmentId.get(environmentId) : undefined
+    return environmentId ? statuses.get(environmentId) : undefined
   })
   const [probe, setProbe] = useState<{ owner: string; support: boolean | null }>()
   const support = probe?.owner === owner ? probe.support : null

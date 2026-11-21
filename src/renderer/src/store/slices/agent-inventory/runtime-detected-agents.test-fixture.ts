@@ -1,5 +1,5 @@
 import { createStore } from 'zustand/vanilla'
-import type { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
+import type { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import {
   createRuntimeDetectedAgentsSlice,
   type RuntimeDetectedAgentsStoreState

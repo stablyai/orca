@@ -5,6 +5,17 @@ import {
   withProviderDiagnostic
 } from '../../../shared/agent-session/failures/agent-session-failure'
 
+// Structured metadata is not user-facing diagnostic text.
+export function acpErrorDataWords(data: unknown): string | undefined {
+  const words =
+    typeof data === 'string'
+      ? data
+      : typeof data === 'object' && data !== null && 'details' in data
+        ? data.details
+        : undefined
+  return typeof words === 'string' && words.trim() ? words : undefined
+}
+
 export class AcpRpcError extends Error {
   constructor(
     readonly code: number,
@@ -22,6 +33,20 @@ export class AcpAgentError extends AcpRpcError {
     super(code, message, data)
     this.name = 'AcpAgentError'
   }
+}
+
+/** Only an agent-declared temporary answer permits retrying a saved conversation. */
+export function temporaryAcpProviderAnswer(error: unknown): boolean {
+  return (
+    error instanceof AcpAgentError &&
+    error.code === -32603 &&
+    typeof error.data === 'object' &&
+    error.data !== null &&
+    'errorName' in error.data &&
+    (error.data.errorName === 'ServerUnavailable' ||
+      error.data.errorName === 'CatalogNotReady' ||
+      error.data.errorName === 'ServiceUnavailableError')
+  )
 }
 
 export class AcpAuthRequiredError extends AcpAgentError {

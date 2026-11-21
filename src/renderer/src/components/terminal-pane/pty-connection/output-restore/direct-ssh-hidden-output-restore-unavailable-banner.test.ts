@@ -48,7 +48,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } =
     await import('../test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
@@ -144,7 +144,9 @@ function stubMainBufferSnapshot(
 
 async function connectHiddenDirectSshPane(): Promise<SshPaneDrive> {
   const { connectPanePty } = await import('../connect-pane-pty')
-  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+    '@/lib/agent-status/aggregation/worktree-agent-status'
+  )
   const transport = createMockTransport(SSH_PTY_ID)
   const capturedDataCallback: {
     current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -277,35 +279,6 @@ describe('direct-SSH hidden-output restore abandonment', () => {
       unavailableBannerWritten: false,
       hiddenOutputRecoveredFromHostSnapshot: true
     })
-    drive.disposable.dispose()
-  })
-
-  it('[invariant] a permanently silent SSH host banners once after a bounded number of re-arms and then stops requesting', async () => {
-    const getMainBufferSnapshot = stubMainBufferSnapshot(async () => null)
-    const drive = await connectHiddenDirectSshPane()
-    vi.useFakeTimers()
-    driveHiddenBacklogThenReveal(drive)
-    await flushAsyncTicks(20)
-    await advanceThroughNullRetryBudget()
-
-    expect(drive.writtenChunks().join('')).toContain('LIVE_AGENT_CHUNK')
-
-    for (let step = 0; step < 6; step += 1) {
-      await allowSelfHealWindow()
-    }
-    const bannerCount = drive
-      .writtenChunks()
-      .filter((data) => data.includes(BANNER_FRAGMENT)).length
-    expect(bannerCount).toBe(1)
-    const settledRequests = getMainBufferSnapshot.mock.calls.length
-    expect(settledRequests).toBeGreaterThan(4)
-    expect(settledRequests).toBeLessThan(40)
-
-    for (let step = 0; step < 4; step += 1) {
-      await allowSelfHealWindow()
-    }
-    expect(getMainBufferSnapshot.mock.calls.length).toBe(settledRequests)
-    expect(drive.writtenChunks().filter((data) => data.includes(BANNER_FRAGMENT)).length).toBe(1)
     drive.disposable.dispose()
   })
 

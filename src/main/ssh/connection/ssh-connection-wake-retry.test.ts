@@ -17,7 +17,7 @@ import { SshConnection } from './ssh-connection'
 import { resolveWithSshG } from '../config/ssh-g-config-resolution'
 
 import { RECONNECT_BACKOFF_MS } from './ssh-connection-timing'
-import { recordSshUserDisconnected, resetSshUserDisconnectsForTests } from './ssh-user-disconnect'
+import { recordSshUserDisconnected } from './ssh-user-disconnect'
 
 vi.mock('../authentication/ssh2-module-load', async () =>
   (await import('./testing/ssh-connection-test-client')).createSsh2LoaderModule()
@@ -86,14 +86,13 @@ async function spendLadderWhileAsleep(conn: SshConnection): Promise<void> {
 describe('SshConnection retry after wake or network return', () => {
   beforeEach(() => {
     resetSshConnectionMocks()
-    resetSshUserDisconnectsForTests()
     vi.useFakeTimers()
   })
   afterEach(() => {
     vi.useRealTimers()
   })
 
-  it('retries a host the ladder gave up on while the machine slept (#26888)', async () => {
+  it('restores the retry budget on wake after the ladder is exhausted (#26888)', async () => {
     const { conn } = recordStatuses()
     await connectWithFakeTimers(conn)
     await spendLadderWhileAsleep(conn)
@@ -102,23 +101,9 @@ describe('SshConnection retry after wake or network return', () => {
     await vi.advanceTimersByTimeAsync(10 * 60_000)
     expect(clientInstances).toHaveLength(clientsBefore)
 
-    ssh2Mock.connectBehavior = 'ready'
-    const created = nextSshClientCreation()
-    expect(conn.retryAfterNetworkReturn()).toBe(true)
-    await created
-    await vi.advanceTimersByTimeAsync(1)
-
-    expect(conn.getState().status).toBe('connected')
-  })
-
-  it('gives a wake retry the full failure budget, not what the dark wakes left', async () => {
-    const { conn } = recordStatuses()
-    await connectWithFakeTimers(conn)
-    await spendLadderWhileAsleep(conn)
-
     // The network is still coming back: the wake attempt fails and the ladder must start afresh.
     const created = nextSshClientCreation()
-    conn.retryAfterNetworkReturn()
+    expect(conn.retryAfterNetworkReturn()).toBe(true)
     await created
     await vi.advanceTimersByTimeAsync(1)
     expect(conn.getState().status).toBe('reconnecting')

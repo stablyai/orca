@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildAiVaultResumeShellCommand } from './ai-vault-resume-command'
+import { getAgentResumeArgv } from '../../agent-launch/startup/agent-resume-argv'
+import {
+  buildAiVaultResumeCommand,
+  buildAiVaultResumeShellCommand
+} from './ai-vault-resume-command'
 
 describe('buildAiVaultResumeShellCommand env removal', () => {
   const base = {
@@ -63,5 +67,49 @@ describe('buildAiVaultResumeShellCommand env removal', () => {
     ).toBe(
       'set "CODEX_HOME=" & set "ORCA_CODEX_HOME=" & cd /d "C:\\repo" && codex \'resume\' \'sid\''
     )
+  })
+})
+
+// STA-14815: OMP takes its profile from flag or env only, so a bare --resume opened a profile's chat under the default profile.
+describe('OMP profile session resume', () => {
+  it.each([
+    ['/home/u/.omp/profiles/qwen/agent/sessions/b/s.jsonl', 'qwen'],
+    ['/home/u/.local/share/omp/profiles/work.2/sessions/b/s.jsonl', 'work.2']
+  ])('resumes %s under profile %s', (transcript, profile) => {
+    const command = buildAiVaultResumeCommand({
+      agent: 'omp',
+      sessionId: 'sid',
+      resumeFilePath: transcript,
+      cwd: null,
+      platform: 'linux'
+    })
+    expect(command).toBe(`omp --profile ${profile} --resume '${transcript}'`)
+    expect(getAgentResumeArgv('omp', { key: 'session_id', id: 'sid' }, transcript)).toEqual([
+      'omp',
+      '--profile',
+      profile,
+      '--resume',
+      transcript
+    ])
+  })
+})
+
+describe('Hermes profile session resume', () => {
+  it.each([
+    ['/home/u/.hermes/state.db#local-1', 'default'],
+    ['/home/u/.hermes/profiles/work/state.db#local-1', 'work'],
+    ['\\\\wsl.localhost\\Ubuntu\\home\\u\\.hermes\\profiles\\ops\\state.db#local-1', 'ops']
+  ])('resumes %s under profile %s, from the row and from a restored pane', (row, profile) => {
+    const command = buildAiVaultResumeCommand({
+      agent: 'hermes',
+      sessionId: 'local-1',
+      resumeFilePath: row,
+      cwd: null,
+      platform: 'linux'
+    })
+    expect(command).toBe(`hermes -p ${profile} --resume 'local-1'`)
+    expect(
+      getAgentResumeArgv('hermes', { key: 'session_id', id: 'local-1', transcriptPath: row })
+    ).toEqual(['hermes', '-p', profile, '--resume', 'local-1'])
   })
 })

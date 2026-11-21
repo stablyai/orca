@@ -11,7 +11,7 @@ import {
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { createStructuredSessionObservationClock } from './structured-agent-session-observation-clock.test-fixture'
 
 let rig: QueuedMessageTestRig
@@ -60,7 +60,7 @@ it('a steer send waiting on approval joins the running turn when approval clears
   expect(await rig.handoff(steer.id)).toBeUndefined()
   const itemId = agentJournalItemKey(identity)
   const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
-  const prompt = journal.item(itemId)!
+  const prompt = (await journal.reads.item(itemId))!
   const fields = { itemId, expectedRevision: prompt.revision, optionId: 'allow' }
   expect(
     await host.respondToPrompt(CALLER, {
@@ -71,4 +71,17 @@ it('a steer send waiting on approval joins the running turn when approval clears
   ).toMatchObject({ ok: true })
   await eventually(async () => expect((await rig.handoff(steer.id))?.handedOverAt).toBeDefined())
   expect(await rig.handoff(queueOnly.id)).toBeUndefined()
+})
+
+it('Send-now steers a second card while the first steer is still unechoed', async () => {
+  const opener = await rig.workingSend()
+  await rig.settleAccepted(opener, 'opening')
+  await openRigTurnFor(rig, opener)
+  const first = rig.send('first card', 'queue-if-active')
+  const second = rig.send('second card', 'queue-if-active')
+  await Promise.all([first.result, second.result])
+  expect(await rig.sendNow(first.id)).toMatchObject({ ok: true })
+  await eventually(async () => expect((await rig.handoff(first.id))?.handedOverAt).toBeDefined())
+  expect(await rig.sendNow(second.id)).toMatchObject({ ok: true })
+  await eventually(async () => expect((await rig.handoff(second.id))?.handedOverAt).toBeDefined())
 })

@@ -1,18 +1,22 @@
 import type {
   BundledSkillObserved,
   BundledSkillPlan
-} from '../../../../../shared/bundled-skill-plan'
-import type { DiscoveredSkill, SkillDiscoverySource } from '../../../../../shared/skills'
+} from '../../../../../shared/skills/bundled/bundled-skill-plan'
+import type {
+  DiscoveredSkill,
+  SkillDiscoverySource
+} from '../../../../../shared/skills/discovery/skills'
 
-import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
-import { useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { useDetectedAgents } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import {
   type OrchestrationSkillAgentStatus,
   getOrchestrationSkillAgentStatuses,
   sortOrchestrationAgents
-} from '@/lib/orchestration-skill-coverage'
-import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
-import { cn } from '@/lib/utils'
+} from '@/lib/skills/orchestration-skill-coverage'
+import { ORCHESTRATION_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 

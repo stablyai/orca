@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { RepoUpdatePersistenceOperations } from './repo-update-operations'
 
 function makeRepo(overrides: Partial<Repo> & Pick<Repo, 'id'>): Repo {

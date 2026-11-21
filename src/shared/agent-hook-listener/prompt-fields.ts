@@ -1,7 +1,7 @@
 import {
   isCompactContinuationUserTurnText,
   isKnownHarnessInjectedUserTurnText
-} from '../harness-injected-user-turns'
+} from '../agent-session/journal/harness-injected-user-turns'
 import { capOpenCodeHookText } from './listener-limits'
 import type { HookListenerState } from './listener-state'
 import type { ToolSnapshot } from './listener-event'

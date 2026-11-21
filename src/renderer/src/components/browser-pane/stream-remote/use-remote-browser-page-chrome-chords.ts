@@ -1,16 +1,16 @@
 import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
-import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
-import { keybindingMatchesAction } from '../../../../../shared/keybindings'
+import { useAppStore } from '@/store/index'
+import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import { browserChromeShortcutOwnsEvent } from '../describe-page/browser-overlay-shortcut-target'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
-import { isEditableKeyboardTarget } from '../host-guest/browser-keyboard'
+import { isEditableKeyboardTarget } from '../host-guest/input/browser-keyboard'
 import {
   REMOTE_BROWSER_FIND_UNAVAILABLE_NOTICE_ID,
   type RemoteBrowserPaneNotice
 } from './remote-browser-page-input-model'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 const FIND_UNAVAILABLE_NOTICE_MS = 4000
 
@@ -24,7 +24,9 @@ export function useRemoteBrowserPageChromeChords({
   chromeShortcutScope: BrowserChromeShortcutScope
   workspaceId: string
   runRemoteNavigation: (
-    method: 'browser.reload' | 'browser.back' | 'browser.forward'
+    method: 'browser.reload' | 'browser.back' | 'browser.forward',
+    url?: string,
+    ignoreCache?: boolean
   ) => Promise<void> | void
   setPaneNotice: Dispatch<SetStateAction<RemoteBrowserPaneNotice | null>>
 }): void {
@@ -108,9 +110,7 @@ export function useRemoteBrowserPageChromeChords({
       }
       event.preventDefault()
       event.stopImmediatePropagation()
-      // Why: the runtime exposes one reload; a hard reload would need a wire change, so both
-      // chords land on it rather than one of them silently doing nothing.
-      void runRemoteNavigation('browser.reload')
+      void runRemoteNavigation('browser.reload', undefined, isHardReload)
     }
     addAppKeyListener('keydown', handleKeyDown)
     return () => {

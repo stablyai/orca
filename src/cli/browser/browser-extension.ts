@@ -2,10 +2,10 @@ import type {
   BrowserExtensionSummaryListResult,
   BrowserExtensionReloadResult
 } from '../../shared/browser/extensions/browser-extension-types'
-import type { CommandHandler } from '../dispatch'
-import { getPresentStringFlag } from '../flags'
-import { printResult } from '../format'
-import { resolveRepoPathArgument } from '../repo-path-arguments'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { getPresentStringFlag } from '../arguments/flags'
+import { printResult } from '../output/command-result-output'
+import { resolveRepoPathArgument } from '../projects/repo-path-arguments'
 
 export const BROWSER_EXTENSION_HANDLERS: Record<string, CommandHandler> = {
   'extension list': async ({ flags, client, json }) => {
@@ -16,7 +16,7 @@ export const BROWSER_EXTENSION_HANDLERS: Record<string, CommandHandler> = {
     )
     printResult(result, json, ({ active, extensions }) =>
       !active
-        ? 'Browser extensions are disabled in Settings › Experimental.'
+        ? 'Browser extensions are turned off in Settings › Browser › Extensions.'
         : extensions.length === 0
           ? 'No browser extensions installed.'
           : extensions

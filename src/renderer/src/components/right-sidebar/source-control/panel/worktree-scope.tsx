@@ -1,11 +1,16 @@
+import { captureAgentStatusView } from '@/store/slices/agent-status/status-ownership/agent-status-transaction-owner'
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { create, type StoreApi } from 'zustand'
 import { AppStateViewContext, useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useAppStore } from '@/store'
+import {
+  readRuntimeStatuses,
+  retainRuntimeStatusesForView
+} from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { AppState } from '@/store/types'
-import { getConnectionId } from '@/lib/connection-context'
-import type { Repo } from '../../../../../../shared/repo-types'
-import type { AttachedWorktreeOwner } from '../../folder-workspace-attached-worktrees'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { AttachedWorktreeOwner } from '../../folder-workspaces/folder-workspace-attached-worktrees'
 
 export type SourceControlScope = AttachedWorktreeOwner & {
   repo: Repo
@@ -44,8 +49,10 @@ export function SourceControlScopeProvider({
     if (active) {
       return useAppStore
     }
-    const snapshot = useAppStore.getState()
-    return create<AppState>(() => snapshot)
+    const snapshot = captureAgentStatusView(useAppStore.getState())
+    const view = create<AppState>(() => snapshot)
+    retainRuntimeStatusesForView(view, readRuntimeStatuses())
+    return view
   }, [active])
   const [visibleOwner, setVisibleOwner] = useState(owner)
   if (active && visibleOwner !== owner) {

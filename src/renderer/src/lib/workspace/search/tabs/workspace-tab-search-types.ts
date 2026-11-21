@@ -5,18 +5,18 @@ import type {
   TabContentType,
   TabGroup,
   WorkspaceVisibleTabType
-} from '../../../../../../shared/tab-types'
-import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
+} from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
+import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-authority/pane-foreground-agent'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab
 } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalAgent } from '../../../../../../shared/agent-status/identity/terminal-agent'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { AgentMetadata, WorkspaceTabAgentMetadataState } from './workspace-tab-agent-metadata'
 import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
-import { buildSearchableWorkspaceTabEntries } from './workspace-tab-palette-entry-builder'
+import './workspace-tab-palette-entry-builder'
 import './workspace-tab-palette-results'
 
 export type WorkspaceTabContentType = Exclude<TabContentType, 'browser' | 'simulator'>
@@ -49,8 +49,6 @@ export type SearchableWorkspaceTab = {
 // Keep terminal type aliases searchable but undisplayed; icons already communicate type.
 export const TERMINAL_TYPE_SEARCH_ALIASES = ['terminal tab', 'terminal'] as const
 
-type WorkspaceTabPaletteActiveTabType = WorkspaceVisibleTabType
-
 export type BuildSearchableWorkspaceTabsOptions = WorkspaceTabAgentMetadataState & {
   worktrees: readonly Worktree[]
   ownershipWorktrees?: readonly Pick<Worktree, 'id'>[]
@@ -64,17 +62,15 @@ export type BuildSearchableWorkspaceTabsOptions = WorkspaceTabAgentMetadataState
   groupsByWorktree: Record<string, readonly TabGroup[] | undefined>
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId?: ExecutionHostId | null
-  activeTabType: WorkspaceTabPaletteActiveTabType
+  activeTabType: WorkspaceVisibleTabType
   activeTabId: string | null
   activeTabIdByWorktree: Record<string, string | null | undefined>
   activeFileId: string | null
   activeFileIdByWorktree: Record<string, string | null | undefined>
-  activeTabTypeByWorktree: Record<string, WorkspaceTabPaletteActiveTabType | undefined>
+  activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType | undefined>
   generatedTitlesEnabled: boolean
   /** Chat names as the tab strip shows them, so a renamed chat is found by its new name. */
   chatNames: StructuredChatTabNames
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
   paneForegroundAgentByPaneKey?: Record<string, PaneForegroundAgentEntry>
 }
-
-export const buildSearchableWorkspaceTabs = buildSearchableWorkspaceTabEntries

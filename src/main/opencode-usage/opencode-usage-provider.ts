@@ -1,5 +1,5 @@
-import type { UsageProvider } from '../usage/usage-provider-contract'
-import { scanOpenCodeUsageDatabasesViaWorker } from '../usage/usage-scan-worker-spawn'
+import type { UsageProvider } from '../usage/provider-lifecycle/usage-provider-contract'
+import { scanOpenCodeUsageDatabasesViaWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsageSession } from './types'
 
 // Invalidate older caches: merge migrated rows per column, normalize input and preserve cache writes.

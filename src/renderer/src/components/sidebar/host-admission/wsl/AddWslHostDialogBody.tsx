@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AddWslHostFormPanel, canAddWslDistro, wslHostAddRequest } from './AddWslHostFormPanel'
 import { useWslDistroList } from './use-wsl-distro-list'
-import { useWslHostServerFilesMissing } from '../../use-wsl-hosts-enabled'
-import { readIpcErrorDetail } from '@/lib/ipc-error'
-import { wslHostAddRefusalMessage } from '../../wsl-host-failure-text'
+import { useWslHostServerFilesMissing } from '../../../../runtime/hosts/wsl/use-wsl-hosts-enabled'
+import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
+import { wslHostAddRefusalMessage, wslHostStatusDetailMessage } from './wsl-host-failure-text'
 import { addWslHostDistro } from './add-wsl-host-distro'
 
 export function AddWslHostDialogBody({
@@ -23,6 +23,8 @@ export function AddWslHostDialogBody({
   const distros = list.distros
   const [chosenDistro, setChosenDistro] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [addingDistro, setAddingDistro] = useState<string | null>(null)
+  const [wait, setWait] = useState<string | null>(null)
   // Keep an addable pick or the sole addable distro; never silently choose among several.
   const addable = distros.filter(canAddWslDistro)
   const selectedDistro = addable.some((distro) => distro.name === chosenDistro)
@@ -31,12 +33,27 @@ export function AddWslHostDialogBody({
       ? addable[0].name
       : ''
 
+  // Main names what a long Add waits for (e.g. another install's lock) instead of a bare spinner.
+  // Every window hears every Add's progress; only this dialog's distro may change its text.
+  useEffect(() => {
+    if (!adding || addingDistro === null) {
+      return
+    }
+    return window.api.runtimeEnvironments?.wslHosts?.onAddProgress?.((progress) => {
+      if (progress.distro.toLowerCase() === addingDistro.toLowerCase()) {
+        setWait(wslHostStatusDetailMessage(progress))
+      }
+    })
+  }, [adding, addingDistro])
+
   const add = async (): Promise<void> => {
     const selected = distros.find((distro) => distro.name === selectedDistro)
     if (!selected || !canAddWslDistro(selected)) {
       return
     }
     setError(null)
+    setWait(null)
+    setAddingDistro(selected.name)
     onAddingChange(true)
     try {
       const result = await addWslHostDistro(wslHostAddRequest(selected))
@@ -64,6 +81,7 @@ export function AddWslHostDialogBody({
       selectedDistro={selectedDistro}
       error={error ?? list.error}
       adding={adding}
+      addingDetail={adding ? wait : null}
       serverFilesMissing={serverFilesMissing}
       onSelectDistro={(name) => {
         setChosenDistro(name)

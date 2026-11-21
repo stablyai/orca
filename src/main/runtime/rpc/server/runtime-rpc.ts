@@ -49,12 +49,17 @@ export class OrcaRuntimeRpcServer extends RuntimeRpcMobilePairing {
     this.mobileSocketWiring = null
     this.detachPairedServerRows?.()
     this.detachPairedServerRows = null
+    this.detachRelayHostsChanges?.()
+    this.detachRelayHostsChanges = null
     this.detachWebSocketWiring = null
     const stopResults = await Promise.allSettled(
       transports.map(async (transport) => transport.stop())
     )
     // Relay input is fenced before quit; direct auth may still update lastSeen while transports close.
     this.deviceRegistry?.flushPendingLastSeen()
+    // Direct sockets have closed; relay sockets may still close later, so close() also records who is attached.
+    this.clientConnectionLog?.close()
+    this.clientConnectionLog = null
     const failedStop = stopResults.find((result) => result.status === 'rejected')
     if (failedStop?.status === 'rejected') {
       throw failedStop.reason

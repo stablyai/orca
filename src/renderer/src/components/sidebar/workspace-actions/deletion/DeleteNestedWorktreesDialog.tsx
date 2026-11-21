@@ -10,17 +10,18 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { DialogCancel } from '@/components/ui/dialog-parts'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getWorktreeOnHostFromState } from '@/store/workspaces/selection/worktree-on-host-selector'
-import { isPathInsideOrEqual } from '../../../../../../shared/cross-platform-path'
+import { isPathInsideOrEqual } from '../../../../../../shared/file-access/cross-platform-path'
 import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { useAppStore } from '@/store'
+import { previewNestedWorktreeRemoval } from '@/store/slices/worktrees/teardown/preview-nested-worktree-removal'
 import { useTranslate } from '@/i18n/use-translate'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type { GitWorktreeInfo } from '../../../../../../shared/worktree/types'
-import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal'
+import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal/removal'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function DeleteNestedWorktreesDialog({
@@ -62,19 +63,13 @@ export function DeleteNestedWorktreesDialog({
     setPlan(null)
     setError(null)
     try {
-      const preview = window.api.worktrees.previewNestedRemoval
-      if (!preview) {
-        throw new Error(
-          t(
-            'auto.components.sidebar.DeleteNestedWorktreesDialog.unsupportedHost',
-            'This host does not support nested worktree deletion.'
-          )
+      const result = await previewNestedWorktreeRemoval(
+        target,
+        t(
+          'auto.components.sidebar.DeleteNestedWorktreesDialog.unsupportedHost',
+          'This host does not support nested worktree deletion.'
         )
-      }
-      const result = await preview({
-        worktreeId: target.id,
-        hostId: target.executionHostId ?? undefined
-      })
+      )
       if (generation === request.current) {
         setPlan(result)
       }
@@ -162,7 +157,7 @@ export function DeleteNestedWorktreesDialog({
         {deleting ? <LoaderCircle className="size-4 animate-spin" /> : null}
         {deleting
           ? t('worktree.nestedRemoval.deleting', 'Deleting…')
-          : t('worktree.nestedRemoval.review', 'Delete with nested worktrees…')}
+          : t('worktree.delete.allVerb', 'Delete all')}
       </Button>
       <Dialog
         open={open}
@@ -174,11 +169,15 @@ export function DeleteNestedWorktreesDialog({
           setOpen(next)
         }}
       >
-        <DialogContent surface="security" showCloseButton={!deleting}>
+        <DialogContent
+          size="list"
+          surface="security"
+          scrollable
+          initialFocus="cancel"
+          showCloseButton={!deleting}
+        >
           <DialogHeader>
-            <DialogTitle>
-              {t('worktree.nestedRemoval.title', 'Delete workspace and nested worktrees?')}
-            </DialogTitle>
+            <DialogTitle>{t('common.delete', 'Delete')}</DialogTitle>
             <DialogDescription>
               {t(
                 'worktree.nestedRemoval.description',
@@ -188,25 +187,20 @@ export function DeleteNestedWorktreesDialog({
             </DialogDescription>
           </DialogHeader>
           {plan ? (
-            <div className="rounded-md border border-border/70 bg-muted/35 text-xs">
-              <ScrollArea className="h-48">
-                <div className="space-y-1 px-3 py-2" role="list">
-                  {plan.map((item) => (
-                    <div
-                      key={item.path}
-                      role="listitem"
-                      className="min-w-0 border-b border-border/50 py-1 last:border-0"
-                    >
-                      <div className="break-all font-medium text-foreground">
-                        {item.branch.replace(/^refs\/heads\//, '') ||
-                          t('worktree.nestedRemoval.detached', 'Detached HEAD')}
-                      </div>
-                      <div className="mt-0.5 break-all text-muted-foreground">{item.path}</div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            </div>
+            <ul className="scrollbar-sleek max-h-48 space-y-1 overflow-y-auto rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs">
+              {plan.map((item) => (
+                <li
+                  key={item.path}
+                  className="min-w-0 border-b border-border/50 py-1 last:border-0"
+                >
+                  <div className="break-all font-medium text-foreground">
+                    {item.branch.replace(/^refs\/heads\//, '') ||
+                      t('worktree.nestedRemoval.detached', 'Detached HEAD')}
+                  </div>
+                  <div className="mt-0.5 break-all text-muted-foreground">{item.path}</div>
+                </li>
+              ))}
+            </ul>
           ) : !error ? (
             <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
               <LoaderCircle className="size-4 animate-spin" />
@@ -214,28 +208,15 @@ export function DeleteNestedWorktreesDialog({
             </p>
           ) : null}
           <RemovalUnsavedFilesNotice targets={unsavedTargets} enabled={open} />
-          <p className="text-sm text-muted-foreground">
-            {t(
-              'worktree.nestedRemoval.order',
-              'Nested worktrees are deleted first. If one fails, deletion stops and the parent is kept. Branches follow your existing deletion settings.'
-            )}
-          </p>
           {error ? (
             <p role="alert" className="break-all text-sm text-destructive">
               {error}
             </p>
           ) : null}
           <DialogFooter>
-            <Button
-              variant="outline"
-              disabled={deleting}
-              onClick={() => {
-                ++request.current
-                setOpen(false)
-              }}
-            >
+            <DialogCancel disabled={deleting}>
               {t('worktree.nestedRemoval.cancel', 'Cancel')}
-            </Button>
+            </DialogCancel>
             {error && !plan ? (
               <Button variant="outline" onClick={() => void review()}>
                 {t('worktree.nestedRemoval.retry', 'Review again')}
@@ -249,7 +230,7 @@ export function DeleteNestedWorktreesDialog({
                 {deleting ? <LoaderCircle className="size-4 animate-spin" /> : null}
                 {deleting
                   ? t('worktree.nestedRemoval.deleting', 'Deleting…')
-                  : t('worktree.nestedRemoval.confirm', 'Delete all listed worktrees')}
+                  : t('common.delete', 'Delete')}
               </Button>
             )}
           </DialogFooter>

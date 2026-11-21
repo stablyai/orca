@@ -2,9 +2,16 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
+export const PRIVACY_SETTING_ANCHORS = {
+  overview: 'privacy-overview',
+  usageData: 'privacy-usage-data',
+  diagnostics: 'privacy-diagnostics'
+} as const
+
 export const getPrivacyPaneSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.privacy.search.5c508bad41', 'Privacy & Telemetry'),
+    targetSectionId: PRIVACY_SETTING_ANCHORS.overview,
+    title: translate('auto.components.settings.privacy.search.a966af0840', 'Privacy & telemetry'),
     description: translate(
       'auto.components.settings.privacy.search.aa3b794c17',
       'Anonymous product usage data, diagnostics, and telemetry controls.'
@@ -23,8 +30,8 @@ export const getPrivacyPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.privacy.search.57b283461a',
-      'Share Anonymous Usage Data'
+      'auto.components.settings.privacy.search.6776226be7',
+      'Share anonymous usage data'
     ),
     description: translate(
       'auto.components.settings.privacy.search.b707cc3981',
@@ -40,6 +47,7 @@ export const getPrivacyPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    targetSectionId: PRIVACY_SETTING_ANCHORS.diagnostics,
     title: translate('auto.components.settings.privacy.search.6d258d2ed6', 'Diagnostics'),
     description: translate(
       'auto.components.settings.privacy.search.8b08f32366',
@@ -54,6 +62,8 @@ export const getPrivacyPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    // The variables disable the usage-data switch; their notice renders under it only while one is set.
+    targetSectionId: PRIVACY_SETTING_ANCHORS.usageData,
     title: translate(
       'auto.components.settings.privacy.search.e058a3c98d',
       'Telemetry environment variables'

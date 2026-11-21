@@ -1,5 +1,5 @@
 import { connect, type Socket } from 'node:net'
-import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser-network-tunnel-protocol'
+import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 
 // Settle on connect so an immediate dial error (emitted on nextTick) cannot outrun its listener.
 export function openConnectedSocket(

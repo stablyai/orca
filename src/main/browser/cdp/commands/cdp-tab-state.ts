@@ -2,7 +2,7 @@ import type {
   BrowserConsoleEntry,
   BrowserInterceptedRequest,
   BrowserNetworkEntry
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { SnapshotResult } from '../snapshots/snapshot-engine'
 
 export type CdpTabState = {

@@ -1,5 +1,5 @@
 import { join, resolve } from 'node:path'
-import type { BundledSkillOp } from '../../../shared/bundled-skill-plan'
+import type { BundledSkillOp } from '../../../shared/skills/bundled/bundled-skill-plan'
 import type { BundledSkillSource } from './bundled-skill-sources'
 import {
   hasCloudReceipt,
@@ -9,6 +9,7 @@ import {
 import { classifyBundledSkillPath } from './bundled-skill-classification'
 import type { BundledSkillPlanInput } from './bundled-skill-plan'
 import { recoverySiblings } from './bundled-skill-swap-recovery'
+import { isOtherBuildCopy } from './bundled-skill-written-digests'
 import { bundledSkillPathKey, type BundledSkillTargetRoot } from './bundled-skill-targets'
 
 export async function planFormerSkillPlacements(
@@ -43,12 +44,15 @@ export async function planFormerSkillPlacements(
       continue
     }
     let owned = classified.folderClass === 'released' || classified.folderClass === 'current'
+    const linkedRealPath = observed.kind === 'link' ? await filesystem.realpath(path) : null
+    const canonical = bundledSkillPathKey(join(root.realPath, source.name))
+    // Junctions store an absolute spelling (linked home, subst drive), so also compare realpaths.
     const forwarding =
       observed.kind === 'link' &&
-      bundledSkillPathKey(resolve(root.realPath, observed.target)) ===
-        bundledSkillPathKey(join(root.realPath, source.name))
+      (bundledSkillPathKey(resolve(root.realPath, observed.target)) === canonical ||
+        (linkedRealPath !== null && bundledSkillPathKey(linkedRealPath) === canonical))
     if (observed.kind === 'link' && sharedRoot) {
-      const target = (await filesystem.realpath(path)) ?? resolve(root.realPath, observed.target)
+      const target = linkedRealPath ?? resolve(root.realPath, observed.target)
       const formerShared = join(sharedRoot.realPath, name)
       const sharedTarget = (await filesystem.realpath(join(sharedRoot.path, name))) ?? formerShared
       if (bundledSkillPathKey(target) === bundledSkillPathKey(sharedTarget)) {
@@ -80,9 +84,13 @@ export async function planFormerSkillPlacements(
           reason ??
           (observed.kind === 'unreadable'
             ? 'unreadable'
-            : classified.folderClass === 'edited'
-              ? 'edited'
-              : 'other')
+            : classified.folderClass !== 'edited'
+              ? 'other'
+              : // A build from before the rename recorded these bytes under the former name.
+                !cloud &&
+                  (await isOtherBuildCopy(filesystem, input.destination, { name }, observed))
+                ? 'other-build'
+                : 'edited')
       })
       continue
     }

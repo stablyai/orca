@@ -1,17 +1,18 @@
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { launchHostIsRemote } from '../../../../../../shared/agent-launch/startup/agent-launch-remote'
-import '@/lib/connection-context'
+import '@/lib/workspace/ownership/connection-context'
 import {
   getConnectionIdFromState,
   getConnectionIdForWorktreeCopy
-} from '@/lib/connection-owner-resolution'
+} from '@/lib/workspace/ownership/connection-owner-resolution'
 import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
 import {
-  type ExecutionHostPlatformFact,
   refineLocalLaunchPlatform,
   resolveExecutionHostAgentStartupShell,
   resolveWorktreeExecutionHostPlatform
-} from '@/lib/execution-host-facts'
+} from '@/runtime/hosts/platform/execution-host-facts'
+import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
 import type { useAppStore } from '@/store/index'
 
 export type AgentLaunchExecutionContext = {
@@ -56,6 +57,7 @@ export function resolveAgentLaunchExecutionContext(
   // Why: the agent runs on the workspace's execution host, so its OS and shell decide quoting (#22204).
   const fact = resolveWorktreeExecutionHostPlatform(
     store,
+    readRuntimeStatuses(),
     args.worktreeId,
     workspacePath,
     args.workspaceExecutionHostId

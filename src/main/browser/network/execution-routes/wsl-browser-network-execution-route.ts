@@ -2,7 +2,7 @@ import type { WslBrowserNetworkRelayChild } from './wsl-browser-network-relay-la
 import {
   BrowserNetworkTunnelStreamFrameDecoder,
   BrowserNetworkTunnelStreamFrameWriter
-} from '../../../../shared/browser-network-tunnel-stream-framing'
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-stream-framing'
 import { BrowserNetworkDeferredSocket } from './browser-network-deferred-socket'
 import { BrowserNetworkTunnelClient } from '../tunnels/browser-network-tunnel-client'
 import './browser-network-execution-route'

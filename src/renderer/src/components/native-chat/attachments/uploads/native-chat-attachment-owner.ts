@@ -1,18 +1,25 @@
-import type { AppState } from '../../../../store/types'
-import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '../../../../lib/structured-chat-tab-index'
-
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
+import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '../../../../lib/agent-session/tab-identity/structured-chat-tab-index'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/workspace/identity/floating-workspace-id'
 import { getKnownExecutionHostIdForWorktree } from '../../../../lib/workspace/ownership/worktree-runtime-owner'
-import { runtimeEnvironmentIdForWorkspaceOwner } from '../../../../lib/resolve-owner'
-import { getConnectionIdFromState } from '../../../../lib/connection-owner-resolution'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '../../../../lib/workspace/ownership/resolve-owner'
+import { getConnectionIdFromState } from '../../../../lib/workspace/ownership/connection-owner-resolution'
 import {
-  type ExecutionHostId,
   toRuntimeExecutionHostId,
   getConnectionExecutionHostId,
-  parseExecutionHostId
-} from '../../../../../../shared/execution-host'
+  parseExecutionHostId,
+  toSshExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { findKnownWorktreeById } from '../../../../store/slices/worktrees/listing/detected-worktree-meta'
 import { getRuntimeEnvironmentRevision } from '../../../../runtime/rpc/environment-revisions/runtime-environment-revision'
+import type { AppState } from '../../../../store/types'
+import { useAppStore } from '../../../../store/index'
+import { isWebClientLocation } from '../../../../app-shell/platform/web-client-location'
+import { captureDirectSshMutationExpectation } from '../../../../runtime/hosts/ssh/ssh-mutation-expectation'
+import {
+  resolveAgentStagingWorktreePath,
+  type AgentFileStagingTarget
+} from '../../../../runtime/files/imports/agent-file-staging'
 
 /** The paired host validates every stored attachment path when admitting a structured send. */
 export type NativeChatRuntimeSessionAttachmentOwner = {
@@ -26,14 +33,23 @@ export type NativeChatAttachmentOwner =
   /** `structuredSessionId`: a structured chat on this machine, whose sends claim its pastes. */
   | { kind: 'local'; structuredSessionId?: string; stagingScope?: string }
   | NativeChatRuntimeSessionAttachmentOwner
-  /** Refuse client paths for terminal-backed remote or nested SSH/WSL chats; the paired store may not reach their agent. */
+  /** A terminal-backed chat on another host: client files are staged where its agent runs, or refused. */
   | {
       kind: 'remote'
       /** Save clipboard images on this paired host only when it directly runs the agent, never for nested SSH. */
       clipboardImageEnvironmentId?: string
+      /** Absent: no server serves this worktree (direct SSH, WSL), so client files are refused. */
+      staging?: NativeChatAttachmentStagingOwner
     }
   /** Unknown ownership must not admit local paths: hydration may reveal a remote agent that cannot read them. */
   | { kind: 'not-ready'; notice?: string }
+
+/** The server that runs a terminal-backed chat's agent, and the host its worktree lives on. */
+export type NativeChatAttachmentStagingOwner = {
+  environmentId: string
+  worktreeId: string
+  executionHostId: ExecutionHostId
+}
 
 type NativeChatAttachmentOwnerState = Pick<
   AppState,
@@ -96,11 +112,53 @@ export function resolveNativeChatAttachmentOwnerForWorktree(
     return { kind: 'local' }
   }
   const host = parseExecutionHostId(hostId)
-  // Why null only: a non-null connectionId names the server's nested SSH host, which it does not serve.
-  if (host?.kind === 'runtime' && getConnectionIdFromState(state, worktreeId) === null) {
-    return { kind: 'remote', clipboardImageEnvironmentId: host.environmentId }
+  const connectionId = getConnectionIdFromState(state, worktreeId)
+  if (host?.kind !== 'runtime' || connectionId === undefined) {
+    return { kind: 'remote' }
   }
-  return { kind: 'remote' }
+  // Why null only: the server saves clipboard images on itself, not on its nested SSH host.
+  const clipboard = connectionId === null ? { clipboardImageEnvironmentId: host.environmentId } : {}
+  // The browser client holds dropped files without client paths, which staging cannot read.
+  if (isWebClientLocation()) {
+    return { kind: 'remote', ...clipboard }
+  }
+  // A nested SSH worktree stages on that SSH host, as its terminal drops do.
+  const executionHostId = connectionId === null ? hostId : toSshExecutionHostId(connectionId)
+  return {
+    kind: 'remote',
+    ...clipboard,
+    staging: { environmentId: host.environmentId, worktreeId, executionHostId }
+  }
+}
+
+/** Where to stage files for this chat now, resolved like a terminal drop on the same worktree. */
+export function resolveNativeChatAgentStagingTarget(
+  staging: NativeChatAttachmentStagingOwner
+): AgentFileStagingTarget | null {
+  const { environmentId, worktreeId, executionHostId } = staging
+  const worktreePath = resolveAgentStagingWorktreePath(
+    worktreeId,
+    undefined,
+    executionHostId,
+    environmentId
+  )
+  if (!worktreePath) {
+    return null
+  }
+  const host = parseExecutionHostId(executionHostId)
+  if (host?.kind !== 'ssh') {
+    return { runtimeEnvironmentId: environmentId, worktreeId, worktreePath }
+  }
+  try {
+    return {
+      runtimeEnvironmentId: environmentId,
+      worktreeId,
+      worktreePath,
+      ...captureDirectSshMutationExpectation(useAppStore.getState(), host.targetId, environmentId)
+    }
+  } catch {
+    return null
+  }
 }
 
 export type NativeChatStructuredAttachmentSession = {

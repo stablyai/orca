@@ -19,7 +19,7 @@ describe('OrchestrationDb mutation and question state', () => {
   }
 
   describe('question threads', () => {
-    it('uses the original message ID and records one durable answer', () => {
+    it('records one durable answer and marks only its question read', () => {
       const d = createDb()
       const run = d.createRun({
         objective: 'Questions',
@@ -35,6 +35,12 @@ describe('OrchestrationDb mutation and question state', () => {
         question: 'Which format?',
         options: ['old', 'new']
       })
+      const status = d.insertMessage({
+        runId: run.id,
+        from: `dispatch:${dispatch.id}`,
+        to: `run:${run.id}`,
+        subject: 'Progress'
+      })
 
       expect(created.question.message_id).toBe(created.message.id)
       expect(created.message).toMatchObject({
@@ -49,6 +55,8 @@ describe('OrchestrationDb mutation and question state', () => {
         consumerGeneration: run.consumer_generation,
         body: 'old'
       })
+      expect(d.getMessageById(created.message.id)?.read).toBe(1)
+      expect(d.getMessageById(status.id)?.read).toBe(0)
       const replay = d.answerQuestion({
         messageId: created.message.id,
         runId: run.id,

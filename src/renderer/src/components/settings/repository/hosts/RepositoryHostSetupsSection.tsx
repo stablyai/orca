@@ -4,14 +4,15 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { buildExecutionHostRegistry } from '../../../../../../shared/execution-host/execution-host-registry'
-import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
-import type { ProjectHostSetup } from '../../../../../../shared/project-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution-host/host-setting-overrides'
+import type { ProjectHostSetup } from '../../../../../../shared/project/project-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '../../../../store/index'
 import { getProjectHostSetupProjectionFromState } from '../../../../store/projects/project-host-setup-selector'
-import { cn } from '../../../../lib/utils'
+import { cn } from '../../../../lib/class-names'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
@@ -79,7 +80,7 @@ export function RepositoryHostSetupsSection({
   const sshConnectionStates = useAppStore((state) => state.sshConnectionStates)
   const settings = useAppStore((state) => state.settings)
   const runtimeEnvironments = useAppStore((state) => state.runtimeEnvironments)
-  const runtimeStatusByEnvironmentId = useAppStore((state) => state.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const sshStateByEnvironment = useAppStore((state) => state.sshStateByEnvironment)
   const removedSshTargetLabels = useAppStore((state) => state.removedSshTargetLabels)
   const sshTargetsHydrated = useAppStore((state) => state.sshTargetsHydrated)
@@ -168,7 +169,7 @@ export function RepositoryHostSetupsSection({
 
   return (
     <SearchableSetting
-      title={t('auto.components.settings.RepositoryPane.availableHosts', 'Available Hosts')}
+      title={t('auto.components.settings.RepositoryPane.82733ff808', 'Available hosts')}
       description={t(
         'auto.components.settings.RepositoryPane.availableHostsDescription',
         'Hosts where this project is set up.'
@@ -180,7 +181,7 @@ export function RepositoryHostSetupsSection({
       <div className="space-y-1">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <Label className="text-sm font-semibold">
-            {t('auto.components.settings.RepositoryPane.availableHosts', 'Available Hosts')}
+            {t('auto.components.settings.RepositoryPane.82733ff808', 'Available hosts')}
           </Label>
           {switchableProjectHostSetups.length > 1 ? (
             <div className="flex items-center gap-2">
@@ -253,7 +254,8 @@ export function RepositoryHostSetupsSection({
           const nestedSshStatus =
             runtimeOwnerEnvironmentId && executionHost?.kind === 'ssh'
               ? selectRuntimeAwareSshStatus(
-                  { sshConnectionStates, sshStateByEnvironment, runtimeStatusByEnvironmentId },
+                  { sshConnectionStates, sshStateByEnvironment },
+                  runtimeStatusByEnvironmentId,
                   runtimeOwnerEnvironmentId,
                   executionHost.targetId
                 )
@@ -293,8 +295,7 @@ export function RepositoryHostSetupsSection({
                         sshTargetLabels,
                         removedSshTargetLabels,
                         sshTargetsHydrated,
-                        sshStateByEnvironment,
-                        runtimeStatusByEnvironmentId
+                        sshStateByEnvironment
                       },
                       runtimeOwnerEnvironmentId,
                       executionHost.targetId

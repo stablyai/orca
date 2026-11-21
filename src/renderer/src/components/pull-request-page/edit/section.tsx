@@ -3,14 +3,17 @@ import { useShallow } from 'zustand/react/shallow'
 import { ArrowRight, ChevronDown, CircleDashed, CircleDot, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
-import { useImmediateMutation } from '@/hooks/useIssueMetadata'
-import { useRepoAssignees, useRepoLabels } from '@/hooks/useGitHubRepoMetadata'
-import { useRepoAssigneesBySlug, useRepoLabelsBySlug } from '@/hooks/useGitHubSlugMetadata'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
+import { useImmediateMutation } from '@/hooks/useImmediateMutation'
+import { useRepoAssignees, useRepoLabels } from '@/lib/work-items/github/useGitHubRepoMetadata'
+import {
+  useRepoAssigneesBySlug,
+  useRepoLabelsBySlug
+} from '@/lib/work-items/github/useGitHubSlugMetadata'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
 import { getStateLabel } from '@/components/github/work-item-state-presentation'
 import { useTranslate } from '@/i18n/use-translate'
 import type { PullRequestPageProjectOrigin } from '../page-types'
@@ -344,9 +347,9 @@ export function GHEditSection({
         size="sm"
         onClick={() => onUse(item)}
         className="ml-auto gap-2"
-        aria-label={t('auto.components.PullRequestPage.61452f2143', 'Start workspace from issue')}
+        aria-label={t('auto.components.PullRequestPage.61452f2143', 'Start workspace')}
       >
-        {t('auto.components.PullRequestPage.61452f2143', 'Start workspace from issue')}
+        {t('auto.components.PullRequestPage.61452f2143', 'Start workspace')}
         <ArrowRight className="size-4" />
       </Button>
     </div>

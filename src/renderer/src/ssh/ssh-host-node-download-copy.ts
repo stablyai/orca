@@ -2,8 +2,8 @@
 import type {
   SshManagedServerNodeDownloadBlocked,
   SshManagedServerStatus
-} from '../../../shared/ssh-types'
-import type { NodeDistMirrorRefusal } from '../../../shared/node-dist-mirror'
+} from '../../../shared/remote-runtime/ssh/ssh-types'
+import type { NodeDistMirrorRefusal } from '../../../shared/node-runtime/node-dist-mirror'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

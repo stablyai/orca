@@ -1,9 +1,12 @@
-import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
+import {
+  throwIfAiVaultScanCancelled,
+  waitForAiVaultScan
+} from '../../scan-lifecycle/ai-vault-scan-cancellation'
 import {
   openTranscriptReadStream,
   wslGatedReadFile
-} from '../../../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
+} from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 import { dirname } from 'node:path'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
@@ -15,16 +18,17 @@ import {
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
-} from '../../session-scanner-accumulator'
-import { addSessionContent, addSessionText } from '../../session-scanner-messages'
+} from '../../parsing/session-scanner-accumulator'
+import { addSessionContent, addSessionText } from '../../parsing/session-scanner-messages'
 import {
   extractGrokFirstUserPromptText,
   stripGrokUserQueryEnvelope
 } from './session-scanner-grok-user-text'
-import { asRecord } from '../../session-scanner-record-value'
-import { extractString, parseJsonObject } from '../../session-scanner-values'
-import { normalizeTitleText } from '../../session-scanner-text-normalization'
-import { numberValue } from '../../session-scanner-token-values'
+import { asRecord } from '../../parsing/session-record-fields'
+import { extractString } from '../../../../shared/text/trimmed-string'
+import { parseJsonObject } from '../../parsing/session-json-object'
+import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
+import { numberValue } from '../../parsing/session-scanner-token-values'
 
 const GROK_PREVIEW_SCAN_LIMIT = 4096
 
@@ -64,6 +68,15 @@ export function grokSessionCwd(summary: Record<string, unknown>): string | null 
   return extractString(asRecord(summary.info)?.cwd)
 }
 
+// Grok shows these synthetic user rows as prompts; other reasons are runtime-injected (reminders, wakes).
+const GROK_PROMPT_SYNTHETIC_REASONS = new Set([
+  'interjection',
+  'scheduler_fired',
+  'agent_message',
+  'parent_agent_message',
+  'parent_human_message'
+])
+
 async function consumeGrokChatHistory(
   accumulator: SessionAccumulator,
   transcriptPath: string,
@@ -84,6 +97,10 @@ async function consumeGrokChatHistory(
       }
 
       if (role === 'user') {
+        const syntheticReason = extractString(record.synthetic_reason)
+        if (syntheticReason && !GROK_PROMPT_SYNTHETIC_REASONS.has(syntheticReason)) {
+          continue
+        }
         const text = extractGrokFirstUserPromptText(record.content)
         if (text) {
           accumulator.title ??= normalizeTitleText(text)

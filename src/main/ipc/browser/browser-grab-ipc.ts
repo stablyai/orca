@@ -3,6 +3,10 @@ import { browserManager } from '../../browser/guest-lifecycle/manager/browser-ma
 import { onDocPreviewGrantRevoked } from '../../browser/document-preview/doc-preview-grant-registry'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import { waitForNextTabRegistration } from './browser-tab-registration-wait'
+import {
+  disposeGrabModeStateForPage,
+  setBrowserGrabMode
+} from '../../browser/element-grab/browser-grab-mode-sequencer'
 import type {
   BrowserSetGrabModeArgs,
   BrowserSetGrabModeResult,
@@ -13,41 +17,9 @@ import type {
   BrowserCaptureSelectionScreenshotResult,
   BrowserExtractHoverArgs,
   BrowserExtractHoverResult
-} from '../../../shared/browser-grab-types'
+} from '../../../shared/browser/element-grab/browser-grab-types'
 
-const grabModeIntentByPageId = new Map<string, { generation: number; enabled: boolean }>()
-const grabModeOperationByPageId = new Map<string, Promise<void>>()
 const GRAB_REGISTRATION_WAIT_MS = 1_000
-
-function queueGrabModeOperation(
-  browserPageId: string,
-  operation: () => Promise<BrowserSetGrabModeResult>
-): Promise<BrowserSetGrabModeResult> {
-  const previous = grabModeOperationByPageId.get(browserPageId) ?? Promise.resolve()
-  const result = previous.then(operation)
-  const completion = result.then(
-    () => {},
-    () => {}
-  )
-  grabModeOperationByPageId.set(browserPageId, completion)
-  return result.finally(() => {
-    if (grabModeOperationByPageId.get(browserPageId) === completion) {
-      grabModeOperationByPageId.delete(browserPageId)
-    }
-  })
-}
-
-export function resetGrabModeState(): void {
-  grabModeIntentByPageId.clear()
-  // Retired registrations must not leave chains blocking new operations.
-  grabModeOperationByPageId.clear()
-}
-
-export function disposeGrabModeStateForPage(browserPageId: string): void {
-  grabModeIntentByPageId.delete(browserPageId)
-  // Reused page IDs must not queue behind destroyed guests.
-  grabModeOperationByPageId.delete(browserPageId)
-}
 
 // Previews withdraw through grant revocation, not unregisterGuest; dispose their retained intent then.
 let disposePreviewGrantSubscription: (() => void) | null = null
@@ -75,44 +47,14 @@ export function registerBrowserGrabHandlers(): void {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return { ok: false, reason: 'not-authorized' }
       }
-      const intent = {
-        generation: (grabModeIntentByPageId.get(args.browserPageId)?.generation ?? 0) + 1,
-        enabled: args.enabled
-      }
-      grabModeIntentByPageId.set(args.browserPageId, intent)
-      const isCurrentIntent = (): boolean =>
-        grabModeIntentByPageId.get(args.browserPageId) === intent
-      let guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
-      if (!guest && args.enabled) {
+      return setBrowserGrabMode(
+        args.browserPageId,
+        args.enabled,
+        () => browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id),
         // Fast file pages can expose tools before guest registration reaches main.
-        await waitForNextTabRegistration(args.browserPageId, GRAB_REGISTRATION_WAIT_MS).catch(
-          () => {}
-        )
-        if (!isCurrentIntent()) {
-          return { ok: true }
-        }
-        guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
-      }
-      if (!guest) {
-        if (!args.enabled) {
-          return { ok: true }
-        }
-        return { ok: false, reason: 'not-ready' }
-      }
-      return queueGrabModeOperation(args.browserPageId, async () => {
-        if (!isCurrentIntent()) {
-          return { ok: true }
-        }
-        guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
-        if (!guest) {
-          return args.enabled ? { ok: false, reason: 'not-ready' } : { ok: true }
-        }
-        const success = await browserManager.setGrabMode(args.browserPageId, args.enabled, guest)
-        if (!isCurrentIntent()) {
-          return { ok: true }
-        }
-        return success ? { ok: true } : { ok: false, reason: 'injection-failed' }
-      })
+        () =>
+          waitForNextTabRegistration(args.browserPageId, GRAB_REGISTRATION_WAIT_MS).catch(() => {})
+      )
     }
   )
 

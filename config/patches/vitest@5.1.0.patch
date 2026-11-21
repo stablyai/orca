@@ -1,0 +1,12 @@
+diff --git a/dist/chunks/cli-api.COfZo8lK.js b/dist/chunks/cli-api.COfZo8lK.js
+--- a/dist/chunks/cli-api.COfZo8lK.js
++++ b/dist/chunks/cli-api.COfZo8lK.js
+@@ -12393,7 +12393,7 @@
+ 	}
+ }
+ function getExternalSourceMap(project, file) {
+-	if (!project.vite.moduleGraph.getModuleById(file)?.transformResult && existsSync(file)) {
++	if (!project.vite.moduleGraph.getModuleById(file)?.transformResult && existsSync(file) && statSync(file).isFile()) {
+ 		const code = readFileSync(file, "utf-8");
+ 		return extractSourcemapFromFile(code, file)?.map;
+ 	}

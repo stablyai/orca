@@ -1,16 +1,19 @@
 import type { AppState } from '@/store/types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { isSleepingSweepExempt } from '../../../../../../shared/workspace-view/workspace-row-filters'
-import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
-import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
+import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
+import {
+  getWorktreeIdsWithLiveAgent,
+  isInactiveWorkspace
+} from '@/lib/workspace/activity/worktree-activity-state'
 import {
   getVisibleWorktreeBrowserActivityTabs,
   getVisibleWorktreeTerminalActivityTabs,
   getWorktreeIdsWithStructuredChat
 } from './visible-worktree-activity-inputs'
 
-/** Whether "Hide sleeping" drops a row, read from the same activity inputs and agent clock as the sidebar. */
-export function createSleepingSweepHiddenCheck(
+/** Whether a row reads as asleep, from the same activity inputs and agent clock as the sidebar; exempt ids read awake. */
+export function createWorkspaceAsleepCheck(
   state: AppState,
   exemptWorktreeIds?: ReadonlySet<string>
 ): (worktree: Worktree) => boolean {
@@ -27,7 +30,6 @@ export function createSleepingSweepHiddenCheck(
   )
   return (worktree) =>
     exemptWorktreeIds?.has(worktree.id) !== true &&
-    !isSleepingSweepExempt(worktree.isMainWorktree, state.alwaysShowDefaultBranchWorkspace) &&
     isInactiveWorkspace(
       worktree.id,
       tabsByWorktree,
@@ -36,4 +38,12 @@ export function createSleepingSweepHiddenCheck(
       liveAgentWorktrees,
       structuredChatWorktrees
     )
+}
+
+/** Whether "Hide sleeping" drops a row: asleep and not the exempt default-branch checkout. */
+export function createSleepingSweepHiddenCheck(state: AppState): (worktree: Worktree) => boolean {
+  const isAsleep = createWorkspaceAsleepCheck(state)
+  return (worktree) =>
+    !isSleepingSweepExempt(worktree.isMainWorktree, state.alwaysShowDefaultBranchWorkspace) &&
+    isAsleep(worktree)
 }

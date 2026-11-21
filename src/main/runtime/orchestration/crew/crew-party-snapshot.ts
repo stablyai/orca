@@ -4,7 +4,7 @@ import {
   type OrchestrationCrewSnapshot,
   type OrchestrationCrewRow
 } from '../../../../shared/orchestration/orchestration-crew'
-import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address'
+import { parseOrcaSessionAddress } from '../../../../shared/agent-session/identity/orca-session-address'
 import { isPublicOrchestrationAddress } from '../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import { createLineageRunningSessionResolver } from '../addressing/session-lineage/structured-session-lineage'
 import { crewDisplayName, crewTaskDisplay } from './crew-rules'
@@ -24,6 +24,7 @@ import { federatedMessageNamesOnlyHome } from '../workers/reports/dispatch-repor
 import { workerReportRefusal } from '../workers/reports/worker-report-admission'
 import { isEquivalentPaneKey } from '../db/pane-key-match'
 import type { CrewReadDependencies } from './crew-read-dependencies'
+import type { CrewRelevance } from './crew-changes'
 
 function preview(body: string): string {
   // One extra UTF-16 unit distinguishes a full ASCII preview from a longer body.
@@ -39,7 +40,9 @@ function preview(body: string): string {
 export function buildCrewSnapshot(
   address: string,
   deps: CrewReadDependencies,
-  host = createCrewHostDerivation(deps, deps.now ?? Date.now())
+  host = createCrewHostDerivation(deps),
+  /** Collects the panes, chats and dispatches the rows read, so unrelated wakes can be skipped. */
+  relevance?: CrewRelevance
 ): OrchestrationCrewSnapshot {
   deps = { ...host.deps, now: deps.now }
   const db = deps.db
@@ -107,6 +110,7 @@ export function buildCrewSnapshot(
     }
   }
   const selfAliases = () => aliasesFor(self.address)
+  relevance?.addSelf(self, selfAliases(), remoteAttachment?.id)
   const traffic = host.sourceInputs.traffic(selfAliases(), now)
   const questions = host.sourceInputs.questions(selfAliases())
   hydrate([
@@ -159,6 +163,21 @@ export function buildCrewSnapshot(
     const session = isStructuredWorkerHandle(worker?.agentTerminalHandle)
       ? observeSession(worker!)
       : undefined
+    if (relevance) {
+      relevance.addParty(target)
+      relevance.addPane(worker?.paneKey)
+      relevance.addPane(target.terminalHandle ? deps.paneForHandle(target.terminalHandle) : null)
+      for (const id of [
+        target.orcaSessionId,
+        live?.kind === 'here' ? live.sessionId : null,
+        worker?.agentTerminalHandle
+      ]) {
+        if (id) {
+          relevance.sessions.add(id)
+        }
+      }
+      relevance.addAssignment(assignment)
+    }
     const fresh = session
       ? sessionActivityEvidence(session)
       : bound && projectLiveness({ resource: null }, evidence, now).verdict === 'live'
@@ -168,7 +187,7 @@ export function buildCrewSnapshot(
       partyKey: JSON.stringify([deps.hostKey, target.address]),
       role,
       label: crewDisplayName(
-        deps.name(target, display.displayName || display.taskTitle || null, records),
+        deps.name(target, assignment && { dispatchId: assignment.id, taskTitle: title }, records),
         title,
         'Agent'
       )!,
@@ -205,11 +224,18 @@ export function buildCrewSnapshot(
     return row
   }
   const snapshot = emptyCrew('ok')
+  const approvals = Map.groupBy(
+    host.sourceInputs.approvals(selfAliases()),
+    ({ approval }) => approval.worker.dispatchId
+  )
   for (const { assignment, worker, parent } of host.relations.get(self.address) ?? []) {
     if (parent.address === self.address) {
-      snapshot.sections.managing.push(
-        decorate(worker, 'worker', assignment, `dispatch:${assignment.id}`)
-      )
+      const row = decorate(worker, 'worker', assignment, `dispatch:${assignment.id}`)
+      const own = approvals.get(assignment.id)
+      if (own) {
+        row.approvals = own
+      }
+      snapshot.sections.managing.push(row)
     }
   }
   const parents = host.sourceInputs.parentInputs(selfAliases(), self.paneKey ? [self.paneKey] : [])
@@ -242,13 +268,16 @@ export function buildCrewSnapshot(
       row = decorate(target, 'peer', undefined, sendAddress)
       snapshot.sections.talkingWith.push(row)
     }
+    const line = {
+      preview: preview(message.body),
+      at: message.created_at,
+      sequence: message.sequence
+    }
     if (!row.latest || message.sequence > row.latest.sequence) {
-      row.latest = {
-        direction: message.direction,
-        preview: preview(message.body),
-        at: message.created_at,
-        sequence: message.sequence
-      }
+      row.latest = { direction: message.direction, ...line }
+    }
+    if (message.direction === 'from' && (!row.reply || message.sequence > row.reply.sequence)) {
+      row.reply = line
     }
   }
   for (const [address, { target, question }] of attention) {

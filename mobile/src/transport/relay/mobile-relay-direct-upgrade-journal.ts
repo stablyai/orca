@@ -1,12 +1,12 @@
 import { Platform } from 'react-native'
-import { z } from 'zod'
+import * as z from 'zod'
 import { hashMobileRelayCredential } from './mobile-relay-credential-hash'
 import {
   deletePairingKeychainItem,
   readPairingKeychainItem,
   writePairingKeychainItem
-} from '../hosts/pairing-keychain'
-import { markHostCredentialWrite } from '../hosts/host-credential-write-revision'
+} from '../../host-credentials/pairing-keychain'
+import { markHostCredentialWrite } from '../../host-credentials/host-credential-write-revision'
 
 const Base64Url32ByteSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 

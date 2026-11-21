@@ -4,12 +4,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { RuntimeRepositoryCloneController } from './runtime-repository-clone-controller'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 
 vi.mock('../../repository-icons/repo-icon-autodetect', () => ({
-  detectRepoIconAndUpstream: vi.fn().mockResolvedValue({})
+  detectRepoLocalMetadata: vi.fn().mockResolvedValue({})
 }))
 vi.mock('../../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: vi.fn().mockResolvedValue(undefined)
@@ -129,7 +129,8 @@ describe('clone reuses only a project on this machine', () => {
 
       expect(second.id).toBe(first.id)
       expect(repos).toHaveLength(1)
-      expect(first.path).toBe(join(root, 'real', 'source'))
+      // Git for Windows answers `rev-parse --show-toplevel` with forward slashes.
+      expect(first.path).toBe(join(root, 'real', 'source').replaceAll('\\', '/'))
     })
 
     it('refuses a different repository at a saved project whose folder is gone', async () => {

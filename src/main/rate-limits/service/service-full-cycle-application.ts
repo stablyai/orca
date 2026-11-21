@@ -6,7 +6,7 @@ import {
 } from './service-sibling-provider-result'
 import { disabledUsageSnapshot } from './disabled-usage-snapshot'
 import { prepareMuseUsageFetch } from './service-muse-usage-fetch'
-import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 function hasKnownProvenanceChange(
   previous: ProviderRateLimits | null,
@@ -174,9 +174,13 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
 
     if (shouldApplyClaude) {
       this.trackActiveFailureStreak('claude', claude)
+      const home = prepared.claudeAuthPreparation?.configDir
+      this.rememberUsageReadingAccount('claude', claudeTarget, home, claudeProvenance)
     }
     if (shouldApplyCodex) {
       this.trackActiveFailureStreak('codex', codex)
+      const home = prepared.codexHomePath
+      this.rememberUsageReadingAccount('codex', codexTarget, home, codexProvenance)
     }
     this.trackActiveFailureStreak('gemini', gemini)
     if (shouldApplyOpencode) {

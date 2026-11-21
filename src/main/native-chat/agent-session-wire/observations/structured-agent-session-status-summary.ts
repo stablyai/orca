@@ -1,16 +1,15 @@
-import { isAgentSessionInteractionMode } from '../../../../shared/agent-session/options/agent-session-interaction-mode'
+import { isAgentSessionInteractionMode } from '../../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 import {
-  structuredAgentSessionRuntimeModel,
+  structuredAgentSessionRuntimeFallbackModel,
   structuredAgentSessionRuntimePermission
 } from '../options/structured-agent-session-ran-options'
-import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import {
   normalizeOptionalField,
   AGENT_MODEL_MAX_LENGTH
 } from '../../../../shared/agent-status/contracts/agent-status-field-normalization'
 
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { StructuredAgentSessionStatusState } from './structured-agent-session-status-journal-projection'
 import type {
   StructuredAgentSessionProviderChild,
@@ -25,16 +24,18 @@ import type {
 } from './structured-agent-session-status-feed-deps'
 import { structuredStatusSummariesEqual } from './structured-agent-session-status-summary-equality'
 import { structuredAgentRuntimeMetadata } from '../../../runtime/agent-session/installation/structured-agent-runtime-metadata'
+import { structuredAgentSessionAwaitsAnswer } from '../../../../shared/agent-session/view/structured-agent-session-async-questions'
 
 export function structuredAgentSessionStatusSummary({
   sessionId,
   session,
-  journal,
+  lastActivityAt,
   record,
   state,
   stopping,
   starting,
   usageLimitContinue,
+  runningPermissionMode,
   childWork,
   namingFailure,
   now
@@ -48,17 +49,19 @@ export function structuredAgentSessionStatusSummary({
     child?: StructuredAgentSessionProviderChild | null
     restartResume?: AgentSessionStatusSummary['restartResume']
   }
-  journal: AgentSessionJournal
+  lastActivityAt: number
   record: AgentSessionConversationView | null
   state: StructuredAgentSessionStatusState
   starting?: boolean
   usageLimitContinue?: AgentSessionStatusSummary['usageLimitContinue']
+  runningPermissionMode?: string
   stopping: boolean
   childWork: Pick<AgentSessionStatusSummary, 'children' | 'backgroundTasks'>
   namingFailure: StructuredChatNamingFailure | undefined
   now: () => number
 }): AgentSessionStatusSummary {
-  const projected = state.summary
+  const { openAsyncQuestion, ...projected } = state.summary
+  const skippedThrough = record?.asyncQuestionsSkippedThrough
   const providerSession = structuredAgentSessionProviderSessionMetadata(record)
   // Acknowledged record options remain authoritative across model switches.
   const model = normalizeOptionalField(record?.options?.model, AGENT_MODEL_MAX_LENGTH)
@@ -68,6 +71,9 @@ export function structuredAgentSessionStatusSummary({
   const fastMode = record?.options?.fastMode
   const serviceTier = record?.options?.serviceTier
   const interactionMode = record?.options?.interactionMode
+  const fallbackModel = session.child
+    ? structuredAgentSessionRuntimeFallbackModel(session.child)
+    : undefined
   const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
   return {
     sessionId,
@@ -82,6 +88,10 @@ export function structuredAgentSessionStatusSummary({
       : {}),
     ...(session.restartResume ? { restartResume: { phase: session.restartResume.phase } } : {}),
     ...projected,
+    ...(structuredAgentSessionAwaitsAnswer(openAsyncQuestion, skippedThrough)
+      ? { awaitsAnswer: true as const, awaitsQuestion: openAsyncQuestion }
+      : {}),
+    ...(skippedThrough ? { asyncQuestionsSkippedThrough: skippedThrough } : {}),
     runtimePermission: structuredAgentSessionRuntimePermission(session.child ?? undefined),
     // Only a working session is still being stopped; any other status already ended that work.
     ...(stopping && projected.status === 'working' ? { stopping: true as const } : {}),
@@ -89,10 +99,14 @@ export function structuredAgentSessionStatusSummary({
       ? { rewindBlockedReason: 'outcome-unknown' as const }
       : {}),
     ...(model ? { model } : {}),
-    ...(session.params.provider === 'claude' && session.child
-      ? { reportedModel: structuredAgentSessionRuntimeModel(session.child) }
-      : {}),
+    ...(fallbackModel ? { fallbackModel } : {}),
     ...(isAgentChatPermissionMode(permissionMode) ? { permissionMode } : {}),
+    ...(session.child?.permissionMode
+      ? {
+          launchPermissionMode: session.child.permissionMode,
+          runningPermissionMode: runningPermissionMode ?? session.child.permissionMode
+        }
+      : {}),
     ...(effort ? { effort } : {}),
     ...(fastMode ? { fastMode } : {}),
     ...(serviceTier ? { serviceTier } : {}),
@@ -103,7 +117,7 @@ export function structuredAgentSessionStatusSummary({
     ...structuredSummaryHostProgram(record),
     ...structuredSummaryConversationNaming(record, namingFailure),
     ...(typeof record?.sleptAt === 'number' ? { sleptAt: record.sleptAt } : {}),
-    updatedAt: journal.lastActivityAt() || now()
+    updatedAt: lastActivityAt || now()
   }
 }
 
@@ -119,25 +133,44 @@ export function structuredSummaryHostProgram(
     : {}
 }
 
-/** The record's name, and the failure to replace it only while that is still the name. */
+type StructuredSummaryNaming = Pick<
+  AgentSessionStatusSummary,
+  'conversationName' | 'namingError' | 'conversationNameSource' | 'forkedFrom'
+>
+
+/** The record's name, its provenance, and the failure to replace it only while that is still the
+ *  name. `forkedFrom` is always present for a record, so clients read the frame as authoritative. */
 export function structuredSummaryConversationNaming(
   record: AgentSessionConversationView | null,
   failure: StructuredChatNamingFailure | undefined
-): Pick<AgentSessionStatusSummary, 'conversationName' | 'namingError'> {
-  const name = record?.conversationName
-  if (!name) {
+): StructuredSummaryNaming {
+  if (!record) {
     return {}
+  }
+  const name = record.conversationName
+  const provenance: StructuredSummaryNaming = {
+    forkedFrom: record.forkedFrom
+      ? {
+          sessionId: record.forkedFrom.sessionId,
+          ...(record.forkedFrom.plainName ? { plainName: true as const } : {})
+        }
+      : null,
+    ...(record.conversationNameSource === 'user' ? { conversationNameSource: 'user' as const } : {})
+  }
+  if (!name) {
+    return provenance
   }
   return failure?.forName === name
     ? {
         conversationName: name,
+        ...provenance,
         namingError: {
           message: failure.message,
           failedAt: failure.failedAt,
           ...(failure.messageCode ? { messageCode: failure.messageCode } : {})
         }
       }
-    : { conversationName: name }
+    : { conversationName: name, ...provenance }
 }
 
 export function renamedStructuredStatusSummary(
@@ -146,7 +179,14 @@ export function renamedStructuredStatusSummary(
   sessionId: string
 ): AgentSessionStatusSummary | null {
   const record = deps.getConversation(sessionId)
-  const { conversationName: _name, namingError: _error, sleptAt: _sleptAt, ...rest } = previous
+  const {
+    conversationName: _name,
+    namingError: _error,
+    conversationNameSource: _source,
+    forkedFrom: _forkedFrom,
+    sleptAt: _sleptAt,
+    ...rest
+  } = previous
   const summary = {
     ...rest,
     ...structuredSummaryConversationNaming(record, deps.namingFailure?.(sessionId)),
@@ -173,6 +213,7 @@ export function releasedStructuredStatusSummary(
     stopping: _stopping,
     restartResume: _restartResume,
     reportedModel: _reportedModel,
+    fallbackModel: _fallbackModel,
     ...retained
   } = previous
   return { ...retained, runtimePermission: null }

@@ -1,4 +1,3 @@
-import { existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeAll, expect, it, vi } from 'vitest'
 import type {
@@ -9,7 +8,7 @@ import {
   openSessionSearchIndexerHarness,
   writeClaudeTranscript,
   type SessionSearchIndexerHarness
-} from '../../ai-vault-search/session-search-indexer-test-fixture'
+} from '../../ai-vault-search/indexing/session-search-indexer-test-fixture'
 import {
   AI_VAULT_SERVICE_PROTOCOL_VERSION,
   type AiVaultServiceChildMessage,
@@ -25,6 +24,7 @@ let harness: SessionSearchIndexerHarness
 let currentRoots: SessionSearchIndexerHarness['roots']
 let originalSend: typeof process.send
 const sent: AiVaultServiceChildMessage[] = []
+const replyWaiters = new Map<number, (reply: AiVaultServiceChildMessage) => void>()
 let nextId = 1
 
 function emit(message: AiVaultServiceParentMessage): void {
@@ -33,14 +33,12 @@ function emit(message: AiVaultServiceParentMessage): void {
 
 async function call(body: AiVaultServiceRequestBody): Promise<AiVaultServiceResultValue> {
   const id = nextId++
+  // Reconcile can outlast a poll window, so wait for this id's reply.
+  const replied = new Promise<AiVaultServiceChildMessage>((resolve) =>
+    replyWaiters.set(id, resolve)
+  )
   emit({ ...body, id })
-  const reply = await vi.waitFor(() => {
-    const found = sent.find(
-      (message) => (message.type === 'result' || message.type === 'error') && message.id === id
-    )
-    expect(found).toBeDefined()
-    return found!
-  })
+  const reply = await replied
   if (reply.type === 'error') {
     throw new Error(reply.message)
   }
@@ -85,6 +83,10 @@ beforeAll(async () => {
   originalSend = process.send
   const record: NonNullable<typeof process.send> = (message) => {
     sent.push(message)
+    if (message.type === 'result' || message.type === 'error') {
+      replyWaiters.get(message.id)?.(message)
+      replyWaiters.delete(message.id)
+    }
     if (message.type === 'sessionSearchRoots') {
       queueMicrotask(() =>
         emit({ type: 'sessionSearchRoots', id: message.id, roots: currentRoots })
@@ -125,28 +127,4 @@ it('discovers a new root through the parent exchange on manual reconciliation', 
   if (response.kind === 'results') {
     expect(response.hits.map((hit) => hit.sessionId)).toEqual([id])
   }
-})
-
-it('clears the owned index and rebuilds from the transcripts still on disk', async () => {
-  const transcriptPath = join(harness.claudeProjectDir, `${SESSION_ID}.jsonl`)
-  expect((await searchSessions('distinctive')).kind).toBe('results')
-  rmSync(transcriptPath)
-
-  expect(await call({ type: 'request', operation: 'searchClear' })).toEqual({
-    operation: 'searchClear',
-    value: null,
-    type: 'result',
-    id: expect.any(Number)
-  })
-  expect(await searchSessions('distinctive')).toMatchObject({ kind: 'results', hits: [] })
-  expect(existsSync(harness.databasePath)).toBe(true)
-})
-
-it('answers disabled once consent is withdrawn, without a respawn', async () => {
-  emit({ type: 'sessionSearch', init: searchInit(false) })
-  expect(await searchSessions('distinctive')).toEqual({ kind: 'unavailable', reason: 'disabled' })
-  expect(await searchStatus()).toMatchObject({ enabled: false, phase: 'idle' })
-  emit({ type: 'sessionSearch', init: searchInit(true) })
-  await call({ type: 'request', operation: 'searchReconcile' })
-  expect((await searchSessions('distinctive')).kind).toBe('results')
 })

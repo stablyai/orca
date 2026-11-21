@@ -1,21 +1,28 @@
-import type { BrowserSnapshotOptions } from '../../../../shared/rpc-contract/browser-observation-params'
+import {
+  claimBrowserMemoryPage,
+  retainBrowserMemoryPageForAgent,
+  waitForBrowserPageReady
+} from '../../../browser/guest-lifecycle/browser-page-memory'
+import type { BrowserSnapshotOptions } from '../../../../shared/rpc-contract/browser/browser-observation-params'
 import type { AgentBrowserBridge } from '../../../browser/agent-browser/agent-browser-bridge'
 import { BrowserError } from '../../../browser/browser-error'
 import { browserPopupPageWebContentsId } from '../../../browser/guest-lifecycle/popups/browser-popup-page-id'
-import { webContents } from 'electron'
+import { liveBrowserGuest } from '../../../browser/guest-lifecycle/live-browser-guest'
 import {
   waitForTabFirstLoad,
   waitForTabRegistration,
   waitForWorktreeTabRegistration
 } from '../../../ipc/browser/browser-tab-registration-wait'
 import { whenBrowserMainWindowReady } from '../../../browser/guest-lifecycle/browser-main-window-readiness'
-import type { BrowserSnapshotResult } from '../../../../shared/runtime-browser-contracts'
+import type { BrowserSnapshotResult } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type {
   BrowserCommandTargetParams,
+  BrowserAnswerAdmission,
   RuntimeBrowserCommandHost,
   ResolvedBrowserCommandTarget,
   ResolvedBrowserPageWebContents
 } from './browser-command-contracts'
+import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 
 const MAIN_WINDOW_READY_WAIT_MS = 8_000
 
@@ -25,11 +32,72 @@ export class RuntimeBrowserCommandTargets {
       RuntimeBrowserCommandHost,
       | 'getAgentBrowserBridge'
       | 'resolveWorkspaceSelector'
-      | 'getAuthoritativeWindow'
+      | 'getAuthoritativeWindowId'
       | 'retireRuntimeOwnedBrowserSessionTab'
       | 'serveBrowserTabs'
+      | 'readBrowserTabBar'
     >
   ) {}
+
+  async withPageOperation<T>(
+    params: BrowserCommandTargetParams,
+    execute: (
+      params: BrowserCommandTargetParams,
+      admitAnswer?: BrowserAnswerAdmission
+    ) => Promise<T>,
+    mode: 'ordinary' | 'recover' | 'answer' = 'ordinary'
+  ): Promise<T> {
+    const explicitRelease = params.page ? claimBrowserMemoryPage(params.page, 'operation') : null
+    let release = explicitRelease
+    try {
+      const worktreeId = params.worktree
+        ? (await this.host.resolveWorkspaceSelector(params.worktree)).id
+        : undefined
+      const bridge = this.host.getAgentBrowserBridge()
+      if (
+        params.page &&
+        (bridge?.getRegisteredPageWebContentsId(params.page, worktreeId) !== undefined ||
+          this.host
+            .readBrowserTabBar?.(worktreeId)
+            .some((entry) => entry.browserPageId === params.page))
+      ) {
+        retainBrowserMemoryPageForAgent(params.page)
+      }
+      if (mode === 'answer') {
+        const admitAnswer: BrowserAnswerAdmission = (resolved) => {
+          let target: ResolvedBrowserPageWebContents
+          try {
+            target = this.resolveBrowserPageWebContents(resolved.worktreeId, resolved.browserPageId)
+          } catch {
+            return resolved
+          }
+          release ??= claimBrowserMemoryPage(target.browserPageId, 'operation')
+          retainBrowserMemoryPageForAgent(target.browserPageId)
+          return { ...resolved, browserPageId: target.browserPageId }
+        }
+        return await execute(params, admitAnswer)
+      }
+      let browserPageId =
+        params.page ??
+        (bridge && this.coldRoutedPageId(bridge, worktreeId)) ??
+        bridge?.getActivePageId(worktreeId)
+      if (!browserPageId && bridge) {
+        await this.resolveBrowserWorktreeId(params.worktree)
+        browserPageId = bridge.getActivePageId(worktreeId) ?? undefined
+      }
+      if (!browserPageId) {
+        return await execute(params)
+      }
+      release ??= claimBrowserMemoryPage(browserPageId, 'operation')
+      await this.ensureBrowserPageActive(worktreeId, browserPageId)
+      const target = this.resolveBrowserPageWebContents(worktreeId, browserPageId)
+      retainBrowserMemoryPageForAgent(browserPageId)
+      await waitForBrowserPageReady(browserPageId, target.webContents, mode === 'recover')
+      return await execute(params)
+    } finally {
+      release?.()
+    }
+  }
 
   requireAgentBrowserBridge(): AgentBrowserBridge {
     const bridge = this.host.getAgentBrowserBridge()
@@ -40,9 +108,11 @@ export class RuntimeBrowserCommandTargets {
   }
 
   retireGhostBrowserSessionRow(worktreeId: string | undefined, browserPageId: string): boolean {
+    // A freed or not-yet-restarted serve page is closed by its saved tab, even when only the page is named.
+    const owner = worktreeId ?? this.host.serveBrowserTabs?.savedWorktreeOf(browserPageId)
     return (
-      worktreeId !== undefined &&
-      this.host.retireRuntimeOwnedBrowserSessionTab?.(worktreeId, browserPageId) === true
+      owner !== undefined &&
+      this.host.retireRuntimeOwnedBrowserSessionTab?.(owner, browserPageId) === true
     )
   }
 
@@ -51,8 +121,7 @@ export class RuntimeBrowserCommandTargets {
     worktreeId: string | undefined
   ): boolean {
     for (const [, webContentsId] of bridge.getRegisteredTabs(worktreeId)) {
-      const guest = webContents.fromId(webContentsId)
-      if (guest && !guest.isDestroyed()) {
+      if (liveBrowserGuest(webContentsId)) {
         return true
       }
     }
@@ -64,12 +133,24 @@ export class RuntimeBrowserCommandTargets {
     worktreeId: string | undefined,
     browserPageId: string
   ): boolean {
-    const webContentsId = bridge.getRegisteredTabs(worktreeId).get(browserPageId)
+    const webContentsId = bridge.getRegisteredPageWebContentsId(browserPageId, worktreeId)
     if (webContentsId == null) {
       return false
     }
-    const guest = webContents.fromId(webContentsId)
-    return Boolean(guest && !guest.isDestroyed())
+    return liveBrowserGuest(webContentsId) !== null
+  }
+
+  // A freed routed page is still the target, so restore it rather than act on a live sibling.
+  private coldRoutedPageId(
+    bridge: AgentBrowserBridge,
+    worktreeId: string | undefined
+  ): string | undefined {
+    const routedPageId = bridge.getRoutedPageId(worktreeId)
+    const cold =
+      routedPageId !== null &&
+      bridge.getRegisteredPageWebContentsId(routedPageId) === undefined &&
+      this.host.readBrowserTabBar?.(worktreeId).some((page) => page.browserPageId === routedPageId)
+    return cold ? routedPageId : undefined
   }
 
   // Resolve CLI selectors to the repoId::path keys the bridge uses.
@@ -99,7 +180,8 @@ export class RuntimeBrowserCommandTargets {
   }
 
   async resolveBrowserCommandTarget(
-    params: BrowserCommandTargetParams
+    params: BrowserCommandTargetParams,
+    options: { waitForFirstLoad?: boolean } = {}
   ): Promise<ResolvedBrowserCommandTarget> {
     const browserPageId =
       typeof params.page === 'string' && params.page.length > 0 ? params.page : undefined
@@ -120,7 +202,7 @@ export class RuntimeBrowserCommandTargets {
       !this.hasLiveRegisteredBrowserPage(bridge, worktreeId, browserPageId)
     ) {
       try {
-        await this.ensureBrowserPageActive(worktreeId, browserPageId)
+        await this.ensureBrowserPageActive(worktreeId, browserPageId, options)
       } catch {}
     }
     return {
@@ -139,7 +221,7 @@ export class RuntimeBrowserCommandTargets {
     if (!resolvedPageId) {
       throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
     }
-    const webContentsId = bridge.getRegisteredTabs(worktreeId).get(resolvedPageId)
+    const webContentsId = bridge.getRegisteredPageWebContentsId(resolvedPageId, worktreeId)
     if (webContentsId == null) {
       const scope = worktreeId ? ' in this worktree' : ''
       throw new BrowserError(
@@ -147,8 +229,8 @@ export class RuntimeBrowserCommandTargets {
         `Browser page ${resolvedPageId} was not found${scope}`
       )
     }
-    const guest = webContents.fromId(webContentsId)
-    if (!guest || guest.isDestroyed()) {
+    const guest = liveBrowserGuest(webContentsId)
+    if (!guest) {
       throw new BrowserError(
         'browser_tab_not_found',
         `Browser page ${resolvedPageId} is no longer available`
@@ -176,13 +258,35 @@ export class RuntimeBrowserCommandTargets {
     browserPageId: string,
     options: { waitForFirstLoad?: boolean } = {}
   ): Promise<void> {
-    if (!(await this.host.serveBrowserTabs?.start(worktreeId, browserPageId))) {
-      await this.sendActivateView(worktreeId ? { worktreeId, browserPageId } : { browserPageId })
-      await waitForTabRegistration(browserPageId)
+    const bridge = this.host.getAgentBrowserBridge()
+    if (bridge && this.hasLiveRegisteredBrowserPage(bridge, worktreeId, browserPageId)) {
+      return
     }
-    // Why opt-in: a switched-to tab should read like one open all along, but streaming panes must not wait.
-    if (options.waitForFirstLoad) {
-      await waitForTabFirstLoad(browserPageId)
+    const notFound = (): BrowserError =>
+      new BrowserError(
+        'browser_tab_not_found',
+        `Browser page ${browserPageId} was not found${worktreeId ? ' in this worktree' : ''}`
+      )
+    if (
+      browserPopupPageWebContentsId(browserPageId) !== null ||
+      this.host
+        .readBrowserTabBar?.(worktreeId)
+        .some((page) => page.browserPageId === browserPageId) === false
+    ) {
+      throw notFound()
+    }
+    try {
+      const startedSavedPage = await this.host.serveBrowserTabs?.start(worktreeId, browserPageId)
+      if (!startedSavedPage) {
+        await this.sendActivateView(worktreeId ? { worktreeId, browserPageId } : { browserPageId })
+        await waitForTabRegistration(browserPageId)
+      }
+      // A switched-to tab or a woken serve page should read like one open all along; streaming panes must not wait.
+      if (options.waitForFirstLoad ?? startedSavedPage === true) {
+        await waitForTabFirstLoad(browserPageId)
+      }
+    } catch {
+      throw notFound()
     }
   }
 
@@ -191,28 +295,32 @@ export class RuntimeBrowserCommandTargets {
     worktreeId?: string
     browserPageId?: string
   }): Promise<void> {
-    const win = this.host.getAuthoritativeWindow()
+    const windowId = this.host.getAuthoritativeWindowId()
     await whenBrowserMainWindowReady(MAIN_WINDOW_READY_WAIT_MS)
-    win.webContents.send('browser:activateView', payload)
+    if (!getRuntimeDesktopSurface().sendToWindow(windowId, 'browser:activateView', payload)) {
+      throw new Error('No renderer window available')
+    }
+  }
+
+  // Best effort: with no window (shutdown/headless) there is no view to update.
+  private notifyRenderer(channel: string, payload: unknown): void {
+    try {
+      getRuntimeDesktopSurface().sendToWindow(
+        this.host.getAuthoritativeWindowId(),
+        channel,
+        payload
+      )
+    } catch {}
   }
 
   // Automation may bypass Electron navigation events; publish authoritative URL/title updates.
   notifyRendererNavigation(browserPageId: string, url: string, title: string): void {
-    try {
-      const win = this.host.getAuthoritativeWindow()
-      win.webContents.send('browser:navigation-update', { browserPageId, url, title })
-    } catch {}
+    this.notifyRenderer('browser:navigation-update', { browserPageId, url, title })
   }
 
   // Scope --focus to its worktree so parallel agents cannot move each other's view.
   notifyRendererBrowserPaneFocus(worktreeId: string | undefined, browserPageId: string): void {
-    try {
-      const win = this.host.getAuthoritativeWindow()
-      win.webContents.send('browser:pane-focus', {
-        worktreeId: worktreeId ?? null,
-        browserPageId
-      })
-    } catch {}
+    this.notifyRenderer('browser:pane-focus', { worktreeId: worktreeId ?? null, browserPageId })
   }
 
   async browserSnapshot(

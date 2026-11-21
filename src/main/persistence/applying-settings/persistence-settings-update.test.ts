@@ -1,19 +1,14 @@
 import {
   closeTestStores,
-  testState,
   createStore,
-  writeDataFile,
-  makeRepo
+  readPersistedState,
+  testState,
+  writeDataFile
 } from '../persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-
-import {
-  getLocalWorktreeScanGeneration,
-  isLocalWorktreeScanGenerationCurrent
-} from '../../workspaces/catalog/local-worktree-scan-generation'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
@@ -67,19 +62,52 @@ describe('Store', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('invalidates local worktree scans when the global Windows runtime changes', async () => {
-    writeDataFile({ repos: [makeRepo()] })
-    const store = await createStore()
-    const generation = getLocalWorktreeScanGeneration('r1')
+  it.each([
+    [{}, false],
+    [{ linuxTilingWindowMode: 'true' }, false],
+    [{ linuxTilingWindowMode: true }, true]
+  ])('loads tiling window mode from a saved profile with settings %j', (settings, expected) => {
+    writeDataFile({ settings })
+    expect(createStore().getSettings().linuxTilingWindowMode).toBe(expected)
+  })
 
+  it('persists tiling window mode as a strict boolean and preserves it on unrelated updates', () => {
+    const store = createStore()
+    store.updateSettings({ linuxTilingWindowMode: true })
     store.updateSettings({ theme: 'dark' })
-    expect(isLocalWorktreeScanGenerationCurrent('r1', generation)).toBe(true)
+    store.flushOrThrow()
+    expect(readPersistedState().settings.linuxTilingWindowMode).toBe(true)
 
     store.updateSettings({
-      localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+      // @ts-expect-error -- Settings updates can contain malformed values at runtime.
+      linuxTilingWindowMode: 'true'
     })
+    store.flushOrThrow()
+    expect(readPersistedState().settings.linuxTilingWindowMode).toBe(false)
+  })
 
-    expect(isLocalWorktreeScanGenerationCurrent('r1', generation)).toBe(false)
+  it('saves a pasted workspace directory with leading spaces as the absolute path it names', async () => {
+    const store = await createStore()
+    store.updateSettings({ workspaceDir: '/Users/me/dev' })
+    const historyBefore = store.getSettings().workspaceDirHistory
+
+    // Padding before an absolute path would otherwise resolve inside every repo.
+    expect(store.updateSettings({ workspaceDir: '  /Users/me/dev' }).workspaceDir).toBe(
+      '/Users/me/dev'
+    )
+    expect(store.getSettings().workspaceDirHistory).toEqual(historyBefore)
+    // Trailing characters and relative paths can be real folder names.
+    expect(store.updateSettings({ workspaceDir: '/tmp/workspaces ' }).workspaceDir).toBe(
+      '/tmp/workspaces '
+    )
+    expect(store.updateSettings({ workspaceDir: ' ~notes' }).workspaceDir).toBe(' ~notes')
+    if (process.platform === 'win32') {
+      expect(store.updateSettings({ workspaceDir: ' C:\\work' }).workspaceDir).toBe('C:\\work')
+    } else {
+      // ~\ and a leading \ are relative off Windows, so the value stays exact.
+      expect(store.updateSettings({ workspaceDir: ' ~\\work' }).workspaceDir).toBe(' ~\\work')
+      expect(store.updateSettings({ workspaceDir: ' \\work' }).workspaceDir).toBe(' \\work')
+    }
   })
 
   it('updateSettings deep-merges and clamps notification custom sound volume', async () => {

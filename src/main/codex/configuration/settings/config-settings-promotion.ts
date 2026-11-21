@@ -2,8 +2,13 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { observeAgentStateFile } from '../codex-path-observation'
 import { resolvePromotionWriteTarget } from './config-settings-promotion-write-target'
-import { writeFileAtomically } from '../../../codex-accounts/fs-utils'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { observeFilePublication } from '../../../filesystem/file-content-observation'
+import {
+  assertGuardedFileCurrent,
+  ConcurrentFileEditError
+} from '../../../filesystem/concurrent-file-edit-guard'
+import { writeTomlConfigAtomically } from '../toml/config-toml-atomic-write'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../homes/codex-home-paths'
 import { upsertPromotedSettingsInContent } from './codex-config-settings-upsert'
 import {
@@ -40,7 +45,7 @@ export type CodexSettingsBaselineSnapshotOptions = {
 export function snapshotCodexRuntimeSettingsBaseline(
   runtimeHomePath = getOrcaManagedCodexHomePath(),
   options: CodexSettingsBaselineSnapshotOptions = {}
-): void {
+): boolean {
   try {
     const runtimeTomlPath = join(runtimeHomePath, 'config.toml')
     // An empty baseline lets the first Codex write be detected and promoted.
@@ -68,8 +73,10 @@ export function snapshotCodexRuntimeSettingsBaseline(
       mcpServers: options.mirroredMcpServers ?? new Set(),
       mcpServerRoot: options.mirroredMcpServerRoot ?? false
     })
+    return true
   } catch (error) {
     console.warn('[codex-settings-promotion] failed to snapshot settings baseline', error)
+    return false
   }
 }
 
@@ -99,8 +106,15 @@ function getHostPromotionHomes(): CodexSettingsPromotionHomes {
 export function promoteCodexRuntimeSettingsToSystem(
   homes?: CodexSettingsPromotionHomes
 ): CodexSettingsPromotionPlan | null {
+  const promotionHomes = homes ?? getHostPromotionHomes()
   try {
-    return promoteCodexRuntimeSettingsToSystemUnsafe(homes ?? getHostPromotionHomes())
+    for (let attempt = 0; attempt < PUBLISH_ATTEMPTS; attempt++) {
+      const plan = promoteCodexRuntimeSettingsToSystemUnsafe(promotionHomes)
+      if (plan) {
+        return plan
+      }
+    }
+    throw new ConcurrentFileEditError(join(promotionHomes.systemHomePath, 'config.toml'))
   } catch (error) {
     // Failed promotion must not block Codex launch.
     console.warn('[codex-settings-promotion] failed to promote runtime settings', error)
@@ -108,9 +122,12 @@ export function promoteCodexRuntimeSettingsToSystem(
   }
 }
 
+const PUBLISH_ATTEMPTS = 3
+
+/** Null when the user saved the source config after Orca read it; the caller redoes the pass. */
 function promoteCodexRuntimeSettingsToSystemUnsafe(
   homes: CodexSettingsPromotionHomes
-): CodexSettingsPromotionPlan {
+): CodexSettingsPromotionPlan | null {
   const { runtimeHomePath, systemHomePath } = homes
   const runtimeTomlPath = join(runtimeHomePath, 'config.toml')
   const systemTomlPath = join(systemHomePath, 'config.toml')
@@ -180,14 +197,25 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   if (nextContent === systemContent) {
     return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
   }
+  const computedFrom = targetExists ? writeTargetObservation.value : null
   if (targetExists && parseWslUncPath(writeTarget.path)) {
     // WSL 9P symlink metadata is unreliable; write through to preserve the guest inode.
+    assertGuardedFileCurrent(writeTarget.path)
+    const current = observeAgentStateFile(writeTarget.path)
+    if (current.kind === 'indeterminate') {
+      throw current.error
+    }
+    if (current.kind !== 'present' || current.value !== computedFrom) {
+      return null
+    }
     writeFileSync(writeTarget.path, nextContent, 'utf-8')
+    observeFilePublication(writeTarget.path, nextContent)
     return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
   }
-  writeFileAtomically(writeTarget.path, nextContent, {
-    mode: writeTarget.mode
-  })
+  // Promotion never rotated the user's config.toml.bak; keep it that way.
+  if (!writeTomlConfigAtomically(writeTarget.path, nextContent, computedFrom, { backup: false })) {
+    return null
+  }
   return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
 }
 

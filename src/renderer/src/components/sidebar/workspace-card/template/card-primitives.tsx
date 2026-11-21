@@ -2,7 +2,7 @@ import React from 'react'
 import { PluginDeclarativeBadge } from '@/components/plugins/declarative/PluginDeclarativeDisplay'
 import { PluginDeclarativeIconGlyph } from '@/components/plugins/declarative/plugin-declarative-icons'
 import type { PluginDeclarativeTone } from '../../../../../../shared/plugins/declarative/plugin-declarative-catalog'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { cardElement, type CardHostElement } from './card-template-compiler'
 
 const GAP: Readonly<Record<string, string>> = {
@@ -22,7 +22,8 @@ const JUSTIFY: Readonly<Record<string, string>> = {
   between: 'justify-between'
 }
 const OVERFLOW: Readonly<Record<string, string>> = {
-  clip: 'overflow-hidden',
+  // Why: `clip` clips only the x axis for every template box, so a dense label's taller line box can paint past its row instead of cropping CJK glyphs.
+  clip: 'overflow-x-clip',
   visible: 'overflow-visible'
 }
 // Markers Orca's own code and tests select on; a template may only reuse these.
@@ -69,6 +70,8 @@ function boxAttrs(
       props.keep === true && 'shrink-0',
       props.push === true && 'ml-auto',
       props.inset === 'end' && 'pr-1.5',
+      props.inset === 'start' && 'pl-1',
+      props.inset === 'hair' && 'pr-px',
       pick(OVERFLOW, props.overflow),
       props.hoverGroup === true && 'group/worktree-card'
     ),

@@ -3,7 +3,7 @@
 import type { AppState } from '@/store/types'
 import { editorTabContent } from '@/store/slices/editor/tabs/editor-tab-open-through-layout-owner'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
-import type { PublishedWorkspaceLayout } from '../../../../../shared/workspace-layout/workspace-layout-published'
+import type { PublishedWorkspaceLayout } from '../../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import type { LayoutApplyReply } from '../../../../../shared/workspace-layout/workspace-layout-command-types'
 import { sendToServerMain, type WindowLayoutCommand } from '../commands/layout-apply-send'
 import { serverEditorOpen } from './server-layout-apply'

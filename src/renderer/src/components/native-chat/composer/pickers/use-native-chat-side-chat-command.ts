@@ -1,13 +1,13 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import { translate } from '@/i18n/i18n'
 import { mayHoldAgentReferences } from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
-import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/native-chat-picker-items'
-import type { SlashCommandSuggestion } from '../../../../../../shared/native-chat/input/native-chat-slash-commands'
+import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
+import type { SlashCommandSuggestion } from '../../../../../../shared/native-chat/input/commands/native-chat-slash-commands'
 import {
   isNativeChatSideChatCommand,
   parseNativeChatSideChatDraft,
   withNativeChatSideChatCommands
-} from '../../../../../../shared/native-chat/input/native-chat-side-chat-command'
+} from '../../../../../../shared/native-chat/input/commands/native-chat-side-chat-command'
 import type { NativeChatStructuredComposerTransport } from '../submit/native-chat-structured-composer-transport'
 import type { NativeChatPickerState } from './use-native-chat-picker-state'
 import { nativeChatPendingAttachmentSnapshot } from '../../attachments/chips/native-chat-pending-attachment-cache'
@@ -120,7 +120,7 @@ export function useNativeChatSideChatCommand(args: {
         const leading = autocomplete.mode === 'slash' && autocomplete.dispatchable === true
         const name = item.kind === 'command' && item.orcaOwned ? item.name : null
         if (leading && sideChat && isNativeChatSideChatCommand(name)) {
-          // An unavailable row says why; picking it does nothing, as the common pattern does.
+          // An unavailable row says why; picking it does nothing.
           if (sideChat.notReadyReason === null) {
             completeItem(item)
           }

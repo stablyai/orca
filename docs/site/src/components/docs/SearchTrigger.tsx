@@ -10,6 +10,16 @@ function getPlatformSnapshot() {
   return typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
 }
 
+// Why: the docs layout mounts a sidebar trigger and a mobile-nav trigger, and
+// only one is rendered visibly per breakpoint. Letting both answer Cmd/Ctrl+K
+// opened two dialogs whose body scroll locks restored each other out of order.
+function isHotkeyOwner(trigger: HTMLButtonElement | null) {
+  const firstVisible = Array.from(
+    document.querySelectorAll<HTMLButtonElement>('[data-docs-search-trigger]')
+  ).find((el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden')
+  return firstVisible === trigger
+}
+
 export default function SearchTrigger() {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -24,7 +34,7 @@ export default function SearchTrigger() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const modifierPressed = isMac ? e.metaKey : e.ctrlKey
-      if (modifierPressed && e.key.toLowerCase() === 'k') {
+      if (modifierPressed && e.key.toLowerCase() === 'k' && isHotkeyOwner(triggerRef.current)) {
         e.preventDefault()
         const nextOpen = !open
         setOpen(nextOpen)
@@ -42,6 +52,7 @@ export default function SearchTrigger() {
       <button
         ref={triggerRef}
         type="button"
+        data-docs-search-trigger
         onClick={() => setOpen(true)}
         aria-label="Search docs"
         aria-haspopup="dialog"

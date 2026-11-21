@@ -53,13 +53,30 @@ export const STRONG_PERMISSION_KEYWORDS_RE =
 
 export const CURSOR_NATIVE_TITLE_LOWER = 'cursor agent'
 
-export function hasGeminiStatusGlyph(title: string): boolean {
-  return (
-    title.includes(GEMINI_PERMISSION) ||
-    title.includes(GEMINI_WORKING) ||
-    title.includes(GEMINI_SILENT_WORKING) ||
-    title.includes(GEMINI_IDLE)
-  )
+const GEMINI_GLYPH_CLASS = `[${GEMINI_PERMISSION}${GEMINI_WORKING}${GEMINI_SILENT_WORKING}${GEMINI_IDLE}]`
+// Gemini opens its title with the glyph (or a `<glyph>  ` frame behind a tmux/Administrator prefix); leftmost anchor wins.
+const GEMINI_STATUS_GLYPH_RE = new RegExp(
+  String.raw`(?:^\s*| \| \s*|["'\s](?=${GEMINI_GLYPH_CLASS}  ))(${GEMINI_GLYPH_CLASS})`
+)
+
+export function leadingGeminiGlyphStatus(title: string): AgentStatus | null {
+  const glyph = GEMINI_STATUS_GLYPH_RE.exec(title)?.[1]
+  if (!glyph) {
+    return null
+  }
+  if (glyph === GEMINI_PERMISSION) {
+    return 'permission'
+  }
+  return glyph === GEMINI_IDLE ? 'idle' : 'working'
+}
+
+const GEMINI_IDENTITY_FRAME_RE =
+  /^gemini(?: cli)?(?:\s+(?:ready|idle|done|working|thinking|running))?(?:\s*-\s*action required)?$/
+
+// Decorated Claude task text can mention Gemini; behind a spinner/prefix only a Gemini label frame claims identity.
+function isDecoratedNonGeminiFrameSegment(segment: string): boolean {
+  const body = stripLeadingAgentTitleDecorationOrEmpty(segment)
+  return body !== segment.trimStart() && !GEMINI_IDENTITY_FRAME_RE.test(body.trim().toLowerCase())
 }
 
 function computeIsGeminiTerminalTitle(title: string): boolean {
@@ -71,8 +88,11 @@ function computeIsGeminiTerminalTitle(title: string): boolean {
     return false
   }
   // Why: Gemini OSC glyphs are stronger evidence than any cwd/session text.
-  if (hasGeminiStatusGlyph(title)) {
+  if (leadingGeminiGlyphStatus(title) !== null) {
     return true
+  }
+  if (getWrapperTitleSegments(title).some(isDecoratedNonGeminiFrameSegment)) {
+    return false
   }
   // Pi/OMP cwd/session text may contain gemini-project; substrings cannot establish Gemini identity.
   if (isPiAgentTitle(title)) {
@@ -155,14 +175,21 @@ export function shouldSuppressCursorNativeTitle(lastEmittedTitle: string | null)
   return lastEmittedTitle !== null && isCursorAgentTitle(lastEmittedTitle)
 }
 
-// Collapse only Grok’s spinner - phrase - grok frame; both delimiters exclude Claude/Codex task mentions.
-// Keep unspun session titles unchanged and accept spinner + grok so our collapsed label stays idempotent.
-const GROK_ROTATING_FRAME_RE = /^[\u2800-\u28FF]+\s+-\s+[\s\S]+?\s-\s+grok\s*$/i
-const GROK_COLLAPSED_WORKING_TITLE_RE = /^[\u2800-\u28FF]+\s+grok\s*$/i
+// Grok frames read `[⚠ Action required - ]<spinner> - <activity> - [<session> - ]grok`; Windows uses `!` and spins | / - \.
+// Both delimiters exclude Claude/Codex task mentions; our exact collapsed labels match too so they stay idempotent and keep identity.
+const GROK_FRAME_RE =
+  /^(?<actionRequired>[!\u26a0] Action required\s+-\s+)?(?:[\u2800-\u28FF]+|[|/\\-])\s+-\s+[\s\S]+?\s-\s+grok\s*$/i
+export const GROK_WORKING_TITLE = '\u280b Grok'
+export const GROK_PERMISSION_TITLE = 'Grok - action required'
 
-export function isGrokRotatingWorkingTitle(title: string): boolean {
-  if (!containsBrailleSpinner(title)) {
-    return false
+export function grokFrameTitleStatus(title: string): 'working' | 'permission' | null {
+  const frame = GROK_FRAME_RE.exec(title)
+  if (frame) {
+    return frame.groups?.actionRequired ? 'permission' : 'working'
   }
-  return GROK_ROTATING_FRAME_RE.test(title) || GROK_COLLAPSED_WORKING_TITLE_RE.test(title)
+  return title === GROK_PERMISSION_TITLE
+    ? 'permission'
+    : title === GROK_WORKING_TITLE
+      ? 'working'
+      : null
 }

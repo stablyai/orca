@@ -1,12 +1,25 @@
 import { useTranslation } from 'react-i18next'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useIntlLocale } from '@/i18n/use-translate'
-import { useNowSnapshot } from '@/hooks/use-now'
-import { cn } from '@/lib/utils'
+import { useNowSnapshot } from '@/lib/window-activity/use-now'
+import { cn } from '@/lib/class-names'
 import {
   getNativeChatMessageDay,
   getNativeChatMessageTimeFormatter
-} from '../../../../../../shared/native-chat/transcript/native-chat-message-time'
+} from '../../../../../../shared/native-chat/transcript/messages/native-chat-message-time'
+
+/** The full spoken time a timestamp shows, for a control that names its row by words and time. */
+export function useNativeChatMessageTimeLabel(timestamp: number | null | undefined): string | null {
+  const intlLocale = useIntlLocale()
+  const today = useNowSnapshot(30_000, getNativeChatMessageDay)
+  if (timestamp === null || timestamp === undefined) {
+    return null
+  }
+  const date = new Date(timestamp)
+  return Number.isNaN(date.getTime())
+    ? null
+    : getNativeChatMessageTimeFormatter(intlLocale, today).formatFull(date)
+}
 
 export function NativeChatMessageTimestamp({
   timestamp,

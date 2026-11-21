@@ -10,14 +10,15 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   buildWorktreeComparator,
   sortWorktreesSmart
-} from '../../../../../../shared/sidebar-list/smart-sort'
+} from '../../../../../../shared/sidebar-list/sorting/smart-sort'
 import './visible-worktree-activity-inputs'
 import { buildVisibleWorktreeOptionsFromState } from './visible-worktree-options-from-state'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useAppStore } from '@/store'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
-import { getSettingsFocusedExecutionHostId } from '../../../../../../shared/execution-host'
+import { getSettingsFocusedExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   computeRenderedSidebarWorktreeOrder,
   computeRenderedSidebarWorktrees
@@ -81,7 +82,7 @@ function computeUnmountedVisibleWorktrees(): Worktree[] {
   const visibleHostIds = getVisibleWorkspaceHostIdSet(state)
   const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
   return computeVisibleWorktrees(selectWorktreesByRepo(state), sortedKeys, {
-    ...buildVisibleWorktreeOptionsFromState(state, repoMap),
+    ...buildVisibleWorktreeOptionsFromState(state, readRuntimeStatuses(), repoMap),
     sortedByHostIdentity: true
   }).filter(
     (worktree) =>
@@ -97,6 +98,7 @@ export function getVisibleWorktreeIds(): string[] {
   // Grouping, pinning and main-worktree hoisting must also govern shortcut numbering.
   return computeRenderedSidebarWorktreeOrder(
     useAppStore.getState(),
+    readRuntimeStatuses(),
     computeUnmountedVisibleWorktrees()
   )
 }
@@ -108,7 +110,11 @@ export function getVisibleWorktreeShortcutTargets(): VisibleWorktreeShortcutTarg
   const state = useAppStore.getState()
   if (!_publishedVisibleIds) {
     return toShortcutTargets(
-      computeRenderedSidebarWorktrees(state, computeUnmountedVisibleWorktrees())
+      computeRenderedSidebarWorktrees(
+        state,
+        readRuntimeStatuses(),
+        computeUnmountedVisibleWorktrees()
+      )
     )
   }
   const visibleIds = _publishedVisibleIds
@@ -124,7 +130,7 @@ export function getVisibleWorktreeShortcutTargets(): VisibleWorktreeShortcutTarg
         worktreeMatchesVisibleHost(worktree, visibleHostIds, repoMap, defaultHostId)
     )
     .sort((a, b) => (visibleIdRank.get(a.id) ?? 0) - (visibleIdRank.get(b.id) ?? 0))
-  return toShortcutTargets(computeRenderedSidebarWorktrees(state, worktrees))
+  return toShortcutTargets(computeRenderedSidebarWorktrees(state, readRuntimeStatuses(), worktrees))
 }
 
 function toShortcutTargets(worktrees: readonly Worktree[]): VisibleWorktreeShortcutTarget[] {

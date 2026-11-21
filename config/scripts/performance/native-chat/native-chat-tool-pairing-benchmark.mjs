@@ -30,7 +30,7 @@ async function load(source, sourcefile = 'src/shared/native-chat-tool-fold.ts') 
             for (const [name, directory] of [
               ['native-chat-tool-pairs', 'src/shared/native-chat/tools'],
               ['native-chat-folded-tool-results', 'src/shared/native-chat/tools'],
-              ['native-chat-provider-frame-summary', 'src/shared/native-chat']
+              ['native-chat-provider-frame-summary', 'src/shared/native-chat/transcript/notices']
             ]) {
               const previous = path.join(root, 'src/shared', name)
               if (target === previous || target === `${previous}.ts`) {

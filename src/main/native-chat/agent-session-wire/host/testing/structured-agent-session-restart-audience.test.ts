@@ -1,10 +1,10 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../../../runtime/agent-session/records/agent-session-recovery-capsule'
-import { interruptedRestart } from './structured-agent-session-restart-interruption-test-harness'
+import { interruptedRestart } from './structured-agent-session-restart-interruption.test-fixture'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -70,4 +70,44 @@ it('keeps a failure the caller cannot show, and leaves it out of an action reply
   expect(await host.restartResume.listFailures()).toHaveLength(1)
   expect(await host.restartResume.dismiss(undefined, showsCodex)).toBe(1)
   expect(await host.restartResume.listFailures()).toEqual([])
+})
+
+it('tells listeners of the cut a dismissal removed, and nothing for one it kept', async () => {
+  const { host } = await interruptedRestart()
+  const heard = vi.fn()
+  host.restartResume.onDismissed(heard)
+
+  await host.restartResume.dismiss([SESSION], cannotShowCodex)
+  expect(heard).not.toHaveBeenCalled()
+  await host.restartResume.dismiss([SESSION], showsCodex)
+  expect(heard).toHaveBeenCalledExactlyOnceWith([
+    { sessionId: SESSION, cut: expect.objectContaining({ cause: 'quit' }) }
+  ])
+})
+
+it('tells listeners of a dismissed send its turn never recorded', async () => {
+  const { host } = await interruptedRestart('submission')
+  const heard = vi.fn()
+  host.restartResume.onDismissed(heard)
+
+  await host.restartResume.dismiss([SESSION])
+  expect(heard).toHaveBeenCalledExactlyOnceWith([
+    { sessionId: SESSION, cut: expect.objectContaining({ cause: 'quit' }) }
+  ])
+})
+
+it('continues on its own only an offer the run that just ended recorded', async () => {
+  const { host, root } = await interruptedRestart()
+  const [offer] = await host.restartResume.list()
+  const automatic = (recordedSince: number) =>
+    host.restartResume.continueAfterRestart(undefined, 'launch', undefined, {
+      automatic: true,
+      recordedSince
+    })
+
+  expect((await automatic(offer!.recordedAt + 1)).continued).toEqual([])
+  expect(await offersIn(root)).toHaveLength(1)
+  expect((await automatic(offer!.recordedAt)).continued).toMatchObject([
+    { sessionId: SESSION, outcome: 'continued' }
+  ])
 })

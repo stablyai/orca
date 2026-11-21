@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { displayIpcErrorMessage } from '@/lib/ipc-error'
+import { displayIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import type { Translate } from '@/i18n/use-translate'
 import type { GitCommitActionResult } from '../../../../../shared/git/commands/git-commit-action'
 

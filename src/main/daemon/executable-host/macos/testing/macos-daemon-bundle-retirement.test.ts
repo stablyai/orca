@@ -29,9 +29,9 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-async function copy(name: string): Promise<string> {
+async function copy(name: string, bundle = 'Orca Agents.app'): Promise<string> {
   const directory = join(root, name)
-  await mkdir(join(directory, 'app.noindex', 'Orca Terminal Host.app'), { recursive: true })
+  await mkdir(join(directory, 'app.noindex', bundle), { recursive: true })
   return directory
 }
 
@@ -59,14 +59,34 @@ it.each([
   { stderr: 'lsof: WARNING: can not stat' },
   { timedOut: true },
   { outputTruncated: true },
-  { code: null },
-  { code: 0 }
+  { code: null }
 ])('keeps a copy when the scan is incomplete: %j', async (override) => {
   const directory = await copy('terminal-host-old')
   run.mockResolvedValue({ ...unused, ...override })
   await retireUnusedMacDaemonCopy(directory)
   expect(await exists(directory)).toBe(true)
 })
+
+it.each(['Orca Agents.app', 'Orca Terminal Host.app'])(
+  'unregisters an unused %s before deleting its copy',
+  async (bundle) => {
+    const directory = await copy('terminal-host-old', bundle)
+    run.mockImplementation(async (spec) => {
+      if (spec.program === LSREGISTER) {
+        expect(await exists(directory)).toBe(true)
+      }
+      return unused
+    })
+    await retireUnusedMacDaemonCopy(directory)
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        program: LSREGISTER,
+        args: ['-u', join(directory, 'app.noindex', bundle)]
+      })
+    )
+    expect(await exists(directory)).toBe(false)
+  }
+)
 
 it("retires every unused copy and staging dir except the current build's and this process's staging", async () => {
   const current = await copy('terminal-host-current')

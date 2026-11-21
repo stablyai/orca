@@ -246,7 +246,8 @@
 
 .rich-markdown-review-rail-actions {
   position: absolute;
-  top: 12px;
+  /* Why: (40px toolbar row - 26px action buttons) / 2 keeps these centered with the formatting buttons. */
+  top: 7px;
   right: 14px;
   z-index: 45;
   display: inline-flex;
@@ -1141,15 +1142,10 @@
 .rich-markdown-editor a,
 .rich-markdown-editor .ProseMirror a {
   color: var(--text-link, #0969da);
+  cursor: pointer;
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
-  text-underline-offset: 2px;
-}
-
-/* Plain clicks place the caret; RichMarkdownEditor exposes link pointers only while Cmd/Ctrl is held. */
-.rich-markdown-mod-held .rich-markdown-editor a,
-.rich-markdown-mod-held .rich-markdown-editor .ProseMirror a {
-  cursor: pointer;
+  text-underline-offset: 0.25em;
 }
 
 .dark .rich-markdown-editor a {
@@ -1164,16 +1160,14 @@
   color: var(--text-link, #0969da);
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
-  text-underline-offset: 2px;
+  text-underline-offset: 0.25em;
 }
 
 .dark .rich-markdown-editor .rich-markdown-html-superscript-link {
   color: var(--text-link, #58a6ff);
 }
 
-.rich-markdown-mod-held
-  .rich-markdown-editor
-  .rich-markdown-html-superscript-link[data-actionable] {
+.rich-markdown-editor .rich-markdown-html-superscript-link[data-actionable] {
   cursor: pointer;
 }
 
@@ -1462,7 +1456,7 @@
   color: var(--text-link, #0969da);
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
-  text-underline-offset: 2px;
+  text-underline-offset: 0.25em;
 }
 
 .dark .rich-markdown-editor .rich-markdown-doc-link {
@@ -1489,7 +1483,7 @@
   color: var(--text-link, #0969da);
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
-  text-underline-offset: 2px;
+  text-underline-offset: 0.25em;
 }
 
 .dark .rich-markdown-editor .rich-markdown-doc-link-preview {
@@ -1525,6 +1519,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--font-mono, monospace);
+  cursor: text;
+  user-select: text;
+  outline: none;
 }
 
 .rich-markdown-link-button {

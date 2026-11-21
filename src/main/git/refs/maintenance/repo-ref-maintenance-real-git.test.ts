@@ -3,8 +3,8 @@ import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/pr
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { countLooseRefs } from '../../../../shared/loose-ref-count'
-import { RepoRefMaintenance } from '../../../../shared/repo-ref-maintenance'
+import { countLooseRefs } from '../../../../shared/git/maintenance/loose-ref-count'
+import { RepoRefMaintenance } from '../../../../shared/git/maintenance/repo-ref-maintenance'
 import {
   _resetLocalRepoRefMaintenanceForTests,
   createLocalRepoRefMaintenanceTarget,
@@ -228,14 +228,19 @@ describe('idle ref maintenance against real Git', () => {
     }
   )
 
-  it('packs a backlogged repository down to zero loose refs', async () => {
+  it('packs a backlogged repository only after automatic maintenance is enabled', async () => {
     const { repoPath, refsDir } = await createRepo(THRESHOLD + 30)
-    const { maintenance, arm } = createMaintenance()
-
+    git(repoPath, ['config', 'maintenance.auto', 'false'])
+    const optedOut = createMaintenance()
+    optedOut.arm(repoPath)
+    await settle(optedOut.maintenance)
+    optedOut.maintenance.dispose()
     await expect(countLooseRefs(refsDir, 10_000)).resolves.toMatchObject({
       count: THRESHOLD + 31
     })
 
+    git(repoPath, ['config', 'maintenance.auto', 'true'])
+    const { maintenance, arm } = createMaintenance()
     arm(repoPath)
     await settle(maintenance)
     maintenance.dispose()
@@ -247,24 +252,6 @@ describe('idle ref maintenance against real Git', () => {
     expect(git(repoPath, ['rev-parse', '--verify', 'refs/remotes/origin/branch-0'])).toMatch(
       /^[0-9a-f]{40}$/
     )
-  }, 30_000)
-
-  it('honours maintenance.auto=false in the repository config', async () => {
-    const { repoPath, refsDir } = await createRepo(THRESHOLD + 30)
-    git(repoPath, ['config', 'maintenance.auto', 'false'])
-    let packed = 0
-    const { maintenance, arm } = createMaintenance(() => {
-      packed += 1
-    })
-
-    arm(repoPath)
-    await settle(maintenance)
-    maintenance.dispose()
-
-    expect(packed).toBe(0)
-    await expect(countLooseRefs(refsDir, 10_000)).resolves.toMatchObject({
-      count: THRESHOLD + 31
-    })
   }, 30_000)
 })
 
@@ -311,37 +298,5 @@ describe('yielding the repository to work that deletes refs', () => {
     await deletion
     expect(deleted).toBe(true)
     expect(git(repoPath, ['branch', '--list', 'doomed'])).toBe('')
-  }, 30_000)
-
-  it('does not block the caller once the rewrite window has closed', async () => {
-    const { repoPath } = await createRepo(0)
-    git(repoPath, ['branch', 'doomed'])
-    const head = git(repoPath, ['rev-parse', 'refs/heads/doomed'])
-
-    let pruning = false
-    let finishPrune: (() => void) | undefined
-    _resetLocalRepoRefMaintenanceForTests({ quietPeriodMs: QUIET_MS, looseRefThreshold: 1 })
-    setRepoMaintenanceActivityProbe(() => false)
-    getLocalRepoRefMaintenance().arm({
-      key: `local::${repoPath}`,
-      resolveRefsDirectory: async () => join(repoPath, '.git', 'refs'),
-      packRefs: async (lock) => {
-        lock.setHeld(true)
-        lock.setHeld(false)
-        pruning = true
-        await new Promise<void>((resolve) => {
-          finishPrune = resolve
-        })
-      }
-    })
-    for (let attempt = 0; attempt < 200 && !pruning; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, QUIET_MS))
-    }
-
-    const startedAt = Date.now()
-    await expect(forceDeleteLocalBranch(repoPath, 'doomed', head)).resolves.toBeUndefined()
-    expect(Date.now() - startedAt).toBeLessThan(2_000)
-
-    finishPrune?.()
   }, 30_000)
 })

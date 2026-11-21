@@ -22,7 +22,7 @@ import {
   jiraStatusUpdate,
   nextJiraStatusReadGeneration
 } from './jira-read-coordination'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 
 type JiraConnectionActions = Pick<
   JiraSlice,

@@ -1,5 +1,5 @@
 import type { WebContents } from 'electron'
-import type { BrowserNetworkEntry } from '../../../../shared/runtime-browser-contracts'
+import type { BrowserNetworkEntry } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { CdpTabState } from '../commands/cdp-tab-state'
 
 const CAPTURE_LOG_LIMIT = 1000

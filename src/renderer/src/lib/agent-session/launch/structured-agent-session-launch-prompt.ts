@@ -4,28 +4,15 @@ import { agentSessionThrownFailure } from '../../../../../shared/agent-session/f
 import { sendStructuredAgentSessionMessage } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import { noteStructuredAgentSessionFence } from '@/components/native-chat/session/structured/delivery/structured-agent-session-send-attempt'
 import { publishStructuredAgentSessionSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   unstageStructuredLaunchPrompt,
   handBackStagedLaunchPrompt,
   type StagedStructuredLaunchPrompt,
   type StagedDelivery,
-  type StructuredLaunchPromptOptions,
-  type StructuredPromptDeliveryResult
+  type StructuredLaunchPromptOptions
 } from './structured-agent-session-staged-prompt'
-export {
-  stageStructuredLaunchPrompt,
-  discardStructuredLaunchPrompts,
-  discardStructuredAgentSessionChatSends,
-  takeBackLegacyStructuredLaunchPrompts,
-  prepareLegacyStructuredLaunchPrompts,
-  prepareStructuredLaunchPromptForCreate,
-  issueStructuredLaunchPromptForCreate,
-  hasStagedStructuredLaunchPrompt,
-  type StagedStructuredLaunchPrompt,
-  type StructuredLaunchPromptOptions,
-  type StructuredPromptDeliveryResult
-} from './structured-agent-session-staged-prompt'
+import type { StructuredPromptDeliveryResult } from './structured-agent-session-launch-callers'
 
 function promptDeliveryResult(outcome: StagedDelivery): StructuredPromptDeliveryResult {
   return {

@@ -2,7 +2,7 @@ import type {
   GitHubReaction,
   GitHubReactionContent,
   PRComment
-} from '../../../../../../shared/github/comment-types'
+} from '../../../../../../shared/github/comments/comment-types'
 
 export const GITHUB_REACTION_ORDER: readonly GitHubReactionContent[] = [
   '+1',

@@ -1,14 +1,21 @@
+import { hasInProcessTerminalSessions } from '../../ipc/pty/provider/kill-all'
+import { prepareRendererForUpdate } from '../../window/renderer-relays/native-unload-coordinator'
+import { wslMoveInstallHold } from './updater-wsl-move-install-hold'
 import { app } from 'electron'
+import { updaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
 import {
   isWindowsSignatureCheckUnavailableFailure,
   isWindowsSignatureMismatchFailure
-} from '../../../shared/updater-windows-signature-check'
+} from '../../../shared/updater/updater-windows-signature-check'
 import { redactLinuxPackageInstallText } from '../linux-package/linux-package-install-diagnostic'
 import { getTrackedLinuxPackageArtifact } from '../linux-package/linux-package-update-recovery'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { disarmUpdateInstallExitWatchdog } from '../update-install-exit-watchdog'
 import { resetMacInstallState } from '../mac-install/updater-mac-install'
-import type { LinuxPackageInstallRecovery, UpdateStatus } from '../../../shared/update-status-types'
+import type {
+  LinuxPackageInstallRecovery,
+  UpdateStatus
+} from '../../../shared/updater/update-status-types'
 import { compareVersions } from '../releases/updater-fallback'
 import { PRE_QUIT_CLEANUP_TIMEOUT_MS, REQUIRED_PRE_QUIT_CLEANUP_TIMEOUT_MS } from './updater-state'
 import { UpdaterCheckState } from './updater-check-state'
@@ -72,7 +79,62 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
     return `${userInitiated ? 'user' : 'auto'}:${message}`
   }
 
+  protected canProceedWithInstall(version: string, automatic: boolean): boolean {
+    if (automatic && this.getAutomaticUpdates?.() !== true) {
+      this.cancelAutomaticInstall(version)
+      return false
+    }
+
+    const wslHold = wslMoveInstallHold()
+    const hold = wslHold
+      ? { message: wslHold.message }
+      : automatic && hasInProcessTerminalSessions()
+        ? { ...updaterCodedMessage('automaticInstallTerminalBusy'), retryable: false }
+        : null
+    if (!hold) {
+      return true
+    }
+
+    if (wslHold) {
+      recordUpdaterLifecycle(wslHold.lifecycleEvent, { version: version || null })
+    }
+    this.resetQuitForUpdateState()
+    this.sendToMainWindow('updater:quitAndInstallAborted')
+    this.sendInstallFailureStatus({
+      state: 'error',
+      version,
+      retryAction: 'install',
+      ...hold
+    })
+    return false
+  }
+
+  protected async prepareAutomaticInstall(version: string): Promise<boolean> {
+    const window = this.getMainWindow()
+    if (window && !window.isDestroyed() && !window.webContents.isDestroyed()) {
+      this.cancelAutomaticInstallPreparation = await prepareRendererForUpdate(window.webContents)
+      if (!this.cancelAutomaticInstallPreparation) {
+        this.resetQuitForUpdateState()
+        this.sendInstallFailureStatus({
+          state: 'error',
+          version,
+          retryAction: 'install',
+          ...updaterCodedMessage('automaticInstallCheckpointFailed')
+        })
+        return false
+      }
+    }
+    return true
+  }
+
+  protected cancelAutomaticInstall(version: string): void {
+    this.resetQuitForUpdateState()
+    this.sendStatus({ state: 'downloaded', version }, { force: true })
+  }
+
   protected resetQuitForUpdateState(): void {
+    this.cancelAutomaticInstallPreparation?.()
+    this.cancelAutomaticInstallPreparation = null
     this.quitAndInstallInProgress = false
     this.quittingForUpdate = false
     this.updateInstallCommitted = false

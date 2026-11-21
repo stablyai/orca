@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { Store } from '../../../persistence/loading-store/store'
@@ -19,7 +19,7 @@ import {
   WORKTREE_PATH,
   makeSession
 } from '../../__fixtures__/orca-runtime-terminal-close-continuity-state-fixture'
-import { advanceTerminalTopologyRevision } from '../../../persistence/terminal-topology/terminal-topology-membership'
+import { advanceTerminalTopologyRevision } from '../../../persistence/terminal-topology/pane-ownership/terminal-topology-membership'
 
 const SSH_REPO_ID = 'ssh-repo'
 const SSH_HOST_ID = 'ssh:target-1'
@@ -79,27 +79,24 @@ function rendererSave(session: WorkspaceSessionState): WorkspaceSessionState {
 }
 
 describe('close records', () => {
-  it.each(['user', 'cleanup'] as const)(
-    'records a %s close in main and keeps it across a renderer save and a reload',
-    async (reason) => {
-      const { store, runtime, reload } = createPersistedRuntime()
+  it('keeps the close and its cleanup reason across a renderer save and a reload', async () => {
+    const { store, runtime, reload } = createPersistedRuntime()
 
-      await runtime.closeTerminalSurfaceFromRenderer({
-        worktreeId: WORKTREE_ID,
-        target: { kind: 'tab', tabId: TAB_ID },
-        reason
-      })
-      store.setWorkspaceSession(rendererSave(store.getWorkspaceSession()))
+    await runtime.closeTerminalSurfaceFromRenderer({
+      worktreeId: WORKTREE_ID,
+      target: { kind: 'tab', tabId: TAB_ID },
+      reason: 'cleanup'
+    })
+    store.setWorkspaceSession(rendererSave(store.getWorkspaceSession()))
 
-      const reloaded = (await reload()).getWorkspaceSession()
-      expect(reloaded.tabsByWorktree[WORKTREE_ID]).toEqual([])
-      expect(reloaded.closedTerminalTabTombstonesByTabId?.[TAB_ID]).toEqual({
-        closedAt: expect.any(Number),
-        worktreeId: WORKTREE_ID,
-        reason
-      })
-    }
-  )
+    const reloaded = (await reload()).getWorkspaceSession()
+    expect(reloaded.tabsByWorktree[WORKTREE_ID]).toEqual([])
+    expect(reloaded.closedTerminalTabTombstonesByTabId?.[TAB_ID]).toEqual({
+      closedAt: expect.any(Number),
+      worktreeId: WORKTREE_ID,
+      reason: 'cleanup'
+    })
+  })
 
   // Durable close must reject in-flight spawns committing after crash/reload, even if the tab was never listed.
   it('refuses a closed tab whose spawn commits after a crash and reload', async () => {

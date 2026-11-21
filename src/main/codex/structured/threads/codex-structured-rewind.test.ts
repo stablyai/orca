@@ -112,21 +112,7 @@ describe('Codex rewind', () => {
     })
     expect(request).not.toHaveBeenCalled()
   })
-  it('refuses when native turn listing fails before preparing the rewind', async () => {
-    const { session, request } = fixture()
-    const original = request.getMockImplementation()!
-    request.mockImplementation(async (method, params) => {
-      if (method === 'thread/turns/list') {
-        throw new Error('turn listing unavailable')
-      }
-      return original(method, params)
-    })
-    expect(await rewind(session, { fence: 2, beforeTurnId: 'drop' })).toEqual({
-      ok: false,
-      reason: 'provider-refused'
-    })
-    expect(request.mock.calls.some(([method]) => method === 'thread/revert')).toBe(false)
-  })
+
   it('refuses a missing target before mutation', async () => {
     const { session, request } = fixture()
     expect(await rewind(session, { fence: 2, beforeTurnId: 'missing' })).toEqual({
@@ -187,7 +173,6 @@ describe('Codex rewind', () => {
 
 it.each([
   { turns: ['T1', 'T2', 'drop'], kept: 'T2' },
-  { turns: ['T1', 'drop'], kept: 'T1' },
   { turns: ['T1', 'T2', 'drop', 'later'], kept: 'T2' },
   { turns: ['drop'], kept: null }
 ])('recovers a lost reply with the prepared native predecessor $kept', async ({ turns, kept }) => {

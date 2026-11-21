@@ -2,21 +2,21 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
-import type { SshTarget } from '../../../shared/ssh-types'
+import { getManagedOrcadFenceEnvironmentId } from '../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { closeTestStores, createSqliteTestStore } from '../../persistence/persistence-test-harness'
 import { Store } from '../../persistence/loading-store/store'
 import {
   listOrcadMigrationSourceCutovers,
   orcadMigrationCutoverJournalDirectory
-} from '../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
+} from '../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import {
   fenceOrcadMigrationSource,
   resolveOrcadMigrationFence
 } from './orcad-migration-source-fence'
 import type { OrcadMigrationTerminalVerdict } from './orcad-migration-terminal-gate'
 import { SshTargetOrcadClaims } from '../targets/ssh-target-orcad-claims'
-import '../../persistence/migrating-orcad-catalog/orcad-migration-manifest-export'
+import '../../persistence/migrating-orcad-catalog/source/catalog/orcad-migration-manifest-export'
 import '../../../shared/orcad-migration/orcad-migration-manifest-validation'
 
 const TARGET: SshTarget = {
