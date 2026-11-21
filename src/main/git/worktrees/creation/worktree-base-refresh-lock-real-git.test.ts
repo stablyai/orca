@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -293,6 +293,24 @@ describe('local base refresh reads worktree ownership from git dirs with real Gi
     expect(await readFile(join(linkedPath, 'version.txt'), 'utf8')).toBe('two\n')
     expect(lists()).toBe(0)
   })
+
+  // Windows needs symlink privileges.
+  it.skipIf(process.platform === 'win32')(
+    'leaves main alone when a symlinked HEAD has it checked out',
+    async () => {
+      const { repoPath, lockPath, localOid } = await createBehindRepo()
+      await rm(lockPath, { force: true })
+      git(repoPath, ['checkout', '--quiet', 'main'])
+      await rm(join(repoPath, '.git', 'HEAD'))
+      await symlink('refs/heads/main', join(repoPath, '.git', 'HEAD'))
+      const spy = spyOnFastForwards()
+
+      await expect(refresh(repoPath)).resolves.toBeUndefined()
+
+      expect(spy.writes()).toBe(0)
+      expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
+    }
+  )
 
   it('moves the main a bare repo names from one of its linked worktrees', async () => {
     const { repoPath, lockPath, remoteOid } = await createBehindRepo()

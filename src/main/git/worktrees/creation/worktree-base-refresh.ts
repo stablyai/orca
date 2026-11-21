@@ -16,9 +16,10 @@ import {
 } from '../../../../shared/worktree/base-refs/local-base-branch-fast-forward'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import {
+  isDirectory,
   readGitDirState,
   readLinkedWorktreeDir,
-  REFTABLE_HEAD_PLACEHOLDER
+  UNRESOLVED_HEAD
 } from './git-dir-branch-state'
 import {
   translateWslOutputPath,
@@ -175,26 +176,25 @@ function localBaseBranchGit(
     )
     return parseWorktreeList(translateWslOutputPaths(stdout, repoPath, routed(repoPath)))
   }
-  const gitPathOf = (repoPath: string, path: string) =>
-    isAbsolute(path)
-      ? translateWslOutputPath(path, repoPath, routed(repoPath))
-      : join(repoPath, path)
   const repoGitDirsOf = async (repoPath: string): Promise<RepoGitDirs> => {
     const { stdout } = await gitExecFileAsync(
-      ['rev-parse', '--is-bare-repository', '--git-dir', '--git-common-dir'],
+      ['rev-parse', '--is-bare-repository', '--git-common-dir'],
       execOptions(repoPath)
     )
-    // Only strip line endings: a path may end in spaces.
-    const [bareLine, gitDirLine, commonDirLine] = stdout.split(/\r?\n/)
-    if (!gitDirLine || !commonDirLine) {
-      throw new Error(`git rev-parse printed no git dirs for ${repoPath}`)
+    // The path comes last and keeps any newline or edge space; only the final line ending goes.
+    const bareEnd = stdout.indexOf('\n')
+    const commonDirLine = stdout.slice(bareEnd + 1).replace(/\r?\n$/, '')
+    if (bareEnd === -1 || !commonDirLine) {
+      throw new Error(`git rev-parse printed no common dir for ${repoPath}`)
     }
-    const gitDir = gitPathOf(repoPath, gitDirLine)
-    const commonDir = gitPathOf(repoPath, commonDirLine)
-    const isMain =
-      normalizeRuntimePathForComparison(gitDir) === normalizeRuntimePathForComparison(commonDir)
+    const commonDir = isAbsolute(commonDirLine)
+      ? translateWslOutputPath(commonDirLine, repoPath, routed(repoPath))
+      : join(repoPath, commonDirLine)
+    const reportsBare = stdout.slice(0, bareEnd).trim() === 'true'
+    // A `.git` directory means the repo path's own git dir is the common dir; linked worktrees have a `.git` file.
+    const isMain = reportsBare || (await isDirectory(join(repoPath, '.git')))
     // From a linked worktree Git reports false; its main is bare when core.bare says so.
-    const bare = bareLine === 'true' || (!isMain && (await readCoreBare(repoPath)))
+    const bare = reportsBare || (!isMain && (await readCoreBare(repoPath)))
     return { commonDir, isMain, bare }
   }
   const readCoreBare = async (repoPath: string) => {
@@ -226,9 +226,9 @@ function localBaseBranchGit(
     } else if (owner !== undefined) {
       ownerPath = await readLinkedWorktreePath(owner, repoPath)
     }
-    // Reftable HEADs, or an owner whose path the files do not give, need Git's own listing.
+    // HEADs the files cannot resolve, or an owner whose path they do not give, need Git's own listing.
     if (
-      [...heads.values()].includes(REFTABLE_HEAD_PLACEHOLDER) ||
+      [...heads.values()].includes(UNRESOLVED_HEAD) ||
       (owner !== undefined && ownerPath === undefined)
     ) {
       const fromGit = (await listWorktrees(repoPath)).find((wt) => wt.branch === fullRef)
@@ -262,8 +262,8 @@ function localBaseBranchGit(
                 ([gitDir, head]) =>
                   // A bare repo's own HEAD names a branch without checking it out.
                   !(bare && gitDir === commonDir) &&
-                  // Reftable keeps HEAD elsewhere and leaves this placeholder: fail closed.
-                  (head === `ref: ${fullRef}` || head === REFTABLE_HEAD_PLACEHOLDER)
+                  // Fail closed on a HEAD the files cannot resolve (reftable, odd symlinks).
+                  (head === `ref: ${fullRef}` || head === UNRESOLVED_HEAD)
               )
             return !inUse
           }
@@ -281,7 +281,7 @@ function localBaseBranchGit(
 
 type RepoGitDirs = {
   commonDir: string
-  /** The repo path's own git dir is the common dir: it is the main worktree or the bare repo. */
+  /** The repo path is the main worktree or the bare repo; false when unsure, which falls back to Git's listing. */
   isMain: boolean
   /** The common dir's own HEAD names a branch nothing has checked out. */
   bare: boolean

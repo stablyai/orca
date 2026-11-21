@@ -1,8 +1,8 @@
-import { readdir, readFile, stat } from 'node:fs/promises'
+import { readdir, readFile, readlink, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
-/** What a reftable repo leaves in HEAD files; the real HEAD lives elsewhere. */
-export const REFTABLE_HEAD_PLACEHOLDER = 'ref: refs/heads/.invalid'
+/** A HEAD whose branch the files cannot tell: reftable leaves this placeholder, and odd symlinks map to it. */
+export const UNRESOLVED_HEAD = 'ref: refs/heads/.invalid'
 
 type GitDirState = {
   /** Each git dir's HEAD file, keyed by git dir. */
@@ -32,13 +32,13 @@ export async function readGitDirState(commonDir: string): Promise<GitDirState> {
   await Promise.all(
     gitDirs.map(async (gitDir) => {
       const [head, rebaseMerge, rebaseApply, updateRefs, bisectStart] = await Promise.all([
-        readOptional(join(gitDir, 'HEAD')),
+        readHead(gitDir),
         readOptional(join(gitDir, 'rebase-merge', 'head-name')),
         readOptional(join(gitDir, 'rebase-apply', 'head-name')),
         readOptional(join(gitDir, 'rebase-merge', 'update-refs')),
         readOptional(join(gitDir, 'BISECT_START'))
       ])
-      heads.set(gitDir, head.trim())
+      heads.set(gitDir, head)
       for (const line of [rebaseMerge, rebaseApply, updateRefs].flatMap((text) =>
         text.split('\n')
       )) {
@@ -55,6 +55,22 @@ export async function readGitDirState(commonDir: string): Promise<GitDirState> {
   return { heads, reserved }
 }
 
+// Git still accepts a symlinked HEAD; reading through it would hide the branch it names.
+async function readHead(gitDir: string): Promise<string> {
+  const path = join(gitDir, 'HEAD')
+  try {
+    const target = await readlink(path)
+    return target.startsWith('refs/') ? `ref: ${target}` : UNRESOLVED_HEAD
+  } catch (error) {
+    const code = errorCode(error)
+    if (code !== 'EINVAL' && code !== 'UNKNOWN') {
+      rethrowUnlessMissing(error)
+      return ''
+    }
+  }
+  return (await readOptional(path)).trim()
+}
+
 async function readOptional(path: string): Promise<string> {
   try {
     return await readFile(path, 'utf8')
@@ -64,9 +80,12 @@ async function readOptional(path: string): Promise<string> {
   }
 }
 
+function errorCode(error: unknown): unknown {
+  return typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
+}
+
 function rethrowUnlessMissing(error: unknown): void {
-  const code =
-    typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
+  const code = errorCode(error)
   if (code !== 'ENOENT' && code !== 'ENOTDIR') {
     throw error
   }
@@ -79,4 +98,12 @@ export async function readLinkedWorktreeDir(gitDir: string): Promise<string | un
     return undefined
   }
   return dotGit.slice(0, -'/.git'.length)
+}
+
+export async function isDirectory(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory()
+  } catch {
+    return false
+  }
 }
