@@ -48,7 +48,7 @@ export function mergeNamedBotItems(
   if (same && added.length === 0 && counts === previous.counts) {
     return previous.seenEventId === named.seenEventId
       ? previous
-      : { ...previous, seenEventId: named.seenEventId, named: uids }
+      : stepFrom(previous, uids, { ...previous, seenEventId: named.seenEventId })
   }
   // In the host's order (open, then Closed; each newest activity first), as a whole read has them.
   const ordered = [...items, ...added].sort(
@@ -57,9 +57,49 @@ export function mergeNamedBotItems(
       b.lastActivityAt - a.lastActivityAt ||
       b.number - a.number
   )
-  return { ...previous, items: ordered, counts, seenEventId: named.seenEventId, named: uids }
+  return stepFrom(previous, uids, {
+    ...previous,
+    items: ordered,
+    counts,
+    seenEventId: named.seenEventId
+  })
 }
 
 function isClosedItem(item: BotItem): boolean {
   return item.status === 'done' || item.status === 'canceled'
+}
+
+/** Each merged read's step: the read it was merged into, held weakly so a chain of reads isn't kept. */
+const steps = new WeakMap<
+  BotItemsListRead,
+  { from: WeakRef<BotItemsListRead>; uids: readonly string[] }
+>()
+
+function stepFrom(
+  previous: BotItemsListRead,
+  uids: readonly string[],
+  next: BotItemsListRead
+): BotItemsListRead {
+  steps.set(next, { from: new WeakRef(previous), uids })
+  return next
+}
+
+/** The items read again between `from` and `read` when `read` is `from` with only named items merged
+ *  in (over at most `limit` merges); null when it isn't, or the chain is no longer known. */
+export function botItemsNamedSince(
+  read: BotItemsListRead,
+  from: BotItemsListRead,
+  limit = 20
+): Set<string> | null {
+  const uids = new Set<string>()
+  let at: BotItemsListRead | undefined = read
+  for (let hop = 0; at && at !== from && hop < limit; hop++) {
+    const step = steps.get(at)
+    if (!step) {
+      return null
+    }
+    step.uids.forEach((uid) => uids.add(uid))
+    at = step.from.deref()
+  }
+  return at === from ? uids : null
 }

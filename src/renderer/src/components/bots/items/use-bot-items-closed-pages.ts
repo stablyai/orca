@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { BotRef } from '@/lib/bot-hosts'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
+import { botItemsNamedSince } from '../../../../../shared/bots/bot-item-merge'
 import { readMoreClosedItems, useStableBotItemChats, type BotItemsRead } from './use-bot-items'
 
 type Pages = {
@@ -82,15 +83,12 @@ export function useBotItemsClosedPages(
   const chats = useStableBotItemChats(chatIds)
   const [kept, setPages] = useState<Pages | null>(null)
   const pages = kept?.chats === chats ? kept : null
-  // A named read straight after the pages' own read: the named items' copies are in it now (none for
-  // a deleted one), so the pages drop theirs and carry on. Any other new read reads the depth again.
-  const [lastRead, setLastRead] = useState(read)
-  if (lastRead !== read) {
-    setLastRead(read)
-    if (pages && read?.named && pages.base === lastRead) {
-      const named = new Set(read.named)
-      setPages({ ...pages, base: read, items: pages.items.filter((item) => !named.has(item.uid)) })
-    }
+  // A read that is the pages' own with only named items read again: the named items' copies are in it
+  // now (none for a deleted one), so the pages drop theirs and carry on. Any other new read reads the
+  // depth again.
+  const named = pages && read && pages.base !== read ? botItemsNamedSince(read, pages.base) : null
+  if (pages && read && named) {
+    setPages({ ...pages, base: read, items: pages.items.filter((item) => !named.has(item.uid)) })
   }
   const generation = useRef(0)
 
@@ -121,7 +119,15 @@ export function useBotItemsClosedPages(
     })
   }, [read, depth, current, hostId, id, chats])
 
-  const cursor = current ? pages.cursor : depth === 0 ? (read?.nextClosedCursor ?? null) : null
+  // While the depth is read again, the old rows stay up, to their old end.
+  const shownPages = pages?.items ?? NONE
+  const shownEnd = pages ? pages.cursor : (read?.nextClosedCursor ?? null)
+  const items = useMemo(() => loadedItems(read, shownPages, shownEnd), [read, shownPages, shownEnd])
+  // Every Closed item the read counts is shown (a named read moved the last unloaded one out): no more.
+  const closedTotal = (read?.counts.done ?? 0) + (read?.counts.canceled ?? 0)
+  const allShown = useMemo(() => items.filter(isClosed).length >= closedTotal, [items, closedTotal])
+  const paged = current ? pages.cursor : depth === 0 ? (read?.nextClosedCursor ?? null) : null
+  const cursor = allShown ? null : paged
   const loadMore = useCallback(async (): Promise<BotItemsClosedPage> => {
     if (!read || !cursor) {
       return { items: NONE, more: false }
@@ -130,9 +136,10 @@ export function useBotItemsClosedPages(
     const next = await readMoreClosedItems({ hostId, id }, cursor, chats)
     if (generation.current === mine) {
       setPages((prev) => {
-        const same = prev?.base === read && prev.chats === chats
+        // Still the pages this one continues (a named read since kept them): it joins them.
+        const same = prev !== null && prev.chats === chats && prev.cursor === cursor
         return {
-          base: read,
+          base: same ? prev.base : read,
           chats,
           depth: (same ? prev.depth : 0) + 1,
           items: [...(same ? prev.items : []), ...next.items],
@@ -143,14 +150,10 @@ export function useBotItemsClosedPages(
     return { items: next.items, more: Boolean(next.nextClosedCursor) }
   }, [read, cursor, hostId, id, chats])
 
-  // While the depth is read again, the old rows stay up, to their old end.
-  const shownPages = pages?.items ?? NONE
-  const shownEnd = pages ? pages.cursor : (read?.nextClosedCursor ?? null)
-  const items = useMemo(() => loadedItems(read, shownPages, shownEnd), [read, shownPages, shownEnd])
   return {
     items,
     loadMore: cursor ? loadMore : null,
-    ended: read !== null && cursor === null && (current || depth === 0),
+    ended: read !== null && cursor === null && (current || depth === 0 || allShown),
     endAt: cursor ? (cursorPlace(cursor)?.at ?? null) : null
   }
 }
