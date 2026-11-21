@@ -98,6 +98,7 @@ export function AgentDetectionCatalog({
           <SettingsGroup
             key={installed ? 'installed' : 'available'}
             bodyRef={installed ? installedBody : availableBody}
+            bodyClassName="has-[[data-clip-agent-menu]]:[contain:paint]"
             className="has-[[data-settings-group-body]:empty]:hidden"
             scrollLabel={
               installed

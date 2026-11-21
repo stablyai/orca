@@ -1,17 +1,9 @@
-import { ExternalLink, MoreHorizontal } from 'lucide-react'
+import { AgentCatalogActionsMenu } from './AgentCatalogActionsMenu'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import { Button } from '../../../ui/button'
 import { Switch } from '../../../ui/switch'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from '../../../ui/dropdown-menu'
 import { SettingsBadge } from '../../form-controls/SettingsFormControls'
 import {
   type AgentSessionSourceHomeControl,
@@ -32,7 +24,6 @@ import {
 import { agentPermissionChoiceLabel } from '../../../agent/launch-settings/agent-permission-choice-label'
 import { AgentPermissionMenu } from '../../../agent/launch-settings/AgentPermissionMenu'
 import type { AgentPermissionChoiceRow } from '../../../agent/launch-settings/agent-permission-choice-row'
-import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import type { AgentOpensAs } from '../../../../lib/agent-session/launch/native-chat-provider-choice'
 import { useAgentCatalogRowExpansion } from './agent-catalog-row-expansion'
 import { AgentOpensAsControl } from '../../../agent/launch-settings/AgentChatChoiceControls'
@@ -237,45 +228,14 @@ export function AgentCatalogRow({
               }
             )}
           />
-          <DropdownMenu modal={false}>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label={t('settings.agents.agentActions', '{{agent}} actions', {
-                  agent: label
-                })}
-                className="size-7 text-muted-foreground hover:text-foreground"
-              >
-                <MoreHorizontal className="size-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-44">
-              <DropdownMenuItem
-                disabled={!isSavedDefault && !(isDetected && isEnabled)}
-                onSelect={() => onSetDefault(!isSavedDefault)}
-              >
-                {isSavedDefault
-                  ? t('settings.agents.clearDefault', 'Clear default agent')
-                  : t('auto.components.settings.AgentsPane.5f986a9b92', 'Set as default')}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <a
-                  href={homepageUrl}
-                  target="_blank"
-                  onClick={openAppHttpLinkFromAnchor}
-                  rel="noopener noreferrer"
-                >
-                  {isDetected
-                    ? t('auto.components.settings.AgentsPane.fe4d630c94', 'Docs')
-                    : t('auto.components.settings.AgentsPane.f95b5c79b8', 'Install')}
-                  <ExternalLink className="ml-auto size-3" />
-                </a>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <AgentCatalogActionsMenu
+            label={label}
+            homepageUrl={homepageUrl}
+            isDetected={isDetected}
+            isEnabled={isEnabled}
+            isSavedDefault={isSavedDefault}
+            onSetDefault={onSetDefault}
+          />
         </div>
       </div>
       {cmdOpen && (
