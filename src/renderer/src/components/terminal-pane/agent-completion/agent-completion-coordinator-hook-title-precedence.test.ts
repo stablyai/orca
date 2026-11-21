@@ -52,15 +52,19 @@ describe('agent completion coordinator', () => {
     await flushAsyncTicks()
 
     result = processResult('zsh', false)
+    // Each exit redraws the prompt and each start prints; that output arms the reads.
+    processCoordinator.observeOutputActivity()
     await vi.advanceTimersByTimeAsync(3_000)
     await flushAsyncTicks()
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
 
     result = processResult('codex')
+    processCoordinator.observeOutputActivity()
     vi.advanceTimersByTime(2_000)
     await flushAsyncTicks()
     result = processResult('zsh', false)
+    processCoordinator.observeOutputActivity()
     await vi.advanceTimersByTimeAsync(3_000)
     await flushAsyncTicks()
 

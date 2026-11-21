@@ -236,12 +236,16 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
       async () => foreground === 'codex'
     )
     vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('codex')
-    const { paneKey, terminal } = await connectAgentPane({ ptyId: 'pty-live-codex', visible: true })
+    const { paneKey, terminal, sendData } = await connectAgentPane({
+      ptyId: 'pty-live-codex',
+      visible: true
+    })
     await seedHookRow(paneKey, 'codex')
     await vi.advanceTimersByTimeAsync(3_000)
     terminal.write.mockClear()
 
     foreground = 'pwsh.exe'
+    sendData('PS> ')
     await vi.advanceTimersByTimeAsync(10_000)
 
     expect(window.api.pty.confirmForegroundProcess).toHaveBeenCalledWith('pty-live-codex')
@@ -259,7 +263,10 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
       let children = true
       vi.mocked(window.api.pty.getForegroundProcess).mockImplementation(async () => foreground)
       vi.mocked(window.api.pty.hasChildProcesses).mockImplementation(async () => children)
-      const { paneKey } = await connectAgentPane({ ptyId: 'pty-cmd-claude', visible: true })
+      const { paneKey, sendData } = await connectAgentPane({
+        ptyId: 'pty-cmd-claude',
+        visible: true
+      })
       await seedHookRow(paneKey, agent)
       mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
         paneKey,
@@ -275,6 +282,7 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
       // `/exit` in cmd.exe: the shell is back and no 133;D ever arrives.
       foreground = 'cmd.exe'
       children = false
+      sendData('C:\\> ')
       await vi.advanceTimersByTimeAsync(10_000)
       await flushAsyncTicks()
 

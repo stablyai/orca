@@ -10,7 +10,7 @@ import type { TerminalProcessInspection as RuntimeTerminalProcessInspection } fr
 describe('agent completion coordinator', () => {
   useAgentCompletionCoordinatorLifecycle()
 
-  it('confirms an exit whose prompt redraw lands inside a hidden pane\'s notice window', async () => {
+  it("confirms an exit whose prompt redraw lands inside a hidden pane's notice window", async () => {
     let foregroundProcess: string | null = 'codex'
     const dispatchCompletion = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
@@ -59,9 +59,10 @@ describe('agent completion coordinator', () => {
       expect(inspectProcess).toHaveBeenCalledTimes(1)
       expect(vi.getTimerCount()).toBe(0)
 
-      for (let chunk = 0; chunk < 20; chunk += 1) {
+      // A burst shorter than the 750 ms throttle interval.
+      for (let chunk = 0; chunk < 10; chunk += 1) {
         coordinator.observeOutputActivity()
-        await vi.advanceTimersByTimeAsync(50)
+        await vi.advanceTimersByTimeAsync(30)
       }
       await vi.advanceTimersByTimeAsync(10 * 60_000)
       expect(inspectProcess).toHaveBeenCalledTimes(2)
