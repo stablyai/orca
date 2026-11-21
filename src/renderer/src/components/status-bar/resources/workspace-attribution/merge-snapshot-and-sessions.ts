@@ -34,6 +34,15 @@ function getUnattributedRepoName(t: Translate = translate): string {
   return t('auto.components.status.bar.mergeSnapshotAndSessions.unattributed', 'Unattributed')
 }
 
+/** The paired host a worktree's own record names, which outranks where its repo is tracked. */
+function stampedRuntimeHostId(ctx: MergeContext, worktreeId: string): string | null {
+  if (ctx.ambiguousWorktreeIds?.has(worktreeId)) {
+    return null
+  }
+  const hostId = canonicalExecutionHostId(ctx.worktreeById?.get(worktreeId)?.hostId)
+  return hostId?.startsWith('runtime:') ? hostId : null
+}
+
 export function mergeSnapshotAndSessions(
   snapshot: MemorySnapshot | null,
   daemonSessions: readonly DaemonSession[],
@@ -139,7 +148,7 @@ export function mergeSnapshotAndSessions(
       const repoId = worktree?.repoId ?? wt.repoId
       const { isRemote, runtimeHostId } = resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId)
       // Reject local samples for runtime-hosted workspaces to prevent cross-host attribution.
-      if (runtimeHostId) {
+      if (runtimeHostId || stampedRuntimeHostId(ctx, wt.worktreeId)) {
         continue
       }
       ingestSampledWorktree(wt, {
@@ -158,10 +167,8 @@ export function mergeSnapshotAndSessions(
       const repoId = worktree?.repoId ?? wt.repoId
       // A worktree stamped with a paired host belongs to that host alone, wherever its repo is tracked.
       const ambiguous = ctx.ambiguousWorktreeIds?.has(wt.worktreeId) ?? false
-      const recordHostId = ambiguous
-        ? null
-        : canonicalExecutionHostId(ctx.worktreeById?.get(wt.worktreeId)?.hostId)
-      const owned = recordHostId?.startsWith('runtime:')
+      const recordHostId = stampedRuntimeHostId(ctx, wt.worktreeId)
+      const owned = recordHostId
         ? recordHostId === canonicalExecutionHostId(host.hostId)
         : resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId).runtimeHostId === host.hostId
       // Keep foreign/unplaced server load host-qualified so same-ID workspaces elsewhere cannot absorb it.
@@ -213,7 +220,7 @@ export function mergeSnapshotAndSessions(
       finalWorktreeId,
       finalRepoId
     )
-    if (runtimeHostId) {
+    if (runtimeHostId || stampedRuntimeHostId(ctx, finalWorktreeId)) {
       continue
     }
 

@@ -128,8 +128,10 @@ describe('folder Resource Manager rows', () => {
       displayName: 'Remote',
       hostId: 'runtime:wsl:Ubuntu'
     }
+    // A local sample of the same id (an older placement) must not add a second row.
     const repos = mergeSnapshotAndSessions(
-      null,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the merge reads only worktrees.
+      { worktrees: [{ ...oldRow, worktreeId: worktree.id, repoId: 'repo-1' }] } as MemorySnapshot,
       [],
       context({
         worktreeById: new Map([[worktree.id, worktree]]),
