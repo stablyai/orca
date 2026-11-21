@@ -52,6 +52,10 @@ function chatConversations(records: readonly AgentSessionRecord[]): DeletedChatC
   return [...conversations.values()]
 }
 
+/** A worker chat an orchestration still waits on settles through its record. */
+const ownsOpenDispatch = (host: ChatHost, records: readonly AgentSessionRecord[]): boolean =>
+  records.some((record) => host.deps.hasOpenDispatch?.(record) === true)
+
 /** Holds every session's conversation lane, in a fixed order so two deletes never deadlock. */
 function inLanes<T>(
   host: ChatHost,
@@ -75,12 +79,13 @@ function commitChatDeletion(
     if (sessionIds.some(host.hasSession)) {
       return 'reopened'
     }
-    // A worker chat an orchestration still waits on settles through its record.
-    if (records.some((record) => host.deps.hasOpenDispatch?.(record))) {
+    // Read again in the lanes: a send since the first read may have added a provider conversation.
+    const current = sessionIds.flatMap((id) => host.deps.store.getRecord(id) ?? [])
+    if (ownsOpenDispatch(host, current)) {
       return 'worker'
     }
     const forgotten = await host.deps.store
-      .forgetChat({ chatId, sessionIds, conversations: chatConversations(records) })
+      .forgetChat({ chatId, sessionIds, conversations: chatConversations(current) })
       .catch((error: unknown) => {
         console.warn('[chat-delete] the chat store refused the delete', error)
         return false
@@ -129,6 +134,10 @@ export async function deleteOrcaChat(
   // A managed agent's live Home is where its mail and connectors land; it is not deleted.
   if (chat.records.some((record) => record.sessionId === bot?.chatSessionId)) {
     return { outcome: 'refused', reason: 'home' }
+  }
+  // Before any stop, so a refused delete never interrupts a worker's turn.
+  if (ownsOpenDispatch(host, chat.records)) {
+    return { outcome: 'refused', reason: 'workers' }
   }
   let committed: Commit = 'reopened'
   for (let attempt = 0; attempt < STOP_ATTEMPTS && committed === 'reopened'; attempt++) {

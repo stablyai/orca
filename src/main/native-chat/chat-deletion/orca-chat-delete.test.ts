@@ -65,7 +65,19 @@ vi.mock('../../runtime/agent-session/lifecycle/structured-agent-session-close', 
     mocks.stopped.push(sessionId)
     mocks.loaded.delete(sessionId)
     if (mocks.reopens.delete(sessionId)) {
+      // The send that reopened it resumed a new provider conversation.
       mocks.loaded.add(sessionId)
+      mocks.records = mocks.records.map((entry) =>
+        entry.sessionId === sessionId
+          ? {
+              ...entry,
+              providerHandleChain: [
+                ...entry.providerHandleChain,
+                { handle: { nativeId: 'conv-3' } }
+              ]
+            }
+          : entry
+      )
     }
     return { stopped: true }
   }
@@ -123,19 +135,29 @@ describe('deleteOrcaChat', () => {
     ])
   })
 
-  it('stops a chat a send reopened before the commit again, then deletes it', async () => {
+  it('stops a chat a send reopened before the commit again, and tombstones what that send resumed', async () => {
     mocks.loaded.add('chat-root')
     mocks.reopens.add('chat-root')
 
     expect(await deleteChat('chat-root')).toEqual({ outcome: 'deleted' })
     expect(mocks.stopped).toEqual(['chat-root', 'chat-root'])
-    expect(mocks.forgets).toHaveLength(1)
+    expect(mocks.forgets).toEqual([
+      expect.objectContaining({
+        conversations: [
+          { provider: 'claude', providerSessionId: 'conv-1' },
+          { provider: 'claude', providerSessionId: 'conv-3' },
+          { provider: 'claude', providerSessionId: 'conv-2' }
+        ]
+      })
+    ])
   })
 
-  it('keeps a worker chat an orchestration still waits on', async () => {
+  it('keeps a worker chat an orchestration still waits on, without stopping its turn', async () => {
     mocks.owesDispatch = true
+    mocks.loaded.add('chat-root')
 
     expect(await deleteChat('chat-root')).toEqual({ outcome: 'refused', reason: 'workers' })
+    expect(mocks.stopped).toEqual([])
     expect(mocks.forgets).toEqual([])
   })
 

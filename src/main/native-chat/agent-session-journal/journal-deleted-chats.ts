@@ -38,6 +38,14 @@ function isDeletedChat(value: unknown): value is DeletedChat {
 
 /** Every tombstone; an unreadable row is skipped, never guessed at. */
 export function readDeletedChats(db: Database.Database): DeletedChat[] {
+  // A read-only open of a newer build's database may lack the table; it then holds no tombstones.
+  if (
+    !db
+      .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='agent_session_store_meta'")
+      .get()
+  ) {
+    return []
+  }
   return db
     .prepare('SELECT value FROM agent_session_store_meta WHERE key>=?1 AND key<?2')
     .all(DELETED_CHAT_KEY, `${DELETED_CHAT_KEY.slice(0, -1)};`)
