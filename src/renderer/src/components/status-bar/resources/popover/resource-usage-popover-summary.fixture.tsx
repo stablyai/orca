@@ -2,10 +2,6 @@ import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { renderResourceUsageSummary } from './resource-usage-popover-summary'
 import { ResourceUsageStatusSegment } from '../ResourceUsageStatusSegment'
 import type { MemorySnapshot } from '../../../../../../shared/diagnostics/process-stats-types'
-import {
-  getResourceMemoryMetricCopy,
-  getResourceCommitMetricCopy
-} from './resource-memory-metric-copy'
 
 const fixtureOwnerSplit = {
   orca: { memory: 987842478 },
@@ -13,46 +9,24 @@ const fixtureOwnerSplit = {
   yourProcesses: { memory: 2029359923 }
 }
 
-export const metricDetails = defineFixture({
-  width: 420,
-  render: () =>
-    renderResourceUsageSummary({
-      ownerSplit: fixtureOwnerSplit,
-      memoryMetricCopy: getResourceMemoryMetricCopy('working-set'),
-      commitBadgeLabel: '3 GB',
-      commitMetricCopy: getResourceCommitMetricCopy(),
-      commitToneClass: null,
-      orphanCount: 0
-    }),
-  interact: (frame) => {
-    frame.querySelector('summary')?.click()
-  }
-})
-
 export const ownerBreakdown = defineFixture({
   // Popover is 26rem wide; the frame adds 16px padding on each side.
   width: 448,
   render: () =>
     renderResourceUsageSummary({
       ownerSplit: fixtureOwnerSplit,
-      memoryMetricCopy: getResourceMemoryMetricCopy('footprint'),
       commitBadgeLabel: null,
-      commitMetricCopy: null,
       commitToneClass: null,
       orphanCount: 2
     })
 })
-
-export const narrowMetricDetails = defineFixture({ ...metricDetails, width: 280 })
 
 export const orphanSummary = defineFixture({
   width: 420,
   render: () =>
     renderResourceUsageSummary({
       ownerSplit: fixtureOwnerSplit,
-      memoryMetricCopy: getResourceMemoryMetricCopy('footprint'),
       commitBadgeLabel: null,
-      commitMetricCopy: null,
       commitToneClass: null,
       orphanCount: 2
     })
@@ -100,7 +74,7 @@ const crowdedSnapshot: MemorySnapshot = {
   }))
 }
 
-export const shortWindowMetricDetails = defineFixture({
+export const shortWindowPopover = defineFixture({
   width: 440,
   store: { memorySnapshot: crowdedSnapshot, workspaceSessionReady: true },
   setup: () => {
@@ -109,7 +83,7 @@ export const shortWindowMetricDetails = defineFixture({
   },
   render: () => (
     <div className="flex h-90 items-end justify-end">
-      <ResourceUsageStatusSegment iconOnly={false} />
+      <ResourceUsageStatusSegment />
     </div>
   ),
   interact: async (frame) => {
@@ -119,22 +93,13 @@ export const shortWindowMetricDetails = defineFixture({
     if (popover) {
       popover.style.maxHeight = '320px'
     }
-    popover?.querySelector('summary')?.click()
-  }
-})
-
-export const shortWindowCollapsedDetails = defineFixture({
-  ...shortWindowMetricDetails,
-  interact: async (frame) => {
-    await shortWindowMetricDetails.interact?.(frame)
-    document.querySelector('[data-slot="popover-content"] details')?.removeAttribute('open')
   }
 })
 
 export const shortWindowOrphanCleanup = defineFixture({
-  ...shortWindowMetricDetails,
+  ...shortWindowPopover,
   setup: () => {
-    shortWindowMetricDetails.setup?.()
+    shortWindowPopover.setup?.()
     window.api.pty.listSessions = async () => [
       { id: 'fixture-orphan', cwd: '/workspace', title: 'Terminal', agentOwnership: 'absent' }
     ]

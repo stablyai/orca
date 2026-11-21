@@ -32,7 +32,7 @@ jobs:
         env:
           ORCA_UNIT_SELECTION_MODE: shadow
           ORCA_PULL_REQUEST_DRAFT: ${{ github.event.pull_request.draft }}
-          ORCA_UNIT_FULL_SHARD_COUNT: ${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '12' }}
+          ORCA_UNIT_FULL_SHARD_COUNT: ${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '24' }}
         run: node config/scripts/ci/unit-selection/ci-unit-plan.mjs
       - uses: actions/download-artifact@v8
         with:

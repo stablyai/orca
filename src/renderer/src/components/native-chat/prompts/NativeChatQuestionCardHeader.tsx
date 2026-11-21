@@ -3,30 +3,39 @@ import { X } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
+
+/** The question card's question with its collapse and cancel controls. */
 export function NativeChatQuestionCardHeader({
   question,
   heading,
   context,
   isSubmitting,
   isCancelling,
+  onCollapse,
   onCancel,
-  onCollapse
+  renderQuestion
 }: {
   question: string
   heading?: string
   context?: ReactNode
   isSubmitting: boolean
   isCancelling: boolean
-  onCancel?: () => void
-  onCollapse?: () => void
+  onCollapse: (() => void) | undefined
+  /** Without it (nothing to dismiss) there is no ×. */
+  onCancel: (() => void) | undefined
+  /** Draws the question's words in place of the plain heading (an item clamps a long ask). */
+  renderQuestion?: (content: string) => React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
-
   return (
     <div>
       <div className="flex items-start gap-2 px-3.5 py-2.5">
         {heading ? (
           <p className="min-w-0 flex-1 text-sm font-semibold text-foreground">{heading}</p>
+        ) : renderQuestion ? (
+          <div className="min-w-0 flex-1" data-testid="native-chat-question-card-title">
+            {renderQuestion(question)}
+          </div>
         ) : (
           <NativeChatQuestionText
             data-testid="native-chat-question-card-title"
@@ -49,7 +58,6 @@ export function NativeChatQuestionCardHeader({
           </button>
         ) : null}
       </div>
-
       {context ? (
         <div className="space-y-2 px-3.5 pb-2.5 text-xs text-muted-foreground">{context}</div>
       ) : null}

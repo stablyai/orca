@@ -43,7 +43,12 @@ async function createSharedLinkWorktree(): Promise<string> {
   git(['add', '.'])
   git(['commit', '-q', '-m', 'initial'])
   await mkdir(path.join(owner, 'node_modules'))
-  await symlink(path.join(owner, 'node_modules'), path.join(repo, 'node_modules'))
+  // Directory symlinks need elevation on Windows; Orca's shared links are junctions there.
+  await symlink(
+    path.join(owner, 'node_modules'),
+    path.join(repo, 'node_modules'),
+    process.platform === 'win32' ? 'junction' : undefined
+  )
   await writeFile(path.join(repo, 'new.txt'), 'new\n')
   return repo
 }
@@ -74,6 +79,7 @@ afterEach(async () => {
 })
 
 describe('git.bulkStage with a whole-worktree scope', () => {
+  // Git for Windows reads the junction as an ignored directory; POSIX symlinks escape the rule.
   it('replies with a receipt and skips the shared node_modules link', async () => {
     const repo = await createSharedLinkWorktree()
     const dispatcher = dispatcherFor({

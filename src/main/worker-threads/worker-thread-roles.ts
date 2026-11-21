@@ -7,6 +7,7 @@ export type WorkerThreadRole =
   | 'orca-claude-rewind-transcript'
   | 'orca-codex-history-disk-usage'
   | 'orca-codex-project-trust'
+  | 'orca-codex-rollout-references'
   | 'orca-command-path-directory'
   | 'orca-environment-store'
   | 'orca-foreign-sqlite-reader'

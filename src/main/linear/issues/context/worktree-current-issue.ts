@@ -38,16 +38,16 @@ export function getLinearCurrentIssueFromWorktree(worktree: {
   }
 }
 
-export function resolveLegacyLinearLinkWorkspace(
+export async function resolveLegacyLinearLinkWorkspace(
   identifier: string,
   splitOrganizationUrlKey?: string | null
-): CurrentIssueLink['backfill'] {
+): Promise<CurrentIssueLink['backfill']> {
   const parsed = parseLinearIssueInput(identifier)
   const organizationUrlKey = splitOrganizationUrlKey ?? parsed?.organizationUrlKey
   if (!organizationUrlKey) {
     return undefined
   }
-  const matches = getConnectedWorkspaces().filter(
+  const matches = (await getConnectedWorkspaces()).filter(
     (workspace) => workspace.organizationUrlKey === organizationUrlKey
   )
   return matches.length === 1

@@ -18,6 +18,8 @@ import {
   cancelBrowserPasskeyRequests,
   getBrowserPasskeyRequest
 } from '../../webauthn/browser-passkey-requests'
+import type { BrowserPageZoomDirection } from '../../../../shared/browser/site-settings/browser-page-zoom'
+import type { BrowserPageSiteDisplay } from '../../../../shared/browser/site-settings/browser-site-display'
 import { formatBrowserPasskeyRequest } from '../../../../shared/browser/prompts/browser-passkey-request'
 import { browserGuestHasNothingToReload } from '../../../../shared/browser/guest-lifecycle/browser-guest-reloadability'
 import { cancelBrowserWebAuthnAccountRequests } from '../../webauthn/browser-webauthn-account-picker'
@@ -225,6 +227,19 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
     return this.enqueueInertAction(worktreeId, browserPageId, async (sessionName) => {
       return (await this.execAgentBrowser(sessionName, ['forward'])) as BrowserBackResult
     })
+  }
+
+  // Not queued: zoom is the person's view of the page, not an action an agent's command waits on.
+  zoom(
+    direction: BrowserPageZoomDirection,
+    worktreeId?: string,
+    browserPageId?: string
+  ): BrowserPageSiteDisplay | null {
+    this.assertCommandAdmission()
+    const assertNotRevoked = captureRemoteCliBrowserRevocation()
+    const { webContentsId } = this.resolveCommandTarget(worktreeId, browserPageId)
+    assertNotRevoked(webContentsId)
+    return this.browserManager.zoomGuestPage(webContentsId, direction)
   }
 
   // Not queued: the load it stops may be the queued command ahead of it, such as a reload.

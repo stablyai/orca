@@ -236,7 +236,7 @@ describeRender('a bot’s access requests in its sheet, in a real browser', () =
     expect(text).toContain('@lee · Slack (Acme)')
 
     await page.click('[aria-label="Review Lee Park"]')
-    await waitForText(page, 'Give Lee Park access to Atlas?')
+    await waitForText(page, 'Give Lee access to Atlas?')
     expect(decisions(await page.evaluate(() => globalThis.__orcaRenderCheckRequests))).toEqual([])
     await page.click('text=Give access')
     let requests = await waitForRecordedRequests(page, ['bots.access.decide'])

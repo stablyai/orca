@@ -1,4 +1,4 @@
-import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { terminalQuickCommandAgentPromptMaxLength } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import {
   parseExecutionHostId,
@@ -8,7 +8,7 @@ import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/
 
 /** An older host's agent-prompt character cap, read from its live status; `null` for none. */
 export function getTerminalQuickCommandHostPromptMaxLength(
-  state: Pick<AppState, 'runtimeStatusByEnvironmentId'>,
+  statuses: RuntimeStatuses,
   hostId: ExecutionHostId
 ): number | null {
   const parsed = parseExecutionHostId(hostId)
@@ -16,7 +16,6 @@ export function getTerminalQuickCommandHostPromptMaxLength(
     return null
   }
   return terminalQuickCommandAgentPromptMaxLength(
-    lastVerifiedRuntimeStatus(state.runtimeStatusByEnvironmentId.get(parsed.environmentId))
-      ?.capabilities
+    lastVerifiedRuntimeStatus(statuses.get(parsed.environmentId))?.capabilities
   )
 }

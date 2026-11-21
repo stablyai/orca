@@ -74,6 +74,7 @@ test('confirming the X-button prompt closes the busy tab', async ({ orcaPage }) 
   await busyTab.hover()
   await busyTab.getByRole('button', { name: /^Close tab /i }).click()
   await expect(closeDialog(orcaPage)).toBeVisible({ timeout: 15_000 })
+  await expect(busyTab).toBeVisible()
   await orcaPage.getByRole('button', { name: /^Stop and close$/i }).click()
 
   await expect(busyTab).toHaveCount(0, { timeout: 15_000 })

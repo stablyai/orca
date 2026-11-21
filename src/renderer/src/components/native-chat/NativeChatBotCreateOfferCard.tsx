@@ -1,7 +1,7 @@
 // The card a bot shows with `orca bot create --offer`: a new bot it proposes. Nothing is created until the
 // owner presses Create bot (or creates it from Edit); the card then reads Created, from the bots there are.
 import { useRef, useState } from 'react'
-import { Check, ChevronDown, ChevronUp } from 'lucide-react'
+import { ChevronDown, ChevronUp, Pencil } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -31,7 +31,11 @@ import {
   type BotCreateOfferSay
 } from '../../../../shared/bots/bot-create-offer-view'
 import type { BotCardCopyValues } from '../../../../shared/native-chat/bot-cards/bot-card-copy'
-import { NativeChatCardFrame } from './NativeChatCardFrame'
+import {
+  NativeChatCardActions,
+  NativeChatCardFrame,
+  NativeChatCardStatus
+} from './NativeChatCardFrame'
 import { NativeChatCardFact } from './NativeChatAutomationCardDetails'
 import { NativeChatExpandable } from './messages/disclosure/NativeChatExpandable'
 import { NativeChatOfferActions, useNativeChatOffer } from './NativeChatOfferActions'
@@ -64,6 +68,14 @@ const PIECES: Record<keyof typeof COPY, (t: Translate, values?: BotCardCopyValue
       COPY.createdTookOverMany,
       values
     ),
+  askedOne: (t) => t('components.native-chat.botCreateOffer.askedOne', COPY.askedOne),
+  askedMany: (t, values) =>
+    t('components.native-chat.botCreateOffer.askedMany', COPY.askedMany, values),
+  tookOverSome: (t, values) =>
+    t('components.native-chat.botCreateOffer.tookOverSome', COPY.tookOverSome, values),
+  tookOverOne: (t) => t('components.native-chat.botCreateOffer.tookOverOne', COPY.tookOverOne),
+  tookOverMany: (t, values) =>
+    t('components.native-chat.botCreateOffer.tookOverMany', COPY.tookOverMany, values),
   deleted: (t) => t('components.native-chat.botCreateOffer.deleted', COPY.deleted),
   nameTaken: (t, values) =>
     t('components.native-chat.botCreateOffer.nameTaken', COPY.nameTaken, values),
@@ -140,7 +152,8 @@ function OfferCard({
   bots: readonly Bot[]
   messageId: string
 }): React.JSX.Element {
-  const say = sayWith(useTranslate())
+  const t = useTranslate()
+  const say = sayWith(t)
   useTranslation()
   const answering = useNativeChatOffer(proposer.id, messageId)
   const { proposal } = offer
@@ -192,70 +205,72 @@ function OfferCard({
             <ProposalAvatar proposal={proposal} />
           )
         }
-      >
-        <div className="flex items-end justify-between gap-3">
-          <button
-            ref={toggle}
-            type="button"
-            aria-expanded={open}
-            onClick={() => setOpen(!open)}
-            className="flex min-w-0 flex-1 items-end justify-between gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-medium text-foreground">
-                {view.title}
-              </span>
-              {view.line.kind === 'created' ? (
-                <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Check className="size-3" aria-hidden />
-                  {view.line.text}
-                </span>
-              ) : (
-                <span className="block text-xs text-muted-foreground">{view.line.text}</span>
-              )}
-            </span>
-            <Chevron className="mb-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
-          </button>
-          {created ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              className="shrink-0"
-              onClick={() => void openBotHomeTabById(created)}
+        heading={t('components.native-chat.botCreateOffer.heading', 'New bot')}
+        status={
+          view.line.kind === 'purpose' ? null : (
+            <NativeChatCardStatus tone={view.line.kind === 'created' ? 'success' : 'muted'}>
+              {view.line.kind === 'created' ? say('created') : view.line.text}
+            </NativeChatCardStatus>
+          )
+        }
+        title={view.title}
+        footer={
+          created ? (
+            <NativeChatCardActions>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void openBotHomeTabById(created)}
+              >
+                {say('open')}
+              </Button>
+            </NativeChatCardActions>
+          ) : view.open === null ? undefined : (
+            <NativeChatOfferActions
+              offer={answering}
+              start={
+                view.open.actions === 'rename' ? undefined : (
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(true)}>
+                    <Pencil aria-hidden />
+                    {say('edit')}
+                  </Button>
+                )
+              }
             >
-              {say('open')}
-            </Button>
-          ) : null}
-        </div>
-        {view.open === null ? null : (
-          // Narrow, the buttons wrap under the line rather than cutting it.
-          <div className="mt-2 flex flex-wrap items-center justify-end gap-x-3 gap-y-1.5">
-            <p className="mr-auto text-xs text-muted-foreground">{view.open.note}</p>
-            <NativeChatOfferActions offer={answering} done={false}>
               {view.open.actions === 'rename' ? (
-                <Button type="button" variant="outline" size="xs" onClick={() => setEditing(true)}>
+                <Button type="button" size="sm" onClick={() => setEditing(true)}>
                   {say('rename')}
                 </Button>
               ) : (
-                <>
-                  <Button type="button" variant="ghost" size="xs" onClick={() => setEditing(true)}>
-                    {say('edit')}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="xs"
-                    disabled={creating}
-                    onClick={create}
-                  >
-                    {say('create')}
-                  </Button>
-                </>
+                <Button type="button" size="sm" disabled={creating} onClick={create}>
+                  {say('create')}
+                </Button>
               )}
             </NativeChatOfferActions>
-          </div>
-        )}
+          )
+        }
+      >
+        <button
+          ref={toggle}
+          type="button"
+          aria-expanded={open}
+          aria-label={t('components.native-chat.botCreateOffer.details', 'Details of {{name}}', {
+            name: view.title
+          })}
+          onClick={() => setOpen(!open)}
+          className="-mx-1 flex w-[calc(100%+0.5rem)] min-w-0 items-start justify-between gap-2 rounded-md px-1 text-left text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <span className="min-w-0">
+            {view.line.kind === 'purpose' ? (
+              <span className="block">{view.line.text}</span>
+            ) : view.takeover ? (
+              <span className="block">{view.takeover}</span>
+            ) : null}
+            {view.open?.note ? <span className="block">{view.open.note}</span> : null}
+          </span>
+          <Chevron className="mt-0.5 size-4 shrink-0" aria-hidden />
+        </button>
         <NativeChatExpandable open={open}>
           {open ? <ProposalDetails proposal={proposal} /> : null}
         </NativeChatExpandable>

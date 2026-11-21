@@ -226,12 +226,14 @@ vi.mock('../runtime/orca-runtime', () => ({
     restoreHostAccountLaunchEnv() {}
     async refreshRestoredOrchestrationAuthority() {}
     async reconcileLegacyWorkerTerminals() {}
+    async reportWorkerStopsAcrossRestartOnce() {}
     async installPendingOrcadMigrationShellHistory() {}
     async stopLegacyWorkerTerminalRecovery() {}
     async closeNotificationDismissals() {}
     flushPaneGrids() {
       return null
     }
+    async saveReattachedPaintLedger() {}
     syncWindowGraph() {}
     setAgentSenderPeerKey() {}
     setMobilePushRegistrar(
@@ -335,7 +337,7 @@ it('reads live pairing names from the standalone RPC registry', async () => {
   }
 })
 
-it('starts push after RPC identity is available and stops dispatch on shutdown', async () => {
+it('serves the startup profile and starts and stops its push dispatch', async () => {
   state.root = mkdtempSync(join(tmpdir(), 'orca-headless-push-'))
   state.controller = new RuntimeMobileNotificationController()
   state.registry = new DeviceRegistry(state.root)
@@ -343,6 +345,9 @@ it('starts push after RPC identity is available and stops dispatch on shutdown',
   const { startOrcad } = await import('./host-runtime/orcad-entry')
   const host = await startOrcad({ noPairing: true, json: true })
   try {
+    const [store] = runs.runtimeArgs[0] ?? []
+    expect(store).toBe(runs.profileStore)
+    expect(runs.servedProfiles).toEqual(['headless-profile'])
     const result = await state.controller.registerPushDevice({
       deviceId: phone.deviceId,
       platform: 'android',
@@ -424,32 +429,19 @@ it('unsubscribes settings when daemon startup fails after hook setup', async () 
   acquireProfileStateMaintenance(state.root).release()
 })
 
-it('spawns the daemon while the hook server is still starting', async () => {
-  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-daemon-parallel-'))
-  const { agentHookServer } = await import('../agent-hooks/server/agent-hook-server')
-  const hookStart = Promise.withResolvers<void>()
-  const start = vi.spyOn(agentHookServer, 'start').mockReturnValue(hookStart.promise)
-  const { startOrcad } = await import('./host-runtime/orcad-entry')
-  const starting = startOrcad({ noPairing: true, json: true })
-
-  await vi.waitFor(() => expect(start).toHaveBeenCalledOnce())
-  await vi.waitFor(() => expect(state.startDaemon).toHaveBeenCalledOnce())
-  hookStart.resolve()
-
-  const host = await starting
-  await host.stop()
-})
-
-it('disconnects a daemon still spawning only after it settles, when the hook server fails', async () => {
+it('spawns the daemon alongside the hook server and waits for it before disconnecting on failure', async () => {
   state.root = mkdtempSync(join(tmpdir(), 'orca-headless-hook-failure-'))
   const daemonSpawn = Promise.withResolvers<void>()
+  const hookStart = Promise.withResolvers<void>()
   state.startDaemon.mockReturnValueOnce(daemonSpawn.promise)
   const { agentHookServer } = await import('../agent-hooks/server/agent-hook-server')
-  vi.spyOn(agentHookServer, 'start').mockRejectedValueOnce(new Error('hook port taken'))
+  const startHooks = vi.spyOn(agentHookServer, 'start').mockReturnValueOnce(hookStart.promise)
   const { startOrcad } = await import('./host-runtime/orcad-entry')
 
   const starting = startOrcad()
+  await vi.waitFor(() => expect(startHooks).toHaveBeenCalledOnce())
   await vi.waitFor(() => expect(state.startDaemon).toHaveBeenCalledOnce())
+  hookStart.reject(new Error('hook port taken'))
   // The cleanup waits on the in-flight spawn rather than disconnecting a half-started provider.
   await new Promise((resolve) => setImmediate(resolve))
   expect(state.stopDaemon).not.toHaveBeenCalled()
@@ -508,20 +500,6 @@ it('leaves agent configs alone when status hooks are off', async () => {
     await new Promise((resolve) => setImmediate(resolve))
     expect(state.installManagedAgentHooks).not.toHaveBeenCalled()
     expect(state.startCodexHooks.mock.calls[0]![0].isEnabled()).toBe(false)
-  } finally {
-    await host.stop()
-  }
-})
-
-// Bots record link owners from this profile's account; it must be the one whose store this is.
-it("serves the startup profile's store and names that same profile", async () => {
-  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-served-profile-'))
-  const { startOrcad } = await import('./host-runtime/orcad-entry')
-  const host = await startOrcad({ noPairing: true, json: true })
-  try {
-    const [store] = runs.runtimeArgs[0] ?? []
-    expect(store).toBe(runs.profileStore)
-    expect(runs.servedProfiles).toEqual(['headless-profile'])
   } finally {
     await host.stop()
   }

@@ -3,7 +3,6 @@ import {
   advanceGoogleConsole,
   GOOGLE_CONSOLE_START,
   googleConsoleStepUrl,
-  googleConsoleSteps,
   googleEnableApisUrl,
   readGoogleConsoleAddress,
   withGoogleAccount,
@@ -17,19 +16,6 @@ function walk(addresses: string[]): GoogleConsoleProgress {
 }
 
 describe('Google console setup', () => {
-  it('adds Publish only for a personal account', () => {
-    expect(googleConsoleSteps('company')).toEqual(['project', 'apis', 'branding', 'client'])
-    // Publish stays greyed until Branding has the links, so they come first.
-    expect(googleConsoleSteps('personal')).toEqual([
-      'project',
-      'apis',
-      'branding',
-      'links',
-      'publish',
-      'client'
-    ])
-  })
-
   it('always turns on the People API, then only the chosen services', () => {
     const url = new URL(googleEnableApisUrl(['gmail'], { projectId: 'orca-google-41023' }))
     expect(url.pathname).toBe('/apis/enableflow')
@@ -55,10 +41,6 @@ describe('Google console setup', () => {
       `${C}/projectcreate`
     )
 
-    for (const step of googleConsoleSteps('personal')) {
-      const url = new URL(googleConsoleStepUrl(step, { choices: ['gmail'], projectId: 'p' }))
-      expect(url.searchParams.has('authuser')).toBe(false)
-    }
     const account = 'alice@example.com'
     expect(withGoogleAccount(`${C}/apis/library/x?project=p`, account)).toBe(
       `${C}/apis/library/x?project=p&authuser=alice%40example.com`

@@ -35,7 +35,6 @@ export default defineConfig({
     ...(process.versions.bun ? { pool: 'node-runtime', poolRunner: nodeRuntimePool } : {}),
     include: [...contractGlobs, ...namedContracts],
     benchmark: { include: [] },
-    fileParallelism: false,
     retry: 0
   }
 })

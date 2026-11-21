@@ -1,5 +1,6 @@
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { defineFixture } from '../../component-fixtures/component-fixture'
+import { stubBots } from '../../component-fixtures/fixture-bots'
 import { publishBots } from '@/lib/bot-catalog-snapshot'
 import { publishBotGroups } from '@/lib/bot-group-catalog-snapshot'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
@@ -81,7 +82,7 @@ export const foldedHeader = defineFixture({
       [chat(BOTS[1]!, 'waiting'), chat(BOTS[2]!, 'working')].map((entry) => [entry.paneKey, entry])
     )
   },
-  setup: () => publishBots(BOTS, { threadReplies: false, webhooks: undefined, waits: {} }),
+  setup: () => stubBots(BOTS),
   render: () => (
     <ConfirmationDialogProvider>
       <div className="flex flex-col bg-sidebar pb-2 text-sidebar-foreground">
@@ -100,6 +101,18 @@ const HOMES = (owners: readonly Pick<Bot, 'folderWorkspaceId' | 'name' | 'folder
       folderPath: `/home/me/.orca/bots/${owner.folder}`
     })
   )
+
+export const foldedEmptyHeader = defineFixture({
+  ...foldedHeader,
+  store: { collapsedGroups: new Set(['bots']) },
+  setup: () => stubBots([])
+})
+
+export const foldedTwoBotsHeader = defineFixture({
+  ...foldedHeader,
+  store: { collapsedGroups: new Set(['bots']), folderWorkspaces: HOMES(BOTS.slice(0, 2)) },
+  setup: () => stubBots(BOTS.slice(0, 2))
+})
 
 // Three bots a drag placed, then "New bot" and a group made after the drag.
 const PLACED_AND_NEW = [...BOTS.slice(0, 3), bot('fresh', 'New bot', 'A1', undefined, 2)]
@@ -136,23 +149,7 @@ export const newBotOnTop = defineFixture({
 export const plusMenu = defineFixture({
   width: 320,
   store: { folderWorkspaces: HOMES(BOTS.slice(0, 3)) },
-  setup: () => {
-    const shown = BOTS.slice(0, 3)
-    publishBots(shown, { threadReplies: false, webhooks: undefined, waits: {} })
-    // The section lists bots and groups again as it mounts; answer as a host with these three.
-    const answers: Record<string, unknown> = {
-      'bots.list': { bots: shown },
-      'bots.groups.list': { groups: [] }
-    }
-    const runtime = window.api.runtime
-    Reflect.set(window.api, 'runtime', {
-      ...runtime,
-      call: (args: Parameters<typeof runtime.call>[0]) =>
-        args.method in answers
-          ? Promise.resolve({ ok: true, result: answers[args.method] })
-          : runtime.call(args)
-    })
-  },
+  setup: () => stubBots(BOTS.slice(0, 3)),
   render: () => (
     <ConfirmationDialogProvider>
       <div className="flex flex-col bg-sidebar pb-2 text-sidebar-foreground">

@@ -28,7 +28,7 @@ const NOW = 1_700_000_000_000
 
 const dispatched: NotificationDispatchRequest[] = []
 
-function seed(muted: Record<string, boolean>): void {
+function seed(muted: Record<string, boolean>, launchRestored = false): void {
   store.setState({
     repos: [TEST_REPO],
     worktreesByRepo: {
@@ -69,7 +69,18 @@ function seed(muted: Record<string, boolean>): void {
           paneKey: PANE_KEY,
           terminalTitle: 'codex',
           stateHistory: [],
-          lastAssistantMessage: 'Done.'
+          lastAssistantMessage: 'Done.',
+          ...(launchRestored
+            ? {
+                observation: {
+                  origin: 'launch' as const,
+                  authorityId: 'main',
+                  incarnation: 1,
+                  revision: 1,
+                  observedAt: NOW
+                }
+              }
+            : {})
         }
       ]
     ]),
@@ -112,6 +123,18 @@ describe('dispatchTerminalNotification per-worktree mute', () => {
 
     expect(requested).toBe(false)
     expect(dispatched).toEqual([])
+    expect(store.getState().worktreesByRepo.repo1?.[0]?.isUnread).toBe(true)
+  })
+
+  it("does not take another agent's restored turn for this completion's restatement", () => {
+    seed({}, true)
+
+    dispatchTerminalNotification(WORKSPACE, {
+      source: 'agent-task-complete',
+      terminalTitle: 'claude',
+      paneKey: PANE_KEY
+    })
+
     expect(store.getState().worktreesByRepo.repo1?.[0]?.isUnread).toBe(true)
   })
 })

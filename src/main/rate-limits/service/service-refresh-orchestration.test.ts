@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { RateLimitService } from './rate-limit-service'
+import { parseClaudeStatusLineBody } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 import { fetchActiveClaudeRateLimits } from '../providers/claude/claude-active-usage-fetch'
 import { fetchInactiveClaudeAccountUsage } from '../providers/claude/claude-managed-account-usage'
 import {
@@ -98,7 +99,7 @@ describe('RateLimitService', () => {
     void service.refreshForClaudeAccountChange('acct-b')
     reads[1].resolve(okProvider('claude', 11))
     await flushMicrotasks(60)
-    expect(service.getState().claude?.session?.usedPercent).toBe(55)
+    expect((await service.getState()).claude?.session?.usedPercent).toBe(55)
   })
 
   it('keeps live Claude usage through refreshes without reading OAuth usage when disabled', async () => {
@@ -115,7 +116,7 @@ describe('RateLimitService', () => {
     service.start({ fetchImmediately: false })
     await flushMicrotasks(20)
     service.stop()
-    expect(service.getState().claude).toMatchObject({
+    expect((await service.getState()).claude).toMatchObject({
       session: null,
       weekly: null,
       status: 'unavailable'
@@ -129,13 +130,13 @@ describe('RateLimitService', () => {
     await service.refresh()
     await service.fetchInactiveClaudeAccountsOnOpen()
 
-    expect(service.getState().claude).toMatchObject({
+    expect((await service.getState()).claude).toMatchObject({
       session: { usedPercent: 33 },
       weekly: { usedPercent: 62 },
       status: 'ok',
       usageMetadata: { source: 'live-session' }
     })
-    expect(service.getState().inactiveClaudeAccounts).toEqual([])
+    expect((await service.getState()).inactiveClaudeAccounts).toEqual([])
     expect(service.usageReadingAccount('claude')).toEqual({
       home: '/claude/account-a',
       provenance: '/claude/account-a'
@@ -146,14 +147,14 @@ describe('RateLimitService', () => {
 
     home = '/claude/account-b'
     await service.refreshForClaudeAccountChange('outgoing')
-    expect(service.getState().claude?.session).toBeNull()
-    expect(service.getState().claude?.status).toBe('unavailable')
+    expect((await service.getState()).claude?.session).toBeNull()
+    expect((await service.getState()).claude?.status).toBe('unavailable')
     service.ingestLiveClaudeRateLimits({
       configDir: '/claude/account-b',
       fiveHour: { used_percentage: 12 },
       sevenDay: null
     })
-    expect(service.getState().claude?.session?.usedPercent).toBe(12)
+    expect((await service.getState()).claude?.session?.usedPercent).toBe(12)
     expect(service.usageReadingAccount('claude')).toEqual({
       home: '/claude/account-b',
       provenance: '/claude/account-b'
@@ -186,7 +187,7 @@ describe('RateLimitService', () => {
     reply.resolve(okProvider('claude', 90))
     await refresh
 
-    expect(service.getState().claude).toMatchObject({
+    expect((await service.getState()).claude).toMatchObject({
       session: { usedPercent: 41 },
       status: 'ok',
       usageMetadata: { source: 'live-session' }
@@ -222,21 +223,21 @@ describe('RateLimitService', () => {
       fiveHour: { used_percentage: 35 },
       sevenDay: null
     })
-    expect(service.getState().claude?.weekly?.usedPercent).toBe(50)
+    expect((await service.getState()).claude?.weekly?.usedPercent).toBe(50)
 
     enabled = false
     service.discardClaudeOAuthUsage()
     await service.refresh()
 
-    expect(service.getState().claude).toMatchObject({
+    expect((await service.getState()).claude).toMatchObject({
       session: { usedPercent: 35 },
       weekly: null,
       usageMetadata: { source: 'live-session' }
     })
-    expect(service.getState().claude?.fableWeekly).toBeFalsy()
-    expect(service.getState().claude?.extraUsage).toBeFalsy()
+    expect((await service.getState()).claude?.fableWeekly).toBeFalsy()
+    expect((await service.getState()).claude?.extraUsage).toBeFalsy()
     await service.refreshForClaudeAccountChange('outgoing')
-    expect(service.getState().claude?.session).toBeNull()
+    expect((await service.getState()).claude?.session).toBeNull()
   })
 
   it('discards pending inactive-account usage when polling is disabled', async () => {
@@ -260,8 +261,8 @@ describe('RateLimitService', () => {
     reply.resolve(okProvider('claude', 90))
     await refresh
 
-    expect(service.getState().inactiveClaudeAccounts).toEqual([])
-    expect(service.getState().claude).toMatchObject({
+    expect((await service.getState()).inactiveClaudeAccounts).toEqual([])
+    expect((await service.getState()).claude).toMatchObject({
       session: null,
       weekly: null,
       status: 'unavailable'
@@ -302,7 +303,7 @@ describe('RateLimitService', () => {
         fiveHour: { used_percentage: 15 },
         sevenDay: null
       })
-      expect(service.getState().claude?.session?.usedPercent).toBe(15)
+      expect((await service.getState()).claude?.session?.usedPercent).toBe(15)
       expect(service.usageReadingAccount('claude')).toEqual({
         home: '/claude/current',
         provenance: 'current'
@@ -330,7 +331,7 @@ describe('RateLimitService', () => {
       fiveHour: { used_percentage: 30 },
       sevenDay: null
     })
-    expect(service.getState().claude).toMatchObject({
+    expect((await service.getState()).claude).toMatchObject({
       session: { usedPercent: 30 },
       planType: 'max_20x',
       usageMetadata: { source: 'live-session', readingAccount }
@@ -345,9 +346,54 @@ describe('RateLimitService', () => {
       fiveHour: { used_percentage: 40 },
       sevenDay: null
     })
-    expect(service.getState().claude?.session?.usedPercent).toBe(40)
-    expect(service.getState().claude?.planType).toBeUndefined()
-    expect(service.getState().claude?.usageMetadata?.readingAccount).toBeUndefined()
+    expect((await service.getState()).claude?.session?.usedPercent).toBe(40)
+    expect((await service.getState()).claude?.planType).toBeUndefined()
+    expect((await service.getState()).claude?.usageMetadata?.readingAccount).toBeUndefined()
+  })
+  it('shows a redeemed Claude limit reset while idle sessions keep posting the old value', async () => {
+    mockFreshBackgroundProviderFetches()
+    const service = new RateLimitService()
+    service.setClaudeAuthPreparationResolver(async () => ({
+      configDir: '/claude/a',
+      envPatch: { CLAUDE_CONFIG_DIR: '/claude/a' },
+      provenance: 'profile:a'
+    }))
+    await service.refresh()
+    const resetsAt = Date.parse('2100-01-01T00:00:00Z') / 1000
+    const post = (sessionId: string, usedPercentage: number) => {
+      const event = parseClaudeStatusLineBody({
+        configDir: '/claude/a',
+        payload: JSON.stringify({
+          session_id: sessionId,
+          rate_limits: { five_hour: { used_percentage: usedPercentage, resets_at: resetsAt } }
+        })
+      })
+      if (event) {
+        service.ingestLiveClaudeRateLimits(event)
+      }
+    }
+    const shown = async () => (await service.getState()).claude?.session?.usedPercent
+
+    post('session-a', 85)
+    post('session-a', 90)
+    post('session-b', 40)
+    expect(await shown()).toBe(90)
+    post('session-c', 95)
+    expect(await shown()).toBe(95)
+    // A late post from a session whose own value rose is still an older reading, not a reset.
+    post('session-b', 50)
+    post('session-d', 97)
+    expect(await shown()).toBe(97)
+
+    post('session-a', 7)
+    expect(await shown()).toBe(7)
+    post('session-c', 95)
+    post('session-e', 60)
+    expect(await shown()).toBe(7)
+    // Another session catching up to the same reset is not a second one.
+    post('session-a', 20)
+    post('session-c', 9)
+    expect(await shown()).toBe(20)
   })
   it('keeps the account on the usage read right after redeeming a Codex reset', async () => {
     mockFreshBackgroundProviderFetches()
@@ -371,7 +417,7 @@ describe('RateLimitService', () => {
       codexHomePath: '/codex/a'
     })
     // The reply replaces the renderer's state, so it must name the account as the push does.
-    for (const codex of [service.getState().codex, state.codex]) {
+    for (const codex of [(await service.getState()).codex, state.codex]) {
       expect(codex).toMatchObject({ planType: 'pro', usageMetadata: { readingAccount } })
     }
   })

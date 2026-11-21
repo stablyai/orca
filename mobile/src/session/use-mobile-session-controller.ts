@@ -16,6 +16,7 @@ import { useMobileSessionDocumentReaders } from '../files/session-documents/use-
 import { useMobileSessionDiffComments } from '../source-control/review/review-notes/use-mobile-session-diff-comments'
 import { useMobileSessionMarkdownActions } from '../files/session-documents/use-mobile-session-markdown-actions'
 import { useMobileSessionTabReconciliation } from './tabs/use-mobile-session-tab-reconciliation'
+import { useMarkViewedAgentRead } from './tabs/use-mark-viewed-agent-read'
 import { useMobileSessionLifecycle } from './use-mobile-session-lifecycle'
 import { useMobileSessionKeyboardState } from '../terminal/session/input-controls/use-mobile-session-keyboard-state'
 import { useMobileSessionStartup } from './use-mobile-session-startup'
@@ -104,6 +105,7 @@ export function useMobileSessionController() {
   const tabSwitching = Object.assign(keyboardState, useMobileSessionTabSwitching(keyboardState))
   const openNativeSession = useMobileStructuredSessionOpening(tabSwitching)
   useNotificationPaneNavigation({ ...tabSwitching, openNativeSession })
+  useMarkViewedAgentRead(tabSwitching.client, tabSwitching.connState, tabSwitching.activeSessionTab)
   const terminalWebview = Object.assign(tabSwitching, useMobileSessionTerminalWebview(tabSwitching))
   const terminalSendActions = Object.assign(
     terminalWebview,

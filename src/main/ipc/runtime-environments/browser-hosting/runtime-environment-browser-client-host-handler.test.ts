@@ -136,8 +136,19 @@ describe('runtime environment browser client host handler', () => {
     expect(startHostMock).not.toHaveBeenCalled()
   })
 
-  // Probe failure falls back to server placement; this guard alone detects concurrent manual disconnect.
-  it('rejects a manual disconnect that lands while the probe is in flight', async () => {
+  it('rejects manual disconnect before and during a placement probe', async () => {
+    register(true)
+    const prepare = handler<{ selector: string }, unknown>(
+      'runtimeEnvironments:prepareBrowserClientHostPlacement'
+    )
+    manuallyDisconnectedMock.mockReturnValue(true)
+    await expect(prepare(null, { selector: 'environment-a' })).rejects.toThrow(
+      'runtime_manually_disconnected'
+    )
+    expect(getRuntimeEnvironmentStatusMock).not.toHaveBeenCalled()
+    expect(startHostMock).not.toHaveBeenCalled()
+
+    manuallyDisconnectedMock.mockReturnValue(false)
     getRuntimeEnvironmentStatusMock.mockImplementation(async () => {
       manuallyDisconnectedMock.mockReturnValue(true)
       return {
@@ -147,28 +158,10 @@ describe('runtime environment browser client host handler', () => {
         _meta: { runtimeId: 'runtime-a' }
       }
     })
-    register(true)
-    const prepare = handler<{ selector: string }, unknown>(
-      'runtimeEnvironments:prepareBrowserClientHostPlacement'
-    )
 
     await expect(prepare(null, { selector: 'environment-a' })).rejects.toThrow(
       'runtime_manually_disconnected'
     )
-    expect(startHostMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects manual disconnect before probing or attaching', async () => {
-    manuallyDisconnectedMock.mockReturnValue(true)
-    register(true)
-    const prepare = handler<{ selector: string }, unknown>(
-      'runtimeEnvironments:prepareBrowserClientHostPlacement'
-    )
-
-    await expect(prepare(null, { selector: 'environment-a' })).rejects.toThrow(
-      'runtime_manually_disconnected'
-    )
-    expect(getRuntimeEnvironmentStatusMock).not.toHaveBeenCalled()
     expect(startHostMock).not.toHaveBeenCalled()
   })
 })

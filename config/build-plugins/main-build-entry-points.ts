@@ -67,6 +67,9 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   'codex-history-disk-usage-worker-entry': resolve(
     'src/main/codex/history/disk-usage/codex-history-disk-usage-worker-entry.ts'
   ),
+  'codex-rollout-history-references-worker-entry': resolve(
+    'src/main/codex/history/cleanup/codex-rollout-history-references-worker-entry.ts'
+  ),
   // Launch trust grants edit large Codex configs and the ownership ledger; keep them off main.
   'codex-project-trust-worker-entry': resolve(
     'src/main/codex/trust/project-trust/codex-project-trust-worker-entry.ts'

@@ -1,7 +1,7 @@
 import React from 'react'
 import { FolderMinus, House, Server, ServerOff, Star, Trash2 } from 'lucide-react'
 
-import { RepoIconGlyph } from '@/components/repo/repo-icon'
+import { ProjectChip } from '@/components/repo/project-chip'
 import { Badge } from '@/components/ui/badge'
 import { AgentCommandFailedChip } from '@/components/agent-command-failure/AgentCommandFailedChip'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -9,7 +9,6 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
-import { resolveRepoHeaderColor } from '../../worktree-list/rows/project-header-color'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import { formatSparseDirectoryPreview } from '../controller/worktree-card-model'
 
@@ -18,26 +17,12 @@ export function WorktreeCardRepoChip({ repo }: { repo: Repo }): React.JSX.Elemen
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span
-          className="inline-flex h-4 max-w-24 shrink-0 items-center justify-center gap-0.5 rounded-[4px] border border-worktree-sidebar-border bg-worktree-sidebar-accent/55 px-0.5"
+        <ProjectChip
+          repo={repo}
           aria-label={t('auto.components.sidebar.WorktreeCard.35ccfe2475', 'Project {{value0}}', {
             value0: repo.displayName
           })}
-        >
-          {/* Why: emoji glyphs scale with font size (0.9em), so pin it to fit the 12px icon box. */}
-          <span className="inline-flex size-3 shrink-0 items-center justify-center text-2xs">
-            <RepoIconGlyph
-              repoIcon={repo.repoIcon}
-              color={resolveRepoHeaderColor(repo.badgeColor)}
-              className="size-full"
-              iconClassName="size-3"
-            />
-          </span>
-          {/* Why: the default folder icon is the same for every project, so the name tells them apart. */}
-          <span className="min-w-0 truncate text-3xs leading-none text-muted-foreground lowercase">
-            {repo.displayName}
-          </span>
-        </span>
+        />
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={8}>
         {repo.displayName}

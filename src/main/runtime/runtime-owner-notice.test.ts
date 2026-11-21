@@ -18,9 +18,10 @@ function controller() {
   const banners: { title: string; body: string }[] = []
   setRuntimeDesktopSurface({
     showNotification: (input) => banners.push(input) > 0,
-    findWindowById: () => null,
-    onIpc: () => {},
-    removeIpcListener: () => {}
+    hasWindow: () => false,
+    hasLiveRenderer: () => false,
+    sendToWindow: () => false,
+    requestRenderer: () => Promise.reject(new Error('No renderer window available'))
   })
   const notifications = new RuntimeMobileNotificationController()
   const sent: MobileNotificationEvent[] = []

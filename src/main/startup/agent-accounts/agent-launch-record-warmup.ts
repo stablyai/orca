@@ -6,7 +6,7 @@ export const AGENT_LAUNCH_RECORD_WARMUP_DELAY_MS = 1_500
 
 /** Warm once startup settles and a launch-capable client connects, avoiding first-launch disk cost. */
 function markStartupSettled(): void {
-  state.runtime?.noteAgentLaunchStartupSettled()
+  state.core.runtime?.noteAgentLaunchStartupSettled()
 }
 
 function warmLater(): void {

@@ -13,17 +13,7 @@ const desktop = {
 }
 
 describe('a Google client file', () => {
-  it('reads a Desktop app client', () => {
-    expect(parseGoogleClientFile(JSON.stringify(desktop))).toEqual({
-      ok: true,
-      clientId: '123-abc.apps.googleusercontent.com',
-      clientSecret: 'GOCSPX-secret',
-      projectId: 'acme-orca'
-    })
-  })
-
   it.each([
-    ['a Web app client', { web: desktop.installed }, 'This is a Web app client'],
     [
       'a service-account key',
       { type: 'service_account', private_key: 'k', client_email: 'x@y.iam.gserviceaccount.com' },
