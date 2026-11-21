@@ -1950,6 +1950,32 @@
       "title": "Automatic updates",
       "description": "On supported desktop installs, Orca downloads eligible updates on its regular check schedule and restarts to install them automatically.",
       "info": "About automatic updates"
+    },
+    "transfer": {
+      "title": "Export and import settings",
+      "searchDescription": "Export your settings to a file and import them on another device.",
+      "keywords": {
+        "export": "export",
+        "import": "import",
+        "backup": "backup",
+        "restore": "restore",
+        "sync": "sync",
+        "migrate": "migrate",
+        "device": "device"
+      },
+      "groupTitle": "Settings File",
+      "importFailed": {
+        "unsupportedVersion": "This file comes from a newer Orca. Update Orca, then import it again.",
+        "notSettings": "This is not an Orca settings file.",
+        "unreadable": "Orca could not read this file."
+      },
+      "exportFailed": "Orca could not save the settings file.",
+      "exported": "Exported {{count}} settings.",
+      "nothingToImport": "The file has no settings to import.",
+      "imported": "Imported {{count}} settings.",
+      "description": "Move appearance, editor, terminal and agent preferences to another device. Accounts, tokens and paths stay on this device.",
+      "export": "Export",
+      "import": "Import"
     }
   },
   "menu": {

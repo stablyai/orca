@@ -5,6 +5,10 @@ import type {
 } from '../../../shared/terminal-themes/terminal-custom-themes'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type {
+  SettingsExportResult,
+  SettingsImportReadResult
+} from '../../../shared/settings/portable-settings'
+import type {
   TerminalConfigImportPreview,
   TerminalConfigImportSource
 } from '../../../shared/terminal/appearance/terminal-config-import-preview'
@@ -24,6 +28,8 @@ export type SettingsApi = {
   ) => Promise<TerminalConfigImportPreview>
   previewKittyImport: (source?: TerminalConfigImportSource) => Promise<TerminalConfigImportPreview>
   previewWarpThemeImport: (source: WarpThemeImportSource) => Promise<WarpThemeImportPreview>
+  exportToFile: () => Promise<SettingsExportResult>
+  readImportFile: () => Promise<SettingsImportReadResult>
   onChanged: (callback: (updates: Partial<GlobalSettings>) => void) => () => void
 }
 
