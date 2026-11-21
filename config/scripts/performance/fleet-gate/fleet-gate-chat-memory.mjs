@@ -12,13 +12,24 @@ import { closeStartupDialogs } from './fleet-gate-scenarios.mjs'
 
 const CHAT_MEMORY_LOW = 10
 const CHAT_MEMORY_HIGH = 200
-// Settled same-build runs on the seed spread ±0.25 MB/chat; a retained 1 MB per chat reads ~1.
+// Pressure-released same-build runs on the seed stay well under this; a retained 1 MB per chat reads ~1.
 const MAX_MAIN_MB_PER_CHAT = 0.25
+const RELEASE_WAIT_MS = 60_000
 const SAMPLE_WINDOW_MS = 60_000
 const SAMPLE_EVERY_MS = 5_000
 
-/** Lowest main RSS over a minute: transient garbage from the last burst counts least. */
-async function sampleMainRssMb(electronApp) {
+/**
+ * Main RSS once V8 has handed back the freed pages of the last chat burst (a memory-pressure signal, then a
+ * minute), as the lowest of 12 samples. Without it those pages linger for minutes and swamp the slope.
+ */
+async function sampleMainRssMb(electronApp, page) {
+  const cdp = await page.context().newCDPSession(page)
+  try {
+    await cdp.send('Memory.simulatePressureNotification', { level: 'critical' })
+  } finally {
+    await cdp.detach().catch(() => {})
+  }
+  await new Promise((resolve) => setTimeout(resolve, RELEASE_WAIT_MS))
   let lowest = Infinity
   const deadline = Date.now() + SAMPLE_WINDOW_MS
   while (Date.now() < deadline) {
@@ -68,7 +79,7 @@ export async function chatMemoryOnce({
         )
       }
       await new Promise((resolve) => setTimeout(resolve, options.chatSettleMs))
-      return sampleMainRssMb(copy.app)
+      return sampleMainRssMb(copy.app, copy.page)
     }
     result.lowRssMb = await step(CHAT_MEMORY_LOW, 0)
     result.highRssMb = await step(CHAT_MEMORY_HIGH - CHAT_MEMORY_LOW, CHAT_MEMORY_LOW)

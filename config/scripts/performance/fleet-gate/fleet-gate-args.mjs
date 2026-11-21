@@ -18,7 +18,7 @@ export function parseArgs(argv) {
     settleMs: 120_000,
     windowMs: 30_000,
     idleWindowMs: 60_000,
-    chatSettleMs: 300_000,
+    chatSettleMs: 120_000,
     scenarios: null,
     force: false,
     pathsOnly: false,
