@@ -2,12 +2,8 @@
 // receiving bot, whatever address named it. Each refusal is one sentence that says what to do instead.
 // Whom the request is for travels with it as information and never refuses it: every bot runs as the owner.
 import type { Bot } from '../../shared/bot-types'
-import {
-  botAddressArgument,
-  botOfAddress,
-  botSendTarget,
-  type BotRosterEntry
-} from '../../shared/bot-roster'
+import { botAddressArgument, botOfAddress, botSendTarget } from '../../shared/bot-roster'
+import type { CachedPairedBotRoster } from './paired-bot-rosters'
 
 /** A bot takes these kinds of mail from outside itself; status is information, with no job in it. */
 export const BOT_REQUEST_PURPOSES = ['status', 'handoff', 'question'] as const
@@ -39,7 +35,7 @@ export function isBotRequestPurpose(type: string | undefined): type is BotReques
 export function botNotFound(
   name: string,
   bots: readonly Pick<Bot, 'name'>[],
-  paired?: readonly BotRosterEntry[]
+  paired?: readonly CachedPairedBotRoster[]
 ): BotRequestRefusal {
   const elsewhere = paired ? pairedSendsTo(name, paired) : null
   if (elsewhere) {
@@ -56,16 +52,10 @@ export function botNotFound(
 }
 
 // Read from the cache only: a send never waits on a paired computer to refuse.
-function pairedSendsTo(name: string, paired: readonly BotRosterEntry[]): string | null {
-  const byServer = new Map<string, BotRosterEntry[]>()
-  for (const entry of paired) {
-    if (entry.server) {
-      byServer.set(entry.server.on, [...(byServer.get(entry.server.on) ?? []), entry])
-    }
-  }
-  const matches = [...byServer.values()].flatMap((entries) => {
-    const match = botOfAddress(entries, name)
-    return match?.server ? [{ name: match.name, server: match.server }] : []
+function pairedSendsTo(name: string, paired: readonly CachedPairedBotRoster[]): string | null {
+  const matches = paired.flatMap(({ server, bots }) => {
+    const match = botOfAddress(bots, name)
+    return match ? [{ name: match.name, server }] : []
   })
   if (matches.length === 0) {
     return null

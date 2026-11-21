@@ -86,3 +86,15 @@ it('answers from the last read without waiting, reads again behind it, and keeps
   const requested = runtime.callOrchestrationWorkerServer.mock.calls.map(([id]) => id)
   expect(new Set(requested)).toEqual(air)
 })
+
+it("keeps an unreachable computer's last answer under the name and --on it has now", () => {
+  const cache = pairedBotRosterCache(servers({}))
+  const entry = { ...ENTRY, agent: 'codex' as const, server: { name: 'M4', on: 'M4' } }
+  cache.remember([{ environmentId: 'env-a', server: { name: 'M4', on: 'M4' }, bots: [entry] }])
+  cache.remember([
+    { environmentId: 'env-a', server: { name: 'Build Box', on: 'env-a' }, unreachable: true }
+  ])
+  expect(cache.lastRead()).toEqual([
+    { environmentId: 'env-a', server: { name: 'Build Box', on: 'env-a' }, bots: [entry] }
+  ])
+})

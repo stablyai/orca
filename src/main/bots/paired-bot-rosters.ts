@@ -72,25 +72,37 @@ export type KnownPairedBotRoster = {
   bots: readonly BotRosterEntry[] | null
 }
 
+/** A paired server's bots as one read answered them, under its current name and `--on`. */
+export type CachedPairedBotRoster = {
+  environmentId: string
+  server: BotRosterServer
+  bots: readonly BotRosterEntry[]
+}
+
 export type PairedBotRosterCache = {
   /** The asked servers as last read, refreshing them in the background for the next ask. */
   read(servers: ReadonlySet<string>): Promise<KnownPairedBotRoster[]>
-  /** Every entry any read answered with, without listing servers or touching the network. */
-  lastRead(): readonly BotRosterEntry[]
+  /** Each server any read answered, without listing servers or touching the network. */
+  lastRead(): readonly CachedPairedBotRoster[]
   /** Keeps what a full read just answered, so the next ask needn't wait on it. */
   remember(rosters: readonly PairedBotRoster[]): void
 }
 
 /** The paired servers' bots without waiting on the network: what each was last read to hold, while
  *  a read in the background brings it up to date for the next ask. A server that can't be read keeps
- *  its last answer. */
+ *  its last answer, under the name and `--on` it has now. */
 export function pairedBotRosterCache(runtime: PairedBotServers): PairedBotRosterCache {
-  const known = new Map<string, readonly BotRosterEntry[]>()
+  const known = new Map<string, CachedPairedBotRoster>()
   const reading = new Set<string>()
   const remember = (rosters: readonly PairedBotRoster[]): void => {
     for (const roster of rosters) {
-      if ('bots' in roster) {
-        known.set(roster.environmentId, roster.bots)
+      const bots = 'bots' in roster ? roster.bots : known.get(roster.environmentId)?.bots
+      if (bots) {
+        known.set(roster.environmentId, {
+          environmentId: roster.environmentId,
+          server: roster.server,
+          bots
+        })
       }
     }
   }
@@ -113,10 +125,10 @@ export function pairedBotRosterCache(runtime: PairedBotServers): PairedBotRoster
       return asked.map(({ environmentId, name }) => ({
         environmentId,
         server: { name, on: serverSelector(all, environmentId, name) },
-        bots: known.get(environmentId) ?? null
+        bots: known.get(environmentId)?.bots ?? null
       }))
     },
-    lastRead: () => [...known.values()].flat(),
+    lastRead: () => [...known.values()],
     remember
   }
 }
