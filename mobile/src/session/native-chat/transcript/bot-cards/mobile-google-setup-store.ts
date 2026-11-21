@@ -19,7 +19,8 @@ export type MobileGoogleSetup = { run: GoogleSetupRun | null; blocker: GoogleSet
 type Reading = { run: GoogleSetupRun | null; blocker?: unknown }
 
 type Entry = {
-  client: RpcClient
+  /** Held only while a card shows, so a closed or replaced client isn't kept for the app's life. */
+  client: RpcClient | null
   botId: string
   setup: MobileGoogleSetup | null
   readers: number
@@ -32,6 +33,8 @@ type Entry = {
   /** Raised per request; a reply older than the last one applied is dropped. */
   asked: number
   applied: number
+  /** Raised when the last card leaves; a read from an earlier showing is dropped. */
+  showing: number
 }
 
 // Every kind and button this build words; a Record so a new one on the type fails the typecheck here.
@@ -122,13 +125,17 @@ function apply(key: string, entry: Entry, ticket: number, reading: Reading): voi
 
 function read(key: string): void {
   const entry = entries.get(key)
-  if (!entry) {
+  if (!entry?.client) {
     return
   }
   const ticket = ++entry.asked
+  const showing = entry.showing
   void googleSetupRead
     .request(entry.client, { botId: entry.botId })
     .then((response) => {
+      if (entry.showing !== showing) {
+        return
+      }
       entry.replied = true
       apply(key, entry, ticket, googleSetupRead.interpret(response))
     })
@@ -137,9 +144,9 @@ function read(key: string): void {
 }
 
 /** Re-reads while a card shows: on the host's notices, a reconnect and the foreground. */
-function startRefresh(key: string, entry: Entry): () => void {
+function startRefresh(key: string, entry: Entry, client: RpcClient): () => void {
   return startHostBotRefresh({
-    client: entry.client,
+    client,
     appState: AppState,
     refresh: () => read(key),
     listed: () => entry.replied,
@@ -148,10 +155,10 @@ function startRefresh(key: string, entry: Entry): () => void {
   })
 }
 
-/** Kept after the last card leaves, so scrolling one back shows it at once; it reads again then. */
+/** The setup outlives the last card, so scrolling one back shows it at once; it reads again then. */
 function attach(key: string, client: RpcClient, botId: string): () => void {
   let entry = entries.get(key)
-  if (entry && entry.client !== client) {
+  if (entry?.client && entry.client !== client) {
     entry.stop?.()
     entries.delete(key)
     entry = undefined
@@ -166,18 +173,24 @@ function attach(key: string, client: RpcClient, botId: string): () => void {
       stop: null,
       known: new Set(),
       asked: 0,
-      applied: 0
+      applied: 0,
+      showing: 0
     }
     entries.set(key, entry)
   }
   const attached = entry
+  attached.client = client
   attached.readers += 1
-  attached.stop ??= startRefresh(key, attached)
+  attached.stop ??= startRefresh(key, attached, client)
   return () => {
     attached.readers -= 1
     if (attached.readers === 0) {
       attached.stop?.()
       attached.stop = null
+      attached.client = null
+      // The next showing may read through another client; it waits for that client's own reply.
+      attached.replied = false
+      attached.showing += 1
     }
   }
 }

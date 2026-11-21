@@ -2396,7 +2396,8 @@
       "shellCmd": "CMD Prompt",
       "shellGitBash": "Git Bash",
       "shellWsl": "WSL",
-      "terminalWithShell": "Terminal: {{shell}}"
+      "terminalWithShell": "Terminal: {{shell}}",
+      "more": "More"
     },
     "tabStrip": {
       "newTab": "New tab",
@@ -3204,7 +3205,8 @@
       "attachedImage": "Attached image",
       "removeImage": "Remove image",
       "uploadingFile": "Uploading {{name}}",
-      "removeFile": "Remove {{name}}"
+      "removeFile": "Remove {{name}}",
+      "uploadingImage": "Uploading image"
     },
     "useImageUpload": {
       "disconnected": "Attach failed (disconnected)",
@@ -5319,7 +5321,14 @@
       "anyFallback": "On an event"
     },
     "chatStartFailed": "Couldn’t start the chat",
-    "newChatWith": "New chat with {{name}}",
+    "newHomeChat": {
+      "action": "New Home Chat",
+      "hint": "starts fresh",
+      "title": "Start a new Home Chat?",
+      "description": "{{name}} keeps its soul and memory, but not this conversation."
+    },
+    "sideChatsWith": "Side chats with {{name}}",
+    "newAgentChat": "New {{agent}} Chat",
     "upNext": {
       "title": "Suggestions",
       "looked": "Looked {{time}}",
@@ -5660,7 +5669,11 @@
         "snoozed": "snoozed this until {{when}}",
         "snoozedBare": "snoozed this",
         "unsnoozed": "unsnoozed this",
-        "snoozeEnded": "Back from snooze early"
+        "snoozeEnded": "Back from snooze early",
+        "notSent": "Not sent.",
+        "retry": "Retry",
+        "discard": "Discard",
+        "mayHaveArrived": "May have arrived."
       },
       "comment": {
         "offline": "{{host}} is offline. Your comment is kept; Comment works again when it’s back.",
@@ -5706,7 +5719,10 @@
         "activity": "Activity",
         "showEarlier": "Show earlier",
         "showLess": "Show less",
-        "showMore": "Show more"
+        "showMore": "Show more",
+        "placeOf": "{{index}} of {{total}}",
+        "previous": "Previous item",
+        "next": "Next item"
       },
       "readFailedShort": "Couldn’t load items.",
       "lastRead": "Showing the last items read.",
@@ -5795,7 +5811,8 @@
       "ask": {
         "recommended": "Recommended",
         "notNow": "Not now"
-      }
+      },
+      "readFailedClosedPage": "Couldn’t read more closed items."
     },
     "needs": {
       "permissionTool": "Permission · {{tool}}",
@@ -5965,6 +5982,43 @@
     },
     "errors": {
       "generic": "Something went wrong. Try again."
+    },
+    "firstScreen": {
+      "stepCreate": "Create bot",
+      "startAgent": "Start {{agent}}",
+      "stepReply": "First message",
+      "retryFailed": "Could not try again. Try in a moment.",
+      "subtitle": "Your new bot · runs your {{agent}}",
+      "setup": "Setup",
+      "failed": "Couldn’t finish setting up",
+      "tryAgain": "Try again",
+      "reading": "Getting to know your setup…",
+      "read": "Getting to know your setup",
+      "namesMore": "{{names}} and {{count}} more",
+      "projectsReading": "Projects: looking at what you have in Orca…",
+      "projectsDone": "Looked at your projects",
+      "projectsNone": "No projects in Orca yet",
+      "projectsOne": "Found 1 project: {{names}}",
+      "projectsMany": "Found {{count}} projects: {{names}}",
+      "githubReading": "GitHub: reading your open PRs…",
+      "githubDone": "GitHub: looked at your work",
+      "githubOne": "GitHub: 1 open PR of yours",
+      "githubMany": "GitHub: {{count}} open PRs of yours",
+      "linearReading": "Linear: reading your open issues…",
+      "linearDone": "Linear: looked at your issues",
+      "linearMore": "Linear: {{count}}+ open issues assigned to you",
+      "linearOne": "Linear: 1 open issue assigned to you",
+      "linearMany": "Linear: {{count}} open issues assigned to you",
+      "workspacesReading": "Workspaces: looking at what your agents are doing…",
+      "workspacesDone": "Looked at your workspaces",
+      "workspacesNone": "No workspaces with an agent open",
+      "workspacesOne": "Workspaces: 1 with an agent open",
+      "workspacesMany": "Workspaces: {{count}} with an agent open",
+      "toolsReading": "Your tools: MCP servers…",
+      "toolsDone": "Looked at your MCP servers",
+      "toolsNone": "No MCP servers yet",
+      "toolsOne": "1 MCP server: {{names}}",
+      "toolsMany": "{{count}} MCP servers: {{names}}"
     }
   },
   "mobileWebShell": {
