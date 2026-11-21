@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { AccountsSnapshot, ProviderRateLimits } from '../accounts-snapshot'
+import {
+  decodeAccountsSnapshot,
+  type AccountsSnapshot,
+  type ProviderRateLimits
+} from '../accounts-snapshot'
 import { getSystemDefaultProviderUsage } from './usage-selectors'
 
 function claudeReading(usedPercent: number): ProviderRateLimits {
@@ -14,10 +18,12 @@ function claudeReading(usedPercent: number): ProviderRateLimits {
 }
 
 function snapshot(activeAccountId: string | null): AccountsSnapshot {
-  return {
+  return decodeAccountsSnapshot({
     claude: { accounts: [], activeAccountId },
+    codex: { accounts: [], activeAccountId: null },
     rateLimits: {
       claude: claudeReading(80),
+      codex: null,
       inactiveClaudeAccounts: [
         {
           accountId: 'claude-system-default',
@@ -25,9 +31,10 @@ function snapshot(activeAccountId: string | null): AccountsSnapshot {
           updatedAt: 1,
           isFetching: false
         }
-      ]
+      ],
+      inactiveCodexAccounts: []
     }
-  } as unknown as AccountsSnapshot
+  })
 }
 
 describe('getSystemDefaultProviderUsage', () => {

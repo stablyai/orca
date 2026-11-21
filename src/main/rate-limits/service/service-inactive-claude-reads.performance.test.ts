@@ -30,16 +30,21 @@ vi.mock('../../zcode/zcode-plan-api-key-store', () => ({ hasZcodePlanApiKey: asy
 
 const SYSTEM_DEFAULT = { configDir: '/home/me/.claude', envPatch: {}, provenance: 'system' }
 
+let systemDefaultUsed = 40
+
 beforeEach(() => {
+  systemDefaultUsed = 40
   vi.mocked(fetchActiveClaudeRateLimits)
     .mockReset()
     .mockImplementation(async (options) =>
-      okProvider('claude', options?.authPreparation?.configDir === '/profiles/own-login' ? 12 : 40)
+      okProvider(
+        'claude',
+        options?.authPreparation?.configDir === '/profiles/own-login' ? 12 : systemDefaultUsed
+      )
     )
 })
 
-// #46002 follow-up: System default and legacy accounts sharing its login were each read again.
-it('reads each Claude login once across the selected and unselected accounts', async () => {
+function legacyAccountOnSystemDefault(): RateLimitService {
   const service = new RateLimitService()
   // The selected legacy account runs on System default's login.
   service.setClaudeAuthPreparationResolver(async () => SYSTEM_DEFAULT)
@@ -48,20 +53,48 @@ it('reads each Claude login once across the selected and unselected accounts', a
     { id: 'own-login' },
     { id: CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID }
   ])
+  return service
+}
 
-  await service.refreshClaudeForTarget()
-  await service.fetchInactiveClaudeAccountsOnOpen()
-
-  expect(fetchActiveClaudeRateLimits).toHaveBeenCalledTimes(2)
-  const usedByAccount = Object.fromEntries(
+async function inactiveUsage(
+  service: RateLimitService
+): Promise<Record<string, number | undefined>> {
+  return Object.fromEntries(
     (await service.getState()).inactiveClaudeAccounts.map((entry) => [
       entry.accountId,
       entry.rateLimits?.session?.usedPercent
     ])
   )
-  expect(usedByAccount).toEqual({
+}
+
+// #46002 follow-up: System default and legacy accounts sharing its login were each read again.
+it('reads each Claude login once across the selected and unselected accounts', async () => {
+  const service = legacyAccountOnSystemDefault()
+
+  await service.refreshClaudeForTarget()
+  await service.fetchInactiveClaudeAccountsOnOpen()
+
+  expect(fetchActiveClaudeRateLimits).toHaveBeenCalledTimes(2)
+  expect(await inactiveUsage(service)).toEqual({
     legacy: 40,
     'own-login': 12,
     [CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID]: 40
+  })
+})
+
+it('does not copy the pre-refresh reading while the selected login is being read again', async () => {
+  const service = legacyAccountOnSystemDefault()
+  await service.refreshClaudeForTarget()
+  systemDefaultUsed = 70
+  vi.mocked(fetchActiveClaudeRateLimits).mockClear()
+
+  await Promise.all([service.refreshClaudeForTarget(), service.fetchInactiveClaudeAccountsOnOpen()])
+
+  // The two unselected accounts on System default's home still share one read.
+  expect(fetchActiveClaudeRateLimits).toHaveBeenCalledTimes(3)
+  expect(await inactiveUsage(service)).toEqual({
+    legacy: 70,
+    'own-login': 12,
+    [CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID]: 70
   })
 })

@@ -195,7 +195,8 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     const reads = new Map<string, Promise<ProviderRateLimits>>()
     const active = this.state.claude
     const home = this.usageReadingAccounts.claude?.home
-    if (home && active && active.status !== 'fetching' && active.status !== 'idle') {
+    // Why idle only: a running refresh keeps the old reading in state until it lands.
+    if (!this.isFetching && home && (active?.status === 'ok' || active?.status === 'error')) {
       reads.set(home, Promise.resolve(active))
     }
     return reads
