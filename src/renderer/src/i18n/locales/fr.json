@@ -11809,7 +11809,7 @@
           "serverCountOne": "1 serveur jumelé",
           "fdd271abf0": "Serveurs Orca distants",
           "e4e5937469": "Rechercher des mises à jour",
-          "newerCount": "Version plus récente que celle de cette application : {{value0}}"
+          "newerCount": "Serveurs plus récents que cette application : {{value0}}"
         },
         "RemoteServerUpdateDialog": {
           "versionUnavailable": "Version indisponible",
