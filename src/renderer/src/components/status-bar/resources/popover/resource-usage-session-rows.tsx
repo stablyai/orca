@@ -130,7 +130,9 @@ export function WorktreeRow({
 }): React.JSX.Element {
   const t = useTranslate()
   const hasResources =
-    worktree.sessions.length > 0 || worktree.chats.length > 0 || worktree.browsers.length > 0
+    worktree.sessions.length > 0 ||
+    (worktree.chats?.length ?? 0) > 0 ||
+    worktree.browsers.length > 0
   // Why: synthetic buckets (orphan/unattributed) have no sidebar target to reveal; real and SSH-resolved worktrees stay navigable.
   const isSynthetic =
     worktree.worktreeId === ORPHAN_WORKTREE_ID || worktree.repoId === UNATTRIBUTED_REPO_ID
@@ -255,7 +257,7 @@ export function WorktreeRow({
       </div>
 
       {!isCollapsed &&
-        worktree.chats.map((chat) => (
+        worktree.chats?.map((chat) => (
           <ChatRow
             key={chat.agentSessionId}
             chat={chat}

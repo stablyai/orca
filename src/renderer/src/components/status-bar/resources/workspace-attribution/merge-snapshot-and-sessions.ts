@@ -120,7 +120,7 @@ export function mergeSnapshotAndSessions(
       isRemote: row.isRemote,
       ...(row.hostLabel ? { hostLabel: row.hostLabel } : {}),
       sessions,
-      chats: wt.chats ?? [],
+      chats: wt.chats,
       browsers: []
     })
   }
@@ -216,7 +216,6 @@ export function mergeSnapshotAndSessions(
         hasLocalSamples: false,
         isRemote,
         sessions: [],
-        chats: [],
         browsers: []
       }
       appendWorktreeRow(repo, row)
@@ -257,7 +256,6 @@ export function mergeSnapshotAndSessions(
         hasLocalSamples: false,
         isRemote: resolveResourceWorkspaceHost(ctx, worktreeId, worktree.repoId).isRemote,
         sessions: [],
-        chats: [],
         browsers: []
       }
       appendWorktreeRow(repo, row)
