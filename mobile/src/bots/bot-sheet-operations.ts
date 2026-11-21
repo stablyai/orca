@@ -66,6 +66,17 @@ export const botHomeChatReset = bindDeferredRpcOperation(
   })
 )
 
+/** Sends a wait's run that couldn't start into its chat, once ever; the host refuses a second. */
+export const botRunSendAgain = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.send-run-again',
+    method: 'bots.sendRunAgain',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('bot-run-sent-again', z.looseObject({ sessionId: z.string().min(1) }))
+  })
+)
+
 export type SheetActivity = BotActivityView
 export type SheetActivityRow = BotActivityViewRow
 export type SheetActivityOrigin = BotActivityViewOrigin
