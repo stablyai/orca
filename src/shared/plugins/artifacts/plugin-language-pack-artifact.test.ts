@@ -4,14 +4,12 @@ import { describe, expect, it } from 'vitest'
 import { parsePluginLanguagePackArtifact } from './plugin-language-pack-artifact'
 
 function catalogReplacing(path: string, text: string): Record<string, unknown> {
-  return path
-    .split('.')
-    .reduceRight<Record<string, unknown>>(
-      (value, segment, index, segments) => ({
-        [segment]: index === segments.length - 1 ? text : value
-      }),
-      {}
-    )
+  return path.split('.').reduceRight<Record<string, unknown>>(
+    (value, segment, index, segments) => ({
+      [segment]: index === segments.length - 1 ? text : value
+    }),
+    {}
+  )
 }
 
 const PERMISSION_PILL_CONTROLS = join(
@@ -22,7 +20,10 @@ const PERMISSION_PILL_CONTROLS = join(
 /** Every key the composer permission pill and its menu render, read from the source itself. */
 function permissionPillKeys(): string[] {
   const keys = new Set<string>()
-  for (const file of ['NativeChatPermissionModePicker.tsx', 'native-chat-permission-mode-labels.ts']) {
+  for (const file of [
+    'NativeChatPermissionModePicker.tsx',
+    'native-chat-permission-mode-labels.ts'
+  ]) {
     const source = readFileSync(join(PERMISSION_PILL_CONTROLS, file), 'utf8')
     for (const match of source.matchAll(/\bt\(\s*'([^']+)'/g)) {
       keys.add(match[1])
