@@ -132,6 +132,13 @@ export const deliverKimiInstructions: AcpInstructionsDelivery = async ({ text, c
   return {}
 }
 
+// Goose takes no system prompt over ACP and rebuilds its own from the folder's `.goosehints` before
+// every model call, so a reopened chat reads what its latest launch wrote (checked live on 1.60.2).
+export const deliverGooseInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+  await writeFolderContextFile(cwd, '.goosehints', 'Goose', text)
+  return {}
+}
+
 // Copilot rebuilds them at every start from its instruction sources, so each launch passes the folder.
 // Only an instructions file applies at once: an AGENTS.md there counts as nested and loads on demand.
 export const deliverCopilotInstructions: AcpInstructionsDelivery = async ({
