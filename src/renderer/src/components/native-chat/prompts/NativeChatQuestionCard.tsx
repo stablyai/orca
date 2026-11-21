@@ -1,6 +1,5 @@
 import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
-import { useRef, useState, type RefObject, type ReactNode } from 'react'
-import { Check, Pencil } from 'lucide-react'
+import { useRef, useState, type RefObject } from 'react'
 import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
@@ -9,6 +8,7 @@ import { NativeChatQuestionOption } from './NativeChatQuestionOption'
 import { NativeChatQuestionConfirmButton } from './NativeChatQuestionConfirmButton'
 import {
   NativeChatQuestionSteps,
+  NativeChatQuestionTypedMark,
   useReportNativeChatQuestionDraft,
   foldNativeChatQuestionOnEscape,
   type NativeChatQuestionCardDraft,
@@ -31,11 +31,8 @@ import {
 
 export type NativeChatQuestionCardProps = {
   prompt: AskPrompt
-  heading?: string
-  context?: ReactNode
   disabled?: boolean
   requireAnswer?: boolean
-  submitLabel?: string
   /** Whether the snapshotted answer is still being delivered to the agent. */
   isSubmitting?: boolean
   isCancelling?: boolean
@@ -70,11 +67,8 @@ const CONFIRM_LABEL = {
 /** Single-select advances after a pick; multi-select confirms explicitly, and multi-question prompts retain earlier answers. */
 export function NativeChatQuestionCard({
   prompt,
-  heading,
-  context,
   disabled = false,
   requireAnswer = false,
-  submitLabel,
   isSubmitting = false,
   isCancelling = false,
   onAnswer,
@@ -293,9 +287,7 @@ export function NativeChatQuestionCard({
         look?.frameClassName
       )}
       aria-busy={isSubmitting}
-      onKeyDown={(event) =>
-        foldNativeChatQuestionOnEscape(event, blocked ? undefined : collapse)
-      }
+      onKeyDown={(event) => foldNativeChatQuestionOnEscape(event, blocked ? undefined : collapse)}
     >
       <div className="mx-auto flex min-h-0 w-full max-w-(--chat-content-max-width) flex-col px-3 pt-2 pb-4 sm:px-4">
         {total > 1 && !stepsInSurface ? steps() : null}
@@ -322,8 +314,8 @@ export function NativeChatQuestionCard({
             ) : null}
             <NativeChatQuestionCardHeader
               question={q.question}
-              heading={heading}
-              context={context}
+              heading={look?.heading}
+              context={look?.context}
               isSubmitting={blocked}
               isCancelling={isCancelling}
               onCollapse={collapse}
@@ -362,20 +354,7 @@ export function NativeChatQuestionCard({
                   freeTextInput?.multiline ? 'items-start' : 'items-center'
                 )}
               >
-                <span
-                  className={cn(
-                    'flex size-5.5 shrink-0 items-center justify-center rounded-md border',
-                    currentTypedAnswerChosen
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-question-option-border text-muted-foreground'
-                  )}
-                >
-                  {currentTypedAnswerChosen ? (
-                    <Check className="size-3.5" strokeWidth={3} />
-                  ) : (
-                    <Pencil className="size-3.5" />
-                  )}
-                </span>
+                <NativeChatQuestionTypedMark chosen={currentTypedAnswerChosen} />
                 {/* Deliver free text verbatim as a tool result; composer slash commands and autocomplete do not apply. */}
                 {freeTextInput?.multiline ? (
                   // The box draws the field's edge, so the bare field (not the bordered Textarea primitive) sits inside it.
@@ -438,12 +417,10 @@ export function NativeChatQuestionCard({
               label={
                 isSubmitting
                   ? t('components.native-chat.question.sending', 'Sending…')
-                  : (submitLabel ?? CONFIRM_LABEL[confirmLabel]())
+                  : (look?.submitLabel ?? CONFIRM_LABEL[confirmLabel]())
               }
               answered={confirmLabel !== 'skip' && !nothingToSend}
-              enterHint={
-                currentAnswered && !blocked && !q.multiSelect && !freeTextInput?.multiline
-              }
+              enterHint={currentAnswered && !blocked && !q.multiSelect && !freeTextInput?.multiline}
               disabled={blocked || nothingToSend || (requireAnswer && !currentAnswered)}
               onConfirm={() => confirm()}
             />

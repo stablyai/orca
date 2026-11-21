@@ -56,35 +56,40 @@ export function SessionLinkOwnerDecision({
         <div hidden={collapsed}>
           <NativeChatQuestionCard
             prompt={prompt}
-            heading={heading}
-            context={
-              <>
-                <p>
-                  {link.participants
-                    .map(
-                      (participant) =>
-                        `${tuiAgentDisplayName(participant.agent) ?? participant.agent} (${participant.role === 'reviewer' ? t('components.sessionLink.reviewerRole', 'reviewer') : t('components.sessionLink.implementerRole', 'implementer')})`
-                    )
-                    .join(' ↔ ')}
-                </p>
-                <details>
-                  <summary className="cursor-pointer">
-                    {t('components.sessionLink.goal', 'Goal')}
-                  </summary>
-                  <p className="mt-2 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-                    {link.story}
-                  </p>
-                </details>
-                {!atomic ? (
+            look={{
+              heading,
+              context: (
+                <>
                   <p>
-                    {t(
-                      'components.sessionLink.legacyAnswer',
-                      'This host needs two steps: send your answer, then continue the link. Update the desktop app for one-step continuation.'
-                    )}
+                    {link.participants
+                      .map(
+                        (participant) =>
+                          `${tuiAgentDisplayName(participant.agent) ?? participant.agent} (${participant.role === 'reviewer' ? t('components.sessionLink.reviewerRole', 'reviewer') : t('components.sessionLink.implementerRole', 'implementer')})`
+                      )
+                      .join(' ↔ ')}
                   </p>
-                ) : null}
-              </>
-            }
+                  <details>
+                    <summary className="cursor-pointer">
+                      {t('components.sessionLink.goal', 'Goal')}
+                    </summary>
+                    <p className="mt-2 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                      {link.story}
+                    </p>
+                  </details>
+                  {!atomic ? (
+                    <p>
+                      {t(
+                        'components.sessionLink.legacyAnswer',
+                        'This host needs two steps: send your answer, then continue the link. Update the desktop app for one-step continuation.'
+                      )}
+                    </p>
+                  ) : null}
+                </>
+              ),
+              submitLabel: atomic
+                ? t('components.sessionLink.answerResume', 'Answer and continue')
+                : t('components.sessionLink.sendAll', 'Send to all')
+            }}
             freeTextInputs={[
               {
                 placeholder: t(
@@ -97,11 +102,6 @@ export function SessionLinkOwnerDecision({
             disabled={disabled}
             isSubmitting={submitting}
             requireAnswer
-            submitLabel={
-              atomic
-                ? t('components.sessionLink.answerResume', 'Answer and continue')
-                : t('components.sessionLink.sendAll', 'Send to all')
-            }
             shouldFocus={!collapsed && shouldFocus}
             onAnswer={(selections) => {
               const body = formatAskAnswer(prompt, selections).trim()
