@@ -48,6 +48,7 @@ const DESCRIPTION_LINES_HEIGHT = 3 * 20
 
 export function MobileBotItemPage({
   client,
+  hostKey,
   bot,
   uid,
   reads,
@@ -63,6 +64,8 @@ export function MobileBotItemPage({
   showToast
 }: {
   client: RpcClient | null
+  /** The paired and execution host the item lives on; two hosts can hold the same bot and item ids. */
+  hostKey: string
   bot: { id: string; name: string }
   uid: string
   /** Up and down through the list the item opened from; null when it opened from elsewhere. */
@@ -118,7 +121,7 @@ export function MobileBotItemPage({
   const takesImages = useRouteCapability(BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY)
   const pending = usePhoneBotItemPendingComments({
     client,
-    key: `${bot.id}\0${uid}`,
+    key: `${hostKey}\0${bot.id}\0${uid}`,
     uid,
     events: view.events,
     hostName,

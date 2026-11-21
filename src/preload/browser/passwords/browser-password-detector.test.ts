@@ -479,6 +479,26 @@ describe('browser password detector', () => {
       expect(el('#user').value).toBe('dave')
     })
 
+    it('fills the username when the same form pre-renders a password box that is not visible', () => {
+      load(
+        '<form><input id="user" name="identifier" autocomplete="username"><input id="pw" name="password" type="password" autocomplete="current-password"><button>Next</button></form>'
+      )
+      rects.set(el('#pw'), new DOMRect(10, 50, 0, 0))
+      install()
+      enable()
+
+      const result = fill({
+        requestId: 'r',
+        fieldToken: focusedToken(el('#user')),
+        username: 'dave',
+        password: 'pw'
+      })
+
+      expect(result).toEqual({ requestId: 'r', ok: true })
+      expect(el('#user').value).toBe('dave')
+      expect(el('#pw').value).toBe('')
+    })
+
     it('does not report its own focus moves as user focus', () => {
       load(LOGIN_FORM)
       install()
@@ -488,6 +508,8 @@ describe('browser password detector', () => {
 
       fill({ requestId: 'r', fieldToken, username: 'bob', password: 'pw' })
 
+      expect(el('#email').value).toBe('bob')
+      expect(el('#pw').value).toBe('pw')
       expect(sentOn(CHANNEL.fieldFocused)).toHaveLength(focusedBefore)
       expect(sentOn(CHANNEL.fieldBlurred)).toEqual([{ fieldToken }])
     })

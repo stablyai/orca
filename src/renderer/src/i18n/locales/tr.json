@@ -19636,6 +19636,7 @@
         "optionUpdateFailed": "Seçenek güncellenemedi",
         "optionValue": {
           "none": "Yok",
+          "off": "Kapalı",
           "fast": "Hızlı",
           "minimal": "Minimal",
           "low": "Düşük",

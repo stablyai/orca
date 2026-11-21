@@ -1,10 +1,11 @@
 import {
   CLIENT_NAVIGATION_PUBLICATION_EPOCH_SUFFIX,
   UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH
-} from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+} from './runtime-session-contracts'
 
 type SnapshotPublication = {
-  publicationEpoch: string
+  // Hosts older than publication epochs omit it; their frames were always authoritative.
+  publicationEpoch?: string
   snapshotVersion: number
 }
 

@@ -29,7 +29,11 @@ export const BOT_AGENTS = [
   'copilot',
   'opencode2',
   'kimi',
-  'kiro'
+  'kiro',
+  'aug',
+  'goose',
+  'kilo',
+  'mimo-code'
 ] as const satisfies readonly Exclude<NativeChatAgent, (typeof BOT_HELD_BACK_AGENTS)[number]>[]
 
 /** Agents the previous release's bot schema reads; it drops bots on any other agent when it loads. */
@@ -140,6 +144,10 @@ export const BotItemsStaleSchema = z.union([
   z.literal('never')
 ])
 export type BotItemsStale = z.infer<typeof BotItemsStaleSchema>
+/** Its choices in order, as Settings offers them. */
+export const BOT_ITEMS_STALE_CHOICES: readonly BotItemsStale[] = BotItemsStaleSchema.options.map(
+  (option) => option.value
+)
 
 export const BotSchema = z.object({
   id: z.string().min(1),
