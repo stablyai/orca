@@ -94,7 +94,8 @@ export class PluginService {
         panels: pluginPanelBridgeServices(this.panelBridge),
         sinks: this.options,
         audit: this.audit,
-        log: (pluginKey) => this.installed.captureLog(pluginKey, 'info')
+        log: (pluginKey) => this.installed.captureLog(pluginKey, 'info'),
+        invokeCommand: (pluginKey, commandId) => this.invokeCommand(pluginKey, commandId)
       })
     )
     this.panels = new PluginPanelController({

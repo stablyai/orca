@@ -39,6 +39,7 @@ import {
 import type { PluginAppearanceService } from '../../appearance/plugin-appearance-service'
 import type { PluginEditorTypographySource } from '../../appearance/plugin-editor-typography'
 import { PluginHostCallError } from './plugin-host-call-scope'
+import { pluginNotification, type PluginOwnCommands } from './plugin-notification-click'
 import type {
   PluginActionConfirmation,
   PluginConfirmationSubject
@@ -91,6 +92,7 @@ export type PluginHostServices = {
     pluginId: string
     title: string
     body?: string
+    onClick?: () => void
   }): Promise<{ delivered: boolean }>
   storage: {
     get(pluginId: string, key: string): PluginJsonValue | undefined
@@ -112,6 +114,8 @@ export type PluginHostServices = {
     protection(): 'os-keyring' | 'unavailable'
   }
   desktop?: PluginDesktopFrameServices | null
+  /** The calling plugin's own worker commands; absent where none can run. */
+  commands?: PluginOwnCommands | null
   /** The plugin's open panels and its worker; absent where no panel host runs. */
   panels?: PluginPanelBridgeServices | null
   /** Absent where no Orca window draws a status bar. */
@@ -211,8 +215,10 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
     const result = await services.sendTerminalText(params.terminalId, { text, enter })
     return { accepted: result.accepted }
   }),
-  'notifications.show': bind(api['notifications.show'], async (params, { pluginId, services }) =>
-    services.dispatchPluginNotification({ pluginId, title: params.title, body: params.body })
+  'notifications.show': bind(
+    api['notifications.show'],
+    async (params, { pluginId, services, scope }) =>
+      services.dispatchPluginNotification(pluginNotification(params, pluginId, services, scope))
   ),
   'storage.get': bind(api['storage.get'], async ({ key }, { pluginId, services }) => ({
     value: services.storage.get(pluginId, key) ?? null
