@@ -15,7 +15,7 @@ import {
 import { FileExplorerScopeNotice } from './FileExplorerScopeNotice'
 import { useFileExplorerRootNavigation } from '../navigation/use-file-explorer-root-navigation'
 import { useFileExplorerScopeTransition } from '../navigation/use-file-explorer-scope-transition'
-import { basename } from '@/lib/path'
+import { getFileExplorerTitle } from './file-explorer-title'
 import { cn } from '@/lib/class-names'
 import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import { getVisibleFileExplorerWorktreePath } from '../navigation/file-explorer-reset'
@@ -94,7 +94,10 @@ function FileExplorerFiles(): React.JSX.Element {
     rightSidebarOpen,
     worktreePath
   })
-  const repoName = activeRepo?.displayName ?? (worktreePath ? basename(worktreePath) : '')
+  const title = useMemo(
+    () => getFileExplorerTitle(activeRepo, activeWorktree),
+    [activeRepo, activeWorktree]
+  )
   const activeRepoSupportsGit = activeRepo ? isGitRepoKind(activeRepo) : false
 
   const expanded = useMemo(() => activeExpandedDirs ?? new Set<string>(), [activeExpandedDirs])
@@ -251,7 +254,7 @@ function FileExplorerFiles(): React.JSX.Element {
         className="flex min-h-0 flex-1 flex-col"
       >
         <FileExplorerToolbar
-          repoName={repoName}
+          title={title}
           worktreePath={worktreePath}
           {...getRouteForLocalPathOpenOwner(openInOwner)}
           workspaceId={activeWorktreeId}
