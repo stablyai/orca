@@ -23,6 +23,7 @@
     "start:emulator": "node scripts/start-emulator.mjs"
   },
   "dependencies": {
+    "@bacons/apple-targets": "5.0.0",
     "@formatjs/intl-pluralrules": "6.3.16",
     "@noble/hashes": "1.8.0",
     "@orca/expo-two-way-audio": "file:./packages/expo-two-way-audio",

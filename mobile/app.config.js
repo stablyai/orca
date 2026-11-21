@@ -2,6 +2,8 @@
 // Derive APNs mode from release workflow env; Expo still supplies app.json, including Fastlane version/buildNumber rewrites, for everything else.
 const APS_ENVIRONMENT =
   process.env.ORCA_IOS_APS_ENVIRONMENT === 'production' ? 'production' : 'development'
+// Shared with the usage widget (targets/usage-widget), which mirrors it; keep in sync with usage-widget-storage.ios.ts.
+const APP_GROUP = 'group.com.stably.orca.mobile'
 
 module.exports = ({ config }) => ({
   ...config,
@@ -10,7 +12,11 @@ module.exports = ({ config }) => ({
   buildCacheProvider: { plugin: './scripts/native-build-cache.cjs' },
   ios: {
     ...config.ios,
-    entitlements: { ...config.ios?.entitlements, 'aps-environment': APS_ENVIRONMENT }
+    entitlements: {
+      ...config.ios?.entitlements,
+      'aps-environment': APS_ENVIRONMENT,
+      'com.apple.security.application-groups': [APP_GROUP]
+    }
   },
   plugins: (config.plugins ?? []).map((plugin) =>
     plugin === 'expo-notifications'

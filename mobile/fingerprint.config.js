@@ -6,8 +6,11 @@ const localNativePackageSources = ['android', 'ios', 'expo-module.config.json'].
   reasons: ['localNativePackage']
 }))
 
+// The widget's Swift sources live outside ios/ and node_modules, so hash them too.
+const appleTargetSources = [{ type: 'dir', filePath: 'targets', reasons: ['appleTargets'] }]
+
 module.exports = {
-  extraSources: localNativePackageSources,
+  extraSources: [...localNativePackageSources, ...appleTargetSources],
   // These never change native code but would force a dev-client rebuild: package.json scripts,
   // .gitignore, and the version/build numbers that release bump PRs and fastlane rewrite.
   sourceSkips: ['PackageJsonScriptsAll', 'GitIgnore', 'ExpoConfigVersions']

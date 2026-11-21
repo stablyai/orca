@@ -124,6 +124,7 @@
       "./plugins/ios-pod-deployment-target-floor.js",
       "./plugins/ios-scene-lifecycle.js",
       "./plugins/ios-bundle-phase-quoted-script-path.js",
+      "@bacons/apple-targets",
       [
         "expo-splash-screen",
         {

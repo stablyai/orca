@@ -1,5 +1,5 @@
-import { useFocusEffect } from 'expo-router'
-import { useCallback, useMemo, useState } from 'react'
+import { useFocusEffect, useLocalSearchParams } from 'expo-router'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Alert, BackHandler, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -31,7 +31,7 @@ import { mobileConnectionPathLabel } from '../transport/connection/mobile-connec
 import { newWorkspaceOverlayHref } from '../new-workspace/new-workspace-overlay-route'
 import { useMobileHomeData } from './use-mobile-home-data'
 import { useHomeSparePage } from './use-home-spare-page'
-import { HOME_TABS, type HomeTabId } from './tabs/home-tabs'
+import { HOME_TABS, isHomeTabId, type HomeTabId } from './tabs/home-tabs'
 import { MobileHomeAgentsTab } from './tabs/MobileHomeAgentsTab'
 import { MobileHomeAutomationsTab } from './tabs/MobileHomeAutomationsTab'
 import { MobileHomeBotsTab } from './tabs/MobileHomeBotsTab'
@@ -42,6 +42,7 @@ import { MobileHomeFab } from './tabs/MobileHomeFab'
 import { MobileHomeFeedTab } from './tabs/MobileHomeFeedTab'
 import { MobileHomeTabBar } from './tabs/MobileHomeTabBar'
 import { MobileHomeUsageTab } from './tabs/MobileHomeUsageTab'
+import { useUsageWidgetSync } from './usage-widget/use-usage-widget-sync'
 
 // The floating button's height plus its gap above the tab bar.
 const FAB_CLEARANCE = 56 + spacing.lg
@@ -50,6 +51,11 @@ export function MobileHomeScreen() {
   const t = useMobileTranslation()
   useMobileColorScheme()
   const data = useMobileHomeData()
+  useUsageWidgetSync({
+    hosts: data.sortedHostCatalog,
+    hostsLoaded: data.hostCatalogLoaded,
+    accountsByHost: data.accountsByHost
+  })
   useHomeSparePage(data.hostCatalogLoaded ? data.sortedHosts.map((host) => host.id) : [])
   const insets = useSafeAreaInsets()
   const openMobileHostEdit = useOpenMobileHostEdit()
@@ -80,6 +86,16 @@ export function MobileHomeScreen() {
     setVisitedTabs((visited) => (visited.has(next) ? visited : new Set([...visited, next])))
   }, [])
 
+  // The usage widget opens orca:///?tab=usage; clear it so the same tap works again later.
+  const { router, setHostCatalog } = data
+  const linkedTab = useLocalSearchParams<{ tab?: string }>().tab
+  useEffect(() => {
+    if (isHomeTabId(linkedTab)) {
+      selectTab(linkedTab)
+      router.setParams({ tab: undefined })
+    }
+  }, [linkedTab, router, selectTab])
+
   // Android Back from another tab returns to Feed before it leaves the app.
   useFocusEffect(
     useCallback(() => {
@@ -95,7 +111,6 @@ export function MobileHomeScreen() {
   )
 
   // Stable handlers keep the memoized Feed sections and desktop rows from redrawing on every Home update.
-  const { router, setHostCatalog } = data
   const seeAllAgents = useCallback(() => selectTab('agents'), [selectTab])
   const seeAllBots = useCallback(() => selectTab('bots'), [selectTab])
 
