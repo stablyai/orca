@@ -95,15 +95,18 @@ export function noteStreamedTextProjection<P extends readonly object[]>(
   return projected
 }
 
+/** The function a stage builds its list with; one per stage and chat. */
+export type StreamedTextStage = (...args: never[]) => unknown
+
 const lastDerivation = new WeakMap<
-  object,
+  StreamedTextStage,
   { base: readonly object[]; inputs: readonly unknown[]; derived: readonly object[] }
 >()
 
 /** Links `derived`, which `owner` built from `source` and `inputs`, to what `owner` last built
  *  when `source` revised that one's source only in streamed text, so the link survives each stage. */
 export function noteStreamedTextDerivation<P extends readonly object[]>(
-  owner: object,
+  owner: StreamedTextStage,
   source: readonly object[],
   inputs: readonly unknown[],
   derived: P

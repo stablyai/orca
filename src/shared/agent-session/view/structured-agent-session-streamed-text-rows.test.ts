@@ -28,7 +28,7 @@ it("gives a projection's consumers the first projection while only a reply's tex
 })
 
 it('keeps the link through each later stage built from a linked list', () => {
-  const fold = {}
+  const fold = (): void => {}
   const first = [reply('The reply')]
   const firstMessages = noteStreamedTextProjection(first, [], [{ id: 'reply' }])
   const firstFolded = noteStreamedTextDerivation(fold, firstMessages, [false], [{ id: 'reply' }])
