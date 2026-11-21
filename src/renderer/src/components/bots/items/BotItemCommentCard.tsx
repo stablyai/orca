@@ -124,10 +124,9 @@ export function BotItemCommentCard({
           time: fullTime ?? ''
         })}
         className={cn(
-          'rounded-[10px] bg-foreground/[0.035] px-2 pt-1.5 outline-none focus:ring-2 focus:ring-ring/50',
-          // The waiting question keeps its own look. Every other card gets a hairline (an inset ring, so
-          // its size and padding hold) and, in dark, the muted surface: a tint alone lost its edge.
-          waiting ? 'dark:bg-foreground/[0.045]' : 'inset-ring inset-ring-border dark:bg-muted',
+          // A hairline (an inset ring, so its size and padding hold) and, in dark, the muted surface: a
+          // tint alone lost the card's edge on the page.
+          'rounded-[10px] bg-foreground/[0.035] px-2 pt-1.5 inset-ring inset-ring-border outline-none focus:ring-2 focus:ring-ring/50 dark:bg-muted',
           // A question's chips end the card: more room under them.
           shape.decisions.length > 0 ? 'pb-4' : 'pb-2'
         )}
