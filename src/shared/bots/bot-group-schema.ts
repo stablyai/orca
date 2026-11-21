@@ -5,6 +5,7 @@ import { isAdmissibleAgentJournalRenderItem } from '../agent-session/journal/age
 import type { AgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock, NativeChatMessage } from '../native-chat/native-chat-types'
 import { isQuietBotResult, quietBotResultText } from '../bot-quiet-result'
+import { AutomationRunMessageSchema } from '../automations/automation-run-message'
 
 export const BotGroupReplyMode = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('bot'), botId: z.string().min(1) }),
@@ -170,6 +171,8 @@ export const BotGroupMessageSchema = z.object({
   mentioned: z.literal(true).optional(),
   /** Legacy: the paused line older builds saved after a hand-off cap; it starts no turn. */
   pausedAfter: z.number().int().positive().optional(),
+  /** On a post an automation's run made, served as its owner's: the run, shown as its run row. */
+  automationRun: AutomationRunMessageSchema.optional().catch(undefined),
   turns: z.array(BotGroupTurnSchema),
   /** The post's questions to remote members; older or unreadable ones are dropped, never the post. */
   remoteAsks: z.array(BotGroupRemoteAskSchema).optional().catch(undefined)
