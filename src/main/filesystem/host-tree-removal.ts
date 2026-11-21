@@ -53,6 +53,41 @@ async function deleteHostChildren(root: string, names: readonly string[]): Promi
   }
 }
 
+function orNullIfMissing<T>(promise: Promise<T>): Promise<T | null> {
+  return promise.catch((error: unknown) => {
+    const code = getErrorCode(error)
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      return null
+    }
+    throw error
+  })
+}
+
+async function inspectHostDirectoryRoot(
+  root: string,
+  targetPath: string,
+  initial?: { dev?: number; ino?: number }
+): Promise<{ dev?: number; ino?: number } | null> {
+  const entry = await orNullIfMissing(lstat(root))
+  if (!entry) {
+    return null
+  }
+  if (
+    !entry.isDirectory() ||
+    (typeof entry.isSymbolicLink === 'function' && entry.isSymbolicLink())
+  ) {
+    throw new Error(`Refusing to delete unregistered worktree path: ${targetPath}`)
+  }
+  if (
+    initial?.ino !== undefined &&
+    entry.ino !== undefined &&
+    (entry.dev !== initial.dev || entry.ino !== initial.ino)
+  ) {
+    throw differentCheckoutAtPathError(targetPath)
+  }
+  return entry
+}
+
 /** Keep checkout proof out of recursive walks; one shared budget covers children and the final rmdir. */
 export async function removeHostCheckout(
   targetPath: string,
@@ -61,6 +96,7 @@ export async function removeHostCheckout(
   verifyBeforeChildDelete?: () => Promise<boolean>
 ): Promise<void> {
   const root = toHostRemovalPath(targetPath)
+  let initialRoot: { dev?: number; ino?: number } | undefined
   let markerGone = false
   try {
     await removeTree(root, {
@@ -71,7 +107,15 @@ export async function removeHostCheckout(
         } else {
           markerGone = !(await authorize(true))
           if (!markerGone) {
+            const currentRoot = await inspectHostDirectoryRoot(root, targetPath, initialRoot)
+            if (!currentRoot) {
+              return
+            }
+            initialRoot ??= currentRoot
             const names = await namesExceptCheckoutMarker(root)
+            if (!(await inspectHostDirectoryRoot(root, targetPath, initialRoot))) {
+              return
+            }
             if (verifyBeforeChildDelete) {
               markerGone = !(await verifyBeforeChildDelete())
             }
@@ -80,42 +124,37 @@ export async function removeHostCheckout(
               // Child promises settled; their internal Node sibling walks may still be running.
               markerGone = !(await authorize(false))
               if (!markerGone) {
-                try {
-                  await unlink(join(root, '.git'))
-                } catch (error) {
+                if (!(await inspectHostDirectoryRoot(root, targetPath, initialRoot))) {
+                  return
+                }
+                await unlink(join(root, '.git')).catch((error: unknown) => {
                   if (getErrorCode(error) !== 'ENOENT') {
                     throw error
                   }
-                }
+                })
                 markerGone = true
               }
             }
           }
+        }
+        if (!(await inspectHostDirectoryRoot(root, targetPath, initialRoot))) {
+          return
         }
         await removeHostEmptyDirectory(root)
       }
     })
   } catch (error) {
     if (markerGone && getErrorCode(error) === 'ENOTEMPTY') {
-      if (await hasAnyCheckoutMarkerEntry(join(root, '.git'))) {
-        throw differentCheckoutAtPathError(targetPath)
-      }
-      throw unregisteredFolderRefusal(targetPath)
+      throw (await hasAnyCheckoutMarkerEntry(join(root, '.git')))
+        ? differentCheckoutAtPathError(targetPath)
+        : unregisteredFolderRefusal(targetPath)
     }
     throw describeRemovalFailure(error)
   }
 }
 
 async function hasAnyCheckoutMarkerEntry(markerPath: string): Promise<boolean> {
-  try {
-    await lstat(markerPath)
-    return true
-  } catch (error) {
-    if (getErrorCode(error) === 'ENOENT' || getErrorCode(error) === 'ENOTDIR') {
-      return false
-    }
-    throw error
-  }
+  return (await orNullIfMissing(lstat(markerPath))) !== null
 }
 
 // The volume decides case folding: `.GIT` is the marker only if it is the same file `.git` resolves to.
@@ -143,26 +182,16 @@ async function inspectHostCheckoutMarker(
   markerPath: string,
   targetPath: string
 ): Promise<{ identity: string; dev: bigint; ino: bigint } | null> {
-  let entry
-  try {
-    entry = await lstatBigInt(markerPath)
-  } catch (error) {
-    if (getErrorCode(error) === 'ENOENT' || getErrorCode(error) === 'ENOTDIR') {
-      return null
-    }
-    throw error
+  const entry = await orNullIfMissing(lstatBigInt(markerPath))
+  if (!entry) {
+    return null
   }
   if (!entry.isFile()) {
     throw differentCheckoutAtPathError(targetPath)
   }
-  let contents: string
-  try {
-    contents = await readUtf8File(markerPath)
-  } catch (error) {
-    if (getErrorCode(error) === 'ENOENT' || getErrorCode(error) === 'ENOTDIR') {
-      return null
-    }
-    throw error
+  const contents = await orNullIfMissing(readUtf8File(markerPath))
+  if (contents === null) {
+    return null
   }
   const gitdir = parseGitdirMarkerPayload(contents)
   if (!gitdir) {
@@ -179,19 +208,9 @@ export async function removeUnregisteredHostCheckout(
 ): Promise<void> {
   const { expectedMarker: expectedMarkerIdentity, forbidAnyMarker = false } = markerOptions
   const root = toHostRemovalPath(targetPath)
-  let entry
-  try {
-    entry = await lstat(root)
-  } catch (error) {
-    // Like rm -rf, an already-missing folder is done.
-    if (getErrorCode(error) === 'ENOENT' || getErrorCode(error) === 'ENOTDIR') {
-      return
-    }
-    throw error
-  }
-  // lstat never reports a symlink as a directory; following one would empty its target.
-  if (!entry.isDirectory()) {
-    throw new Error(`Refusing to delete unregistered worktree path: ${targetPath}`)
+  const initialRoot = await inspectHostDirectoryRoot(root, targetPath)
+  if (!initialRoot) {
+    return
   }
 
   const markerPath = join(root, '.git')
@@ -205,6 +224,9 @@ export async function removeUnregisteredHostCheckout(
   }
   if (initial) {
     const verifyInitialMarker = async (): Promise<boolean> => {
+      if (!(await inspectHostDirectoryRoot(root, targetPath, initialRoot))) {
+        return false
+      }
       const current = await inspectHostCheckoutMarker(markerPath, targetPath)
       if (!current) {
         return false
@@ -223,22 +245,31 @@ export async function removeUnregisteredHostCheckout(
   }
 
   let swept = false
+  const assertMarkerlessRoot = async (): Promise<boolean> => {
+    if (!(await inspectHostDirectoryRoot(root, targetPath, initialRoot))) {
+      return false
+    }
+    if (await hasAnyCheckoutMarkerEntry(markerPath)) {
+      throw differentCheckoutAtPathError(targetPath)
+    }
+    return true
+  }
   try {
     await removeTree(root, {
       signal,
       rm: async () => {
-        if (await hasAnyCheckoutMarkerEntry(markerPath)) {
-          throw differentCheckoutAtPathError(targetPath)
+        if (!(await assertMarkerlessRoot())) {
+          return
         }
         if (!swept) {
           const names = await namesExceptCheckoutMarker(root)
-          if (await hasAnyCheckoutMarkerEntry(markerPath)) {
-            throw differentCheckoutAtPathError(targetPath)
+          if (!(await assertMarkerlessRoot())) {
+            return
           }
           await deleteHostChildren(root, names)
           swept = true
-          if (await hasAnyCheckoutMarkerEntry(markerPath)) {
-            throw differentCheckoutAtPathError(targetPath)
+          if (!(await assertMarkerlessRoot())) {
+            return
           }
         }
         await removeHostEmptyDirectory(root)
@@ -246,10 +277,9 @@ export async function removeUnregisteredHostCheckout(
     })
   } catch (error) {
     if (swept && getErrorCode(error) === 'ENOTEMPTY') {
-      if (await hasAnyCheckoutMarkerEntry(markerPath)) {
-        throw differentCheckoutAtPathError(targetPath)
-      }
-      throw unregisteredFolderRefusal(targetPath)
+      throw (await hasAnyCheckoutMarkerEntry(markerPath))
+        ? differentCheckoutAtPathError(targetPath)
+        : unregisteredFolderRefusal(targetPath)
     }
     throw describeRemovalFailure(error)
   }

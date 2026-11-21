@@ -231,8 +231,8 @@ function buildWslMarkerLastScript(
   // stat distinguishes ENOENT from EACCES; re-verify dev:ino and gitdir before rm -f .git, and never re-sweep before rmdir.
   return (
     `orca_target=${target}; ` +
-    'orca_root_kind=$(LC_ALL=C stat -c \'%F\' -- "$orca_target") || exit $?; ' +
-    'if [ "$orca_root_kind" != \'directory\' ]; then echo "Refusing to delete non-directory worktree path" >&2; exit 3; fi; ' +
+    'orca_root_meta=$(LC_ALL=C stat -c \'%F#%d:%i\' -- "$orca_target") || exit $?; ' +
+    'case "$orca_root_meta" in \'directory#\'*) ;; *) echo "Refusing to delete non-directory worktree path" >&2; exit 3 ;; esac; ' +
     'if orca_meta=$(LC_ALL=C stat -c \'%F#%d:%i#%i\' -- "$orca_target/.git" 2>&1); then orca_has_git=1; ' +
     "else case \"$orca_meta\" in *': No such file or directory'|*': Not a directory') orca_has_git=0 ;; *) printf '%s\\n' \"$orca_meta\" >&2; exit 1 ;; esac; fi; " +
     'if [ "$orca_has_git" = 1 ]; then ' +
@@ -241,7 +241,10 @@ function buildWslMarkerLastScript(
     `${PARSE_ORCA_GITDIR_LINE} && ` +
     `if [ -z "$orca_gitdir" ]${expectedClause}; then exit 4; fi && ` +
     'orca_saved_gitdir=$orca_gitdir && ' +
-    'LC_ALL=C find "$orca_target" -mindepth 1 -maxdepth 1 ! -samefile "$orca_target/.git" -exec rm -rf -- {} + && ' +
+    'LC_ALL=C find -P "$orca_target" -mindepth 1 -maxdepth 1 ! -samefile "$orca_target/.git" -exec rm -rf -- {} + && ' +
+    'orca_cur_root=$(LC_ALL=C stat -c \'%F#%d:%i\' -- "$orca_target") || exit $? && ' +
+    'case "$orca_cur_root" in \'directory#\'*) ;; *) echo "Refusing to delete non-directory worktree path" >&2; exit 3 ;; esac && ' +
+    'if [ "$orca_cur_root" != "$orca_root_meta" ]; then exit 4; fi && ' +
     'if orca_after=$(LC_ALL=C stat -c \'%F#%d:%i\' -- "$orca_target/.git" 2>&1); then ' +
     "case \"$orca_after\" in 'regular file#'*|'regular empty file#'*) ;; *) exit 4 ;; esac && " +
     'if [ "${orca_after#*#}" != "$orca_marker_id" ]; then exit 4; fi && ' +
@@ -251,7 +254,10 @@ function buildWslMarkerLastScript(
     "else case \"$orca_after\" in *': No such file or directory'|*': Not a directory') ;; *) printf '%s\\n' \"$orca_after\" >&2; exit 1 ;; esac; fi; " +
     'else ' +
     'if LC_ALL=C stat -c \'%F\' -- "$orca_target/.git" >/dev/null 2>&1; then exit 4; fi && ' +
-    'LC_ALL=C find "$orca_target" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} + && ' +
+    'LC_ALL=C find -P "$orca_target" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} + && ' +
+    'orca_cur_root=$(LC_ALL=C stat -c \'%F#%d:%i\' -- "$orca_target") || exit $? && ' +
+    'case "$orca_cur_root" in \'directory#\'*) ;; *) echo "Refusing to delete non-directory worktree path" >&2; exit 3 ;; esac && ' +
+    'if [ "$orca_cur_root" != "$orca_root_meta" ]; then exit 4; fi && ' +
     'if orca_after=$(LC_ALL=C stat -c \'%F\' -- "$orca_target/.git" 2>&1); then exit 4; ' +
     "else case \"$orca_after\" in *': No such file or directory'|*': Not a directory') ;; *) printf '%s\\n' \"$orca_after\" >&2; exit 1 ;; esac; fi; " +
     'fi && ' +

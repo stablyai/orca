@@ -26,6 +26,7 @@ vi.mock('../catalog/worktree-list-reader', async (original) => ({
 }))
 vi.mock('../../../filesystem/asar-transparent-fs', () => ({
   lstat: stat,
+  lstatBigInt: stat,
   readdir: names,
   rm: removeChild,
   unlink,
@@ -42,6 +43,7 @@ vi.mock('../../../workspaces/removal/worktree-removal-safety', async (original) 
 vi.mock('./worktree-removal-preflight', () => ({ assertWorktreeCleanForRemoval: clean }))
 
 import { removeWindowsCheckout } from './windows-worktree-removal'
+import { removeUnregisteredHostCheckout } from '../../../filesystem/host-tree-removal'
 import { _resetWorktreeScanCacheForTests } from '../catalog/worktree-scan-cache'
 
 const originalPlatform = process.platform
@@ -200,4 +202,28 @@ it('skips child deletion and refuses non-empty folder when the pinned marker dis
   } finally {
     rmSync(scratch, { recursive: true, force: true })
   }
+})
+
+it('refuses before sweeping children when a markerless root becomes a symlink during enumeration', async () => {
+  stat.mockImplementation(async (path: string) => {
+    if (String(path).endsWith('.git')) {
+      throw missing
+    }
+    return { isDirectory: () => true, isSymbolicLink: () => false }
+  })
+  names.mockImplementationOnce(async () => {
+    stat.mockImplementation(async (path: string) => {
+      if (String(path).endsWith('.git')) {
+        throw missing
+      }
+      return { isDirectory: () => false, isSymbolicLink: () => true }
+    })
+    return ['notes.txt']
+  })
+
+  await expect(
+    removeUnregisteredHostCheckout('/work/feature', undefined, { forbidAnyMarker: true })
+  ).rejects.toThrow('Refusing to delete unregistered worktree path')
+
+  expect(removeChild).not.toHaveBeenCalled()
 })
