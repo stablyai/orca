@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import { getQuestionTaker } from '../../../../../orchestration/db/messages/mail-taker'
 import { linkWorkerToQuestion } from './worker-question-link'
+import type { OrcaSessionId } from '../../../../../../../shared/agent-session/identity/orca-session-address'
 
 const caller = {
   address: 'term_docs',
@@ -37,10 +38,32 @@ describe('worker-start --for', () => {
     expect(linkWorkerToQuestion(db, id, caller, false)).toEqual({ question: id, linked: true })
   })
 
-  it('links a question still on its way to the caller, and records the caller took it', () => {
+  it('links a question still on its way to the caller, and records the take once the worker starts', () => {
     const id = question('term_docs', 'arriving')
-    expect(linkWorkerToQuestion(db, id, caller, false)).toEqual({ question: id, linked: true })
+    const link = linkWorkerToQuestion(db, id, caller, false)
+    expect(link).toMatchObject({ question: id, linked: true })
+    expect(getQuestionTaker(db, id)).toBeNull()
+    if (link.linked) {
+      link.take?.()
+    }
     expect(getQuestionTaker(db, id)).toBe('terminal:term_docs')
+  })
+
+  it('links a structured worker to the question its chat took', () => {
+    const id = question('term_docs', 'card')
+    db.markAsRead([id], { kind: 'session', sessionId: 'session-docs' })
+    const structured = { ...caller, orcaSessionId: 'session-docs' as OrcaSessionId }
+    expect(linkWorkerToQuestion(db, id, structured, false)).toEqual({ question: id, linked: true })
+  })
+
+  it('does not link a question read before Orca recorded who took it', () => {
+    const id = question('term_docs', 'old')
+    db.db.prepare('UPDATE messages SET read = 1 WHERE id = ?').run(id)
+    expect(linkWorkerToQuestion(db, id, caller, false)).toEqual({
+      question: id,
+      linked: false,
+      why: `${id} was read before Orca recorded who took it`
+    })
   })
 
   it("starts unlinked, saying why, for someone else's question, a paired worker or other mail", () => {
