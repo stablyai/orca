@@ -55,8 +55,12 @@ export function launchedAgentExitMessage(output: string): string {
     : "The agent's launch command exited before the agent was ready, without printing anything."
 }
 
+export class LaunchedAgentExitedError extends Error {}
+
 function launchedAgentExitError(recentOutput: string | undefined): Error {
-  return new Error(launchedAgentExitMessage(readLaunchCommandOutput(recentOutput ?? '')))
+  return new LaunchedAgentExitedError(
+    launchedAgentExitMessage(readLaunchCommandOutput(recentOutput ?? ''))
+  )
 }
 
 /** Fails a fresh launch's readiness wait once its launch command has finished and the shell is back in front.

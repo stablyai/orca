@@ -160,7 +160,12 @@ export function liveResumeRecordChange(
   live: SleepingAgentSessionRecord | null
 ): { set: SleepingAgentSessionRecord } | 'clear' | null {
   if (live) {
-    return recoveryRecordMatches(existing, live) ? null : { set: live }
+    // A finished turn's checkpoint must not demote the sleep record of the same conversation: wakes key on its origin.
+    const sleptSameTurn =
+      existing?.origin === 'worktree-sleep' &&
+      live.state === 'done' &&
+      recoveryRecordTargetsSameSession(existing, live)
+    return sleptSameTurn || recoveryRecordMatches(existing, live) ? null : { set: live }
   }
   return existing ? 'clear' : null
 }

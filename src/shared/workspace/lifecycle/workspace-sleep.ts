@@ -4,6 +4,15 @@ import {
 } from '../../agent-session/lifecycle/agent-session-resume'
 import type { ExecutionHostId } from '../../execution-host/execution-host'
 
+export type SleepingAgentWakeRequest = {
+  worktreeId: string
+  paneKey?: string
+  prepareOnly?: boolean
+  requestId?: string
+  /** Main's wake attempt id; the resumed agent launches under it so main knows its process. */
+  launchToken?: string
+}
+
 /** A host that runs part of a workspace: this desktop's main, or a paired server. */
 export type WorkspaceSleepHost = { kind: 'self' } | { kind: 'environment'; environmentId: string }
 

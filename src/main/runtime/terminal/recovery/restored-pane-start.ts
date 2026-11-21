@@ -77,10 +77,12 @@ export class RestoredPaneStarter {
     }
     this.started.delete(key)
     this.ports.starting?.(pane)
-    const start = this.ports
-      .start(pane, restoredPaneStartPlan(pane, bound), trigger)
+    const start = Promise.resolve()
+      .then(() => this.ports.start(pane, restoredPaneStartPlan(pane, bound), trigger))
       .then((pty) => {
-        this.started.set(key, pty)
+        if (pty) {
+          this.started.set(key, pty)
+        }
         return pty
       })
       .catch((error: unknown) => {
