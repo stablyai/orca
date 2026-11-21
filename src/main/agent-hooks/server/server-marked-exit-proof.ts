@@ -91,10 +91,13 @@ export abstract class AgentHookServerMarkedExitProof extends AgentHookServerTabC
 
   private async recordMarkedExitIfGone(resolved: string, marked: MarkedAgent): Promise<void> {
     const verdict = await probeAgentProcessPresence(marked.process).catch(() => null)
-    const now = this.state.lastStatusByPaneKey.get(resolved)?.agentPresence?.process
-    this.aliveAfterMark.delete(resolved)
-    // A newer agent in the pane owns it now; this one's end is no longer its news.
-    if (now && !isSameAgentProcess(now, marked.process)) {
+    const retained = this.aliveAfterMark.get(resolved)
+    if (retained && isSameAgentProcess(retained.process, marked.process)) {
+      this.aliveAfterMark.delete(resolved)
+    }
+    // A newer live agent owns the pane, even one that reported no process: this end is not its news.
+    const now = this.state.lastStatusByPaneKey.get(resolved)?.agentPresence
+    if (now && !now.ended && !(now.process && isSameAgentProcess(now.process, marked.process))) {
       return
     }
     if (verdict === 'exited') {
