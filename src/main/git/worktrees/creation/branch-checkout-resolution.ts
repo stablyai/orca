@@ -11,7 +11,7 @@ import {
 } from './git-dir-branch-state'
 import { COMMIT_ID } from './git-ref-text'
 import { forEachBounded } from './bounded-reads'
-import { checkedIo } from './file-check-deadline'
+import { checkedIo, throwIfCheckExpired } from './file-check-deadline'
 
 export type BranchCheckouts =
   | { kind: 'free' }
@@ -229,6 +229,7 @@ export async function resolveAliasedBranch(
 
 // Git cannot follow a ref it cannot read either, so that ref aliases nothing.
 function unlessUnreadable(error: unknown): string {
+  throwIfCheckExpired()
   const code = errorCode(error)
   if (code === 'EACCES' || code === 'EPERM') {
     return ''

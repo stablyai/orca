@@ -1,7 +1,7 @@
 import { realpath } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join } from 'node:path'
 import { isSamePath, readOptional } from './git-dir-branch-state'
-import { checkedIo } from './file-check-deadline'
+import { checkedIo, throwIfCheckExpired } from './file-check-deadline'
 
 // Git caps a gitfile at 1 MiB.
 const MAX_GITFILE_BYTES = 1 << 20
@@ -31,6 +31,7 @@ async function readLinkedCheckoutDir(
   try {
     return await readVerifiedCheckoutDir(gitDir, toHostPath)
   } catch {
+    throwIfCheckExpired()
     // Unreadable or odd: Git's listing decides.
     return undefined
   }
@@ -70,7 +71,10 @@ export async function readOwnerCheckoutPath(
     return repoPath
   }
   // A separate git dir: the primary's `.git` file points straight at the common dir.
-  const pointed = await readGitfileTarget(dotGit, toHostPath).catch(() => undefined)
+  const pointed = await readGitfileTarget(dotGit, toHostPath).catch(() => {
+    throwIfCheckExpired()
+    return undefined
+  })
   if (pointed && (await isSamePath(pointed, commonDir))) {
     return repoPath
   }

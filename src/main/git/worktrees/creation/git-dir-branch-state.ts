@@ -113,6 +113,7 @@ export async function readRefLink(path: string): Promise<string | undefined> {
   try {
     target = await checkedIo(() => readlink(path))
   } catch (error) {
+    throwIfCheckExpired()
     const code = errorCode(error)
     if (code === 'EINVAL' || code === 'UNKNOWN') {
       return undefined
@@ -177,6 +178,8 @@ async function readBoundedFile(
     }
   } finally {
     await handle.close()
+    // A check that expired while closing must not act on the content.
+    throwIfCheckExpired()
   }
 }
 
@@ -218,7 +221,9 @@ export function errorCode(error: unknown): unknown {
   return typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
 }
 
+/** Every error path reading files goes through here, so a late error from an expired check stops too. */
 export function rethrowUnlessMissing(error: unknown): void {
+  throwIfCheckExpired()
   const code = errorCode(error)
   if (code !== 'ENOENT' && code !== 'ENOTDIR') {
     throw error
@@ -257,6 +262,7 @@ export async function readRefFile(path: string): Promise<string> {
   try {
     return await readSmallRef(path, NO_FOLLOW)
   } catch (error) {
+    throwIfCheckExpired()
     const code = errorCode(error)
     if (code === 'ELOOP' || code === 'EMLINK') {
       return (await readRefLink(path)) ?? UNRESOLVED_HEAD
