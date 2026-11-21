@@ -32,10 +32,7 @@ import {
   retitleStructuredConversationTabs,
   titleStructuredConversationTabs
 } from '../../session-tabs/chat/structured-conversation-tab-title'
-import {
-  structuredConversationRetitleNames,
-  structuredConversationTabNamer
-} from '../../session-tabs/chat/structured-conversation-tab-namer'
+import { structuredConversationTabNamer } from '../../session-tabs/chat/structured-conversation-tab-namer'
 import { hostMobileTerminalTheme } from './host-mobile-terminal-theme'
 
 export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntimeWithSavedConversationTitlePublication {
@@ -92,7 +89,7 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
   ): RuntimeMobileSessionTabsResult {
     snapshot = titleStructuredConversationTabs(
       inlineRuntimeBrowserTabFavicons(this, snapshot),
-      structuredConversationTabNamer(snapshot, this.savedWorkspaceTabs(snapshot.worktree)),
+      structuredConversationTabNamer(snapshot.worktree, this.savedWorkspaceTabs(snapshot.worktree)),
       structuredConversationForked
     )
     return projectTabsWithBotHomePins(this.store, snapshot, this.getMobileSessionProjectionHost())
@@ -103,12 +100,21 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     if (!snapshot) {
       return
     }
-    const names = structuredConversationRetitleNames(
+    // An older fork's shown name reads its source's, so the source's open forks retitle with it.
+    const store = getStructuredAgentSessionHost()?.deps?.store
+    const nameFor = structuredConversationTabNamer(
       workspaceId,
-      snapshot,
-      sessionId,
       this.savedWorkspaceTabs(workspaceId)
     )
+    const names = new Map([[sessionId, nameFor(sessionId)]])
+    for (const tab of snapshot.tabs) {
+      if (
+        tab.type === 'agent-session' &&
+        store?.getConversation(tab.sessionId)?.forkedFrom?.sessionId === sessionId
+      ) {
+        names.set(tab.sessionId, nameFor(tab.sessionId))
+      }
+    }
     const next = retitleStructuredConversationTabs(snapshot, names, structuredConversationForked)
     if (next) {
       this.emitMobileSessionTabsSnapshot(this.storeMobileSessionSnapshot(workspaceId, next))

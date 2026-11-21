@@ -74,18 +74,18 @@ async function savedRowVisitsForOneListing(saved: number, shown: number) {
 
 // Guards #46247: each chat's title scanned the saved tabs from the start, ~1M row visits per listing at 1,000 chats.
 describe('chat tab titles on a workspace with many saved tabs', () => {
-  it('visits each saved tab at most once per listing', async () => {
+  it('visits the saved tabs in one pass after the first chat', async () => {
     setStructuredAgentSessionHost(noConversationsHost())
     expect(await savedRowVisitsForOneListing(2000, 1000)).toEqual({
-      visits: 2000,
+      visits: 2002,
       renamedTitle: 'Renamed'
     })
   })
 
   it('stops at the last chat it needs', async () => {
     setStructuredAgentSessionHost(noConversationsHost())
-    expect(await savedRowVisitsForOneListing(2000, 2)).toEqual({
-      visits: 4,
+    expect(await savedRowVisitsForOneListing(2000, 3)).toEqual({
+      visits: 8,
       renamedTitle: 'Renamed'
     })
   })

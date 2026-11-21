@@ -1,58 +1,16 @@
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { structuredChatDisplayName } from '../../../../shared/agent-session/view/structured-chat-row-name'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { agentSessionRecordShownName } from '../../agent-session/records/agent-session-record-shown-name'
 
 type SavedTabs = () => readonly Tab[] | undefined
 
-/** Names every chat tab in one projected snapshot. */
+/** Names a workspace's chat tabs: the desktop tab's rename, else the chat's saved name; null leaves the agent's default label. */
 export function structuredConversationTabNamer(
-  snapshot: RuntimeMobileSessionTabsSnapshot,
+  workspaceId: string,
   savedTabs: SavedTabs
 ): (sessionId: string) => string | null {
-  let chats = 0
-  for (const tab of snapshot.tabs) {
-    chats += tab.type === 'agent-session' ? 1 : 0
-  }
-  return chatTabNamer(snapshot.worktree, savedTabs, chats)
-}
-
-/** New names for a renamed chat and its open forks, since an older fork's shown name reads its source's. */
-export function structuredConversationRetitleNames(
-  workspaceId: string,
-  snapshot: RuntimeMobileSessionTabsSnapshot,
-  sessionId: string,
-  savedTabs: SavedTabs
-): Map<string, string | null> {
-  const store = getStructuredAgentSessionHost()?.deps?.store
-  const forks = snapshot.tabs.flatMap((tab) =>
-    tab.type === 'agent-session' &&
-    store?.getConversation(tab.sessionId)?.forkedFrom?.sessionId === sessionId
-      ? [tab.sessionId]
-      : []
-  )
-  const nameFor = chatTabNamer(workspaceId, savedTabs, 1 + forks.length)
-  const names = new Map([[sessionId, nameFor(sessionId)]])
-  for (const fork of forks) {
-    names.set(fork, nameFor(fork))
-  }
-  return names
-}
-
-/** The desktop tab's rename, else the chat's saved name; null leaves the agent's default label. */
-function chatTabNamer(
-  workspaceId: string,
-  savedTabs: SavedTabs,
-  lookups: number
-): (sessionId: string) => string | null {
-  const customLabelFor =
-    lookups > 1
-      ? savedChatTabCustomLabels(savedTabs)
-      : (sessionId: string) =>
-          savedTabs()?.find(
-            (tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId
-          )?.customLabel
+  const customLabelFor = savedChatTabCustomLabels(savedTabs)
   return (sessionId) => {
     const store = getStructuredAgentSessionHost()?.deps?.store
     const record = store?.getConversation(sessionId)
@@ -64,18 +22,23 @@ function chatTabNamer(
   }
 }
 
-/** First-match rename per chat; each lookup resumes the scan where the last stopped, so one pass reads each saved tab at most once. */
+/** First-match rename per chat. The first lookup is a plain early-exit find; later ones share one resumable scan, so no lookup reads past where a find would stop and a pass reads each saved tab at most twice. */
 function savedChatTabCustomLabels(
   savedTabs: SavedTabs
 ): (sessionId: string) => string | null | undefined {
   let tabs: readonly Tab[] | undefined
+  let labels: Map<string, string | null> | undefined
   let scanned = 0
-  const labels = new Map<string, string | null>()
   return (sessionId) => {
+    if (!tabs) {
+      tabs = savedTabs() ?? []
+      return tabs.find((tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId)
+        ?.customLabel
+    }
+    labels ??= new Map()
     if (labels.has(sessionId)) {
       return labels.get(sessionId)
     }
-    tabs ??= savedTabs() ?? []
     while (scanned < tabs.length) {
       const tab = tabs[scanned++]
       if (tab.contentType !== 'agent-session' || labels.has(tab.entityId)) {
