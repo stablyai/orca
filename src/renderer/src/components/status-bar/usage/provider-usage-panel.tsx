@@ -25,7 +25,14 @@ import {
   getProviderUsageErrorMessage,
   getProviderUsageStatusLabel
 } from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
-import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
+import {
+  getDisplayedUsagePercentage,
+  type UsagePercentageDisplay
+} from '../../../../../shared/agent-usage/display/usage-percentage-display'
+import {
+  getUsagePace,
+  getUsagePaceNextChangeAt
+} from '../../../../../shared/agent-usage/display/usage-pace'
 import { useResetCountdownClock } from '@/components/status-bar/usage/useResetCountdownClock'
 import { recomputeOn } from '@/lib/recompute-on'
 import { ProviderExtraUsageSection } from './provider-extra-usage-section'
@@ -33,6 +40,8 @@ import { formatWindowLabel } from './rate-limit-window-localized-label'
 import { formatPoolCardLabel } from './usage-pool-label'
 import { formatResetsInCaption } from './usage-reset-caption'
 import { UsageBar, UsageValue } from './usage-meter'
+import { formatUsagePaceLine } from './usage-pace-copy'
+import { UsagePaceMarker } from './UsagePaceMarker'
 
 export function formatTimeAgo(ts: number, t: Translate = translate): string {
   const diff = Date.now() - ts
@@ -180,6 +189,7 @@ function getWindowSectionLabel(
 
 // Tooltips invert the theme; use background text tokens for legible primary and secondary content.
 
+/** One rate-limit window: header, meter, and — where the window's timing supports it — a pace marker and reading. */
 function ProviderRateLimitWindowSection({
   window,
   label,
@@ -203,6 +213,11 @@ function ProviderRateLimitWindowSection({
     return null
   }
   const caption = formatResetsInCaption(window.resetsAt, now, intlLocale, t)
+  const pace = getUsagePace(window, now)
+  // Why: the marker tracks the fill, so it flips with "remaining" mode or tick and bar disagree.
+  const pacePct = pace
+    ? getDisplayedUsagePercentage(pace.expectedUsedPercent, usagePercentageDisplay)
+    : 0
 
   return (
     <div className="space-y-1.5" data-usage-window={label}>
@@ -217,14 +232,22 @@ function ProviderRateLimitWindowSection({
           className={`shrink-0 font-semibold ${textClass}`}
         />
       </div>
-      {/* Why: fill follows the selected percentage; only this card colors it by consumption. */}
-      <UsageBar
-        usedPercent={window.usedPercent}
-        display={usagePercentageDisplay}
-        tone="health"
-        className="h-[6px] w-full"
-        trackClassName={emptyBarClass}
-      />
+      <div className="relative">
+        {/* Why: fill follows the selected percentage; only this card colors it by consumption. */}
+        <UsageBar
+          usedPercent={window.usedPercent}
+          display={usagePercentageDisplay}
+          tone="health"
+          className="h-[6px] w-full"
+          trackClassName={emptyBarClass}
+        />
+        {pace ? <UsagePaceMarker percent={pacePct} stage={pace.stage} /> : null}
+      </div>
+      {pace ? (
+        <div data-usage-pace={pace.stage} className={mutedClass}>
+          {formatUsagePaceLine(pace, t)}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -250,7 +273,14 @@ export function ProviderPanel({
 }): React.JSX.Element {
   const t = useTranslate()
   const windowSections = p ? getWindowSections(p, t) : []
-  const now = useResetCountdownClock(windowSections.map((section) => section.window?.resetsAt))
+  // Why: pace turns over on its own schedule, finer than the hourly countdown boundary past a day out.
+  const now = useResetCountdownClock(
+    windowSections.map((section) => section.window?.resetsAt),
+    (at) =>
+      windowSections.map((section) =>
+        section.window ? getUsagePaceNextChangeAt(section.window, at) : null
+      )
+  )
   const textClass = inverted ? 'text-background' : 'text-foreground'
   const mutedClass = inverted ? 'text-background/60' : 'text-muted-foreground'
   const faintClass = inverted ? 'text-background/50' : 'text-muted-foreground/80'
