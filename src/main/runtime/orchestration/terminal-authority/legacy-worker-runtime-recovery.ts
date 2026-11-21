@@ -18,6 +18,14 @@ import type { TerminalWorkerTurnStops } from '../workers/turn-stops/terminal-wor
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { isOrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
 import { canonicalOrcaSessionId } from '../addressing/session-lineage/canonical-orca-session-id'
+import { settleRestartCutWorkerStart } from '../db/worker-dispatch/restart-cut-worker-start'
+import {
+  observeUnconfirmedWorkerStart,
+  type UnconfirmedWorkerStart
+} from '../workers/turn-stops/unconfirmed-worker-start'
+import { redactWorkerTerminalView } from './views/worker-terminal-redaction'
+import { isTerminalHandle } from '../../../../shared/terminal/terminal-handle-prefix'
+import { isStructuredWorkerHandle } from '../../../../shared/orchestration/workers/structured-worker-handle'
 
 export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessionFlush {
   protected abstract getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>>
@@ -109,6 +117,7 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
         db,
         reportDeps: this.workerTurnStopReportDeps,
         reportRestingPane: (paneKey) => this.terminalWorkerTurnStops.reportRestingPane(paneKey),
+        reportUnconfirmedStart: (dispatchId) => this.reportUnconfirmedWorkerStart(dispatchId),
         chats: host
           ? {
               cutByLastRun,
@@ -124,6 +133,39 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
     } catch (error: unknown) {
       console.warn('[orchestration] reporting workers stopped across a restart failed', error)
     }
+  }
+
+  /** Tells the coordinator once about a start whose turn Orca never saw begin, live or after a
+   *  restart; a terminal's screen shows whether its brief still waits in the prompt. */
+  async reportUnconfirmedWorkerStart(dispatchId: string): Promise<void> {
+    const db = this.getExistingOrchestrationDb()
+    // A paired server's start is settled by federation reconcile, not here.
+    if (!db || db.getFederatedDispatch(dispatchId)) {
+      return
+    }
+    const worker = settleRestartCutWorkerStart(db, dispatchId, this.getRuntimeId())
+    if (worker?.state !== 'start_unknown') {
+      return
+    }
+    const dispatch = db.getDispatchContextById(dispatchId)
+    // A chat's Dispatch names its session; only a terminal worker has a screen to read.
+    const handle = dispatch?.assignee_orca_session_id ? null : dispatch?.assignee_handle
+    const start: UnconfirmedWorkerStart =
+      handle && isTerminalHandle(handle) && !isStructuredWorkerHandle(handle)
+        ? {
+            surface: 'terminal',
+            screen: await this.readTerminal(handle, { screen: true, limit: 15 })
+              .then((view) => {
+                const { tail, draft } = redactWorkerTerminalView(view)
+                // A held paste shows as a bare prompt; the composer's draft says what waits there.
+                return [...tail, ...(draft ? [`Text waiting in its prompt: ${draft}`] : [])].join(
+                  '\n'
+                )
+              })
+              .catch(() => undefined)
+          }
+        : { surface: 'chat' }
+    observeUnconfirmedWorkerStart(db, dispatchId, start, this.workerTurnStopReportDeps)
   }
 
   async reconcileLegacyWorkerTerminals(

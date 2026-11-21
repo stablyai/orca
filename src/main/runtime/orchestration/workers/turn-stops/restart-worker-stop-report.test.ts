@@ -80,6 +80,7 @@ describe('worker stops across a restart', () => {
         db: ctx.db,
         reportDeps: ctx.reportDeps,
         reportRestingPane: (paneKey) => stops.reportRestingPane(paneKey),
+        reportUnconfirmedStart: async () => {},
         chats: null
       })
     await pass()
@@ -96,9 +97,36 @@ describe('worker stops across a restart', () => {
       db: ctx.db,
       reportDeps: ctx.reportDeps,
       reportRestingPane: (paneKey) => stops.reportRestingPane(paneKey),
+      reportUnconfirmedStart: async () => {},
       chats: null
     })
     expect(ctx.mail()).toEqual([])
+  })
+
+  it('decides every start left undecided, and no other worker', async () => {
+    const ctx = setup(HANDLE)
+    const startUnknown = (spec: string) => {
+      const task = ctx.db.createTask({ spec, runId: ctx.run.id })
+      const started = ctx.db.createStartingWorkerDispatch({
+        creator: { kind: 'system' },
+        maxDepth: Number.MAX_SAFE_INTEGER,
+        taskId: task.id,
+        startOptions: {}
+      })
+      return started.dispatch.id
+    }
+    const cut = startUnknown('cut by the restart')
+    const unseen = startUnknown('turn never seen')
+    ctx.db.markWorkerStartUnknown(unseen, 'turn_start_unobserved', 'not seen')
+    const decided: string[] = []
+    await reportWorkerStopsAcrossRestart({
+      db: ctx.db,
+      reportDeps: ctx.reportDeps,
+      reportRestingPane: async () => {},
+      reportUnconfirmedStart: async (dispatchId) => void decided.push(dispatchId),
+      chats: null
+    })
+    expect(decided.sort()).toEqual([cut, unseen].sort())
   })
 
   const chatPass = (
@@ -113,6 +141,7 @@ describe('worker stops across a restart', () => {
       db: ctx.db,
       reportDeps: ctx.reportDeps,
       reportRestingPane: async () => {},
+      reportUnconfirmedStart: async () => {},
       chats: {
         cutByLastRun,
         lineageRoot,
@@ -238,6 +267,7 @@ describe('worker stops across a restart', () => {
       db,
       reportDeps: { getDb: () => db, isWaitingForMail: () => false, notify: vi.fn() },
       reportRestingPane: async (paneKey) => void visited.push(paneKey),
+      reportUnconfirmedStart: async () => {},
       chats: null
     })
     expect(visited).toEqual([PANE])
@@ -276,6 +306,7 @@ describe('worker stops across a restart', () => {
         visited.push(paneKey)
         return new Promise(() => {})
       },
+      reportUnconfirmedStart: async () => {},
       chats: null
     })
     await vi.waitFor(() => expect(visited.sort()).toEqual([PANE, other].sort()))
@@ -345,6 +376,7 @@ describe('worker stops across a restart', () => {
         db: ctx.db,
         reportDeps: ctx.reportDeps,
         reportRestingPane: (paneKey) => stops.reportRestingPane(paneKey),
+        reportUnconfirmedStart: async () => {},
         chats: null
       })
       expect(ctx.mail()).toEqual([])
@@ -375,6 +407,7 @@ describe('worker stops across a restart', () => {
       db,
       reportDeps: { getDb: () => db, isWaitingForMail: () => false, notify: vi.fn() },
       reportRestingPane: async (paneKey) => void visited.push(paneKey),
+      reportUnconfirmedStart: async () => {},
       chats: null
     })
     expect(visited).toEqual([])
@@ -399,6 +432,7 @@ describe('worker stops across a restart', () => {
       db: ctx.db,
       reportDeps: ctx.reportDeps,
       reportRestingPane: () => new Promise(() => {}),
+      reportUnconfirmedStart: async () => {},
       chats: null
     })
     await vi.waitFor(() => expect(ctx.mail()).toHaveLength(1))
@@ -453,6 +487,7 @@ describe('worker stops across a restart', () => {
       db: ctx.db,
       reportDeps: ctx.reportDeps,
       reportRestingPane: async (paneKey) => void visited.push(paneKey),
+      reportUnconfirmedStart: async () => {},
       chats: {
         cutByLastRun: new Set(),
         lineageRoot: (sessionId) => sessionId,
@@ -473,6 +508,7 @@ describe('worker stops across a restart', () => {
       db: ctx.db,
       reportDeps: ctx.reportDeps,
       reportRestingPane: async () => {},
+      reportUnconfirmedStart: async () => {},
       chats: {
         cutByLastRun: new Set([CHAT_SESSION]),
         lineageRoot: (sessionId) => sessionId,
