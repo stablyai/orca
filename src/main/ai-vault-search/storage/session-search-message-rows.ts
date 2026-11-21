@@ -1,6 +1,7 @@
 import type SyncDatabase from '../../sqlite/sync-database'
 import type { TranscriptMessage } from '../../ai-vault/transcripts/session-transcript-consumers'
 import { identifierShadowText } from './session-search-identifier-split'
+import { recordSessionSearchDeletedRows } from './session-search-index-compaction'
 
 const CHUNK_TARGET_CHARS = 8000
 
@@ -82,5 +83,6 @@ export function deleteSearchMessages(db: SyncDatabase, sessionId: number, limit 
     full.run(id)
     message.run(id)
   }
+  recordSessionSearchDeletedRows(db, ids.length)
   return ids.length
 }

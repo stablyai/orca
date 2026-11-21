@@ -24,6 +24,7 @@ import {
   SessionSearchOrphanCleanup
 } from './session-search-retention-delete'
 import { openSessionSearchDatabase } from './session-search-schema'
+import { seedSessionSearchDeletedRows } from './session-search-index-compaction'
 
 export class SessionSearchStore {
   private readonly db: SyncDatabase
@@ -43,6 +44,7 @@ export class SessionSearchStore {
   ) {
     this.db = openSessionSearchDatabase(path)
     ensureSessionSearchQuerySchema(this.db)
+    seedSessionSearchDeletedRows(this.db)
     this.orphanCleanup = new SessionSearchOrphanCleanup(
       this.db,
       () => this.closed,

@@ -4,21 +4,32 @@ import { traceSessionSearch } from '../session-search-trace'
 
 const DELETED_KEY = 'fts_deleted_rows'
 const ROWS_KEY = 'fts_rows_at_compaction'
-export const SESSION_SEARCH_DELETED_ROWS_TRIGGER = 'search_fts_deleted_rows'
 
 /**
  * FTS5 keeps a deleted row's postings until a merge reaches the segment holding them, and
  * replacing whole sessions deletes rows faster than automerge reaches the oldest segments.
- * An index created before this counter seeds it from its rowid high-water mark, so a store
- * that has replaced many rows compacts once; an empty one starts at zero.
+ * An index from before this counter seeds it with the rows it has ever deleted (rowid
+ * high-water mark minus live rows), so one that replaced many rows compacts once.
  */
-export const SESSION_SEARCH_DELETED_ROWS_SQL = `
-INSERT OR IGNORE INTO meta(key, value) SELECT '${DELETED_KEY}', COALESCE(MAX(id), 0) FROM messages;
-CREATE TRIGGER IF NOT EXISTS ${SESSION_SEARCH_DELETED_ROWS_TRIGGER} AFTER DELETE ON messages BEGIN
-  INSERT INTO meta(key, value) VALUES ('${DELETED_KEY}', '1')
-    ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1;
-END;
-`
+export function seedSessionSearchDeletedRows(db: SyncDatabase): void {
+  // COUNT(*) walks every row, so only an index without the counter pays it, once.
+  if (db.prepare('SELECT 1 FROM meta WHERE key = ?').get(DELETED_KEY)) {
+    return
+  }
+  db.prepare(`INSERT OR IGNORE INTO meta(key, value)
+    SELECT ?, MAX(0, COALESCE(MAX(id), 0) - COUNT(*)) FROM messages WHERE true`).run(DELETED_KEY)
+}
+
+/** Counted per delete call in its transaction; a per-row trigger makes FTS5 flush on every row. */
+export function recordSessionSearchDeletedRows(db: SyncDatabase, rows: number): void {
+  if (rows > 0) {
+    db.prepare(`INSERT INTO meta(key, value) VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + excluded.value`).run(
+      DELETED_KEY,
+      String(rows)
+    )
+  }
+}
 
 // Below this many deletes a stale posting share stays small next to the cost of a rewrite.
 const MIN_DELETED_ROWS = 50_000
@@ -47,12 +58,17 @@ export async function compactSessionSearchIndex(
 ): Promise<void> {
   const deletedAtStart = metaInteger(db, DELETED_KEY)
   const changes = db.prepare('SELECT total_changes() AS n')
-  // Negative merges every level, not only one holding enough segments for automerge.
   const merge = db.prepare("INSERT INTO messages_fts(messages_fts, rank) VALUES('merge', ?)")
-  while (!closed()) {
+  // Writing the whole file twice bounds the pass even if indexing keeps adding segments.
+  const maxSteps =
+    (2 * Number(db.pragma('page_count', { simple: true }))) / MERGE_PAGES_PER_STEP + 16
+  for (let step = 0; step < maxSteps && !closed(); step++) {
     const before = Number(changes.get()!.n)
     const started = performance.now()
-    traceSessionSearch('merge', () => merge.run(-MERGE_PAGES_PER_STEP))
+    // Only the first step is negative: it starts one merge over every segment present now. The
+    // rest continue that merge, so segments indexing commits meanwhile aren't pulled in again.
+    const pages = step === 0 ? -MERGE_PAGES_PER_STEP : MERGE_PAGES_PER_STEP
+    traceSessionSearch('merge', () => merge.run(pages))
     const merged = Number(changes.get()!.n) - before >= 2
     await rest(performance.now() - started)
     if (!merged) {

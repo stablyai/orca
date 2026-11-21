@@ -214,36 +214,40 @@ export class SessionSearchOrphanCleanup {
     }
   }
 
+  private async drainRequested(): Promise<void> {
+    while (!this.closed() && (this.recoveryRequested || this.orphanedSessions.size > 0)) {
+      await this.drainKnownOrphans()
+      if (this.recoveryRequested && !this.closed()) {
+        this.recoveryRequested = false
+        await drainOrphanedMessages(
+          this.db,
+          () => this.closed(),
+          async () => {
+            await yieldToEventLoop()
+            await this.drainKnownOrphans()
+          },
+          this.onMessagesChanged
+        )
+      }
+    }
+  }
+
   private async runOrphanDrain(): Promise<void> {
     try {
       // A microtask would still run cleanup before the awaiting writer/open reply.
       await yieldToEventLoop()
       for (;;) {
-        while (!this.closed() && (this.recoveryRequested || this.orphanedSessions.size > 0)) {
-          await this.drainKnownOrphans()
-          if (this.recoveryRequested && !this.closed()) {
-            this.recoveryRequested = false
-            await drainOrphanedMessages(
-              this.db,
-              () => this.closed(),
-              async () => {
-                await yieldToEventLoop()
-                await this.drainKnownOrphans()
-              },
-              this.onMessagesChanged
-            )
-          }
-        }
+        await this.drainRequested()
         if (this.closed() || !sessionSearchIndexCompactionDue(this.db)) {
           break
         }
-        // Replacements keep arriving during a long first compaction; drain them between steps.
+        // Replacements and retention sweeps keep arriving during a long first compaction.
         await compactSessionSearchIndex(
           this.db,
           () => this.closed(),
           async (workMs) => {
             await this.rest(workMs)
-            await this.drainKnownOrphans()
+            await this.drainRequested()
           }
         )
       }
