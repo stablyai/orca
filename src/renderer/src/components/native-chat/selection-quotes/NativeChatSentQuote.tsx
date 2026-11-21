@@ -78,7 +78,8 @@ export function NativeChatSentQuote({ node }: { node?: HastNode }): React.JSX.El
           type="button"
           variant="outline"
           size="xs"
-          className="my-1 max-w-full"
+          // The end margin is the one space before the comment on its line.
+          className="my-1 me-1 max-w-full"
           onClick={() =>
             jumpToQuoteSource(sourceText, {
               jumpToMessage,

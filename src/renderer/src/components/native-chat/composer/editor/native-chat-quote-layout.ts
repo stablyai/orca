@@ -1,5 +1,4 @@
 import { Plugin, TextSelection, type Transaction } from '@tiptap/pm/state'
-import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { promptLeafString, QUOTE_LINE, QUOTE_NODE } from './native-chat-prompt-document-text'
 
@@ -66,78 +65,15 @@ export function layoutQuoteChips(state: { doc: ProseMirrorNode; tr: Transaction 
   return tr
 }
 
-/**
- * A gap: the empty line directly above a chip line. It shows no line, as in the sent message. The
- * text keeps the blank line that "Add to chat" writes, so the agent gets the same text.
- */
-function isQuoteGap(doc: ProseMirrorNode, index: number): boolean {
-  return (
-    doc.maybeChild(index)?.content.size === 0 &&
-    doc.maybeChild(index + 1)?.firstChild?.type.name === QUOTE_NODE
-  )
-}
-
-function quoteGapDecorations(doc: ProseMirrorNode): DecorationSet {
-  const gaps: Decoration[] = []
-  doc.forEach((block, offset, index) => {
-    if (isQuoteGap(doc, index)) {
-      gaps.push(
-        Decoration.node(offset, offset + block.nodeSize, {
-          'data-native-chat-quote-gap': '',
-          'aria-hidden': 'true',
-          class: 'h-0 overflow-hidden'
-        })
-      )
-    }
-  })
-  return DecorationSet.create(doc, gaps)
-}
-
-/** The caret place beside gap `gap`: the end of the line above it when `back`, else the chip line's start. */
-function pastGap(doc: ProseMirrorNode, gap: number, back: boolean): number {
-  let start = 1
-  for (let index = 0; index < gap; index++) {
-    start += doc.child(index).nodeSize
-  }
-  return back && gap > 0 ? start - 2 : start + doc.child(gap).nodeSize
-}
-
-/**
- * Arrows, Backspace and Delete next to a gap act as if the gap were not there. Backspace and Delete
- * change no text there, as next to a chip line with no gap: a chip always starts its line.
- */
-export function quoteGapKey(
-  view: EditorView,
-  key: 'Backspace' | 'Delete' | 'ArrowLeft' | 'ArrowRight'
-): boolean {
-  const { selection, doc } = view.state
-  const { $from } = selection
-  const back = key === 'Backspace' || key === 'ArrowLeft'
-  const gap = $from.index(0) + (back ? -1 : 1)
-  const atEdge = $from.parentOffset === (back ? 0 : $from.parent.content.size)
-  if (!selection.empty || $from.depth !== 1 || !atEdge || !isQuoteGap(doc, gap)) {
-    return false
-  }
-  if (key !== 'Delete') {
-    view.dispatch(
-      view.state.tr
-        .setSelection(TextSelection.create(doc, pastGap(doc, gap, back)))
-        .scrollIntoView()
-    )
-  }
-  return true
-}
-
 export const nativeChatQuoteLayout = new Plugin({
-  props: { decorations: (state) => quoteGapDecorations(state.doc) },
-  appendTransaction: (transactions, old, state) => {
+  appendTransaction: (transactions, _old, state) => {
     // Programmatic writes (preventUpdate) must keep the text they set.
-    const layout = transactions.some((tr) => tr.docChanged && !tr.getMeta('preventUpdate'))
-      ? layoutQuoteChips(state)
-      : null
-    const tr = layout?.docChanged ? layout : null
+    if (!transactions.some((tr) => tr.docChanged && !tr.getMeta('preventUpdate'))) {
+      return null
+    }
+    const tr = layoutQuoteChips(state)
     const { selection } = state
-    if (tr && selection instanceof TextSelection) {
+    if (tr.docChanged && selection instanceof TextSelection) {
       // Text typed before a chip stays on the line above it.
       tr.setSelection(
         TextSelection.create(
@@ -147,15 +83,6 @@ export const nativeChatQuoteLayout = new Plugin({
         )
       )
     }
-    // No caret move rests on a gap: an up arrow or a click goes on past it.
-    const caret = (tr ?? state).selection
-    const doc = tr?.doc ?? state.doc
-    if (!caret.empty || caret.$from.depth !== 1 || !isQuoteGap(doc, caret.$from.index(0))) {
-      return tr
-    }
-    const back = caret.from < old.selection.from
-    return (tr ?? state.tr).setSelection(
-      TextSelection.create(doc, pastGap(doc, caret.$from.index(0), back))
-    )
+    return tr.docChanged ? tr : null
   }
 })

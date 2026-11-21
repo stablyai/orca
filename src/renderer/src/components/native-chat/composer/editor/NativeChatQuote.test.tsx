@@ -99,7 +99,7 @@ describe('quote chips in the composer', () => {
     }
   /**
    * Typed lines, an empty line and a chip line; then the chip line joins the empty line, as a delete
-   * across the empty line does. Backspace there leaves the text as it is.
+   * across the empty line does.
    */
   const joinChipLineUnder =
     (lines: string[]) =>

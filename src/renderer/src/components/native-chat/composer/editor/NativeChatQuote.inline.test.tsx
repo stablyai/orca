@@ -56,17 +56,14 @@ function mount(text: string) {
   return { view, input: inputRef.current!, editor: promptEditor(screen.getByRole('textbox')) }
 }
 
-/**
- * The composer lines, after the text the agent gets is checked to be `text`. The empty line above
- * a chip line has no height, so it is not a line.
- */
+/** The composer lines, after the text the agent gets is checked to be `text`. HIDDEN: a hidden line. */
 async function composerLines(text: string): Promise<string[]> {
   const { view, input } = mount(text)
   await waitFor(() => expect(view.container.textContent).toContain('Quote: '))
   expect(input.value).toBe(text)
-  return [...view.container.querySelectorAll('.ProseMirror > p')]
-    .filter((line) => !line.matches('[data-native-chat-quote-gap]'))
-    .map(lineText)
+  return [...view.container.querySelectorAll('.ProseMirror > p')].map((line) =>
+    line.matches('[aria-hidden="true"], .h-0') ? 'HIDDEN' : lineText(line)
+  )
 }
 
 function renderSent(text: string): Element {
@@ -89,14 +86,18 @@ function sentLines(text: string): string[] {
 const TABLE: [string, string, string[]][] = [
   ['a comment after a quote', '> q\n\nc', [`${CHIP} c`]],
   ['a comment after each quote', '> a\n\nc1\n> b\n\nc2', [`${CHIP} c1`, `${CHIP} c2`]],
-  // "Add to chat" after a comment writes a blank line before the next quote.
-  ['the next quote after a comment', '> a\n\nc1\n\n> b\n\nc2', [`${CHIP} c1`, `${CHIP} c2`]],
+  // An empty line that the user typed above a quote shows.
+  [
+    'an empty line between two chip lines',
+    '> a\n\nc1\n\n> b\n\nc2',
+    [`${CHIP} c1`, '', `${CHIP} c2`]
+  ],
   ['two quotes, then a comment', '> a\n\n> b\n\nc', [`${CHIP} ${CHIP} c`]],
   ['a line below a quote', '> q\n\n\nbelow', [CHIP, 'below']],
   ['an empty line below a quote', '> q\n\n\n\nbelow', [CHIP, '', 'below']],
   ['a line above a quote', 'above\n> q\n\nc', ['above', `${CHIP} c`]],
-  ['a blank line above a quote', 'above\n\n> q\n\nc', ['above', `${CHIP} c`]],
-  ['an empty line above a quote', 'above\n\n\n> q\n\nc', ['above', '', `${CHIP} c`]]
+  ['an empty line above a quote', 'above\n\n> q\n\nc', ['above', '', `${CHIP} c`]],
+  ['two empty lines above a quote', 'above\n\n\n> q\n\nc', ['above', '', '', `${CHIP} c`]]
 ]
 
 it.each(TABLE)('shows %s in the composer', async (_name, text, lines) => {
@@ -117,12 +118,12 @@ it('marks each sent chip line, so it takes no paragraph gap above or below it', 
 it('puts one space between the chip and the comment, in the composer and when sent', async () => {
   const { view } = mount('> q\n\nc')
   await waitFor(() => expect(view.container.textContent).toContain('Quote: '))
-  // The composer text has no space there: the chip's margin is the space.
+  // No text has a space there: the chip's end margin is the space.
   expect(view.container.querySelector('.ProseMirror [data-selected]')!.classList).toContain('me-1')
   cleanup()
   const chip = renderSent('> q\n\nc').querySelector('[data-native-chat-sent-quote]')!
-  expect([...chip.classList].filter((name) => name.startsWith('me-'))).toEqual([])
-  expect(chip.nextSibling?.textContent).toBe(' c')
+  expect(chip.classList).toContain('me-1')
+  expect(chip.nextSibling?.textContent).toBe('c')
 })
 
 const NATIVE = 'native'
@@ -239,50 +240,6 @@ it.each(KEY_CASES)('%s on %j at %s', (key, text, _caret, place, outcome) => {
   }
   expect(browserHandles).toBe(false)
   expect(input.value).toBe(outcome)
-})
-
-// Lines: 0 'x' (caret places 1, 2), 1 the hidden empty line (4), 2 the chip line (6 before the chip).
-const GAP_TEXT = 'x\n\n> q\n\nc'
-
-it('hides the empty line above a chip line from screen readers', async () => {
-  const { view } = mount(GAP_TEXT)
-  await waitFor(() => expect(view.container.textContent).toContain('Quote: '))
-  expect(
-    view.container.querySelector('[data-native-chat-quote-gap]')?.getAttribute('aria-hidden')
-  ).toBe('true')
-})
-
-it.each([
-  ['ArrowLeft', 6, 2],
-  ['Backspace', 6, 2],
-  ['ArrowRight', 2, 6],
-  ['Delete', 2, 2]
-])('%s next to the hidden empty line steps over it and keeps the text', (key, from, to) => {
-  const { input, editor } = mount(GAP_TEXT)
-  act(() => {
-    editor.commands.setTextSelection(from)
-  })
-  let browserHandles = true
-  act(() => {
-    browserHandles = press(key)
-  })
-  expect(browserHandles).toBe(false)
-  expect(editor.state.selection.from).toBe(to)
-  expect(input.value).toBe(GAP_TEXT)
-})
-
-it.each([
-  ['from below', 6, 2],
-  ['from above', 2, 6]
-])('moves a caret that lands on the hidden empty line %s on past it', (_name, from, to) => {
-  const { editor } = mount(GAP_TEXT)
-  act(() => {
-    editor.commands.setTextSelection(from)
-  })
-  act(() => {
-    editor.commands.setTextSelection(4)
-  })
-  expect(editor.state.selection.from).toBe(to)
 })
 
 it('moves the caret across a chip as across an image: one press steps over it', () => {
