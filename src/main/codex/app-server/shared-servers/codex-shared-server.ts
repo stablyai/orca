@@ -231,6 +231,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
       leaseId: lease.id,
       ...(this.sweep ? { sweep: this.sweep } : {}),
       serverPid: this.pid,
+      ...(physical.watcherPid !== undefined ? { watcherPid: physical.watcherPid } : {}),
       timeoutMs: RELEASE_REQUEST_TIMEOUT_MS
     }).catch(() => false)
     // A chat that resumed one of these threads here owns its subscription now; abandoned threads

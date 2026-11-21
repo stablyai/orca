@@ -70,7 +70,7 @@ function serverChain(
  *  chat's Stop is proven only when the server runs nothing else at all. */
 export async function scanDarwin(
   serverPid: number,
-  isLauncherName: (name: string | undefined) => boolean
+  watcherPid: number | undefined
 ): Promise<CodexLeaseProcessScan | null> {
   const processes = await readDarwinProcesses()
   if (!processes?.has(serverPid)) {
@@ -89,19 +89,12 @@ export async function scanDarwin(
       return group !== undefined && chain.has(group) ? [group] : []
     })
   )
-  // The launcher's owner-pipe watcher is a launcher-named child of a launcher (never of Codex) that
-  // leads its own process group (provider-exec's run_watcher setpgid(0, 0)): not a chat's work.
+  // The launcher's owner-pipe watcher (the pid its bootstrap reported, leading its own group beside
+  // the CLI) is infrastructure; nothing is exempted by name, so a command Codex started still counts.
   const infrastructure = new Set(chain)
-  for (const pid of chain) {
-    if (!isLauncherName(processes.get(pid)?.name)) {
-      continue
-    }
-    for (const child of children.get(pid) ?? []) {
-      const row = processes.get(child)
-      if (isLauncherName(row?.name) && row?.group === child) {
-        infrastructure.add(child)
-      }
-    }
+  const watcher = watcherPid === undefined ? undefined : processes.get(watcherPid)
+  if (watcherPid !== undefined && watcher?.group === watcherPid && chain.has(watcher.parent)) {
+    infrastructure.add(watcherPid)
   }
   const members = [...processes].flatMap(([pid, { group }]) => (owned.has(group) ? [pid] : []))
   const others = [...new Set([...descendants(children, serverPid), ...members])].filter(

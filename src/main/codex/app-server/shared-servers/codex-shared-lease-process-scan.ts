@@ -27,13 +27,14 @@ export type CodexLeaseProcessScan = {
 export async function scanCodexLeaseProcesses(
   envName: string,
   serverPid: number,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  watcherPid?: number
 ): Promise<CodexLeaseProcessScan | null> {
   if (platform === 'linux') {
     return scanLinux(envName, serverPid)
   }
   if (platform === 'darwin') {
-    return scanDarwin(serverPid, isLauncherName)
+    return scanDarwin(serverPid, watcherPid)
   }
   return null
 }

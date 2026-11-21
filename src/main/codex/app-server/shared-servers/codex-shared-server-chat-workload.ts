@@ -10,7 +10,11 @@ import { CODEX_SHARED_LEASE_ENV } from './codex-shared-server-lease-requests'
 
 const SWEEP_SETTLE_MS = 1_000
 
-export type CodexSharedServerProcessSweep = (serverPid: number, leaseId: string) => Promise<boolean>
+export type CodexSharedServerProcessSweep = (
+  serverPid: number,
+  leaseId: string,
+  watcherPid?: number
+) => Promise<boolean>
 
 /** A dedicated server's close reaped the chat's whole tree; on a shared one only this lease's
  *  commands are stopped. Resolves true only on positive evidence that none is left. */
@@ -19,6 +23,7 @@ export async function stopCodexSharedChatWorkload(input: {
   threads: readonly string[]
   leaseId: string
   serverPid: number | undefined
+  watcherPid?: number
   timeoutMs: number
   /** Stops and checks this lease's processes under the server; true only when none is left. */
   sweep?: CodexSharedServerProcessSweep
@@ -28,7 +33,11 @@ export async function stopCodexSharedChatWorkload(input: {
     return false
   }
   // Codex's own list misses a command that detached from it, and older Codex can't list at all.
-  const leftovers = await (input.sweep ?? stopTaggedProcesses)(input.serverPid, input.leaseId)
+  const leftovers = await (input.sweep ?? stopTaggedProcesses)(
+    input.serverPid,
+    input.leaseId,
+    input.watcherPid
+  )
   return terminalsGone !== false && leftovers
 }
 
@@ -102,17 +111,28 @@ async function stopListedTerminals(input: {
 async function stopTaggedProcesses(
   serverPid: number,
   leaseId: string,
+  watcherPid?: number,
   platform: NodeJS.Platform = process.platform
 ): Promise<boolean> {
   try {
-    const first = await scanCodexLeaseProcesses(CODEX_SHARED_LEASE_ENV, serverPid, platform)
+    const first = await scanCodexLeaseProcesses(
+      CODEX_SHARED_LEASE_ENV,
+      serverPid,
+      platform,
+      watcherPid
+    )
     if (!first) {
       return false
     }
     const targets = first.tagged(leaseId)
     if (targets.length > 0) {
       // Signalled only if a second reading still shows the tag, so a reused pid is never hit.
-      const confirm = await scanCodexLeaseProcesses(CODEX_SHARED_LEASE_ENV, serverPid, platform)
+      const confirm = await scanCodexLeaseProcesses(
+        CODEX_SHARED_LEASE_ENV,
+        serverPid,
+        platform,
+        watcherPid
+      )
       const still = new Set(confirm?.tagged(leaseId) ?? [])
       for (const pid of targets) {
         if (still.has(pid)) {
@@ -127,7 +147,12 @@ async function stopTaggedProcesses(
     }
     // Always a reading taken after the first finished: a process forked while the first was
     // being read, or reparented when its parent exited mid-read, shows up in this one.
-    const after = await scanCodexLeaseProcesses(CODEX_SHARED_LEASE_ENV, serverPid, platform)
+    const after = await scanCodexLeaseProcesses(
+      CODEX_SHARED_LEASE_ENV,
+      serverPid,
+      platform,
+      watcherPid
+    )
     if (
       !after ||
       !after.bounded ||
