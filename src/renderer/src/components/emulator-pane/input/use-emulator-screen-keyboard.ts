@@ -79,6 +79,8 @@ export function useEmulatorScreenKeyboard({
     }
     const syncId = ++layoutSyncIdRef.current
     heldInput.startSync()
+    // A dead key the simulator took under the old layout no longer owns the Mac's next composition.
+    physicalDeadKeyRef.current = false
     void callRuntimeRpc<{ physicalKeys: boolean }>(
       { kind: 'local' },
       'emulator.syncKeyboardLayout',
@@ -95,7 +97,7 @@ export function useEmulatorScreenKeyboard({
         physicalKeysRef.current = physicalKeys
         heldInput.finishSync(simulatorSinks)
       })
-  }, [heldInput, scrcpyKeyboard, simulatorSinks, worktreeId])
+  }, [heldInput, physicalDeadKeyRef, scrcpyKeyboard, simulatorSinks, worktreeId])
 
   const cancelActivePaste = useCallback((): void => {
     pasteRequestIdRef.current += 1
@@ -173,6 +175,10 @@ export function useEmulatorScreenKeyboard({
         physicalKeysRef.current &&
         !heldInput.syncingLayout &&
         (event.key === 'Dead' || (imeKey && physicalDeadKeyRef.current))
+      if (event.key === 'Dead' && !simulatorDeadKey) {
+        // The Mac composes this dead key, so its composition must reach the device.
+        physicalDeadKeyRef.current = false
+      }
       // Android takes whatever character the host layout produced as text, Option and AltGr ones too.
       const androidText = scrcpyKeyboard !== null && [...event.key].length === 1
       // AltGr arrives as Ctrl+Alt on Windows and Linux; its characters are text, not a Ctrl shortcut.

@@ -142,4 +142,16 @@ describe('HeldSimulatorInput', () => {
 
     expect(delivered).toEqual(['text:你', 'text:ḍ̇'])
   })
+
+  it('releases keys held by a layout sync only after earlier frames have gone out', async () => {
+    const input = new HeldSimulatorInput()
+    // Shift+A goes out as four spaced frames; the sync starts and ends while they do.
+    input.pressKey(press('A', 'KeyA', { shift: true }), sinks())
+    input.startSync()
+    input.pressKey(press('b', 'KeyB'), sinks())
+    input.finishSync(sinks())
+    await settle()
+
+    expect(delivered).toEqual(['key:4', 'key:5'])
+  })
 })

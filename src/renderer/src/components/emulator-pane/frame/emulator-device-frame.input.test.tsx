@@ -454,4 +454,52 @@ describe('EmulatorDeviceFrame input', () => {
 
     expect(deadKey.defaultPrevented).toBe(false)
   })
+
+  it('keeps an accent the Mac composes after a layout change that followed a simulator dead key', async () => {
+    vi.useFakeTimers()
+    let layoutChanged: (event: { phase: string }) => void = () => {}
+    vi.stubGlobal('api', {
+      app: {
+        onKeyboardLayoutChanged: (listener: typeof layoutChanged) => {
+          layoutChanged = listener
+          return () => undefined
+        }
+      }
+    })
+    callRuntimeRpc.mockResolvedValue({ physicalKeys: true })
+    renderFrame()
+    act(() => {
+      FakeWebSocket.instances[0]?.open()
+    })
+    const screen = getScreen()
+    const proxy = screen.querySelector<HTMLTextAreaElement>('[data-emulator-keyboard-proxy]')!
+    await act(async () => {
+      screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
+    })
+    // The simulator takes a dead key physically, and the Mac never composes it.
+    act(() => {
+      proxy.dispatchEvent(keyEvent('keydown', { altKey: true, code: 'KeyE', key: 'Dead' }))
+      vi.runAllTimers()
+    })
+
+    // The Mac switches to a layout the simulator has no twin for, then composes "é" itself.
+    let finishSync: (result: { physicalKeys: boolean }) => void = () => {}
+    callRuntimeRpc.mockReturnValue(new Promise((resolve) => (finishSync = resolve)))
+    act(() => layoutChanged({ phase: 'invalidated' }))
+    act(() => {
+      proxy.dispatchEvent(keyEvent('keydown', { altKey: true, code: 'KeyE', key: 'Dead' }))
+      proxy.value = 'é'
+      proxy.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: 'é' }))
+    })
+    callRuntimeRpc.mockResolvedValue(undefined)
+    await act(async () => {
+      finishSync({ physicalKeys: false })
+      await vi.runAllTimersAsync()
+    })
+
+    expect(callRuntimeRpc).toHaveBeenLastCalledWith({ kind: 'local' }, 'emulator.type', {
+      text: 'é',
+      worktree: 'wt-1'
+    })
+  })
 })

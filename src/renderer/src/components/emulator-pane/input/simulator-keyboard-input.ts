@@ -191,6 +191,11 @@ export class HeldSimulatorInput {
     if (this.holding || !sinks) {
       return
     }
+    // Keys held by a sync or commit must not pass frames that are still going out either.
+    if (this.held.length > 0 && Date.now() < this.framesDoneAt) {
+      this.waitForFrames()
+      return
+    }
     const frames: ServeSimKeyboardFrame[] = []
     let text = ''
     for (let item = this.held[0]; item; item = this.held[0]) {
