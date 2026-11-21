@@ -7438,7 +7438,7 @@
           "638a2d221d": "Hide sleeping",
           "f506a1262a": "Filter workspaces",
           "75405270ed": "Edit filters ({{value0}} active)",
-          "489d1c8c9f": "Search projects...",
+          "489d1c8c9f": "Search projects (*, ||)...",
           "ee240a39eb": "Edit filters",
           "automationCreated": "Hide automation-created",
           "cliCreated": "Hide CLI-created",

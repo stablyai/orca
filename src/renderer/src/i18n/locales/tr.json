@@ -6399,7 +6399,7 @@
           "638a2d221d": "Uyuyanları gizle",
           "f506a1262a": "Çalışma alanlarını filtrele",
           "75405270ed": "Filtreleri düzenle ({{value0}} etkin)",
-          "489d1c8c9f": "Projelerde ara...",
+          "489d1c8c9f": "Projelerde ara (*, ||)...",
           "ee240a39eb": "Filtreleri düzenle",
           "automationCreated": "Otomasyonla oluşturulanları gizle",
           "cliCreated": "CLI ile oluşturulanları gizle",

@@ -1,5 +1,6 @@
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard/clipboard-text'
+import { compileRepoSearchPattern, type RepoSearchPattern } from './repo-search-pattern'
 
 // Path scores must exceed every display-name score; choose an offset above realistic display-name lengths.
 const PATH_SCORE_OFFSET = 1000
@@ -18,13 +19,13 @@ export function isRepoSearchQueryTooLarge(
   return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
 
-function matchScore(repo: Repo, query: string): number | null {
-  const displayNameIndex = repo.displayName.toLowerCase().indexOf(query)
+function matchScore(repo: Repo, match: RepoSearchPattern): number | null {
+  const displayNameIndex = match(repo.displayName.toLowerCase())
   if (displayNameIndex !== -1) {
     return displayNameIndex
   }
 
-  const pathIndex = repo.path.toLowerCase().indexOf(query)
+  const pathIndex = match(repo.path.toLowerCase())
   if (pathIndex !== -1) {
     // Name hits outrank paths (#379); paths only disambiguate fallback matches.
     return PATH_SCORE_OFFSET + pathIndex
@@ -43,9 +44,10 @@ export function searchRepos(repos: readonly Repo[], rawQuery: string): readonly 
     return repos
   }
 
+  const match = compileRepoSearchPattern(query)
   const matches: RepoMatch[] = []
   for (const [index, repo] of repos.entries()) {
-    const score = matchScore(repo, query)
+    const score = matchScore(repo, match)
     if (score !== null) {
       matches.push({ repo, score, index })
     }

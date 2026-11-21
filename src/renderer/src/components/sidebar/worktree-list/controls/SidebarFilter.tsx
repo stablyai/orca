@@ -277,7 +277,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
                 autoFocus
                 placeholder={t(
                   'auto.components.sidebar.SidebarFilter.489d1c8c9f',
-                  'Search projects...'
+                  'Search projects (*, ||)...'
                 )}
                 value={query}
                 onValueChange={(nextQuery) => {
