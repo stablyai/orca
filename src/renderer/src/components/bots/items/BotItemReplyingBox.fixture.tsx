@@ -29,7 +29,10 @@ function asking(uid: number, question: string): { item: BotItem; events: BotItem
     title: 'Pair the M4 Air',
     owner: { botId: fixtureCos.id, name: 'Dev Ops' },
     status: 'needs_you',
-    question: { eventId: `q${uid}`, text: question }
+    question: { eventId: `q${uid}`, text: question },
+    createdAt: Date.now() - 3 * 3_600_000,
+    updatedAt: Date.now() - 20 * 60_000,
+    lastActivityAt: Date.now() - 20 * 60_000
   })
   const events: BotItemEvent[] = [
     { id: `m${uid}`, kind: 'made', actor: asker, data: {}, at: Date.now() - 3 * 3_600_000 },
