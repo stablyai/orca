@@ -133,7 +133,15 @@ describe("mail sent to a coordinating chat's own address, outside its Run", () =
   const to = `orca_session_id:${COORDINATOR}`
   /** Mail to the chat itself, tagged with no Run, as bot item mail and peers send it. */
   const directMail = (id: string, from: string) =>
-    db.insertMessage({ id, from, to, type: 'status', subject: 'commented', body: 'how about it?' })
+    db.insertMessage({
+      id,
+      from,
+      to,
+      type: 'status',
+      subject: 'commented',
+      body: 'how about it?',
+      ...(from === 'orca:items' ? { orcaAuthored: 'item-mail' as const } : {})
+    })
 
   it('delivers direct mail to the chat and exposes undelivered messages through the unbound check', async () => {
     const chat = await openChat(COORDINATOR)

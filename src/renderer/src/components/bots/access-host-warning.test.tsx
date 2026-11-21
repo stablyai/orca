@@ -20,6 +20,7 @@ import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/run
 import { publishBots, setBotHostListing, stampBotHost } from '@/lib/bot-catalog-snapshot'
 import { ConfirmationDialogProvider } from '../dismiss/confirmation/confirmation-dialog'
 import { BotAccessControlLine } from './BotAccessReach'
+import { BotConnectorPageSections } from './bot-connector-page'
 import { useConfirmBotAccess } from './bot-access-confirm'
 
 const initial = useAppStore.getState()
@@ -134,7 +135,13 @@ afterEach(() => {
 describe('paired access host identity', () => {
   it('names the verified machine for a runtime-stamped web grant', async () => {
     receive(status(1, 'Atlas Server'))
-    show(remote)
+    render(
+      <ConfirmationDialogProvider>
+        <BotConnectorPageSections.Provider value={true}>
+          <Access bot={remote} />
+        </BotConnectorPageSections.Provider>
+      </ConfirmationDialogProvider>
+    )
     await expectWarningAndConsent('Atlas Server')
   })
   it('uses neutral wording before the current pairing identifies its machine', async () => {

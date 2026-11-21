@@ -12,7 +12,13 @@ import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/
 import { describeApprovalClosed } from './worker-approval-text'
 import { describeStop, WORKER_STOP_SUBJECTS } from './worker-turn-stop-wording'
 
-export type WorkerTurnStopReason = 'finished' | 'errored' | 'needs-input' | 'exited' | 'lost'
+export type WorkerTurnStopReason =
+  | 'finished'
+  | 'errored'
+  | 'needs-input'
+  | 'exited'
+  | 'lost'
+  | 'start-unconfirmed'
 
 export type WorkerTurnStop = {
   /** The worker's own mailbox identity: terminal handle, chat address or structured worker handle. */
@@ -35,6 +41,8 @@ export type WorkerTurnStop = {
   leftover?: string
   /** A start that never got a terminal has no output to read. */
   neverStarted?: true
+  /** For `start-unconfirmed`: where the brief waits, which decides how to check it. */
+  startSurface?: 'terminal' | 'chat'
   /** How its going away settled the Dispatch; absent while the Dispatch stays open. */
   settled?: 'failed' | 'circuit_broken'
   /** A chat request that failed, reported in the chat's own error words. */
@@ -44,6 +52,10 @@ export type WorkerTurnStop = {
 export type WorkerRequestError = {
   text: string
   detail?: string
+  /** The shared failure kind, when the failure was typed. */
+  kind?: string
+  /** A terminal's failure, held back like its other rests while it waits for mail; a chat's is not. */
+  heldByWaits?: true
   /** What the coordinator's mail carries about the failed request. */
   facts: Record<string, unknown>
 }
@@ -67,14 +79,18 @@ export function workerTurnStopDispatchId(target: WorkerTurnStopDispatch): string
   return target.kind === 'local' ? target.dispatch.id : target.attachment.dispatch_id
 }
 
-/** Waiting on mail, or a clean finish resting on its own question, rejected report or helpers, is deliberate. */
+/** Waiting on mail, or a clean finish resting on its own question, rejected report or helpers, is deliberate.
+ *  A failed request a chat showed never is. */
 export function isDeliberateRest(
   db: OrchestrationDb,
   target: WorkerTurnStopDispatch,
-  stop: Pick<WorkerTurnStop, 'reason' | 'turnStartedAt'>,
+  stop: Pick<WorkerTurnStop, 'reason' | 'turnStartedAt' | 'requestError'>,
   deps: Pick<WorkerTurnStopReportDeps, 'isWaitingForMail'>
 ): boolean {
   const dispatchId = workerTurnStopDispatchId(target)
+  if (stop.requestError && !stop.requestError.heldByWaits) {
+    return false
+  }
   return (
     deps.isWaitingForMail(`dispatch:${dispatchId}`) ||
     (stop.reason === 'finished' &&
@@ -97,7 +113,9 @@ export function sendWorkerReport(
   const dispatchId = workerTurnStopDispatchId(target)
   const subject = stop.approval
     ? 'Worker is waiting for permission'
-    : WORKER_STOP_SUBJECTS[stop.reason]
+    : stop.requestError?.kind === 'usageLimitReached'
+      ? 'Worker hit its usage limit'
+      : WORKER_STOP_SUBJECTS[stop.reason]
   const payload = {
     dispatchId,
     handle: stop.from,

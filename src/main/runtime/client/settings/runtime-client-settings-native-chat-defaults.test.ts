@@ -35,3 +35,26 @@ it("reports a desktop's untouched CLI default as its choice", () => {
     nativeChatProviders: {}
   })
 })
+
+it("reports a headless host's Terminal once a paired client chose it", async () => {
+  let stored: GlobalSettings = getDefaultSettings('/home/user')
+  const controller = new RuntimeClientSettingsController(
+    {
+      getSettings: () => stored,
+      updateSettings: (updates: Partial<GlobalSettings>) => {
+        stored = { ...stored, ...updates }
+      },
+      runDurableMutation: vi.fn()
+    },
+    undefined,
+    undefined,
+    () => true
+  )
+
+  await controller.update({ agentDefaultSurface: 'terminal' })
+
+  expect(controller.get().nativeChatDefaults).toEqual({
+    agentDefaultSurface: 'terminal',
+    nativeChatProviders: {}
+  })
+})

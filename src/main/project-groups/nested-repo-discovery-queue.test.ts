@@ -42,25 +42,34 @@ function fixture(paths: typeof posix, onRead: (count: number) => void = () => {}
 }
 
 it.each([
-  ['local Windows paths', win32],
-  ['SSH POSIX paths', posix]
-] as const)('preserves broad BFS order and inherited ignores with %s', async (_label, paths) => {
-  const f = fixture(paths)
-  const result = await scanNestedRepos({
-    path: f.root,
-    options: { maxRepos: 500 },
-    filesystem: f.filesystem
-  })
-  expect(f.visits).toEqual([f.root, ...f.branches, ...f.descendants])
-  expect(result.repos.map(({ path }) => path)).toEqual(f.repositories)
-  expect(result.repos.every(({ depth }) => depth === 3)).toBe(true)
-  expect(result).toMatchObject({
-    truncated: false,
-    stopped: false,
-    timedOut: false,
-    timeoutMs: null
-  })
-})
+  ['local Windows paths', win32, {}],
+  ['SSH POSIX paths', posix, { timeoutMs: null }]
+] as const)(
+  'preserves broad BFS order and inherited ignores with %s',
+  async (_label, paths, options) => {
+    let now = 0
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const f = fixture(paths, (count) => {
+      if (count === 200) {
+        now = 1_000
+      }
+    })
+    const result = await scanNestedRepos({
+      path: f.root,
+      options: { maxRepos: 500, ...options },
+      filesystem: f.filesystem
+    })
+    expect(f.visits).toEqual([f.root, ...f.branches, ...f.descendants])
+    expect(result.repos.map(({ path }) => path)).toEqual(f.repositories)
+    expect(result.repos.every(({ depth }) => depth === 3)).toBe(true)
+    expect(result).toMatchObject({
+      truncated: false,
+      stopped: false,
+      timedOut: false,
+      timeoutMs: null
+    })
+  }
+)
 
 it('preserves max depth and result caps during broad traversal', async () => {
   const depth = fixture(posix)
@@ -99,24 +108,19 @@ it('honors abort after a broad prefix has been consumed', async () => {
   expect(result).toMatchObject({ stopped: true, timedOut: false })
 })
 
-it.each([null, 500])(
-  'preserves optional timeout=%s after consuming a broad prefix',
-  async (timeoutMs) => {
-    let now = 0
-    vi.spyOn(Date, 'now').mockImplementation(() => now)
-    const f = fixture(posix, (count) => {
-      if (count === 200) {
-        now = 1_000
-      }
-    })
-    const result = await scanNestedRepos({
-      path: f.root,
-      options: { maxRepos: 500, timeoutMs },
-      filesystem: f.filesystem
-    })
-    expect(result.repos.map(({ path }) => path)).toEqual(
-      timeoutMs === null ? f.repositories : f.repositories.slice(0, 38)
-    )
-    expect(result).toMatchObject({ timedOut: timeoutMs !== null, timeoutMs, stopped: false })
-  }
-)
+it('honors a timeout after consuming a broad prefix', async () => {
+  let now = 0
+  vi.spyOn(Date, 'now').mockImplementation(() => now)
+  const f = fixture(posix, (count) => {
+    if (count === 200) {
+      now = 1_000
+    }
+  })
+  const result = await scanNestedRepos({
+    path: f.root,
+    options: { maxRepos: 500, timeoutMs: 500 },
+    filesystem: f.filesystem
+  })
+  expect(result.repos.map(({ path }) => path)).toEqual(f.repositories.slice(0, 38))
+  expect(result).toMatchObject({ timedOut: true, timeoutMs: 500, stopped: false })
+})

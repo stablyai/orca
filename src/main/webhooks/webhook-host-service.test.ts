@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -11,6 +11,7 @@ import type { WebhookCloudCalls } from './webhook-cloud-routes'
 import { notifyBotCouldNotFinish } from '../bots/bot-could-not-finish'
 import { makeTestBot } from '../bots/bot.test-fixture'
 import type { OwnerNotice } from '../runtime/push/notifications/runtime-mobile-notification-controller'
+import { WebhookHostLedger } from './webhook-host-ledger'
 import { WebhookHostService } from './webhook-host-service'
 
 const HOOK = 'wh_7Kx2pQ9mZbV4tL1r'
@@ -79,6 +80,7 @@ function service(
     botFolder: () => null,
     botFolders: () => [],
     botExists: () => true,
+    newerAgentBotIds: () => new Set(),
     bot: () =>
       makeTestBot({
         name: 'Scout',
@@ -176,6 +178,23 @@ describe("this host's webhooks", () => {
     expect(notices).toHaveLength(1)
     // Another bot's, or a hook not listed here: not this host's.
     expect(webhooks.notice({ ...notice, botId: 'bot-2' })).toBe(false)
+  })
+
+  it("moves a hook out of the file older builds read once its bot's agent is one they can't", () => {
+    const hook = { hookId: HOOK, automationId: 'auto-1', botId: 'bot-1', epoch: 1, state: 'live' }
+    new WebhookHostLedger(
+      userDataPath,
+      () => 'acct-1',
+      () => new Set()
+    ).saveHook({ ...hook, state: 'live' })
+    const newerAgents = new Set<string>()
+    const webhooks = service({}, { newerAgentBotIds: () => newerAgents })
+    const hooksIn = (file: string) =>
+      JSON.parse(readFileSync(join(userDataPath, file), 'utf8')).hooks
+    newerAgents.add('bot-1')
+    webhooks.botsWritten()
+    expect(hooksIn('webhook-host.json')).toEqual([])
+    expect(hooksIn('webhook-host-newer-agents.json')).toMatchObject([hook])
   })
 
   it("takes webhooks as offered until the poll client's hello answer says otherwise", () => {

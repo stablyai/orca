@@ -90,6 +90,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     submitPasteReadySignal: 'opencode-agent-row',
     // Two Windows ConPTY hosts enabled paste at ~4.8s and composer readiness at ~10s; the 8s default pasted blind. Signals arrived reliably (#22479).
     draftPasteReadyTimeoutMs: 20_000,
+    // Why: OpenCode inserts a paste asynchronously and drops an Enter that beats it, leaving `[Pasted ~N lines]` held (#45760).
+    // One retry: the paste lands well within the first recheck; a refusal after that is OpenCode's own (no model).
+    submitRetryBudgetMs: 1000,
     // Why: OpenCode decodes CSI-u Ctrl+Enter without local ConPTY kitty negotiation (#25372).
     ctrlEnterEncoding: 'csi-u',
     composerReadyCaptures: [
@@ -107,6 +110,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     draftPasteReadySignal: 'render-cursor-after-bracketed-paste',
     submitPasteReadySignal: 'opencode-agent-row',
     draftPasteReadyTimeoutMs: 20_000,
+    submitRetryBudgetMs: 1000,
     composerReadyCaptures: [
       'opencode-2-0-18-timed-boot-hidden-pane',
       'opencode-2-0-21-timed-cold-standalone',

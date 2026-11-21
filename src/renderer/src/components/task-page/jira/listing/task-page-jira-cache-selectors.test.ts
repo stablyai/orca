@@ -1,7 +1,11 @@
 import { getTaskSourceCacheScope } from '../../../../../../shared/work-items/task-source-context'
 import { describe, expect, it } from 'vitest'
 import type { JiraIssue } from '../../../../../../shared/jira/jira-types'
-import { findTaskPageJiraIssue, resolveTaskPageJiraIssues } from './task-page-jira-cache-selectors'
+import {
+  findTaskPageJiraIssue,
+  pickNewerJiraIssue,
+  resolveTaskPageJiraIssues
+} from './task-page-jira-cache-selectors'
 
 function issue(statusName: string, updatedAt: string): JiraIssue {
   return {
@@ -96,5 +100,15 @@ describe('resolveTaskPageJiraIssues', () => {
     expect(
       findTaskPageJiraIssue({}, cache, 'ALP-1', { sourceContext, siteId: 'site-1' })?.status.name
     ).toBe('Done')
+  })
+})
+
+describe('pickNewerJiraIssue', () => {
+  it('prefers the refreshed row over an older cached copy', () => {
+    const fetched = issue('Done', '2026-11-19T12:30:28.209+0200')
+    const cached = issue('In Progress', '2026-11-18T10:00:00.000+0200')
+
+    expect(pickNewerJiraIssue(fetched, cached).status.name).toBe('Done')
+    expect(pickNewerJiraIssue(cached, fetched).status.name).toBe('Done')
   })
 })

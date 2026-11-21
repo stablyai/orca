@@ -1,25 +1,30 @@
-import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSnapshot
-} from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalSqlReads } from '../native-chat/agent-session-journal/journal-sql-reads'
-import type { AgentJournalConnectorDelivery } from '../../shared/agent-session/journal/agent-journal-bot-message-fields'
-import type { JournalConnectorReplyRow } from '../../shared/agent-session/journal/journal-connector-reply'
-import { connectorReplyTurnStamps } from '../../shared/agent-session/journal/journal-connector-reply-turn'
-import {
-  readAgentJournalTurn,
-  readAgentJournalTurnOutcome
-} from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
-import { structuredAgentSessionTurnAssistantMessage } from '../../shared/agent-session/requests/structured-agent-session-latest-request'
-import { structuredAgentSessionTurnFailure } from '../../shared/agent-session/requests/structured-agent-session-turn-failure'
+import type {
+  AgentJournalConnectorClaim,
+  AgentJournalConnectorDelivery
+} from '../../shared/agent-session/journal/agent-journal-bot-message-fields'
+import type {
+  JournalConnectorReplyCut,
+  JournalConnectorReplyRow
+} from '../../shared/agent-session/journal/journal-connector-reply'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { readAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import type { ConnectorFailure } from '../../shared/connectors/connector-cloud-contract'
 import { connectorFailure } from './external-conversation-failure'
-import type { ConnectorReplyJournal } from '../connector-cloud/connector-reply-outbox'
-import { DISPATCH_DOUBT_PROVIDER_EXITED } from '../native-chat/agent-session-journal/projection/journal-dispatch-doubt-reasons'
+import type {
+  ConnectorReplyCutJournal,
+  ConnectorReplyJournal
+} from '../connector-cloud/connector-reply-outbox'
 import type { ConversationReplyFill } from './external-conversation-reply-fill'
-import { readEndedChatTurnOpener } from './external-conversation-turn-opener'
+import { fillRecoveredTurn } from './external-conversation-reply-turn-fill'
+import {
+  claimCut,
+  expectOf,
+  readReplyEvidence,
+  rowVerdict,
+  turnVerdictOf
+} from './external-conversation-reply-evidence'
 
 // Design item 125 §3: rows a live turn end didn't fill. Boot fills them from the journal, and a
 // watch on each such chat settles the rest as its journal moves (withdrawn cards fill in their own
@@ -44,11 +49,16 @@ export class ConnectorReplyRecovery {
   private readonly watches = new Map<string, () => void>()
   private readonly settling = new Map<string, Promise<void>>()
   private readonly again = new Set<string>()
+  // Chats owing a usage-limit pause: its end (a cancel, the setting, a closed chat) moves no journal,
+  // only the chat's status.
+  private readonly paused = new Set<string>()
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>()
+  // Until this start's own continuations of restart cuts settled, a cut may still be claimed.
+  private continuationsSettled: boolean
 
   constructor(
     private readonly deps: {
-      journal: () => ConnectorReplyJournal | null
+      journal: () => ConnectorReplyCutJournal | null
       chat: () => ReplyRecoveryChat | null
       /** Whether the chat still exists. */
       hasSession: (sessionId: string) => boolean
@@ -59,8 +69,26 @@ export class ConnectorReplyRecovery {
       fillTurn: ConversationReplyFill
       /** Rows were filled: wake the sender. */
       filled: () => void
+      /** Whether a usage-limit cut's requests still wait for its automatic continue. */
+      usageLimitDisposition?: (sessionId: string, turnItemId: string) => Promise<string | undefined>
+      /** Settles once this start continued what the last run cut, or left it to a person. */
+      continuationsSettled?: Promise<unknown>
     }
-  ) {}
+  ) {
+    this.continuationsSettled = deps.continuationsSettled === undefined
+    void deps.continuationsSettled?.then(
+      () => this.settleCuts(),
+      () => this.settleCuts()
+    )
+  }
+
+  // Every watched chat is settled again: its cuts can close now.
+  private settleCuts(): void {
+    this.continuationsSettled = true
+    for (const sessionId of this.watches.keys()) {
+      this.later(sessionId)
+    }
+  }
 
   /** One pass over every row: filled ones go, unfilled chats are opened two at a time and settled. */
   async boot(): Promise<void> {
@@ -87,6 +115,7 @@ export class ConnectorReplyRecovery {
     this.watches.clear()
     this.timers.forEach((timer) => clearTimeout(timer))
     this.timers.clear()
+    this.paused.clear()
   }
 
   /** A request was admitted to this chat: its journal is watched from now on, subscribed before the
@@ -144,157 +173,114 @@ export class ConnectorReplyRecovery {
       // Opening runs death settlement, so a turn the quit cut short reads interrupted.
       await chat.conversation(sessionId)
     }
-    // From the rows' own sends (or the queued cards they carried) to the head, without tool output:
-    // the whole journal can be hundreds of MB.
-    const { snapshot } = await (
-      await chat.journalReads(sessionId)
-    ).operationWindow({
-      operationIds: unfilled.map((row) => row.messageId),
-      withoutToolOutput: true
-    })
-    // A row's message by the stamp it carries: a queued card's handed-off message carries it too.
-    const messageOf = (row: Unfilled) =>
-      snapshot.items.find(
-        (item) =>
-          item.body.kind === 'message' &&
-          item.body.connectorDelivery?.account === row.account &&
-          (item.body.connectorDelivery.deliveryId === row.deliveryId ||
-            item.body.connectorDelivery.carried?.includes(row.deliveryId) === true)
-      )
-    const messageAt = (row: Unfilled): number => messageOf(row)?.sequence ?? 0
-    // Only turns that could have answered a row still unfilled.
-    const placed = unfilled.map(messageAt).filter((at) => at > 0)
-    const since = placed.length > 0 ? Math.min(...placed) : Number.POSITIVE_INFINITY
-    const turns = snapshot.items.filter(
-      (item) => item.sequence >= since && readAgentJournalTurn(item.body)
+    const view = await readReplyEvidence(chat, sessionId, unfilled, (submission) =>
+      this.rejectionOf(sessionId, submission)
     )
-    // Requests a turn with no verdict yet claims: owed and watched until it has one (O3).
+    const { snapshot } = view
+    const turns = view.turns()
+    // Requests a turn with no verdict yet claims: owed and watched until it has one (O3). Requests
+    // a cut turn claims: owed to a continuation until this start's own continuations settled.
     const unresolved: AgentJournalConnectorDelivery[] = []
+    const cut: AgentJournalConnectorDelivery[] = []
     for (const turn of turns) {
-      unresolved.push(...(await this.fillTurn(chat, sessionId, snapshot, turn)))
+      const verdict = await fillRecoveredTurn(chat, sessionId, snapshot, turn, this.deps)
+      ;(verdict.kind === 'cut' ? cut : unresolved).push(...verdict.stamps)
     }
-    const claimed = (row: Unfilled) =>
-      unresolved.some(
-        (stamp) =>
-          stamp.account === row.account &&
-          (stamp.deliveryId === row.deliveryId || stamp.carried?.includes(row.deliveryId) === true)
-      )
     const idle = !turns.some((turn) => readAgentJournalTurn(turn.body)?.state === 'running')
     const lastEnded = Math.max(
       0,
-      ...turns
-        .filter((turn) => readAgentJournalTurnOutcome(readAgentJournalTurn(turn.body)))
-        .map((turn) => turn.sequence)
+      ...turns.filter((turn) => turnVerdictOf(turn) !== null).map((turn) => turn.sequence)
     )
-    // Settled before any turn opened, by the journal's own evidence: a typed rejection failed; a
-    // provider that exited before taking it (death settlement) interrupted it. That evidence wins
-    // over position; otherwise a delivered message no ended turn's evidence claimed was answered with
-    // the turns around it (O8). Anything else stays unfilled and watched (O3).
-    const evidence = (row: Unfilled) => {
-      const message = messageOf(row)
-      const submission = snapshot.submissions.find(
-        (candidate) => agentJournalSubmissionKey(candidate.clientMessageId) === message?.itemId
-      )
-      if (submission && !submission.answeredInTurn) {
-        if (submission.dispatchState === 'rejected') {
-          return 'failed' as const
-        }
-        if (
-          submission.dispatchState === 'unknown' &&
-          submission.recovered === true &&
-          submission.reason === DISPATCH_DOUBT_PROVIDER_EXITED
-        ) {
-          return 'interrupted' as const
-        }
-      }
-      const at = messageAt(row)
-      return idle && !claimed(row) && at > 0 && at < lastEnded ? ('unattributed' as const) : null
-    }
+    const settled = this.continuationsSettled
     const left = (await journal.read(sessionId)).filter((row) => !row.fill)
-    // A typed rejection says why, as the live end would.
-    const rejection = (row: Unfilled): ConnectorFailure | undefined => {
-      const key = messageOf(row)?.itemId
-      const fact = readAgentSessionFailureFact(
-        snapshot.submissions.find(
-          (candidate) => agentJournalSubmissionKey(candidate.clientMessageId) === key
-        )?.rejection
-      )
-      return fact && connectorFailure(fact, this.deps.agentOf(sessionId))
+    const endedCuts = new Set<string>()
+    const paused = left.flatMap((row) =>
+      row.cut?.kind === 'usage_limit' && row.claimMessageId === undefined ? [row.cut.turnId] : []
+    )
+    for (const turnItemId of new Set(paused)) {
+      const disposition = await this.deps.usageLimitDisposition?.(sessionId, turnItemId)
+      // Ambiguous with the row unclaimed: the continue was never admitted (a claim commits with it).
+      if (disposition === 'ended' || disposition === 'ambiguous') {
+        endedCuts.add(turnItemId)
+      }
     }
-    for (const outcome of ['failed', 'interrupted', 'unattributed'] as const) {
-      await this.fillEach(
-        journal,
-        left.filter((row) => evidence(row) === outcome),
-        outcome,
-        outcome === 'failed' ? rejection : undefined
-      )
-    }
-    if ((await journal.read(sessionId)).some((row) => !row.fill)) {
+    const evidence = (row: Unfilled) =>
+      rowVerdict(row, {
+        view,
+        cut,
+        unresolved,
+        settled,
+        endedCuts,
+        idle,
+        lastEnded,
+        rejectionOf: (submission) => this.rejectionOf(sessionId, submission)
+      })
+    const fills = left.flatMap((row) => {
+      const verdict = evidence(row)
+      return verdict ? [{ row, verdict }] : []
+    })
+    await journal.fillOutcomes(
+      fills.map(({ row, verdict }) => ({
+        account: row.account,
+        deliveryId: row.deliveryId,
+        outcome: verdict.outcome,
+        answerDeliveryId: row.deliveryId,
+        ...expectOf(row),
+        ...(verdict.failure ? { failure: verdict.failure } : {})
+      }))
+    )
+    const owed = (await journal.read(sessionId)).filter((row) => !row.fill)
+    if (owed.length > 0) {
       this.watch(chat, sessionId)
+      if (owed.some((row) => row.cut?.kind === 'usage_limit' && !row.claimMessageId)) {
+        this.paused.add(sessionId)
+      } else {
+        this.paused.delete(sessionId)
+      }
     } else {
+      this.paused.delete(sessionId)
       this.unwatch(sessionId)
     }
     this.deps.filled()
   }
 
-  /** Fills the rows a turn with a verdict answered; returns those one without a verdict claims. */
-  private async fillTurn(
-    chat: ReplyRecoveryChat,
+  /** A continuation about to be sent for a cut of this chat (Phase 1 §1.4): claimCut. */
+  async claimFor(
     sessionId: string,
-    snapshot: AgentJournalSnapshot,
-    turn: AgentJournalRenderItem
-  ): Promise<AgentJournalConnectorDelivery[]> {
-    const outcome = readAgentJournalTurnOutcome(readAgentJournalTurn(turn.body))
-    const items = snapshot.items.filter((item) => item.sequence <= turn.sequence)
-    const opener = await readEndedChatTurnOpener(
-      () => chat.journalReads(sessionId),
-      items,
-      turn.itemId
-    )
-    const stamps = connectorReplyTurnStamps(snapshot, opener, turn.itemId)
-    if (!outcome) {
-      // Running or unverifiable: its requests stay unfilled and watched (O3).
-      return stamps
-    }
-    if (stamps.length > 0) {
-      await this.deps.fillTurn({
-        sessionId,
-        turnItemId: turn.itemId,
-        stamps,
-        outcome,
-        prose: structuredAgentSessionTurnAssistantMessage(snapshot.items, turn.itemId),
-        bot: this.deps.isBot(sessionId),
-        links: [],
-        ...(outcome === 'failure'
-          ? {
-              failure: connectorFailure(
-                structuredAgentSessionTurnFailure(snapshot.items, turn.itemId),
-                this.deps.agentOf(sessionId)
-              )
-            }
-          : {})
-      })
-    }
-    return []
+    cut: JournalConnectorReplyCut
+  ): Promise<AgentJournalConnectorClaim | undefined> {
+    const journal = this.deps.journal()
+    const chat = this.deps.chat()
+    return journal && chat
+      ? await claimCut(journal, chat, sessionId, cut, (submission) =>
+          this.rejectionOf(sessionId, submission)
+        )
+      : undefined
+  }
+
+  /** A typed rejection says why, as the live end would. */
+  private rejectionOf(
+    sessionId: string,
+    submission: AgentJournalSubmission
+  ): { failure?: ConnectorFailure } {
+    const fact = readAgentSessionFailureFact(submission.rejection)
+    const failure = fact && connectorFailure(fact, this.deps.agentOf(sessionId))
+    return failure ? { failure } : {}
   }
 
   private async fillEach(
     journal: ConnectorReplyJournal,
     rows: readonly Unfilled[],
-    outcome: 'not_found' | 'unattributed' | 'failed' | 'interrupted',
-    failureOf?: (row: Unfilled) => ConnectorFailure | undefined
+    outcome: 'not_found'
   ): Promise<void> {
     await journal.fillOutcomes(
-      rows.map((row) => {
-        const failure = failureOf?.(row)
-        return {
-          account: row.account,
-          deliveryId: row.deliveryId,
-          outcome,
-          answerDeliveryId: row.deliveryId,
-          ...(failure ? { failure } : {})
-        }
-      })
+      rows.map((row) => ({
+        account: row.account,
+        deliveryId: row.deliveryId,
+        outcome,
+        answerDeliveryId: row.deliveryId,
+        ...expectOf(row)
+      }))
     )
   }
 
@@ -304,6 +290,16 @@ export class ConnectorReplyRecovery {
         sessionId,
         chat.observeJournalPublications(sessionId, () => this.later(sessionId))
       )
+    }
+  }
+
+  /** A chat's status was published, or its continue's scheduler says it may have ended (none
+   *  named: every chat): a pause it owes may have ended. */
+  statusChanged(sessionId?: string): void {
+    for (const id of sessionId === undefined ? [...this.paused] : [sessionId]) {
+      if (this.paused.has(id)) {
+        this.later(id)
+      }
     }
   }
 

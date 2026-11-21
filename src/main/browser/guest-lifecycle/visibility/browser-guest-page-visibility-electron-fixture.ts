@@ -119,8 +119,10 @@ async function run(): Promise<void> {
   window.webContents.emit('-window-visibility-change', 'visible')
   const windowRestored = await firstPageState('visible')
 
+  // Chromium tells a guest it's hidden or shown only when the embedder lays out. This window is never
+  // shown, so it lays out late (seconds under CI load); reading offsetHeight lays it out now.
   await window.webContents.executeJavaScript(
-    `document.getElementById('first').style.display = 'none'; document.getElementById('second-tab').style.display = 'block'`
+    `document.getElementById('first').style.display = 'none'; document.getElementById('second-tab').style.display = 'block'; void document.body.offsetHeight`
   )
   const switched = {
     first: await settle(first, 'hidden', 2),

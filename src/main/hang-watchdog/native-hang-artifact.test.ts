@@ -92,31 +92,27 @@ it('withholds complete-artifact admission for a cut report or unsafe image row',
   expect(sanitizeNativeHangReport(sample.replace('[0x100100008]', 'unknown location'))).toBeNull()
 })
 
-it.each([
-  { count: 4, times: [1, 2, 3, 4] },
-  { count: 40, times: [37, 38, 39, 40] }
-])(
-  'bounds retained evidence after $count incidents and preserves unrelated files',
-  async ({ count, times }) => {
-    const store = new NativeHangCaptureStore(directory)
-    await fs.writeFile(join(directory, 'unrelated.txt'), 'keep')
-    await fs.writeFile(
-      join(directory, 'hang-0-00000000-0000-0000-0000-000000000000.tmp'),
-      'interrupted'
-    )
-    for (let time = 1; time <= count; time++) {
-      await store.save(artifact(time))
-    }
-    const names = await fs.readdir(directory)
-    const retained: number[] = []
-    for (const name of names.filter((name) => name.endsWith('.json'))) {
-      retained.push(JSON.parse(await fs.readFile(join(directory, name), 'utf8')).detectedAt)
-    }
-    expect(retained.sort((a, b) => a - b)).toEqual(times)
-    expect(names.filter((name) => name.endsWith('.tmp'))).toEqual([])
-    expect(await fs.readFile(join(directory, 'unrelated.txt'), 'utf8')).toBe('keep')
+it('retains the four newest incidents and preserves unrelated files', async () => {
+  const store = new NativeHangCaptureStore(directory)
+  await fs.writeFile(join(directory, 'unrelated.txt'), 'keep')
+  await fs.writeFile(
+    join(directory, 'hang-0-00000000-0000-0000-0000-000000000000.tmp'),
+    'interrupted'
+  )
+  for (let time = 1; time <= 4; time++) {
+    await store.save(artifact(time))
   }
-)
+  expect((await fs.readdir(directory)).filter((name) => name.endsWith('.json')).sort()).toEqual(
+    [1, 2, 3, 4].map((time) => `${artifact(time).captureId}.json`)
+  )
+  await store.save(artifact(5))
+  const names = await fs.readdir(directory)
+  expect(names.filter((name) => name.endsWith('.json')).sort()).toEqual(
+    [2, 3, 4, 5].map((time) => `${artifact(time).captureId}.json`)
+  )
+  expect(names.filter((name) => name.endsWith('.tmp'))).toEqual([])
+  expect(await fs.readFile(join(directory, 'unrelated.txt'), 'utf8')).toBe('keep')
+})
 
 it('keeps manual freeze reports silent and preserves identity and sent status across restarts', async () => {
   await new NativeHangCaptureStore(directory).save(artifact(1))

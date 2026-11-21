@@ -81,7 +81,7 @@ export function BotRow({
   const handleDelete = useDeleteBot(bot)
   return (
     <BotSidebarRow
-      avatar={<BotAvatar bot={bot} className="size-9 rounded-md text-sm" />}
+      avatar={<BotAvatar bot={bot} className="size-8 rounded-md text-sm" />}
       name={bot.name}
       workspaceId={workspaceId}
       hostId={bot.hostId}

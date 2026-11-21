@@ -5,6 +5,7 @@ import type { GoogleSetupRun } from '../../../../../../shared/google/google-setu
 import type { GoogleSetupCardRef } from '../../../../../../shared/google/google-setup-card'
 import type { KeySource } from '../use-capture-google-key'
 import type { GoogleSetupBlocker } from '../../../../../../shared/google/google-setup-blocker'
+import type { GoogleClientView } from '../../../../../../shared/google/google-client-config'
 
 const mocks = vi.hoisted(() => {
   const run: { current: GoogleSetupRun | null } = { current: null }
@@ -24,7 +25,9 @@ const mocks = vi.hoisted(() => {
     answer: vi.fn(),
     connect: vi.fn(),
     turnOn: vi.fn(),
-    share: vi.fn()
+    share: vi.fn(),
+    importApp: vi.fn(),
+    findKey: vi.fn()
   }
 })
 vi.mock('@/lib/bot-catalog', () => ({
@@ -51,7 +54,7 @@ vi.mock('../use-google-sign-in', () => ({
 vi.mock('../use-turn-on-bot-google', () => ({ useTurnOnBotGoogle: () => mocks.turnOn }))
 vi.mock('../google-connect-client', () => ({
   useGoogleHost: () => mocks.host.current,
-  importGoogleApp: vi.fn(),
+  importGoogleApp: mocks.importApp,
   openInMyBrowser: mocks.open,
   refreshGoogle: mocks.refresh,
   shareGoogleApp: mocks.share
@@ -95,8 +98,14 @@ beforeEach(() => {
   mocks.signInState.current = { kind: 'idle' }
   mocks.connect.mockReset()
   mocks.turnOn.mockReset()
+  mocks.importApp.mockReset().mockResolvedValue({})
+  mocks.findKey.mockReset().mockResolvedValue(null)
+  vi.stubGlobal('api', { googleSetup: { findDownloadedKey: mocks.findKey } })
 })
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 
 describe('a Google setup card in the chat', () => {
   it('shows the host line until the run is read, and says an earlier run ended', () => {
@@ -250,6 +259,68 @@ describe('a Google setup card in the chat', () => {
     show('step', 'apis')
     expect(screen.getByText('✓ Ivy takes over from here')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Done' }).hasAttribute('disabled')).toBe(true)
+  })
+
+  describe("Done on the key step in the person's own browser", () => {
+    const KEY = { name: 'client_secret_1.json', text: 'KEY', modifiedAt: 7 }
+    const keyStep = () => {
+      mocks.run.current = run({
+        mode: 'guide-browser',
+        projectId: 'acme-bot',
+        startedAt: 5,
+        steps: { client: { status: 'active', at: 6 } }
+      })
+      show('step', 'client')
+      fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    }
+    const savedKey = (client: GoogleClientView) =>
+      mocks.refresh.mockResolvedValue({ status: 'ready', google: { client, accounts: [] } })
+    const answered = () =>
+      waitFor(() =>
+        expect(mocks.answer).toHaveBeenCalledWith(expect.objectContaining({ id: 'ivy' }), 'step', [
+          'done',
+          'client'
+        ])
+      )
+
+    it('saves a key already in Downloads, then answers Done', async () => {
+      mocks.findKey.mockResolvedValue(KEY)
+      keyStep()
+      await answered()
+      expect(mocks.findKey).toHaveBeenCalledWith({ since: 5, projectId: 'acme-bot' })
+      expect(mocks.importApp).toHaveBeenCalledWith(expect.anything(), 'KEY')
+    })
+
+    it.each([
+      { modifiedAt: 7, imports: false },
+      { modifiedAt: 9, imports: true }
+    ])(
+      'imports a Downloads key only when it is newer than the saved one (modified $modifiedAt)',
+      async ({ modifiedAt, imports }) => {
+        mocks.findKey.mockResolvedValue({ ...KEY, modifiedAt })
+        savedKey({ clientId: 'first', projectId: 'acme-bot', source: 'imported', savedAt: 8 })
+        keyStep()
+        await answered()
+        expect(mocks.importApp).toHaveBeenCalledTimes(imports ? 1 : 0)
+      }
+    )
+
+    it('saves the key found when the host never answers', async () => {
+      mocks.findKey.mockResolvedValue(KEY)
+      mocks.refresh.mockReturnValue(new Promise(() => {}))
+      vi.useFakeTimers()
+      try {
+        keyStep()
+        await vi.advanceTimersByTimeAsync(3000)
+        expect(mocks.importApp).toHaveBeenCalledWith(expect.anything(), 'KEY')
+        expect(mocks.answer).toHaveBeenCalledWith(expect.objectContaining({ id: 'ivy' }), 'step', [
+          'done',
+          'client'
+        ])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
   })
 
   it('shows the three links on the links step only, and no Take over on the policy box', () => {
