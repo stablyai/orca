@@ -10,12 +10,11 @@ import {
 import { nextCadenceInspectionDelayMs } from './agent-completion-poll-interval'
 import { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } from '../../../../../shared/process-observation/tables/process-table-snapshot'
 
-/** Continuous output (a spinner) still gets one read this often; a pause reads sooner. */
-const ACTIVITY_READ_MAX_DEFERRAL_MS = 5_000
-/** Inconclusive reads (children, errors) retry this many times per event, then wait for the next event. */
+/** Inconclusive reads (children, a discarded read) retry this many times per event, then wait for the next event. */
 const MAX_UNRESOLVED_FOLLOW_UPS = 3
 
-export type CadenceFollowUp = 'pending' | 'unresolved'
+/** 'error' retries with backoff until a read succeeds; 'unresolved' is capped per event. */
+export type CadenceFollowUp = 'pending' | 'unresolved' | 'error'
 
 /** Reads are event-driven: output, input echo, title, hook or a new PTY bind arm one trailing read. A
  * quiet pane arms no timer, because an agent's exit always redraws the shell prompt or ends the PTY. */
@@ -94,12 +93,14 @@ export function createAgentCompletionPollScheduler(args: {
     const now = Date.now()
     const dueSince = state.readDueSince
     const settleMs = POLL_TIER_INTERVAL_MS[tier]
-    // Debounce: wait for output to pause, but never past the max deferral.
+    // Throttle at the tier interval, waiting at most one snapshot TTL more so the read postdates the latest output.
     if (dueSince !== null && state.lastPaneActivityAt !== null) {
-      const remaining = Math.min(
-        state.lastPaneActivityAt + settleMs - now,
-        dueSince + ACTIVITY_READ_MAX_DEFERRAL_MS - now
+      const throttleAt = dueSince + settleMs
+      const freshAt = Math.min(
+        state.lastPaneActivityAt + PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS,
+        throttleAt + PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
       )
+      const remaining = Math.max(throttleAt, freshAt) - now
       if (remaining > 0) {
         armPollTimer(tier, remaining)
         return
@@ -161,7 +162,7 @@ export function createAgentCompletionPollScheduler(args: {
     scheduleNextPoll()
   }
 
-  /** A read left a bounded question open: an exit to confirm, a hook done in flight, or an inconclusive read. */
+  /** A read left a bounded question open: an exit to confirm, a hook done in flight, a failed or inconclusive read. */
   function requestFollowUp(kind: CadenceFollowUp): void {
     if (kind === 'unresolved') {
       if (state.unresolvedFollowUps >= MAX_UNRESOLVED_FOLLOW_UPS) {

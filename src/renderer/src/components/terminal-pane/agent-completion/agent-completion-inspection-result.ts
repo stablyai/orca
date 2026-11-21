@@ -68,7 +68,7 @@ export function handleAgentCompletionInspectionResult(args: {
   ) {
     state.pendingProcessExit = null
     state.consecutiveInspectionErrors += 1
-    requestFollowUp('unresolved')
+    requestFollowUp('error')
     return false
   }
   if (remote) {

@@ -207,7 +207,7 @@ export function createAgentCompletionProcessMonitor({
         } catch {
           state.pendingProcessExit = null
           state.consecutiveInspectionErrors += 1
-          requestFollowUp('unresolved')
+          requestFollowUp('error')
         } finally {
           state.inspectionInFlight = false
           if (generationAtRequest !== state.inspectionGeneration) {
