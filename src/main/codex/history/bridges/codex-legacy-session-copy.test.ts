@@ -20,7 +20,11 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { syncSystemCodexSessionsIntoManagedHomeIncrementally } from './codex-session-bridge'
-import { protectLegacySessionCopy, swapLegacySessionCopy } from './codex-legacy-session-copy'
+import {
+  protectLegacySessionCopy,
+  settleLegacySessionCopyName,
+  swapLegacySessionCopy
+} from './codex-legacy-session-copy'
 import { legacyCopyLocks } from './codex-legacy-session-copy-lock-holder'
 import {
   prepareCodexAccountRestartResume,
@@ -410,6 +414,16 @@ describe('legacy session copy swap', () => {
     await bridgePass()
 
     expect(existsSync(copyPath)).toBe(false)
+  })
+
+  it('settles a missing name with an unreadable marker only when no copy is moved aside', async () => {
+    mkdirSync(markerPath, { recursive: true })
+    const settle = (): Promise<void> =>
+      settleLegacySessionCopyName({ managedHome: runtimeHome(), relativePath: RELATIVE_PATH })
+
+    await expect(settle()).resolves.toBeUndefined()
+    writeFile(`${copyPath}.orca-legacy-copy.1`, OLD_TURNS)
+    await expect(settle()).rejects.toThrow()
   })
 
   it('keeps the exact source spelling of a copy written since it was copied', async () => {

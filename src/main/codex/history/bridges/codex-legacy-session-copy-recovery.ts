@@ -9,6 +9,10 @@ import {
 } from './codex-legacy-session-copy-marker'
 import { linkUnlessTaken, lstatIfPresent } from './codex-legacy-session-copy-name-ops'
 import { runAloneForCopy } from './codex-legacy-session-copy-turns'
+import {
+  LEGACY_SESSION_COPY_ASIDE_SUFFIX,
+  LEGACY_SESSION_COPY_MAX_ASIDES
+} from './codex-legacy-session-copy'
 
 /**
  * Before a resume looks for a copy's name: runs after any swap of it, and gives a copy that a
@@ -36,8 +40,9 @@ async function settle(
   const markerPath = legacySessionCopyMarkerPath(args.managedHome, args.relativePath)
   const marker = await readFile(markerPath, 'utf-8').then(
     parseLegacyCopiedSessionMarker,
-    (error: unknown) => {
-      if (isDefinitiveAbsence(error)) {
+    async (error: unknown) => {
+      // With no copy moved aside there is nothing a marker could give back.
+      if (isDefinitiveAbsence(error) || !(await hasMovedAsideCopy(copyPath))) {
         return null
       }
       throw error
@@ -47,6 +52,19 @@ async function settle(
     await restoreMovedCopy(marker, normalize(marker.sourcePath), copyPath)
   }
   return 'none'
+}
+
+/** Any aside holding bytes; a name that can't be checked counts as one. */
+async function hasMovedAsideCopy(copyPath: string): Promise<boolean> {
+  for (let attempt = 1; attempt <= LEGACY_SESSION_COPY_MAX_ASIDES; attempt += 1) {
+    const aside = await lstatIfPresent(
+      `${copyPath}${LEGACY_SESSION_COPY_ASIDE_SUFFIX}.${attempt}`
+    ).catch(() => ({ size: 1n }))
+    if (aside && aside.size > 0n) {
+      return true
+    }
+  }
+  return false
 }
 
 /** A swap stopped after moving the copy aside: its name comes back before anything else. */
