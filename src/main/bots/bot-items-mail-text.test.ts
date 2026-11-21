@@ -82,6 +82,6 @@ it('names each skill picked in a comment by its file, for the bot to load', () =
   const mail = botItemChangeMail([{ event: picked, item }])
 
   expect(mail?.body).toContain(
-    '[Orca: they picked a skill for this; load each from its file and follow it: /release-notes "/bots/b/.claude/skills/release-notes/SKILL.md"]'
+    '[Orca: they picked a skill for this; load each from its file and follow it: release-notes "/bots/b/.claude/skills/release-notes/SKILL.md"]'
   )
 })

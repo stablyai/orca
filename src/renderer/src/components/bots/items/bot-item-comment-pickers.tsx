@@ -6,7 +6,14 @@ import {
   type RefObject,
   type SetStateAction
 } from 'react'
+import type { JSONContent } from '@tiptap/react'
 import type { Bot } from '../../../../../shared/bot-types'
+import type { BotItemCommentSkill } from '../../../../../shared/bots/bot-items'
+import { sentBotItemCommentSkills } from '../../../../../shared/bots/bot-item-comment-skills'
+import { SkillRefLimitError } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { MAX_SKILL_REFS } from '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-message-params'
+import { useTranslate } from '@/i18n/use-translate'
+import { promptSkillRefs } from '../../native-chat/composer/editor/native-chat-prompt-document'
 import type { NativeChatPickerItem } from '../../../../../shared/native-chat/input/composer/native-chat-picker-items'
 import type { SlashCommandSuggestion } from '../../../../../shared/native-chat/input/commands/native-chat-slash-commands'
 import type { NativeChatComposerNotice } from '../../native-chat/composer/controls/native-chat-composer-notice'
@@ -44,13 +51,14 @@ export function useBotItemCommentPickers(args: {
   draft: string
   caret: number
   notices: readonly NativeChatComposerNotice[]
+  setNotice: (text: string | null) => void
   isComposing: () => boolean
   input: RefObject<NativeChatComposerInput | null>
   setDraft: (value: string) => void
   setCaret: Dispatch<SetStateAction<number>>
   setActiveSuggestion: Dispatch<SetStateAction<number>>
 }) {
-  const { bot, scopeKey, worktreeId, draft, caret, notices, input, ...editor } = args
+  const { bot, scopeKey, worktreeId, draft, caret, notices, setNotice, input, ...editor } = args
   const picker = useNativeChatPickerState({
     agent: bot.agent,
     terminalTabId: scopeKey,
@@ -82,5 +90,31 @@ export function useBotItemCommentPickers(args: {
       ),
     [completeItem]
   )
-  return { picker: { ...picker, completeItem: completeWithFile }, mentions }
+  const commentSkills = useBotItemCommentSkills(bot, setNotice)
+  return { picker: { ...picker, completeItem: completeWithFile }, mentions, commentSkills }
+}
+
+/** The skills a comment's pills pick, as chat sends them; null, with chat's notice, past its limit. */
+function useBotItemCommentSkills(
+  bot: Bot,
+  setNotice: (text: string | null) => void
+): (text: string, document: JSONContent | undefined) => BotItemCommentSkill[] | null {
+  const t = useTranslate()
+  return (text, document) => {
+    try {
+      return sentBotItemCommentSkills(text, promptSkillRefs(document), bot.agent)
+    } catch (error) {
+      if (!(error instanceof SkillRefLimitError)) {
+        throw error
+      }
+      setNotice(
+        t(
+          'components.native-chat.composer.tooManySkills',
+          'Your message was not sent to {{agent}}. Keep at most {{limit}} selected skill files and try again.',
+          { agent: bot.name, limit: MAX_SKILL_REFS }
+        )
+      )
+      return null
+    }
+  }
 }

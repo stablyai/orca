@@ -144,7 +144,8 @@ it("completes a workspace file at @ from the bot's folder, as chat does, instead
 })
 
 it("offers chat's bots at @ and skills at /, and sends the same tokens chat does", () => {
-  const box = renderBox(undefined, 68, { ...BOT, agent: 'claude' })
+  const handle = createRef<BotItemCommentBoxHandle>()
+  const box = renderBox(handle, 68, { ...BOT, agent: 'claude' })
   changePrompt(box, 'Ask @perf')
   expect(screen.getByRole('option', { name: /Perf bot/ })).toBeTruthy()
   fireEvent.keyDown(box, { key: 'Enter', keyCode: 13 })
@@ -154,9 +155,12 @@ it("offers chat's bots at @ and skills at /, and sends the same tokens chat does
   expect(screen.getByRole('option', { name: /release-notes/ })).toBeTruthy()
   fireEvent.keyDown(box, { key: 'Enter', keyCode: 13 })
   expect(sent).not.toHaveBeenCalled()
+  // Picked twice, it goes once, as chat sends it.
+  act(() => handle.current?.type('then /release'))
+  fireEvent.keyDown(box, { key: 'Enter', keyCode: 13 })
   fireEvent.keyDown(box, { key: 'Enter' })
 
-  expect(sent).toHaveBeenCalledWith('/release-notes', [], null, [
+  expect(sent).toHaveBeenCalledWith('/release-notes then /release-notes', [], null, [
     { name: 'release-notes', path: '/bots/b/.claude/skills/release-notes/SKILL.md' }
   ])
 })

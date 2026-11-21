@@ -26,7 +26,6 @@ import { NativeChatPromptEditor } from '../../native-chat/composer/editor/Native
 import { useNativeChatComposerKeyDown } from '../../native-chat/composer/editor/use-native-chat-composer-keydown'
 import { NativeChatComposerMenus } from '../../native-chat/composer/pickers/NativeChatComposerMenus'
 import { NativeChatComposerRoomProvider } from '../../native-chat/NativeChatComposerRoomProvider'
-import { promptSkillRefs } from '../../native-chat/composer/editor/native-chat-prompt-document'
 import type { NativeChatComposerInput } from '../../native-chat/composer/editor/native-chat-composer-input'
 import { useNativeChatComposerHandle } from '../../native-chat/composer/editor/use-native-chat-composer-handle'
 import { useNativeChatDraftEvents } from '../../native-chat/composer/editor/use-native-chat-draft-events'
@@ -130,13 +129,14 @@ function BotItemCommentField({
   const dictation = useNativeChatDictation(input, false)
   const access = useBotItemCommentAttachments(bot, item, attachTo)
   const [activeSuggestion, setActiveSuggestion] = useState(0)
-  const { picker, mentions } = useBotItemCommentPickers({
+  const { picker, mentions, commentSkills } = useBotItemCommentPickers({
     bot,
     scopeKey,
     worktreeId: attachTo?.worktreeId,
     draft,
     caret,
     notices,
+    setNotice,
     isComposing: ime.isComposing,
     input,
     setDraft,
@@ -268,11 +268,15 @@ function BotItemCommentField({
       sent.map((image) => image.id)
     ).trim()
     const paths = sent.map((image) => image.path)
+    const skills = commentSkills(text, submitted.document)
+    if (!skills) {
+      return
+    }
     if (clearNativeChatComposerDraftIfUnchanged(scopeKey, submitted)) {
       attachments.clearImageAttachments()
     }
     setNotice(null)
-    onSend(text, paths, reply.quote?.id ?? null, promptSkillRefs(submitted.document))
+    onSend(text, paths, reply.quote?.id ?? null, skills)
   }
   // Stable identities let the memoized editor skip the per-keystroke render, as in chat.
   const editorChange = useLatestHandler((node: NativeChatComposerInput) => {

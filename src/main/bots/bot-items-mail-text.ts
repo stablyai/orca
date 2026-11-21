@@ -122,13 +122,16 @@ function commentWords(event: BotItemEventRecord, imagesBefore: number): string {
   return `${said}${imagesNote(images, imagesBefore)}${skillsNote(botItemCommentSkills(event.data))}`
 }
 
+const quoted = (text: string): string => text.replaceAll('"', '\\"')
+
 /** Skills picked in the comment, as chat sends a picked skill: by the file its agent loads. */
 function skillsNote(skills: readonly BotItemCommentSkill[]): string {
   if (skills.length === 0) {
     return ''
   }
   const named = skills
-    .map(({ name, path }) => `/${inlineUntrusted(name)} "${inlineUntrusted(path, 4096)}"`)
+    // By name alone: the comment's token is `/name` or `$name` by the bot's agent.
+    .map(({ name, path }) => `${inlineUntrusted(name)} "${quoted(inlineUntrusted(path, 4096))}"`)
     .join(', ')
   const which = skills.length === 1 ? 'a skill' : `${skills.length} skills`
   return `\n  [Orca: they picked ${which} for this; load each from its file and follow it: ${named}]`
