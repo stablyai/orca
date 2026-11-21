@@ -6,6 +6,7 @@ import { useScrollEdgeFades } from '@/lib/list-interaction/use-scroll-edge-fades
 import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
 import { NATIVE_CHAT_EMPTY_STATE_COPY } from '../../../../../shared/native-chat/native-chat-empty-state'
 import type { NativeChatSession } from '../../../../../shared/native-chat/native-chat-types'
+import './native-chat-empty-state.css'
 
 /** Who an empty chat introduces in the agent's place, e.g. a bot. */
 export type NativeChatPersona = { icon: React.ReactNode; name: string; subtitle: string }
@@ -43,7 +44,7 @@ export function NativeChatEmptyState({
       }
     : emptyStateCopy(kind, { message, headline }, agent, retrying, t)
   return (
-    <div className="h-full min-h-0 w-full overflow-hidden has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-ring">
+    <div className="native-chat-empty-state h-full min-h-0 w-full overflow-hidden has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-ring">
       <div
         ref={fades.ref}
         role={fades.scrollable ? 'region' : undefined}
@@ -54,7 +55,7 @@ export function NativeChatEmptyState({
           fades.className
         )}
       >
-        <div className="flex w-full shrink-0 flex-col items-center gap-3 p-6 text-center">
+        <div className="native-chat-empty-state-content flex w-full shrink-0 flex-col items-center gap-3 p-6 text-center">
           {shownPersona ? (
             shownPersona.icon
           ) : (

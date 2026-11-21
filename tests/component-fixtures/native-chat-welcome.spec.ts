@@ -24,6 +24,7 @@ for (const theme of ['dark', 'light']) {
     expect(paneBox.width).toBe(817)
     expect(paneBox.height).toBe(225)
     expect(composerBox.y + composerBox.height).toBeLessThanOrEqual(paneBox.y + 225)
+    await expect(pane.locator('[data-clearing] p').first()).toBeInViewport({ ratio: 1 })
 
     await welcome.focus()
     await page.keyboard.press('Home')
@@ -64,7 +65,7 @@ test('a fitting welcome adds no tab stop, and a growing composer makes it scroll
   const editor = page.getByRole('textbox')
   await expect(editor).toBeFocused()
   await page.locator('[data-welcome-fixture]').evaluate((node) => {
-    node.style.height = '400px'
+    node.style.height = '340px'
   })
   await editor.fill('Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\nLine 8')
   await expect(page.getByRole('region')).toHaveCount(1)
@@ -72,4 +73,10 @@ test('a fitting welcome adds no tab stop, and a growing composer makes it scroll
   await expect(page.getByRole('region')).toBeFocused()
   await page.keyboard.press('Tab')
   await expect(editor).toBeFocused()
+  await page.locator('[data-welcome-fixture]').evaluate((node) => {
+    node.style.height = '225px'
+  })
+  await expect(page.getByRole('region')).toHaveCount(0)
+  await editor.fill('')
+  await expect(page.getByRole('region')).toHaveCount(1)
 })
