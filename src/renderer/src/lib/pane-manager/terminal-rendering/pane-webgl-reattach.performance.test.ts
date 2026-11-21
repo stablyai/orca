@@ -95,11 +95,11 @@ describe('atlas-rebuild reattachment', () => {
     await vi.advanceTimersByTimeAsync(16 * 5)
     expect(framed.raw.webglAddon).toBeNull()
     // Grid fits stay off while it waits on the DOM renderer.
-    expect(reattachModule.isPaneAwaitingAtlasRebuildReattach(framed.pane)).toBe(true)
+    expect(reattachModule.isTerminalAwaitingAtlasRebuildReattach(framed.pane.terminal)).toBe(true)
     framedModes.synchronizedOutputMode = false
     await vi.advanceTimersByTimeAsync(16)
     expect(framed.raw.webglAddon).toBeTruthy()
-    expect(reattachModule.isPaneAwaitingAtlasRebuildReattach(framed.pane)).toBe(false)
+    expect(reattachModule.isTerminalAwaitingAtlasRebuildReattach(framed.pane.terminal)).toBe(false)
   })
 
   it('skips a pane that closed or got its renderer back before its frame', async () => {

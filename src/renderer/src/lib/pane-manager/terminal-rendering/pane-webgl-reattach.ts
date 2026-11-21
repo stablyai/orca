@@ -86,11 +86,14 @@ export function detachPanesWebglForRebuild(panes: Iterable<ManagedPaneInternal>)
 // xterm's own watchdog ends a synchronized frame within a second; past this, attach anyway rather than strand a shown pane.
 const MAX_SYNC_WAIT_FRAMES = 120
 // Shown panes a rebuild left on the DOM renderer until their frame; DOM cell metrics differ from WebGL's, so a grid fit meanwhile would resize the PTY twice.
-const panesAwaitingRebuildReattach = new WeakSet<ManagedPaneInternal>()
+// Keyed by terminal: PTY sessions hold a public pane wrapper, not this internal pane.
+const terminalsAwaitingRebuildReattach = new WeakSet<ManagedPaneInternal['terminal']>()
 
-/** True while an atlas rebuild has this shown pane on the DOM renderer, waiting for its frame to get WebGL back. */
-export function isPaneAwaitingAtlasRebuildReattach(pane: ManagedPaneInternal): boolean {
-  return panesAwaitingRebuildReattach.has(pane)
+/** True while an atlas rebuild has this shown terminal on the DOM renderer, waiting for its frame to get WebGL back. */
+export function isTerminalAwaitingAtlasRebuildReattach(
+  terminal: ManagedPaneInternal['terminal']
+): boolean {
+  return terminalsAwaitingRebuildReattach.has(terminal)
 }
 
 /** One context per frame: recreating every context in one task stalls the renderer for hundreds of ms. */
@@ -117,7 +120,7 @@ function reattachAcrossFrames(
       }
     }
   }
-  panesAwaitingRebuildReattach.delete(pane)
+  terminalsAwaitingRebuildReattach.delete(pane.terminal)
   if (rest.length > 0) {
     requestAnimationFrame(() => reattachAcrossFrames(rest, verdictOf))
   }
@@ -131,7 +134,7 @@ setTerminalWebglAtlasRebuilder((panes, shouldReattach, verdictOnItsFrame) => {
   const rest = reattach.filter((_, index) => index !== firstIndex)
   // Waiting panes show xterm's DOM renderer until their frame; paint it now so a synchronized-output frame can't hold it blank.
   for (const pane of rest) {
-    panesAwaitingRebuildReattach.add(pane)
+    terminalsAwaitingRebuildReattach.add(pane.terminal)
     paintReplacementCanvasNow(pane.terminal)
   }
   if (first) {
