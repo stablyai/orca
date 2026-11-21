@@ -66,9 +66,9 @@ function orNullIfMissing<T>(promise: Promise<T>): Promise<T | null> {
 async function inspectHostDirectoryRoot(
   root: string,
   targetPath: string,
-  initial?: { dev?: number; ino?: number }
-): Promise<{ dev?: number; ino?: number } | null> {
-  const entry = await orNullIfMissing(lstat(root))
+  initial?: { dev?: bigint; ino?: bigint }
+): Promise<{ dev?: bigint; ino?: bigint } | null> {
+  const entry = await orNullIfMissing(lstatBigInt(root))
   if (!entry) {
     return null
   }
@@ -96,7 +96,7 @@ export async function removeHostCheckout(
   verifyBeforeChildDelete?: () => Promise<boolean>
 ): Promise<void> {
   const root = toHostRemovalPath(targetPath)
-  let initialRoot: { dev?: number; ino?: number } | undefined
+  let initialRoot: { dev?: bigint; ino?: bigint } | undefined
   let markerGone = false
   try {
     await removeTree(root, {
@@ -164,11 +164,11 @@ async function namesExceptCheckoutMarker(root: string): Promise<string[]> {
     return names.filter((name) => name !== '.git')
   }
   // A case-folding volume may list the marker under another spelling; only the entry `.git` resolves to is it.
-  const marker = await lstat(join(root, '.git')).catch(() => null)
+  const marker = await lstatBigInt(join(root, '.git')).catch(() => null)
   const kept: string[] = []
   for (const name of names) {
     if (name.toLowerCase() === '.git' && marker) {
-      const entry = await lstat(join(root, name)).catch(() => null)
+      const entry = await lstatBigInt(join(root, name)).catch(() => null)
       if (entry && entry.ino === marker.ino && entry.dev === marker.dev) {
         continue
       }

@@ -227,3 +227,23 @@ it('refuses before sweeping children when a markerless root becomes a symlink du
 
   expect(removeChild).not.toHaveBeenCalled()
 })
+
+it('distinguishes 64-bit directory inode IDs above Number.MAX_SAFE_INTEGER when rechecking root identity', async () => {
+  let rootIno = 9_007_199_254_745_092n
+  stat.mockImplementation(async (path: string) => {
+    if (String(path).endsWith('.git')) {
+      throw missing
+    }
+    return { isDirectory: () => true, isSymbolicLink: () => false, dev: 1n, ino: rootIno }
+  })
+  names.mockImplementationOnce(async () => {
+    rootIno = 9_007_199_254_745_093n
+    return ['notes.txt']
+  })
+
+  await expect(
+    removeUnregisteredHostCheckout('/work/feature', undefined, { forbidAnyMarker: true })
+  ).rejects.toThrow('A different checkout is now at')
+
+  expect(removeChild).not.toHaveBeenCalled()
+})
