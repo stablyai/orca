@@ -118,10 +118,10 @@ export function useTabStripCondense({
   const [heldIconIds, setHeldIconIds] = useState<ReadonlySet<string>>(NO_HIDDEN)
   const planRef = useRef(plan)
   const windowStartRef = useRef<number | null>(null)
-  const inputsRef = useRef({ ids, activeId, frozen, heldWidths })
+  const inputsRef = useRef({ ids, activeId, frozen, heldWidths, heldIconIds })
   // Declared before the effects that read it, so they see this render's inputs.
   useLayoutEffect(() => {
-    inputsRef.current = { ids, activeId, frozen, heldWidths }
+    inputsRef.current = { ids, activeId, frozen, heldWidths, heldIconIds }
   })
 
   const replanRef = useRef<() => void>(() => {})
@@ -259,7 +259,7 @@ export function useTabStripCondense({
   const stripPointerHandlers = useMemo(
     () => ({
       onPointerDownCapture: () => {
-        const { ids: currentIds } = inputsRef.current
+        const { ids: currentIds, heldWidths: held, heldIconIds: heldIcons } = inputsRef.current
         // Hidden tabs have no width to hold; only a fully visible strip keeps its geometry.
         if (
           !surface ||
@@ -270,7 +270,10 @@ export function useTabStripCondense({
         }
         snapshotRef.current = {
           widths: measureSlotWidths(surface),
-          iconIds: new Set(planRef.current.mode === 'condensed' ? planRef.current.iconIds : []),
+          // A close during a hold must keep the held icons, not the re-planned (titled) plan's.
+          iconIds: held
+            ? heldIcons
+            : new Set(planRef.current.mode === 'condensed' ? planRef.current.iconIds : []),
           ids: currentIds.join('\u0000'),
           at: performance.now()
         }

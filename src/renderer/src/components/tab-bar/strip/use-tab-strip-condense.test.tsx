@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { useTabStripCondense } from './use-tab-strip-condense'
 
 const IDS = ['a', 'b', 'c', 'd', 'e', 'f']
@@ -83,4 +83,60 @@ describe('useTabStripCondense', () => {
     rerender(<Strip frozen ids={['a', 'b', 'c', 'd', 'e', 'g']} />)
     expect(surface.getAttribute('data-hidden')).toBe('a,g')
   })
+
+  it('keeps held icon slots as icons across consecutive pointer closes', () => {
+    // Slot geometry: the active tab is 132px, icon slots 32px, anything else 80px.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      const slotWidth =
+        this.dataset.tabStripSlot === 'c' ? 132 : this.dataset.density === 'icon' ? 32 : 80
+      return new DOMRect(0, 0, slotWidth, 0)
+    })
+    width = 479
+    const { container, rerender } = render(<HeldStrip ids={IDS} />)
+    const surface = container.firstElementChild!
+    const iconSlots = (): string =>
+      [...surface.querySelectorAll<HTMLElement>('[data-density="icon"]')]
+        .map((slot) => slot.dataset.tabStripSlot)
+        .join(',')
+    expect(iconSlots()).toBe('a,b,d,e,f')
+
+    fireEvent.pointerOver(surface)
+    fireEvent.pointerDown(surface)
+    rerender(<HeldStrip ids={['a', 'b', 'c', 'd', 'f']} />)
+    expect(iconSlots()).toBe('a,b,d,f')
+
+    fireEvent.pointerDown(surface)
+    rerender(<HeldStrip ids={['a', 'b', 'c', 'd']} />)
+    expect(iconSlots()).toBe('a,b,d')
+  })
 })
+
+function HeldStrip({ ids }: { ids: readonly string[] }): React.JSX.Element {
+  const { density, setSurface, stripPointerHandlers } = useTabStripCondense({
+    ids,
+    activeId: 'c',
+    frozen: false,
+    hasOverflow: false
+  })
+  return (
+    <div
+      ref={(node) => {
+        if (node) {
+          Object.defineProperty(node, 'clientWidth', { configurable: true, get: () => width })
+        }
+        setSurface(node)
+      }}
+      {...stripPointerHandlers}
+    >
+      {ids.map((id) => (
+        <div
+          key={id}
+          data-tab-strip-slot={id}
+          data-density={density.iconIds.has(id) ? 'icon' : undefined}
+        />
+      ))}
+    </div>
+  )
+}
