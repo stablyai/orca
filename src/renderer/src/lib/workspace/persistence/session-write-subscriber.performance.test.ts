@@ -3,12 +3,19 @@ import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixtu
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import * as structuralEquality from '../../../../../shared/collections/structural-value-equality'
-import { createSessionWriteSubscriber } from './session-write-subscriber'
+import * as launchPersistence from '../../agent-session/launch/structured-agent-session-launch-persistence'
+import * as fileHostOwnership from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import { AcknowledgedWorkspaceSessionEntries } from './workspace-session-acknowledged-entries'
-import { patchWorkspaceSessionByHost, type SessionApi } from './workspace-session-host-persistence'
+import type { SessionApi } from './workspace-session-host-persistence'
+import { subscribeWorkspaceSessionHostWrites } from './workspace-session-host-write-subscriber'
+import { sessionRoutingFor } from './workspace-session-host-routing'
+import { makeOpenFile } from '@/store/slices/editor/types/open-file.test-fixture'
+import { applyWorkspaceSessionEntriesPatch } from '../../../../../shared/workspace-session/workspace-session-entries-patch'
+import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
+import { getDefaultWorkspaceSession } from '../../../../../shared/orca-profiles/constants'
 
-// Perf contract: one background title change rebuilt every workspace's saved tabs and layouts with new
-// identities, so the write deep-compared the whole fleet against what main held. Counts deep compares.
+// Perf contract (#45731): one background title change rebuilt and routed every workspace's saved tabs and layouts,
+// so the write walked and deep-compared the whole fleet. Counts deep compares and keys routed to a host.
 
 const DEBOUNCE_MS = 150
 const OVER_CAP_TAB_IDS = new Set(['tab-0-b', 'tab-1-b'])
@@ -20,22 +27,41 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-const sessionApi: SessionApi = {
-  get: async () => {
-    throw new Error('not read in this flow')
-  },
-  patch: async () => {},
-  patchEntries: async () => ({ status: 'applied' })
+// Main's local partition, rebuilt from each entries patch the way main applies it.
+function receivingMain() {
+  let stored: WorkspaceSessionState = getDefaultWorkspaceSession()
+  let rejectNext = false
+  const api: SessionApi = {
+    get: async () => stored,
+    patch: async () => {},
+    patchEntries: async (patch) => {
+      if (rejectNext) {
+        rejectNext = false
+        throw new Error('main rejected the save')
+      }
+      stored = { ...stored, ...applyWorkspaceSessionEntriesPatch(stored, patch) }
+      return { status: 'applied' }
+    }
+  }
+  return {
+    api,
+    stored: () => stored,
+    rejectNextSave: () => {
+      rejectNext = true
+    }
+  }
 }
 
-async function deepComparesForOneTitleChange(size: number): Promise<number> {
+async function workForTitleChanges(size: number) {
   const store = createTestStore()
+  const main = receivingMain()
+  const sessionApi = main.api
   const acknowledged = new AcknowledgedWorkspaceSessionEntries()
-  const stop = createSessionWriteSubscriber({
+  const stop = subscribeWorkspaceSessionHostWrites({
     store,
-    debounceMs: DEBOUNCE_MS,
-    persist: ({ patch }) =>
-      patchWorkspaceSessionByHost(sessionApi, patch, store.getState(), acknowledged).written
+    api: sessionApi,
+    acknowledged,
+    debounceMs: DEBOUNCE_MS
   })
   try {
     const worktrees = Array.from({ length: size }, (_, index) =>
@@ -75,24 +101,111 @@ async function deepComparesForOneTitleChange(size: number): Promise<number> {
       localOnlyScrollbackByTabId: Object.fromEntries(
         [...OVER_CAP_TAB_IDS].map((tabId) => [tabId, { 'leaf-2': overCap }])
       ),
+      // An editor shown in wt-2 for a file wt-1 owns: saves move it into wt-1.
+      openFiles: [makeOpenFile({ id: 'file-of-wt-1', worktreeId: worktrees[1]!.id })],
       workspaceSessionReady: true,
       hydrationSucceeded: true
+    })
+    store.getState().createUnifiedTab(worktrees[2]!.id, 'editor', {
+      id: 'editor-in-wt-2',
+      entityId: 'file-of-wt-1',
+      label: 'file.ts'
     })
     // The first save sends whole fields and main acknowledges them.
     await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
 
+    // Editing replaces the open-file list but moves no editor tab.
+    store.setState((state) => ({
+      openFiles: state.openFiles.map((file) => ({ ...file, language: 'markdown' }))
+    }))
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+
     const deepCompares = vi.spyOn(structuralEquality, 'structuralValuesEqual')
+    const routedKeys = vi.spyOn(sessionRoutingFor(store.getState()), 'hostIdByWorktreeId')
+    const slotSignatureBuilds = vi.spyOn(launchPersistence, 'structuredLaunchSlotSignatures')
+    const hostUnions = vi.spyOn(acknowledged, 'settledHosts')
     store.getState().updateTabTitle('tab-3-b', 'Renamed by agent')
     await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
-    const count = deepCompares.mock.calls.length
+    // Read now: the whole retry after the rejection below would rewrite it either way.
+    const measuredTitle = main
+      .stored()
+      .tabsByWorktree[worktrees[3]!.id]?.find((tab) => tab.id === 'tab-3-b')?.title
+    const counts = {
+      deepCompares: deepCompares.mock.calls.length,
+      routedKeys: routedKeys.mock.calls.length,
+      slotSignatureBuilds: slotSignatureBuilds.mock.calls.length,
+      hostUnions: hostUnions.mock.calls.length
+    }
+    hostUnions.mockRestore()
     deepCompares.mockRestore()
-    return count
+    routedKeys.mockRestore()
+    slotSignatureBuilds.mockRestore()
+
+    // The open files were proven placement-equal by that save: the next title skips the proof.
+    const placementChecks = vi.spyOn(fileHostOwnership, 'getOpenFileExecutionHostId')
+    store.getState().updateTabTitle('tab-7-b', 'Second title')
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+    const repeatedPlacementChecks = placementChecks.mock.calls.length
+    placementChecks.mockRestore()
+
+    // Saves that fall back to the whole path read launch slots once, not once per attempt.
+    const fallbackSlotBuilds = vi.spyOn(launchPersistence, 'structuredLaunchSlotSignatures')
+    // The moved editor's file now opens over SSH: its saved tab in wt-1 must follow, even when the
+    // next title change is in a workspace that holds neither end of the move.
+    store.setState((state) => ({
+      openFiles: state.openFiles.map((file) => ({ ...file, externalSshTargetId: 'target-1' }))
+    }))
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+    store.getState().updateTabTitle('tab-6-a', 'Third workspace')
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+    const movedEditorHost = main
+      .stored()
+      .unifiedTabs?.[worktrees[1]!.id]?.find((tab) => tab.id === 'editor-in-wt-2')?.executionHostId
+    // A title in the workspace that receives the moved editor must keep that editor saved.
+    store.getState().updateTabTitle('tab-1-a', 'Owner renamed')
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+    const ownerUnifiedTabs = main.stored().unifiedTabs?.[worktrees[1]!.id]
+    const ownerTabs = ownerUnifiedTabs?.map((tab) => tab.entityId)
+    const ownerLabel = ownerUnifiedTabs?.find((tab) => tab.entityId === 'tab-1-a')?.label
+    // A rejected title save is still owed, and is sent with the next one.
+    main.rejectNextSave()
+    store.getState().updateTabTitle('tab-4-a', 'Rejected once')
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+    store.getState().updateTabTitle('tab-5-a', 'After the rejection')
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+
+    const fallbackSlotReads = fallbackSlotBuilds.mock.calls.length
+    fallbackSlotBuilds.mockRestore()
+    const stored = main.stored()
+    const titleOf = (index: number, tabId: string) =>
+      stored.tabsByWorktree[worktrees[index]!.id]?.find((tab) => tab.id === tabId)?.title
+    return {
+      ...counts,
+      repeatedPlacementChecks,
+      titles: [measuredTitle, titleOf(1, 'tab-1-a'), titleOf(4, 'tab-4-a'), titleOf(5, 'tab-5-a')],
+      ownerTabs,
+      ownerLabel,
+      movedEditorHost,
+      fallbackSlotReads
+    }
   } finally {
     stop()
   }
 }
 
-it('one title change deep-compares only the retitled workspace’s entries at N and 10N', async () => {
-  expect(await deepComparesForOneTitleChange(20)).toBe(4)
-  expect(await deepComparesForOneTitleChange(200)).toBe(4)
+it('a title change compares and routes only its workspace’s entries at N and 10N, and saves what the whole path saves', async () => {
+  const expected = {
+    deepCompares: 3,
+    routedKeys: 5,
+    slotSignatureBuilds: 1,
+    hostUnions: 1,
+    repeatedPlacementChecks: 0,
+    titles: ['Renamed by agent', 'Owner renamed', 'Rejected once', 'After the rejection'],
+    ownerTabs: ['tab-1-a', 'tab-1-b', 'file-of-wt-1'],
+    ownerLabel: 'Owner renamed',
+    movedEditorHost: 'ssh:target-1',
+    fallbackSlotReads: 4
+  }
+  expect(await workForTitleChanges(20)).toEqual(expected)
+  expect(await workForTitleChanges(200)).toEqual(expected)
 })

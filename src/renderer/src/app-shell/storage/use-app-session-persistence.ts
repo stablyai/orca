@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../../store/index'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
-import { createSessionWriteSubscriber } from '../../lib/workspace/persistence/session-write-subscriber'
+import { subscribeWorkspaceSessionHostWrites } from '../../lib/workspace/persistence/workspace-session-host-write-subscriber'
 import { buildActiveViewUnloadPatch } from '../startup/active-view-persist'
 import {
   isIntentionalAppRestartInProgress,
@@ -11,10 +11,7 @@ import {
   buildWorkspaceSessionPayload,
   shouldPersistWorkspaceSession
 } from '../../lib/workspace/persistence/workspace-session'
-import {
-  buildWorkspaceSessionHostSnapshots,
-  patchWorkspaceSessionByHost
-} from '../../lib/workspace/persistence/workspace-session-host-persistence'
+import { buildWorkspaceSessionHostSnapshots } from '../../lib/workspace/persistence/workspace-session-host-persistence'
 import {
   desktopRelaysSupported,
   forgetAcknowledgedDesktopRelays,
@@ -57,18 +54,11 @@ export function useAppSessionPersistence(): void {
     windowAcknowledgedSessionEntries.forget()
     forgetAcknowledgedDesktopRelays()
     probeDesktopRelays(window.api.session)
-    return createSessionWriteSubscriber({
+    return subscribeWorkspaceSessionHostWrites({
       store: useAppStore,
-      onPersistError: (error) => console.warn('[session] Session patch failed:', error),
-      persist: ({ patch }) => {
-        // Route each host’s workspace slice to its own partition.
-        return patchWorkspaceSessionByHost(
-          window.api.session,
-          patch,
-          useAppStore.getState(),
-          windowAcknowledgedSessionEntries
-        ).written
-      }
+      api: window.api.session,
+      acknowledged: windowAcknowledgedSessionEntries,
+      onPersistError: (error) => console.warn('[session] Session patch failed:', error)
     })
   }, [])
 
