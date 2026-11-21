@@ -127,6 +127,11 @@ const AGENT_CLI_UPDATE_DEFINITIONS: Record<AgentCliUpdateAgent, AgentCliUpdateDe
               agentSessionInstallCommand('qwen-code', process.platform) ??
               'npm install -g @qwen-code/qwen-code@latest'
           }
+  },
+  // `devin update` installs the newest release the way the CLI itself was installed.
+  devin: {
+    latest: () => ({ kind: 'acp-registry', id: 'devin' }),
+    plan: selfUpdate('update')
   }
 }
 

@@ -29812,6 +29812,7 @@
     "kiloProduct": "Kilo CLI",
     "mimoCodeProduct": "MiMo Code",
     "qwenCodeProduct": "Qwen Code",
+    "devinProduct": "Devin CLI",
     "commandCopied": "Command copied",
     "commandNotCopied": "Could not copy the command",
     "copyCommand": "Copy",

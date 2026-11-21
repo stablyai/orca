@@ -41,5 +41,7 @@ export function agentCliProductName(
       return t('agentCliUpdate.mimoCodeProduct', 'MiMo Code')
     case 'qwen-code':
       return t('agentCliUpdate.qwenCodeProduct', 'Qwen Code')
+    case 'devin':
+      return t('agentCliUpdate.devinProduct', 'Devin CLI')
   }
 }
