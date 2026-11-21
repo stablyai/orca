@@ -99,6 +99,26 @@ const baseStyles = themedStyleSheet(() => ({
     fontWeight: '600',
     textTransform: 'capitalize'
   },
+  sequencerButtons: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  sequencerContinue: {
+    flex: 1,
+    minHeight: 32,
+    borderRadius: radii.control,
+    backgroundColor: colors.surfaceBright,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  sequencerContinueText: {
+    color: colors.bgBase,
+    fontSize: typography.bodySize,
+    fontWeight: '600'
+  },
+  sequencerAbort: {
+    flex: 1
+  },
   reconnectBanner: {
     flexDirection: 'row',
     alignItems: 'center',

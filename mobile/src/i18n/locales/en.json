@@ -4385,7 +4385,15 @@
       "currentBranch": "current",
       "prCreatedTitle": "Pull Request Created",
       "openPrWithWarning": "Open it in your browser?\n\n{{warning}}",
-      "openPrMessage": "Open it in your browser?"
+      "openPrMessage": "Open it in your browser?",
+      "discardAllFileCount_one": "{{count}} file",
+      "discardAllFileCount_other": "{{count}} files",
+      "discardAllButton": "Discard all",
+      "discardAllStagedTitle": "Discard all staged changes?",
+      "discardAllStagedMessage": "This will unstage and revert all staged changes. Staged new files will be deleted. This cannot be undone.",
+      "discardAllUnstagedTitle": "Discard all unstaged changes?",
+      "discardAllUnstagedMessage_one": "This will revert unstaged changes and permanently delete any untracked files in this selection. This cannot be undone.",
+      "discardAllUnstagedMessage_other": "This will revert unstaged changes and permanently delete any untracked files among these {{count}} files. This cannot be undone."
     },
     "panel": {
       "unavailableTitle": "Source Control Unavailable",
@@ -4480,7 +4488,9 @@
       "aborting": "Aborting…",
       "abortMerge": "Abort merge",
       "abortRebase": "Abort rebase",
-      "abortOperation": "Abort {{operation}}"
+      "abortOperation": "Abort {{operation}}",
+      "abortCherryPick": "Abort cherry-pick",
+      "abortRevert": "Abort revert"
     },
     "hubTab": {
       "changes": "Changes",
@@ -4605,7 +4615,7 @@
     },
     "conflictActions": {
       "resolveFile": "{{action}}: {{path}}",
-      "needsNewerHost": "Update Orca on the computer running this workspace to resolve merge conflicts from your phone.",
+      "needsNewerHost": "Update Orca on the computer running this workspace to resolve conflicts from your phone.",
       "markResolved": "Mark as resolved",
       "keepFile": "Keep file",
       "keepDeletion": "Keep deletion",
@@ -4682,14 +4692,33 @@
       "continueOnComputer": "Every conflict is resolved. Continue on your computer to finish.",
       "commits_one": "{{count}} commit",
       "commits_other": "{{count}} commits",
-      "conflictsMayRemain": "Not every file is listed, so conflicts may remain. Check on your computer."
+      "conflictsMayRemain": "Not every file is listed, so conflicts may remain. Check on your computer.",
+      "reverting": "Reverting",
+      "revertInProgress": "Revert in progress",
+      "operationInProgress": "Operation in progress",
+      "continueToFinish": "Every conflict is resolved. Continue to finish.",
+      "abortSequencerTitle": "Abort {{operation}}?",
+      "abortSequencerMessage": "This cancels the operation in progress and can discard conflict resolutions made during it.",
+      "abortSequencerConfirm": "Abort {{operation}}",
+      "revert": "Revert",
+      "cherryPick": "Cherry-pick",
+      "continueSequencer": "Continue {{operation}}",
+      "continuing": "Continuing…",
+      "continue": "Continue",
+      "abort": "Abort"
     },
     "fileList": {
       "stageAll": "Stage all",
       "mergedCleanly": "Merged cleanly",
       "unstageAll": "Unstage all",
       "onThisBranch": "On this branch {{count}}",
-      "versusBase": "vs {{base}}"
+      "versusBase": "vs {{base}}",
+      "discardAll": "Discard all"
+    },
+    "discardAll": {
+      "unstageFailed": "Discard all failed — unable to unstage files before discard",
+      "failed_one": "Failed to discard {{count}} file",
+      "failed_other": "Failed to discard {{count}} files"
     }
   },
   "newWorkspace": {

@@ -15,6 +15,10 @@ import {
   isMobileConflictAborting,
   mobileConflictAbortLabel
 } from '../conflicts/mobile-source-control-conflict-abort'
+import {
+  isSequencerOperation,
+  MobileSequencerRecoveryButtons
+} from '../conflicts/MobileSequencerRecoveryButtons'
 import type { MobileSourceControlState } from '../use-mobile-source-control-state'
 import { styles } from '../mobile-source-control-styles'
 
@@ -26,6 +30,8 @@ type HeaderState = Pick<
   | 'busyAction'
   | 'openBranchPicker'
   | 'abortConflictOperation'
+  | 'continueSequencerOperation'
+  | 'setSequencerAbortTarget'
 >
 
 function syncMeta(
@@ -40,6 +46,8 @@ function syncMeta(
       return t('sourceControl.changesHeader.rebasing', 'Rebasing')
     case 'cherry-pick':
       return t('sourceControl.changesHeader.cherryPicking', 'Cherry-picking')
+    case 'revert':
+      return t('sourceControl.changesHeader.reverting', 'Reverting')
     case 'unknown':
     case null:
       break
@@ -65,6 +73,21 @@ function syncMeta(
   return t('sourceControl.changesHeader.upToDate', 'Up to date')
 }
 
+function bannerTitle(operation: GitConflictOperation, t: Translate): string {
+  switch (operation) {
+    case 'merge':
+      return t('sourceControl.changesHeader.mergeInProgress', 'Merge in progress')
+    case 'rebase':
+      return t('sourceControl.changesHeader.rebaseInProgress', 'Rebase in progress')
+    case 'cherry-pick':
+      return t('sourceControl.changesHeader.cherryPickInProgress', 'Cherry-pick in progress')
+    case 'revert':
+      return t('sourceControl.changesHeader.revertInProgress', 'Revert in progress')
+    case 'unknown':
+      return t('sourceControl.changesHeader.operationInProgress', 'Operation in progress')
+  }
+}
+
 /** Above the Changes list: the branch and its sync state, the Commits row, and a paused merge. */
 export function MobileSourceControlChangesHeader({
   state,
@@ -77,12 +100,14 @@ export function MobileSourceControlChangesHeader({
   const t = useMobileTranslation()
   const { status, busyAction } = state
   const rawOperation = status?.conflictOperation ?? null
-  const operation = rawOperation === 'unknown' ? null : rawOperation
-  const meta = syncMeta(status, operation, t)
   const commits = state.branchCompareResult?.summary.commitsAhead ?? 0
   const unresolved =
     status?.entries.filter((entry) => entry.conflictStatus === 'unresolved').length ?? 0
+  // Like desktop, an operation git can't name shows only while it leaves conflicts to decide.
+  const operation = rawOperation === 'unknown' && unresolved === 0 ? null : rawOperation
+  const meta = syncMeta(status, operation, t)
   const aborting = isMobileConflictAborting(busyAction, operation)
+  const sequencer = isSequencerOperation(operation) ? operation : null
   return (
     <View>
       <View style={styles.statusLine}>
@@ -111,16 +136,7 @@ export function MobileSourceControlChangesHeader({
         <View style={styles.conflictBanner}>
           <View style={styles.conflictBannerTitleRow}>
             <TriangleAlert size={17} color={colors.statusAmber} strokeWidth={2.1} />
-            <Text style={styles.conflictBannerTitle}>
-              {operation === 'merge'
-                ? t('sourceControl.changesHeader.mergeInProgress', 'Merge in progress')
-                : operation === 'rebase'
-                  ? t('sourceControl.changesHeader.rebaseInProgress', 'Rebase in progress')
-                  : t(
-                      'sourceControl.changesHeader.cherryPickInProgress',
-                      'Cherry-pick in progress'
-                    )}
-            </Text>
+            <Text style={styles.conflictBannerTitle}>{bannerTitle(operation, t)}</Text>
             {operation === 'merge' || operation === 'rebase' ? (
               <Pressable
                 style={({ pressed }) => [
@@ -162,12 +178,26 @@ export function MobileSourceControlChangesHeader({
                       'sourceControl.changesHeader.conflictsResolved',
                       'Every conflict is resolved. Finish from the bar below.'
                     )
-                  : // Mobile has no continue for a rebase or cherry-pick.
-                    t(
-                      'sourceControl.changesHeader.continueOnComputer',
-                      'Every conflict is resolved. Continue on your computer to finish.'
-                    )}
+                  : sequencer
+                    ? t(
+                        'sourceControl.changesHeader.continueToFinish',
+                        'Every conflict is resolved. Continue to finish.'
+                      )
+                    : // Mobile has no continue for a rebase.
+                      t(
+                        'sourceControl.changesHeader.continueOnComputer',
+                        'Every conflict is resolved. Continue on your computer to finish.'
+                      )}
           </Text>
+          {sequencer ? (
+            <MobileSequencerRecoveryButtons
+              operation={sequencer}
+              busyAction={busyAction}
+              unresolved={unresolved}
+              onContinue={() => void state.continueSequencerOperation(sequencer)}
+              onAbort={() => state.setSequencerAbortTarget(sequencer)}
+            />
+          ) : null}
         </View>
       ) : null}
       {commits > 0 ? (

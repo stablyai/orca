@@ -623,6 +623,10 @@
       "baseNewer_one": "1 newer commit",
       "baseNewer_other": "{{count}} newer commits"
     },
+    "discardAll": {
+      "failed_one": "Failed to discard {{count}} file",
+      "failed_other": "Failed to discard {{count}} files"
+    },
     "dropdownCounts": {
       "fastForwardCount_one": "Fast-forward {{count}} commit",
       "fastForwardCount_other": "Fast-forward {{count}} commits",
@@ -650,6 +654,12 @@
       "months_other": "{{count}}mo",
       "years_one": "{{count}}y",
       "years_other": "{{count}}y"
+    },
+    "modals": {
+      "discardAllFileCount_one": "{{count}} file",
+      "discardAllFileCount_other": "{{count}} files",
+      "discardAllUnstagedMessage_one": "This will revert unstaged changes and permanently delete any untracked files in this selection. This cannot be undone.",
+      "discardAllUnstagedMessage_other": "This will revert unstaged changes and permanently delete any untracked files among these {{count}} files. This cannot be undone."
     },
     "nextStep": {
       "checksFailing_one": "{{count}} check failing",
