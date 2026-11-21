@@ -15,7 +15,9 @@ const GitHubUserSchema = z.object({
 })
 
 // GET `${github}/state`: the GitHub user the account is linked as, the Orca app's installations that
-// user can reach, and the bot their requests go to when they name none.
+// user can reach, and the bot their requests go to when they name none. linkedAccounts: every Orca
+// account linked to the same GitHub user (this one first, marked current), each by its computers'
+// names; each one's managed agents answer that user's requests.
 export const ConnectorGitHubStateSchema = z.object({
   installUrl: z.string().url(),
   account: GitHubUserSchema.nullable(),
@@ -27,7 +29,10 @@ export const ConnectorGitHubStateSchema = z.object({
       repositories: z.array(z.object({ fullName: z.string().min(1) })).nullable()
     })
   ),
-  defaultBotId: z.string().nullable()
+  defaultBotId: z.string().nullable(),
+  linkedAccounts: z
+    .array(z.object({ current: z.boolean(), machines: z.array(z.string()), linkedAt: z.number() }))
+    .optional()
 })
 
 // POST `${github}/links` {v:1}: GitHub's sign-in page (identity only) for this account.

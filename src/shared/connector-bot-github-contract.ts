@@ -37,9 +37,26 @@ export const ConnectorGitHubState = z.object({
     })
   ),
   /** The bot that takes the owner's requests when a comment names none; null when unset. */
-  defaultBotId: z.string().nullable()
+  defaultBotId: z.string().nullable(),
+  /**
+   * Every Orca account linked to the same GitHub user, this one first and marked current, each by
+   * its computers' names. Each one's managed agents answer that user's requests; absent from an
+   * older cloud.
+   */
+  linkedAccounts: z
+    .array(
+      z.object({
+        current: z.boolean(),
+        machines: z.array(z.string()),
+        linkedAt: z.number()
+      })
+    )
+    .optional()
 })
 export type ConnectorGitHubState = z.infer<typeof ConnectorGitHubState>
+export type ConnectorGitHubLinkedAccount = NonNullable<
+  ConnectorGitHubState['linkedAccounts']
+>[number]
 export type ConnectorGitHubInstallation = ConnectorGitHubState['installations'][number]
 
 // GET `${github}/users?q=<username>`: the GitHub user with that username, found by exact match, as

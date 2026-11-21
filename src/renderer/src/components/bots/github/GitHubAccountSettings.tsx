@@ -1,5 +1,6 @@
 import React from 'react'
 import { toast } from 'sonner'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -18,6 +19,7 @@ import { connectAnotherAccount, useConnectorConnect } from '@/lib/connector-conn
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { refreshBotGitHub, useBotGitHub } from '@/lib/bot-github-state'
 import { botGitHubErrorMessage } from './bot-github-copy'
+import type { ConnectorGitHubLinkedAccount } from '../../../../../shared/connector-bot-github-contract'
 
 // Select items need a non-empty value.
 const ASK_EACH_TIME = 'ask'
@@ -70,6 +72,53 @@ function DefaultBotPicker({
         ) : null}
       </SelectContent>
     </Select>
+  )
+}
+
+/**
+ * Every Orca account linked to the same GitHub login, by its computers' names, this one marked and
+ * the only one that can be unlinked from here. Each one's managed agents answer that login's requests.
+ */
+function LinkedOrcaAccounts({
+  login,
+  accounts,
+  onUnlink
+}: {
+  login: string
+  accounts: ConnectorGitHubLinkedAccount[]
+  onUnlink: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-medium text-muted-foreground">
+        {t('bots.github.account.linkedAccounts', 'Orca accounts linked to {{login}}', { login })}
+      </p>
+      <ul className="divide-y divide-border rounded-md border border-border">
+        {accounts.map((account) => (
+          <li
+            key={`${account.linkedAt}:${account.current}:${account.machines.join('\n')}`}
+            className="flex min-h-12 items-center gap-3 px-3 py-2"
+          >
+            <p className="min-w-0 flex-1 truncate text-sm">
+              {account.machines.length > 0
+                ? account.machines.join(', ')
+                : t('bots.github.account.noComputers', 'No computers yet')}
+            </p>
+            {account.current ? (
+              <>
+                <Badge variant="outline">
+                  {t('bots.github.account.thisAccount', 'This account')}
+                </Badge>
+                <Button size="sm" variant="ghost" onClick={onUnlink}>
+                  {t('bots.github.account.unlink', 'Unlink')}
+                </Button>
+              </>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
@@ -136,6 +185,11 @@ export function GitHubAccountSettings({
     )
   }
   const { account, defaultBotId } = view.github
+  // Linked from other Orca accounts too: Unlink moves to this account's row in their list.
+  const linkedAccounts =
+    account && (view.github.linkedAccounts?.length ?? 0) > 1
+      ? (view.github.linkedAccounts ?? [])
+      : null
   return (
     <section className="space-y-3">
       {header}
@@ -164,9 +218,11 @@ export function GitHubAccountSettings({
               {t('bots.github.account.reconnect', 'Reconnect')}
             </Button>
           )}
-          <Button size="sm" variant="ghost" onClick={() => void unlink()}>
-            {t('bots.github.account.unlink', 'Unlink')}
-          </Button>
+          {linkedAccounts ? null : (
+            <Button size="sm" variant="ghost" onClick={() => void unlink()}>
+              {t('bots.github.account.unlink', 'Unlink')}
+            </Button>
+          )}
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">
@@ -182,6 +238,13 @@ export function GitHubAccountSettings({
               )}
         </p>
       )}
+      {account && linkedAccounts ? (
+        <LinkedOrcaAccounts
+          login={account.login}
+          accounts={linkedAccounts}
+          onUnlink={() => void unlink()}
+        />
+      ) : null}
       {connect.status === 'failed' ? (
         <p role="alert" className="text-sm text-destructive">
           {botGitHubErrorMessage(connect.error, hostName)}

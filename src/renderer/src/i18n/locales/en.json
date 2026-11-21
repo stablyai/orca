@@ -27568,7 +27568,10 @@
         "linkedAs": "Linked as {{login}}",
         "reconnect": "Reconnect",
         "linkFromApp": "Link GitHub from Orca on a computer paired to {{host}}.",
-        "linkedOnHost": "Linked to {{host}}’s Orca account"
+        "linkedOnHost": "Linked to {{host}}’s Orca account",
+        "linkedAccounts": "Orca accounts linked to {{login}}",
+        "noComputers": "No computers yet",
+        "thisAccount": "This account"
       },
       "errors": {
         "off": "GitHub is coming soon.",
