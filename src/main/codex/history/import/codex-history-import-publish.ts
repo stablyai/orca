@@ -51,12 +51,14 @@ async function linkUnlessDeleted(job: StagedImport): Promise<'copied' | 'existin
     const marker = join(job.indexPendingDir, basename(job.final))
     await writeFile(marker, '')
     try {
-      // Checked again with nothing awaited before the link, which is the publish.
-      if (!stillWanted()) {
+      // Checked again with nothing awaited before each link attempt, which is the publish.
+      const linked = stillWanted()
+        ? await linkStagedRollout(job.staged, job.final, stillWanted)
+        : 'refused'
+      if (linked === 'refused') {
         await rm(marker, { force: true, maxRetries: 3 })
-        return 'refused'
       }
-      return await linkStagedRollout(job.staged, job.final)
+      return linked
     } catch (error) {
       // No heal runs during a publish, so the marker can't settle the thread as missing.
       await rm(marker, { force: true, maxRetries: 3 })

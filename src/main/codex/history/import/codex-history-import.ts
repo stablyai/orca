@@ -25,8 +25,7 @@ import {
 } from './codex-history-import-ledger'
 
 const ARCHIVED = 'archived_sessions'
-// Each save rewrites every handled name: saved by time, so a pass's writes don't grow with its folders.
-const LEDGER_SAVE_INTERVAL_MS = 10_000
+const LEDGER_SAVE_EVERY = 50
 
 export type CodexHistoryImportArgs = {
   importHome: string
@@ -199,13 +198,11 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
   const store = new StoreNames(args.storeHome, args.runId)
   let copied = 0
   let unsaved = 0
-  let savedAt = performance.now()
   let stopped = false
   const save = async (): Promise<void> => {
     source.handled = [...handled]
     await writeImportLedger(args.ledgerPath, ledger)
     unsaved = 0
-    savedAt = performance.now()
   }
   try {
     for (const folder of folders) {
@@ -247,7 +244,7 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
         if (result.halt) {
           break
         }
-        if (unsaved > 0 && performance.now() - savedAt >= LEDGER_SAVE_INTERVAL_MS) {
+        if (unsaved >= LEDGER_SAVE_EVERY) {
           await save()
         }
       }
