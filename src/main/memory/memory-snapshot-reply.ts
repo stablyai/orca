@@ -23,7 +23,7 @@ function textBytes(value: string | null | undefined): number {
 }
 
 function sessionBytes(session: SessionMemory): number {
-  return SESSION_OVERHEAD_BYTES + textBytes(session.sessionId) + textBytes(session.paneKey)
+  return SESSION_OVERHEAD_BYTES + textBytes(session.sessionId)
 }
 
 function chatBytes(chat: ChatAgentMemory): number {
@@ -52,23 +52,26 @@ function isChatOnly(worktree: WorktreeMemory): boolean {
 
 /**
  * The snapshot as sent over RPC: every row with its totals, and at most 20 history points each.
- * Near the size limit, history, then chat lists, then chat-only rows are left out, so what chats
- * add never makes a host unreachable; terminal rows, sessions and totals always stay.
+ * Near the size limit it sheds, in order, history, chat lists, chat-only rows and pane keys, so
+ * what this view adds never pushes a host past the payload it sent before; terminal rows,
+ * sessions and totals always stay.
  */
 export function toMemorySnapshotReply(snapshot: MemorySnapshot): MemorySnapshot {
-  let terminalRows = 0
+  let core = 0
+  let paneKeys = 0
   let chatOnlyRows = 0
-  let histories = 0
   let chats = 0
+  let histories = 0
   for (const worktree of snapshot.worktrees) {
     let bytes = rowBytes(worktree)
     for (const session of worktree.sessions) {
       bytes += sessionBytes(session)
+      paneKeys += textBytes(session.paneKey)
     }
     if (isChatOnly(worktree)) {
       chatOnlyRows += bytes
     } else {
-      terminalRows += bytes
+      core += bytes
     }
     histories += Math.min(worktree.history.length, MEMORY_REPLY_HISTORY_POINTS) * NUMBER_BYTES
     for (const chat of worktree.chats ?? []) {
@@ -76,17 +79,21 @@ export function toMemorySnapshotReply(snapshot: MemorySnapshot): MemorySnapshot 
     }
   }
   const budget = MEMORY_REPLY_BUDGET_BYTES
-  const keepChatOnlyRows = terminalRows + chatOnlyRows <= budget
-  const keepChats = keepChatOnlyRows && terminalRows + chatOnlyRows + chats <= budget
-  const keepHistory = keepChats && terminalRows + chatOnlyRows + chats + histories <= budget
+  const keepPaneKeys = core + paneKeys <= budget
+  const keepChatOnlyRows = keepPaneKeys && core + paneKeys + chatOnlyRows <= budget
+  const keepChats = keepChatOnlyRows && core + paneKeys + chatOnlyRows + chats <= budget
+  const keepHistory = keepChats && core + paneKeys + chatOnlyRows + chats + histories <= budget
   const worktrees = keepChatOnlyRows
     ? snapshot.worktrees
     : snapshot.worktrees.filter((worktree) => !isChatOnly(worktree))
   return {
     ...snapshot,
     app: { ...snapshot.app, history: snapshot.app.history.slice(-MEMORY_REPLY_HISTORY_POINTS) },
-    worktrees: worktrees.map(({ chats: rowChats, history, ...worktree }) => ({
+    worktrees: worktrees.map(({ chats: rowChats, history, sessions, ...worktree }) => ({
       ...worktree,
+      sessions: keepPaneKeys
+        ? sessions
+        : sessions.map((session) => ({ ...session, paneKey: null })),
       history: keepHistory ? history.slice(-MEMORY_REPLY_HISTORY_POINTS) : [],
       ...(keepChats && rowChats ? { chats: rowChats } : {})
     }))

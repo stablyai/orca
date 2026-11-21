@@ -107,4 +107,36 @@ describe('the memory snapshot sent over RPC', () => {
     expect(Buffer.byteLength(JSON.stringify(reply))).toBeLessThan(4 * 1024 * 1024)
     expect(reply.worktrees).toHaveLength(3_500)
   })
+
+  it('leaves out pane keys before a restored host would exceed the size limit', () => {
+    const worktrees = Array.from({ length: 4_000 }, (_, i) => ({
+      worktreeId: `w-${i}-${'x'.repeat(370)}`,
+      worktreeName: 'main',
+      repoId: 'repo',
+      repoName: 'repo',
+      cpu: 1,
+      memory: 123_456_789,
+      sessions: [
+        {
+          sessionId: `pty-${i}-${'x'.repeat(370)}`,
+          paneKey: `tab-${i}-0123456789abcdef0123456789abcdef:leaf-0123456789abcdef0123456789`,
+          pid: 1_000 + i,
+          cpu: 1,
+          memory: 123_456_789
+        }
+      ],
+      history: [123_456_789]
+    }))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reply reads only app and worktrees.
+    const snapshot = {
+      app: { cpu: 0, memory: 0, main: {}, renderer: {}, other: {}, history: [] },
+      worktrees
+    } as unknown as MemorySnapshot
+
+    const reply = toMemorySnapshotReply(snapshot)
+
+    expect(Buffer.byteLength(JSON.stringify(reply))).toBeLessThan(4 * 1024 * 1024)
+    expect(reply.worktrees).toHaveLength(4_000)
+    expect(reply.worktrees[0]?.sessions[0]?.paneKey).toBeNull()
+  })
 })
