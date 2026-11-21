@@ -45,6 +45,7 @@ import { PLUGIN_AUTHORING_COMMAND_SPECS, PLUGIN_RUNTIME_COMMAND_SPECS } from './
 import { PAIR_COMMAND_SPECS } from './pair'
 import { PLUGIN_VIEW_COMMAND_SPECS } from './plugin-view'
 import { PLUGIN_INSTALL_COMMAND_SPECS } from './plugin-install'
+import { SETTINGS_SYNC_COMMAND_SPECS } from './settings-sync'
 import { WORKSPACE_CLEANUP_COMMAND_SPECS } from './workspace-cleanup'
 
 export const COMMAND_SPECS: CommandSpec[] = [
@@ -81,6 +82,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...INTROSPECTION_COMMAND_SPECS,
   ...ENVIRONMENT_COMMAND_SPECS,
   ...MANAGED_SERVER_COMMAND_SPECS,
+  ...SETTINGS_SYNC_COMMAND_SPECS,
   ...JIRA_COMMAND_SPECS,
   ...LINEAR_COMMAND_SPECS,
   ...VM_COMMAND_SPECS,
