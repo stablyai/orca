@@ -59,7 +59,7 @@ export function renderResourceUsagePopoverBody(
     toggleWorktree: (worktreeId: string) => void
     navigateToWorktree: (worktreeId: string) => void
     navigateToTab: (tabId: string, paneKey: string | null) => void
-    openChat: (worktreeId: string, agentSessionId: string) => void
+    openChat: (worktreeId: string, agentSessionId: string, runtimeHostId?: string) => void
     sharedAgentUsage: { cpu: number; memory: number } | null
     deleteWorktree: (worktreeId: string) => void
     handleKillSession: (session: UnifiedSessionRow) => void

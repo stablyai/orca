@@ -76,7 +76,7 @@ export function ResourceTree({
   navigateToTab: (tabId: string, paneKey: string | null) => void
   onDelete: (worktreeId: string) => void
   onKillSession: (session: UnifiedSessionRow) => void
-  onOpenChat: (worktreeId: string, agentSessionId: string) => void
+  onOpenChat: (worktreeId: string, agentSessionId: string, runtimeHostId?: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const worktreeById = useWorktreeMap()
