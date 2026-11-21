@@ -5,6 +5,7 @@ import type {
 import type { AgentStatusEntry } from '../../../agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../native-chat/native-chat-types'
 import { agentMessageTranscriptText } from './agent-message-display-text'
+import { pluginSenderKey } from '../../../orchestration/mailbox/plugin-sender-address'
 
 export function agentMessageIsCompact(
   message: Pick<NativeChatMessage, 'agentStart' | 'from'>
@@ -93,10 +94,11 @@ export function agentMessageSavedKind(
   return sender?.agent === 'unknown' ? undefined : sender?.agent
 }
 
-/** A Dispatch address names work, not a pane; every other sender address can be opened. */
+/** A Dispatch address names work and a plugin runs in no pane; every other sender address can be opened. */
 export function agentMessageSenderCanOpen(sender: AgentMessageSender): boolean {
   return (
     !sender.party.address.startsWith('dispatch:') &&
+    pluginSenderKey(sender.party.address) === null &&
     !(
       sender.party.address.startsWith('run:') &&
       !sender.party.orcaSessionId &&

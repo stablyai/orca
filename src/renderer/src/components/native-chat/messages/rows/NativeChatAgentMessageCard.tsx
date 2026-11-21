@@ -28,6 +28,8 @@ import {
   useAgentMessageSenderLabel
 } from '../agent-senders/native-chat-agent-message-sender-label'
 import { BotAvatar, CarriedBotAvatar } from '@/components/bots/BotAvatar'
+import { usePluginMessageSender } from '../agent-senders/native-chat-plugin-message-sender'
+import { PluginContributionIcon } from '@/components/plugins/PluginContributionIcon'
 import { useNativeChatVisualOwner } from '../../media/visuals/native-chat-visual-owner'
 import { useNativeChatWorkers } from '../../native-chat-workers-context'
 import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
@@ -221,6 +223,7 @@ function AgentMessageAvatar({
   target?: RuntimeClientTarget
 }): React.JSX.Element {
   const bot = useAgentMessageSenderBot(sender, worktreeId, target, dispatchId)
+  const plugin = usePluginMessageSender(sender?.party.address)
   return bot ? (
     <BotAvatar bot={bot} className={BOT_TILE} />
   ) : sender?.bot && sender.host ? (
@@ -231,7 +234,11 @@ function AgentMessageAvatar({
       className={BOT_TILE}
     />
   ) : (
-    <AgentTypeIcon agentType={agentType} size={14} />
+    <PluginContributionIcon
+      url={plugin?.iconUrl}
+      className="size-3.5 rounded-sm"
+      fallback={<AgentTypeIcon agentType={agentType} size={14} />}
+    />
   )
 }
 
