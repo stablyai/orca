@@ -17,8 +17,10 @@ export type NativeChatComposerControl = {
 
 type Layout = { compact: boolean; hidden: string[]; terminal: boolean }
 
-// Below this a shrinkable label is too clipped to read, so the toolbar compacts instead.
-const SHRINK_BUDGET_PX = 160
+// Why 256: every shipped permission name fits in full (the widest, Portuguese, is about 230px), so
+// the toolbar compacts rather than truncating a name. Only a longer sentence, such as a deferred
+// pick, is counted at this width and truncates instead of compacting the whole toolbar.
+const SHRINK_BUDGET_PX = 256
 
 export function NativeChatComposerToolbar({
   left,

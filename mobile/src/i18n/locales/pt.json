@@ -1275,9 +1275,9 @@
         "permissionAcceptEdits": "Aceitar edições",
         "permissionAuto": "Aprovar por mim",
         "permissionFullAccess": "Acesso total",
-        "permissionAgentSettings": "Configurações de {{agent}}",
+        "permissionAgentSettings": "Configurações do {{agent}}",
         "permissionAgentSettingsHint": "Usa suas configurações de permissão do {{agent}}. O modo aparece após sua primeira mensagem.",
-        "permissionFromAgentSettings": "{{mode}}, conforme as configurações de {{agent}}"
+        "permissionFromAgentSettings": "{{mode}}, conforme as configurações do {{agent}}"
       },
       "turnDiff": {
         "changedFiles_one": "{{count}} arquivo alterado",

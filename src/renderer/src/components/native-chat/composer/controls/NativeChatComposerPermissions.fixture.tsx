@@ -106,12 +106,14 @@ function permissionFixture({
       const label = host.querySelector<HTMLElement>(
         '[data-composer-control="permissions"] [data-composer-label]'
       )!
-      if (
-        width >= 767 &&
-        (getComputedStyle(label).visibility !== 'visible' ||
-          (!active && label.scrollWidth > label.clientWidth + 1))
-      ) {
+      const labelShown = getComputedStyle(label).visibility === 'visible'
+      if (width >= 767 && !labelShown) {
         throw new Error('The permission text must be fully visible when the composer has room')
+      }
+      if (!active && labelShown && label.scrollWidth > label.clientWidth + 1) {
+        throw new Error(
+          'A permission name must show in full or compact to its icon, never truncate'
+        )
       }
       const originalWidth = frame.style.width
       frame.style.width = '292px'
@@ -188,6 +190,14 @@ export const reportedTooltip = permissionFixture({ reported: 'full-access', tool
 export const reported = permissionFixture({ reported: 'full-access' })
 export const longFallback = permissionFixture({ language: 'pt' })
 export const longFallbackEs = permissionFixture({ language: 'es' })
+// Split panes leave the composer between the wide and narrow layouts.
+export const longFallback420 = permissionFixture({ language: 'pt', width: 420 })
+export const longFallback480 = permissionFixture({ language: 'pt', width: 480 })
+export const longFallback520 = permissionFixture({ language: 'pt', width: 520 })
+export const longFallbackEs420 = permissionFixture({ language: 'es', width: 420 })
+export const longFallbackEs480 = permissionFixture({ language: 'es', width: 480 })
+export const longFallbackEs520 = permissionFixture({ language: 'es', width: 520 })
+export const longFallbackTooltip = permissionFixture({ language: 'pt', tooltip: true })
 export const longMode = permissionFixture({ language: 'fr', reported: 'accept-edits' })
 export const longModeRu = permissionFixture({ language: 'ru', reported: 'ask' })
 export const narrow = permissionFixture({ width: 292 })
