@@ -28,7 +28,11 @@ const NOW = 1_700_000_000_000
 
 const dispatched: NotificationDispatchRequest[] = []
 
-function seed(muted: Record<string, boolean>, launchRestored = false): void {
+function seed(
+  muted: Record<string, boolean>,
+  launchRestored = false,
+  mutedTabs: Record<string, boolean> = {}
+): void {
   store.setState({
     repos: [TEST_REPO],
     worktreesByRepo: {
@@ -86,7 +90,8 @@ function seed(muted: Record<string, boolean>, launchRestored = false): void {
     ]),
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only fields read.
     settings: { experimentalTerminalAttention: true } as GlobalSettings,
-    notificationsMutedByWorktree: muted
+    notificationsMutedByWorktree: muted,
+    notificationsMutedByTabId: mutedTabs
   })
 }
 
@@ -114,6 +119,20 @@ describe('dispatchTerminalNotification per-worktree mute', () => {
 
   it('marks the worktree unread but sends no notification while muted', () => {
     seed({ [WORKSPACE]: true })
+
+    const requested = dispatchTerminalNotification(WORKSPACE, {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey: PANE_KEY
+    })
+
+    expect(requested).toBe(false)
+    expect(dispatched).toEqual([])
+    expect(store.getState().worktreesByRepo.repo1?.[0]?.isUnread).toBe(true)
+  })
+
+  it('marks the worktree unread but sends no notification while the tab is muted', () => {
+    seed({}, false, { 'tab-1': true })
 
     const requested = dispatchTerminalNotification(WORKSPACE, {
       source: 'agent-task-complete',
