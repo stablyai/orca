@@ -271,7 +271,7 @@ export function NativeChatQueuedMessageCard({
                 <TooltipTrigger asChild>
                   <Button
                     type="button"
-                    variant={showsSteerShortcut ? 'queued-head-steer' : 'ghost'}
+                    variant={showsSteerShortcut ? 'queued-head-steer' : 'outline-strong'}
                     size="xs"
                     onClick={onSteer}
                     disabled={steerHeld || busy}
