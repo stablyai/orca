@@ -11,7 +11,8 @@ export function codexRunningStreamBody(item: CodexThreadItem | undefined, text: 
   return translated.body && withJournalReasoningLifecycle(translated.body, { state: 'running' })
 }
 
-/** Command output can be far larger than replies, so only reply text is shown between saves. */
+/** Only reply and reasoning text is shown between saves: command output can be far larger, and a
+ *  plan's status row is no text a reader can append to, so it would be built only to be dropped. */
 export function codexShowsLiveText(item: CodexThreadItem | undefined): boolean {
-  return item?.type === 'agentMessage' || item?.type === 'reasoning' || item?.type === 'plan'
+  return item?.type === 'agentMessage' || item?.type === 'reasoning'
 }
