@@ -10,6 +10,7 @@ import type { SelectionOutcome } from '../../../../../../../shared/agent-session
 
 type OptionsFixtureMocks = {
   call: Mock
+  runtimeCall: Mock
   subscribeStatus: Mock
   enqueue: Mock
   pick: Mock
@@ -39,6 +40,7 @@ const mocks: OptionsFixtureMocks = vi.hoisted(() => {
   }
   return {
     call: vi.fn(),
+    runtimeCall: vi.fn(async () => ({ updates: [] })),
     subscribeStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
     enqueue: vi.fn(),
     pick: vi.fn(),
@@ -59,6 +61,10 @@ const mocks: OptionsFixtureMocks = vi.hoisted(() => {
 })
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
+
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.runtimeCall
+}))
 
 vi.mock(
   '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability',

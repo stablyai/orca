@@ -2,7 +2,6 @@ import { useEffect, useMemo } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import { agentCliUpdateHostTarget } from '@/store/slices/runtime-host-updates/agent-cli-updates'
@@ -32,14 +31,11 @@ export function AgentCliUpdateButton({
     () => (hostKey === null ? null : agentCliUpdateHostTarget(hostKey)),
     [hostKey]
   )
-  const { update, run, start, openFailure } = useAgentCliUpdate(target, agent)
-  const checkAgentCliUpdates = useAppStore((s) => s.checkAgentCliUpdates)
+  const { update, run, check, start, openFailure } = useAgentCliUpdate(target, agent)
   // Opening Settings on a host counts as using it; the host answers from its cache.
   useEffect(() => {
-    if (target) {
-      void checkAgentCliUpdates(target)
-    }
-  }, [checkAgentCliUpdates, target])
+    check()
+  }, [check])
   if (!update?.runnable) {
     return null
   }

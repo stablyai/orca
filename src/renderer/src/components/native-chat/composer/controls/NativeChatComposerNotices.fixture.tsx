@@ -161,6 +161,7 @@ function codexTooOld(phase: 'idle' | 'running' | 'failed', hostName = 'this comp
                     : phase === 'failed'
                       ? { phase, output: 'npm error code EACCES', finishedAt: 0 }
                       : null,
+                check: () => {},
                 start: async () => false,
                 openFailure: () => {}
               }

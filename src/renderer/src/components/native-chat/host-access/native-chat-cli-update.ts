@@ -20,6 +20,7 @@ export function useNativeChatCliUpdate(
   const {
     update,
     run,
+    check,
     start: startUpdate,
     openFailure: openUpdateFailure
   } = useAgentCliUpdate(target, agent)
@@ -36,8 +37,8 @@ export function useNativeChatCliUpdate(
   const openFailure = useCallback(() => openUpdateFailure(start), [openUpdateFailure, start])
   const supported = isAgentCliUpdateAgent(agent)
   return useMemo(
-    () => (supported ? { update, run, start, openFailure } : null),
-    [supported, update, run, start, openFailure]
+    () => (supported ? { update, run, check, start, openFailure } : null),
+    [supported, update, run, check, start, openFailure]
   )
 }
 
