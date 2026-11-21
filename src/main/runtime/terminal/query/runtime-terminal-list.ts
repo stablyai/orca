@@ -58,13 +58,13 @@ type RuntimeTerminalListDependencies = {
   listsEveryPane?: (worktreeId: string) => boolean
 }
 
-export function terminalTabsLookup(
-  store: Pick<RuntimeStore, 'getWorkspaceSession'> | null,
+export function terminalTabs(
+  getStore: () => Pick<RuntimeStore, 'getWorkspaceSession'> | null | undefined,
   getWorkspaceSessionForWorktree: (worktreeId: string) => WorkspaceSessionState | null | undefined
 ): RuntimeTerminalListDependencies['getUnifiedTabs'] {
   return (worktreeId, hostId) => {
     const session = hostId
-      ? store?.getWorkspaceSession?.(hostId)
+      ? getStore()?.getWorkspaceSession?.(hostId)
       : getWorkspaceSessionForWorktree(worktreeId)
     return session?.unifiedTabs?.[worktreeId]
   }

@@ -75,6 +75,7 @@ async function makeRuntimeWithLeaf(store = makeStore()): Promise<OrcaRuntimeServ
 it('reads the terminal identified by its copied workspace tab ID', async () => {
   const store = makeStore()
   const session = store.getWorkspaceSession()
+  const runtime = await makeRuntimeWithLeaf(store)
   session.unifiedTabs = {
     [WORKTREE_ID]: [
       {
@@ -91,7 +92,7 @@ it('reads the terminal identified by its copied workspace tab ID', async () => {
       }
     ]
   }
-  const runtime = await makeRuntimeWithLeaf(store)
+  runtime.setWorkspaceSessionForWorktree(WORKTREE_ID, session)
   runtime.onPtyData(PTY_ID, 'target pane output\r\n', 42)
   const copied = 'orcaTabId: workspace-tab'
   const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`, 100, {
