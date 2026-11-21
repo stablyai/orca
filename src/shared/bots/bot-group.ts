@@ -17,6 +17,7 @@ import {
 export {
   BotGroupReplyMode,
   botGroupOwnerMessageBlocks,
+  botGroupTurnReplyText,
   withBotGroupTurnAnswer
 } from './bot-group-schema'
 export type {

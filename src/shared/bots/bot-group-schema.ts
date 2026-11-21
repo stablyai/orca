@@ -4,6 +4,7 @@ import { BotAvatarColorSchema } from './bot-avatar-color'
 import { isAdmissibleAgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-schemas'
 import type { AgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock, NativeChatMessage } from '../native-chat/native-chat-types'
+import { isQuietBotResult, quietBotResultText } from '../bot-quiet-result'
 
 export const BotGroupReplyMode = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('bot'), botId: z.string().min(1) }),
@@ -149,13 +150,36 @@ export type BotGroupLatest = z.infer<typeof BotGroupLatestSchema>
 export type BotGroupPeerScope = z.infer<typeof BotGroupPeerScopeSchema>
 export type LegacyBotGroup = z.infer<typeof LegacyBotGroupSchema>
 
+/** Whether a turn's own words already say its answer to a member's request. */
+const holdsAnswer = (words: string, answer: string) => words.includes(answer.trim())
+
+/** A turn's reply as room history: its answer to a member's request added unless the reply
+ *  already says it, and a quiet reply's marker dropped. Null when neither has words. */
+export function botGroupTurnReplyText(
+  reply: string | null | undefined,
+  answer: string | undefined
+): string | null {
+  const said = reply && isQuietBotResult(reply) ? quietBotResultText(reply) : (reply ?? '')
+  if (!answer?.trim() || holdsAnswer(said, answer)) {
+    return said || null
+  }
+  return said ? `${said}\n\n${answer}` : answer
+}
+
 /** A turn's rows as the room draws them on desktop and mobile: its answer to a member's request
- *  closes them, as the reply its chat ended without. */
+ *  closes them, unless its own words already said it. */
 export function withBotGroupTurnAnswer(
   messages: NativeChatMessage[],
   turn: Pick<BotGroupTurn, 'operationId' | 'answer'>
 ): NativeChatMessage[] {
-  return turn.answer
+  const words = messages
+    .flatMap((message) =>
+      message.role === 'assistant'
+        ? message.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+        : []
+    )
+    .join('\n')
+  return turn.answer?.trim() && !holdsAnswer(words, turn.answer)
     ? [
         ...messages,
         {
