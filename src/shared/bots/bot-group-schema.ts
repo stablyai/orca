@@ -36,6 +36,11 @@ export const BotGroupRemoteMemberSchema = z.object({
   agent: z.enum(BOT_AGENTS)
 })
 
+/** Bots on paired computers, as the desktop listed them for a create or edit. */
+export const BotGroupRemoteBotsSchema = z
+  .array(BotGroupRemoteMemberSchema.omit({ computer: true, joinedAfter: true }))
+  .max(31)
+
 /** Sessions of members that left a room: its history still opens there; they grant no access. */
 const FormerSessionIds = z.array(z.string().min(1)).optional()
 

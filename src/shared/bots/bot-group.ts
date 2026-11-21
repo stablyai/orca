@@ -9,7 +9,7 @@ import type {
 import { structuredAgentTurnAnchors } from '../native-chat/transcript/turns/native-chat-turn-membership'
 import { remoteMemberKey } from './bot-group-mentions'
 import {
-  BotGroupRemoteMemberSchema,
+  BotGroupRemoteBotsSchema as RemoteBots,
   BotGroupReplyMode,
   type BotGroup,
   type BotGroupMember,
@@ -107,10 +107,6 @@ const GroupId = z.object({ groupId: z.string().min(1) })
 /** A room in the group: one of its threads, or the original room when absent. */
 const Room = GroupId.extend({ threadId: z.string().min(1).optional() })
 const Revision = GroupId.extend({ revision: z.number().int().positive() })
-/** Bots on paired computers, as the desktop listed them. */
-const RemoteBots = z
-  .array(BotGroupRemoteMemberSchema.omit({ computer: true, joinedAfter: true }))
-  .max(31)
 export const BotGroupCreate = z.object({
   name: BotNameSchema,
   botIds: z.array(z.string().min(1)).min(1).max(32),
@@ -282,9 +278,8 @@ export function botGroupCompletedReply(
   return full ? { text: full.slice(-16_000), full, completedAt } : null
 }
 
-/** What a member has not seen: room posts and peer replies since it was last asked (everything
- *  for a new member), newest kept under the cap. Local replies are keyed by operation; remote
- *  members' answers ride on their post. A remote member is named by its key. */
+/** What a member has not seen: posts and replies since it was last asked (all, if new), newest kept
+ *  under the cap. Local replies are keyed by operation; remote answers ride on their post. */
 export function botGroupContext(
   messages: readonly BotGroupMessage[],
   completed: ReadonlyMap<string, string>,
@@ -320,14 +315,10 @@ export function botGroupContext(
         : []
     }),
     ...(message.remoteAsks ?? []).flatMap((ask) => {
-      const key = botGroupRemoteKey(ask)
-      return ask.reply?.kind === 'answer' && key !== remoteKey
-        ? [
-            {
-              author: { kind: 'bot' as const, id: key, name: `${ask.name} (${ask.computer})` },
-              text: ask.reply.text.slice(-16_000)
-            }
-          ]
+      const id = botGroupRemoteKey(ask)
+      const name = `${ask.name} (${ask.computer})`
+      return ask.reply?.kind === 'answer' && id !== remoteKey
+        ? [{ author: { kind: 'bot' as const, id, name }, text: ask.reply.text.slice(-16_000) }]
         : []
     })
   ])

@@ -42,6 +42,7 @@ function remoteFixture(
       }
     }
     if (method === 'orchestration.peerMailDeliver') {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: peerMailDeliver is always called with its params object.
       delivered.push(params as Record<string, unknown>)
       return (await options.deliver?.()) ?? { ok: true }
     }
@@ -79,6 +80,7 @@ function arrive(
   reply: { answer: string } | { notice: string }
 ) {
   const room = botGroupRoomMailAddress(groupId)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query selects conversation_id from an existing row.
   const conversation = base.orchestration.db
     .prepare('SELECT conversation_id FROM peer_mail_conversations WHERE local_party = ?')
     .get(room) as { conversation_id: string }
@@ -372,7 +374,8 @@ describe('what a remote member is sent and shown', () => {
       groupId: group.id,
       author: { kind: 'owner' },
       text: 'secret from an older build',
-      createdAt: Date.now(),
+      // Room order is by sequence, so a fixed time is enough.
+      createdAt: 1_800_000_000_000,
       turns: []
     })
     await post(base, group, 'asked where it can be @Atlas')
@@ -418,6 +421,8 @@ describe('what a remote member is sent and shown', () => {
     expect(base.delivered).toHaveLength(1)
   })
 
+  // Forty posts with 4 MB of answers go through the real SQLite store, which can pass the default
+  // 5 s on a loaded CI host.
   it('keeps a page of long remote answers bounded, and says they were shortened', async () => {
     const base = remoteFixture()
     const group = await mixedRoom(base)

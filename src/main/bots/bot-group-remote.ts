@@ -257,8 +257,12 @@ function refusedBeforeAdmission(error: unknown): boolean {
   if (!(error instanceof OrchestrationError)) {
     return false
   }
-  const data = error.data as { effectsApplied?: unknown } | undefined
-  return data?.effectsApplied === false || REFUSED_BEFORE_ADMISSION.has(error.code)
+  const data: unknown = error.data
+  const effectsApplied =
+    typeof data === 'object' && data !== null && 'effectsApplied' in data
+      ? data.effectsApplied
+      : undefined
+  return effectsApplied === false || REFUSED_BEFORE_ADMISSION.has(error.code)
 }
 
 function text(error: unknown): string {

@@ -194,17 +194,17 @@ describe('a group on one computer with a bot on another', () => {
 
   function reply(id: string, body: string) {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double carrying only the fields the code under test reads.
-    return ORCHESTRATION_REPLY_METHOD.handler({ id, body }, {
-      runtime: b.runtime,
-      orchestrationCaller: {
-        address: DOCS_HOME,
-        terminalHandle: null,
-        paneKey: null,
-        orcaSessionId: DOCS_CHAT,
-        sessionId: DOCS_CHAT,
-        workspaceId: 'w'
-      } as OrchestrationSessionCaller
-    } as RpcContext)
+    const orchestrationCaller = {
+      address: DOCS_HOME,
+      terminalHandle: null,
+      paneKey: null,
+      orcaSessionId: DOCS_CHAT,
+      sessionId: DOCS_CHAT,
+      workspaceId: 'w'
+    } as OrchestrationSessionCaller
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double carrying only the fields the code under test reads.
+    const context = { runtime: b.runtime, orchestrationCaller } as RpcContext
+    return ORCHESTRATION_REPLY_METHOD.handler({ id, body }, context)
   }
 
   it("asks Docs in its Home Chat on B, and posts its answer in G's room", async () => {
