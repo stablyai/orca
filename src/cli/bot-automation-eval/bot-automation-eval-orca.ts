@@ -24,6 +24,7 @@ import { installDeliveryUploads, serveDeliveries } from './bot-automation-eval-a
 import { wakingThreadRef } from './bot-automation-eval-waking-thread'
 import { serveOwnerLinear } from './bot-automation-eval-owner-linear'
 import { serveBotConnectors } from './bot-automation-eval-bot-connectors'
+import { serveEvalDecisionItem } from '../bot-orchestration-eval/bot-orchestration-eval-decision-item'
 import { serveBots } from '../bot-orchestration-eval/bot-orchestration-eval-bots'
 import {
   evalWorkRecord,
@@ -131,6 +132,9 @@ function serve(method: string, params: Record<string, unknown>): unknown {
   const io = {
     record,
     save: (next: EvalHostState) => writeFileSync(statePath, JSON.stringify(next))
+  }
+  if (state.decisionItem && (method === 'bots.items.set' || method === 'bots.items.comment')) {
+    return serveEvalDecisionItem(state, method, params, io)
   }
   const bots = serveBots(state, method, params, io)
   if (bots !== undefined) {

@@ -30,7 +30,7 @@ import {
   oneOf,
   replyAvoids,
   replyCites,
-  runsNothing,
+  asksWithoutActions,
   readsOnly,
   startsIn,
   startsInOneOf,
@@ -43,6 +43,7 @@ import { BOT_SCENARIOS } from './bot-orchestration-eval-bot-scenarios'
 import { IDENTITY_SCENARIOS } from './bot-orchestration-eval-identity-scenarios'
 import { ADOPTION_SCENARIOS } from './bot-orchestration-eval-adoption-scenarios'
 import { LOOK_AROUND_SCENARIOS } from './bot-orchestration-eval-look-around-scenarios'
+import { ASK_SCENARIOS } from './bot-orchestration-eval-ask-scenarios'
 
 export type OrchestrationScenario = {
   id: string
@@ -251,7 +252,7 @@ const PR_READS = [
 ]
 
 const GREETS_ONLY = [
-  runsNothing,
+  asksWithoutActions,
   noStart,
   replyAvoids(/::orca-idea/, 'idea buttons'),
   asksOneQuestion
@@ -287,5 +288,6 @@ export const ALL_ORCHESTRATION_SCENARIOS = [
   ...CONNECTOR_SCENARIOS,
   ...IDENTITY_SCENARIOS,
   ...ADOPTION_SCENARIOS,
-  ...LOOK_AROUND_SCENARIOS
+  ...LOOK_AROUND_SCENARIOS,
+  ...ASK_SCENARIOS
 ]

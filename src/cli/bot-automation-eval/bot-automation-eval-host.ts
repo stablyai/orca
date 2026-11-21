@@ -7,6 +7,7 @@ import { build } from 'esbuild'
 import { runProcess } from '@orca/process-host'
 import type { Automation } from '../../shared/automations/automation-definition'
 import type { Bot } from '../../shared/bot-types'
+import type { BotItem } from '../../shared/bots/bot-items'
 import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import type { LinearRun } from './bot-automation-eval-linear'
 import type { BotWorkPullRequest } from '../../shared/bots/bot-work-pull-request'
@@ -20,6 +21,7 @@ import type { BotLookState } from '../../main/bots/bot-look-around-state'
 export type EvalAgent = 'claude' | 'codex'
 
 export type EvalHostState = {
+  decisionItem?: { item: BotItem; comments: string[] }
   bots: (Pick<
     Bot,
     'id' | 'name' | 'agent' | 'slack' | 'slackApps' | 'github' | 'linear' | 'linearWorkspaces'

@@ -59,6 +59,8 @@ export type EvalTurnOutcome = {
   shell: string[]
   /** Every tool call, by name (`shell` for a command); a native read or MCP call shows here only. */
   tools: string[]
+  /** What the bot asked the owner through its question tool, each question with its options. */
+  asks?: string[]
   /** The owner's own CLIs (gh, linear, ...) the bot reached for, by name. */
   ownerTools: string[]
   error?: string
@@ -204,7 +206,12 @@ export async function runBotThread(input: {
         program: input.agent,
         args: turnArgs(input.agent, preamble, message, home, sessionId),
         cwd: home,
-        env: childEnv(input.standIn, home),
+        env: {
+          ...childEnv(input.standIn, home),
+          ...(current.decisionItem
+            ? { ORCA_AGENT_SESSION_ID: current.decisionItem.item.chat.id }
+            : {})
+        },
         stdio: ['ignore', 'pipe', 'pipe'],
         timeoutMs: input.timeoutMs
       })
@@ -228,6 +235,7 @@ export async function runBotThread(input: {
         ),
         shell: parsed.shell,
         tools: parsed.tools,
+        asks: parsed.asks,
         ownerTools: log.flatMap((entry) => (entry.tool ? [entry.tool] : [])),
         ...(result.code === 0
           ? {}
@@ -235,7 +243,13 @@ export async function runBotThread(input: {
         ...(result.timedOut ? { timedOut: true as const } : {}),
         ...(parsed.costUsd === undefined ? {} : { costUsd: parsed.costUsd })
       })
-      transcript.push(`>>> ${message}`, ...parsed.steps, `<<< ${parsed.reply}`, '')
+      transcript.push(
+        `>>> ${message}`,
+        ...parsed.steps,
+        ...parsed.asks.map((ask) => `[question]\n${ask}`),
+        `<<< ${parsed.reply}`,
+        ''
+      )
     }
     record.dispose()
     const changed = await Promise.all(
