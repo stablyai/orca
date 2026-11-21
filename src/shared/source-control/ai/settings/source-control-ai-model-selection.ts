@@ -155,6 +155,19 @@ export function getTextGenerationModels<T extends CommitMessageAiModelCapability
   ]
 }
 
+/** The default a host's CLI accepts: the built-in default when the CLI lists it, else the CLI's first model. */
+export function discoveredDefaultModelId(
+  staticDefaultModelId: string,
+  discovered: readonly { id: string }[]
+): string {
+  // Static default sentinels preserve the CLI's configured provider despite concrete discovered models.
+  return staticDefaultModelId === 'default' ||
+    discovered.length === 0 ||
+    discovered.some((model) => model.id === staticDefaultModelId)
+    ? staticDefaultModelId
+    : discovered[0].id
+}
+
 // Dictated text waits on cleanup before it lands, so cleanup starts on each agent's quickest model.
 const DICTATION_CLEANUP_MODEL_BY_AGENT: Partial<Record<TuiAgent, string>> = {
   claude: 'haiku',

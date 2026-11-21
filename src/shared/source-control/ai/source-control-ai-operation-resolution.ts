@@ -20,6 +20,7 @@ import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 
 import { projectSourceControlAiToLegacyCommitMessageAi as projectLegacySettings } from './settings/source-control-ai-legacy-projection'
 import {
+  discoveredDefaultModelId,
   getDiscoveredModels,
   resolveThinkingLevel,
   selectPersistedModelId
@@ -216,6 +217,9 @@ export function resolveSourceControlAiForOperation(
     )
   }
   const hostKey = input.discoveryHostKey ?? LOCAL_COMMIT_MESSAGE_HOST_KEY
+  const discoveredModels = getDiscoveredModels(source, legacy, hostKey, resolvedAgent)
+  // A CLI on a custom provider can list no built-in model; launching the built-in default then fails on every run.
+  const defaultModelId = discoveredDefaultModelId(spec.defaultModelId, discoveredModels)
   const persistedModelId = selectPersistedModelId({
     source,
     legacy,
@@ -223,12 +227,12 @@ export function resolveSourceControlAiForOperation(
     operation: input.operation,
     hostKey,
     agentId: resolvedAgent,
-    defaultModelId: spec.defaultModelId
+    defaultModelId
   })
-  const discoveredModels = getDiscoveredModels(source, legacy, hostKey, resolvedAgent)
   const model =
     spec.models.find((candidate) => candidate.id === persistedModelId) ??
     discoveredModels.find((candidate) => candidate.id === persistedModelId) ??
+    discoveredModels.find((candidate) => candidate.id === defaultModelId) ??
     getCommitMessageModel(resolvedAgent, spec.defaultModelId)
   if (!model) {
     return resolveFailure(textGenerationFailure('noModelForAgent', { label: spec.label }))

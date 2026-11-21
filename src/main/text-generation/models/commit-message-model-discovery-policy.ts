@@ -1,5 +1,6 @@
 import { buildClaudeModelListArgs } from '../../../shared/agent-session/options/model-catalog/claude-model-list-probe'
 import type { CommitMessageModel } from '../../../shared/source-control/ai/generation/commit-message-agent-spec'
+import { discoveredDefaultModelId } from '../../../shared/source-control/ai/settings/source-control-ai-model-selection'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../../codex-cli/codex-read-only-app-server-args'
 import type { CommandTemplateBackslash } from '../../../shared/source-control/ai/generation/commit-message-prompt'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
@@ -77,12 +78,12 @@ export function discoveredModelsResult(
       models = [configuredDefault, ...models]
     }
   }
-  // Static default sentinels preserve the CLI's configured provider despite concrete discovered models.
-  const defaultModelId =
-    spec.defaultModelId === 'default' || models.some((model) => model.id === spec.defaultModelId)
-      ? spec.defaultModelId
-      : models[0].id
-  return staticModelDiscoveryResult(spec, models, defaultModelId, 'probe')
+  return staticModelDiscoveryResult(
+    spec,
+    models,
+    discoveredDefaultModelId(spec.defaultModelId, models),
+    'probe'
+  )
 }
 
 export function planModelDiscovery(
