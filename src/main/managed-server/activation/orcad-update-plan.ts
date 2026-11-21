@@ -32,7 +32,7 @@ export function planOrcadUpdate(input: {
   candidateVersion: string
   census: OrcadTerminalCensus
   candidateDaemonProtocol: OrcadDaemonProtocolFacts
-  /** Daemon generations the candidate found alive on the host; consulted only when the census cannot name them. */
+  /** Daemon generations the candidate found alive on the host; consulted only when the census cannot name them or is uncounted. */
   hostDaemonProtocols?: readonly number[]
   force?: OrcadUpdateForce
 }): OrcadUpdateDecision {
@@ -73,6 +73,17 @@ export function planOrcadUpdate(input: {
     }
   }
   const { liveSessions } = input.census
+  // The candidate proved every daemon generation dead, so no daemon terminal can be stranded.
+  if (liveSessions === null && input.force === true && input.hostDaemonProtocols?.length === 0) {
+    return {
+      action: 'proceed',
+      preservesLiveDaemon: false,
+      notes: [
+        'Forced while no terminal daemon is running on this host, so no daemon terminal can be ' +
+          'stranded. Terminals the current orcad runs itself end with the restart.'
+      ]
+    }
+  }
   if (input.force && crossing.state === 'unverifiable') {
     return {
       action: 'defer',

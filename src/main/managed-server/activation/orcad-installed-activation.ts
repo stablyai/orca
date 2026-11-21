@@ -123,8 +123,8 @@ export async function activateInstalledOrcad(
   if (refusal) {
     return notActivated(ORCAD_ACTIVATION_POLICY_REFUSED_CODE, refusal)
   }
-  // Hosts predating the census protocol set cannot name mixed generations; the candidate can.
-  const asksCandidate = censusNeedsHostDaemonProtocols(census)
+  // Hosts predating the census protocol set cannot name mixed generations, and a dead daemon answers no census; the candidate can.
+  const asksCandidate = censusNeedsHostDaemonProtocols(census) || census.liveSessions === null
   if (
     plan.action === 'defer' &&
     !(asksCandidate && plan.code === 'orcad_update_daemon_protocol_unverifiable')
