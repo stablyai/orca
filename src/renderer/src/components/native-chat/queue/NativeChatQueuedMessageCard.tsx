@@ -243,11 +243,11 @@ export function NativeChatQueuedMessageCard({
         )}
         {drag?.grip}
       </span>
-      {/* Expanded, the actions scroll with the text; the scroller spans the row's padding so focus rings aren't clipped. */}
+      {/* Reserve the same gutter in both states so the chevron stays aligned when expanded text scrolls. */}
       <div
         className={cn(
-          'min-w-0 flex-1',
-          expanded && 'scrollbar-sleek -my-1 -mr-1 max-h-64 overflow-y-auto py-1 pr-1'
+          '-my-1 -mr-1 min-h-9 min-w-0 flex-1 py-1 pr-1 [scrollbar-gutter:stable]',
+          expanded ? 'scrollbar-sleek max-h-64 overflow-y-auto' : 'scrollbar-sleek overflow-hidden'
         )}
       >
         {/* Floated with a margin box one text line tall (text and controls scale apart), so only the first line makes room; hidden actions keep their space so text never shifts. */}

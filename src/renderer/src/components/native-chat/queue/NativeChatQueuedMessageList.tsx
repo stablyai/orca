@@ -197,74 +197,76 @@ function NativeChatQueueHeader({
   return (
     <div
       className={cn(
-        // Reserves the list's scrollbar gutter so its chevron shares the rows' column wherever scrollbars take width.
-        'scrollbar-sleek flex items-center gap-1 overflow-hidden rounded-t-md py-1 pr-1 pl-2.5 text-xs text-muted-foreground [scrollbar-gutter:stable]',
+        // Match the list's gutter here and the expanded message's gutter inside.
+        'scrollbar-sleek overflow-hidden rounded-t-md [scrollbar-gutter:stable]',
         pause && 'bg-muted',
         !expanded && 'rounded-b-md'
       )}
     >
-      <p className={cn('truncate', pause && 'font-medium text-foreground')}>
-        {pause
-          ? t('components.native-chat.queuedMessages.paused', 'Paused')
-          : t('components.native-chat.queuedMessages.queued', 'Queued')}
-      </p>
-      <span aria-hidden>·</span>
-      <span className={cn('tabular-nums', attentionCaption ? 'shrink-0' : 'min-w-0 flex-1')}>
-        {count}
-      </span>
-      {attentionCaption ? (
-        <span className="flex min-w-0 flex-1 items-center gap-1 text-destructive">
-          <AlertCircle className="size-3.5 shrink-0" aria-hidden />
-          <span className="truncate">{attentionCaption}</span>
+      <div className="scrollbar-sleek flex items-center gap-1 overflow-hidden py-1 pr-1 pl-2.5 text-xs text-muted-foreground [scrollbar-gutter:stable]">
+        <p className={cn('truncate', pause && 'font-medium text-foreground')}>
+          {pause
+            ? t('components.native-chat.queuedMessages.paused', 'Paused')
+            : t('components.native-chat.queuedMessages.queued', 'Queued')}
+        </p>
+        <span aria-hidden>·</span>
+        <span className={cn('tabular-nums', attentionCaption ? 'shrink-0' : 'min-w-0 flex-1')}>
+          {count}
         </span>
-      ) : null}
-      {pause ? (
-        <>
-          {/* Each greys during the other: a Resume would send the cards a Clear is deleting. */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            disabled={!clearCapable || queuePending !== null}
-            onClick={onClearAll}
-          >
-            <NativeChatPendingIcon pending={queuePending === 'clear'} className="size-3">
-              <Trash2 className="size-3" />
-            </NativeChatPendingIcon>
-            {t('components.native-chat.queuedMessages.clearAll', 'Clear all')}
-          </Button>
-          <Button
-            type="button"
-            variant="default"
-            size="xs"
-            disabled={queuePending !== null}
-            onClick={onResume}
-          >
-            <NativeChatPendingIcon pending={queuePending === 'resume'} className="size-3">
-              <Play className="size-3" />
-            </NativeChatPendingIcon>
-            {t('components.native-chat.queuedMessages.resume', 'Resume')}
-          </Button>
-        </>
-      ) : null}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label={t('components.native-chat.queuedMessages.listLabel', 'Queued messages')}
-            aria-expanded={expanded}
-            aria-controls={listId}
-            onClick={onToggle}
-          >
-            {expanded ? <ChevronDown /> : <ChevronRight />}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={4}>
-          {toggleLabel}
-        </TooltipContent>
-      </Tooltip>
+        {attentionCaption ? (
+          <span className="flex min-w-0 flex-1 items-center gap-1 text-destructive">
+            <AlertCircle className="size-3.5 shrink-0" aria-hidden />
+            <span className="truncate">{attentionCaption}</span>
+          </span>
+        ) : null}
+        {pause ? (
+          <>
+            {/* Each greys during the other: a Resume would send the cards a Clear is deleting. */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              disabled={!clearCapable || queuePending !== null}
+              onClick={onClearAll}
+            >
+              <NativeChatPendingIcon pending={queuePending === 'clear'} className="size-3">
+                <Trash2 className="size-3" />
+              </NativeChatPendingIcon>
+              {t('components.native-chat.queuedMessages.clearAll', 'Clear all')}
+            </Button>
+            <Button
+              type="button"
+              variant="default"
+              size="xs"
+              disabled={queuePending !== null}
+              onClick={onResume}
+            >
+              <NativeChatPendingIcon pending={queuePending === 'resume'} className="size-3">
+                <Play className="size-3" />
+              </NativeChatPendingIcon>
+              {t('components.native-chat.queuedMessages.resume', 'Resume')}
+            </Button>
+          </>
+        ) : null}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label={t('components.native-chat.queuedMessages.listLabel', 'Queued messages')}
+              aria-expanded={expanded}
+              aria-controls={listId}
+              onClick={onToggle}
+            >
+              {expanded ? <ChevronDown /> : <ChevronRight />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            {toggleLabel}
+          </TooltipContent>
+        </Tooltip>
+      </div>
     </div>
   )
 }
