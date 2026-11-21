@@ -31,6 +31,7 @@ describe('agent completion coordinator process-exit turn boundary', () => {
     await vi.advanceTimersByTimeAsync(2_000)
     await flushAsyncTicks()
     result = processResult('zsh', false)
+    ptyLane.observeOutputActivity()
     await vi.advanceTimersByTimeAsync(3_000)
     await flushAsyncTicks()
     expect(ptyDispatch).toHaveBeenCalledTimes(1)

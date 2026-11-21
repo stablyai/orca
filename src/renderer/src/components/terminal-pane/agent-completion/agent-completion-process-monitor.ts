@@ -13,6 +13,7 @@ import {
 } from '../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { ProcessMonitorOptions } from './agent-completion-process-types'
 import { createAgentCompletionPollScheduler } from './agent-completion-poll-scheduler'
+import { HIDDEN_OUTPUT_ACTIVITY_NOTICE_INTERVAL_MS } from '../../../../../shared/terminal/replay/pty-model-restore-marker'
 import {
   handleAgentCompletionInspectionResult,
   type RemoteInspectionState
@@ -50,8 +51,19 @@ export function createAgentCompletionProcessMonitor({
     // Invalidate reads queued for a prior same-id incarnation.
     state.inspectionGeneration += 1
   }
-  const { clearPollTimer, scheduleNextPoll, shouldRunCadenceInspection } =
-    createAgentCompletionPollScheduler({ options, state, pendingTitle, requestInspection })
+  const {
+    clearPollTimer,
+    scheduleNextPoll,
+    shouldRunCadenceInspection,
+    noteForegroundEvent,
+    requestFollowUp,
+    consumeReadDue
+  } = createAgentCompletionPollScheduler({ options, state, pendingTitle, requestInspection })
+
+  function recordActivityUntil(until: number, eventAt: number): void {
+    state.lastPaneActivityAt = Math.max(state.lastPaneActivityAt ?? until, until)
+    noteForegroundEvent(eventAt)
+  }
 
   function handleRecognizedProcess(process: RecognizedAgentProcess): void {
     state.pendingProcessExit = null
@@ -111,6 +123,7 @@ export function createAgentCompletionProcessMonitor({
       // Local reads share one capture; remote reads consume separate host round trips.
       sharesHostObservation: options.isRemotePtyId?.(ptyId) !== true,
       run: async () => {
+        consumeReadDue()
         let inspectedRecognizedAgent = false
         let inspectionSucceeded = false
         try {
@@ -131,6 +144,7 @@ export function createAgentCompletionProcessMonitor({
             : options.inspectProcess(ptyId))
           // An agent tracked while a job-only read was in flight needs full child evidence; the next poll gets it.
           if (jobMembershipOnly && state.lastForegroundAgent && state.hasAgentRunEvidence) {
+            requestFollowUp('unresolved')
             return
           }
           // A stale shell cache must not retire a live agent and disable its mouse reporting (#29996).
@@ -182,7 +196,7 @@ export function createAgentCompletionProcessMonitor({
                 identityScope,
                 clearAgentRunEvidence,
                 hasPendingHookDone,
-                scheduleNextPoll,
+                requestFollowUp,
                 handleRecognizedProcess,
                 dispatchCompletion,
                 remoteInspection
@@ -193,13 +207,15 @@ export function createAgentCompletionProcessMonitor({
         } catch {
           state.pendingProcessExit = null
           state.consecutiveInspectionErrors += 1
+          requestFollowUp('unresolved')
         } finally {
           state.inspectionInFlight = false
           if (generationAtRequest !== state.inspectionGeneration) {
             if (pendingTitle.get()) {
               requestInspection('pending-title')
             } else {
-              scheduleNextPoll()
+              // The discarded read answered nothing.
+              requestFollowUp('unresolved')
             }
           } else {
             const currentPendingTitle = pendingTitle.get()
@@ -236,19 +252,25 @@ export function createAgentCompletionProcessMonitor({
       }
     },
     start: () => {
-      // A newly bound PTY polls fast while its foreground identity settles; visibility re-syncs don't count as activity.
+      // A new binding is an event; visibility re-syncs only release a read deferred while hidden.
       const ptyId = options.getPtyId()
       if (!state.pollTrackingStarted || ptyId !== trackedPtyId) {
         state.pollTrackingStarted = true
         trackedPtyId = ptyId
-        state.lastPaneActivityAt = Date.now()
+        const now = Date.now()
+        recordActivityUntil(now, now)
+        return
       }
       scheduleNextPoll()
     },
     recordActivity: () => {
-      state.lastPaneActivityAt = Date.now()
-      // The scheduler replaces a slower pending timer (quiet or no-evidence) with the faster tier.
-      scheduleNextPoll()
+      const now = Date.now()
+      recordActivityUntil(now, now)
+    },
+    // Main reports hidden output only on the leading edge of its throttle window, so read after that window.
+    recordHiddenOutputActivity: () => {
+      const until = Date.now() + HIDDEN_OUTPUT_ACTIVITY_NOTICE_INTERVAL_MS
+      recordActivityUntil(until, until)
     },
     incrementGeneration: () => {
       state.inspectionGeneration += 1

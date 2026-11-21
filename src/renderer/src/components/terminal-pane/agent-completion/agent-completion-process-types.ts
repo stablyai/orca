@@ -25,7 +25,11 @@ export type ProcessMonitorState = {
   pollTrackingStarted: boolean
   pollTimer: ReturnType<typeof setTimeout> | null
   pollTimerTier: PollCadenceTier | null
+  /** May lie in the future: a hidden-output notice stands for output until its window ends. */
   lastPaneActivityAt: number | null
+  /** Earliest event no read has answered yet; null means no read is due. */
+  readDueSince: number | null
+  unresolvedFollowUps: number
   hasAgentRunEvidence: boolean
   pendingProcessExit: PendingProcessExit | null
   lastForegroundAgent: RecognizedAgentProcess | null

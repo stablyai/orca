@@ -1,4 +1,4 @@
-// Bound costly-host idle scans without relaxing active-agent completion detection; pane activity re-arms hot cadence.
+// Quiet panes never scan; pane activity arms one read without relaxing agent exit detection.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createAgentCompletionCoordinator } from './agent-completion-coordinator'
 import { resetAgentCompletionCoordinatorIdentitiesForTest } from './agent-completion-identity-store'
@@ -84,7 +84,7 @@ describe('agent completion no-evidence inspection cadence', () => {
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
   })
 
-  it('still detects an unannounced agent exit promptly after escalating from the relaxed tier', async () => {
+  it('still detects an unannounced agent exit from its prompt redraw after a long quiet spell', async () => {
     let foregroundProcess: string | null = null
     const inspectProcess = vi.fn(async () => processResult(foregroundProcess))
     const { coordinator, dispatchCompletion } = createCoordinator(inspectProcess)
@@ -97,8 +97,9 @@ describe('agent completion no-evidence inspection cadence', () => {
     await vi.advanceTimersByTimeAsync(2_000)
     expect(inspectProcess).toHaveBeenCalled()
 
-    // With no title/hook end signal, sustained process absence must still confirm completion at active cadence.
+    // With no title/hook end signal, the prompt redraw arms reads that confirm sustained absence.
     foregroundProcess = null
+    coordinator.observeOutputActivity()
     const callsAtExit = inspectProcess.mock.calls.length
     await vi.advanceTimersByTimeAsync(3_000)
     expect(inspectProcess.mock.calls.length).toBeGreaterThan(callsAtExit)

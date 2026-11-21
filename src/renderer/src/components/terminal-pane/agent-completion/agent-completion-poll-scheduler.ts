@@ -8,7 +8,17 @@ import {
   type PollCadenceTier
 } from './agent-completion-poll-cadence'
 import { nextCadenceInspectionDelayMs } from './agent-completion-poll-interval'
+import { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } from '../../../../../shared/process-observation/tables/process-table-snapshot'
 
+/** Continuous output (a spinner) still gets one read this often; a pause reads sooner. */
+const ACTIVITY_READ_MAX_DEFERRAL_MS = 5_000
+/** Inconclusive reads (children, errors) retry this many times per event, then wait for the next event. */
+const MAX_UNRESOLVED_FOLLOW_UPS = 3
+
+export type CadenceFollowUp = 'pending' | 'unresolved'
+
+/** Reads are event-driven: output, input echo, title, hook or a new PTY bind arm one trailing read. A
+ * quiet pane arms no timer, because an agent's exit always redraws the shell prompt or ends the PTY. */
 export function createAgentCompletionPollScheduler(args: {
   options: AgentCompletionCoordinatorOptions
   state: ProcessMonitorState
@@ -55,7 +65,7 @@ export function createAgentCompletionPollScheduler(args: {
       return 'hidden'
     }
     const now = Date.now()
-    // An agent idling at its prompt changes nothing until it prints; a pending exit still confirms fast.
+    // A quiet pane reads only to retry an inconclusive read; a pending exit still confirms fast.
     if (
       (state.lastForegroundAgent || state.hasAgentRunEvidence) &&
       state.pendingProcessExit === null &&
@@ -78,8 +88,36 @@ export function createAgentCompletionPollScheduler(args: {
     return 'idle'
   }
 
+  function onPollTimer(tier: PollCadenceTier): void {
+    state.pollTimer = null
+    state.pollTimerTier = null
+    const now = Date.now()
+    const dueSince = state.readDueSince
+    const settleMs = POLL_TIER_INTERVAL_MS[tier]
+    // Debounce: wait for output to pause, but never past the max deferral.
+    if (dueSince !== null && state.lastPaneActivityAt !== null) {
+      const remaining = Math.min(
+        state.lastPaneActivityAt + settleMs - now,
+        dueSince + ACTIVITY_READ_MAX_DEFERRAL_MS - now
+      )
+      if (remaining > 0) {
+        armPollTimer(tier, remaining)
+        return
+      }
+    }
+    requestInspection('cadence')
+  }
+
+  function armPollTimer(tier: PollCadenceTier, delayMs: number): void {
+    state.pollTimerTier = tier
+    state.pollTimer = setTimeout(() => onPollTimer(tier), delayMs)
+  }
+
   function scheduleNextPoll(): void {
     if (state.disposed || !state.pollTrackingStarted || !options.isLive() || pendingTitle.get()) {
+      return
+    }
+    if (state.readDueSince === null) {
       return
     }
     const tier = currentPollTier()
@@ -105,19 +143,51 @@ export function createAgentCompletionPollScheduler(args: {
     // Align only genuinely idle panes; agent activity retains the exact interval and phase.
     const isIdlePane =
       tier === 'quiet-agent' || (state.lastForegroundAgent === null && isPaneQuiet(now))
-    const interval = nextCadenceInspectionDelayMs({
-      baseMs: backoff,
-      hasConsecutiveErrors: state.consecutiveInspectionErrors > 0,
-      alignToSharedGrid: isIdlePane,
-      now
-    })
-    state.pollTimerTier = tier
-    state.pollTimer = setTimeout(() => {
-      state.pollTimer = null
-      state.pollTimerTier = null
-      requestInspection('cadence')
-    }, interval)
+    armPollTimer(
+      tier,
+      nextCadenceInspectionDelayMs({
+        baseMs: backoff,
+        hasConsecutiveErrors: state.consecutiveInspectionErrors > 0,
+        alignToSharedGrid: isIdlePane,
+        now
+      })
+    )
   }
 
-  return { clearPollTimer, scheduleNextPoll, shouldRunCadenceInspection }
+  /** Something that can change the foreground happened; read once after it settles. */
+  function noteForegroundEvent(at = Date.now()): void {
+    state.readDueSince ??= at
+    state.unresolvedFollowUps = 0
+    scheduleNextPoll()
+  }
+
+  /** A read left a bounded question open: an exit to confirm, a hook done in flight, or an inconclusive read. */
+  function requestFollowUp(kind: CadenceFollowUp): void {
+    if (kind === 'unresolved') {
+      if (state.unresolvedFollowUps >= MAX_UNRESOLVED_FOLLOW_UPS) {
+        return
+      }
+      state.unresolvedFollowUps += 1
+    }
+    state.readDueSince ??= Date.now()
+    scheduleNextPoll()
+  }
+
+  /** The read now starting answers every event before it, except output too recent for a shared snapshot to show. */
+  function consumeReadDue(): void {
+    const lastActivity = state.lastPaneActivityAt
+    state.readDueSince =
+      lastActivity !== null && lastActivity > Date.now() - PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
+        ? lastActivity
+        : null
+  }
+
+  return {
+    clearPollTimer,
+    scheduleNextPoll,
+    shouldRunCadenceInspection,
+    noteForegroundEvent,
+    requestFollowUp,
+    consumeReadDue
+  }
 }

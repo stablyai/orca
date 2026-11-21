@@ -16,6 +16,7 @@ import type {
   LastCompletionIdentity
 } from './agent-completion-identity-store'
 import type { ProcessMonitorState } from './agent-completion-process-types'
+import type { CadenceFollowUp } from './agent-completion-poll-scheduler'
 import { POLL_TIER_INTERVAL_MS } from './agent-completion-poll-cadence'
 
 export type RemoteInspectionState = {
@@ -42,7 +43,7 @@ export function handleAgentCompletionInspectionResult(args: {
   identityScope: AgentCompletionIdentityScope
   clearAgentRunEvidence: () => void
   hasPendingHookDone: () => boolean
-  scheduleNextPoll: () => void
+  requestFollowUp: (kind: CadenceFollowUp) => void
   handleRecognizedProcess: (process: RecognizedAgentProcess) => void
   dispatchCompletion: CompletionDispatch
   remoteInspection: RemoteInspectionState
@@ -55,7 +56,7 @@ export function handleAgentCompletionInspectionResult(args: {
     identityScope,
     clearAgentRunEvidence,
     hasPendingHookDone,
-    scheduleNextPoll,
+    requestFollowUp,
     handleRecognizedProcess,
     dispatchCompletion,
     remoteInspection
@@ -67,7 +68,7 @@ export function handleAgentCompletionInspectionResult(args: {
   ) {
     state.pendingProcessExit = null
     state.consecutiveInspectionErrors += 1
-    scheduleNextPoll()
+    requestFollowUp('unresolved')
     return false
   }
   if (remote) {
@@ -146,13 +147,14 @@ export function handleAgentCompletionInspectionResult(args: {
     return true
   }
   if (hasPendingHookDone()) {
-    scheduleNextPoll()
+    requestFollowUp('pending')
     return false
   }
   if (state.lastForegroundAgent && state.hasAgentRunEvidence) {
     if (result.hasChildProcesses) {
       state.pendingProcessExit = null
-      scheduleNextPoll()
+      // A foreground child ends with output (the agent resumes or the prompt redraws), so retry only briefly.
+      requestFollowUp('unresolved')
       return false
     }
     const pending = state.pendingProcessExit
@@ -165,11 +167,11 @@ export function handleAgentCompletionInspectionResult(args: {
         process: state.lastForegroundAgent,
         firstObservedAtMonotonic: performance.now()
       }
-      scheduleNextPoll()
+      requestFollowUp('pending')
       return false
     }
     if (performance.now() - pending.firstObservedAtMonotonic <= LOCAL_PROCESS_EXIT_SETTLE_MS) {
-      scheduleNextPoll()
+      requestFollowUp('pending')
       return false
     }
     const exited = state.lastForegroundAgent

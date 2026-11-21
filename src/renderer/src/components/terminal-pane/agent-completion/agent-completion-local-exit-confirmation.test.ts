@@ -50,6 +50,7 @@ describe('agent completion local exit confirmation', () => {
           .mockImplementationOnce(() => pending.promise)
       )
       tracked.setInspection('pwsh.exe', false)
+      tracked.coordinator.observeOutputActivity()
       await vi.advanceTimersByTimeAsync(3_000)
       expect(tracked.confirmForegroundProcess).toHaveBeenCalledTimes(1)
 
@@ -57,6 +58,8 @@ describe('agent completion local exit confirmation', () => {
       tracked.dispatchCompletion.mockClear()
       pending.resolve(lateForeground)
       await vi.advanceTimersByTimeAsync(0)
+      // The replacement's exit redraws the prompt.
+      tracked.coordinator.observeOutputActivity()
       await vi.advanceTimersByTimeAsync(POLL_TIER_INTERVAL_MS.active * 3)
 
       expect(tracked.onForegroundAgentExited).not.toHaveBeenCalled()

@@ -72,6 +72,8 @@ export type AgentCompletionCoordinator = {
   observeClassifiedTitleCompletion: (title: string) => void
   observeTitleWorking: () => void
   observeOutputActivity: () => void
+  /** Main dropped output for this hidden pane; it reports again at most once per notice window. */
+  observeHiddenOutputActivity: () => void
   observeHookStatus: (payload: AgentCompletionStatusSnapshot) => void
   seedHookStatus: (payload: AgentCompletionStatusSnapshot) => void
   startProcessTracking: () => void
