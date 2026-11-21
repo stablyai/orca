@@ -1332,7 +1332,8 @@
         "automationHelp": "Its run history is deleted too.",
         "automation": "Deleting an automation",
         "title": "Confirmations",
-        "running": "Closing a running chat or terminal"
+        "running": "Closing a running chat or terminal",
+        "chat": "Deleting a chat"
       },
       "pages": {
         "folder": "Workspace folder",
@@ -29137,7 +29138,10 @@
       "workers": "Workers",
       "waitingCount": "{{count}} waiting",
       "loading": "Loading chats…",
-      "readFailed": "Couldn't read this bot's chats."
+      "readFailed": "Couldn't read this bot's chats.",
+      "delete": "Delete chat",
+      "open": "Open",
+      "actions": "Chat actions"
     },
     "cloudSignIn": {
       "automationScheduledOnly": "Runs on its schedule only: its events are paused while signed out of Orca",
@@ -29821,5 +29825,18 @@
     "toolsLabel": "App tools",
     "workspaces": "Workspaces",
     "more": "More"
+  },
+  "chats": {
+    "delete": {
+      "updateHost": "Update {{host}} to delete chats",
+      "failed": "Couldn't delete the chat",
+      "undone": "This can't be undone.",
+      "title": "Delete this chat?",
+      "descriptionHost": "It's deleted permanently from {{host}}. This can't be undone.",
+      "action": "Delete",
+      "groupRoom": "A group room's chat can't be deleted",
+      "workerOwed": "An orchestration still waits on this chat",
+      "home": "A managed agent's Home Chat can't be deleted"
+    }
   }
 }

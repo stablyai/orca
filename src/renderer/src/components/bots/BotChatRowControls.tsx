@@ -35,66 +35,63 @@ export function useBotChatPress(
 export const FOLD_TOGGLE_CLASS =
   'flex shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50'
 
+/** Hides what a row's ⋯ replaces, on exactly the hover, focus and open that show the ⋯. The ⋯ and
+ *  the hidden text sit in one `group/chat-end`. */
+export const MENU_TAKES_PLACE =
+  'group-hover/bot-chat:invisible group-has-[[data-chat-menu]:focus-within]/chat-end:invisible group-has-[[data-state=open]]/chat-end:invisible'
+
 const END_TEXT = 'min-w-0 truncate text-2xs whitespace-nowrap text-muted-foreground tabular-nums'
 
-/** The row's right edge: its time or fold summary, and the chevron, which takes the time's place on
- *  hover and stays shown while folded. Rows using it carry `group/bot-chat`. */
+/** The row's right edge: its time or fold summary, which the row's ⋯ takes the place of on hover,
+ *  then the fold chevron, shown while folded or unfolded. Rows using it carry `group/bot-chat`. */
 export function BotChatRowEnd({
   text,
   fold,
+  menu,
   className
 }: {
   text: string | null
   /** Null for a chat with nothing under it. */
   fold: { open: boolean; name: string; onToggle: () => void } | null
+  /** Null for a row with no menu, whose text then stays on hover. */
+  menu: React.ReactNode
   className?: string
-}): React.JSX.Element | null {
+}): React.JSX.Element {
   const t = useTranslate()
-  if (!fold) {
-    return text ? <span className={cn(END_TEXT, 'shrink-0', className)}>{text}</span> : null
-  }
-  const chevron = (
-    <button
-      type="button"
-      aria-expanded={fold.open}
-      aria-label={
-        fold.open
-          ? t('bots.chats.fold', 'Fold {{name}}', { name: fold.name })
-          : t('bots.chats.unfold', 'Unfold {{name}}', { name: fold.name })
-      }
-      className={cn(
-        // Positioned, so it sits over a row's own full-size button.
-        'peer relative size-4',
-        FOLD_TOGGLE_CLASS,
-        fold.open &&
-          'opacity-0 group-hover/bot-chat:opacity-100 focus-visible:opacity-100 data-[over-text]:absolute data-[over-text]:right-0'
-      )}
-      data-over-text={fold.open && text ? '' : undefined}
-      onClick={(event) => {
-        event.stopPropagation()
-        fold.onToggle()
-      }}
-      onKeyDown={(event) => event.stopPropagation()}
-    >
-      <ChevronDown className={cn('size-3.5', !fold.open && '-rotate-90')} />
-    </button>
-  )
   return (
     <span
-      className={cn('relative flex min-w-0 shrink-0 items-center justify-end gap-1', className)}
+      className={cn(
+        'group/chat-end relative flex min-w-0 shrink-0 items-center justify-end gap-1',
+        className
+      )}
     >
-      {fold.open ? chevron : null}
-      {text ? (
-        <span
-          className={cn(
-            END_TEXT,
-            fold.open && 'group-hover/bot-chat:invisible peer-focus-visible:invisible'
-          )}
+      <span className={cn(END_TEXT, 'min-w-6', menu && MENU_TAKES_PLACE)}>{text}</span>
+      <span
+        className="absolute top-1/2 right-0 -translate-y-1/2 data-[fold]:right-5"
+        data-fold={fold ? '' : undefined}
+      >
+        {menu}
+      </span>
+      {fold ? (
+        <button
+          type="button"
+          aria-expanded={fold.open}
+          aria-label={
+            fold.open
+              ? t('bots.chats.fold', 'Fold {{name}}', { name: fold.name })
+              : t('bots.chats.unfold', 'Unfold {{name}}', { name: fold.name })
+          }
+          // Positioned, so it sits over a row's own full-size button.
+          className={cn('relative size-4', FOLD_TOGGLE_CLASS)}
+          onClick={(event) => {
+            event.stopPropagation()
+            fold.onToggle()
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
         >
-          {text}
-        </span>
+          <ChevronDown className={cn('size-3.5', !fold.open && '-rotate-90')} />
+        </button>
       ) : null}
-      {fold.open ? null : chevron}
     </span>
   )
 }
