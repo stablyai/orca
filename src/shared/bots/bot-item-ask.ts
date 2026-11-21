@@ -57,6 +57,38 @@ export const BotItemAskSchema = z.object({
 
 export type BotItemAsk = z.infer<typeof BotItemAskSchema>
 
+// "(Recommended)" or "[recommended]" an agent wrote at the end of an option, with the space before it.
+const RECOMMENDED_SUFFIX = /\s*[([]\s*recommended\s*[)\]]\s*$/i
+
+/** The ask as stored: `recommended` is the one mark of the recommended option, so a "(Recommended)"
+ *  an agent also wrote into a label leaves the label, and marks that option when --recommended didn't
+ *  and it is the only one. A label it would empty or make a sibling's twin keeps its words. */
+export function normalizeBotItemAsk(ask: BotItemAsk): BotItemAsk {
+  return {
+    ...ask,
+    questions: ask.questions.map((question) => {
+      const marked: number[] = []
+      const labels = question.options.map((option, index) => {
+        const label = option.label.replace(RECOMMENDED_SUFFIX, '')
+        if (label === option.label || !label) {
+          return option.label
+        }
+        marked.push(index)
+        return label
+      })
+      if (marked.length === 0 || !distinct(labels)) {
+        return question
+      }
+      const recommended = question.recommended ?? (marked.length === 1 ? marked[0] : undefined)
+      return {
+        ...question,
+        options: question.options.map((option, index) => ({ ...option, label: labels[index]! })),
+        ...(recommended === undefined ? {} : { recommended })
+      }
+    })
+  }
+}
+
 /** A question's first line as plain words, for a one-line row: no `**`, `#`, list marks, code ticks
  *  or link syntax, so a question the agent wrote in Markdown reads cleanly there. */
 export function botItemQuestionLine(text: string): string {
