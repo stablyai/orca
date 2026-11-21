@@ -23341,6 +23341,9 @@
     "linkedMessageMissing": "Impossible de trouver ce message.",
     "math": {
       "scrollDisplayEquation": "Faire défiler l'équation affichée"
+    },
+    "messageTime": {
+      "yesterday": "Hier {{time}}"
     }
   },
   "runtime": {

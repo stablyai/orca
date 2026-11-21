@@ -23876,6 +23876,9 @@
     "linkedMessageMissing": "Não foi possível encontrar essa mensagem.",
     "math": {
       "scrollDisplayEquation": "Rolar equação em bloco"
+    },
+    "messageTime": {
+      "yesterday": "Ontem {{time}}"
     }
   },
   "runtime": {

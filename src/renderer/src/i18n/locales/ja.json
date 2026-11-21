@@ -24182,6 +24182,9 @@
     "linkedMessageMissing": "そのメッセージが見つかりませんでした。",
     "math": {
       "scrollDisplayEquation": "数式ブロックをスクロール"
+    },
+    "messageTime": {
+      "yesterday": "昨日 {{time}}"
     }
   },
   "runtime": {

@@ -22774,6 +22774,9 @@
     "linkedMessageMissing": "Bu mesaj bulunamadı.",
     "math": {
       "scrollDisplayEquation": "Denklemi kaydır"
+    },
+    "messageTime": {
+      "yesterday": "Dün {{time}}"
     }
   },
   "quitAndStopAllSessions": {

@@ -1,4 +1,4 @@
-// The one test for "this tab is the bot's Home": placement, locks, pin rules and the banner all ask it.
+// The one test for "this tab is the bot's Home": placement, locks and pin rules all ask it.
 import type { Bot } from '../bot-types'
 import type { Tab } from '../workspace-layout/tab-groups/tab-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../execution-host/execution-host'

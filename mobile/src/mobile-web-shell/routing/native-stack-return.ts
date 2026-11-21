@@ -1,5 +1,8 @@
 import { stringifyRouteHref } from '../../navigation/route-href'
-import { parseMobileSessionItemTarget } from '../../session/mobile-session-item-target'
+import {
+  parseMobileSessionAccessTarget,
+  parseMobileSessionItemTarget
+} from '../../session/mobile-session-item-target'
 import { nextPaneIntent, SESSION_PANE_INTENT_PARAM } from '../../session/session-pane-intent'
 
 export type NativeStackState = Readonly<{
@@ -183,7 +186,10 @@ export function nativeSessionReturn(
     routeKey: match.routeKey,
     params: {
       paneKey,
-      botItem: parseMobileSessionItemTarget(botItem) ? botItem : undefined,
+      botItem:
+        parseMobileSessionItemTarget(botItem) || parseMobileSessionAccessTarget(botItem)
+          ? botItem
+          : undefined,
       paneIntent
     }
   }

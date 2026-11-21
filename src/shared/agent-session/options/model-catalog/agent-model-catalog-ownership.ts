@@ -13,7 +13,7 @@ export function fillsLiveModelsFromCatalog(agent: string): boolean {
 }
 
 export function usesModelSpecificAcpEfforts(agent: string): boolean {
-  return agent === 'opencode' || agent === 'opencode2' || agent === 'omp'
+  return agent === 'opencode' || agent === 'opencode2' || agent === 'omp' || agent === 'kilo'
 }
 
 export function usesInstalledAgentModelCatalog(agent: string, coherentCatalog?: boolean): boolean {

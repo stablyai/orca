@@ -23369,6 +23369,9 @@
     "linkedMessageMissing": "Не удалось найти это сообщение.",
     "math": {
       "scrollDisplayEquation": "Прокрутить формулу"
+    },
+    "messageTime": {
+      "yesterday": "Вчера {{time}}"
     }
   },
   "quitAndStopAllSessions": {

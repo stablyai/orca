@@ -42,5 +42,10 @@ export const BOT_AGENTS_LISTING_LINKED_SKILLS: readonly string[] = [
   'hermes',
   'kimi',
   'kiro',
-  'goose'
+  'goose',
+  'kilo',
+  'mimo-code',
+  'gemini',
+  'droid',
+  'qwen-code'
 ]

@@ -22293,6 +22293,9 @@
     "linkedMessageMissing": "找不到該訊息。",
     "math": {
       "scrollDisplayEquation": "捲動獨立公式"
+    },
+    "messageTime": {
+      "yesterday": "昨天 {{time}}"
     }
   },
   "quitAndStopAllSessions": {

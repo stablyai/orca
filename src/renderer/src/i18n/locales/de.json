@@ -22789,6 +22789,9 @@
     "linkedMessageMissing": "Diese Nachricht wurde nicht gefunden.",
     "math": {
       "scrollDisplayEquation": "Abgesetzte Gleichung scrollen"
+    },
+    "messageTime": {
+      "yesterday": "Gestern {{time}}"
     }
   },
   "quitAndStopAllSessions": {

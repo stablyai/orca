@@ -28,6 +28,7 @@ import { acpRunFolder } from '../launch/acp-private-temp'
 import { acpListingDependsOnRelease, acpModelListingForRelease } from './acp-model-discovery-policy'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
 import { checkAcpLaunchVersion } from '../launch/acp-launch-version'
+import { prepareAcpListingAccount } from './acp-listing-account'
 import { acpLaunchSpecForAccount } from '../launch/acp-launch-command'
 import { agentSessionAccountHomePath } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import {
@@ -75,10 +76,8 @@ export function createAcpModelCatalogProbe(
     }
     // Start in home; only explicit chat-folder discovery reads project config.
     const cwd = deps.homePath ?? homedir()
-    const { command, prefixArgs, env, envToDelete, version } = await resolveAcpLaunchInvocation(
-      spec,
-      accountHome,
-      {
+    const { command, prefixArgs, env, envToDelete, version, antigravityChatAuth } =
+      await resolveAcpLaunchInvocation(spec, accountHome, {
         ...deps,
         ...(lookup !== 'recover'
           ? {
@@ -88,8 +87,7 @@ export function createAcpModelCatalogProbe(
           : {}),
         operation,
         resolveWorkingDirectory: () => cwd
-      }
-    )
+      })
     assertStructuredAgentResolutionCurrent(operation)
     return {
       answerSignIn: spec.signIn?.answered,
@@ -126,6 +124,9 @@ export function createAcpModelCatalogProbe(
         if (listing === null) {
           throw new Error(`${spec.agent} at ${command} lists its models only through its chats`)
         }
+        await prepareAcpListingAccount(spec, env, antigravityChatAuth, () =>
+          assertStructuredAgentResolutionCurrent(operation)
+        )
         const launch = {
           command,
           args: [...prefixArgs, ...spec.args({ fullAccess: false, pluginDirs: [] })],

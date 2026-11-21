@@ -7,7 +7,7 @@ import { nameLinkedPlace } from './external-conversation-place'
 import { isBotAgent } from '../../shared/bot-types'
 import {
   type ConversationChatHost,
-  runningTurnOpenedByConversationReport,
+  chatTurnFacts,
   watchChatNews
 } from './external-conversation-chat'
 import { answerConversation } from './external-conversation-answer'
@@ -143,10 +143,7 @@ export class ExternalConversationSeam {
   }
 
   private turnFacts(chats: ConversationChatHost | undefined) {
-    return {
-      delivered: (sessionId: string) => this.chatDeliveries.pending(sessionId),
-      reported: (sessionId: string) => runningTurnOpenedByConversationReport(chats, sessionId)
-    }
+    return chatTurnFacts(chats, this.deps.store, (id) => this.chatDeliveries.pending(id))
   }
 
   /** Null unless a watch runs (replies need the connector) and the chat is linked. */
