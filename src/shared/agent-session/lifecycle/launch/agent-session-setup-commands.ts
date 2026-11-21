@@ -106,6 +106,14 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     windowsInstallScript:
       'https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.ps1'
   },
+  // `devin auth login` opens a browser flow; the manual token flow serves remote and headless hosts.
+  {
+    agent: 'devin',
+    loginCommand: ['devin', 'auth', 'login'],
+    remoteLoginCommand: ['devin', 'auth', 'login', '--force-manual-token-flow'],
+    installCommand: 'curl -fsSL https://cli.devin.ai/install.sh | bash',
+    windowsInstallScript: 'https://cli.devin.ai/install.ps1'
+  },
   // An `agy` login signs in only chats on agy (`system`); chats on Orca's server keep their own.
   {
     agent: 'antigravity',

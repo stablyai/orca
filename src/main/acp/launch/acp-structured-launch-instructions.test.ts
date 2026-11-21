@@ -52,7 +52,8 @@ const SPECS = {
   kilo: acpLaunchSpecFor('kilo')!,
   'mimo-code': acpLaunchSpecFor('mimo-code')!,
   gemini: acpLaunchSpecFor('gemini')!,
-  'qwen-code': acpLaunchSpecFor('qwen-code')!
+  'qwen-code': acpLaunchSpecFor('qwen-code')!,
+  devin: acpLaunchSpecFor('devin')!
 }
 
 const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome']> = {
@@ -69,7 +70,8 @@ const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome'
   kilo: { variable: 'XDG_DATA_HOME', path: '/home/user/.local/share' },
   'mimo-code': { variable: 'XDG_DATA_HOME', path: '/home/user/.local/share' },
   gemini: { variable: 'GEMINI_CLI_HOME', path: '/home/user' },
-  'qwen-code': { variable: 'QWEN_HOME', path: '/home/user/.qwen' }
+  'qwen-code': { variable: 'QWEN_HOME', path: '/home/user/.qwen' },
+  devin: { variable: 'XDG_DATA_HOME', path: '/home/user/.local/share' }
 }
 
 const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
@@ -83,7 +85,8 @@ const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
   kilo: '7.8.32',
   'mimo-code': '0.1.17',
   gemini: '0.70.0',
-  'qwen-code': '0.28.0'
+  'qwen-code': '0.28.0',
+  devin: '3000.14.30821'
 }
 
 let dataDirectory = ''
@@ -317,7 +320,8 @@ describe('ACP launch: standing instructions', () => {
 
   it.each([
     ['hermes', '.hermes.md'],
-    ['qwen-code', 'QWEN.md']
+    ['qwen-code', 'QWEN.md'],
+    ['devin', 'AGENTS.local.md']
   ] as const)(
     "writes them to %s's %s in the folder it runs in, rewriting it at each launch",
     async (agent, contextFile) => {
