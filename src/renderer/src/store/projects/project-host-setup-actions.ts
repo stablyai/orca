@@ -3,11 +3,13 @@ import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type {
+  Project,
   ProjectHostSetupCreateResult,
   ProjectHostSetupDeleteResult,
   ProjectHostSetupResult,
   ProjectHostSetupUpdateResult
 } from '../../../../shared/project/project-types'
+import { retainExistingProjectDisplayName } from '../../../../shared/project/catalog/project-compatibility-merge'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { omitSparsePresetsForRepos } from '../slices/worktrees/create/sparse-presets'
 import { repoMatchesHostIdentity } from '../repos/repo-host-identity'
@@ -27,6 +29,13 @@ import {
   upsertProjectHostSetup
 } from './project-host-routing'
 import { toastProjectAddFailure } from './project-add-failure-toast'
+
+function withExistingProjectDisplayName(projects: readonly Project[], incoming: Project): Project {
+  return retainExistingProjectDisplayName(
+    projects.find((entry) => entry.id === incoming.id),
+    incoming
+  )
+}
 
 export function createProjectHostSetupActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -71,7 +80,9 @@ export function createProjectHostSetupActions(
           row: result.setup
         })
         const project = normalizeProjectRow(result.project)
+        let retainedProject = project
         set((s) => {
+          retainedProject = withExistingProjectDisplayName(s.projects, project)
           const nextRepos = s.repos.some((entry) =>
             repoMatchesHostIdentity(entry, repo.id, repoHostId)
           )
@@ -79,9 +90,9 @@ export function createProjectHostSetupActions(
                 repoMatchesHostIdentity(entry, repo.id, repoHostId) ? repo : entry
               )
             : [...s.repos, repo]
-          const nextProjects = s.projects.some((entry) => entry.id === project.id)
-            ? s.projects.map((entry) => (entry.id === project.id ? project : entry))
-            : [...s.projects, project]
+          const nextProjects = s.projects.some((entry) => entry.id === retainedProject.id)
+            ? s.projects.map((entry) => (entry.id === retainedProject.id ? retainedProject : entry))
+            : [...s.projects, retainedProject]
           const nextSetups = upsertProjectHostSetup(s.projectHostSetups, setup)
           return {
             repos: nextRepos,
@@ -92,7 +103,7 @@ export function createProjectHostSetupActions(
         toast.success(translate('auto.store.slices.repos.8bb3ad7935', 'Project added'), {
           description: repo.displayName
         })
-        return { ...result, project, repo, setup }
+        return { ...result, project: retainedProject, repo, setup }
       } catch (err) {
         console.error('Failed to set up project on host:', err)
         toastProjectAddFailure(err)
@@ -120,13 +131,19 @@ export function createProjectHostSetupActions(
           row: result.setup
         })
         const project = normalizeProjectRow(result.project)
-        set((s) => ({
-          projects: s.projects.some((entry) => entry.id === project.id)
-            ? s.projects.map((entry) => (entry.id === project.id ? project : entry))
-            : [...s.projects, project],
-          projectHostSetups: upsertProjectHostSetup(s.projectHostSetups, setup)
-        }))
-        return { project, setup }
+        let retainedProject = project
+        set((s) => {
+          retainedProject = withExistingProjectDisplayName(s.projects, project)
+          return {
+            projects: s.projects.some((entry) => entry.id === retainedProject.id)
+              ? s.projects.map((entry) =>
+                  entry.id === retainedProject.id ? retainedProject : entry
+                )
+              : [...s.projects, retainedProject],
+            projectHostSetups: upsertProjectHostSetup(s.projectHostSetups, setup)
+          }
+        })
+        return { project: retainedProject, setup }
       } catch (err) {
         console.error('Failed to create project host setup:', err)
         const message = err instanceof Error ? err.message : String(err)
@@ -164,20 +181,26 @@ export function createProjectHostSetupActions(
           ? adoptFromEndpoint(target, { kind: 'repo', row: result.repo })
           : undefined
         const repoHostId = repo ? getRepoExecutionHostId(repo) : null
-        set((s) => ({
-          repos: repo
-            ? s.repos.some((entry) => repoMatchesHostIdentity(entry, repo.id, repoHostId!))
-              ? s.repos.map((entry) =>
-                  repoMatchesHostIdentity(entry, repo.id, repoHostId!) ? repo : entry
+        let retainedProject = project
+        set((s) => {
+          retainedProject = withExistingProjectDisplayName(s.projects, project)
+          return {
+            repos: repo
+              ? s.repos.some((entry) => repoMatchesHostIdentity(entry, repo.id, repoHostId!))
+                ? s.repos.map((entry) =>
+                    repoMatchesHostIdentity(entry, repo.id, repoHostId!) ? repo : entry
+                  )
+                : [...s.repos, repo]
+              : s.repos,
+            projects: s.projects.some((entry) => entry.id === retainedProject.id)
+              ? s.projects.map((entry) =>
+                  entry.id === retainedProject.id ? retainedProject : entry
                 )
-              : [...s.repos, repo]
-            : s.repos,
-          projects: s.projects.some((entry) => entry.id === project.id)
-            ? s.projects.map((entry) => (entry.id === project.id ? project : entry))
-            : [...s.projects, project],
-          projectHostSetups: upsertProjectHostSetup(s.projectHostSetups, setup)
-        }))
-        return { ...result, project, repo, setup }
+              : [...s.projects, retainedProject],
+            projectHostSetups: upsertProjectHostSetup(s.projectHostSetups, setup)
+          }
+        })
+        return { ...result, project: retainedProject, repo, setup }
       } catch (err) {
         console.error('Failed to update project host setup:', err)
         const message = err instanceof Error ? err.message : String(err)

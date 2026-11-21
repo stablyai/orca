@@ -72,8 +72,11 @@ export async function linkImportedFolderToProject(
     folderRemote = await readCurrentGitRemoteIdentity({ ...repo, ...folderRemote })
     repo = currentRow()
   }
+  const trimmedDisplayName = args.displayName?.trim()
   const updates: Partial<Repo> = {
-    projectHostSetupMethod: args.setupMethod ?? 'imported-existing-folder'
+    projectHostSetupMethod: args.setupMethod ?? 'imported-existing-folder',
+    // Why: Add to another host already sends the project name. The folder basename is not that name.
+    ...(trimmedDisplayName ? { displayName: trimmedDisplayName } : {})
   }
   const keepsCurrentIdentity =
     repo.upstream !== undefined && getProjectIdentityKey(repo) === args.projectId
