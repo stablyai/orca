@@ -66,6 +66,12 @@ describe('stripKnownHarnessEnvelope', () => {
     ).toBe('Fix CI config')
   })
 
+  it('does not count a self-closing nested tag as another opening', () => {
+    expect(
+      stripKnownHarnessEnvelope('<hook_result><hook_result /></hook_result>\nFix CI config')
+    ).toBe('Fix CI config')
+  })
+
   it('strips attributed source channels while preserving bare and unknown user XML', () => {
     expect(
       stripKnownHarnessEnvelope(

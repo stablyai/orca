@@ -1,5 +1,5 @@
 import type { AgentHookSource } from './transport/agent-hook-relay'
-import { isKnownHarnessInjectedUserTurnText } from '../agent-session/journal/harness-injected-user-turns'
+import { userTaskTextAfterHarnessEnvelope } from '../agent-session/journal/harness-injected-user-turns'
 import type { ToolSnapshot } from './listener-event'
 import type { ExtractedPromptText } from './prompt-fields'
 import { extractClaudeToolFields } from './providers/claude/claude-tool-fields'
@@ -184,8 +184,8 @@ export function hasExplicitUserPrompt(
   if (extractedPrompt.text.length === 0) {
     return false
   }
-  // Known harness tags confer no user-submit telemetry/stickiness; preserve real unknown-tag prompts.
-  if (isKnownHarnessInjectedUserTurnText(extractedPrompt.text)) {
+  // Harness-only turns confer no user-submit telemetry/stickiness; a task after leading envelopes still does.
+  if (!userTaskTextAfterHarnessEnvelope(extractedPrompt.text)) {
     return false
   }
   // message may be status/permission text; it cannot prove submission.

@@ -54,18 +54,15 @@ export function isKnownHarnessInjectedUserTurnText(text: string): boolean {
   return HARNESS_INJECTED_TURN_PREFIXES.some((prefix) => normalized.startsWith(prefix))
 }
 
-// Nested same-tag content needs depth tracking rather than stopping at the first closing tag.
+// Nested same-tag content needs depth tracking; self-closing tags open nothing.
 function findMatchingCloseTagEnd(remaining: string, tagName: string): number | null {
-  const tagRe = new RegExp(`<(?:(/)${tagName}>|${tagName}(?=[\\s>]|$))`, 'gi')
-  let depth = 1
-  tagRe.lastIndex = 1
+  const tagRe = new RegExp(`<(?:(/)${tagName}>|${tagName}(?=[\\s/>]|$)(?:[^<>]*(/)>)?)`, 'gi')
+  let depth = 0
   let match: RegExpExecArray | null
   while ((match = tagRe.exec(remaining))) {
-    if (!match[1]) {
-      depth += 1
-      continue
+    if (!match[2]) {
+      depth += match[1] ? -1 : 1
     }
-    depth -= 1
     if (depth === 0) {
       return tagRe.lastIndex
     }
@@ -92,6 +89,15 @@ export function stripKnownHarnessEnvelope(text: string): string {
     remaining = remaining.slice(closeTagEnd).trim()
   }
   return remaining
+}
+
+/** User task left after leading harness envelopes; '' when the turn holds only harness content. */
+export function userTaskTextAfterHarnessEnvelope(text: string): string {
+  if (!isKnownHarnessInjectedUserTurnText(text)) {
+    return text
+  }
+  const task = stripKnownHarnessEnvelope(text)
+  return isKnownHarnessInjectedUserTurnText(task) ? '' : task
 }
 
 /** True only for the observed post-compaction continuation prompt. */

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { generateCommitMessageFromContext } from '../commit-message-text-generation'
+import {
+  generateBranchNameFromContext,
+  generateCommitMessageFromContext
+} from '../commit-message-text-generation'
 
 describe('commit-message generation regressions', () => {
   it('keeps bounded diagnostic captures out of commit-message results', async () => {
@@ -30,5 +33,30 @@ describe('commit-message generation regressions', () => {
     })
     expect(JSON.stringify(result)).not.toContain('/Users/private')
     expect(result).not.toHaveProperty('failureOutput')
+  })
+
+  it('fills the {{firstPrompt}} branch-name template with the task after harness envelopes', async () => {
+    const plans: string[] = []
+    await generateBranchNameFromContext(
+      { firstPrompt: '<hook_result hook_event="UserPromptSubmit">{}</hook_result>\nFix CI config' },
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent',
+        commandInputTemplate: '{{firstPrompt}}'
+      },
+      {
+        kind: 'remote',
+        cwd: '/remote/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async (plan) => {
+          plans.push(JSON.stringify(plan))
+          return { stdout: 'fix-ci-config', stderr: '', exitCode: 0, timedOut: false }
+        }
+      }
+    )
+
+    expect(plans.join('\n')).toContain('Fix CI config')
+    expect(plans.join('\n')).not.toContain('hook_result')
   })
 })
