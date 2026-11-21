@@ -23,6 +23,8 @@ export type BotItemWorkerLinksDeps = {
   sendOwedMail: () => Promise<void>
   /** These items changed; their bots' panels re-read. */
   changed: (store: BotItemsRemote, uids: readonly string[]) => Promise<void>
+  /** A change whose items couldn't be told of: readers can't know which changed. */
+  unnamed: () => void
   warn: (error: unknown) => void
 }
 
@@ -38,7 +40,12 @@ export class BotItemWorkerLinks {
     this.queued ??= new Promise((resolve) =>
       queueMicrotask(() => {
         this.queued = null
-        void this.flush().catch(this.deps.warn).finally(resolve)
+        void this.flush()
+          .catch((error: unknown) => {
+            this.deps.warn(error)
+            this.deps.unnamed()
+          })
+          .finally(resolve)
       })
     )
     return this.queued

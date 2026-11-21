@@ -72,7 +72,10 @@ export function mergeNamedBotItems(
       b.number - a.number
   )
   // No deeper than it was loaded (a page at least): rows pushed past the end wait behind Show more.
-  const depth = Math.max(BOT_ITEM_LIMITS.listPage, botItemsClosedLoaded(previous))
+  // A list read to its end has no end to push past.
+  const depth = previous.nextClosedCursor
+    ? Math.max(BOT_ITEM_LIMITS.listPage, botItemsClosedLoaded(previous))
+    : Infinity
   const firstClosed = ordered.findIndex(isClosedItem)
   const keep = (firstClosed === -1 ? ordered.length : firstClosed) + depth
   const page = ordered.slice(0, keep)

@@ -92,6 +92,12 @@ describe('loadBotItemsList', () => {
     expect(uids).toHaveLength(259)
     expect(new Set(uids).size).toBe(259)
     expect(read.items.filter((item) => !closed(item))).toHaveLength(41)
+
+    // Read to its end, a list keeps every Closed row as more close: there is no end to push past.
+    Object.assign(items[60]!, { status: 'done', lastActivityAt: 3000, version: 2 })
+    read = await loadBotItemsList(call, read, { whole: false, parts: ['i61'], more: false })
+    expect(read.items.filter(closed)).toHaveLength(260)
+    expect(read.nextClosedCursor).toBeUndefined()
   })
 
   it('reads the loaded depth again on a whole read, page by page from an older host', async () => {

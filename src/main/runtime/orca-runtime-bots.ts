@@ -5,7 +5,7 @@ import type { Bot } from '../../shared/bot-types'
 import type { AgentStatusOrchestrationContext } from '../../shared/agent-status/contracts/agent-status-types'
 import type { BotAccessRequestWatch } from '../bots/bot-access-request-watch'
 import type { ConnectorGitHubInstallations } from '../connector-cloud/connector-github-installations'
-import { BotChangeNotices } from '../bots/bot-change-notices'
+import { BotChangeNotices, workersChangedAfterItems } from '../bots/bot-change-notices'
 import { deleteAutomationsOfBot } from '../bots/bot-automations-removal'
 import { syncBotAutomationAgents } from '../bots/bot-automation-agent-sync'
 import { BotController } from '../bots/bot-controller'
@@ -364,14 +364,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** A paired server's worker verdicts changed: their bots re-read (all, if a bot can't be read). */
   protected botFederatedWorkersChanged(dispatchIds: readonly string[]): void {
     const botIds = this.botChatTreeIndex?.ownersOf(dispatchIds) ?? null
-    // Their items hear of it as an items notice naming them, sent first so the two go out as one.
     const told = dispatchIds.map((dispatchId) => this.botItems.dispatchChanged(dispatchId))
-    const scope = { ...(botIds ? { botIds } : {}), workersNamed: true as const }
-    if (botIds?.length !== 0) {
-      void Promise.all(told).then(() =>
-        this.botChangeNotices.changed({ ...scope, kinds: ['workers'] })
-      )
-    }
+    workersChangedAfterItems(this.botChangeNotices, botIds, Promise.all(told))
   }
 
   protected botDispatchChanged(dispatchId: string | null, change: DispatchRowChange): void {

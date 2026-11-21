@@ -82,6 +82,8 @@ export class BotItemsHost {
       linksOf: async (item) => (await this.views([item]))[0]?.links,
       sendOwedMail: () => this.sendOwedMail(),
       changed: (store, uids) => this.changedItems(store, uids),
+      // Which items it touched is unknown: every bot's lists read whole.
+      unnamed: () => this.deps.notify({ kinds: ['items'] }),
       warn
     })
   }

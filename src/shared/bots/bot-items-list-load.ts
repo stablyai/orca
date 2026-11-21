@@ -46,13 +46,6 @@ export async function loadBotItemsList(
     const more = ask.more && previous?.nextClosedCursor ? page : 0
     const want = Math.max(page, loaded) + more
     let value = await call({ closedLimit: Math.min(want, BOT_ITEM_LIMITS.closedLoadMax) })
-    // A host before `closedLimit` answered one page: when that page is as loaded, so are the pages
-    // after it, as before this read (no more asked).
-    if (previous && !more && value.nextClosedCursor && botItemsClosedLoaded(value) < want) {
-      if (sameFirstPage(previous, value)) {
-        return previous
-      }
-    }
     if (show && previous && value.nextClosedCursor && botItemsClosedLoaded(value) < want) {
       show(reuseEqualJson(previous, withLoadedBelow(value, previous)))
     }
@@ -95,18 +88,4 @@ function withLoadedBelow(first: BotItemsListRead, previous: BotItemsListRead): B
     items: [...first.items, ...below],
     ...(previous.nextClosedCursor ? { nextClosedCursor: previous.nextClosedCursor } : {})
   }
-}
-
-/** Whether `first` (a host's one-page answer) holds just what `previous` holds down to that page's end. */
-function sameFirstPage(previous: BotItemsListRead, first: BotItemsListRead): boolean {
-  const isClosed = (item: { status: string }) =>
-    item.status === 'done' || item.status === 'canceled'
-  const closedCount = botItemsClosedLoaded(first)
-  const open = previous.items.filter((item) => !isClosed(item))
-  const head = [...open, ...previous.items.filter(isClosed).slice(0, closedCount)]
-  return (
-    reuseEqualJson(head, first.items) === head &&
-    reuseEqualJson(previous.counts, first.counts) === previous.counts &&
-    previous.seenEventId === first.seenEventId
-  )
 }

@@ -148,6 +148,37 @@ export function botPhaseChangeScopes(
   return scopes
 }
 
+/** The most a worker notice waits for its items' notice, to go out with it. */
+const ITEMS_NAMED_WAIT_MS = 250
+
+/** `tell` once the items a worker change touched were told of, or after a short wait at most (they
+ *  then go out on their own). */
+function afterItemsNamed(named: Promise<unknown>, tell: () => void): void {
+  let told = false
+  const once = (): void => {
+    if (!told) {
+      told = true
+      clearTimeout(timer)
+      tell()
+    }
+  }
+  const timer = setTimeout(once, ITEMS_NAMED_WAIT_MS)
+  void named.then(once)
+}
+
+/** These bots' workers changed (every bot's, with null), their items told of it as an items notice
+ *  naming them: sent after that notice, so the two go out as one. */
+export function workersChangedAfterItems(
+  notices: Pick<BotChangeNotices, 'changed'>,
+  botIds: readonly string[] | null,
+  itemsTold: Promise<unknown>
+): void {
+  if (botIds?.length !== 0) {
+    const scope = { ...(botIds ? { botIds } : {}), workersNamed: true as const }
+    afterItemsNamed(itemsTold, () => notices.changed({ ...scope, kinds: ['workers'] }))
+  }
+}
+
 /** A phase change (working, needs you, done) of a pane a bot or group shows; per-tick observations are
  *  not. The detector follows the host's one agent-status store. */
 export function followAgentPhasesForBots(
@@ -162,7 +193,7 @@ export function followAgentPhasesForBots(
       const tell = (): void => scopes.forEach((scope) => notices.changed(scope))
       // After its items' notice, so the two go out as one.
       if (dispatchId) {
-        void facts.workerChanged(dispatchId).then(tell)
+        afterItemsNamed(facts.workerChanged(dispatchId), tell)
       } else {
         tell()
       }
