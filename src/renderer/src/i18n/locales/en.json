@@ -29792,5 +29792,13 @@
     "toolsLabel": "App tools",
     "workspaces": "Workspaces",
     "more": "More"
+  },
+  "files": {
+    "download": {
+      "progress": {
+        "title": "Downloading {{name}}…",
+        "cancel": "Cancel"
+      }
+    }
   }
 }
