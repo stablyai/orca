@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
 import { beforeEach, expect, it, vi } from 'vitest'
 
-const host = vi.hoisted(() => ({ capabilities: [] as string[], connected: true }))
+const host = vi.hoisted((): { capabilities: string[]; connected: boolean } => ({
+  capabilities: [],
+  connected: true
+}))
 vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
   ensureRuntimeEnvironmentCompatible: async () => ({
     runtimeId: 'server',
