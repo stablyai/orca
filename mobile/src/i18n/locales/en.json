@@ -5981,7 +5981,12 @@
         "title": "Delete the webhook for “{{automation}}”?",
         "note": "Its URL stops working, and calls still waiting are cancelled. A new webhook gets a new URL.",
         "confirm": "Delete webhook",
-        "done": "Webhook deleted"
+        "done": "Webhook deleted",
+        "withAutomation": {
+          "title": "Delete “{{automation}}” and its webhook?",
+          "note": "Nothing else starts this automation, so it's deleted with its run history. The webhook's URL stops working, and calls still waiting are cancelled.",
+          "confirm": "Delete both"
+        }
       },
       "recentCalls": "Recent calls",
       "showFewer": "Show fewer",
