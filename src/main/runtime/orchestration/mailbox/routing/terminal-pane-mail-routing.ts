@@ -31,6 +31,7 @@ import { closedChatWorkersForSession } from '../../workers/lifecycle/chat-assign
 import { OPERATOR_CLOSE_EXIT_CAUSE } from '../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { resolveTerminalIdentityFromProbes } from '../../../terminal/identity/terminal-identity-probe'
 import { observeChatWorkerWorking } from '../../workers/turn-stops/chat-worker-turn-stops'
+import { ChatWorkerModelWait } from '../../workers/turn-stops/chat-worker-model-wait'
 
 export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneMobileSessionTabGroupLayout {
   protected terminalIdentitySources = () => ({
@@ -177,6 +178,9 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   }
 
   /** The structured idle edge: any journal movement is a chance to redrive parked mail. */
+  /** Chat workers whose model is not answering: one watch per working chat worker. */
+  private readonly chatWorkerModelWait = new ChatWorkerModelWait(this.workerTurnStopReportDeps)
+
   notifyStructuredSessionJournalActivity(sessionId: string): void {
     this.orchestrationStructuredMailboxPointerDelivery.onJournalActivity(sessionId)
   }
@@ -189,10 +193,11 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     // A repeat (a streamed revision republishes the same status) is nothing new to mail; what the
     // journal changes, the parked mail's own watch hears.
     const delivery = this.orchestrationStructuredMailboxPointerDelivery
-    if (
-      !delivery.statusChanged(summary.sessionId, summary.status) ||
-      summary.status === 'attention'
-    ) {
+    if (!delivery.statusChanged(summary.sessionId, summary.status)) {
+      return
+    }
+    this.chatWorkerModelWait.observe(summary.sessionId, summary.status === 'working')
+    if (summary.status === 'attention') {
       return
     }
     // Log failures without blocking the later first-turn workspace rename.
