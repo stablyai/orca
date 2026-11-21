@@ -141,6 +141,7 @@ export function createTerminalTabCloseActions(
                 }
               : null
           const nextExpanded = omitByTabId(s.expandedPaneByTabId)
+          const nextNotificationsMutedByTabId = omitByTabId(s.notificationsMutedByTabId)
           const nextCanExpand = omitByTabId(s.canExpandPaneByTabId)
           const nextLayouts = omitAddressedByTabId(s.terminalLayoutsByTabId)
           const nextLocalOnlyScrollback = omitByTabId(s.localOnlyScrollbackByTabId)
@@ -248,6 +249,7 @@ export function createTerminalTabCloseActions(
             pendingInitialCwdByTabId: nextPendingInitialCwdByTabId,
             pendingIssueCommandSplitByTabId: nextPendingIssueCommandSplitByTabId,
             cacheTimerByKey: nextCacheTimer,
+            notificationsMutedByTabId: nextNotificationsMutedByTabId,
             tabBarOrderByWorktree: nextTabBarOrderByWorktree,
             pendingSnapshotByPtyId: nextSnapshots,
             pendingColdRestoreByPtyId: nextColdRestores,

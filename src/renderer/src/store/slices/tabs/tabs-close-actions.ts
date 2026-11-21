@@ -148,6 +148,10 @@ export function createTabsCloseActions(
             const nextUnreadTerminalTabs = terminalEntityId
               ? omitRecordKeys(current.unreadTerminalTabs, [terminalEntityId])
               : current.unreadTerminalTabs
+            const nextNotificationsMutedByTabId = omitRecordKeys(
+              current.notificationsMutedByTabId,
+              terminalEntityId ? [tabId, terminalEntityId] : [tabId]
+            )
             // Why: a structured chat tab owns its markers directly; nothing else retires them.
             const structuredAttention =
               tab.contentType === 'agent-session' ? removeTabsAttention(current, [tabId]) : null
@@ -197,6 +201,9 @@ export function createTabsCloseActions(
               // Avoid no-op unread allocations that wake full-state selectors.
               ...(nextUnreadTerminalTabs !== current.unreadTerminalTabs
                 ? { unreadTerminalTabs: nextUnreadTerminalTabs }
+                : {}),
+              ...(nextNotificationsMutedByTabId !== current.notificationsMutedByTabId
+                ? { notificationsMutedByTabId: nextNotificationsMutedByTabId }
                 : {}),
               ...structuredAttention,
               // Why: closing the last tab can leave the worktree selected but render-empty, so write the landing-state fallback directly.
