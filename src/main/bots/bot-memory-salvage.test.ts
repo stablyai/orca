@@ -177,7 +177,9 @@ describe('the status move, for salvage', () => {
       {
         memory: createBotMemoryRecord(fs, history),
         fs,
-        salvage: { recordMoved: (_bot, month, lines) => void recorded.push([month, ...lines]) }
+        salvage: {
+          recordMoved: async (_bot, month, lines) => void recorded.push([month, ...lines])
+        }
       },
       { botId: 'b1', folder: '/h', memory, reply: '[]', today: '2026-11-21', migration }
     )
