@@ -178,7 +178,7 @@ export async function inspectTerminalHostProcess(args: {
         },
         snapshot.rows
       )
-      await rememberSteadyStateAnchor(session, evidence)
+      await rememberSteadyStateAnchor(session, evidence, snapshot.rows)
     } catch {
       evidence = unverifiableEvidence(args, session, 'process_table_unreadable')
       clearSteadyStateAnchor(session)

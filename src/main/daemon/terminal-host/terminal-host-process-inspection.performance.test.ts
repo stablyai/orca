@@ -10,8 +10,9 @@ import { inspectTerminalHostProcess } from './terminal-host-process-inspection'
 
 // Guards PR #45713: idle shell panes polled every few seconds read the whole machine's process table each time.
 type LastCapture = { capture: Promise<{ rows: ProcessTableRow[] }>; at: number }
-const tables = vi.hoisted((): { strict: Mock; last: LastCapture | null } => ({
+const tables = vi.hoisted((): { strict: Mock; cheap: Mock; last: LastCapture | null } => ({
   strict: vi.fn(),
+  cheap: vi.fn(),
   last: null
 }))
 vi.mock(
@@ -28,6 +29,13 @@ vi.mock(
       tables.last && Date.now() - tables.last.at < 500
         ? tables.last.capture.then((snapshot) => snapshot.rows)
         : null
+  })
+)
+vi.mock(
+  '../../../shared/process-observation/tables/cheap-process-table-snapshot-reader',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    getCheapProcessTableSnapshot: tables.cheap
   })
 )
 
@@ -419,6 +427,37 @@ it('anchors an agent whose pipeline group leader already exited', async () => {
     foreground: 'claude'
   })
   tables.strict.mockReset().mockResolvedValue({ rows, capturedAgeMs: 0 })
+  for (let epoch = 0; epoch < 10; epoch++) {
+    const result = await settle(
+      inspectTerminalHostProcess({
+        sessionId: 'pane-1',
+        session,
+        steadyState: true,
+        authorityGeneration: 'generation-1',
+        nextObservationEpoch: () => epoch
+      })
+    )
+    expect(result.foregroundProcess).toBe('claude')
+    vi.advanceTimersByTime(15_000)
+  }
+  expect(tables.strict).toHaveBeenCalledTimes(1)
+})
+
+it('keeps the table-fingerprint check while per-pid reads are unavailable', async () => {
+  const AGENT = 5151
+  const rows: ProcessTableRow[] = [
+    { ...row(SHELL, 1, SHELL, '-zsh'), tpgid: AGENT, startTime: 'Mon Nov 20 10:00:00 2026' },
+    { ...row(AGENT, SHELL, AGENT, 'claude'), tpgid: AGENT, startTime: 'Mon Nov 20 10:01:00 2026' }
+  ]
+  setLibprocAddonForTests(null)
+  tables.cheap.mockReset().mockResolvedValue(rows)
+  tables.strict.mockReset().mockResolvedValue({ rows, capturedAgeMs: 0 })
+  const session = pane({
+    root: SHELL,
+    shellIsRootChild: false,
+    foregroundGroup: AGENT,
+    foreground: 'claude'
+  })
   for (let epoch = 0; epoch < 10; epoch++) {
     const result = await settle(
       inspectTerminalHostProcess({
