@@ -131,6 +131,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
     maxDepth: runtime.getNestedWorkerMaxDepth(),
     taskId: task?.id,
     taskSpec: params.spec,
+    taskDisplayName: params.taskDisplayName,
     taskTitle: params.taskTitle,
     taskDeps: args.taskDeps,
     taskParentId: params.parent,
@@ -188,6 +189,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           dispatchId: started.dispatch.id,
           taskId: taskForRemote.id,
           taskSpec: taskForRemote.spec,
+          ...(createdTask.display_name ? { taskDisplayName: createdTask.display_name } : {}),
           // Carry home dispatch depth so remote workers cannot re-enter as roots when nesting.
           depth: started.dispatch.depth,
           protocolVersion: federationProtocolVersion,

@@ -53,6 +53,7 @@ type WorkerAgentPlacementArgs = {
   db: OrchestrationDb
   dispatchId: string
   taskId: string
+  terminalTitle: string
   params: WorkerStartInput
   requestedWorktree: string
   /** Present only when this start creates a worktree. */
@@ -173,6 +174,7 @@ async function launchWorkerAgent(
             db: args.db,
             dispatchId: args.dispatchId,
             requestedWorktree: args.requestedWorktree,
+            terminalTitle: args.terminalTitle,
             target: requirePlacement(args.creationTarget),
             orchestrationContext: {
               taskId: args.taskId,
@@ -279,7 +281,7 @@ function workerSurfaceFactory(
         worktreeId,
         agent,
         ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
-        taskId: args.taskId,
+        title: args.terminalTitle,
         effects: args.effects
       })
       onTerminalCreation(terminal)

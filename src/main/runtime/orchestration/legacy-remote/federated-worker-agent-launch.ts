@@ -48,6 +48,7 @@ export async function launchFederatedWorkerAgent(args: {
     )
   }
   const agent = args.agent
+  const terminalTitle = params.taskDisplayName || `worker-${params.taskId}`
   let created: { id: string } | undefined
   let terminalCreation: RuntimeTerminalCreate | undefined
   const launched = await executeAgentLaunch({
@@ -100,6 +101,7 @@ export async function launchFederatedWorkerAgent(args: {
           observeSetupCompletion: true,
           createdWithAgent: agent,
           startupAgent: agent,
+          startupTitle: terminalTitle,
           startupLaunchSource: 'orchestration',
           startupSuppressUpdatePrompt: true,
           ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {}),
@@ -158,7 +160,7 @@ export async function launchFederatedWorkerAgent(args: {
           launchSource: 'orchestration',
           suppressStartupUpdatePrompt: true,
           ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
-          title: `worker-${params.taskId}`,
+          title: terminalTitle,
           presentation: 'background'
         })
         effects.push({ kind: 'terminal', role: 'agent', action: 'created', id: terminal.handle })

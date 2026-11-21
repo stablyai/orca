@@ -77,6 +77,7 @@ export function createLocalWorkerStartDispatch(
     taskSpec: params.spec,
     adoptTaskId: params.adoptTaskId,
     taskTitle: params.taskTitle,
+    taskDisplayName: params.taskDisplayName,
     taskDeps,
     // A helper's Task sits under its creator's Task, so the Run's Task tree shows who started it.
     taskParentId: params.parent ?? helperCreator?.task_id,

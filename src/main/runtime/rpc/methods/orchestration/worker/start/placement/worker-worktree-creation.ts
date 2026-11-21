@@ -119,6 +119,7 @@ export async function createWorkerWorktree(args: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
   dispatchId: string
+  terminalTitle: string
   requestedWorktree: string
   target: WorkerWorktreeCreationTarget
   /** Recorded on the new workspace's lineage, so it reads as this worker's. */
@@ -172,6 +173,7 @@ export async function createWorkerWorktree(args: {
     ...(args.withAgentTerminal
       ? {
           startupAgent: args.agent,
+          startupTitle: args.terminalTitle,
           startupLaunchSource: 'orchestration',
           startupSuppressUpdatePrompt: true,
           ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {})
