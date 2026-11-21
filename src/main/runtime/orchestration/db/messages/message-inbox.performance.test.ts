@@ -37,16 +37,17 @@ function seedMessages(): OrchestrationDb {
 }
 
 function capturePlans(db: OrchestrationDb, read: () => unknown): string[] {
-  const calls: { text: string; args: unknown[] }[] = []
+  type BindArgs = Parameters<ReturnType<typeof db.db.prepare>['all']>
+  const calls: { text: string; args: BindArgs }[] = []
   const prepare = db.db.prepare.bind(db.db)
   vi.spyOn(db.db, 'prepare').mockImplementation((text: string) => {
     const statement = prepare(text)
     return new Proxy(statement, {
       get: (target, key) =>
         key === 'all'
-          ? (...args: unknown[]) => {
+          ? (...args: BindArgs) => {
               calls.push({ text, args })
-              return target.all(...(args as never[]))
+              return target.all(...args)
             }
           : Reflect.get(target, key, target)
     })
@@ -56,7 +57,7 @@ function capturePlans(db: OrchestrationDb, read: () => unknown): string[] {
   return calls.flatMap(({ text, args }) =>
     db.db
       .prepare(`EXPLAIN QUERY PLAN ${text}`)
-      .all(...(args as never[]))
+      .all(...args)
       .map((row) => String(row.detail))
   )
 }
