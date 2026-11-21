@@ -49,6 +49,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     folderWorkspaceId,
     handleAssignWorkspaceStatus,
     handleCloseAutoFocus,
+    handleInteractOutside,
     handleCloseTerminals,
     handleRemoveParentLink,
     handleRename,
@@ -139,6 +140,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           }}
           onMouseUpCapture={suppressOpeningPointerEvent}
           onClickCapture={suppressOpeningPointerEvent}
+          onInteractOutside={handleInteractOutside}
           onCloseAutoFocus={handleCloseAutoFocus}
         >
           {/* Why: the highlighted card already names a single worktree. */}

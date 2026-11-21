@@ -34,6 +34,7 @@ import {
 } from '../parenting/use-worktree-parent-picker-transition'
 import { useWorktreeContextMenuSecondaryActions } from './use-worktree-context-menu-secondary-actions'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
+import { useWorktreeContextMenuCloseFocus } from './use-worktree-context-menu-close-focus'
 import { getWorktreeContextMenuBatchLabels } from './workspace-batch-action-labels'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -128,6 +129,12 @@ export function useWorktreeContextMenuModel({
   )
   const scopeRef = useRef<HTMLDivElement>(null)
   const contextMenuOpenedAtRef = useRef<number | null>(null)
+  const {
+    consumeDismissedOutside,
+    handleInteractOutside,
+    restoreSidebarFocusOnClose,
+    syncMenuOpen
+  } = useWorktreeContextMenuCloseFocus(scopeRef)
   const activeContextWorktrees = menuOpen ? contextWorktrees : effectiveSelectedWorktrees
   const { workspaceStatuses, statusesForWorktree } =
     useContextWorkspaceStatuses(activeContextWorktrees)
@@ -221,6 +228,7 @@ export function useWorktreeContextMenuModel({
 
   const setMenuOpenState = useCallback(
     (open: boolean) => {
+      syncMenuOpen(open)
       setMenuOpen(open)
       if (!open) {
         // Why: the reveal is per-open, so a later plain right-click can't inherit it.
@@ -228,7 +236,7 @@ export function useWorktreeContextMenuModel({
       }
       onOpenChange?.(open)
     },
-    [onOpenChange]
+    [onOpenChange, syncMenuOpen]
   )
 
   useEffect(() => {
@@ -324,15 +332,13 @@ export function useWorktreeContextMenuModel({
       // Suppress Radix focus restoration to a hidden trigger that can scroll the virtual list after Sleep/Delete.
       event.preventDefault()
       if (pendingParentPickerRef.current) {
+        consumeDismissedOutside()
         window.setTimeout(openPendingParentPicker, 0)
         return
       }
-      const sidebar = scopeRef.current?.closest('[data-worktree-sidebar]')
-      if (sidebar instanceof HTMLElement) {
-        sidebar.focus({ preventScroll: true })
-      }
+      restoreSidebarFocusOnClose(event.target)
     },
-    [openPendingParentPicker]
+    [consumeDismissedOutside, openPendingParentPicker, restoreSidebarFocusOnClose]
   )
 
   return {
@@ -356,6 +362,7 @@ export function useWorktreeContextMenuModel({
     effectiveSelectedWorktrees,
     folderWorkspaceId,
     handleCloseAutoFocus,
+    handleInteractOutside,
     handleOpenParentPicker,
     handleParentPickerOpenChange,
     handleRemoveParentLink,
