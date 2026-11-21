@@ -28,14 +28,17 @@ import {
   getSessionDetailsId,
   SessionMetadata
 } from './ai-vault-session-row-display'
-import type { AgentDotState } from '@/components/agent/status/AgentStateDot'
 import type { AiVaultSearchHit } from '../../../../../../shared/ai-vault/search/ai-vault-search-types'
 import { AiVaultSearchEvidence } from '../search/AiVaultSearchEvidence'
 import { useAiVaultSessionDisplayTitle } from './use-ai-vault-session-display-title'
+import { AgentStateDot, type AgentDotState } from '@/components/agent/status/AgentStateDot'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { ForkMarkedName } from '@/components/native-chat/fork/ForkMarkedName'
 import type { AiVaultOriginalPaneTarget } from '../session-actions/ai-vault-original-pane'
 
 export function VaultSessionRow({
+  compact = false,
+  onOpen,
   session,
   liveState,
   resumeStartup,
@@ -71,6 +74,8 @@ export function VaultSessionRow({
   sourceHostLabel,
   onPick
 }: {
+  compact?: boolean
+  onOpen?: () => void
   session: AiVaultSession
   liveState: AgentDotState | null
   resumeStartup: AiVaultResumeStartup
@@ -165,7 +170,7 @@ export function VaultSessionRow({
     <div
       className={cn(
         'group/session-row flex w-full min-w-0 cursor-pointer flex-col border-b border-sidebar-border px-3 py-2 text-left transition-colors hover:bg-sidebar-accent/55',
-        !detailsExpanded && 'min-h-[98px]'
+        !detailsExpanded && !compact && 'min-h-[98px]'
       )}
       onClick={(event) => {
         // Ignore portaled React clicks outside the row DOM so menu actions cannot expand the row.
@@ -175,6 +180,8 @@ export function VaultSessionRow({
         }
         if (onPick) {
           onPick()
+        } else if (onOpen) {
+          onOpen()
         } else {
           onToggleDetails()
         }
@@ -202,6 +209,12 @@ export function VaultSessionRow({
             window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_END_EVENT))
           }}
         >
+          {compact ? (
+            <span className="mr-1.5 inline-flex items-center gap-1.5 align-middle text-muted-foreground">
+              <AgentIcon agent={session.agent} size={14} />
+              {liveState && liveState !== 'done' ? <AgentStateDot state={liveState} /> : null}
+            </span>
+          ) : null}
           {forked ? <ForkMarkedName name={title} /> : title}
         </div>
         <SessionRowTrailingActions
@@ -234,7 +247,7 @@ export function VaultSessionRow({
         />
       </div>
       {searchHit ? <AiVaultSearchEvidence hit={searchHit} /> : null}
-      {!detailsExpanded && !searchHit ? (
+      {!compact && !detailsExpanded && !searchHit ? (
         <div className="mt-0.5 min-w-0 line-clamp-2 text-[12px] leading-4 text-muted-foreground">
           {latestTurn ? (
             <>
@@ -251,14 +264,16 @@ export function VaultSessionRow({
           )}
         </div>
       ) : null}
-      <SessionMetadata
-        session={session}
-        liveState={liveState}
-        updatedAt={updatedAt}
-        worktreeInfo={worktreeInfo}
-        vaultScope={vaultScope}
-        sourceHostLabel={sourceHostLabel}
-      />
+      {!compact || detailsExpanded ? (
+        <SessionMetadata
+          session={session}
+          liveState={liveState}
+          updatedAt={updatedAt}
+          worktreeInfo={worktreeInfo}
+          vaultScope={vaultScope}
+          sourceHostLabel={sourceHostLabel}
+        />
+      ) : null}
       {detailsExpanded ? (
         <SessionInlineDetails
           id={detailsId}

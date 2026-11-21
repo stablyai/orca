@@ -122,6 +122,7 @@ async function setup(viewedSurface: 'editor' | 'terminal'): Promise<{
   const store = createTestStore()
   storeRef.current = store
   seedStore(store, {
+    sidebarBody: 'workspaces',
     worktreesByRepo: {
       repo1: [
         makeWorktree({ id: VIEWED, repoId: 'repo1', path: '/repo1/viewed' }),
@@ -165,6 +166,31 @@ async function setup(viewedSurface: 'editor' | 'terminal'): Promise<{
   }
 }
 
+function screenState(store: TestStore): unknown {
+  const s = store.getState()
+  return {
+    activeWorktreeId: s.activeWorktreeId,
+    activeView: s.activeView,
+    activeTabType: s.activeTabType,
+    activeFileId: s.activeFileId,
+    activeTabId: s.activeTabId,
+    viewedActiveFile: s.activeFileIdByWorktree[VIEWED],
+    viewedActiveTabType: s.activeTabTypeByWorktree[VIEWED],
+    viewedActiveGroup: s.activeGroupIdByWorktree[VIEWED],
+    viewedGroups: s.groupsByWorktree[VIEWED]?.map((group) => ({
+      id: group.id,
+      activeTabId: group.activeTabId
+    })),
+    pendingEditorFocusRequest: s.pendingEditorFocusRequest,
+    pendingRevealWorktree: s.pendingRevealWorktree,
+    backgroundVisitedAt: s.lastVisitedAtByWorktreeId[BACKGROUND]
+  }
+}
+
+function tabEntityIds(store: TestStore, worktreeId: string): string[] {
+  return (store.getState().unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => tab.entityId)
+}
+
 function activeEditorEntityId(store: TestStore, worktreeId: string): string | undefined {
   const state = store.getState()
   const group = state.groupsByWorktree[worktreeId]?.find(
@@ -179,20 +205,52 @@ describe('runtime file opens on the host desktop', () => {
     vi.unstubAllGlobals()
   })
 
-  it('switches the desktop for a phone open (no navigation field), as before', async () => {
+  it('CLI caller open adds the tab to the viewed worktree without leaving the focused terminal', async () => {
     const { openFile, store } = await setup('terminal')
+    const before = screenState(store)
+    expect(store.getState().activeTabType).toBe('terminal')
 
-    await openFile({ worktreeId: BACKGROUND, ...APP_TS })
+    await openFile({ worktreeId: VIEWED, ...VIEWED_APP_TS, navigation: 'caller' })
 
-    const state = store.getState()
-    expect(state.activeWorktreeId).toBe(BACKGROUND)
-    expect(state.activeView).toBe('terminal')
-    expect(state.activeFileId).toBe(APP_TS.filePath)
-    expect(state.activeTabType).toBe('editor')
-    expect(activeEditorEntityId(store, BACKGROUND)).toBe(APP_TS.filePath)
-    expect(state.pendingRevealWorktree?.worktreeId).toBe(BACKGROUND)
-    expect(state.lastVisitedAtByWorktreeId[BACKGROUND]).toBeDefined()
+    expect(screenState(store)).toEqual(before)
+    expect(tabEntityIds(store, VIEWED)).toContain(VIEWED_APP_TS.filePath)
   })
+
+  it('CLI caller open in a background worktree leaves the viewed editor alone', async () => {
+    const { openFile, store } = await setup('editor')
+    const before = screenState(store)
+
+    await openFile({ worktreeId: BACKGROUND, ...APP_TS, navigation: 'caller' })
+
+    expect(screenState(store)).toEqual(before)
+    expect(activeEditorEntityId(store, BACKGROUND)).toBe(APP_TS.filePath)
+    expect(store.getState().activeFileIdByWorktree[BACKGROUND]).toBe(APP_TS.filePath)
+    store.getState().setActiveWorktree(BACKGROUND)
+    expect(store.getState().activeFileId).toBe(APP_TS.filePath)
+    expect(store.getState().activeTabType).toBe('editor')
+  })
+
+  it.each(['workspaces', 'conversations'] as const)(
+    'opens a phone-selected file while preserving the %s sidebar',
+    async (sidebarBody) => {
+      const { openFile, store } = await setup('terminal')
+      store.setState({ sidebarBody })
+
+      await openFile({ worktreeId: BACKGROUND, ...APP_TS })
+
+      const state = store.getState()
+      expect(state.activeWorktreeId).toBe(BACKGROUND)
+      expect(state.activeView).toBe('terminal')
+      expect(state.activeFileId).toBe(APP_TS.filePath)
+      expect(state.activeTabType).toBe('editor')
+      expect(activeEditorEntityId(store, BACKGROUND)).toBe(APP_TS.filePath)
+      expect(state.sidebarBody).toBe(sidebarBody)
+      expect(state.pendingRevealWorktree?.worktreeId).toBe(
+        sidebarBody === 'workspaces' ? BACKGROUND : undefined
+      )
+      expect(state.lastVisitedAtByWorktreeId[BACKGROUND]).toBeDefined()
+    }
+  )
 
   describe('with another server focused', () => {
     const FRESH = 'repo9::/repo9/fresh'

@@ -18,6 +18,7 @@ export type SidebarSectionFold = {
 
 type SidebarSectionHeaderProps = {
   title: string
+  titleControl?: React.ReactNode
   /** Names the section for tests and tours, e.g. `projects`. */
   sectionId: string
   /** The section's controls on the right; null leaves the row to the title and its summary. */
@@ -35,6 +36,7 @@ type SidebarSectionHeaderProps = {
 /** A top-level sidebar section's header row: its title on the left, its controls on the right. */
 export function SidebarSectionHeader({
   title,
+  titleControl,
   sectionId,
   actions,
   fold,
@@ -101,17 +103,19 @@ export function SidebarSectionHeader({
           </Tooltip>
         ) : null}
         {showChevron ? <SidebarSectionFoldChevron collapsed={fold.collapsed} /> : null}
-        <span
-          // Truncate localized titles because fixed-width actions cannot shrink inside the short header row.
-          className={cn(
-            'min-w-0 truncate select-none pr-0.5 text-xs font-semibold text-muted-foreground/80',
-            showChevron ? 'pl-0' : 'pl-2',
-            fold && 'pointer-events-none'
-          )}
-          data-sidebar-section-title={sectionId}
-        >
-          {title}
-        </span>
+        {titleControl ?? (
+          <span
+            // Truncate localized titles because fixed-width actions cannot shrink inside the short header row.
+            className={cn(
+              'min-w-0 truncate select-none pr-0.5 text-xs font-semibold text-muted-foreground/80',
+              showChevron ? 'pl-0' : 'pl-2',
+              fold && 'pointer-events-none'
+            )}
+            data-sidebar-section-title={sectionId}
+          >
+            {title}
+          </span>
+        )}
         {titleAccessory}
         {summary}
       </div>

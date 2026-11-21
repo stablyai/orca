@@ -1,3 +1,4 @@
+import type { StructuredConversationJournalPreview } from '../../ai-vault/structured-conversation-journal-preview'
 import type { JournalOutlineCache } from './journal-domain-outline'
 import type { JournalMailAttempt, JournalMailObservation } from './journal-mail-observation'
 import type { JournalRequestFailureRead } from './journal-request-failure'
@@ -57,6 +58,7 @@ export type JournalSqlPointRead = {
         compareSubmissions: boolean
       }
     | { kind: 'saved-content' }
+    | { kind: 'conversation-preview'; workspaceId: string }
     | { kind: 'conversation-outline'; budgetBytes: number }
     | { kind: 'rewind-target'; itemId: string }
     | { kind: 'rewind-cut'; target: JournalRewindSelection }
@@ -101,6 +103,7 @@ export type JournalSqlPointReadResult =
   | { kind: 'rewind-cut'; cut: JournalRewindCut | null }
   | { kind: 'fork-boundary'; boundary: JournalForkBoundary }
   | { kind: 'saved-content'; content: JournalSavedContent }
+  | { kind: 'conversation-preview'; preview: StructuredConversationJournalPreview }
   | {
       kind: 'conversation-outline'
       outline: AgentSessionConversationOutline

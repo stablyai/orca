@@ -14,6 +14,7 @@ import type { AiVaultHostScopeOption } from '../scope/ai-vault-host-scope'
 import type { AiVaultSessionLimit } from '../session-list/ai-vault-session-limit'
 
 type AiVaultPanelHeaderProps = {
+  conversationNavigation?: boolean
   searching?: boolean
   query: string
   loading: boolean
@@ -45,6 +46,7 @@ type AiVaultPanelHeaderProps = {
 }
 
 export function AiVaultPanelHeader({
+  conversationNavigation = false,
   query,
   searching = false,
   loading,
@@ -75,9 +77,19 @@ export function AiVaultPanelHeader({
 }: AiVaultPanelHeaderProps): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div className="shrink-0 border-b border-sidebar-border px-2.5 py-2">
-      <div className="flex items-center gap-1.5">
-        <div className="min-w-0 flex-1">
+    <div
+      className={
+        conversationNavigation
+          ? 'flex shrink-0 items-center gap-1 border-b border-sidebar-border px-2.5 py-2'
+          : 'shrink-0 border-b border-sidebar-border px-2.5 py-2'
+      }
+    >
+      <div
+        className={
+          conversationNavigation ? 'order-2 flex items-center gap-1.5' : 'flex items-center gap-1.5'
+        }
+      >
+        <div className={conversationNavigation ? 'hidden' : 'min-w-0 flex-1'}>
           <div className="truncate text-xs font-semibold text-foreground">
             {/* Why: below 300px the header competes with fixed controls, so compact copy prevents overlap. */}
             <span className="@max-[300px]/ai-vault:hidden">
@@ -99,26 +111,28 @@ export function AiVaultPanelHeader({
                 )}
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1 @max-[300px]/ai-vault:gap-0.5">
+        <div className="ml-auto flex shrink-0 items-center gap-1 @max-[300px]/ai-vault:gap-0.5">
           <VaultHostScopeMenu
             executionHostScope={executionHostScope}
             hostOptions={hostScopeOptions}
             onExecutionHostScopeChange={onExecutionHostScopeChange}
           />
-          <VaultViewMenu
-            searching={searching}
-            agents={agents}
-            group={group}
-            hideEmptySessions={hideEmptySessions}
-            sessionLimit={sessionLimit}
-            adjustmentCount={adjustmentCount}
-            onAgentEnabledChange={onAgentEnabledChange}
-            onAllAgentsEnabledChange={onAllAgentsEnabledChange}
-            onGroupChange={onGroupChange}
-            onHideEmptySessionsChange={onHideEmptySessionsChange}
-            onSessionLimitChange={onSessionLimitChange}
-            onReset={onReset}
-          />
+          {!conversationNavigation ? (
+            <VaultViewMenu
+              searching={searching}
+              agents={agents}
+              group={group}
+              hideEmptySessions={hideEmptySessions}
+              sessionLimit={sessionLimit}
+              adjustmentCount={adjustmentCount}
+              onAgentEnabledChange={onAgentEnabledChange}
+              onAllAgentsEnabledChange={onAllAgentsEnabledChange}
+              onGroupChange={onGroupChange}
+              onHideEmptySessionsChange={onHideEmptySessionsChange}
+              onSessionLimitChange={onSessionLimitChange}
+              onReset={onReset}
+            />
+          ) : null}
           <Button
             type="button"
             variant="ghost"
@@ -142,7 +156,7 @@ export function AiVaultPanelHeader({
         </div>
       </div>
 
-      <div className="mt-2">
+      <div className={conversationNavigation ? 'hidden' : 'mt-2'}>
         <VaultScopeSwitch
           scope={scope}
           workspaceAvailable={Boolean(activeWorktreePath)}
@@ -151,16 +165,19 @@ export function AiVaultPanelHeader({
         />
       </div>
 
-      <div className="mt-2 flex h-8 items-center gap-1.5 rounded-md border border-sidebar-border bg-input/50 px-2 focus-within:border-sidebar-ring focus-within:ring-[2px] focus-within:ring-sidebar-ring/30">
+      <div
+        className={`${conversationNavigation ? 'min-w-0 flex-1' : 'mt-2'} flex h-8 items-center gap-1.5 rounded-md border border-sidebar-border bg-input/50 px-2 focus-within:border-sidebar-ring focus-within:ring-[2px] focus-within:ring-sidebar-ring/30`}
+      >
         <Search className="size-3.5 shrink-0 text-muted-foreground" />
         <ImeInput
           ref={searchInputRef}
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
-          placeholder={t(
-            'auto.components.right.sidebar.AiVaultPanel.searchSessions',
-            'Search sessions'
-          )}
+          placeholder={
+            conversationNavigation
+              ? t('projectConversations.search', 'Search chats')
+              : t('auto.components.right.sidebar.AiVaultPanel.searchSessions', 'Search sessions')
+          }
           className="min-w-0 flex-1 bg-transparent py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground"
           aria-label={t(
             'auto.components.right.sidebar.AiVaultPanel.searchSessions',

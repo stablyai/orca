@@ -1,29 +1,39 @@
 // Index each immutable snapshot once; reset for test fixtures that mutate the map in place.
 let agentSessionIdsKeyBySnapshot = new WeakMap<object, string>()
+let terminalSessionIdsKeyBySnapshot = new WeakMap<object, string>()
 
 export function getAgentSessionIdsKey(
   agentStatusByPaneKey:
-    | ReadonlyMap<string, { providerSession?: { id?: string } | null }>
-    | undefined
+    | ReadonlyMap<
+        string,
+        { providerSession?: { id?: string } | null; terminalResumeEligible?: false }
+      >
+    | undefined,
+  terminalOnly = false
 ): string {
   if (!agentStatusByPaneKey) {
     return ''
   }
-  const cached = agentSessionIdsKeyBySnapshot.get(agentStatusByPaneKey)
+  const cache = terminalOnly ? terminalSessionIdsKeyBySnapshot : agentSessionIdsKeyBySnapshot
+  const cached = cache.get(agentStatusByPaneKey)
   if (cached !== undefined) {
     return cached
   }
   const ids: string[] = []
   for (const entry of Array.from(agentStatusByPaneKey.values())) {
+    if (terminalOnly && entry.terminalResumeEligible === false) {
+      continue
+    }
     if (entry.providerSession?.id) {
       ids.push(entry.providerSession.id)
     }
   }
   const key = ids.sort().join('\n')
-  agentSessionIdsKeyBySnapshot.set(agentStatusByPaneKey, key)
+  cache.set(agentStatusByPaneKey, key)
   return key
 }
 
 export function resetAgentSessionIdsRefreshKeys(): void {
   agentSessionIdsKeyBySnapshot = new WeakMap<object, string>()
+  terminalSessionIdsKeyBySnapshot = new WeakMap<object, string>()
 }

@@ -15,6 +15,7 @@ import { getActiveStickyHeaderIndexForScroll } from '../../../sidebar/worktree-l
 import { EmptyState, SessionLoadingState } from './AiVaultSessionListStates'
 import type { AiVaultSessionListGroup } from './ai-vault-session-filters'
 import type { AiVaultOriginalPaneTarget } from '../session-actions/ai-vault-original-pane'
+import type { AiVaultSessionProject } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import type {
   AiVaultSessionResumeActions,
   AiVaultSessionResumeState
@@ -29,10 +30,8 @@ import {
 import type { AiVaultResumeInChatEligibility } from '../session-actions/ai-vault-session-resume-in-chat'
 import { AiVaultVirtualRow, type AiVaultListRow } from './AiVaultVirtualRow'
 import type { AiVaultSearchHit } from '../../../../../../shared/ai-vault/search/ai-vault-search-types'
-import {
-  resolveAiVaultSessionRowChatActions,
-  type AiVaultSessionRowChatActions
-} from '../session-actions/ai-vault-session-chat-action'
+import type { AiVaultSessionRowChatActions } from '../session-actions/ai-vault-session-chat-action'
+import { aiVaultSessionRowChat } from '../session-actions/ai-vault-session-row-chat'
 import {
   resumeAiVaultSessionHere,
   type AiVaultResumeHere
@@ -47,6 +46,7 @@ const VAULT_ROW_OVERSCAN = 8
 const VAULT_EXPANDED_SESSION_ROW_ESTIMATED_HEIGHT = 420
 
 export function AiVaultSessionVirtualList({
+  conversationNavigation = false,
   groups,
   collapsedGroups,
   loading,
@@ -88,6 +88,8 @@ export function AiVaultSessionVirtualList({
   query = '',
   resumeHere
 }: {
+  sessionProjects?: ReadonlyMap<string, AiVaultSessionProject>
+  conversationNavigation?: boolean
   groups: readonly AiVaultSessionListGroup[]
   collapsedGroups: ReadonlySet<string>
   loading: boolean
@@ -181,7 +183,7 @@ export function AiVaultSessionVirtualList({
       if (row?.type === 'session' && expandedSessionIds.has(row.session.id)) {
         return VAULT_EXPANDED_SESSION_ROW_ESTIMATED_HEIGHT
       }
-      return VAULT_SESSION_ROW_HEIGHT
+      return conversationNavigation ? 40 : VAULT_SESSION_ROW_HEIGHT
     },
     overscan: VAULT_ROW_OVERSCAN,
     // Why: the pinned group header covers the list's top, so a row scrolled into view stops below it.
@@ -219,6 +221,16 @@ export function AiVaultSessionVirtualList({
     })
   }, [])
 
+  const { rowActions, openConversation } = aiVaultSessionRowChat({
+    getOriginalPaneTarget,
+    isStructuredSessionOpen,
+    getSessionResumeState,
+    getSessionResumeInChat,
+    searchHits,
+    onResume,
+    onJumpToOriginalPane,
+    onResumeInNewChat
+  })
   // Keep a synchronous single-flight latch while resume opens its destination so repeated picks cannot start duplicate resumes.
   const pickInFlight = useRef(false)
   const pickHere = (session: AiVaultSession): boolean => {
@@ -228,14 +240,7 @@ export function AiVaultSessionVirtualList({
     if (pickInFlight.current) {
       return true
     }
-    const actions = resolveAiVaultSessionRowChatActions({
-      session,
-      originalPaneTarget: getOriginalPaneTarget(session),
-      structuredSessionOpen: isStructuredSessionOpen(session),
-      resumeState: getSessionResumeState(session),
-      resumeInChat: getSessionResumeInChat(session),
-      searchHit: searchHits?.get(session.id)
-    })
+    const actions = rowActions(session)
     if (resumeHere.alongside) {
       return pickAlongside(session, actions, resumeHere)
     }
@@ -276,8 +281,7 @@ export function AiVaultSessionVirtualList({
 
   // Enter resumes the row in the chat; a row that can't shows its details instead.
   const activateSession = (session: AiVaultSession, index: number): void => {
-    // A stale row answers an older query, so Enter waits for the current one.
-    if (stale) {
+    if (stale || (conversationNavigation && openConversation(session))) {
       return
     }
     if (!pickHere(session)) {
@@ -288,6 +292,11 @@ export function AiVaultSessionVirtualList({
   const selectRow = useLatestHandler(selection.select)
   const pickSession = useLatestHandler((session: AiVaultSession) => {
     if (!pickHere(session)) {
+      toggleSessionDetails(session.id)
+    }
+  })
+  const openConversationRow = useLatestHandler((session: AiVaultSession) => {
+    if (!openConversation(session)) {
       toggleSessionDetails(session.id)
     }
   })
@@ -352,6 +361,8 @@ export function AiVaultSessionVirtualList({
               const row = vaultRows[virtualRow.index]
               return (
                 <AiVaultVirtualRow
+                  conversationNavigation={conversationNavigation}
+                  onOpenConversation={conversationNavigation ? openConversationRow : undefined}
                   key={virtualRow.key}
                   row={row}
                   index={virtualRow.index}
