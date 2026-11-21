@@ -195,6 +195,7 @@ function readTurnsBehind(
       answered:
         turn.state === 'completed' &&
         readAgentJournalTurnOutcome(turn) !== null &&
+        said.trim() !== '' &&
         !isQuietBotResult(said)
     })
   }
