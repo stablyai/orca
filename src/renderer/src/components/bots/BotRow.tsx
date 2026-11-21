@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react'
 import { openBotSettings } from './bot-settings-open'
-import { ChevronDown, Copy, Pause, Play, Server, Settings, Trash2 } from 'lucide-react'
+import { ChevronDown, Copy, Pause, Play, Settings, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
+import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/host/WorktreeHostContextBadge'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import { useTranslate } from '@/i18n/use-translate'
 import { openBotHome, updateBot } from '@/lib/bot-catalog'
@@ -61,7 +62,7 @@ export function BotRow({
   const isUnread = home.isUnread && !offline
   const upNextNew = useBotUpNextUnseen(bot)
   const age = offline ? null : botRowLineAge(line, now)
-  const hostPill = hostLabel ? <BotRowHostIcon label={hostLabel} /> : null
+  const hostPill = hostLabel ? <BotRowHostBadge label={hostLabel} /> : null
   // The Bots search matches purposes from what each listed row shows; it never reads SOUL.md.
   const purposeKey = botSidebarEntryKey(bot)
   useEffect(() => {
@@ -188,16 +189,16 @@ export function openBotHomePanelFromSidebar(bot: Bot, onOpened: () => void): voi
   }
 }
 
-/** A paired server's bot: a glyph on its second line, the server's name in its tooltip, so the
- *  line keeps its width for what the bot is doing. */
-function BotRowHostIcon({ label }: { label: string }): React.JSX.Element {
+/** A paired server's bot: its server name as a chip matching workspace cards, with the full name
+ *  in its tooltip when truncated. */
+function BotRowHostBadge({ label }: { label: string }): React.JSX.Element {
   const t = useTranslate()
   const tip = t('bots.row.runsOn', 'Runs on {{host}}', { host: label })
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span role="img" aria-label={tip} className="flex shrink-0 items-center">
-          <Server className="size-3" aria-hidden="true" />
+        <span className="inline-flex shrink-0">
+          <WorktreeHostContextBadge label={label} />
         </span>
       </TooltipTrigger>
       <TooltipContent side="bottom">{tip}</TooltipContent>
