@@ -92,6 +92,9 @@ function fakeCodex(
           })
         }
         const threadId = typeof params?.threadId === 'string' ? params.threadId : ''
+        if (method === 'thread/resume' && params?.gone === true) {
+          throw new Error('codex app-server thread/resume failed: no rollout found')
+        }
         if (method === 'thread/backgroundTerminals/list' && codex.listUnsupported) {
           throw new CodexAppServerUnsupportedError('codex app-server does not support list')
         }
@@ -306,7 +309,7 @@ describe('shared Codex app-servers', () => {
     expect(b.notifications.at(-1)?.method).toBe('item/started')
   })
 
-  it('makes the server wait once paused chats hold its frame budget, and drops a chat that stalls it', async () => {
+  it('makes the server wait while every chat is paused, dropping no one', async () => {
     vi.useFakeTimers()
     const { servers, pool } = fakeCodex()
     const a = chat()
@@ -330,15 +333,41 @@ describe('shared Codex app-servers', () => {
     }
     // 40 MiB queued across the two chats: past the 32 MiB server budget, Codex now waits.
     expect(servers[0]!.readingPaused).toBe(true)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(a.exits).toEqual([])
+    expect(b.exits).toEqual([])
     connB.resumeReading?.()
     expect(b.notifications.filter((n) => n.method === 'item/agentMessage/delta')).toHaveLength(20)
-    // A alone still holds 20 MiB, above the 16 MiB the server resumes at.
+    // A alone still holds 20 MiB, above the 16 MiB the server resumes at; B now asks for something.
     expect(servers[0]!.readingPaused).toBe(true)
-    await vi.advanceTimersByTimeAsync(20_000)
-    // The chat still holding the server is dropped alone; the other keeps it.
+    void connB.request('thread/read', { threadId: threadB })
     await vi.waitFor(() => expect(a.exits).toHaveLength(1))
     expect(servers[0]!.readingPaused).toBe(false)
     expect(connB.closed).toBe(false)
+  })
+
+  it('drops a lagging chat at once when another chat on its server is running a turn', async () => {
+    const { servers, pool } = fakeCodex()
+    const a = chat()
+    const b = chat()
+    const connA = await pool.open(launch(), a.handlers, { sessionId: 'a', skillRoots: [] })
+    const connB = await pool.open(launch(), b.handlers, { sessionId: 'b', skillRoots: [] })
+    const threadA = await startThread(connA)
+    const threadB = await startThread(connB)
+    servers[0]!.handlers.onNotification?.('turn/started', { threadId: threadB, turn: { id: 'tb' } })
+    connA.pauseReading?.()
+    const delta = { delta: 'x'.repeat(1024 * 1024) }
+    for (let i = 0; i < 40; i += 1) {
+      servers[0]!.handlers.onNotification?.('item/agentMessage/delta', {
+        threadId: threadA,
+        ...delta
+      })
+    }
+    await vi.waitFor(() => expect(a.exits).toHaveLength(1))
+    // B never waited on the laggard.
+    expect(servers[0]!.readingPaused).toBe(false)
+    servers[0]!.handlers.onNotification?.('item/agentMessage/delta', { threadId: threadB })
+    expect(b.notifications.at(-1)?.method).toBe('item/agentMessage/delta')
   })
 
   it('interrupts a turn whose start is still queued behind a paused chat', async () => {
@@ -435,6 +464,18 @@ describe('shared Codex app-servers', () => {
     })
     servers[0]!.handlers.onNotification?.('item/agentMessage/delta', { threadId: threadA })
     expect(a.notifications.map((n) => n.method)).toContain('item/agentMessage/delta')
+  })
+
+  it('lets another chat open a thread this chat failed to resume', async () => {
+    const { pool } = fakeCodex()
+    const connA = await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
+    const connB = await pool.open(launch(), chat().handlers, { sessionId: 'b', skillRoots: [] })
+    await expect(
+      connA.request('thread/resume', { threadId: 'thread-gone', gone: true })
+    ).rejects.toThrow('no rollout found')
+    await expect(connB.request('thread/resume', { threadId: 'thread-gone' })).resolves.toEqual({
+      thread: { id: 'thread-gone' }
+    })
   })
 
   it('starts a fresh server once the current one can no longer take requests', async () => {

@@ -25,8 +25,14 @@ export type CodexLeaseRequestOwner = {
   readonly pendingOpens: Set<Promise<unknown>>
   /** Rejects every caller still waiting when the lease ends. */
   readonly outstanding: Set<(error: Error) => void>
+  /** Threads this chat holds now. */
+  readonly threads: ReadonlySet<string>
   claim: (threadId: string) => void
   heldByOther: (threadId: string) => boolean
+  /** Drops this chat's own claim on a thread it failed to open. */
+  unclaim: (threadId: string) => void
+  /** Re-checks the server's backlog now that this chat waits on a reply. */
+  noteWaiting: () => void
   abandon: (threadId: string) => void
 }
 
@@ -56,6 +62,7 @@ export async function sendCodexLeaseRequest(
   const opensThread = OPENS_THREAD.has(method)
   const resumed =
     method === 'thread/resume' && typeof params?.threadId === 'string' ? params.threadId : null
+  let resumedNewly = false
   if (resumed) {
     // A chat leaving this thread finishes its cleanup first, so it can't stop this one's work.
     await host.threadReleased(resumed)
@@ -72,6 +79,7 @@ export async function sendCodexLeaseRequest(
         detail
       )
     }
+    resumedNewly = !owner.threads.has(resumed)
     owner.claim(resumed)
   }
   const turnThreadId =
@@ -117,6 +125,7 @@ export async function sendCodexLeaseRequest(
     owner.pendingOpens.add(sent)
     const settle = (): void => {
       owner.pendingOpens.delete(sent)
+      host.turnsChanged()
     }
     sent.then(settle, settle)
   }
@@ -134,6 +143,7 @@ export async function sendCodexLeaseRequest(
       reject(error)
     }
     owner.outstanding.add(giveUp)
+    owner.noteWaiting()
     if (openTimeoutMs !== null) {
       timer = setTimeout(
         () =>
@@ -152,6 +162,10 @@ export async function sendCodexLeaseRequest(
       (error: unknown) => {
         clearTimeout(timer)
         owner.outstanding.delete(giveUp)
+        // Codex opened nothing, so another chat may still open this thread here.
+        if (resumed && resumedNewly) {
+          owner.unclaim(resumed)
+        }
         reject(error instanceof Error ? error : new Error(String(error)))
       }
     )

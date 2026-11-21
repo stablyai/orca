@@ -2,26 +2,14 @@ import { codexFrameThreadId, codexTurnId } from './codex-shared-server-frames'
 
 const MAX_RECENT_COMPLETED_TURNS = 1_024
 
-/** True when `promise` settles first; false at the deadline. */
-export async function withDeadline(promise: Promise<unknown>, ms: number): Promise<boolean> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const deadline = new Promise<false>((resolve) => {
-    timer = setTimeout(() => resolve(false), ms)
-  })
-  try {
-    return await Promise.race([promise.then(() => true), deadline])
-  } finally {
-    clearTimeout(timer)
-  }
-}
-
 /** Every turn running on one server, seen before any chat's queue so backpressure can't hide it,
  *  plus turn/starts still in flight, so Stop can prove each of a chat's turns ended. */
 export class CodexSharedServerTurns {
   private readonly running = new Map<string, string>()
   private readonly recentlyCompleted = new Set<string>()
-  /** One per turn, shared by every Stop retry, so a turn that never ends holds one waiter. */
-  private readonly endWaiters = new Map<string, { ended: Promise<void>; resolve: () => void }>()
+  /** Re-checked on every change; each leaves at its deadline, so retries on a turn that never
+   *  ends hold nothing. */
+  private readonly waiters = new Set<() => void>()
   private readonly pendingStarts = new Map<string, Set<Promise<unknown>>>()
 
   trackStart(threadId: string, request: Promise<unknown>): void {
@@ -33,6 +21,7 @@ export class CodexSharedServerTurns {
       if (pending.size === 0 && this.pendingStarts.get(threadId) === pending) {
         this.pendingStarts.delete(threadId)
       }
+      this.changed()
     }
     request.then(settle, settle)
   }
@@ -60,38 +49,42 @@ export class CodexSharedServerTurns {
     return this.running.get(threadId)
   }
 
-  startsPending(threads: readonly string[]): Promise<unknown>[] {
-    return threads.flatMap((threadId) => [...(this.pendingStarts.get(threadId) ?? [])])
-  }
-
   anyStartPending(threads: readonly string[]): boolean {
     return threads.some((threadId) => this.pendingStarts.has(threadId))
   }
 
-  ended(turnId: string): Promise<void> {
-    if (![...this.running.values()].includes(turnId)) {
-      return Promise.resolve()
+  /** true once `done()` holds, false at the deadline; re-checked whenever a turn or start ends. */
+  waitUntil(done: () => boolean, ms: number): Promise<boolean> {
+    if (done()) {
+      return Promise.resolve(true)
     }
-    const known = this.endWaiters.get(turnId)
-    if (known) {
-      return known.ended
-    }
-    let resolve = (): void => {}
-    const ended = new Promise<void>((done) => {
-      resolve = done
+    return new Promise((resolve) => {
+      const finish = (value: boolean): void => {
+        clearTimeout(timer)
+        this.waiters.delete(check)
+        resolve(value)
+      }
+      const check = (): void => {
+        if (done()) {
+          finish(true)
+        }
+      }
+      const timer = setTimeout(() => finish(done()), ms)
+      this.waiters.add(check)
     })
-    this.endWaiters.set(turnId, { ended, resolve })
-    return ended
+  }
+
+  changed(): void {
+    for (const check of this.waiters) {
+      check()
+    }
   }
 
   /** The process is gone, so every turn it ran is over. */
   endAll(): void {
     this.running.clear()
     this.pendingStarts.clear()
-    for (const { resolve } of this.endWaiters.values()) {
-      resolve()
-    }
-    this.endWaiters.clear()
+    this.changed()
   }
 
   private complete(threadId: string, turnId: string): void {
@@ -105,7 +98,6 @@ export class CodexSharedServerTurns {
         this.recentlyCompleted.delete(oldest.value)
       }
     }
-    this.endWaiters.get(turnId)?.resolve()
-    this.endWaiters.delete(turnId)
+    this.changed()
   }
 }

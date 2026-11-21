@@ -15,12 +15,11 @@ import type {
   CodexSharedServerLease
 } from './codex-shared-server-lease'
 import { CodexSharedServerBacklog } from './codex-shared-server-backlog'
-import { CodexSharedServerTurns, withDeadline } from './codex-shared-server-turns'
+import { CodexSharedServerTurns } from './codex-shared-server-turns'
+import { stopCodexLeaseWriter } from './codex-shared-server-writer-stop'
 import { CodexSharedServerRouter } from './codex-shared-server-router'
 
 const RELEASE_REQUEST_TIMEOUT_MS = 5_000
-/** How long an interrupted turn has to report turn/completed before Stop counts it unproven. */
-const TURN_STOP_PROOF_MS = 10_000
 const INITIALIZE_TIMEOUT_MS = 15_000
 const NO_OWNER_ERROR_CODE = -32000
 
@@ -37,7 +36,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   private readonly releases = new WeakMap<CodexSharedServerLease, Promise<CodexLeaseRelease>>()
   private readonly turns = new CodexSharedServerTurns()
   private readonly backlogs = new CodexSharedServerBacklog(() => this.physical, this.leases)
-  private readonly router = new CodexSharedServerRouter(
+  readonly router = new CodexSharedServerRouter(
     () => this.leases,
     (frame) => this.refuse(frame)
   )
@@ -109,9 +108,11 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     this.router.claim(threadId, lease)
   }
 
-  backlog = (deltaBytes: number): void => this.backlogs.change(deltaBytes)
-  heldByOther = (threadId: string, lease: CodexSharedServerLease): boolean =>
-    this.router.heldByOther(threadId, lease)
+  backlog = (lease: CodexSharedServerLease, deltaBytes: number): void =>
+    this.backlogs.change(lease, deltaBytes)
+  turnsChanged = (): void => this.turns.changed()
+  hasRunningTurn = (threads: Iterable<string>): boolean =>
+    [...threads].some((threadId) => this.turns.runningOn(threadId) !== undefined)
 
   trackTurnStart(threadId: string, request: Promise<unknown>): void {
     this.turns.trackStart(threadId, request)
@@ -170,42 +171,6 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     }
   }
 
-  /** Interrupts every turn on the chat's threads, the helpers it announces meanwhile included;
-   *  the chat keeps routing them until each turn is proven over. */
-  private async stopLeaseWriter(lease: CodexSharedServerLease): Promise<boolean> {
-    const physical = this.physical
-    if (!physical) {
-      return true
-    }
-    const options = { timeoutMs: RELEASE_REQUEST_TIMEOUT_MS }
-    // Opens that answer from here on are abandoned (lease.ts), so none outlives the chat.
-    await withDeadline(
-      Promise.allSettled([...lease.pendingOpens, ...this.turns.startsPending([...lease.threads])]),
-      RELEASE_REQUEST_TIMEOUT_MS
-    )
-    const interrupted = new Set<string>()
-    for (let pass = 0; pass < 2; pass += 1) {
-      const turns = [...lease.threads, ...lease.abandonedThreads].flatMap((threadId) => {
-        const turnId = this.turns.runningOn(threadId)
-        return turnId && !interrupted.has(turnId) ? [{ threadId, turnId }] : []
-      })
-      await Promise.all(
-        turns.map(async ({ threadId, turnId }) => {
-          interrupted.add(turnId)
-          const ended = this.turns.ended(turnId)
-          await physical.request('turn/interrupt', { threadId, turnId }, options).catch(() => {})
-          await withDeadline(ended, TURN_STOP_PROOF_MS)
-        })
-      )
-    }
-    const threads = [...lease.threads, ...lease.abandonedThreads]
-    return (
-      lease.pendingOpens.size === 0 &&
-      !this.turns.anyStartPending(threads) &&
-      threads.every((threadId) => this.turns.runningOn(threadId) === undefined)
-    )
-  }
-
   private async stopLeaseWork(lease: CodexSharedServerLease): Promise<CodexLeaseRelease> {
     const physical = this.physical
     if (!physical) {
@@ -218,7 +183,9 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     if (this.hasExited) {
       return this.reapedVerdict()
     }
-    const writerStopped = await this.stopLeaseWriter(lease)
+    const writerStopped =
+      !this.physical ||
+      (await stopCodexLeaseWriter(this.physical, lease, this.turns, RELEASE_REQUEST_TIMEOUT_MS))
     if (!writerStopped && !this.hasExited) {
       await this.stopIfAlone(lease)
     }

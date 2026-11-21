@@ -2,68 +2,96 @@ import type { CodexAppServerConnection } from '../codex-app-server-connection-ty
 
 /** Frames all paused chats on one server may hold in Orca before the server itself waits. */
 export const CODEX_SHARED_SERVER_BACKLOG_BYTES = 32 * 1024 * 1024
-/** How long one stalled chat may hold every chat on its server before it alone is dropped. */
-export const CODEX_SHARED_SERVER_STALL_MS = 20_000
 
-type Lagging = { readonly backlogBytes: number; shed: () => void }
+type BacklogLease = {
+  /** Reading, and owed a reply or a running turn's frames: a paused reader would stall it. */
+  readonly waiting: boolean
+  /** Drops this chat's queue and ends it alone; it reconnects on its next send. */
+  shed: () => void
+}
 
-/** Bytes queued by the paused chats on one server. Past the budget the shared reader pauses, so
- *  Codex waits as it would on a dedicated chat's pipe and memory stays bounded however many chats
- *  stall. A chat still holding the server after the stall window is dropped (it reconnects). */
+/** Bytes queued by the paused chats on one server, bounded however many chats stall. Past the
+ *  budget, with every chat paused (a journal stall), the shared reader pauses and Codex waits as
+ *  it would on a dedicated chat's pipe; nothing is dropped. With a chat waiting on the server, the
+ *  chats holding the backlog are dropped instead, largest first, so one laggard never stalls the
+ *  rest. */
 export class CodexSharedServerBacklog {
+  private readonly bytes = new Map<BacklogLease, number>()
   private total = 0
   private paused = false
-  private stallTimer: ReturnType<typeof setTimeout> | undefined
+  private shedding = false
 
   constructor(
     private readonly reader: () => Pick<
       CodexAppServerConnection,
       'pauseReading' | 'resumeReading'
     > | null,
-    private readonly leases: Iterable<Lagging>
+    private readonly leases: Iterable<BacklogLease>
   ) {}
 
-  change(deltaBytes: number): void {
-    this.total += deltaBytes
+  /** A chat's queue grew or shrank, or it started or stopped waiting (delta 0). */
+  change(lease: BacklogLease, deltaBytes: number): void {
+    if (deltaBytes !== 0) {
+      const held = (this.bytes.get(lease) ?? 0) + deltaBytes
+      if (held > 0) {
+        this.bytes.set(lease, held)
+      } else {
+        this.bytes.delete(lease)
+      }
+      this.total += deltaBytes
+    }
+    if (this.shedding) {
+      return
+    }
+    const limit = this.paused
+      ? CODEX_SHARED_SERVER_BACKLOG_BYTES / 2
+      : CODEX_SHARED_SERVER_BACKLOG_BYTES
+    if (this.total > limit && [...this.leases].some((other) => other.waiting)) {
+      this.shedUntil(CODEX_SHARED_SERVER_BACKLOG_BYTES / 2)
+    }
     if (!this.paused && this.total > CODEX_SHARED_SERVER_BACKLOG_BYTES) {
       this.paused = true
       this.reader()?.pauseReading?.()
-      this.armStall()
     } else if (this.paused && this.total <= CODEX_SHARED_SERVER_BACKLOG_BYTES / 2) {
-      this.resume()
+      this.paused = false
+      this.reader()?.resumeReading?.()
     }
   }
 
   dispose(): void {
-    clearTimeout(this.stallTimer)
-    this.paused = false
+    this.bytes.clear()
     this.total = 0
+    this.paused = false
   }
 
-  private armStall(): void {
-    this.stallTimer = setTimeout(() => {
-      this.stallTimer = undefined
-      if (!this.paused) {
-        return
-      }
-      let largest: Lagging | undefined
-      for (const lease of this.leases) {
-        if (lease.backlogBytes > (largest?.backlogBytes ?? 0)) {
+  private shedUntil(target: number): void {
+    this.shedding = true
+    try {
+      this.shedLargestUntil(target)
+    } finally {
+      this.shedding = false
+    }
+  }
+
+  private shedLargestUntil(target: number): void {
+    while (this.total > target) {
+      let largest: BacklogLease | undefined
+      let largestBytes = 0
+      for (const [lease, held] of this.bytes) {
+        if (held > largestBytes) {
           largest = lease
+          largestBytes = held
         }
       }
-      largest?.shed()
-      if (this.paused) {
-        this.armStall()
+      if (!largest) {
+        return
       }
-    }, CODEX_SHARED_SERVER_STALL_MS)
-    this.stallTimer.unref?.()
-  }
-
-  private resume(): void {
-    this.paused = false
-    clearTimeout(this.stallTimer)
-    this.stallTimer = undefined
-    this.reader()?.resumeReading?.()
+      // shed() reports its dropped bytes through change(); a chat that already ended is dropped here.
+      largest.shed()
+      if (this.bytes.get(largest) === largestBytes) {
+        this.bytes.delete(largest)
+        this.total -= largestBytes
+      }
+    }
   }
 }
