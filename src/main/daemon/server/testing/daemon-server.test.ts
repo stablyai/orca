@@ -8,6 +8,8 @@ import { DaemonServer } from '../daemon-server'
 import { DaemonClient } from '../../transport/client/daemon-client'
 import { encodeNdjson } from '../../../../shared/json-stream/main-process-ndjson-framer'
 import { PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
+import type { GetSnapshotResult } from '../../protocol/daemon-rpc-contract'
+import type { TerminalVisibleProjectionSnapshot } from '../../protocol/terminal-snapshot'
 import type { SubprocessHandle } from '../../sessions/session-subprocess-handle'
 import {
   getDaemonPidPath,
@@ -80,6 +82,54 @@ describe('DaemonServer', () => {
   }
 
   describe('RPC routing', () => {
+    it('returns the active screen and stream position without ANSI when requested', async () => {
+      const output = Promise.withResolvers<(data: string) => void>()
+      server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        spawnSubprocess: () => ({ ...createMockSubprocess(), onData: output.resolve })
+      })
+      await server.start()
+      const c = await connectClient()
+      const sessionId = 'visible-snapshot'
+      const { incarnationId } = await c.request<{ incarnationId: string }>('createOrAttach', {
+        sessionId,
+        cols: 80,
+        rows: 24
+      })
+      const emit = await output.promise
+      emit('\x1b]2;Build\x07\x1b[?1049hBuild passed\r\nReady')
+
+      const { snapshot } = await c.request<GetSnapshotResult<TerminalVisibleProjectionSnapshot>>(
+        'getSnapshot',
+        { sessionId, scrollbackRows: 0, visibleProjection: true }
+      )
+      expect(snapshot).toMatchObject({
+        cols: 80,
+        rows: 24,
+        modes: { alternateScreen: true },
+        lastTitle: 'Build',
+        outputSequence: 37,
+        incarnationId,
+        visibleProjection: {
+          lines: ['Build passed', 'Ready'],
+          tailRows: [
+            { wrapped: false, trailingSpaces: 0 },
+            { wrapped: false, trailingSpaces: 0 }
+          ]
+        }
+      })
+      expect(snapshot).not.toHaveProperty('snapshotAnsi')
+      expect(snapshot).not.toHaveProperty('scrollbackAnsi')
+      expect(snapshot).not.toHaveProperty('frameRestoreAnsi')
+
+      const legacy = await c.request<GetSnapshotResult>('getSnapshot', {
+        sessionId,
+        scrollbackRows: 0
+      })
+      expect(legacy.snapshot?.snapshotAnsi).toContain('Build passed')
+    })
+
     it('keeps RPC responsive and creates one subprocess while spawn preparation is pending', async () => {
       let finishPreparation!: () => void
       const preparation = new Promise<void>((resolve) => {

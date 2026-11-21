@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import '../../construction/test-context/runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
+import type {
+  PtyProviderBufferSnapshot,
+  PtyProviderBufferSnapshotOptions
+} from '../../../providers/pty/provider-contract'
 import '../../orca-runtime-test-mocks/setup.spec'
 import '../../rpc/dispatcher'
 import '../../rpc/methods/terminal/terminal'
@@ -11,7 +14,10 @@ import {
 } from '../../construction/test-context/orca-runtime-test-fixtures.spec'
 
 async function createProviderSnapshotRuntime(
-  serializeProviderBuffer: () => Promise<PtyProviderBufferSnapshot>
+  serializeProviderBuffer: (
+    ptyId: string,
+    opts?: PtyProviderBufferSnapshotOptions
+  ) => Promise<PtyProviderBufferSnapshot>
 ): Promise<{ runtime: OrcaRuntimeService; handle: string }> {
   const runtime = new OrcaRuntimeService(store)
   runtime.setPtyController({
@@ -33,6 +39,49 @@ async function createProviderSnapshotRuntime(
 }
 
 describe('OrcaRuntimeService', () => {
+  it('uses provider screen rows while concurrent replay and older providers still use ANSI', async () => {
+    const projection = Promise.withResolvers<PtyProviderBufferSnapshot>()
+    const requested = Promise.withResolvers<void>()
+    const ansiSnapshot: PtyProviderBufferSnapshot = {
+      data: '\x1b[?1049hLegacy ANSI frame\r\n',
+      cols: 80,
+      rows: 24,
+      seq: 915,
+      source: 'headless',
+      alternateScreen: true
+    }
+    const { runtime, handle } = await createProviderSnapshotRuntime(async (_ptyId, opts) => {
+      requested.resolve()
+      return opts?.visibleProjection ? projection.promise : ansiSnapshot
+    })
+
+    const visible = runtime.readTerminal(handle, { screen: true })
+    await requested.promise
+    const replay = runtime.serializeAuthoritativeTerminalBuffer('pty-1', { scrollbackRows: 0 })
+    projection.resolve({
+      ...ansiSnapshot,
+      data: '',
+      visibleProjection: {
+        lines: ['Projected frame', '❯'],
+        draft: 'typed draft'
+      }
+    })
+    await expect(visible).resolves.toMatchObject({
+      source: 'screen',
+      tail: ['Projected frame', '❯'],
+      draft: 'typed draft'
+    })
+    await expect(replay).resolves.toMatchObject({ data: '\x1b[?1049hLegacy ANSI frame\r\n' })
+
+    const legacy = await createProviderSnapshotRuntime(async () => ansiSnapshot)
+    await expect(
+      legacy.runtime.readTerminal(legacy.handle, { screen: true })
+    ).resolves.toMatchObject({
+      source: 'screen',
+      tail: ['Legacy ANSI frame']
+    })
+  })
+
   it('rejects a provider visible frame after live non-mode-switch output advances', async () => {
     let resolveSnapshot!: (snapshot: PtyProviderBufferSnapshot) => void
     const serializeProviderBuffer = vi.fn(

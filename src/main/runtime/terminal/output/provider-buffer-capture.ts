@@ -3,22 +3,27 @@ import type {
   RuntimeVisibleTerminalState
 } from '../records/runtime-terminal-state-records'
 import { OrcaRuntimeWithSerializeTerminalBufferFromAvailableState } from './terminal-buffer-selection'
-import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
+import type {
+  PtyProviderBufferSnapshot,
+  PtyProviderBufferSnapshotOptions
+} from '../../../providers/pty/provider-contract'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
-import type { RuntimeTerminalRead } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type {
+  RuntimeTerminalProjection,
+  RuntimeTerminalRead
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeProviderSnapshotReadOptions } from './provider-snapshot-read-options'
 import {
   buildVisibleSnapshotReadFallback,
   shouldFallbackToVisibleTerminalSnapshot,
   terminalReadLimit
 } from './tail/terminal-tail-read'
-import type { RuntimeTerminalProjection } from './terminal-projection'
 import { DEFAULT_TERMINAL_READ_LIMIT } from './tail/terminal-tail-limits'
 import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import {
   projectTerminalTailLines,
   projectTerminalVisibleLines
-} from '../view/orca-runtime-terminal-projection'
+} from '../../../daemon/emulation/terminal-screen-projection'
 import { VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-budget'
 import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
 
@@ -40,7 +45,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
 
   protected async captureProviderTerminalBuffer(
     ptyId: string,
-    opts: { scrollbackRows?: number },
+    opts: PtyProviderBufferSnapshotOptions,
     generation: number
   ): Promise<PtyProviderBufferSnapshot | null> {
     const liveModeTracker = new TerminalKittyKeyboardModeTracker()

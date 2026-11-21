@@ -200,8 +200,10 @@ describe('TerminalHost completed spawn inputs', () => {
       await vi.waitFor(() => expect(confirmations).toBe(1))
       gate.resolve(true)
       const snapshot = await host.getSettledSnapshot('recovery')
-      expect(snapshot?.terminalOwner).toBe('shell')
-      expect(snapshot?.snapshotAnsi).toContain('SHELL-PROMPT')
+      expect(snapshot).toMatchObject({
+        terminalOwner: 'shell',
+        snapshotAnsi: expect.stringContaining('SHELL-PROMPT')
+      })
     } finally {
       gate.resolve(false)
       await host.dispose()

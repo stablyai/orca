@@ -24,7 +24,6 @@ import {
 } from './terminal-view-attribute-responder'
 import { installDeviceAttributesResponder } from './startup-device-attributes-responder'
 import type { TerminalSnapshot } from '../protocol/terminal-snapshot'
-import type { TerminalModes } from '../protocol/terminal-modes'
 import type { TerminalOscLinkRange } from '../../../shared/terminal/links/terminal-osc-link-ranges'
 import type { TerminalCursorContext } from '../../../shared/terminal/input/terminal-composer-draft'
 import { readTerminalCursorLineContext } from '../../../shared/terminal/input/terminal-cursor-line-context'
@@ -242,7 +241,8 @@ export class HeadlessEmulator {
   }
 
   getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot {
-    const modes = this.getModes()
+    const metadata = this.getSnapshotMetadata()
+    const { modes } = metadata
     // Absolute cursor restore avoids wrap-pending drift; carry the saved register for DECRC.
     const serializedAnsi = serializeWithAbsoluteCursor(
       this.serializer,
@@ -251,7 +251,7 @@ export class HeadlessEmulator {
       readSavedCursorRegister(this.terminal)
     )
     const { snapshotAnsi, scrollbackAnsi } = splitTerminalSnapshotAnsi(serializedAnsi, modes)
-    const snapshot: TerminalSnapshot = {
+    return {
       snapshotAnsi,
       scrollbackAnsi,
       oscLinks: collectHeadlessOscLinkRanges(
@@ -261,18 +261,22 @@ export class HeadlessEmulator {
       ),
       rehydrateSequences: buildRehydrateSequences(modes),
       ...buildFrameRestoreSnapshotFields(this.serializer, this.terminal, modes),
-      cwd: this.oscText.cwd,
-      modes,
-      cols: this.terminal.cols,
-      rows: this.terminal.rows,
+      ...metadata,
       scrollbackLines: this.terminal.buffer.normal.length - this.terminal.rows,
-      lastTitle: this.oscText.lastTitle ?? undefined,
       // Restore this last so the next live chunk completes the incomplete escape.
       ...(this.partialEscapeTail.length > 0
         ? { pendingEscapeTailAnsi: this.partialEscapeTail }
         : {})
     }
-    return snapshot
+  }
+
+  getSnapshotMetadata() {
+    return {
+      ...this.getAppliedSize(),
+      modes: readTerminalModes(this.terminal),
+      cwd: this.oscText.cwd,
+      lastTitle: this.oscText.lastTitle ?? undefined
+    }
   }
 
   get isAlternateScreen(): boolean {
@@ -354,9 +358,5 @@ export class HeadlessEmulator {
   dispose(): void {
     this.disposed = true
     this.terminal.dispose()
-  }
-
-  private getModes(): TerminalModes {
-    return readTerminalModes(this.terminal)
   }
 }

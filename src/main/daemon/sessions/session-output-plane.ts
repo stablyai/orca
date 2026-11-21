@@ -4,11 +4,15 @@ import {
 } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { XtermConptyOptions } from '../../../shared/terminal/pty/native-process/xterm-conpty-options'
 import { HeadlessEmulator } from '../emulation/headless-emulator'
+import { projectTerminalVisibleLines } from '../emulation/terminal-screen-projection'
 import { StartupDeviceAttributesQueryFilter } from '../emulation/startup-device-attributes-responder'
 import { normalizePtySize } from '../protocol/daemon-pty-size'
 import type { PtyIngressEmission } from '../../../shared/terminal/pty/ingress/pty-startup-ingress-contract'
 import type { PendingOutputRecord, TakePendingOutputResult } from '../protocol/daemon-rpc-contract'
-import type { TerminalSnapshot } from '../protocol/terminal-snapshot'
+import type {
+  TerminalSnapshot,
+  TerminalVisibleProjectionSnapshot
+} from '../protocol/terminal-snapshot'
 import type { TerminalOwner } from '../../../shared/terminal/pty/lifecycle/terminal-owner'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { nudgePowerShellPromptRepaint } from './session-powershell-prompt-repaint'
@@ -163,6 +167,20 @@ export class SessionOutputPlane {
       ...this.emulator.getSnapshot(opts),
       ...(terminalOwner ? { terminalOwner } : {}),
       outputSequence: this._outputSequence
+    }
+  }
+
+  getVisibleProjection(incarnationId: string): TerminalVisibleProjectionSnapshot | null {
+    if (this.disposed) {
+      return null
+    }
+    const terminalOwner = this.readTerminalOwner?.()
+    return {
+      ...this.emulator.getSnapshotMetadata(),
+      visibleProjection: projectTerminalVisibleLines(this.emulator),
+      ...(terminalOwner ? { terminalOwner } : {}),
+      outputSequence: this._outputSequence,
+      incarnationId
     }
   }
 

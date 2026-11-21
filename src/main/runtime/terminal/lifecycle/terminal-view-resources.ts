@@ -115,7 +115,10 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
     Set<TerminalKittyKeyboardModeTracker>
   >()
 
-  protected providerBufferAcquisitionsByPtyId = new Map<string, ProviderBufferAcquisition>()
+  protected providerBufferAcquisitionsByPtyId = new Map<
+    string,
+    { ansi?: ProviderBufferAcquisition; visible?: ProviderBufferAcquisition }
+  >()
 
   protected providerVisibleStateByPtyId = new Map<string, RuntimeVisibleTerminalState>()
 

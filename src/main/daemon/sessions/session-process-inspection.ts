@@ -2,6 +2,7 @@ import type { ChildProcessVerdictRead, SubprocessHandle } from './session-subpro
 import type { TerminalForegroundSample } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import { SessionLaunchNote } from './session-launch-note'
 import { SessionRepaintNudge } from './session-repaint-nudge'
+import type { JobTerminationOutcome } from '../../windows/windows-pty-job'
 
 export abstract class SessionProcessInspection {
   /** Main's launch note for this process; Session feeds it the output that can retire it. */
@@ -20,6 +21,11 @@ export abstract class SessionProcessInspection {
   constructor(protected readonly subprocess: SubprocessHandle) {
     this.processNameIsSpawnFile = subprocess.processNameIsSpawnFile === true
     this.shellIsRootChild = subprocess.shellIsRootChild === true
+  }
+
+  /** A PTY job result of unavailable does not prove child exit. */
+  terminateOwnedTree(): JobTerminationOutcome {
+    return this.subprocess.terminateOwnedTree()
   }
 
   /** Redraws the program without input by moving only the PTY, never the grid attaches read. */

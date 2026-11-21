@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
-import { projectTerminalVisibleLines } from '../view/orca-runtime-terminal-projection'
+import { projectTerminalVisibleLines } from '../../../daemon/emulation/terminal-screen-projection'
 import { normalizeTerminalChunk } from '../output/terminal-ansi-normalization'
 import { appendNormalizedToTailBuffer } from '../output/tail/terminal-tail-buffer'
 import { buildPreview } from '../output/tail/terminal-tail-state'

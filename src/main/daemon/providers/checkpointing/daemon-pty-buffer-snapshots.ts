@@ -9,28 +9,42 @@ import {
 } from '../../protocol/daemon-protocol-version'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../sessions/daemon-session-scrollback-window'
 import type { GetSnapshotResult } from '../../protocol/daemon-rpc-contract'
-import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
+import type {
+  TerminalSnapshot,
+  TerminalVisibleProjectionSnapshot
+} from '../../protocol/terminal-snapshot'
+import type {
+  PtyProviderBufferSnapshot,
+  PtyProviderBufferSnapshotOptions
+} from '../../../providers/pty/provider-contract'
 
 const DURABLE_HISTORY_OVERLAY_DEADLINE_MS = 5_000
 
 export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
   async getBufferSnapshot(
     id: string,
-    opts: { scrollbackRows?: number } = {}
+    opts: PtyProviderBufferSnapshotOptions = {}
   ): Promise<PtyProviderBufferSnapshot | null> {
     if (!this.supportsAuthoritativeBufferSnapshots) {
       return null
     }
     try {
-      const scrollbackRows = normalizeDesktopTerminalSnapshotRows(opts.scrollbackRows)
-      const result = await this.client.request<GetSnapshotResult>('getSnapshot', {
+      const scrollbackRows = opts.visibleProjection
+        ? 0
+        : normalizeDesktopTerminalSnapshotRows(opts.scrollbackRows)
+      const { snapshot } = await this.client.request<
+        GetSnapshotResult<TerminalSnapshot | TerminalVisibleProjectionSnapshot>
+      >('getSnapshot', {
         sessionId: id,
-        ...(scrollbackRows !== undefined ? { scrollbackRows } : {})
+        ...(scrollbackRows !== undefined ? { scrollbackRows } : {}),
+        ...(opts.visibleProjection ? { visibleProjection: true } : {})
       })
-      const snapshot = result.snapshot
       // Older v19 snapshots lack the absolute sequence needed to reconcile data queued on the other socket.
       if (!snapshot || typeof snapshot.outputSequence !== 'number') {
         return null
+      }
+      if ('visibleProjection' in snapshot) {
+        return opts.visibleProjection ? this.toProviderBufferSnapshot(snapshot) : null
       }
       const restored =
         this.historyManager &&
@@ -45,29 +59,33 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
   }
 
   protected toProviderBufferSnapshot(
-    snapshot: NonNullable<GetSnapshotResult['snapshot']>
+    snapshot: TerminalSnapshot | TerminalVisibleProjectionSnapshot
   ): PtyProviderBufferSnapshot | null {
     if (typeof snapshot.outputSequence !== 'number') {
       return null
     }
     const kittyKeyboardFlags = parseTerminalKittyKeyboardFlags(snapshot.modes.kittyKeyboardFlags)
     return {
-      data: snapshot.rehydrateSequences + snapshot.snapshotAnsi,
-      frameRestoreAnsi: snapshot.frameRestoreAnsi,
-      scrollbackAnsi: snapshot.scrollbackAnsi,
+      ...('visibleProjection' in snapshot
+        ? { data: '', visibleProjection: snapshot.visibleProjection }
+        : {
+            data: snapshot.rehydrateSequences + snapshot.snapshotAnsi,
+            frameRestoreAnsi: snapshot.frameRestoreAnsi,
+            scrollbackAnsi: snapshot.scrollbackAnsi,
+            oscLinks: snapshot.oscLinks,
+            ...(snapshot.pendingEscapeTailAnsi
+              ? { pendingEscapeTailAnsi: snapshot.pendingEscapeTailAnsi }
+              : {})
+          }),
       cols: snapshot.cols,
       rows: snapshot.rows,
       cwd: snapshot.cwd,
       lastTitle: snapshot.lastTitle,
       seq: snapshot.outputSequence,
       source: 'headless',
-      oscLinks: snapshot.oscLinks,
       alternateScreen: snapshot.modes.alternateScreen,
       // Preserve known zero keyboard flags; absence means the source cannot report them.
       ...(kittyKeyboardFlags !== undefined ? { kittyKeyboardFlags } : {}),
-      ...(snapshot.pendingEscapeTailAnsi
-        ? { pendingEscapeTailAnsi: snapshot.pendingEscapeTailAnsi }
-        : {}),
       ...(snapshot.terminalOwner ? { terminalOwner: snapshot.terminalOwner } : {})
     }
   }

@@ -6,7 +6,7 @@ import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
 import { DaemonPtyAdapterSubscriptionFanout } from './daemon-pty-adapter-subscription-fanout'
 import type {
   IPtyProvider,
-  PtyProviderBufferSnapshot,
+  PtyProviderBufferSnapshotOptions,
   PtySpawnOptions
 } from '../../../providers/pty/provider-contract'
 import type { PtyBackgroundStreamEvent } from '../../../providers/pty/events'
@@ -206,10 +206,7 @@ export class DaemonPtyRouter implements IPtyProvider {
     return (await this.adapterFor(id).getAppliedSize?.(id)) ?? null
   }
 
-  async getBufferSnapshot(
-    id: string,
-    opts?: { scrollbackRows?: number }
-  ): Promise<PtyProviderBufferSnapshot | null> {
+  async getBufferSnapshot(id: string, opts?: PtyProviderBufferSnapshotOptions) {
     return await this.adapterFor(id).getBufferSnapshot(id, opts)
   }
 
