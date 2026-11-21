@@ -45,6 +45,11 @@ import {
 import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { resolveWslInteropSpawnCwd } from '../../../wsl/execution/wsl-interop-spawn-directory'
+import { blockedWslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'
+import {
+  wslDistroStoppedMessage,
+  wslDistroUnverifiableMessage
+} from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-not-running-refusal'
 
 const RPC_TIMEOUT_MS = 10_000
 const WSL_RPC_TIMEOUT_MS = 25_000
@@ -96,9 +101,21 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
     return abortedCodexRateLimitResult()
   }
   const codexArgs = [...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS]
-  const wslCodex = options?.codexHomePath
-    ? buildWslCodexCommand(options.codexHomePath, codexArgs)
-    : null
+  const codexHomePath = options?.codexHomePath
+  const wslCodex = codexHomePath ? buildWslCodexCommand(codexHomePath, codexArgs) : null
+  // The home was gated before the process lock, which can wait tens of seconds; a stop since must hold.
+  const blocked = wslCodex && codexHomePath ? await blockedWslDistroForPath(codexHomePath) : null
+  if (blocked) {
+    return codexUnavailable(
+      blocked.state === 'stopped'
+        ? wslDistroStoppedMessage(blocked.distro, false)
+        : wslDistroUnverifiableMessage(blocked.distro),
+      'error'
+    )
+  }
+  if (options?.signal?.aborted) {
+    return abortedCodexRateLimitResult()
+  }
   const codexCommand = wslCodex ? 'codex' : resolveCodexCommand()
   // Worker spawn avoids cold Windows process-creation stalls (#27362); bare npm shims stay visible to spawnProcess.
   const child = spawnProcessOnWorkerThread({

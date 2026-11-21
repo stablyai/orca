@@ -16,6 +16,7 @@ import {
   stopCodexBackfillRecoveryProcess
 } from './codex-state-db-backfill-recovery-process'
 import { getOrcaUserDataPath } from '../../configuration/homes/codex-home-paths'
+import { isBackfillDistroBlocked, noteBackfillChildDied } from './codex-backfill-wsl-gate'
 import {
   BACKFILL_PENDING_MIN_SESSION_FILES,
   countCodexSessionFilesUpTo,
@@ -44,6 +45,7 @@ type RecoveryDependencies = {
   now: () => number
   sleep: (ms: number, signal: AbortSignal) => Promise<void>
   terminate: (child: CodexBackfillRecoveryChild, supervised: boolean) => Promise<void>
+  isDistroBlocked: (codexHomePath: string) => Promise<boolean>
 }
 
 const defaultDependencies: RecoveryDependencies = {
@@ -53,7 +55,8 @@ const defaultDependencies: RecoveryDependencies = {
   countSessions: countCodexSessionFilesUpTo,
   now: Date.now,
   sleep: async (ms, signal) => await delay(ms, undefined, { signal }),
-  terminate: stopCodexBackfillRecoveryProcess
+  terminate: stopCodexBackfillRecoveryProcess,
+  isDistroBlocked: isBackfillDistroBlocked
 }
 
 function finish(
@@ -93,6 +96,10 @@ export async function runCodexStateDbBackfillRecovery(
   dependenciesOverride: Partial<RecoveryDependencies> = {}
 ): Promise<CodexStateDbBackfillRecoverySummary> {
   const dependencies = { ...defaultDependencies, ...dependenciesOverride }
+  // A blocked distro ends as 'stopped'; a later poll restarts recovery once the distro runs.
+  if (await dependencies.isDistroBlocked(codexHomePath)) {
+    return finish('stopped', 0)
+  }
   const initialOutcome = initialRecoveryDecision(codexHomePath, dependencies)
   if (initialOutcome) {
     return finish(initialOutcome, 0)
@@ -101,24 +108,37 @@ export async function runCodexStateDbBackfillRecovery(
   const deadline = dependencies.now() + RECOVERY_MAX_TOTAL_MS
   let spawnCount = 0
   while (!signal.aborted && dependencies.now() < deadline && spawnCount < RECOVERY_MAX_SPAWNS) {
+    if ((await dependencies.isDistroBlocked(codexHomePath)) || signal.aborted) {
+      return finish('stopped', spawnCount)
+    }
     const { child, supervised } = spawnCodexBackfillRecoveryProcess(
       codexHomePath,
       dependencies.spawnProcess,
       dependencies.resolveCommand
     )
-    const terminate = (): Promise<void> => dependencies.terminate(child, supervised)
+    let terminating = false
+    const terminate = (): Promise<void> => {
+      terminating = true
+      return dependencies.terminate(child, supervised)
+    }
     spawnCount += 1
     let childDown = false
-    child.once('error', () => {
+    const onChildDown = (): void => {
+      if (!childDown && !terminating) {
+        noteBackfillChildDied(codexHomePath)
+      }
       childDown = true
-    })
-    child.once('exit', () => {
-      childDown = true
-    })
+    }
+    child.once('error', onChildDown)
+    child.once('exit', onChildDown)
 
     try {
       while (!childDown && !signal.aborted && dependencies.now() < deadline) {
         await dependencies.sleep(RECOVERY_POLL_INTERVAL_MS, signal)
+        if (await dependencies.isDistroBlocked(codexHomePath)) {
+          await terminate()
+          return finish('stopped', spawnCount)
+        }
         const status = dependencies.readStatus(codexHomePath)
         if (status.kind === 'complete') {
           await terminate()
