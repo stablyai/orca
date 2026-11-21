@@ -35,7 +35,7 @@ export function tidyUpFormat(input: {
   const migration = statusMigrationPlan(memory, today, input.exempt)
   const shown = migration ? applyBotMemoryChange(memory, migration.change) : memory
   return {
-    prompt: tidyUpOpsPrompt({ snapshot: memorySnapshot(shown), files, chats }),
+    prompt: tidyUpOpsPrompt({ snapshot: memorySnapshot(shown), files, chats, keep: input.exempt }),
     apply: (deps, run) =>
       applyTidyUpOps(deps, {
         ...run,

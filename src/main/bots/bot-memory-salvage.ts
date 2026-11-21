@@ -29,23 +29,23 @@ export function salvageLineHash(month: string, line: string): string {
 /** What the owner deciding sounds like. Wide on purpose: a line that matches stays in MEMORY.md,
  *  so a false match only costs its bytes, while a miss moves a decision out. */
 const VERBS = [
-  'picked',
-  'decided',
-  'prefers',
-  'preferred',
-  'chose',
-  'approved',
-  'okayed',
-  'rejected',
-  'declined',
-  'agreed',
-  'ruled',
-  'wants',
-  'wanted',
-  'said',
-  'told',
-  'asked',
-  'signed off'
+  'pick(?:s|ed)?',
+  'decid(?:e|es|ed)',
+  'chose|chos(?:e|en)|choos(?:e|es)',
+  'prefer(?:s|red)?',
+  'approv(?:e|es|ed)',
+  "okayed|ok'd",
+  'reject(?:s|ed)?',
+  'declin(?:e|es|ed)',
+  'agree(?:s|d)?',
+  'confirm(?:s|ed)?',
+  'rul(?:e|es|ed)',
+  'want(?:s|ed)?',
+  'said|says',
+  'told|tells?',
+  'ask(?:s|ed)?',
+  'sign(?:s|ed)? off',
+  'go(?:es)? with|went with'
 ]
 /** Not inside a word: a name or verb counts only as a whole word ("co-owner" is not "owner"). */
 const EDGE = '\\p{L}\\p{N}_-'
@@ -58,7 +58,8 @@ const word = (pattern: string): string => `(?<![${EDGE}])(?:${pattern})(?![${EDG
  *   within 20 characters ("Dana picked", "owner decided to");
  * - a decision verb, then "by" or "from" the owner ("approved by Dana", "go-ahead from owner"),
  *   or "per" the owner;
- * - the owner quoted ("Dana: '...'"), or an owner rule stated ("owner rule: ...").
+ * - the owner's words after a colon ("Dana: CSV first"), "Dana's call" or "owner's decision", or an
+ *   owner rule stated ("owner rule: ...").
  * "decided" with no owner named is anyone's, so never enough; "code owner" is a role.
  */
 export function salvageCandidateTest(ownerNames: readonly string[]): (text: string) => boolean {
@@ -75,7 +76,10 @@ export function salvageCandidateTest(ownerNames: readonly string[]): (text: stri
       'iu'
     ),
     new RegExp(`${word('per')}\\s+(?:the\\s+)?${who}`, 'iu'),
-    new RegExp(`${who}\\s*:\\s*["'\\u2018\\u201c]`, 'iu'),
+    // The owner's own words after a colon, quoted or not ("Dana: CSV first").
+    new RegExp(`${who}\\s*:\\s*\\S`, 'iu'),
+    // "Dana's call", "owner's decision".
+    new RegExp(`${who}['\\u2019]s\\s+(?:call|decision|pick|choice|rule|preference)`, 'iu'),
     // A rule stated, not one merely mentioned ("no owner rule yet").
     /\bowner rule\s*:/i
   ]

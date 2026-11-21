@@ -43,9 +43,17 @@ export function memorySnapshot(memory: string): MemorySnapshotLine[] {
   })
 }
 
-export function memorySnapshotText(snapshot: readonly MemorySnapshotLine[]): string {
-  return snapshot.map(({ ref, raw }) => `${ref} ${raw.trim()}`).join('\n')
+/** The snapshot as the prompt shows it; a line `keep` marks gets a note that it stays. */
+export function memorySnapshotText(
+  snapshot: readonly MemorySnapshotLine[],
+  keep: (line: MemorySnapshotLine) => boolean = () => false
+): string {
+  return snapshot
+    .map((line) => `${line.ref} ${line.raw.trim()}${keep(line) ? KEEP_MARK : ''}`)
+    .join('\n')
 }
+
+const KEEP_MARK = "  [keep: your owner's decision]"
 
 const OpSchema = z.discriminatedUnion('op', [
   z.object({
@@ -76,6 +84,9 @@ const keyOf = (line: string): string => botMemoryLineKey({ line, after: null }) 
  * edits those. A line with a negation or modal is never rewritten, only moved or left. No op adds
  * a line: new lines come from the owner and the bot's own turns. Lines leave with every copy.
  */
+/** Why an op on a line that reads as the owner deciding is skipped: a skip that isn't a failure. */
+export const TIDY_UP_KEEP_SKIP = "names a line that reads as your owner's decision, which stays"
+
 export function checkTidyUpOps(
   memory: string,
   ops: readonly unknown[],
@@ -138,6 +149,9 @@ export function checkTidyUpOps(
       const found = [...new Set(picked.flatMap(groupOf))]
       if (found.some((line) => used.has(line.ref))) {
         return 'names a line an earlier op took'
+      }
+      if (found.some((line) => groupOf(line).some(({ fact }) => exempt(fact.text)))) {
+        return TIDY_UP_KEEP_SKIP
       }
       if (found.some(fixed)) {
         return "names your owner's rule or an undated line, which only your owner changes"

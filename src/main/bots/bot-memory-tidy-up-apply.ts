@@ -4,7 +4,7 @@ import type { BotMemoryChange, BotMemoryLine } from '../../shared/bot-memory-lin
 import { redactSecretLike } from '../../shared/crash-reporting/crash-report-redaction'
 import type { BotHomeFilesystem } from './bot-home'
 import type { BotMemoryRecord } from './bot-memory-record'
-import { checkTidyUpOps } from './bot-memory-ops'
+import { checkTidyUpOps, TIDY_UP_KEEP_SKIP } from './bot-memory-ops'
 import type { BotSalvageStore } from './bot-memory-salvage-store'
 import { parseTidyUpOps } from './bot-memory-ops-reply'
 import { TIDY_UP_FAILURES, type TidyUpApplied } from './bot-memory-tidy-up'
@@ -61,10 +61,12 @@ export async function applyTidyUpOps(
   const asked = checked?.plan.change
   // No readable reply, or every op skipped: the ops failed, with their first reason, so the run
   // keeps its chats for the next time even when the status move still applies.
+  // A skip only because the line reads as the owner's decision is the guard working, not a failure.
+  const realSkips = checked?.skipped.filter((why) => !why.endsWith(TIDY_UP_KEEP_SKIP)) ?? []
   const failed = !checked
     ? TIDY_UP_FAILURES.noOps
-    : asked?.added.length === 0 && asked.removed.length === 0 && checked.skipped.length > 0
-      ? `${TIDY_UP_FAILURES.allSkipped} (${checked.skipped[0]})`
+    : asked?.added.length === 0 && asked.removed.length === 0 && realSkips.length > 0
+      ? `${TIDY_UP_FAILURES.allSkipped} (${realSkips[0]})`
       : null
   if (failed && !run.migration) {
     return { error: failed, alerted: false }

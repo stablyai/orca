@@ -5,6 +5,19 @@ import { runProcess } from '@orca/process-host'
 
 let names: Promise<string[]> | null = null
 
+/** Words a name source can hold that aren't the owner's name, or would match too much. */
+const NOT_NAMES = new Set([
+  'owner',
+  'user',
+  'admin',
+  'root',
+  'bot',
+  'claude',
+  'codex',
+  'orca',
+  'the'
+])
+
 async function output(program: string, args: string[]): Promise<string | null> {
   try {
     const { code, stdout } = await runProcess({ program, args, timeoutMs: 5_000 })
@@ -23,10 +36,13 @@ export function hostOwnerNames(): Promise<string[]> {
     }
     const words = Object.values(sources)
       .flatMap((full) => full?.split(/\s+/) ?? [])
-      .filter((word) => /^\p{L}[\p{L}'-]+$/u.test(word) && word.toLowerCase() !== 'owner')
+      .filter((word) => /^\p{L}[\p{L}'-]{2,}$/u.test(word) && !NOT_NAMES.has(word.toLowerCase()))
     const found = Object.entries(sources).flatMap(([source, full]) => (full ? [source] : []))
     console.info(`[bots] owner names for memory from: ${found.join(', ') || 'none'}`)
     return [...new Set(words)]
   })()
-  return names
+  const read = names
+  // An empty read (a slow or failed source) is tried again next time, never kept.
+  void read.then((found) => found.length === 0 && names === read && (names = null))
+  return read
 }
