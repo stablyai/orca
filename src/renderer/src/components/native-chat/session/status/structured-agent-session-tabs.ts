@@ -197,7 +197,14 @@ export function getStructuredAgentSessionTabsByPaneKey(
   if (cached) {
     return cached
   }
-  const result = new Map(structuredTabs.map((tab) => [chatPaneKey(tab.entityId), tab]))
+  // The first listed tab stands for a conversation, as the status member and projection do.
+  const result = new Map<string, StructuredTab>()
+  for (const tab of structuredTabs) {
+    const key = chatPaneKey(tab.entityId)
+    if (!result.has(key)) {
+      result.set(key, tab)
+    }
+  }
   paneTabs.set(structuredTabs, result)
   return result
 }
