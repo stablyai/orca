@@ -39,10 +39,10 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
   await setMainUiLanguage(store.getSettings().uiLanguage)
   logStartupMilestone('i18n-ready')
   installDesktopHoldQuit({
-    store,
+    settings: store,
     isActivityOwner: isTrustedUIRenderer,
     isLocalWorkActive: () => (state.agentAwakeService?.getWorkingAgentCount() ?? 0) > 0,
-    getKeybindings: () => state.keybindings?.getOverrides(),
+    getKeybindings: () => state.core.keybindings?.getOverrides(),
     isUIRenderer: (sender) =>
       isTrustedUIRenderer(sender) ||
       isDashboardPopoutRenderer(sender) ||

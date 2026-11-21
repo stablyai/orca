@@ -163,7 +163,7 @@ function fixture(platform = 'darwin') {
     quitItem = buildQuitItem()
   })
   const dispose = installDesktopHoldQuit({
-    store: {
+    settings: {
       getSettings: () => settings,
       onSettingsChanged: (listener) => {
         changed = listener

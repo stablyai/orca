@@ -1,5 +1,5 @@
 import { app, ipcMain, webContents, type BaseWindow, type WebContents } from 'electron'
-import type { Store } from '../persistence/loading-store/store'
+import type { NativeSettingsProjection } from '../core-desktop/native-settings-projection'
 import { isAgentInjectingInput } from '../browser/cdp/input/agent-input-injection'
 import { HoldQuitGesture } from './hold-quit-gesture'
 import { watchMacQuitChord } from './macos-quit-chord-watch'
@@ -17,7 +17,7 @@ import {
 } from './desktop-hold-quit-surface'
 
 export function installDesktopHoldQuit(options: {
-  store: Pick<Store, 'getSettings' | 'onSettingsChanged'>
+  settings: Pick<NativeSettingsProjection, 'getSettings' | 'onSettingsChanged'>
   isActivityOwner: (sender: WebContents) => boolean
   isUIRenderer: (sender: WebContents) => boolean
   isLocalWorkActive: () => boolean
@@ -36,7 +36,7 @@ export function installDesktopHoldQuit(options: {
   let disposed = false
   let hadSurface = hasFocusedDesktopHoldQuitSurface()
   const routingWindows = new Map<BaseWindow, () => void>()
-  const enabled = (): boolean => options.store.getSettings().holdQuitWhileAgentsWork === true
+  const enabled = (): boolean => options.settings.getSettings().holdQuitWhileAgentsWork === true
   const chordOwned = (): boolean =>
     Object.values(options.getKeybindings?.() ?? {}).some((bindings) =>
       bindings?.some((binding) =>
@@ -261,7 +261,7 @@ export function installDesktopHoldQuit(options: {
     attach(contents)
   }
   refreshRouting()
-  const unsubscribe = options.store.onSettingsChanged((updates) => {
+  const unsubscribe = options.settings.onSettingsChanged((updates) => {
     if ('holdQuitWhileAgentsWork' in updates) {
       refresh()
       options.rebuildMenu()
