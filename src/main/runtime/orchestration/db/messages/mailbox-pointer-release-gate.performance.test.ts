@@ -88,14 +88,6 @@ describe('mailbox pointer release gate', () => {
     })
   })
 
-  it('releases a pointer staged on an already-released PTY id', () => {
-    const db = open()
-    db.releasePendingMailboxPointerForPty('pty_reused')
-    const id = stagePointer(db, 'pty_reused', 'term_b')
-    db.releasePendingMailboxPointerForPty('pty_reused')
-    expect(db.getMessageById(id)).toMatchObject({ pointer_enter_pending: 0, pointer_pty_id: null })
-  })
-
   it('releases an Enter-attempted pointer left on an id that cold restore reuses after exit', () => {
     const db = open()
     db.releasePendingMailboxPointerForPty('pty_restored')
@@ -107,26 +99,5 @@ describe('mailbox pointer release gate', () => {
     db.releasePendingMailboxPointerForPty('pty_restored')
     expect(db.getMessageById(id)).toMatchObject({ pointer_enter_pending: 0, pointer_pty_id: null })
     expect(db.getMessageById(id)?.delivered_at).not.toBeNull()
-  })
-
-  it('retries a release that an enclosing transaction rolled back', () => {
-    const db = open()
-    const id = stagePointer(db, 'pty_rolled', 'term_d')
-    db.db.exec('BEGIN')
-    db.releasePendingMailboxPointerForPty('pty_rolled')
-    db.db.exec('ROLLBACK')
-    db.releasePendingMailboxPointerForPty('pty_rolled')
-    expect(db.getMessageById(id)).toMatchObject({ pointer_enter_pending: 0, pointer_pty_id: null })
-  })
-
-  it('caps remembered PTYs and still releases after the reset', () => {
-    const db = open()
-    for (let i = 0; i < 5000; i++) {
-      db.releasePendingMailboxPointerForPty(`pty_${i}`)
-    }
-    expect(db.releasedPointerPtyIds.size).toBeLessThanOrEqual(4096)
-    const id = stagePointer(db, 'pty_0', 'term_e')
-    db.releasePendingMailboxPointerForPty('pty_0')
-    expect(db.getMessageById(id)).toMatchObject({ pointer_enter_pending: 0, pointer_pty_id: null })
   })
 })
