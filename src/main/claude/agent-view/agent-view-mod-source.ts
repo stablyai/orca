@@ -82,9 +82,8 @@ let announcedAt = 0
           ...(observedView?.sessionId === sessionId ? { view: observedView.view } : {})
         }, session)
       } catch {}
-      if (result?.unbound) return result
-      // A relay that could not forward answers {} with no registered.
-      if (!result?.registered) {
+      // A relay that could not forward answers {} with neither flag.
+      if (!result?.registered && !result?.unbound) {
         await retry($)
         return {}
       }

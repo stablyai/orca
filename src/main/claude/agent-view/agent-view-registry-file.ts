@@ -102,6 +102,9 @@ export class ClaudeAgentViewRegistryFile {
     const timeout = new Promise<false>((resolve) => {
       timer = setTimeout(() => resolve(false), ms)
     })
+    if (this.failed && !this.writing) {
+      void this.save() // storage may be back; nothing else would write again
+    }
     const done = (async () => {
       await this.restored
       while (this.writing) {
