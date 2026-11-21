@@ -1,6 +1,7 @@
 import type { LegacySessionCopySwap } from './codex-legacy-session-copy'
 
-type CopyTurnKind = 'swap' | 'protect'
+/** `full`: a swap with no read limit, as a resume needs; `limited`: a pass's protect or swap. */
+type CopyTurnKind = 'full' | 'limited'
 const runningForCopy = new Map<
   string,
   { kind: CopyTurnKind; task: Promise<LegacySessionCopySwap> }
@@ -8,7 +9,7 @@ const runningForCopy = new Map<
 
 /**
  * Every write of a copy's marker or names runs one at a time per copy; a second caller shares it,
- * except a swap, which runs after a protect rather than taking its `none`.
+ * except a full swap, which runs after a limited one rather than taking its `none` or `deferred`.
  */
 export function runAloneForCopy(
   copyPath: string,
@@ -17,7 +18,7 @@ export function runAloneForCopy(
 ): Promise<LegacySessionCopySwap> {
   const running = runningForCopy.get(copyPath)
   if (running) {
-    return kind === 'swap' && running.kind === 'protect'
+    return kind === 'full' && running.kind === 'limited'
       ? running.task.then(() => runAloneForCopy(copyPath, kind, work))
       : running.task
   }
@@ -31,7 +32,10 @@ export function runAloneForCopy(
   return task
 }
 
-/** Settles once whatever is writing the copy's marker or names now is done. */
+/** Settles once nothing writes the copy's marker or names, including a swap queued behind one. */
 export async function waitForCopyTurn(copyPath: string): Promise<void> {
-  await runningForCopy.get(copyPath)?.task
+  for (let running = runningForCopy.get(copyPath); running;) {
+    await running.task
+    running = runningForCopy.get(copyPath)
+  }
 }

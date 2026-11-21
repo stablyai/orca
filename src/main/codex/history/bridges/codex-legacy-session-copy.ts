@@ -63,7 +63,7 @@ export function swapLegacySessionCopy(args: {
   readBudget?: LegacySessionCopyReadBudget
 }): Promise<LegacySessionCopySwap> {
   const copyPath = join(args.managedHome, 'sessions', args.relativePath)
-  return runAloneForCopy(copyPath, 'swap', () => swap(args, copyPath))
+  return runAloneForCopy(copyPath, args.readBudget ? 'limited' : 'full', () => swap(args, copyPath))
 }
 
 /**
@@ -75,7 +75,7 @@ export function protectLegacySessionCopy(args: {
   relativePath: string
 }): Promise<LegacySessionCopySwap> {
   const copyPath = join(args.managedHome, 'sessions', args.relativePath)
-  return runAloneForCopy(copyPath, 'protect', async (): Promise<LegacySessionCopySwap> => {
+  return runAloneForCopy(copyPath, 'limited', async (): Promise<LegacySessionCopySwap> => {
     await protectLegacySessionCopyMarker(args.managedHome, args.relativePath)
     return 'none'
   })

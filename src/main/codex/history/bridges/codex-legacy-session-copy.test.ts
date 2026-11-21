@@ -501,6 +501,24 @@ describe('legacy session copy swap', () => {
     expect(lstatSync(copyPath).ino).toBe(lstatSync(sourcePath).ino)
   })
 
+  it('swaps for a resume that arrives while a pass gives up on the same copy', async () => {
+    legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
+
+    const passing = swapLegacySessionCopy({
+      managedHome: runtimeHome(),
+      relativePath: RELATIVE_PATH,
+      readBudget: { bytes: 1, limit: 64 * 1024 * 1024 }
+    })
+    const resuming = swapLegacySessionCopy({
+      managedHome: runtimeHome(),
+      relativePath: RELATIVE_PATH
+    })
+
+    expect(await passing).toBe('deferred')
+    expect(await resuming).toBe('swapped')
+    expect(readFileSync(copyPath, 'utf-8')).toBe(OLD_TURNS + NEW_TURNS)
+  })
+
   it.skipIf(process.platform === 'win32')(
     'swaps when one home links its lock folder to the other home',
     async () => {
