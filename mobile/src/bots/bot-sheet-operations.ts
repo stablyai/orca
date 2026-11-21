@@ -44,6 +44,28 @@ export const botSessionStart = bindDeferredRpcOperation(
   })
 )
 
+/** Sends a new bot's setup again; the host answers a repeat of the same send with the first. */
+export const botKickoffRetry = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.kickoff-retry',
+    method: 'bots.kickoff.retry',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('bot-kickoff-retried', z.looseObject({}))
+  })
+)
+
+/** A fresh Home Chat for the bot; its old conversation stays in its chats. */
+export const botHomeChatReset = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.chat-reset',
+    method: 'bots.chat.reset',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('bot-chat-reset', z.looseObject({ sessionId: z.string().min(1) }))
+  })
+)
+
 export type SheetActivity = BotActivityView
 export type SheetActivityRow = BotActivityViewRow
 export type SheetActivityOrigin = BotActivityViewOrigin

@@ -5,10 +5,14 @@ export type BotGroupPeerLine =
   | { kind: 'asked' | 'told'; from: string; to: string }
   | { kind: 'read'; reader: string; peer: string }
   | { kind: 'followed'; bot: string }
+  | { kind: 'paused'; count: number }
 
 /** A row with no stored requester or replier (older ones too) is a plain follow-up: the room's
  *  loaded history cannot say which peer, if any, it answered. */
 export function botGroupPeerLine(message: BotGroupMessage): BotGroupPeerLine {
+  if (message.pausedAfter) {
+    return { kind: 'paused', count: message.pausedAfter }
+  }
   const name =
     (message.author.kind === 'bot' ? message.author.name : null) ?? message.turns[0]?.botName ?? ''
   if (message.requester) {

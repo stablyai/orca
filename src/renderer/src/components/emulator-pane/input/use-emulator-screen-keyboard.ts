@@ -124,6 +124,9 @@ export function useEmulatorScreenKeyboard({
     (active: boolean): void => {
       if (!active) {
         cancelActivePaste()
+        // Keys buffered for this capture must not be delivered into a later one.
+        layoutSyncIdRef.current += 1
+        pendingKeyPressesRef.current = null
       } else if (!captureActiveRef.current) {
         syncKeyboardLayout()
       }

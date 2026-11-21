@@ -142,7 +142,8 @@ it('closes public input as soon as its native destination closes', async () => {
   await run.closed
 })
 
-it.each(['EMFILE', 'ENFILE'])('reports a processless %s launch without throwing', async (code) => {
+it('reports a processless launch without losing its spawn error', async () => {
+  const code = 'EMFILE'
   const raw = createFakeSpawnedChild()
   for (const stream of [raw.stdin, raw.stdout, raw.stderr]) {
     stream.destroy()

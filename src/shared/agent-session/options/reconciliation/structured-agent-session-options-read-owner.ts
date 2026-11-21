@@ -198,6 +198,7 @@ export function createStructuredAgentSessionOptionsReadOwner(
           record: cloneStructuredAgentSessionOptionRecord(current.record),
           reportedPermissionMode: undefined,
           reportedEffort: undefined,
+          fallbackModel: undefined,
           sessionNeverStarted: undefined,
           catalogNamesConfiguredModel: undefined,
           ...(current.acceptedInputSources ? { acceptedInputSources: {} } : {})
@@ -217,6 +218,7 @@ export function createStructuredAgentSessionOptionsReadOwner(
                 record: cloneStructuredAgentSessionOptionRecord(current.record),
                 reportedPermissionMode: undefined,
                 reportedEffort: undefined,
+                fallbackModel: undefined,
                 sessionNeverStarted: undefined
               }
             : context.seed()

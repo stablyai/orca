@@ -1515,6 +1515,10 @@
       "confirmMaySkipApprovals": "May act without asking first",
       "confirmNoApprovals": "Acts without asking first",
       "confirmWarning": "They’ll act as you on {{computer}}.",
+      "controlBrief": "They can act as you here.",
+      "controlBriefIfAdded": "Anyone you add can act as you here.",
+      "controlBriefOnHost": "They can act as you on {{computer}}.",
+      "controlBriefIfAddedOnHost": "Anyone you add can act as you on {{computer}}.",
       "controlMany": "They can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
       "controlNone": "Anyone you add can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
       "controlOne": "{{person}} can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
@@ -1642,6 +1646,20 @@
       "stale": {
         "confirm_one": "Cancel {{count}} stale item?",
         "confirm_other": "Cancel {{count}} stale items?"
+      }
+    },
+    "new": {
+      "parts": {
+        "automations_one": "{{count}} automation",
+        "automations_other": "{{count}} automations",
+        "needsApps_one": "Needs {{count}} app",
+        "needsApps_other": "Needs {{count}} apps",
+        "schedules_one": "{{count}} schedule",
+        "schedules_other": "{{count}} schedules",
+        "skillsKept_one": "{{kept}}/{{count}} skill",
+        "skillsKept_other": "{{kept}}/{{count}} skills",
+        "skills_one": "{{count}} skill",
+        "skills_other": "{{count}} skills"
       }
     },
     "options": {
@@ -2597,6 +2615,10 @@
         "waitForStart": "Wait for the agent to finish starting.",
         "waitForTurn": "Wait for the agent to finish responding, or stop it.",
         "waitMoment": "Wait a moment."
+      },
+      "goal": {
+        "checks_one": "{{count}} check",
+        "checks_other": "{{count}} checks"
       }
     },
     "onboarding": {

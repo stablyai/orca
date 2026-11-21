@@ -3,7 +3,7 @@ import {
   LEGACY_SESSION_COPY_ASIDE_SUFFIX,
   LEGACY_SESSION_COPY_MAX_ASIDES
 } from '../bridges/codex-legacy-session-copy'
-import type { RolloutName } from './codex-rollout-permanent-delete'
+import type { RolloutName } from './codex-rollout-names'
 
 /**
  * An old session copy's own bytes, kept beside the name once its source was linked in. Only

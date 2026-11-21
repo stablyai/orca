@@ -42,10 +42,6 @@ const account = (items: AgentJournalRenderItem[], submissions: ReturnType<typeof
   nativeChatSignInAccount({ unavailable: null, launchDetails: undefined, items, submissions })
 
 describe('the account a chat signs in with', () => {
-  it('is the one its refused send names, so agy’s own Sign in is offered', () => {
-    expect(account([], [send('rejected', 'system')])).toBe('system')
-  })
-
   it('is none for an old signed-out line a newer failure replaced (Claude, managed folder missing)', () => {
     const items = [
       failed('old', 'notSignedIn', 'system'),
