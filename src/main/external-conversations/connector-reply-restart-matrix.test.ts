@@ -480,9 +480,28 @@ describe('a usage-limit pause', () => {
     await p.limited('item:t1', 'm1', [stampOf('d1')])
     await p.recovery.boot()
     expect(p.outcomes()).toEqual({ d1: { outcome: null } })
-    // The person cancelled the automatic continue: no journal change, the recheck closes it.
+    // The person cancelled the automatic continue: no journal change, only the chat's status.
     disposition = 'ended'
-    await vi.advanceTimersByTimeAsync(60_000)
+    p.recovery.statusChanged('chat-1')
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(p.outcomes()).toEqual({
+      d1: { outcome: 'failed', head: 'd1', category: 'usage_limit' }
+    })
+  })
+
+  it('fails the request when the continue’s send went unconfirmed and it never claimed (U4)', async () => {
+    const p = start({
+      continuationsSettled: Promise.resolve(),
+      usageLimitDisposition: async () => 'ambiguous'
+    })
+    admit(p.db, 'm1', asked('d1'))
+    p.show([p.message('m1'), ...p.turn('item:t1', 'm1', 'failed')])
+    await p.journal.cut({
+      keys: [{ account: 'account-a', deliveryId: 'd1' }],
+      cut: { turnId: 'item:t1', kind: 'usage_limit' },
+      failure: LIMIT
+    })
+    await p.recovery.boot()
     expect(p.outcomes()).toEqual({
       d1: { outcome: 'failed', head: 'd1', category: 'usage_limit' }
     })

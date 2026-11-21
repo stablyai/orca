@@ -34,7 +34,6 @@ import {
 const OPEN_AT_ONCE = 2
 // A watched chat's journal moves with every streamed token; it is settled once it pauses.
 const SETTLE_AFTER_MS = 2_000
-const PAUSE_RECHECK_MS = 60_000
 
 export type ReplyRecoveryChat = {
   conversation(sessionId: string): Promise<unknown>
@@ -50,6 +49,9 @@ export class ConnectorReplyRecovery {
   private readonly watches = new Map<string, () => void>()
   private readonly settling = new Map<string, Promise<void>>()
   private readonly again = new Set<string>()
+  // Chats owing a usage-limit pause: its end (a cancel, the setting, a closed chat) moves no journal,
+  // only the chat's status.
+  private readonly paused = new Set<string>()
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>()
   // Until this start's own continuations of restart cuts settled, a cut may still be claimed.
   private continuationsSettled: boolean
@@ -113,6 +115,7 @@ export class ConnectorReplyRecovery {
     this.watches.clear()
     this.timers.forEach((timer) => clearTimeout(timer))
     this.timers.clear()
+    this.paused.clear()
   }
 
   /** A request was admitted to this chat: its journal is watched from now on, subscribed before the
@@ -195,7 +198,9 @@ export class ConnectorReplyRecovery {
       row.cut?.kind === 'usage_limit' && row.claimMessageId === undefined ? [row.cut.turnId] : []
     )
     for (const turnItemId of new Set(paused)) {
-      if ((await this.deps.usageLimitDisposition?.(sessionId, turnItemId)) === 'ended') {
+      const disposition = await this.deps.usageLimitDisposition?.(sessionId, turnItemId)
+      // Ambiguous with the row unclaimed: the continue was never admitted (a claim commits with it).
+      if (disposition === 'ended' || disposition === 'ambiguous') {
         endedCuts.add(turnItemId)
       }
     }
@@ -227,11 +232,13 @@ export class ConnectorReplyRecovery {
     const owed = (await journal.read(sessionId)).filter((row) => !row.fill)
     if (owed.length > 0) {
       this.watch(chat, sessionId)
-      // A cancel, the setting or the chat's closing ends a pause without moving the journal.
-      if (owed.some((row) => row.cut?.kind === 'usage_limit')) {
-        this.later(sessionId, PAUSE_RECHECK_MS)
+      if (owed.some((row) => row.cut?.kind === 'usage_limit' && !row.claimMessageId)) {
+        this.paused.add(sessionId)
+      } else {
+        this.paused.delete(sessionId)
       }
     } else {
+      this.paused.delete(sessionId)
       this.unwatch(sessionId)
     }
     this.deps.filled()
@@ -286,12 +293,19 @@ export class ConnectorReplyRecovery {
     }
   }
 
-  private later(sessionId: string, after = SETTLE_AFTER_MS): void {
+  /** A chat's status was published: a pause it owes may have ended. */
+  statusChanged(sessionId: string): void {
+    if (this.paused.has(sessionId)) {
+      this.later(sessionId)
+    }
+  }
+
+  private later(sessionId: string): void {
     clearTimeout(this.timers.get(sessionId))
     const timer = setTimeout(() => {
       this.timers.delete(sessionId)
       void this.settle(sessionId)
-    }, after)
+    }, SETTLE_AFTER_MS)
     timer.unref?.()
     this.timers.set(sessionId, timer)
   }

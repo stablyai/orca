@@ -8,7 +8,7 @@ import type { ConversationEvent } from './external-conversation-events'
 import { connectorFailure } from './external-conversation-failure'
 import type { SlackMirrorTurn } from './slack-mirror'
 import type { EndedChatTurn } from './external-conversation-ended-turn'
-import type { ConversationReplyFill } from './external-conversation-reply-fill'
+import type { ConversationReplyFill, FilledTurn } from './external-conversation-reply-fill'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
 export type { SlackMirrorTurn } from './slack-mirror'
@@ -119,7 +119,7 @@ export async function endRepliedTurn(
   }
   const failure =
     end.news.outcome === 'failure' ? { failure: connectorFailure(turn.failure, end.agent) } : {}
-  const { covered, paused } = await fill({
+  const { covered, resumesAt } = await fill({
     sessionId: end.news.sessionId,
     turnItemId: turn.turnItemId,
     stamps: turn.stamps,
@@ -130,7 +130,7 @@ export async function endRepliedTurn(
     links: link.bot ? await links() : [],
     ...tookOf(end.ended),
     ...failure
-  }).catch((error: unknown) => {
+  }).catch((error: unknown): FilledTurn => {
     console.warn('[connector] could not fill reply outbox rows', error)
     return { covered: new Set<string>(), paused: false }
   })
@@ -151,14 +151,21 @@ export async function endRepliedTurn(
   await end.workersChecked()
   if (end.current()) {
     // The cloud keeps the thread's failure from whichever of this and the reply lands last.
-    // Paused with a known reset: the thread says when it picks the work up again (Phase 1 §4).
-    const resumes = paused && failure.failure?.usageLimit?.resetsAt !== undefined
+    // Paused with a time the app shows: the thread says when it picks the work up (Phase 1 §4).
     end.emit({
       ...end.ended,
       ...end.turnFor(turn),
       stateOnly: true,
       ...failure,
-      ...(resumes ? { resumes: true as const } : {})
+      ...(resumesAt !== undefined && failure.failure
+        ? {
+            resumes: true as const,
+            failure: {
+              ...failure.failure,
+              usageLimit: { ...failure.failure.usageLimit, resetsAt: resumesAt }
+            }
+          }
+        : {})
     })
   }
   return true

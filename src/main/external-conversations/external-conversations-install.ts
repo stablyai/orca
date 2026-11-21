@@ -188,7 +188,10 @@ function connectorReplyOutbox(
   const fill = conversationReplyFill(
     journal,
     filled,
-    usageLimitReplyPause(journal, usageLimitDisposition)
+    usageLimitReplyPause(journal, usageLimitDisposition, async (sessionId) => {
+      const shown = await getStructuredAgentSessionHost()?.readUsageLimitContinue(sessionId)
+      return shown?.state === 'scheduled' ? (shown.continueAt ?? shown.resetsAt) : undefined
+    })
   )
   const recovery = new ConnectorReplyRecovery({
     journal,
@@ -208,15 +211,30 @@ function connectorReplyOutbox(
       : {})
   })
   setConnectorClaimSource((sessionId, cut) => recovery.claimFor(sessionId, cut))
+  let unwatchStatus: (() => void) | undefined
   const boot = () => {
     recovery.dispose()
-    if (getStructuredAgentSessionHost()) {
+    unwatchStatus?.()
+    const host = getStructuredAgentSessionHost()
+    // Every end of a usage-limit pause publishes the chat's status (its continue's state).
+    unwatchStatus = host?.subscribeStatus({
+      id: 'connector-reply-pauses',
+      emit: (event) => {
+        if (event.type === 'status') {
+          recovery.statusChanged(event.session.sessionId)
+        } else if (event.type === 'snapshot') {
+          event.sessions.forEach((session) => recovery.statusChanged(session.sessionId))
+        }
+      }
+    })
+    if (host) {
       void recovery.boot()
     }
   }
   const stop = onStructuredAgentSessionHostChanged(boot)
   signal.addEventListener('abort', () => {
     stop()
+    unwatchStatus?.()
     setConnectorClaimSource(null)
     recovery.dispose()
   })
