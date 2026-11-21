@@ -7,7 +7,6 @@ import {
 import { nextAutomationOccurrenceAfter } from '../../shared/automations/scheduling/automation-schedule-occurrences'
 import { EVENT_SCENARIOS } from './bot-automation-eval-event-scenarios'
 import { TOOL_SCENARIOS } from './bot-automation-eval-tool-scenarios'
-import { DELIVERY_SCENARIOS } from './bot-automation-eval-delivery-scenarios'
 import {
   DEPLOY_PINGS,
   EVERY_DAY,
@@ -28,7 +27,6 @@ import {
 export const EVAL_SCENARIOS: EvalScenario[] = [
   ...EVENT_SCENARIOS,
   ...TOOL_SCENARIOS,
-  ...DELIVERY_SCENARIOS,
   {
     id: 'schedule-weekdays',
     category: 'schedule',

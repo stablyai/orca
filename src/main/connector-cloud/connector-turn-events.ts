@@ -21,7 +21,6 @@ import {
 } from './connector-snapshot-trace'
 import { ConnectorPromptPublications } from './connector-prompt-publications'
 import { answerFor, answerTextFor, toConnectorEvent } from './connector-event-wire'
-import { slackReplyBody } from './connector-slack-text'
 import type { ConnectorCallObserver } from './connector-transport'
 import {
   ConnectorReplyOutbox,
@@ -249,10 +248,7 @@ export class ConnectorTurnEvents {
     return {
       client: flush && {
         // As the events path sends it: within the older cap for a cloud without answers.long.
-        post: (reply) => {
-          const shown = slackReplyBody(reply)
-          return post({ ...shown, text: answerTextFor(shown.text, this.cloudFeatures) })
-        },
+        post: (reply) => post({ ...reply, text: answerTextFor(reply.text, this.cloudFeatures) }),
         hostName,
         push: (events) => {
           this.outbox.push(...events)

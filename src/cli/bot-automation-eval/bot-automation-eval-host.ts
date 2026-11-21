@@ -95,13 +95,6 @@ export type EvalHostState = {
   botRequests?: { toBotId: string; purpose: string; message: StandInMessage }[]
   /** Slack channels the bot's app is not in, so a post there is refused. */
   notInChannels?: string[]
-  /** Whether Orca publishing is on (`artifacts share` gives a link) or off (refused); absent, the
-   *  host answers neither. */
-  artifactSharing?: 'on' | 'off'
-  /** The answer surface refuses files, so no attachment posts. */
-  filesRefused?: true
-  /** The bot's open items, by number, that `bot item comment` reaches. */
-  items?: { number: number; title: string }[]
   /** The GitHub repository each project tracks, by project id. */
   githubRepos?: Record<string, { id: number; fullName: string }>
   /** The owner's `gh` (signed in unless `signedOut`), and whether `orca linear` has no login or key. */
@@ -216,8 +209,6 @@ export function childEnv(standIn: string, home: string): Record<string, string> 
     // A bot is a native chat; without these, chat-only commands refuse before the stand-in.
     ORCA_AGENT_SESSION_ID: randomUUID(),
     ORCA_STRUCTURED_SESSION: '1',
-    // No real publication: Claude's Artifact tool would post to the owner's account.
-    CLAUDE_CODE_DISABLE_ARTIFACT: '1',
     // Blocks accidental and casual network use by git, however git is invoked (an absolute path, an
     // alias, `-c` or repo-local config): only local-file transports, and no system or global config,
     // so no credential helper. Deliberate evasion (curl with a token from the keychain or gh's hosts

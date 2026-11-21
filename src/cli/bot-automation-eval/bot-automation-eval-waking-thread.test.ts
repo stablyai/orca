@@ -12,7 +12,7 @@ const state = (over: Partial<EvalHostState> = {}): EvalHostState => ({
 })
 
 describe('the waking Slack thread', () => {
-  it('posts an explicit reply to the waking thread', () => {
+  it('takes a bot reply file as an attachment there', () => {
     const recorded: Record<string, unknown>[] = []
     const io = { record: (entry: Record<string, unknown>) => recorded.push(entry), save: () => {} }
     expect(serveWakingThread(state(), 'reply', undefined, { args: {} }, io)).toMatchObject({
@@ -20,7 +20,7 @@ describe('the waking Slack thread', () => {
     })
     expect(recorded).toEqual([
       expect.objectContaining({
-        method: 'connector.reply',
+        method: 'connector.attach',
         result: { target: 'slack:T0EVAL:C1:1.0' }
       })
     ])

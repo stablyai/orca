@@ -2,7 +2,7 @@
 // recorded stand-in host, so nothing reaches a real Orca.
 import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
 import type { Automation } from '../../shared/automations/automation-definition'
-import { randomBytes, randomUUID } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import {
   EVENT_ONLY_SCHEDULE,
   isWebhookTrigger,
@@ -20,8 +20,6 @@ import {
 } from '../../main/bots/bot-look-around-policy'
 import { serveOrchestration } from '../bot-orchestration-eval/bot-orchestration-eval-orca'
 import { serveConnector } from './bot-automation-eval-connector'
-import { installDeliveryUploads, serveDeliveries } from './bot-automation-eval-artifacts'
-import { wakingThreadRef } from './bot-automation-eval-waking-thread'
 import { serveOwnerLinear } from './bot-automation-eval-owner-linear'
 import { serveBotConnectors } from './bot-automation-eval-bot-connectors'
 import { serveBots } from '../bot-orchestration-eval/bot-orchestration-eval-bots'
@@ -41,7 +39,6 @@ import { googleBotConnectState } from '../../shared/google/google-bot-connect-st
 
 const statePath = process.env.ORCA_EVAL_STATE ?? ''
 const logPath = process.env.ORCA_EVAL_LOG ?? ''
-const invocation = { id: randomUUID(), argv: process.argv.slice(2) }
 
 function readState(): EvalHostState {
   return JSON.parse(readFileSync(statePath, 'utf8'))
@@ -50,8 +47,6 @@ function readState(): EvalHostState {
 function record(entry: Record<string, unknown>): void {
   appendFileSync(logPath, `${JSON.stringify(entry)}\n`)
 }
-
-installDeliveryUploads({ record })
 
 function saved(state: EvalHostState, params: Record<string, unknown>, id: string): Automation {
   const now = Date.now()
@@ -148,10 +143,6 @@ function serve(method: string, params: Record<string, unknown>): unknown {
   if (linear !== undefined) {
     return linear
   }
-  const delivered = serveDeliveries(state, method, params, io, invocation)
-  if (delivered !== undefined) {
-    return delivered
-  }
   const connector = serveConnector(state, method, params, io)
   if (connector !== undefined) {
     return connector
@@ -199,7 +190,7 @@ function serve(method: string, params: Record<string, unknown>): unknown {
       writeFileSync(statePath, JSON.stringify(state))
       return { removed: true, id: params.id }
     case 'connector.reply':
-      record({ kind: 'write', method, params, result: { target: wakingThreadRef(state) } })
+      record({ kind: 'write', method, params })
       return { status: 'posted' }
     case 'bots.connector.offer': {
       const bot = state.bots[0]!
@@ -267,8 +258,8 @@ async function readyStatus(): ReturnType<RuntimeClient['getCliStatus']> {
 }
 RuntimeClient.prototype.getCliStatus = readyStatus
 
-const argv = invocation.argv
-record({ kind: 'argv', argv, invocationId: invocation.id })
+const argv = process.argv.slice(2)
+record({ kind: 'argv', argv })
 if (
   readState().lookAround &&
   !lookAroundCommandAllowed(['orca', ...argv].map((word) => `'${word}'`).join(' '))
