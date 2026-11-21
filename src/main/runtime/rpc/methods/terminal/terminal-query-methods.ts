@@ -103,9 +103,14 @@ export const TERMINAL_QUERY_METHODS = [
     name: 'terminal.show',
     permission: 'workspace',
     params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      terminal: await runtime.showTerminal(params.terminal)
-    })
+    handler: async (params, { runtime }) => {
+      const terminal = await runtime.showTerminal(params.terminal)
+      const session =
+        terminal.ptyId !== null && terminal.connected && terminal.verdict !== 'exited'
+          ? runtime.getExactWorkerProviderSession(terminal.handle, terminal)
+          : null
+      return { terminal: { ...terminal, providerSessionId: session?.providerSession.id ?? null } }
+    }
   }),
   defineMethod({
     // Read identity only: structured workers have no writable terminal, so never return terminal.show's shape.

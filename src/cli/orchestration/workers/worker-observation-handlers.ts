@@ -90,6 +90,14 @@ export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHa
         source: source as OrchestrationWorkerReadSource | undefined
       }
     )
-    printOrchestrationReceipt(result, { flags, json }, formatWorkerRead)
+    const output = result.result
+    const providerSessionId =
+      'source' in output && output.source === 'transcript'
+        ? (output.providerSessionId ?? null)
+        : null
+    const receipt = flags.has('full')
+      ? { ...result, result: { ...output, providerSessionId } }
+      : result
+    printOrchestrationReceipt(receipt, { flags, json }, formatWorkerRead)
   }
 }

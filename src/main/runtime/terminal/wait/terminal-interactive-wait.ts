@@ -25,7 +25,11 @@ import {
   type PairedWorkspaceContextSource
 } from './active-worktree-context-fallback'
 import type { ExactWorkerProviderSession } from '../../../../shared/orchestration/workers/orchestration-worker-output'
-import { selectExactWorkerProviderSession } from '../../orchestration/workers/transcripts/worker-provider-session'
+import {
+  matchesWorkerSessionObservation,
+  selectExactWorkerProviderSession,
+  type WorkerSessionObservation
+} from '../../orchestration/workers/transcripts/worker-provider-session'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
@@ -182,7 +186,7 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
 
   getExactWorkerProviderSession(
     handle: string,
-    observedAfter: number
+    observation?: WorkerSessionObservation
   ): ExactWorkerProviderSession | null {
     const paneKey = this.getTerminalPaneKey(handle)
     const processIncarnation = this.getTerminalProcessIncarnation(handle)
@@ -190,14 +194,12 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
       return null
     }
     let connectionId: string | null | undefined
-    let launchToken: string | null | undefined
     let wslDistro: string | undefined
     let pty: RuntimePtyWorktreeRecord | undefined
     try {
       const ptyId = this.getTerminalAgentStatusPtyId(handle)
       pty = this.ptysById.get(ptyId)
       connectionId = pty?.connectionId ?? null
-      launchToken = pty?.launchToken ?? null
       // A WSL pane's PTY is local, so its hook events only match once the distro is supplied.
       wslDistro = pty?.connectionId
         ? undefined
@@ -205,13 +207,16 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     } catch {
       // Exact worker validation rejects this in production; test/legacy providers may not expose PTY metadata.
     }
+    if (!matchesWorkerSessionObservation(observation, pty)) {
+      return null
+    }
     const session = selectExactWorkerProviderSession({
       paneKey,
       processIncarnation,
       connectionId,
-      launchToken,
+      launchToken: pty?.launchToken,
       wslDistro,
-      observedAfter,
+      observedAfter: typeof observation === 'number' ? observation : 0,
       statuses: this.publicPaneStatusFn?.(paneKey) ?? []
     })
     const launchConfig = session ? heldLaunchConfig(pty, session.agent) : undefined

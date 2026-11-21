@@ -52,6 +52,8 @@ export type OrchestrationWorkerReadTranscriptResult = {
   source: 'transcript'
   sourceIdentity: string
   provider: AgentType
+  /** Hook-reported identity for an exact provider transcript, absent on older hosts. */
+  providerSessionId?: string | null
   transcript: OrchestrationWorkerTranscriptPage
   cursor: string
   status: {

@@ -105,6 +105,7 @@ async function readReleasedTranscript(
       dispatchId: args.dispatchId,
       sourceIdentity,
       agent,
+      providerSessionId: sessionId,
       transcript,
       status: releasedStatus(args)
     }),

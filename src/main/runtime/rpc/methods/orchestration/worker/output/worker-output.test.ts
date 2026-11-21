@@ -65,6 +65,16 @@ describe('exact orchestration worker output', () => {
       ...overrides
     })
 
+  it('identifies the provider session whose transcript supplied the messages', async () => {
+    await expect(read({ source: 'transcript' })).resolves.toMatchObject({
+      provider: 'codex',
+      providerSessionId: 'session-a',
+      transcript: {
+        messages: [{ role: 'assistant', blocks: [{ type: 'text', text: 'worker A only' }] }]
+      }
+    })
+  })
+
   it('rejects an old cursor after a same-inode truncate/regrow', async () => {
     const initial = await read()
     if (initial.source !== 'transcript') {

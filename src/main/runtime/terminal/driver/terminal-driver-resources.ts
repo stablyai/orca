@@ -1,3 +1,4 @@
+import type { WorkerSessionObservation } from '../../orchestration/workers/transcripts/worker-provider-session'
 import type { RuntimeServiceCommandSurface } from '../../construction/runtime-service-command-surface'
 import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/chat/structured-session-tab-close'
 import {
@@ -110,7 +111,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
   abstract closeTerminal(handle: string): Promise<RuntimeTerminalClose>
   abstract getExactWorkerProviderSession(
     handle: string,
-    observedAfter: number
+    observation?: WorkerSessionObservation
   ): ExactWorkerProviderSession | null
   abstract readTerminal(
     handle: string,

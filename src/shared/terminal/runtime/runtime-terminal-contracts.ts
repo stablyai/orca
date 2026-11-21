@@ -190,6 +190,8 @@ export type RuntimeTerminalInteractiveWait = {
 }
 
 export type RuntimeTerminalShow = RuntimeTerminalSummary & {
+  /** Hook identity of the current launch, when the serving host can prove it. */
+  providerSessionId?: string | null
   paneRuntimeId: number
   ptyId: string | null
   rendererGraphEpoch: number

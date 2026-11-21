@@ -110,6 +110,7 @@ export async function readExactWorkerOutput(args: {
     dispatchId: args.dispatchId,
     sourceIdentity,
     agent: session.agent,
+    providerSessionId: session.providerSession.id,
     transcript,
     status: {
       worker: args.workerState,
@@ -124,6 +125,7 @@ export function workerTranscriptReadResult(args: {
   dispatchId: string
   sourceIdentity: string
   agent: AgentType
+  providerSessionId: string
   transcript: WorkerTranscriptReadSuccess
   status: OrchestrationWorkerReadResult['status']
 }): OrchestrationWorkerReadResult {
@@ -140,6 +142,7 @@ export function workerTranscriptReadResult(args: {
     source: 'transcript',
     sourceIdentity: args.sourceIdentity,
     provider: args.agent,
+    providerSessionId: args.providerSessionId,
     transcript: {
       messages: transcript.messages,
       nextCursor,
