@@ -38,6 +38,7 @@ export type WorkerThreadChildEvent =
       spawnRecordDir?: string
       launcherCmdline?: string
       launcherStartTicks?: number
+      launcherSid?: number
     }
   // Posted in the same turn the process is created, so a worker lost after that still reported the pid.
   // 'recorded': the launcher holds a record of this child until it ends (see endLostSpawns).

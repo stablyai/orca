@@ -19,7 +19,7 @@ const FIRST_CHECK_MS = 50
 const MAX_CHECK_MS = 30_000
 
 /** The lost launcher process, from its 'ready'. */
-export type LostLauncher = { pid: number; cmdline: string; startTicks: number }
+export type LostLauncher = { pid: number; cmdline: string; startTicks: number; sid: number }
 
 export type LostSpawn = {
   key: string

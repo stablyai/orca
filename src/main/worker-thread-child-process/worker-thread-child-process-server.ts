@@ -290,7 +290,8 @@ export function serveWorkerThreadChildProcesses(
       ? {
           spawnRecordDir: records.dir,
           launcherCmdline: records.launcherCmdline,
-          launcherStartTicks: records.launcherStartTicks
+          launcherStartTicks: records.launcherStartTicks,
+          launcherSid: records.launcherSid
         }
       : {})
   })

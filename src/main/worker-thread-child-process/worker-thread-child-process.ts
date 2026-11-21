@@ -164,11 +164,13 @@ export class WorkerThreadChildProcessHost {
       this.launcher =
         event.launcherCmdline &&
         event.launcherStartTicks !== undefined &&
+        event.launcherSid !== undefined &&
         Number.isInteger(launcherPid)
           ? {
               pid: launcherPid,
               cmdline: event.launcherCmdline,
-              startTicks: event.launcherStartTicks
+              startTicks: event.launcherStartTicks,
+              sid: event.launcherSid
             }
           : null
       this.ready?.settle(true)

@@ -205,7 +205,9 @@ function gitSpawnFromIsolatedSpawner(
     program: resolved.binary,
     args: resolved.args,
     cwd: resolved.cwd,
-    env: untranslatedGitOutputEnv(options.env ?? process.env)
+    env: untranslatedGitOutputEnv(options.env ?? process.env),
+    // Its own group: if the launcher is lost, main ends the whole group, hooks included, before close.
+    terminationBarrier: true
   })
   recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - startedAt)
   child.stdin.end()

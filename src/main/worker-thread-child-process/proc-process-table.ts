@@ -33,7 +33,9 @@ export async function readProcStat(pid: number): Promise<ProcStat | 'gone' | nul
   try {
     return parseProcStat(await readFile(`/proc/${pid}/stat`, 'latin1'))
   } catch (error) {
-    return readFailureProvesNothing(error) ? null : 'gone'
+    // Denied is not gone: a hidden process may still be one of ours.
+    const code = errorCode(error)
+    return code === 'ENOENT' || code === 'ESRCH' ? 'gone' : null
   }
 }
 
@@ -164,7 +166,7 @@ export function createKeyScan(
   keyEnv: string,
   keys: ReadonlySet<string>,
   sinceTicks: number,
-  launcher: { pid: number; cmdline: string } | null
+  launcher: { pid: number; cmdline: string; sid: number } | null
 ) {
   const uid = process.getuid?.()
   return async (): Promise<{
@@ -194,6 +196,16 @@ export function createKeyScan(
         return
       }
       if (procStat === 'gone' || procStat.state === 'Z' || procStat.startTicks < sinceTicks) {
+        return
+      }
+      // The launcher's children are in its session, lead their own (a barrier child), or are in one
+      // whose leader (that child) is gone; a process in any other live session is not one of them.
+      if (
+        launcher &&
+        procStat.sid !== launcher.sid &&
+        pid !== procStat.sid &&
+        (await readProcStat(procStat.sid)) !== 'gone'
+      ) {
         return
       }
       const environ = await readGuarded(pid, 'environ')

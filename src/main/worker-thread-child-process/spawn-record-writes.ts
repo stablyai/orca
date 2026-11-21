@@ -19,6 +19,8 @@ export type SpawnRecords = {
   launcherCmdline: string
   /** This process's start time: every child it spawns started after it. */
   launcherStartTicks: number
+  /** This process's session, which its children share unless they start their own. */
+  launcherSid: number
   /** False when no record could be written; main then falls back to the child's key. */
   write(key: string, pid: number): boolean
   remove(key: string): void
@@ -33,20 +35,21 @@ export function openSpawnRecords(): SpawnRecords | null {
     return null
   }
   let launcherCmdline: string
-  let launcherStartTicks: number | undefined
+  let own: ReturnType<typeof parseProcStat>
   try {
     launcherCmdline = readFileSync('/proc/self/cmdline', 'latin1')
-    launcherStartTicks = parseProcStat(readFileSync('/proc/self/stat', 'latin1'))?.startTicks
+    own = parseProcStat(readFileSync('/proc/self/stat', 'latin1'))
   } catch {
     return null
   }
-  if (launcherStartTicks === undefined) {
+  if (!own) {
     return null
   }
   return {
     dir,
     launcherCmdline,
-    launcherStartTicks,
+    launcherStartTicks: own.startTicks,
+    launcherSid: own.sid,
     write(key, pid) {
       try {
         const stat = parseProcStat(readFileSync(`/proc/${pid}/stat`, 'latin1'))
