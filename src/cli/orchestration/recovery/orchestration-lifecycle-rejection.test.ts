@@ -29,6 +29,7 @@ it('fails closed when an older runtime leaves worker_done dispatched without a v
         ['from', 'term_foreign'],
         ['subject', 'done'],
         ['type', 'worker_done'],
+        ['body', 'Completed the requested work.'],
         ['task-id', 'task_1'],
         ['dispatch-id', 'ctx_1'],
         ['outcome', 'succeeded']
@@ -65,6 +66,7 @@ it('preserves the worker_done mutation identity when post-verification fails', a
         ['from', 'term_worker'],
         ['subject', 'done'],
         ['type', 'worker_done'],
+        ['body', 'Completed the requested work.'],
         ['task-id', 'task_1'],
         ['dispatch-id', 'ctx_1'],
         ['outcome', 'succeeded']
@@ -112,6 +114,7 @@ it('rejects a terminal Dispatch with the wrong identity', async () => {
         ['from', 'term_worker'],
         ['subject', 'done'],
         ['type', 'worker_done'],
+        ['body', 'Completed the requested work.'],
         ['task-id', 'task_1'],
         ['dispatch-id', 'ctx_1'],
         ['outcome', 'succeeded']
