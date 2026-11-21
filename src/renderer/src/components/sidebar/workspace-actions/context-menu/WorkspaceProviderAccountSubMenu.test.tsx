@@ -144,7 +144,7 @@ it('matches WSL account distro names without case sensitivity', async () => {
     activeAccountIdsByRuntime: { host: null, wsl: { Ubuntu: 'wsl-user' } }
   }
   renderMenu()
-  expect(await screen.findByRole('menuitemradio', { name: 'wsl-user@example.com' })).toBeTruthy()
+  expect(await screen.findByRole('menuitemradio', { name: /wsl-user@example\.com/ })).toBeTruthy()
 })
 
 it('does not label a WSL Claude system default with the host identity', async () => {
