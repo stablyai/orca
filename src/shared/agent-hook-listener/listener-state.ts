@@ -101,8 +101,8 @@ export type HookListenerState = {
   lastLaunchTokenByPaneKey: Map<string, string>
   /** Hermes turn per pane, so tool hooks from its post-turn background review can be ignored. */
   hermesTurnByPaneKey: Map<string, HermesPaneTurn>
-  /** DSH child sessions named by SubagentStart; the bridge stamps their hooks with their own session_id. */
-  dshChildSessionIdsByPaneKey: Map<string, Set<string>>
+  /** DSH child sessions named by SubagentStart (their hooks carry their own session_id), with the last hook time until SubagentStop. */
+  dshChildSessionsByPaneKey: Map<string, Map<string, number | null>>
 }
 
 export type GrokActiveTurn = {
@@ -160,7 +160,7 @@ export function createHookListenerState(
     opencodeSessionPaneBySessionId: new Map(),
     lastLaunchTokenByPaneKey: new Map(),
     hermesTurnByPaneKey: new Map(),
-    dshChildSessionIdsByPaneKey: new Map()
+    dshChildSessionsByPaneKey: new Map()
   }
   legacyStatusAdapterByState.set(state, adapter)
   return state
@@ -239,7 +239,7 @@ export function clearPaneProcessCacheState(state: HookListenerState, paneKey: st
   unbindOpenCodeSessionsOfPane(state, paneKey)
   deletePaneScopedCacheEntry(state.lastLaunchTokenByPaneKey, paneKey)
   state.hermesTurnByPaneKey.delete(paneKey)
-  state.dshChildSessionIdsByPaneKey.delete(paneKey)
+  state.dshChildSessionsByPaneKey.delete(paneKey)
   // Unfinished evidence and exit intent belong to the ended process.
   deletePaneScopedCacheEntry(state.hookRootAttempts, paneKey)
 }
@@ -297,7 +297,7 @@ export function movePaneCacheState(
   moveOpenCodeSessionBindings(state, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.lastLaunchTokenByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.hermesTurnByPaneKey, fromPaneKey, toPaneKey)
-  movePaneScopedMapEntries(state.dshChildSessionIdsByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.dshChildSessionsByPaneKey, fromPaneKey, toPaneKey)
 }
 
 export function clearPaneTurnCacheState(state: HookListenerState, paneKey: string): void {
@@ -346,6 +346,6 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.opencodeSessionPaneBySessionId.clear()
   state.lastLaunchTokenByPaneKey.clear()
   state.hermesTurnByPaneKey.clear()
-  state.dshChildSessionIdsByPaneKey.clear()
+  state.dshChildSessionsByPaneKey.clear()
   state.hookRootAttempts.clear()
 }

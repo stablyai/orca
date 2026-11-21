@@ -12,14 +12,15 @@ import { readManagedHookEventsFromJson } from '../agent-hooks/installation/confi
 
 const DSH_SCRIPT_BASE = 'dsh-hook'
 
-/** Register only bridge-supported events; unsupported Claude events never fire in DSH. */
+/** Register only bridge-supported events; unsupported Claude events never fire in DSH. SubagentStop ends a background child that holds the lead's finished turn. */
 export const DSH_HOOK_EVENTS = [
   'SessionStart',
   'UserPromptSubmit',
   'PreToolUse',
   'PostToolUse',
   'Stop',
-  'SubagentStart'
+  'SubagentStart',
+  'SubagentStop'
 ] as const
 
 export const DSH_MANAGED_HOOKS_FILE_NAME = 'dsh-hooks.json'
