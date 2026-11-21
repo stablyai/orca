@@ -1303,7 +1303,7 @@
 4 src/main/runtime/workspaces/creation/runtime-local-worktree-setup.ts
 2 src/main/runtime/workspaces/creation/workspace-creation.ts
 1 src/main/runtime/workspaces/lineage/runtime-worktree-lineage-controller.ts
-1 src/main/runtime/workspaces/removal/runtime-interrupted-local-worktree-removal.ts
+1 src/main/runtime/workspaces/removal/checkout-missing-git-link.ts # moved from runtime-interrupted-local-worktree-removal.ts with its path-access lookup
 4 src/main/runtime/workspaces/removal/runtime-registered-local-worktree-removal.ts
 2 src/main/runtime/workspaces/removal/runtime-unregistered-worktree-removal.ts
 2 src/main/runtime/workspaces/removal/workspace-registration-removal.ts
