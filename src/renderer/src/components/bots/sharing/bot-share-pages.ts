@@ -50,7 +50,7 @@ export function allMemory(notes: readonly { topic: string }[]): string[] {
   return notes.slice(0, BOT_SHARE_MAX_PICKS).map((note) => note.topic)
 }
 
-const UNPACKABLE_SKILL = new Set(['link', 'size', 'unreadable'])
+const UNPACKABLE_SKILL = new Set(['link', 'size', 'unreadable', 'limit'])
 
 /** Skills the packager can't read (a link inside, too big): shown off so the owner sees why. */
 export function unpackableSkills(leftOut: readonly BotShareLeftOut[]): BotShareLeftOut[] {

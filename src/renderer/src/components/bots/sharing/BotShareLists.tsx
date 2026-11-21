@@ -31,6 +31,8 @@ function notShared(why: string): string {
       return translate('bots.share.tooLargeNotShared', 'Too large · not shared')
     case 'unreadable':
       return translate('bots.share.unreadableNotShared', "Can't be read · not shared")
+    case 'limit':
+      return translate('bots.share.overLimitNotShared', 'Over the skill limit · not shared')
     default:
       return translate('bots.share.notShared', 'Not shared')
   }

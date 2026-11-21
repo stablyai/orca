@@ -415,7 +415,8 @@ const linkedIn = {
   name: 'electron',
   description: 'Drive the desktop app: open windows, click through flows and capture screenshots',
   homePath: null,
-  optInFrom: 'team-skills'
+  optInFrom: 'team-skills',
+  optInKey: 'team-skills-electron'
 }
 export const skillsLinkedIn = defineFixture({
   ...base,

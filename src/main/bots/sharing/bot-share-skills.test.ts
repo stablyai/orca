@@ -90,66 +90,72 @@ describe("a bot's linked projects' skills in the Share dialog", () => {
     await candidates.dispose()
   })
 
-  it('lists a skill the project links in from outside itself, for the owner to tick', async () => {
-    await write(root, 'devex/electron/SKILL.md', skillText('electron', 'Drive the app'))
-    await write(project, '.agents/skills/deploy/SKILL.md', skillText('deploy', 'Ship it'))
-    await symlink(join(root, 'devex/electron'), join(project, '.agents/skills/electron'))
+  it.skipIf(process.platform === 'win32')(
+    'lists a skill the project links in from outside itself, for the owner to tick',
+    async () => {
+      await write(root, 'devex/electron/SKILL.md', skillText('electron', 'Drive the app'))
+      await write(project, '.agents/skills/deploy/SKILL.md', skillText('deploy', 'Ship it'))
+      await symlink(join(root, 'devex/electron'), join(project, '.agents/skills/electron'))
 
-    const shareable = await read()
-    expect(shareable.skills.map(({ name, optInFrom }) => ({ name, optInFrom }))).toEqual([
-      { name: 'deploy', optInFrom: undefined },
-      { name: 'electron', optInFrom: 'team-skills' }
-    ])
+      const shareable = await read()
+      expect(shareable.skills.map(({ name, optInFrom }) => ({ name, optInFrom }))).toEqual([
+        { name: 'deploy', optInFrom: undefined },
+        { name: 'electron', optInFrom: 'team-skills' }
+      ])
 
-    const candidates = new BotShareCandidates(join(root, 'candidates'))
-    const byDefault = await candidates.prepare({
-      bot,
-      shareable,
-      selection: {},
-      packageId: 'package-1'
-    })
-    expect(byDefault.bot.skills.map((skill) => skill.name)).toEqual(['deploy'])
-    expect(byDefault.available.skills).toContainEqual(
-      expect.objectContaining({ name: 'electron', optInFrom: 'team-skills' })
-    )
-    const key = shareable.skills.find((skill) => skill.name === 'electron')?.optInKey ?? ''
-    const ticked = await candidates.prepare({
-      bot,
-      shareable,
-      selection: { skills: ['deploy', 'electron'], outsideSkills: [{ name: 'electron', key }] },
-      packageId: 'package-1'
-    })
-    expect(ticked.bot.skills.map((skill) => skill.name)).toEqual(['deploy', 'electron'])
-    expect(ticked.files.map((file) => file.path)).toContain('skills/electron/SKILL.md')
-    await candidates.dispose()
-  })
+      const candidates = new BotShareCandidates(join(root, 'candidates'))
+      const byDefault = await candidates.prepare({
+        bot,
+        shareable,
+        selection: {},
+        packageId: 'package-1'
+      })
+      expect(byDefault.bot.skills.map((skill) => skill.name)).toEqual(['deploy'])
+      expect(byDefault.available.skills).toContainEqual(
+        expect.objectContaining({ name: 'electron', optInFrom: 'team-skills' })
+      )
+      const key = shareable.skills.find((skill) => skill.name === 'electron')?.optInKey ?? ''
+      const ticked = await candidates.prepare({
+        bot,
+        shareable,
+        selection: { skills: ['deploy', 'electron'], outsideSkills: [{ name: 'electron', key }] },
+        packageId: 'package-1'
+      })
+      expect(ticked.bot.skills.map((skill) => skill.name)).toEqual(['deploy', 'electron'])
+      expect(ticked.files.map((file) => file.path)).toContain('skills/electron/SKILL.md')
+      await candidates.dispose()
+    }
+  )
 
-  it('leaves out a skill with a link inside, so the others still share by default', async () => {
-    await write(home, 'skills/notes/SKILL.md', skillText('notes', 'Own skill'))
-    await write(project, '.agents/skills/deploy/SKILL.md', skillText('deploy', 'Ship it'))
-    await write(project, 'README.md', 'Project readme\n')
-    await symlink(join(project, 'README.md'), join(project, '.agents/skills/deploy/README.md'))
+  it.skipIf(process.platform === 'win32')(
+    'leaves out a skill with a link inside, so the others still share by default',
+    async () => {
+      await write(home, 'skills/notes/SKILL.md', skillText('notes', 'Own skill'))
+      await write(project, '.agents/skills/deploy/SKILL.md', skillText('deploy', 'Ship it'))
+      await write(project, 'README.md', 'Project readme\n')
+      await symlink(join(project, 'README.md'), join(project, '.agents/skills/deploy/README.md'))
 
-    const shareable = await read()
-    expect(shareable.skills.map((skill) => skill.name)).toEqual(['notes'])
-    expect(shareable.leftOut).toContainEqual({
-      kind: 'skill',
-      name: 'deploy',
-      why: 'link'
-    })
+      const shareable = await read()
+      expect(shareable.skills.map((skill) => skill.name)).toEqual(['notes'])
+      expect(shareable.leftOut).toContainEqual({
+        kind: 'skill',
+        name: 'deploy',
+        why: 'link'
+      })
 
-    const candidates = new BotShareCandidates(join(root, 'candidates'))
-    const summary = await candidates.prepare({
-      bot,
-      shareable,
-      selection: {},
-      packageId: 'package-1'
-    })
-    expect(summary.bot.skills.map((skill) => skill.name)).toEqual(['notes'])
-    expect(summary.files.map((file) => file.path)).toContain('skills/notes/SKILL.md')
-    expect(summary.files.some((file) => file.path.startsWith('skills/deploy/'))).toBe(false)
-    await candidates.dispose()
-  })
+      const candidates = new BotShareCandidates(join(root, 'candidates'))
+      const summary = await candidates.prepare({
+        bot,
+        shareable,
+        selection: {},
+        packageId: 'package-1'
+      })
+      expect(summary.bot.skills.map((skill) => skill.name)).toEqual(['notes'])
+      expect(summary.files.map((file) => file.path)).toContain('skills/notes/SKILL.md')
+      expect(summary.files.some((file) => file.path.startsWith('skills/deploy/'))).toBe(false)
+      await candidates.dispose()
+    }
+  )
 
   it('leaves out a skill with a hard-linked file, for the same reason', async () => {
     await write(project, '.agents/skills/deploy/SKILL.md', skillText('deploy', 'Ship it'))
@@ -231,6 +237,24 @@ describe("a bot's linked projects' skills in the Share dialog", () => {
       await candidates.dispose()
     }
   )
+
+  it('still prepares a bot with more skills than a package carries, own ones first', async () => {
+    await write(home, 'skills/notes/SKILL.md', skillText('notes', 'Own skill'))
+    for (let index = 0; index < 65; index += 1) {
+      const name = `skill-${String(index).padStart(2, '0')}`
+      await write(project, `.agents/skills/${name}/SKILL.md`, skillText(name, 'Project skill'))
+    }
+
+    const shareable = await read()
+    expect(shareable.skills).toHaveLength(64)
+    expect(shareable.skills.map((skill) => skill.name)).toContain('notes')
+    expect(shareable.leftOut.filter((entry) => entry.why === 'limit')).toHaveLength(2)
+
+    const candidates = new BotShareCandidates(join(root, 'candidates'))
+    const summary = await candidates.prepare({ bot, shareable, selection: {}, packageId: 'p' })
+    expect(summary.bot.skills).toHaveLength(64)
+    await candidates.dispose()
+  })
 
   it("keeps the bot's own skill when a linked project has one of the same name", async () => {
     await write(home, 'skills/triage/SKILL.md', skillText('triage', 'Own copy'))

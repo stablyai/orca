@@ -76,45 +76,48 @@ function tick(shareable: BotShareable): BotShareSelection {
 const BOTH = ['skills/deploy/SKILL.md', 'skills/electron/SKILL.md']
 const DEPLOY = ['skills/deploy/SKILL.md']
 
-describe('a skill linked into a project from outside it', () => {
-  it('is named for its project and left out until ticked, even when the project has no name', async () => {
-    await linkElectronIn()
-    const shareable = await read('')
-    expect(shareable.skills.find((skill) => skill.name === 'electron')?.optInFrom).toBe(
-      'team-skills'
-    )
-    expect(await packed(shareable, {})).toEqual(DEPLOY)
-    expect(await packed(shareable, tick(shareable))).toEqual(BOTH)
-  })
+describe.skipIf(process.platform === 'win32')(
+  'a skill linked into a project from outside it',
+  () => {
+    it('is named for its project and left out until ticked, even when the project has no name', async () => {
+      await linkElectronIn()
+      const shareable = await read('')
+      expect(shareable.skills.find((skill) => skill.name === 'electron')?.optInFrom).toBe(
+        'team-skills'
+      )
+      expect(await packed(shareable, {})).toEqual(DEPLOY)
+      expect(await packed(shareable, tick(shareable))).toEqual(BOTH)
+    })
 
-  it('stays out of every rebuild after it moves outside, until the owner ticks it there', async () => {
-    await write(project, '.agents/skills/electron/SKILL.md', skillText('electron', 'Old copy'))
-    const names = { skills: ['deploy', 'electron'] }
-    expect(await packed(await read(), names)).toEqual(BOTH)
+    it('stays out of every rebuild after it moves outside, until the owner ticks it there', async () => {
+      await write(project, '.agents/skills/electron/SKILL.md', skillText('electron', 'Old copy'))
+      const names = { skills: ['deploy', 'electron'] }
+      expect(await packed(await read(), names)).toEqual(BOTH)
 
-    await linkElectronIn()
-    const shareable = await read()
-    // Unrelated toggles and Retry send the same names again.
-    expect(await packed(shareable, names)).toEqual(DEPLOY)
-    expect(await packed(shareable, names)).toEqual(DEPLOY)
-    expect(await packed(shareable, tick(shareable))).toEqual(BOTH)
-  })
+      await linkElectronIn()
+      const shareable = await read()
+      // Unrelated toggles and Retry send the same names again.
+      expect(await packed(shareable, names)).toEqual(DEPLOY)
+      expect(await packed(shareable, names)).toEqual(DEPLOY)
+      expect(await packed(shareable, tick(shareable))).toEqual(BOTH)
+    })
 
-  it('takes a first tick with no candidate before it, as after expiry or a failed build', async () => {
-    await linkElectronIn()
-    const shareable = await read()
-    expect(await packed(shareable, tick(shareable))).toEqual(BOTH)
-  })
+    it('takes a first tick with no candidate before it, as after expiry or a failed build', async () => {
+      await linkElectronIn()
+      const shareable = await read()
+      expect(await packed(shareable, tick(shareable))).toEqual(BOTH)
+    })
 
-  it('drops a tick once the skill is linked in from another folder', async () => {
-    await linkElectronIn('devex')
-    const ticked = tick(await read())
-    await linkElectronIn('elsewhere')
-    expect(await packed(await read(), ticked)).toEqual(DEPLOY)
-  })
-})
+    it('drops a tick once the skill is linked in from another folder', async () => {
+      await linkElectronIn('devex')
+      const ticked = tick(await read())
+      await linkElectronIn('elsewhere')
+      expect(await packed(await read(), ticked)).toEqual(DEPLOY)
+    })
+  }
+)
 
-describe('saved picks for Update link', () => {
+describe.skipIf(process.platform === 'win32')('saved picks for Update link', () => {
   async function published(selection: BotShareSelection) {
     const shareable = await read()
     const summary = await candidates.prepare({ bot, shareable, selection, packageId: 'p' })

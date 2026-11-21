@@ -7,6 +7,7 @@ import { realpath } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import type { Bot } from '../../../shared/bot-types'
 import {
+  BOT_PACKAGE_SKILLS_MAX,
   BOT_AGENT_SKILLS_FOLDERS,
   BOT_OWN_SKILLS_FOLDER,
   type BotAgentSkillsFolder,
@@ -160,7 +161,7 @@ export async function readShareSkills(
       leftOut.push(entry)
     }
   }
-  return (await packable(skills, leftOut)).sort((left, right) =>
+  return withinLimit(await packable(skills, leftOut), leftOut).sort((left, right) =>
     left.name.localeCompare(right.name, 'en-US')
   )
 }
@@ -174,6 +175,14 @@ function optInField(
   }
   const optInKey = createHash('sha256').update(folder).digest('hex').slice(0, 32)
   return { optInFrom: project, optInKey }
+}
+
+/** The first skills a package can carry, the bot's own first; the rest are left out with why. */
+function withinLimit(skills: BotShareSkill[], leftOut: BotShareLeftOut[]): BotShareSkill[] {
+  for (const skill of skills.slice(BOT_PACKAGE_SKILLS_MAX)) {
+    leftOut.push({ kind: 'skill', name: skill.name, why: 'limit' })
+  }
+  return skills.slice(0, BOT_PACKAGE_SKILLS_MAX)
 }
 
 /** How many skill folders are checked at once. */

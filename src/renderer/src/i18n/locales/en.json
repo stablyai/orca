@@ -28679,6 +28679,7 @@
       "outsideSkillWith": "From outside {{project}} · {{description}}",
       "tooLargeNotShared": "Too large · not shared",
       "unreadableNotShared": "Can't be read · not shared",
+      "overLimitNotShared": "Over the skill limit · not shared",
       "notShared": "Not shared",
       "setupNote": "Setup note",
       "skills": "Skills",

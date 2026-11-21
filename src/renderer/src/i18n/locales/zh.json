@@ -26993,6 +26993,7 @@
       "outsideSkillWith": "来自 {{project}} 外 · {{description}}",
       "tooLargeNotShared": "过大 · 未分享",
       "unreadableNotShared": "无法读取 · 未分享",
+      "overLimitNotShared": "超出技能数量上限 · 未分享",
       "notShared": "未分享",
       "setupNote": "设置备注",
       "skills": "技能",
