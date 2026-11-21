@@ -129,6 +129,10 @@ async function pastePathIntoTerminal(
   if (beforeTerminalSend && !(await beforeTerminalSend(terminal))) {
     return false
   }
+  // The lease wait can outlast a cancel tap.
+  if (shouldCancel?.()) {
+    throw new MobileUploadCancelledError()
+  }
   const response = await nativeChatTerminalWrite.request(client, {
     terminal,
     text: payload,
