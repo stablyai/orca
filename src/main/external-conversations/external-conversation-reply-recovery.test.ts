@@ -406,12 +406,29 @@ describe('recovery, round 4', () => {
 
 describe('recovery of a bot’s answer to its owner’s DM', () => {
   const DM = { source: 'slack', externalId: 'T05BHT77GUF:D0CH5QFFC2C:D0CH5QFFC2C:U0CGB82KBC2' }
+  // The owner's own DM, as the journal stores its asker.
+  const ownerAsked = (deliveryId: string, sequence: number) => {
+    const asking = asked(deliveryId, sequence)
+    return {
+      ...asking,
+      body: {
+        ...asking.body,
+        origin: 'connector' as const,
+        asker: {
+          source: 'slack' as const,
+          userId: 'U0OWNER',
+          role: 'owner' as const,
+          place: { kind: 'direct_message' as const, id: 'D0CH5QFFC2C' }
+        }
+      }
+    }
+  }
 
   it('decides as the live fill does: the DM gets the words before the marker, a thread stays quiet', async () => {
     const answer = "I started fixes for Neil's items.\n\nNO_REPLY"
     const f = fixture(
       {
-        items: [asked('d1', 1), asked('d2', 2), said(answer, 3, TURN_KEY), turn(4, 'd1')],
+        items: [asked('d1', 1), ownerAsked('d2', 2), said(answer, 3, TURN_KEY), turn(4, 'd1')],
         submissions: [submission('d2', { answeredInTurn: { turnItemId: TURN_KEY, via: 'steer' } })]
       },
       {

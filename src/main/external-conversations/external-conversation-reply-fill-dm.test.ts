@@ -71,10 +71,12 @@ const turn = (prose: string, stamps: EndedTurnReplies['stamps']): EndedTurnRepli
   links: []
 })
 
-const stamp = (deliveryId: string, conversation = DM) => ({
+// The journal marks the deliveries the bot's owner sent (connectorReplyTurnStamps).
+const stamp = (deliveryId: string, conversation = DM, ownerAsked = true) => ({
   account: 'acct',
   conversation,
-  deliveryId
+  deliveryId,
+  ...(ownerAsked ? { ownerAsked: true as const } : {})
 })
 
 describe('a bot turn’s answer to its owner’s DM', () => {
@@ -103,6 +105,13 @@ describe('a bot turn’s answer to its owner’s DM', () => {
   it('keeps a reply that is only the marker quiet', async () => {
     const { filled, run } = fill([row('d1')])
     await run(turn('NO_REPLY', [stamp('d1')]))
+    expect(filled).toEqual([expect.objectContaining({ outcome: 'quiet' })])
+    expect(filled[0]).not.toHaveProperty('prose')
+  })
+
+  it('keeps a member’s DM to today’s rule: words before the marker stay private', async () => {
+    const { filled, run } = fill([row('m1')])
+    await run(turn('Owner-only note on #12.\n\nNO_REPLY', [stamp('m1', DM, false)]))
     expect(filled).toEqual([expect.objectContaining({ outcome: 'quiet' })])
     expect(filled[0]).not.toHaveProperty('prose')
   })

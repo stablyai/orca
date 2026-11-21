@@ -1,15 +1,20 @@
 import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
 import type { AgentJournalConnectorDelivery } from './agent-journal-bot-message-fields'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
-import { isQuietBotResult, quietBotResultText } from '../../bot-quiet-result'
+import { addressedBotWords, isQuietBotResult } from '../../bot-quiet-result'
 import type { JournalConnectorReplyOutcome } from './journal-connector-reply'
 
 // The turn end's mapping to a reply outbox outcome (design item 125 §3), shared by the live fill and
 // the boot scan so both say the same for the same turn.
 
+/** A delivery a turn answered, as its journal proves it. `ownerAsked`: the bot's owner sent the
+ *  message that carried it (its asker), the one person the marker can't silence in a DM. */
+export type ConnectorReplyStamp = AgentJournalConnectorDelivery & { ownerAsked?: true }
+
 /** A bot's final words for a request: none when its quiet marker silences them. The marker is a
- *  deliberate silence, except toward someone who addressed the bot directly (a DM): there it can only
- *  silence a reply that is nothing but the marker, and otherwise just the trailing marker goes. */
+ *  deliberate silence, except toward its owner in their own DM (`addressed`): there it silences only
+ *  a reply that is nothing but the marker, and otherwise just the trailing marker goes
+ *  (addressedBotWords). */
 export function connectorReplyWords(
   prose: string,
   { bot, addressed }: { bot: boolean; addressed: boolean }
@@ -17,12 +22,11 @@ export function connectorReplyWords(
   if (!bot || !isQuietBotResult(prose)) {
     return prose
   }
-  const words = addressed ? quietBotResultText(prose) : ''
-  return words.trim() ? words : null
+  return addressed ? addressedBotWords(prose) : null
 }
 
 /** The outcome a turn's end gives one request it answered. prose: its own root prose (empty when
- *  it wrote none). `addressed`: the request's conversation spoke to the bot directly
+ *  it wrote none). `addressed`: the request is its owner's in their own DM
  *  (connectorReplyWords). A success that wrote nothing is done without an answer, never a failure. */
 export function connectorReplyTurnOutcome(turn: {
   outcome: 'success' | 'failure' | 'cancellation' | 'superseded' | 'interruption'
@@ -63,17 +67,22 @@ export function connectorReplyTurnStamps(
   },
   opener: AgentJournalRenderItem | null | undefined,
   turnItemId: string
-): AgentJournalConnectorDelivery[] {
-  const stamps: AgentJournalConnectorDelivery[] = []
+): ConnectorReplyStamp[] {
+  const stamps: ConnectorReplyStamp[] = []
   const seen = new Set<string>()
-  const addStamp = (stamp: AgentJournalConnectorDelivery | undefined) => {
+  const addStamp = (stamp: ConnectorReplyStamp | undefined) => {
     if (stamp && !seen.has(`${stamp.account}\0${stamp.deliveryId}`)) {
       seen.add(`${stamp.account}\0${stamp.deliveryId}`)
       stamps.push(stamp)
     }
   }
-  const add = (item: AgentJournalRenderItem | null | undefined) =>
-    addStamp(item?.body.kind === 'message' ? item.body.connectorDelivery : undefined)
+  const add = (item: AgentJournalRenderItem | null | undefined) => {
+    const body = item?.body.kind === 'message' ? item.body : null
+    if (body?.connectorDelivery) {
+      const ownerAsked = body.asker?.role === 'owner'
+      addStamp({ ...body.connectorDelivery, ...(ownerAsked ? { ownerAsked: true as const } : {}) })
+    }
+  }
   // A continuation answers the deliveries of the cut it claimed, ahead of anything steered in.
   if (opener?.body.kind === 'message') {
     opener.body.connectorClaim?.origin.forEach(addStamp)

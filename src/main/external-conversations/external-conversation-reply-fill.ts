@@ -1,11 +1,13 @@
 import type { AgentJournalTurnOutcome } from '../../shared/agent-status/lifecycle/agent-turn-outcome'
-import type { AgentJournalConnectorDelivery } from '../../shared/agent-session/journal/agent-journal-bot-message-fields'
 import {
   JOURNAL_CONNECTOR_REPLY_PROSE_BYTES,
   type JournalConnectorReplyFill,
   type JournalConnectorReplyRow
 } from '../../shared/agent-session/journal/journal-connector-reply'
-import { connectorReplyTurnOutcome } from '../../shared/agent-session/journal/journal-connector-reply-turn'
+import {
+  connectorReplyTurnOutcome,
+  type ConnectorReplyStamp
+} from '../../shared/agent-session/journal/journal-connector-reply-turn'
 import type { ConnectorFailure } from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
 import type { ConnectorReplyJournal } from '../connector-cloud/connector-reply-outbox'
@@ -17,7 +19,7 @@ export type EndedTurnReplies = {
   sessionId: string
   turnItemId: string
   /** The deliveries the turn answered, opener first (connectorReplyTurnStamps). */
-  stamps: readonly AgentJournalConnectorDelivery[]
+  stamps: readonly ConnectorReplyStamp[]
   /** The turn's opening message: a continuation fills only the rows its admission claimed. */
   openerItemId?: string
   outcome: AgentJournalTurnOutcome
@@ -60,11 +62,15 @@ export function conversationReplyFill(
       return { covered: new Set(), paused: false }
     }
     const order = new Map<string, number>()
+    const ownerAsked = new Set<string>()
     for (const stamp of turn.stamps) {
       for (const deliveryId of [stamp.deliveryId, ...(stamp.carried ?? [])]) {
         const key = keyOf(stamp.account, deliveryId)
         if (!order.has(key)) {
           order.set(key, order.size)
+        }
+        if (stamp.ownerAsked) {
+          ownerAsked.add(key)
         }
       }
     }
@@ -102,12 +108,15 @@ export function conversationReplyFill(
     }
     const fills: JournalConnectorReplyFill[] = []
     for (const row of own) {
-      // Decided per request: the bot's marker can't silence an answer to a DM (recovery fills here too).
+      // Decided per request: the marker can't silence an answer to its owner's own DM (recovery
+      // fills here too); a member's DM, or a thread, keeps today's silence.
       const { outcome, prose } = connectorReplyTurnOutcome({
         outcome: turn.outcome,
         prose: turn.prose,
         bot: turn.bot,
-        addressed: isSlackDirectMessage(row.conversation)
+        addressed:
+          isSlackDirectMessage(row.conversation) &&
+          ownerAsked.has(keyOf(row.account, row.deliveryId))
       })
       const conversation = JSON.stringify([row.account, row.conversation])
       const answerDeliveryId = answers.get(conversation) ?? row.deliveryId
