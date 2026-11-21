@@ -273,6 +273,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           {model}
         </span>
       )}
+      {cacheTimer && <CacheTimer startedAt={cacheTimer.startedAt} ttlMs={cacheTimer.ttlMs} />}
       {hasChildDisclosure && !childAgentsExpanded && (
         // The count is the visible hint that workers exist, so it expands them instead of opening the row.
         <button
@@ -307,7 +308,6 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           +{childAgentCount}
         </button>
       )}
-      {cacheTimer && <CacheTimer startedAt={cacheTimer.startedAt} ttlMs={cacheTimer.ttlMs} />}
       {hasChildDisclosure ? (
         <DashboardAgentChildDisclosure
           childAgentCount={childAgentCount}
