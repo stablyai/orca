@@ -51,6 +51,10 @@ export abstract class SessionProcessInspection {
     return this._outputChunks
   }
 
+  get shellPath(): string | undefined {
+    return this.subprocess.shellPath
+  }
+
   confirmShellForeground(): Promise<boolean> {
     return this.recoveryBarrier.confirmOwnerSettled()
   }

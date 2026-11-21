@@ -2901,7 +2901,9 @@
       "endAllRunningCount_one": "{{count}} session is running an agent or another program.",
       "endAllRunningCount_other": "{{count}} sessions are running agents or other programs.",
       "endAllUnverifiableCount_one": "Couldn't check for running work in {{count}} terminal.",
-      "endAllUnverifiableCount_other": "Couldn't check for running work in {{count}} terminals."
+      "endAllUnverifiableCount_other": "Couldn't check for running work in {{count}} terminals.",
+      "endRefusedCount_one": "Could not end {{count}} terminal.",
+      "endRefusedCount_other": "Could not end {{count}} terminals."
     }
   },
   "runtime": {

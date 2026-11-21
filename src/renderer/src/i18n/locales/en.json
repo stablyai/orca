@@ -25925,7 +25925,9 @@
       "selectedCount": "{{count}} selected",
       "clearSelection": "Clear",
       "endCount": "End {{count}}",
-      "notEnded": "Not ended"
+      "notEnded": "Not ended",
+      "endRefusedCount_one": "Could not end {{count}} terminal.",
+      "endRefusedCount_other": "Could not end {{count}} terminals."
     },
     "resources": "Resources",
     "ptys": "PTYs",

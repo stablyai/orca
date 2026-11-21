@@ -143,8 +143,10 @@ export async function inspectTerminalHostProcess(args: {
       )
     }
     // A steady-state poll never decides adoption or close, so it may read the cached process table.
+    // A job can miss guest work and the children of packaged shells.
     childProcessEvidence =
-      decidingRunningWork && session.wslDistro
+      decidingRunningWork &&
+      (session.wslDistro || /(?:^|[\\/])WindowsApps[\\/]/i.test(session.shellPath ?? ''))
         ? 'unverifiable'
         : await session.inspectChildProcesses(
             args.steadyState !== true,

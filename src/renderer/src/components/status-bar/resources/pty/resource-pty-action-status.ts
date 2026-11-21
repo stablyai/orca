@@ -20,6 +20,9 @@ export class ResourcePtyActionStatus implements ResourcePtyEndingSource {
   private readonly errors = new Map<string, ResourcePtyEndError>()
   private readonly listeners = new Set<EndingListener>()
   private readonly rowListeners = new Map<string, Set<() => void>>()
+  private lastRefusal: { count: number; reason: ResourcePtyEndError; sequence: number } | null =
+    null
+  getLastRefusal = () => this.lastRefusal
   getKeys = (): ReadonlySet<string> => this.ending
   isSelectable = (identity: string): boolean => !this.ending.has(identity)
   private selectionCheck = this.isSelectable
@@ -63,11 +66,18 @@ export class ResourcePtyActionStatus implements ResourcePtyEndingSource {
   }
 
   complete(completions: readonly { identity: string; error?: ResourcePtyEndError }[]): void {
+    let count = 0
+    let reason: ResourcePtyEndError | undefined
     for (const { identity, error } of completions) {
       this.ending.delete(identity)
       if (error) {
         this.errors.set(identity, error)
+        count += 1
+        reason = error
       }
+    }
+    if (reason) {
+      this.lastRefusal = { count, reason, sequence: (this.lastRefusal?.sequence ?? 0) + 1 }
     }
     this.publish(
       completions.map(({ identity }) => identity),

@@ -15,6 +15,7 @@ import {
   type ResourcePtyRow
 } from './resource-pty-view-model'
 import { ResourcePtyList, type ResourcePtyListItem } from './ResourcePtyList'
+import { ResourcePtyEndAnnouncements } from './ResourcePtyEndAnnouncements'
 import type { useResourceSessionInventory } from '../inventory/use-resource-session-inventory'
 import { canEndResourcePty, type useResourcePtyActions } from './use-resource-pty-actions'
 import { useResourcePtyEndableGroups } from './use-resource-pty-endable-groups'
@@ -277,6 +278,7 @@ export function ResourcePtyPanel({
   })
   return (
     <div ref={panelRef} className="flex h-full min-h-0 flex-col">
+      {active && <ResourcePtyEndAnnouncements status={status} />}
       {inventory.sessionsError && (
         <div
           role="alert"
