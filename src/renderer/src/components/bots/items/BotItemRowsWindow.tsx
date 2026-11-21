@@ -9,9 +9,9 @@
 import { Fragment, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
-import type { BotItemsViewport } from './bot-items-viewport'
+import { botItemsDocumentHidden, type BotItemsViewport } from './bot-items-viewport'
 import { focusFellToNothing } from '../use-needs-you-focus'
-import { BotItemFaceReadsContext, useBotItemFaceReads } from './bot-item-face-reads'
+import { BotItemFaceFailuresContext, useBotItemFaceFailures } from './bot-item-face-reads'
 
 /** A one-line row and its gap, and one that names its chat on a second line. Until a drawn row is
  *  read, their heights at the default font size; a larger font (Orca Web) makes them taller. */
@@ -173,7 +173,7 @@ export function BotItemRowsWindow({
     setWindowed(true)
   }
   const all = count <= ALL_ROWS && !windowed
-  const faceReads = useBotItemFaceReads(faces && !all)
+  const faceFailures = useBotItemFaceFailures(faces)
   // Heights follow from which rows have a chat line: in one bot's list none do, so positions are a count.
   // Keyed by those heights alone, so content changes leave the positions as they were.
   const tallKey = useMemo(
@@ -244,18 +244,12 @@ export function BotItemRowsWindow({
       }
     }
     // An unchanged range over the same rows (most scroll frames) builds nothing.
-    if (
-      next.start === windowRange.start &&
-      next.end === windowRange.end &&
-      windowRange.band.every((pick) => items[pick.at]?.uid === pick.uid)
-    ) {
-      return
-    }
-    const band = bandOf(items, next.start, next.end)
     setRange((prev) =>
-      prev.start === next.start && prev.end === next.end && sameBand(prev.band, band)
+      prev.start === next.start &&
+      prev.end === next.end &&
+      prev.band.every((pick) => items[pick.at]?.uid === pick.uid)
         ? prev
-        : { ...next, band }
+        : { ...next, band: bandOf(items, next.start, next.end) }
     )
   })
   // A short group draws every row and needs no view. A long one listens once for as long as it windows.
@@ -273,7 +267,7 @@ export function BotItemRowsWindow({
     )
   })
   useLayoutEffect(() => {
-    if (!all && !document.hidden) {
+    if (!all && !botItemsDocumentHidden()) {
       measure()
     }
   }, [all, count, geometry, measure])
@@ -293,7 +287,7 @@ export function BotItemRowsWindow({
     })
   )
   useLayoutEffect(() => {
-    if (carried.length > 0 && !document.hidden) {
+    if (carried.length > 0 && !botItemsDocumentHidden()) {
       measure()
     } else if (drifted && carried.length === 0) {
       rebase()
@@ -425,7 +419,7 @@ export function BotItemRowsWindow({
   // A long group is a grid, the role assistive tech knows may be partly drawn: it says how many rows
   // there are and which one this is, and moves between rows with the arrows.
   return (
-    <BotItemFaceReadsContext.Provider value={faceReads}>
+    <BotItemFaceFailuresContext.Provider value={faceFailures}>
       <div
         ref={container}
         role={all ? 'list' : 'grid'}
@@ -452,7 +446,11 @@ export function BotItemRowsWindow({
                 ref={
                   index === targetIndex ? focusTarget : index === backIndex ? focusBack : undefined
                 }
+                // A short group draws and tabs every row, so focus moving through it needs no state.
                 onFocus={() => {
+                  if (all) {
+                    return
+                  }
                   const pick = { uid: item.uid, at: index }
                   // Focus moving between a row's own controls changes nothing here.
                   setFocused((prev) => (samePick(prev, pick) ? prev : pick))
@@ -462,6 +460,7 @@ export function BotItemRowsWindow({
                   // Focus going nowhere (the row removed, or a click on no control) keeps the row as the
                   // one holding focus, so a row leaving hands focus to the next.
                   if (
+                    !all &&
                     document.hasFocus() &&
                     event.relatedTarget !== null &&
                     !event.currentTarget.contains(event.relatedTarget)
@@ -482,7 +481,7 @@ export function BotItemRowsWindow({
           height={geometry.total - (drawn.length ? geometry.offset(drawn.at(-1)! + 1) : 0)}
         />
       </div>
-    </BotItemFaceReadsContext.Provider>
+    </BotItemFaceFailuresContext.Provider>
   )
 }
 

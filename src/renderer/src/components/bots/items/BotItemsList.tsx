@@ -106,10 +106,6 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
     viewport.flush()
     return () => viewport.attach(null, null)
   }, [viewport, panelScroller])
-  // A group whose size changes moves the groups below it, even with the list's height unchanged (rows
-  // aging from one group into another): their windows measure again before the change is painted.
-  const shape = BOT_ITEM_GROUP_IDS.map((id) => groups[id].length).join()
-  useLayoutEffect(() => viewport.flush(), [viewport, shape])
 
   const select = useLatestHandler((item: BotItem, on: boolean, range: boolean): void => {
     setSelected((current) => {
@@ -244,9 +240,12 @@ function BotItemGroup({
     focusUid ? items.findIndex((item) => item.uid === focusUid) : -1
   )
   const [shown, setShown] = useState(Math.max(BOT_ITEM_GROUP_ROWS, focusIndex + 1))
-  // Folding or showing more moves the groups below without changing any group's count: they measure
-  // again before it's painted.
-  useLayoutEffect(() => viewport.flush(), [open, shown, viewport])
+  // A group whose height changes (folding, Show more, rows coming or going while open, appearing or
+  // emptying) moves the groups below, even with the list's height unchanged (rows aging from one group
+  // into another): they measure again before it's painted. A folded group's count changes nothing.
+  const drawnRows = open ? (id === 'needs_you' ? items.length : Math.min(shown, items.length)) : -1
+  const present = items.length > 0 || (id === 'needs_you' && owner.outside.count > 0)
+  useLayoutEffect(() => viewport.flush(), [drawnRows, present, viewport])
   // Only an open window draws rows: a folded group, or Needs you, copies none.
   const shownItems = useMemo(
     () => (open && id !== 'needs_you' ? items.slice(0, shown) : []),

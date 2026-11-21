@@ -2,6 +2,10 @@
 // when scrolling, resizing or the list's own height moves it. Each long group reads its rows' window from it,
 // so groups add no scroll listeners or observers of their own, and with no group reading it nothing listens.
 import { useMemo } from 'react'
+import {
+  isDocumentVisibilityProvenStale,
+  registerStaleDocumentVisibilityRecovery
+} from '../../terminal-pane/viewport/visibility/stale-document-visibility'
 
 /** Marks the scroller an Items list windows against, so the list finds it as it mounts. */
 export const BOT_ITEMS_SCROLLER_ATTR = 'data-bot-items-scroller'
@@ -22,6 +26,12 @@ export type BotItemsViewport = {
   attach: (scroller: HTMLElement | null, list: HTMLElement | null) => void
 }
 
+/** Hidden for measuring: not after macOS display wake, when Chromium can stay `hidden` while the
+ *  window takes input (see stale-document-visibility). */
+export function botItemsDocumentHidden(): boolean {
+  return document.hidden && !isDocumentVisibilityProvenStale()
+}
+
 function readBox(scroller: HTMLElement): BotItemsViewportBox {
   const box = scroller.getBoundingClientRect()
   return { top: box.top, bottom: box.bottom }
@@ -34,11 +44,22 @@ function listenTo(
   onFrame: () => void
 ): () => void {
   let frame: number | null = null
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const run = (): void => {
+    frame = null
+    timer = null
+    onFrame()
+  }
   const notify = (): void => {
-    frame ??= requestAnimationFrame(() => {
-      frame = null
-      onFrame()
-    })
+    if (frame !== null || timer !== null) {
+      return
+    }
+    // A window wrongly left `hidden` gets no frames, so it measures on a timer instead.
+    if (document.hidden) {
+      timer = setTimeout(run, 0)
+    } else {
+      frame = requestAnimationFrame(run)
+    }
   }
   scroller.addEventListener('scroll', notify, { passive: true })
   // A hidden window measures nothing, so showing it again measures what changed meanwhile.
@@ -48,6 +69,7 @@ function listenTo(
     }
   }
   document.addEventListener('visibilitychange', shown)
+  const stopStale = registerStaleDocumentVisibilityRecovery(notify)
   // The list's height moves a group below one that folds, grows or shrinks.
   const resized = new ResizeObserver(notify)
   resized.observe(scroller)
@@ -58,8 +80,12 @@ function listenTo(
     scroller.removeEventListener('scroll', notify)
     document.removeEventListener('visibilitychange', shown)
     resized.disconnect()
+    stopStale()
     if (frame !== null) {
       cancelAnimationFrame(frame)
+    }
+    if (timer !== null) {
+      clearTimeout(timer)
     }
   }
 }
@@ -97,7 +123,7 @@ function createViewport(): BotItemsViewport {
       }
     },
     flush: () => {
-      if (listeners.size > 0 && !document.hidden) {
+      if (listeners.size > 0 && !botItemsDocumentHidden()) {
         onFrame()
       }
     },

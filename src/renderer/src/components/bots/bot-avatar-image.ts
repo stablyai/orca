@@ -1,6 +1,7 @@
 // Where a bot's picture loads from: a bundled mascot, or its uploaded PNG read once per version.
 import { useEffect, useState } from 'react'
 import { readBotAvatarPng } from '@/lib/bot-catalog'
+import { readBotHostState } from '@/lib/bot-catalog-snapshot'
 import { botRefKey, type BotOnHost, type BotRef } from '@/lib/bot-hosts'
 import { parseBotAvatar } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
@@ -21,9 +22,13 @@ type Upload = {
 export type BotAvatarFailures = Map<string, string>
 const MAX_FAILURES = 64
 
-/** `paused`: don't read now (the host is offline). `failures`: a version listed there for its bot isn't
- *  read again; a failed read is listed and a successful one unlisted. */
-export type BotAvatarRead = { paused: boolean; failures: BotAvatarFailures | null }
+/** `paused`: don't read now (the host is offline). `failures`: a failed read is listed there and a
+ *  successful one unlisted; with `skipFailed`, a version listed for its bot isn't read again. */
+export type BotAvatarRead = {
+  paused: boolean
+  failures: BotAvatarFailures | null
+  skipFailed: boolean
+}
 
 function noteFailure(failures: BotAvatarFailures, key: string, version: string): void {
   failures.delete(key)
@@ -64,7 +69,10 @@ function startUpload(bot: BotRef, key: string, version: string): Upload {
       if (uploads.get(key) === started) {
         uploads.delete(key)
       }
-      started.noted.forEach((failures) => noteFailure(failures, key, version))
+      // A read that failed because its host went away is read again when the host is back.
+      if (readBotHostState(bot.hostId) === 'live') {
+        started.noted.forEach((failures) => noteFailure(failures, key, version))
+      }
       started.noted.clear()
       settle(started, null, true)
     }
@@ -122,6 +130,7 @@ export function useBotAvatarSrc(
 ): string | null {
   const paused = read?.paused === true
   const failures = read?.failures ?? null
+  const skipFailed = read?.skipFailed === true
   const parsed = parseBotAvatar(bot.avatar)
   const mascotSrc = botMascotSrc(parsed?.kind === 'mascot' ? parsed.id : null, bot.avatarColor)
   const uploadKey = parsed?.kind === 'upload' ? parsed.version : null
@@ -129,7 +138,7 @@ export function useBotAvatarSrc(
   const [upload, setUpload] = useState(() => finishedUpload({ hostId, id }, uploadKey))
   useEffect(() => {
     const key = botRefKey({ hostId, id })
-    if (!uploadKey || paused || failures?.get(key) === uploadKey) {
+    if (!uploadKey || paused || (skipFailed && failures?.get(key) === uploadKey)) {
       return
     }
     return readUpload({ hostId, id }, uploadKey, failures, (src) => {
@@ -137,7 +146,7 @@ export function useBotAvatarSrc(
         shown?.key === uploadKey && shown.src === src ? shown : { key: uploadKey, src }
       )
     })
-  }, [hostId, id, uploadKey, paused, failures])
+  }, [hostId, id, uploadKey, paused, failures, skipFailed])
   if (mascotSrc) {
     return mascotSrc
   }
