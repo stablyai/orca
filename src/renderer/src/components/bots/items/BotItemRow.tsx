@@ -21,7 +21,7 @@ import {
 } from '../../../../../shared/bots/bot-items'
 import type { Bot } from '../../../../../shared/bot-types'
 import { botItemQuestionLine } from '../../../../../shared/bots/bot-item-ask'
-import { jsonEqual } from '../../../../../shared/json-equal'
+import { isJsonRecord, jsonEqual } from '../../../../../shared/json-equal'
 import { BotRowHoverCard } from '../BotPanelRow'
 import { BotItemNumberColumn } from './BotItemNumberColumn'
 import { BotItemRowFace } from './BotItemRowFace'
@@ -32,13 +32,14 @@ import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
 
 /** The item compares by value, as a fresh host read decodes it anew; every other prop by identity. */
 function sameRowProps<P extends { item: BotItem }>(prev: Readonly<P>, next: Readonly<P>): boolean {
+  if (!isJsonRecord(prev) || !isJsonRecord(next)) {
+    return false
+  }
   const keys = Object.keys(next)
   return (
     keys.length === Object.keys(prev).length &&
     keys.every((key) =>
-      key === 'item'
-        ? jsonEqual(prev.item, next.item)
-        : Object.is(Reflect.get(prev, key), Reflect.get(next, key))
+      key === 'item' ? jsonEqual(prev.item, next.item) : Object.is(prev[key], next[key])
     )
   )
 }
