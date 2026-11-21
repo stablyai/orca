@@ -2,6 +2,7 @@ import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktr
 import {
   getStructuredAgentSessionTabs,
   getStructuredAgentSessionTabsInWorkspace,
+  structuredTabPaneKey,
   type StructuredTab
 } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { readTabMapChanges } from '@/store/record-transitions/keyed-record-change-reads'
@@ -71,7 +72,7 @@ function rowEntry(state: RowState, tab: StructuredTab, reuse: Map<string, RowEnt
     tabId: tab.id,
     sessionId: tab.entityId,
     worktreeId: tab.worktreeId,
-    actual: previous?.actual ?? structuredAgentSessionPaneKey(tab.id, tab.entityId),
+    actual: previous?.actual ?? structuredTabPaneKey(tab),
     key:
       previous?.key ??
       structuredAgentSessionPaneKey(structuredAgentSessionTabId(tab.entityId), tab.entityId),
