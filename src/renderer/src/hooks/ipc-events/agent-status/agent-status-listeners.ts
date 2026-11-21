@@ -6,7 +6,7 @@ import {
 import { useAppStore } from '../../../store/index'
 import {
   forgetRefusedPaneResume,
-  namesRefusedResume
+  namesConversation
 } from '@/lib/agent-session/resume/forget-refused-pane-resume'
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-status/pane-authority/agent-pane-authority'
 import { resolvePaneKey } from '../../../lib/agent-status/ownership/agent-status-pane-ownership'
@@ -31,7 +31,7 @@ function dropEventsRestoringRefused(
     event.receivedAt <= refused.expectedStatus.receivedAt &&
     event.stateStartedAt === refused.expectedStatus.stateStartedAt &&
     resolveAgentPaneAuthorityKey(event.paneKey) === paneKey &&
-    namesRefusedResume(refused, { ...event, agent: event.agentType })
+    namesConversation(refused, { ...event, agent: event.agentType })
   const pending = queues.pendingAgentStatusEvents
   for (let index = pending.length - 1; index >= 0; index -= 1) {
     if (restores(pending[index].data)) {

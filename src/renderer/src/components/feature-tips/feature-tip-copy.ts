@@ -4,14 +4,12 @@ import { translate } from '@/i18n/i18n'
 const FEATURE_TIP_COPY: Record<
   FeatureTipId,
   {
-    eyebrow: () => string
     title: () => string
     description: () => string
     ctaLabel: () => string
   }
 > = {
   'chat-ui-here': {
-    eyebrow: () => translate('auto.components.feature.tips.feature.tip.copy.1fcdfc5fe8', 'New'),
     title: () => translate('featureTips.chatUiHere.title', 'Chat UI is here'),
     description: () =>
       translate(
@@ -21,7 +19,6 @@ const FEATURE_TIP_COPY: Record<
     ctaLabel: () => translate('featureTips.chatUiHere.cta', 'Use Chat UI')
   },
   'bots-teammate': {
-    eyebrow: () => translate('featureTips.eyebrowNew', 'New'),
     title: () => translate('featureTips.botsTeammate.title', 'Your AI teammate'),
     description: () =>
       translate(
@@ -31,7 +28,6 @@ const FEATURE_TIP_COPY: Record<
     ctaLabel: () => translate('featureTips.botsTeammate.cta', 'Create a bot')
   },
   'agent-session-search': {
-    eyebrow: () => translate('auto.components.feature.tips.feature.tip.copy.1fcdfc5fe8', 'New'),
     title: () =>
       translate(
         'auto.components.feature.tips.feature.tip.copy.f98e9d1bad',
@@ -43,13 +39,9 @@ const FEATURE_TIP_COPY: Record<
         'Find any past conversation by what was said in it, then pick up where the agent left off.'
       ),
     ctaLabel: () =>
-      translate(
-        'auto.components.feature.tips.feature.tip.copy.91e2719807',
-        'Turn on session search'
-      )
+      translate('auto.components.feature.tips.feature.tip.copy.91e2719807', 'Enable session search')
   },
   'orca-cli': {
-    eyebrow: () => translate('auto.components.feature.tips.feature.tip.copy.52e9e84809', 'Tip'),
     title: () =>
       translate(
         'auto.components.feature.tips.feature.tip.copy.3eacedec93',
@@ -64,7 +56,6 @@ const FEATURE_TIP_COPY: Record<
       translate('auto.components.feature.tips.feature.tip.copy.0080bc86eb', 'Install CLI & Skills')
   },
   'cmd-j-palette': {
-    eyebrow: () => translate('auto.components.feature.tips.feature.tip.copy.52e9e84809', 'Tip'),
     // Keep "<shortcut>" so CmdJPaletteTipDialog can inline the live keybinding.
     title: () =>
       translate(
@@ -79,7 +70,6 @@ const FEATURE_TIP_COPY: Record<
     ctaLabel: () => translate('auto.components.feature.tips.feature.tip.copy.eb5e9e90ec', 'Got it')
   },
   'voice-dictation': {
-    eyebrow: () => translate('auto.components.feature.tips.feature.tip.copy.52e9e84809', 'Tip'),
     title: () =>
       translate(
         'auto.components.feature.tips.feature.tip.copy.5221facada',
@@ -91,10 +81,7 @@ const FEATURE_TIP_COPY: Record<
         'Start voice dictation in any focused pane, then use the shortcut again to stop.'
       ),
     ctaLabel: () =>
-      translate(
-        'auto.components.feature.tips.feature.tip.copy.24aaad376f',
-        'Set up voice dictation'
-      )
+      translate('auto.components.feature.tips.feature.tip.copy.24aaad376f', 'Set up dictation')
   }
 }
 
@@ -103,7 +90,6 @@ export function localizeFeatureTip(tip: FeatureTip): FeatureTip {
   const copy = FEATURE_TIP_COPY[tip.id]
   return {
     ...tip,
-    eyebrow: copy.eyebrow(),
     title: copy.title(),
     description: copy.description(),
     ctaLabel: copy.ctaLabel()

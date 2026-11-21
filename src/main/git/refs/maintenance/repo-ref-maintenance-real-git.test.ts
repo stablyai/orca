@@ -228,14 +228,19 @@ describe('idle ref maintenance against real Git', () => {
     }
   )
 
-  it('packs a backlogged repository down to zero loose refs', async () => {
+  it('packs a backlogged repository only after automatic maintenance is enabled', async () => {
     const { repoPath, refsDir } = await createRepo(THRESHOLD + 30)
-    const { maintenance, arm } = createMaintenance()
-
+    git(repoPath, ['config', 'maintenance.auto', 'false'])
+    const optedOut = createMaintenance()
+    optedOut.arm(repoPath)
+    await settle(optedOut.maintenance)
+    optedOut.maintenance.dispose()
     await expect(countLooseRefs(refsDir, 10_000)).resolves.toMatchObject({
       count: THRESHOLD + 31
     })
 
+    git(repoPath, ['config', 'maintenance.auto', 'true'])
+    const { maintenance, arm } = createMaintenance()
     arm(repoPath)
     await settle(maintenance)
     maintenance.dispose()
@@ -247,24 +252,6 @@ describe('idle ref maintenance against real Git', () => {
     expect(git(repoPath, ['rev-parse', '--verify', 'refs/remotes/origin/branch-0'])).toMatch(
       /^[0-9a-f]{40}$/
     )
-  }, 30_000)
-
-  it('honours maintenance.auto=false in the repository config', async () => {
-    const { repoPath, refsDir } = await createRepo(THRESHOLD + 30)
-    git(repoPath, ['config', 'maintenance.auto', 'false'])
-    let packed = 0
-    const { maintenance, arm } = createMaintenance(() => {
-      packed += 1
-    })
-
-    arm(repoPath)
-    await settle(maintenance)
-    maintenance.dispose()
-
-    expect(packed).toBe(0)
-    await expect(countLooseRefs(refsDir, 10_000)).resolves.toMatchObject({
-      count: THRESHOLD + 31
-    })
   }, 30_000)
 })
 

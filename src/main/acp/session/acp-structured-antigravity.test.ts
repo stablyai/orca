@@ -50,3 +50,30 @@ it("fails the turn on agy's streamed 401 notice, shown as an error row and not a
     { kind: 'status', tone: 'error', text: UNAUTHENTICATED }
   ])
 })
+
+it.each([
+  'API key not valid. Please pass a valid API key.',
+  'Agent execution error: failed to create Gemini client: failed to configure default GCP credentials for Vertex AI: credentials: could not find default credentials.'
+])("fails the turn on the server's own credential notice: %s", async (notice) => {
+  const rig = await openAcpAdapterRig({
+    spec: ANTIGRAVITY,
+    script: (agent) =>
+      agent.on('session/prompt', (frame) => {
+        agent.notify('session/update', chunk(notice))
+        agent.reply(frame, { stopReason: 'end_turn' })
+      })
+  })
+  await rig.acquire()
+  await sendHello(rig, 'send-1')
+  const rows = await waitFor(async () => {
+    const found = await rig.rig.rows()
+    expect(found.some((row) => readAgentJournalTurn(row.body)?.state === 'completed')).toBe(true)
+    return found
+  })
+  expect(rows.map((row) => readAgentJournalTurn(row.body)?.outcome).filter(Boolean)).toEqual([
+    'failure'
+  ])
+  expect(rows.filter((row) => row.body.kind !== 'turn').map((row) => row.body)).toEqual([
+    { kind: 'status', tone: 'error', text: notice }
+  ])
+})

@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import {
   getSettingsFocusedExecutionHostId,
@@ -23,7 +24,7 @@ export function worktreePassesSidebarFilters(
   return computeVisibleWorktrees(
     selectWorktreesByRepo(state),
     [],
-    buildVisibleWorktreeOptionsFromState(state, repoMap)
+    buildVisibleWorktreeOptionsFromState(state, readRuntimeStatuses(), repoMap)
   ).some((worktree) => {
     if (worktree.id !== worktreeId) {
       return false

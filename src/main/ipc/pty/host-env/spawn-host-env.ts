@@ -261,7 +261,6 @@ async function resolvePtySpawnHostEnvForAct(args: PtySpawnHostEnvArgs): Promise<
       agentStatusHooksEnabled,
       agentsOnPath,
       claudeSubagentNavigationEnabled: ptySettings?.claudeSubagentNavigationEnabled,
-      terminalInlineImages: ptySettings?.terminalInlineImages,
       disabledTuiAgents: ptySettings?.disabledTuiAgents,
       networkProxySettings: ptySettings,
       routeBrowserOpensToClient: deps.runtime?.shouldRelayTerminalBrowserOpens?.(),

@@ -18,6 +18,11 @@ export const BOT_CREATE_OFFER_COPY = {
   createdTookOverSome: 'Created · took over {{taken}} of {{count}} workspaces',
   createdTookOverOne: 'Created · took over 1 workspace',
   createdTookOverMany: 'Created · took over {{count}} workspaces',
+  askedOne: 'Asked to take over 1 workspace',
+  askedMany: 'Asked to take over {{count}} workspaces',
+  tookOverSome: 'Took over {{taken}} of {{count}} workspaces',
+  tookOverOne: 'Took over 1 workspace',
+  tookOverMany: 'Took over {{count}} workspaces',
   deleted: 'Created, then deleted',
   nameTaken: 'You already have a bot named {{name}}.',
   rename: 'Rename',
@@ -41,6 +46,8 @@ export type BotCreateOfferView = {
   createdBotId: string | null
   title: string
   line: { kind: 'created' | 'deleted' | 'purpose'; text: string }
+  /** Once created with workspaces to take over: how that went, for a card whose state already says Created. */
+  takeover: string | null
   /** While the offer is open: a note beside its buttons, and which buttons show. */
   open: { note: string | null; actions: 'rename' | 'editAndCreate' } | null
 }
@@ -57,6 +64,19 @@ export function botCreateOfferTakenOver(
   }
   const home = folderWorkspaceKey(bot.folderWorkspaceId)
   return worktrees.filter((entry) => parentOf(workspaceKeyOfRow(entry.id)) === home).length
+}
+
+function takeoverLine(taken: number, count: number, say: BotCreateOfferSay): string | null {
+  if (count === 0) {
+    return null
+  }
+  if (taken === 0) {
+    return count === 1 ? say('askedOne') : say('askedMany', { count })
+  }
+  if (taken < count) {
+    return say('tookOverSome', { taken, count })
+  }
+  return count === 1 ? say('tookOverOne') : say('tookOverMany', { count })
 }
 
 function createdLine(taken: number, count: number, say: BotCreateOfferSay): string {
@@ -89,6 +109,7 @@ export function botCreateOfferView(
       createdBotId: state.botId,
       title: created?.name ?? proposal.name,
       line: { kind: 'created', text: createdLine(taken, count, say) },
+      takeover: takeoverLine(taken, count, say),
       open: null
     }
   }
@@ -97,6 +118,7 @@ export function botCreateOfferView(
       createdBotId: null,
       title: proposal.name,
       line: { kind: 'deleted', text: say('deleted') },
+      takeover: null,
       open: null
     }
   }
@@ -112,6 +134,7 @@ export function botCreateOfferView(
     createdBotId: null,
     title: proposal.name,
     line: { kind: 'purpose', text: proposal.purpose },
+    takeover: null,
     open: { note, actions: nameTaken ? 'rename' : 'editAndCreate' }
   }
 }

@@ -145,10 +145,6 @@
         "moveFailed_other": "Couldn’t move {{count}} items: {{why}}"
       }
     },
-    "lookAround": {
-      "suggestions_one": "{{count}} suggestion",
-      "suggestions_other": "{{count}} suggestions"
-    },
     "panel": {
       "needYou_one": "{{count}} needs you",
       "needYou_other": "{{count}} need you"
@@ -156,9 +152,21 @@
     "upNext": {
       "showMore_one": "Show {{count}} more",
       "showMore_other": "Show {{count}} more"
+    },
+    "webhooks": {
+      "hookCount_one": "{{count}} hook",
+      "hookCount_other": "{{count}} hooks",
+      "rotate": {
+        "stopCancels_one": "For a leaked key. {{count}} waiting call it let in is cancelled.",
+        "stopCancels_other": "For a leaked key. {{count}} waiting calls it let in are cancelled."
+      }
     }
   },
   "chat": {
+    "goal": {
+      "checks_one": "{{count}} check",
+      "checks_other": "{{count}} checks"
+    },
     "mcp": {
       "status": {
         "tools_one": "{{count}} tool",
@@ -313,6 +321,10 @@
     }
   },
   "hostScreen": {
+    "deleteConfirm": {
+      "changes_one": "{{count}} uncommitted change",
+      "changes_other": "{{count}} uncommitted changes"
+    },
     "hostBottomBar": {
       "activeFilters_one": "Workspace options ({{count}} filter active)",
       "activeFilters_other": "Workspace options ({{count}} filters active)"

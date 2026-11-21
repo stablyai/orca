@@ -87,14 +87,6 @@ describe('publishing a launch tab before its agent exists', () => {
     expect(launchTab()?.viewMode).toBe('chat')
   })
 
-  it('never makes a second tab when a retry names the same one', () => {
-    publishAgentLaunchTab(request())
-    const again = publishAgentLaunchTab(request({ requestId: 'request-2' }))
-
-    expect(again).toMatchObject({ tabId: TAB_ID, created: false })
-    expect(store.getState().tabsByWorktree[WT]?.filter((tab) => tab.id === TAB_ID)).toHaveLength(1)
-  })
-
   it("keeps a launch's final outcome on a retry of that launch; a different launch resets it", () => {
     const launchPane = () =>
       store.getState().tabsByWorktree[WT]?.find((tab) => tab.id === TAB_ID)?.agentLaunchPane
@@ -105,7 +97,9 @@ describe('publishing a launch tab before its agent exists', () => {
       outcome: { kind: 'not-started', code: 'boom' }
     })
 
-    publishAgentLaunchTab(request({ requestId: 'request-2', operationId: 'op-1' }))
+    const retried = publishAgentLaunchTab(request({ requestId: 'request-2', operationId: 'op-1' }))
+    expect(retried).toMatchObject({ tabId: TAB_ID, created: false })
+    expect(store.getState().tabsByWorktree[WT]?.filter((tab) => tab.id === TAB_ID)).toHaveLength(1)
     expect(launchPane()).toEqual({
       leafId: LEAF_ID,
       operationId: 'op-1',

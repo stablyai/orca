@@ -5,6 +5,8 @@ import type {
   BrowserReloadResult,
   BrowserStopResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
+import type { BrowserPageZoomDirection } from '../../../../shared/browser/site-settings/browser-page-zoom'
+import type { BrowserPageSiteDisplay } from '../../../../shared/browser/site-settings/browser-site-display'
 import type {
   BrowserCommandTargetParams,
   RuntimeBrowserCommandHost
@@ -15,7 +17,7 @@ export class RuntimeBrowserNavigation {
   constructor(
     private readonly host: Pick<
       RuntimeBrowserCommandHost,
-      'getAvailableAuthoritativeWindow' | 'notifyHeadlessBrowserSessionTabsChanged'
+      'getAvailableAuthoritativeWindowId' | 'notifyHeadlessBrowserSessionTabsChanged'
     >,
     private readonly targets: Pick<
       RuntimeBrowserCommandTargets,
@@ -47,7 +49,7 @@ export class RuntimeBrowserNavigation {
     if (pageId) {
       this.targets.notifyRendererNavigation(pageId, result.url, result.title)
     }
-    if (!this.host.getAvailableAuthoritativeWindow() && target.worktreeId) {
+    if (this.host.getAvailableAuthoritativeWindowId() === null && target.worktreeId) {
       this.host.notifyHeadlessBrowserSessionTabsChanged?.(target.worktreeId)
     }
     return result
@@ -77,6 +79,15 @@ export class RuntimeBrowserNavigation {
       this.targets.notifyRendererNavigation(pageId, result.url, result.title)
     }
     return result
+  }
+
+  async browserZoom(
+    params: { direction: BrowserPageZoomDirection } & BrowserCommandTargetParams
+  ): Promise<BrowserPageSiteDisplay | null> {
+    const target = await this.targets.resolveBrowserCommandTarget(params)
+    return this.targets
+      .requireAgentBrowserBridge()
+      .zoom(params.direction, target.worktreeId, target.browserPageId)
   }
 
   async browserStop(params: BrowserCommandTargetParams): Promise<BrowserStopResult> {

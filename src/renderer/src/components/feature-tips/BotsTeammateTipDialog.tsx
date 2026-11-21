@@ -8,8 +8,9 @@ import type { FeatureTip } from '../../../../shared/feature-education/feature-ti
 import { getLocalizedFeatureTipCopy } from './feature-tip-localized-copy'
 import { FeatureTipDialogFrame } from './FeatureTipDialogFrame'
 import { BotsTipGroupVisual } from './BotsTipGroupVisual'
+import { BotsTipItemsVisual } from './BotsTipItemsVisual'
 import { BotsTipMascots } from './BotsTipMascots'
-import { GroupPageCopy, TeammatePageCopy } from './BotsTipPageCopy'
+import { GroupPageCopy, ItemsPageCopy, TeammatePageCopy } from './BotsTipPageCopy'
 import { BotsTipPageNav } from './BotsTipPageNav'
 import { BotsTipSlackVisual } from './BotsTipSlackVisual'
 import { BOTS_TIP_PAGE_COUNT, mascotPawTapping } from './bots-tip-timeline'
@@ -40,6 +41,7 @@ export function BotsTeammateTipDialog({
       startPage(next)
       const titles = [
         t('featureTips.botsTeammate.title', 'Your AI teammate'),
+        t('featureTips.botsTeammate.itemsTitle', 'Its work, in one list'),
         t('featureTips.botsTeammate.groupTitle', 'Bots work together')
       ]
       setAnnounced(
@@ -85,11 +87,13 @@ export function BotsTeammateTipDialog({
 
   const pages = [
     <TeammatePageCopy key="teammate" active={page === 0} slotStart={pageStarts[0]!} />,
-    <GroupPageCopy key="group" active={page === 1} />
+    <ItemsPageCopy key="items" active={page === 1} />,
+    <GroupPageCopy key="group" active={page === 2} />
   ]
   const visuals = [
     <BotsTipSlackVisual key="slack" t={pageTimes[0]!} />,
-    <BotsTipGroupVisual key="group" t={pageTimes[1]!} />
+    <BotsTipItemsVisual key="items" t={pageTimes[1]!} />,
+    <BotsTipGroupVisual key="group" t={pageTimes[2]!} />
   ]
 
   return (

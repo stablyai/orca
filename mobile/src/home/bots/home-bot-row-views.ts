@@ -67,7 +67,7 @@ export function agentsByHome(info: HostWorktreeInfo | undefined): Map<string, Ho
   return byHome
 }
 
-/** The bot's own turn: needs you, working, else idle (grey, as Home's mock draws it). */
+/** The bot's own turn, folded as on its computer's Bots list: needs you, working, else available or paused. */
 function botDot(agents: readonly HomeAgentEntry[], paused: boolean, now: number): BotRowStatus {
   let status: WorktreeStatus = 'inactive'
   for (const { agent } of agents) {
@@ -79,7 +79,7 @@ function botDot(agents: readonly HomeAgentEntry[], paused: boolean, now: number)
       status = 'working'
     }
   }
-  return status === 'inactive' ? 'inactive' : foldBotStatus(status, paused)
+  return foldBotStatus(status, paused)
 }
 
 /** Where a row runs, kept apart from which paired computer reached it. */

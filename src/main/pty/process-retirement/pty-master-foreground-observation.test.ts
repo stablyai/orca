@@ -28,7 +28,8 @@ beforeEach(() => {
   mocks.tty.mockResolvedValue('pts/5')
   mocks.ps.mockResolvedValue('200 pts/5')
 })
-describe('physical PTY observations', () => {
+// observePtyForeground short-circuits on win32 before the POSIX master/fd path these cases cover.
+describe.skipIf(process.platform === 'win32')('physical PTY observations', () => {
   it('never queries a retired/reused fd or rescues a supported failure with a cached name', async () => {
     const owner = proc()
     owner.fd = -1

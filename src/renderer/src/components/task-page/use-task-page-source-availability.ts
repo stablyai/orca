@@ -96,14 +96,20 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
   )
   const unreachableTaskSourceHostKey = [...unreachableTaskSourceHostIds].sort().join('|')
   // The request a skipped host would have made was the dial that notices it came back; one status check stands in.
-  const recheckUnreachableTaskSourceHosts = useCallback(() => {
-    for (const hostId of unreachableTaskSourceHostIds) {
-      const host = parseExecutionHostId(hostId)
-      if (host?.kind === 'runtime') {
-        void useAppStore.getState().refreshRuntimeEnvironmentStatus(host.environmentId)
+  // `force` for a user's Refresh or Retry, which must not wait out a failed host's backoff.
+  const recheckUnreachableTaskSourceHosts = useCallback(
+    (options?: { force?: true }) => {
+      for (const hostId of unreachableTaskSourceHostIds) {
+        const host = parseExecutionHostId(hostId)
+        if (host?.kind === 'runtime') {
+          void useAppStore
+            .getState()
+            .refreshRuntimeEnvironmentStatus(host.environmentId, undefined, options)
+        }
       }
-    }
-  }, [unreachableTaskSourceHostIds])
+    },
+    [unreachableTaskSourceHostIds]
+  )
   const accountBackedTaskSourceHostId = useMemo(
     () => getSettingsFocusedExecutionHostId(settings),
     [settings]

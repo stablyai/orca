@@ -92,6 +92,8 @@ type SortableTabContextMenuProps = {
   isPinned: boolean
   /** See `SortableTabProps.closable`. */
   closable?: boolean
+  /** See `SortableTabProps.canPin`. */
+  canPin?: boolean
   /** See `SortableTabProps.canContinueInTerminal`. */
   canContinueInTerminal?: boolean
   onSessionSwitchComplete?: () => void
@@ -123,6 +125,7 @@ export function SortableTabContextMenu({
   tabCount,
   isPinned,
   closable = true,
+  canPin = true,
   canContinueInTerminal = true,
   onSessionSwitchComplete,
   sessionSwitchOpening,
@@ -180,7 +183,7 @@ export function SortableTabContextMenu({
             <SquareTerminal className="size-3.5 shrink-0" />
             {t(
               'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
-              'Continue with Terminal Agent'
+              'Continue in terminal'
             )}
           </ContextMenuItem>
         </>
@@ -196,7 +199,7 @@ export function SortableTabContextMenu({
         />
       ) : null}
       <ContextMenuSeparator />
-      {closable ? (
+      {closable && (canPin || isPinned) ? (
         <ContextMenuItem onSelect={onTogglePin}>
           {isPinned ? (
             <PinOff className="size-3.5 shrink-0" />

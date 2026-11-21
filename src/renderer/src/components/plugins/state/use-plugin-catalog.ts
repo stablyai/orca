@@ -63,8 +63,8 @@ export function usePluginCatalog({
     requestPluginInstallCounts()
     try {
       const [nextSources, nextListings] = await Promise.all([
-        window.api.plugins.listMarketplaces(),
-        window.api.plugins.listMarketplacePlugins()
+        window.api.plugins.listMarketplaces({ waitForRefresh: true }),
+        window.api.plugins.listMarketplacePlugins({ waitForRefresh: true })
       ])
       if (mountedRef.current && requestId === requestRef.current) {
         setSources(nextSources)
