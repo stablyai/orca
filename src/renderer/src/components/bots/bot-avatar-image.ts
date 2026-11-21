@@ -26,6 +26,14 @@ function uploadSrc(bot: BotRef, version: string): Promise<string | null> {
   return src
 }
 
+/** The bot's uploaded picture through the shared cache: a data URL, null for none, undefined when the
+ *  read failed. */
+export function readBotUploadSrc(bot: BotRef, version: string): Promise<string | null | undefined> {
+  return uploadSrc(bot, version).then((src) =>
+    src === null && uploads.get(botRefKey(bot))?.version !== version ? undefined : src
+  )
+}
+
 /** The picture's URL; null shows the emoji or initial. */
 export function useBotAvatarSrc(
   bot: Pick<Bot, 'id' | 'avatar' | 'avatarColor'> & BotOnHost

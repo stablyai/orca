@@ -3,7 +3,8 @@
 // with the rows not drawn standing as gaps of their height, so the browser keeps the reading position as
 // for any list. Rows keep their keys at every size, so a group never remounts its rows as it grows or
 // shrinks. One row is in the Tab
-// order; arrows, Home and End move between rows, drawing the next one first. The row holding focus, the
+// order; arrows, Home and End move between rows, drawing the next one first (at the group's first or
+// last row they go on to the panel, which scrolls). The row holding focus, the
 // group's Tab stop, and Back's row stay drawn wherever the panel scrolls. A short group draws every row
 // and leaves Tab and the keys to the panel, as a plain list does.
 import { Fragment, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -363,8 +364,9 @@ export function BotItemRowsWindow({
     const at = Number(
       event.target.closest<HTMLElement>('[data-bot-item-index]')?.dataset.botItemIndex ?? -1
     )
-    // At the group's first or last row, Home and End go on to the panel, which scrolls to its ends.
-    if (at < 0 || (event.key === 'Home' && at === 0) || (event.key === 'End' && at === count - 1)) {
+    // At the group's first or last row, the keys that would leave it go on to the panel, which scrolls.
+    const up = event.key === 'Home' || event.key === 'ArrowUp'
+    if (at < 0 || (up && at === 0) || (!up && at === count - 1)) {
       return
     }
     const next =
@@ -374,7 +376,6 @@ export function BotItemRowsWindow({
           ? count - 1
           : Math.min(count - 1, Math.max(0, at + (event.key === 'ArrowDown' ? 1 : -1)))
     const item = items[next]
-    // At either end the key does nothing, rather than scroll the panel while focus stays on the row.
     event.preventDefault()
     if (next === at || !item) {
       return
