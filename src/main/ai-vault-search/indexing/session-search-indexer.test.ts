@@ -132,6 +132,42 @@ it.each(['append', 'rewrite'] as const)(
   }
 )
 
+it('finds an unchanged Antigravity transcript in its workspace when metadata arrives later', async () => {
+  const brain = join(harness.root, '.gemini', 'antigravity-cli', 'brain')
+  await writeAntigravityTranscript(brain, 'late-workspace', [
+    {
+      source: 'USER_EXPLICIT',
+      type: 'USER_INPUT',
+      created_at: '2026-10-02T01:00:00Z',
+      content: '<USER_REQUEST>lateworkspaceneedle</USER_REQUEST>'
+    }
+  ])
+  const workspace = join(harness.root, 'worktree')
+  const search = (scopePaths?: string[]) =>
+    harness.read((db) =>
+      new SessionSearchEngine(db)
+        .search({ query: 'lateworkspaceneedle', filters: { scopePaths } })
+        .hits.map((hit) => hit.sessionId)
+    )
+  const active = newIndexer({
+    roots: { ...harness.roots, antigravityBrainDir: brain, antigravityAppHome: harness.root }
+  })
+  await active.start()
+  expect(search()).toEqual(['late-workspace'])
+  expect(search([workspace])).toEqual([])
+
+  const cache = join(dirname(brain), 'cache')
+  await mkdir(cache, { recursive: true })
+  await writeFile(
+    join(cache, 'last_conversations.json'),
+    JSON.stringify({ [workspace]: 'late-workspace' })
+  )
+  await active.reconcile({ full: true })
+  expect(search([workspace])).toEqual(['late-workspace'])
+  expect(search()).toEqual(['late-workspace'])
+  expect(errors).toEqual([])
+})
+
 /** Two transcripts untouched for days in one directory, so cycles reuse their indexed stats. */
 async function writeQuietTranscripts(): Promise<string> {
   const path = transcriptPath()

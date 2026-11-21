@@ -1,3 +1,4 @@
+import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   createAntigravityWorkspaceResolver,
   readLocalAntigravityHistory
@@ -23,7 +24,7 @@ import type {
 } from '../storage/session-search-store-types'
 
 // Older cursors prove byte coverage, not workspace enrichment or readable conversation content.
-type AntigravitySnapshot = 'content' | 'empty' | 'suppressed'
+type AntigravitySnapshot = 'content' | 'empty' | 'suppressed' | AiVaultSession
 const verifiedAntigravity = new WeakMap<SessionSearchIndexStore, Map<string, AntigravitySnapshot>>()
 
 export type SessionSearchIndexPassOptions = {
@@ -94,18 +95,26 @@ export async function runSessionSearchIndexPass(
         row?.state === 'current' &&
         cursor !== null &&
         (cutoffMs === null || candidate.file.mtimeMs >= cutoffMs)
-      if (
-        decision === 'skip' &&
-        current &&
-        candidate.agent === 'antigravity' &&
-        (!verified.has(path) || (paired && position === 0 && verified.get(path) === 'empty'))
-      ) {
-        decision = 'whole'
+      const snapshot = verified.get(path)
+      const historyPath = candidate.antigravityHistoryPath
+      if (decision === 'skip' && current && candidate.agent === 'antigravity') {
+        let workspaceResolved = false
+        // Retry an unresolved workspace from metadata before paying to reread the transcript.
+        if (historyPath && typeof snapshot === 'object') {
+          try {
+            workspaceResolved = !!(await workspaceResolver.enrich(snapshot, historyPath)).cwd
+          } catch {
+            throwIfAiVaultScanCancelled(options.signal)
+          }
+        }
+        if (workspaceResolved || !snapshot || (paired && position === 0 && snapshot === 'empty')) {
+          decision = 'whole'
+        }
       }
       if (decision === 'skip') {
         if (current) {
           if (paired) {
-            if (deferred || verified.get(path) !== 'content') {
+            if (deferred || (snapshot !== 'content' && typeof snapshot !== 'object')) {
               continue
             }
             deferred = false
@@ -150,6 +159,7 @@ export async function runSessionSearchIndexPass(
       admitted = true
       read += 1
       let hasMessages = false
+      let unresolvedWorkspace: AiVaultSession | null = null
       try {
         const session = await parseAgentSessionFileCached(
           candidate,
@@ -161,9 +171,14 @@ export async function runSessionSearchIndexPass(
             if (paired && position === 0 && session.messageCount === 0) {
               return null
             }
-            return candidate.antigravityHistoryPath
-              ? workspaceResolver.enrich(session, candidate.antigravityHistoryPath)
-              : session
+            if (!historyPath) {
+              return session
+            }
+            const enriched = await workspaceResolver.enrich(session, historyPath)
+            if (!enriched.cwd) {
+              unresolvedWorkspace = session
+            }
+            return enriched
           }
         )
         hasMessages = (session?.messageCount ?? 0) > 0
@@ -187,7 +202,11 @@ export async function runSessionSearchIndexPass(
           if (covered) {
             verified.set(
               path,
-              hasMessages ? 'content' : paired && position === 0 ? 'suppressed' : 'empty'
+              hasMessages
+                ? (unresolvedWorkspace ?? 'content')
+                : paired && position === 0
+                  ? 'suppressed'
+                  : 'empty'
             )
           }
           if (paired) {
