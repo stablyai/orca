@@ -12,6 +12,7 @@ import {
   buildSmartWorkspaceUrlSourceRows,
   type SmartWorkspaceGitLabUrlIntent
 } from './smart-workspace-url-source-results'
+import { findSmartWorkspaceBranchIntentRef } from './smart-workspace-command-value'
 import { isSmartWorkspaceSourceQueryWithinLimit } from './smart-workspace-source-query'
 
 export {
@@ -310,5 +311,15 @@ export function buildSmartWorkspaceSourceRows({
   if (mode === 'jira') {
     nextRows.push(...jiraIssues.map(toJiraSourceRow))
   }
-  return nextRows.slice(0, resultLimit + 1)
+  const cappedRows = nextRows.slice(0, resultLimit + 1)
+  if (mode !== 'smart' || !trimmed) {
+    return cappedRows
+  }
+  const branchIntentRef = findSmartWorkspaceBranchIntentRef(trimmed, branches, resultLimit)
+  const branchIntentRow = branchIntentRef
+    ? nextRows.find((row) => row.kind === 'branch' && row.refName === branchIntentRef)
+    : undefined
+  return branchIntentRow && !cappedRows.includes(branchIntentRow)
+    ? [...cappedRows.slice(0, -1), branchIntentRow]
+    : cappedRows
 }
