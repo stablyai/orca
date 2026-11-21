@@ -1,11 +1,14 @@
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { BotItemStatus } from '../../shared/bots/bot-items'
 import { SALVAGE } from './bot-memory-salvage'
 import { salvageOffer, type SalvageOfferDeps } from './bot-memory-salvage-offer'
-import { BotSalvageStore } from './bot-memory-salvage-store'
+import { BotSalvageStore, salvageFileIo } from './bot-memory-salvage-store'
+import { botMemoryHistoryAuthor } from '../../shared/bots/bot-memory-history-copy'
 import { statusMigrationPlan } from './bot-memory-status-migration'
 
-const DAY = 86_400_000
 const DECISION = "- 2026-11-03 PR #5900 merged; Dana picked: 'CSV first' after round C2"
 const SECOND = "- 2026-11-04 PR #5902 merged; owner decided: 'skip the tour' (item 601)"
 const STATUS = '- 2026-11-05 worker ctx_ab12cd34 pending on #5904'
@@ -15,12 +18,12 @@ function world(options: { chat?: boolean } = {}) {
   const store = new BotSalvageStore({ read: async () => null, write: async () => {} })
   const journal = new Map([['2026-11', ['# Status moved', DECISION, SECOND, STATUS]]])
   const memory: string[] = []
-  const item = {
-    status: null as BotItemStatus | null,
-    question: 0,
-    comments: [] as { id: number; text: string }[]
-  }
-  const asked: { title: string; description: string }[] = []
+  const item: {
+    status: BotItemStatus | null
+    question: number
+    comments: { id: number; text: string }[]
+  } = { status: null, question: 0, comments: [] }
+  const asked: Parameters<SalvageOfferDeps['items']['ask']>[1][] = []
   const closes: { to: string; note: string }[] = []
   let failRestore = 0
   let nextEvent = 10
@@ -88,9 +91,9 @@ describe('salvage offers decisions the status move took', () => {
     await w.moved(DECISION, SECOND, STATUS)
     await salvageOffer('b1', w.deps)
     expect(w.asked).toHaveLength(1)
-    expect(w.asked[0].description).toContain(`1. \` ${DECISION} \` (journal 2026-11)`)
-    expect(w.asked[0].description).toContain(`2. \` ${SECOND} \``)
-    expect(w.asked[0].description).not.toContain('ctx_ab12cd34')
+    expect(w.asked[0].ask.context).toContain(`1. \` ${DECISION} \` (journal 2026-11)`)
+    expect(w.asked[0].ask.context).toContain(`2. \` ${SECOND} \``)
+    expect(w.asked[0].ask.context).not.toContain('ctx_ab12cd34')
     expect(await w.states()).toEqual({
       [DECISION]: 'proposed',
       [SECOND]: 'proposed',
@@ -217,5 +220,36 @@ describe('a kept line, at the next status move', () => {
     const memory = ['# Memory', DECISION, STATUS, ''].join('\n')
     const plan = statusMigrationPlan(memory, '2026-11-22', new Set([DECISION]))
     expect(plan?.change.removed.map(({ line }) => line)).toEqual([STATUS])
+  })
+})
+
+describe('a kept line in History', () => {
+  it('names the item it was kept from', () => {
+    const t = (_key: string, fallback: string, values?: Record<string, unknown>) =>
+      fallback.replace(/\{\{(\w+)\}\}/g, (_m, name: string) => String(values?.[name] ?? ''))
+    const row = {
+      id: 'r1',
+      at: 1,
+      by: { kind: 'owner' as const, restored: { month: '2026-11', item: 700 } },
+      change: { added: [{ line: DECISION, after: null }], removed: [] },
+      undoable: true,
+      chat: null
+    }
+    expect(botMemoryHistoryAuthor(t, row)).toBe('You, kept from item #700')
+    expect(botMemoryHistoryAuthor(t, { ...row, by: { kind: 'owner' } })).toBe('You, in Settings')
+  })
+})
+
+describe('the salvage record file', () => {
+  it('starts empty and writable when there is no file yet', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'salvage-'))
+    try {
+      const store = new BotSalvageStore(salvageFileIo(() => join(dir, 'bot-memory-salvage.json')))
+      await store.recordMoved('b1', '2026-11', [DECISION], 1)
+      const saved = await readFile(join(dir, 'bot-memory-salvage.json'), 'utf8')
+      expect(saved).toContain('CSV first')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })

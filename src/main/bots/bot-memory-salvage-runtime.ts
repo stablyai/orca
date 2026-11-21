@@ -1,7 +1,7 @@
 // Salvage on this host: the offer's reads and writes on the real Items, MEMORY.md and journal, one
 // pass at a time per bot. A pass runs after a pilot bot's Tidy-up, and when its open proposal's
 // item changes (the owner may have answered).
-import { execFile } from 'node:child_process'
+import { runProcess } from '@orca/process-host'
 import { join } from 'node:path'
 import type { Bot } from '../../shared/bot-types'
 import { botMemoryLineKey } from '../../shared/bot-memory-lines'
@@ -18,16 +18,15 @@ const EVENTS_PAGE = 50
 /** The owner's first name as this computer knows it, for "Dana picked"; none when unknown. */
 let ownerNamesRead: Promise<string[]> | null = null
 function hostOwnerNames(): Promise<string[]> {
-  ownerNamesRead ??= new Promise((resolve) => {
-    if (process.platform !== 'darwin') {
-      resolve([])
-      return
-    }
-    execFile('id', ['-F'], { timeout: 5_000 }, (error, stdout) => {
-      const first = error ? '' : (String(stdout).trim().split(/\s+/)[0] ?? '')
-      resolve(first.length >= 2 ? [first] : [])
-    })
-  })
+  ownerNamesRead ??=
+    process.platform !== 'darwin'
+      ? Promise.resolve([])
+      : runProcess({ program: '/usr/bin/id', args: ['-F'], timeoutMs: 5_000 })
+          .then(({ code, stdout }) => {
+            const first = code === 0 ? (stdout.trim().split(/\s+/)[0] ?? '') : ''
+            return first.length >= 2 ? [first] : []
+          })
+          .catch(() => [])
   return ownerNamesRead
 }
 

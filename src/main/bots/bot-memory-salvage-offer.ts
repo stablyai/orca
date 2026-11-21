@@ -18,7 +18,11 @@ import {
   type SalvageSource,
   salvageNextProposal
 } from './bot-memory-salvage-store'
-import { SALVAGE_NOTES, SALVAGE_REASK, salvageProposalText } from './bot-memory-salvage-text'
+import {
+  SALVAGE_NOTES,
+  SALVAGE_REASK,
+  salvageProposalText
+} from '../../shared/bots/bot-memory-salvage-text'
 
 /** Non-candidates are never offered, so after this long they are dropped from the record. */
 const NON_CANDIDATE_KEPT_MS = 180 * 86_400_000

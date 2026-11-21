@@ -1,6 +1,6 @@
 // The item salvage asks with: the lines word for word, each with its journal month and any later
 // line that may replace it, and a question with two quick replies. The owner may also type numbers.
-import type { BotItemAsk } from '../../shared/bots/bot-item-ask'
+import type { BotItemAsk } from './bot-item-ask'
 
 export const SALVAGE_KEEP_ALL = 'Keep all'
 export const SALVAGE_KEEP_NONE = 'Keep none'
@@ -32,13 +32,15 @@ export function salvageProposalText(offered: readonly SalvageOffered[]): {
     description: [
       "Tidy-up moved these lines out of MEMORY.md into the bot's journal because they mention work in progress. They read like decisions you made, so they may belong in memory.",
       "Each line is the bot's own note, quoted from its journal word for word. It matched a pattern, which doesn't mean you said it.",
-      '',
-      ...lines,
-      '',
       'Orca puts back exactly the lines you keep and changes nothing else. Nothing changes until you answer.'
-    ].join('\n'),
+    ].join('\n\n'),
+    // The lines sit with the question, so the owner reads them where they answer.
     ask: {
-      context: `Answer ${SALVAGE_KEEP_ALL}, ${SALVAGE_KEEP_NONE}, or the numbers to keep, like "1, 3".`,
+      context: [
+        ...lines,
+        '',
+        `Answer ${SALVAGE_KEEP_ALL}, ${SALVAGE_KEEP_NONE}, or the numbers to keep, like "1, 3".`
+      ].join('\n'),
       questions: [
         {
           prompt: 'Keep these lines in memory?',
