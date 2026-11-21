@@ -47,6 +47,8 @@ export class StructuredAgentSessionUsageLimitContinue {
   }
 
   start(): void {
+    // Seeded, so a chat closed before the first sweep is still told closed.
+    this.shown = new Set(openUsageLimitChats(this.deps.host.store))
     this.timer = setInterval(() => void this.tick(), 10_000)
     this.timer.unref?.()
     let enabled = this.enabled()
