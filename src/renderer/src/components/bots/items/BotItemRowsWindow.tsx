@@ -169,6 +169,7 @@ export function BotItemRowsWindow({
     [items, placed]
   )
   const [sizes, setSizes] = useState(DEFAULT_ROW_SIZES)
+  const sizesRead = useRef(false)
   const geometry = useMemo(
     () =>
       tallKey.includes('1')
@@ -208,11 +209,6 @@ export function BotItemRowsWindow({
     const box = viewport.read()
     const element = container.current
     const top = box && element ? element.getBoundingClientRect().top : null
-    const read = element ? readRowSizes(element, sizes) : sizes
-    if (read !== sizes) {
-      // New heights re-position the rows, which measures again.
-      setSizes(read)
-    }
     let next: Range = { start: 0, end: Math.min(count, FIRST_ROWS) }
     if (box && top !== null) {
       const from = box.top - top - OVERSCAN_PX
@@ -221,6 +217,17 @@ export function BotItemRowsWindow({
         count === 0 || to <= 0 || from >= geometry.total
           ? { start: 0, end: 0 }
           : { start: geometry.indexAt(Math.max(0, from)), end: geometry.indexAt(to) + 1 }
+    }
+    // Heights are read from drawn rows once, then as the range moves (not every scroll frame), and
+    // never for a group out of view.
+    const moved = next.start !== windowRange.start || next.end !== windowRange.end
+    if (element && next.end > next.start && (moved || !sizesRead.current)) {
+      sizesRead.current = windowRange.end > windowRange.start
+      const read = readRowSizes(element, sizes)
+      if (read !== sizes) {
+        // New heights re-position the rows, which measures again.
+        setSizes(read)
+      }
     }
     const band = bandOf(items, next.start, next.end)
     setRange((prev) =>

@@ -10,15 +10,18 @@ import { BOT_MASCOT_URLS } from './bot-mascots'
 export function BotAvatar({
   bot,
   className,
-  style
+  style,
+  waitToRetry
 }: {
   bot: Pick<Bot, 'id' | 'name' | 'avatar' | 'avatarColor'> & BotOnHost
   className?: string
   style?: React.CSSProperties
+  /** Drawn as its list scrolls: a failed picture read is retried only after a while. */
+  waitToRetry?: boolean
 }): React.JSX.Element {
   return (
     <BotAvatarTile
-      src={useBotAvatarSrc(bot)}
+      src={useBotAvatarSrc(bot, waitToRetry)}
       fallback={botFallback(bot)}
       className={className}
       style={style}

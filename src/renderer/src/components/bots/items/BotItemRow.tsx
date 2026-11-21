@@ -53,36 +53,36 @@ type BotItemRowProps = {
   listItem?: boolean
 }
 
+type ItemFieldEqual = (a: BotItem, b: BotItem) => boolean
+const skipped: ItemFieldEqual = () => true
+
 /** How each field compares when the version is unchanged. Only the item's own write bumps the version,
  *  so its long texts (which the row never shows) skip; of its links the row shows only whether one is
  *  live; joined parts (names, chat, the question) compare by value. Typed per field, so a new field
  *  needs a rule. */
-const ITEM_FIELD_RULES: Record<keyof BotItem, 'same' | 'value' | 'skip' | 'live'> = {
-  uid: 'same',
-  number: 'same',
-  owner: 'value',
-  title: 'same',
-  description: 'skip',
-  doneMeans: 'skip',
-  status: 'same',
-  chat: 'value',
-  madeBy: 'value',
-  question: 'value',
-  closeNote: 'same',
-  links: 'live',
-  version: 'same',
-  lastEventId: 'same',
-  othersLastEventId: 'same',
-  snoozedUntil: 'same',
-  lastActivityAt: 'same',
-  createdAt: 'same',
-  updatedAt: 'same',
-  closedAt: 'same'
+const ITEM_FIELD_RULES: Record<keyof BotItem, ItemFieldEqual> = {
+  uid: (a, b) => a.uid === b.uid,
+  number: (a, b) => a.number === b.number,
+  owner: (a, b) => structuralValuesEqual(a.owner, b.owner),
+  title: (a, b) => a.title === b.title,
+  description: skipped,
+  doneMeans: skipped,
+  status: (a, b) => a.status === b.status,
+  chat: (a, b) => structuralValuesEqual(a.chat, b.chat),
+  madeBy: (a, b) => structuralValuesEqual(a.madeBy, b.madeBy),
+  question: (a, b) => structuralValuesEqual(a.question, b.question),
+  closeNote: (a, b) => a.closeNote === b.closeNote,
+  links: (a, b) => isBotItemLive(a) === isBotItemLive(b),
+  version: (a, b) => a.version === b.version,
+  lastEventId: (a, b) => a.lastEventId === b.lastEventId,
+  othersLastEventId: (a, b) => a.othersLastEventId === b.othersLastEventId,
+  snoozedUntil: (a, b) => a.snoozedUntil === b.snoozedUntil,
+  lastActivityAt: (a, b) => a.lastActivityAt === b.lastActivityAt,
+  createdAt: (a, b) => a.createdAt === b.createdAt,
+  updatedAt: (a, b) => a.updatedAt === b.updatedAt,
+  closedAt: (a, b) => a.closedAt === b.closedAt
 }
-const ITEM_FIELDS = Object.entries(ITEM_FIELD_RULES) as [
-  keyof BotItem,
-  (typeof ITEM_FIELD_RULES)[keyof BotItem]
-][]
+const ITEM_FIELD_EQUALS = Object.values(ITEM_FIELD_RULES)
 
 /** Equal for the row: a fresh host read decodes every item anew. Constant work per item. */
 function sameItem(a: BotItem, b: BotItem): boolean {
@@ -92,15 +92,7 @@ function sameItem(a: BotItem, b: BotItem): boolean {
   if (a.version !== b.version || a.updatedAt !== b.updatedAt) {
     return false
   }
-  return ITEM_FIELDS.every(([field, rule]) =>
-    rule === 'skip'
-      ? true
-      : rule === 'live'
-        ? isBotItemLive(a) === isBotItemLive(b)
-        : rule === 'same'
-          ? Object.is(a[field], b[field])
-          : structuralValuesEqual(a[field], b[field])
-  )
+  return ITEM_FIELD_EQUALS.every((equal) => equal(a, b))
 }
 
 /** The item compares by value, as a fresh host read decodes it anew; every other prop by identity. */
