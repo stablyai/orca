@@ -85,6 +85,16 @@ export class BotChatTreeWorkerCache {
     return [...kept, ...fresh]
   }
 
+  /** Forgets the reads of bots no longer on the host. */
+  keepBots(botIds: readonly string[]): void {
+    const live = new Set(botIds)
+    for (const botId of this.byBot.keys()) {
+      if (!live.has(botId)) {
+        this.byBot.delete(botId)
+      }
+    }
+  }
+
   /** The database's notice of a Dispatch row write; one to a row no Dispatch owns changes no read. */
   rowChanged(dispatchId: string | null, change: DispatchRowChange): void {
     if (dispatchId !== null || change === 'deleted') {

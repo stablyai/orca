@@ -1,5 +1,6 @@
 // `bots.chatTree`: a bot's chats with the workers each started, built on the bot's host from its own records.
 import { structuredAgentSessionStatusPaneKey } from '../../shared/agent-session/view/structured-agent-session-tab'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentListVerdict } from '../../shared/agent-status/presentation/agent-list-status'
 import { handedAgentRows } from '../../shared/bots/bot-activity-handed-agents'
 import type { BotChatTreeRead, BotChatTreeWorker } from '../../shared/bots/bot-chat-tree'
@@ -66,11 +67,21 @@ function handedWorker(row: ReturnType<typeof handedAgentRows>[number]): BotChatT
 function workerStatusEvidence(
   host: BotChatTreeHost
 ): (worker: OrchestrationSessionWorker) => string {
-  const rows = new Map(host.statusRows().map((row) => [row.paneKey, row]))
-  return (worker) => {
-    const row = worker.paneKey ? rows.get(worker.paneKey) : undefined
-    return row ? `${row.agentType ?? ''}|${row.connectionId ?? ''}` : ''
+  const byPane = new Map<string, AgentStatusIpcPayload>()
+  const byHandle = new Map<string, AgentStatusIpcPayload>()
+  for (const row of host.statusRows()) {
+    byPane.set(row.paneKey, row)
+    if (row.terminalHandle) {
+      byHandle.set(row.terminalHandle, row)
+    }
   }
+  const key = (row: AgentStatusIpcPayload | undefined): string =>
+    row ? `${row.agentType ?? ''}|${row.connectionId ?? ''}` : ''
+  // A worker's row is matched by its pane, else by its terminal handle.
+  return (worker) =>
+    `${key(worker.paneKey ? byPane.get(worker.paneKey) : undefined)}/${key(
+      worker.address ? byHandle.get(worker.address) : undefined
+    )}`
 }
 
 async function readBotChatBase(host: BotChatTreeHost, bot: Bot) {
@@ -119,7 +130,9 @@ export async function readBotChatTreeParts(
   host: BotChatTreeHost,
   params: BotChatTreeParams
 ): Promise<BotChatTreeParts> {
-  const bot = host.bots().find((entry) => entry.id === params.botId)
+  const bots = host.bots()
+  host.workerCache?.keepBots(bots.map((entry) => entry.id))
+  const bot = bots.find((entry) => entry.id === params.botId)
   if (!bot) {
     throw new Error('bot_not_found')
   }
