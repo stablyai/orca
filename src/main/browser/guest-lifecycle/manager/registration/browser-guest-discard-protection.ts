@@ -209,9 +209,9 @@ export function installBrowserGuestDiscardProtection(
     if (details.isMainFrame && !details.isSameDocument) {
       owner.navigating = true
       invalidate()
-    } else if (details.isMainFrame && !owner.currentPostChecked) {
+    } else if (details.isMainFrame && !owner.currentPostChecked && !owner.currentEdited) {
       // History API updates drop the entry's form body while the POST result stays on screen, so
-      // read it once per document before the first one lands.
+      // read it once per document before the first one lands; edits already protect until commit.
       owner.currentPostChecked = true
       owner.currentPost ||= readBrowserGuestCurrentFormData(guest) !== 'none'
       publish()
