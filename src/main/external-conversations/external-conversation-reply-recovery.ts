@@ -261,6 +261,7 @@ export class ConnectorReplyRecovery {
         sessionId,
         turnItemId: turn.itemId,
         stamps,
+        ...(opener ? { openerItemId: opener.itemId } : {}),
         outcome,
         prose: structuredAgentSessionTurnAssistantMessage(snapshot.items, turn.itemId),
         bot: this.deps.isBot(sessionId),

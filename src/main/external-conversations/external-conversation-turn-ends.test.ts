@@ -109,3 +109,57 @@ it('fills an answered turn with how long it ran, by its own start and end', asyn
   )
   expect(fill.mock.lastCall?.[0]).not.toHaveProperty('tookMs')
 })
+
+it('ends a Slack turn its stamps name state-only even when its rows are already gone, never with its answer', async () => {
+  const run = async (source: 'slack' | 'github', fill: ConversationReplyFill) => {
+    const emit = vi.fn()
+    const externalId = `${source}:thread`
+    const end: ChatTurnEnd = {
+      ended: {
+        kind: 'turn-ended',
+        conversation: { source, externalId },
+        paneKey: 'pane',
+        worktreeId: 'wt',
+        turnId: 1,
+        stopReason: 'success',
+        at: 2
+      },
+      news: {
+        kind: 'turn-ended',
+        sessionId: 'chat-1',
+        outcome: 'success',
+        readTurn: async () => ({}),
+        at: 2
+      },
+      agent: 'claude',
+      emit,
+      turnFor: () => ({}),
+      workersChecked: async () => undefined,
+      current: () => true
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a replied end reads only source, externalId and bot.
+    const link = { source, externalId } as ExternalConversationLink
+    const told = await endRepliedTurn(
+      end,
+      {
+        turnItemId: 'item:turn-1',
+        stamps: [{ account: 'a', conversation: { source, externalId }, deliveryId: 'd1' }],
+        turnProse: 'Done.'
+      },
+      link,
+      async () => [],
+      fill
+    )
+    return { told, emitted: emit.mock.calls.map(([event]) => event.stateOnly === true) }
+  }
+  // Recovery already filled, sent and deleted its rows: the fill covers nothing.
+  expect(await run('slack', async () => new Set())).toEqual({ told: true, emitted: [true] })
+  // The fill failed: recovery drains the rows; the thread still never gets a full end.
+  expect(
+    await run('slack', async () => {
+      throw new Error('journal busy')
+    })
+  ).toEqual({ told: true, emitted: [true] })
+  // Sources outside the outbox keep their full end.
+  expect(await run('github', async () => new Set())).toEqual({ told: false, emitted: [] })
+})

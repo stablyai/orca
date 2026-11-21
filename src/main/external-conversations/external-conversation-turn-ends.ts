@@ -1,3 +1,4 @@
+import { answersThroughOutbox } from '../../shared/agent-session/journal/journal-connector-reply'
 // The ends of chat turns their conversation didn't ask for: one adopted for its prompt tells how it
 // went and never what it said; an Orca-typed turn of a chat posting to Slack posts its reply too.
 import type { NativeChatAgent } from '../../shared/agent-launch/permissions/agent-chat-permission-support'
@@ -127,6 +128,7 @@ export async function endRepliedTurn(
     sessionId: end.news.sessionId,
     turnItemId: turn.turnItemId,
     stamps: turn.stamps,
+    ...(turn.opener ? { openerItemId: turn.opener.itemId } : {}),
     outcome: end.news.outcome,
     prose: turn.turnProse ?? '',
     bot: Boolean(link.bot),
@@ -137,7 +139,18 @@ export async function endRepliedTurn(
     console.warn('[connector] could not fill reply outbox rows', error)
     return new Set<string>()
   })
-  if (!end.current() || !covered.has(link.externalId)) {
+  // A turn whose stamps name this conversation answers it through the outbox only, even when its
+  // rows were already sent and gone or the fill failed (recovery drains what is left): never also as
+  // a full end.
+  const outboxed =
+    covered.has(link.externalId) ||
+    (answersThroughOutbox(link.source) &&
+      turn.stamps.some(
+        (stamp) =>
+          stamp.conversation.source === link.source &&
+          stamp.conversation.externalId === link.externalId
+      ))
+  if (!end.current() || !outboxed) {
     return !end.current()
   }
   // The constant fallback uses this end's existing durable turn-event key.

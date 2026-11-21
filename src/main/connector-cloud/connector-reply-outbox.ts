@@ -8,6 +8,8 @@ import {
   type ConnectorEvent
 } from '../../shared/connectors/connector-cloud-contract'
 import type {
+  JournalConnectorReplyCut,
+  JournalConnectorReplyCutRows,
   JournalConnectorReplyFill,
   JournalConnectorReplyKey,
   JournalConnectorReplyOutcome,
@@ -20,6 +22,13 @@ export type ConnectorReplyJournal = {
   read(sessionId?: string): Promise<JournalConnectorReplyRow[]>
   fillOutcomes(fills: readonly JournalConnectorReplyFill[]): Promise<boolean>
   sent(keys: readonly JournalConnectorReplyKey[]): Promise<void>
+}
+
+/** The rows' cut and claim writes (Phase 1): what restart and usage-limit recovery change. */
+export type ConnectorReplyCutJournal = ConnectorReplyJournal & {
+  cut(rows: JournalConnectorReplyCutRows): Promise<boolean>
+  recut(claimMessageId: string, cut: JournalConnectorReplyCut): Promise<boolean>
+  releaseClaim(claimMessageId: string): Promise<boolean>
 }
 
 export type ConnectorReplyEvent = Extract<ConnectorEvent, { kind: 'reply' }>
