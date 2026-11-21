@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const { runProcess } = vi.hoisted(() => ({ runProcess: vi.fn() }))
 vi.mock('@orca/process-host', () => ({ runProcess }))
 
+import { resolvePathEnvKey } from '../../pty/environment/windows-path-segment-merge'
 import {
   isExternalAutomationCommandOnPath,
   runLocalAutomationCommand
@@ -28,56 +29,62 @@ afterEach(async () => {
   await rm(pathDir, { recursive: true, force: true })
 })
 
-it('spawns a Windows npm .cmd shim by its resolved path', async () => {
+it('spawns a Windows npm .cmd shim by its resolved path with its directory on PATH', async () => {
   Object.defineProperty(process, 'platform', { value: 'win32' })
   const shimPath = join(pathDir, 'orca-test-openclaw.cmd')
   await writeFile(shimPath, '@echo off\r\n')
 
   await runLocalAutomationCommand('orca-test-openclaw', ['cron', 'run', 'job-42'])
 
-  // runProcess launches .cmd shims only when the program carries the extension.
   expect(runProcess).toHaveBeenCalledWith(
     expect.objectContaining({
       program: shimPath,
-      args: ['cron', 'run', 'job-42']
+      args: ['cron', 'run', 'job-42'],
+      env: expect.objectContaining({
+        [resolvePathEnvKey(process.env, 'win32')]: pathDir
+      })
     })
   )
 })
 
-it('discovers commands with System32 where.exe, not a PATH lookup of where', async () => {
+it('reports availability from resolution without spawning a lookup process', async () => {
   Object.defineProperty(process, 'platform', { value: 'win32' })
-  vi.stubEnv('SystemRoot', 'C:\\Windows')
-  await writeFile(join(pathDir, 'where.cmd'), '@echo off\r\n')
+  await writeFile(join(pathDir, 'orca-test-openclaw.cmd'), '@echo off\r\n')
 
   await expect(isExternalAutomationCommandOnPath('orca-test-openclaw')).resolves.toBe(true)
+  expect(runProcess).not.toHaveBeenCalled()
 
-  expect(runProcess).toHaveBeenCalledWith(
-    expect.objectContaining({
-      program: 'C:\\Windows\\System32\\where.exe',
-      args: ['orca-test-openclaw']
-    })
-  )
+  await expect(isExternalAutomationCommandOnPath('missing-test-cli')).resolves.toBe(false)
 })
 
-it('spawns the bare name on Windows when PATH has no match', async () => {
+it('spawns the bare name with no env override when resolution finds nothing', async () => {
   Object.defineProperty(process, 'platform', { value: 'win32' })
 
   await runLocalAutomationCommand('orca-test-openclaw', ['cron', 'list'])
 
-  expect(runProcess).toHaveBeenCalledWith(
-    expect.objectContaining({ program: 'orca-test-openclaw' })
-  )
+  expect(runProcess).toHaveBeenCalledWith({
+    program: 'orca-test-openclaw',
+    args: ['cron', 'list'],
+    timeoutMs: 30_000
+  })
 })
 
-it('leaves POSIX spawns to PATH lookup by bare name', async () => {
-  Object.defineProperty(process, 'platform', { value: 'linux' })
-  const binary = join(pathDir, 'orca-test-openclaw')
-  await writeFile(binary, '#!/bin/sh\n')
-  await chmod(binary, 0o755)
+it('preserves timeout and error reporting for resolved commands', async () => {
+  Object.defineProperty(process, 'platform', { value: 'win32' })
+  await writeFile(join(pathDir, 'orca-test-openclaw.cmd'), '@echo off\r\n')
 
-  await runLocalAutomationCommand('orca-test-openclaw', ['cron', 'list'])
+  runProcess.mockResolvedValueOnce({ code: 0, stdout: '', stderr: '', timedOut: true })
+  await expect(runLocalAutomationCommand('orca-test-openclaw', ['cron'])).rejects.toThrow(
+    'Local automation command timed out after 30000ms.'
+  )
 
-  expect(runProcess).toHaveBeenCalledWith(
-    expect.objectContaining({ program: 'orca-test-openclaw' })
+  runProcess.mockResolvedValueOnce({
+    code: 2,
+    stdout: '',
+    stderr: '  no such job \n',
+    timedOut: false
+  })
+  await expect(runLocalAutomationCommand('orca-test-openclaw', ['cron'])).rejects.toThrow(
+    'no such job'
   )
 })
