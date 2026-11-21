@@ -72,12 +72,9 @@ async function readDarwinRows(pids: ReadonlySet<number>): Promise<Identities | n
 
 async function readLinuxIdentity(pid: number): Promise<[number, ProcessIdentity] | null> {
   let stat: string
-  let cmdline: string
   try {
-    ;[stat, cmdline] = await Promise.all([
-      readFile(`/proc/${pid}/stat`, 'utf8'),
-      readFile(`/proc/${pid}/cmdline`, 'utf8')
-    ])
+    // stat alone: its comm changes on exec like macOS's p_comm, and argv (which can hold a launch prompt) is never read.
+    stat = await readFile(`/proc/${pid}/stat`, 'utf8')
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
       return null
@@ -93,7 +90,8 @@ async function readLinuxIdentity(pid: number): Promise<[number, ProcessIdentity]
   if (!Number.isSafeInteger(pgid) || !start) {
     throw new Error(`unparsable /proc/${pid}/stat`)
   }
-  return [pid, { pgid, identity: `${pid}@${start}:${lifecycleState(fields[0] ?? '')}:${cmdline}` }]
+  const comm = stat.slice(stat.indexOf('(') + 1, stat.lastIndexOf(')'))
+  return [pid, { pgid, identity: `${pid}@${start}:${lifecycleState(fields[0] ?? '')}:${comm}` }]
 }
 
 /** Identities of the given pids that are live members of `group`, from per-pid reads only (no table scan, no child

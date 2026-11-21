@@ -7,6 +7,7 @@ import {
   getFirstCommandToken
 } from '../../../shared/shell/command-resolution/command-token-scanner'
 import { getProcessTableIndex } from '../../../shared/process-observation/tables/process-table-index'
+import type { ProcessTableRow } from '../../../shared/process-observation/tables/process-table-snapshot'
 import type { Session } from '../sessions/session'
 import { readForegroundGroupMembers } from './terminal-host-foreground-group-identity'
 
@@ -37,7 +38,7 @@ export function clearSteadyStateAnchor(session: Session): void {
 export async function rememberSteadyStateAnchor(
   session: Session,
   evidence: RemoteForegroundEvidence,
-  rows: Parameters<typeof buildPaneProcessFingerprint>[0]
+  rows: readonly ProcessTableRow[]
 ): Promise<void> {
   anchors.delete(session)
   if (
