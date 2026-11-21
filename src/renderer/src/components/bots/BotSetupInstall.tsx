@@ -52,6 +52,7 @@ export function useBotSetupInstall(
   const signsIn =
     bot.agent === 'antigravity' &&
     !hostProgram &&
+    !ownCommand &&
     installed &&
     observation.kind === 'active' &&
     antigravityOrcaRuntimeSignsIn(observation)
