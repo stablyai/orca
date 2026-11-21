@@ -16,7 +16,10 @@ import {
 } from '../install/orcad-remote-readiness-wait'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import { withOrcadLogTail } from '../install/orcad-remote-log-tail'
-import type { RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
+import {
+  isWindowsRemoteHost,
+  type RemoteHostPlatform
+} from '../../ssh/remote-host/ssh-remote-platform'
 
 type OrcadReadinessFailureVerdict = 'exited' | 'unverifiable' | 'rejected'
 
@@ -80,22 +83,53 @@ function orcadDaemonCoverageRefusal(readiness: ServeReadiness): string | null {
   )
 }
 
+export const ORCAD_ACTIVE_PROBE_SECTION_END = '__ORCA_ACTIVE_PROBE_END__'
+
+/** Liveness, then readiness, in one POSIX command; each section ends on its own marker line. */
+export function orcadActiveProbeCommand(
+  host: RemoteHostPlatform,
+  remoteInstallDir: string
+): string {
+  return [
+    orcadLivenessProbeCommand(host, remoteInstallDir),
+    `printf '\\n%s\\n' ${ORCAD_ACTIVE_PROBE_SECTION_END}`,
+    readOrcadReadinessNowCommand(host, remoteInstallDir)
+  ].join('\n')
+}
+
 export async function probeActiveOrcadReadiness(
   target: OrcadRemoteExecTarget & { remoteInstallDir: string },
   expectation: OrcadActivationExpectation
 ): Promise<ServeReadiness> {
-  assertActiveOrcadLive(
-    await execOrcadRemote(target, orcadLivenessProbeCommand(target.host, target.remoteInstallDir)),
-    expectation
-  )
-  return activeOrcadReadinessFromOutput(
-    target.host,
-    await execOrcadRemote(
-      target,
-      readOrcadReadinessNowCommand(target.host, target.remoteInstallDir)
-    ),
-    expectation
-  )
+  if (isWindowsRemoteHost(target.host)) {
+    // Each Windows probe is its own powershell.exe command line.
+    assertActiveOrcadLive(
+      await execOrcadRemote(
+        target,
+        orcadLivenessProbeCommand(target.host, target.remoteInstallDir)
+      ),
+      expectation
+    )
+    return activeOrcadReadinessFromOutput(
+      target.host,
+      await execOrcadRemote(
+        target,
+        readOrcadReadinessNowCommand(target.host, target.remoteInstallDir)
+      ),
+      expectation
+    )
+  }
+  const sections = (
+    await execOrcadRemote(target, orcadActiveProbeCommand(target.host, target.remoteInstallDir))
+  ).split(`\n${ORCAD_ACTIVE_PROBE_SECTION_END}\n`)
+  if (sections.length !== 2) {
+    throw new OrcadActiveReadinessError(
+      'unverifiable',
+      `orcad ${expectation.fullVersion} process state is unverifiable.`
+    )
+  }
+  assertActiveOrcadLive(sections[0] ?? '', expectation)
+  return activeOrcadReadinessFromOutput(target.host, sections[1] ?? '', expectation)
 }
 
 /** Throws unless the liveness probe's answer proves the active slot's process is running. */

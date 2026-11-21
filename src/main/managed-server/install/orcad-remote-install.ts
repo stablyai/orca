@@ -7,7 +7,7 @@ import { orcadAgentBrowserNativeName } from '../../../shared/remote-runtime/orca
 import type { NodeRuntimeTarget } from '../../../shared/node-runtime/node-runtime-pin'
 import { ensureRemoteOrcadNodeRuntime } from './orcad-remote-node-runtime'
 import { recordedRemoteNodeRuntimeProbeCommand } from './orcad-remote-node-runtime-recorded-probe'
-import { cachedOrcadSlotInstalled } from './orcad-remote-install-cached-probe'
+import { readCachedOrcadSlotState } from './orcad-remote-install-cached-probe'
 import {
   execCommand,
   isSshCommandExitError,
@@ -48,7 +48,7 @@ export async function installOrcadBundle(
     nodeRuntimeOfflineArchivePath?: string
     /** Per-source connect budget for the host's own download fallback. */
     nodeRuntimeHostConnectTimeoutSeconds?: number
-    /** WSL opt-in: reuse a matching stat signature previously hashed to this pin. */
+    /** WSL opt-in: reuse a matching stat signature previously hashed to this pin; SSH always hashes. */
     recordedNodeRuntimeProbe?: boolean
     /** WSL opt-in: wait through to stale takeover instead of giving up at the step timeout. */
     localWslHost?: boolean
@@ -59,29 +59,33 @@ export async function installOrcadBundle(
   fullVersion: string,
   remoteDir: string
 ): Promise<'uploaded' | 'reused'> {
-  if (options.recordedNodeRuntimeProbe && (await cachedOrcadSlotInstalled(options, remoteDir))) {
+  const cached = await readCachedOrcadSlotState(options, remoteDir)
+  if (cached?.runtimeReady && cached.slotComplete) {
     return 'reused'
   }
-  // Existing slot bytes are unusable without their referenced runtime.
-  await ensureRemoteOrcadNodeRuntime({
-    conn: options.conn,
-    host: options.host,
-    slotDir: remoteDir,
-    target: options.target,
-    archivePath: options.nodeRuntimeArchive,
-    offlineArchivePath: options.nodeRuntimeOfflineArchivePath,
-    hostConnectTimeoutSeconds: options.nodeRuntimeHostConnectTimeoutSeconds,
-    signal: options.signal,
-    ...(options.recordedNodeRuntimeProbe
-      ? { posixProbeCommand: recordedRemoteNodeRuntimeProbeCommand }
-      : {})
-  })
-  if (
-    await isRemoteInstallComplete(options.conn, ORCAD_INSTALL_MODEL, remoteDir, options.host, {
-      signal: options.signal
+  // A runtime the combined probe found needs neither its probe again nor a slot recheck before the lock.
+  if (!cached?.runtimeReady) {
+    // Existing slot bytes are unusable without their referenced runtime.
+    await ensureRemoteOrcadNodeRuntime({
+      conn: options.conn,
+      host: options.host,
+      slotDir: remoteDir,
+      target: options.target,
+      archivePath: options.nodeRuntimeArchive,
+      offlineArchivePath: options.nodeRuntimeOfflineArchivePath,
+      hostConnectTimeoutSeconds: options.nodeRuntimeHostConnectTimeoutSeconds,
+      signal: options.signal,
+      ...(options.recordedNodeRuntimeProbe
+        ? { posixProbeCommand: recordedRemoteNodeRuntimeProbeCommand }
+        : {})
     })
-  ) {
-    return 'reused'
+    if (
+      await isRemoteInstallComplete(options.conn, ORCAD_INSTALL_MODEL, remoteDir, options.host, {
+        signal: options.signal
+      })
+    ) {
+      return 'reused'
+    }
   }
   // Persist the token so a relaunch can prove ownership of an interrupted upload lock.
   const token = randomUUID()

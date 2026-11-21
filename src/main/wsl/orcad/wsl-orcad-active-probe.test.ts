@@ -18,7 +18,7 @@ import { probeWslActiveOrcad } from './wsl-orcad-active-probe'
 
 const mockExec = vi.mocked(execCommand)
 const VERSION = '0.1.0+aa'
-const END = '\n__ORCA_WSL_ACTIVE_PROBE_END__\n'
+const END = '\n__ORCA_ACTIVE_PROBE_END__\n'
 const host = getRemoteHostPlatform('linux-x64')
 const context = {
   activationRecord: emptyOrcadActivationRecord(),
