@@ -100,7 +100,8 @@ export function DeleteWorktreeChangesSummary({
     const spans = [textRef.current, noteRef.current].filter((el) => el != null)
     const px = spans.reduce((total, el) => total + el.scrollWidth - el.clientWidth, 0)
     const inToggle = spans[0]?.closest('button') != null
-    const key = `${spans.map((el) => el.textContent).join('|')}|${rowRef.current?.clientWidth}`
+    const font = spans[0] ? getComputedStyle(spans[0]).fontFamily : ''
+    const key = `${spans.map((el) => el.textContent).join('|')}|${rowRef.current?.clientWidth}|${font}`
     // Latch a clip the plain line showed for this text and width; otherwise the toggle's chevron and
     // the plain line can disagree by a subpixel and swap forever.
     const latched = inToggle ? null : px > 0
@@ -227,10 +228,12 @@ export function DeleteWorktreeChangesSummary({
       </span>
       {note ? (
         // A zero flex basis gives the note only leftover room, so the main sentence stays whole.
-        // The separator's space lives inside the note, so a zero-width note leaves no gap behind.
-        <span ref={noteRef} className="-ml-1.5 min-w-0 flex-1 truncate text-muted-foreground">
-          {'\u00a0· '}
-          {note}
+        // The gap is the note's own padding, so a zero-width note leaves no gap behind.
+        <span
+          ref={noteRef}
+          className="-ml-1.5 min-w-0 flex-1 truncate pl-1.5 text-muted-foreground"
+        >
+          · {note}
         </span>
       ) : null}
       {stillChecking ? (
