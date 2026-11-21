@@ -14,6 +14,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'
 import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/browser/browser-family-labels'
 import type { BrowserSessionProfile } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
+import type { BrowserSshPageCookieImportRoute } from '@/store/slices/browser/browser-slice-contract'
 
 export type DetectedBrowserEntry = {
   family: string
@@ -31,6 +32,8 @@ export type BrowserToolbarProfileSubProps = {
   detectedBrowsers: DetectedBrowserEntry[]
   onFetchDetectedBrowsers: () => void
   browserSessionImportState: { profileId: string; status: string } | null | undefined
+  /** Set when the page browses through an SSH host, whose jar the import fills. */
+  sshRoute: BrowserSshPageCookieImportRoute | null
   onImportFromBrowser: (browserFamily: string, browserProfile?: string) => void
   onImportFromFile: () => void
   /** The browser tour opens this submenu so its Import Cookies target is on screen. */
@@ -47,6 +50,7 @@ export function BrowserToolbarProfileSub({
   detectedBrowsers,
   onFetchDetectedBrowsers,
   browserSessionImportState,
+  sshRoute,
   onImportFromBrowser,
   onImportFromFile,
   forceOpen
@@ -116,7 +120,7 @@ export function BrowserToolbarProfileSub({
             </DropdownMenuSubTrigger>
             <DropdownMenuPortal>
               <DropdownMenuSubContent data-browser-page-menu-id={browserPageId}>
-                <BrowserCookieImportMachineNotice />
+                <BrowserCookieImportMachineNotice sshRoute={sshRoute} />
                 {detectedBrowsers.map((browser) =>
                   browser.profiles.length > 1 ? (
                     <DropdownMenuSub key={browser.family}>

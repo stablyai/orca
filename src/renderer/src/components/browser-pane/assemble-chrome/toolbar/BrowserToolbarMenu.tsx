@@ -23,10 +23,12 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { BrowserChromeOverflowMenuProps } from './browser-chrome-toolbar'
 import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
 import { applyBrowserViewportPreset } from '../viewport/browser-viewport-preset-apply'
+import { useBrowserPageCookieImport } from '../profile-routing/use-browser-page-cookie-import'
 
 type BrowserToolbarMenuProps = {
   currentProfileId: string | null
   workspaceId: string
+  worktreeId: string
   browserPageId: string
   viewportPresetId: BrowserViewportPresetId | null
   isActive: boolean
@@ -44,6 +46,7 @@ type BrowserToolbarMenuProps = {
 export function BrowserToolbarMenu({
   currentProfileId,
   workspaceId,
+  worktreeId,
   browserPageId,
   viewportPresetId,
   isActive,
@@ -55,13 +58,13 @@ export function BrowserToolbarMenu({
   overflow
 }: BrowserToolbarMenuProps): React.JSX.Element {
   const t = useTranslate()
+  const { sshRoute, detectedBrowsers, fetchDetectedBrowsers } =
+    useBrowserPageCookieImport(worktreeId)
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
-  const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
   const switchBrowserTabProfile = useAppStore((s) => s.switchBrowserTabProfile)
   const createBrowserSessionProfile = useAppStore((s) => s.createBrowserSessionProfile)
   const importCookiesFromBrowser = useAppStore((s) => s.importCookiesFromBrowser)
   const importCookiesToProfile = useAppStore((s) => s.importCookiesToProfile)
-  const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
   const browserCookieTourStepActive = useAppStore(
     (s) => s.activeContextualTourId === 'browser' && s.activeContextualTourStepIndex === 1
@@ -213,7 +216,12 @@ export function BrowserToolbarMenu({
     browserFamily: string,
     browserProfile?: string
   ): Promise<void> => {
-    const result = await importCookiesFromBrowser(effectiveProfileId, browserFamily, browserProfile)
+    const result = await importCookiesFromBrowser(
+      effectiveProfileId,
+      browserFamily,
+      browserProfile,
+      sshRoute
+    )
     if (result.ok) {
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
       emitBrowserCookieImportToast(
@@ -244,7 +252,7 @@ export function BrowserToolbarMenu({
   }
 
   const handleImportFromFile = async (): Promise<void> => {
-    const result = await importCookiesToProfile(effectiveProfileId)
+    const result = await importCookiesToProfile(effectiveProfileId, sshRoute)
     if (result.ok) {
       emitBrowserCookieImportToast(
         result.summary,
@@ -278,6 +286,7 @@ export function BrowserToolbarMenu({
                 detectedBrowsers,
                 onFetchDetectedBrowsers: () => void fetchDetectedBrowsers(),
                 browserSessionImportState,
+                sshRoute,
                 onImportFromBrowser: (browserFamily, browserProfile) =>
                   void handleImportFromBrowser(browserFamily, browserProfile),
                 onImportFromFile: () => void handleImportFromFile(),

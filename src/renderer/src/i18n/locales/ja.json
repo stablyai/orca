@@ -21987,12 +21987,20 @@
         "safariFullDiskAccess": "macOS が Safari の Cookie へのアクセスを拒否しました。「システム設定」→「プライバシーとセキュリティ」→「フルディスクアクセス」で Orca にフルディスクアクセスを許可してください。",
         "connectionEnded": "インポート中にこのサーバーへの接続が切れました。再接続して、もう一度お試しください。",
         "serverRepaired": "インポート中にこのサーバーが再ペアリングされました。もう一度お試しください。",
-        "macFullDiskAccess": "macOS が {{browser}} の Cookie へのアクセスを拒否しました。「システム設定」→「プライバシーとセキュリティ」→「フルディスクアクセス」で Orca にアクセスを許可し、Orca を再起動してください。"
+        "macFullDiskAccess": "macOS が {{browser}} の Cookie へのアクセスを拒否しました。「システム設定」→「プライバシーとセキュリティ」→「フルディスクアクセス」で Orca にアクセスを許可し、Orca を再起動してください。",
+        "sshHostDisconnected": "このページは SSH ホスト経由で接続されなくなりました。再接続してもう一度お試しください。"
       },
       "notice": {
         "importedMore_other": "{{domains}} と他 {{more}} 件のドメイン用に Cookie を {{count}} 個インポートしました。使用するにはページを再読み込みしてください。",
         "imported_other": "{{domains}} 用に Cookie を {{count}} 個インポートしました。使用するにはページを再読み込みしてください。",
         "failed": "Cookie をインポートできませんでした: {{reason}}"
+      },
+      "sshPage": {
+        "label": "このデバイスのブラウザ",
+        "destination": "{{host}} 用のブラウザにインポートします。",
+        "hostAgents": "{{host}} の Agent はこれらのサインインを使用できますが、Cookie を読み取ることはできません。",
+        "stored": "{{host}} 用のブラウザに保存しました。",
+        "googleCookiesSkipped": "Google の Cookie はインポートされませんでした。{{host}} 経由で閲覧するページを開き、Google にサインインしてください。"
       }
     },
     "passwords": {

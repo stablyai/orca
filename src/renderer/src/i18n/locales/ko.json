@@ -20599,12 +20599,20 @@
         "safariFullDiskAccess": "macOS에서 Safari 쿠키에 대한 접근을 거부했습니다. 시스템 설정 → 개인 정보 보호 및 보안 → 전체 디스크 접근 권한에서 Orca에 전체 디스크 접근 권한을 부여하세요.",
         "connectionEnded": "가져오는 동안 이 서버와의 연결이 끊어졌습니다. 다시 연결한 후 재시도하세요.",
         "serverRepaired": "가져오는 동안 이 서버가 다시 페어링되었습니다. 다시 시도하세요.",
-        "macFullDiskAccess": "macOS가 {{browser}} 쿠키 접근을 거부했습니다. 시스템 설정 → 개인정보 보호 및 보안 → 전체 디스크 접근에서 Orca에 접근을 허용한 후 Orca를 다시 시작하세요."
+        "macFullDiskAccess": "macOS가 {{browser}} 쿠키 접근을 거부했습니다. 시스템 설정 → 개인정보 보호 및 보안 → 전체 디스크 접근에서 Orca에 접근을 허용한 후 Orca를 다시 시작하세요.",
+        "sshHostDisconnected": "이 페이지는 더 이상 SSH 호스트를 통해 연결되어 있지 않습니다. 다시 연결한 후 다시 시도하세요."
       },
       "notice": {
         "importedMore_other": "{{domains}} 외 {{more}}개 도메인의 쿠키 {{count}}개를 가져왔습니다. 사용하려면 페이지를 새로고침하세요.",
         "imported_other": "{{domains}}의 쿠키 {{count}}개를 가져왔습니다. 사용하려면 페이지를 새로고침하세요.",
         "failed": "쿠키를 가져오지 못했습니다: {{reason}}"
+      },
+      "sshPage": {
+        "label": "이 기기의 브라우저",
+        "destination": "{{host}}용 브라우저로 가져옵니다.",
+        "hostAgents": "{{host}}의 에이전트는 이 로그인을 사용할 수 있지만 쿠키를 읽을 수는 없습니다.",
+        "stored": "{{host}}용 브라우저에 저장했습니다.",
+        "googleCookiesSkipped": "Google 쿠키는 가져오지 않았습니다. {{host}}를 통해 탐색하는 페이지를 열고 Google에 로그인하세요."
       }
     },
     "passwords": {
