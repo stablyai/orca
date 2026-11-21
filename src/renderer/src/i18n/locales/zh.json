@@ -965,7 +965,6 @@
       "permissions": "权限",
       "permissionsDescription": "新会话的初始权限。超出此权限的操作会在会话中请求批准。",
       "active": "已启用",
-      "activeDescription": "回复消息并运行自动化。",
       "memoryFact": "记忆",
       "cancel": "取消",
       "save": "保存",
@@ -1151,7 +1150,6 @@
         "missing": "此项目已不在 Orca 中。",
         "notYet": "暂不可用",
         "none": "此项目还没有技能。运行项目的设置流程来添加技能；这些技能会在 {{bot}} 的下次聊天中加载。",
-        "more": "另外 {{count}} 个",
         "openFolder": "打开文件夹",
         "noneShort": "无技能",
         "link": "关联项目",
@@ -19974,6 +19972,7 @@
         "optionUpdateFailed": "无法更新选项",
         "optionValue": {
           "none": "无",
+          "off": "关闭",
           "fast": "快速",
           "minimal": "最小",
           "low": "低",
@@ -20751,7 +20750,6 @@
         "copyFailed": "复制失败",
         "copyIdentity": "复制 {{value0}}",
         "detachedCommit": "提交 {{head}}（非分支）",
-        "folder": "文件夹",
         "mainCheckout": "主工作副本",
         "turnWorking": "此聊天的智能体正在工作。请在其回合结束后再切换分支。",
         "worktree": "工作树"
@@ -20862,7 +20860,8 @@
           "failed": "失败",
           "failedReason": "失败：{{error}}",
           "disabled": "已禁用",
-          "needsAuthAfterSend": "需要登录，发送一条消息即可在这里登录"
+          "needsAuthAfterSend": "需要登录，发送一条消息即可在这里登录",
+          "notStarted": "尚未启动"
         },
         "signIn": {
           "action": "登录",
@@ -21195,7 +21194,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Git 工作区中任何未提交或未跟踪的更改都将被永久删除",
           "unavailable": "无法检查更改",
           "checking": "正在检查更改…",
           "checkingDetails": "检查…",
@@ -21215,7 +21213,6 @@
           "line_one": "{{count}} 个文件中未保存的编辑内容将被丢弃：{{files}}",
           "line_other": "{{count}} 个文件中未保存的编辑内容将被丢弃：{{files}}"
         },
-        "ignoredFilesLost": "Git 忽略的文件将丢失：{{names}}",
         "ignoredFilesUnchecked": "无法完整检查 Git 忽略的文件"
       },
       "atRiskLocalFiles": {
@@ -21805,7 +21802,8 @@
           "notRemovable": "主工作区或文件夹项目",
           "projectOff": "此项目已关闭清理",
           "rulesOff": "未开启任何规则",
-          "withDetail": "{{cause}} · {{detail}}"
+          "withDetail": "{{cause}} · {{detail}}",
+          "folderWorkspaceSibling": "此工作区中的另一个仓库仍在使用中"
         },
         "trigger": {
           "startup": "启动时",
@@ -24064,7 +24062,6 @@
         "withIgnored": "{{what}}和 Git 忽略的文件将会丢失",
         "ignoredOnly": "Git 忽略的文件将会丢失"
       },
-      "showChanges": "显示更改",
       "unsavedSuffix": "（未保存）",
       "onHost": "位于 {{host}}",
       "forceDeletingEllipsis": "正在强制删除…",
@@ -24677,6 +24674,9 @@
     "linkedMessageMissing": "找不到该消息。",
     "math": {
       "scrollDisplayEquation": "滚动显示公式"
+    },
+    "messageTime": {
+      "yesterday": "昨天 {{time}}"
     }
   },
   "quitAndStopAllSessions": {
@@ -24793,7 +24793,9 @@
       "1524825c2c": "切换工作区看板",
       "d286d1ab85": "清除窗格标题",
       "tabNewBrowserSplitRight": "在右侧拆分窗格中新建浏览器标签页",
-      "5468defe61": "折叠/展开所有项目"
+      "5468defe61": "折叠/展开所有项目",
+      "botItemPrevious": "上一个条目",
+      "botItemNext": "下一个条目"
     },
     "group": {
       "global": "全局",
@@ -26263,7 +26265,29 @@
         "google": "以你的身份使用 Gmail、Calendar 和 Drive"
       },
       "mcp": {
-        "adding": "正在添加 {{app}}…"
+        "adding": "正在添加 {{app}}…",
+        "addTitle": "添加 {{app}}",
+        "advanced": "高级",
+        "hostInvalid": "请输入主机名，例如 {{example}}。",
+        "datadog": {
+          "siteLabel": "Datadog 站点"
+        },
+        "gitlab": {
+          "hostLabel": "GitLab 地址（可选）",
+          "hostHint": "适用于自管理或 Dedicated 实例。留空则使用 GitLab.com。"
+        },
+        "place": {
+          "usEast": "美国东部",
+          "usWest": "美国西部",
+          "usCentral": "美国中部",
+          "europe": "欧洲",
+          "japan": "日本",
+          "australia": "澳大利亚",
+          "unitedKingdom": "英国"
+        },
+        "elsewhereTitle": "{{app}} 已在 {{bot}} 上",
+        "elsewhereLine": "它已添加在 {{place}}。请先在“管理”中移除，再添加其他。",
+        "elsewhereOther": "请先在“管理”中移除，再添加其他。"
       },
       "unsupported": "暂不支持此应用",
       "cantReach": "无法连接 {{app}}",
@@ -26396,7 +26420,7 @@
         "links": "链接",
         "showLess": "收起",
         "showMore": "展开",
-        "sub": "条目 {{number}} · {{chat}} · {{when}}",
+        "subWhere": "条目 {{number}} · {{chat}}",
         "showEarlier": "显示更早的内容",
         "place": "{{index}} / {{total}}",
         "deleted": "此条目已删除。",
@@ -26942,7 +26966,6 @@
       "publishing": "正在发布…",
       "previewChanged": "预览已更改。请在发布前检查。",
       "manageSharing": "管理分享…",
-      "sharedUpdated": "已分享 · 更新于 {{date}}",
       "secretFoundTitle": "发现密钥",
       "secretWhere": "{{flag}}，位于 {{where}} 第 {{line}} 行",
       "view": "查看",
@@ -27017,15 +27040,6 @@
         "open": "打开",
         "stopped": "此链接已失效",
         "stoppedDetail": "请向分享者索取新链接。",
-        "ask": "请求批准",
-        "askDetail": "从链接创建的机器人默认使用此项",
-        "full": "完全访问权限",
-        "fullDetail": "运行命令时不询问",
-        "chatsDetail": "初始采用你的聊天权限设置",
-        "askLine": "运行命令前请求批准。你自己的允许规则仍然适用。",
-        "fullLine": "运行命令时不询问。",
-        "chatsLine": "按你的聊天设置请求批准。",
-        "change": "（更改）",
         "origin": "来自 {{who}} 的链接",
         "originAnonymous": "来自分享链接",
         "back": "返回",
@@ -27174,11 +27188,8 @@
       "yesterday": "昨天",
       "lastLooked": "上次查看于 {{when}}",
       "lastTidied": "上次整理于 {{when}}",
-      "memoryFiles_one": "MEMORY.md 和 {{count}} 个主题文件",
-      "memoryFiles_other": "MEMORY.md 和 {{count}} 个主题文件",
       "toolsFrom": "来自 {{agent}} 的 {{count}} 个工具",
       "toolsMore": "另有 {{count}} 个工具来自 {{agent}}",
-      "withAccess": "{{service}} 中有 {{people}} 人拥有访问权限",
       "onlyYou": "仅你"
     },
     "newHomeChat": {
@@ -27298,14 +27309,11 @@
       "copyPath": "复制路径",
       "topicFiles": "主题文件",
       "schedule": "计划",
-      "automationsFoot": "自动化位于 Home › 自动化。",
       "soulAndMemory": "灵魂与记忆",
       "access": "访问权限",
       "whoCanAsk": "谁可以提问",
-      "chatDefault": "你的聊天默认设置",
       "name": "机器人名称",
       "rename": "重命名 {{name}}",
-      "share": "分享…",
       "agent": "智能体和模型",
       "computer": "电脑",
       "deleteBot": "删除机器人…",
@@ -27324,10 +27332,24 @@
       "items": "条目",
       "itemsStale": {
         "days": "{{days}} 天",
-        "detail": "无活动达到此时长后标记为“长期无活动”。计划中的条目使用 3 倍时长。",
         "never": "永不",
-        "title": "多久后将条目标记为“长期无活动”"
-      }
+        "title": "多久后将条目标记为“长期无活动”",
+        "shortTitle": "多久算过期"
+      },
+      "memoryFiles_other": "{{count}} 个文件",
+      "lookAroundShort": {
+        "every4h": "4 小时",
+        "every2h": "2 小时",
+        "twiceDaily": "每天两次",
+        "mornings": "每天早上"
+      },
+      "tidyUpShort": {
+        "night": "每晚",
+        "week": "每周"
+      },
+      "youAndOthers_other": "你和另外 {{count}} 人",
+      "shareAction": "分享",
+      "sharingOn": "开"
     },
     "cloudSignIn": {
       "automationScheduledOnly": "仅按计划运行：退出 Orca 登录期间，其事件已暂停",
@@ -27678,6 +27700,7 @@
       "titleOne": "允许 {{person}} 访问 {{name}}？",
       "titleMany": "允许 {{count}} 人访问 {{name}}？",
       "confirm": "授予访问权限",
+      "reject": "拒绝",
       "confirmWarning": "他们将以你的身份在 {{computer}} 上操作。",
       "confirmComputer": "运行命令和修改文件",
       "confirmNoApprovals": "无需事先询问即可操作",
@@ -27839,7 +27862,7 @@
       "description": "{{name}} 的 Home Chat 将在 {{agent}} 上重新开始。当前对话会保留在历史记录中。",
       "kept": "保留：灵魂、记忆、自动化、连接器",
       "notKept": "不保留：当前对话",
-      "threads": "正在运行的 Slack 话题会继续使用 {{agent}}，直至结束",
+      "threads": "已有 Orca 聊天的 Slack 话题会保留该聊天的智能体",
       "action": "切换为 {{agent}}"
     },
     "paused": {

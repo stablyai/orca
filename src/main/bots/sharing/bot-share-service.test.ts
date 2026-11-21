@@ -38,6 +38,7 @@ function fakeCloud() {
     { id: string; name: string; versions: Record<string, unknown>[] }
   >()
   const shares: Share[] = []
+  const listing = { fails: false }
   let uploaded: Buffer | null = null
   let counter = 0
   const json = (status: number, body: unknown) =>
@@ -172,6 +173,9 @@ function fakeCloud() {
       })
     }
     if (path === '/v1/bot-shares' && method === 'GET') {
+      if (listing.fails) {
+        return json(503, { code: 'unavailable' })
+      }
       return json(200, {
         shares: shares
           .filter((entry) => entry.live)
@@ -189,7 +193,7 @@ function fakeCloud() {
     return json(404, { code: 'not_found' })
   }
   const typed: typeof fetch = fetcher
-  return { fetcher: typed, shares }
+  return { fetcher: typed, shares, listing }
 }
 
 const bot = makeTestBot({ id: '3f2b6c1e-8d4a-4b7e-9c1f-5a6d7e8f9a0b', name: 'Release notes' })
@@ -281,6 +285,29 @@ describe('sharing a bot by link', () => {
     ).rejects.toThrow(BOT_SHARE_ERRORS.stopped)
     expect(cloud.shares.filter((share) => share.live)).toEqual([])
     expect(await service.status(bot)).toEqual({ status: 'ok', value: { shared: false } })
+  })
+
+  it('forgets saved picks only for the managed agent the listing shows owning the link', async () => {
+    const cloud = fakeCloud()
+    const home = join(root, 'home')
+    await writeHome(home, '# Release notes\n\nDrafts release notes.\n')
+    const picks = new BotSharePicksStore(join(root, 'bot-share-picks.json'))
+    const service = appSession(cloud, home, 'run-1', { signedIn: true }, picks)
+    const otherId = '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d'
+    const otherPicks = { selection: { skills: ['triage'] }, setupNote: 'Other note' }
+    await picks.set(otherId, otherPicks)
+    const first = await publish(service)
+
+    expect(await service.stop(first.share.id, otherId)).toEqual({ status: 'ok', value: true })
+    expect(await picks.get(otherId)).toEqual(otherPicks)
+
+    const second = await publish(service)
+    expect(await service.stop(first.share.id, bot.id)).toEqual({ status: 'ok', value: false })
+    expect(await picks.get(bot.id)).toMatchObject({ setupNote: '' })
+
+    cloud.listing.fails = true
+    expect(await service.stop(second.share.id, bot.id)).toEqual({ status: 'ok', value: true })
+    expect(await picks.get(bot.id)).toMatchObject({ setupNote: '' })
   })
 
   it('publishes the reviewed candidate once a refused note is fixed', async () => {

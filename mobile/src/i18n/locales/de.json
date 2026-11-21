@@ -691,6 +691,55 @@
     "selectionQuote": {
       "action": "Zitieren",
       "hint": "Fügt den markierten Text als Zitat in die Nachricht ein"
+    },
+    "messageTime": {
+      "yesterday": "Gestern {{time}}"
+    },
+    "mcp": {
+      "status": {
+        "notStarted": "Nicht gestartet",
+        "connected": "Verbunden",
+        "failed": "Fehler",
+        "failedReason": "Fehler: {{error}}",
+        "finishOnPage": "Auf der geöffneten Seite abschließen",
+        "needsAuth": "Anmeldung nötig",
+        "needsAuthAfterSend": "Anmeldung nötig. Zum Anmelden hier eine Nachricht senden.",
+        "off": "Aus",
+        "pending": "Verbindung wird hergestellt…",
+        "tools_one": "{{count}} Werkzeug",
+        "tools_other": "{{count}} Werkzeuge",
+        "waitingForSignIn": "Wartet auf Anmeldung…"
+      },
+      "source": {
+        "project": "Projekt",
+        "local": "Lokal",
+        "user": "Benutzer",
+        "plugin": "Plugin",
+        "session": "Sitzung"
+      },
+      "title": "MCP-Server",
+      "notRunning": "Die MCP-Server verbinden sich beim Senden der nächsten Nachricht.",
+      "unsupported": "Orca auf dem Host dieses Chats aktualisieren, um MCP-Server hier zu verwalten.",
+      "readFailed": "MCP-Server konnten nicht geladen werden.",
+      "retry": "Erneut versuchen",
+      "empty": "Für diesen Chat sind keine MCP-Server eingerichtet.",
+      "signIn": "Anmelden",
+      "reconnect": "Neu verbinden",
+      "toggleLabel": "{{name}} verwenden",
+      "actionFailed": "Aktion fehlgeschlagen. Erneut versuchen.",
+      "openAgain": "Erneut öffnen",
+      "pastePlaceholder": "URL einfügen",
+      "pasteLabel": "Adresse der Anmeldeseite",
+      "finish": "Abschließen",
+      "signInUnfinished": "Anmeldung noch nicht abgeschlossen. Auf der geöffneten Seite abschließen, dann auf „Abschließen“ tippen.",
+      "summary": {
+        "signingIn": "Anmeldung bei {{name}}",
+        "connected": "Verbunden: {{count}}",
+        "needsAuth_one": "{{count}} benötigt Anmeldung",
+        "needsAuth_other": "{{count}} benötigen Anmeldung",
+        "failed": "Fehler: {{count}}"
+      },
+      "pasteHint": "Wenn der Browser auf einer Seite landet, die nicht lädt, ihre Adresse kopieren und hier einfügen."
     }
   },
   "common": {

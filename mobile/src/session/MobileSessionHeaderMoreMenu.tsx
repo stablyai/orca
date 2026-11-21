@@ -17,8 +17,10 @@ import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileSessionBotActionsContext } from './mobile-session-bot-actions-context'
+import { getMobileNativeChatCliForkActions } from './native-chat/history/mobile-native-chat-cli-fork'
 import { useMobileSessionTabBarMode } from './tabs/use-mobile-session-tab-bar-mode'
 
 type Props = {
@@ -57,6 +59,7 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
   } = controller
   const { mode: tabBarMode, toggleMode: toggleTabBarMode } = useMobileSessionTabBarMode()
   const botActions = useContext(MobileSessionBotActionsContext)
+  const workspaceOnPairedHost = useWorkspaceOnPairedHost()
   const tabActionsDisabled = createTabBusy || connState !== 'connected'
   const panels: ActionSheetAction[] = [
     ...(!isFloatingWorkspaceRoute
@@ -188,7 +191,13 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
             onPress: handleOpenNewTab
           }
         ]
-      : [])
+      : []),
+    ...getMobileNativeChatCliForkActions({
+      controller,
+      tab: activeSessionTab?.type === 'agent-session' ? activeSessionTab : null,
+      workspaceOnPairedHost,
+      onDismiss: () => setShowHeaderMoreActions(false)
+    }).map((action) => ({ ...action, disabled: tabActionsDisabled }))
   ]
   return (
     <PullDownMenu

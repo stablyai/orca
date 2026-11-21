@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { lstatSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as NodeFs from 'node:fs'
 import type * as NodeOs from 'node:os'
 import { tmpdir } from 'node:os'
@@ -92,7 +92,7 @@ vi.mock('node:os', async () => {
     homedir: homedirMock
   }
 })
-import { syncSystemCodexSessionsIntoManagedHome } from './codex-session-bridge'
+import { syncSystemCodexSessionsIntoManagedHomeIncrementally } from './codex-session-bridge'
 
 let fakeHomeDir: string
 let userDataDir: string
@@ -104,28 +104,6 @@ function getSystemCodexHomePath(): string {
 
 function getRuntimeCodexHomePath(): string {
   return join(userDataDir, 'codex-runtime-home', 'home')
-}
-
-function writeLegacyCopyMarker(relativePath: string, sourcePath: string, targetPath: string): void {
-  const sourceStat = lstatSync(sourcePath)
-  const targetStat = lstatSync(targetPath)
-  const markerPath = join(getRuntimeCodexHomePath(), '.orca-session-copies', `${relativePath}.json`)
-  mkdirSync(dirname(markerPath), { recursive: true })
-  writeFileSync(
-    markerPath,
-    `${JSON.stringify(
-      {
-        sourcePath,
-        sourceSize: sourceStat.size,
-        sourceMtimeMs: sourceStat.mtimeMs,
-        targetSize: targetStat.size,
-        targetMtimeMs: targetStat.mtimeMs
-      },
-      null,
-      2
-    )}\n`,
-    'utf-8'
-  )
 }
 
 beforeEach(() => {
@@ -151,29 +129,18 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('syncSystemCodexSessionsIntoManagedHome', () => {
-  it('preserves runtime-owned sessions and legacy copies when relinking fails', () => {
-    const relativeSessionPath = join('2026', '05', '26', 'rollout-legacy-unlinked.jsonl')
-    const systemSessionPath = join(getSystemCodexHomePath(), 'sessions', relativeSessionPath)
-    const runtimeSessionPath = join(getRuntimeCodexHomePath(), 'sessions', relativeSessionPath)
+describe('syncSystemCodexSessionsIntoManagedHomeIncrementally', () => {
+  it('does not overwrite runtime-owned session files', async () => {
+    const relativeSessionPath = join('sessions', '2026', '05', '26', 'rollout-conflict.jsonl')
+    const systemSessionPath = join(getSystemCodexHomePath(), relativeSessionPath)
+    const runtimeSessionPath = join(getRuntimeCodexHomePath(), relativeSessionPath)
     mkdirSync(dirname(systemSessionPath), { recursive: true })
     mkdirSync(dirname(runtimeSessionPath), { recursive: true })
-    const conflictName = 'rollout-conflict.jsonl'
-    const ownedSession = join(dirname(runtimeSessionPath), conflictName)
-    writeFileSync(join(dirname(systemSessionPath), conflictName), '{"id":"system"}\n', 'utf-8')
-    writeFileSync(ownedSession, '{"id":"runtime"}\n', 'utf-8')
-    syncSystemCodexSessionsIntoManagedHome()
-    expect(readFileSync(ownedSession, 'utf-8')).toBe('{"id":"runtime"}\n')
+    writeFileSync(systemSessionPath, '{"id":"system"}\n', 'utf-8')
+    writeFileSync(runtimeSessionPath, '{"id":"runtime"}\n', 'utf-8')
 
-    writeFileSync(systemSessionPath, '{"id":"legacy"}\n', 'utf-8')
-    writeFileSync(runtimeSessionPath, '{"id":"legacy"}\n', 'utf-8')
-    writeLegacyCopyMarker(relativeSessionPath, systemSessionPath, runtimeSessionPath)
-    fsMockState.failLink = true
-    fsMockState.failSymlink = true
+    await syncSystemCodexSessionsIntoManagedHomeIncrementally({ yieldMs: 0 })
 
-    syncSystemCodexSessionsIntoManagedHome()
-
-    expect(lstatSync(runtimeSessionPath).isSymbolicLink()).toBe(false)
-    expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"legacy"}\n')
+    expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"runtime"}\n')
   })
 })

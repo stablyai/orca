@@ -26,10 +26,10 @@ import {
 } from './automation-orca-save-operations'
 import { completeAutomationSave } from './automation-save-completion'
 import type { AutomationSaveContext } from './automation-save-context'
-import { botResultsPlace, withBotResultsPlace } from './automation-bot-results-to'
+import { botResultsPlace } from '../../../../../shared/automation-bot-target'
+import { withBotResultsPlace } from './automation-bot-results-to'
 import { botAutomationSetup, sameBotAgentSetup } from '../../../../../shared/bots/bot-agent-setup'
 import { isBotAgent } from '../../../../../shared/bot-types'
-import { readBots } from '@/lib/bot-catalog'
 import type { AutomationHostCatalogEntry } from '../hosts/automation-host-catalog-types'
 import { automationHostRecoveryActions } from '../hosts/automation-host-status-descriptors'
 
@@ -178,10 +178,9 @@ export async function saveBotAutomation(
   }
 
   // Like the CLI's --bot, the automation lives on the host that runs its bot.
-  const botHostId = readBots().find((entry) => entry.id === bot.botId)?.hostId
   const botHost = automationCreateHostFor(
     destination.createDestination.control.entries,
-    automationCreateHostStableKey(botHostId)
+    automationCreateHostStableKey(draft.botHostId)
   )
   const here = resolveAutomationCreateDestination(botHost)
   if (here.status !== 'ready') {

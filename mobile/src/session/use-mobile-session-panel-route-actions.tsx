@@ -8,6 +8,7 @@ import {
   panelRouteDescriptor
 } from './session-panel-host'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
+import { mobileAgentLoadStatusRow } from './agent-launch/mobile-agent-load-status-row'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   useWorkspaceExecutionHost,
@@ -51,50 +52,12 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     showToast
   } = scope
   const agentStatusRow = (errorHint: string): ActionSheetAction | null =>
-    createTabAgentLoadState === 'loading'
-      ? {
-          id: 'detectingAgents',
-          label: t('session.usePanelRouteActions.detectingAgents', 'Detecting Agents'),
-          icon: Bot,
-          disabled: true,
-          loading: true,
-          onPress: () => {}
-        }
-      : createTabAgentOptions.length > 0
-        ? null
-        : createTabAgentLoadState === 'loaded'
-          ? {
-              id: 'noEnabledAgents',
-              label: t('session.usePanelRouteActions.noEnabledAgents', 'No Enabled Agents'),
-              icon: Bot,
-              disabled: true,
-              onPress: () => {}
-            }
-          : createTabAgentLoadState === 'other-runtime'
-            ? {
-                id: 'otherServerAgents',
-                label: t(
-                  'session.usePanelRouteActions.otherServerAgents',
-                  'Agents on Another Server'
-                ),
-                hint: t('session.usePanelRouteActions.pairServerHint', 'Pair that server directly'),
-                icon: Bot,
-                disabled: true,
-                onPress: () => {}
-              }
-            : createTabAgentLoadState === 'error'
-              ? {
-                  id: 'presetsUnavailable',
-                  label: t(
-                    'session.usePanelRouteActions.presetsUnavailable',
-                    'Agent Presets Unavailable'
-                  ),
-                  hint: errorHint,
-                  icon: Bot,
-                  disabled: true,
-                  onPress: () => {}
-                }
-              : null
+    mobileAgentLoadStatusRow({
+      loadState: createTabAgentLoadState,
+      optionCount: createTabAgentOptions.length,
+      errorHint,
+      t
+    })
   const createTabAgentStatusRow = agentStatusRow(
     t('session.usePanelRouteActions.checkHostHint', 'Check the host connection')
   )

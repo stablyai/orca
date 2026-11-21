@@ -19486,6 +19486,7 @@
         "optionUpdateFailed": "Option konnte nicht aktualisiert werden",
         "optionValue": {
           "none": "Keine",
+          "off": "Aus",
           "fast": "Schnell",
           "minimal": "Minimal",
           "low": "Niedrig",
@@ -20136,7 +20137,6 @@
         "copyFailed": "Kopieren fehlgeschlagen",
         "copyIdentity": "{{value0}} kopieren",
         "detachedCommit": "Commit {{head}} (kein Branch)",
-        "folder": "Ordner",
         "mainCheckout": "Haupt-Checkout",
         "turnWorking": "Der Agent dieses Chats arbeitet. Wechsle den Branch, wenn sein Zug beendet ist.",
         "worktree": "Worktree"
@@ -20178,6 +20178,58 @@
       },
       "usageLimitActions": {
         "handOff": "An Agenten übergeben"
+      },
+      "mcp": {
+        "status": {
+          "notStarted": "Nicht gestartet",
+          "connected": "Verbunden",
+          "disabled": "Deaktiviert",
+          "failed": "Fehler",
+          "failedReason": "Fehler: {{error}}",
+          "needsAuth": "Anmeldung nötig",
+          "needsAuthAfterSend": "Anmeldung nötig. Zum Anmelden hier eine Nachricht senden.",
+          "pending": "Verbindung wird hergestellt…",
+          "tools_one": "{{count}} Werkzeug",
+          "tools_other": "{{count}} Werkzeuge"
+        },
+        "signIn": {
+          "external": "Auf der geöffneten Seite abschließen",
+          "waiting": "Wartet auf Anmeldung…",
+          "waitingBrowser": "Wartet auf den Browser…",
+          "action": "Anmelden",
+          "remote": "Nach der Anmeldung landet der Browser auf einer Seite, die nicht lädt. Die Adresse dieser Seite kopieren und hier einfügen.",
+          "done": "Fertig",
+          "finish": "Abschließen",
+          "openAgain": "Erneut öffnen",
+          "addressLabel": "Adresse der Anmeldeseite",
+          "unfinished": "Anmeldung noch nicht abgeschlossen. Auf der geöffneten Seite abschließen, dann „Fertig“ drücken."
+        },
+        "title": "MCP-Server",
+        "close": "Schließen",
+        "loading": "Wird geladen…",
+        "notRunning": "Verbindung beim Senden der nächsten Nachricht",
+        "unsupported": "Orca auf dem Host dieses Chats aktualisieren, um sie hier zu verwalten",
+        "readFailed": "Laden fehlgeschlagen",
+        "retry": "Erneut versuchen",
+        "empty": "Für diesen Chat nicht eingerichtet",
+        "cancel": "Abbrechen",
+        "reconnect": "Neu verbinden",
+        "toggle": "{{name}} verwenden",
+        "actionFailed": "Aktion fehlgeschlagen. Erneut versuchen.",
+        "summary": {
+          "connected": "Verbunden: {{count}}",
+          "needsAuth_one": "{{count}} benötigt Anmeldung",
+          "needsAuth_other": "{{count}} benötigen Anmeldung",
+          "failed": "Fehler: {{count}}",
+          "signingIn": "Anmeldung bei {{name}}"
+        },
+        "source": {
+          "project": "Projekt",
+          "local": "Lokal",
+          "user": "Benutzer",
+          "plugin": "Plugin",
+          "session": "Sitzung"
+        }
       }
     },
     "tab": {
@@ -20456,7 +20508,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Alle nicht committeten oder nicht versionierten Änderungen in Git-Arbeitsbereichen werden endgültig gelöscht.",
           "unavailable": "Änderungen konnten nicht geprüft werden",
           "checking": "Änderungen werden geprüft…",
           "checkingDetails": "Wird geprüft…",
@@ -20476,7 +20527,6 @@
           "line_one": "Nicht gespeicherte Änderungen in {{count}} Datei werden verworfen: {{files}}",
           "line_other": "Nicht gespeicherte Änderungen in {{count}} Dateien werden verworfen: {{files}}"
         },
-        "ignoredFilesLost": "Ignorierte Dateien gehen verloren: {{names}}",
         "ignoredFilesUnchecked": "Ignorierte Dateien konnten nicht vollständig geprüft werden"
       }
     },
@@ -22047,7 +22097,6 @@
         "withIgnored": "{{what}} und ignorierte Dateien gehen verloren",
         "ignoredOnly": "Ignorierte Dateien gehen verloren"
       },
-      "showChanges": "Änderungen anzeigen",
       "unsavedSuffix": "(nicht gespeichert)",
       "onHost": "Auf {{host}}",
       "forceDeletingEllipsis": "Löschen wird erzwungen…",
@@ -22783,6 +22832,9 @@
     "linkedMessageMissing": "Diese Nachricht wurde nicht gefunden.",
     "math": {
       "scrollDisplayEquation": "Abgesetzte Gleichung scrollen"
+    },
+    "messageTime": {
+      "yesterday": "Gestern {{time}}"
     }
   },
   "quitAndStopAllSessions": {
@@ -22897,7 +22949,9 @@
       "128cce6e6d": "Titel festlegen…",
       "e9da9f872a": "Review-Notizen an Agenten senden",
       "1524825c2c": "Arbeitsbereichsübersicht ein-/ausblenden",
-      "d286d1ab85": "Bereichstitel leeren"
+      "d286d1ab85": "Bereichstitel leeren",
+      "botItemPrevious": "Vorheriges Element",
+      "botItemNext": "Nächstes Element"
     },
     "group": {
       "global": "Global",
@@ -23664,6 +23718,68 @@
       "paste": {
         "remoteSignIn": "Remote-Anmeldung"
       }
+    },
+    "row": {
+      "runsOn": "Läuft auf {{host}}",
+      "disconnected": "Getrennt",
+      "hostDisconnected": "{{host}}: getrennt",
+      "idle": "Inaktiv",
+      "paused": "Pausiert",
+      "reading": "Liest deine Nachricht",
+      "replying": "Antwortet",
+      "replyingIn": "Antwortet in {{place}}",
+      "replyingOn": "Antwortet auf {{place}}",
+      "waitingCount": "Ausstehende Ereignisse: {{count}}",
+      "waitingFor": "Wartet auf {{label}}",
+      "waitingForUntil": "Wartet auf {{label}} · bis {{time}}"
+    },
+    "items": {
+      "view": {
+        "placeOf": "{{index}} von {{total}}",
+        "navigation": "Element {{index}} von {{total}}",
+        "loadingNext": "Nächstes Element wird geladen",
+        "shown": "Element {{index}} von {{total}}: {{title}}",
+        "firstItem": "Erstes Element",
+        "lastItem": "Letztes Element",
+        "previous": "Vorheriges Element",
+        "next": "Nächstes Element"
+      }
+    },
+    "hover": {
+      "asksQuestion": "Wartet auf Antwort",
+      "wantsApproval": "Wartet auf Genehmigung",
+      "signIn": "Anmeldung nötig",
+      "access": "Hat Zugriff angefordert",
+      "review": "Prüfen",
+      "openHome": "Home von {{name}} öffnen",
+      "needsYouHeading_one": "{{count}} Punkt braucht dich",
+      "needsYouHeading_other": "{{count}} Punkte brauchen dich",
+      "moreAsks_one": "+{{count}} weitere Anfrage",
+      "moreAsks_other": "+{{count}} weitere Anfragen",
+      "itemsNeedYou_one": "{{count}} Element für dich markiert",
+      "itemsNeedYou_other": "{{count}} Elemente für dich markiert"
+    },
+    "chats": {
+      "home": "Home Chat",
+      "untitled": "Neuer Chat"
+    },
+    "needs": {
+      "chat": "Dein Chat mit {{name}}"
+    },
+    "panel": {
+      "needYou_one": "{{count}} braucht dich",
+      "needYou_other": "{{count}} brauchen dich",
+      "working": "{{count}} aktiv",
+      "working_one": "{{count}} aktiv",
+      "working_other": "{{count}} aktiv"
+    },
+    "usageLimit": {
+      "continuesAt": "Fortsetzung um {{time}}",
+      "continuesShort": "Fortsetzung {{time}}",
+      "continuesTip": "Automatische Fortsetzung um {{time}}",
+      "hitLimit": "Limit erreicht · Reset {{time}}",
+      "hitShort": "Limit erreicht",
+      "hitTip": "Nutzungslimit von {{agent}} erreicht · Reset {{time}}"
     }
   },
   "agentPicker": {

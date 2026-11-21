@@ -345,3 +345,6 @@ const styles = themedStyleSheet(() => ({
   cellPressed: { backgroundColor: colors.translucentFill },
   cellDisabled: { opacity: feedback.disabledOpacity }
 }))
+
+// The group room's thread bar draws its cells with these too.
+export { styles as sessionTabBarStyles }

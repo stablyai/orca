@@ -8,7 +8,8 @@ import type { Bot } from '../../../../../shared/bot-types'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { AutomationEditorSettingsSidebar } from './AutomationEditorSettingsSidebar'
 import { botTargetError, isSameBotTarget } from './automation-bot-save'
-import { botResultsPlace, withBotResultsPlace } from './automation-bot-results-to'
+import { botResultsPlace } from '../../../../../shared/automation-bot-target'
+import { withBotResultsPlace } from './automation-bot-results-to'
 
 vi.mock('./AutomationSchedulePicker', () => ({ AutomationSchedulePicker: () => null }))
 vi.mock('./AutomationWorkspaceField', () => ({

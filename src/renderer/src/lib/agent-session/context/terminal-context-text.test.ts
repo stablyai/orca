@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
-import { buildBoundedSessionTranscript } from './agent-session-fork-context'
+import { buildBoundedSessionTranscript } from '../../../../../shared/agent-session/conversation-context/agent-session-fork-context'
 import { readTerminalContextText } from './terminal-context-text'
 
 async function withTerminal<T>(

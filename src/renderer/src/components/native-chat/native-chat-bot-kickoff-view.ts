@@ -1,18 +1,16 @@
 // A new bot's Chat from Orca's kickoff: its first screen, Stop's hold, and sends on the owner's behalf.
 import { createContext, useLayoutEffect, useMemo, useRef } from 'react'
 import type { Bot } from '../../../../shared/bot-types'
-import type { AgentSessionLatestTurn } from '../../../../shared/agent-session/agent-session-wire'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import { nativeChatBotCardsOf } from '../../../../shared/native-chat/bot-cards/native-chat-bot-card-kind'
 import { useBotForWorkspace } from '../bots/bot-workspace'
-import type { BotSetupRefusal } from '../../../../shared/bots/bot-setup-steps'
 import {
-  agentSessionFailureDetailText,
-  readAgentSessionFailureFact
-} from '../../../../shared/agent-session/failures/agent-session-failure'
+  nativeChatFirstScreen,
+  nativeChatKickoffEnded,
+  nativeChatKickoffRefusal,
+  type KickoffSession,
+  type NativeChatFirstScreen
+} from '../../../../shared/bots/bot-first-screen'
 import type { NativeChatStructuredComposerTransport } from './composer/submit/native-chat-structured-composer-transport'
-import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 
 export type NativeChatBotKickoffView = {
   /** The owner hasn't written since the latest kickoff. */
@@ -29,110 +27,11 @@ export type NativeChatBotKickoffView = {
   firstKickoffId: string | null
 }
 
-/** `failed`: the first turn ended without a word. `turn` is what it did, for its checklist.
- *  `refused`: why the host refused the kickoff before any turn opened (its agent did not start). */
-export type NativeChatFirstScreen = {
-  phase: 'starting' | 'failed'
-  turn: readonly NativeChatMessage[]
-  refused: BotSetupRefusal | null
-}
-
 export const NativeChatBotKickoffContext = createContext<NativeChatBotKickoffView | null>(null)
 
 function nativeChatKickoffLive(messages: readonly NativeChatMessage[]): boolean {
   const kickoff = messages.findLastIndex((message) => message.orcaNotice === 'bot-created')
   return kickoff !== -1 && !messages.slice(kickoff + 1).some((message) => message.role === 'user')
-}
-
-/** Orca's kickoff turn until the bot speaks, or the owner writes; null for any other chat. */
-export function nativeChatFirstScreen(
-  messages: readonly NativeChatMessage[],
-  turnEnded: boolean,
-  refused: BotSetupRefusal | null = null
-): NativeChatFirstScreen | null {
-  // The latest kickoff: Try again sends another.
-  const notice = messages.findLastIndex((message) => message.orcaNotice === 'bot-created')
-  const turn = notice === -1 ? [] : messages.slice(notice + 1)
-  if (notice === -1 || turn.some((message) => message.role === 'user')) {
-    return null
-  }
-  const spoke = turn.some(
-    (message) =>
-      message.role === 'assistant' &&
-      message.blocks.some((block) => block.type === 'text' && block.text.trim() !== '')
-  )
-  // An import's plan is the bot's answer, and waits on the owner: the screen gives way to it at once.
-  const imported = turn.some((message) =>
-    message.blocks.some(
-      (block) =>
-        block.type === 'text' &&
-        nativeChatBotCardsOf(block).some(
-          (card) => card.kind === 'importPlan' || card.kind === 'importDone'
-        )
-    )
-  )
-  if (imported) {
-    return null
-  }
-  // The transcript shows from the bot's first words, live, as the rest of its turn streams.
-  if (spoke) {
-    return null
-  }
-  return { phase: turnEnded ? 'failed' : 'starting', turn, refused }
-}
-
-type KickoffSession = {
-  isWorking: boolean
-  latestTurn?: AgentSessionLatestTurn | null
-  submissions?: readonly Pick<AgentJournalSubmission, 'dispatchState' | 'reason' | 'rejection'>[]
-}
-
-/** The host's reason when it refused the latest send before any turn opened; else null. */
-export function nativeChatKickoffRefusal(session: KickoffSession): BotSetupRefusal | null {
-  const latest = session.isWorking ? undefined : session.submissions?.at(-1)
-  if (latest?.dispatchState !== 'rejected') {
-    return null
-  }
-  const fact = readAgentSessionFailureFact(latest.rejection)
-  const providerDetail = agentSessionFailureDetailText(fact)
-  return {
-    reason: latest.reason ?? '',
-    ...(providerDetail ? { providerDetail } : {}),
-    ...(fact ? { kind: fact.kind } : {}),
-    ...(fact?.kind === 'notSignedIn'
-      ? { notSignedIn: fact.account ? { account: fact.account } : {} }
-      : {})
-  }
-}
-
-/** The sign-in a failed first screen is waiting on: the kickoff's refusal, or its turn's failure
- *  line; null when it failed for another reason. */
-export function nativeChatFirstScreenSignIn(
-  firstScreen: NativeChatFirstScreen | null
-): { account?: AgentSessionAccountKind } | null {
-  if (firstScreen?.phase !== 'failed') {
-    return null
-  }
-  if (firstScreen.refused) {
-    return firstScreen.refused.notSignedIn ?? null
-  }
-  const failure = firstScreen.turn
-    .flatMap((message) => message.blocks)
-    .findLast((block) => block.type === 'text' && block.failure !== undefined)
-  const fact = failure?.type === 'text' ? failure.failure : undefined
-  return fact?.kind === 'notSignedIn' ? (fact.account ? { account: fact.account } : {}) : null
-}
-
-/** Ended once the host has a turn record that no longer runs, or refused the kickoff before any turn
- *  opened (its agent failed to start); before that the kickoff is still starting. */
-export function nativeChatKickoffEnded(session: KickoffSession): boolean {
-  if (session.isWorking) {
-    return false
-  }
-  if (nativeChatKickoffRefusal(session) !== null) {
-    return true
-  }
-  return session.latestTurn != null && session.latestTurn.turn.state !== 'running'
 }
 
 export function useNativeChatBotKickoffView(
