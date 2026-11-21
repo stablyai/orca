@@ -10,7 +10,7 @@ import type { TerminalProcessInspection as RuntimeTerminalProcessInspection } fr
 describe('agent completion coordinator', () => {
   useAgentCompletionCoordinatorLifecycle()
 
-  it('still detects an unannounced process exit while hidden, at the slower cadence', async () => {
+  it('confirms an exit whose prompt redraw lands inside a hidden pane\'s notice window', async () => {
     let foregroundProcess: string | null = 'codex'
     const dispatchCompletion = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
@@ -26,13 +26,14 @@ describe('agent completion coordinator', () => {
     coordinator.observeTitle('Codex working')
     await vi.advanceTimersByTimeAsync(3_000)
 
-    // Agent exits with no completion title/hook — only the poll can notice.
+    // Main reports hidden output once per 5 s window; the agent exits and the prompt redraws inside it, unreported.
+    coordinator.observeHiddenOutputActivity()
+    await vi.advanceTimersByTimeAsync(4_000)
     foregroundProcess = null
-    // First idle sample requires a repeat before announcing (no dispatch yet).
-    await vi.advanceTimersByTimeAsync(3_000)
+    await vi.advanceTimersByTimeAsync(4_000)
     expect(dispatchCompletion).not.toHaveBeenCalled()
 
-    // Second idle sample confirms the exit ~2 hidden polls (~6s) after it happened.
+    // A second fresh read 3 s later confirms it.
     await vi.advanceTimersByTimeAsync(3_000)
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
     expect(dispatchCompletion).toHaveBeenCalledWith('codex', {
@@ -40,6 +41,33 @@ describe('agent completion coordinator', () => {
       quietedHookDone: false,
       terminalIdleConfirmed: true
     })
+  })
+
+  it('reads nothing and arms no timer for a quiet agent or shell, and once after an output burst', async () => {
+    for (const foregroundProcess of ['codex', null]) {
+      const inspectProcess = vi.fn(async () => processResult(foregroundProcess))
+      const coordinator = createAgentCompletionCoordinator({
+        paneKey: 'tab-1:leaf-1',
+        getPtyId: () => 'pty-1',
+        inspectProcess,
+        dispatchCompletion: vi.fn(),
+        isLive: () => true
+      })
+
+      coordinator.startProcessTracking()
+      await vi.advanceTimersByTimeAsync(10 * 60_000)
+      expect(inspectProcess).toHaveBeenCalledTimes(1)
+      expect(vi.getTimerCount()).toBe(0)
+
+      for (let chunk = 0; chunk < 20; chunk += 1) {
+        coordinator.observeOutputActivity()
+        await vi.advanceTimersByTimeAsync(50)
+      }
+      await vi.advanceTimersByTimeAsync(10 * 60_000)
+      expect(inspectProcess).toHaveBeenCalledTimes(2)
+      expect(vi.getTimerCount()).toBe(0)
+      coordinator.dispose()
+    }
   })
 
   it('does not dispatch process-exit while an agent terminal still has child processes', async () => {
@@ -58,6 +86,7 @@ describe('agent completion coordinator', () => {
     await flushAsyncTicks()
 
     result = processResult('zsh', true)
+    coordinator.observeOutputActivity()
     vi.advanceTimersByTime(750)
     await flushAsyncTicks()
 
@@ -117,6 +146,7 @@ describe('agent completion coordinator', () => {
     coordinator.startProcessTracking()
     await vi.advanceTimersByTimeAsync(2_000)
     result = processResult(null, false)
+    coordinator.observeOutputActivity()
     await vi.advanceTimersByTimeAsync(750)
     result = unavailableResult
     await vi.advanceTimersByTimeAsync(750)
@@ -147,6 +177,7 @@ describe('agent completion coordinator', () => {
     await vi.advanceTimersByTimeAsync(2_000)
 
     foregroundProcess = 'claude'
+    coordinator.observeOutputActivity()
     await vi.advanceTimersByTimeAsync(750)
     expect(dispatchCompletion).not.toHaveBeenCalled()
 

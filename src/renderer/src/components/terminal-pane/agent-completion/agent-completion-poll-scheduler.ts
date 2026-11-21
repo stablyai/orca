@@ -8,6 +8,7 @@ import {
   type PollCadenceTier
 } from './agent-completion-poll-cadence'
 import { nextCadenceInspectionDelayMs } from './agent-completion-poll-interval'
+import { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } from '../../../../../shared/process-observation/tables/process-table-snapshot'
 
 /** Continuous output (a spinner) still gets one read this often; a pause reads sooner. */
 const ACTIVITY_READ_MAX_DEFERRAL_MS = 5_000
@@ -154,8 +155,8 @@ export function createAgentCompletionPollScheduler(args: {
   }
 
   /** Something that can change the foreground happened; read once after it settles. */
-  function noteForegroundEvent(): void {
-    state.readDueSince ??= Date.now()
+  function noteForegroundEvent(at = Date.now()): void {
+    state.readDueSince ??= at
     state.unresolvedFollowUps = 0
     scheduleNextPoll()
   }
@@ -172,9 +173,13 @@ export function createAgentCompletionPollScheduler(args: {
     scheduleNextPoll()
   }
 
-  /** The read now starting answers every event before it. */
+  /** The read now starting answers every event before it, except output too recent for a shared snapshot to show. */
   function consumeReadDue(): void {
-    state.readDueSince = null
+    const lastActivity = state.lastPaneActivityAt
+    state.readDueSince =
+      lastActivity !== null && lastActivity > Date.now() - PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
+        ? lastActivity
+        : null
   }
 
   return {
