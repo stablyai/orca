@@ -152,6 +152,16 @@ describe('BotChangeNotices', () => {
     const notice = emit.mock.calls[0]![0]
     expect(notice.kinds).toEqual(['status', 'workers'])
     expect(botItemsNoticeParts(notice, 'bot-a')).toEqual(['i1'])
+    // Too many to name: the list reads whole.
+    const many = Array.from({ length: 101 }, (_, index) => `i${index}`)
+    notices.changed({
+      botIds: ['bot-a'],
+      kinds: ['workers'],
+      itemUids: { 'bot-a': many },
+      workersNamed: true
+    })
+    vi.advanceTimersByTime(500)
+    expect(botItemsNoticeParts(emit.mock.calls[1]![0], 'bot-a')).toBeNull()
   })
 
   it('stays quiet on a host without bots', () => {

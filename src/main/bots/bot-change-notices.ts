@@ -104,7 +104,7 @@ export type BotPaneFacts = {
   inGroupRoom: (sessionId: string) => boolean
   /** The Dispatch whose worker a pane is; null for a pane that is no worker. */
   workerDispatch: (paneKey: string) => string | null
-  /** A worker's phase changed: its items hear of it as an items notice naming them, sent before it settles. */
+  /** A worker's phase changed: a workers notice names its items, sent before it settles. */
   workerChanged: (dispatchId: string) => Promise<void>
   /** Reads the chats of bots never read yet; false when one can't be read, so a worker pane may be an
    *  unread bot's. */
@@ -132,7 +132,7 @@ export function botPhaseChangeScopes(
     everyBotRead = facts.readEveryBot()
     botId = everyBotRead ? find() : null
   }
-  // A worker's items hear of its phase as an items notice naming them (`workerChanged`).
+  // A worker's items are named in a workers notice of their own (`workerChanged`).
   const named = worker ? { workersNamed: true as const } : {}
   if (botId) {
     scopes.push({ botIds: [botId], kinds, ...named })
@@ -166,8 +166,8 @@ function afterItemsNamed(named: Promise<unknown>, tell: () => void): void {
   void named.then(once)
 }
 
-/** These bots' workers changed (every bot's, with null), their items told of it as an items notice
- *  naming them: sent after that notice, so the two go out as one. */
+/** These bots' workers changed (every bot's, with null), their items named in a workers notice of
+ *  their own: sent after it, so the two go out as one. */
 export function workersChangedAfterItems(
   notices: Pick<BotChangeNotices, 'changed'>,
   botIds: readonly string[] | null,

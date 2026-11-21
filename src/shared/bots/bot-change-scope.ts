@@ -43,8 +43,8 @@ export type BotChangeScope = {
    *  here had only these change, so its list reads just them. A bot left out of an `items` change
    *  (and an older host's notice) re-reads whole. */
   itemUids?: Readonly<Record<string, readonly string[]>>
-  /** Every `workers` change it covers also reached item lists as an items notice naming the items it
-   *  touched, so those lists need not read for it. Absent: an older host, or a change it can't name. */
+  /** Every `workers` change it covers names in `itemUids` the items it touched (or goes with a notice
+   *  that does), so item lists read just those. Absent: an older host, or a change it can't name. */
   workersNamed?: true
 }
 
@@ -185,7 +185,13 @@ export function addBotChange(pending: PendingBotChanges, scope: BotChangeScope):
     }
     const next = uids ?? new Set<string>()
     named.forEach((uid) => next.add(uid))
-    pending.itemUids.set(botId, next.size > BOT_CHANGE_ITEM_UIDS_MAX ? null : next)
+    if (next.size > BOT_CHANGE_ITEM_UIDS_MAX) {
+      // Too many to name: its lists read whole, a workers change's too.
+      pending.itemUids.set(botId, null)
+      pending.workersNamed = false
+    } else {
+      pending.itemUids.set(botId, next)
+    }
   }
 }
 
