@@ -353,15 +353,9 @@ it('confirms N resting agents polled together with one native read', async () =>
           startTime: 'Mon Nov 20 10:01:00 2026'
         }
       )
-      sessions.push({
-        ...pane({
-          root: shell,
-          shellIsRootChild: false,
-          foregroundGroup: agent,
-          foreground: 'claude'
-        }),
-        pid: shell
-      } as Session)
+      sessions.push(
+        pane({ root: shell, shellIsRootChild: false, foregroundGroup: agent, foreground: 'claude' })
+      )
     }
     setLibprocAddonForTests({
       readProcessTable: async (query) => {
