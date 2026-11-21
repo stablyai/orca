@@ -15,13 +15,24 @@ const mocks = vi.hoisted(() => ({
 }))
 vi.mock('./bot-chat-session', () => ({
   startBotSession: (...args: unknown[]) => mocks.create(...args),
-  botMessageBody: (text: string, options?: { images?: readonly { path: string }[] }) => ({
+  botMessageBody: (
+    text: string,
+    options?: {
+      images?: readonly { path: string }[]
+      memorySource?: string
+      automationRun?: object
+    }
+  ) => ({
     kind: 'message',
     role: 'user',
     blocks: [
       { type: 'text', text },
       ...(options?.images ?? []).map(({ path }) => ({ type: 'image-ref' as const, path }))
-    ]
+    ],
+    ...(options?.memorySource ? { memorySource: options.memorySource } : {}),
+    ...(options?.automationRun
+      ? { origin: 'automation-run', automationRun: options.automationRun }
+      : {})
   }),
   requireStructuredHost: async () => ({
     // The whole snapshot answers each bounded read: it holds every row a window would.

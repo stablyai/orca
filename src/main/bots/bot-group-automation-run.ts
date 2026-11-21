@@ -45,8 +45,13 @@ export async function sendBotGroupAutomationRun(
     groupOf(groups, bot, sessionId),
     async () => {
       const found = groups.store.memberOf(sessionId)
-      if (found?.member.botId !== bot.id || bot.paused) {
+      if (found?.member.botId !== bot.id) {
         throw new Error(botLeftGroupRoom(bot.name))
+      }
+      if (bot.paused) {
+        throw new Error(
+          `${bot.name} is paused, so the automation didn't run. Resume it to run again.`
+        )
       }
       const { group: room, threadId } = found
       const { turns, contexts } = await reserveGroupTurns(
@@ -79,7 +84,7 @@ export async function sendBotGroupAutomationRun(
   )
   groups.changed()
   const [turn] = message.turns
-  const fingerprint = turn ? await deliverTurn(groups, message, turn) : undefined
+  const fingerprint = turn ? await deliverTurn(groups, message, turn, run) : undefined
   if (!turn || fingerprint === undefined) {
     throw new Error(turnError(groups, message) ?? botLeftGroupRoom(bot.name))
   }

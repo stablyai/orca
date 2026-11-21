@@ -81,12 +81,28 @@ describe('automations in group rooms', () => {
     expect(post.turns.map((turn) => turn.botId)).toEqual(['bot-0'])
     expect(sent).toMatchObject({ clientMessageId: post.turns[0]!.operationId })
     const prompt: string = mocks.send.mock.calls[0]![0].turn.body.blocks[0].text
-    expect(prompt).toContain(`automation "Progress check" ran here`)
-    expect(prompt).toContain(PROMPT)
+    expect(prompt.startsWith(PROMPT)).toBe(true)
+    expect(prompt).toContain(`automation "Progress check", which ran here`)
 
     await reply(post, 'Release is at 80%. @Forge where is the migration?')
     expect(newest()).toMatchObject({ mentioned: true, rootRequestId: post.id })
     expect(newest().turns.map((turn) => turn.botId)).toEqual(['bot-1'])
+  })
+
+  it("sends the run to the member as that automation's run, with its event's images", async () => {
+    const { groups, bots, pm } = await room()
+    await sendBotGroupAutomationRun(groups, bots[0]!, pm.sessionId, PROMPT, {
+      automationRun: RUN,
+      memorySource: 'automation:Progress check',
+      images: [{ path: '/tmp/event/screenshot.png' }]
+    })
+    await vi.waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(1))
+    expect(mocks.send.mock.calls[0]![0].turn.body).toMatchObject({
+      origin: 'automation-run',
+      automationRun: RUN,
+      memorySource: 'automation:Progress check',
+      blocks: [{ type: 'text' }, { type: 'image-ref', path: '/tmp/event/screenshot.png' }]
+    })
   })
 
   it("stops with the room's Stop", async () => {
