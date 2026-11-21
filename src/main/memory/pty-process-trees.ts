@@ -19,17 +19,6 @@ export function claimProcessTree(
   return rows
 }
 
-/** Processes init adopted that kept this group, with their subtrees: what a group's leader backgrounded. */
-export function claimOrphanedGroup(
-  index: ProcIndex,
-  groupId: number,
-  claimed: Set<number>
-): ProcRow[] {
-  return (index.orphansByGroup?.get(groupId) ?? []).flatMap((pid) =>
-    claimProcessTree(index, pid, claimed)
-  )
-}
-
 /** Each local PTY's live process subtree; overlapping trees are attributed once, in registration order. */
 export function claimPtyProcessTrees(
   index: ProcIndex,
