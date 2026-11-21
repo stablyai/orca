@@ -1,11 +1,9 @@
 import { stat } from 'node:fs/promises'
-import { basename, dirname, join } from 'node:path'
+import { join } from 'node:path'
 import {
   COMMIT_ID,
   errorCode,
   forEachBounded,
-  isSamePath,
-  readLinkedCheckoutDir,
   readRefFile,
   readRefLink,
   rethrowUnlessMissing,
@@ -165,21 +163,4 @@ async function pathExists(path: string): Promise<boolean> {
     rethrowUnlessMissing(error)
     return false
   }
-}
-
-/** The checkout a sole owning git dir belongs to; undefined when the files cannot prove it. */
-export async function readOwnerCheckoutPath(
-  repoPath: string,
-  gitDir: string,
-  commonDir: string,
-  toHostPath: (path: string) => string
-): Promise<string | undefined> {
-  if (gitDir !== commonDir) {
-    return readLinkedCheckoutDir(gitDir, toHostPath)
-  }
-  if (await isSamePath(join(repoPath, '.git'), commonDir)) {
-    return repoPath
-  }
-  // From a linked repo path: the primary checkout holds the common dir as its `.git`.
-  return basename(commonDir) === '.git' ? dirname(commonDir) : undefined
 }

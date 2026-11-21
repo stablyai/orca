@@ -165,3 +165,19 @@ it.skipIf(process.platform === 'win32')(
     expect(listings()).toBe(0)
   }
 )
+
+it.each([3, 30])(
+  'fast-forwards main in a primary checkout with a separate git dir without listing %i worktrees',
+  async (linked) => {
+    const { repoPath, remoteOid } = await createRepo(linked, (root) => [
+      '--separate-git-dir',
+      join(root, 'repo-git')
+    ])
+    git(repoPath, ['checkout', '--quiet', 'main'])
+    const listings = countWorktreeListings()
+
+    await refreshAndFollowUp(repoPath, repoPath, remoteOid)
+
+    expect(listings()).toBe(0)
+  }
+)

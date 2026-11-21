@@ -16,7 +16,8 @@ import {
 } from '../../../../shared/worktree/base-refs/local-base-branch-fast-forward'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { hasLinkedPlaceholderHead, isSamePath, readGitDirState } from './git-dir-branch-state'
-import { readOwnerCheckoutPath, resolveBranchCheckouts } from './branch-checkout-resolution'
+import { resolveBranchCheckouts } from './branch-checkout-resolution'
+import { readOwnerCheckoutPath } from './checkout-dir-from-files'
 import {
   translateWslOutputPath,
   translateWslOutputPaths

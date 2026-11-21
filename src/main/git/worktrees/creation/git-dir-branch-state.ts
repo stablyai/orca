@@ -1,7 +1,7 @@
 import { constants } from 'node:fs'
 import { lstat, open, readdir, readlink, realpath, stat } from 'node:fs/promises'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
-import { dirname, isAbsolute, join } from 'node:path'
+import { join } from 'node:path'
 
 /** A HEAD whose branch the files cannot tell: reftable leaves this placeholder, and odd symlinks map to it. */
 export const UNRESOLVED_HEAD = 'ref: refs/heads/.invalid'
@@ -170,20 +170,20 @@ export function normalizeHead(text: string): string {
 
 export const COMMIT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/
 
-// Git caps a gitfile at 1 MiB; other metadata here is smaller still.
-const MAX_METADATA_BYTES = 1 << 20
-
-/** A metadata file's content, '' when missing; throws for anything but a small regular file. */
-export async function readOptional(path: string): Promise<string> {
+/** A metadata file's content, '' when missing; throws for anything but a regular file of at most `maxBytes`. */
+export async function readOptional(
+  path: string,
+  maxBytes = Number.MAX_SAFE_INTEGER
+): Promise<string> {
   let text: string | null | undefined
   try {
-    text = await readBoundedFile(path, MAX_METADATA_BYTES)
+    text = await readBoundedFile(path, maxBytes)
   } catch (error) {
     rethrowUnlessMissing(error)
     return ''
   }
   if (typeof text !== 'string') {
-    throw new Error(`Not a small regular file: ${path}`)
+    throw new Error(`Not a readable regular file: ${path}`)
   }
   return text
 }
@@ -216,37 +216,6 @@ export async function isSamePath(left: string, right: string): Promise<boolean> 
   } catch {
     return false
   }
-}
-
-/** A linked git dir's checkout, from its `gitdir` file, only when that checkout's `.git` file points back. */
-export async function readLinkedCheckoutDir(
-  gitDir: string,
-  toHostPath: (path: string) => string
-): Promise<string | undefined> {
-  try {
-    return await readVerifiedCheckoutDir(gitDir, toHostPath)
-  } catch {
-    // Unreadable or odd: Git's listing decides.
-    return undefined
-  }
-}
-
-async function readVerifiedCheckoutDir(
-  gitDir: string,
-  toHostPath: (path: string) => string
-): Promise<string | undefined> {
-  const named = (await readOptional(join(gitDir, 'gitdir'))).replace(/\r?\n$/, '')
-  if (!named.endsWith('/.git')) {
-    return undefined
-  }
-  // Git 2.48+ may write it relative to the git dir, resolved through any symlink.
-  const dotGit = isAbsolute(named) ? toHostPath(named) : join(await realpath(gitDir), named)
-  const pointer = /^gitdir:\s*(.+?)\r?\n?$/.exec(await readOptional(dotGit))?.[1]
-  if (!pointer) {
-    return undefined
-  }
-  const pointed = isAbsolute(pointer) ? toHostPath(pointer) : join(dirname(dotGit), pointer)
-  return (await isSamePath(pointed, gitDir)) ? dirname(dotGit) : undefined
 }
 
 // One no-follow read per ref where the platform has O_NOFOLLOW (not Windows).
