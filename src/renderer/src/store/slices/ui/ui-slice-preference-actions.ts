@@ -165,35 +165,15 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     notificationsMutedByWorktree: {},
     toggleWorktreeNotificationsMuted: (worktreeId) =>
       set((s) => {
-        if (!worktreeId) {
-          return s
-        }
-        const nextMuted = s.notificationsMutedByWorktree[worktreeId] !== true
-        const next = { ...s.notificationsMutedByWorktree }
-        // Why: not muted is the default; only persist worktree-level opt-ins.
-        if (nextMuted) {
-          next[worktreeId] = true
-        } else {
-          delete next[worktreeId]
-        }
-        return { notificationsMutedByWorktree: next }
+        const next = toggleMutedEntry(s.notificationsMutedByWorktree, worktreeId)
+        return next === s.notificationsMutedByWorktree ? s : { notificationsMutedByWorktree: next }
       }),
 
     notificationsMutedByTabId: {},
     toggleTabNotificationsMuted: (tabId) =>
       set((s) => {
-        if (!tabId) {
-          return s
-        }
-        const nextMuted = s.notificationsMutedByTabId[tabId] !== true
-        const next = { ...s.notificationsMutedByTabId }
-        // Why: not muted is the default; only persist tab-level opt-ins.
-        if (nextMuted) {
-          next[tabId] = true
-        } else {
-          delete next[tabId]
-        }
-        return { notificationsMutedByTabId: next }
+        const next = toggleMutedEntry(s.notificationsMutedByTabId, tabId)
+        return next === s.notificationsMutedByTabId ? s : { notificationsMutedByTabId: next }
       }),
 
     filterRepoIds: [],
@@ -331,4 +311,18 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       set(updates)
     }
   }
+}
+
+/** Toggles an opt-in notification mute entry; absent means not muted. */
+function toggleMutedEntry(current: Record<string, boolean>, key: string): Record<string, boolean> {
+  if (!key) {
+    return current
+  }
+  const next = { ...current }
+  if (current[key] !== true) {
+    next[key] = true
+  } else {
+    delete next[key]
+  }
+  return next
 }

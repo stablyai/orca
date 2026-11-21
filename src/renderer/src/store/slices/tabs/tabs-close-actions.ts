@@ -246,12 +246,21 @@ export function createTabsCloseActions(
                     get,
                     // The tab is gone by now, so its chat's pane address is named here.
                     () =>
-                      set((current) =>
-                        removeTabsAttention(current, [
-                          tabId,
-                          structuredAgentSessionAddressTabId(tabId, tab.entityId)
-                        ])
-                      ),
+                      set((current) => {
+                        const nextNotificationsMutedByTabId = omitRecordKeys(
+                          current.notificationsMutedByTabId,
+                          [tabId]
+                        )
+                        return {
+                          ...removeTabsAttention(current, [
+                            tabId,
+                            structuredAgentSessionAddressTabId(tabId, tab.entityId)
+                          ]),
+                          ...(nextNotificationsMutedByTabId !== current.notificationsMutedByTabId
+                            ? { notificationsMutedByTabId: nextNotificationsMutedByTabId }
+                            : {})
+                        }
+                      }),
                     { tabsBefore: state }
                   )
               }
