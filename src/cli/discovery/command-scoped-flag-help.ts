@@ -66,6 +66,7 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     limit: '--limit <n>            Maximum matching workspaces (default 50)'
   },
   'worktree create': {
+    agents: '--agents <id,id,...>   Run the same --prompt on 2-6 agents, one new worktree each',
     branch: '--branch <name>        Git branch name to use instead of the prefixed default',
     reference:
       '--reference <url-or-jira-key> Attach an issue/review URL or Jira key; repeat for several',
@@ -73,6 +74,13 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     pr: '--pr <number>          Linked GitHub pull request number',
     'gitlab-issue': '--gitlab-issue <number|url> Linked GitLab issue in the source project',
     'gitlab-mr': '--gitlab-mr <number|url> Linked GitLab merge request in the source project'
+  },
+  'worktree compare': {
+    worktree: '--worktree <selector>  Candidate worktree to compare; repeat once per candidate',
+    agent: '--agent <id>           Agent that compares the candidates and recommends one',
+    task: '--task <text>          Original task, given to the comparing agent',
+    'judge-worktree':
+      '--judge-worktree <selector> Workspace the comparing agent runs in (default: current)'
   },
   'skills get': {
     full: '--full                 Print the full guide with bundled references',

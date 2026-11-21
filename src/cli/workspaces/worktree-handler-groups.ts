@@ -15,6 +15,11 @@ export const WORKTREE_HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./worktree.js')).WORKTREE_HANDLERS
   },
   {
+    name: 'worktree-compare',
+    keys: ['worktree compare'],
+    load: async () => (await import('./worktree-compare.js')).WORKTREE_COMPARE_HANDLERS
+  },
+  {
     name: 'worktree-activate',
     keys: ['worktree activate'],
     load: async () => (await import('./worktree-activate.js')).WORKTREE_ACTIVATE_HANDLERS

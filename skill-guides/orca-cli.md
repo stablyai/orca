@@ -51,6 +51,15 @@ ORCA worktree create --name <task-name> --no-parent --agent codex --model gpt-6-
 
 Read what started from `result.launch`: `outcome.kind` is `structured` (a chat) or `terminal`, `outcome.handle` is the agent handle, `receipt.detail` says why, and `prompt.outcome` says whether the brief arrived. An Orca host older than this returns the terminal handle in `result.agentTerminalHandle` and refuses `--model`/`--effort`.
 
+To race one task across several agents, one new worktree each, use `--agents` instead of `--agent` (2 to 6 agents; worktrees are named `<name>-<agent>`). When they finish, `worktree compare` starts an agent that reads every attempt without changing it and recommends one:
+
+```text
+ORCA worktree create --name <task-name> --no-parent --agents claude,codex --prompt "<task brief>" --json
+ORCA worktree compare --worktree id:<worktreeIdA> --worktree id:<worktreeIdB> --agent claude --task "<task brief>" --json
+```
+
+The create result lists each attempt under `result.attempts` (`agent`, `name`, `worktreeId`, `launch`). If one attempt fails, the error lists the attempts already started in `data.startedAttempts`; later attempts were not started.
+
 For a fresh agent in a worktree that already exists, use `agent launch`, which takes the same `--prompt`, `--model` and `--effort`:
 
 ```text

@@ -135,6 +135,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  worktree current          Show the Orca-managed worktree for the current directory',
   '  worktree create           Create a new Orca-managed worktree',
   '  worktree set              Update Orca metadata for a worktree',
+  '  worktree compare          Have an agent compare worktrees and recommend one',
   '  worktree rm               Remove a worktree from Orca and git',
   '  worktree ps               Show a compact orchestration summary across worktrees',
   '  ports                     List the listening ports Orca detected for a workspace',

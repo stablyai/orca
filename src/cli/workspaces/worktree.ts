@@ -30,9 +30,13 @@ import {
   resolveWorktreeCreateCwdContext,
   resolveCurrentWorktreeSelector
 } from '../workspace-selection/workspace-selector'
-import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
-import { parseCliAgent, readCliAgentLaunch } from '../agents/agent-launch-request'
+import { readCliAgentLaunch } from '../agents/agent-launch-request'
 import { createWorktreeWithAgent } from './worktree-create-agent-launch'
+import {
+  createWorktreeAttempts,
+  getOptionalStartupAgent,
+  readFanoutAgents
+} from './worktree-create-startup-agents'
 import { printLineageSummary, printSetParentLine } from './worktree-lineage-summary'
 import { resolveCreateParentFields, resolveSetParentFields } from './worktree-parent-fields'
 import { runWorktreePs } from './worktree-ps'
@@ -63,20 +67,6 @@ import {
   getCreateReferenceInputs,
   resolveReferenceInputs
 } from '../references/reference-input'
-
-function getOptionalStartupAgent(flags: Map<string, string | boolean>): TuiAgent | undefined {
-  const agent = getPresentStringFlag(flags, 'agent')
-  if (agent === undefined) {
-    const needsAgent = ['prompt', 'model', 'effort', 'surface', 'retry-launch'].find((name) =>
-      flags.has(name)
-    )
-    if (needsAgent) {
-      throw new RuntimeClientError('invalid_argument', `--${needsAgent} requires --agent`)
-    }
-    return undefined
-  }
-  return parseCliAgent(agent)
-}
 
 export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   'worktree ps': runWorktreePs,
@@ -115,7 +105,8 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const explicitParent = await resolveCreateParentSelector(flags, cwd, client)
     const explicitParentWorktree = explicitParent.parentWorktree
     const explicitParentWorkspace = explicitParent.parentWorkspace
-    const startupAgent = getOptionalStartupAgent(flags)
+    const fanoutAgents = readFanoutAgents(flags)
+    const startupAgent = fanoutAgents ? undefined : getOptionalStartupAgent(flags)
     // Read before any request, so a bad prompt, model or effort creates nothing.
     const agentLaunch = startupAgent
       ? readCliAgentLaunch(flags, startupAgent, { createsWorktree: true })
@@ -188,6 +179,10 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       ...cliCaller(callerTerminalHandle, client.isRemote),
       // Always request CLI provenance, including hand-typed creates without a terminal handle.
       cliProvenanceRequest: callerTerminalHandle ? { callerTerminalHandle } : {}
+    }
+    if (fanoutAgents) {
+      await createWorktreeAttempts({ ...context, create, name, agents: fanoutAgents })
+      return
     }
     if (agentLaunch) {
       await createWorktreeWithAgent({ client, flags, create, launch: agentLaunch, json, rawArgs })

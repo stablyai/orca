@@ -6,7 +6,7 @@ export const WORKTREE_CREATE_COMMAND_SPEC: CommandSpec = {
   repeatableFlags: ['reference'],
   summary: 'Create a new Orca-managed worktree',
   usage:
-    'orca worktree create --name <name> [--repo <selector>|--project <id-or-name> [--host <host>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--model <id>] [--effort <level>] [--surface chat|terminal] [--setup run|skip|inherit] [--base-branch <ref>] [--branch <name>] [--reference <url-or-jira-key>...] [--reference-site <id>] [--issue <number>] [--pr <number>] [--linear-issue <identifier-or-url>] [--gitlab-issue <number-or-url>] [--gitlab-mr <number-or-url>] [--comment <text>] [--parent-worktree <selector> [--parent-environment <environment>]] [--no-parent] [--run-hooks] [--activate] [--retry-launch <operationId>] [--json]',
+    'orca worktree create --name <name> [--repo <selector>|--project <id-or-name> [--host <host>]|--project-host-setup <id>] [--agent <id>|--agents <id,id,...>] [--prompt <text>] [--model <id>] [--effort <level>] [--surface chat|terminal] [--setup run|skip|inherit] [--base-branch <ref>] [--branch <name>] [--reference <url-or-jira-key>...] [--reference-site <id>] [--issue <number>] [--pr <number>] [--linear-issue <identifier-or-url>] [--gitlab-issue <number-or-url>] [--gitlab-mr <number-or-url>] [--comment <text>] [--parent-worktree <selector> [--parent-environment <environment>]] [--no-parent] [--run-hooks] [--activate] [--retry-launch <operationId>] [--json]',
   allowedFlags: [
     ...GLOBAL_FLAGS,
     'repo',
@@ -15,6 +15,7 @@ export const WORKTREE_CREATE_COMMAND_SPEC: CommandSpec = {
     'project-host-setup',
     'name',
     'agent',
+    'agents',
     'prompt',
     'model',
     'effort',
@@ -52,6 +53,7 @@ export const WORKTREE_CREATE_COMMAND_SPEC: CommandSpec = {
     '--no-parent only affects Orca lineage; omit --base-branch to use the repo default base, or pass the default base ref explicitly for independent top-level work.',
     'By default this creates the worktree and its first terminal without switching the active Orca view.',
     'Pass --agent to start an agent with the worktree, as a chat or a terminal per your Chat | CLI choice for that agent, exactly as a new agent tab does; --prompt sends initial work to it. --model and --effort pick its model and reasoning effort, and --surface chat|terminal picks chat or terminal for this launch instead of your setting.',
+    'Pass --agents claude,codex instead of --agent to run the same --prompt on several agents (2 to 6), one new worktree each from the same base, named <name>-<agent> (a repeated agent gets -1, -2). Other create flags apply to every attempt; --agents cannot be combined with --agent, --model, --effort, --surface, --branch, --activate, --run-hooks or --retry-launch. Attempts start one at a time and stop at the first failure, which names the ones already started. Compare the results with `orca worktree compare`.',
     'After a lost agent launch reply, re-issue the same command from the same directory on the same host with --retry-launch <operationId> from the error. Never retry as a fresh launch; older hosts require inspecting the workspace first.',
     'With --agent --json, result.launch says what started: launch.outcome.kind (structured chat or terminal), launch.outcome.handle, and launch.receipt.detail for why. An Orca host older than this returns the terminal agent handle in result.agentTerminalHandle instead.',
     'Repo-defined setup hooks follow the repository setup policy; pass --setup run to force them.',
@@ -62,6 +64,7 @@ export const WORKTREE_CREATE_COMMAND_SPEC: CommandSpec = {
   examples: [
     'orca worktree create --name agent-task --agent codex --prompt "hi" --json',
     'orca worktree create --name design --no-parent --agent codex --model gpt-6-astra --effort high --prompt "Write the design doc" --json',
+    'orca worktree create --name fix-login --agents claude,codex --prompt "Fix the flaky login test" --json',
     'orca worktree create --repo id:<repoId> --name related-task --json',
     'orca worktree create --project github:stablyai/orca --host runtime:03ef704c-b180-4b10-998d-e28fbd5de9a3 --name benchmark --json',
     'orca worktree create --repo id:<repoId> --name linear-task --linear-issue https://linear.app/stably/issue/STA-335/test-issue --json',

@@ -3,6 +3,7 @@ import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-
 import { WORKTREE_LISTING_SCOPE_NOTES } from './worktree-listing-scope-notes'
 import { WORKTREE_CREATE_COMMAND_SPEC } from './worktree-create'
 import { WORKTREE_SET_COMMAND_SPEC } from './worktree-set'
+import { WORKTREE_COMPARE_COMMAND_SPEC } from './worktree-compare'
 import { SERVE_COMMAND_SPECS } from './serve'
 import { REPO_COMMAND_SPECS } from './repo'
 import { TERMINAL_SEND_COMMAND_SPEC } from './terminal-send'
@@ -80,6 +81,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   },
   WORKTREE_CREATE_COMMAND_SPEC,
   WORKTREE_SET_COMMAND_SPEC,
+  WORKTREE_COMPARE_COMMAND_SPEC,
   {
     path: ['worktree', 'rm'],
     aliases: [
