@@ -9,7 +9,8 @@ export { readCheckoutMarkerIdentity as markerIdentity } from './worktree-removal
 export {
   waitForPendingWorktreeRemoval,
   waitForWorktreeRemovalAcceptance,
-  finishAcceptedWorktreeRemoval
+  finishAcceptedWorktreeRemoval,
+  withAcceptedCompletion
 } from './worktree-removal-settlement'
 import {
   LOCAL_EXECUTION_HOST_ID,

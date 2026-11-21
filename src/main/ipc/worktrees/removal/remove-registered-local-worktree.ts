@@ -156,7 +156,7 @@ export async function removeRegisteredLocalWorktree(
       return result
     }
     // After acceptance, deletion must survive request cancellation; other views observe the host's removing marker.
-    void backgroundRemoval.startBackgroundWorktreeRemoval({
+    const completion = backgroundRemoval.startBackgroundWorktreeRemoval({
       removal: {
         worktreeId: args.worktreeId,
         repoId,
@@ -180,7 +180,7 @@ export async function removeRegisteredLocalWorktree(
       admissionFailed: () => removalGate.finish(false)
     })
     await backgroundRemoval.waitForWorktreeRemovalAcceptance(args.worktreeId)
-    return { removing: true }
+    return backgroundRemoval.withAcceptedCompletion({ removing: true }, completion)
   }
   return background ? worktreeRemovalLifetime.withPreparation(prepare) : prepare()
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -66,20 +66,36 @@ export function useWorkspaceCleanupHostRules(
     hostRules: WorkspaceCleanupHostRules
   } | null>(null)
   const [attempt, setAttempt] = useState(0)
+  // Reads can finish out of order; an older answer never replaces a newer one.
+  const reads = useRef({ started: 0, applied: 0 })
+  const readInOrder = async (
+    id: string,
+    isCurrent: () => boolean,
+    keepOnFailure = false
+  ): Promise<WorkspaceCleanupHostRules> => {
+    const order = ++reads.current.started
+    const hostRules = await readEnvironmentRules(id)
+    if (
+      isCurrent() &&
+      order > reads.current.applied &&
+      (hostRules.state === 'ready' || !keepOnFailure)
+    ) {
+      reads.current.applied = order
+      setRemote({ environmentId: id, hostRules })
+    }
+    return hostRules
+  }
 
   useEffect(() => {
     if (!environmentId) {
       return
     }
     let current = true
-    void readEnvironmentRules(environmentId).then((hostRules) => {
-      if (current) {
-        setRemote({ environmentId, hostRules })
-      }
-    })
+    void readInOrder(environmentId, () => current)
     return () => {
       current = false
     }
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- readInOrder only reads refs and setters.
   }, [environmentId, attempt])
 
   useEffect(() => {
@@ -91,17 +107,14 @@ export function useWorkspaceCleanupHostRules(
       if (changedId !== environmentId || !keys.includes('workspaceCleanupPolicy')) {
         return
       }
-      void readEnvironmentRules(environmentId).then((hostRules) => {
-        // A failed refresh keeps the last answer rather than replacing the pane with an error.
-        if (current && hostRules.state === 'ready') {
-          setRemote({ environmentId, hostRules })
-        }
-      })
+      // A failed refresh keeps the last answer rather than replacing the pane with an error.
+      void readInOrder(environmentId, () => current, true)
     })
     return () => {
       current = false
       stop()
     }
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- readInOrder only reads refs and setters.
   }, [environmentId])
 
   const reportFailure = (error: unknown): void => {
@@ -135,8 +148,7 @@ export function useWorkspaceCleanupHostRules(
   return {
     hostRules: remote?.environmentId === environmentId ? remote.hostRules : { state: 'loading' },
     readLatest: async () => {
-      const hostRules = await readEnvironmentRules(environmentId)
-      setRemote({ environmentId, hostRules })
+      const hostRules = await readInOrder(environmentId, () => true)
       return hostRules.state === 'ready' ? hostRules.rules : null
     },
     reload,
@@ -148,6 +160,8 @@ export function useWorkspaceCleanupHostRules(
           { workspaceCleanupPolicy: rules },
           { timeoutMs: HOST_SETTINGS_TIMEOUT_MS }
         )
+        // The saved answer is newer than any read still in flight.
+        reads.current.applied = ++reads.current.started
         setRemote({ environmentId, hostRules: readHostRules(result.settings) })
         return true
       } catch (error) {

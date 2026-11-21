@@ -45,34 +45,30 @@ export function useWorkspaceCleanupPolicyOwner(owner: RuntimeClientTarget, repoI
       })
     }))
   }
-  const reload = async () => {
+  // Reads can finish out of order; an older one never replaces a newer adopted read.
+  const reads = useRef({ started: 0, adopted: 0 })
+  const load = async (keepOnFailure: boolean) => {
     const token = generation.current
+    const order = ++reads.current.started
     try {
       const value = await readLatest()
-      if (token !== generation.current) {
+      if (token !== generation.current || order < reads.current.adopted) {
         return
       }
+      reads.current.adopted = order
       adopt(value)
       setCapability(value.protocol === 3 ? 'ready' : 'old')
     } catch (failure) {
-      if (token === generation.current) {
+      if (!keepOnFailure && token === generation.current && order > reads.current.adopted) {
         setCapability(hasRuntimeRpcErrorCode(failure, 'method_not_found') ? 'old' : 'error')
       }
     }
   }
+  const reload = () => load(false)
   const reloadEffect = useEffectEvent(() => reload())
   // Another client may change this host's rules while the pane is open; writes still re-read first.
-  const refreshEffect = useEffectEvent(async () => {
-    const token = generation.current
-    try {
-      const value = await readLatest()
-      if (token === generation.current) {
-        adopt(value)
-      }
-    } catch {
-      // Keep the last read; the next write or retry reads the host again.
-    }
-  })
+  // A failed refresh keeps the last read; the next write or retry reads the host again.
+  const refreshEffect = useEffectEvent(() => load(true))
   const environmentId = owner.kind === 'environment' ? owner.environmentId : null
   useEffect(() => {
     if (!environmentId) {
