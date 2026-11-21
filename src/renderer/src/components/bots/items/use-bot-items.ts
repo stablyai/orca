@@ -181,7 +181,7 @@ export function useBotChatItems(
           console.warn('[bots] items: reading a chat’s items failed', error)
           // What a read with a failed Show more read stands; that ask fails (its caller says so).
           if (error instanceof BotReadMoreFailed) {
-            land(error.landed as BotItemsRead)
+            land(error.landed)
           } else if (ask.whole || ask.parts.length > 0) {
             missed = true
             if (live) {

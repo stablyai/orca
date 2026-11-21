@@ -48,7 +48,7 @@ export async function loadBotItemsList(
   const value = await loadAsked(call, previous, ask, options).catch((error: unknown) => {
     // The rows below where the last read stopped are still to page.
     if (from && error instanceof BotReadMoreFailed) {
-      unread.set(error.landed as BotItemsListRead, from)
+      unread.set(error.landed, from)
     }
     throw error
   })

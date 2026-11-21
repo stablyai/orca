@@ -115,7 +115,7 @@ export function createBotHostRead<T>(
       }
     }
     // A read's value: told to its surfaces when it changed (an unchanged answer tells no one).
-    const land = (value: T): void => {
+    const land = (value: T | null): void => {
       if (value !== entry.value || entry.failure) {
         entry.value = value
         entry.failure = null
@@ -140,7 +140,7 @@ export function createBotHostRead<T>(
       console.error(failure, error)
       // What a read with a failed Show more read stands; that ask fails (its caller says so).
       if (error instanceof BotReadMoreFailed && live()) {
-        land(error.landed as T)
+        land(error.landed)
       }
       // A failed read of only more fails just that ask (its caller says so); the list stands.
       const onlyMore = (!ask.whole && ask.parts.length === 0) || error instanceof BotReadMoreFailed

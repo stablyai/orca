@@ -105,8 +105,10 @@ describe('loadBotItemsList', () => {
       parts: ['i2'],
       more: true
     }).catch((error: unknown) => error)
-    expect(failed).toBeInstanceOf(BotReadMoreFailed)
-    const landed = (failed as BotReadMoreFailed<BotItemsListRead>).landed
+    if (!(failed instanceof BotReadMoreFailed)) {
+      throw new Error('Show more did not fail')
+    }
+    const landed: BotItemsListRead = failed.landed
     expect(landed.items.find((item) => item.uid === 'i2')?.status).toBe('needs_you')
   })
 
