@@ -7,6 +7,7 @@ import { cva } from 'class-variance-authority'
 import { cn } from '@/lib/class-names'
 import { handleOverlayCloseAutoFocus } from '@/lib/overlay-interaction/overlay-focus-ownership'
 import { getWheelScrollDeltaY } from '@/lib/wheel-scroll-delta'
+import { FLOATING_SURFACE_CLASSES } from './floating-surface'
 import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
 import { handleImeOverlayEscape } from '@/lib/text-input/ime/ime-overlay-escape'
 import { PortalContainerContext, usePortalContainer } from './portal-container-context'
@@ -15,16 +16,14 @@ import { MENU_SURFACE_CLASS } from './menu-surface'
 // React delegates wheel passively, so native defaultPrevented may not reflect synthetic cancellation.
 const consumerPreventedWheelEvents = new WeakSet<WheelEvent>()
 
-type PopoverTone = 'default' | 'inverted' | 'menu'
+type PopoverTone = 'default' | 'pointer' | 'menu'
 
 const popoverToneVariants = cva('', {
   variants: {
     tone: {
-      default:
-        'overflow-hidden rounded-md border border-black/14 bg-floating-surface text-popover-foreground shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl dark:border-white/14 dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)]',
+      default: `overflow-hidden rounded-md ${FLOATING_SURFACE_CLASSES}`,
       // The callout arrow sits outside the box.
-      inverted:
-        'overflow-visible rounded-lg bg-foreground p-2.5 text-xs text-background shadow-floating',
+      pointer: `overflow-visible rounded-lg p-2.5 text-xs ${FLOATING_SURFACE_CLASSES}`,
       menu: cn('overflow-hidden backdrop-blur-2xl', MENU_SURFACE_CLASS)
     }
   }
@@ -138,7 +137,7 @@ function PopoverContent({
 }: React.ComponentProps<typeof PopoverPrimitive.Content> & {
   portalContainer?: HTMLElement | null
   wheelScroll?: boolean
-  /** `inverted` styles callouts. `menu` matches dropdown menus for search pickers. */
+  /** `pointer` is the themed callout used by sidebar tips; `menu` matches search pickers. */
   tone?: PopoverTone
 }) {
   const container = usePortalContainer(portalContainer)
@@ -223,7 +222,7 @@ function PopoverArrow({
     <PopoverPrimitive.Arrow
       data-slot="popover-arrow"
       className={cn(
-        tone === 'inverted' ? 'fill-foreground' : 'fill-popover',
+        tone === 'pointer' ? 'fill-floating-surface' : 'fill-popover',
         '!visible block overflow-visible',
         className
       )}
