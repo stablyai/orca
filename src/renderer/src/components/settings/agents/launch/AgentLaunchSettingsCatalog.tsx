@@ -4,7 +4,7 @@ import { AgentCliUpdateButton } from '@/components/agent-cli-update/AgentCliUpda
 
 import { AgentLaunchChoiceEditor } from '@/components/agent/launch-settings/AgentLaunchChoiceEditor'
 import { agentChatPermissionModes } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
-import { savedChatPermissionMode } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { savedChatPermissionMode } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { useMemo } from 'react'
 import { recomputeOn } from '@/lib/recompute-on'

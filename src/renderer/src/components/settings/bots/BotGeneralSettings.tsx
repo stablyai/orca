@@ -18,12 +18,12 @@ import { useTranslate } from '@/i18n/use-translate'
 import { openBotChat } from '@/lib/bot-catalog'
 import {
   AGENT_CHAT_PERMISSION_MODES,
-  savedChatPermissionMode,
   type AgentChatPermissionMode
 } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   agentChatPermissionModes,
-  chatAsksNoApprovals
+  chatAsksNoApprovals,
+  savedChatPermissionMode
 } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'

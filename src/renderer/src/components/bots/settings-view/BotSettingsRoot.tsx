@@ -24,7 +24,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useAccessRequests } from '@/lib/bot-access-requests'
 import { useAppStore } from '@/store'
 import { nativeChatPermissionModeLabel } from '@/components/native-chat/session/options/controls/native-chat-permission-mode-labels'
-import { savedChatPermissionMode } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { savedChatPermissionMode } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import {
   agentChatPermissionModes,
   chatAsksNoApprovals
