@@ -210,9 +210,14 @@ async function inspectHostCheckoutMarker(
 export async function removeUnregisteredHostCheckout(
   targetPath: string,
   signal?: AbortSignal,
-  markerOptions: { expectedMarker?: string; forbidAnyMarker?: boolean; expectedRoot?: string } = {}
+  markerOptions: {
+    expectedMarker?: string
+    forbidAnyMarker?: boolean
+    expectedRoot?: string
+    requireMarker?: boolean
+  } = {}
 ): Promise<void> {
-  const { expectedMarker, forbidAnyMarker = false, expectedRoot } = markerOptions
+  const { expectedMarker, forbidAnyMarker = false, expectedRoot, requireMarker } = markerOptions
   const root = toHostRemovalPath(targetPath)
   const initialRoot = await inspectHostDirectoryRoot(root, targetPath, expectedRoot)
   if (!initialRoot) {
@@ -221,6 +226,9 @@ export async function removeUnregisteredHostCheckout(
 
   const markerPath = join(root, '.git')
   const initial = await inspectHostCheckoutMarker(markerPath, targetPath)
+  if (!initial && requireMarker && (await readdir(root)).length > 0) {
+    throw differentCheckoutAtPathError(targetPath)
+  }
   if (
     initial &&
     (forbidAnyMarker || (expectedMarker !== undefined && initial.identity !== expectedMarker))

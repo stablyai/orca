@@ -29,6 +29,8 @@ export type ProvenOrphanCheckoutGuard = {
   expectedMarker?: string
   forbidAnyMarker?: boolean
   expectedRoot?: string
+  requireMarker?: boolean
+  alreadyAbsent?: boolean
 }
 
 function isAbsentMarkerError(error: unknown): boolean {
@@ -184,6 +186,7 @@ export async function proveOrphanedCheckoutGuard(
     return {
       markerLast: true,
       forbidAnyMarker: true,
+      alreadyAbsent: true,
       ...(rootBefore.identity ? { expectedRoot: rootBefore.identity } : {})
     }
   }
@@ -214,6 +217,7 @@ export async function proveOrphanedCheckoutGuard(
   return {
     markerLast: true,
     expectedMarker: requiredIdentity,
+    requireMarker: true,
     ...(expectedRoot ? { expectedRoot } : {})
   }
 }

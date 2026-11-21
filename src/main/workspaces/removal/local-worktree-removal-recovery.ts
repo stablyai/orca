@@ -151,24 +151,27 @@ export async function recoverPartialLocalWorktreeRemoval(
   throwIfSignalAborted(args.signal)
   await args.beforeLeftoverDelete?.()
   const verifiedMarkerOptions = await assertRemainingMarkerBelongsToRepoWorktree(args)
-  try {
-    await removeLocalWorktreePath(
-      args.canonicalWorktreePath,
-      args.localWorktreeGitOptions,
-      args.signal,
-      {
-        markerLast: true,
-        expectedMarker: args.expectedMarker ?? verifiedMarkerOptions.expectedMarker,
-        forbidAnyMarker: args.forbidAnyMarker ?? verifiedMarkerOptions.forbidAnyMarker,
-        expectedRoot: verifiedMarkerOptions.expectedRoot
+  if (verifiedMarkerOptions) {
+    try {
+      await removeLocalWorktreePath(
+        args.canonicalWorktreePath,
+        args.localWorktreeGitOptions,
+        args.signal,
+        {
+          markerLast: true,
+          expectedMarker: args.expectedMarker ?? verifiedMarkerOptions.expectedMarker,
+          forbidAnyMarker: args.forbidAnyMarker ?? verifiedMarkerOptions.forbidAnyMarker,
+          expectedRoot: verifiedMarkerOptions.expectedRoot,
+          requireMarker: verifiedMarkerOptions.requireMarker
+        }
+      )
+    } catch (error) {
+      throwIfSignalAborted(args.signal)
+      if (error instanceof CheckoutIdentityRefusal) {
+        throw error
       }
-    )
-  } catch (error) {
-    throwIfSignalAborted(args.signal)
-    if (error instanceof CheckoutIdentityRefusal) {
-      throw error
+      throw new Error(formatWorktreeRemovalError(error, args.canonicalWorktreePath, args.force))
     }
-    throw new Error(formatWorktreeRemovalError(error, args.canonicalWorktreePath, args.force))
   }
   const { branch, head } = args.registeredWorktree
   // Same -d policy as a normal delete: merged branches go, unmerged ones are preserved.
@@ -182,7 +185,7 @@ export async function recoverPartialLocalWorktreeRemoval(
 
 async function assertRemainingMarkerBelongsToRepoWorktree(
   args: LocalPartialRemovalRecoveryArgs
-): Promise<Omit<RemoveLocalWorktreeMarkerOptions, 'markerLast'>> {
+): Promise<Omit<RemoveLocalWorktreeMarkerOptions, 'markerLast'> | null> {
   const access = getLocalWorktreePathAccess(
     args.localWorktreeGitOptions,
     args.canonicalWorktreePath
@@ -202,7 +205,7 @@ async function assertRemainingMarkerBelongsToRepoWorktree(
   )
   throwIfSignalAborted(args.signal)
   if (rootBefore.kind === 'absent') {
-    return { forbidAnyMarker: true }
+    return null
   }
   if (rootBefore.kind !== 'directory') {
     throw differentCheckoutAtPathError(args.canonicalWorktreePath)
@@ -239,22 +242,22 @@ async function assertRemainingMarkerBelongsToRepoWorktree(
     args.canonicalWorktreePath,
     args.localWorktreeGitOptions
   )
+  throwIfSignalAborted(args.signal)
+  if (rootAfter.kind === 'absent') {
+    return null
+  }
   const after = await readCheckoutMarkerState(
     args.canonicalWorktreePath,
     args.localWorktreeGitOptions
   )
   throwIfSignalAborted(args.signal)
   if (
-    rootAfter.kind === 'other' ||
-    (rootAfter.kind === 'directory' &&
-      rootBefore.identity &&
-      rootAfter.identity &&
-      rootAfter.identity !== rootBefore.identity)
+    rootAfter.kind !== 'directory' ||
+    (rootBefore.identity && rootAfter.identity && rootAfter.identity !== rootBefore.identity)
   ) {
     throw differentCheckoutAtPathError(args.canonicalWorktreePath)
   }
-  const expectedRoot =
-    (rootAfter.kind === 'directory' ? rootAfter.identity : undefined) ?? rootBefore.identity
+  const expectedRoot = rootAfter.identity ?? rootBefore.identity
   if (after.kind === 'absent') {
     return {
       forbidAnyMarker: true,
@@ -266,6 +269,7 @@ async function assertRemainingMarkerBelongsToRepoWorktree(
   }
   return {
     expectedMarker: before.identity,
+    requireMarker: true,
     ...(expectedRoot ? { expectedRoot } : {})
   }
 }

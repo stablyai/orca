@@ -39,6 +39,8 @@ export type RemoveLocalWorktreeMarkerOptions = {
   expectedMarker?: string
   forbidAnyMarker?: boolean
   expectedRoot?: string
+  requireMarker?: boolean
+  alreadyAbsent?: boolean
 }
 
 const WSL_FILE_OPERATION_TIMEOUT_MS = 30_000
@@ -263,6 +265,9 @@ export async function removeLocalWorktreePath(
   markerOptions: RemoveLocalWorktreeMarkerOptions = {}
 ): Promise<void> {
   throwIfSignalAborted(signal)
+  if (markerOptions.alreadyAbsent) {
+    return
+  }
   const { markerLast = false } = markerOptions
   const distro = resolveTargetWslDistro(targetPath, options)
   if (!distro) {

@@ -450,5 +450,44 @@ describe.skipIf(process.platform === 'win32')(
 
       expect(existsSync(checkoutPath)).toBe(false)
     })
+
+    it('refuses before deleting children when the marker changes between WSL find enumeration and rm', async () => {
+      const checkoutPath = join(scratchDir, 'mid-find-race')
+      mkdirSync(checkoutPath)
+      writeFileSync(join(checkoutPath, '.git'), 'gitdir: /repo/.git/worktrees/accepted\n')
+      writeFileSync(join(checkoutPath, 'unsaved.txt'), 'unsaved\n')
+      const realHead = execFileSync('sh', ['-c', 'command -v head'], { encoding: 'utf8' }).trim()
+      const headShim = join(shimDir, 'head')
+      writeFileSync(
+        headShim,
+        [
+          '#!/bin/sh',
+          'if [ -e "$RACE_SEEN_FIRST_HEAD" ] && [ ! -e "$RACE_SWAPPED" ]; then',
+          '  : > "$RACE_SWAPPED"',
+          '  printf "gitdir: /other/.git/worktrees/restored\\n" > "$RACE_TARGET/.git"',
+          'else',
+          '  : > "$RACE_SEEN_FIRST_HEAD"',
+          'fi',
+          'exec "$REAL_HEAD" "$@"'
+        ].join('\n')
+      )
+      chmodSync(headShim, 0o755)
+      wireGuestShell({
+        REAL_HEAD: realHead,
+        RACE_TARGET: checkoutPath,
+        RACE_SEEN_FIRST_HEAD: join(shimDir, 'head-1'),
+        RACE_SWAPPED: join(shimDir, 'head-swapped')
+      })
+
+      await withPlatform('win32', async () => {
+        await expect(
+          removeLocalWorktreePath(checkoutPath, { wslDistro: 'Ubuntu' }, undefined, {
+            markerLast: true
+          })
+        ).rejects.toThrow('A different checkout is now at')
+      })
+
+      expect(readFileSync(join(checkoutPath, 'unsaved.txt'), 'utf8')).toBe('unsaved\n')
+    })
   }
 )
