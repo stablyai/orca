@@ -85,11 +85,19 @@ function announceRebaseStep(result: ContinueRebaseResult): void {
 }
 
 // Module-level so the hooks stay React Compiler friendly (no try/finally inside them).
-async function inspectRebaseStop(context: RuntimeGitContext, operationStore: OperationStore) {
+async function inspectRebaseStop(
+  context: RuntimeGitContext,
+  operationStore: OperationStore,
+  isCurrent: () => boolean
+) {
   try {
-    recordRebaseStopReading(operationStore, await continueRuntimeGitRebase(context, 'inspect'))
+    const result = await continueRuntimeGitRebase(context, 'inspect')
+    // A reading superseded by a newer HEAD's inspection must not overwrite that one.
+    if (isCurrent()) {
+      recordRebaseStopReading(operationStore, result)
+    }
   } catch {
-    // Unread stops keep Continue disabled; the next status change reads again.
+    // Unread stops keep Continue disabled; the next HEAD change reads again.
   }
 }
 
@@ -134,6 +142,7 @@ export function useSourceControlRebaseContinue({
   refreshActiveGitStatusAfterMutation,
   refreshBranchCompareRef,
   refreshGitHistoryRef,
+  statusHead,
   worktreePath
 }: {
   activeRepoTarget: SourceControlWorktreeContext['activeRepoTarget']
@@ -145,6 +154,8 @@ export function useSourceControlRebaseContinue({
   refreshActiveGitStatusAfterMutation: SourceControlStatusRefresh['refreshActiveGitStatusAfterMutation']
   refreshBranchCompareRef: React.RefObject<() => Promise<void>>
   refreshGitHistoryRef: React.RefObject<() => Promise<void>>
+  // The HEAD status reports; a move while still unread starts a fresh inspection.
+  statusHead: string | null
   worktreePath: string | null
 }) {
   const scope = useSourceControlScope()
@@ -153,6 +164,7 @@ export function useSourceControlRebaseContinue({
     if (!shouldInspect || !activeWorktreeId || !worktreePath) {
       return
     }
+    let current = true
     void inspectRebaseStop(
       {
         target: requireGitOwnerTarget(activeRepoTarget),
@@ -160,9 +172,21 @@ export function useSourceControlRebaseContinue({
         worktreePath,
         connectionId: sourceControlConnectionId(scope, activeWorktreeId)
       },
-      operationStore
+      operationStore,
+      () => current
     )
-  }, [activeRepoTarget, activeWorktreeId, operationStore, scope, shouldInspect, worktreePath])
+    return () => {
+      current = false
+    }
+  }, [
+    activeRepoTarget,
+    activeWorktreeId,
+    operationStore,
+    scope,
+    shouldInspect,
+    statusHead,
+    worktreePath
+  ])
 
   const handleContinueRebase = useCallback(async (): Promise<void> => {
     const state = operationStore.getState()
