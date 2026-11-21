@@ -117,11 +117,14 @@ onBotHostCameBack((hostId) => {
   notify()
 })
 
-/** The host's Orca sign-in, read when shown and again when its bots change (a sign-in change re-lists them). */
+/** The host's Orca sign-in. Cards of one host share the read already in flight or finished.
+ *  A bot or sign-in change reads again; a sign-in change re-lists the bots. */
 export function useBotHostOrcaAccount(hostId: ExecutionHostId): OrcaAccountServerStatus | null {
   const status = useSyncExternalStore(subscribe, () => hosts.get(hostId)?.status ?? null)
   useEffect(() => {
-    void refreshBotHostOrcaAccount(hostId)
+    if (!hosts.get(hostId)?.settled) {
+      void refreshBotHostOrcaAccount(hostId)
+    }
     return onBotsChanged(() => void refreshBotHostOrcaAccount(hostId), hostId, {
       kinds: ['settings', 'bot']
     })
