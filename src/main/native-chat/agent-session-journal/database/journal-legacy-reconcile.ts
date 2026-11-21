@@ -41,6 +41,7 @@ import {
   deleteMeta,
   revisionHoldsHistory,
   failuresWithoutOriginal,
+  clearUnreadRevisionFailure,
   writeMeta,
   type JournalLegacyFailure
 } from './journal-legacy-reconcile-marks'
@@ -291,6 +292,7 @@ function absorbChat(
     }
     // A refused adoption retries when its refused claims change; history-only failures stay held.
     if (!failure?.claims || !failure.adoption) {
+      clearUnreadRevisionFailure(db, id, failure)
       claimsOnly()
       return
     }

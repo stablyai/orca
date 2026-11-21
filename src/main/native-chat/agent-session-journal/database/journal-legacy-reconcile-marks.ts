@@ -5,7 +5,8 @@ import {
   journalLegacyFailureKey,
   journalLegacyPendingCopyKey,
   recordJournalLegacyChatRevision,
-  readJournalLegacyFailure
+  readJournalLegacyFailure,
+  type JournalLegacyFailureRecord
 } from './journal-legacy-source'
 
 /** A converted chat with no revision to compare whose original moved; compared in the background. */
@@ -149,4 +150,18 @@ export function failuresWithoutOriginal(
     }
   }
   return { gone, clearedClaims }
+}
+
+/**
+ * A failure saved without a revision came from a read of the original that threw, often file-wide
+ * damage. Once the chat reads again at the revision this file shows, it has nothing left to hold.
+ */
+export function clearUnreadRevisionFailure(
+  db: Database.Database,
+  sessionId: string,
+  failure: JournalLegacyFailureRecord | undefined
+): void {
+  if (failure && failure.revision === null && !failure.claims) {
+    deleteMeta(db, journalLegacyFailureKey(sessionId))
+  }
 }
