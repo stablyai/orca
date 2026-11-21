@@ -293,6 +293,21 @@ describe('how a bot request ends', () => {
       expect(db.getBotRequestOutcome(id)).toBe('dropped')
     })
 
+    it('tells the asker of a question being handed over when its bot is deleted', async () => {
+      const reconciler = start()
+      const id = request('question')
+      db.reserveStructuredMailSend({
+        mailbox_handle: 'orca_session_id:22222222-2222-4222-8222-222222222222',
+        message_id: id,
+        session_id: '22222222-2222-4222-8222-222222222222',
+        operation_id: 'op-1',
+        minted_at_ms: Date.now()
+      })
+      await dropUnreadBotRequests(runtime, 'docs', 'deleted')
+      await decided(reconciler)
+      expect(mailToRanger()[0]?.body).toMatch(/^Docs was deleted before it read your question/)
+    })
+
     it("waits while the asker's /clear successor can't be read, then tells it once it can", async () => {
       runtime.ensureStructuredAgentSessionHost = async () =>
         installSenderHost(['11111111-1111-4111-8111-111111111111'], undefined, {

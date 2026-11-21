@@ -68,11 +68,15 @@ export function installQuestionReconciler(
   })
   const stopPanes = install.subscribePanes((change) => {
     const phase = change.kind === 'moved' ? change.to : change.phase
-    if (phase !== 'working' && reconciler.watching()) {
-      reconciler.terminalChanged(terminalParty(install.terminalOfPane(change.paneKey)), false)
+    if (reconciler.watching()) {
+      const party = terminalParty(install.terminalOfPane(change.paneKey))
+      reconciler.terminalChanged(party, phase === 'working')
     }
   })
-  const stopEdges = reconciler.start()
+  // A chat taker is decided once a chat host can read it; until then it would read as stopped.
+  const stopEdges = reconciler.start(
+    (taker) => !taker.startsWith('session:') || getStructuredAgentSessionHost() !== null
+  )
   return {
     reconciler,
     stop: () => {

@@ -21,7 +21,15 @@ type FailureWords = {
 const failures = new Map<string, FailureWords>()
 
 export function noteBotQuestionFailure(sessionId: string, words: FailureWords): void {
+  failures.delete(sessionId)
   failures.set(sessionId, words)
+  // Only a chat's latest turn is worded, so the oldest chats' words can go.
+  for (const oldest of failures.keys()) {
+    if (failures.size <= 256) {
+      break
+    }
+    failures.delete(oldest)
+  }
 }
 
 function isDropReason(why: string): why is (typeof BOT_REQUEST_DROP_REASONS)[number] {

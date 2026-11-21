@@ -11,7 +11,7 @@ import '../../db/messages/mailbox-routing-page'
 import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { noteQuestionEdge, type QuestionEdge } from '../../db/messages/question-edges'
-import type { MailTaker } from '../../db/messages/mail-taker'
+import { stampQuestionTakes, type MailTaker } from '../../db/messages/mail-taker'
 import { linkWorkerToQuestion } from '../../../rpc/methods/orchestration/worker/start/worker-question-link'
 import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import { QuestionReconciler } from './question-reconciler'
@@ -485,18 +485,23 @@ class World {
         this.state[op.who] = op.op === 'pause' ? 'paused' : 'deleted'
         // As dropUnreadBotRequests: questions not being handed over are dropped as takes.
         const why = op.op === 'pause' ? 'paused' : 'deleted'
+        // A question being handed over is taken unread; the handover can still read it.
         const unread = this.questions.filter(
-          (q) =>
-            q.taker === null &&
-            q.to === op.who &&
-            !this.handing.some((m) => m.id === q.id) &&
-            this.db.getMessageById(q.id)?.read === 0
+          (q) => q.taker === null && q.to === op.who && this.db.getMessageById(q.id)?.read === 0
         )
+        const inFlight = unread.filter((q) => this.handing.some((m) => m.id === q.id))
+        const dropped: MailTaker = { kind: 'dropped', why }
         this.take(
-          unread.map((q) => q.id),
-          { kind: 'dropped', why },
+          unread.filter((q) => !inFlight.includes(q)).map((q) => q.id),
+          dropped,
           true
         )
+        stampQuestionTakes(
+          this.db,
+          inFlight.map((q) => q.id),
+          dropped
+        )
+        inFlight.forEach((q) => (q.taker = `dropped:${why}`))
         if (SKIP !== 'E7') {
           this.reconciler.decideAll()
         }

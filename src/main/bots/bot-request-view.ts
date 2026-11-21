@@ -217,7 +217,6 @@ export function botAnswerView(
   return { from: record.toBotName, answers: `your ${record.purpose}`, next }
 }
 
-/** Why a request came back with no answer, for the sender to act on. */
 /** Why a bot request ended without an answer: its turn ended or failed, or it was never read. */
 export const BOT_REQUEST_DROP_REASONS = [
   'paused',
@@ -232,6 +231,7 @@ export type BotRequestNoticeWhy =
   | 'failed-continues'
   | (typeof BOT_REQUEST_DROP_REASONS)[number]
 
+/** Why a request came back with no answer, for the sender to act on. */
 export function botRequestUnansweredText(
   record: BotRequestRecord,
   why: BotRequestNoticeWhy,

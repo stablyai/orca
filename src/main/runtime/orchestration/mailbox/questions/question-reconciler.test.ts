@@ -170,4 +170,24 @@ describe('telling an agent question asker its taker stopped', () => {
     await settle()
     expect(told).toEqual([id])
   })
+
+  it('tells nothing on a stopped read when the taker starts running while it reads', async () => {
+    const id = ask('a')
+    let release: () => void = () => undefined
+    reads.chatRunning = () =>
+      new Promise((resolve) => {
+        release = () => resolve(false)
+      })
+    db.markAsRead([id], TAKER)
+    await new Promise((resolve) => setImmediate(resolve))
+    // A delivery starts its turn mid-read: the read still answers "stopped".
+    reconciler.chatObserved(BOT, true)
+    release()
+    await settle()
+    expect(told).toEqual([])
+    reads.chatRunning = async () => false
+    reconciler.chatObserved(BOT, false)
+    await settle()
+    expect(told).toEqual([id])
+  })
 })

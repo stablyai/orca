@@ -19,6 +19,10 @@ import { botRequestRecord } from './bot-request-record'
 import { ensureSenderRecords, tellSender } from './bot-request-sender-notice'
 import { noteBotQuestionFailure } from './bot-question-notices'
 import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
+import {
+  stampQuestionTakes,
+  type MailTaker
+} from '../../../../orchestration/db/messages/mail-taker'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { TurnEndedVerdict } from '../../../../../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import type { StructuredAgentSessionRequestFailure } from '../../../../../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
@@ -207,12 +211,16 @@ export async function dropUnreadBotRequests(
       .listUnreadBotRequests(botId)
       .filter(({ message }) => !onlyTo || message.to_handle.endsWith(onlyTo))
     // A question is dropped as a take: the reconciler tells its asker, and retries an asker it
-    // can't verify yet. One being handed to the chat now isn't dropped; that handover decides it.
+    // can't verify yet. One being handed to the chat now is taken unread; a handover that still
+    // reaches the chat reads it, and a later answer still lands.
     for (const { request, message } of unread) {
       if (request.purpose === 'question') {
         runLifecycleWriteTransaction(db.db, 'drop_bot_question', () => {
+          const dropped: MailTaker = { kind: 'dropped', why }
           if (db.getStructuredMailSendsForMessages([message.id]).length === 0) {
-            db.markAsRead([message.id], { kind: 'dropped', why })
+            db.markAsRead([message.id], dropped)
+          } else {
+            stampQuestionTakes(db, [message.id], dropped)
           }
         })
       }

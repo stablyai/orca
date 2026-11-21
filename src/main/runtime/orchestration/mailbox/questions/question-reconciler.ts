@@ -10,7 +10,8 @@ import {
   linkedDispatches,
   reconcileQuestions,
   takersLinkedTo,
-  type QuestionNoticeWriter
+  type QuestionNoticeWriter,
+  type QuestionPartyFacts
 } from './question-reconcile'
 import {
   dispatchParty,
@@ -35,10 +36,11 @@ export class QuestionReconciler {
   /** Mailboxes whose mail held a taker at its last decision. */
   private readonly watched = new Map<string, Set<string>>()
   private readonly queued = new Set<string>()
-  /** Takers holding a question whose asker couldn't be verified yet: any chat's change may fix it. */
+  /** Takers holding a question whose asker couldn't be verified yet, and the chats seen since. */
   private readonly unverified = new Set<string>()
-  /** Takers whose decision is reading facts now: any edge decides them again after it. */
-  private readonly deciding = new Set<string>()
+  private readonly seenSinceUnverified = new Set<string>()
+  /** What changed while each running decision read its facts (`party:`, `mailbox:`, `dispatch:`). */
+  private readonly changing = new Set<Set<string>>()
   private readonly chains = new Map<string, Promise<void>>()
 
   constructor(
@@ -46,32 +48,37 @@ export class QuestionReconciler {
     private readonly deps: QuestionReconcilerDeps
   ) {}
 
-  /** Listens for the database's edges and decides every taker the database still holds. */
-  start(): () => void {
+  /** Listens for the database's edges; `decide` picks the takers held from before to decide now. */
+  start(decide: (taker: string) => boolean = () => true): () => void {
     const stop = listenForQuestionEdges((edge) => this.onEdge(edge))
-    this.decideAll()
+    this.decideAll(decide)
     return stop
   }
 
-  /** Every taker still awaiting: at open, and when sender records change (unverified askers). */
-  decideAll(): void {
+  /** Every taker still awaiting: at open, when a chat host installs, and on pause or delete. */
+  decideAll(decide: (taker: string) => boolean = () => true): void {
     for (const taker of awaitingTakers(this.db)) {
-      this.request(taker)
+      if (decide(taker)) {
+        this.request(taker)
+      }
     }
   }
 
   /** A chat's status was observed, or it closed (running false). */
   chatObserved(sessionId: string, running: boolean): void {
     // A /clear successor's first observation is when its asker becomes verifiable.
-    this.unverified.forEach((taker) => this.request(taker))
-    if (!running && this.watching()) {
-      this.partyChanged(this.deps.sessionParty(sessionId))
+    if (this.unverified.size > 0 && !this.seenSinceUnverified.has(sessionId)) {
+      this.seenSinceUnverified.add(sessionId)
+      this.unverified.forEach((taker) => this.request(taker))
+    }
+    if (this.watching()) {
+      this.partyChanged(this.deps.sessionParty(sessionId), running)
     }
   }
 
   terminalChanged(party: string | null, working: boolean): void {
-    if (!working && party) {
-      this.partyChanged(party)
+    if (party && this.watching()) {
+      this.partyChanged(party, working)
     }
   }
 
@@ -106,40 +113,45 @@ export class QuestionReconciler {
 
   /** Whether any question waits on an edge; false skips every lookup. */
   watching(): boolean {
-    return this.awaiting.size > 0 || this.linked.size > 0 || this.deciding.size > 0
+    return this.awaiting.size > 0 || this.linked.size > 0 || this.changing.size > 0
+  }
+
+  private changed(key: string): void {
+    this.changing.forEach((keys) => keys.add(key))
   }
 
   private onEdge(edge: QuestionEdge): void {
-    // Facts a running decision read may already be stale: it decides again.
-    this.deciding.forEach((taker) => this.request(taker))
     switch (edge.kind) {
       case 'take':
         this.request(edge.taker)
         return
       case 'dispatch':
+        this.changed(`dispatch:${edge.id}`)
         if (this.awaiting.size > 0) {
           takersLinkedTo(this.db, edge.id).forEach((taker) => this.request(taker))
         }
         return
       case 'mailbox':
-        this.watched.get(edge.mailbox)?.forEach((taker) => this.request(taker))
-        return
+        return this.mailboxChanged(edge.mailbox)
       case 'pane':
-        if (this.watching()) {
-          this.terminalChanged(this.deps.terminalParty(edge.ptyId), false)
-        }
-        return
+        return this.terminalChanged(this.deps.terminalParty(edge.ptyId), false)
       case 'mail':
-        if (this.watched.size > 0) {
-          for (const mailbox of this.mailboxesOf(edge.ids)) {
-            this.watched.get(mailbox)?.forEach((taker) => this.request(taker))
-          }
+        if (this.watched.size > 0 || this.changing.size > 0) {
+          this.mailboxesOf(edge.ids).forEach((mailbox) => this.mailboxChanged(mailbox))
         }
     }
   }
 
-  private partyChanged(party: string): void {
-    this.deciding.forEach((taker) => this.request(taker))
+  private mailboxChanged(mailbox: string): void {
+    this.changed(`mailbox:${mailbox}`)
+    this.watched.get(mailbox)?.forEach((taker) => this.request(taker))
+  }
+
+  private partyChanged(party: string, running: boolean): void {
+    this.changed(`${running ? 'running' : 'party'}:${party}`)
+    if (running) {
+      return
+    }
     if (this.awaiting.has(party)) {
       this.request(party)
     }
@@ -168,53 +180,80 @@ export class QuestionReconciler {
   }
 
   private async decide(taker: string): Promise<void> {
-    this.deciding.add(taker)
-    try {
-      await this.decideNow(taker)
-    } finally {
-      this.deciding.delete(taker)
-    }
-  }
-
-  private async decideNow(taker: string): Promise<void> {
     const questions = awaitingQuestions(this.db, taker)
     if (questions.length === 0) {
       this.forget(taker)
       this.unverified.delete(taker)
       return
     }
-    const workers = questions.flatMap((id) =>
-      linkedDispatches(this.db, id).flatMap(
-        (dispatchId) => dispatchParty(this.db, dispatchId) ?? []
-      )
-    )
-    const facts = await readQuestionPartyFacts(this.db, this.deps.reads, [taker, ...workers])
+    const dispatches = questions.flatMap((id) => linkedDispatches(this.db, id))
+    const workers = dispatches.flatMap((id) => dispatchParty(this.db, id) ?? [])
+    const parties = [taker, ...workers]
+    // Wording first, so nothing is awaited between the facts and the write.
     const write = await this.deps.notices(taker, questions)
+    const changes = new Set<string>()
+    this.changing.add(changes)
+    let facts: QuestionPartyFacts
+    try {
+      facts = await readQuestionPartyFacts(this.db, this.deps.reads, parties)
+    } finally {
+      this.changing.delete(changes)
+    }
+    // A party, mailbox or Dispatch it read changed while it read: tell nothing on those facts. A
+    // party that started running holds the questions until its stop; anything else decides again.
+    const changedWhileRead = (prefix: string) =>
+      [
+        ...parties.map((party) => `${prefix}:${party}`),
+        ...(prefix === 'party'
+          ? [
+              ...parties.flatMap((party) => facts.mailboxes(party).map((m) => `mailbox:${m}`)),
+              ...dispatches.map((id) => `dispatch:${id}`)
+            ]
+          : [])
+      ].some((key) => changes.has(key))
+    if (changedWhileRead('party')) {
+      this.request(taker)
+    } else if (!changedWhileRead('running')) {
+      this.record(taker, parties, facts, this.tell(taker, facts, write))
+      return
+    }
+    this.record(taker, parties, facts, questions)
+  }
+
+  /** Tells what is owed now; the ids still held. */
+  private tell(taker: string, facts: QuestionPartyFacts, write: QuestionNoticeWriter): string[] {
     let unverified = false
-    const told = new Set(
-      reconcileQuestions(
-        this.db,
-        facts,
-        (notice) => {
-          const result = write(notice)
-          unverified ||= result === 'unverified'
-          return result
-        },
-        taker
-      ).map((notice) => notice.messageId)
+    reconcileQuestions(
+      this.db,
+      facts,
+      (notice) => {
+        const result = write(notice)
+        unverified ||= result === 'unverified'
+        return result
+      },
+      taker
     )
     if (unverified) {
       this.unverified.add(taker)
-    } else {
-      this.unverified.delete(taker)
+    } else if (this.unverified.delete(taker) && this.unverified.size === 0) {
+      this.seenSinceUnverified.clear()
     }
+    return awaitingQuestions(this.db, taker)
+  }
+
+  /** Remembers what holds a taker's questions, so the edge that ends the hold decides again. */
+  private record(
+    taker: string,
+    parties: readonly string[],
+    facts: QuestionPartyFacts,
+    held: readonly string[]
+  ): void {
     this.forget(taker)
-    if (questions.every((id) => told.has(id))) {
+    if (held.length === 0) {
       return
     }
-    // Still held: remember what holds it, so the edge that ends the hold decides again.
     this.awaiting.add(taker)
-    for (const party of [taker, ...workers]) {
+    for (const party of parties) {
       if (party !== taker) {
         this.add(this.linked, party, taker)
       }
