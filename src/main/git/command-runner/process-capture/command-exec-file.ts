@@ -28,7 +28,9 @@ export async function commandExecFileAsync(
   const { wslDistro, ...execOptions } = options
   const resolved = resolveCommand(command, args, options.cwd, wslDistro)
   const binary =
-    resolved.wsl === null ? resolveWindowsCommand(resolved.binary, options.env) : resolved.binary
+    resolved.wsl === null
+      ? resolveWindowsCommand(resolved.binary, options.env, resolved.cwd)
+      : resolved.binary
   if (isWindowsBatchScript(binary)) {
     return spawnCommandCapture(binary, resolved.args, {
       ...execOptions,
@@ -48,7 +50,7 @@ export async function commandExecFileAsync(
   } catch (error) {
     if (shouldRetryWindowsCommandShim(error, resolved)) {
       return spawnCommandCapture(
-        resolveWindowsCommand(`${resolved.binary}.cmd`, options.env),
+        resolveWindowsCommand(`${resolved.binary}.cmd`, options.env, resolved.cwd),
         resolved.args,
         {
           ...execOptions,
