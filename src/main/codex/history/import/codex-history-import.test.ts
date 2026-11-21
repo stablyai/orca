@@ -1,5 +1,6 @@
 import {
   appendFileSync,
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -20,6 +21,8 @@ import { importCodexHistory } from './codex-history-import'
 
 // The rollout whose copy finds the store's disk full.
 const diskFull = vi.hoisted(() => ({ forName: '' }))
+// Set while every whole-ledger write fails.
+const ledgerSave = vi.hoisted(() => ({ fails: false }))
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
@@ -28,7 +31,11 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     copyFile: (...args: Parameters<typeof actual.copyFile>) =>
       basename(String(args[0])) === diskFull.forName
         ? Promise.reject(Object.assign(new Error('ENOSPC: no space left'), { code: 'ENOSPC' }))
-        : actual.copyFile(...args)
+        : actual.copyFile(...args),
+    rename: (...args: Parameters<typeof actual.rename>) =>
+      ledgerSave.fails && basename(String(args[1])) === 'import-ledger.json'
+        ? Promise.reject(Object.assign(new Error('EIO: i/o error'), { code: 'EIO' }))
+        : actual.rename(...args)
   }
 })
 
@@ -43,6 +50,7 @@ const roots: string[] = []
 
 afterEach(() => {
   diskFull.forName = ''
+  ledgerSave.fails = false
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -51,7 +59,7 @@ afterEach(() => {
 function setup(beforePublish: () => Promise<void> = async () => {}): {
   importHome: string
   storeHome: string
-  run: () => Promise<number | null>
+  run: (importer?: typeof importCodexHistory) => Promise<number | null>
 } {
   const root = mkdtempSync(join(tmpdir(), 'codex-import-'))
   roots.push(root)
@@ -60,8 +68,8 @@ function setup(beforePublish: () => Promise<void> = async () => {}): {
   mkdirSync(join(importHome, DAY), { recursive: true })
   mkdirSync(join(importHome, 'archived_sessions'), { recursive: true })
   mkdirSync(join(storeHome, DAY), { recursive: true })
-  const run = (): Promise<number | null> =>
-    importCodexHistory({
+  const run = (importer = importCodexHistory): Promise<number | null> =>
+    importer({
       importHome,
       storeHome,
       ledgerPath: join(root, 'import-ledger.json'),
@@ -84,6 +92,8 @@ describe('importCodexHistory', () => {
     writeFileSync(imported, 'new\n')
     const sourceTime = new Date('2026-03-01T00:00:00Z')
     utimesSync(imported, sourceTime, sourceTime)
+    // A read-only backup still gives a copy Codex can append to.
+    chmodSync(imported, 0o444)
     writeFileSync(join(importHome, DAY, TAKEN), 'import copy\n')
     writeFileSync(join(storeHome, DAY, TAKEN), 'store copy\n')
     // The store's compressed form wins even over a newer plain form here.
@@ -130,6 +140,38 @@ describe('importCodexHistory', () => {
     expect(existsSync(join(storeHome, 'archived_sessions', `${NEW}.zst`))).toBe(false)
     expect(readFileSync(join(storeHome, DAY, LATER), 'utf8')).toBe('later\n')
   })
+
+  it('records a pass without rewriting the ledger, and a restart remembers a copy the user deleted', async () => {
+    const { importHome, storeHome, run } = setup()
+    writeFileSync(join(importHome, DAY, NEW), 'new\n')
+    // Any whole-ledger write fails, as a crash before it would.
+    ledgerSave.fails = true
+    expect(await run()).toBe(1)
+    ledgerSave.fails = false
+
+    rmSync(join(storeHome, DAY, NEW))
+    vi.resetModules()
+    const restarted = (await import('./codex-history-import')).importCodexHistory
+    expect(await run(restarted)).toBe(0)
+    expect(existsSync(join(storeHome, DAY, NEW))).toBe(false)
+  })
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'imports the other years when one year folder cannot be read',
+    async () => {
+      const { importHome, storeHome, run } = setup()
+      writeFileSync(join(importHome, DAY, NEW), 'new\n')
+      const unreadable = join(importHome, 'sessions', '2025')
+      mkdirSync(join(unreadable, '01', '01'), { recursive: true })
+      chmodSync(unreadable, 0o000)
+      try {
+        expect(await run()).toBe(1)
+      } finally {
+        chmodSync(unreadable, 0o755)
+      }
+      expect(readFileSync(join(storeHome, DAY, NEW), 'utf8')).toBe('new\n')
+    }
+  )
 
   it('does not publish a conversation deleted while it was copied', async () => {
     let deleting = true
