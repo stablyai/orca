@@ -42,10 +42,22 @@ import type {
   StatusRowMutationListener
 } from './server-types'
 import { RevisionedMap } from './revisioned-map'
-import { forgetAgentExit, type AgentExitEvidence } from './agent-exit-evidence'
+import { recordAgentExit, forgetAgentExit, type AgentExitEvidence } from './agent-exit-evidence'
+import { paneAgentIdentity, type PaneAgentIdentity } from './pane-agent-identity'
+import { cliWriterTopology } from './cli-writer-observation'
+import { toAgentStatusIpcPayload } from './server-status-identity'
+import type { AgentProcessPresence } from '../../../shared/agent-status/process/agent-process-presence'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 
 export abstract class AgentHookServerState extends AgentHookServerStateContract {
   protected terminalPaneLifecycle: {
+    /** Answers the record that was saved when the agent quit. */
+    retireSavedRecord?(paneKey: string, exitedAt: number): SleepingAgentSessionRecord | undefined
+    readSavedRecord?(paneKey: string): SleepingAgentSessionRecord | undefined
+    confirmProcessExit?(paneKey: string, agent: string): Promise<boolean>
+    /** The host's word that the pane's shell holds its PTY alone, whatever launch it ran; null
+     *  where the host gives none (remote, Windows), so a command mark stands as on main. */
+    confirmShellAlone?(paneKey: string, agent?: string): Promise<boolean | null>
     ownsProcess(paneKey: string, ptyId: string, incarnationId?: string): boolean
     isStopping(paneKey: string): boolean
     isReversibleStop(ptyId: string, incarnationId?: string): boolean
@@ -58,15 +70,119 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
     this.terminalPaneLifecycle = lifecycle
   }
 
-  protected preservesStoppingDone(paneKey: string): boolean {
-    const row = this.state.lastStatusByPaneKey.get(paneKey) as
+  /** An idle agent's row outlives the TTL while its pane is placed; until placement is readable,
+   *  the prune after binding decides. */
+  protected placementKeepsRow(row: EnrichedAgentHookEventPayload): boolean {
+    return !this.terminalPaneLifecycle || this.terminalPaneLifecycle.isPlaced(row) === true
+  }
+
+  /** Which agent conversation this pane holds; see paneAgentIdentity. A null `savedRecord` was
+   *  already read and found absent, so it isn't read again. */
+  paneAgentIdentity(
+    paneKey: string,
+    passedRecord?: SleepingAgentSessionRecord | null,
+    worktreeId = passedRecord?.worktreeId
+  ): PaneAgentIdentity | null {
+    let savedRecord = passedRecord ?? undefined
+    const resolved = this.resolvePaneKeyAlias(paneKey)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this server stores enriched accepted rows in the listener's base-typed cache.
+    const legacy = this.state.lastStatusByPaneKey.get(resolved) as
       | EnrichedAgentHookEventPayload
       | undefined
+    const row = legacy ?? this.getTmuxSelectedStatus(resolved)
+    if (!row && passedRecord === undefined) {
+      savedRecord = this.terminalPaneLifecycle?.readSavedRecord?.(resolved)
+    }
+    worktreeId ??= savedRecord?.worktreeId
+    const exit =
+      this.agentExitedAtByPaneKey.get(resolved) ?? this.agentExitedAtByPaneKey.get(paneKey)
+    const identity = paneAgentIdentity({
+      paneKey: resolved,
+      ...(row ? { row: toAgentStatusIpcPayload(this.programStatusFacets.stitch(row)) } : {}),
+      ...(savedRecord ? { savedRecord } : {}),
+      ...(worktreeId ? { worktreeId } : {}),
+      ...(exit ? { exitedAt: exit.at } : {}),
+      ended: row?.agentPresence?.ended === true
+    })
+    return identity
+      ? {
+          ...identity,
+          ...(row?.connectionId === null &&
+          row.agentPresence?.process &&
+          row.agentPresence.suspended &&
+          !row.agentPresence.ended
+            ? { suspended: true as const }
+            : {}),
+          // A shared host's conversation never leaves a saved record, so one is the pane's.
+          executionHost: row ? (legacy ? cliWriterTopology(row) : 'shared') : 'pane-owned'
+        }
+      : null
+  }
+
+  protected recordPaneAgentExit(
+    paneKey: string,
+    endedPresence: AgentProcessPresence,
+    status = this.paneAgentIdentity(paneKey)?.status
+  ): void {
+    const paneKeys = this.paneKeysWithAliases(paneKey)
+    const exitedAt = Date.now()
+    recordAgentExit(this.agentExitedAtByPaneKey, paneKeys, endedPresence, exitedAt)
+    this.retirePaneResume(paneKeys, status, exitedAt)
+  }
+
+  private paneKeysWithAliases(paneKey: string): Set<string> {
+    const stable = this.resolvePaneKeyAlias(paneKey)
+    const aliases = [...this.legacyPaneKeyAliases].filter(([, a]) => a.stablePaneKey === stable)
+    return new Set([stable, paneKey, ...aliases.map(([aliasKey]) => aliasKey)])
+  }
+
+  private retirePaneResume(
+    paneKeys: Set<string>,
+    status: PaneAgentIdentity['status'] | undefined,
+    exitedAt: number
+  ): void {
+    for (const key of paneKeys) {
+      const saved = this.terminalPaneLifecycle?.retireSavedRecord?.(key, exitedAt)
+      const agent = status?.agentType ?? saved?.agent
+      const providerSession = status?.providerSession ?? saved?.providerSession
+      if (agent && providerSession) {
+        this.emitPaneStatusCleared({
+          paneKey: key,
+          refusedResume: {
+            agent,
+            providerSession,
+            ...(status
+              ? {
+                  expectedStatus: {
+                    paneKey: key,
+                    receivedAt: status.receivedAt,
+                    stateStartedAt: status.stateStartedAt
+                  }
+                }
+              : {}),
+            ...(saved && saved.updatedAt <= exitedAt
+              ? {
+                  expectedSavedRecord: {
+                    paneKey: key,
+                    capturedAt: saved.capturedAt,
+                    updatedAt: saved.updatedAt
+                  }
+                }
+              : {})
+          }
+        })
+      }
+    }
+    this.scheduleStatusPersist()
+  }
+
+  /** A stopping pane's agent keeps its row for the sleep gate, whatever shape it rests in. */
+  protected preservesStoppingAgent(paneKey: string): boolean {
+    // A saved record never rests in sleep, so only a stopping pane reads one.
+    const stopping = this.terminalPaneLifecycle?.isStopping(paneKey) === true
+    const identity = this.paneAgentIdentity(paneKey, stopping ? undefined : null)
     return (
-      row?.payload.state === 'done' &&
-      row.payload.sessionBoundary !== true &&
-      row.providerSessionOnly !== true &&
-      (row.paneSleep !== undefined || this.terminalPaneLifecycle?.isStopping(paneKey) === true)
+      identity !== null && !identity.ended && (identity.status.paneSleep !== undefined || stopping)
     )
   }
   protected canWriteLegacyStatusRow(entry: AgentHookEventPayload): boolean {
@@ -102,6 +218,12 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
       forgotten
     ) {
       this.scheduleStatusPersist()
+    }
+  }
+  /** An exit recorded before a launch belongs to the process that launch replaced. */
+  forgetAgentExitBefore(paneKey: string, launchedAt: number): void {
+    if ((this.agentExitedAtByPaneKey.get(paneKey)?.at ?? Infinity) < launchedAt) {
+      this.forgetAgentExit(paneKey)
     }
   }
   protected readonly canonicalSubjectsByPane = new Map<string, Map<string, AgentStatusSubject>>()

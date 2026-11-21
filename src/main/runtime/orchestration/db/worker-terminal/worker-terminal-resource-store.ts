@@ -136,7 +136,7 @@ export function getWorkerTerminalResourceByProcessIncarnation(
         WHERE process_incarnation = ? ORDER BY updated_at DESC LIMIT 1`
     )
     .get(processIncarnation)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of WorkerTerminalResourceRow, a missing one fails compilation, and projected-row-getters.test.ts pins it to the migrated schema.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list is checked against WorkerTerminalResourceRow, and projected-row-getters.test.ts verifies the returned row.
   return row as WorkerTerminalResourceRow | undefined
 }
 

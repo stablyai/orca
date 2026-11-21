@@ -103,7 +103,10 @@ export function flushPendingData(session: PtyIpcSession): void {
       }
       const { id, pending } = selection
       // The model already owns hidden bytes; discard delivery and restore from its snapshot on reveal.
-      if (shouldDropHiddenRendererPtyData(id, settings)) {
+      if (
+        shouldDropHiddenRendererPtyData(id, settings) &&
+        !(pending.droppedOutput === true && pending.data)
+      ) {
         session.pendingData.remove(selection)
         session.pendingOverflowMarkedPtys.delete(id)
         session.updateProducerFlowControl(id)

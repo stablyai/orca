@@ -178,7 +178,8 @@ const FAILURE_SENTENCES = {
   historyInOtherAccount: (_context, _fact, _surface, say) => say('historyInOtherAccount'),
   claudeAccountFolderMissing: (_context, _fact, _surface, say) => say('claudeAccountFolderMissing'),
   claudeAccountSetupFailed: (_context, _fact, _surface, say) => say('claudeAccountSetupFailed'),
-  agentCommandNotRunnable: namingAgent('agentCommandNotRunnable'),
+  // A Command that failed names the program it ran and what it said.
+  agentCommandNotRunnable: quotingForAgent('agentCommandNotRunnable', 'agentCommandFailed'),
   runtimeNotInstalled: namingAgent('runtimeNotInstalled'),
   fullAccessAsRoot: namingAgent('fullAccessAsRoot'),
   launchPreparationFailed: (context, _fact, _surface, say) =>

@@ -130,7 +130,9 @@ export const AgentLaunchPicker = memo(
       agent: AgentPickerEntry['agent'],
       draft?: AgentPickerDraft,
       entry?: AgentPickerEntry,
-      surface?: AgentPickerDraft['surface']
+      surface?: AgentPickerDraft['surface'],
+      /** The user chose the draft's permission, even one it already showed. */
+      permissionPicked?: boolean
     ) => void
   }) {
     const t = useTranslate()
@@ -204,11 +206,11 @@ export const AgentLaunchPicker = memo(
       }
     }, [catalogAgent, onCatalogOpen])
     const pick = useCallback<typeof onPick>(
-      (picked, next, from, surface) => {
+      (picked, next, from, surface, permissionPicked) => {
         if (next && from) {
           rememberPickedAgentModel(from, next)
         }
-        onPick(picked, next, from, surface)
+        onPick(picked, next, from, surface, permissionPicked)
       },
       [onPick]
     )

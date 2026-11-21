@@ -1,6 +1,7 @@
 // What Hand to bot reads from the workspace (a bot name, a purpose, an agent) and how it moves it under
 // the bot's home: the same Set Parent write a sidebar drop makes.
 import { useAppStore } from '@/store'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { getDropFolderParentsInState } from '@/components/sidebar/workspace-actions/parenting/use-eligible-folder-parents'
 import { isCrossStoreParent } from '@/store/slices/worktrees/metadata/cross-store-parent-ref'
 import { getFolderWorkspaceWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
@@ -65,7 +66,7 @@ export function botHomeParentFor(child: Worktree, bot: Bot): Worktree | null {
   }
   const identity = getWorktreeHostIdentity(getFolderWorkspaceWorktree(home))
   return (
-    getDropFolderParentsInState(state, child).find(
+    getDropFolderParentsInState(state, readRuntimeStatuses(), child).find(
       (folder) => getWorktreeHostIdentity(folder) === identity
     ) ?? null
   )
@@ -94,7 +95,9 @@ export async function moveUnderParent(
 /** Where the workspace sits now, so a hand-over the bot refused can put it back. */
 export function placementOf(child: Worktree): Worktree | null {
   const state = useAppStore.getState()
-  const parent = selectSidebarLineageParentIdentities(state)?.get(getWorktreeHostIdentity(child))
+  const parent = selectSidebarLineageParentIdentities(state, readRuntimeStatuses())?.get(
+    getWorktreeHostIdentity(child)
+  )
   if (parent === undefined) {
     return null
   }

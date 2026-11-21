@@ -1,7 +1,7 @@
 import type { AppState } from '../../../types'
 import { sleepingAgentRecordIndex } from '../../../terminals/sleep/sleeping-agent-record-index'
 import '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { getAgentResumeArgv } from '../../../../../../shared/agent-launch/startup/agent-resume-argv'
+import { promoteSavedLiveResumeRecord } from '../../../../../../shared/agent-session/lifecycle/resume/promote-saved-live-resume-record'
 import type { SleepingAgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { paneKeyMatchesAnyTabPrefix } from '../pane-authority/agent-status-pane-key-tab-binding'
 import {
@@ -41,23 +41,17 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     )) {
       const liveEntry = state.agentStatusByPaneKey.get(existing.paneKey)
       if (
-        existing.worktreeId !== worktreeId ||
-        existing.origin !== 'live' ||
         (liveEntry !== undefined &&
           !isCompletedPiCompatibleAgentWithLiveRecoveryRecord(liveEntry, existing)) ||
-        (allowedPaneKeys && !allowedPaneKeys.has(existing.paneKey)) ||
-        !getAgentResumeArgv(existing.agent, existing.providerSession)
+        (allowedPaneKeys && !allowedPaneKeys.has(existing.paneKey))
       ) {
         continue
       }
-      // Pi resumes without turn status and while done/idle; manual sleep must promote these checkpoints too.
-      records[existing.paneKey] = {
-        ...existing,
-        state: 'working',
-        capturedAt,
-        updatedAt: capturedAt,
-        origin: 'worktree-sleep'
+      const promoted = promoteSavedLiveResumeRecord({ record: existing, worktreeId, capturedAt })
+      if (!promoted) {
+        continue
       }
+      records[existing.paneKey] = promoted
       promotedLiveRecoveryPaneKeys.add(existing.paneKey)
     }
   }

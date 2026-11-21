@@ -17,6 +17,11 @@ export type AutomationBotResultsTo =
   | 'none'
   | 'thread'
 
+/** The channel or Linear issue a result posts to, by its label where the host saved it as a ref. */
+export function botResultsPlace(resultsTo: Extract<AutomationBotResultsTo, object>): string {
+  return resultsTo.label ?? ('channel' in resultsTo ? resultsTo.channel : resultsTo.linearIssue)
+}
+
 /** The bot an automation runs as: its folder, agent and preamble replace the project target. */
 export type AutomationBotTarget = {
   botId: string

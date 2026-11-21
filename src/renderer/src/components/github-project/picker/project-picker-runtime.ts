@@ -9,13 +9,19 @@ import type {
 } from '../../../../../shared/github/projects/project-result-types'
 
 /** `target` is the board's row-less source host, never the focused server. */
-export function getProjectPickerRuntimeScope(target: RuntimeClientTarget, host: string): string {
+export function getProjectPickerRuntimeScope(
+  target: RuntimeClientTarget,
+  host: string | undefined
+): string {
   const runtimeScope = target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
-  return `${runtimeScope}\0${host.toLowerCase()}`
+  return `${runtimeScope}\0${host?.toLowerCase() ?? ''}`
 }
 
-export function getProjectPickerBrowseHost(activeProject: { host?: string } | null): string {
-  return githubProjectHost(activeProject?.host).toLowerCase()
+/** Without a saved project, omit the host so gh uses its own default host (e.g. its only GHES login). */
+export function getProjectPickerBrowseHost(
+  activeProject: { host?: string } | null
+): string | undefined {
+  return activeProject ? githubProjectHost(activeProject.host).toLowerCase() : undefined
 }
 
 /** `wake`: a click, which may start the stopped WSL distro gh lives in (E9); mount effects omit it. */
@@ -27,10 +33,10 @@ function wakeArg(options: PickerCallOptions): { wakeWslDistro?: true } {
 
 export async function listAccessibleProjectsForRuntime(
   target: RuntimeClientTarget,
-  host: string,
+  host: string | undefined,
   options: PickerCallOptions = {}
 ): Promise<ListAccessibleProjectsResult> {
-  const args = { host }
+  const args = host ? { host } : {}
   return target.kind === 'environment'
     ? callRuntimeRpc<ListAccessibleProjectsResult>(target, 'github.project.listAccessible', args, {
         timeoutMs: 60_000

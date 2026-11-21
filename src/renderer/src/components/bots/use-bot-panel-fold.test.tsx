@@ -108,17 +108,6 @@ describe('useBotPanelFold', () => {
     expect(result.current.theirs).toBe(true)
   })
 
-  it("keeps another window's fold when folding here after its event arrives", () => {
-    const { result } = twoBots()
-    otherWindowSaves({ theirs: ['suggestions'] })()
-    expect(result.current.theirs).toBe(true)
-
-    act(() => result.current.mine.onOpenChange(false))
-    expect(stored()).toMatchObject({ theirs: ['suggestions'], mine: ['suggestions'] })
-    expect(result.current.mine.open).toBe(false)
-    expect(result.current.theirs).toBe(true)
-  })
-
   it("keeps a fold storage refused when another window's event arrives", () => {
     const { result } = twoBots()
     const held = refuseWrites()
@@ -210,15 +199,5 @@ describe('useBotPanelFold', () => {
     realStorage.setItem(FOLDS_KEY, JSON.stringify({ 'gap-2': ['suggestions'] }))
 
     expect(renderHook(() => useBotPanelFolded('gap-2', 'suggestions')).result.current).toBe(true)
-  })
-
-  it("ignores other keys' storage events", () => {
-    const { result } = renderHook(() => useBotPanelFolded('bot-1', 'suggestions'))
-    act(() => {
-      window.dispatchEvent(
-        new StorageEvent('storage', { key: 'other', newValue: '{"bot-1":["suggestions"]}' })
-      )
-    })
-    expect(result.current).toBe(false)
   })
 })

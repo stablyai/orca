@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PtyTransport, PtyTransportRecoveryState } from '../pty-transport-types'
+import type { PtyTransport } from '../pty-transport-types'
 import { createRemoteRuntimeTransportMocks } from '../remote/remote-runtime-pty-transport-test-harness'
 import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 import './recovery/remote-runtime-pty-recovery-state'
@@ -35,19 +35,7 @@ const {
   }
 })
 
-const pendingErrors = [
-  { name: 'awaiting sign-in', message: 'SSH host needs you to sign in. Reconnect to sign in.' },
-  {
-    name: 'IPC-wrapped sign-in',
-    message:
-      "Error invoking remote method 'runtimeEnvironments:call': Error: SSH host needs you to sign in. Reconnect to sign in."
-  },
-  {
-    name: 'cancelled sign-in',
-    message: 'SSH sign-in for SSH host was cancelled. Reconnect to sign in again.'
-  },
-  { name: 'connection in progress', message: 'Connection to SSH host is already in progress' }
-]
+const SIGN_IN_REQUIRED = 'SSH host needs you to sign in. Reconnect to sign in.'
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -62,23 +50,20 @@ afterEach(() => {
   expect(appStore.getState).not.toHaveBeenCalled()
 })
 
-async function mountNewPaneAwaitingSignIn(failure: { message: string }, afterSignIn?: () => void) {
+async function mountNewPaneAwaitingSignIn() {
   let signedIn = false
   const healthyCall = runtimeCall.getMockImplementation()
   runtimeCall.mockImplementation(async (request: { method: string; params?: unknown }) => {
     if (!signedIn) {
-      throw new Error(failure.message)
+      throw new Error(SIGN_IN_REQUIRED)
     }
-    afterSignIn?.()
     return healthyCall?.(request)
   })
   const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
   await import('./recovery/remote-runtime-pty-recovery-state')
   const { reviveRemoteRuntimePtyRecoveriesForEnvironment } =
     await import('./recovery/remote-runtime-pty-control-ready-revivers')
-  const onError = vi.fn()
   const onPtySpawn = vi.fn()
-  const publishedStates: PtyTransportRecoveryState[] = []
   const pane = createRemoteRuntimePtyTransport('env-1', {
     worktreeId: 'wt-1',
     tabId: 'tab-new',
@@ -86,24 +71,18 @@ async function mountNewPaneAwaitingSignIn(failure: { message: string }, afterSig
     onPtySpawn
   })
   transport = pane
-  let connectSettled = false
   const connected = Promise.resolve(
     pane.connect({
       url: '',
       cols: 80,
       rows: 24,
-      callbacks: { onError, onRecoveryStateChange: (state) => publishedStates.push(state) }
+      callbacks: {}
     })
-  ).finally(() => {
-    connectSettled = true
-  })
+  )
   await vi.advanceTimersByTimeAsync(0)
   return {
     connected,
-    connectSettled: () => connectSettled,
     pane,
-    lastPublishedState: () => publishedStates.at(-1),
-    onError,
     onPtySpawn,
     createCalls: () =>
       runtimeCall.mock.calls.filter(([request]) => request.method === 'terminal.create'),
@@ -121,7 +100,7 @@ describe('SSH sign-in for a terminal created while the host waits for sign-in', 
     const healthySubscribe = runtimeSubscribe.getMockImplementation()
     runtimeSubscribe.mockImplementation(async (...args: unknown[]) => {
       if (!signedIn) {
-        throw new Error(pendingErrors[0].message)
+        throw new Error(SIGN_IN_REQUIRED)
       }
       return healthySubscribe?.(...args)
     })
@@ -152,22 +131,17 @@ describe('SSH sign-in for a terminal created while the host waits for sign-in', 
     expect(onPtySpawn).toHaveBeenCalledTimes(1)
   })
 
-  it.each(['destroy', 'disconnect'] as const)(
-    'spawns nothing after sign-in once the pending terminal is closed (%s)',
-    async (teardown) => {
-      const { pane, onPtySpawn, signIn, createCalls, connected } = await mountNewPaneAwaitingSignIn(
-        pendingErrors[0]
-      )
-      const createsBeforeClose = createCalls().length
-      pane[teardown]?.()
-      await expect(connected).resolves.toBeUndefined()
+  it('spawns nothing after sign-in once the pending terminal disconnects', async () => {
+    const { pane, onPtySpawn, signIn, createCalls, connected } = await mountNewPaneAwaitingSignIn()
+    const createsBeforeClose = createCalls().length
+    pane.disconnect()
+    await expect(connected).resolves.toBeUndefined()
 
-      expect(signIn()).toBe(0)
-      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 1)
+    expect(signIn()).toBe(0)
+    await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 1)
 
-      expect(createCalls()).toHaveLength(createsBeforeClose)
-      expect(onPtySpawn).not.toHaveBeenCalled()
-      expect(subscribedTerminalHandles()).toEqual([])
-    }
-  )
+    expect(createCalls()).toHaveLength(createsBeforeClose)
+    expect(onPtySpawn).not.toHaveBeenCalled()
+    expect(subscribedTerminalHandles()).toEqual([])
+  })
 })

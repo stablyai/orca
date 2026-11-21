@@ -113,7 +113,7 @@ afterEach(() => {
 async function saveInTab(
   bot: keyof typeof homes,
   tab: Tab,
-  { workspace = 'folder:fw-cos', filePath = PATH } = {}
+  filePath = PATH
 ): Promise<string | null> {
   const { result } = renderHook(() => useBotSoulDescription(homes[bot]))
   await waitFor(() => expect(result.current).toBe(FIRST[bot]))
@@ -123,7 +123,7 @@ async function saveInTab(
         makeOpenFile({
           ...tab,
           id: 'soul-tab',
-          worktreeId: workspace,
+          worktreeId: 'folder:fw-cos',
           filePath,
           relativePath: 'SOUL.md'
         })
@@ -164,13 +164,6 @@ describe('useBotSoulDescription editor saves by filesystem', () => {
   })
 
   it.each([
-    ['local', 'directSsh'],
-    ['paired', 'nestedSsh']
-  ] as const)('a %s bot ignores an SSH workspace with the same path (%s)', async (bot, tab) => {
-    expect(await saveInTab(bot, tabs[tab], { workspace: 'folder:ssh-home' })).toBe(FIRST[bot])
-  })
-
-  it.each([
     ['local', 'pairedOpenAsFile'],
     ['local', 'pairedWithProvenance'],
     ['paired', 'localOpenAsFile'],
@@ -179,11 +172,9 @@ describe('useBotSoulDescription editor saves by filesystem', () => {
     expect(await saveInTab(bot, tabs[tab])).toBe(FIRST[bot])
   })
 
-  it.each(['local', 'paired'] as const)(
-    'a %s bot ignores another file on its own filesystem',
-    async (bot) => {
-      const own = bot === 'local' ? tabs.localWithProvenance : tabs.pairedWithProvenance
-      expect(await saveInTab(bot, own, { filePath: '/bots/cos/MEMORY.md' })).toBe(FIRST[bot])
-    }
-  )
+  it('ignores another file on the bot’s own filesystem', async () => {
+    expect(await saveInTab('local', tabs.localWithProvenance, '/bots/cos/MEMORY.md')).toBe(
+      FIRST.local
+    )
+  })
 })

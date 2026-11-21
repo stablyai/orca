@@ -9,13 +9,16 @@ export async function requireRuntimeAnswersVersion(
   label: string,
   expected: string,
   answers: (stdout: string) => boolean,
-  signal: AbortSignal
+  signal: AbortSignal,
+  /** Added to the inherited environment, e.g. to keep a self-updating CLI from updating. */
+  env?: Readonly<Record<string, string>>
 ): Promise<void> {
   let result: Awaited<ReturnType<typeof runProcess>>
   try {
     result = await runProcess({
       program,
       args: ['--version'],
+      ...(env && { env: { ...process.env, ...env } }),
       timeoutMs: VALIDATE_TIMEOUT_MS,
       signal
     })

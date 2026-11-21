@@ -4,6 +4,8 @@ import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { useBotForWorkspace } from './bot-workspace'
 
+import { useResetOtherBotConnectorPage } from './bot-connector-page'
+
 const CLOSED_KEY = 'orca.bots.panelClosed'
 
 function readClosed(): Set<string> {
@@ -75,7 +77,9 @@ export function botPanelStep(
 }
 
 export function useBotPanelMemory(): void {
-  const botId = useBotForWorkspace(useAppStore((s) => s.activeWorktreeId))?.id ?? null
+  const bot = useBotForWorkspace(useAppStore((s) => s.activeWorktreeId))
+  useResetOtherBotConnectorPage(bot)
+  const botId = bot?.id ?? null
   const open = useAppStore((s) => s.rightSidebarOpen)
   const routeRequestId = useAppStore((s) => s.rightSidebarRouteRequestId)
   const last = useRef<BotPanelFrame>({ botId: null, open, routeRequestId })

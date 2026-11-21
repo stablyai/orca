@@ -195,7 +195,12 @@ export async function activateBackendRuntime(
     }
   })
   profileShutdown.paneGrids = runtime
+  profileShutdown.paintLedger = runtime
   runtime.beginStructuredAgentSessionStartupOpen(chatJournal.maintenanceAfter, chatJournal.open)
+  // Agent detection answers RPC before release reclaim below, and must count Orca's copies then too.
+  const { provideManagedAgentDetection } =
+    await import('../runtime/rpc/methods/host-management/managed-copy-detection')
+  provideManagedAgentDetection(runtime)
 
   const { installFirstWorkRenameHookSubscription } =
     await import('../agent-hooks/first-work/first-work-rename-hook-subscription')

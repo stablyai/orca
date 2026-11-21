@@ -502,21 +502,20 @@ async function main() {
       )
     }
   }
+  // The burst judges NEW alone, so OLD never pays for a fleet launch under full CPU load.
   if (options.scenarios.includes('burst')) {
-    for (const arm of ['old', 'new']) {
-      bursts.push(
-        await burstOnce({
-          arm,
-          sha: shas[arm],
-          buildDir: builds[arm],
-          seedDir: seed.seedDir,
-          outDir,
-          repoRoot,
-          minWorkspaces: seed.receipt ? SEED_SHAPE.worktrees + SEED_SHAPE.folders : 0,
-          runDir: path.join(runsRoot, `burst-${arm}`)
-        })
-      )
-    }
+    bursts.push(
+      await burstOnce({
+        arm: 'new',
+        sha: shas.new,
+        buildDir: builds.new,
+        seedDir: seed.seedDir,
+        outDir,
+        repoRoot,
+        minWorkspaces: seed.receipt ? SEED_SHAPE.worktrees + SEED_SHAPE.folders : 0,
+        runDir: path.join(runsRoot, 'burst-new')
+      })
+    )
   }
   const census = runs.find((entry) => entry.census)?.census
   const rows = [...compareRuns(runs, windowScenarios), ...burstRows(bursts)]

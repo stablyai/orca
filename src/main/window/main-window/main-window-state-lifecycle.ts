@@ -1,5 +1,5 @@
 import { app, type BrowserWindow, type Event } from 'electron'
-import type { Store } from '../../persistence/loading-store/store'
+import type { NativeSettingsProjection } from '../../core-desktop/native-settings-projection'
 import { uiZoomFactorFromLevel } from '../../../shared/app-lifecycle/windows/ui-zoom-level'
 import {
   isBackgroundLaunch,
@@ -22,7 +22,7 @@ export function installMainWindowStateLifecycle(args: {
   revealInBackground?: boolean
   savedMaximized: boolean
   savedFullScreen: boolean
-  store: Store | null
+  nativeSettings: NativeSettingsProjection | null
 }): MainWindowStateLifecycle {
   const {
     mainWindow,
@@ -30,10 +30,10 @@ export function installMainWindowStateLifecycle(args: {
     revealInBackground = false,
     savedMaximized,
     savedFullScreen,
-    store
+    nativeSettings
   } = args
   mainWindow.webContents.on('dom-ready', () => {
-    const level = store?.getUI().uiZoomLevel ?? 0
+    const level = nativeSettings?.getUI().uiZoomLevel ?? 0
     mainWindow.webContents.setZoomLevel(level)
     // Native traffic lights do not scale with CSS zoom; align them with the titlebar on startup.
     if (process.platform === 'darwin') {
@@ -113,17 +113,20 @@ export function installMainWindowStateLifecycle(args: {
       // Persist maximized state and bounds atomically, including near-minimum rejection.
       const isMaximized = mainWindow.isMaximized()
       if (isMaximized) {
-        store?.updateUI({ windowMaximized: true })
+        void nativeSettings?.requestCoreWrite({ kind: 'ui', updates: { windowMaximized: true } })
         return
       }
       const bounds = mainWindow.getBounds()
       // Reject teardown's shrink-to-minimum bounds even after freeze races; default next launch (#1269).
       if (bounds.width <= MIN_WIDTH || bounds.height <= MIN_HEIGHT) {
         console.warn('[window] Skipping persist of near-minimum windowBounds:', bounds)
-        store?.updateUI({ windowMaximized: false })
+        void nativeSettings?.requestCoreWrite({ kind: 'ui', updates: { windowMaximized: false } })
         return
       }
-      store?.updateUI({ windowMaximized: false, windowBounds: bounds })
+      void nativeSettings?.requestCoreWrite({
+        kind: 'ui',
+        updates: { windowMaximized: false, windowBounds: bounds }
+      })
     }, 500)
   }
   mainWindow.on('resize', saveBounds)
@@ -146,7 +149,7 @@ export function installMainWindowStateLifecycle(args: {
     if (windowClosing) {
       return
     }
-    store?.updateUI({ windowMaximized: true })
+    void nativeSettings?.requestCoreWrite({ kind: 'ui', updates: { windowMaximized: true } })
     mainWindow.webContents.send('window:maximize-changed', true)
   })
   mainWindow.on('unmaximize', () => {
@@ -162,22 +165,25 @@ export function installMainWindowStateLifecycle(args: {
     // Teardown unmaximize can emit minimum bounds; apply the same persistence guard.
     if (bounds.width <= MIN_WIDTH || bounds.height <= MIN_HEIGHT) {
       console.warn('[window] Skipping unmaximize-time persist of near-min bounds:', bounds)
-      store?.updateUI({ windowMaximized: false })
+      void nativeSettings?.requestCoreWrite({ kind: 'ui', updates: { windowMaximized: false } })
       return
     }
-    store?.updateUI({ windowMaximized: false, windowBounds: bounds })
+    void nativeSettings?.requestCoreWrite({
+      kind: 'ui',
+      updates: { windowMaximized: false, windowBounds: bounds }
+    })
   })
 
   mainWindow.on('enter-full-screen', () => {
     if (!windowClosing) {
-      store?.updateUI({ windowFullScreen: true })
+      void nativeSettings?.requestCoreWrite({ kind: 'ui', updates: { windowFullScreen: true } })
     }
     mainWindow.webContents.send('window:fullscreen-changed', true)
   })
 
   mainWindow.on('leave-full-screen', () => {
     if (!windowClosing) {
-      store?.updateUI({ windowFullScreen: false })
+      void nativeSettings?.requestCoreWrite({ kind: 'ui', updates: { windowFullScreen: false } })
     }
     mainWindow.webContents.send('window:fullscreen-changed', false)
   })

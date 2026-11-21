@@ -11,6 +11,8 @@ import {
 import { resolveFishBinary } from '../../../shared/shell/testing/fish-binary-requirement'
 import { getPowerShellAgentWrappers } from '../../../shared/shell/launch/agents/powershell-agent-wrappers'
 import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../../shared/clipboard/remote-viewer-clipboard-env'
+import { withCodexStartupImageCommand } from '../../../shared/agent-launch/startup/codex-startup-image-command'
+import { hasCodexNativeDraftFlag } from '../../../shared/agent-launch/startup/codex-startup-delivery'
 
 const isWindows = process.platform === 'win32'
 const fishLookup = resolveFishBinary()
@@ -20,29 +22,6 @@ const pwshAvailable = canRun('pwsh')
 
 const HELP_WITH_FLAG = 'Usage: codex [OPTIONS] [PROMPT]\n      --no-daemon  Run in-process\n'
 const HELP_WITHOUT_FLAG = 'Usage: codex [OPTIONS] [PROMPT]\n      --no-alt-screen\n'
-
-const ADDED: string[][] = [
-  [],
-  ['fix the bug'],
-  // PowerShell .cmd invocation needs embedded quotes escaped.
-  ['say "hi" to "bob"'],
-  ['exec the plan'],
-  ['-m', 'gpt-5', '--yolo', 'x'],
-  ['resume'],
-  ['resume', '--last'],
-  ['--yolo', 'resume', '--last'],
-  ['fork', '--last'],
-  ['-a', 'never', 'resume'],
-  ['-c', 'model=o3'],
-  ['archive', 'S'],
-  ['delete', 'S'],
-  ['exec', 'x'],
-  ['e', 'x'],
-  ['-m', 'x', 'exec', 'x'],
-  ['review'],
-  ['login'],
-  ['mcp', 'list']
-]
 
 type Shell = 'bash' | 'zsh' | 'fish' | 'pwsh' | 'powershell'
 const isPowerShell = (shell: Shell): boolean => shell === 'pwsh' || shell === 'powershell'
@@ -84,6 +63,7 @@ if (a.length === 1 && a[0] === '--help') {
 }
 let out = ['ARGV', ...a].join('|')
 if (process.env.FAKE_CODEX_READ_CLIPBOARD_ENV === '1') out += '|ssh=' + (process.env.SSH_CONNECTION ?? '<unset>')
+if (process.env.FAKE_CODEX_READ_IMAGE_ENV === '1') out += '|kitty=' + (process.env.KITTY_WINDOW_ID ?? '<unset>')
 if (process.env.FAKE_CODEX_READ_STDIN === '1') out += '|stdin=' + fs.readFileSync(0, 'utf8').trim()
 console.log(out)
 process.exit(Number(process.env.FAKE_CODEX_EXIT || 0))
@@ -101,6 +81,7 @@ if [ "$#" -eq 1 ] && [ "$1" = --help ]; then echo help >> ${JSON.stringify(helpL
 out=ARGV
 for a in "$@"; do out="$out|$a"; done
 [ "\${FAKE_CODEX_READ_CLIPBOARD_ENV:-}" = 1 ] && out="$out|ssh=\${SSH_CONNECTION-<unset>}"
+[ "\${FAKE_CODEX_READ_IMAGE_ENV:-}" = 1 ] && out="$out|kitty=\${KITTY_WINDOW_ID-<unset>}"
 [ "\${FAKE_CODEX_READ_STDIN:-}" = 1 ] && out="$out|stdin=$(cat)"
 printf '%s\\n' "$out"
 exit "\${FAKE_CODEX_EXIT:-0}"
@@ -179,16 +160,14 @@ function run(
     SSH_CONNECTION: undefined,
     SSH_TTY: undefined,
     [REMOTE_VIEWER_CLIPBOARD_ENV]: undefined,
+    KITTY_WINDOW_ID: undefined,
+    ORCA_IMAGE_PROTOCOL: undefined,
     ...env
   })
 }
 
 function lines(output: string): string[] {
   return output.trimEnd().split(/\r?\n/)
-}
-
-function expectedLine(argv: string[], added: boolean): string {
-  return ['ARGV', ...(added ? ['--no-daemon'] : []), ...argv].join('|')
 }
 
 const shells: [Shell, boolean][] = [
@@ -200,37 +179,121 @@ const shells: [Shell, boolean][] = [
   ['powershell', isWindows && canRun('powershell')]
 ]
 
+describe.concurrent('Codex terminal image compatibility', () => {
+  for (const [shell, available] of shells) {
+    it.skipIf(!available)(
+      `${shell} keeps the synthetic ID in the Codex process`,
+      async ({ expect }) => {
+        const sandbox = makeSandbox(HELP_WITHOUT_FLAG)
+        const set = (name: string, value: string): string =>
+          isPowerShell(shell)
+            ? `$env:${name} = '${value}'`
+            : shell === 'fish'
+              ? `set -gx ${name} ${value}`
+              : `export ${name}=${value}`
+        const direct = isPowerShell(shell)
+          ? `& ${quote(shell, sandbox.codex)} direct`
+          : `${quote(shell, sandbox.codex)} direct`
+        const result = await run(
+          shell,
+          [
+            'codex enabled',
+            direct,
+            set('KITTY_WINDOW_ID', '42'),
+            'codex existing',
+            isPowerShell(shell)
+              ? 'Remove-Item Env:KITTY_WINDOW_ID'
+              : shell === 'fish'
+                ? 'set -e KITTY_WINDOW_ID'
+                : 'unset KITTY_WINDOW_ID',
+            set('ORCA_IMAGE_PROTOCOL', 'off'),
+            'codex disabled'
+          ].join('\n'),
+          sandbox,
+          { FAKE_CODEX_READ_IMAGE_ENV: '1', ORCA_IMAGE_PROTOCOL: 'kitty' }
+        )
+
+        expect(result.status, result.stderr).toBe(0)
+        expect(lines(result.stdout)).toEqual([
+          'ARGV|enabled|kitty=0',
+          'ARGV|direct|kitty=<unset>',
+          'ARGV|existing|kitty=42',
+          'ARGV|disabled|kitty=<unset>'
+        ])
+      }
+    )
+    it.skipIf(!available)(
+      `${shell} scopes Kitty for a managed path that bypasses the shell function`,
+      async ({ expect }) => {
+        const sandbox = makeSandbox(HELP_WITHOUT_FLAG)
+        const powerShell = isPowerShell(shell)
+        const direct = `${powerShell ? '& ' : ''}${quote(shell, sandbox.codex)}`
+        const command = `${direct} --prefill 'say hello'`
+        const scoped = withCodexStartupImageCommand(command, powerShell ? 'powershell' : 'posix')
+        if (!powerShell) {
+          expect(hasCodexNativeDraftFlag(scoped)).toBe(true)
+        }
+        const result = await run(
+          shell,
+          [
+            scoped,
+            `${direct} after`,
+            ...(powerShell
+              ? []
+              : [
+                  withCodexStartupImageCommand('env KITTY_WINDOW_ID=9 codex env-override', 'posix'),
+                  withCodexStartupImageCommand('env codex env-default', 'posix')
+                ]),
+            powerShell
+              ? "$env:KITTY_WINDOW_ID = '42'"
+              : shell === 'fish'
+                ? 'set -gx KITTY_WINDOW_ID 42'
+                : 'export KITTY_WINDOW_ID=42',
+            scoped
+          ].join('\n'),
+          sandbox,
+          { FAKE_CODEX_READ_IMAGE_ENV: '1', ORCA_IMAGE_PROTOCOL: 'kitty' }
+        )
+        expect(result.status, result.stderr).toBe(0)
+        expect(lines(result.stdout)).toEqual([
+          'ARGV|--prefill|say hello|kitty=0',
+          'ARGV|after|kitty=<unset>',
+          ...(powerShell ? [] : ['ARGV|env-override|kitty=9', 'ARGV|env-default|kitty=0']),
+          'ARGV|--prefill|say hello|kitty=42'
+        ])
+      }
+    )
+  }
+})
+
 describe.concurrent('codex wrapper --no-daemon rule', () => {
   for (const [shell, available] of shells) {
     describe.skipIf(!available)(shell, () => {
-      it('adds nothing when --help does not list the flag (0.155 and older)', async ({
+      it('only adds the flag when Codex advertises it, including after version changes', async ({
         expect
       }) => {
         const sandbox = makeSandbox(HELP_WITHOUT_FLAG)
-        const result = await run(
-          shell,
-          ADDED.map((argv) => codexCall(shell, argv)).join('\n'),
-          sandbox
-        )
-
-        expect(lines(result.stdout)).toEqual(ADDED.map((argv) => expectedLine(argv, false)))
-      })
-
-      it('re-probes --help when Codex changes version mid-shell', async ({ expect }) => {
-        const sandbox = makeSandbox(HELP_WITH_FLAG)
         const swap = (help: string): string =>
           isPowerShell(shell)
             ? `Set-Content -NoNewline -LiteralPath ${quote(shell, sandbox.helpFile)} -Value ${quote(shell, help)}`
             : `printf '%s' ${quote(shell, help)} > ${quote(shell, sandbox.helpFile)}`
         const result = await run(
           shell,
-          ['codex a', swap(HELP_WITHOUT_FLAG), 'codex b', swap(HELP_WITH_FLAG), 'codex c'].join(
-            '\n'
-          ),
+          [
+            codexCall(shell, ['say "hi" to "bob"']),
+            swap(HELP_WITH_FLAG),
+            'codex upgraded',
+            swap(HELP_WITHOUT_FLAG),
+            'codex downgraded'
+          ].join('\n'),
           sandbox
         )
 
-        expect(lines(result.stdout)).toEqual(['ARGV|--no-daemon|a', 'ARGV|b', 'ARGV|--no-daemon|c'])
+        expect(lines(result.stdout)).toEqual([
+          'ARGV|say "hi" to "bob"',
+          'ARGV|--no-daemon|upgraded',
+          'ARGV|downgraded'
+        ])
       })
 
       it("keeps piped stdin for Codex and returns Codex's exit status", async ({ expect }) => {
