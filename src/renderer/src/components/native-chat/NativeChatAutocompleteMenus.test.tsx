@@ -26,6 +26,22 @@ const OTHER_BOTS = {
 }
 
 const NO_BOT_MATCH = { ...OTHER_BOTS, unavailable: [], query: 'notes' }
+// `@current` matches only what Docs is for.
+const PURPOSE_MATCH = {
+  ...OTHER_BOTS,
+  unavailable: [],
+  query: 'current',
+  matches: [
+    {
+      value: 'Docs',
+      name: 'Docs',
+      tier: 4 as const,
+      nameHits: [],
+      detailHits: [{ start: 'keeping the docs '.length, length: 'current'.length }],
+      unavailable: false
+    }
+  ]
+}
 
 describe('NativeChatMentionMenu', () => {
   afterEach(cleanup)
@@ -114,5 +130,21 @@ describe('NativeChatMentionMenu', () => {
     expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['notes.md'])
     fireEvent.pointerDown(screen.getByRole('option', { name: 'notes.md' }))
     expect(onChoose).toHaveBeenCalledWith('notes.md')
+  })
+
+  it('keeps "For:" before a highlighted purpose match, so it reads apart from the name', () => {
+    render(
+      <NativeChatRoomContext.Provider value={PURPOSE_MATCH}>
+        <NativeChatMentionMenu
+          mention={{ ...NO_ROWS, files: ['Docs'] }}
+          activeIndex={0}
+          listboxId="bots"
+          onChoose={vi.fn()}
+        />
+      </NativeChatRoomContext.Provider>
+    )
+    const [row] = screen.getAllByRole('option')
+    expect(row.textContent).toMatch(/^DocsFor: .*current$/)
+    expect(row.querySelector('strong')?.textContent).toBe('current')
   })
 })
