@@ -24,7 +24,11 @@ import { BotShareService } from '../bots/sharing/bot-share-service'
 import { readBotShareable } from '../bots/sharing/bot-share-sources'
 import { botHomeWorktreeOnBranch, runtimeBotWork, workerGitHubRepo } from '../bots/bot-work-runtime'
 import type { BotHomeLineage, BotWorkRuntime } from '../bots/bot-work-runtime'
-import type { WorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey,
+  type WorkspaceKey
+} from '../../shared/workspace/identity/workspace-scope'
 import type { WorkspaceLineage } from '../../shared/worktree/lineage-types'
 import type { OwnPullRequest } from '../connector-cloud/own-pr-trigger-guard'
 import { botWorkHasPrBranch } from '../bots/bot-work-pr-branch'
@@ -232,11 +236,13 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     return (
       (await botWorkHasPrBranch(
         {
-          rows: () =>
-            this.botWork
+          rows: () => {
+            const { byId } = this.indexedWiredBots()
+            return this.botWork
               .store()
               .liveRows()
-              .filter((row) => this.bots.list().some((bot) => bot.id === row.botId)),
+              .filter((row) => byId.has(row.botId))
+          },
           workspace: async (row) => {
             const checked = await this.botWork.check(row)
             const worker = checked?.worker
@@ -259,9 +265,35 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** A bot session's gate on a queued message; the runtime overrides it. */
   protected assertStructuredQueuedMessageAllowed(_sessionId: string, _messageId: string): void {}
 
+  private wiredBotIndex: {
+    bots: readonly WiredBot[]
+    length: number
+    byId: ReadonlyMap<string, WiredBot>
+    byHome: ReadonlyMap<string, WiredBot>
+  } | null = null
+
   /** The bots on this host's store, read per call. */
   protected wiredBots(): readonly WiredBot[] {
     return this.store?.getBots?.() ?? []
+  }
+
+  private indexedWiredBots() {
+    const bots = this.wiredBots()
+    if (this.wiredBotIndex?.bots !== bots || this.wiredBotIndex.length !== bots.length) {
+      const byId = new Map<string, WiredBot>()
+      const byHome = new Map<string, WiredBot>()
+      for (const bot of bots) {
+        if (!byId.has(bot.id)) {
+          byId.set(bot.id, bot)
+        }
+        const homeKey = folderWorkspaceKey(bot.folderWorkspaceId)
+        if (!byHome.has(homeKey)) {
+          byHome.set(homeKey, bot)
+        }
+      }
+      this.wiredBotIndex = { bots, length: bots.length, byId, byHome }
+    }
+    return this.wiredBotIndex
   }
 
   /** The structured host's bot side: their sessions' tools and memory, Look around, and the queued-message gate. */
@@ -295,14 +327,23 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
 
   /** A chat's phone attention: muted by its workspace's filters or its bot's switches, with its group room. */
   protected botAttentionDeliveryDeps() {
-    const muteDeps = {
-      isWorkspaceMuted: (id: string) => this.isWorkspaceNotificationMuted(id),
-      bots: () => this.wiredBots()
-    }
     type Muted = Parameters<typeof isStructuredAttentionMuted>
     return {
       isMuted: (scope: Muted[1], news: Muted[2]) =>
-        isStructuredAttentionMuted(muteDeps, scope, news),
+        isStructuredAttentionMuted(
+          {
+            isWorkspaceMuted: (id: string) => this.isWorkspaceNotificationMuted(id),
+            bots: () => {
+              if (parseWorkspaceKey(scope.workspaceId)?.type !== 'folder') {
+                return []
+              }
+              const bot = this.indexedWiredBots().byHome.get(scope.workspaceId)
+              return bot ? [bot] : []
+            }
+          },
+          scope,
+          news
+        ),
       readBotGroupRoom: (sessionId: string) => this.botSessions.groupRoomOf(sessionId),
       repliesInSlack: (id: string) => !!this.store && sessionRepliesInSlack(this.store, id)
     }

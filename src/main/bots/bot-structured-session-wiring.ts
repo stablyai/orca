@@ -8,6 +8,7 @@ import { botHomeFolder, localBotHomeFilesystem } from './bot-home'
 import { messageWords } from '../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
 import {
   botMentionContext,
+  botMentionTokens,
   mentionedBots,
   mentionedServerBots,
   type BotMentionChat
@@ -17,7 +18,10 @@ import { soulSpecialty } from '../../shared/bot-roster'
 import type { BotLookAroundStore } from './bot-look-around-store'
 import { botSessionToolServers, currentBotToolsRevision } from './bot-tools-file'
 import { botToolsEpoch, type BotLaunchedTools } from './bot-tools-revision'
-import { botOfHomeWorkspace } from '../../shared/bots/bot-homes'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../shared/workspace/identity/workspace-scope'
 import { createBotTurnContext } from './bot-turn-context'
 import type { TurnEndedVerdict } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import type { BotChatJournal } from './bot-turn-rows'
@@ -91,6 +95,34 @@ export function botStructuredSessionWiring(deps: {
   >
 > {
   const bots = (): readonly Bot[] => deps.store().getBots?.() ?? []
+  let indexed: {
+    bots: readonly Bot[]
+    length: number
+    byId: ReadonlyMap<string, Bot>
+    byHome: ReadonlyMap<string, Bot>
+  } | null = null
+  const botIndex = () => {
+    const current = bots()
+    if (indexed?.bots !== current || indexed.length !== current.length) {
+      const byId = new Map<string, Bot>()
+      const byHome = new Map<string, Bot>()
+      for (const bot of current) {
+        if (!byId.has(bot.id)) {
+          byId.set(bot.id, bot)
+        }
+        const homeKey = folderWorkspaceKey(bot.folderWorkspaceId)
+        if (!byHome.has(homeKey)) {
+          byHome.set(homeKey, bot)
+        }
+      }
+      indexed = { bots: current, length: current.length, byId, byHome }
+    }
+    return indexed
+  }
+  const botOfHome = (workspaceId: string | null | undefined): Bot | null =>
+    workspaceId && parseWorkspaceKey(workspaceId)?.type === 'folder'
+      ? (botIndex().byHome.get(workspaceId) ?? null)
+      : null
   /** The paired servers' bots a message names, as each server last listed them, so a send never
    *  waits on another computer; one on a server this host isn't paired to, or one its server no longer
    *  lists, adds nothing. */
@@ -122,7 +154,7 @@ export function botStructuredSessionWiring(deps: {
       ]
     })
   }
-  const botById = (botId: string): Bot | undefined => bots().find((bot) => bot.id === botId)
+  const botById = (botId: string): Bot | undefined => botIndex().byId.get(botId)
   /** Only a new bot's Chat runs first run; its automations and threads run in the same home without. */
   const inFirstRun = (botId: string, sessionId: string): boolean => {
     const bot = botById(botId)
@@ -183,13 +215,21 @@ export function botStructuredSessionWiring(deps: {
     })
   }
   const botOfRecord = (record: AgentSessionRecord): Bot | null =>
-    botOfHomeWorkspace(bots(), record.location.workspaceId)
+    botOfHome(record.location.workspaceId)
   /** The bot's linked-skills folder brought up to date; rejects when it can't be. */
   const syncLinkedSkills = (bot: Bot): Promise<LinkedSkills> =>
     linkedSkillProjects(bot, deps.store().getRepos(), botLinkedSkillsFolder(bot.id))
   return {
-    resolveSessionInstructions: (record, launchDirectory, linkedSkills) =>
-      botSessionInstructions(turnContext, bots(), record, launchDirectory, linkedSkills),
+    resolveSessionInstructions: (record, launchDirectory, linkedSkills) => {
+      const bot = botOfRecord(record)
+      return botSessionInstructions(
+        turnContext,
+        bot ? [bot] : [],
+        record,
+        launchDirectory,
+        linkedSkills
+      )
+    },
     // The agent turned its roots down after launch: its next turn gets the list.
     reportSessionLinkedSkills: (sessionId, linkedSkills) => {
       // Later links reach it as a list with paths; an empty folder left it nothing to resend.
@@ -209,7 +249,12 @@ export function botStructuredSessionWiring(deps: {
       }
     },
     resolveSessionToolServers: async (record, launchDirectory) => {
-      const { tools, launched } = await botSessionToolServers(bots(), record, launchDirectory)
+      const bot = botOfRecord(record)
+      const { tools, launched } = await botSessionToolServers(
+        bot ? [bot] : [],
+        record,
+        launchDirectory
+      )
       if (launched) {
         launchedTools.set(record.sessionId, launched)
       } else {
@@ -263,7 +308,17 @@ export function botStructuredSessionWiring(deps: {
       // `@name`. Only this host's bots and its paired servers' resolve.
       mentions: async (sessionId, message) => {
         const words = messageWords(message)
-        const named = mentionedBots(words, bots())
+        const tokens = botMentionTokens(words)
+        const localBots = tokens.some((token) => !token.server)
+          ? tokens.flatMap((token) => {
+              if (token.server) {
+                return []
+              }
+              const bot = botIndex().byId.get(token.id)
+              return bot ? [bot] : []
+            })
+          : []
+        const named = localBots.length > 0 ? mentionedBots(words, localBots) : []
         const remote = serverBotLines(words)
         const chatsOf = new Map<string, Promise<readonly BotChatRow[] | null>>()
         const readChats = (bot: Bot) => {
@@ -313,7 +368,7 @@ export function botStructuredSessionWiring(deps: {
           : null,
     quietTurnEnd: (sessionId, outcome, usageLimited) =>
       deps.lookAround.lookTurnIsQuiet(sessionId, outcome, usageLimited === true),
-    isBotHome: (workspaceId) => botOfHomeWorkspace(bots(), workspaceId) !== null
+    isBotHome: (workspaceId) => botOfHome(workspaceId) !== null
   }
 }
 

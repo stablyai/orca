@@ -57,7 +57,13 @@ export function normalizeLoadedProfileState(
   const { readable: bots, newer: botsNewerAgents } = allBots
     ? splitBotsByOlderBuildSupport(allBots)
     : { readable: undefined, newer: [] }
-  if (botsNewerAgents.length > 0 && parsed.bots?.length !== bots?.length) {
+  const hasStaleNewerBotState =
+    botsNewerAgents.length === 0 &&
+    (parsed.botsNewerAgents !== undefined || parsed.botOrder !== undefined)
+  if (
+    hasStaleNewerBotState ||
+    (botsNewerAgents.length > 0 && parsed.bots?.length !== bots?.length)
+  ) {
     markNeedsSave()
   }
   if (allBots !== undefined && parsed.botsPermissionDefaultMigrated !== true) {
@@ -94,9 +100,15 @@ export function normalizeLoadedProfileState(
     return decoded
   })
 
+  const {
+    botsNewerAgents: _parsedBotsNewerAgents,
+    botOrder: _parsedBotOrder,
+    ...restParsed
+  } = parsed
+
   return {
     ...defaults,
-    ...parsed,
+    ...restParsed,
     featureInteractionTelemetryBuckets: normalizeFeatureInteractionTelemetryBuckets(
       parsed.featureInteractionTelemetryBuckets
     ),
@@ -171,11 +183,11 @@ export function normalizeLoadedProfileState(
       : {
           bots,
           botsPermissionDefaultMigrated: true as const,
-          ...(botsNewerAgents.length > 0 || parsed.botsNewerAgents !== undefined
+          ...(botsNewerAgents.length > 0
             ? {
                 botsNewerAgents,
                 botOrder: Array.isArray(parsed.botOrder)
-                  ? parsed.botOrder
+                  ? parsed.botOrder.filter((id): id is string => typeof id === 'string')
                   : allBots?.map((bot) => bot.id)
               }
             : {})
