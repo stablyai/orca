@@ -21816,7 +21816,9 @@
         "clearAll": "Clear all",
         "editReturned": "Your edit is in the chat box.",
         "commandsUnsupported": "Commands can't be saved in a queued message.",
-        "imageCount": "{{count}} images"
+        "imageCount": "{{count}} images",
+        "queuedCount_one": "{{count}} queued",
+        "queuedCount_other": "{{count}} queued"
       },
       "thought": "Thought",
       "thoughtForDuration": "Thought for {{duration}}",
