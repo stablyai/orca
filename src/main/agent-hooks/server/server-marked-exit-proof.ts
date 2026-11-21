@@ -8,11 +8,33 @@ import { AgentHookServerTabCleanup } from './server-tab-cleanup'
 
 type MarkedAgent = { presence: AgentProcessPresence; process: AgentProcessIdentity }
 
-/** A command mark proves no exit on its own: Ctrl-Z and a shell nested in the agent finish
- *  commands too. A local agent's own process answers instead, a stopped one counting as alive. */
+/** Tells the terminal lifecycle of each agent end something proved, and proves the ends a
+ *  command mark only suggests: Ctrl-Z and a shell nested in the agent finish commands too, so a
+ *  local agent's own process answers, a stopped one counting as not gone. */
 export abstract class AgentHookServerMarkedExitProof extends AgentHookServerTabCleanup {
   /** Agents a mark did not prove gone (stopped, or under a nested shell): the pane's next mark asks again. */
   private readonly aliveAfterMark = new Map<string, MarkedAgent>()
+
+  protected override reconcileEndedProcess(
+    paneKeys: Iterable<string>,
+    options: EndedProcessReconciliationOptions | undefined,
+    clearPane: (paneKey: string) => void
+  ): { cleared: number; untouched: string[] } {
+    const keys = [...paneKeys]
+    const result = super.reconcileEndedProcess(keys, options, clearPane)
+    // Only an explicit end is proof (a probe that read it, or the agent's own end hook); a mark
+    // left standing where no host can prove it (SSH, WSL, Windows) may be a Ctrl-Z.
+    const ended = options?.endedPresence
+    for (const paneKey of ended ? keys : []) {
+      const resolved = this.resolvePaneKeyAlias(paneKey)
+      const now = this.state.lastStatusByPaneKey.get(resolved)?.agentPresence
+      // A newer live agent owns the pane: the old one's end is not its news.
+      if (!now?.process || now.ended || now.process.pid === ended?.process?.pid) {
+        this.terminalPaneLifecycle?.agentExited?.(resolved)
+      }
+    }
+    return result
+  }
 
   override retireProcessAuthority(
     paneKey: string,
@@ -47,7 +69,10 @@ export abstract class AgentHookServerMarkedExitProof extends AgentHookServerTabC
       return
     }
     if (verdict === 'exited') {
-      this.recordPaneAgentExit(resolved, { ...marked.presence, ended: true })
+      this.reconcileEndedProcessForPaneKeys([resolved], {
+        preserveResumeIdentity: true,
+        endedPresence: { ...marked.presence, ended: true }
+      })
     } else {
       // Alive, stopped (which reads as unverifiable) or unread: not proven gone.
       this.aliveAfterMark.set(resolved, marked)

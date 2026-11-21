@@ -76,6 +76,8 @@ describe('a terminal worker whose agent exits while its terminal stays open', ()
         }
       ])
     } finally {
+      // Escalation mail is delivered after the settlement commits.
+      await new Promise((resolve) => setImmediate(resolve))
       db.close()
     }
   })
@@ -100,6 +102,8 @@ describe('a terminal worker whose agent exits while its terminal stays open', ()
       expect(db.getDispatchContextById(dispatchId)?.status).toBe('completed')
       expect(escalations()).toEqual([])
     } finally {
+      // Escalation mail is delivered after the settlement commits.
+      await new Promise((resolve) => setImmediate(resolve))
       db.close()
     }
   })

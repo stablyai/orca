@@ -130,7 +130,6 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
     const exitedAt = Date.now()
     recordAgentExit(this.agentExitedAtByPaneKey, paneKeys, endedPresence, exitedAt)
     this.retirePaneResume(paneKeys, status, exitedAt)
-    this.terminalPaneLifecycle?.agentExited?.(this.resolvePaneKeyAlias(paneKey))
   }
 
   private paneKeysWithAliases(paneKey: string): Set<string> {

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../../agent-hook-server'
 import { buildBody, PANE, postHookEvent } from '../server.test-fixtures'
+import { wslHookRelayConnectionId } from '../../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 
 vi.mock('../../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
@@ -75,5 +76,46 @@ describe("a command mark in a local agent's pane", () => {
     server.retireProcessAuthority(PANE, { launchRetired: true })
     await settle()
     expect(exits).toEqual([PANE])
+  })
+
+  it("reports an agent's own end hook", async () => {
+    const response = await postHookEvent(
+      server,
+      buildBody(
+        { hook_event_name: 'SessionEnd', session_id: 'session-a', reason: 'prompt_input_exit' },
+        {
+          agentProcess: JSON.stringify({
+            pid: 4001,
+            platform: process.platform,
+            startTime: 'birth-4001'
+          })
+        }
+      )
+    )
+    expect(response.status).toBe(204)
+    await settle()
+    expect(exits).toEqual([PANE])
+  })
+
+  it('reports nothing for a mark no host can prove, which may be a Ctrl-Z', async () => {
+    const wslPane = 'tab-wsl:44444444-4444-4444-8444-444444444444'
+    server.ingestRemote(
+      {
+        paneKey: wslPane,
+        tabId: 'tab-wsl',
+        worktreeId: String.raw`repo::\\wsl.localhost\Ubuntu\home\user\repo`,
+        providerSession: { key: 'session_id', id: 'wsl-claude' },
+        agentPresence: {
+          agent: 'claude',
+          sessionOwner: true,
+          process: { pid: 4002, platform: 'linux', startTime: 'boot:4002' }
+        },
+        payload: { state: 'working', prompt: 'ship it', agentType: 'claude' }
+      },
+      wslHookRelayConnectionId('Ubuntu')
+    )
+    server.retireProcessAuthority(wslPane, { confirmedExit: true })
+    await settle()
+    expect(exits).toEqual([])
   })
 })

@@ -86,7 +86,7 @@ export abstract class RuntimePtyExitWorkerObservation extends RuntimePtyExitSurf
       error: string
       workerStage?: string
       gone: Pick<WorkerGone, 'reason' | 'cause'>
-      /** A start still deciding reports its own outcome. */
+      /** A start still deciding reports its own outcome; an agent in its pane before then may be another's. */
       startDecides?: true
     }
   ): void {
@@ -112,11 +112,9 @@ export abstract class RuntimePtyExitWorkerObservation extends RuntimePtyExitSurf
           continue
         }
         const active = db.getActiveDispatchForTerminal(handle, paneKey)
-        if (
-          ending.startDecides &&
-          active &&
-          db.getWorkerDispatch(active.id)?.state === 'starting'
-        ) {
+        const attachment = paneKey ? db.findActiveRemoteAttachmentForPane(paneKey) : undefined
+        const state = active ? db.getWorkerDispatch(active.id)?.state : attachment?.state
+        if (ending.startDecides && (state === 'starting' || state === 'start_unknown')) {
           return
         }
         const processIncarnation = this.getTerminalProcessIncarnation(handle)
