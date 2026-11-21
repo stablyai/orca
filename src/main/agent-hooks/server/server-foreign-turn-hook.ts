@@ -22,10 +22,36 @@ function isRelayedCodexSideThreadHook(
   )
 }
 
+function isStaleAntigravityDrain(
+  previous: EnrichedAgentHookEventPayload,
+  incoming: AgentHookEventPayload
+): boolean {
+  const before = previous.payload.mainAgent
+  const drain = incoming.payload.mainAgent
+  return (
+    incoming.source === 'antigravity' &&
+    incoming.isReplay === true &&
+    incoming.antigravityHelpersDrained === true &&
+    drain?.state === 'done' &&
+    before !== undefined &&
+    (before.stateStartedAt > drain.stateStartedAt ||
+      (before.state === 'working' && before.stateStartedAt === drain.stateStartedAt)) &&
+    incoming.connectionId !== null &&
+    incoming.connectionId === previous.connectionId &&
+    incoming.worktreeId === previous.worktreeId &&
+    incoming.launchToken === previous.launchToken &&
+    incoming.providerSession?.id === previous.providerSession?.id
+  )
+}
+
 /** A hook from a turn other than the one the row tracks, which must leave the row as it is. */
 export function isForeignTurnHook(
   previous: EnrichedAgentHookEventPayload,
   incoming: AgentHookEventPayload
 ): boolean {
-  return isStaleGrokTurnEnd(previous, incoming) || isRelayedCodexSideThreadHook(previous, incoming)
+  return (
+    isStaleGrokTurnEnd(previous, incoming) ||
+    isRelayedCodexSideThreadHook(previous, incoming) ||
+    isStaleAntigravityDrain(previous, incoming)
+  )
 }

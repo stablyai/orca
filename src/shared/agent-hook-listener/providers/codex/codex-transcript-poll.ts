@@ -37,13 +37,15 @@ export type CodexTranscriptPollReads = {
 /** Reads the pane's rollouts off the main thread; slow opens (Windows on-access scans) must never block it. */
 export async function readCodexTranscriptPoll(
   state: HookListenerState,
-  paneKey: string
+  paneKey: string,
+  live: () => boolean = () => true
 ): Promise<CodexTranscriptPollReads> {
   const roster = state.codexSubagentRosterByPaneKey.get(paneKey)
   const transcript = state.codexSubagentTranscriptByPaneKey.get(paneKey)
   // A replaced or cleared pane makes the rest of these reads unappliable; stop opening rollouts for it.
   const batch = new RolloutReadBatch(
     () =>
+      live() &&
       state.codexSubagentRosterByPaneKey.get(paneKey) === roster &&
       state.codexSubagentTranscriptByPaneKey.get(paneKey) === transcript
   )

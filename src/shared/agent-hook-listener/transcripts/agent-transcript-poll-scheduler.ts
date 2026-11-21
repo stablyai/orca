@@ -4,6 +4,7 @@ import {
   type TranscriptNativeWatcher
 } from './transcript-native-watcher'
 import { isWslUncPath } from '../../file-access/wsl-paths'
+import { queueAbandonedRolloutReadRelease } from '../providers/codex/codex-rollout-async-reads'
 
 const ROOT_RECONCILIATION_MS = 5_000
 
@@ -61,9 +62,10 @@ export class AgentTranscriptPollScheduler<T> {
   }
 
   private settle(key: string, entry: TranscriptWakeup<T>): void {
-    if (this.inFlight.get(key) === entry) {
-      this.inFlight.delete(key)
+    if (this.inFlight.get(key) !== entry) {
+      return
     }
+    this.inFlight.delete(key)
     const current = this.entries.get(key)
     if (current?.dueWhileInFlight) {
       // A wake or newer hook came due mid-read; run again at the normal cadence instead of the sparse probe.
@@ -156,12 +158,17 @@ export class AgentTranscriptPollScheduler<T> {
     }
     this.entries.delete(key)
     // A read that never settles must not stall the pane's next poll forever.
-    this.inFlight.delete(key)
+    if (this.inFlight.delete(key)) {
+      queueAbandonedRolloutReadRelease()
+    }
     this.deadlines.clear(key)
     entry.watcher?.dispose()
   }
 
   clearAll(): void {
+    if (this.inFlight.size > 0) {
+      queueAbandonedRolloutReadRelease()
+    }
     this.inFlight.clear()
     this.deadlines.clearAll()
     for (const entry of this.entries.values()) {

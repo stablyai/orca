@@ -46,3 +46,8 @@ export type CodexLeadTurnState = {
   sessionId?: string
   turnId?: string
 }
+
+export type GrokActiveTurn = {
+  promptId?: string
+  sessionId?: string
+}

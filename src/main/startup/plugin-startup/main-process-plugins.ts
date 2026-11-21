@@ -28,7 +28,7 @@ import {
   normalizePluginConsents,
   normalizePluginIdList
 } from '../../../shared/plugins/approval/plugin-consent-state'
-import { projectPluginAgentStatusChangedPayload } from '../../plugins/events/plugin-agent-status-event'
+import { pluginAgentStatusListener } from '../../plugins/events/plugin-agent-status-event'
 import { setMainPluginLanguagePacks, setMainUiLanguage } from '../../i18n/main-i18n'
 import { isUsablePluginLanguagePack } from '../../../shared/plugins/languages/plugin-language-pack-coverage'
 import { rebuildAppMenu } from '../../menu/register-app-menu'
@@ -297,12 +297,7 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
   }, PLUGIN_MARKETPLACE_SEED_STARTUP_DELAY_MS).unref?.()
   // Filter hook/worktree events server-side by each plugin subscription.
   const forwardAgentStatus = createPluginAgentStatusForwarder(pluginDelegate, pluginService)
-  agentHookServer.subscribeEnrichedStatus((enriched) => {
-    const payload = projectPluginAgentStatusChangedPayload(enriched, store)
-    if (payload) {
-      forwardAgentStatus(payload, enriched.terminalHandle)
-    }
-  })
+  agentHookServer.subscribeEnrichedStatus(pluginAgentStatusListener(store, forwardAgentStatus))
   watchPluginWorkspaceContext({
     delegate: pluginDelegate,
     events: pluginService,

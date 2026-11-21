@@ -1,151 +1,63 @@
 import {
+  isAntigravityInSessionChildHook,
+  type AntigravityTranscriptOrigin
+} from './antigravity-hook-identity'
+import {
+  antigravityHasPendingLaunch,
+  trackAntigravityBackgroundCommand
+} from './antigravity-pane-state'
+import { trackAntigravityLaunch } from './antigravity-launch-state'
+import { buildAntigravityFoldedStatusPayload } from './antigravity-parent-status'
+import {
   normalizeAgentStatusPayload,
   type ParsedAgentStatusPayload
 } from '../../../agent-status/contracts/agent-status-types'
+import { continueMainAgentStatus } from '../../../agent-status/lifecycle/agent-lead-status-fold'
 import { readFirstString } from '../../interactive-tool'
-import type { AntigravityChildWork } from '../../listener-event'
 import type { HookListenerState } from '../../listener-state'
 import { resolvePrompt, resolveToolState } from '../../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../../provider-event-routing'
 import { readLastUserPromptFromTranscript } from '../../transcript-lines'
+import {
+  isAntigravityAgentCoordinationTool,
+  isAntigravityFeedbackTool,
+  isAntigravityHelperSpawnCall,
+  isAntigravityStopStillBusy,
+  isRecognizedAntigravityEvent,
+  resolveSimpleAntigravityEventState
+} from './antigravity-event-rules'
+import {
+  createAntigravityBrainCache,
+  normalizeAntigravityModel,
+  resolveAntigravityBrainDirectory
+} from './antigravity-brain-metadata'
+import {
+  getOrCreateAntigravityPaneState,
+  reconcileAntigravityActiveSubagents,
+  recordAntigravityChildHook
+} from './antigravity-subagent-roster'
 import { readAntigravityToolCall } from './antigravity-tool-fields'
-import { isAntigravityStopStillBusy } from './antigravity-event-rules'
 
-export function isAntigravityFeedbackTool(toolName: string | undefined): boolean {
-  return toolName === 'ask_question' || toolName === 'ask_permission'
-}
+export { isAntigravityFeedbackTool }
 
-function isAntigravitySubagentTool(toolName: string | undefined): boolean {
-  return toolName === 'invoke_subagent' || toolName === 'send_message'
-}
-
-/** agy sends a backgrounded run_command's PostToolUse only when the command ends; daemons are never expected to. */
-function trackAntigravityBackgroundCommand(
-  state: HookListenerState,
-  paneKey: string,
-  eventName: unknown,
-  conversationId: string | undefined,
-  hookPayload: Record<string, unknown>
-): void {
-  const { toolName, toolInputSource } = readAntigravityToolCall(hookPayload)
-  const stepIdx = hookPayload.stepIdx
-  if (
-    toolName !== 'run_command' ||
-    !conversationId ||
-    typeof stepIdx !== 'number' ||
-    (eventName !== 'PreToolUse' && eventName !== 'PostToolUse')
-  ) {
-    return
-  }
-  const key = `${conversationId}:${stepIdx}`
-  if (eventName === 'PostToolUse') {
-    state.antigravityChildWorkByPaneKey.get(paneKey)?.commands?.delete(key)
-    return
-  }
-  const args =
-    typeof toolInputSource === 'object' && toolInputSource !== null ? toolInputSource : {}
-  if ('IsDaemon' in args && args.IsDaemon === true) {
-    return
-  }
-  const work = antigravityChildWork(state, paneKey)
-  work.commands = (work.commands ?? new Set()).add(key)
-}
-
-function antigravityChildWork(state: HookListenerState, paneKey: string): AntigravityChildWork {
-  let work = state.antigravityChildWorkByPaneKey.get(paneKey)
-  if (!work) {
-    work = {}
-    state.antigravityChildWorkByPaneKey.set(paneKey, work)
-  }
-  return work
-}
-
-export function normalizeAntigravityEvent(
+function normalizeColdChildAntigravityEvent(
   state: HookListenerState,
   eventName: unknown,
   promptText: string,
   paneKey: string,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  transcriptPath: string | undefined
 ): ParsedAgentStatusPayload | null {
-  const transcriptPath = readFirstString(hookPayload, ['transcriptPath', 'transcript_path'])
-  const conversationId = readFirstString(hookPayload, ['conversationId', 'conversation_id'])
-  const subagentParent = state.antigravityChildWorkByPaneKey.get(paneKey)?.subagentParent
-  if (subagentParent && conversationId && conversationId !== subagentParent) {
-    // Subagents run inside the parent agy under their own conversationId and never carry user input.
-    if (!readFirstString(hookPayload, ['lastUserInput'])) {
-      const work = antigravityChildWork(state, paneKey)
-      const open = (work.openSubagents ??= new Set())
-      if (eventName === 'Stop' && !isAntigravityStopStillBusy(hookPayload)) {
-        open.delete(conversationId)
-      } else {
-        open.add(conversationId)
-      }
-      // Unless agy wakes the parent with this result, the last subagent's Stop is the run's last hook;
-      // a sibling still working or a parent command still running keeps the run open.
-      if (open.size === 0 && (work.commands?.size ?? 0) === 0) {
-        work.helpersIdleAt = Date.now()
-      } else {
-        delete work.helpersIdleAt
-      }
-      return null
-    }
-    const work = antigravityChildWork(state, paneKey)
-    delete work.subagentParent
-    delete work.openSubagents
-  }
-  const pendingHelpersIdle = state.antigravityChildWorkByPaneKey.get(paneKey)
-  // The parent's busy Stop may land after its last subagent's; only other parent work reopens the run.
-  if (pendingHelpersIdle && !(eventName === 'Stop' && isAntigravityStopStillBusy(hookPayload))) {
-    delete pendingHelpersIdle.helpersIdleAt
-  }
-  if (eventName === 'PreInvocation') {
-    state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
-  } else if (
-    transcriptPath &&
-    eventName !== 'Stop' &&
-    state.antigravityCompletedTranscriptByPaneKey.get(paneKey) === transcriptPath
-  ) {
-    // Ignore bookkeeping PostToolUse after Stop so finished rows do not resurrect.
+  const toolName = readAntigravityToolCall(hookPayload).toolName
+  if (isAntigravityFeedbackTool(toolName)) {
     return null
   }
-
-  const toolName = readAntigravityToolCall(hookPayload).toolName
-  if (
-    conversationId &&
-    (eventName === 'PreToolUse' || eventName === 'PostToolUse') &&
-    isAntigravitySubagentTool(toolName)
-  ) {
-    antigravityChildWork(state, paneKey).subagentParent = conversationId
-  }
-  trackAntigravityBackgroundCommand(state, paneKey, eventName, conversationId, hookPayload)
-
   const stopStillBusy = eventName === 'Stop' && isAntigravityStopStillBusy(hookPayload)
-  // agy ends the parent's turn with fullyIdle=false while its helpers run; they hold the pane open.
-  const childWork = state.antigravityChildWorkByPaneKey.get(paneKey)
-  const heldOpenByHelpers = stopStillBusy && childWork?.subagentParent !== undefined
-  // A backgrounded command holds it the same way, as monitoring so silence can still bound it.
-  const heldOpenByCommands =
-    stopStillBusy && !heldOpenByHelpers && (childWork?.commands?.size ?? 0) > 0
-  const stateName =
-    eventName === 'PreToolUse' && isAntigravityFeedbackTool(toolName)
-      ? 'waiting'
-      : eventName === 'Stop'
-        ? stopStillBusy
-          ? 'working'
-          : 'done'
-        : eventName === 'PreInvocation' ||
-            eventName === 'PostInvocation' ||
-            eventName === 'PreToolUse' ||
-            eventName === 'PostToolUse'
-          ? 'working'
-          : null
-
+  const stateName = resolveSimpleAntigravityEventState(eventName, toolName, stopStillBusy)
   if (!stateName) {
     return null
   }
-
   const resetsTurn = isNewTurnEvent('antigravity', eventName)
-  // Cache prompts per turn instead of rescanning large transcripts per hook.
   const cachedPrompt = resetsTurn ? undefined : state.lastPromptByPaneKey.get(paneKey)
   const effectivePrompt =
     promptText || cachedPrompt || readLastUserPromptFromTranscript(transcriptPath) || ''
@@ -155,27 +67,207 @@ export function normalizeAntigravityEvent(
     extractToolFields('antigravity', eventName, hookPayload),
     { resetOnNewTurn: resetsTurn }
   )
-
-  const payload = normalizeAgentStatusPayload({
+  return normalizeAgentStatusPayload({
     state: stateName,
-    prompt: resolvePrompt(state, paneKey, effectivePrompt, {
-      resetOnNewTurn: resetsTurn
-    }),
+    prompt: resolvePrompt(state, paneKey, effectivePrompt, { resetOnNewTurn: resetsTurn }),
     agentType: 'antigravity',
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
-    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
-    ...(heldOpenByCommands ? { workingMode: 'monitoring' as const } : {}),
-    mainAgent:
-      heldOpenByHelpers || heldOpenByCommands
-        ? { state: 'done', stateStartedAt: Date.now() }
-        : undefined
+    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput
   })
-  // Stop between tools can report fullyIdle=false; only an idle Stop is terminal.
-  if (eventName === 'Stop' && !stopStillBusy) {
+}
+
+export function normalizeAntigravityEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>,
+  origin: AntigravityTranscriptOrigin
+): ParsedAgentStatusPayload | null {
+  if (!isRecognizedAntigravityEvent(eventName)) {
+    return null
+  }
+  const now = Date.now()
+  const transcriptPath = readFirstString(hookPayload, ['transcriptPath', 'transcript_path'])
+  const conversationId = readFirstString(hookPayload, ['conversationId', 'conversation_id'])
+  const existingPaneState = state.antigravityChildWorkByPaneKey.get(paneKey)
+
+  // Cold child hooks after a restart must carry no root resume/child ownership.
+  if (!existingPaneState?.rootConversationId && origin === 'child') {
+    return normalizeColdChildAntigravityEvent(
+      state,
+      eventName,
+      promptText,
+      paneKey,
+      hookPayload,
+      transcriptPath
+    )
+  }
+
+  // A child Stop without its conversation id must not run the root's idle-Stop cleanup.
+  if (existingPaneState?.rootConversationId && !conversationId && origin === 'child') {
+    return null
+  }
+  if (
+    existingPaneState?.rootConversationId &&
+    conversationId &&
+    conversationId !== existingPaneState.rootConversationId &&
+    isAntigravityInSessionChildHook(state, paneKey, hookPayload, origin)
+  ) {
+    recordAntigravityChildHook(existingPaneState, conversationId, eventName, hookPayload, now)
+    return null
+  }
+
+  if (
+    conversationId &&
+    existingPaneState?.rootConversationId &&
+    existingPaneState.rootConversationId !== conversationId &&
+    !isAntigravityInSessionChildHook(state, paneKey, hookPayload, origin)
+  ) {
     state.antigravityChildWorkByPaneKey.delete(paneKey)
+    state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
+  }
+
+  const { toolCallId, toolName, toolInputSource } = readAntigravityToolCall(hookPayload)
+  const spawnsHelpers = isAntigravityHelperSpawnCall(toolName, toolInputSource)
+  const isCompletedBookkeeping = Boolean(
+    transcriptPath &&
+    eventName !== 'Stop' &&
+    state.antigravityCompletedTranscriptByPaneKey.get(paneKey) === transcriptPath
+  )
+  if (eventName === 'PreInvocation') {
+    state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
+  } else if (isCompletedBookkeeping && !(eventName === 'PostToolUse' && spawnsHelpers)) {
+    if (
+      !existingPaneState?.verifiedChildren.size &&
+      (!existingPaneState || !antigravityHasPendingLaunch(existingPaneState))
+    ) {
+      // Ignore bookkeeping PostToolUse after Stop so finished rows do not resurrect.
+      return null
+    }
+  }
+
+  const paneState = getOrCreateAntigravityPaneState(state, paneKey)
+  paneState.leadObservedAt = now
+  const brainDir = resolveAntigravityBrainDirectory(hookPayload, transcriptPath)
+  if (
+    conversationId &&
+    !paneState.rootConversationId &&
+    // An unreadable root transcript must not leave its subagents to finish the run as cold children.
+    (origin === 'root' ||
+      (origin === 'unknown' &&
+        (Boolean(promptText || readFirstString(hookPayload, ['lastUserInput'])) ||
+          isAntigravityAgentCoordinationTool(toolName))))
+  ) {
+    paneState.rootConversationId = conversationId
+  }
+  if (brainDir && paneState.rootConversationId === conversationId) {
+    if (
+      paneState.rootBrainDir !== brainDir ||
+      (transcriptPath && paneState.rootTranscriptPath !== transcriptPath)
+    ) {
+      paneState.brainCache = createAntigravityBrainCache()
+      paneState.rootTranscriptPath = transcriptPath
+    }
+    paneState.rootBrainDir = brainDir
+    paneState.rootTranscriptPath = transcriptPath ?? paneState.rootTranscriptPath
+  }
+
+  const resetsTurn = isNewTurnEvent('antigravity', eventName)
+  const stopStillBusy = eventName === 'Stop' && isAntigravityStopStillBusy(hookPayload)
+  const idleBookkeeping = paneState.rootStop === 'idle' && eventName === 'PostToolUse'
+  if (
+    !idleBookkeeping &&
+    (eventName !== 'Stop' || (!stopStillBusy && paneState.rootStop !== 'idle'))
+  ) {
+    paneState.helpersIdleAt = undefined
+  }
+  if (!idleBookkeeping) {
+    paneState.rootStop = eventName === 'Stop' ? (stopStillBusy ? 'busy' : 'idle') : undefined
+  }
+  if (
+    paneState.rootConversationId &&
+    conversationId === paneState.rootConversationId &&
+    toolName &&
+    spawnsHelpers &&
+    (eventName === 'PreToolUse' || eventName === 'PostToolUse')
+  ) {
+    trackAntigravityLaunch(paneState, hookPayload.stepIdx, toolCallId, toolName, toolInputSource)
+  }
+  const finishedBackgroundCommand = trackAntigravityBackgroundCommand(
+    paneState,
+    eventName,
+    conversationId,
+    hookPayload
+  )
+
+  const rawModel = readFirstString(hookPayload, ['modelName', 'model'])
+  if (rawModel || (resetsTurn && paneState.leadModel === undefined)) {
+    const resolvedModel = normalizeAntigravityModel(rawModel)
+    paneState.leadModel = resolvedModel ?? paneState.leadModel
+    if (resolvedModel) {
+      paneState.leadModelSince = undefined
+      paneState.leadModelFromStep = undefined
+    } else if (resetsTurn) {
+      const steps = hookPayload.initialNumSteps
+      paneState.leadModelSince = now
+      paneState.leadModelFromStep = typeof steps === 'number' ? steps : undefined
+    }
+  }
+
+  if (eventName === 'Stop' && !stopStillBusy) {
+    paneState.commands?.clear()
+  }
+  const subagents = reconcileAntigravityActiveSubagents(paneState, now)
+  const hasBackgroundHold =
+    subagents.length > 0 ||
+    antigravityHasPendingLaunch(paneState) ||
+    (paneState.commands?.size ?? 0) > 0 ||
+    paneState.helpersIdleAt !== undefined
+  const preservesDoneLead =
+    paneState.leadState === 'done' &&
+    !resetsTurn &&
+    eventName === 'PostToolUse' &&
+    (idleBookkeeping || isCompletedBookkeeping || finishedBackgroundCommand)
+  // Stop between tools reports fullyIdle=false without background work; stay working until truly idle or held.
+  const leadState = preservesDoneLead
+    ? 'done'
+    : eventName === 'PreToolUse' && isAntigravityFeedbackTool(toolName)
+      ? 'waiting'
+      : eventName === 'Stop'
+        ? stopStillBusy && !hasBackgroundHold
+          ? 'working'
+          : 'done'
+        : 'working'
+
+  const previousLead =
+    paneState.leadState && paneState.leadStateStartedAt !== undefined
+      ? { state: paneState.leadState, stateStartedAt: paneState.leadStateStartedAt }
+      : undefined
+  const nextLead = continueMainAgentStatus(previousLead, { state: leadState }, now)
+  paneState.leadState = nextLead.state
+  paneState.leadStateStartedAt = nextLead.stateStartedAt
+
+  const cachedPrompt = resetsTurn ? undefined : state.lastPromptByPaneKey.get(paneKey)
+  const effectivePrompt =
+    promptText || cachedPrompt || readLastUserPromptFromTranscript(transcriptPath) || ''
+  resolvePrompt(state, paneKey, effectivePrompt, { resetOnNewTurn: resetsTurn })
+  resolveToolState(state, paneKey, extractToolFields('antigravity', eventName, hookPayload), {
+    resetOnNewTurn: resetsTurn
+  })
+
+  const payload = buildAntigravityFoldedStatusPayload(state, paneKey, paneState, now, {
+    subagents
+  })
+  if (
+    ((eventName === 'Stop' && !stopStillBusy) || preservesDoneLead) &&
+    payload?.state === 'done' &&
+    subagents.length === 0 &&
+    (paneState.commands?.size ?? 0) === 0
+  ) {
     if (transcriptPath) {
       state.antigravityCompletedTranscriptByPaneKey.set(paneKey, transcriptPath)
     }

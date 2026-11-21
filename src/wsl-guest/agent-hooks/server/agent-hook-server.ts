@@ -126,7 +126,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     this.token = this.fixedToken ?? randomUUID()
     this.endpointFileWritten = false
     this.portFallbackApplied = false
-    await drainRelayHookSpool(this.endpointDir, this.state, this.env, (record) => ({
+    const replay = await drainRelayHookSpool(this.endpointDir, this.state, this.env, (record) => ({
       providerNormalization: this.providerNormalization,
       checkAgentPresence: (paneKey) => this.checkAgentPresence(paneKey),
       readHookRootEvidence: this.readHookRootEvidence,
@@ -164,7 +164,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
       },
       setPort: (port) => {
         this.port = port
-        this.retryScheduler.activateClaudeHelperObservations()
+        this.retryScheduler.activateListening(replay)
       },
       onFallback: () => {
         this.portFallbackApplied = true

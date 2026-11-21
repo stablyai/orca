@@ -38,6 +38,7 @@ import type {
   ServerStatusLineListener,
   StatusChangeListener,
   StatusDropListener,
+  EnrichedStatusListener,
   StatusFreshnessListener,
   StatusRowMutationListener
 } from './server-types'
@@ -258,7 +259,7 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
   // Runtime handles survive pane remints; this in-memory index owns no rows.
   protected paneKeyByTerminalHandle = new Map<string, string>()
   // Additive subscribers survive window teardown and work under headless serve.
-  protected enrichedStatusListeners = new Set<(payload: EnrichedAgentHookEventPayload) => void>()
+  protected enrichedStatusListeners = new Set<EnrichedStatusListener>()
   // start() supplies paths so the hook server has no Electron dependency.
   protected endpointDir: string | null = null
   protected endpointFilePathCache: string | null = null

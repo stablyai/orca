@@ -310,11 +310,11 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusR
       this.scheduleStatusPersist()
     }
     this.notifyStatusChangeListeners()
-    this.emitEnrichedStatus(
+    const publication =
       authorityRestartId && payload.isReplay !== true
         ? { ...enriched, authorityRestartId }
         : enriched
-    )
+    this.emitEnrichedStatus(publication, rowBefore)
     return enriched
   }
 }

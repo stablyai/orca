@@ -30,7 +30,13 @@ export type BoundedNodeFileRead = {
 type NodeFileReadOptions = {
   regularFileOnly?: boolean
   signal?: AbortSignal
+  assertCurrent?: () => void
   window?: { offset: number; length?: number }
+}
+
+function assertReadCurrent(options: NodeFileReadOptions): void {
+  options.signal?.throwIfAborted()
+  options.assertCurrent?.()
 }
 
 function validateSize(size: number, maxBytes: number): void {
@@ -47,11 +53,11 @@ export async function readNodeFileWithinLimit(
   maxBytes: number,
   options: NodeFileReadOptions = {}
 ): Promise<BoundedNodeFileRead> {
-  options.signal?.throwIfAborted()
+  assertReadCurrent(options)
   if (options.regularFileOnly && !(await stat(filePath)).isFile()) {
     throw new NodeFileNotRegularError()
   }
-  options.signal?.throwIfAborted()
+  assertReadCurrent(options)
   // Nonblocking open fences replacement with a FIFO after the path check.
   const flags = options.regularFileOnly
     ? constants.O_RDONLY | (process.platform === 'win32' ? 0 : constants.O_NONBLOCK)
@@ -73,9 +79,9 @@ export async function readNodeFileHandleWithinLimit(
     throw new RangeError('File read limit must be a non-negative safe integer')
   }
 
-  options.signal?.throwIfAborted()
+  assertReadCurrent(options)
   const stats = await handle.stat()
-  options.signal?.throwIfAborted()
+  assertReadCurrent(options)
   if (options.regularFileOnly && !stats.isFile()) {
     throw new NodeFileNotRegularError()
   }
@@ -97,9 +103,9 @@ export async function readNodeFileHandleWithinLimit(
     const buffer = Buffer.allocUnsafe(length)
     let read = 0
     while (read < length) {
-      options.signal?.throwIfAborted()
+      assertReadCurrent(options)
       const { bytesRead } = await handle.read(buffer, read, length - read, offset + read)
-      options.signal?.throwIfAborted()
+      assertReadCurrent(options)
       if (bytesRead === 0) {
         throw new Error('File is smaller than the requested window')
       }
@@ -113,10 +119,10 @@ export async function readNodeFileHandleWithinLimit(
   let buffer = Buffer.allocUnsafe(stats.size || Math.min(MIN_GROWTH_BYTES, maxBytes))
   let offset = 0
   while (true) {
-    options.signal?.throwIfAborted()
+    assertReadCurrent(options)
     while (offset < buffer.length) {
       const { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, offset)
-      options.signal?.throwIfAborted()
+      assertReadCurrent(options)
       if (bytesRead === 0) {
         return { buffer: buffer.subarray(0, offset), stats }
       }
@@ -125,7 +131,7 @@ export async function readNodeFileHandleWithinLimit(
 
     const probe = Buffer.allocUnsafe(1)
     const { bytesRead } = await handle.read(probe, 0, 1, offset)
-    options.signal?.throwIfAborted()
+    assertReadCurrent(options)
     if (bytesRead === 0) {
       return { buffer: buffer.subarray(0, offset), stats }
     }

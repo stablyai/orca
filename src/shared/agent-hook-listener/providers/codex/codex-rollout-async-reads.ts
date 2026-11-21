@@ -14,7 +14,34 @@ import {
 // Why: an open stalled by an on-access scan holds a libuv thread (4 by default); leave one free for other file work.
 const MAX_CONCURRENT_ROLLOUT_READS = 3
 let rolloutReadsInFlight = 0
-const rolloutReadQueue: (() => void)[] = []
+const rolloutReadQueue: { batch: RolloutReadBatch; grant: (granted: boolean) => void }[] = []
+const MIN_ROLLOUT_QUEUE_PRUNE_LENGTH = 16
+let rolloutQueuePruneLength = MIN_ROLLOUT_QUEUE_PRUNE_LENGTH
+
+let releaseQueued = false
+
+/** One prune per turn however many owners retire, run after their teardown so their wanted checks fail. */
+export function queueAbandonedRolloutReadRelease(): void {
+  if (!releaseQueued) {
+    releaseQueued = true
+    queueMicrotask(releaseAbandonedRolloutReads)
+  }
+}
+
+/** Settles queued reads whose callers gave up; stalled slots would otherwise hold them and their polls. */
+function releaseAbandonedRolloutReads(): void {
+  releaseQueued = false
+  let kept = 0
+  for (const waiter of rolloutReadQueue) {
+    if (waiter.batch.wanted()) {
+      rolloutReadQueue[kept++] = waiter
+    } else {
+      waiter.grant(false)
+    }
+  }
+  rolloutReadQueue.length = kept
+  rolloutQueuePruneLength = Math.max(MIN_ROLLOUT_QUEUE_PRUNE_LENGTH, kept * 2)
+}
 
 // Why: buffers live until their poll or hook applies them; cap what all pending batches hold so many queued panes cannot pile up megabytes each.
 const MAX_HELD_ROLLOUT_BYTES = 16 * 1024 * 1024
@@ -85,15 +112,21 @@ async function withRolloutReadSlot<T>(
   if (rolloutReadsInFlight < MAX_CONCURRENT_ROLLOUT_READS) {
     rolloutReadsInFlight += 1
   } else {
+    // Pruning only when the queue doubles keeps admission linear while abandoned waiters cannot pile up.
+    if (rolloutReadQueue.length >= rolloutQueuePruneLength) {
+      releaseAbandonedRolloutReads()
+    }
     // A freed slot passes straight to the oldest waiter, so the count never overshoots.
-    await new Promise<void>((resolve) => rolloutReadQueue.push(resolve))
+    if (!(await new Promise<boolean>((grant) => rolloutReadQueue.push({ batch, grant })))) {
+      return unwanted
+    }
   }
   try {
     return batch.wanted() ? await run() : unwanted
   } finally {
     const next = rolloutReadQueue.shift()
     if (next) {
-      next()
+      next.grant(true)
     } else {
       rolloutReadsInFlight -= 1
     }
@@ -138,8 +171,14 @@ async function readJsonlFirstRecordAsyncUnslotted(
   let handle: FileHandle | undefined
   try {
     handle = await open(filePath, FIRST_RECORD_OPEN_FLAGS)
+    if (!batch.wanted()) {
+      return 'unreadable'
+    }
     if (!(await handle.stat()).isFile()) {
       return undefined
+    }
+    if (!batch.wanted()) {
+      return 'unreadable'
     }
     const buffer = Buffer.allocUnsafe(TRANSCRIPT_LINE_MAX_BYTES)
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
@@ -183,13 +222,16 @@ async function readJsonlCursorBytesUnslotted(
   if (plan.length === 0) {
     return plan
   }
-  if (!batch.reserve(plan.length)) {
+  if (!batch.wanted() || !batch.reserve(plan.length)) {
     return 'deferred'
   }
   let handle: FileHandle | undefined
   try {
     // Why: open per read, never held, so a replaced rollout is always read at its current path.
     handle = await open(plan.filePath, 'r')
+    if (!batch.wanted()) {
+      return 'deferred'
+    }
     const buffer = Buffer.allocUnsafe(plan.length)
     const { bytesRead } = await handle.read(buffer, 0, plan.length, plan.start)
     return { ...plan, bytes: buffer.subarray(0, bytesRead) }

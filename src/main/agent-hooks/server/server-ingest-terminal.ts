@@ -12,9 +12,13 @@ import { isAgentStatusHeldOpenByChildWork } from '../../../shared/agent-status/l
 import { AgentHookServerIngestLaunch } from './server-ingest-launch'
 import {
   antigravityRefusedDoneRetryMs,
+  isAntigravityHelperHeldDone,
   programStatusHookYieldEndsAt
 } from './program-status/hook-precedence'
-import { deferProgramStatusRecheck } from './program-status/program-status-recheck'
+import {
+  completeAntigravityProgramStatus,
+  deferProgramStatusRecheck
+} from './program-status/program-status-recheck'
 import type { ProgramStatusFacet } from '../../../shared/program-status/facet'
 
 const PROGRAM_STATUS_FACET_REPUBLISH_MS = 250
@@ -177,10 +181,17 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       }
       return
     }
-    const helpersIdleAt = this.state.antigravityChildWorkByPaneKey.get(paneKey)?.helpersIdleAt
+    const antigravity = this.state.antigravityChildWorkByPaneKey.get(paneKey)
     const yieldEndsAt =
       event.fromProgramStatus === true
-        ? programStatusHookYieldEndsAt(previous, payload, workingSince, helpersIdleAt)
+        ? programStatusHookYieldEndsAt(
+            previous,
+            payload,
+            workingSince,
+            antigravity?.helpersIdleAt,
+            antigravity?.leadObservedAt,
+            antigravity?.relayRosterShed
+          )
         : undefined
     const hookOwnsAgent = yieldEndsAt !== undefined && now < yieldEndsAt
     if (event.fromProgramStatus === true) {
@@ -194,6 +205,16 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         paneKey,
         yieldedTo: previous?.receivedAt,
         delayMs,
+        preserveAntigravityDone:
+          hookOwnsAgent &&
+          previous !== undefined &&
+          (payload.agentType === undefined || payload.agentType === 'antigravity') &&
+          isAntigravityHelperHeldDone(previous, payload, antigravity?.relayRosterShed),
+        antigravityDone:
+          previous?.payload.agentType === 'antigravity' &&
+          (payload.agentType === undefined || payload.agentType === 'antigravity') &&
+          payload.state === 'done' &&
+          payload.sessionBoundary !== true,
         event,
         reoffer: (retried) => this.ingestTerminalStatus(retried)
       })
@@ -263,7 +284,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         ? previous.payload.mainAgent
         : undefined)
     // Terminal observations cannot establish prompt-sent telemetry.
-    this.applyNormalizedStatus(
+    const applied = this.applyNormalizedStatus(
       {
         paneKey,
         tabId,
@@ -280,5 +301,15 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       newRun,
       !preservedProviderSession
     )
+    if (applied === previous || applied?.payload.agentType !== 'antigravity') {
+      return
+    }
+    if (payload.sessionBoundary === true) {
+      this.clearTranscriptPoll(paneKey)
+      this.state.antigravityChildWorkByPaneKey.delete(paneKey)
+      this.state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
+    } else if (event.fromProgramStatus && completeAntigravityProgramStatus(this.state, applied)) {
+      this.clearTranscriptPoll(paneKey)
+    }
   }
 }

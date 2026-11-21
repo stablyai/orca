@@ -6,6 +6,8 @@ import { tookOverStatusLabel } from '../../native-chat/took-over-notice'
 
 /** Maximum character length for the prompt field. Truncated on parse. */
 export const AGENT_STATUS_MAX_FIELD_LENGTH = 200
+/** Maximum character length for the toolName field. */
+export const AGENT_STATUS_TOOL_NAME_MAX_LENGTH = 60
 /** Maximum character length for the toolInput preview. */
 export const AGENT_STATUS_TOOL_INPUT_MAX_LENGTH = 160
 /** Maximum character length for the agentType label. Truncated on parse. */

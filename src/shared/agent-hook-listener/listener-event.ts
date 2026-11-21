@@ -39,6 +39,8 @@ export type AgentHookEventPayload = {
   promptInteractionKey?: string
   /** Raw agent hook event name, used by main-process transition guards. */
   hookEventName?: string
+  /** The execution host saw the last Antigravity child hold drain in this turn. */
+  antigravityHelpersDrained?: true
   /** Provider-owned turn identity (Claude UUID or opaque Grok prompt id). */
   providerPromptId?: string
   /** This row belongs to an observed Grok prompt boundary even when its opaque id is absent. */
@@ -100,14 +102,4 @@ export type ToolSnapshot = {
   /** Tool output remains visible in status cards but must not render as assistant prose in chat. */
   lastAssistantMessageIsToolOutput?: boolean
   clearLastAssistantMessage?: boolean
-}
-
-/** Work agy runs beside the parent turn; see HookListenerState.antigravityChildWorkByPaneKey. */
-export type AntigravityChildWork = {
-  subagentParent?: string
-  commands?: Set<string>
-  /** Subagent conversations whose latest hook was not a fully idle Stop. */
-  openSubagents?: Set<string>
-  /** When a subagent last sent a fully idle Stop after the parent's latest event; agy may then end with no parent Stop. */
-  helpersIdleAt?: number
 }

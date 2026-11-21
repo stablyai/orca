@@ -1,6 +1,14 @@
+import { agentSubagentsEqual } from '../agent-status/contracts/agent-status-subagent-snapshot'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../agent-status/contracts/agent-status-freshness'
 import type { AgentHookSource } from './transport/agent-hook-relay'
 import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
+import {
+  hasAntigravityPollWork,
+  antigravityDiscoveryEndsAt,
+  antigravityIdleGraceEndsAt,
+  isAntigravityPollSettled
+} from './providers/antigravity/antigravity-transcript-poll'
 import { hasCodexTranscriptSubagents } from './providers/codex/codex-state'
 import { hasMuseSessionLog } from './providers/muse/muse-events'
 import { hasPendingCodexSubagentIdentity } from './providers/codex/codex-subagent-roster'
@@ -19,6 +27,9 @@ export function shouldPollHookTranscript(
         Boolean(state.codexSubagentTranscriptByPaneKey.get(event.paneKey)?.parent.filePath))
     )
   }
+  if (source === 'antigravity') {
+    return hasAntigravityPollWork(state, event)
+  }
   if (source === 'muse') {
     // Muse question waits/answers exist only in the session log.
     return event.payload.state !== 'done' && hasMuseSessionLog(state, event.paneKey)
@@ -31,9 +42,42 @@ const MUSE_POLL_MS = 1_000
 // live quiet session may still log a question), so back off to one stat per 5s instead of stopping.
 const MUSE_QUIET_POLL_MAX_MS = 5_000
 
+// Why: a settled agy pane can only change by a KILLED descriptor, which no hook announces.
+const ANTIGRAVITY_SETTLED_QUIET_POLL_MAX_MS = 30_000
+
 /** Log growth, a status change, or any hook for the session restores the 1s cadence. */
-export function nextMusePollDelay(previousMs?: number, quiet = false): number {
-  return quiet ? Math.min((previousMs ?? MUSE_POLL_MS) * 2, MUSE_QUIET_POLL_MAX_MS) : MUSE_POLL_MS
+export function nextMusePollDelay(
+  previousMs?: number,
+  quiet = false,
+  maxMs = MUSE_QUIET_POLL_MAX_MS
+): number {
+  return quiet ? Math.min((previousMs ?? MUSE_POLL_MS) * 2, maxMs) : MUSE_POLL_MS
+}
+
+export function nextHookTranscriptPollDelay(
+  state: HookListenerState,
+  { source, delayMs: previousMs }: { source: AgentHookSource; delayMs?: number },
+  paneKey: string,
+  quiet: boolean
+): number | undefined {
+  if (source !== 'muse' && source !== 'antigravity') {
+    return undefined
+  }
+  const pane =
+    source === 'antigravity' ? state.antigravityChildWorkByPaneKey.get(paneKey) : undefined
+  if (pane && pane.verifiedChildren.size === 0) {
+    const deadline = antigravityIdleGraceEndsAt(pane) ?? antigravityDiscoveryEndsAt(pane)
+    return Math.min(
+      nextMusePollDelay(previousMs, quiet, AGENT_STATUS_STALE_AFTER_MS),
+      Math.max(1, deadline - Date.now())
+    )
+  }
+  const settled = source === 'antigravity' && isAntigravityPollSettled(state, paneKey)
+  return nextMusePollDelay(
+    previousMs,
+    quiet,
+    settled ? ANTIGRAVITY_SETTLED_QUIET_POLL_MAX_MS : MUSE_QUIET_POLL_MAX_MS
+  )
 }
 
 export function museLogOffset(state: HookListenerState, paneKey: string): number | undefined {
@@ -89,6 +133,32 @@ export function transcriptPollUpdate<T extends AgentHookEventPayload>(
       ? { ...polled, hasExplicitPrompt: undefined, hookEventName: undefined }
       : undefined
   }
+  if (source === 'antigravity') {
+    const subagentsChanged = !agentSubagentsEqual(
+      polled.payload.subagents,
+      original.payload.subagents
+    )
+    const changed =
+      subagentsChanged ||
+      polled.payload.state !== original.payload.state ||
+      polled.payload.workingMode !== original.payload.workingMode ||
+      polled.payload.model !== original.payload.model ||
+      polled.payload.mainAgent?.state !== original.payload.mainAgent?.state ||
+      polled.payload.antigravitySpawnPending !== original.payload.antigravitySpawnPending ||
+      polled.antigravityHelpersDrained !== original.antigravityHelpersDrained
+    if (!changed) {
+      return undefined
+    }
+    const completedTurn =
+      polled.payload.state === 'done' &&
+      original.payload.state !== 'done' &&
+      polled.payload.mainAgent?.state === 'done'
+    return {
+      ...polled,
+      hasExplicitPrompt: undefined,
+      hookEventName: completedTurn ? 'Stop' : undefined
+    }
+  }
   const subagentsChanged =
     JSON.stringify(polled.payload.subagents) !== JSON.stringify(original.payload.subagents)
   const leadChanged =
@@ -107,4 +177,42 @@ export function transcriptPollUpdate<T extends AgentHookEventPayload>(
     hasExplicitPrompt: undefined,
     hookEventName: replayedStop ? 'Stop' : undefined
   }
+}
+
+export function antigravityHookPollRow(
+  state: HookListenerState,
+  body: unknown
+): AgentHookEventPayload | undefined {
+  const paneKey =
+    typeof body === 'object' &&
+    body !== null &&
+    'paneKey' in body &&
+    typeof body.paneKey === 'string'
+      ? body.paneKey.trim()
+      : undefined
+  const row = paneKey ? state.lastStatusByPaneKey.get(paneKey) : undefined
+  return row?.payload.agentType === 'antigravity' && hasAntigravityPollWork(state, row)
+    ? row
+    : undefined
+}
+
+export function ignoredHookTranscriptPoll<
+  T extends { source: AgentHookSource; body: unknown; original: AgentHookEventPayload }
+>(
+  state: HookListenerState,
+  source: AgentHookSource,
+  body: unknown,
+  env: string,
+  peek: (paneKey: string) => T | undefined
+): { source: AgentHookSource; body: unknown; original: AgentHookEventPayload } | T | undefined {
+  if (source === 'antigravity') {
+    const original = antigravityHookPollRow(state, body)
+    return original ? { source, body, original } : undefined
+  }
+  const paneKey = museHookPollPane(state, body, env)
+  const poll = paneKey ? peek(paneKey) : undefined
+  return poll?.source === 'muse' &&
+    state.lastStatusByPaneKey.get(poll.original.paneKey) === poll.original
+    ? poll
+    : undefined
 }

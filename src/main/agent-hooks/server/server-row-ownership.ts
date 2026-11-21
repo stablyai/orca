@@ -38,17 +38,29 @@ function semanticRow(row: EnrichedAgentHookEventPayload): Record<string, unknown
 }
 
 // Per-write comparison skips shared leaves and exits early without serializing large messages.
-function semanticRowsEqual(
+function semanticRowChange(
   before: EnrichedAgentHookEventPayload | null | undefined,
   after: EnrichedAgentHookEventPayload | null | undefined
-): boolean {
+): 'none' | 'subagents' | 'row' {
   if (before === after || (!before && !after)) {
-    return true
+    return 'none'
   }
   if (!before || !after) {
-    return false
+    return 'row'
   }
-  return structuralValuesEqualIgnoringUndefined(semanticRow(before), semanticRow(after))
+  const previous = semanticRow(before)
+  const next = semanticRow(after)
+  if (before.payload.agentType === 'antigravity' && after.payload.agentType === 'antigravity') {
+    const { subagents: previousChildren, ...previousLead } = previous
+    const { subagents: nextChildren, ...nextLead } = next
+    if (!structuralValuesEqualIgnoringUndefined(previousLead, nextLead)) {
+      return 'row'
+    }
+    return structuralValuesEqualIgnoringUndefined(previousChildren, nextChildren)
+      ? 'none'
+      : 'subagents'
+  }
+  return structuralValuesEqualIgnoringUndefined(previous, next) ? 'none' : 'row'
 }
 
 export abstract class AgentHookServerRowOwnership extends AgentHookServerListeners {
@@ -131,12 +143,14 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
         this.updateStatusQueryIndex(key)
       }
     }
-    if (!emit || semanticRowsEqual(before, after)) {
+    const change = emit ? semanticRowChange(before, after) : 'none'
+    if (change === 'none') {
       return false
     }
     this.notifyStatusRowMutationListeners({
       before: toMutationIdentity(before),
-      after: toMutationIdentity(after)
+      after: toMutationIdentity(after),
+      ...(change === 'subagents' ? { subagentsOnly: true as const } : {})
     })
     return true
   }

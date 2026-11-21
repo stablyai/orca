@@ -12,6 +12,7 @@ import type { TerminalAgent } from '../identity/terminal-agent'
 import {
   AGENT_MODEL_MAX_LENGTH,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
+  AGENT_STATUS_TOOL_NAME_MAX_LENGTH,
   AGENT_TYPE_MAX_LENGTH,
   normalizeInteractivePromptField,
   normalizeOptionalField,
@@ -177,6 +178,8 @@ export type AgentStatusPayload = {
   mainAgent?: AgentMainAgentStatus
   /** The execution host awaits a launched Claude task’s wake-up or its finishing turn. */
   claudeTaskWakeupPending?: 'notification' | 'finishing-turn'
+  /** The execution host still waits for an agy subagent spawn to prove its child. */
+  antigravitySpawnPending?: true
 }
 
 /** Parsing always supplies prompt (empty if omitted); optional tool/assistant fields distinguish no update from explicit clearing. */
@@ -209,13 +212,13 @@ export function pickParsedAgentStatusPayload(
     ...(row.mainAgent !== undefined ? { mainAgent: row.mainAgent } : {}),
     ...(row.claudeTaskWakeupPending !== undefined
       ? { claudeTaskWakeupPending: row.claudeTaskWakeupPending }
-      : {})
+      : {}),
+    ...(row.antigravitySpawnPending ? { antigravitySpawnPending: true as const } : {})
   }
 }
 
 /** Hook set/snapshot IPC shares one shape so renderers use one setAgentStatus path. */
-/** Maximum character length for the toolName field. */
-export const AGENT_STATUS_TOOL_NAME_MAX_LENGTH = 60
+export { AGENT_STATUS_TOOL_NAME_MAX_LENGTH }
 /** 8KB preserves paragraph summaries while bounding per-pane cache growth. */
 export const AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH = 8000
 /** Keep full question JSON/options, with a cap to bound cache; preview cuts would corrupt it. */
@@ -322,6 +325,11 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     (obj.claudeTaskWakeupPending === 'notification' ||
       obj.claudeTaskWakeupPending === 'finishing-turn')
       ? { claudeTaskWakeupPending: obj.claudeTaskWakeupPending }
+      : {}),
+    ...(obj.agentType === 'antigravity' &&
+    state === 'working' &&
+    obj.antigravitySpawnPending === true
+      ? { antigravitySpawnPending: true as const }
       : {})
   }
 }

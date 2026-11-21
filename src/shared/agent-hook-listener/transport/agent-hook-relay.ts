@@ -73,6 +73,7 @@ export type AgentHookRelayEnvelope = {
   promptInteractionKey?: string
   /** Hook discriminator preserved for main-process transition rules. */
   hookEventName?: string
+  antigravityHelpersDrained?: true
   /** Provider-owned turn identity (Claude UUID or opaque Grok prompt id). */
   providerPromptId?: string
   /** The row belongs to an observed Grok prompt boundary whose opaque id may be absent. */
@@ -132,14 +133,20 @@ export const AGENT_HOOK_SHED_FIELDS_KEY = 'shedFields' as const
 const AGENT_HOOK_SHED_SUBAGENTS_DIGEST_PREFIX = 'subagents:sha256:'
 
 function subagentRosterDigest(subagents: readonly AgentSubagentSnapshot[]): string {
-  const stableRoster = subagents.map(({ id, state, startedAt, agentType, model, description }) => [
-    id,
-    state,
-    startedAt,
-    agentType ?? null,
-    model ?? null,
-    description ?? null
-  ])
+  const stableRoster = subagents.map(
+    ({ id, state, startedAt, agentType, model, description, toolName, toolInput }) => [
+      id,
+      state,
+      startedAt,
+      agentType ?? null,
+      model ?? null,
+      description ?? null,
+      // Appended only when set so rosters without a live tool keep their earlier digest.
+      ...(toolName !== undefined || toolInput !== undefined
+        ? [toolName ?? null, toolInput ?? null]
+        : [])
+    ]
+  )
   return createHash('sha256').update(JSON.stringify(stableRoster)).digest('base64url')
 }
 

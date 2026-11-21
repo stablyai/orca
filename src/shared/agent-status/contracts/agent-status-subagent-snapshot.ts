@@ -3,6 +3,7 @@
 import {
   AGENT_MODEL_MAX_LENGTH,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
+  AGENT_STATUS_TOOL_NAME_MAX_LENGTH,
   AGENT_TYPE_MAX_LENGTH,
   normalizeOptionalField
 } from './agent-status-field-normalization'
@@ -17,6 +18,10 @@ export type AgentSubagentSnapshot = {
   /** Provider model used by this child, when exposed by its lifecycle event. */
   model?: string
   description?: string
+  /** Tool the child is currently running, when exposed by its lifecycle event. */
+  toolName?: string
+  /** Short preview of the child's current tool input. */
+  toolInput?: string
   state: AgentSubagentState
   /** Timestamp (ms) when this subagent was first observed. */
   startedAt: number
@@ -51,7 +56,9 @@ function normalizeSubagentSnapshot(
       typeof obj.startedAt === 'number' && Number.isFinite(obj.startedAt) ? obj.startedAt : 0,
     agentType: normalizeOptionalField(obj.agentType, AGENT_TYPE_MAX_LENGTH),
     model: normalizeOptionalField(obj.model, AGENT_MODEL_MAX_LENGTH),
-    description: normalizeOptionalField(obj.description, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH)
+    description: normalizeOptionalField(obj.description, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH),
+    toolName: normalizeOptionalField(obj.toolName, AGENT_STATUS_TOOL_NAME_MAX_LENGTH),
+    toolInput: normalizeOptionalField(obj.toolInput, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH)
   }
 }
 
@@ -101,7 +108,9 @@ export function agentSubagentsEqual(
       x.startedAt !== y.startedAt ||
       x.agentType !== y.agentType ||
       x.model !== y.model ||
-      x.description !== y.description
+      x.description !== y.description ||
+      x.toolName !== y.toolName ||
+      x.toolInput !== y.toolInput
     ) {
       return false
     }

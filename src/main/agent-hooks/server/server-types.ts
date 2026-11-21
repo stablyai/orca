@@ -130,6 +130,10 @@ export type AgentHookAuthorityAttestation = Readonly<{
 
 export type StatusChangeListener = (statuses: AgentHookStatusChangeEntry[]) => void
 export type StatusFreshnessListener = (status: AgentHookStatusFreshnessObservation) => void
+export type EnrichedStatusListener = (
+  row: EnrichedAgentHookEventPayload,
+  previous?: EnrichedAgentHookEventPayload
+) => void
 export type ProviderSessionChangeListener = (
   providerSessions: AgentHookProviderSessionIdentity[]
 ) => void
@@ -143,6 +147,7 @@ export type AgentHookStatusRowIdentity = {
 export type AgentHookStatusRowMutation = {
   before: AgentHookStatusRowIdentity | null
   after: AgentHookStatusRowIdentity | null
+  subagentsOnly?: true
 }
 export type StatusRowMutationListener = (mutation: AgentHookStatusRowMutation) => void
 export type PaneStatusClearListener = (clear: AgentStatusClearIpcPayload) => void

@@ -38,6 +38,7 @@ export function buildRelayHookEnvelope(
     hasExplicitPrompt: event.hasExplicitPrompt,
     promptInteractionKey: event.promptInteractionKey,
     hookEventName: event.hookEventName,
+    antigravityHelpersDrained: event.antigravityHelpersDrained,
     providerPromptId: event.providerPromptId,
     grokPromptBoundary: event.grokPromptBoundary,
     ...(event.opensTurn ? { opensTurn: true } : {}),

@@ -7,6 +7,14 @@ import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-
 import { buildDashboardSnapshot } from './build-dashboard-snapshot'
 import { createDashboardSnapshotReuse } from './dashboard-snapshot-reuse'
 import { i18n } from '@/i18n/i18n'
+import { createDashboardBoardProjection } from '../board/agent-board-projection'
+import { EMPTY_DASHBOARD_FILTERS } from '../board/agent-board-filtering'
+import { getAgentSessionIdsKey } from '../../right-sidebar/ai-vault/scanning/ai-vault-agent-session-refresh-key'
+import { selectPetAgentAnimation } from '../../pet/pet-agent-state'
+import {
+  selectVisibleAgentOrchestration,
+  visibleOrchestrationWorkForTest
+} from '@/runtime/agent-orchestration/visible-agent-orchestration'
 
 const NOW = 1_000_000_000
 const LEAF = '11111111-1111-4111-8111-111111111111'
@@ -92,6 +100,78 @@ function update(
 afterEach(() => vi.restoreAllMocks())
 
 describe('dashboard incremental snapshot contract', () => {
+  it.each([100, 1000])('keeps child status work local with %s agent cards', (size) => {
+    vi.spyOn(Date, 'now').mockReturnValue(NOW)
+    const store = fleet(size)
+    const reuse = createDashboardSnapshotReuse()
+    const read = () =>
+      buildDashboardSnapshot({ ...store.getState(), chatNames: names }, NOW, { reuse })
+    const key = makePaneKey('t0', LEAF)
+    const publish = (toolInput: string) => {
+      const statuses = store.getState().agentStatusByPaneKey
+      store.setState({
+        agentStatusByPaneKey: statuses.replace([
+          [
+            key,
+            {
+              ...statuses.get(key)!,
+              updatedAt: toolInput === 'a' ? NOW : NOW + 1,
+              subagents: [
+                {
+                  id: 'worker',
+                  description: 'Task helper',
+                  state: 'working',
+                  startedAt: NOW,
+                  toolName: 'view_file',
+                  toolInput
+                }
+              ]
+            }
+          ]
+        ])
+      })
+    }
+    publish('a')
+    const before = read()
+    const search = vi.fn(() => 'task')
+    Object.defineProperty(before.cards[size - 1], 'task', { get: search })
+    const project = createDashboardBoardProjection()
+    const board = project(before.cards, false, 'task', EMPTY_DASHBOARD_FILTERS)
+    const readDerivatives = (state: AppState) => [
+      getAgentSessionIdsKey(state.agentStatusByPaneKey),
+      selectPetAgentAnimation(state),
+      selectVisibleAgentOrchestration(state)
+    ]
+    const derivatives = readDerivatives(store.getState())
+    const orchestration = visibleOrchestrationWorkForTest()
+    const list = vi.spyOn(store.getState().agentStatusByPaneKey.projection, 'list')
+    publish('b')
+    const current = store.getState()
+    const visits = vi.spyOn(current.agentStatusByPaneKey, 'values')
+    expect(readDerivatives(current)).toEqual(derivatives)
+    expect(visits).not.toHaveBeenCalled()
+    expect(visibleOrchestrationWorkForTest()).toEqual(orchestration)
+    const next = read()
+    expect(list.mock.calls).toEqual([['w0']])
+    expect(
+      store
+        .getState()
+        .agentStatusByPaneKey.projection.list('w0')
+        .find((row) => row.rowSource === 'subagent')?.entry.toolInput
+    ).toBe('b')
+    expect(next.cards.filter((card, index) => card !== before.cards[index])).toEqual([
+      next.cards[0]
+    ])
+    expect(next.cards[0]).toMatchObject({
+      statusUpdatedAt: NOW + 1,
+      subagents: [{ id: `${key}\0subagent:worker`, name: 'Task helper', dotState: 'working' }]
+    })
+    search.mockClear()
+    expect(project(next.cards, false, 'task', EMPTY_DASHBOARD_FILTERS).lanes.working).toBe(
+      board.lanes.working
+    )
+    expect(search).not.toHaveBeenCalled()
+  })
   it('keeps a reused snapshot current as pane state and card details change', () => {
     vi.spyOn(Date, 'now').mockReturnValue(NOW)
     const store = fleet(2)

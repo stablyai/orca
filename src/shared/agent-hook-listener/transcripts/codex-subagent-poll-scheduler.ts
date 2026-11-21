@@ -1,8 +1,10 @@
+import { KeyedDeadlines } from '../../collections/keyed-deadlines'
 /** Share one deadline timer while keeping each pane’s deadline/payload/cancellation independent. */
 // Use elapsed monotonic time so wall-clock corrections cannot stretch poll deadlines.
 const monotonicNow = (): number => performance.now()
 
 export class CodexSubagentPollScheduler<T> {
+  private readonly deadlines = new KeyedDeadlines()
   private readonly entries = new Map<string, { value: T; dueAt: number }>()
   private timer: ReturnType<typeof setTimeout> | undefined
   private timerDueAt: number | undefined
@@ -16,7 +18,9 @@ export class CodexSubagentPollScheduler<T> {
 
   schedule(key: string, value: T, delayMs = this.delayMs): void {
     this.entries.delete(key)
-    this.entries.set(key, { value, dueAt: this.now() + delayMs })
+    const dueAt = this.now() + delayMs
+    this.entries.set(key, { value, dueAt })
+    this.deadlines.set(key, dueAt)
     this.arm()
   }
 
@@ -24,11 +28,13 @@ export class CodexSubagentPollScheduler<T> {
     if (!this.entries.delete(key)) {
       return
     }
+    this.deadlines.delete(key)
     this.arm()
   }
 
   clearAll(): void {
     this.entries.clear()
+    this.deadlines.clear()
     this.cancelTimer()
   }
 
@@ -42,10 +48,7 @@ export class CodexSubagentPollScheduler<T> {
       return
     }
 
-    let nextDueAt = Number.POSITIVE_INFINITY
-    for (const entry of this.entries.values()) {
-      nextDueAt = Math.min(nextDueAt, entry.dueAt)
-    }
+    const nextDueAt = this.deadlines.next
     if (this.timer !== undefined && this.timerDueAt === nextDueAt) {
       return
     }
@@ -86,19 +89,12 @@ export class CodexSubagentPollScheduler<T> {
     const now = this.now()
     try {
       // Select one entry per callback so it can cancel unfired siblings like independent timers.
-      while (true) {
-        let dueEntry: { key: string; value: T } | undefined
-        for (const [key, entry] of this.entries) {
-          if (entry.dueAt <= now) {
-            dueEntry = { key, value: entry.value }
-            break
-          }
-        }
-        if (!dueEntry) {
-          break
-        }
-        this.entries.delete(dueEntry.key)
-        this.onDue(dueEntry.key, dueEntry.value)
+      while (this.deadlines.next <= now) {
+        const key = this.deadlines.firstKey!
+        const entry = this.entries.get(key)!
+        this.deadlines.delete(key)
+        this.entries.delete(key)
+        this.onDue(key, entry.value)
       }
     } finally {
       this.arm()
