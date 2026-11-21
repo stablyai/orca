@@ -167,6 +167,7 @@ export type IPtyProvider = {
     id: string,
     opts?: PtyProviderBufferSnapshotOptions
   ) => Promise<PtyProviderBufferSnapshot | null>
+  supportsVisibleProjectionSnapshot?(id: string): boolean
   /** Whether this exact PTY can return a sequence-safe provider snapshot. */
   canProvideAuthoritativeBufferSnapshot?: (id: string) => boolean
   /** Applied size readback detects dropped/clamped remote resize requests.

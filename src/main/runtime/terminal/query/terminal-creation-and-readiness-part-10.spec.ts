@@ -17,7 +17,8 @@ async function createProviderSnapshotRuntime(
   serializeProviderBuffer: (
     ptyId: string,
     opts?: PtyProviderBufferSnapshotOptions
-  ) => Promise<PtyProviderBufferSnapshot>
+  ) => Promise<PtyProviderBufferSnapshot>,
+  supportsVisibleProjection = false
 ): Promise<{ runtime: OrcaRuntimeService; handle: string }> {
   const runtime = new OrcaRuntimeService(store)
   runtime.setPtyController({
@@ -25,6 +26,7 @@ async function createProviderSnapshotRuntime(
     kill: () => true,
     getForegroundProcess: async () => null,
     serializeProviderBuffer,
+    supportsVisibleProjectionSnapshot: () => supportsVisibleProjection,
     hasRendererSerializer: () => false
   })
   await syncSinglePty(runtime)
@@ -53,7 +55,7 @@ describe('OrcaRuntimeService', () => {
     const { runtime, handle } = await createProviderSnapshotRuntime(async (_ptyId, opts) => {
       requested.resolve()
       return opts?.visibleProjection ? projection.promise : ansiSnapshot
-    })
+    }, true)
 
     const visible = runtime.readTerminal(handle, { screen: true })
     await requested.promise

@@ -210,6 +210,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     return await this.adapterFor(id).getBufferSnapshot(id, opts)
   }
 
+  supportsVisibleProjectionSnapshot(id: string): boolean {
+    return this.adapterFor(id).supportsVisibleProjectionSnapshot()
+  }
+
   canProvideAuthoritativeBufferSnapshot(id: string): boolean {
     return this.adapterFor(id).canProvideAuthoritativeBufferSnapshot(id)
   }

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { HeadlessEmulator } from '../headless-emulator'
+import { projectTerminalVisibleLines } from '../terminal-screen-projection'
 import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal/appearance/terminal-unicode-provider'
 
 const WIDE = 135
@@ -46,6 +47,19 @@ async function paintShrinkRepaint(target: Writable, prefix: string): Promise<voi
 }
 
 describe('snapshot after a column shrink', () => {
+  it('projects only cells within the applied alternate-screen width', async () => {
+    const emu = new HeadlessEmulator({ cols: 10, rows: 3 })
+    try {
+      await emu.write('\x1b[?1049habcdefghij')
+      await emu.write('\x1b[2;1Habcdefgh中\x1b[3;1Habcdefg😀x')
+      emu.resize(9, 3)
+
+      expect(projectTerminalVisibleLines(emu).lines).toEqual(['abcdefghi', 'abcdefgh', 'abcdefg😀'])
+    } finally {
+      emu.dispose()
+    }
+  })
+
   it('restores the visible alternate-screen grid, not the stale pre-shrink cells', async () => {
     const emu = new HeadlessEmulator({ cols: WIDE, rows: ROWS })
     await paintShrinkRepaint(emu, '\x1b[?1049h')

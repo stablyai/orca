@@ -144,7 +144,10 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
       : Math.max(0, Math.floor(opts.scrollbackRows ?? 0))
     const acquisitions = this.providerBufferAcquisitionsByPtyId.get(ptyId) ?? {}
     // Replay readers need ANSI even while a visible projection is pending.
-    const kind = opts.visibleProjection && !acquisitions.ansiOnly ? 'visible' : 'ansi'
+    const kind =
+      opts.visibleProjection && this.ptyController?.supportsVisibleProjectionSnapshot?.(ptyId)
+        ? 'visible'
+        : 'ansi'
     let acquisition = acquisitions[kind]
     const ansi = acquisitions.ansi
     if (
@@ -161,17 +164,7 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     ) {
       const captureOptions =
         opts.visibleProjection && kind === 'ansi' ? { scrollbackRows: 0 } : opts
-      const capture = this.captureProviderTerminalBuffer(ptyId, captureOptions, generation)
-      const promise =
-        kind === 'visible'
-          ? capture.then((snapshot) => {
-              // An ANSI reply to a projection request identifies a legacy provider for this PTY generation.
-              if (snapshot && !snapshot.visibleProjection) {
-                acquisitions.ansiOnly = true
-              }
-              return snapshot
-            })
-          : capture
+      const promise = this.captureProviderTerminalBuffer(ptyId, captureOptions, generation)
       acquisition = { generation, scrollbackRows, promise, timedOut: false }
       acquisitions[kind] = acquisition
       this.providerBufferAcquisitionsByPtyId.set(ptyId, acquisitions)
@@ -181,7 +174,6 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
           if (
             !acquisitions.ansi &&
             !acquisitions.visible &&
-            !acquisitions.ansiOnly &&
             this.providerBufferAcquisitionsByPtyId.get(ptyId) === acquisitions
           ) {
             this.providerBufferAcquisitionsByPtyId.delete(ptyId)

@@ -1,7 +1,10 @@
 // Perf contract (#46516): delayed screen reads and overlapping replays duplicated provider requests.
 import { afterEach, expect, it, vi } from 'vitest'
 import { getLocalPtyProvider, setLocalPtyProvider } from '../../../ipc/pty/provider/registry'
-import { serializeProviderBufferFromRuntimeController } from '../../../ipc/pty/runtime/operations'
+import {
+  serializeProviderBufferFromRuntimeController,
+  supportsVisibleProjectionSnapshotFromRuntimeController
+} from '../../../ipc/pty/runtime/provider-buffer-snapshot'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import type {
   PtyProviderBufferSnapshot,
@@ -31,18 +34,25 @@ afterEach(() => {
 
 function startTerminals(
   count: number,
+  supportsVisibleProjection: boolean,
   getBufferSnapshot: (
     id: string,
     opts?: PtyProviderBufferSnapshotOptions
   ) => Promise<PtyProviderBufferSnapshot>
 ) {
-  setLocalPtyProvider(Object.assign(new LocalPtyProvider(), { getBufferSnapshot }))
+  setLocalPtyProvider(
+    Object.assign(new LocalPtyProvider(), {
+      getBufferSnapshot,
+      supportsVisibleProjectionSnapshot: () => supportsVisibleProjection
+    })
+  )
   const runtime = new OrcaRuntimeService(null)
   runtime.setPtyController({
     write: () => true,
     kill: () => true,
     getForegroundProcess: async () => null,
-    serializeProviderBuffer: serializeProviderBufferFromRuntimeController
+    serializeProviderBuffer: serializeProviderBufferFromRuntimeController,
+    supportsVisibleProjectionSnapshot: supportsVisibleProjectionSnapshotFromRuntimeController
   })
   const terminals = Array.from({ length: count }, (_, index) => {
     const ptyId = `provider-buffer-${index}`
@@ -63,7 +73,7 @@ it.each([
   const getBufferSnapshot = vi.fn(async (_ptyId: string, opts?: PtyProviderBufferSnapshotOptions) =>
     opts?.visibleProjection ? frame.promise : ANSI_FRAME
   )
-  const { runtime, terminals } = startTerminals(count, getBufferSnapshot)
+  const { runtime, terminals } = startTerminals(count, true, getBufferSnapshot)
 
   const reads = terminals.map(({ handle }) => runtime.readTerminal(handle, { screen: true }))
   await vi.advanceTimersByTimeAsync(751)
@@ -81,7 +91,7 @@ it.each([
   }
 })
 
-it('joins a pending replay with scrollback before projection support is known', async () => {
+it('joins a pending ANSI replay with scrollback on a provider that supports projection', async () => {
   vi.useFakeTimers()
   const frame = Promise.withResolvers<PtyProviderBufferSnapshot>()
   const getBufferSnapshot = vi.fn(async (_ptyId: string, opts?: PtyProviderBufferSnapshotOptions) =>
@@ -90,7 +100,7 @@ it('joins a pending replay with scrollback before projection support is known', 
   const {
     runtime,
     terminals: [{ ptyId, handle }]
-  } = startTerminals(1, getBufferSnapshot)
+  } = startTerminals(1, true, getBufferSnapshot)
 
   const replay = runtime.serializeAuthoritativeTerminalBuffer(ptyId, { scrollbackRows: 50 })
   const visible = runtime.readTerminal(handle, { screen: true })
@@ -103,37 +113,35 @@ it('joins a pending replay with scrollback before projection support is known', 
   expect(getBufferSnapshot).toHaveBeenCalledExactlyOnceWith(ptyId, { scrollbackRows: 50 })
 })
 
-it('shares one legacy provider request when a visible read and a zero-row replay overlap', async () => {
-  vi.useFakeTimers()
-  const frame = Promise.withResolvers<PtyProviderBufferSnapshot>()
-  const getBufferSnapshot = vi
-    .fn<
-      (id: string, opts?: PtyProviderBufferSnapshotOptions) => Promise<PtyProviderBufferSnapshot>
-    >()
-    .mockResolvedValueOnce(ANSI_FRAME)
-    .mockReturnValue(frame.promise)
-  const {
-    runtime,
-    terminals: [{ ptyId, handle }]
-  } = startTerminals(1, getBufferSnapshot)
+it.each([
+  [2, 2],
+  [20, 20]
+])(
+  'shares %i first screen reads with zero-row replays in %i legacy provider requests',
+  async (count, requests) => {
+    vi.useFakeTimers()
+    const frame = Promise.withResolvers<PtyProviderBufferSnapshot>()
+    const getBufferSnapshot = vi.fn(() => frame.promise)
+    const { runtime, terminals } = startTerminals(count, false, getBufferSnapshot)
 
-  const first = runtime.readTerminal(handle, { screen: true })
-  await vi.advanceTimersByTimeAsync(20)
-  await expect(first).resolves.toMatchObject({ tail: ['Legacy screen'] })
-  expect(getBufferSnapshot).toHaveBeenCalledWith(ptyId, {
-    scrollbackRows: 0,
-    visibleProjection: true
-  })
-  getBufferSnapshot.mockClear()
+    const reads = terminals.map(({ handle }) => runtime.readTerminal(handle, { screen: true }))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(getBufferSnapshot).toHaveBeenCalledTimes(requests)
+    const replays = terminals.map(({ ptyId }) =>
+      runtime.serializeAuthoritativeTerminalBuffer(ptyId, { scrollbackRows: 0 })
+    )
+    frame.resolve(ANSI_FRAME)
+    await vi.advanceTimersByTimeAsync(20)
 
-  runtime.onPtyData(ptyId, 'next', Date.now())
-  const visible = runtime.readTerminal(handle, { screen: true })
-  await vi.advanceTimersByTimeAsync(0)
-  const replay = runtime.serializeAuthoritativeTerminalBuffer(ptyId, { scrollbackRows: 0 })
-  frame.resolve({ ...ANSI_FRAME, seq: 904 })
-  await vi.advanceTimersByTimeAsync(20)
-
-  await expect(visible).resolves.toMatchObject({ source: 'screen', tail: ['Legacy screen'] })
-  await expect(replay).resolves.toMatchObject({ data: '\x1b[?1049hLegacy screen' })
-  expect(getBufferSnapshot).toHaveBeenCalledExactlyOnceWith(ptyId, { scrollbackRows: 0 })
-})
+    for (const screen of await Promise.all(reads)) {
+      expect(screen).toMatchObject({ source: 'screen', tail: ['Legacy screen'] })
+    }
+    for (const replay of await Promise.all(replays)) {
+      expect(replay).toMatchObject({ data: '\x1b[?1049hLegacy screen' })
+    }
+    expect(getBufferSnapshot).toHaveBeenCalledTimes(requests)
+    for (const { ptyId } of terminals) {
+      expect(getBufferSnapshot).toHaveBeenCalledWith(ptyId, { scrollbackRows: 0 })
+    }
+  }
+)

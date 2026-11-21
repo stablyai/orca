@@ -32,13 +32,20 @@ export function readHeadlessTerminalRows(
   const rows: HeadlessTerminalRow[] = []
   for (let row = start; row < end; row += 1) {
     const line = buffer.getLine(row)
-    const text = line?.translateToString(true) ?? ''
+    const cols = Math.min(line?.length ?? 0, terminal.cols)
+    // Match snapshot serialization when a shrink leaves half of a wide glyph outside the grid.
+    const clippedWideCell =
+      line && line.length > cols && (line.getCell(cols - 1)?.getWidth() ?? 0) > 1
+    const textCols = clippedWideCell ? cols - 1 : cols
+    const text = line?.translateToString(true, 0, textCols) ?? ''
     rows.push({
       text,
       metadata: {
         wrapped: line?.isWrapped ?? false,
         trailingSpaces: buffer.getLine(row + 1)?.isWrapped
-          ? (line?.translateToString(false).length ?? text.length) - text.length
+          ? (line?.translateToString(false, 0, textCols).length ?? 0) +
+            (clippedWideCell ? 1 : 0) -
+            text.length
           : 0
       }
     })

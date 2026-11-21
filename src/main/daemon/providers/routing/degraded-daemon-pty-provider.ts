@@ -172,6 +172,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return (await this.providerFor(id).getBufferSnapshot?.(id, opts)) ?? null
   }
 
+  supportsVisibleProjectionSnapshot(id: string): boolean {
+    return this.providerFor(id).supportsVisibleProjectionSnapshot?.(id) === true
+  }
+
   clearBuffer = (id: string): Promise<void> => this.providerFor(id).clearBuffer(id)
   resetInputModes = (id: string): Promise<void> => this.providerFor(id).resetInputModes(id)
 

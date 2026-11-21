@@ -5,7 +5,8 @@ import { DaemonPtySessionControl } from '../adapter/daemon-pty-session-control'
 import { isUnknownRequestTypeError } from '../../endpoint/identity/daemon-endpoint-errors'
 import {
   focusLossReportSupport,
-  REPAINT_REQUEST_PROTOCOL_VERSION
+  REPAINT_REQUEST_PROTOCOL_VERSION,
+  VISIBLE_PROJECTION_SNAPSHOT_PROTOCOL_VERSION
 } from '../../protocol/daemon-protocol-version'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../sessions/daemon-session-scrollback-window'
 import type { GetSnapshotResult } from '../../protocol/daemon-rpc-contract'
@@ -21,6 +22,10 @@ import type {
 const DURABLE_HISTORY_OVERLAY_DEADLINE_MS = 5_000
 
 export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
+  supportsVisibleProjectionSnapshot(): boolean {
+    return this.protocolVersion >= VISIBLE_PROJECTION_SNAPSHOT_PROTOCOL_VERSION
+  }
+
   async getBufferSnapshot(
     id: string,
     opts: PtyProviderBufferSnapshotOptions = {}
@@ -29,6 +34,7 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
       return null
     }
     try {
+      const visibleProjection = opts.visibleProjection && this.supportsVisibleProjectionSnapshot()
       const scrollbackRows = opts.visibleProjection
         ? 0
         : normalizeDesktopTerminalSnapshotRows(opts.scrollbackRows)
@@ -37,14 +43,14 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
       >('getSnapshot', {
         sessionId: id,
         ...(scrollbackRows !== undefined ? { scrollbackRows } : {}),
-        ...(opts.visibleProjection ? { visibleProjection: true } : {})
+        ...(visibleProjection ? { visibleProjection: true } : {})
       })
       // Older v19 snapshots lack the absolute sequence needed to reconcile data queued on the other socket.
       if (!snapshot || typeof snapshot.outputSequence !== 'number') {
         return null
       }
       if ('visibleProjection' in snapshot) {
-        return opts.visibleProjection ? this.toProviderBufferSnapshot(snapshot) : null
+        return visibleProjection ? this.toProviderBufferSnapshot(snapshot) : null
       }
       const restored =
         this.historyManager &&
