@@ -114,9 +114,12 @@ export function useSourceControlRemoteActionRunner({
           : []
       )
       const failureBranchName = targetIsActiveWorktree ? branchName || null : null
-      // Any push or pull reconciles with the remote, so the post-rebase Pull hiding retires.
-      if (targetIsActiveWorktree && kind !== 'fetch') {
-        operationStore.setState({ orcaRebase: null })
+      // A push or pull that lands reconciles with the remote, so the post-rebase Pull hiding retires.
+      // A rejected one leaves the divergence the rebase made, so the marker stays.
+      const retireOrcaRebaseMarker = (): void => {
+        if (targetIsActiveWorktree) {
+          operationStore.setState({ orcaRebase: null })
+        }
       }
       try {
         if (kind === 'publish') {
@@ -128,6 +131,7 @@ export function useSourceControlRemoteActionRunner({
             target.pushTarget,
             { runtimeTarget: target.target }
           )
+          retireOrcaRebaseMarker()
           return { status: 'ok' }
         }
         if (kind === 'push') {
@@ -140,6 +144,7 @@ export function useSourceControlRemoteActionRunner({
             target.pushTarget,
             { runtimeTarget: target.target }
           )
+          retireOrcaRebaseMarker()
           return { status: 'ok' }
         }
         if (kind === 'force_push') {
@@ -151,6 +156,7 @@ export function useSourceControlRemoteActionRunner({
             target.pushTarget,
             { forceWithLease: true, runtimeTarget: target.target }
           )
+          retireOrcaRebaseMarker()
           return { status: 'ok' }
         }
         if (kind === 'pull') {
@@ -163,6 +169,7 @@ export function useSourceControlRemoteActionRunner({
               runtimeTarget: target.target
             }
           )
+          retireOrcaRebaseMarker()
           return { status: 'ok' }
         }
         if (kind === 'fast_forward') {
@@ -173,6 +180,7 @@ export function useSourceControlRemoteActionRunner({
             target.pushTarget,
             { runtimeTarget: target.target }
           )
+          retireOrcaRebaseMarker()
           return { status: 'ok' }
         }
         if (kind === 'fetch') {
@@ -188,6 +196,8 @@ export function useSourceControlRemoteActionRunner({
           return { status: 'ok' }
         }
         if (kind === 'rebase') {
+          // A new rebase replaces any earlier marker, whether or not it completes.
+          retireOrcaRebaseMarker()
           const baseRef = options?.baseRef ?? effectiveBaseRef
           if (!baseRef) {
             return { status: 'skipped' }
@@ -201,11 +211,10 @@ export function useSourceControlRemoteActionRunner({
             { runtimeTarget: target.target }
           )
           // Main reports the upstream tip only when this rebase integrated it, so only then hide Pull.
-          operationStore.setState({
-            orcaRebase: targetIsActiveWorktree
-              ? orcaRebaseMarkerFromResult(branchName, result)
-              : null
-          })
+          // The store is the active worktree's; another target's rebase must not touch its marker.
+          if (targetIsActiveWorktree) {
+            operationStore.setState({ orcaRebase: orcaRebaseMarkerFromResult(branchName, result) })
+          }
           return { status: 'ok' }
         }
         await syncBranch(
@@ -217,6 +226,7 @@ export function useSourceControlRemoteActionRunner({
             runtimeTarget: target.target
           }
         )
+        retireOrcaRebaseMarker()
         if (operationStore.getState().remoteActionSequence === sequence) {
           operationStore.setState({ remoteActionError: null })
         }
