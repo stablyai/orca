@@ -21719,7 +21719,8 @@
         "title": "Claude 사용량 주기적 조회",
         "description": "Claude Code 로그인 정보로 사용량, 크레딧 및 비활성 계정을 확인합니다. 끄면 실행 중인 터미널 세션에서 제공하는 실시간 사용량만 표시합니다.",
         "about": "Claude 사용량 주기적 조회 정보"
-      }
+      },
+      "addedAs": "{{value0}}(으)로 추가됨"
     },
     "hostSignIn": {
       "copied": "복사됨",

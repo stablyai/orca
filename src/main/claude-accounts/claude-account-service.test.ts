@@ -158,6 +158,18 @@ describe('ClaudeAccountService', () => {
     }
   )
 
+  it('names the login an account was added with once its folder signs in to another one', () => {
+    const f = fixture([account('a', { organizationName: 'Work' }), account('b')])
+    f.signIn('a', 'other@example.test')
+    f.signIn('b', 'b@example.test')
+    const listed = f.service.listAccounts().accounts
+    expect(listed.find((entry) => entry.id === 'a')).toMatchObject({
+      email: 'other@example.test',
+      addedAs: { email: 'a@example.test', organizationName: 'Work' }
+    })
+    expect(listed.find((entry) => entry.id === 'b')?.addedAs).toBeUndefined()
+  })
+
   it.skipIf(process.platform === 'win32')(
     'hands the link Claude gives BROWSER to Settings when asked to copy it',
     async () => {

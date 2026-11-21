@@ -11,6 +11,10 @@ import { readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
+import type {
+  ClaudeManagedAccount,
+  ClaudeManagedAccountSummary
+} from '../../../shared/agent-accounts/managed-account-types'
 import { resolveClaudeGlobalConfigFile } from '../../claude/configuration/claude-folder-trust-file'
 import { execSecurityCommand } from '../../macos-keychain/generic-password'
 import { describeClaudeProfile, readClaudeProfileObject } from '../profiles/claude-profile-paths'
@@ -74,6 +78,22 @@ export function isSameClaudeLogin(
       !right.organizationUuid ||
       left.organizationUuid === right.organizationUuid)
   )
+}
+
+/** A folder's login as the account list shows it, naming the saved login it replaced. */
+export function summarizeClaudeFolderLogin(
+  saved: ClaudeManagedAccount,
+  login: ClaudeFolderLogin
+): Pick<
+  ClaudeManagedAccountSummary,
+  'email' | 'organizationUuid' | 'organizationName' | 'addedAs'
+> {
+  return {
+    ...login,
+    ...(isSameClaudeLogin(saved, login)
+      ? {}
+      : { addedAs: { email: saved.email, organizationName: saved.organizationName ?? null } })
+  }
 }
 
 export function claudeStateLogin(state: Record<string, unknown>): ClaudeFolderLogin | null {

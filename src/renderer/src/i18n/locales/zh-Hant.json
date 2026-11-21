@@ -21789,7 +21789,8 @@
         "title": "Claude 用量輪詢",
         "description": "使用 Claude Code 登入憑證查詢用量、額度和非使用中帳戶。關閉後，僅顯示執行中終端機工作階段提供的即時用量。",
         "about": "關於 Claude 用量輪詢"
-      }
+      },
+      "addedAs": "新增時為 {{value0}}"
     },
     "managedData": {
       "description": "在 Orca 主機的終端機中執行此命令以新增帳戶。此選擇適用於該主機上明確發起的新代理程式啟動操作；直接 SSH 轉送和在 Windows 主機上啟動的 WSL 使用各自的憑證。",

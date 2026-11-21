@@ -22405,7 +22405,8 @@
         "title": "Suivi de l’utilisation de Claude",
         "description": "Utilise votre connexion Claude Code pour consulter l’utilisation, les crédits et les comptes inactifs. Désactivez cette option pour utiliser uniquement les données en direct des sessions de terminal.",
         "about": "À propos du suivi de l’utilisation de Claude"
-      }
+      },
+      "addedAs": "Ajouté en tant que {{value0}}"
     },
     "hostSignIn": {
       "copied": "Copié",
