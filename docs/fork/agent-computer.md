@@ -5,7 +5,7 @@ every agent on that machine shares. Optional per machine: nothing runs until `in
 
 ## What runs
 
-`src/main/orca-fork/agent-computer/agent-computer.sh` (a systemd user service, `orca-agent-computer`):
+`config/orca-fork/agent-computer/agent-computer.sh` (a systemd user service, `orca-agent-computer`):
 
 - `Xtigervnc :42` (X server + VNC in one, 1440×900) with an XFCE session. VNC listens **only on a 0600
   Unix socket** (`-rfbunixpath`, `-rfbport -1`), VncAuth with a random password kept in
@@ -31,7 +31,7 @@ Agents can also export `DISPLAY=:42` and use Orca's own `orca computer …` (AT-
 ## Install on a machine
 
 ```sh
-src/main/orca-fork/agent-computer/agent-computer.sh install   # apt packages, service, MCP registration
+config/orca-fork/agent-computer/agent-computer.sh install   # apt packages, service, MCP registration
 ~/.local/share/orca-fork/agent-computer/agent-computer.sh status   # URL + password
 ```
 
