@@ -1,6 +1,7 @@
 import { publishTerminalProviderCapabilityChange } from './terminal-provider-capability-revision'
 import {
   clearTerminalProviderGoneSessions,
+  markTerminalProviderSessionBound,
   pruneTerminalProviderGoneSessions,
   terminalProviderSessionIsGone
 } from './terminal-provider-gone-sessions'
@@ -253,6 +254,29 @@ export function startTerminalProviderSnapshotCapabilitySynchronization(
     disposed = true
     clearTimeout(retryTimer)
   }
+}
+
+/** Spawn or attach proves the session lives; a restored id the startup ask answered false (session not yet revived) is asked again so it can park. */
+export function markTerminalProviderSessionLive(ptyId: string): void {
+  markTerminalProviderSessionBound(ptyId)
+  const live = lastSynchronizedLivePtyIds
+  if (authoritativeSnapshotByPtyId.get(ptyId) !== false || !live?.includes(ptyId)) {
+    return
+  }
+  authoritativeSnapshotByPtyId.delete(ptyId)
+  unknownCapabilityRetryAtByPtyId.set(ptyId, 0)
+  refreshEarliestUnknownCapabilityRetry()
+  const reask = async (): Promise<void> => {
+    // A newer inventory owns synchronization; replaying this one would evict its answers.
+    if (live !== lastSynchronizedLivePtyIds) {
+      return
+    }
+    const retryDelayMs = await synchronizeTerminalProviderSnapshotCapabilities(live)
+    if (retryDelayMs !== null) {
+      setTimeout(() => void reask(), Math.max(1, retryDelayMs))
+    }
+  }
+  void reask()
 }
 
 export function terminalProviderHasAuthoritativeSnapshot(ptyId: string): boolean {
