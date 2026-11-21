@@ -1,4 +1,5 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
+import { useAppStore } from '../../../store'
 import { BotAvatarTile } from '../../bots/BotAvatar'
 import { useNativeChatAppearanceStyle } from '../appearance/native-chat-appearance-style'
 import { NativeChatComposer } from '../composer/NativeChatComposer'
@@ -9,7 +10,8 @@ const LONG_PURPOSE =
   'Investigates product issues, reviews changes, checks release readiness, and helps the team ship reliable software. It explains what changed, verifies the result, and keeps the work moving across local folders, remote hosts, and every supported platform.'
 
 function WelcomePane({ purpose, height }: { purpose: string; height: number }) {
-  const appearance = useNativeChatAppearanceStyle()
+  const settings = useAppStore((state) => state.settings)
+  const appearance = useNativeChatAppearanceStyle(settings)
   return (
     <div
       data-welcome-fixture
