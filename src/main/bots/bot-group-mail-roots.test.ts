@@ -305,6 +305,23 @@ describe('group mail roots', () => {
     })
   })
 
+  it('runs an answer stored unread before room lines exactly once, a Stop since included', async () => {
+    const { groups, group, orchestration, source, notice } = await room(1)
+    // Stored by an older Orca: the mail is there, its room line is not.
+    const answer = itemMail(orchestration, source.sessionId)
+    expect(ids(groups.narrowMailBatch(source.sessionId, [answer]))).toEqual([answer.id])
+    expect(ids(groups.narrowMailBatch(source.sessionId, [answer]))).toEqual([answer.id])
+    groups.reserveMailTurn({ ...notice('late', [answer.id]), sessionId: source.sessionId })
+    expect(groups.store.operationMessage('late')?.id).toBe(`mail:${source.sessionId}:item-mail-1`)
+    expect(
+      groups.store.messages(group.id).filter((message) => message.id.startsWith('mail:'))
+    ).toHaveLength(1)
+    const older = itemMail(orchestration, source.sessionId, 'item-mail-2')
+    await groups.stop(group.id, 'bot-0')
+    // Its line is written as it is read, after the Stop: it runs rather than ends.
+    expect(ids(groups.narrowMailBatch(source.sessionId, [older]))).toEqual([older.id])
+  })
+
   it('leaves item mail for a session no room has to the Home chat', async () => {
     const { groups } = await room(1)
     expect(anchorGroupItemMail(groups, 'bot-group-member-gone', 'item-mail-1')).toBe(false)

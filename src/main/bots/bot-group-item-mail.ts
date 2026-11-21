@@ -50,13 +50,18 @@ export function anchorGroupItemMail(
   return true
 }
 
-/** The request item mail continues: its own room line. Null for mail that has none. */
+/** The request item mail continues: its own room line. Mail stored before lines were written as
+ *  it was sent (left unread then) gets its line on first read, so it still runs once. */
 export function itemMailRoot(
   groups: BotGroupRuntime,
   member: BotGroupMember,
   mailId: string
 ): BotGroupPeerScope | null {
-  const line = groups.store.message(groupMailLineId(member.sessionId, [mailId]))
+  const id = groupMailLineId(member.sessionId, [mailId])
+  if (!groups.store.message(id)) {
+    anchorGroupItemMail(groups, member.sessionId, mailId)
+  }
+  const line = groups.store.message(id)
   return line
     ? {
         id: line.groupId,
