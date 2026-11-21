@@ -29,4 +29,17 @@ describe('agent process registry', () => {
     releaseOld()
     expect(listAgentProcessRoots()).toEqual([])
   })
+
+  it("never shows the old chat when a new wrapper reuses an exited wrapper's pid", () => {
+    const releaseOld = registerAgentProcess(4444, 4300)
+    noteAgentProcessChat(4300, 'old-chat')
+    const releaseNew = registerAgentProcess(4444, 4400)
+
+    expect(listAgentProcessRoots()).toEqual([{ pid: 4444, agentSessionId: null }])
+    releaseOld()
+    noteAgentProcessChat(4400, 'new-chat')
+    expect(listAgentProcessRoots()).toEqual([{ pid: 4444, agentSessionId: 'new-chat' }])
+    releaseNew()
+    expect(listAgentProcessRoots()).toEqual([])
+  })
 })
