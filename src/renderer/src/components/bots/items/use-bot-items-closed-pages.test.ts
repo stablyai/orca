@@ -4,6 +4,7 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
+import { mergeNamedBotItems } from '../../../../../shared/bots/bot-item-merge'
 
 const host = vi.hoisted((): { closed: string[] } => ({ closed: [] }))
 
@@ -71,7 +72,8 @@ it('takes a named read’s copies into loaded pages, a deleted item dropped, wit
 
   // c70 was deleted; the host no longer pages it, and the named read leaves it out.
   host.closed = host.closed.filter((uid) => uid !== 'c70')
-  view.rerender({ read: { ...first, counts: { done: 99 }, named: ['c70'] } })
+  const named = { items: [], counts: { done: 99 }, seenEventId: 'e0' }
+  view.rerender({ read: mergeNamedBotItems(first, named, ['c70']) })
 
   const uids = view.result.current.items.map((item) => item.uid)
   expect(uids).toHaveLength(99)
