@@ -87,6 +87,10 @@ export type PersistedUIState = {
   hideCliCreatedWorkspaces?: boolean
   /** Hide workspaces sitting on a detached HEAD; folder workspaces (no head at all) are unaffected. */
   hideDetachedHeadWorkspaces?: boolean
+  /** Hide workspaces whose board status is in hiddenWorkspaceStatusIds. */
+  hideWorkspacesByStatus?: boolean
+  /** The statuses "Hide by status" hides; absent means Done. */
+  hiddenWorkspaceStatusIds?: string[]
   /** Hide workspaces with known provenance from another paired device or the host UI. */
   hideWorkspacesFromOtherDevices?: boolean
   /** Keep each project's main workspace out of the "Hide sleeping" sweep. Absent means on (#8873). */

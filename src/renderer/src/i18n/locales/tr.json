@@ -6471,7 +6471,9 @@
           "keepDefaultBranch": "Varsayılan branch hariç",
           "keepDefaultBranchAria": "Uyuyan çalışma alanlarını gizlerken varsayılan branch'i görünür tut",
           "otherClients": "Diğer istemcilerin çalışma alanlarını gizle",
-          "otherClientsAria": "Paylaşılan uzak sunucularda diğer Orca istemcileri tarafından oluşturulan çalışma alanlarını gizle"
+          "otherClientsAria": "Paylaşılan uzak sunucularda diğer Orca istemcileri tarafından oluşturulan çalışma alanlarını gizle",
+          "hideByStatus": "Duruma göre gizle",
+          "hideStatusAria": "{{status}} çalışma alanlarını gizle"
         },
         "sidebarHostOptions": {
           "3e102f111c": "Tüm host'lar",

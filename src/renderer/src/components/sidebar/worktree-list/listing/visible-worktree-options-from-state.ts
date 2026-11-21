@@ -39,6 +39,9 @@ export function buildVisibleWorktreeOptionsFromState(
     hideCliCreatedWorkspaces: state.hideCliCreatedWorkspaces,
     hideDetachedHeadWorkspaces: state.hideDetachedHeadWorkspaces,
     hideWorkspacesFromOtherDevices: state.hideWorkspacesFromOtherDevices,
+    hideWorkspacesByStatus: state.hideWorkspacesByStatus,
+    hiddenWorkspaceStatusIds: state.hiddenWorkspaceStatusIds,
+    statusColumns: state,
     pairedDeviceIdsByEnvironment: state.hideWorkspacesFromOtherDevices
       ? getPairedDeviceIdsByEnvironment(state.runtimeEnvironments, statuses)
       : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,

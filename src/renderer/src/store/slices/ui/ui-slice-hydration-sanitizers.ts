@@ -17,6 +17,7 @@ import {
 import { isTopLevelView } from '../../../../../shared/ui-chrome/top-level-view'
 import { resolveVisibleWorkspaceHostIds } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { persistedUIValuesEqual } from '../../../../../shared/collections/persisted-ui-equality'
+import { NO_WORKSPACE_ROW_FILTERS } from '../../../../../shared/workspace-view/workspace-row-filters'
 import '../../../../../shared/orca-profiles/constants'
 import type { UISlice } from './ui-slice-contract'
 
@@ -263,5 +264,29 @@ export function sanitizePerWorktreePreferences(
     showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree),
     // Same persisted shape as the dotfile map: a per-worktree boolean opt-in record.
     notificationsMutedByWorktree: sanitizeShowDotfilesByWorktree(ui.notificationsMutedByWorktree)
+  }
+}
+
+/** The kind switches and "Hide by status"; malformed values read as off and the default statuses. */
+export function sanitizeWorkspaceKindAndStatusFilters(
+  ui: PersistedUIState
+): Pick<
+  AppState,
+  | 'hideDefaultBranchWorkspace'
+  | 'hideAutomationGeneratedWorkspaces'
+  | 'hideCliCreatedWorkspaces'
+  | 'hideDetachedHeadWorkspaces'
+  | 'hideWorkspacesByStatus'
+  | 'hiddenWorkspaceStatusIds'
+> {
+  return {
+    hideDefaultBranchWorkspace: ui.hideDefaultBranchWorkspace ?? false,
+    hideAutomationGeneratedWorkspaces: ui.hideAutomationGeneratedWorkspaces === true,
+    hideCliCreatedWorkspaces: ui.hideCliCreatedWorkspaces === true,
+    hideDetachedHeadWorkspaces: ui.hideDetachedHeadWorkspaces === true,
+    hideWorkspacesByStatus: ui.hideWorkspacesByStatus === true,
+    hiddenWorkspaceStatusIds: Array.isArray(ui.hiddenWorkspaceStatusIds)
+      ? ui.hiddenWorkspaceStatusIds.filter((id) => typeof id === 'string')
+      : NO_WORKSPACE_ROW_FILTERS.hiddenWorkspaceStatusIds
   }
 }

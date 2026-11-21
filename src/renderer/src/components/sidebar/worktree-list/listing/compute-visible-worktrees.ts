@@ -15,6 +15,7 @@ import {
 } from '../../../../../../shared/sidebar-list/selection/visible-worktrees'
 import type { SidebarLineageParentIdentities } from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 import { buildDesktopWorkspaceRowFactReader } from './desktop-workspace-row-facts'
+import type { HostStatusColumnInputs } from '@/store/workspaces/status/host-workspace-status-columns'
 import { sidebarWorkspaceRowFilters } from '../controls/sidebar-filter-actions'
 import { getLineageAncestorIndex, getSortedWorktreeRankIndex } from './visible-worktree-indexes'
 
@@ -33,6 +34,10 @@ export type VisibleWorktreeOptions = {
   hideCliCreatedWorkspaces: boolean
   hideDetachedHeadWorkspaces: boolean
   hideWorkspacesFromOtherDevices: boolean
+  hideWorkspacesByStatus: boolean
+  hiddenWorkspaceStatusIds: readonly string[]
+  /** The local and paired hosts' board columns each row's status resolves against. */
+  statusColumns: HostStatusColumnInputs
   pairedDeviceIdsByEnvironment: ReadonlyMap<string, string>
   alwaysShowDefaultBranchWorkspace?: boolean
   repoMap: Map<string, Repo>

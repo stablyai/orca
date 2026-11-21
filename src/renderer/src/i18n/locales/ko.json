@@ -5689,7 +5689,9 @@
           "keepDefaultBranch": "기본 브랜치는 제외",
           "keepDefaultBranchAria": "슬립 중인 워크스페이스를 숨겨도 기본 브랜치는 계속 표시",
           "otherClients": "다른 클라이언트 워크스페이스 숨기기",
-          "otherClientsAria": "공유 원격 서버의 다른 Orca 클라이언트에서 생성된 워크스페이스 숨기기"
+          "otherClientsAria": "공유 원격 서버의 다른 Orca 클라이언트에서 생성된 워크스페이스 숨기기",
+          "hideByStatus": "상태별로 숨기기",
+          "hideStatusAria": "{{status}} 워크스페이스 숨기기"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Agent 활동 레이아웃",

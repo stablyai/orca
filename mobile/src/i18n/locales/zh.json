@@ -1962,7 +1962,9 @@
       "reset": "重置",
       "thisComputer": "本机",
       "waitingForDesktop": "仍在等待主机响应",
-      "workspaceOptions": "工作区选项"
+      "workspaceOptions": "工作区选项",
+      "hideByStatus": "按状态隐藏",
+      "hideStatus": "隐藏“{{status}}”工作区"
     },
     "hostBottomBar": {
       "workspaceOptions": "工作区选项",

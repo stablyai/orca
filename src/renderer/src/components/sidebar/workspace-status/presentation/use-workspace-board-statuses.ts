@@ -4,6 +4,7 @@ import {
   selectAllOfferedWorkspaceStatuses,
   selectWorkspaceBoardStatuses,
   selectWorkspaceStatusesForHost,
+  type HostStatusColumnInputs,
   type StatusColumnOwner
 } from '@/store/workspaces/status/host-workspace-status-columns'
 import {
@@ -11,6 +12,17 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
+
+/** The local and paired hosts' columns, for resolving each row's status. */
+export function useWorkspaceStatusColumns(): HostStatusColumnInputs {
+  const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
+  const hostWorkspaceStatuses = useAppStore((s) => s.hostWorkspaceStatuses)
+  const removedRuntimeEnvironmentIds = useAppStore((s) => s.removedRuntimeEnvironmentIds)
+  return useMemo(
+    () => ({ workspaceStatuses, hostWorkspaceStatuses, removedRuntimeEnvironmentIds }),
+    [workspaceStatuses, hostWorkspaceStatuses, removedRuntimeEnvironmentIds]
+  )
+}
 
 /** The columns cards group by: local ones plus the paired hosts' columns their own cards use. Edits use the local list. */
 export function useWorkspaceBoardStatuses(): readonly WorkspaceStatusDefinition[] {

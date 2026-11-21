@@ -24,9 +24,9 @@ import {
 } from '../../../../src/shared/workspace-view/workspace-view-options'
 
 export type WorkspaceViewSettings = {
-  [
-    Key in keyof FilterState as (typeof WORKSPACE_ROW_FILTER_UI_FIELDS)[Key]
-  ]?: Key extends 'filterRepoIds'
+  [Key in keyof FilterState as (typeof WORKSPACE_ROW_FILTER_UI_FIELDS)[Key]]?: Key extends
+    | 'filterRepoIds'
+    | 'hiddenWorkspaceStatusIds'
     ? string[]
     : Key extends 'visibleHostIds'
       ? string[] | null

@@ -1822,7 +1822,9 @@
       "syncedAcrossDevices": "Sincronizadas entre tus dispositivos",
       "thisComputer": "Este equipo",
       "waitingForDesktop": "Aún esperando respuesta del host",
-      "workspaceOptions": "Opciones de espacio de trabajo"
+      "workspaceOptions": "Opciones de espacio de trabajo",
+      "hideByStatus": "Ocultar por estado",
+      "hideStatus": "Ocultar espacios de trabajo en {{status}}"
     },
     "workspaceRenameSheet": {
       "title": "Cambiar nombre del espacio de trabajo",

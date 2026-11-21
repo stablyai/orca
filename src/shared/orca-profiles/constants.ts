@@ -36,6 +36,7 @@ import {
   getDefaultPrimarySelectionMiddleClickPaste,
   getDefaultTerminalRightClickToPaste
 } from '../terminal/appearance/terminal-platform-defaults'
+import { DONE_WORKSPACE_STATUS_ID } from '../workspace/status/workspace-status-defaults'
 
 export const SCHEMA_VERSION = 1
 
@@ -147,6 +148,8 @@ export function getDefaultUIState(): PersistedUIState {
     hideAutomationGeneratedWorkspaces: false,
     hideCliCreatedWorkspaces: false,
     hideDetachedHeadWorkspaces: false,
+    hideWorkspacesByStatus: false,
+    hiddenWorkspaceStatusIds: [DONE_WORKSPACE_STATUS_ID],
     hideWorkspacesFromOtherDevices: false,
     alwaysShowDefaultBranchWorkspace: true,
     _explorerDisplayRootMigrated: true,

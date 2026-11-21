@@ -1777,7 +1777,9 @@
       "syncedAcrossDevices": "Geräteübergreifend synchronisiert",
       "thisComputer": "Dieser Computer",
       "waitingForDesktop": "Es wird noch auf den Host gewartet",
-      "workspaceOptions": "Arbeitsbereichsoptionen"
+      "workspaceOptions": "Arbeitsbereichsoptionen",
+      "hideByStatus": "Nach Status ausblenden",
+      "hideStatus": "Arbeitsbereiche mit Status {{status}} ausblenden"
     },
     "workspaceRenameSheet": {
       "title": "Arbeitsbereich umbenennen",

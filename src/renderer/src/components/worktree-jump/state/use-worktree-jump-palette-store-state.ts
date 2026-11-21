@@ -1,3 +1,4 @@
+import { useWorkspaceStatusColumns } from '@/components/sidebar/workspace-status/presentation/use-workspace-board-statuses'
 import { useMemo, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
@@ -135,6 +136,13 @@ export function useWorktreeJumpPaletteStoreState({
   )
   const hideCliCreatedWorkspaces = useAppStore((state) => state.hideCliCreatedWorkspaces)
   const hideDetachedHeadWorkspaces = useAppStore((state) => state.hideDetachedHeadWorkspaces)
+  const workspaceStatusFilter = useAppStore(
+    useShallow((state) => ({
+      hideWorkspacesByStatus: state.hideWorkspacesByStatus,
+      hiddenWorkspaceStatusIds: state.hiddenWorkspaceStatusIds
+    }))
+  )
+  const statusColumns = useWorkspaceStatusColumns()
   const hideWorkspacesFromOtherDevices = useAppStore(
     (state) => state.hideWorkspacesFromOtherDevices
   )
@@ -216,6 +224,8 @@ export function useWorktreeJumpPaletteStoreState({
     hideAutomationGeneratedWorkspaces,
     hideCliCreatedWorkspaces,
     hideDetachedHeadWorkspaces,
+    workspaceStatusFilter,
+    statusColumns,
     hideWorkspacesFromOtherDevices,
     showSleepingWorkspaces,
     alwaysShowDefaultBranchWorkspace,
