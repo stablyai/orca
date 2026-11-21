@@ -9,6 +9,7 @@ import {
   resolvePinnedBunExecutable
 } from '../../tool-invocation/pinned-bun-executable.mjs'
 import { resolveTsrsTypecheckCommand, supportsTsrs } from './tsrs-typecheck-compiler.mjs'
+import { withLocalCheckSlot } from '../../preflight/local-checks/local-check-slot.mjs'
 
 const BYTES_PER_GIB = 1024 ** 3
 
@@ -259,7 +260,7 @@ export async function runTypecheckProjects({
   projects = TYPECHECK_PROJECTS,
   spawnCompiler = spawnProcess,
   memoryBytes = totalmem(),
-  parallelism = availableParallelism()
+  parallelism = Math.min(2, availableParallelism())
 } = {}) {
   const batches = typecheckBatches(projects, { compiler, bunConcurrency, memoryBytes, parallelism })
   if (compiler === 'bun' || compiler === 'tsrs') {
@@ -318,7 +319,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     root: repoRoot,
     resolveBunExecutable: resolveTypecheckBunExecutable
   })
-  const failures = await runTypecheckProjects({ ...options, ...selection })
+  const failures = await withLocalCheckSlot(() =>
+    runTypecheckProjects({ ...options, ...selection })
+  )
   if (failures.length > 0) {
     for (const failure of failures) {
       console.error(failure.message ?? failure)

@@ -1,12 +1,12 @@
 import type { UserConfig } from 'electron-vite'
 
-/** Default to bundled dev chunks to reduce renderer requests and startup/reload time; opt out with ORCA_DEV_BUNDLED=0. */
+/** Bundled dev retains native build state across rebuilds; keep it opt-in until that is fixed. */
 export function withBundledRendererDev(
   config: UserConfig,
   env: NodeJS.ProcessEnv = process.env
 ): UserConfig {
   const renderer = config.renderer
-  if (env.ORCA_DEV_BUNDLED === '0' || !renderer || typeof renderer === 'function') {
+  if (env.ORCA_DEV_BUNDLED !== '1' || !renderer || typeof renderer === 'function') {
     return config
   }
   const rollupOptions = renderer.build?.rollupOptions

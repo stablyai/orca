@@ -7,6 +7,7 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { resolveOxlintInvocation } from '../../tool-invocation/oxlint-cli-invocation.mjs'
 import { resolvePnpmCliInvocation } from '../../tool-invocation/pnpm-cli-invocation.mjs'
+import { withLocalCheckSlot } from '../local-checks/local-check-slot.mjs'
 
 // package.json script names, slowest first so short steps fill in around them.
 export const LINT_STEPS = [
@@ -139,9 +140,8 @@ async function main(root, argv) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
-    process.exitCode = await main(
-      path.resolve(import.meta.dirname, '../../../..'),
-      process.argv.slice(2)
+    process.exitCode = await withLocalCheckSlot(() =>
+      main(path.resolve(import.meta.dirname, '../../../..'), process.argv.slice(2))
     )
   } catch (error) {
     console.error(`lint: ${error.message ?? error}`)
