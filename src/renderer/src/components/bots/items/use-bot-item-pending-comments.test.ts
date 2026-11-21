@@ -49,7 +49,16 @@ it('shows a sent comment until its event arrives and keeps a refused comment for
 
   sent.mockResolvedValueOnce({ eventId: 'e10' })
   await act(async () => reopened.result.current.retry(refused!.event.id))
-  expect(sent).toHaveBeenLastCalledWith(BOT, 'uid-6', 'Again', [], undefined, undefined, false)
+  expect(sent).toHaveBeenLastCalledWith(
+    BOT,
+    'uid-6',
+    'Again',
+    [],
+    undefined,
+    undefined,
+    false,
+    undefined
+  )
   expect(reopened.result.current.shown[0]?.failed).toBe(false)
 })
 
@@ -137,6 +146,15 @@ it('sends a quick reply with its question and drops it once the host says the qu
 
   await act(async () => view.result.current.send('Yes', [], 'e8', 'e5'))
 
-  expect(sent).toHaveBeenLastCalledWith(LOCAL, 'uid-7', 'Yes', [], expect.any(String), 'e5', false)
+  expect(sent).toHaveBeenLastCalledWith(
+    LOCAL,
+    'uid-7',
+    'Yes',
+    [],
+    expect.any(String),
+    'e5',
+    false,
+    undefined
+  )
   expect(view.result.current.shown).toEqual([])
 })

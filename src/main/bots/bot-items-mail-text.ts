@@ -3,8 +3,10 @@
 import { fenceQuotedText, inlineUntrusted } from '../../shared/quoted-text-fence'
 import {
   botItemCommentImages,
+  botItemCommentSkills,
   botItemEventId,
   type BotItemCommentImage,
+  type BotItemCommentSkill,
   type BotItemStatus
 } from '../../shared/bots/bot-items'
 import { offsetSentImagePromptMarkers } from '../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
@@ -117,7 +119,19 @@ function commentWords(event: BotItemEventRecord, imagesBefore: number): string {
   const images = botItemCommentImages(event.data)
   const text = offsetSentImagePromptMarkers(str(event.data.text) ?? '', images.length, imagesBefore)
   const said = text.trim() || images.length === 0 ? `:\n${fenceQuotedText(text)}` : ''
-  return `${said}${imagesNote(images, imagesBefore)}`
+  return `${said}${imagesNote(images, imagesBefore)}${skillsNote(botItemCommentSkills(event.data))}`
+}
+
+/** Skills picked in the comment, as chat sends a picked skill: by the file its agent loads. */
+function skillsNote(skills: readonly BotItemCommentSkill[]): string {
+  if (skills.length === 0) {
+    return ''
+  }
+  const named = skills
+    .map(({ name, path }) => `/${inlineUntrusted(name)} "${inlineUntrusted(path, 4096)}"`)
+    .join(', ')
+  const which = skills.length === 1 ? 'a skill' : `${skills.length} skills`
+  return `\n  [Orca: they picked ${which} for this; load each from its file and follow it: ${named}]`
 }
 
 /** `sent`: the images go with the mail as image-refs; otherwise only their paths do. */

@@ -4,7 +4,7 @@ import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import { cn } from '@/lib/class-names'
-import { NativeChatMentionMenu, NativeChatPickerMenu } from '../pickers/NativeChatAutocompleteMenus'
+import { NativeChatComposerMenus } from '../pickers/NativeChatComposerMenus'
 import { NativeChatComposerActions } from '../controls/NativeChatComposerActions'
 import { NativeChatComposerNotices } from '../controls/NativeChatComposerNotices'
 import { NativeChatImageAttachmentPreview } from '../../attachments/chips/NativeChatImageAttachmentPreview'
@@ -194,24 +194,16 @@ export function NativeChatComposerField({
         <div
           className={cn('relative w-full', !launch && 'mx-auto max-w-(--chat-content-max-width)')}
         >
-          {autocomplete.mode === 'slash' ? (
-            <NativeChatPickerMenu
-              autocomplete={autocomplete}
-              activeIndex={activeSuggestion}
-              listboxId={pickerListboxId}
-              onChoose={onChoosePickerItem}
-              onRetry={onRetrySkills}
-            />
-          ) : null}
-          {autocomplete.mode === 'mention' ? (
-            <NativeChatMentionMenu
-              mention={mentionFiles}
-              activeIndex={activeSuggestion}
-              listboxId={pickerListboxId}
-              onChoose={onChooseMentionFile}
-              onHover={onHoverMentionOption}
-            />
-          ) : null}
+          <NativeChatComposerMenus
+            autocomplete={autocomplete}
+            mention={mentionFiles}
+            activeIndex={activeSuggestion}
+            listboxId={pickerListboxId}
+            onChooseItem={onChoosePickerItem}
+            onRetrySkills={onRetrySkills}
+            onChooseMention={onChooseMentionFile}
+            onHoverMention={onHoverMentionOption}
+          />
           <NativeChatComposerNotices
             notices={notices.map((notice) =>
               // A dismissed row takes its focused × with it; the message box gets focus back.

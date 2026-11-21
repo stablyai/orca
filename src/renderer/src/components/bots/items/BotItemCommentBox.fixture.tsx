@@ -1,5 +1,7 @@
 import { defineFixture, type ComponentFixture } from '../../../component-fixtures/component-fixture'
 import { fixtureCos } from '../../../component-fixtures/fixture-bot-panel'
+import { stubBots } from '../../../component-fixtures/fixture-bots'
+import { mascotAvatar } from '../../../../../shared/bot-avatar'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
@@ -154,4 +156,80 @@ export const posted = defineFixture({
       }}
     />
   )
+})
+
+const PICKER_SKILLS = ['release-notes', 'triage'].map((name) => ({
+  id: name,
+  name,
+  description: name === 'triage' ? 'Sort new reports by impact' : 'Write the release notes',
+  providers: ['claude'],
+  sourceKind: 'repo',
+  sourceLabel: 'Repository',
+  rootPath: '/home/me/.orca/bots/cos/.claude/skills',
+  directoryPath: `/home/me/.orca/bots/cos/.claude/skills/${name}`,
+  skillFilePath: `/home/me/.orca/bots/cos/.claude/skills/${name}/SKILL.md`,
+  installed: true,
+  updatedAt: null
+}))
+
+const PICKER_SKILL_SOURCE = {
+  id: 'repo-claude',
+  label: 'Repository',
+  path: '/home/me/.orca/bots/cos/.claude/skills',
+  sourceKind: 'repo',
+  providers: ['claude'],
+  owner: 'claude'
+}
+
+/** The owner's other bots and the bot folder's skills, answered without a runtime. */
+function stubPickerSources(): void {
+  stubBots(
+    [fixtureCos, { ...fixtureCos, id: 'bot-perf', name: 'Perf', avatar: mascotAvatar('B1') }],
+    { 'bot-perf': 'Owns performance audits and fixes' }
+  )
+  const runtime = window.api.runtime
+  Reflect.set(window.api, 'runtime', {
+    ...runtime,
+    call: async (request: { method: string }) =>
+      request.method === 'skills.discover'
+        ? {
+            ok: true,
+            result: { skills: PICKER_SKILLS, sources: [PICKER_SKILL_SOURCE], scannedAt: 1 }
+          }
+        : runtime.call(request as Parameters<typeof runtime.call>[0])
+  })
+}
+
+function typeInBox(text: string): (frame: HTMLElement) => Promise<void> {
+  return async (frame) => {
+    frame.querySelector<HTMLElement>('[contenteditable="true"]')?.focus()
+    document.execCommand('insertText', false, text)
+    await new Promise((resolve) => setTimeout(resolve, 400))
+  }
+}
+
+// The lists open above the box, as in the item pane.
+const withRoomAbove = (): React.JSX.Element => (
+  <div className="flex h-72 flex-col justify-end">{commentBox(item, '').render()}</div>
+)
+
+/** `@` open: the owner's bots above the folder's files, as in the bot's chat. */
+export const mentionPicker = defineFixture({
+  width: 380,
+  ...commentBox(item, ''),
+  render: withRoomAbove,
+  setup: () => {
+    commentBox(item, '').setup?.()
+    stubPickerSources()
+  },
+  interact: typeInBox('@')
+})
+
+/** `/` open: the bot folder's skills, as in the bot's chat. */
+export const slashPicker = defineFixture({
+  width: 380,
+  ...commentBox(item, ''),
+  setup: mentionPicker.setup,
+  render: withRoomAbove,
+  interact: typeInBox('/')
 })

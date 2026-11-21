@@ -131,11 +131,36 @@ export function BotChatRoom({
   // The visual owner names the host the chat's agent runs on; only that host's bots can be asked.
   const target = useContext(NativeChatVisualOwnerContext)?.target
   const hostId = target ? getRuntimeTargetHostId(target) : null
+  return (
+    <BotWorkspaceChatRoom
+      workspaceId={workspaceId ?? undefined}
+      hostId={hostId}
+      sessionId={sessionId ?? null}
+    >
+      {children}
+    </BotWorkspaceChatRoom>
+  )
+}
+
+/** A bot's chat's `@` room for what writes to that chat from outside it, such as an item's comment
+ *  box: the bot's workspace and host stand in for the chat tab's. */
+export function BotWorkspaceChatRoom({
+  workspaceId,
+  hostId,
+  sessionId,
+  children
+}: {
+  workspaceId: string | undefined
+  hostId: ExecutionHostId | null
+  /** The chat's session, as which its bots' chats are read; null reads them as the owner. */
+  sessionId: string | null
+  children: ReactNode
+}): React.JSX.Element {
   const self = useBotForWorkspace(workspaceId ?? null)
   const bots = useBots(useBotsEnabled() && hostId !== null)
   const hostBots = useMemo(() => bots.filter((bot) => bot.hostId === hostId), [bots, hostId])
   const ownBot = (self && hostBots.find((bot) => isSameBot(bot, self))) || null
-  const picker = useBotChatPicker(hostId, hostBots, ownBot, sessionId ?? null)
+  const picker = useBotChatPicker(hostId, hostBots, ownBot, sessionId)
   const room = useBotChatComposerRoom(workspaceId ?? undefined, hostId, picker.selfId !== null)
   // Bots a draft names show as they are now, room or not: deleted, paused or renamed.
   const mentionTargets = useBotMentionTargets(hostId)
