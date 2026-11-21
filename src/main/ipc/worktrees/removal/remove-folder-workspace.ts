@@ -13,6 +13,7 @@ import { getLocalPtyProvider } from '../../pty/provider/registry'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { getFolderWorkspaceRootId } from '../folder-workspace-model'
+import { projectRootWorkspaceRemovalError } from '../../../../shared/worktree/removal/removal'
 import { preservedBranchCleanupByScope } from './preserved-branch-cleanup'
 import { removeWorktreeMetadataAndTransientState } from './worktree-removal-ownership'
 import { teardownStops } from '../../../runtime/workspaces/removal/owned-session-teardown-policy'
@@ -32,7 +33,7 @@ export async function removeFolderWorkspace(
 ): Promise<RemoveWorktreeResult> {
   const { mainWindow, store, runtime } = context
   if (args.worktreeId === getFolderWorkspaceRootId(repo)) {
-    throw new Error('Cannot delete the project root workspace. Remove the folder project instead.')
+    throw projectRootWorkspaceRemovalError()
   }
   // Archive failure must refuse before watcher, PTY or metadata teardown (#19334).
   const archiveHookOverride = await gateFolderWorkspaceRemovalOnArchiveHook({

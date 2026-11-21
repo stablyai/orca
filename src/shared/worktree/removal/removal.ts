@@ -7,6 +7,13 @@ export function unregisteredFolderRefusal(worktreePath: string): Error {
   )
 }
 
+// Folder projects are removed with setup-delete; worktree rm cannot delete their root (#20539).
+export function projectRootWorkspaceRemovalError(): Error {
+  return new Error(
+    'Cannot delete the project root workspace. Remove the folder project with orca project setup-delete --setup <setup-id>. List setups with orca project setups.'
+  )
+}
+
 export const LOCKED_WORKTREE_REMOVAL_PREFIX = 'Worktree is locked by Git.'
 
 export const UNSTOPPED_PTY_REMOVAL_PREFIX = 'Failed to physically stop every PTY for worktree:'
