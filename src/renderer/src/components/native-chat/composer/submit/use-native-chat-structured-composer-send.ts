@@ -179,7 +179,6 @@ export function useNativeChatStructuredComposerSend({
         // Custody only if this send really took its reply; one picked meanwhile stays the user's.
         if (settleNativeChatReplySend(draftScopeKey, reply?.id) && reply) {
           replyTakenAt = nativeChatReplyCustody(draftScopeKey)
-          rememberNativeChatReplySource(text, reply.messageId)
         }
         const left = nativeChatComposerDraftLeftAfterSend(
           readNativeChatComposerDraft(draftScopeKey),
@@ -257,6 +256,11 @@ export function useNativeChatStructuredComposerSend({
             revealsTranscript && (!hostCommand || isCurrent()) ? revealAdmitted : undefined
           )
           consume()
+          // Only accepted text is remembered: it quotes the reply captured at send, even if a newer
+          // one was picked meanwhile.
+          if (reply) {
+            rememberNativeChatReplySource(text, reply.messageId)
+          }
           return true
         })
         .catch((error) => {

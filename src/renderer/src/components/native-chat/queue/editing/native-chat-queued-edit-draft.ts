@@ -112,10 +112,6 @@ export function nativeChatQueuedEditInput(
   )
   const reply = readNativeChatReplyTarget(edit.scopeKey)
   const text = withNativeChatReplyContext(words, reply, 'the agent')
-  // Saving the edit sends this text in place of the queued message, which answers the same original.
-  if (reply) {
-    rememberNativeChatReplySource(text, reply.messageId)
-  }
   const images = draft.images.map(
     (image) =>
       edit.kept.find((entry) => sameQueuedEditImage(entry.image, image))?.block ?? {
@@ -129,6 +125,17 @@ export function nativeChatQueuedEditInput(
     ...(skillsCapable
       ? { skills: pickedSkillsInText(text, promptSkillRefs(draft.document), ['$', '/']) }
       : {})
+  }
+}
+
+/** A saved edit replaced the queued message with `text`: it answers the same original. */
+export function rememberNativeChatQueuedEditReplySource(
+  edit: NativeChatQueuedEditDraft,
+  text: string
+): void {
+  const reply = readNativeChatReplyTarget(edit.scopeKey)
+  if (reply) {
+    rememberNativeChatReplySource(text, reply.messageId)
   }
 }
 

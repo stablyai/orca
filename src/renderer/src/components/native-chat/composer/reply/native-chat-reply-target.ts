@@ -80,7 +80,8 @@ function load(): void {
         const [scopeKey, target] = entry
         targets.set(scopeKey, {
           ...target,
-          excerpt: target.excerpt.slice(0, NATIVE_CHAT_REPLY_EXCERPT_MAX + 1)
+          // By characters, as excerpts are cut, so a reload never splits one.
+          excerpt: Array.from(target.excerpt).slice(0, NATIVE_CHAT_REPLY_EXCERPT_MAX).join('')
         })
         // Tracked like a reply picked this session, so deleting its chat still fences a pending send.
         custody.set(scopeKey, custody.get(scopeKey) ?? 0)

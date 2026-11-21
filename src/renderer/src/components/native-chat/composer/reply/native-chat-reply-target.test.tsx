@@ -402,6 +402,27 @@ describe('reply quotes', () => {
     expect(nativeChatReplyQuoteOf(crlf)?.rest).toBe('first\r\nsecond')
   })
 
+  it('cuts at the cap even with no space to trim, leaving room for the ellipsis', () => {
+    expect(Array.from(nativeChatReplyExcerpt('b'.repeat(600)))).toHaveLength(
+      NATIVE_CHAT_REPLY_EXCERPT_MAX
+    )
+  })
+
+  it('finds a long agent message made of several text blocks, as the Reply action read it', () => {
+    const blocks = [text(`${'First part. '.repeat(30)}`), text(`${'Second part. '.repeat(30)}`)]
+    // Reply reads a row's text blocks a blank line apart.
+    const excerpt = nativeChatReplyExcerpt(blocks.map((block) => block.text).join('\n\n'))
+    const message = { id: 'm-blocks', role: 'assistant' as const, blocks }
+    expect(nativeChatReplyOriginalId([message], { author: 'agent', excerpt })).toBe('m-blocks')
+  })
+
+  it('a long excerpt of wide characters survives a reload whole', () => {
+    const excerpt = `${'😀'.repeat(NATIVE_CHAT_REPLY_EXCERPT_MAX - 1)}…`
+    setNativeChatReplyTarget('scope-wide', { ...reply('r'), excerpt })
+    resetNativeChatReplyTargetsForTests()
+    expect(readNativeChatReplyTarget('scope-wide')?.excerpt).toBe(excerpt)
+  })
+
   it('a long message cut to an excerpt is still found by what was kept', () => {
     const long = `${'Updated the layout. '.repeat(40)}Done.`
     const excerpt = nativeChatReplyExcerpt(long)

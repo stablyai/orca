@@ -26,7 +26,8 @@ export function nativeChatReplyOriginalId(
     }
     const words = message.blocks
       .flatMap((block) => (block.type === 'text' ? [block.text] : []))
-      .join('\n')
+      // As the Reply action reads a row: text blocks a blank line apart, so long excerpts cut alike.
+      .join('\n\n')
     // An agent's Reply quotes its words without visual directive lines.
     if (
       excerptMatches(

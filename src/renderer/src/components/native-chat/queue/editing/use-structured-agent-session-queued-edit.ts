@@ -20,7 +20,8 @@ import {
   handBackNativeChatQueuedEdit,
   nativeChatQueuedEditDirty,
   nativeChatQueuedEditHeld,
-  nativeChatQueuedEditInput
+  nativeChatQueuedEditInput,
+  rememberNativeChatQueuedEditReplySource
 } from './native-chat-queued-edit-draft'
 import { nativeChatQueuedEditValueKey } from './native-chat-queued-edit-value'
 import { settleNativeChatQueuedEdit } from './native-chat-queued-edit-outcome'
@@ -251,6 +252,10 @@ export function useStructuredAgentSessionQueuedEdit(args: StructuredQueuedEditAr
       'agentSession.queuedMessageUpdate',
       { messageId: edit.messageId, expectedBodyFingerprint: attempt.expected, ...input }
     )
+    // Only an accepted update is the text that will be sent; typing and refused saves record nothing.
+    if (result.kind === 'done' && result.value.status === 'updated') {
+      rememberNativeChatQueuedEditReplySource(edit, input.text)
+    }
     settle(edit, attempt, result)
   }, [close, imagesCapable, render, sessionId, settle, write, transport.skillsCapable])
 

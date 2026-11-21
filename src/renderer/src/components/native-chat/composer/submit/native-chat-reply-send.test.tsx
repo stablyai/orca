@@ -341,6 +341,34 @@ describe('replying to a message from a terminal chat', () => {
 })
 
 describe('remembering which message a reply answered', () => {
+  it('an accepted structured send records the reply it quoted, even if another was picked meanwhile', async () => {
+    localStorage.clear()
+    resetNativeChatReplySourcesForTests()
+    setNativeChatReplyTarget(scope, target)
+    const { send } = fixture(true)
+    await act(async () => {
+      const pending = send('Why blue?')
+      setNativeChatReplyTarget(scope, { ...target, id: 'reply-2', messageId: 'm-9' })
+      await pending
+    })
+    expect(nativeChatReplySourceOf(withNativeChatReplyContext('Why blue?', target, 'Codex'))).toBe(
+      'm-7'
+    )
+  })
+
+  it('a refused structured send records nothing', async () => {
+    localStorage.clear()
+    resetNativeChatReplySourcesForTests()
+    setNativeChatReplyTarget(scope, target)
+    const { send } = fixture(async () => false)
+    await act(async () => {
+      await send('Why blue?')
+    })
+    expect(
+      nativeChatReplySourceOf(withNativeChatReplyContext('Why blue?', target, 'Codex'))
+    ).toBeUndefined()
+  })
+
   beforeEach(() => {
     localStorage.clear()
     resetNativeChatReplyTargetsForTests()
