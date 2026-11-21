@@ -58,10 +58,9 @@ export function getRemoteRunLink(
   db: OrchestrationDb,
   conversationId: string
 ): RemoteRunLinkRow | undefined {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns exactly its row shape.
   return db.db
-    .prepare('SELECT * FROM remote_run_links WHERE conversation_id = ?')
-    .get(conversationId) as RemoteRunLinkRow | undefined
+    .prepare<RemoteRunLinkRow>('SELECT * FROM remote_run_links WHERE conversation_id = ?')
+    .get(conversationId)
 }
 
 /** The link a write about this Run's remote work may still land under; a reset or re-pair since then closed it. */
@@ -83,12 +82,11 @@ export function openRemoteRunLink(
   const pin = remoteServerPin(server)
   const transaction = beginLifecycleWriteTransaction(db.db, 'open_remote_run_link')
   try {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns exactly its row shape.
     const open = db.db
-      .prepare(
+      .prepare<RemoteRunLinkRow>(
         `SELECT * FROM remote_run_links WHERE run_id = ? AND environment_id = ? AND state = 'open'`
       )
-      .get(runId, pin.environment_id) as RemoteRunLinkRow | undefined
+      .get(runId, pin.environment_id)
     let link = open
     if (open && !remoteRunLinkPinMatches(open, pin)) {
       // Nothing can reach that link's work any more: the server knows this Orca by another pairing now.
@@ -130,12 +128,11 @@ export function openRemoteRunLink(
 
 /** Servers with a link whose queue still needs reading or whose cancel is still owed. */
 export function listLiveRemoteRunLinkEnvironments(db: OrchestrationDb): string[] {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT over this table returns exactly these columns.
   const rows = db.db
-    .prepare(
+    .prepare<{ environment_id: string }>(
       `SELECT DISTINCT environment_id FROM remote_run_links WHERE state IN ('open', 'cancel_owed')`
     )
-    .all() as { environment_id: string }[]
+    .all()
   return rows.map((row) => row.environment_id)
 }
 
@@ -143,12 +140,11 @@ export function listOwedRemoteRunCancels(
   db: OrchestrationDb,
   environmentId: string
 ): RemoteRunLinkRow[] {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns exactly its row shape.
   return db.db
-    .prepare(
+    .prepare<RemoteRunLinkRow>(
       `SELECT * FROM remote_run_links WHERE environment_id = ? AND state = 'cancel_owed' ORDER BY rowid`
     )
-    .all(environmentId) as RemoteRunLinkRow[]
+    .all(environmentId)
 }
 
 /** Part of both resets: every open link owes its server a cancel under a fresh key, and keeps its import position as the tombstone. */
@@ -176,21 +172,20 @@ export function closeRemoteRunLink(
 ): void {
   const transaction = beginLifecycleWriteTransaction(db.db, 'close_remote_run_link')
   try {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT of one column returns exactly that column.
     const held = db.db
-      .prepare(
+      .prepare<{
+        task_id: string
+        run_id: string
+        dispatch_id: string | null
+        status: 'dispatched' | 'blocked'
+      }>(
         `SELECT placement.task_id, placement.run_id, placement.dispatch_id, task.status
          FROM remote_placements placement JOIN tasks task ON task.id = placement.task_id
          LEFT JOIN remote_dispatches attempt ON attempt.dispatch_id = placement.dispatch_id
          WHERE placement.conversation_id = ?
            AND (task.status = 'dispatched' OR (task.status = 'blocked' AND attempt.stop_owed = 1))`
       )
-      .all(conversationId) as {
-      task_id: string
-      run_id: string
-      dispatch_id: string | null
-      status: 'dispatched' | 'blocked'
-    }[]
+      .all(conversationId)
     const now = new Date().toISOString()
     const result = `${reason} Its worker may still run there.`
     for (const placement of held) {
@@ -245,10 +240,11 @@ export function closeRemoteRunLinksOfChangedPairing(
   serverName: string,
   notify: (handle: string, messageType: string) => void
 ): void {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns exactly its row shape.
   const links = db.db
-    .prepare(`SELECT * FROM remote_run_links WHERE environment_id = ? AND state = 'open'`)
-    .all(server.environment_id) as RemoteRunLinkRow[]
+    .prepare<RemoteRunLinkRow>(
+      `SELECT * FROM remote_run_links WHERE environment_id = ? AND state = 'open'`
+    )
+    .all(server.environment_id)
   for (const link of links) {
     if (!remoteRunLinkPinMatches(link, server)) {
       closeRemoteRunLink(
@@ -268,12 +264,11 @@ export function closeRemoteRunLinksOfRemovedServer(
   reason: string,
   notify: (handle: string, messageType: string) => void
 ): void {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT of one column returns exactly that column.
   const links = db.db
-    .prepare(
+    .prepare<{ conversation_id: string }>(
       `SELECT conversation_id FROM remote_run_links WHERE environment_id = ? AND state <> 'closed'`
     )
-    .all(environmentId) as { conversation_id: string }[]
+    .all(environmentId)
   for (const link of links) {
     closeRemoteRunLink(db, link.conversation_id, reason, notify)
   }

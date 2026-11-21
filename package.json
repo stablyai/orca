@@ -49,6 +49,7 @@
     "check:ratchets": "node config/scripts/static-analysis/ratchet-runner/run-ratchets.mjs",
     "check:max-lines-ratchet": "node config/scripts/static-analysis/ratchets/source-budget/check-max-lines-ratchet.mjs",
     "check:ts-nocheck-ratchet": "node config/scripts/static-analysis/ratchets/source-budget/check-ts-nocheck-ratchet.mjs",
+    "check:unjustified-lint-disable-ratchet": "node config/scripts/static-analysis/ratchets/source-budget/check-unjustified-lint-disable-ratchet.mjs",
     "check:host-list-render-ratchet": "node config/scripts/static-analysis/ratchets/renderer-state/check-host-list-render-ratchet.mjs",
     "check:whole-hot-map-selector-ratchet": "node config/scripts/static-analysis/ratchets/renderer-state/check-whole-hot-map-selector-ratchet.mjs",
     "check:memo-translate-subscription-ratchet": "node config/scripts/static-analysis/ratchets/renderer-state/check-memo-translate-subscription-ratchet.mjs",

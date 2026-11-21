@@ -1,0 +1,35 @@
+# eslint/oxlint-disable directives without a ` -- <reason>` in production src, per file.
+# This is a RATCHET: counts may only go DOWN.
+# Prune after adding reasons: pnpm check:unjustified-lint-disable-ratchet --prune
+1 src/main/ipc/worktrees/worktree-remote.ts
+1 src/renderer/src/components/agent/launch-settings/AgentDefaultSurfacePreviews.tsx
+1 src/renderer/src/components/bots/use-bot-workspace-order.ts
+1 src/renderer/src/components/browser-pane/host-guest/use-browser-page-webview-lifecycle.ts
+1 src/renderer/src/components/dashboard/snapshot/useLiveDashboardSnapshot.ts
+1 src/renderer/src/components/diff-comments/useDiffCommentDecorator.tsx
+1 src/renderer/src/components/editor/combined-diff/load-sections/use-combined-diff-section-loader.ts
+1 src/renderer/src/components/editor/loading/useEditorPanelActiveTabContentLoad.ts
+1 src/renderer/src/components/editor/monaco/use-plugin-syntax-language.ts
+1 src/renderer/src/components/editor/rich-markdown/instance/useRichMarkdownEditorInstance.ts
+2 src/renderer/src/components/editor/rich-markdown/review/useRichMarkdownReviewController.ts
+2 src/renderer/src/components/editor/rich-markdown/schema/drag-selection-guard.ts
+2 src/renderer/src/components/native-chat/conversation/projection/use-native-chat-transcript-projection.ts
+1 src/renderer/src/components/pull-request-page/files/combined-diff-viewer.tsx
+1 src/renderer/src/components/right-sidebar/ai-vault/scanning/ai-vault-association-observation.ts
+3 src/renderer/src/components/right-sidebar/file-explorer/tree/use-file-explorer-tree-load-effects.ts
+2 src/renderer/src/components/settings/repository/RepositorySettingsDraftInput.tsx
+3 src/renderer/src/components/settings/terminal/appearance/TerminalSettingsPreview.tsx
+1 src/renderer/src/components/sidebar/host-path-browser/remote-file-browser-entry-actions.ts
+1 src/renderer/src/components/sidebar/worktree-list/listing/use-sort-order.ts
+1 src/renderer/src/components/task-page/github/refresh/use-task-page-github-landing-refresh.ts
+1 src/renderer/src/components/task-page/github/refresh/use-task-page-github-quiet-refresh-effect.ts
+1 src/renderer/src/components/task-page/linear/item-drawer/LinearItemDrawer.tsx
+1 src/renderer/src/components/terminal-pane/input/focus/use-terminal-pane-focus-event.ts
+1 src/renderer/src/components/terminal-pane/layout/expand/use-terminal-pane-expand-event.ts
+1 src/renderer/src/components/terminal-pane/mounting/use-terminal-pane-mount-lifecycle.ts
+1 src/renderer/src/components/worktree-jump/workspaces/use-worktree-jump-palette-worktrees.ts
+1 src/renderer/src/hooks/composer-state/workspace-identity/workspace-identity-state.ts
+1 src/renderer/src/hooks/composer-state/workspace-target/host-runtime-effects.ts
+1 src/renderer/src/lib/agent-session/launch/inventory/host-chat-program-acquisition.ts
+1 src/renderer/src/store/slices/editor/editor-slice-test-harness.ts
+1 src/renderer/src/store/slices/ui/ui-slice-test-harness.ts
