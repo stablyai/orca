@@ -83,7 +83,9 @@ export const botsListRead = bindDeferredRpcOperation(
           // When those counts next change (an item goes stale or a snoozed one comes back).
           needsYouStaleInMs: z.number().optional().catch(undefined),
           // The host's Orca Cloud link; absent from an older host, and a newer value reads as absent.
-          connectorStatus: z.enum(CONNECTOR_CLOUD_STATUSES).optional().catch(undefined)
+          connectorStatus: z.enum(CONNECTOR_CLOUD_STATUSES).optional().catch(undefined),
+          // Whether its Orca Cloud answers an event in its own thread; older hosts don't say.
+          threadReplies: z.boolean().optional().catch(undefined)
         })
         // Off, the host's own sidebar lists its bot homes as ordinary folders, so the phone does too.
         .transform((listing) => ({
@@ -94,6 +96,7 @@ export const botsListRead = bindDeferredRpcOperation(
           waits: botWaitsSchema.catch({}).parse(listing.waits ?? {}),
           needsYou: botNeedsYouSchema.catch({}).parse(listing.needsYou ?? {}),
           connectorStatus: listing.connectorStatus,
+          threadReplies: listing.threadReplies === true,
           ...(listing.needsYouStaleInMs !== undefined
             ? { needsYouChangeInMs: listing.needsYouStaleInMs }
             : {})

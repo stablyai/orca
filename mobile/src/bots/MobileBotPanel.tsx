@@ -26,7 +26,6 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { MobileBotActivityTab } from './MobileBotActivityTab'
-import { MobileBotAutomationsTab } from './MobileBotAutomationsTab'
 import { MobileBotSettingsTab, type BotSettingsHome } from './MobileBotSettingsTab'
 import { MobileBotUpNext } from './MobileBotUpNext'
 import { botAgentLabel } from './mobile-bot-sheet-copy'
@@ -50,8 +49,9 @@ import { usePhoneBotItems } from './items/use-phone-bot-items'
 import { usePhoneBotItemWalk } from './items/use-phone-bot-item-walk'
 import { openBotItemWorker } from './items/bot-item-worker-open'
 import { useBotAccessDecisionSheet } from './MobileBotAccessDecision'
+import { useBotPanelAutomations } from './use-bot-panel-automations'
 
-type PanelPage = 'settings' | `item:${string}`
+type PanelPage = 'settings' | `item:${string}` | `automation:${string}`
 
 export type BotPanelOpen = { tab: 'items' } | { item: string } | { access: string }
 
@@ -72,6 +72,10 @@ export function MobileBotPanel(props: {
   /** The Needs you count the bot list carries, until the panel reads the items. */
   listNeedsYou: number
   onNewAutomation: (() => void) | null
+  /** Drafts a message in the bot's chat (Edit in chat); the panel closes first. */
+  onAskInChat: ((draft: string) => void) | null
+  /** Opens an automation's runs on the Automations page. */
+  onViewRuns: ((automationId: string) => void) | null
   accessRequests: BotAccessRequests | null
   onStartSuggestion: ((ask: string) => void) | null
   treeActions: BotChatTreeActions
@@ -88,6 +92,7 @@ export function MobileBotPanel(props: {
   const [tab, setTab] = useState<PanelTab>('items')
   const pager = useOptionPager<PanelPage>()
   const { message, showToast } = useTransientToast()
+  const automations = useBotPanelAutomations(props, pager, showToast)
   const [sheet, setSheet] = useState<BotItemSheet | null>(null)
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
   const [filter, setFilter] = useState<BotItemFilter>(BOT_ITEM_NO_FILTER)
@@ -210,17 +215,7 @@ export function MobileBotPanel(props: {
   }
   const after = (
     <>
-      {props.routeBot.activity ? (
-        <MobileBotAutomationsTab
-          client={props.client}
-          bot={bot}
-          rows={props.routeBot.activity.automations ?? null}
-          waits={props.routeBot.activity.waits}
-          showToast={showToast}
-          onNewAutomation={props.onNewAutomation}
-          online={props.online}
-        />
-      ) : null}
+      {automations.tab}
       {props.routeBot.activity?.upNext ? (
         <MobileBotUpNext
           botName={bot.name}
@@ -348,6 +343,8 @@ export function MobileBotPanel(props: {
           />
         </ScrollView>
       </View>
+    ) : page?.startsWith('automation:') ? (
+      automations.page(page.slice('automation:'.length))
     ) : shownItem ? (
       <MobileBotItemPage
         key={shownItem.uid}
@@ -394,6 +391,7 @@ export function MobileBotPanel(props: {
         snooze={async (snoozed, until) => clearOnWrite(await moves.snooze(snoozed, until))}
       />
       {accessSheet}
+      {automations.sheets}
       <MobileBotItemsFilterSheet
         visible={filtering}
         onClose={() => setFiltering(false)}

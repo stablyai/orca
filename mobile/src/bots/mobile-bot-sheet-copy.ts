@@ -71,7 +71,7 @@ const SOURCE_EVENT_FALLBACKS: Partial<Record<string, () => string>> = {
   webhook: () => translate('bots.events.webhookFallback', 'When its webhook is called')
 }
 
-function eventLabel(trigger: { source: string; event?: string }): string {
+export function eventLabel(trigger: { source: string; event?: string }): string {
   const known = trigger.event ? EVENT_LABELS[trigger.source]?.[trigger.event] : undefined
   return (
     (known ?? SOURCE_EVENT_FALLBACKS[trigger.source])?.() ??
