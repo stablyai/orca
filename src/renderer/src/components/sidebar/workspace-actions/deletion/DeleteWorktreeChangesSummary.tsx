@@ -1,5 +1,5 @@
 // @protected-copy
-import { memo, useCallback, useLayoutEffect, useRef, useState, type JSX } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type JSX } from 'react'
 import { Check, CircleAlert } from 'lucide-react'
 import { DialogDisclosure } from '@/components/ui/dialog-parts'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
@@ -105,25 +105,6 @@ export function DeleteWorktreeChangesSummary({
   }, [])
   // Text changes don't fire ResizeObserver, so remeasure after every render too.
   useLayoutEffect(measureClipped)
-  const observeRow = useCallback(
-    (row: HTMLDivElement | null) => {
-      if (!row || typeof ResizeObserver === 'undefined') {
-        return
-      }
-      const observer = new ResizeObserver(measureClipped)
-      observer.observe(row)
-      // A font load or font setting change alters text width without resizing the row.
-      document.fonts?.addEventListener('loadingdone', measureClipped)
-      const fontSetting = new MutationObserver(measureClipped)
-      fontSetting.observe(document.documentElement, { attributeFilter: ['style'] })
-      return () => {
-        observer.disconnect()
-        fontSetting.disconnect()
-        document.fonts?.removeEventListener('loadingdone', measureClipped)
-      }
-    },
-    [measureClipped]
-  )
   const key = worktree.hostId ? getWorktreeHostIdentity(worktree) : worktree.id
   const changeCount = dirtyChanges.counts.get(key)
   const checkState = dirtyChanges.checkStates.get(key)
@@ -188,6 +169,25 @@ export function DeleteWorktreeChangesSummary({
   // A toggle that exists only because of clipping takes the chevron's room from the text itself.
   const clipped = overflow.px > (overflow.inToggle && !keepsToggle ? CHEVRON_ROOM_PX : 0)
   const expandable = keepsToggle || clipped
+  const rowRef = useRef<HTMLDivElement>(null)
+  const hasRow = tone !== null
+  useEffect(() => {
+    const row = rowRef.current
+    if (!row || typeof ResizeObserver === 'undefined') {
+      return
+    }
+    const observer = new ResizeObserver(measureClipped)
+    observer.observe(row)
+    // A font load or font setting change alters text width without resizing the row.
+    document.fonts?.addEventListener('loadingdone', measureClipped)
+    const fontSetting = new MutationObserver(measureClipped)
+    fontSetting.observe(document.documentElement, { attributeFilter: ['style'] })
+    return () => {
+      observer.disconnect()
+      fontSetting.disconnect()
+      document.fonts?.removeEventListener('loadingdone', measureClipped)
+    }
+  }, [hasRow, measureClipped])
   if (!tone) {
     return null
   }
@@ -196,7 +196,7 @@ export function DeleteWorktreeChangesSummary({
     <span className="flex min-w-0 items-center gap-1.5" title={fullText}>
       <span aria-hidden="true" className="flex size-3.5 shrink-0 items-center justify-center">
         {tone === 'checking' ? (
-          <LoadingSpinner className="size-3.5 text-muted-foreground" />
+          <LoadingSpinner className="size-3.5" />
         ) : tone === 'clean' ? (
           <Check className="size-3.5 text-status-success" />
         ) : (
@@ -214,7 +214,7 @@ export function DeleteWorktreeChangesSummary({
       ) : null}
       {stillChecking ? (
         <>
-          <LoadingSpinner className="size-3 shrink-0 text-muted-foreground" />
+          <LoadingSpinner className="size-3 shrink-0" />
           {changesChecking && text === checkingLabel ? null : (
             <span className="sr-only">
               {changesChecking
@@ -226,13 +226,10 @@ export function DeleteWorktreeChangesSummary({
       ) : null}
     </span>
   )
-  const toneClassName =
-    tone === 'warning'
-      ? 'text-status-warning-text hover:text-status-warning-text'
-      : 'text-muted-foreground'
+  const toneClassName = tone === 'warning' ? 'text-status-warning-text' : 'text-muted-foreground'
   return (
     <div
-      ref={observeRow}
+      ref={rowRef}
       aria-live="polite"
       className="min-w-0"
       onFocus={() => setFocused(true)}
@@ -243,13 +240,10 @@ export function DeleteWorktreeChangesSummary({
       }}
     >
       {expandable ? (
-        // A fixed open height: results that land after opening scroll inside instead of moving Delete.
         <DialogDisclosure
           label={line}
           variant="code"
-          chevron="trailing"
-          contentClassName="h-44"
-          triggerClassName={`h-5 max-w-full min-w-0 gap-1.5 ${toneClassName}`}
+          status={tone === 'warning' ? 'warning' : 'muted'}
           open={open}
           onOpenChange={(next) => {
             setOpen(next)

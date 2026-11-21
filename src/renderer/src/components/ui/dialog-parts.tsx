@@ -80,9 +80,7 @@ function DialogDisclosure({
   children,
   defaultOpen = false,
   variant = 'boxed',
-  chevron = 'leading',
-  triggerClassName,
-  contentClassName,
+  status,
   open: controlledOpen,
   onOpenChange
 }: {
@@ -91,10 +89,11 @@ function DialogDisclosure({
   defaultOpen?: boolean
   /** `code`: a scrolling monospace list (changed files, diagnostics). `plain`: form fields, no box. */
   variant?: 'boxed' | 'code' | 'plain'
-  /** `trailing` keeps a label that starts with its own status icon aligned with sibling lines. */
-  chevron?: 'leading' | 'trailing'
-  triggerClassName?: string
-  contentClassName?: string
+  /**
+   * A one-line status toggle: the label leads with its own icon and the chevron trails, the
+   * line keeps a fixed height, and the open panel keeps a fixed height so late content never resizes it.
+   */
+  status?: 'muted' | 'warning'
   /** Controlled open state, for callers that must keep the section open while its content changes. */
   open?: boolean
   onOpenChange?: (open: boolean) => void
@@ -120,12 +119,13 @@ function DialogDisclosure({
         }}
         className={cn(
           'flex w-fit items-center gap-1 rounded-sm text-[13px] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50',
-          triggerClassName
+          status && 'h-5 max-w-full min-w-0 gap-1.5',
+          status === 'warning' && 'text-status-warning-text hover:text-status-warning-text'
         )}
       >
-        {chevron === 'leading' ? chevronIcon : null}
+        {status ? null : chevronIcon}
         {label}
-        {chevron === 'trailing' ? chevronIcon : null}
+        {status ? chevronIcon : null}
       </button>
       <div
         id={contentId}
@@ -135,7 +135,7 @@ function DialogDisclosure({
           variant !== 'plain' &&
             'rounded-lg border border-input px-2.5 py-2 text-[11px] leading-normal text-muted-foreground',
           variant === 'code' && 'scrollbar-sleek max-h-44 overflow-y-auto font-mono',
-          contentClassName
+          status && 'h-44'
         )}
       >
         {children}
