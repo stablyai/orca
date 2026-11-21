@@ -36,6 +36,7 @@ import {
 } from './bot-group-peer-requests'
 import type { MessageRow } from '../runtime/orchestration/db/orchestration-records'
 import { groupAnswerTurn, saveGroupPeerAnswer } from './bot-group-peer-answer'
+import { noteGroupTurnMailed } from './bot-group-mention-handoffs'
 
 const runtimes = new WeakMap<OrcaRuntimeService, BotGroupRuntime>()
 export function runtimeBotGroups(runtime: OrcaRuntimeService): BotGroupRuntime {
@@ -161,6 +162,8 @@ export class BotGroupRuntime {
   ) => narrowGroupMailBatch(this, sessionId, messages)
   captureWorkerOperation = (sessionId: string) => liveGroupOperation(this, sessionId)
   answerTurn = (sessionId: string, text: string) => groupAnswerTurn(this, sessionId, text)
+  noteMailed = (operationId: string | undefined, botId: string) =>
+    noteGroupTurnMailed(this, operationId, botId)
   saveAnswer = (operationId: string, text: string) => saveGroupPeerAnswer(this, operationId, text)
   recordWorker = (operation: Promise<string | null>, dispatchId: string) =>
     recordGroupWorker(this, operation, dispatchId)

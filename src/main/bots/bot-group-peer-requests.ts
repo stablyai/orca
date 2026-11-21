@@ -72,7 +72,14 @@ export async function groupPeerScope(
   ) {
     throw new Error('The original human group request cannot be verified.')
   }
-  return { originalHumanInstruction: original.text, group, source, target, ...root }
+  return {
+    originalHumanInstruction: original.text,
+    group,
+    source,
+    target,
+    operationId: turn.operationId,
+    ...root
+  }
 }
 
 export function assertGroupPeerScope(groups: BotGroupRuntime, scope: GroupPeerScope): void {

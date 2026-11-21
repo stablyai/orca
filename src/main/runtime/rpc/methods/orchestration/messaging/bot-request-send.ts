@@ -287,6 +287,7 @@ async function admitBotRequestMail(
       return blockedReceipt(admission)
     }
     const { message } = admission
+    runtimeBotGroups(runtime).noteMailed(groupScope?.operationId, target.id)
     card.write({ messageId: message.id })
     const sent = recordReceiptForPostCommitNudge(
       args.recordMutationReceipt,

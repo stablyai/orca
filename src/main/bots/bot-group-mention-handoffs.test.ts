@@ -154,6 +154,35 @@ describe('group @Name hand-offs', () => {
     expect(newest().id).toBe('late-mail')
   })
 
+  it('wakes no second turn for a member the same turn already mailed', async () => {
+    const { groups, group, post, reply, lines } = await room()
+    const next = await post('@Scout look')
+    const [scout] = groups.store.get(group.id).members
+    const mailLine = (id: string) =>
+      groups.store.append({
+        id,
+        groupId: group.id,
+        author: { kind: 'bot', id: 'bot-0', name: 'Scout' },
+        text: 'Forge asked Scout',
+        createdAt: next.createdAt,
+        rootRequestId: next.id,
+        rootSequence: next.sequence,
+        requester: { id: 'bot-1', name: 'Forge' },
+        turns: [
+          { ...next.turns[0]!, operationId: `${id}-op`, sessionId: scout!.sessionId, mailbox: true }
+        ]
+      })
+    // Scout answers Forge's request by reply, then names Forge too.
+    const answered = mailLine('answered')
+    groups.saveAnswer('answered-op', 'Use the staging bucket.')
+    await reply(answered, '@Forge answered above')
+    // Scout sends Forge a peer request, then names Forge too.
+    const sent = mailLine('sent')
+    groups.noteMailed('sent-op', 'bot-1')
+    await reply(sent, 'Asked @Forge for the logs')
+    expect(lines().map((line) => line.id)).toEqual([next.id, 'answered', 'sent'])
+  })
+
   it("wakes the member a worker report's turn names", async () => {
     const { groups, post, reply, newest, startWorker, orchestration } = await room()
     const asked = await post('@Scout build it')

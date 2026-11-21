@@ -86,10 +86,18 @@ export async function handOffGroupMentions(
           (sessionId === undefined || member.sessionId === sessionId) &&
           (member.stoppedThroughSequence ?? 0) < rootSequence
       )
+    // A member this turn already mailed (a peer request, or its answer to the requester) wakes on
+    // that mail, so naming it too would start a second turn.
+    const mailed = new Set(speaking.mailed)
+    const requester = groups.store.message(message.id)?.requester
+    if (speaking.answer !== undefined && requester) {
+      mailed.add(requester.id)
+    }
     const bots = groups.runtime.bots.list()
     const named = active(turn.botId, turn.sessionId)
       ? botGroupReplyMentions(blankMarkdownCode(reply.full), room, bots, turn.botId).filter(
-          ({ id }) => active(id) && bots.some((bot) => bot.id === id && !bot.paused)
+          ({ id }) =>
+            active(id) && !mailed.has(id) && bots.some((bot) => bot.id === id && !bot.paused)
         )
       : []
     const targets = named.map(({ id }) => id)
@@ -141,6 +149,26 @@ export async function handOffGroupMentions(
       void deliverTurn(groups, line, wokenTurn)
     }
   }
+}
+
+/** Records that a member's turn sent a peer request to `botId`; a send from no room turn has none. */
+export function noteGroupTurnMailed(
+  groups: BotGroupRuntime,
+  operationId: string | undefined,
+  botId: string
+): void {
+  const message = operationId ? groups.store.operationMessage(operationId) : null
+  if (!message) {
+    return
+  }
+  groups.store.update({
+    ...message,
+    turns: message.turns.map((turn) =>
+      turn.operationId === operationId && !turn.mailed?.includes(botId)
+        ? { ...turn, mailed: [...(turn.mailed ?? []), botId] }
+        : turn
+    )
+  })
 }
 
 function markHandedOff(

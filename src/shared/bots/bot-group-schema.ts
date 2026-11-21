@@ -106,6 +106,8 @@ const BotGroupTurnSchema = z.object({
   answer: z.string().optional(),
   /** The members its reply named, saved as their hand-offs were reserved: a replay wakes none. */
   handedOff: z.array(z.string()).optional(),
+  /** The members it sent peer requests to: its @mentions of them wake no second turn. */
+  mailed: z.array(z.string()).optional(),
   frozenItems: z
     .array(z.custom<AgentJournalRenderItem>(isAdmissibleAgentJournalRenderItem))
     .optional()
