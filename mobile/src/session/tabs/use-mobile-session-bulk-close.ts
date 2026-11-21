@@ -7,6 +7,11 @@ import type { RpcSuccess } from '../../transport/rpc/rpc-wire-types'
 import { mobileBulkTabCloseCopy } from './mobile-bulk-tab-close-copy'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { activateMobileSessionTab } from './mobile-session-tab-activation'
+import {
+  clearTerminalTabHold,
+  noteTerminalTabActivation,
+  useTerminalTabHeldByNewerVersion
+} from './newer-version-held-terminal-tabs'
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-tabs'
 import type { MobileSessionCloseActionsModel } from './use-mobile-session-close-actions'
 
@@ -66,6 +71,15 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
     activeSessionTab?.type === 'terminal' && typeof activeSessionTab.terminal !== 'string'
       ? activeSessionTab
       : null
+  const activePendingTerminalHeld = useTerminalTabHeldByNewerVersion(
+    worktreeId,
+    activePendingTerminalTab?.id
+  )
+  const retryHeldTerminal = () => {
+    if (activePendingTerminalTab) {
+      clearTerminalTabHold(worktreeId, activePendingTerminalTab.id)
+    }
+  }
   const isPendingTerminalRecoveryParked =
     pendingTerminalRecoveryContextKey !== null &&
     pendingTerminalRecoveryContextKey === parkedPendingTerminalContext
@@ -75,6 +89,10 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
       if (connState !== 'connected' || !activePendingTerminalTab) {
         pendingTerminalActivationAttemptRef.current = null
       }
+      return
+    }
+    // A held tab waits for the user's retry; asking again can't help until that computer changes.
+    if (activePendingTerminalHeld) {
       return
     }
     const activationKey = `${worktreeId}:${activePendingTerminalTab.id}:${activePendingTerminalTab.leafId ?? ''}`
@@ -96,6 +114,7 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
         if (pendingTerminalActivationAttemptRef.current !== activationKey) {
           return
         }
+        noteTerminalTabActivation(worktreeId, activePendingTerminalTab.id, response)
         if (!response.ok) {
           pendingTerminalActivationAttemptRef.current = null
           return
@@ -110,6 +129,7 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
         }
       })
   }, [
+    activePendingTerminalHeld,
     activePendingTerminalTab,
     applySessionTabs,
     client,
@@ -127,6 +147,8 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
     activeFileTab,
     activeBrowserTab,
     activePendingTerminalTab,
+    activePendingTerminalHeld,
+    retryHeldTerminal,
     isPendingTerminalRecoveryParked,
     retryPendingTerminalRecovery
   }

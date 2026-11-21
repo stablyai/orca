@@ -7,7 +7,7 @@ import {
   terminalPaneDirection,
   terminalPaneKeyboardLayout
 } from '../terminal/session/pane-layout/mobile-terminal-pane-layout'
-import { View, Text, Pressable, ActivityIndicator } from 'react-native'
+import { View } from 'react-native'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from '../terminal/session/pane-layout/TerminalPaneView'
 import { MountedTerminalPanes } from '../terminal/session/pane-layout/mounted-terminal-lru'
@@ -18,10 +18,10 @@ import { MobileNativeChatForkProvider } from './MobileNativeChatForkProvider'
 import { useMobileAgentMessageNavigation } from './use-mobile-agent-message-navigation'
 import { MobileNativeChatDictationPreviewContext } from './native-chat/composer/dictation/mobile-native-chat-dictation-preview-context'
 import { resolveMobileNativeChatSessionId } from './native-chat/conversation/mobile-native-chat-eligibility'
-import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
+import { MobilePendingTerminalState } from './MobilePendingTerminalState'
 import { renderAnimatedToast } from '../components/feedback/TransientToast'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobileSessionContentKeyboardLift } from '../terminal/session/input-controls/use-mobile-session-keyboard-lift'
@@ -113,6 +113,8 @@ export function MobileSessionActiveContent({
     activeFileTab,
     activeBrowserTab,
     activePendingTerminalTab,
+    activePendingTerminalHeld,
+    retryHeldTerminal,
     isPendingTerminalRecoveryParked,
     retryPendingTerminalRecovery,
     showLoadingState,
@@ -240,36 +242,12 @@ export function MobileSessionActiveContent({
         {toast}
       </View>
     ) : activePendingTerminalTab ? (
-      <View style={styles.emptyState}>
-        {!isPendingTerminalRecoveryParked && (
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-        )}
-        <Text style={styles.emptyText}>
-          {isPendingTerminalRecoveryParked
-            ? t(
-                'session.activeContent.terminalTakingLonger',
-                'Terminal is taking longer than expected'
-              )
-            : activePendingTerminalTab.title ||
-              t('session.activeContent.loadingTerminal', 'Loading terminal')}
-        </Text>
-        {isPendingTerminalRecoveryParked && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t(
-              'session.activeContent.retryLoadingTerminal',
-              'Retry loading terminal'
-            )}
-            style={({ pressed }) => [
-              styles.createButton,
-              pressed && styles.newTerminalButtonPressed
-            ]}
-            onPress={() => void retryPendingTerminalRecovery()}
-          >
-            <Text style={styles.createButtonText}>{t('common.retry', 'Retry')}</Text>
-          </Pressable>
-        )}
-      </View>
+      <MobilePendingTerminalState
+        title={activePendingTerminalTab.title}
+        held={activePendingTerminalHeld}
+        parked={isPendingTerminalRecoveryParked}
+        onRetry={activePendingTerminalHeld ? retryHeldTerminal : retryPendingTerminalRecovery}
+      />
     ) : (
       <View style={styles.terminalFrame}>
         <MountedTerminalPanes terminals={terminals} visibleHandles={visibleTerminalHandles}>
