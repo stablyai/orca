@@ -80,7 +80,7 @@ describe('an unconfirmed worker start', () => {
       title: 'worker',
       ptyId: 'pty-worker',
       incarnationId: 'inc-1'
-    } as never)
+    })
     vi.spyOn(h.runtime, 'subscribeToTerminalData').mockReturnValue(() => {})
     vi.spyOn(h.runtime, 'readRecentTerminalOutput').mockReturnValue('')
     vi.spyOn(h.runtime, 'isExactAgentInFront').mockResolvedValue(inFront)
@@ -143,7 +143,7 @@ describe('an unconfirmed worker start', () => {
     vi.spyOn(h.runtime, 'getPtyLivenessVerdict').mockReturnValue({
       status: 'exited',
       incarnationId: 'inc-1'
-    } as never)
+    })
     vi.spyOn(h.runtime, 'readExitedLaunchOutput').mockReturnValue('zsh: command not found: claude')
     const { state, dispatchId } = await start('claude')
 
