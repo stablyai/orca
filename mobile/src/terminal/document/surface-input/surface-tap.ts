@@ -51,8 +51,10 @@ export function notifyTerminalSurfaceTap(
   if (clickInput) {
     // Flush pending live text before a click can move the TUI cursor.
     notify(scope, { type: 'terminal-input', bytes: clickInput, click: true })
+    // Leave IME closed when a tracking TUI consumes the tap; the bottom command dock owns keyboard entry.
+    return
   }
-  // Touch still needs native focus after TUI clicks; unproven mouse encoding falls back to a plain tap.
+  // Unproven encoding or non-tracking surfaces fall back to focusing the native input on touch taps.
   if (
     focusKeyboard ||
     !isClickMouseTrackingMode(getMouseTrackingMode(scope)) ||
