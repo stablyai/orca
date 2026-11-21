@@ -162,6 +162,9 @@ export function assertRemotePoster(
   }
 }
 
+/** The paired computer didn't answer: posting again may reach it, unlike any other refusal. */
+class RemoteComputerUnreachable extends Error {}
+
 /** The paired computer, refused with the group's own words when its Orca can't take bot questions. */
 async function requireRemoteComputer(groups: BotGroupRuntime, environmentId: string) {
   let name = environmentId
@@ -172,7 +175,7 @@ async function requireRemoteComputer(groups: BotGroupRuntime, environmentId: str
     if (error instanceof OrchestrationError && error.code === 'server_mail_unsupported') {
       throw new Error(`Update Orca on ${name} to add its bots to a group.`)
     }
-    throw new Error(`Couldn't reach ${name}. ${text(error)}`.trim())
+    throw new RemoteComputerUnreachable(`Couldn't reach ${name}. ${text(error)}`.trim())
   }
 }
 
@@ -207,10 +210,14 @@ export async function deliverRemoteAsks(
           try {
             server = await requireRemoteComputer(groups, environmentId)
           } catch (error) {
+            const reason = text(error)
             for (const ask of computerAsks) {
               await settleAsk(groups, message, ask.requestId, {
                 state: 'failed',
-                error: text(error)
+                error:
+                  error instanceof RemoteComputerUnreachable
+                    ? `${/[.!?]$/.test(reason) ? reason : `${reason}.`} Post again to retry.`
+                    : reason
               })
             }
             return

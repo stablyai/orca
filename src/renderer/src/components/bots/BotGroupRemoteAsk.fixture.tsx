@@ -63,7 +63,7 @@ export const noAnswer = defineFixture({
           ...base,
           requestId: id(4),
           state: 'failed',
-          error: "Couldn't reach Workstation. It is offline."
+          error: "Couldn't reach Workstation. It's offline. Post again to retry."
         },
         { ...base, requestId: id(5), state: 'unknown', error: 'The request timed out.' },
         { ...base, requestId: id(6), reply: { kind: 'notice' } },
@@ -107,7 +107,7 @@ export const narrow = defineFixture({
           name: 'Nightly builds and release checks',
           requestId: id(10),
           state: 'failed',
-          error: "Couldn't reach Workstation. It is offline."
+          error: "Couldn't reach Workstation. It's offline. Post again to retry."
         },
         { ...base, requestId: id(11), state: 'sending' }
       ]}

@@ -11,6 +11,7 @@ import { BotGroupMembersDialog } from './BotGroupMembersDialog'
 
 const mocks = vi.hoisted(() => ({
   bots: new Array<Bot>(),
+  pairedWebWindow: false,
   openBotGroup: vi.fn(async (_group: BotGroup) => {}),
   rpc: vi.fn(async (_target: unknown, method: string, _params?: unknown) =>
     // A host answers with its own view of the group, which names itself `local`.
@@ -23,6 +24,10 @@ vi.mock('@/lib/bot-group-list', () => ({ refreshBotGroups: vi.fn(async () => {})
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (target: unknown, method: string, params?: unknown) =>
     mocks.rpc(target, method, params)
+}))
+vi.mock('@/app-shell/chrome/desktop-window-chrome', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  isPairedWebClientWindow: () => mocks.pairedWebWindow
 }))
 vi.mock('./use-bot-group-delete', () => ({ useBotGroupDelete: () => vi.fn() }))
 vi.mock('./use-bot-host-label', () => ({
@@ -83,6 +88,7 @@ afterEach(() => {
 describe('BotGroupMembersDialog', () => {
   const sameHost = [bot('a', 'Fern'), bot('b', 'Moss'), bot('c', 'Ivy')]
   beforeEach(() => {
+    mocks.pairedWebWindow = false
     mocks.bots = sameHost
   })
 
@@ -250,6 +256,25 @@ describe('BotGroupMembersDialog', () => {
       botIds: ['a'],
       remoteBots: []
     })
+  })
+
+  it("doesn't list a room's remote members in a paired web window, which can't change them", () => {
+    mocks.pairedWebWindow = true
+    const remote = {
+      environmentId: 'ws',
+      botId: 'w',
+      chatSessionId: 'chat-w',
+      computer: 'Workstation',
+      joinedAfter: 0,
+      name: 'Willow',
+      avatar: null,
+      agent: 'claude' as const
+    }
+    render(
+      <BotGroupMembersDialog group={{ ...group, remoteMembers: [remote] }} onClose={() => {}} />
+    )
+    expect(screen.queryByRole('checkbox', { name: /Willow/ })).toBeNull()
+    expect(row('Fern')).toBeTruthy()
   })
 
   it("leaves another computer's room's remote members to that computer", () => {

@@ -33,9 +33,7 @@ export function BotGroupRemoteAsk({ ask }: { ask: RemoteAsk }): React.JSX.Elemen
     answer !== null || ask.reply?.kind === 'notice'
       ? null
       : ask.state === 'failed'
-        ? t('bots.groups.remoteRetry', '{{reason}} Post again to retry.', {
-            reason: sentence(ask.error ?? '')
-          }).trim()
+        ? sentence(ask.error ?? '')
         : ask.state === 'unknown'
           ? [mayAnswer, ask.error ? sentence(ask.error) : ''].join(' ').trim()
           : ask.stopped
@@ -72,7 +70,8 @@ export function BotGroupRemoteAsk({ ask }: { ask: RemoteAsk }): React.JSX.Elemen
           />
         ) : null}
         <span
-          role={problem ? 'status' : undefined}
+          // Present in every state, so a live change to a problem is announced.
+          role="status"
           title={status}
           className={
             problem

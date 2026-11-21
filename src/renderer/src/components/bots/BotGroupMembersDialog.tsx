@@ -56,18 +56,15 @@ export function BotGroupMembersDialog({
 }): React.JSX.Element {
   const t = useTranslate()
   const listedBots = useBots()
-  // In a room here, a remote member whose computer isn't listed now still shows, so it can be
-  // removed. Another computer's room keeps its remote roster to itself.
-  const allBots = useMemo(
-    () =>
-      group?.hostId === LOCAL_EXECUTION_HOST_ID
-        ? withUnlistedMembers(listedBots, group)
-        : listedBots,
-    [listedBots, group]
-  )
   // A room on this computer can also hold bots on paired computers; a paired server's room holds
   // only that server's bots. A paired web window's bots all live on its one server.
   const canMix = !isPairedWebClientWindow() && (!group || group.hostId === LOCAL_EXECUTION_HOST_ID)
+  // In a room here, a remote member whose computer isn't listed now still shows, so it can be
+  // removed. Elsewhere (another computer's room, a paired web window) the remote roster isn't shown.
+  const allBots = useMemo(
+    () => (canMix ? withUnlistedMembers(listedBots, group) : listedBots),
+    [canMix, listedBots, group]
+  )
   const manyHosts = useMemo(
     () => !isPairedWebClientWindow() && new Set(allBots.map((bot) => bot.hostId)).size > 1,
     [allBots]

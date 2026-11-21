@@ -29,22 +29,25 @@ describe('a question to a bot on another computer', () => {
     expect(screen.getByText('May still answer on Workstation. The request timed out.')).toBeTruthy()
   })
 
-  it('says a question refused before delivery can be posted again', () => {
+  it('shows why a question was not sent, under a short label', () => {
     render(
       <BotGroupRemoteAsk
-        ask={{ ...base, state: 'failed', error: "Couldn't reach Workstation. It is offline." }}
+        ask={{
+          ...base,
+          state: 'failed',
+          error: "Couldn't reach Workstation. It's offline. Post again to retry."
+        }}
       />
     )
     expect(screen.getByRole('status').textContent).toBe('Not sent to Workstation')
     expect(
-      screen.getByText("Couldn't reach Workstation. It is offline. Post again to retry.")
+      screen.getByText("Couldn't reach Workstation. It's offline. Post again to retry.")
     ).toBeTruthy()
   })
 
   it("names the computer, not the bot again, when the bot didn't answer or was stopped", () => {
     render(<BotGroupRemoteAsk ask={{ ...base, reply: { kind: 'notice' } }} />)
     expect(screen.getByText("Didn't answer on Workstation")).toBeTruthy()
-    expect(screen.queryByRole('status')).toBeNull()
     cleanup()
     render(<BotGroupRemoteAsk ask={{ ...base, stopped: true }} />)
     expect(screen.getByText('Stopped here')).toBeTruthy()

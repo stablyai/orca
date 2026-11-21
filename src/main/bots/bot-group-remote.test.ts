@@ -191,6 +191,24 @@ describe('a group with a bot on another computer', () => {
     })
   })
 
+  it('offers posting again only when the computer could not be reached', async () => {
+    let offline = false
+    const base = remoteFixture({
+      status: async () => {
+        if (offline) {
+          throw new Error('The host did not answer')
+        }
+      }
+    })
+    const group = await mixedRoom(base)
+    offline = true
+    const message = await post(base, group, '@Atlas hi')
+    expect(message.remoteAsks![0]).toMatchObject({
+      state: 'failed',
+      error: "Couldn't reach Build Box. The host did not answer. Post again to retry."
+    })
+  })
+
   it('records a refusal as failed, and a lost acknowledgement as unknown', async () => {
     const refused = remoteFixture({
       deliver: async () => {
@@ -198,9 +216,10 @@ describe('a group with a bot on another computer', () => {
       }
     })
     const refusedGroup = await mixedRoom(refused)
-    expect((await post(refused, refusedGroup, '@Atlas hi')).remoteAsks![0]).toMatchObject({
-      state: 'failed'
-    })
+    const refusal = (await post(refused, refusedGroup, '@Atlas hi')).remoteAsks![0]
+    expect(refusal).toMatchObject({ state: 'failed' })
+    // Posting again would be refused the same way, so it isn't offered.
+    expect(refusal.error).not.toContain('Post again')
     expect(refused.ensureRelay).toHaveBeenCalledWith('env-s')
 
     const base = remoteFixture({

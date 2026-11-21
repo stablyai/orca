@@ -28086,7 +28086,6 @@
       "remoteSending": "Asking on {{computer}}…",
       "remoteAsked": "Asked on {{computer}}",
       "remoteMayAnswer": "May still answer on {{computer}}.",
-      "remoteRetry": "{{reason}} Post again to retry.",
       "remoteShortened": "Shortened. Full answer is on {{computer}}.",
       "homeUnavailable": "The home workspace for “{{name}}” on {{host}} is unavailable.",
       "createdNotOpened": "Created “{{name}}”, but couldn’t open it.",
