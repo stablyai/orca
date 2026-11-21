@@ -20288,6 +20288,10 @@
         "copyTrimsGutterDescription": "移除代理程式輸出左側的共用縮排，讓複製的文字不會多出空格。只會移除所有選取行共同擁有的縮排。",
         "copyOnSelectDescription": "自動將在終端機或聊天中選取的文字複製到剪貼簿。",
         "scrollOnUserInputDescription": "向上捲動時鍵入或貼上會跳至最新輸出。關閉此項可保留目前位置。",
+        "scrollbarAlwaysVisible": "一律顯示捲軸",
+        "scrollbarAlwaysVisibleDescription": "讓終端機捲軸持續顯示，而不是只在滑鼠懸停或捲動時才出現。",
+        "scrollbarWidth": "捲軸寬度",
+        "scrollbarWidthDescription": "終端機捲軸的寬度（像素）。較寬的捲軸更容易看見與拖曳。",
         "4ed43d5060": "複製時移除左側留白",
         "4c690cdfc3": "輸入時捲動到底部"
       },
@@ -20306,6 +20310,8 @@
           }
         },
         "search": {
+          "scrollbar": "捲軸",
+          "accessibility": "無障礙",
           "typing": "鍵入",
           "input": "輸入",
           "jump": "跳轉",

@@ -26,7 +26,13 @@ vi.mock('@/components/standalone-terminal/open-standalone-terminal', () => ({
       rows: 24,
       loadAddon: () => {},
       focus: () => {},
-      onResize: () => ({ dispose: () => {} })
+      onResize: () => ({ dispose: () => {} }),
+      onScroll: () => ({ dispose: () => {} }),
+      onWriteParsed: () => ({ dispose: () => {} }),
+      buffer: {
+        active: { type: 'normal', baseY: 0 },
+        onBufferChange: () => ({ dispose: () => {} })
+      }
     },
     write: (chunk: string, options: { onDone?: () => void }) => {
       written.push(chunk)

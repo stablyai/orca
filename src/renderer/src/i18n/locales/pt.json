@@ -22220,6 +22220,10 @@
         "copyTrimsGutterDescription": "Remove a margem esquerda onde a saída do agente é desenhada por trás, para que o texto copiado não fique indentado. Apenas a indentação compartilhada por todas as linhas selecionadas é removida.",
         "copyOnSelectDescription": "Copiar automaticamente o texto selecionado em um terminal ou chat para a área de transferência.",
         "scrollOnUserInputDescription": "Digitar ou colar com o painel rolado para cima leva à saída mais recente. Desative para manter sua posição.",
+        "scrollbarAlwaysVisible": "Sempre mostrar a barra de rolagem",
+        "scrollbarAlwaysVisibleDescription": "Mantém a barra de rolagem do terminal visível em vez de apenas ao passar o cursor ou rolar.",
+        "scrollbarWidth": "Largura da barra de rolagem",
+        "scrollbarWidthDescription": "Largura da barra de rolagem do terminal em pixels. Uma barra mais larga é mais fácil de ver e arrastar.",
         "4ed43d5060": "Remover Margem ao Copiar",
         "4c690cdfc3": "Rolar para o final ao digitar"
       },
@@ -22238,6 +22242,8 @@
           }
         },
         "search": {
+          "scrollbar": "barra de rolagem",
+          "accessibility": "acessibilidade",
           "typing": "digitação",
           "input": "entrada",
           "jump": "pular",

@@ -20719,6 +20719,10 @@
         "copyTrimsGutterDescription": "Déposez la sortie de l'agent de gouttière gauche qui est peinte derrière, donc le texte copié n'est pas en retrait. Seul le retrait de chaque partage de ligne sélectionnée est supprimé.",
         "copyOnSelectDescription": "Copier automatiquement vers le presse-papiers le texte sélectionné dans un terminal ou un chat.",
         "scrollOnUserInputDescription": "Taper ou coller pendant que le volet est défilé vers le haut ramène à la dernière sortie. Désactivez pour conserver votre position.",
+        "scrollbarAlwaysVisible": "Toujours afficher la barre de défilement",
+        "scrollbarAlwaysVisibleDescription": "Gardez la barre de défilement du terminal visible au lieu de l'afficher uniquement au survol ou pendant le défilement.",
+        "scrollbarWidth": "Largeur de la barre de défilement",
+        "scrollbarWidthDescription": "Largeur de la barre de défilement du terminal en pixels. Une barre plus large est plus facile à voir et à faire glisser.",
         "4ed43d5060": "Couper la gouttière lors de la copie",
         "4c690cdfc3": "Défiler vers le bas lors de la saisie"
       },
@@ -20737,6 +20741,8 @@
           }
         },
         "search": {
+          "scrollbar": "barre de défilement",
+          "accessibility": "accessibilité",
           "typing": "saisie",
           "input": "entrée",
           "jump": "sauter",

@@ -21025,6 +21025,10 @@
         "copyTrimsGutterDescription": "左側のガターをドロップすると、Agent の出力が後ろに描画されるため、コピーされたテキストはインデントされません。選択した行ごとに共有されるインデントのみが削除されます。",
         "copyOnSelectDescription": "ターミナルやチャットで選択したテキストをクリップボードに自動的にコピーします。",
         "scrollOnUserInputDescription": "上にスクロール中に入力または貼り付けを行うと、最新の出力に移動します。オフにすると現在の位置を維持します。",
+        "scrollbarAlwaysVisible": "スクロールバーを常に表示",
+        "scrollbarAlwaysVisibleDescription": "ホバー中やスクロール中だけでなく、ターミナルのスクロールバーを常に表示します。",
+        "scrollbarWidth": "スクロールバーの幅",
+        "scrollbarWidthDescription": "ターミナルのスクロールバーの幅（ピクセル）。幅が広いほど見つけやすく、ドラッグしやすくなります。",
         "4ed43d5060": "コピー時に余白をトリミングする",
         "4c690cdfc3": "入力時に一番下へスクロール"
       },
@@ -21043,6 +21047,8 @@
           }
         },
         "search": {
+          "scrollbar": "スクロールバー",
+          "accessibility": "アクセシビリティ",
           "typing": "タイピング",
           "input": "入力",
           "jump": "ジャンプ",

@@ -20417,6 +20417,10 @@
         "copyTrimsGutterDescription": "Elimina el margen izquierdo tras el que se dibuja la salida del agente, para que el texto copiado no quede indentado. Solo se quita la indentación que comparten todas las líneas seleccionadas.",
         "copyOnSelectDescription": "Copia automáticamente al portapapeles el texto que selecciones en un terminal o un chat.",
         "scrollOnUserInputDescription": "Escribir o pegar con el panel desplazado hacia arriba salta a la salida más reciente. Desactívalo para mantener tu posición.",
+        "scrollbarAlwaysVisible": "Mostrar siempre la barra de desplazamiento",
+        "scrollbarAlwaysVisibleDescription": "Mantén visible la barra de desplazamiento del terminal en lugar de solo al pasar el cursor o desplazarte.",
+        "scrollbarWidth": "Ancho de la barra de desplazamiento",
+        "scrollbarWidthDescription": "Ancho de la barra de desplazamiento del terminal en píxeles. Una barra más ancha es más fácil de ver y arrastrar.",
         "4ed43d5060": "Recortar margen al copiar",
         "4c690cdfc3": "Desplazar al final al escribir"
       },
@@ -20435,6 +20439,8 @@
           }
         },
         "search": {
+          "scrollbar": "barra de desplazamiento",
+          "accessibility": "accesibilidad",
           "typing": "escritura",
           "input": "entrada",
           "jump": "saltar",

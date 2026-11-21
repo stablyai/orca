@@ -19860,6 +19860,10 @@
         "copyTrimsGutterDescription": "복사한 텍스트에서 에이전트 출력의 왼쪽 여백을 제거합니다. 선택한 모든 줄에 공통된 들여쓰기만 제거됩니다.",
         "copyOnSelectDescription": "터미널이나 채팅에서 선택한 내용을 클립보드에 자동으로 복사합니다.",
         "scrollOnUserInputDescription": "위로 스크롤한 상태에서 입력하거나 붙여넣으면 최신 출력으로 이동합니다. 현재 위치를 유지하려면 끄세요.",
+        "scrollbarAlwaysVisible": "스크롤바 항상 표시",
+        "scrollbarAlwaysVisibleDescription": "마우스를 올리거나 스크롤할 때만이 아니라 터미널 스크롤바를 항상 표시합니다.",
+        "scrollbarWidth": "스크롤바 너비",
+        "scrollbarWidthDescription": "터미널 스크롤바의 너비(픽셀)입니다. 너비가 넓을수록 보기 쉽고 드래그하기 쉽습니다.",
         "4ed43d5060": "복사 시 여백 자르기",
         "4c690cdfc3": "입력 시 맨 아래로 스크롤"
       },
@@ -19878,6 +19882,8 @@
           }
         },
         "search": {
+          "scrollbar": "스크롤바",
+          "accessibility": "접근성",
           "typing": "타이핑",
           "input": "입력",
           "jump": "이동",

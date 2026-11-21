@@ -601,3 +601,12 @@
   color: #a1a1aa;
   background: rgba(24, 24, 27, 0.85);
 }
+
+/* Always-visible mode: xterm only fades its scrollbar with .xterm-invisible, so undo that under the opt-in attribute. */
+[data-terminal-scrollbar-always-visible]
+  .xterm
+  .xterm-scrollable-element
+  > .xterm-scrollbar.xterm-invisible {
+  opacity: 1;
+  pointer-events: auto;
+}

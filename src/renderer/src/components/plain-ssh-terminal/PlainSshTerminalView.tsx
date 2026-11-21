@@ -9,6 +9,7 @@ import { resolveEffectiveTerminalAppearance } from '@/lib/terminal/appearance/te
 import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
 import { resolveTerminalMinimumContrastRatio } from '../../../../shared/terminal-themes/terminal-contrast-correction'
 import { syncPreviewTerminalLigatures } from '@/components/standalone-terminal/rendering/preview-terminal-ligatures'
+import { applyTerminalScrollbarSettings } from '@/lib/pane-manager/terminal-scrollbar-visibility'
 import {
   buildPreviewAppearanceOptions,
   buildPreviewTerminalOptions
@@ -299,8 +300,11 @@ export function PlainSshTerminalView({
       )
     })
     syncPreviewTerminalLigatures(terminal, settings)
-    // Why the guard: a minimized panel measures 0x0, and fitting would shrink the remote pty to 2x1.
     const container = containerRef.current
+    if (container) {
+      applyTerminalScrollbarSettings(terminal, container, settings)
+    }
+    // Why the guard: a minimized panel measures 0x0, and fitting would shrink the remote pty to 2x1.
     if (!hidden && container && container.offsetWidth > 0 && container.offsetHeight > 0) {
       fitRef.current?.fit()
     }

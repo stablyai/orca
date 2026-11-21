@@ -20606,6 +20606,10 @@
         "copyTrimsGutterDescription": "Den linken Rand vor der Agentenausgabe entfernen, damit kopierter Text nicht eingerückt ist. Entfernt wird nur die gemeinsame Einrückung aller ausgewählten Zeilen.",
         "copyOnSelectDescription": "In einem Terminal oder Chat ausgewählten Text automatisch in die Zwischenablage kopieren.",
         "scrollOnUserInputDescription": "Tippen oder Einfügen im hochgescrollten Zustand springt zur neuesten Ausgabe. Deaktiviere dies, um deine Position zu behalten.",
+        "scrollbarAlwaysVisible": "Scrollleiste immer anzeigen",
+        "scrollbarAlwaysVisibleDescription": "Die Terminal-Scrollleiste dauerhaft anzeigen statt nur beim Darüberfahren oder Scrollen.",
+        "scrollbarWidth": "Breite der Scrollleiste",
+        "scrollbarWidthDescription": "Breite der Terminal-Scrollleiste in Pixeln. Eine breitere Leiste ist leichter zu sehen und zu ziehen.",
         "4ed43d5060": "Linken Rand beim Kopieren entfernen",
         "4c690cdfc3": "Bei Eingabe nach unten scrollen"
       },
@@ -20624,6 +20628,8 @@
           }
         },
         "search": {
+          "scrollbar": "scrollleiste",
+          "accessibility": "barrierefreiheit",
           "typing": "tippen",
           "input": "eingabe",
           "jump": "springen",

@@ -2,6 +2,7 @@ import type { GlobalSettings } from './global-settings-types'
 import type { NotificationSettings } from '../notifications/notification-settings-types'
 import type { VoiceSettings } from '../speech/speech-types'
 import { DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from '../terminal/appearance/terminal-fonts'
+import { DEFAULT_TERMINAL_SCROLLBAR_WIDTH } from '../terminal/appearance/terminal-scroll-settings'
 import { getDefaultTerminalQuickCommands } from '../terminal/quick-commands/terminal-quick-commands'
 import { TASK_PROVIDERS } from '../work-items/task-providers'
 import {
@@ -131,6 +132,8 @@ export function buildDefaultSettings(args: {
     terminalFocusFollowsMouse: false,
     // Why: xterm's default; turning it off keeps a scrolled-up reading position while typing.
     terminalScrollOnUserInput: true,
+    terminalScrollbarWidth: DEFAULT_TERMINAL_SCROLLBAR_WIDTH,
+    terminalScrollbarAlwaysVisible: false,
     windowBackgroundBlur: false,
     reduceVisualEffects: false,
     minimizeToTrayOnClose: false,

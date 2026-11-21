@@ -22971,6 +22971,10 @@
         "copyTrimsGutterDescription": "Drop the left gutter agent output is painted behind, so copied text is not indented. Only the indent every selected line shares is removed.",
         "copyOnSelectDescription": "Automatically copy text you select in a terminal or chat to the clipboard.",
         "scrollOnUserInputDescription": "Typing or pasting while scrolled up jumps to the latest output. Turn off to keep your place.",
+        "scrollbarAlwaysVisible": "Always show scrollbar",
+        "scrollbarAlwaysVisibleDescription": "Keep the terminal scrollbar visible instead of only while hovering or scrolling.",
+        "scrollbarWidth": "Scrollbar width",
+        "scrollbarWidthDescription": "Width of the terminal scrollbar in pixels. A wider bar is easier to see and drag.",
         "4ed43d5060": "Trim gutter on copy",
         "4c690cdfc3": "Scroll to bottom on input"
       },
@@ -22989,6 +22993,8 @@
           }
         },
         "search": {
+          "scrollbar": "scrollbar",
+          "accessibility": "accessibility",
           "typing": "typing",
           "input": "input",
           "jump": "jump",

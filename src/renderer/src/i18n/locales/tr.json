@@ -20753,6 +20753,10 @@
         "copyTrimsGutterDescription": "Ajan çıktısının arkasına çizildiği sol kenar boşluğunu kaldırır, böylece kopyalanan metin girintili olmaz. Yalnızca seçilen tüm satırların paylaştığı girinti kaldırılır.",
         "copyOnSelectDescription": "Terminalde veya sohbette seçtiğiniz metni otomatik olarak panoya kopyalayın.",
         "scrollOnUserInputDescription": "Yukarı kaydırılmışken yazmak veya yapıştırmak en son çıktıya götürür. Konumunuzu korumak için kapatın.",
+        "scrollbarAlwaysVisible": "Kaydırma çubuğunu her zaman göster",
+        "scrollbarAlwaysVisibleDescription": "Terminal kaydırma çubuğunu yalnızca üzerine gelindiğinde veya kaydırırken değil, her zaman görünür tut.",
+        "scrollbarWidth": "Kaydırma çubuğu genişliği",
+        "scrollbarWidthDescription": "Terminal kaydırma çubuğunun piksel cinsinden genişliği. Daha geniş bir çubuğu görmek ve sürüklemek daha kolaydır.",
         "4ed43d5060": "Kopyalarken Kenar Boşluğunu Kırp",
         "4c690cdfc3": "Girişte en alta kaydır"
       },
@@ -20771,6 +20775,8 @@
           }
         },
         "search": {
+          "scrollbar": "kaydırma çubuğu",
+          "accessibility": "erişilebilirlik",
           "typing": "yazma",
           "input": "giriş",
           "jump": "atla",
