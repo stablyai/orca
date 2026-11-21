@@ -12,13 +12,24 @@ import {
   runtime,
   sendUserMessage
 } from '../../runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-mail-rig.test-fixture'
-import { attachParams } from '../../runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-fake-codex-fixture'
+import {
+  attachParams,
+  operationId
+} from '../../runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-fake-codex-fixture'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
+import { STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER } from '../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-resume-wiring'
+import { structuredQueueHold } from '../../native-chat/agent-session-wire/delivery/structured-agent-session-queued-gate'
 import { runtimeBotChatEndDeps } from '../../runtime/rpc/methods/bots-end-chat'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/agent-session/identity/orca-session-address-prefix'
 import { makeTestBot } from '../bot.test-fixture'
 import { endBotChat, type BotChatEndRequest } from './bot-chat-end'
 import { installBotChatEndGuards } from './bot-chat-end-guards'
-import { fenceChatEnd, liftChatEndFence, resetChatEndFencesForTests } from './bot-chat-end-fence'
+import {
+  CHAT_ENDED,
+  fenceChatEnd,
+  liftChatEndFence,
+  resetChatEndFencesForTests
+} from './bot-chat-end-fence'
 
 const SIDE = COORDINATOR
 const SIDE_ADDRESS = `${ORCA_SESSION_ADDRESS_PREFIX}${SIDE}`
@@ -45,6 +56,38 @@ async function openBotChat(sessionId: string, place: 'tab' | 'background'): Prom
 async function end(request: Partial<BotChatEndRequest> = {}, chat: string = SIDE) {
   const deps = await runtimeBotChatEndDeps(runtime, BOT, chat, undefined)
   return endBotChat(deps, { intent: 'end', sessionId: chat, ...request })
+}
+
+/** A send as `callerKey` makes it: another window's composer, or Orca continuing a cut-off turn. */
+function sendAs(callerKey: string, sessionId: string, text: string) {
+  const body = {
+    kind: 'message' as const,
+    role: 'user' as const,
+    blocks: [{ type: 'text' as const, text }]
+  }
+  return host.send(
+    { callerKey },
+    {
+      envelope: {
+        sessionId,
+        clientOperationId: operationId(),
+        expectedRuntimeFence: host.deps.store.getRecord(sessionId)!.lease.runtimeFence,
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.send',
+          sessionId,
+          fields: { body }
+        })
+      },
+      body
+    }
+  )
+}
+
+const idleWork = {
+  working: () => false,
+  hasActionablePrompt: () => false,
+  actionablePrompts: () => [],
+  activeTurnId: () => null
 }
 
 beforeEach(() => {
@@ -119,6 +162,43 @@ describe('ending a bot side chat', () => {
       })
     }
     expect(host.deps.store.isSessionInBackground(SIDE)).toBe(true)
+  })
+})
+
+describe('when the idle release does not stop the agent', () => {
+  it('reports what the release saw, once: a reply in progress, or an agent still stopping', async () => {
+    await openBotChat(SIDE, 'background')
+    const release = vi.spyOn(host, 'releaseIdleSession')
+
+    release.mockResolvedValueOnce('busy')
+    expect(await end()).toEqual({ outcome: 'kept', reasons: [{ kind: 'replying' }] })
+    release.mockResolvedValueOnce('unconfirmed')
+    expect(await end()).toEqual({ outcome: 'kept', reasons: [{ kind: 'stopping' }] })
+
+    expect(release).toHaveBeenCalledTimes(2)
+    expect(host.deps.store.isSessionInBackground(SIDE)).toBe(true)
+    expect(host.deps.store.isSessionEnded(SIDE)).toBe(false)
+  })
+})
+
+describe('every way a turn can start in an ended chat', () => {
+  it("refuses another window's send, Orca's own continuation and its queue, until reopened", async () => {
+    await openBotChat(SIDE, 'background')
+    expect(await end()).toEqual({ outcome: 'ended', title: null })
+    const ended = { ok: false, refusal: { message: CHAT_ENDED } }
+
+    expect(await sendAs('second-window', SIDE, 'stale draft')).toMatchObject(ended)
+    expect(
+      await sendAs(STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER, SIDE, 'Continue')
+    ).toMatchObject(ended)
+    const record = () => host.deps.store.getRecord(SIDE)
+    expect(structuredQueueHold({ record: record(), work: idleWork })).toBe('blocked')
+
+    await host.setSessionTabVisibility(SIDE, true)
+    expect(structuredQueueHold({ record: record(), work: idleWork })).toBeNull()
+    expect(
+      await sendAs(STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER, SIDE, 'Continue')
+    ).toMatchObject({ ok: true })
   })
 })
 

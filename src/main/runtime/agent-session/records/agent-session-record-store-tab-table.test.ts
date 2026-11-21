@@ -160,4 +160,25 @@ describe('chat tab table', () => {
     expect(reopened.isSessionEnded('session-alpha')).toBe(false)
     expect((await open()).isSessionEnded('session-alpha')).toBe(false)
   })
+
+  it("names a restored tab's showing once, renews it on every show and drops it on hide", async () => {
+    const store = await open()
+    await store.reserveOwner(reserveRequest())
+    await store.setSessionTabVisibility('session-alpha', true)
+
+    // A restart restores the listed tab with no showing yet; the first read names it, later reads keep it.
+    const reopened = await open()
+    const restored = reopened.getSessionTabShowing('session-alpha')
+    expect(restored).toEqual(expect.any(String))
+    expect(reopened.getSessionTabShowing('session-alpha')).toBe(restored)
+
+    // Showing a tab that is already listed is a new showing; an x on the old one is late.
+    await reopened.setSessionTabVisibility('session-alpha', true)
+    const renewed = reopened.getSessionTabShowing('session-alpha')
+    expect(renewed).not.toBe(restored)
+    expect(reopened.getSessionTabShowing('session-alpha')).toBe(renewed)
+
+    await reopened.setSessionTabVisibility('session-alpha', false, undefined, { background: true })
+    expect(reopened.getSessionTabShowing('session-alpha')).toBeNull()
+  })
 })
