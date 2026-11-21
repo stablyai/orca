@@ -1,8 +1,8 @@
 import { createLocalJWKSet, jwtVerify, type JSONWebKeySet } from 'jose'
 import { z } from 'zod'
 
-export type UpstreamConfig = { issuer: string; clientId: string; clientSecret?: string; allowedEmails?: string[]; allowedDomains?: string[]; keepSecretLogin?: boolean; allowAny?: boolean; allowCrossOrigin?: boolean }
-const documentSchema = z.object({ issuer: z.string(), authorization_endpoint: z.string().url(), token_endpoint: z.string().url(), jwks_uri: z.string().url(), userinfo_endpoint: z.string().url().optional() })
+export type UpstreamConfig = { issuer: string; clientId: string; clientSecret?: string; tokenEndpointAuthMethod?: 'client_secret_basic' | 'client_secret_post'; allowedEmails?: string[]; allowedDomains?: string[]; keepSecretLogin?: boolean; allowAny?: boolean; allowCrossOrigin?: boolean }
+const documentSchema = z.object({ issuer: z.string(), token_endpoint_auth_methods_supported: z.array(z.string()).optional(), authorization_endpoint: z.string().url(), token_endpoint: z.string().url(), jwks_uri: z.string().url(), userinfo_endpoint: z.string().url().optional() })
 
 export function allowedEmail(config: UpstreamConfig, value: string) {
   if (!/^[\x21-\x7e]+@[\x21-\x7e]+$/.test(value) || value.split('@').length !== 2) return false
@@ -37,7 +37,7 @@ export function upstreamOidc(config: UpstreamConfig, callback: string) {
   }
   async function discovery() {
     if (cache && cache.expires > Date.now()) return cache.document
-    const document = documentSchema.parse(await json(`${config.issuer}/.well-known/openid-configuration`))
+    const document = documentSchema.parse(await json(`${config.issuer.replace(/\/$/, '')}/.well-known/openid-configuration`))
     if (document.issuer !== config.issuer) throw new Error('issuer mismatch')
     for (const endpoint of [document.authorization_endpoint, document.token_endpoint, document.jwks_uri, document.userinfo_endpoint]) if (endpoint) validateEndpoint(endpoint)
     cache = { document, expires: Date.now() + 300_000 }
@@ -52,17 +52,33 @@ export function upstreamOidc(config: UpstreamConfig, callback: string) {
     async exchange(code: string, verifier: string, nonce: string) {
       const document = await discovery()
       const params = new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: callback, client_id: config.clientId, code_verifier: verifier })
-      if (config.clientSecret) params.set('client_secret', config.clientSecret)
-      const result = z.object({ id_token: z.string(), access_token: z.string().optional() }).parse(await json(document.token_endpoint, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: params }))
+      const headers: Record<string, string> = { 'content-type': 'application/x-www-form-urlencoded' }
+      if (config.clientSecret) {
+        const supported = document.token_endpoint_auth_methods_supported ?? ['client_secret_basic']
+        const method = config.tokenEndpointAuthMethod ?? (supported.includes('client_secret_basic') ? 'client_secret_basic' : supported.includes('client_secret_post') ? 'client_secret_post' : undefined)
+        if (!method) throw new Error('unsupported_client_authentication')
+        if (method === 'client_secret_post') params.set('client_secret', config.clientSecret)
+        else {
+          const encode = (value: string) => new URLSearchParams({ value }).toString().slice(6)
+          headers.authorization = `Basic ${Buffer.from(`${encode(config.clientId)}:${encode(config.clientSecret)}`).toString('base64')}`
+          params.delete('client_id')
+        }
+      }
+      const result = z.object({ id_token: z.string(), access_token: z.string().optional() }).parse(await json(document.token_endpoint, { method: 'POST', headers, body: params }))
       const jwks = z.object({ keys: z.array(z.record(z.string(), z.unknown())) }).parse(await json(document.jwks_uri)) as JSONWebKeySet
       const { payload } = await jwtVerify(result.id_token, createLocalJWKSet(jwks), { issuer: config.issuer, audience: config.clientId, algorithms: ['RS256', 'ES256', 'EdDSA'], requiredClaims: ['sub', 'exp', 'iat'] })
       if (payload.nonce !== nonce || !payload.sub) throw new Error('invalid_identity')
       if (Array.isArray(payload.aud) && payload.aud.length > 1 && payload.azp !== config.clientId) throw new Error('invalid_authorized_party')
       let claims = payload
       if ((!payload.email || !payload.name) && document.userinfo_endpoint && result.access_token) {
-        const userinfo = z.object({ sub: z.string(), email: z.string().optional(), email_verified: z.boolean().optional(), name: z.string().optional() }).parse(await json(document.userinfo_endpoint, { headers: { authorization: `Bearer ${result.access_token}` } }))
-        if (userinfo.sub !== payload.sub) throw new Error('invalid_userinfo')
-        claims = { ...payload, email: payload.email ?? userinfo.email, email_verified: payload.email ? payload.email_verified : userinfo.email_verified, name: payload.name ?? userinfo.name }
+        let userinfo: { sub: string; email?: string; email_verified?: boolean; name?: string } | undefined
+        try {
+          userinfo = z.object({ sub: z.string(), email: z.string().optional(), email_verified: z.boolean().optional(), name: z.string().optional() }).parse(await json(document.userinfo_endpoint, { headers: { authorization: `Bearer ${result.access_token}` } }))
+        } catch (error) { if (!payload.email || payload.email_verified !== true) throw error }
+        if (userinfo) {
+          if (userinfo.sub !== payload.sub) throw new Error('invalid_userinfo')
+          claims = { ...payload, email: payload.email ?? userinfo.email, email_verified: payload.email ? payload.email_verified : userinfo.email_verified, name: payload.name ?? userinfo.name }
+        }
       }
       if (claims.email_verified !== true) throw new Error('email_unverified')
       if (typeof claims.email !== 'string' || !allowedEmail(config, claims.email)) throw new Error('email_not_allowed')

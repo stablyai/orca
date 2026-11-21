@@ -125,8 +125,11 @@ export async function createService(config: Config) {
     try { address = getConnInfo(c).remote.address ?? 'unknown' } catch {}
     if (config.trustProxy) { const forwarded = c.req.header('x-forwarded-for')?.split(',').at(-1)?.trim(); if (forwarded && isIP(forwarded)) address = forwarded }
     const recent = (key: string) => (attempts.get(key) ?? []).filter(t => t > now - 60_000)
-    const key = `${scope}:ip:${address}`, globalKey = `${scope}:global`, ip = recent(key), global = recent(globalKey)
-    return { limited: ip.length >= limit || global.length >= globalLimit, failure: () => { ip.push(now); global.push(now); attempts.set(key, ip); if (Number.isFinite(globalLimit)) attempts.set(globalKey, global) } }
+    const key = `${scope}:ip:${address}`, globalKey = `${scope}:global`
+    return { limited: recent(key).length >= limit || recent(globalKey).length >= globalLimit, failure: () => {
+      const recordedAt = Date.now()
+      for (const counter of Number.isFinite(globalLimit) ? [key, globalKey] : [key]) attempts.set(counter, [...(attempts.get(counter) ?? []).filter(t => t > recordedAt - 60_000), recordedAt])
+    } }
   }
   app.get('/healthz', c => c.json({ ok: true }))
   app.get('/.well-known/jwks.json', c => c.json({ keys }))
@@ -229,14 +232,23 @@ export async function createService(config: Config) {
       db.exec('COMMIT'); return c.json(result)
     } catch (e) { db.exec('ROLLBACK'); throw e }
   })
-  app.post('/v1/desktop/auth/capabilities', c => { const s = getSession(bearer(c.req.header('authorization'))); return s ? c.json(info(s)) : fail('unauthorized', 401) })
+  app.post('/v1/desktop/auth/capabilities', c => { const s = getSession(bearer(c.req.header('authorization'))); return s && identityAllowed(s) ? c.json(info(s)) : fail('unauthorized', 401) })
   app.post('/v1/desktop/auth/org', c => getSession(bearer(c.req.header('authorization'))) ? fail('organization_not_found', 403) : fail('unauthorized', 401))
   app.post('/v1/desktop/auth/profile', async c => {
-    const s = getSession(bearer(c.req.header('authorization'))), input = z.object({ refreshToken: str, orgId: str.optional(), name: str.optional() }).safeParse(await body(c.req.raw))
-    if (!s) return fail('unauthorized', 401); if (!identityAllowed(s)) { audit('session_identity_denied'); return fail('invalid_grant', 401) } if (!input.success) return fail('invalid_request'); if (input.data.orgId) return fail('organization_not_found', 403)
-    const refresh = db.prepare('SELECT session FROM refresh WHERE hash=? AND used=0').get(hash(input.data.refreshToken)) as { session: string } | undefined
-    if (refresh?.session !== s.id) return fail('invalid_grant', 401)
-    db.exec('BEGIN IMMEDIATE'); try { const next = { ...s, id: randomUUID(), profile: randomUUID(), expires: s.expires, revoked: 0 }; db.prepare('INSERT INTO sessions (id,profile,expires,revoked,user_id,email,name,email_verified) VALUES (?,?,?,0,?,?,?,?)').run(next.id, next.profile, next.expires, next.user_id, next.email, next.name, next.email_verified); const result = issue(next); db.exec('COMMIT'); return c.json(result) } catch (e) { db.exec('ROLLBACK'); throw e }
+    const input = z.object({ refreshToken: str, orgId: str.optional(), name: str.optional() }).safeParse(await body(c.req.raw))
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      const s = getSession(bearer(c.req.header('authorization')))
+      if (!s) { db.exec('COMMIT'); return fail('unauthorized', 401) }
+      if (!identityAllowed(s)) { db.exec('COMMIT'); audit('session_identity_denied'); return fail('invalid_grant', 401) }
+      if (!input.success) { db.exec('COMMIT'); return fail('invalid_request') }
+      if (input.data.orgId) { db.exec('COMMIT'); return fail('organization_not_found', 403) }
+      const refresh = db.prepare('SELECT session FROM refresh WHERE hash=? AND used=0').get(hash(input.data.refreshToken)) as { session: string } | undefined
+      if (refresh?.session !== s.id) { db.exec('COMMIT'); return fail('invalid_grant', 401) }
+      const next = { ...s, id: randomUUID(), profile: randomUUID(), revoked: 0 }
+      db.prepare('INSERT INTO sessions (id,profile,expires,revoked,user_id,email,name,email_verified) VALUES (?,?,?,0,?,?,?,?)').run(next.id, next.profile, next.expires, next.user_id, next.email, next.name, next.email_verified)
+      const result = issue(next); db.exec('COMMIT'); return c.json(result)
+    } catch (e) { db.exec('ROLLBACK'); throw e }
   })
   app.post('/v1/desktop/auth/logout', async c => {
     const s = getSession(bearer(c.req.header('authorization'))), input = credentials.safeParse(await body(c.req.raw)); if (!s) return fail('unauthorized', 401); if (!input.success) return fail('invalid_request')
@@ -245,8 +257,8 @@ export async function createService(config: Config) {
     db.prepare('UPDATE sessions SET revoked=1 WHERE id=?').run(s.id); return c.json({ ok: true })
   })
   app.post('/v1/desktop/auth/relay-token', async c => {
-    const s = getSession(bearer(c.req.header('authorization'))); if (!s) return fail('unauthorized', 401)
     const input = z.object({ relayHostId: z.string().regex(/^[A-Za-z0-9_-]{16}$/), hostPublicKeyB64: str }).safeParse(await body(c.req.raw)); if (!input.success) return fail('invalid_request')
+    const s = getSession(bearer(c.req.header('authorization'))); if (!s || !identityAllowed(s)) return fail('unauthorized', 401)
     const raw = input.data.hostPublicKeyB64
     if (!/^[A-Za-z0-9+/]{43}=$/.test(raw)) return fail('invalid_public_key')
     const key = Buffer.from(raw, 'base64'); if (key.length !== 32 || key.toString('base64') !== raw) return fail('invalid_public_key')
@@ -254,6 +266,8 @@ export async function createService(config: Config) {
     if (!equal(hostId, input.data.relayHostId)) return fail('host_id_mismatch')
     const exp = Math.floor(Date.now() / 1000) + 300
     const relayToken = await new SignJWT({ prof: s.profile, relayHostId: hostId, purpose: 'host-control' }).setProtectedHeader({ alg: 'ES256', kid }).setSubject(s.user_id ?? config.userId).setIssuer(config.issuer).setAudience('orca-relay').setIssuedAt().setExpirationTime(exp).sign(privateKey)
+    const current = getSession(bearer(c.req.header('authorization')))
+    if (!current || !identityAllowed(current)) return fail('unauthorized', 401)
     return c.json({ relayToken, expiresAt: exp * 1000 })
   })
   app.post('/v1/desktop/auth/connector-token', c => getSession(bearer(c.req.header('authorization'))) ? fail('connector_disabled', 501) : fail('unauthorized', 401))
