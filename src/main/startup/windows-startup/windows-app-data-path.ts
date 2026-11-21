@@ -30,11 +30,17 @@ function readNativeAppDataPath(host: WindowsAppDataPathHost): string | null {
   }
 }
 
+export type EnsureWindowsAppDataPathOptions = {
+  isPortable?: boolean
+  execPath?: string
+}
+
 /** Pin Windows profile paths before resolution: absent SSH/user profiles can make Chromium dereference null before Crashpad connects. */
 export function ensureWindowsAppDataPath(
   host: WindowsAppDataPathHost,
   env: NodeJS.ProcessEnv = process.env,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  options?: EnsureWindowsAppDataPathOptions
 ): void {
   if (platform !== 'win32') {
     return
@@ -47,6 +53,10 @@ export function ensureWindowsAppDataPath(
   }
   // Preserve userData already resolved from an explicit switch.
   if (host.commandLine.hasSwitch('user-data-dir')) {
+    return
+  }
+  if (options?.isPortable) {
+    host.setPath('userData', win32.join(win32.dirname(options.execPath ?? process.execPath), 'data'))
     return
   }
   // Use Electron's own value while bypassing its unsafe provider.

@@ -14,16 +14,25 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const crateRoot = join(repoRoot, 'native', 'windows-cli-launcher')
   const iconPath = join(repoRoot, 'resources', 'build', 'icon.ico')
   const output = readArg('--output') ?? join(crateRoot, '.build', 'orca.exe')
-  for (const binName of ['orca', 'orca-administrator-restart']) {
+  for (const binName of ['orca', 'orca-administrator-restart', 'orca-portable-updater']) {
+    const label =
+      binName === 'orca'
+        ? 'Windows CLI launcher'
+        : binName === 'orca-administrator-restart'
+          ? 'Windows administrator restart launcher'
+          : 'Windows portable updater'
     compileWindowsRustExecutable({
       repoRoot,
       crateRoot,
       binName,
-      label: binName === 'orca' ? 'Windows CLI launcher' : 'Windows administrator restart launcher',
+      label,
       fingerprintInputs: [
         join(crateRoot, 'src', 'administrator_status.rs'),
         join(crateRoot, 'src', 'administrator_restart.rs'),
         join(crateRoot, 'src', 'administrator_launcher.rs'),
+        join(crateRoot, 'src', 'portable_authenticode.rs'),
+        join(crateRoot, 'src', 'portable_updater.rs'),
+        join(crateRoot, 'src', 'portable_updater_launcher.rs'),
         iconPath,
         join(repoRoot, 'config/scripts/native-build/windows/build-windows-cli-launcher.mjs')
       ],

@@ -12,6 +12,8 @@ import { updaterCodedMessage } from '../../../shared/updater/updater-failure-cop
 import { MAC_DEFERRED_STAGING_TIMEOUT_MS, QUIT_AND_INSTALL_DELAY_MS } from './updater-state'
 import { UpdaterRemoteStatus } from './updater-remote-status'
 import { prepareThisProcessShipItStaging } from '../mac-install/shipit-leftover-recovery'
+import { isWindowsPortableInstall } from '../windows-portable/windows-portable-package'
+import { downloadAndStageWindowsPortableUpdate } from '../windows-portable/windows-portable-update-manager'
 
 export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
   private macStagingTimer: ReturnType<typeof setTimeout> | null = null
@@ -188,6 +190,34 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     // Acknowledge acceptance before setup delays progress events so the card responds immediately.
     this.sendStatus({ state: 'downloading', percent: 0, version })
     const startDownload = (): void => {
+      if (isWindowsPortableInstall()) {
+        if (localBuildDownload) {
+          this.downloadInFlight = false
+          this.sendLocalBuildErrorAndRestore(
+            'Local build installation is not supported on Windows portable builds.'
+          )
+          return
+        }
+        void downloadAndStageWindowsPortableUpdate({
+          version,
+          onProgress: (percent) => {
+            this.sendStatus({ state: 'downloading', percent, version })
+          }
+        })
+          .then(() => {
+            this.downloadInFlight = false
+            this.publishDownloadStatus({
+              state: 'downloaded',
+              version,
+              releaseUrl: this.getKnownReleaseUrl()
+            })
+          })
+          .catch((err) => {
+            this.downloadInFlight = false
+            this.sendErrorStatus(String(err?.message ?? err))
+          })
+        return
+      }
       this.getAutoUpdater()
         .downloadUpdate()
         .catch((err) => {

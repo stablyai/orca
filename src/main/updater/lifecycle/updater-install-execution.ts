@@ -15,6 +15,7 @@ import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { requestServeUpdateHandoff, failServeUpdateHandoff } from '../serve-update-handoff'
 import { UpdaterMacInstallPreflight } from '../mac-install/updater-mac-install-preflight'
 import { prepareThisProcessShipItStaging } from '../mac-install/shipit-leftover-recovery'
+import { invokeQuitAndInstallForCurrentPackage } from '../windows-portable/windows-portable-update-manager'
 import { MAC_DEFERRED_STAGING_TIMEOUT_MS } from './updater-state'
 
 export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight {
@@ -123,10 +124,7 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
           version: pendingVersion || null
         })
         // Recovery may have cleared the handoff; never invoke installation afterward.
-        if (!this.quitAndInstallInProgress) {
-          return
-        }
-        if (!this.canProceedWithInstall(pendingVersion, automatic)) {
+        if (!this.quitAndInstallInProgress || !this.canProceedWithInstall(pendingVersion, automatic)) {
           return
         }
         // Mark before native invoke so synchronous errors can recover; pre-native errors cannot.
@@ -134,9 +132,8 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         this.quitAndInstallNativeInvoked = true
         // Invoke before destroying PTYs/close guards so synchronous failure leaves the app usable.
         const supervisorOwnsRelaunch = this.updateInstallMode === 'supervised-headless-serve'
-        const silent = automatic || supervisorOwnsRelaunch
-        runWithLaunchPath(() =>
-          this.getAutoUpdater().quitAndInstall(silent, !supervisorOwnsRelaunch)
+        await runWithLaunchPath(() =>
+          invokeQuitAndInstallForCurrentPackage(this.getAutoUpdater(), automatic, supervisorOwnsRelaunch)
         )
         span.addEvent('native_quit_and_install_invoked')
 
