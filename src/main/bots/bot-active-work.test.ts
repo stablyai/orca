@@ -244,3 +244,14 @@ describe('the Active work budget', () => {
     expect(text).toMatch(/\(\d+ more:/)
   })
 })
+
+describe('the Active work key', () => {
+  it('changes when only an item title changes', () => {
+    const before = botActiveWorkSection([item(2, 'needs_you', 10)], [])
+    const renamed = botActiveWorkSection(
+      [{ ...item(2, 'needs_you', 10), title: 'Approve production' }],
+      []
+    )
+    expect(renamed.key).not.toBe(before.key)
+  })
+})

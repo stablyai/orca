@@ -38,7 +38,7 @@ function workerPr(worker: BotWorkerSummary): string {
   return worker.pr ? ` · PR #${worker.pr.number} ${worker.pr.state}` : ''
 }
 
-/** The section and its key (ids and states, sorted, no times or checks), so a turn resends it only
+/** The section and its key (rows' ids, states and text, sorted; no times or checks), so a turn resends it only
  *  when the work changed. With nothing live it says so, so a chat that saw work hears it ended. */
 export function botActiveWorkSection(
   all: readonly Pick<
@@ -137,7 +137,10 @@ export function botActiveWorkSection(
   const more = hiddenAfter(shown.length)
   const text = render(shown, more)
   const key = JSON.stringify([
-    shown.map(({ id, state }) => [id, state]).toSorted(([a], [b]) => a.localeCompare(b)),
+    // The rendered row too, so a renamed item resends; times, order and CI checks never show in it.
+    shown
+      .map(({ id, state, line }) => [id, state, line])
+      .toSorted(([a], [b]) => a.localeCompare(b)),
     more
   ])
   return { text, key }
