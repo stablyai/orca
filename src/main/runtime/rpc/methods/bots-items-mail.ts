@@ -70,21 +70,11 @@ export async function sendBotItemMail(
   if (!mail || !bot) {
     return true
   }
-  // The owner's answer to a question a conversation's turn asked goes to the chat that asked, which
-  // answers in that conversation; gone, it goes where any other item mail does.
-  const asker = answerAskedIn(owed)
-  const askerChat = asker ? runtime.botItems.chatRootOf(asker) : null
-  const chat = await botChatTakingMail(
-    runtime,
-    bot,
-    askerChat ? [askerChat, owed.chatId] : owed.chatId
-  )
-  const toAsker = Boolean(
-    chat && askerChat && runtime.botItems.chatRootOf(chat.sessionId) === askerChat
-  )
+  const chat = await botChatTakingMail(runtime, bot, owed.chatId)
   const sessionId = chat?.sessionId ?? (await runtimeBotChats(runtime).ensure(bot.id))
   const to = `orca_session_id:${sessionId}`
   const images = botItemMailImages(owed.changes)
+  const asker = answerAskedIn(owed)
   const payload = JSON.stringify({
     botItems: owed.changes.map(({ event, item }) => ({
       uid: item.uid,
@@ -94,7 +84,9 @@ export async function sendBotItemMail(
     })),
     // Delivered as the chat's image blocks, as chat sends a pasted image.
     ...(images.length > 0 ? { images } : {}),
-    ...(toAsker && asker ? { askedInConversation: asker } : {})
+    // The owner's answer to a question the item's chat asked while its thread's turn ran; the reader
+    // checks it is that chat (conversation-ask-answer.ts).
+    ...(asker ? { askedInConversation: asker } : {})
   })
   db.insertMessage({
     id,

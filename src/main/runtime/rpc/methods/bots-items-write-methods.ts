@@ -54,11 +54,13 @@ const SET = defineMethod({
       comment = attached.text
     }
     const images = attached.images.length > 0 ? attached.images : undefined
-    // Asked while its thread's turn ran, the owner's answer goes back to that thread. Home Chat, which
-    // the bot's direct messages share with its owner in Orca, keeps it in Orca.
+    // Asked by the item's own thread chat while its thread's turn ran, the owner's answer, mailed to
+    // that chat, goes back to that thread. Home Chat, which the bot's direct messages share with its
+    // owner in Orca, keeps it in Orca, as does an ask about another chat's item.
     const asked =
       ask &&
       writer.source.kind === 'thread' &&
+      writer.actor.chatId === item.chatId &&
       context.runtime
         .getExternalConversationSeam()
         ?.conversationTurn(runtimeChatHost(context.runtime), writer.sessionId)
