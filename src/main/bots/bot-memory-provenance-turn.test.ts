@@ -48,9 +48,18 @@ const edits = (line: string): AgentJournalItemBody => ({
 function bot(memory: string) {
   const files = new Map([[MEMORY, memory]])
   let beforeReplace = (): void => {}
+  let afterMemoryRead: (() => Promise<void>) | undefined
   let failing = 0
   const fs = {
-    readText: async (path: string) => files.get(path) ?? null,
+    readText: async (path: string) => {
+      const text = files.get(path) ?? null
+      if (path === MEMORY && afterMemoryRead) {
+        const run = afterMemoryRead
+        afterMemoryRead = undefined
+        await run()
+      }
+      return text
+    },
     replaceText: async (path: string, expected: string, text: string) => {
       beforeReplace()
       if (failing > 0) {
@@ -124,11 +133,15 @@ function bot(memory: string) {
         plan?.given(TAKEN)
         return plan?.text ?? null
       },
-      /** A turn start the ride-along doesn't go with, such as a message with an attachment. */
-      startedUncarried: async () => {
+      /** An attachment turn takes its outside context before the provider sees the payload. */
+      startedAttachment: async () => {
         context.handedOver?.(sessionId, said('see attached'))
-        ;(await context.launchUpdate?.(sessionId))?.given(TAKEN)
+        const plan = await context.launchUpdate?.(sessionId)
+        plan?.given(TAKEN)
+        return plan?.text ?? null
       },
+      /** A prompt command opens its turn with nothing ahead of it. */
+      startedCommand: () => context.handedOver?.(sessionId, said('/review')),
       /** Rows of a turn still running. */
       running: show,
       /** Rows the conversation shows, then the end of what ran (one turn or a queued batch). */
@@ -158,6 +171,7 @@ function bot(memory: string) {
         fact,
         sessionId ? { kind: 'bot', sessionId } : { kind: 'owner' }
       ),
+    afterNextMemoryRead: (run: () => Promise<void>) => (afterMemoryRead = run),
     onReplace: (run: () => void) => (beforeReplace = run),
     failReplaces: (count: number) => (failing = count)
   }
@@ -468,17 +482,48 @@ describe('a chat hears of MEMORY.md edited outside it', () => {
     expect(await chat.started()).toContain(ADDED)
   })
 
-  it('after a hand edit between turns, though a turn that did not carry it ran a tool', async () => {
+  it('delivers a hand edit on an attachment turn before its tool runs', async () => {
     const { conversation, read, write } = bot(OLD)
     const chat = conversation('s1')
     await chat.started()
     await chat.ended(said('hi'))
     write(`${read()}${ADDED}\n`)
-    await chat.startedUncarried()
+    expect(await chat.startedAttachment()).toContain(ADDED)
     await chat.ended(said('see attached'), {
       kind: 'tool-call',
       name: 'Read',
       input: { file_path: 'notes.png' },
+      state: 'completed'
+    })
+
+    expect(await chat.started()).toBeNull()
+  })
+
+  it('delivers a Settings removal made while an attachment turn was opening', async () => {
+    const { conversation, read, write, forget, afterNextMemoryRead } = bot(OLD)
+    const chat = conversation('s1')
+    write(`${read()}${ADDED}\n`)
+    afterNextMemoryRead(async () => {
+      expect(await forget('owner fact')).toBe(true)
+    })
+
+    expect(await chat.startedAttachment()).toContain(ADDED)
+    await chat.ended(said('see attached'), edits(ADDED))
+
+    expect(await chat.started()).toContain('Removed:\n<<<\n- 2026-11-01 owner fact\n>>>')
+  })
+
+  it('after a hand edit between turns, though a command turn that did not carry it ran a tool', async () => {
+    const { conversation, read, write } = bot(OLD)
+    const chat = conversation('s1')
+    await chat.started()
+    await chat.ended(said('hi'))
+    write(`${read()}${ADDED}\n`)
+    chat.startedCommand()
+    await chat.ended(said('/review'), {
+      kind: 'tool-call',
+      name: 'Read',
+      input: { file_path: 'notes.md' },
       state: 'completed'
     })
 

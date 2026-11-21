@@ -685,11 +685,12 @@ describe('the empty linked-skills replacement on a resumed chat', () => {
     instructionsKey: botRulesKey(botRulesBlock('codex'))
   }
 
-  it('is not sent for a bot that never linked a project', async () => {
+  it('omits a linked-project update when the resumed bot never linked a project', async () => {
     const h = home('Be brief.', '- a fact')
     await botSessionInstructions(h.context, [bot], resumed, FOLDER, null, h.fs)
-    expect(await h.context.launchUpdate?.('s1')).toBeNull()
-    expect((await h.plan())?.text ?? '').not.toContain('linked projects')
+    const update = await h.context.launchUpdate?.('s1')
+    expect(update?.text).toContain('Be brief.')
+    expect(update?.text).not.toContain('no skills from linked projects now')
   })
 
   it('is sent once its projects were all unlinked', async () => {

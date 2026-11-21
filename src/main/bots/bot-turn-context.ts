@@ -99,6 +99,70 @@ export function createBotTurnContext(
   /** Orca's Tools and Rules go first, as at launch, where they outrank what memory remembers. */
   const withOrcaRules = (sessionId: string, entry: Given, held: Held, plan: TurnPlan | null) =>
     withBotRulesUpdate(entry.orcaRules, held, plan, (orcaRules) => update(sessionId, { orcaRules }))
+  const planUpdate = async (
+    sessionId: string,
+    message: AgentJournalMessageItem,
+    held?: Held,
+    includeRecentChats = true
+  ): Promise<TurnPlan | null> => {
+    const stored = given.get(sessionId)
+    if (!stored) {
+      return null
+    }
+    const memoryRecord = record.version(stored.botId)
+    const [entry, files, work, topics, recent, unanswered] = await Promise.all([
+      relinked(sessionId, stored),
+      readBotHomeFiles(fs, stored.folder),
+      workNote(sessionId, message).catch(() => null),
+      readTopics(stored.folder),
+      includeRecentChats ? recentChats(stored.botId, sessionId, message).catch(() => null) : null,
+      unansweredQuestionNote(sessionId).catch(() => null)
+    ])
+    const soul = fingerprint(files.soul)
+    const memory = fingerprint(files.memory)
+    update(sessionId, {
+      memoryAtStart: memory,
+      receiptAtStart: { memory: files.memory, topics, version: memoryRecord },
+      topicsAtStart: botMemoryTopicsKey(topics),
+      ...(entry.topics ? {} : { topics })
+    })
+    const skillsNow = skillsUpdate(entry)
+    const rules = firstRun.rules(entry.botId, sessionId)
+    const memoryNow =
+      memory !== entry.memory ? botMemoryUpdateText(entry.memoryText, files.memory) : null
+    const topicsNow = entry.topics ? botMemoryTopicsUpdateText(entry.topics, topics) : null
+    const others = recent && recent.key !== entry.recentChats ? recent.text : null
+    const changed: BotContextChange[] = [
+      ...(soul !== entry.soul ? ['soul' as const] : []),
+      ...(memoryNow || topicsNow ? ['memory' as const] : [])
+    ]
+    if (changed.length === 0 && !work && !skillsNow && !rules && !others && !unanswered) {
+      return withOrcaRules(sessionId, entry, held, null)
+    }
+    return withOrcaRules(sessionId, entry, held, {
+      text: [
+        ...(rules ? [rules] : []),
+        ...(soul !== entry.soul ? [`${COPY.soul}\n\n${files.soul?.trim() || '(empty)'}`] : []),
+        ...(memoryNow ? [memoryNow] : []),
+        ...(topicsNow ? [topicsNow] : []),
+        ...(skillsNow ? [skillsNow.text] : []),
+        ...(others ? [others] : []),
+        ...(work ? [work] : []),
+        ...(unanswered ? [unanswered] : [])
+      ].join('\n\n'),
+      ...(changed.length > 0 ? { note: botContextNoteBody({ botId: entry.botId, changed }) } : {}),
+      given: () =>
+        update(sessionId, {
+          soul,
+          memory,
+          memoryText: botMemoryKnown(entry.memoryText, files.memory),
+          memoryRecord,
+          topics,
+          ...(recent ? { recentChats: recent.key } : {}),
+          ...(skillsNow ? { skills: skillsNow.skills } : {})
+        })
+    })
+  }
   return {
     launched: (sessionId, botId, folder, files, delivered, orcaRules) => {
       record.started(botId, files.memory)
@@ -129,93 +193,9 @@ export function createBotTurnContext(
       const entry = given.get(sessionId)
       return entry ? botLaunchedInstructions(entry.orcaRules) : null
     },
-    launchUpdate: async (sessionId, held) => {
-      const stored = given.get(sessionId)
-      if (!stored) {
-        return null
-      }
-      const receiptVersion = record.version(stored.botId)
-      const [entry, memory, topics, unanswered] = await Promise.all([
-        relinked(sessionId, stored),
-        fs.readText(join(stored.folder, 'MEMORY.md')),
-        readTopics(stored.folder),
-        unansweredQuestionNote(sessionId).catch(() => null)
-      ])
-      update(sessionId, {
-        memoryAtStart: fingerprint(memory),
-        receiptAtStart: { memory, topics, version: receiptVersion },
-        topicsAtStart: botMemoryTopicsKey(topics),
-        ...(entry.topics ? {} : { topics })
-      })
-      const rules = firstRun.rules(stored.botId, sessionId)
-      const skillsNow = skillsUpdate(entry)
-      const text = [rules, skillsNow?.text, unanswered].filter(Boolean)
-      const taken = () => (skillsNow ? update(sessionId, { skills: skillsNow.skills }) : undefined)
-      const plan = text.length === 0 ? null : { text: text.join('\n\n'), given: taken }
-      return withOrcaRules(sessionId, entry, held, plan)
-    },
-    plan: async (sessionId, message, held) => {
-      const stored = given.get(sessionId)
-      if (!stored) {
-        return null
-      }
-      const receiptVersion = record.version(stored.botId)
-      const [entry, files, work, topics, recent, unanswered] = await Promise.all([
-        relinked(sessionId, stored),
-        readBotHomeFiles(fs, stored.folder),
-        workNote(sessionId, message).catch(() => null),
-        readTopics(stored.folder),
-        recentChats(stored.botId, sessionId, message).catch(() => null),
-        unansweredQuestionNote(sessionId).catch(() => null)
-      ])
-      const soul = fingerprint(files.soul)
-      const memory = fingerprint(files.memory)
-      const memoryRecord = record.version(entry.botId)
-      update(sessionId, {
-        memoryAtStart: memory,
-        receiptAtStart: { memory: files.memory, topics, version: receiptVersion },
-        topicsAtStart: botMemoryTopicsKey(topics),
-        ...(entry.topics ? {} : { topics })
-      })
-      const skillsNow = skillsUpdate(entry)
-      const rules = firstRun.rules(entry.botId, sessionId)
-      const memoryNow =
-        memory !== entry.memory ? botMemoryUpdateText(entry.memoryText, files.memory) : null
-      const topicsNow = entry.topics ? botMemoryTopicsUpdateText(entry.topics, topics) : null
-      const others = recent && recent.key !== entry.recentChats ? recent.text : null
-      const changed: BotContextChange[] = [
-        ...(soul !== entry.soul ? ['soul' as const] : []),
-        ...(memoryNow || topicsNow ? ['memory' as const] : [])
-      ]
-      if (changed.length === 0 && !work && !skillsNow && !rules && !others && !unanswered) {
-        return withOrcaRules(sessionId, entry, held, null)
-      }
-      return withOrcaRules(sessionId, entry, held, {
-        text: [
-          ...(rules ? [rules] : []),
-          ...(soul !== entry.soul ? [`${COPY.soul}\n\n${files.soul?.trim() || '(empty)'}`] : []),
-          ...(memoryNow ? [memoryNow] : []),
-          ...(topicsNow ? [topicsNow] : []),
-          ...(skillsNow ? [skillsNow.text] : []),
-          ...(others ? [others] : []),
-          ...(work ? [work] : []),
-          ...(unanswered ? [unanswered] : [])
-        ].join('\n\n'),
-        ...(changed.length > 0
-          ? { note: botContextNoteBody({ botId: entry.botId, changed }) }
-          : {}),
-        given: () =>
-          update(sessionId, {
-            soul,
-            memory,
-            memoryText: botMemoryKnown(entry.memoryText, files.memory),
-            memoryRecord,
-            topics,
-            ...(recent ? { recentChats: recent.key } : {}),
-            ...(skillsNow ? { skills: skillsNow.skills } : {})
-          })
-      })
-    },
+    launchUpdate: (sessionId, held, message) =>
+      planUpdate(sessionId, message ?? { kind: 'message', role: 'user', blocks: [] }, held, false),
+    plan: planUpdate,
     handedOver: (sessionId) =>
       update(sessionId, { memoryAtStart: null, topicsAtStart: null, receiptAtStart: null }),
     // The bot's own SOUL.md or MEMORY.md edit is what its next turn already knows; any other change

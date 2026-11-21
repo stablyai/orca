@@ -54,7 +54,7 @@ export function structuredAgentSessionRideAlong(
     // A command must open the prompt; the update waits for the next turn it can go ahead of.
     return isPromptCommand(body)
       ? Promise.resolve(null)
-      : (ctx.turnContext.launchUpdate?.(ctx.sessionId, held) ?? Promise.resolve(null))
+      : (ctx.turnContext.launchUpdate?.(ctx.sessionId, held, body) ?? Promise.resolve(null))
   }
   // Whether the whole ride-along goes with this send; otherwise only a launch update, kept apart from
   // the message's own blocks.

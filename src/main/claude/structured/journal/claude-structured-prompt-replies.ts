@@ -1,4 +1,5 @@
 import type { PermissionResult, PermissionUpdate } from '@anthropic-ai/claude-agent-sdk'
+import { relayAskSelection } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-ask-selection-relay'
 import type {
   AgentSessionPromptResponse,
   AgentSessionQuestionAnswer
@@ -54,15 +55,28 @@ function questionAnswer(prompt: ClaudePendingPrompt, questionId: string, optionI
   const option = options[optionIndex]
   const label = isClaudePromptRecord(option) ? readClaudePromptString(option.label) : null
   if (decoded.questionId === `q${questionIndex + 1}` && label) {
-    return label
+    const description = isClaudePromptRecord(option)
+      ? (readClaudePromptString(option.description) ?? '')
+      : ''
+    return relayAskSelection(label, description, 'review the original question')
+  }
+  const legacyChoice = options.find(
+    (candidate) =>
+      isClaudePromptRecord(candidate) && readClaudePromptString(candidate.label) === decoded.answer
+  )
+  if (
+    (decoded.questionId === `q${questionIndex + 1}` || decoded.questionId === questionId) &&
+    isClaudePromptRecord(legacyChoice)
+  ) {
+    return relayAskSelection(
+      decoded.answer,
+      readClaudePromptString(legacyChoice.description) ?? '',
+      'review the original question'
+    )
   }
   if (decoded.questionId === `q${questionIndex + 1}`) {
     return decoded.answer
   }
-  const legacyChoice = options.some(
-    (candidate) =>
-      isClaudePromptRecord(candidate) && readClaudePromptString(candidate.label) === decoded.answer
-  )
   return decoded.questionId === questionId && (legacyChoice || decoded.answer.trim().length > 0)
     ? decoded.answer
     : optionId
@@ -143,7 +157,7 @@ function questionResponse(
     const selected = answer.optionIds.map((selectedId) =>
       questionAnswer(prompt, providerQuestionId, selectedId)
     )
-    const other = answer.other?.trim()
+    const other = answer.other?.trim() ? answer.other : undefined
     if (question.multiSelect === true) {
       const values = [...selected, ...(other ? [other] : [])]
       if (values.length === 0) {

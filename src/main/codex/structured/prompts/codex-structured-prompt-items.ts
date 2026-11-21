@@ -220,7 +220,10 @@ function questionOptions(
       // Clients return option IDs; encode the question needed by Codex's answer map.
       mapped.push({
         id: encodeCodexJournalQuestionOptionId(questionId, label),
-        label: boundPromptOptionLabel(label)
+        label: boundPromptOptionLabel(label),
+        ...(readString(option, 'description')
+          ? { description: boundPromptOptionLabel(readString(option, 'description') ?? '') }
+          : {})
       })
     }
   }
