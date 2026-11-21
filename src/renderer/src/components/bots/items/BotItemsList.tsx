@@ -25,7 +25,7 @@ import { BotPanelSectionHeader } from '../BotPanelSection'
 import { useBotPanelFold, type BotPanelFoldId } from '../use-bot-panel-fold'
 import { BotNeedsYouSection, type BotNeedsYouAsks } from '../BotNeedsYouSection'
 import { botNeedsYouCount } from '../../../../../shared/bots/bot-now'
-import { BotItemRow, type BotItemRowAction } from './BotItemRow'
+import { BotItemRow, BotItemRowByValue, type BotItemRowAction } from './BotItemRow'
 import { BotItemCancelDialog } from './BotItemCancelDialog'
 import { BotItemSelectionPill } from './BotItemSelectionPill'
 import { botItemGroupName } from '../../../../../shared/bots/bot-item-status-name'
@@ -71,7 +71,7 @@ const NO_BOXES = { scroller: null, list: null }
 const NO_ASKS: BotNeedsYouAsks = { needs: [], stoppedForSignIn: [], itemOf: () => null }
 
 export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
-  const { groups, onOpen } = props
+  const { groups, onOpen, scroller: panelScroller } = props
   const owner = listOwner(props.bot, props.seenEventId)
   const { botOf } = owner
   const t = useTranslate()
@@ -97,7 +97,6 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
   // The scroller and this list, read as the list mounts (before it's painted): the scroller by its mark,
   // since its own ref is set only after this list's effects, so the panel around them needn't render again.
   const listRef = useRef<HTMLDivElement | null>(null)
-  const { scroller: panelScroller } = props
   const [boxes, setBoxes] = useState<{ scroller: HTMLElement | null; list: HTMLElement | null }>(
     NO_BOXES
   )
@@ -286,8 +285,10 @@ function BotItemGroup({
   if (count === 0 && outside === 0) {
     return null
   }
+  // A window's rows compare their item by value: each host read decodes every item anew.
+  const Row = id === 'needs_you' ? BotItemRow : BotItemRowByValue
   const row = (item: BotItem, tabbable?: boolean): React.JSX.Element => (
-    <BotItemRow
+    <Row
       key={item.uid}
       item={item}
       stale={id === 'stale'}

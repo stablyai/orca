@@ -21,6 +21,7 @@ import {
 } from '../../../../../shared/bots/bot-items'
 import type { Bot } from '../../../../../shared/bot-types'
 import { botItemQuestionLine } from '../../../../../shared/bots/bot-item-ask'
+import { jsonEqual } from '../../../../../shared/json-equal'
 import { BotRowHoverCard } from '../BotPanelRow'
 import { BotItemNumberColumn } from './BotItemNumberColumn'
 import { BotItemRowFace } from './BotItemRowFace'
@@ -29,11 +30,22 @@ import { BOT_ITEM_ROW_ACTION_OVERLAY } from './bot-item-row-hover-actions'
 import { BotItemSnoozeMenuItems, type BotItemSnoozing } from './BotItemSnooze'
 import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
 
+/** The item compares by value, as a fresh host read decodes it anew; every other prop by identity. */
+function sameRowProps<P extends { item: BotItem }>(prev: Readonly<P>, next: Readonly<P>): boolean {
+  const keys = Object.keys(next)
+  return (
+    keys.length === Object.keys(prev).length &&
+    keys.every((key) =>
+      key === 'item'
+        ? jsonEqual(prev.item, next.item)
+        : Object.is(Reflect.get(prev, key), Reflect.get(next, key))
+    )
+  )
+}
+
 export type BotItemRowAction = { kind: 'open' } | { kind: 'done' } | { kind: 'cancel' }
 
-/** Memoized: an update re-renders only the rows whose item or flags changed, so its handlers take the
- *  item and stay the same across the list's renders. */
-export const BotItemRow = memo(function BotItemRow({
+function BotItemRowView({
   item,
   stale,
   snoozed = false,
@@ -248,7 +260,15 @@ export const BotItemRow = memo(function BotItemRow({
       )}
     </div>
   )
-})
+}
+
+/** Memoized: an update re-renders only the rows whose item or flags changed, so its handlers take the
+ *  item and stay the same across the list's renders. */
+export const BotItemRow = memo(BotItemRowView)
+
+/** The same row for a list drawn from host reads, which decode every item anew: the item compares by
+ *  value, so a read re-renders only rows whose item changed. Only the rows drawn pay the comparison. */
+export const BotItemRowByValue = memo(BotItemRowView, sameRowProps)
 
 /** The row's hover card while it needs you: the title, one line of the bot's words, then each question
  *  line with its quick replies (read-only here; they answer on the item). */
