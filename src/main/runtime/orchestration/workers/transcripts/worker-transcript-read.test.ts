@@ -270,7 +270,7 @@ describe('worker transcript reads', () => {
   describe('pages of Chinese text larger than the response budget', () => {
     // Six 1,200-character blocks of 3-byte characters: about 21 KB per message after bounds,
     // so 40 of them exceed the 512 KiB response budget.
-    const bigMessage = (index: number) =>
+    const bigMessage = (index: number, stopReason?: string) =>
       `${JSON.stringify({
         type: 'assistant',
         sessionId: 'session-cjk',
@@ -282,7 +282,8 @@ describe('worker transcript reads', () => {
           content: Array.from({ length: 6 }, () => ({
             type: 'text',
             text: `MSG${index} ${'研发测试'.repeat(300)}`
-          }))
+          })),
+          ...(stopReason ? { stop_reason: stopReason } : {})
         }
       })}\n`
     const labels = (messages: { blocks: { type: string; text?: string }[] }[]) =>
@@ -327,6 +328,27 @@ describe('worker transcript reads', () => {
       expect(served).toEqual(all.slice(all.length - served.length))
       expect(first.warnings).toContain('Transcript response was clipped to the wire-size limit.')
       expect(first.clipping).toContain('transcript_payload')
+    })
+
+    it('points a completed turn at its reply among the newest messages served', async () => {
+      const prompt = `${JSON.stringify({
+        type: 'user',
+        sessionId: 'session-cjk',
+        uuid: 'prompt',
+        timestamp: '2026-11-21T12:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'go' }] }
+      })}\n`
+      await writeFile(
+        claudePath,
+        prompt +
+          all.map((_, index) => bigMessage(index, index === 44 ? 'end_turn' : undefined)).join('')
+      )
+
+      const first = await read()
+      if (!first.ok || first.turn?.state !== 'completed') {
+        throw new Error('Expected a first page with a completed turn')
+      }
+      expect(labels([first.messages[first.turn.replyIndex!]!])).toEqual(['MSG44'])
     })
 
     it('resumes a forward page after its last served message, skipping none', async () => {
