@@ -24,9 +24,25 @@ export type NativeChatTextRevealFrames = {
   cancel: (frame: number) => void
 }
 
-/** Half a 60 Hz frame, so a step lands on the first frame at or near its time. */
-const FRAME_SLACK_MS = 8
+/** Until the display's own frames are measured, assume 60 Hz. */
 const FRAME_MS = 1000 / 60
+/** The measured period stays between a 240 Hz and a 30 Hz display, so a saturated thread whose
+ *  every frame runs long still reads as busy. */
+const MIN_FRAME_MS = 1000 / 240
+const MAX_FRAME_MS = 1000 / 30
+/** Recent frame gaps the display period is read from. */
+const FRAME_GAP_SAMPLES = 15
+
+/** The display's frame period: the lower quartile of recent gaps, so steps and long frames don't
+ *  raise it and a lone fast double-frame doesn't lower it. */
+function displayFramePeriod(gaps: readonly number[]): number {
+  if (gaps.length < 3) {
+    return FRAME_MS
+  }
+  const sorted = [...gaps].sort((a, b) => a - b)
+  const quartile = sorted[Math.floor(sorted.length / 4)]!
+  return Math.min(MAX_FRAME_MS, Math.max(MIN_FRAME_MS, quartile))
+}
 /** However slowly the reply renders, it still moves at least this often. */
 const MAX_STEP_MS = 6000
 /** Hidden windows get no animation frames, so a timer steps them a little after each step is due. */
@@ -44,6 +60,8 @@ export function nativeChatRevealStepFrames(
   let busy = 0
   let lastFrame: number | undefined
   let activeAt = -Infinity
+  const gaps: number[] = []
+  let period = FRAME_MS
   let nextId = 0
   const pending = new Map<number, { frame: number; timer: ReturnType<typeof setTimeout> }>()
   const cancel = (id: number): void => {
@@ -59,7 +77,7 @@ export function nativeChatRevealStepFrames(
     request: (step) => {
       const id = ++nextId
       const now = performance.now()
-      if (now - activeAt > 2 * FRAME_MS) {
+      if (now - activeAt > 2 * period) {
         lastFrame = undefined
       }
       const fire = (at: number): void => {
@@ -72,11 +90,21 @@ export function nativeChatRevealStepFrames(
       }
       const onFrame = (frameStart: number): void => {
         if (lastFrame !== undefined) {
-          busy += Math.max(0, frameStart - lastFrame - FRAME_MS)
+          const gap = frameStart - lastFrame
+          gaps.push(gap)
+          if (gaps.length > FRAME_GAP_SAMPLES) {
+            gaps.shift()
+          }
+          period = displayFramePeriod(gaps)
+          // Only time past the display's own frame is late; a 30 Hz frame is not busy.
+          if (gaps.length >= 3) {
+            busy += Math.max(0, gap - period)
+          }
         }
         lastFrame = frameStart
         activeAt = frameStart
-        if (frameStart < steppedAt + spacing - FRAME_SLACK_MS) {
+        // Half a frame early is the nearest frame to the step's time.
+        if (frameStart < steppedAt + spacing - period / 2) {
           pending.get(id)!.frame = requestAnimationFrame(onFrame)
           return
         }

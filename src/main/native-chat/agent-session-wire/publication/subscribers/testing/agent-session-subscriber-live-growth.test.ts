@@ -84,10 +84,11 @@ describe('a live reply that only grows', () => {
     expect(events).toHaveLength(1)
   })
 
-  it('goes nowhere until the reader holds its text to append to', async () => {
+  it('goes whole once to a reader without its text, then waits for a base to append to', async () => {
     const { events, publish } = stream(false, () => false)
     await publish('a'.repeat(1024))
-    expect(events).toEqual([])
+    await publish(`${'a'.repeat(1024)} more`)
+    expect(events).toHaveLength(1)
   })
 
   it('reaches an append reader as only its new text', async () => {

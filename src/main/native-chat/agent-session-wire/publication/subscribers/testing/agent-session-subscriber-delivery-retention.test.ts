@@ -174,7 +174,10 @@ it('counts live text an opening sends once, not again for the copy waiting behin
       expect(pane.events).toContainEqual(
         expect.objectContaining({
           type: 'batch',
-          batch: expect.objectContaining({ items: [text] })
+          // Sent with the per-row bounds every live row gets.
+          batch: expect.objectContaining({
+            items: [expect.objectContaining({ itemId: text.itemId })]
+          })
         })
       )
     )

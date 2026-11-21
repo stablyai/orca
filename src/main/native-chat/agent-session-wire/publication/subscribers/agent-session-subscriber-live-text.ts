@@ -4,8 +4,12 @@ import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../age
 import type { Subscriber } from './agent-session-subscribe-input'
 import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
-import { subscriberHistoryReader } from '../history/agent-session-bounded-frames'
 import {
+  markBoundedBatchFits,
+  subscriberHistoryReader
+} from '../history/agent-session-bounded-frames'
+import {
+  BOUNDED_FRAME_CONTENT_BUDGET_BYTES,
   HISTORY_PAGE_CONTENT_BUDGET_BYTES,
   type HistoryReader
 } from '../history/agent-session-history-page-bounds'
@@ -74,6 +78,9 @@ export function noteSubscriberLiveRow(subscriber: Subscriber) {
     ;(subscriber.liveSent ??= new Map()).set(source.itemId, { source, sent, bytes })
   }
 }
+
+/** The batch's own JSON around its rows: cursor, keys and separators. */
+const FRAME_SIZE_SLACK_BYTES = 4 * 1024
 
 /** Escapes that straddle the appended text's edge can shift its JSON size by a few bytes. */
 const GROWTH_SIZE_SLACK_BYTES = 16
@@ -197,6 +204,15 @@ export function followPageWithLiveText(
     : Promise.resolve()
 }
 
+/** A phone's live rows were each sized as formed; together within its frame, the frame skips
+ *  measuring them again every window. */
+function fitsBoundedFrame(subscriber: Subscriber, rowBytes: number): boolean {
+  return (
+    subscriber.boundedFrames &&
+    rowBytes + FRAME_SIZE_SLACK_BYTES <= BOUNDED_FRAME_CONTENT_BUDGET_BYTES
+  )
+}
+
 /** Live text goes only to a subscriber that has every journal row; one behind waits for catch-up. */
 export function subscriberAtHead(subscriber: Subscriber, journal: AgentSessionJournal): boolean {
   const cursor = journal.cursor()
@@ -233,23 +249,28 @@ export async function publishSubscriberLiveText(
       : HISTORY_PAGE_CONTENT_BUDGET_BYTES
     const rows: SubscriberLiveRow[] = []
     const fresh: AgentJournalRenderItem[] = []
+    let freshBytes = 0
     for (const source of items) {
-      // Without the row's text to append to, it would go whole every window; its save carries it.
-      if (subscriber.holdsTextBase?.(source.itemId) === false) {
+      const prior = sent?.get(source.itemId)
+      // Sent whole once, the row becomes the reader's base; one the reader still can't append to
+      // would go whole every window, so its save carries it.
+      if (prior && subscriber.holdsTextBase?.(source.itemId) === false) {
+        rows.push(prior)
         continue
       }
-      const prior = sent?.get(source.itemId)
       // An unchanged row keeps its object, so a row this subscriber already has is not rebuilt.
       const row = prior?.source === source ? prior : liveRow(prior, source, form, maxBytes)
       rows.push(row)
       if (row !== prior && !sameSentForm(prior, row.sent)) {
         fresh.push(row.sent)
+        freshBytes += row.bytes
       }
     }
     subscriber.liveSent = new Map(rows.map((row) => [row.source.itemId, row]))
     if (fresh.length === 0) {
       continue
     }
+    const batch = { ...emptyAgentSessionBatch(cursor), items: fresh }
     await port.emit(
       subscriber,
       {
@@ -258,7 +279,7 @@ export async function publishSubscriberLiveText(
         fence,
         hostNow,
         ...hostWorkFields(subscriber),
-        batch: { ...emptyAgentSessionBatch(cursor), items: fresh }
+        batch: fitsBoundedFrame(subscriber, freshBytes) ? markBoundedBatchFits(batch) : batch
       },
       { journal, queuePublication: { value: subscriber.queuePublication } }
     )
