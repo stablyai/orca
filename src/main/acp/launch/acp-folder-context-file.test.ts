@@ -59,7 +59,8 @@ describe('Hermes context file', () => {
     const target = join(dir, 'AGENTS.md')
     await writeFile(target, 'Important rules.\n')
     await symlink(target, join(dir, HERMES_CONTEXT_FILE))
-    await writeHermesContextFile(dir, 'text')
+    // Reported unwritten, so a delivery that must land can refuse to start instead.
+    await expect(writeHermesContextFile(dir, 'text')).resolves.toBe(false)
     expect((await lstat(join(dir, HERMES_CONTEXT_FILE))).isSymbolicLink()).toBe(true)
     expect(await readFile(target, 'utf8')).toBe('Important rules.\n')
   })
@@ -68,7 +69,9 @@ describe('Hermes context file', () => {
     const outside = await mkdtemp(join(tmpdir(), 'kimi-outside-'))
     try {
       await symlink(outside, join(dir, '.kimi-code'))
-      await writeFolderContextFile(dir, '.kimi-code/AGENTS.md', 'Kimi Code', 'private text')
+      await expect(
+        writeFolderContextFile(dir, '.kimi-code/AGENTS.md', 'Kimi Code', 'private text')
+      ).resolves.toBe(false)
       await expect(readFile(join(outside, 'AGENTS.md'), 'utf8')).rejects.toThrow()
     } finally {
       await rm(outside, { recursive: true, force: true })

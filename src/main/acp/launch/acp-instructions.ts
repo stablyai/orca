@@ -169,8 +169,11 @@ export const deliverQwenCodeInstructions: AcpInstructionsDelivery = async ({ tex
 
 // Devin reads the folder's AGENTS.local.md as an always-on rule, ahead of the folder's AGENTS.md, so
 // the file stays and every launch rewrites it; a file the user wrote keeps their text around Orca's.
+// A symlink there is the user's, and Devin would start without the instructions, so the launch fails.
 export const deliverDevinInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
-  await writeFolderContextFile(cwd, 'AGENTS.local.md', 'Devin', text)
+  if (!(await writeFolderContextFile(cwd, 'AGENTS.local.md', 'Devin', text))) {
+    throw new Error('Devin cannot read standing instructions from a linked AGENTS.local.md')
+  }
   return {}
 }
 

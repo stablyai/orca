@@ -71,7 +71,10 @@ const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome'
   'mimo-code': { variable: 'XDG_DATA_HOME', path: '/home/user/.local/share' },
   gemini: { variable: 'GEMINI_CLI_HOME', path: '/home/user' },
   'qwen-code': { variable: 'QWEN_HOME', path: '/home/user/.qwen' },
-  devin: { variable: 'XDG_DATA_HOME', path: '/home/user/.local/share' }
+  devin: {
+    variable: process.platform === 'win32' ? 'APPDATA' : 'XDG_DATA_HOME',
+    path: '/home/user/.local/share'
+  }
 }
 
 const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
@@ -488,6 +491,25 @@ describe('ACP launch: standing instructions', () => {
     expect(failing).toThrow('spawn failed')
     expect(released).toBe(2)
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'refuses to start Devin when a linked AGENTS.local.md would swallow its own rules',
+    async () => {
+      const home = await mkdtemp(join(tmpdir(), 'acp-instructions-devin-'))
+      try {
+        const target = join(home, 'AGENTS.md')
+        await writeFile(target, 'Mine.\n')
+        await symlink(target, join(home, 'AGENTS.local.md'))
+        await expect(
+          launch('devin', { instructions: PREAMBLE, workspacePath: home })
+        ).rejects.toThrow(/linked AGENTS\.local\.md/)
+        // The user's own file is left as it was.
+        expect(await readFile(target, 'utf8')).toBe('Mine.\n')
+      } finally {
+        await rm(home, { recursive: true, force: true })
+      }
+    }
+  )
 
   it('refuses to start an agent that has no way to take them', async () => {
     const { instructions: _none, ...withoutDelivery } = SPECS.omp
