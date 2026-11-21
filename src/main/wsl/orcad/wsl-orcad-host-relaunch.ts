@@ -96,11 +96,14 @@ export async function relaunchAsWslHost(args: {
     return deferred(terminalsRunning(stopped.liveSessions))
   }
   if (stopped.state === 'kept') {
-    // As the SSH restart: not restarted, and a server that may be stopping is never reported ready.
-    return {
-      ready: false,
-      deferredUpdate: wslHostNotWslLaunchedDeferral(args.fullVersion, stopped.reason)
-    }
+    // A stop that may be underway is never reported ready. Any other kept stop (a lock another
+    // client holds, a stale count, a withdrawn or refused stop) left the server serving.
+    return stopped.mayBeStopping
+      ? {
+          ready: false,
+          deferredUpdate: wslHostNotWslLaunchedDeferral(args.fullVersion, stopped.reason)
+        }
+      : deferred(stopped.reason)
   }
   restartedThisSession.add(args.environmentId)
   // The WSL transport starts it detached, with the marker.

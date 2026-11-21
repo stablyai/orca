@@ -221,7 +221,7 @@ export function WslHostsSection({
                     {notWslHost
                       ? t(
                           'auto.components.settings.wslHosts.notStartedAsWslHost',
-                          "This host's server was started by an SSH host, not as a WSL host, so projects can't move here. Orca restarts it as a WSL host when it next connects with no terminals running."
+                          "This host's server was started by an SSH host, not as a WSL host, so projects can't move here. Restart it as a WSL host to fix this."
                         )
                       : deferred
                         ? `${t(

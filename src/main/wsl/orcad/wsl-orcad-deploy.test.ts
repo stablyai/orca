@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   readRecord: vi.fn(),
   removeFailed: vi.fn(),
   launchMode: vi.fn(() => 'wsl-host'),
+  moveUnderway: vi.fn(() => false),
   stopIdle: vi.fn(),
   transaction: vi.fn(async (): Promise<unknown> => null)
 }))
@@ -69,6 +70,9 @@ vi.mock('./wsl-orcad-active-probe', async (importOriginal) => ({
     pid: 4242,
     launch: mocks.launchMode()
   })
+}))
+vi.mock('../../persistence/moving-wsl-projects/orchestration/wsl-move-running-moves', () => ({
+  isWslMoveUnderwayOnHost: mocks.moveUnderway
 }))
 vi.mock('../../managed-server/lifecycle/orcad-idle-restart-stop', () => ({
   stopIdleOrcadForRestart: mocks.stopIdle
@@ -278,5 +282,34 @@ describe('deployAndLaunchWslOrcad', () => {
       code: 'orcad_not_started_as_wsl_host'
     })
     expect(mocks.wake).toHaveBeenCalledTimes(1)
+  })
+
+  it('serves with the restart offer when the stop was kept without being sent', async () => {
+    sshStartedServer(0)
+    mocks.stopIdle.mockReset()
+    mocks.stopIdle.mockResolvedValueOnce({ state: 'kept', reason: 'An update holds this host' })
+    await expect(launch()).resolves.toMatchObject({
+      outcome: 'ready',
+      deferredUpdate: { code: 'orcad_not_started_as_wsl_host', reason: 'An update holds this host' }
+    })
+    expect(mocks.wake).toHaveBeenCalledTimes(1)
+  })
+
+  it('neither counts nor stops while a project moves to the host', async () => {
+    sshStartedServer(0)
+    mocks.moveUnderway.mockReturnValue(true)
+    try {
+      await expect(launch()).resolves.toMatchObject({
+        outcome: 'ready',
+        deferredUpdate: { code: 'orcad_not_started_as_wsl_host' }
+      })
+    } finally {
+      mocks.moveUnderway.mockReturnValue(false)
+    }
+    expect(mocks.incumbent).not.toHaveBeenCalled()
+    expect(mocks.stopIdle).not.toHaveBeenCalled()
+    // Drop the count and stop the helper queued but nothing used.
+    mocks.incumbent.mockReset()
+    mocks.stopIdle.mockReset()
   })
 })

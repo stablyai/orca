@@ -14,7 +14,7 @@ export function wslMoveHostUpdateRequiredMessage(
   if (detail === WSL_MOVE_HOST_NOT_WSL_LAUNCHED_DETAIL) {
     return t(
       'wslMove.refusal.hostNotWslLaunched',
-      "The Orca server in {{distro}} was not started as a WSL host (an SSH host for this distro usually started it), so it can't take these projects. Updating won't help. Choose Restart as WSL host on the {{distro}} host in Settings, then try again. Orca also restarts it on its own when it next connects with no terminals running.",
+      "The Orca server in {{distro}} was not started as a WSL host (an SSH host for this distro usually started it), so it can't take these projects. Updating won't help. Choose Restart as WSL host on the {{distro}} host in Settings, then try again.",
       { distro }
     )
   }
