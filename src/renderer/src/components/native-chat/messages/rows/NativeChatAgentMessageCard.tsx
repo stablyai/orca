@@ -1,7 +1,6 @@
 import type { AgentDotState } from '@/components/agent/status/AgentStateDot'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
-import { translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
@@ -10,7 +9,6 @@ import {
   type AgentMessageSource
 } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import {
-  agentMessageHeading,
   agentMessagePrimarySender,
   agentMessageCanCopy
 } from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
@@ -37,31 +35,7 @@ import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAttachments'
 import { NativeChatEventRow, type NativeChatEventBadge } from '../events/NativeChatEventRow'
 import { ItemChip } from '../../bot-items/NativeChatBotItemNoteRow'
-
-function lead(
-  from: AgentMessageSource,
-  message: NativeChatMessage,
-  t: Translate = translate
-): string {
-  switch (agentMessageHeading(from, message)) {
-    case 'started':
-    case 'started-agent':
-      return t('components.native-chat.agentMessage.row.started', 'Started')
-    case 'reopened-worker':
-      return t('components.native-chat.agentMessage.row.reopened', 'Reopened')
-    case 'followed-up-worker':
-      return t('components.native-chat.agentMessage.row.followedUp', 'Sent follow-up to')
-    case 'handed-off':
-      return t('components.native-chat.agentMessage.row.handedOff', 'Handed off to')
-    case 'task':
-      return t('components.native-chat.agentMessage.row.task', 'Task from')
-    case 'worker':
-      return t('components.native-chat.agentMessage.row.update', 'Update from')
-    case 'coordinator':
-    case 'generic':
-      return t('components.native-chat.agentMessage.row.message', 'Message from')
-  }
-}
+import { agentMessageRowLead } from './agent-message-row-lead'
 
 type AgentMessageCardProps = {
   message: NativeChatMessage
@@ -93,7 +67,7 @@ export function NativeChatAgentMessageCard({
   const merged = message.mergedEvents ?? []
   const expandable =
     canCopy || merged.length > 0 || message.blocks.some((block) => block.type === 'image-ref')
-  const words = lead(from, message, t)
+  const words = agentMessageRowLead(from, message, t)
   const items = message.agentStartItems ?? []
   const senderName = useAgentMessageSenderLabel(sender ?? NO_SENDER, worktreeId, target, dispatchId)
   const view = useAgentMessageSenderView(sender, worktreeId, target, dispatchId)
@@ -200,7 +174,7 @@ function MergedAgentMessage({
 }): React.JSX.Element {
   const t = useTranslate()
   const from = message.from
-  const words = from ? lead(from, message, t) : null
+  const words = from ? agentMessageRowLead(from, message, t) : null
   const text = agentMessageTranscriptText(message.blocks, from, message.shortened)
   return (
     <>

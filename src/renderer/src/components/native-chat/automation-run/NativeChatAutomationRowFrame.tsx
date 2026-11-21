@@ -62,12 +62,13 @@ export function NativeChatAutomationRowFrame({
           {lead}
           {leadIsVerb ? ' ' : ' · '}
         </span>
-        <span className="min-w-0 truncate text-chat-foreground" title={name}>
+        <span
+          className="min-w-0 max-w-[min(16rem,100%)] truncate text-chat-foreground"
+          title={name}
+        >
           {name}
         </span>
-        {status ? (
-          <span className="min-w-0 max-w-max grow basis-0 truncate whitespace-pre">{` · ${status}`}</span>
-        ) : null}
+        {status ? <span className="min-w-0 truncate whitespace-pre">{` · ${status}`}</span> : null}
       </span>
     </NativeChatEventRow>
   )
