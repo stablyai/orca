@@ -10,7 +10,6 @@ import { useRef, useState } from 'react'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { useStructuredChatLiveSession } from './session/structured/use-structured-chat-live-session'
 import { NativeChatStructuredPromptCard } from './prompts/NativeChatStructuredPromptCard'
-import { NativeChatComposer } from './composer/NativeChatComposer'
 import { NativeChatEmptyState } from './host-access/NativeChatEmptyState'
 import { NativeChatEmptyPane } from './host-access/NativeChatEmptyPane'
 import { NativeChatLoadingCue } from './host-access/NativeChatLoadingCue'
@@ -60,6 +59,8 @@ import { useAppStore } from '@/store/index'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useNativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/use-native-chat-structured-composer-transport'
 import { NativeChatStructuredComposerTabStrips } from '@/components/native-chat/pane/actions/NativeChatStructuredComposerTabStrips'
+import { NativeChatStructuredComposerInput } from '@/components/native-chat/composer/NativeChatStructuredComposerInput'
+import { agentSessionExtensionStripRows } from '../../../../shared/agent-session/view/agent-session-extension-ui'
 import { nativeChatPaneHeader } from '@/components/native-chat/pane/actions/NativeChatPaneHeader'
 import { structuredAgentSessionReadFailureNotice } from '@/components/native-chat/messages/notices/structured-agent-session-read-failure-notice'
 import { useStructuredAgentSessionDeliveryNotices } from '@/components/native-chat/session/structured/delivery/use-structured-agent-session-delivery-notices'
@@ -175,6 +176,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const pageBot = useBotForWorkspace(ownerWorktreeId ?? null)
   const botServerDown = pageBot !== null && hostOutage !== null && hostOutage.kind !== 'stopped'
   const subagents = useStructuredNativeChatSubagents({ ...props, paneKey, controller })
+  // Extension statuses and widgets the child drew: they ride the journal, never the transcript.
+  const extensionUi = agentSessionExtensionStripRows(controller.journalItems)
   const subagentOpen = subagents.openId !== null
   // A subagent's view takes the composer's place; the main agent's prompts still show.
   const composerShown =
@@ -356,6 +359,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                     runtimeContext={imageRuntimeContext}
                     threadGoal={controller.threadGoal}
                     transport={transport}
+                    extensionUi={extensionUi}
                     isWorking={controller.isWorking}
                     isVisible={props.isVisible}
                     turnId={controller.turnId}
@@ -388,21 +392,17 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                 )}
                 {subagents.statusBar}
                 {composerShown ? (
-                  <NativeChatComposer
+                  <NativeChatStructuredComposerInput
                     ref={composerRef}
-                    terminalTabId={props.tabId}
+                    pane={props}
                     paneKey={paneKey}
-                    draftScopeKey={structuredAgentSessionDraftScopeKey(props.sessionId)}
-                    targetPtyId={null}
-                    agent={props.agent}
-                    {...bot.stopControls.composer}
+                    stopControls={bot.stopControls}
+                    queuedMessages={submits.queuedMessages}
                     unavailableHint={install.unavailableHint}
-                    steerHead={
-                      bot.stopControls.stopping ? undefined : submits.queuedMessages.steerHead
-                    }
-                    structuredTransport={transport}
+                    session={session}
                     notices={notices}
-                    recallSource={{ messages: session.messages, withoutImageMarkers: true }}
+                    transport={transport}
+                    extensionUi={extensionUi}
                   />
                 ) : null}
               </>
