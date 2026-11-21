@@ -31,13 +31,21 @@ import { googleBotSet } from './bot-connector-account-operations'
 export type PhoneGoogleStatus = ReturnType<typeof googleStatusRead.interpret>
 type Readiness = NonNullable<PhoneGoogleStatus['accounts']>[number]['services'][number]
 
-/** The host's Google app and accounts; `check` asks Google again first. Null until read. */
+/** `status` is null until read; `unread` when a read failed with nothing shown yet. */
+export type PhoneGoogle = {
+  status: PhoneGoogleStatus | null
+  unread: boolean
+  refresh: (check?: boolean) => Promise<void>
+}
+
+/** The host's Google app and accounts; `check` asks Google again first. */
 export function usePhoneGoogleStatus(
   client: RpcClient | null,
   enabled: boolean,
   again: number
-): { status: PhoneGoogleStatus | null; refresh: (check?: boolean) => Promise<void> } {
+): PhoneGoogle {
   const [status, setStatus] = useState<PhoneGoogleStatus | null>(null)
+  const [unread, setUnread] = useState(false)
   const refresh = useCallback(
     async (check = false) => {
       if (!client) {
@@ -48,6 +56,7 @@ export function usePhoneGoogleStatus(
         .then((reply) => googleStatusRead.interpret(reply))
         // Unread, the page keeps what it showed.
         .catch(() => null)
+      setUnread(!read)
       if (read) {
         setStatus(read)
       }
@@ -59,7 +68,7 @@ export function usePhoneGoogleStatus(
       void refresh()
     }
   }, [enabled, refresh, again])
-  return { status, refresh }
+  return { status, unread, refresh }
 }
 
 /** A service this build knows; a newer host's others are left out. */
@@ -101,7 +110,7 @@ function readinessRows(
 export function MobileBotGooglePage(props: {
   client: RpcClient | null
   bot: PhoneBot
-  google: { status: PhoneGoogleStatus | null; refresh: (check?: boolean) => Promise<void> }
+  google: PhoneGoogle
   hostName: string
   online: boolean
   banner: ReactNode

@@ -27,12 +27,12 @@ import {
   googleClientImport,
   googleSetupStart
 } from './bot-connector-account-operations'
-import type { PhoneGoogleStatus } from './MobileBotGooglePage'
+import type { PhoneGoogle } from './MobileBotGooglePage'
 
 export function MobileBotGoogleConnect(props: {
   client: RpcClient | null
   bot: PhoneBot
-  google: { status: PhoneGoogleStatus | null; refresh: (check?: boolean) => Promise<void> }
+  google: PhoneGoogle
   online: boolean
   banner: ReactNode
   showToast: (message: string, durationMs?: number) => void
@@ -175,7 +175,7 @@ export function MobileBotGoogleConnect(props: {
       <>
         {cancelHeader}
         {props.banner}
-        {failed ? (
+        {failed || (status === null && props.google.unread) ? (
           <MobileStateView
             title={t('bots.errors.generic', 'Something went wrong. Try again.')}
             action={

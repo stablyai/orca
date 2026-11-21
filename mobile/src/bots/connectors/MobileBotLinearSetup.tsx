@@ -106,7 +106,8 @@ export function MobileBotLinearSetup(props: {
     const open = workspaces.filter((entry) => !taken.includes(entry.workspaceId))
     const workspace =
       workspaces.find((entry) => entry.workspaceId === wanted) ??
-      (open.length === 1 ? open[0] : null)
+      // A row's own workspace is never swapped for another; only Add a connector takes the only one.
+      (props.workspaceId === undefined && open.length === 1 ? open[0] : null)
     if (!workspace) {
       return open.length > 1
         ? { kind: 'pick', workspaces: open }

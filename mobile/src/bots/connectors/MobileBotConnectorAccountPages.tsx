@@ -15,7 +15,7 @@ import { MobileBotComposioApp } from './MobileBotComposioApp'
 import { MobileBotGitHubPage } from './MobileBotGitHubPage'
 import { MobileBotGitHubSetup } from './MobileBotGitHubSetup'
 import { MobileBotGoogleConnect } from './MobileBotGoogleConnect'
-import { MobileBotGooglePage, type PhoneGoogleStatus } from './MobileBotGooglePage'
+import { MobileBotGooglePage, type PhoneGoogle } from './MobileBotGooglePage'
 import { MobileBotLinearPage } from './MobileBotLinearPage'
 import { MobileBotLinearSetup } from './MobileBotLinearSetup'
 import type { useConnectorPeople } from './MobileConnectorAccountParts'
@@ -37,7 +37,7 @@ export type AccountPagesContext = {
   onAskInChat?: ((draft: string) => void) | null
   linear: { view: PhoneLinearView; refresh: () => Promise<void> }
   github: { view: PhoneGitHubView; refresh: () => Promise<void> }
-  google: { status: PhoneGoogleStatus | null; refresh: (check?: boolean) => Promise<void> }
+  google: PhoneGoogle
   composio: MobileComposio
 }
 
