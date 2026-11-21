@@ -14,7 +14,7 @@ import type { NestedRepoCandidate } from '../../../../shared/project/groups/proj
 import {
   hasGitMarker,
   readLocalDirectory,
-  scanNestedRepos
+  scanNestedReposWithFilesystem
 } from '../../../project-groups/nested-repo-discovery'
 import { runGitProbeOnHost } from '../../../workspaces/catalog/repo-git-remote-identity'
 
@@ -59,7 +59,7 @@ async function scanRoot(
       resolveDeadline(latest)
     }, ROOT_SCAN_DEADLINE_MS)
   })
-  const scan = scanNestedRepos({
+  const scan = scanNestedReposWithFilesystem({
     path: root,
     signal: controller.signal,
     options: {
