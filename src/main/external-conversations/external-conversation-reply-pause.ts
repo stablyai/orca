@@ -7,7 +7,9 @@ import type { UsageLimitPause } from './external-conversation-reply-fill'
  *  the cut's close. Any other disposition fills them as failed. */
 export function usageLimitReplyPause(
   journal: () => ConnectorReplyCutJournal | null,
-  disposition: (sessionId: string, turnItemId: string) => Promise<string | undefined>
+  disposition: (sessionId: string, turnItemId: string) => Promise<string | undefined>,
+  /** When the scheduler shows its continue is due; none while it shows no time. */
+  dueAt: (sessionId: string) => Promise<number | undefined> = async () => undefined
 ): UsageLimitPause {
   return async (turn, rows) => {
     const store = journal()
@@ -23,6 +25,7 @@ export function usageLimitReplyPause(
     for (const claim of new Set(rows.flatMap((row) => row.claimMessageId ?? []))) {
       await store.recut(claim, cut, turn.failure)
     }
-    return true
+    const resumesAt = await dueAt(turn.sessionId)
+    return resumesAt === undefined ? {} : { resumesAt }
   }
 }

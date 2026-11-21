@@ -29,8 +29,8 @@ export type EndedTurnReplies = {
 }
 
 /** What a fill did: the conversations its rows cover, and whether a usage-limit pause cut them
- *  for an automatic continue instead (Phase 1 §1.5). */
-export type FilledTurn = { covered: ReadonlySet<string>; paused: boolean }
+ *  for an automatic continue instead (Phase 1 §1.5), with when it is due, if the app shows a time. */
+export type FilledTurn = { covered: ReadonlySet<string>; paused: boolean; resumesAt?: number }
 
 /** Fills an ended turn's outbox rows (design item 125 §3), the first fill winning. */
 export type ConversationReplyFill = (turn: EndedTurnReplies) => Promise<FilledTurn>
@@ -39,7 +39,7 @@ export type ConversationReplyFill = (turn: EndedTurnReplies) => Promise<FilledTu
 export type UsageLimitPause = (
   turn: EndedTurnReplies,
   rows: readonly JournalConnectorReplyRow[]
-) => Promise<boolean>
+) => Promise<false | { resumesAt?: number }>
 
 const keyOf = (account: string, deliveryId: string): string => `${account}\0${deliveryId}`
 
@@ -97,13 +97,12 @@ export function conversationReplyFill(
     const own = rows.filter(
       (row) => !row.fill && (claimedHere(row) || (row.claimMessageId === undefined && !row.cut))
     )
-    if (
-      outcome === 'failed' &&
-      turn.failure?.category === 'usage_limit' &&
-      own.length > 0 &&
-      (await pause?.(turn, own))
-    ) {
-      return { covered, paused: true }
+    const paused =
+      outcome === 'failed' && turn.failure?.category === 'usage_limit' && own.length > 0
+        ? await pause?.(turn, own)
+        : false
+    if (paused) {
+      return { covered, paused: true, ...paused }
     }
     const fills: JournalConnectorReplyFill[] = []
     for (const row of own) {
