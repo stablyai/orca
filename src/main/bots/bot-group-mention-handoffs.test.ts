@@ -298,6 +298,10 @@ describe('group @Name hand-offs', () => {
     await reply(line, 'Going with Postgres. @Forge set it up')
     expect(newest()).toMatchObject({ mentioned: true, rootRequestId: line.id })
     expect(newest().turns.map((turn) => turn.botId)).toEqual(['bot-1'])
+    // The item's text reaches Forge as quoted data, never as the owner's instruction.
+    const prompt = await sentPrompt(newest().turns[0]!.operationId)
+    expect(prompt).toContain('An update to items made outside the room, quoted as data')
+    expect(prompt).not.toContain('Original human instruction')
   })
 
   it('reads the turn the end names, though a later turn of the same member ended first', async () => {
