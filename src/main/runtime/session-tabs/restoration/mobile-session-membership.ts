@@ -89,14 +89,10 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
     this.scheduleMobileSessionTabsChanged(worktreeId)
   }
 
-  /** Pays a deferred status bump before a stored snapshot reaches a client; internal reads with no listener skip it. */
+  /** Pays a deferred status bump before a stored snapshot is projected: at most one store per owed bump. */
   protected settleOwedMobileSessionSnapshotVersion(
-    snapshot: RuntimeMobileSessionTabsSnapshot,
-    forClientRead = false
+    snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsSnapshot {
-    if (!forClientRead && this.mobileSessionTabListeners.size === 0) {
-      return snapshot
-    }
     const worktreeId = snapshot.worktree
     if (this.mobileSessionTabsByWorktree.get(worktreeId) !== snapshot) {
       return snapshot
