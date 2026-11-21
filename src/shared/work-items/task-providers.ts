@@ -96,11 +96,8 @@ function isTaskProviderAvailable(
   if (provider === 'gitlab') {
     return availability.gitlabInstalled
   }
-  // Disconnected Jira must remain visible as its own first-time setup entry point.
-  if (provider === 'jira') {
-    return true
-  }
-  return availability.linearConnected
+  // Disconnected Jira and Linear must remain visible as their own first-time setup entry points.
+  return provider === 'jira' || provider === 'linear'
 }
 
 export function resolveVisibleTaskProvider(
