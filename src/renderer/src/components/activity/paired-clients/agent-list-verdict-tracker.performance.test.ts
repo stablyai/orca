@@ -35,7 +35,12 @@ function entry(paneKey: string, state: 'working' | 'done', at: number): AgentSta
   } as unknown as AgentStatusEntry
 }
 
-function thread(paneKey: string, state: 'working' | 'done', at: number): AgentPaneThread {
+function thread(
+  paneKey: string,
+  state: 'working' | 'done',
+  at: number,
+  unread = false
+): AgentPaneThread {
   const current = entry(paneKey, state, at)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the verdict and child classifier read only these fields.
   return counted({
@@ -47,7 +52,7 @@ function thread(paneKey: string, state: 'working' | 'done', at: number): AgentPa
     latestTimestamp: at,
     latestEvent: { entry: current },
     events: [{ entry: current }],
-    unread: false
+    unread
   } as unknown as AgentPaneThread)
 }
 
@@ -73,11 +78,13 @@ function readsForOneStep(agents: number): number {
   const stepped = 'pane-0-worker'
   threads.set(stepped, thread(stepped, 'done', agents + 1))
   statuses.set(stepped, entry(stepped, 'done', agents + 1))
+  // A read change on a pane sharing a handle rebuilds its thread but keeps its rank and lineage.
+  threads.set('pane-1', thread('pane-1', 'working', 1, true))
   const current = sources()
   reads = 0
-  tracker.markPanes([stepped])
+  tracker.markPanes([stepped, 'pane-1'])
   const changes = tracker.collect(current)
-  expect(Object.keys(changes.changed)).toEqual([stepped])
+  expect(Object.keys(changes.changed).sort()).toEqual(['pane-0-worker', 'pane-1'])
   expect(changes.changed[stepped]).toMatchObject({ childOf: 'pane-0', foldedChild: true })
   return reads
 }

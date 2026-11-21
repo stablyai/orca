@@ -74,32 +74,55 @@ function sameVerdict(a: AgentListVerdict, b: AgentListVerdict): boolean {
 export function createAgentListVerdictTracker() {
   const verdicts = new Map<string, AgentListVerdict>()
   const lineageByPaneKey = new Map<string, Lineage>()
-  const handleCounts = new Map<string, number>()
+  const panesByHandle = new Map<string, Set<string>>()
+  // The pane that owned each shared handle at the last classification: the first in list order.
+  let winnerByHandle = new Map<string, string>()
   let orchestratedThreads = 0
   let parentByChild = new Map<string, string>()
   let pending = new Set<string>()
   let full = true
 
-  function countHandle(handle: string | undefined, delta: 1 | -1): void {
+  function countHandle(handle: string | undefined, paneKey: string, add: boolean): void {
     if (!handle) {
       return
     }
-    const after = (handleCounts.get(handle) ?? 0) + delta
-    if (after === 0) {
-      handleCounts.delete(handle)
-    } else {
-      handleCounts.set(handle, after)
+    const panes = panesByHandle.get(handle) ?? new Set<string>()
+    if (add) {
+      panes.add(paneKey)
+      panesByHandle.set(handle, panes)
+    } else if (panes.delete(paneKey) && panes.size === 0) {
+      panesByHandle.delete(handle)
     }
+  }
+
+  /** Whether a shared handle's owner may differ from the last classification's; ties stay conservative. */
+  function handleOwnerMoved(handle: string, sources: AgentListVerdictSources): boolean {
+    const panes = panesByHandle.get(handle)
+    if (!panes || panes.size < 2) {
+      return false
+    }
+    let owner: string | undefined
+    let newest = -Infinity
+    let tied = false
+    for (const paneKey of panes) {
+      const at = sources.thread(paneKey)?.latestTimestamp ?? -Infinity
+      tied = at === newest || (tied && at < newest)
+      if (at > newest) {
+        newest = at
+        owner = paneKey
+      }
+    }
+    return tied || owner !== winnerByHandle.get(handle)
   }
 
   function setLineage(paneKey: string, next: Lineage | undefined): void {
     const previous = lineageByPaneKey.get(paneKey)
     if (previous) {
-      countHandle(previous.terminalHandle, -1)
+      countHandle(previous.terminalHandle, paneKey, false)
       orchestratedThreads -= Number(previous.orchestration !== null)
     }
     if (next) {
-      countHandle(next.terminalHandle, 1)
+      countHandle(next.terminalHandle, paneKey, true)
       orchestratedThreads += Number(next.orchestration !== null)
       lineageByPaneKey.set(paneKey, next)
     } else {
@@ -124,9 +147,9 @@ export function createAgentListVerdictTracker() {
         previous.terminalHandle === next.terminalHandle &&
         previous.orchestration === next.orchestration
       ) {
-        // The newest pane wins a handle reported twice, so a rebuilt thread's new rank can move a parent.
+        // The newest pane owns a handle reported twice, so a rebuilt thread's new rank can move a parent.
         lineageMoved ||=
-          next.terminalHandle !== undefined && (handleCounts.get(next.terminalHandle) ?? 0) > 1
+          next.terminalHandle !== undefined && handleOwnerMoved(next.terminalHandle, sources)
         previous.thread = next.thread
         continue
       }
@@ -151,6 +174,13 @@ export function createAgentListVerdictTracker() {
       }
     }
     parentByChild = next
+    winnerByHandle = new Map()
+    for (const thread of orchestratedThreads > 0 ? sources.threads : []) {
+      const handle = lineageByPaneKey.get(thread.paneKey)?.terminalHandle
+      if (handle && (panesByHandle.get(handle)?.size ?? 0) > 1 && !winnerByHandle.has(handle)) {
+        winnerByHandle.set(handle, thread.paneKey)
+      }
+    }
   }
 
   function verdictFor(

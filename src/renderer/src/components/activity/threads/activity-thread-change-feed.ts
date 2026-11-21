@@ -11,6 +11,10 @@ const threadsByPaneKey: Record<ActivityThreadMode, ThreadsByPaneKey> = {
   all: new Map(),
   live: new Map()
 }
+const builds: Record<ActivityThreadMode, AgentPaneThreadReuseCache | null> = {
+  all: null,
+  live: null
+}
 const changeListeners: Record<ActivityThreadMode, Set<ActivityThreadChangeListener>> = {
   all: new Set(),
   live: new Set()
@@ -23,6 +27,7 @@ export function publishActivityThreadChanges(
   firstBuild = false
 ): void {
   threadsByPaneKey[mode] = build?.previousByPaneKey ?? new Map()
+  builds[mode] = build
   const paneKeys = build && !firstBuild ? build.changedPaneKeys : null
   if (build) {
     // Tracking costs each build a pass, so only builds with a reader pay; a later reader resyncs.
@@ -41,7 +46,13 @@ export function subscribeActivityThreadChanges(
   listener: ActivityThreadChangeListener
 ): () => void {
   changeListeners[mode].add(listener)
-  return () => changeListeners[mode].delete(listener)
+  return () => {
+    changeListeners[mode].delete(listener)
+    const build = builds[mode]
+    if (build && changeListeners[mode].size === 0) {
+      build.trackChanges = false
+    }
+  }
 }
 
 /** One pane's thread from the last `mode` build, without scanning the list. */
