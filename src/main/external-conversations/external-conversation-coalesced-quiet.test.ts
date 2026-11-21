@@ -387,20 +387,31 @@ it('posts no stand-in to a thread that asked through the reply outbox, whose own
   const earlier = await endedTurn(host, HOST_TEST_SESSION, 'turn-a', cursor)
   expect(earlier.turnProse).toBe(ANSWER)
   expect(earlier.stamps).toMatchObject([{ conversation: KEY }])
+  // The quiet final turn answered the mail, not this thread: its end has no row of its own to send.
+  const last = await endedTurn(host, HOST_TEST_SESSION, 'turn-b', cursor)
+  expect(last.stamps?.some((stamp) => stamp.conversation.externalId === KEY.externalId)).not.toBe(
+    true
+  )
 })
 
 it('still posts the stand-in when one of the merged deliveries has no reply outbox row', async () => {
   const { chats } = await botChat()
   const linked = linkedBot(chats)
   const asked = await askFromThread(linked, { reply: true })
+  let again = ''
   let mail = ''
   await providerTurn('turn-a', asked, [ANSWER], {
     running: async () => {
-      mail = await sendMail()
-      await askFromThread(linked, { taken: { steeredInto: 'turn-a' } })
+      again = await askFromThread(linked, { taken: { owed: true } })
     }
   })
-  await providerTurn('turn-b', mail, ['NO_REPLY'])
+  // The rows-less message's answer reaches the thread only through the merged end, which drops it.
+  await providerTurn('turn-b', again, ['Second answer'], {
+    running: async () => {
+      mail = await sendMail()
+    }
+  })
+  await providerTurn('turn-c', mail, ['NO_REPLY'])
   await eventually(() => expect(ended(linked.events)).toHaveLength(1))
   expect(ended(linked.events)[0]?.lastAssistantMessage).toBe(
     'I replied but the message may not have reached you. Please ask again.'

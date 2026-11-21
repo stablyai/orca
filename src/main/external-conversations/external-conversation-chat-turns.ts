@@ -2,10 +2,7 @@ import type { PendingPrompt } from '../../shared/agent-status/contracts/agent-pe
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentStatusState } from '../../shared/agent-status/contracts/agent-status-types'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type {
-  ConnectorPrompt,
-  ConnectorTurnOrigin
-} from '../../shared/connectors/connector-cloud-contract'
+import type { ConnectorPrompt } from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import { chatPaneKey, type ChatNews } from './external-conversation-chat'
@@ -53,11 +50,6 @@ export class ChatTurns {
       ChatTurnReplies & {
         readHookRow: (paneKey: string) => AgentStatusIpcPayload | null
         pendingPrompt: (link: ExternalConversationLink) => PendingPrompt | null
-        /** Read once per ended turn. */
-        chatTurnOrigin: (sessionId: string, turnAt: number | null) => ConnectorTurnOrigin
-        /** Whether every delivery the ending turn answers has reply outbox rows; read before
-         *  chatTurnOrigin, which ends the turn. */
-        chatTurnOutboxed?: (sessionId: string) => boolean
         /** Whether a delivery was sent to the chat and its turn hasn't ended. */
         chatTurnDelivered: (sessionId: string) => boolean
         /** The delivery a chat turn that began at `turnAt` answers; taken once. */

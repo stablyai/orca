@@ -11,6 +11,7 @@ import type { EndedChatTurn } from './external-conversation-ended-turn'
 import type { ConversationReplyFill, FilledTurn } from './external-conversation-reply-fill'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
+import type { ConnectorTurnOrigin } from '../../shared/connectors/connector-cloud-contract'
 import { connectorReplyWords } from '../../shared/agent-session/journal/journal-connector-reply-turn'
 import { isSlackDirectMessage } from '../../shared/connectors/slack-direct-message'
 export type { SlackMirrorTurn } from './slack-mirror'
@@ -96,6 +97,11 @@ function tookOf(ended: ChatTurnEnd['ended']): { tookMs?: number } {
 export type ChatTurnReplies = {
   /** Fills the reply outbox rows an ended turn answered (design item 125). */
   replyFill?: () => ConversationReplyFill | null
+  /** Read once per ended turn. */
+  chatTurnOrigin: (sessionId: string, turnAt: number | null) => ConnectorTurnOrigin
+  /** Whether every delivery the ending turn answers has reply outbox rows; read before
+   *  chatTurnOrigin, which ends the turn. */
+  chatTurnOutboxed?: (sessionId: string) => boolean
 }
 
 /** The first call reads; every later one gets that same read. */
