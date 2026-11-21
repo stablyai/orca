@@ -33,7 +33,7 @@ export function useNativeChatQuoteJump({
   beginNavigation: () => void
   readerLeavesEnd: () => void
   startHistoryJump: ReturnType<typeof useNativeChatHistoryJump>['start']
-  /** This chat; a source from another chat is not here, so its jump pages nothing. */
+  /** This chat; a source from another chat that is not loaded here pages nothing. */
   sessionKey: string
 }): NativeChatQuoteJump {
   const { issue, nextRequestId } = request
@@ -43,7 +43,9 @@ export function useNativeChatQuoteJump({
   })
   return useCallback(
     ({ messageId, place, chat }, text, notifyMissing, isCurrent) => {
-      if (chat !== undefined && chat !== sessionKey) {
+      const loaded = nativeChatSlotIndexOf(slots, messageId) !== -1
+      // A loaded message is here whatever its chat; the chat only rules out paging this chat.
+      if (!loaded && chat !== undefined && chat !== sessionKey) {
         return false
       }
       beginNavigation()
@@ -68,7 +70,7 @@ export function useNativeChatQuoteJump({
           notifyMissing()
         }
       }
-      if (nativeChatSlotIndexOf(slots, messageId) !== -1) {
+      if (loaded) {
         readerLeavesEnd()
         issue({ kind: 'rail', messageId, requestId: nextRequestId() })
         // The landing scrolls in a layout effect; the row is drawn two frames later or more.

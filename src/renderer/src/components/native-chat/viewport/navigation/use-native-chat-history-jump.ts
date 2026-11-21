@@ -108,8 +108,12 @@ export function useNativeChatHistoryJump({
         if (signal.aborted) {
           return 'aborted'
         }
-        // A trim or a new read moved the history: page once more from the committed one.
-        if (result === 'superseded' && !superseded) {
+        // A trim or a new read moved the history: page once more from the committed one. A second
+        // one in a row stops the jump as an abort does.
+        if (result === 'superseded') {
+          if (superseded) {
+            return 'aborted'
+          }
           superseded = true
           await nextCommit(signal)
           continue

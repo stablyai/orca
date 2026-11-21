@@ -149,6 +149,14 @@ it('shows the notice once when no older page has the quoted reply', async () => 
   expect(shown).not.toHaveBeenCalled()
 })
 
+it('jumps to a message of another chat that is loaded here', async () => {
+  const { spies, click } = chat(['old-reply'])
+  const notifyMissing = click('quoted text', reply('latest-1', 'claude:other'))
+  await waitFor(() => expect(shown).toHaveBeenCalledOnce())
+  expect(notifyMissing).not.toHaveBeenCalled()
+  expect(spies.loadEarlier).not.toHaveBeenCalled()
+})
+
 it('pages nothing for a quote from another chat, and shows the notice', () => {
   const { spies, click } = chat(['old-reply'])
   const notifyMissing = click('quoted text', reply('old-reply', 'claude:other'))
@@ -178,10 +186,12 @@ it('pages on after a page of an earlier read, which is not a stop', async () => 
   expect(notifyMissing).not.toHaveBeenCalled()
 })
 
-it('shows the notice when every page is of an earlier read', async () => {
-  const { click } = chat(['superseded', 'superseded', 'old-reply'])
+it('stops with no notice when two pages in a row are of an earlier read', async () => {
+  const { spies, click } = chat(['superseded', 'superseded', 'old-reply'])
   const notifyMissing = click('quoted text', reply('old-reply'))
-  await waitFor(() => expect(notifyMissing).toHaveBeenCalledOnce())
+  await waitFor(() => expect(spies.loadEarlier).toHaveBeenCalledTimes(2))
+  await act(async () => {})
+  expect(notifyMissing).not.toHaveBeenCalled()
   expect(shown).not.toHaveBeenCalled()
 })
 
