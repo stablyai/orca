@@ -7,7 +7,7 @@ import {
   restoreNativeChatReplyTarget,
   settleNativeChatReplySend
 } from '../reply/native-chat-reply-target'
-import { withNativeChatReplyContext } from '../reply/native-chat-reply-quote'
+import { quoteNativeChatReply } from '../reply/native-chat-reply-sources'
 import {
   admitNativeChatPastedText,
   resolveNativeChatPastedText
@@ -112,7 +112,7 @@ export function useNativeChatPtyComposerSend(args: {
           ? readNativeChatReplyTarget(args.draftScopeKey)
           : null
       if (reply) {
-        text = withNativeChatReplyContext(text, reply, formatAgentTypeLabel(args.agent))
+        text = quoteNativeChatReply(text, reply, formatAgentTypeLabel(args.agent))
       }
       const { sendOptions: launchSendOptions } = resolveNativeChatLaunchDraftSend({
         launchDraft: args.launchDraft,

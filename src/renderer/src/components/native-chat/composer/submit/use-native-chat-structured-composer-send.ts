@@ -5,7 +5,7 @@ import {
   restoreNativeChatReplyTarget,
   settleNativeChatReplySend
 } from '../reply/native-chat-reply-target'
-import { withNativeChatReplyContext } from '../reply/native-chat-reply-quote'
+import { quoteNativeChatReply } from '../reply/native-chat-reply-sources'
 import {
   hasNativeChatStagedFiles,
   captureNativeChatStagedInput
@@ -146,7 +146,7 @@ export function useNativeChatStructuredComposerSend({
       // A reply is part of the message, quoted once here; commands never carry one.
       const reply = hostCommand ? null : readNativeChatReplyTarget(draftScopeKey)
       if (reply) {
-        text = withNativeChatReplyContext(text, reply, formatAgentTypeLabel(agent))
+        text = quoteNativeChatReply(text, reply, formatAgentTypeLabel(agent))
       }
       const submission = captureNativeChatComposerSubmission(draftScopeKey)
       let consumed = false

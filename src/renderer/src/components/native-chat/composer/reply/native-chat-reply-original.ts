@@ -23,15 +23,16 @@ function excerptMatches(excerpt: string, text: string): boolean {
   )
 }
 
-/** A reply restored from sent text names no message: the latest one (`messages` oldest first) by its
- *  author whose own words, not a quote it carries, are the excerpt. */
+/** A reply restored from sent text that this client did not send names no message: the one message
+ *  by its author whose own words, not a quote it carries, are the excerpt. With two such messages the
+ *  original can't be told apart, so it counts as unavailable rather than risking the wrong one. */
 export function nativeChatReplyOriginalId(
   messages: readonly Pick<NativeChatMessage, 'id' | 'role' | 'blocks'>[],
   { author, excerpt }: { author: 'agent' | 'user'; excerpt: string }
 ): string | null {
   const role = author === 'agent' ? 'assistant' : 'user'
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index]
+  let found: string | null = null
+  for (const message of messages) {
     if (message.role !== role) {
       continue
     }
@@ -45,8 +46,11 @@ export function nativeChatReplyOriginalId(
         author === 'agent' ? withoutNativeChatVisualDirectiveLines(words) : words
       )
     ) {
-      return message.id
+      if (found !== null) {
+        return null
+      }
+      found = message.id
     }
   }
-  return null
+  return found
 }

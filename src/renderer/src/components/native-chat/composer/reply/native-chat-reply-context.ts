@@ -1,8 +1,6 @@
 import { useLayoutEffect, type RefObject } from 'react'
 import { createNativeChatReplyTarget, setNativeChatReplyTarget } from './native-chat-reply-target'
 import { nativeChatPrimaryComposer } from '../focus/native-chat-composer-destination'
-import { resolveNativeChatDraftOwner } from '../../drafts/native-chat-draft-owner'
-import { useAppStore } from '@/store'
 
 export type NativeChatReplySource = {
   messageId: string
@@ -18,11 +16,7 @@ export function startNativeChatReply(from: Element | null, source: NativeChatRep
   if (!composer) {
     return false
   }
-  const owner = resolveNativeChatDraftOwner(useAppStore.getState(), composer.scopeKey)
-  setNativeChatReplyTarget(composer.scopeKey, {
-    ...createNativeChatReplyTarget(source),
-    ...(owner ? { owner } : {})
-  })
+  setNativeChatReplyTarget(composer.scopeKey, createNativeChatReplyTarget(source))
   composer.handle.focus()
   return true
 }

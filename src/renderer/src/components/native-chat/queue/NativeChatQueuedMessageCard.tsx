@@ -1,5 +1,8 @@
 import { QueuedMessageImageCount } from '@/components/native-chat/queue/NativeChatQueuedMessageImageCount'
-import { nativeChatReplyDisplayText } from '../composer/reply/NativeChatReplyQuoteChip'
+import {
+  nativeChatReplyDisplayText,
+  nativeChatReplySummaryOmits
+} from '../composer/reply/NativeChatReplyQuoteChip'
 import type { QueuedMessageDragPresentation } from '@/components/native-chat/queue/NativeChatQueuedMessageRows'
 import { useId, useState } from 'react'
 import {
@@ -259,7 +262,7 @@ export function NativeChatQueuedMessageCard({
           ) : null}
         </div>
         {card.images ? <QueuedMessageImageCount images={card.images} /> : null}
-        {expanded || clipped || fullText !== line ? (
+        {expanded || clipped || nativeChatReplySummaryOmits(cardText) ? (
           <QueuedMessageExpandToggle
             expanded={expanded}
             controls={expanded ? textId : undefined}

@@ -1,11 +1,12 @@
 import {
-  clearNativeChatReplyTarget,
   nativeChatReplyTargetFromSentText,
   readNativeChatReplyTarget,
+  releaseNativeChatReplyScope,
   restoreNativeChatReplyTarget,
   setNativeChatReplyTarget
 } from '../../composer/reply/native-chat-reply-target'
-import { withNativeChatReplyContext } from '../../composer/reply/native-chat-reply-quote'
+import { quoteNativeChatReply } from '../../composer/reply/native-chat-reply-sources'
+import { nativeChatQuotedPromptDocument } from './native-chat-queued-edit-quote'
 import type { AgentJournalMessageItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { withoutImageReference } from '../../../../../../shared/native-chat/attachments/native-chat-image-reference'
 import {
@@ -76,7 +77,7 @@ export function createNativeChatQueuedEditDraft(
     queuedMessageEditableText(body) ?? ''
   )
   if (reply) {
-    setNativeChatReplyTarget(scopeKey, reply)
+    setNativeChatReplyTarget(scopeKey, reply, { ephemeral: true })
   }
   const text = promptMarkersToImageReferences(
     rest,
@@ -104,14 +105,12 @@ export function nativeChatQueuedEditInput(
   skillsCapable: boolean
 ): QueuedMessageEdit {
   const draft = readNativeChatComposerDraft(edit.scopeKey)
-  const text = withNativeChatReplyContext(
-    imageReferencesToPromptMarkers(
-      resolveNativeChatPastedText(edit.scopeKey, draft.text),
-      draft.images.map(({ id }) => id)
-    ),
-    readNativeChatReplyTarget(edit.scopeKey),
-    'the agent'
+  const words = imageReferencesToPromptMarkers(
+    resolveNativeChatPastedText(edit.scopeKey, draft.text),
+    draft.images.map(({ id }) => id)
   )
+  const reply = readNativeChatReplyTarget(edit.scopeKey)
+  const text = reply ? quoteNativeChatReply(words, reply, 'the agent') : words
   const images = draft.images.map(
     (image) =>
       edit.kept.find((entry) => sameQueuedEditImage(entry.image, image))?.block ?? {
@@ -174,9 +173,12 @@ export function handBackNativeChatQueuedEdit(
   // it already answers another.
   const reply = dirty ? readNativeChatReplyTarget(edit.scopeKey) : null
   if (reply && !restoreNativeChatReplyTarget(edit.destination, reply)) {
-    text = withNativeChatReplyContext(text, reply, 'the agent')
+    // The editor shows the rich document, so the quote goes into both or typing would drop it.
+    const quoted = quoteNativeChatReply(text, reply, 'the agent')
+    document = nativeChatQuotedPromptDocument(document, text, quoted)
+    text = quoted
   }
-  clearNativeChatReplyTarget(edit.scopeKey)
+  releaseNativeChatReplyScope(edit.scopeKey)
   const pending = nativeChatPendingAttachmentSnapshot(edit.scopeKey)
   appendToNativeChatComposerDraft(edit.destination, {
     text,
@@ -197,7 +199,7 @@ export function handBackNativeChatQueuedEdit(
 }
 
 export function discardNativeChatQueuedEdit(edit: NativeChatQueuedEditDraft): void {
-  clearNativeChatReplyTarget(edit.scopeKey)
+  releaseNativeChatReplyScope(edit.scopeKey)
   clearNativeChatPendingAttachments(edit.scopeKey)
   closeNativeChatEditDraft(edit.scopeKey)
 }

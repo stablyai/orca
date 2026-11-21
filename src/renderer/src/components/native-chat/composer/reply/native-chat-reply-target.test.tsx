@@ -16,6 +16,11 @@ import {
   useNativeChatReplyTarget
 } from './native-chat-reply-target'
 import { nativeChatReplyOriginalId } from './native-chat-reply-original'
+import {
+  quoteNativeChatReply,
+  resetNativeChatReplySourcesForTests
+} from './native-chat-reply-sources'
+import { setNativeChatComposerDraftOwnerResolver } from '../../drafts/native-chat-composer-draft-memory'
 import { nativeChatReplyDisplayText } from './NativeChatReplyQuoteChip'
 import { translate } from '@/i18n/i18n'
 import {
@@ -37,7 +42,10 @@ import {
   useNativeChatMessageRevealAnswer
 } from './native-chat-reply-context'
 import { clearNativeChatComposerDraftsForTests } from '../../drafts/native-chat-draft-reset'
-import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
+import {
+  readNativeChatComposerDraft,
+  updateNativeChatComposerDraft
+} from '../../drafts/native-chat-composer-draft-store'
 import { returnMessageToComposer } from '../../session/structured/delivery/structured-agent-session-message-hand-back'
 
 const text = (value: string) => ({ type: 'text' as const, text: value })
@@ -52,6 +60,8 @@ const reply = (id: string, messageId = 'm-1') => ({
 beforeEach(() => {
   localStorage.clear()
   resetNativeChatReplyTargetsForTests()
+  resetNativeChatReplySourcesForTests()
+  setNativeChatComposerDraftOwnerResolver(() => undefined)
   clearNativeChatComposerDraftsForTests()
 })
 afterEach(() => cleanup())
@@ -312,6 +322,31 @@ describe('reply quotes', () => {
     ).toBe('m4')
   })
 
+  it('a reply rebuilt from text this client sent keeps the exact original among identical messages', () => {
+    const sent = quoteNativeChatReply(
+      'Which one?',
+      { ...reply('r', 'm-first'), excerpt: 'Done.' },
+      'Claude'
+    )
+    expect(nativeChatReplyTargetFromSentText(sent).target?.messageId).toBe('m-first')
+    // Without that record two identical messages can't be told apart: the original is unavailable.
+    const done = (id: string) => ({ id, role: 'assistant' as const, blocks: [text('Done.')] })
+    expect(
+      nativeChatReplyOriginalId([done('m-first'), done('m-second')], {
+        author: 'agent',
+        excerpt: 'Done.'
+      })
+    ).toBeNull()
+  })
+
+  it('a long message cut to an excerpt is still found by what was kept', () => {
+    const long = `${'Updated the layout. '.repeat(40)}Done.`
+    const excerpt = nativeChatReplyExcerpt(long)
+    expect(excerpt.endsWith('…')).toBe(true)
+    const message = { id: 'm-long', role: 'assistant' as const, blocks: [text(long)] }
+    expect(nativeChatReplyOriginalId([message], { author: 'agent', excerpt })).toBe('m-long')
+  })
+
   it('shows the whole quote when a queued card is expanded', () => {
     const sent = withNativeChatReplyContext(
       'Why?',
@@ -360,6 +395,43 @@ describe('restored replies', () => {
     const takenAt = nativeChatReplyCustody('agent-session:reloaded')
     deleteNativeChatComposerDraftsOwnedBy(owner)
     expect(restoreNativeChatReplyTarget('agent-session:reloaded', reply('r'), takenAt)).toBe(false)
+  })
+
+  it('a reply remembered from before a reload is fenced when its own chat is deleted, and returns otherwise', () => {
+    setNativeChatReplyTarget('agent-session:gone', reply('g'))
+    setNativeChatReplyTarget('agent-session:kept', reply('k'))
+    resetNativeChatReplyTargetsForTests()
+    settleNativeChatReplySend('agent-session:gone', 'g')
+    settleNativeChatReplySend('agent-session:kept', 'k')
+    const goneAt = nativeChatReplyCustody('agent-session:gone')
+    const keptAt = nativeChatReplyCustody('agent-session:kept')
+    deleteNativeChatComposerDraft('agent-session:gone')
+    expect(restoreNativeChatReplyTarget('agent-session:gone', reply('g'), goneAt)).toBe(false)
+    expect(restoreNativeChatReplyTarget('agent-session:kept', reply('k'), keptAt)).toBe(true)
+  })
+
+  it('a reply rebuilt from sent text belongs to its chat’s workspace, active or taken by a send', () => {
+    const owner = { workspaceId: 'ws-4', executionHostId: 'local' } as const
+    setNativeChatComposerDraftOwnerResolver((scope) => (scope.endsWith('-ws4') ? owner : undefined))
+    const sent = withNativeChatReplyContext('Why?', { author: 'agent', excerpt: 'Old.' }, 'Claude')
+    returnMessageToComposer('agent-session:active-ws4', 'rw', [text(sent)])
+    returnMessageToComposer('agent-session:pending-ws4', 'rw', [text(sent)])
+    // The words are cleared, so nothing but the reply itself still names the workspace.
+    for (const scope of ['agent-session:active-ws4', 'agent-session:pending-ws4']) {
+      updateNativeChatComposerDraft(
+        scope,
+        { text: '', document: undefined, images: [] },
+        'immediate'
+      )
+    }
+    const pending = readNativeChatReplyTarget('agent-session:pending-ws4')
+    settleNativeChatReplySend('agent-session:pending-ws4', pending?.id)
+    const takenAt = nativeChatReplyCustody('agent-session:pending-ws4')
+    deleteNativeChatComposerDraftsOwnedBy(owner)
+    expect(readNativeChatReplyTarget('agent-session:active-ws4')).toBeNull()
+    expect(
+      restoreNativeChatReplyTarget('agent-session:pending-ws4', pending ?? reply('x'), takenAt)
+    ).toBe(false)
   })
 
   it('a send in flight cannot bring its reply back once its workspace is removed', () => {

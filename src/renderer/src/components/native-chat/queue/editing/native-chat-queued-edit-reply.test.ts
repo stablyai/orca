@@ -2,6 +2,7 @@
 import { beforeEach, expect, it } from 'vitest'
 import {
   createNativeChatQueuedEditDraft,
+  discardNativeChatQueuedEdit,
   handBackNativeChatQueuedEdit,
   nativeChatQueuedEditDirty,
   nativeChatQueuedEditInput
@@ -9,9 +10,12 @@ import {
 import { withNativeChatReplyContext } from '../../composer/reply/native-chat-reply-quote'
 import {
   cancelNativeChatReplyTarget,
+  nativeChatReplyCustody,
   readNativeChatReplyTarget,
-  resetNativeChatReplyTargetsForTests
+  resetNativeChatReplyTargetsForTests,
+  setNativeChatReplyTarget
 } from '../../composer/reply/native-chat-reply-target'
+import { promptTextContent } from '../../composer/editor/native-chat-prompt-document-text'
 import {
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft
@@ -57,4 +61,39 @@ it('an edit handed back to the message box keeps answering the same message', ()
   expect(readNativeChatComposerDraft('agent-session:main').text).toBe('Why blue, really?')
   expect(readNativeChatReplyTarget('agent-session:main')?.excerpt).toBe('Updated the cards.')
   expect(readNativeChatReplyTarget(edit.scopeKey)).toBeNull()
+})
+
+it('an edit handed back to a box already answering another message keeps its quote in what the editor shows', () => {
+  setNativeChatReplyTarget('agent-session:busy', {
+    id: 'b',
+    messageId: 'm-b',
+    author: 'agent',
+    excerpt: 'Another answer.'
+  })
+  const edit = createNativeChatQueuedEditDraft(queued(), 'agent-session:busy')
+  const edited = 'Why blue, really?'
+  updateNativeChatComposerDraft(
+    edit.scopeKey,
+    { text: edited, document: promptTextContent(edited) },
+    'immediate'
+  )
+  handBackNativeChatQueuedEdit(edit)
+  const returned = readNativeChatComposerDraft('agent-session:busy')
+  const quoted = SENT.replace('Why blue?', edited)
+  expect(returned.text).toBe(quoted)
+  // The editor rebuilds its text from the document, so typing there must not drop the quote.
+  const lines = (returned.document?.content ?? []).map((paragraph) =>
+    (paragraph.content ?? []).map((node) => node.text ?? '').join('')
+  )
+  expect(lines.join('\n')).toBe(quoted)
+  expect(readNativeChatReplyTarget('agent-session:busy')?.id).toBe('b')
+})
+
+it('a queued edit’s reply is never saved and leaves nothing behind once the edit closes', () => {
+  const edit = createNativeChatQueuedEditDraft(queued(), 'agent-session:main')
+  expect(nativeChatReplyCustody(edit.scopeKey)).toBeGreaterThan(0)
+  expect(localStorage.getItem('orca.nativeChat.replyTargets.v1') ?? '').not.toContain(edit.scopeKey)
+  discardNativeChatQueuedEdit(edit)
+  expect(readNativeChatReplyTarget(edit.scopeKey)).toBeNull()
+  expect(nativeChatReplyCustody(edit.scopeKey)).toBe(0)
 })

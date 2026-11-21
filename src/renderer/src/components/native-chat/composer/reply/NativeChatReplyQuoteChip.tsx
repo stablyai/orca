@@ -27,6 +27,12 @@ export function nativeChatReplyDisplayText(text: string, t: Translate, full = fa
   return quote.rest.trim() ? `${head}\n${quote.rest}` : head.trimEnd()
 }
 
+/** The one-line summary leaves out quoted lines, so only the full text shows them. */
+export function nativeChatReplySummaryOmits(text: string): boolean {
+  const lines = nativeChatReplyQuoteOf(text)?.excerpt.split(/\r?\n/) ?? []
+  return lines.filter((line) => line.trim()).length > 1
+}
+
 /** The quote the agent received, shown to the user as one compact line above their words. */
 export function NativeChatReplyQuoteChip({ quote }: { quote: ReplyQuote }): React.JSX.Element {
   const t = useTranslate()

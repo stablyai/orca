@@ -225,10 +225,7 @@ export function useNativeChatNavigation({
           ? message.messageId
           : null
         : nativeChatReplyOriginalId(
-            // The members the id lookup searches too: a work run's or notes cluster's, else the head.
-            slots.flatMap((slot) =>
-              slot.kind === 'message' ? (slot.workRun ?? slot.itemNotes ?? [slot.message]) : []
-            ),
+            slots.flatMap((slot) => (slot.kind === 'message' ? [slot.message] : [])),
             message
           )
       if (!found) {

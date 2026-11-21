@@ -1,0 +1,79 @@
+// Which message each sent reply answered, keyed by the exact text sent. A reply rebuilt from that text
+// (Rewind, "not sent → Edit", a queued edit) gets its original back even when another message has
+// the same words. Small and bounded, so localStorage holds it across reloads.
+
+import { withNativeChatReplyContext } from './native-chat-reply-quote'
+import type { NativeChatReplyTarget } from './native-chat-reply-target'
+
+const STORAGE_KEY = 'orca.nativeChat.replySources.v1'
+/** Sent replies remembered at once; older ones are dropped first. */
+export const NATIVE_CHAT_REPLY_SOURCES_MAX = 200
+
+const sources = new Map<string, string>()
+let loaded = false
+
+/** A compact key for sent text: its length and a 32-bit FNV-1a hash. */
+function keyOf(text: string): string {
+  let hash = 0x811c9dc5
+  for (let index = 0; index < text.length; index += 1) {
+    hash = Math.imul(hash ^ text.charCodeAt(index), 0x01000193)
+  }
+  return `${text.length}:${(hash >>> 0).toString(36)}`
+}
+
+function load(): void {
+  if (loaded) {
+    return
+  }
+  loaded = true
+  try {
+    const entries: unknown = JSON.parse(globalThis.localStorage?.getItem(STORAGE_KEY) ?? '[]')
+    for (const entry of Array.isArray(entries) ? entries : []) {
+      if (Array.isArray(entry) && typeof entry[0] === 'string' && typeof entry[1] === 'string') {
+        sources.set(entry[0], entry[1])
+      }
+    }
+  } catch {
+    // Unreadable storage only costs the exact original; the words still find it when unique.
+  }
+}
+
+/** The text a reply sends, remembering which message it answers. */
+export function quoteNativeChatReply(
+  text: string,
+  target: Pick<NativeChatReplyTarget, 'messageId' | 'author' | 'excerpt' | 'agentLabel'>,
+  agentLabel: string
+): string {
+  const sent = withNativeChatReplyContext(text, target, agentLabel)
+  if (target.messageId) {
+    load()
+    const key = keyOf(sent)
+    sources.delete(key)
+    sources.set(key, target.messageId)
+    while (sources.size > NATIVE_CHAT_REPLY_SOURCES_MAX) {
+      const oldest = sources.keys().next().value
+      if (oldest === undefined) {
+        break
+      }
+      sources.delete(oldest)
+    }
+    try {
+      globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify([...sources]))
+    } catch {
+      // Quota or blocked storage: this session still remembers it.
+    }
+  }
+  return sent
+}
+
+/** The message a sent reply answered, when this client sent it. */
+export function nativeChatReplySourceOf(sentText: string): string | undefined {
+  load()
+  return sources.get(keyOf(sentText))
+}
+
+/** Test-only: forget all sources and reload from storage on next read. */
+export function resetNativeChatReplySourcesForTests(): void {
+  sources.clear()
+  loaded = false
+}

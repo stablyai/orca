@@ -8,6 +8,8 @@ import {
   nativeChatReplyExcerpt,
   nativeChatReplyQuoteOf
 } from './native-chat-reply-quote'
+import { nativeChatReplySourceOf } from './native-chat-reply-sources'
+import { resolveNativeChatComposerDraftOwner } from '../../drafts/native-chat-composer-draft-memory'
 
 export type NativeChatReplyTarget = {
   /** Unique per Reply click: a send consumes only the target it captured, never a newer one. */
@@ -35,6 +37,8 @@ const cancelled = new Set<string>()
 const custody = new Map<string, number>()
 /** Who owns each scope's reply, kept after a send takes it so deleting the workspace still decides it. */
 const custodyOwners = new Map<string, NativeChatComposerDraftOwner>()
+/** Scopes that live only while an editor is open (a queued-message edit): never saved, released on close. */
+const ephemeral = new Set<string>()
 const decide = (scopeKey: string): void => {
   custody.set(scopeKey, (custody.get(scopeKey) ?? 0) + 1)
 }
@@ -92,7 +96,8 @@ function load(): void {
 
 function save(): void {
   try {
-    globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify([...targets]))
+    const kept = [...targets].filter(([scopeKey]) => !ephemeral.has(scopeKey))
+    globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify(kept))
   } catch {
     // Quota or blocked storage: the target still works for this session.
   }
@@ -121,14 +126,25 @@ export function readNativeChatReplyTarget(scopeKey: string): NativeChatReplyTarg
   return targets.get(scopeKey) ?? null
 }
 
-export function setNativeChatReplyTarget(scopeKey: string, target: NativeChatReplyTarget): void {
+/** `ephemeral`: the scope lives only while an editor is open, so its reply is never saved. */
+export function setNativeChatReplyTarget(
+  scopeKey: string,
+  target: NativeChatReplyTarget,
+  options: { ephemeral?: boolean } = {}
+): void {
   load()
   decide(scopeKey)
   cancelled.delete(scopeKey)
+  if (options.ephemeral) {
+    ephemeral.add(scopeKey)
+  }
+  // Every reply belongs to its chat's workspace, including one rebuilt from sent text, so removing
+  // the workspace forgets it.
+  const owner = target.owner ?? resolveNativeChatComposerDraftOwner(scopeKey)
   targets.delete(scopeKey)
-  targets.set(scopeKey, target)
-  if (target.owner) {
-    custodyOwners.set(scopeKey, target.owner)
+  targets.set(scopeKey, owner && !target.owner ? { ...target, owner } : target)
+  if (owner) {
+    custodyOwners.set(scopeKey, owner)
   }
   const evicted: string[] = []
   while (targets.size > NATIVE_CHAT_REPLY_TARGETS_MAX) {
@@ -235,6 +251,20 @@ export function clearNativeChatReplyTargetsWhere(
   }
 }
 
+/** An editor-only scope closed: its reply and all bookkeeping go; nothing can be sent from it any more. */
+export function releaseNativeChatReplyScope(scopeKey: string): void {
+  load()
+  const had = targets.delete(scopeKey)
+  custody.delete(scopeKey)
+  custodyOwners.delete(scopeKey)
+  cancelled.delete(scopeKey)
+  ephemeral.delete(scopeKey)
+  if (had) {
+    save()
+    notify(scopeKey)
+  }
+}
+
 /** Clears the scope's target; with `id`, only when it is still that target, so a newer Reply survives a send. */
 export function clearNativeChatReplyTarget(scopeKey: string, id?: string): boolean {
   load()
@@ -285,8 +315,8 @@ export function nativeChatReplyTargetFromSentText(text: string): {
     rest: quote.rest,
     target: {
       id: `${Date.now().toString(36)}-${sequence}`,
-      // The sent text names no message; the transcript finds the original by its words.
-      messageId: '',
+      // The original, when this client sent the reply; otherwise the transcript finds it by its words.
+      messageId: nativeChatReplySourceOf(text) ?? '',
       author: quote.author,
       ...(quote.label ? { agentLabel: quote.label } : {}),
       excerpt: quote.excerpt
@@ -299,6 +329,7 @@ export function resetNativeChatReplyTargetsForTests(): void {
   targets.clear()
   custody.clear()
   custodyOwners.clear()
+  ephemeral.clear()
   cancelled.clear()
   listeners.clear()
   loaded = false
