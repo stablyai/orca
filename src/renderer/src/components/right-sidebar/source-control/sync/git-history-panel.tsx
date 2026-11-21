@@ -13,7 +13,8 @@ import type {
 import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import {
   buildDefaultGitHistoryColorMap,
-  buildGitHistoryViewModels
+  buildGitHistoryViewModels,
+  getGitHistoryItemLaneIndex
 } from '../../../../../../shared/git/history/git-history-graph'
 import { GitHistoryRow } from './git-history-row'
 import { GitHistoryCommitFiles, type GitHistoryCommitFilesState } from './git-history-commit-files'
@@ -22,13 +23,15 @@ import {
   type GitHistoryCommitAction
 } from './git-history-commit-context-menu'
 import type { SourceControlRowOpenEvent } from '../listing/split-open'
+import { GitHistoryScopeMenu, type GitHistoryScope } from './git-history-scope-menu'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 
-export type GitHistoryPanelState =
+export type GitHistoryPanelState = (
   | { status: 'idle' | 'loading'; result?: GitHistoryResult; error?: string }
   | { status: 'refreshing' | 'ready'; result: GitHistoryResult; error?: string }
   | { status: 'error'; result?: GitHistoryResult; error: string }
+) & { isLoadingMore?: boolean; loadMoreError?: string }
 
 const DEFAULT_GIT_HISTORY_PANEL_HEIGHT = 256
 const MIN_GIT_HISTORY_PANEL_HEIGHT = 96
@@ -56,7 +59,10 @@ export function GitHistoryPanel({
   onLoadCommitFiles,
   onOpenCommitFile,
   onCommitAction,
-  onOpenGitGraph
+  onOpenGitGraph,
+  onLoadMore,
+  scope = 'all',
+  onScopeChange
 }: {
   worktreeId?: string
   state: GitHistoryPanelState
@@ -72,6 +78,9 @@ export function GitHistoryPanel({
   ) => void
   onCommitAction?: (action: GitHistoryCommitAction, item: GitHistoryItem) => void
   onOpenGitGraph?: (event: SourceControlRowOpenEvent) => void
+  scope?: GitHistoryScope
+  onScopeChange?: (scope: GitHistoryScope) => void
+  onLoadMore?: () => void
 }): React.JSX.Element | null {
   const t = useTranslate()
   const result = state.result
@@ -91,6 +100,20 @@ export function GitHistoryPanel({
     )
   }, [result])
 
+  const graphLaneCount = useMemo(
+    () =>
+      viewModels.reduce(
+        (count, row) =>
+          Math.max(
+            count,
+            row.inputSwimlanes.length,
+            row.outputSwimlanes.length,
+            getGitHistoryItemLaneIndex(row) + 1
+          ),
+        1
+      ),
+    [viewModels]
+  )
   const loading = state.status === 'loading' || state.status === 'refreshing'
   const count = result?.items.length ?? 0
   const [panelHeight, setPanelHeight] = useState(DEFAULT_GIT_HISTORY_PANEL_HEIGHT)
@@ -269,6 +292,7 @@ export function GitHistoryPanel({
             {result && <span className="text-[10px] font-medium tabular-nums">{count}</span>}
             {result?.hasMore && <span className="text-[10px] font-medium">+</span>}
           </button>
+          {onScopeChange && <GitHistoryScopeMenu scope={scope} onChange={onScopeChange} />}
           {worktreeId && <GitGraphOpenButton worktreeId={worktreeId} onOpen={onOpenGitGraph} />}
           <Tooltip>
             <TooltipTrigger asChild>
@@ -349,6 +373,7 @@ export function GitHistoryPanel({
               const row = (
                 <GitHistoryRow
                   viewModel={viewModel}
+                  graphLaneCount={graphLaneCount}
                   expanded={isExpanded}
                   preserveRefIds={result?.baseRef ? [result.baseRef.id] : undefined}
                   onOpenCommit={onOpenCommit}
@@ -384,6 +409,47 @@ export function GitHistoryPanel({
               )
             })}
           </div>
+        </div>
+      )}
+      {!collapsed && scope === 'all' && result && result.refs !== 'all' && (
+        <p role="status" className="px-3 py-1 text-xs text-muted-foreground">
+          {translate(
+            'source-control.history.unsupported-scope',
+            'Restart Orca or update the execution host to display all branches.'
+          )}
+        </p>
+      )}
+      {!collapsed && result && viewModels.length > 0 && onLoadMore && (
+        <div className="border-t border-border px-3 py-1.5 text-[11px] text-muted-foreground">
+          {state.loadMoreError ? (
+            <div className="flex items-center gap-2">
+              <span role="alert" className="text-destructive">
+                {state.loadMoreError}
+              </span>
+              <button type="button" className="underline" onClick={() => onLoadMore()}>
+                {translate('source-control.history.retry', 'Retry loading commits')}
+              </button>
+            </div>
+          ) : result.hasMore ? (
+            state.isLoadingMore ? (
+              <span role="status">
+                {translate('source-control.history.loading-more', 'Loading more commits…')}
+              </span>
+            ) : result.historyToken === undefined ? (
+              <span>
+                {translate(
+                  'source-control.history.update-host',
+                  'Restart Orca or update the execution host to load older commits.'
+                )}
+              </span>
+            ) : (
+              <button type="button" className="underline" onClick={() => onLoadMore()}>
+                {translate('source-control.history.load-more', 'Load more commits')}
+              </button>
+            )
+          ) : (
+            <span>{translate('source-control.history.all-loaded', 'All commits loaded')}</span>
+          )}
         </div>
       )}
     </div>

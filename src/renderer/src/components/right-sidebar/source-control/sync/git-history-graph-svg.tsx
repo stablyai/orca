@@ -39,9 +39,11 @@ function GraphPath({
 
 export function GitHistoryGraphSvg({
   viewModel,
+  laneCount = 1,
   visibleWidth
 }: {
   viewModel: GitHistoryItemViewModel
+  laneCount?: number
   visibleWidth?: number
 }): React.JSX.Element {
   const historyItem = viewModel.historyItem
@@ -167,7 +169,9 @@ export function GitHistoryGraphSvg({
   }
 
   const cy = SWIMLANE_NODE_Y
-  const width = SWIMLANE_WIDTH * (Math.max(inputSwimlanes.length, outputSwimlanes.length, 1) + 1)
+  const width =
+    SWIMLANE_WIDTH *
+    (Math.max(inputSwimlanes.length, outputSwimlanes.length, laneCount, circleIndex + 1) + 1)
   const isBoundaryNode =
     viewModel.kind === 'incoming-changes' || viewModel.kind === 'outgoing-changes'
   const isMergeNode = historyItem.parentIds.length > 1
