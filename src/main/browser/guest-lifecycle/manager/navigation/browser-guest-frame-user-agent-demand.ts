@@ -28,6 +28,13 @@ function track(guest: Electron.WebContents, frame: Electron.WebFrameMain, demand
   } else {
     frames.delete(frame.frameTreeNodeId)
   }
+  // A page commit drops all iframe demand; frames it left behind go with the next change.
+  const demand = getBrowserGuestFrameUserAgentDemand(guest.id)
+  for (const id of frames.keys()) {
+    if (!demand.has(id)) {
+      frames.delete(id)
+    }
+  }
 }
 
 // Removed, or replaced by a document that never committed to this frame.
@@ -114,6 +121,7 @@ function scheduleRemovalCheck(guest: Electron.WebContents): void {
     removalChecks.delete(guest.id)
     // A commit or settle since scheduling may have cleared every site iframe; skip the tree walk.
     if (guest.isDestroyed() || getBrowserGuestFrameUserAgentDemand(guest.id).size === 0) {
+      trackedFrames.delete(guest)
       return
     }
     const frames = trackedFrames.get(guest)
@@ -122,12 +130,6 @@ function scheduleRemovalCheck(guest: Electron.WebContents): void {
     for (const id of demanding) {
       if (frameGone(frames?.get(id))) {
         setBrowserGuestFrameUserAgentDemand(guest.session, guest.id, id, false)
-      }
-    }
-    // A page commit drops all iframe demand; forget the frames it left behind.
-    for (const id of frames?.keys() ?? []) {
-      if (!demanding.has(id)) {
-        frames?.delete(id)
       }
     }
     if (check.again && getBrowserGuestFrameUserAgentDemand(guest.id).size > 0) {
