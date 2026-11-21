@@ -9,8 +9,12 @@ describe('loadBotItemsList work', () => {
     const items = seeded()
     for (const older of [false, true]) {
       const limits: unknown[] = []
+      const pages: unknown[] = []
       const call: BotItemsListCall = (params) => {
         limits.push(params.closedLimit)
+        if (params.closedCursor) {
+          pages.push(params.closedOnly)
+        }
         return host(items, older)(params)
       }
       let read = await loadBotItemsList(call, null, WHOLE)
@@ -23,6 +27,9 @@ describe('loadBotItemsList work', () => {
       expect(
         limits.every((limit) => limit === undefined || (typeof limit === 'number' && limit <= 50))
       ).toBe(true)
+      // A page below the first asks for Closed rows alone, never the open list again.
+      expect(pages.length).toBeGreaterThan(0)
+      expect(pages.every((closedOnly) => closedOnly === true)).toBe(true)
     }
     // Unchanged, its first page is all a whole read asks of a host, older or not.
     for (const older of [false, true]) {
