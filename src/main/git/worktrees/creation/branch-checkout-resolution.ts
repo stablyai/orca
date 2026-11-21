@@ -2,7 +2,6 @@ import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   errorCode,
-  forEachBounded,
   readRefFile,
   readRefLink,
   rethrowUnlessMissing,
@@ -11,6 +10,7 @@ import {
   type GitDirState
 } from './git-dir-branch-state'
 import { COMMIT_ID } from './git-ref-text'
+import { forEachBounded } from './bounded-reads'
 
 export type BranchCheckouts =
   | { kind: 'free' }

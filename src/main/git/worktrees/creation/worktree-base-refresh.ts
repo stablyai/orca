@@ -129,8 +129,9 @@ export async function getLocalBaseRefUpdateSuggestionForWorktreeCreate(
 function localBaseBranchGit(
   options: GitWorktreeExecOptions,
   admission: Pick<GitExecOptions, 'admissionExempt'> = {},
-  abandoned: () => boolean = () => false
+  abandonable?: () => boolean
 ): LocalBaseBranchGit {
+  const abandoned = abandonable ?? (() => false)
   // Shared refreshes cannot use any individual create's cancellation signal or timeout.
   const execOptions = (cwd: string): GitExecOptions => ({
     cwd,
@@ -142,7 +143,7 @@ function localBaseBranchGit(
   const runGit: typeof gitExecFileAsync = (args, opts) =>
     abandoned()
       ? Promise.reject(new Error('Inspection abandoned'))
-      : gitExecFileAsync(args, { ...opts, canStart: () => !abandoned() })
+      : gitExecFileAsync(args, abandonable ? { ...opts, canStart: () => !abandonable() } : opts)
   // The runner may route a Windows drive repo into WSL; its Linux output paths need the same distro.
   const routed = (cwd: string) => routeLocalGitOptions({ cwd, wslDistro: options.wslDistro })
   const listWorktrees = async (repoPath: string) => {

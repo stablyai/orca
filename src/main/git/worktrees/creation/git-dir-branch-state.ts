@@ -5,6 +5,7 @@ import { lstat, open, readdir, readlink, realpath, stat } from 'node:fs/promises
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { join } from 'node:path'
 import { normalizeHead, trimGitSpace } from './git-ref-text'
+import { forEachBounded } from './bounded-reads'
 
 /** A HEAD whose branch the files cannot tell: reftable leaves this placeholder, and odd symlinks map to it. */
 export const UNRESOLVED_HEAD = 'ref: refs/heads/.invalid'
@@ -58,7 +59,8 @@ export async function readGitDirState(
   await forEachBounded(
     gitDirs,
     async (gitDir) => {
-      const [head, rebaseMerge, rebaseApply, updateRefs, bisectStart] = await Promise.all([
+      // Settle every read before failing, so none is left behind.
+      const reads = await Promise.allSettled([
         NO_FOLLOW === undefined
           ? readOptional(join(gitDir, 'HEAD'))
           : readRefFile(join(gitDir, 'HEAD')),
@@ -67,6 +69,13 @@ export async function readGitDirState(
         readOptional(join(gitDir, 'rebase-merge', 'update-refs')),
         readOptional(join(gitDir, 'BISECT_START'))
       ])
+      const failed = reads.find((read): read is PromiseRejectedResult => read.status === 'rejected')
+      if (failed) {
+        throw failed.reason
+      }
+      const [head, rebaseMerge, rebaseApply, updateRefs, bisectStart] = reads.map(
+        (read) => (read as PromiseFulfilledResult<string>).value
+      )
       heads.set(gitDir, normalizeHead(head))
       for (const line of [rebaseMerge, rebaseApply, updateRefs].flatMap((text) =>
         text.split('\n')
@@ -178,31 +187,6 @@ export function hasLinkedPlaceholderHead(state: GitDirState, commonDir: string):
     }
   }
   return false
-}
-
-const READ_CONCURRENCY = 16
-
-/** Runs at most `READ_CONCURRENCY` at once; starts nothing after a failure or once `done()` holds. */
-export async function forEachBounded<T>(
-  items: readonly T[],
-  run: (item: T) => Promise<void>,
-  done: () => boolean = () => false
-): Promise<void> {
-  let next = 0
-  let failed = false
-  await Promise.all(
-    Array.from({ length: Math.min(READ_CONCURRENCY, items.length) }, async () => {
-      while (next < items.length && !failed && !done()) {
-        const item = items[next++]
-        try {
-          await run(item)
-        } catch (error) {
-          failed = true
-          throw error
-        }
-      }
-    })
-  )
 }
 
 /** A metadata file's content, '' when missing; throws for anything but a regular file (of at most `maxBytes`). */

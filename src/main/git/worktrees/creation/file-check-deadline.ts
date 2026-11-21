@@ -1,5 +1,5 @@
-// Keys whose last check outlived its deadline and has not settled yet.
-const stalledKeys = new Set<string>()
+// Per key, how many checks outlived their deadline and have not settled yet.
+const stalledKeys = new Map<string, number>()
 
 export function waitAtMost<T>(promise: Promise<T>, timeoutMs: number): Promise<T | undefined> {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -35,7 +35,16 @@ export async function checkWithDeadline<T>(
     return answer
   }
   expired = true
-  stalledKeys.add(key)
-  void running.catch(() => {}).finally(() => stalledKeys.delete(key))
+  stalledKeys.set(key, (stalledKeys.get(key) ?? 0) + 1)
+  void running
+    .catch(() => {})
+    .finally(() => {
+      const left = (stalledKeys.get(key) ?? 1) - 1
+      if (left > 0) {
+        stalledKeys.set(key, left)
+      } else {
+        stalledKeys.delete(key)
+      }
+    })
   return fallback
 }
