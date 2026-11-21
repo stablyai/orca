@@ -21,6 +21,7 @@ import {
   loneFastTier,
   speedButtonTiers
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-speed-tiers'
+import { mobileModelChoiceParts } from './mobile-native-chat-session-option-labels'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 import { orderEffortLevels } from '../../../../../../src/shared/agent-session/options/view/effort-level-order'
 import { MobileSwitch } from '../../../../components/controls/MobileSwitch'
@@ -222,17 +223,26 @@ export function descriptorRowElements(
     descriptor.category === 'thought_level'
       ? orderEffortLevels(descriptor.kind.choices)
       : descriptor.kind.choices
-  const choiceRow = (choice: (typeof choices)[number]) => (
-    <ListRow
-      key={choice.value}
-      title={nativeChatSessionChoiceLabel(choice, say, descriptor.id)}
-      subtitle={choice.description}
-      leading={choiceLeading ? (choiceLeading(choice.value) ?? null) : undefined}
-      selected={choice.value === currentValue}
-      disabled={locked}
-      onPress={() => onSetOption(choice.value)}
-    />
-  )
+  const choiceRow = (choice: (typeof choices)[number]) => {
+    const parts = descriptor.category === 'model' ? mobileModelChoiceParts(choice) : null
+    const subtitle =
+      parts && choice.description && !choice.description.includes(parts.provider)
+        ? `${parts.provider} · ${choice.description}`
+        : choice.description || parts?.provider
+    return (
+      <ListRow
+        key={choice.value}
+        title={parts?.model ?? nativeChatSessionChoiceLabel(choice, say, descriptor.id)}
+        accessibilityLabel={parts ? choice.label : undefined}
+        wrapTitle={parts !== null}
+        subtitle={subtitle}
+        leading={choiceLeading ? (choiceLeading(choice.value) ?? null) : undefined}
+        selected={choice.value === currentValue}
+        disabled={locked}
+        onPress={() => onSetOption(choice.value)}
+      />
+    )
+  }
   // No search here, so search-only rows stay out; folded ones follow a More models toggle.
   const listed = choices.filter(
     (choice) =>
