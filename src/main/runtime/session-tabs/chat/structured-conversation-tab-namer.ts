@@ -10,7 +10,7 @@ export function structuredConversationTabNamer(
   workspaceId: string,
   savedTabs: SavedTabs
 ): (sessionId: string) => string | null {
-  const customLabelFor = savedChatTabCustomLabels(savedTabs)
+  const savedChatTab = savedChatTabFinder(savedTabs)
   return (sessionId) => {
     const store = getStructuredAgentSessionHost()?.deps?.store
     const record = store?.getConversation(sessionId)
@@ -18,35 +18,38 @@ export function structuredConversationTabNamer(
       store && record?.location.workspaceId === workspaceId
         ? agentSessionRecordShownName(store, record)
         : null
-    return structuredChatDisplayName(customLabelFor(sessionId), conversationName, '') || null
+    return (
+      structuredChatDisplayName(savedChatTab(sessionId)?.customLabel, conversationName, '') || null
+    )
   }
 }
 
-/** First-match rename per chat. The first lookup is a plain early-exit find; later ones share one resumable scan, so no lookup reads past where a find would stop and a pass reads each saved tab at most twice. */
-function savedChatTabCustomLabels(
-  savedTabs: SavedTabs
-): (sessionId: string) => string | null | undefined {
-  let tabs: readonly Tab[] | undefined
-  let labels: Map<string, string | null> | undefined
+/** Finds each chat's first saved tab; one finder per pass so a pass reads saved tabs O(tabs), not once per chat. */
+export function savedChatTabFinder<T extends Pick<Tab, 'contentType' | 'entityId'>>(
+  savedTabs: () => readonly T[] | undefined
+): (sessionId: string) => T | undefined {
+  let tabs: readonly T[] | undefined
+  let found: Map<string, T> | undefined
   let scanned = 0
   return (sessionId) => {
+    // A lone lookup stays a plain find, with no index to build.
     if (!tabs) {
       tabs = savedTabs() ?? []
       return tabs.find((tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId)
-        ?.customLabel
     }
-    labels ??= new Map()
-    if (labels.has(sessionId)) {
-      return labels.get(sessionId)
+    found ??= new Map()
+    const known = found.get(sessionId)
+    if (known) {
+      return known
     }
     while (scanned < tabs.length) {
       const tab = tabs[scanned++]
-      if (tab.contentType !== 'agent-session' || labels.has(tab.entityId)) {
+      if (tab.contentType !== 'agent-session' || found.has(tab.entityId)) {
         continue
       }
-      labels.set(tab.entityId, tab.customLabel)
+      found.set(tab.entityId, tab)
       if (tab.entityId === sessionId) {
-        return tab.customLabel
+        return tab
       }
     }
     return undefined
