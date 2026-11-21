@@ -33,6 +33,7 @@ export type PendingView = {
 export type ClaudeAgentViewReply = {
   registered?: true
   durable?: true
+  observed?: true
   unknown?: true
   requestId?: string
   agentId?: string

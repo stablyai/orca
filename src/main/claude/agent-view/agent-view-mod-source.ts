@@ -53,7 +53,10 @@ let announcedAt = 0
   async function retry($) {
     const now = await $.clock.now()
     if (!retryDelay) retryStartedAt = now
-    if (now - retryStartedAt > 3600000) return
+    if (now - retryStartedAt > 3600000) {
+      retryDelay = 0 // the next failure opens a new window
+      return
+    }
     retryDelay = Math.min(retryDelay ? retryDelay * 2 : 1000, 60000)
     schedule($, retryDelay)
   }
@@ -71,7 +74,9 @@ let announcedAt = 0
       try {
         keybindings = await $.fs.read(configDir + '/keybindings.json')
       } catch {
-        try { await post($, 'end') } catch {}
+        // Gone or mid-edit: Orca drops the pane now, and the read is retried with backoff.
+        if (!retryDelay) try { await post($, 'end') } catch {}
+        await retry($)
         return {}
       }
       if (identity !== session || endedSessionId === sessionId) return {}
@@ -83,7 +88,8 @@ let announcedAt = 0
           ...(observedView?.sessionId === sessionId ? { view: observedView.view } : {})
         }, session)
       } catch {}
-      if (!result) {
+      // A relay that could not forward answers {} with no registered.
+      if (!result?.registered) {
         await retry($)
         return {}
       }
@@ -108,7 +114,7 @@ export function register(on) {
         observedView = { sessionId, view: { ...(agentId ? { agentId } : {}), revision: ++viewRevision } }
         if (identity?.sessionId === sessionId) {
           void post($, 'observe', { view: observedView.view }).then(
-            (reply) => { if (!reply || reply.unknown) void announce($) },
+            (reply) => { if (!reply?.observed) void announce($) },
             () => { void announce($) }
           )
         }

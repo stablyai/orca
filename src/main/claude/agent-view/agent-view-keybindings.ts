@@ -108,11 +108,16 @@ export function serializeClaudeAgentViewBindings(
   return text
 }
 
-/** The chord this config binds now; undefined when the binding or the file is gone. */
-export async function readClaudeAgentViewChord(configDir: string): Promise<string | undefined> {
+/** The chord this config binds now: null when the binding is gone, undefined when unreadable. */
+export async function readClaudeAgentViewChord(
+  configDir: string
+): Promise<string | null | undefined> {
+  let text: string
   try {
-    return claudeAgentViewChord(await readFile(join(configDir, 'keybindings.json'), 'utf8'))
-  } catch {
-    return undefined
+    text = await readFile(join(configDir, 'keybindings.json'), 'utf8')
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ENOENT' ? null : undefined
   }
+  // A half-written edit does not parse; that says nothing about the binding.
+  return parseClaudeAgentViewBindings(text) ? (claudeAgentViewChord(text) ?? null) : undefined
 }

@@ -99,7 +99,9 @@ it('registers on change only, retries undelivered posts, and rejects in-flight c
                         agentId: 'child',
                         expiresAt: now + 1000
                       }
-                    : {}
+                    : body.action === 'observe'
+                      ? { observed: true }
+                      : {}
                 )
         }
       }

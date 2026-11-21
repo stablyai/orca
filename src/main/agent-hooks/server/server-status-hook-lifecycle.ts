@@ -47,22 +47,30 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
       filePath,
       (view) =>
         !hooksOn ||
-        this.getStatusSnapshotForPane(view.paneKey).some(
-          (row) =>
-            row.agentType === 'claude' &&
-            (!row.providerSession?.id || row.providerSession.id === view.sessionId)
-        )
+        (!this.claudeAgentEnded(view.paneKey) &&
+          this.getStatusSnapshotForPane(view.paneKey).some(
+            (row) =>
+              row.agentType === 'claude' &&
+              (!row.providerSession?.id || row.providerSession.id === view.sessionId)
+          ))
     )
   }
 
-  // A pane's status row goes away with its agent or the pane, so its agent-view entry goes too.
+  private claudeAgentEnded(paneKey: string): boolean {
+    const row = this.state.lastStatusByPaneKey.get(paneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    return row?.agentPresence?.ended === true
+  }
+
+  // A pane's agent-view entry goes when its status row does, or when the row records the agent's exit.
   protected override commitStatusRowMutation(
     before: EnrichedAgentHookEventPayload | null | undefined,
     after: EnrichedAgentHookEventPayload | null | undefined,
     emit = true
   ): boolean {
     const committed = super.commitStatusRowMutation(before, after, emit)
-    if (before && before.paneKey !== after?.paneKey) {
+    if (before && (before.paneKey !== after?.paneKey || after.agentPresence?.ended)) {
       this.claudeAgentViews.forget(before.paneKey, before.providerSession?.id)
     }
     return committed

@@ -58,6 +58,7 @@ export class ClaudeAgentViewRegistryFile {
   private writing?: Promise<void>
   private latest?: readonly RegisteredClaudeAgentView[]
   private failed = false
+  private failedWrites = 0
   private restoring = false
   private savedDuringRestore = false
   private closed = false
@@ -110,11 +111,17 @@ export class ClaudeAgentViewRegistryFile {
       try {
         await writeRegistry(this.filePath, sessions)
         this.failed = false
+        this.failedWrites = 0
       } catch (error) {
         if (!this.failed) {
           console.warn('[agent-hooks] failed to save Claude agent views:', error)
         }
         this.failed = true
+        // Idle mods will not register again, so retry (2 s doubling, five times); a later change retries too.
+        if (++this.failedWrites <= 5) {
+          this.latest ??= sessions
+          await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** this.failedWrites))
+        }
       }
     }
   }

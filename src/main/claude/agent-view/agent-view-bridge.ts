@@ -139,8 +139,8 @@ export class ClaudeAgentViewBridge {
       if (session && message.view) {
         this.observe(session, message.view)
       }
-      // durable: this main keeps the entry without a heartbeat (older mains pruned after 15 s).
-      return { registered: true, durable: true }
+      // durable: no heartbeat needed. A WSL mod keeps one: only it can see its keybindings change.
+      return options.sameMachine ? { registered: true, durable: true } : { registered: true }
     }
     if (
       !current ||
@@ -155,7 +155,7 @@ export class ClaudeAgentViewBridge {
     }
     if (message.action === 'observe') {
       this.observe(current, message.view)
-      return {}
+      return { observed: true }
     }
     const request = current.pending
     if (!request) {
@@ -191,6 +191,9 @@ export class ClaudeAgentViewBridge {
     if (registered?.configDir && registered.sessionId === args.sessionId) {
       // An idle mod does not re-read its keybindings, so read the chord the user has bound now.
       const chord = await readClaudeAgentViewChord(registered.configDir)
+      if (chord === undefined) {
+        return { status: 'unavailable' }
+      }
       if (this.sessions.get(args.paneKey) === registered && registered.chord !== chord) {
         if (chord) {
           registered.chord = chord
@@ -205,10 +208,7 @@ export class ClaudeAgentViewBridge {
     if (!session || session.sessionId !== args.sessionId || !shortcut) {
       return { status: 'unsupported' }
     }
-    if (args.signal?.aborted) {
-      return { status: 'unavailable' }
-    }
-    if (!session.view) {
+    if (args.signal?.aborted || !session.view) {
       return { status: 'unavailable' }
     }
     session.pending?.finish({ status: 'busy' })
