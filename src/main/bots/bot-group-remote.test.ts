@@ -490,6 +490,30 @@ describe('what a remote member is sent and shown', () => {
 })
 
 describe('older or damaged records', () => {
+  it('keeps asking the remote member, and lands its answer, after an older build rewrote the room', async () => {
+    const base = remoteFixture()
+    const group = await mixedRoom(base)
+    const message = await post(base, group, '@Atlas status?')
+    // The older build's edit and post writes: its schemas lack the remote fields, so it drops them.
+    for (const [table, id, field] of [
+      ['bot_groups', group.id, 'remoteMembers'],
+      ['bot_group_messages', message.id, 'remoteAsks']
+    ]) {
+      const row = base.db.prepare(`SELECT record FROM ${table} WHERE id = ?`).get(id)
+      const { [field]: _dropped, ...record } = JSON.parse(String(row?.record))
+      base.db.prepare(`UPDATE ${table} SET record = ? WHERE id = ?`).run(JSON.stringify(record), id)
+    }
+
+    const { group: threaded } = await base.groups.newThread(group.id)
+    expect(threaded.remoteMembers).toMatchObject([{ ...ATLAS, computer: 'Build Box' }])
+    arrive(base, group.id, message.remoteAsks![0].requestId, { answer: 'Green on main.' })
+    remoteRoomMailArrived(base.groups, group.id)
+    expect(base.groups.read(group.id).messages[0].remoteAsks?.[0].reply).toEqual({
+      kind: 'answer',
+      text: 'Green on main.'
+    })
+  })
+
   it('drops an unreadable remote roster or ask list, never the group or post', () => {
     const group = BotGroupSchema.parse({
       id: 'g',

@@ -15,7 +15,8 @@
 6 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite.ts
 6 src/main/ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite-list.ts
 10 src/main/ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite.ts
-47 src/main/bots/bot-group-store.ts
+41 src/main/bots/bot-group-store.ts
+12 src/main/bots/bot-group-store-extras.ts # +6 net: the store's 6 record-write sites moved here, plus a side-table read and write that keep paired members, remote answers and newer-build fields an older build would drop on rewrite
 18 src/main/bots/bot-work-store.ts
 5 src/main/browser-passwords/browser-password-chromium-import.ts
 1 src/main/browser/cookies/chromium/prepare-import.ts

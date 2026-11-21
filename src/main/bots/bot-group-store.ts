@@ -6,6 +6,7 @@ import {
   type LegacyBotGroup
 } from '../../shared/bots/bot-group-schema'
 import type Database from '../sqlite/sync-database'
+import * as extras from './bot-group-store-extras'
 import { botGroupRoom } from '../../shared/bots/bot-group'
 import type {
   BotGroup,
@@ -21,7 +22,10 @@ const MessageRecordSchema = BotGroupMessageSchema.omit({ sequence: true })
 export type PendingGroupTurn = { message: BotGroupMessage; turn: BotGroupTurn }
 
 export class BotGroupStore {
+  private readonly writes: extras.BotGroupRecordWrites
+
   constructor(private readonly db: Database) {
+    this.writes = new extras.BotGroupRecordWrites(db)
     db.exec(`CREATE TABLE IF NOT EXISTS bot_groups (id TEXT PRIMARY KEY, record TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS bot_group_messages (
         sequence INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
@@ -34,7 +38,8 @@ export class BotGroupStore {
       -- Same expression as roomMessages, so a room page reads only its own thread's rows; any build's writes keep it current.
       CREATE INDEX IF NOT EXISTS bot_group_messages_thread
         ON bot_group_messages(group_id, coalesce(json_extract(record, '$.threadId'), ''), sequence);
-      CREATE TABLE IF NOT EXISTS bot_group_sidebar (group_id TEXT PRIMARY KEY, sidebar_order INTEGER, latest TEXT);`)
+      CREATE TABLE IF NOT EXISTS bot_group_sidebar (group_id TEXT PRIMARY KEY, sidebar_order INTEGER, latest TEXT);
+      ${extras.BOT_GROUP_EXTRAS_TABLES}`)
   }
 
   /** Groups saved with a home; one still to migrate is listed once it has one. */
@@ -115,17 +120,19 @@ export class BotGroupStore {
 
   private records(): unknown[] {
     return this.db
-      .prepare('SELECT record FROM bot_groups ORDER BY rowid')
+      .prepare(`SELECT record, ${extras.GROUP_EXTRAS} FROM bot_groups ORDER BY rowid`)
       .all()
-      .map((row) => JSON.parse(String(row.record)))
+      .map(extras.rowRecord)
   }
 
   get(id: string): BotGroup {
-    const row = this.db.prepare('SELECT record FROM bot_groups WHERE id = ?').get(id)
+    const row = this.db
+      .prepare(`SELECT record, ${extras.GROUP_EXTRAS} FROM bot_groups WHERE id = ?`)
+      .get(id)
     if (!row) {
       throw new Error('Group not found.')
     }
-    return BotGroupSchema.parse(JSON.parse(String(row.record)))
+    return BotGroupSchema.parse(extras.rowRecord(row))
   }
 
   /** The group room whose current member owns this native session, as `botGroupRoom` sees it. */
@@ -149,11 +156,7 @@ export class BotGroupStore {
   }
 
   put(group: BotGroup): void {
-    this.db
-      .prepare(
-        'INSERT INTO bot_groups(id, record) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET record = excluded.record'
-      )
-      .run(group.id, JSON.stringify(group))
+    this.transaction(() => this.writes.putGroup(group))
   }
 
   /** The group and everything kept for it: messages, pending sends, operation and worker links. */
@@ -164,6 +167,8 @@ export class BotGroupStore {
       for (const statement of [
         `DELETE FROM bot_group_worker_operations WHERE operation_id IN (${operations})`,
         `DELETE FROM bot_group_operations WHERE message_id IN (${ofGroup})`,
+        `DELETE FROM bot_group_message_extras WHERE message_id IN (${ofGroup})`,
+        'DELETE FROM bot_group_extras WHERE group_id = ?',
         'DELETE FROM bot_group_pending WHERE group_id = ?',
         'DELETE FROM bot_group_messages WHERE group_id = ?',
         'DELETE FROM bot_group_sidebar WHERE group_id = ?',
@@ -181,7 +186,7 @@ export class BotGroupStore {
   ): BotGroupMessage[] {
     return this.db
       .prepare(
-        'SELECT sequence, record FROM bot_group_messages WHERE group_id = ? AND sequence < ? ORDER BY sequence DESC LIMIT ?'
+        `SELECT sequence, record, ${extras.MESSAGE_EXTRAS} FROM bot_group_messages WHERE group_id = ? AND sequence < ? ORDER BY sequence DESC LIMIT ?`
       )
       .all(groupId, beforeSequence, limit)
       .toReversed()
@@ -197,7 +202,7 @@ export class BotGroupStore {
   ): BotGroupMessage[] {
     return this.db
       .prepare(
-        `SELECT sequence, record FROM bot_group_messages WHERE group_id = ? AND sequence < ?
+        `SELECT sequence, record, ${extras.MESSAGE_EXTRAS} FROM bot_group_messages WHERE group_id = ? AND sequence < ?
            AND coalesce(json_extract(record, '$.threadId'), '') = ? ORDER BY sequence DESC LIMIT ?`
       )
       .all(groupId, beforeSequence, threadId ?? '', limit)
@@ -207,7 +212,9 @@ export class BotGroupStore {
 
   message(id: string): BotGroupMessage | null {
     const row = this.db
-      .prepare('SELECT sequence, record FROM bot_group_messages WHERE id = ?')
+      .prepare(
+        `SELECT sequence, record, ${extras.MESSAGE_EXTRAS} FROM bot_group_messages WHERE id = ?`
+      )
       .get(id)
     return row ? this.messageRow(row) : null
   }
@@ -222,9 +229,7 @@ export class BotGroupStore {
   /** Stores a post with each turn's pending context, owed until native admission. */
   append(message: Omit<BotGroupMessage, 'sequence'>, contexts = new Map<string, string>()) {
     this.transaction(() => {
-      this.db
-        .prepare('INSERT INTO bot_group_messages(id, group_id, record) VALUES (?, ?, ?)')
-        .run(message.id, message.groupId, JSON.stringify(message))
+      this.writes.insertMessage(message)
       for (const { operationId } of message.turns) {
         this.link(operationId, message.id)
         const context = contexts.get(operationId)
@@ -321,13 +326,11 @@ export class BotGroupStore {
 
   update({ sequence: _sequence, ...message }: BotGroupMessage): void {
     const turns = message.turns.map(({ workerDispatchIds: _workers, ...turn }) => turn)
-    this.db
-      .prepare('UPDATE bot_group_messages SET record = ? WHERE id = ? AND group_id = ?')
-      .run(JSON.stringify({ ...message, turns }), message.id, message.groupId)
+    this.transaction(() => this.writes.updateMessage({ ...message, turns }))
   }
 
   private messageRow(row: Record<string, unknown>): BotGroupMessage {
-    const message = MessageRecordSchema.parse(JSON.parse(String(row.record)))
+    const message = MessageRecordSchema.parse(extras.rowRecord(row))
     const workers = this.db.prepare(
       'SELECT dispatch_id FROM bot_group_worker_operations WHERE operation_id = ? ORDER BY rowid'
     )
