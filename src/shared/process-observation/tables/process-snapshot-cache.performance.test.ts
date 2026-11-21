@@ -1,6 +1,25 @@
 import { expect, it, vi } from 'vitest'
 import { createProcessTableSnapshotReader } from './process-snapshot-cache'
 
+it('waits for fresh evidence only while the newer check is active', async () => {
+  let now = 100
+  const oldCapture = Promise.withResolvers<string>()
+  const runPs = vi.fn().mockReturnValueOnce(oldCapture.promise).mockResolvedValue('recent')
+  const reader = createProcessTableSnapshotReader<string>({ runPs, now: () => now })
+  const first = reader.getSnapshotWithAge(now)
+  now += 10
+  const cancellation = new AbortController()
+  const cancelled = reader.getSnapshotWithAge(now, cancellation.signal)
+  cancellation.abort()
+  await expect(cancelled).rejects.toMatchObject({ name: 'AbortError' })
+  const successor = reader.getSnapshotWithAge(now)
+  expect(runPs).toHaveBeenCalledTimes(1)
+  oldCapture.resolve('initial')
+  await expect(first).resolves.toMatchObject({ value: 'initial' })
+  await expect(successor).resolves.toMatchObject({ value: 'recent' })
+  expect(runPs).toHaveBeenCalledTimes(2)
+})
+
 it.each([300, 3_000])(
   'shares one elapsed capture across %i checks from one action',
   async (count) => {

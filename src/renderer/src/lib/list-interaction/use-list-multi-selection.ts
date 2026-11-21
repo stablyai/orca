@@ -63,15 +63,23 @@ export function useListMultiSelection<T>({
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
   const [selectionAnchorKey, setSelectionAnchorKey] = useState<string | null>(null)
 
-  const prunedSelection = pruneSelection(
-    selectedKeys,
-    selectionAnchorKey,
-    visibleKeySet,
-    getRetainedItem ? (key) => getRetainedItem(key) !== undefined : undefined,
-    canSelectKey
-  )
+  const prunedSelection = useMemo(() => {
+    const pruned = pruneSelection(
+      selectedKeys,
+      selectionAnchorKey,
+      visibleKeySet,
+      getRetainedItem ? (key) => getRetainedItem(key) !== undefined : undefined,
+      canSelectKey
+    )
+    return {
+      selectedIds: areSelectionsEqual(selectedKeys, pruned.selectedIds)
+        ? selectedKeys
+        : pruned.selectedIds,
+      anchorId: pruned.anchorId
+    }
+  }, [selectedKeys, selectionAnchorKey, visibleKeySet, getRetainedItem, canSelectKey])
   // Why: filters/grouping can hide selected rows; prune during render so nothing sees stale ids for unrendered items.
-  if (!areSelectionsEqual(selectedKeys, prunedSelection.selectedIds)) {
+  if (selectedKeys !== prunedSelection.selectedIds) {
     setSelectedKeys(prunedSelection.selectedIds)
   }
   if (selectionAnchorKey !== prunedSelection.anchorId) {

@@ -204,7 +204,9 @@ export async function getStrictProcessTableSnapshotWithAge(afterMs?: number): Pr
   rows: ProcessTableRow[]
   capturedAgeMs: number
 }> {
-  const snapshot = await withEvidenceBudget(processTableReader.getSnapshotWithAge(afterMs))
+  const budget =
+    afterMs === undefined ? undefined : AbortSignal.timeout(PROCESS_TABLE_EVIDENCE_BUDGET_MS)
+  const snapshot = await withEvidenceBudget(processTableReader.getSnapshotWithAge(afterMs, budget))
   return { rows: snapshot.value.strict(), capturedAgeMs: snapshot.capturedAgeMs }
 }
 

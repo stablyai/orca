@@ -203,7 +203,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   // Foreground proof follows only an established route; other inspections keep their shipped unfenced shape.
   supportsForegroundObservation = (id: string) => this.ownerRecovery.observesForeground(id)
   inspectProcess(id: string, options?: Parameters<typeof inspectPtyProviderProcess>[2]) {
-    const forwarded = options?.foregroundOnly === true ? options : undefined
+    const forwarded =
+      options?.foregroundOnly === true || options?.runningWorkSinceMs !== undefined
+        ? options
+        : undefined
     return this.hasPty(id)
       ? inspectPtyProviderProcess(this.providerFor(id), id, forwarded)
       : Promise.reject(new Error('terminal_gone'))

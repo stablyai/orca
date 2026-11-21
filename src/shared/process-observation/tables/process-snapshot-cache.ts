@@ -1,3 +1,4 @@
+import { waitForPromiseWithSignal } from '../../concurrency/abort-signal-reason'
 import {
   PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS,
   ProcessTableCaptureError
@@ -18,7 +19,10 @@ export function createProcessTableSnapshotReader<T = string>(
   deps: ProcessTableSnapshotReaderDeps<T>
 ): {
   getSnapshot: () => Promise<T>
-  getSnapshotWithAge: (afterMs?: number) => Promise<{ value: T; capturedAgeMs: number }>
+  getSnapshotWithAge: (
+    afterMs?: number,
+    signal?: AbortSignal
+  ) => Promise<{ value: T; capturedAgeMs: number }>
   getFreshSnapshot: () => Promise<T>
   /** The cached or in-flight capture, without starting one. */
   peekSnapshot: () => Promise<T> | null
@@ -66,9 +70,10 @@ export function createProcessTableSnapshotReader<T = string>(
   }
 
   async function getSnapshotWithAge(
-    afterMs?: number
+    afterMs?: number,
+    signal?: AbortSignal
   ): Promise<{ value: T; capturedAgeMs: number }> {
-    const value = await (afterMs === undefined ? getSnapshot() : captureAfter(afterMs))
+    const value = await (afterMs === undefined ? getSnapshot() : captureAfter(afterMs, signal))
     const capturedAtMs = cached?.value === value ? cached.capturedAtMs : undefined
     if (afterMs !== undefined && (capturedAtMs === undefined || capturedAtMs < afterMs)) {
       throw new ProcessTableCaptureError('capture_before_request')
@@ -80,18 +85,21 @@ export function createProcessTableSnapshotReader<T = string>(
     }
   }
 
-  async function captureAfter(afterMs: number): Promise<T> {
+  async function captureAfter(afterMs: number, signal?: AbortSignal): Promise<T> {
+    signal?.throwIfAborted()
     if (cached && cached.capturedAtMs >= afterMs) {
       return cached.value
     }
     if (inFlight && inFlightCapturedAtMs >= afterMs) {
-      return inFlight
+      return waitForPromiseWithSignal(inFlight, signal)
     }
     // A stale capture can't authorize cleanup. Do not queue a new capture behind it after callers leave.
-    if (inFlight || freshQueued) {
-      throw new ProcessTableCaptureError('capture_before_request')
+    const prior = inFlight ?? freshQueued?.promise
+    if (prior) {
+      await waitForPromiseWithSignal(prior, signal).catch(() => undefined)
+      return captureAfter(afterMs, signal)
     }
-    return runSnapshot(true)
+    return waitForPromiseWithSignal(runSnapshot(true), signal)
   }
 
   function getFreshSnapshot(): Promise<T> {
@@ -159,7 +167,7 @@ export function readProcessSnapshot<T>(
   afterMs?: number
 ): Promise<T> {
   return afterMs !== undefined
-    ? reader.getSnapshotWithAge(afterMs).then(({ value }) => value)
+    ? reader.getSnapshotWithAge(afterMs, AbortSignal.timeout(1_200)).then(({ value }) => value)
     : fresh
       ? reader.getFreshSnapshot()
       : reader.getSnapshot()
