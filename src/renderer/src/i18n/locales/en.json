@@ -27562,7 +27562,7 @@
         "pushesOnHost": "{{name}} pushes code from {{host}} with its git login.",
         "tryIt": "Try it on any issue or PR",
         "preview": {
-          "label": "Mention {{command}} on an issue or pull request to ask {{name}}.",
+          "label": "Mention {{command}} on an issue or pull request to ask {{name}}. For example, “{{command}} {{ask}}”, and {{name}} replies “{{reply}}”",
           "commented": "commented now",
           "ask": "review this PR",
           "bot": "bot",
