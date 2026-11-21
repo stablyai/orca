@@ -86,15 +86,20 @@ export function MobileHomeScreen() {
     setVisitedTabs((visited) => (visited.has(next) ? visited : new Set([...visited, next])))
   }, [])
 
-  // The usage widget opens orca:///?tab=usage; clear it so the same tap works again later.
+  // The usage widget opens orca:///?tab=usage (&refresh=1); clear both so the same tap works again later.
   const { router, setHostCatalog } = data
-  const linkedTab = useLocalSearchParams<{ tab?: string }>().tab
+  const link = useLocalSearchParams<{ tab?: string; refresh?: string }>()
+  const [usageRefreshRequest, setUsageRefreshRequest] = useState(0)
   useEffect(() => {
-    if (isHomeTabId(linkedTab)) {
-      selectTab(linkedTab)
-      router.setParams({ tab: undefined })
+    if (!isHomeTabId(link.tab)) {
+      return
     }
-  }, [linkedTab, router, selectTab])
+    selectTab(link.tab)
+    if (link.tab === 'usage' && link.refresh === '1') {
+      setUsageRefreshRequest((request) => request + 1)
+    }
+    router.setParams({ tab: undefined, refresh: undefined })
+  }, [link.tab, link.refresh, router, selectTab])
 
   // Android Back from another tab returns to Feed before it leaves the app.
   useFocusEffect(
@@ -265,6 +270,7 @@ export function MobileHomeScreen() {
                     accountsByHost={data.accountsByHost}
                     stats={data.stats}
                     bottomInset={contentBottom}
+                    refreshRequest={usageRefreshRequest}
                     onOpenAccounts={openMobileAccounts}
                   />
                 ) : (

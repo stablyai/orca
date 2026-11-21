@@ -1,5 +1,5 @@
 import { Gauge, RefreshCw } from 'lucide-react-native'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import Animated, {
   FadeIn,
@@ -49,6 +49,8 @@ export function MobileHomeUsageTab(props: {
   accountsByHost: Record<string, AccountsSnapshot>
   stats: HomeStatsSummary | null
   bottomInset: number
+  /** Bumped by the widget's refresh link; refreshes once the shown desktop is connected. */
+  refreshRequest: number
   onOpenAccounts: (hostId: string) => void
 }) {
   const t = useMobileTranslation()
@@ -74,6 +76,15 @@ export function MobileHomeUsageTab(props: {
       setRefreshingHostId((current) => (current === host.id ? null : current))
     }
   }, [client, host, refreshing])
+
+  // The widget can't reach a desktop, so its refresh opens the app and lands here.
+  const handledRefreshRef = useRef(0)
+  useEffect(() => {
+    if (props.refreshRequest > handledRefreshRef.current && connected && client) {
+      handledRefreshRef.current = props.refreshRequest
+      void refresh()
+    }
+  }, [props.refreshRequest, connected, client, refresh])
 
   return (
     <View style={styles.screen}>

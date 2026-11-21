@@ -59,10 +59,16 @@ struct UsageWidgetView: View {
     if let summary = entry.summary, let host = summary.hosts.first, let updated = host.updatedDate {
       let stale = entry.date.timeIntervalSince(updated) > usageWidgetStaleAfter
       VStack(alignment: .leading, spacing: family == .systemSmall ? 6 : 8) {
-        HStack {
+        HStack(spacing: 6) {
           Text(host.name).font(.caption.weight(.semibold)).lineLimit(1)
           Spacer(minLength: 4)
-          if family != .systemSmall { updatedLabel(updated) }
+          if family != .systemSmall {
+            updatedLabel(updated)
+            Link(destination: usageWidgetRefreshURL) {
+              Image(systemName: "arrow.clockwise").font(.caption.weight(.semibold))
+            }
+            .accessibilityLabel(Text("Refresh"))
+          }
         }
         .foregroundStyle(UsageWidgetColors.secondary)
         if family == .systemSmall {
@@ -81,6 +87,8 @@ struct UsageWidgetView: View {
         }
       }
       .opacity(stale ? 0.45 : 1)
+      // Small widgets take one tap target, so a stale one refreshes on tap.
+      .widgetURL(stale ? usageWidgetRefreshURL : usageWidgetOpenURL)
     } else {
       VStack(alignment: .leading, spacing: 6) {
         Text("Orca").font(.headline).foregroundStyle(UsageWidgetColors.primary)
@@ -89,6 +97,7 @@ struct UsageWidgetView: View {
         Spacer(minLength: 0)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
+      .widgetURL(usageWidgetRefreshURL)
     }
   }
 

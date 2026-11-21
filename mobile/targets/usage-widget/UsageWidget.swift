@@ -4,6 +4,10 @@ import WidgetKit
 // The app only refreshes this while it is open and connected, so old numbers fade instead of passing as live.
 let usageWidgetStaleAfter: TimeInterval = 60 * 60
 
+// The widget can't reach a desktop; refreshing opens the app, which fetches and writes back.
+let usageWidgetOpenURL = URL(string: "orca:///?tab=usage")!
+let usageWidgetRefreshURL = URL(string: "orca:///?tab=usage&refresh=1")!
+
 struct UsageWidgetEntry: TimelineEntry {
   let date: Date
   let summary: UsageWidgetSummary?
@@ -43,7 +47,6 @@ struct OrcaUsageWidget: Widget {
     StaticConfiguration(kind: kind, provider: UsageWidgetTimelineProvider()) { entry in
       UsageWidgetView(entry: entry)
         .containerBackground(UsageWidgetColors.background, for: .widget)
-        .widgetURL(URL(string: "orca:///?tab=usage"))
     }
     .configurationDisplayName("Agent Usage")
     .description("Claude and Codex usage from your paired desktop, as Orca last saw it.")
