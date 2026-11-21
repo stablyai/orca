@@ -234,7 +234,7 @@ export function getInbox(this: OrchestrationDb, limit = 20, runId?: string): Mes
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over messages returns the row shape its schema and MessageRow define, like every row cast in db/.
     (runId === undefined
       ? this.db.prepare('SELECT * FROM messages ORDER BY sequence DESC LIMIT ?').all(limit)
-      : // Why: an `(? IS NULL OR run_id = ?)` predicate hides idx_messages_run_sequence and scans the table.
+      : // Why: an `(? IS NULL OR run_id = ?)` predicate hides the run indexes and scans the table.
         this.db
           .prepare('SELECT * FROM messages WHERE run_id = ? ORDER BY sequence DESC LIMIT ?')
           .all(runId, limit)) as MessageRow[]
@@ -251,14 +251,20 @@ export function getAllMessagesForHandle(
 ): MessageRow[] {
   const typed = types && types.length > 0
   const typeFilter = typed ? `AND type IN (${types.map(() => '?').join(',')})` : ''
+  const runFilter = runId === undefined ? '' : 'AND run_id = ?'
   return exposeMessageListTimestamps(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over messages returns the row shape its schema and MessageRow define, like every row cast in db/.
     this.db
       .prepare(
-        `SELECT * FROM messages WHERE to_handle = ? AND (? IS NULL OR run_id = ?) ${typeFilter}
+        `SELECT * FROM messages WHERE to_handle = ? ${runFilter} ${typeFilter}
          ORDER BY sequence DESC LIMIT ?`
       )
-      .all(toHandle, runId ?? null, runId ?? null, ...(typed ? types : []), limit) as MessageRow[]
+      .all(
+        toHandle,
+        ...(runId === undefined ? [] : [runId]),
+        ...(typed ? types : []),
+        limit
+      ) as MessageRow[]
   )
 }
 

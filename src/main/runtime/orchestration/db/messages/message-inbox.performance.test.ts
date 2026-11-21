@@ -17,7 +17,7 @@ afterEach(() => {
   }
 })
 
-// 50 Runs x 200 messages, interleaved, like a long-lived profile with ~48k messages.
+// Guards #46477: a run-filtered inbox read scanned all ~48k messages on a long-lived profile.
 function seedMessages(): OrchestrationDb {
   const dir = mkdtempSync(join(tmpdir(), 'orca-inbox-perf-'))
   dirs.push(dir)
@@ -66,5 +66,19 @@ describe('getInbox', () => {
       'msg_9857'
     ])
     expect(db.getInbox(2).map((row) => row.id)).toEqual(['msg_10000', 'msg_9999'])
+  })
+
+  it('reads one Run of a mailbox through the run/sequence index', () => {
+    const db = seedMessages()
+    const plan = capturePlans(db, () =>
+      db.getAllMessagesForHandle('term_b', 20, undefined, 'run_7')
+    )
+    expect(plan.filter((detail) => detail.includes('messages'))).toEqual([
+      'SEARCH messages USING INDEX idx_messages_run_sequence (run_id=?)'
+    ])
+    expect(
+      db.getAllMessagesForHandle('term_b', 2, undefined, 'run_7').map((row) => row.id)
+    ).toEqual(['msg_9957', 'msg_9907'])
+    expect(db.getAllMessagesForHandle('term_b', 1).map((row) => row.id)).toEqual(['msg_10000'])
   })
 })
