@@ -6292,6 +6292,26 @@
       "readOnly": "Read-only here. Change them in {{agent}}.",
       "fromYours": "{{count}} from your {{agent}}",
       "tryAgain": "Try again"
+    },
+    "handToBot": {
+      "menu": "Hand to bot…",
+      "title": "Hand {{name}} to a bot",
+      "noAgents": "It has no agents running.",
+      "oneAgent": "Its agent keeps running and works for the bot.",
+      "agents": "Its {{n}} agents keep running and work for the bot.",
+      "newBot": "New bot…",
+      "newBotNote": "Set one up for this workspace",
+      "hasIt": "Has it now",
+      "goal": "What should it do with this?",
+      "optional": "(optional)",
+      "goalPlaceholder": "e.g. get it merged by Friday",
+      "moveNote": "{{owner}} has this workspace now. Handing it over moves it, and its agents, to {{bot}}.",
+      "moveTo": "Move to {{bot}}",
+      "handOver": "Hand over",
+      "newBotOrigin": "From {{name}}. It takes the workspace over when you create it.",
+      "putBack": "{{reason}} {{name}} stayed where it was.",
+      "movedSince": "{{reason}} {{name}} stays where you moved it.",
+      "leftMoved": "{{reason}} {{name}} is under {{bot}} now; move it back from its menu."
     }
   },
   "mobileWebShell": {
