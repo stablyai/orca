@@ -4,8 +4,7 @@ import { afterEach, expect, it } from 'vitest'
 import type { OrchestrationSessionWorker } from '../../shared/orchestration-session-workers'
 import { readBotChatTree } from './bot-chat-tree-host'
 import { BotChatTreeWorkerCache } from './bot-chat-tree-worker-cache'
-import { closeOwnChatHost, homeRecord, ownChatHost } from './bot-own-chat-panes.test-fixture'
-import { bot } from './bot-own-chat-panes.test-fixture'
+import { bot, closeOwnChatHost, homeRecord, ownChatHost } from './bot-own-chat-panes.test-fixture'
 
 afterEach(() => closeOwnChatHost())
 
