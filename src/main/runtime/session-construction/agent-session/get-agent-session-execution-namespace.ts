@@ -191,7 +191,7 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
         isRemote,
         // Orca's copies live on this host, so launches over SSH or inside WSL never run them.
         ...(!isRemote && platform === process.platform
-          ? { managedAgentCommands: await readHostManagedAgentCommands(settings) }
+          ? { managedAgentCommands: await readHostManagedAgentCommands(settings, [request.agent]) }
           : {})
       })
     )

@@ -8,9 +8,9 @@ import { markLocalAgentRefusal, refreshLocalAgentInventory } from './local-agent
 import type { LocalAgentInventoryLifecycle } from './local-agent-inventory-refresh'
 import { createEmptyLocalDetectedAgentState } from './local-detected-agent-store-state'
 import {
+  beginAgentDetection,
   forgetManagedAgentCommands,
-  localManagedAgentInventoryKey,
-  readAgentDetectionReply
+  LOCAL_MANAGED_AGENT_HOST
 } from './managed-agent-launch-commands'
 import type {
   LocalAgentRefreshOptions,
@@ -152,6 +152,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
         }
       }))
       const detectArgs = includeDisabled ? context : { ...context, enabledOnly: true }
+      const read = beginAgentDetection(LOCAL_MANAGED_AGENT_HOST)
       const pending = window.api.preflight
         .detectAgents({
           ...detectArgs,
@@ -159,14 +160,12 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
           withManagedAgentCommands: true
         })
         .then((reply) => {
-          const typed = readAgentDetectionReply(
-            reply,
-            localManagedAgentInventoryKey(localAgentInventoryContextKey(context))
-          )
+          const { agents: typed, keepManagedAgentCommands } = read(reply)
           if (
             requestGeneration === lifecycle.localDetectionGeneration &&
             lifecycle.detectPromises.get(contextKey) === pending
           ) {
+            keepManagedAgentCommands()
             lifecycle.refusedContextKeys.delete(contextKey)
             lifecycle.failedDetectContextKeys.delete(contextKey)
             const exposeToLegacy = lifecycle.legacyDetectContextKey === contextKey
@@ -272,7 +271,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
       lifecycle.detectedContextKey = null
       lifecycle.legacyDetectContextKey = null
       lifecycle.legacyRefreshContextKey = null
-      forgetManagedAgentCommands('local:')
+      forgetManagedAgentCommands((host) => host === LOCAL_MANAGED_AGENT_HOST)
       set(createEmptyLocalDetectedAgentState())
     }
   }

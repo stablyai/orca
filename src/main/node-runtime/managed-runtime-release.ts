@@ -47,6 +47,8 @@ export type ManagedAgentCli = {
   /** Whether this host has a build to download. */
   available: () => boolean
   executable: (folder: string) => string
+  /** The program a terminal launch runs by full path, when it isn't `executable`. */
+  launcher?: (folder: string) => string
   /** The one stock command it stands in for, when the agent's launches name other programs too. */
   standsInFor?: string
 }

@@ -192,7 +192,7 @@ async function buildRuntimeAgentTerminalStartupOptions(
         ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
         // Orca's copies live on this host, so launches over SSH or inside WSL never run them.
         ...(!isRemote && runtime.platform === process.platform
-          ? { managedAgentCommands: await readHostManagedAgentCommands(settings) }
+          ? { managedAgentCommands: await readHostManagedAgentCommands(settings, [agent]) }
           : {})
       }),
       opts.env?.PATH

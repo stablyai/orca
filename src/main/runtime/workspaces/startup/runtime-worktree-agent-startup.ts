@@ -93,10 +93,11 @@ export async function resolveWorktreeStartupDraftAgent(
 function launchManagedAgentCommands(
   repo: Parameters<typeof repoIsRemote>[0],
   platform: NodeJS.Platform,
-  settings: ManagedCopySettings
+  settings: ManagedCopySettings,
+  agent: TuiAgent
 ): Promise<ManagedAgentCommands> | undefined {
   return !repoIsRemote(repo) && platform === process.platform
-    ? readHostManagedAgentCommands(settings)
+    ? readHostManagedAgentCommands(settings, [agent])
     : undefined
 }
 
@@ -129,7 +130,7 @@ export async function buildWorktreeStartupForDraft(
     platform,
     shell,
     isRemote: repoIsRemote(repo),
-    managedAgentCommands: await launchManagedAgentCommands(repo, platform, settings),
+    managedAgentCommands: await launchManagedAgentCommands(repo, platform, settings, agent),
     ...(agent === (environment.originalAgent ?? environment.requestedAgent)
       ? {
           ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
@@ -214,7 +215,7 @@ export async function buildWorktreeStartupForAgent(
     platform,
     shell,
     isRemote: repoIsRemote(repo),
-    managedAgentCommands: await launchManagedAgentCommands(repo, platform, settings),
+    managedAgentCommands: await launchManagedAgentCommands(repo, platform, settings, agent),
     ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
     ...(environment.extraAgentArgs ? { extraAgentArgs: environment.extraAgentArgs } : {}),
     ...(environment.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),

@@ -106,7 +106,7 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
       isRemote: Boolean(workspace.connectionId),
       launchCwd: workspace.path,
       ...(runsOnThisHost(workspace, launchRuntime)
-        ? { managedAgentCommands: await readHostManagedAgentCommands(settings) }
+        ? { managedAgentCommands: await readHostManagedAgentCommands(settings, [record.agent]) }
         : {})
     })
     const startupPlan = buildAgentResumeStartupPlan(resumeInputs)
@@ -157,7 +157,7 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
           // SSH uses relay-shim orca, never the local Linux orca-ide rename.
           isRemote: Boolean(workspace.connectionId),
           ...(runsOnThisHost(workspace, launchRuntime)
-            ? { managedAgentCommands: await readHostManagedAgentCommands(settings) }
+            ? { managedAgentCommands: await readHostManagedAgentCommands(settings, [opts.agent]) }
             : {})
         })
       ),

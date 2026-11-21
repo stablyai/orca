@@ -103,7 +103,7 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
             prepared,
             settings,
             runtime: launchRuntime,
-            managedAgentCommands: await readHostManagedAgentCommands(settings)
+            managedAgentCommands: await readHostManagedAgentCommands(settings, [sourceAgent])
           }),
           opts.terminalImageViewerSupported
         )

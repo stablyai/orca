@@ -32,9 +32,13 @@ function withTeammateModeAuto(args: string[]): string[] {
   return ['--teammate-mode', 'auto', ...args]
 }
 
-async function runClaudeAgentTeams(env: Record<string, string>, args: string[]): Promise<number> {
+async function runClaudeAgentTeams(
+  env: Record<string, string>,
+  args: string[],
+  command = 'claude'
+): Promise<number> {
   return await new Promise((resolve, reject) => {
-    const child = spawn('claude', withTeammateModeAuto(args), {
+    const child = spawn(command, withTeammateModeAuto(args), {
       stdio: 'inherit',
       env
     })
@@ -66,7 +70,8 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     }
     const inheritedEnv = envRecord()
     const response = await client.call<{
-      launch: { env: Record<string, string>; envToDelete?: string[] }
+      // `command` is Orca's own Claude by full path when the host has no Claude of the user's.
+      launch: { env: Record<string, string>; envToDelete?: string[]; command?: string }
     }>('agentTeams.prepareLaunch', {
       paneKey,
       env: inheritedEnv,
@@ -80,7 +85,8 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
         ...inheritedEnv,
         ...response.result.launch.env
       },
-      rawArgs ?? []
+      rawArgs ?? [],
+      response.result.launch.command
     )
   },
   open: async ({ client, json }) => {

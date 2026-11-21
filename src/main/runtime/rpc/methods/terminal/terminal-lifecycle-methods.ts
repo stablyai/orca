@@ -2,6 +2,7 @@ import { terminalCreateFeatureRequirement } from '../../startup/agent-launch-fea
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import { TERMINAL_WORKSPACE_STOP_METHODS } from './terminal-workspace-stop-methods'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
+import { readHostManagedAgentCommands } from '../host-management/managed-copy-detection'
 import { defineMethod } from '../../core'
 import {
   navigationTargetsHost,
@@ -280,12 +281,19 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     name: 'agentTeams.prepareLaunch',
     permission: 'workspace',
     params: AgentTeamsPrepareLaunch,
-    handler: async (params, { runtime }) => ({
-      launch: await runtime.prepareClaudeAgentTeamsLeader({
+    handler: async (params, { runtime }) => {
+      const launch = await runtime.prepareClaudeAgentTeamsLeader({
         paneKey: params.paneKey,
         baseEnv: params.env,
         prepareAuth: params.prepareAuth
       })
-    })
+      // Orca's own Claude by full path when the user has none; a Windows host's pane is a WSL guest's.
+      const command =
+        process.platform === 'win32'
+          ? undefined
+          : (await readHostManagedAgentCommands(runtime.requireStore().getSettings(), ['claude']))
+              .claude
+      return { launch: command ? { ...launch, command } : launch }
+    }
   })
 ]

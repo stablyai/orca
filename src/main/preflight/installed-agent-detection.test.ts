@@ -38,7 +38,7 @@ it('leaves out a disabled agent, and a WSL guest Orca installed nothing in', asy
 it("reports the full path to Orca's copy only where the user has no CLI of their own", async () => {
   provideInstalledManagedAgents(
     async () => ['claude', 'codex'],
-    (agent) => `/data/orca/${agent}/bin/${agent}`
+    async (agent) => `/data/orca/${agent}/bin/${agent}`
   )
   host.onPath = new Set(['codex'])
 
@@ -47,5 +47,5 @@ it("reports the full path to Orca's copy only where the user has no CLI of their
     managedAgentCommands: { claude: '/data/orca/claude/bin/claude' }
   })
   host.wsl = true
-  expect((await detectInstalledAgentInventory()).managedAgentCommands).toEqual({})
+  expect((await detectInstalledAgentInventory()).managedAgentCommands).toBeUndefined()
 })

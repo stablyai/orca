@@ -20,12 +20,11 @@ import {
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { ManagedAgentCommands } from '../../../../../../shared/agent-launch/startup/managed-agent-launch-program'
 import {
-  localManagedAgentInventoryKey,
+  LOCAL_MANAGED_AGENT_HOST,
   readManagedAgentCommands,
-  runtimeManagedAgentInventoryKey
+  runtimeManagedAgentHost
 } from '@/store/slices/agent-inventory/managed-agent-launch-commands'
 import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
-import { localAgentInventoryContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
 import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
 
 type DetectionReadState = Pick<
@@ -200,7 +199,8 @@ export function readAgentInventoryForWorktree(state: AppState, worktreeId: strin
     : { ids: null, state: 'unresolved' as const }
 }
 
-/** Full paths to Orca's copies the workspace's host reported, for the launch builders. */
+/** Full paths to Orca's copies the workspace's host reported, for the launch builders; a local
+ *  workspace running under WSL has none (Orca's copies live on this computer). */
 export function readManagedAgentCommandsForWorktree(
   state: AppState,
   worktreeId: string | null | undefined
@@ -210,18 +210,14 @@ export function readManagedAgentCommandsForWorktree(
     return undefined
   }
   if (target.kind === 'runtime') {
-    return readManagedAgentCommands(
-      runtimeManagedAgentInventoryKey(
-        getRuntimeAgentInventoryKey(target.environmentId, target.worktreeId)
-      )
-    )
+    return readManagedAgentCommands(runtimeManagedAgentHost(target.environmentId))
   }
-  const contextKey =
-    target.contextKey?.split('\u0000')[0] ??
-    localAgentInventoryContextKey(
-      getLocalAgentPreflightContext(state, undefined, undefined, target.worktreeId)
-    )
-  return readManagedAgentCommands(localManagedAgentInventoryKey(contextKey))
+  const context = getLocalAgentPreflightContext(state, undefined, undefined, target.worktreeId)
+  const runtime = context?.projectRuntime
+  const inWsl =
+    Boolean(context?.wslDistro || context?.wslDefault) ||
+    (runtime !== undefined && (runtime.status !== 'resolved' || runtime.runtime.kind === 'wsl'))
+  return inWsl ? undefined : readManagedAgentCommands(LOCAL_MANAGED_AGENT_HOST)
 }
 
 /** Orca's copy paths on a project's host before its workspace exists; a local project running
@@ -232,11 +228,9 @@ export function readManagedAgentCommandsForRepo(
 ): ManagedAgentCommands | undefined {
   const host = parseExecutionHostId(getRepoExecutionHostId(repo))
   if (host?.kind === 'runtime') {
-    return readManagedAgentCommands(
-      runtimeManagedAgentInventoryKey(getRuntimeAgentInventoryKey(host.environmentId))
-    )
+    return readManagedAgentCommands(runtimeManagedAgentHost(host.environmentId))
   }
   return host?.kind === 'ssh' || launchPlatform !== getRendererAppPlatform()
     ? undefined
-    : readManagedAgentCommands(localManagedAgentInventoryKey('host'))
+    : readManagedAgentCommands(LOCAL_MANAGED_AGENT_HOST)
 }

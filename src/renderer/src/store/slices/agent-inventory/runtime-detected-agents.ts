@@ -10,9 +10,9 @@ export {
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
-  forgetManagedAgentCommands,
-  readAgentDetectionReply,
-  runtimeManagedAgentInventoryKey,
+  agentDetectionReader,
+  forgetRuntimeManagedAgentCommands,
+  runtimeManagedAgentHost,
   type AgentDetectionReply
 } from './managed-agent-launch-commands'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
@@ -108,7 +108,7 @@ export const createRuntimeDetectedAgentsSlice: (
       }
     }
     ;[...latestOutcome.keys()].filter(dropKey).forEach((key) => latestOutcome.delete(key))
-    forgetManagedAgentCommands('runtime:', (key) => dropKey(key.slice('runtime:'.length)))
+    forgetRuntimeManagedAgentCommands(drop)
     set((s) => {
       const runtimeDetectedAgentIds = withoutKeys(s.runtimeDetectedAgentIds, dropKey)
       const isDetectingRuntimeAgents = withoutKeys(s.isDetectingRuntimeAgents, dropKey)
@@ -189,6 +189,7 @@ export const createRuntimeDetectedAgentsSlice: (
 
       const target = { kind: 'environment', environmentId } as const
       const fence = capturePairingFence(environmentId)
+      const detection = agentDetectionReader(runtimeManagedAgentHost(environmentId))
       const pending = callRuntimeAgentDetection(
         environmentId,
         worktreeId,
@@ -198,12 +199,13 @@ export const createRuntimeDetectedAgentsSlice: (
             'preflight.detectAgents',
             { ...params, withManagedAgentCommands: true },
             fence
-          ).then((reply) => readAgentDetectionReply(reply, runtimeManagedAgentInventoryKey(key))),
+          ).then(detection.read),
         nestedSshDetection(target, worktreeId, fence)
       )
         .then((typed) => {
           // Removed or re-paired environments must not regain stale entries from in-flight detection.
           if (runtimeDetectPromises.get(key) === pending) {
+            detection.keep()
             commitDetection(key, typed, false)
           }
           return typed
@@ -253,20 +255,19 @@ export const createRuntimeDetectedAgentsSlice: (
 
       const target = { kind: 'environment', environmentId } as const
       const fence = capturePairingFence(environmentId)
+      const detection = agentDetectionReader(runtimeManagedAgentHost(environmentId))
       const request = () =>
         callRuntimeAgentDetection(
           environmentId,
           worktreeId,
           (params) =>
-            callRuntimeRpc<{ agents: string[]; managedAgentCommands?: Record<string, string> }>(
+            callRuntimeRpc<AgentDetectionReply>(
               target,
               'preflight.refreshAgents',
               options.userInitiated ? { ...params, userInitiated: true } : params,
               fence
             )
-              .then((result) =>
-                readAgentDetectionReply(result, runtimeManagedAgentInventoryKey(key))
-              )
+              .then(detection.read)
               .catch((error) => {
                 if (!isRuntimeMethodNotFoundError(error)) {
                   throw error
@@ -288,6 +289,7 @@ export const createRuntimeDetectedAgentsSlice: (
         .then((typed) => {
           // Ignore refreshes detached by environment removal or re-pair.
           if (runtimeRefreshPromises.get(key) === pending) {
+            detection.keep()
             commitDetection(key, typed, false)
           }
           return typed

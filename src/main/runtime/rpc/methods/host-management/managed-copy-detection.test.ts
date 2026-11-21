@@ -56,7 +56,7 @@ it('counts only the managed agy installation and omits it while switched off', a
   expect(await readInstalledManagedAgents()).toEqual([])
 })
 
-it('uses remembered releases after the launch read, and has lists read before it re-read for their paths', async () => {
+it('uses remembered releases after the launch read and skips a refresh when they match', async () => {
   await installed('grok')
   const {
     provideManagedAgentDetection,
@@ -71,7 +71,7 @@ it('uses remembered releases after the launch read, and has lists read before it
   expect(await readInstalledManagedAgents()).toEqual(['grok'])
   rememberManagedAgentRelease('grok', join(host.dataDirectory, 'agent-runtimes', 'grok', '1.0'))
   noteManagedReleasesRead()
-  expect(refreshed).toHaveBeenCalledTimes(1)
+  expect(refreshed).not.toHaveBeenCalled()
   expect(await readInstalledManagedAgents()).toEqual(['grok'])
 
   // Removed: the receipt is still on disk, but the remembered release is gone.

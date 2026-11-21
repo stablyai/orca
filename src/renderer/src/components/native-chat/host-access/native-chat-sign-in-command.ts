@@ -1,7 +1,12 @@
-import { useAppStore } from '@/store/index'
+import { useSyncExternalStore } from 'react'
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
-import { readManagedAgentCommandsForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
+import {
+  LOCAL_MANAGED_AGENT_HOST,
+  readManagedAgentCommands,
+  runtimeManagedAgentHost,
+  subscribeManagedAgentCommands
+} from '@/store/slices/agent-inventory/managed-agent-launch-commands'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { agentSessionSignInCommand } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { AgentSessionAccountKind } from '../../../../../shared/agent-session/failures/agent-session-availability'
@@ -14,7 +19,6 @@ import { resolveHostAgentStartupShell } from '../../../../../shared/shell/launch
 export function useNativeChatSignInCommand(input: {
   agent: string
   target: RuntimeClientTarget
-  worktreeId: string | null
   account: AgentSessionAccountKind | undefined
 }): string | null {
   const shell = useAppStoreWithHostStatuses((s, statuses) => {
@@ -37,10 +41,12 @@ export function useNativeChatSignInCommand(input: {
       }) ?? (platform === 'win32' ? null : 'posix')
     )
   })
-  const managedCommand = useAppStore((s) =>
-    isTuiAgent(input.agent)
-      ? (readManagedAgentCommandsForWorktree(s, input.worktreeId)?.[input.agent] ?? null)
-      : null
+  const host =
+    input.target.kind === 'local'
+      ? LOCAL_MANAGED_AGENT_HOST
+      : runtimeManagedAgentHost(input.target.environmentId)
+  const managedCommand = useSyncExternalStore(subscribeManagedAgentCommands, () =>
+    isTuiAgent(input.agent) ? (readManagedAgentCommands(host)?.[input.agent] ?? null) : null
   )
   return agentSessionSignInCommand(input.agent, {
     account: input.account,

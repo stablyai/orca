@@ -298,7 +298,7 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
         isRemote: false,
         shell: undefined,
         sessionOptions: { model: target.model },
-        managedAgentCommands: await readHostManagedAgentCommands(store.getSettings())
+        managedAgentCommands: await readHostManagedAgentCommands(store.getSettings(), ['opencode'])
       }),
       cwd: path,
       hostIdentity: this.getRuntimeId()

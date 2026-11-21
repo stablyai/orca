@@ -1,5 +1,4 @@
-import { withManagedAgentProgram } from '../../../shared/agent-launch/startup/managed-agent-launch-program'
-import { resolveStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { buildShellCommandFromArgv } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { AgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import {
   buildAgentDraftLaunchPlan,
@@ -49,11 +48,13 @@ export async function resolveOpenCodeModelLaunchRoute(
   const command =
     inputs.cmdOverrides.opencode ||
     getTuiAgentLaunchCommand(TUI_AGENT_CONFIG.opencode, inputs.platform)
-  // Probes run the program the launch will; records keep the stock name.
-  const program = withManagedAgentProgram(command, {
-    ...inputs,
-    shell: resolveStartupShell(inputs.platform, inputs.shell)
-  })
+  // Probes run the program the launch will (one token, as they parse it); records keep the stock name.
+  const managed = !inputs.cmdOverrides.opencode?.trim() && inputs.managedAgentCommands?.opencode
+  const program = managed
+    ? process.platform === 'win32'
+      ? `"${managed}"`
+      : buildShellCommandFromArgv([managed], 'posix')
+    : command
   const env: Record<string, string> = {}
   for (const [key, value] of Object.entries({ ...process.env, ...inputs.agentEnv })) {
     if (value !== undefined) {
