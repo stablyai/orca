@@ -13,8 +13,8 @@ import {
 } from './journal-checkpoint-outages'
 
 const HEALTH_TIMEOUT_MS = 5000
-// A busy worker past this many ms without a reply is treated as stuck in a native call: the writer
-// takes checkpoints back, and the worker is kept (terminating can't interrupt that call).
+// A busy worker past this many ms without a reply is stuck in a native call: it is reported as an
+// outage and kept (terminating can't interrupt that call) until it answers, errors or exits.
 const STUCK_MS = 60_000
 const RESTART_BASE_MS = 1000
 // Also how long a restarted worker must stay up before its backoff starts over.
@@ -40,8 +40,8 @@ export type JournalCheckpointWorkerOptions = {
 export type JournalCheckpointWorkerHost<Message> = {
   receive(message: Message): void
   lose(error: unknown, cause: JournalCheckpointOutage['cause']): void
-  /** Whether a worker stuck past STUCK_MS hands checkpoints back; false while it holds a truncate. */
-  releasesStuck(): boolean
+  /** The worker is busy past a deadline; the owner may take checkpoints back without retiring it. */
+  late(stuck: boolean): void
 }
 
 type Attached = {
@@ -75,8 +75,17 @@ export class JournalCheckpointWorkerSupervisor<Message> {
     private readonly host: JournalCheckpointWorkerHost<Message>,
     private readonly options: JournalCheckpointWorkerOptions = {}
   ) {
-    this.now = options.now ?? Date.now
+    this.now = options.now ?? (() => performance.now())
     this.outages = new JournalCheckpointOutages(this.now, options.onOutage)
+  }
+
+  get running(): boolean {
+    return this.current !== undefined
+  }
+
+  /** Settles once every retired worker thread has exited. */
+  retired(): Promise<void> {
+    return this.retiring
   }
 
   get watching(): boolean {
@@ -177,14 +186,10 @@ export class JournalCheckpointWorkerSupervisor<Message> {
     this.deadline = undefined
   }
 
-  /** The owner has taken checkpoints back; a stuck worker is kept, any other is replaced. */
+  /** The owner has taken checkpoints back; the worker is retired and replaced. */
   fail(error: unknown, cause: JournalCheckpointOutage['cause']): void {
     this.unwatch()
     this.openOutage(error, cause)
-    if (cause === 'slow') {
-      this.watch()
-      return
-    }
     const attached = this.current
     this.current = undefined
     if (attached) {
@@ -275,8 +280,8 @@ export class JournalCheckpointWorkerSupervisor<Message> {
   }
 
   /**
-   * Under paging a checkpoint's fsync can outlast the deadline, so a busy worker keeps its checkpoints
-   * until it is stuck past STUCK_MS; only a worker idle and silent for two deadlines is dead.
+   * Under paging a checkpoint's fsync can outlast the deadline, so a busy worker is never retired; only
+   * a worker idle and silent for two deadlines is dead.
    */
   private expired(): void {
     this.deadline = undefined
@@ -301,12 +306,12 @@ export class JournalCheckpointWorkerSupervisor<Message> {
       attached.busySince ??= now
       if (!attached.stuck && now - attached.busySince >= (this.options.stuckMs ?? STUCK_MS)) {
         attached.stuck = true
-        const error = new Error('checkpoint worker is stuck in a checkpoint')
-        if (this.host.releasesStuck()) {
-          this.host.lose(error, 'slow')
-          return
-        }
-        this.openOutage(error, 'slow')
+        this.openOutage(new Error('checkpoint worker is stuck in a checkpoint'), 'slow')
+      }
+      this.host.late(attached.stuck)
+      // Only its reply, error or exit can end a stuck native call, so polling it adds nothing.
+      if (attached.stuck) {
+        return
       }
     }
     this.watch(progress)

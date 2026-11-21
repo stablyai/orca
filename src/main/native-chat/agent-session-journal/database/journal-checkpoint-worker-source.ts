@@ -73,7 +73,8 @@ try {
         db.exec('PRAGMA busy_timeout = ' + timeout);
       }
       const state = frames.get();
-      const blocked = (ceiling(state) && (busy || state.checkpointed < state.log)) || oversized();
+      // A truncate that succeeded left an empty WAL; stat it only after one that didn't.
+      const blocked = (ceiling(state) && (busy || state.checkpointed < state.log)) || (busy && oversized());
       pendingTruncate = undefined;
       reply({ type: 'checked', id: pending.id, generation: pending.generation,
         truncateId: pending.truncateId, ...state, blocked });

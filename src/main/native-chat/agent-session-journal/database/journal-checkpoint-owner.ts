@@ -36,6 +36,8 @@ export class JournalCheckpointOwner {
   private truncate: { id: number; acknowledged: boolean } | undefined
   private readonly waiters = new JournalWalWaiters()
   private restoreNeeded = false
+  /** Writes wait for a retired worker that may hold a truncate's write lock to exit. */
+  private draining: Promise<void> | undefined
   private closePromise: Promise<void> | undefined
 
   constructor(
@@ -48,8 +50,7 @@ export class JournalCheckpointOwner {
       {
         receive: (message) => this.receive(message),
         lose: (error, cause) => this.lose(error, cause),
-        // A truncate holds SQLite's write lock for its whole run, so writes stay parked behind it.
-        releasesStuck: () => !this.stopped && !this.truncate?.acknowledged
+        late: (stuck) => this.late(stuck)
       },
       options
     )
@@ -66,6 +67,11 @@ export class JournalCheckpointOwner {
       return
     }
     this.worker.start()
+    // The first worker takes checkpoints at once, so a WAL left by a crash isn't checkpointed on the
+    // writer; a replacement takes them only once it answers.
+    if (this.worker.running) {
+      this.attach()
+    }
   }
 
   /** Only the serialized writer calls this, before its outer transaction. */
@@ -124,6 +130,9 @@ export class JournalCheckpointOwner {
   }
 
   private gated(urgent = false): boolean {
+    if (this.draining) {
+      return true
+    }
     const { stopped, unknown, blocked, log } = this
     return journalWalGated({ stopped, unknown, blocked, log, truncating: !!this.truncate }, urgent)
   }
@@ -191,15 +200,16 @@ export class JournalCheckpointOwner {
       return
     }
     if (this.stopped) {
-      // A starting worker, or one stuck past STUCK_MS, answered: it takes checkpoints with fresh
-      // state, then this reply is read as any other, so a truncate it asks for is still acknowledged.
+      // A starting or late worker answered: it takes checkpoints with fresh state, then this reply
+      // is read as any other, so a truncate it asks for is still acknowledged.
       this.worker.unwatch()
       this.attach()
       if (this.stopped) {
         return
       }
-      this.worker.recovered()
     }
+    // Also ends a stuck truncate's outage, which never handed checkpoints back.
+    this.worker.recovered()
     try {
       if (message.type === 'truncate-request' && Number.isSafeInteger(message.truncateId)) {
         this.truncate = { id: message.truncateId!, acknowledged: false }
@@ -207,29 +217,10 @@ export class JournalCheckpointOwner {
         this.acknowledge()
         return
       }
-      if (message.type !== 'checked') {
-        return
+      if (message.type === 'checked') {
+        this.checked(message)
       }
-      const completedTruncate =
-        this.truncate?.acknowledged === true && message.truncateId === this.truncate.id
-      if (completedTruncate) {
-        this.truncate = undefined
-      }
-      if (
-        (completedTruncate || message.generation === this.generation) &&
-        Number.isSafeInteger(message.log) &&
-        Number.isSafeInteger(message.checkpointed) &&
-        typeof message.blocked === 'boolean'
-      ) {
-        this.log = message.log
-        this.checkpointed = message.checkpointed
-        this.blocked = message.blocked
-        this.unknown = false
-      }
-      // A stale response retires its request without clearing newer pressure.
-      if (message.id === this.pending && this.pending !== undefined) {
-        this.pending = undefined
-      }
+      // The first worker's hello can arrive after it took checkpoints; it ends that deadline too.
       if (this.pending === undefined && this.truncate === undefined) {
         this.worker.unwatch()
         if (this.checkAgain) {
@@ -247,11 +238,64 @@ export class JournalCheckpointOwner {
     }
   }
 
-  /** The writer checkpoints for itself until a worker answers again; a stuck one is kept. */
+  private checked(message: CheckpointResponse): void {
+    const completedTruncate =
+      this.truncate?.acknowledged === true && message.truncateId === this.truncate.id
+    if (completedTruncate) {
+      this.truncate = undefined
+    }
+    if (
+      (completedTruncate || message.generation === this.generation) &&
+      Number.isSafeInteger(message.log) &&
+      Number.isSafeInteger(message.checkpointed) &&
+      typeof message.blocked === 'boolean'
+    ) {
+      this.log = message.log
+      this.checkpointed = message.checkpointed
+      this.blocked = message.blocked
+      this.unknown = false
+    }
+    // A stale response retires its request without clearing newer pressure.
+    if (message.id === this.pending && this.pending !== undefined) {
+      this.pending = undefined
+    }
+  }
+
+  /** The worker is retired; the writer checkpoints for itself until a replacement answers. */
   private lose(error: unknown, cause: JournalCheckpointOutage['cause']): void {
     if (this.closing) {
       return
     }
+    // A retired worker may still be inside the truncate it was sent, holding SQLite's write lock.
+    const truncating = this.truncate?.acknowledged === true
+    this.release()
+    this.worker.fail(error, cause)
+    if (truncating) {
+      const draining = this.worker.retired()
+      this.draining = draining
+      void draining.then(() => {
+        if (this.draining === draining) {
+          this.draining = undefined
+          this.wake()
+        }
+      })
+    }
+    this.wake()
+  }
+
+  /**
+   * A busy worker keeps its checkpoints while nothing waits on it. Once writes are parked behind it, or
+   * it is stuck, the writer takes them back until it answers; a truncate keeps them, since SQLite holds
+   * the write lock for that whole call anyway.
+   */
+  private late(stuck: boolean): void {
+    if (!this.stopped && !this.truncate?.acknowledged && (stuck || this.gated())) {
+      this.release()
+      this.wake()
+    }
+  }
+
+  private release(): void {
     this.stopped = true
     this.attachOwed = false
     this.truncate = undefined
@@ -263,8 +307,6 @@ export class JournalCheckpointOwner {
     } catch (restoreError) {
       this.worker.warn(restoreError)
     }
-    this.wake()
-    this.worker.fail(error, cause)
   }
 
   private restore(): void {
@@ -278,6 +320,7 @@ export class JournalCheckpointOwner {
     this.closing = true
     this.stopped = true
     this.truncate = undefined
+    this.draining = undefined
     // Timers stop first, so no restart or deadline lands while admission is handed back.
     const retired = this.worker.close()
     retired.catch(() => undefined)

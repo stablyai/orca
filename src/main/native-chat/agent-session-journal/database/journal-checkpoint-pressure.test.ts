@@ -328,9 +328,10 @@ it('keeps a busy checkpoint worker until it is stuck, and replaces one that stay
   })
   cleanup.push(() => owner.close())
   const autocheckpoint = () => writer.pragma('wal_autocheckpoint', { simple: true })
+  // The first worker owns checkpoints before it answers, so a crash's WAL isn't checkpointed on the writer.
+  expect(autocheckpoint()).toBe(0)
   workers[0]!.busy(false)
   workers[0]!.ready()
-  expect(autocheckpoint()).toBe(0)
 
   // Busy inside a checkpoint: it keeps checkpoints until stuck, then the writer takes them; never replaced.
   workers[0]!.busy(true)
@@ -353,4 +354,28 @@ it('keeps a busy checkpoint worker until it is stuck, and replaces one that stay
   workers.at(-1)!.ready()
   expect(autocheckpoint()).toBe(0)
   expect(outages[1]).toMatchObject({ cause: 'unresponsive', recovered: true, restarts: 1 })
+})
+
+it('hands checkpoints to the writer at the first deadline once writes are parked behind a busy worker', async () => {
+  const { filename, writer } = fixture()
+  let worker!: LivenessCheckpoint
+  const owner = new JournalCheckpointOwner(writer, filename, {
+    timeoutMs: 20,
+    factory: (workerData) => {
+      worker = new LivenessCheckpoint(new Int32Array(workerData.liveness))
+      return worker
+    }
+  })
+  cleanup.push(() => owner.close())
+  worker.busy(false)
+  worker.ready()
+  // Past the bulk ceiling while the worker sits in a slow checkpoint, short of the 60 s stuck limit.
+  writer.prepare('INSERT INTO writes VALUES(1, zeroblob(18874368))').run()
+  worker.busy(true)
+  owner.afterCommit()
+  await new JournalSqlBatch(writer, owner).run([2], (id) =>
+    writer.prepare("INSERT INTO writes VALUES(?, 'bulk')").run(id)
+  )
+  expect(writer.pragma('wal_autocheckpoint', { simple: true })).toBe(1000)
+  expect(worker.terminated).toBe(false)
 })
