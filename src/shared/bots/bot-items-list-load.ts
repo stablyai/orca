@@ -5,8 +5,6 @@ import { BOT_ITEM_LIMITS, type BotItem } from './bot-items'
 import type { BotItemsListRead } from './bot-item-schema'
 import {
   appendBotItemsClosedPage,
-  botItemCursorPlace,
-  botItemReaches,
   botItemsClosedDepth,
   botItemsClosedLoaded,
   mergeNamedBotItems
@@ -20,13 +18,10 @@ export type BotItemsListCall = (params: Record<string, unknown>) => Promise<BotI
 export type BotItemsListAsk = { whole: boolean; parts: readonly string[]; more: boolean }
 
 export type BotItemsListLoadOptions = {
-  /** A value to show while the read goes on (a host before `closedLimit` pages down the depth): its
-   *  first page, with the rows loaded before it below that page kept until theirs land. */
-  show?: (value: BotItemsListRead) => void
   /** False once nothing will show the value, so no further call is made for it. */
   live?: () => boolean
-  /** A host before `closedLimit` is paged down on every whole read, not only once its first page
-   *  moves (the chat-filtered list always read its loaded pages again). */
+  /** A whole read pages down the loaded depth every time, not only once its first page moves (the
+   *  chat-filtered list always read its loaded pages again). */
   pageUnmoved?: boolean
 }
 
@@ -36,7 +31,7 @@ export async function loadBotItemsList(
   ask: BotItemsListAsk,
   options: BotItemsListLoadOptions = {}
 ): Promise<BotItemsListRead> {
-  const { show, live = () => true } = options
+  const { live = () => true } = options
   const page = BOT_ITEM_LIMITS.listPage
   const parts = previous ? namedParts(ask.parts, previous) : []
   if (!ask.whole && previous && parts.length > 0) {
@@ -62,9 +57,6 @@ export async function loadBotItemsList(
       return more && live()
         ? loadBotItemsList(call, previous, { whole: false, parts: [], more: true }, options)
         : previous
-    }
-    if (show && previous && first.nextClosedCursor && botItemsClosedLoaded(first) < want) {
-      show(reuseEqualJson(previous, withLoadedBelow(first, previous)))
     }
     // The pages below, gathered and joined to the first page once.
     const below: BotItem[] = []
@@ -131,24 +123,6 @@ function namedParts(parts: readonly string[], previous: BotItemsListRead): strin
     }
   }
   return [...uids]
-}
-
-/** `first` with `previous`'s Closed rows below its end, to show until the rest of the depth lands. */
-function withLoadedBelow(first: BotItemsListRead, previous: BotItemsListRead): BotItemsListRead {
-  const end = botItemCursorPlace(first.nextClosedCursor)
-  const held = new Set(first.items.map((item) => item.uid))
-  const below = previous.items.filter(
-    (item) =>
-      (item.status === 'done' || item.status === 'canceled') &&
-      !held.has(item.uid) &&
-      end !== null &&
-      !botItemReaches(item, end)
-  )
-  return {
-    ...first,
-    items: [...first.items, ...below],
-    ...(previous.nextClosedCursor ? { nextClosedCursor: previous.nextClosedCursor } : {})
-  }
 }
 
 function isClosedRow(item: { status: string }): boolean {

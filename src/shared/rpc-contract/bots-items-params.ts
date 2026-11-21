@@ -120,7 +120,7 @@ export const BotItemsOwnerList = z.object({
   /** With `closedCursor`: only that Closed page, not the open items again. */
   closedOnly: OptionalBoolean,
   /** How many Closed items this read returns (default one page): a list's loaded depth in one read. */
-  closedLimit: z.number().int().min(1).max(BOT_ITEM_LIMITS.closedLoadMax).optional(),
+  closedLimit: z.number().int().min(1).max(BOT_ITEM_LIMITS.listPage).optional(),
   /** Only these items (those still in scope), with the counts: what a notice named as changed. */
   uids: z.array(z.string().min(1)).max(BOT_ITEM_LIMITS.listPageMax).optional()
 })

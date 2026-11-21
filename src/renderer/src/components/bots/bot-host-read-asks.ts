@@ -48,13 +48,12 @@ export type BotHostReadOptions<T> = {
   ) => readonly string[] | null
   /** The most parts one read takes; more read whole. */
   maxParts: number
-  /** The value for this ask, built on `previous` (null for a first read); `show` puts up a value
-   *  while the read goes on; `live` turns false once nothing will take it. */
+  /** The value for this ask, built on `previous` (null for a first read); `live` turns false once
+   *  nothing will take it. */
   load: (
     bot: BotRef,
     previous: T | null,
     ask: BotHostReadLoadAsk,
-    show: (value: T) => void,
     live: () => boolean
   ) => Promise<T>
 }

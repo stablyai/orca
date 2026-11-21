@@ -48,8 +48,8 @@ const itemsRead = createBotHostRead<BotItemsRead>(
   {
     partsOf: (scope, botId) => botItemsNoticeParts(scope, botId),
     maxParts: BOT_ITEM_LIMITS.listPageMax,
-    load: (bot, previous, ask, show, live) =>
-      loadBotItemsList(listCall(bot, null), previous, ask, { show, live })
+    load: (bot, previous, ask, live) =>
+      loadBotItemsList(listCall(bot, null), previous, ask, { live })
   }
 )
 
@@ -167,7 +167,7 @@ export function useBotChatItems(
           setRead({ chats, value })
         }
       }
-      loadBotItemsList(call, last, ask, { show: land, live: () => live, pageUnmoved: true })
+      loadBotItemsList(call, last, ask, { live: () => live, pageUnmoved: true })
         .then((value) => {
           if (live) {
             landed = value
