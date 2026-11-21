@@ -26,6 +26,7 @@ import { spawnProcessOnWorkerThread } from '../../../worker-thread-child-process
 import { buildConfiguredProxyEnv } from '../../../../shared/network/network-proxy'
 import { getMainHttpClient } from '../../../network/http-client'
 import { probeCodexAuthPresence } from './codex-auth-presence'
+import { classifyCodexApiKeyUsageRejection } from './codex-api-key-usage-rejection'
 import {
   fetchCodexRateLimitsViaBackend,
   supplementCodexUsageWindows
@@ -267,7 +268,7 @@ async function readCodexRateLimits(
       return options?.signal?.aborted ? abortedCodexRateLimitResult() : supplemented
     }
     if (isCodexAuthError(rpcResult.error)) {
-      return rpcResult
+      return await classifyCodexApiKeyUsageRejection(rpcResult, options)
     }
     rpcFailure = rpcResult
   } catch {
