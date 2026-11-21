@@ -53,14 +53,18 @@ describe.skipIf(process.platform === 'win32')('symlink aliases on the caller fil
           hostId: 'local' as const
         }
 
+  // The table is built during collection, before beforeAll runs, so it holds the spelling names
+  // and each case reads the fixture paths once the setup has made them.
   it.each([
-    ['folder', real, alias],
-    ['folder', alias, real],
-    ['worktree', real, alias],
-    ['worktree', alias, real]
+    ['folder', 'real', 'alias'],
+    ['folder', 'alias', 'real'],
+    ['worktree', 'real', 'alias'],
+    ['worktree', 'alias', 'real']
   ] as const)(
     'picks the deeper %s stored under one spelling from cwd under the other',
-    (kind, cwdBase, innerBase) => {
+    (kind, cwdName, innerName) => {
+      const cwdBase = cwdName === 'real' ? real : alias
+      const innerBase = innerName === 'real' ? real : alias
       const cwd = join(cwdBase, 'hub', 'app', 'src')
       const expected = kind === 'folder' ? 'folder:inner' : 'id:repo::inner'
       expect(select([outer(cwdBase), inner(innerBase, kind)], cwd)).toBe(expected)

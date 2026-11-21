@@ -62,9 +62,7 @@ describe('orca plugin test', () => {
     60_000
   )
 
-  // The fixture links a real node_modules/vitest into the plugin folder, and a directory link
-  // needs the symlink privilege on Windows.
-  it.skipIf(process.platform === 'win32')(
+  it(
     "uses the plugin's own vitest when it has one",
     async () => {
       const dir = await componentsPlugin()
