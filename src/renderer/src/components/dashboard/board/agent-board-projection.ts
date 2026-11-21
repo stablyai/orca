@@ -82,11 +82,29 @@ export function createDashboardBoardProjection() {
         const positions = indexes[bucket].sort(
           (a, b) => cards[b].stateChangedAt - cards[a].stateChangedAt
         )
-        return {
-          indexes: positions,
-          paneKeys: positions.map((i) => cards[i].paneKey),
-          subagentCounts: positions.map((i) => cards[i].subagents?.length ?? 0)
+        const prior = lanes?.[bucket]
+        const sameLength = prior !== undefined && positions.length === prior.indexes.length
+        const paneKeyAt = (index: number) => cards[index].paneKey
+        const subagentCountAt = (index: number) => cards[index].subagents?.length ?? 0
+        // Row indexes can shift without changing the virtualizer's ordered keys or estimates.
+        const paneKeys =
+          sameLength && positions.every((index, i) => paneKeyAt(index) === prior.paneKeys[i])
+            ? prior.paneKeys
+            : positions.map(paneKeyAt)
+        const subagentCounts =
+          sameLength &&
+          positions.every((index, i) => subagentCountAt(index) === prior.subagentCounts[i])
+            ? prior.subagentCounts
+            : positions.map(subagentCountAt)
+        if (
+          prior &&
+          paneKeys === prior.paneKeys &&
+          subagentCounts === prior.subagentCounts &&
+          positions.every((index, i) => index === prior.indexes[i])
+        ) {
+          return prior
         }
+        return { indexes: positions, paneKeys, subagentCounts }
       }
       lanes = {
         attention: lane('attention'),
