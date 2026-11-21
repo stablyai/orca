@@ -9,11 +9,11 @@ import {
   buildRuntimeMobileBrowserProjection,
   buildRuntimeMobileEditorDraftsProjection,
   buildRuntimeMobileOpenFilesProjection,
-  buildRuntimeMobileTabsProjection,
   getBrowserPagesByWorkspace,
   getBrowserTabsByWorktree
 } from './sync-projections'
-import { resolveMobileTerminalTheme } from './mobile-terminal-theme'
+import { buildRuntimeMobileTabsProjection } from './mobile-tabs-projection'
+import { resolveMobileTerminalTheme } from '../../../../shared/terminal-themes/mobile-terminal-theme'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AppState } from '@/store/types'
 import type { RuntimeMobileSessionSyncKey } from './types'
@@ -103,7 +103,7 @@ export function getRuntimeMobileSessionSyncKey(
       state.settings === previousState.settings &&
       previousKey.systemPrefersDark === themeSystemPrefersDark
         ? previousKey.terminalThemeProjection
-        : JSON.stringify(resolveMobileTerminalTheme(state, systemPrefersDark) ?? null),
+        : JSON.stringify(resolveMobileTerminalTheme(state.settings, systemPrefersDark) ?? null),
     tabsProjection:
       canReusePrevious && state.tabsByWorktree === previousState.tabsByWorktree
         ? previousKey.tabsProjection

@@ -42,6 +42,8 @@ class OrchestrationDbCore {
   /** Told, with its id, of every change to what places or shows a Dispatch (see worker-status-notice),
    *  by any writer; bots' chats trees and Activity re-read on it. */
   workerStatusListener: ((dispatchId: string | null, change: DispatchRowChange) => void) | undefined
+  /** Set by a crew-notified mutation while it runs, to learn which Dispatches it wrote. */
+  crewDispatchNotice: ((dispatchId: string | null, change: DispatchRowChange) => void) | undefined
   /** Told of the creating chat session whenever one of its Dispatches or workers is written. */
   sessionWorkersListener: ((sessionId: string) => void) | undefined
   /** Told when a paired server's answer for these Dispatches' workers changed; no row was written. */
@@ -72,7 +74,8 @@ class OrchestrationDbCore {
     installWorkerTerminalPriorOwnerIndex(this)
     for (const [table, columns] of [
       ['messages', ['answer_sender_snapshot']],
-      ['federation_relay_items', ['answer_sender_report']]
+      ['federation_relay_items', ['answer_sender_report']],
+      ['message_dispatch_provenance', ['sender_snapshot']]
     ] as const) {
       const existing = new Set(
         this.db
@@ -136,6 +139,7 @@ class OrchestrationDbCore {
         revokeAgentSessionPublicationFences([JSON.stringify(['worker', dispatchId])])
       }
       this.workerStatusListener?.(dispatchId, change)
+      this.crewDispatchNotice?.(dispatchId, change)
       if (dispatchId) {
         this.noteWorkerChanged(dispatchId)
       }
@@ -191,6 +195,9 @@ class OrchestrationDbCore {
 }
 
 export type OrchestrationDb = OrchestrationDbCore & OrchestrationDbMethods
+
+/** Only the connection: what read queries need, so a reader thread's read-only one runs them too. */
+export type OrchestrationDbConnection = Pick<OrchestrationDb, 'db'>
 
 attachOrchestrationDbMethods(OrchestrationDbCore)
 

@@ -1,5 +1,8 @@
 import type { Options as ClaudeAgentSdkOptions } from '@anthropic-ai/claude-agent-sdk'
-import { claudeLaunchServers } from '../../../bots/bot-tools-claude'
+import {
+  CLAUDE_TOOLS_REFUSED_INSTRUCTION,
+  claudeLaunchServers
+} from '../../../bots/bot-tools-claude'
 import type { BotLaunchTools } from '../../../bots/bot-launch-tools'
 import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
 import {
@@ -12,22 +15,29 @@ import {
 } from '../../claude-structured-read-only-options'
 
 /** What a chat adds over the base launch: its instructions, a read-only session's limits, and a
- *  bot's own tools on top of the owner's (a read-only session gets none). */
+ *  bot's own tools on top of the owner's (a read-only session gets none, nor one whose managed
+ *  settings refused them). */
 export async function claudeBotSessionOptions(
   basis: {
     instructions(linkedSkills?: string | null): Promise<string | null>
     readOnly?: ReadOnlySessionMode | null
   },
   linked: readonly LinkedSkillProject[],
-  tools: BotLaunchTools
+  tools: BotLaunchTools,
+  refused: { mcpConfig: boolean }
 ): Promise<Pick<ClaudeAgentSdkOptions, 'systemPrompt' | 'mcpServers'> & ClaudeReadOnlyOptions> {
   // Claude loads every linked project's skills, so the section lists none as unloaded.
-  const instructions = await basis.instructions(linkedSkillsSection(linked, []))
+  const own = await basis.instructions(linkedSkillsSection(linked, []))
+  // Managed settings that refuse --mcp-config would stop Claude starting; it starts without them.
+  const toolsOff = tools.servers.length > 0 && refused.mcpConfig
+  const instructions = toolsOff
+    ? [own, CLAUDE_TOOLS_REFUSED_INSTRUCTION].filter(Boolean).join('\n\n')
+    : own
   return {
     ...(instructions
       ? { systemPrompt: { type: 'preset', preset: 'claude_code', append: instructions } }
       : {}),
     ...(basis.readOnly ? claudeReadOnlyOptions(basis.readOnly) : {}),
-    ...(tools.servers.length > 0 ? { mcpServers: claudeLaunchServers(tools) } : {})
+    ...(tools.servers.length > 0 && !toolsOff ? { mcpServers: claudeLaunchServers(tools) } : {})
   }
 }

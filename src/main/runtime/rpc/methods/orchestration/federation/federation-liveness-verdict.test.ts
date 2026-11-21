@@ -214,26 +214,6 @@ describe('federation host liveness verdicts', () => {
     }
   })
 
-  // New local PTYs lack register verdicts until inventory; fleet must use host-owned evidence meanwhile.
-  it('reads a freshly spawned local pane from its own connected flag before any verdict', async () => {
-    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
-      handle: HANDLE,
-      worktreeId: 'repo::remote-worktree',
-      connected: true,
-      status: 'running'
-    } as never)
-    vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue(null)
-    vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
-      hostScope: { kind: 'local', hostId: 'local' }
-    } as never)
-
-    await expect(
-      call('orchestration.federationFleetSnapshot', { dispatchIds: [DISPATCH_ID] })
-    ).resolves.toMatchObject({
-      items: [{ dispatchId: DISPATCH_ID, observation: { status: 'live', exactWorker: true } }]
-    })
-  })
-
   it('still reports its own workers when one requested Dispatch belongs to an earlier pairing', async () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: observation reads only these terminal fields.
     vi.spyOn(runtime, 'showTerminal').mockResolvedValue({

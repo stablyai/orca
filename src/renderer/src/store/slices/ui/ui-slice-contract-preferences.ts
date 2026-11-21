@@ -131,6 +131,8 @@ export type UISlicePreferences = {
   /** Dragged cap on the sidebar Bots section; null keeps the default 40% cap. */
   sidebarBotsHeight: number | null
   setSidebarBotsHeight: (height: number | null) => void
+  sidebarProjectsFirst: boolean
+  setSidebarProjectsFirst: (projectsFirst: boolean) => void
   syncTaskStatusFromWorkspaceBoard: boolean
   setSyncTaskStatusFromWorkspaceBoard: (enabled: boolean) => void
   /** Transient: the in-window Agent Dashboard companion drawer is open. Not persisted. */

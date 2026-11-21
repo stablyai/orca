@@ -28,6 +28,7 @@ import {
   throwIfBrowserExtensionLoadCancelled
 } from './browser-extension-profile-loads'
 import { removeBrowserExtensionFromSession } from './browser-extension-worker-registration'
+import * as idleKeptState from './browser-extension-idle-kept-state'
 import {
   loadBrowserExtensionIntoSession,
   loadInstalledBrowserExtensionIntoSession
@@ -98,6 +99,7 @@ export function attachBrowserExtensionsToProfileSession(
   registerExtensionPreload(sess)
   attachBrowserExtensionApiHostToSession(sess, profile.id)
   sessionHooks?.attached(sess, profile.id, enabledExtensionIds)
+  const kindFor = idleKeptState.settleKeptStateOnAttach(profile.id, enabledExtensionIds)
   const store = getBrowserExtensionInstallStore()
   const loads = new BrowserExtensionProfileLoads()
   const swept = removeUninstalledBrowserExtensionData(
@@ -119,7 +121,7 @@ export function attachBrowserExtensionsToProfileSession(
           sess,
           profile.id,
           installed,
-          'startup',
+          kindFor(extensionId),
           load
         )
         await sessionHooks?.loaded(sess, profile.id, loaded)
@@ -145,6 +147,7 @@ export function attachBrowserExtensionsToProfileSession(
     .catch(() => {})
     .finally(() => {
       state.loadingExtensions = false
+      idleKeptState.dropUnclaimedBrowserExtensionIdleState(profile.id)
     })
   stateByProfileId.set(profile.id, state)
   profileIdByPartition.set(profile.partition, profile.id)
@@ -184,6 +187,7 @@ export async function detachBrowserExtensionsFromProfileSession(
       await unloadProfileSession(state)
     }
   } finally {
+    idleKeptState.dropBrowserExtensionIdleState({ profileId: profile.id, forgetProfile: true })
     forgetBrowserExtensionActionProfile(profile.id)
     getBrowserExtensionProfileStateStore().forgetProfile(profile.id)
     await Promise.all([
@@ -204,7 +208,7 @@ export async function detachBrowserExtensionsFromAllProfileSessions(): Promise<v
 
 /**
  * A profile with no pages left stops its extensions, as closing a profile's last window does in
- * Chromium; its saved extension data stays. `afterUnload` runs before waiters resume, with whether
+ * Chromium; its saved extension data and session state stay. `afterUnload` runs before waiters resume, with whether
  * an attach asked for the profile meanwhile, so it can reattach.
  */
 export async function unloadBrowserExtensionsFromIdleProfile(
@@ -217,6 +221,7 @@ export async function unloadBrowserExtensionsFromIdleProfile(
   }
   stateByProfileId.delete(profileId)
   profileIdByPartition.delete(state.profile.partition)
+  idleKeptState.beginIdleUnload(profileId, state.session)
   const unloading = unloadProfileSession(state)
     .catch((error: unknown) => {
       console.warn("[browser-extensions] Could not stop an idle profile's extensions:", error)

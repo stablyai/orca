@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   cleanupLegacyCompatibilityDispatcherHarnesses,
   COORDINATOR_HANDLE,
+  counts,
   createHarness,
   currentEvidence,
   CURRENT_COORDINATOR_HANDLE,
@@ -44,10 +45,34 @@ async function takeoverAdoptedRun(harness: LegacyCompatibilityDispatcherHarness)
 }
 
 describe('legacy coordinator fence jurisdiction', () => {
-  it('releases the fence once the adopted Run is unclaimed and its principal is revoked', async () => {
+  it('fences the old coordinator while the adopted Run is claimed and releases it when unclaimed', async () => {
     const harness = createHarness()
     await claimAdoptedRunAsLegacyCoordinator(harness)
     await takeoverAdoptedRun(harness)
+    const { db, adoptedRunId, taskId, dispatchId } = harness
+    const graph = () => ({
+      run: db.getRun(adoptedRunId),
+      tasks: db.listTasks({ runId: adoptedRunId }),
+      dispatch: db.getDispatchContextById(dispatchId),
+      gates: db.listGates({ taskId }),
+      tables: counts(db)
+    })
+    const before = graph()
+
+    const staleWrite = await harness.dispatcher.dispatch(
+      request(
+        'orchestration.taskCreate',
+        { spec: 'stale assignment', run: adoptedRunId, callerTerminalHandle: COORDINATOR_HANDLE },
+        evidence('coordinator'),
+        'claimed-revoked-task-create'
+      )
+    )
+    expect(staleWrite).toMatchObject({
+      ok: false,
+      error: { code: 'legacy_read_only', data: { effectsApplied: false } }
+    })
+    expect(graph()).toEqual(before)
+
     // The new owner moves its pane to another Run, which unbinds the adopted Run.
     const elsewhere = harness.db.createRun({
       objective: 'other work',

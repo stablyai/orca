@@ -11,7 +11,8 @@ import {
   type LegacyClaim,
   type LegacySessionHold
 } from './journal-legacy-content-proof'
-import { assertNoLegacyComparesDue, readLegacyCopiesProofPage } from './journal-legacy-proof-copies'
+import { LEGACY_PROOF_COPIES_TABLE } from './journal-legacy-retirement-state'
+import { assertLegacyStoreReady, readLegacyCopiesProofPage } from './journal-legacy-proof-copies'
 import type Database from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 
@@ -39,8 +40,17 @@ const PROFILE_COLUMNS = new Map(
   JOURNAL_DOMAIN_PROFILE_TABLES.map(({ name, columns }) => [name, new Set<unknown>(columns)])
 )
 const RECOVERY_TABLES = ['journal_repairs', 'journal_imports', 'journal_set_aside']
-const COPIES = CONTENT_TABLES.length + 2
-export type LegacyProofCursor = { table: number; after: string | null; epoch?: string }
+const COPIES = LEGACY_PROOF_COPIES_TABLE
+if (COPIES !== CONTENT_TABLES.length + 2) {
+  throw new Error('legacy proof copies follow the content tables and the claims')
+}
+/** `check`: the first page this launch reads, resumed past the start, checks compares due again. */
+export type LegacyProofCursor = {
+  table: number
+  after: string | null
+  epoch?: string
+  check?: true
+}
 export type LegacySourceSession = {
   sessionId: string
   workspaceId: string
@@ -64,19 +74,9 @@ export function readJournalLegacyProofPage(
   cursor: LegacyProofCursor,
   destination: Database.Database
 ): LegacyProofPage {
-  if (cursor.table === 0 && cursor.after === null) {
-    assertNoLegacyComparesDue(db, destination)
-    for (const { name, columns } of JOURNAL_DOMAIN_PROFILE_TABLES) {
-      const present = new Set(
-        destination
-          .prepare(`PRAGMA table_info(${name})`)
-          .all()
-          .map((column) => column.name)
-      )
-      if (columns.some((column) => !present.has(column))) {
-        throw new Error(`legacy proof requires complete destination table ${name}`)
-      }
-    }
+  // The first page this launch reads checks the store; a resumed one, its compares due again.
+  if (cursor.check || (cursor.table === 0 && cursor.after === null)) {
+    assertLegacyStoreReady(db, destination, !cursor.check)
   }
   return readJournalLegacySource(() => readSourcePage(db, cursor, destination))
 }

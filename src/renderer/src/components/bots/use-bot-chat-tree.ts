@@ -39,7 +39,7 @@ export type BotChatTree = {
   workspaceChats: Record<string, string>
   /** Reads the chat's next 8 finished workers onto its list. */
   loadMore: (chatId: string) => void
-  /** Whether the chats have been read; an older host without the read stays `unsupported`. */
+  /** Whether the chats have been read. */
   state: BotHostReadState
   retry: () => void
 }
@@ -69,15 +69,23 @@ export function useBotChatTree(bot: Bot | null): BotChatTree {
 
   const chats = useMemo(() => {
     const ackOf = new Map(turnPanes.map((paneKey, index) => [paneKey, acks[index] ?? 0]))
+    const entries = read?.chats ?? []
+    const runningKeys = Object.keys(byChat).length
+      ? new Set(entries.flatMap((chat) => chat.running.map((worker) => worker.key)))
+      : undefined
     return orderBotChats(
-      (read?.chats ?? []).map((chat) => {
+      entries.map((chat) => {
         const loaded = byChat[chat.chatId]
         const { turnDone } = chat
         return {
           ...chat,
           // The host can't see this client's acks, so unread is read against them here.
           unread: turnDone ? (ackOf.get(turnDone.paneKey) ?? 0) < turnDone.at : chat.unread,
-          ...(loaded ? { finished: mergeShownFinished(chat.finished, loaded) } : {})
+          ...(loaded
+            ? {
+                finished: mergeShownFinished(chat.finished, loaded, runningKeys)
+              }
+            : {})
         }
       })
     )

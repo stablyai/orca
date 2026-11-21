@@ -268,6 +268,7 @@ export async function sendGroupMessage(args: {
   }
 
   const threadId = params.threadId ?? `thread_${Date.now()}`
+  const senderDispatchId = db.getActiveDispatchForIdentity(from, senderPaneKey)?.id
   const messages = db.insertMessages(
     uniqueRecipients.map((resolution) => ({
       from,
@@ -279,6 +280,7 @@ export async function sendGroupMessage(args: {
       threadId,
       payload: params.payload,
       senderPaneKey,
+      senderDispatchId,
       runId: resolution.runId,
       deliveryContract: legacyWorkerDeliveryContract(
         runtime,

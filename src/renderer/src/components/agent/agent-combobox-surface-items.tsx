@@ -8,7 +8,7 @@ import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agen
 import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import type { NewTabAgentMenuModel } from '@/components/agent/launch-menu/new-tab-agent-menu-model'
 import {
-  chatUnavailableLabel,
+  rowStatusLabel,
   rowId,
   rowLabel,
   rowTitle
@@ -209,30 +209,29 @@ export function SurfaceAgentItems({
             : row.kind === 'chat'
               ? rowTitle(row, agentLabel, t)
               : terminalPickTitle(agentLabel, t),
-          trailing: unavailable ? (
-            <span className="shrink-0 text-muted-foreground">
-              {row.kind === 'chat-unavailable'
-                ? chatUnavailableLabel(row.reason, t)
-                : pendingReason}
-            </span>
-          ) : rowOffersTerminal(model, row) ? (
-            <AgentSurfaceLaunchButton
-              surface="terminal"
-              reason={model.terminalPending ? terminalPendingLabel(t) : undefined}
-              title={terminalPickTitle(agentLabel, t)}
-              aria-pressed={pressed}
-              className={cn(
-                'hover:bg-background [[data-selected=true]_&]:opacity-100',
-                (pressed || armedValue === id) && 'bg-background opacity-100'
-              )}
-              // Keeps focus in the search box; the click picks the CLI, not the row.
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={(event) => {
-                event.stopPropagation()
-                onPick(row.agent, 'terminal')
-              }}
-            />
-          ) : null
+          trailing:
+            unavailable || rowStatusLabel(row, t) ? (
+              <span className="shrink-0 text-muted-foreground">
+                {rowStatusLabel(row, t) ?? pendingReason}
+              </span>
+            ) : rowOffersTerminal(model, row) ? (
+              <AgentSurfaceLaunchButton
+                surface="terminal"
+                reason={model.terminalPending ? terminalPendingLabel(t) : undefined}
+                title={terminalPickTitle(agentLabel, t)}
+                aria-pressed={pressed}
+                className={cn(
+                  'hover:bg-background [[data-selected=true]_&]:opacity-100',
+                  (pressed || armedValue === id) && 'bg-background opacity-100'
+                )}
+                // Keeps focus in the search box; the click picks the CLI, not the row.
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onPick(row.agent, 'terminal')
+                }}
+              />
+            ) : null
         })}
       </React.Fragment>
     )

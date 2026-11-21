@@ -3,6 +3,7 @@ import type { Bot } from '../../../../../shared/bot-types'
 import type { BotShareCandidateSummary } from '../../../../../shared/bots/bot-package'
 import type { BotShareFlagSpot } from './bot-share-flags'
 import type { BotShareSelection } from './bot-share-rpc'
+import { BOT_SHARE_MAX_PICKS } from '../../../../../shared/rpc-contract/bots-share-params'
 
 export type BotShareList =
   | 'skills'
@@ -36,4 +37,9 @@ export function pickedOf(names: readonly string[] | undefined, all: readonly str
 
 export function toggled(picked: readonly string[], name: string, on: boolean): string[] {
   return on ? [...picked, name] : picked.filter((entry) => entry !== name)
+}
+
+/** Every memory file a share can carry: all of them, or the first BOT_SHARE_MAX_PICKS when there are more. */
+export function allMemory(notes: readonly { topic: string }[]): string[] {
+  return notes.slice(0, BOT_SHARE_MAX_PICKS).map((note) => note.topic)
 }

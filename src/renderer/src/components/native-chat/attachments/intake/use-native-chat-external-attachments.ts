@@ -28,6 +28,7 @@ import type {
 } from '../uploads/native-chat-attachment-owner'
 import {
   attachNativeChatSessionAttachmentPaths,
+  attachNativeChatStagedAgentPaths,
   reserveNativeChatAttachmentChips
 } from './native-chat-session-attachment-drop'
 import type {
@@ -58,7 +59,7 @@ export type UseNativeChatExternalAttachmentsArgs = {
   setNotice: (notice: string | null) => void
 }
 
-/** Upload client-local files to the owning agent’s store or SSH .orca/drops before referencing them. */
+/** Upload client-local files to the owning agent’s store or its worktree's .orca/drops before referencing them. */
 export function useNativeChatExternalAttachments({
   terminalTabId,
   draftScopeKey,
@@ -159,7 +160,7 @@ export function useNativeChatExternalAttachments({
         if (owner.kind === 'not-ready') {
           return owner.notice ?? nativeChatWorktreeNotReadyNotice()
         }
-        if (owner.kind === 'remote') {
+        if (owner.kind === 'remote' && !owner.staging) {
           return nativeChatLocalAttachmentUnsupportedNotice()
         }
         // The picker shares the drop limit without partially attaching a batch.
@@ -174,6 +175,18 @@ export function useNativeChatExternalAttachments({
           await attachNativeChatSessionAttachmentPaths({
             pending: reserved,
             owner,
+            chips,
+            options,
+            isAbandoned: abandoned,
+            ownerStillCurrent,
+            setNotice
+          })
+          return
+        }
+        if (owner.kind === 'remote' && owner.staging) {
+          await attachNativeChatStagedAgentPaths({
+            pending: reserved,
+            staging: owner.staging,
             chips,
             options,
             isAbandoned: abandoned,
@@ -200,6 +213,8 @@ export function useNativeChatExternalAttachments({
         admitted: destination !== undefined,
         refusal,
         run,
+        // Staged files live on the agent's host, so a remote terminal may take them.
+        serverOwned: owner.kind === 'remote',
         claimedPaths,
         preparationConsumer:
           owner.kind === 'local' && owner.structuredSessionId
@@ -225,7 +240,7 @@ export function useNativeChatExternalAttachments({
           setNotice(notice)
           return
         }
-        await intake.run(reserveNativeChatAttachmentChips(intake.chips, paths))
+        await intake.run(reserveNativeChatAttachmentChips(intake.chips, paths, intake.serverOwned))
       }
       // Deferred operations own their files until they apply or cancel.
       const deliver: CapturedNativeChatDrop = (paths) =>

@@ -19,7 +19,6 @@ import { isPwshAvailableAsync } from '../pty/shell-startup/pwsh'
 import { isWslAvailableAsync } from '../wsl/discovery/wsl-availability'
 import { listWslDistrosAsync } from '../wsl/discovery/distro-catalog'
 import { isGitBashAvailable } from '../pty/shell-startup/git-bash'
-import { setUnreadDockBadgeCount } from '../dock/unread-badge'
 import { destroySystemTray, rebuildSystemTrayMenu } from '../tray/system-tray'
 import {
   ensureDefaultFloatingWorkspacePath,
@@ -31,10 +30,8 @@ import {
   markdownDocumentFromFilePath
 } from '../../shared/file-listing/markdown-document-paths'
 import { registerMacSymbolicHotkeysProbeHandler } from './keyboard/macos-symbolic-hotkeys-probe'
-import {
-  registerRendererShutdownCheckpointHandler,
-  type QuitResumeRecordsFor
-} from './renderer-shutdown-checkpoint'
+import { registerRendererShutdownCheckpointHandler } from './renderer-shutdown-checkpoint'
+import type { RendererShutdownCheckpointService } from '../core-desktop/renderer-shutdown-checkpoint-service'
 import { readMacKeyboardLayoutSnapshot } from './keyboard/macos-keyboard-layout-snapshot'
 import { registerMacKeyboardLayoutChangeNotifications } from './keyboard/macos-keyboard-layout-change-notifications'
 import { isProfileStateSaveDelayed } from '../startup/profile-startup/profile-state-save-delay'
@@ -46,11 +43,8 @@ import { getWindowsAdministratorStatus } from '../windows/windows-administrator-
 import { getMacosUpgradeSupport } from '../macos-update-requirement/macos-upgrade-support'
 import { resolveWslMappedDrivePath } from '../wsl/filesystem/wsl-mapped-drive-share'
 
-import type { ReconnectFactsFor } from '../persistence/window-save-view'
-
 type RegisterAppHandlersOptions = {
-  quitResumeRecordsFor?: QuitResumeRecordsFor
-  reconnectFactsFor?: ReconnectFactsFor
+  rendererCheckpoint: RendererShutdownCheckpointService
   onBeforeRelaunch?: () => void | Promise<void>
   /** Only for app:relaunch, whose app.exit(0) is committed and skips will-quit. */
   onBeforeRelaunchExit?: () => void | Promise<void>
@@ -127,12 +121,8 @@ function resolveDevFeatureWallAssetDir(): string {
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]
 }
 
-export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions = {}): void {
-  registerRendererShutdownCheckpointHandler(
-    store,
-    options.quitResumeRecordsFor,
-    options.reconnectFactsFor
-  )
+export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions): void {
+  registerRendererShutdownCheckpointHandler(options.rendererCheckpoint)
   registerMacKeyboardLayoutChangeNotifications()
   ipcMain.handle('app:isProfileStateSaveDelayed', isProfileStateSaveDelayed)
   ipcMain.handle('app:getSystemLanguageDetection', (_event, preferences: unknown) => {
@@ -239,10 +229,6 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   })
 
   registerMacSymbolicHotkeysProbeHandler(readCommandStdout)
-
-  ipcMain.handle('app:setUnreadDockBadgeCount', (_event, count: number) => {
-    setUnreadDockBadgeCount(Number.isFinite(count) ? count : 0)
-  })
 
   ipcMain.handle('app:getFloatingTerminalCwd', (_event, args?: FloatingTerminalCwdRequest) =>
     resolveFloatingTerminalCwd(store, args)

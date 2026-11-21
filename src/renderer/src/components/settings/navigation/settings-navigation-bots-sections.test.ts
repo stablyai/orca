@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { Bot } from '../../../../../shared/bot-types'
-import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
   getSettingsNavGroupDefinitionsForSearch,
-  getSettingsSectionId,
-  SETTINGS_NAV_GROUPS
+  getSettingsSectionId
 } from '@/components/settings/navigation/settings-navigation-foundations'
 import { matchesSettingsSearch } from '@/components/settings/search/settings-search'
 import { isSettingsNavigationTarget } from '@/components/settings/navigation/settings-navigation-types'
@@ -35,36 +33,6 @@ function bot(id: string, name: string): Bot {
 const BOTS = [bot('b1', 'Reviewer'), bot('b2', 'Scout')]
 
 describe('bots settings navigation', () => {
-  it('lists the Bots setup page and each bot above Projects', () => {
-    const repo = {
-      id: 'repo-1',
-      path: '/repo',
-      displayName: 'Repo',
-      badgeColor: '#000',
-      addedAt: 0
-    } satisfies Repo
-    const sections = buildSettingsNavigationMetadata({
-      isMac: true,
-      isWindows: false,
-      isWebClient: false,
-      repos: [repo],
-      bots: [{ ...BOTS[0], avatar: '🦉' }, BOTS[1]]
-    })
-    const firstBot = sections.findIndex((section) => section.group === 'bots')
-    const firstProject = sections.findIndex((section) => section.id.startsWith('repo-'))
-
-    expect(sections.find((section) => section.id === 'bots')?.group).toBe('setup')
-    expect(SETTINGS_NAV_GROUPS.at(-1)?.id).toBe('bots')
-    expect(firstBot).toBeGreaterThan(
-      sections.findIndex((section) => section.group === 'experimental')
-    )
-    expect(firstProject).toBe(firstBot + 2)
-    expect(sections.slice(firstBot, firstProject)).toMatchObject([
-      { id: 'bot-b1', title: 'Reviewer', bot: { avatar: '🦉' } },
-      { id: 'bot-b2', title: 'Scout', bot: { id: 'b2' } }
-    ])
-  })
-
   it("finds a bot's page by search and keeps it in the Bots group", () => {
     const sections = buildSettingsNavigationMetadata({
       isMac: true,

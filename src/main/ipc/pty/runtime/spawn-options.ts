@@ -85,6 +85,7 @@ export async function buildRuntimePtySpawnOptions(
     sessionId: ctx.sessionId,
     spawnIntent: ctx.preAdoptedStablePane ? undefined : args.spawnIntent,
     historyIsolationEnabled,
+    headlessHost: ctx.deps.runtime?.servesWithoutWindow?.() === true,
     getSettings: ctx.deps.getSettings,
     store: ctx.deps.store,
     claudeAuth: ctx.claudeAuth

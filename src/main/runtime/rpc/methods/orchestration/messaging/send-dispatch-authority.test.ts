@@ -296,6 +296,7 @@ describe('orchestration.send to a settled Dispatch mailbox', () => {
         subject: 'One more thing'
       })
     ).rejects.toMatchObject({ code: 'dispatch_inactive' })
+    expect(db.getAllMessagesForHandle(`dispatch:${dispatch.id}`)).toEqual([])
   })
 
   it('names the Run a settled assignee now coordinates, not the sender Run', async () => {
@@ -328,24 +329,6 @@ describe('orchestration.send to a settled Dispatch mailbox', () => {
     expect(await call('orchestration.runShow', { id: leadRun.id })).toMatchObject({
       run: { id: leadRun.id }
     })
-  })
-
-  it('does not write an undeliverable message row', async () => {
-    setup()
-    const task = db.createTask({ spec: 'worker that already reported' })
-    const dispatch = createRootDispatch(db, task.id, 'term_worker')
-    db.completeDispatch(dispatch.id)
-
-    await call('orchestration.send', {
-      from: 'term_coord',
-      to: `dispatch:${dispatch.id}`,
-      subject: 'One more thing'
-    }).catch(() => undefined)
-
-    const stranded = db.db
-      .prepare('SELECT COUNT(*) AS count FROM messages WHERE to_handle = ?')
-      .get(`dispatch:${dispatch.id}`) as { count: number }
-    expect(stranded.count).toBe(0)
   })
 })
 

@@ -8,10 +8,13 @@ export function RunTargetRow({
   icon,
   label,
   detail,
+  description,
   armed,
   current,
   optionId,
   dimmed = false,
+  disabled = false,
+  keyboardFocusable = false,
   submenu = false,
   stacked = true,
   onArm,
@@ -21,11 +24,14 @@ export function RunTargetRow({
   icon: React.ReactNode
   label: string
   detail: string
+  description?: string
   armed: boolean
   current: boolean
   optionId: string | undefined
   /** Not-ready hosts are dormant, not errors — quiet them without disabling. */
   dimmed?: boolean
+  disabled?: boolean
+  keyboardFocusable?: boolean
   /** Opens a nested list, so it gets a trailing chevron. */
   submenu?: boolean
   /** Two-line card: label over description, for rows that need explaining. */
@@ -39,12 +45,28 @@ export function RunTargetRow({
       role="option"
       id={optionId}
       aria-selected={armed}
+      aria-disabled={disabled || undefined}
+      aria-description={description}
+      title={description}
+      tabIndex={keyboardFocusable ? -1 : undefined}
       // option supports aria-haspopup but not aria-expanded.
       aria-haspopup={submenu ? 'menu' : undefined}
       data-armed={armed || undefined}
       data-current={current ? 'true' : undefined}
       onMouseDown={(event) => event.preventDefault()}
       onMouseMove={onArm}
+      onFocus={keyboardFocusable ? onArm : undefined}
+      onKeyDown={
+        keyboardFocusable
+          ? (event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                event.stopPropagation()
+                onCommit()
+              }
+            }
+          : undefined
+      }
       onClick={onCommit}
       className={cn(
         'flex cursor-default gap-2 rounded-sm px-2 text-sm',

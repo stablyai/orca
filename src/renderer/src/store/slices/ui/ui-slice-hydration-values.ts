@@ -11,8 +11,6 @@ import { normalizeContextualTourIds } from '../../../../../shared/feature-educat
 import type { UISlice } from './ui-slice-contract'
 import {
   sanitizePersistedSidebarWidth,
-  sanitizeAcknowledgedAgentsByPaneKey,
-  sanitizeActivityClearedAtByPaneKey,
   sanitizePaneKeyTimestampRecord
 } from './ui-slice-hydration-sanitizers'
 
@@ -180,10 +178,8 @@ export function hydrateAgentReadState(
   'acknowledgedAgentsByPaneKey' | 'activityClearedAtByPaneKey' | 'manuallyUnreadTurnsByPaneKey'
 > {
   return {
-    acknowledgedAgentsByPaneKey: sanitizeAcknowledgedAgentsByPaneKey(
-      ui.acknowledgedAgentsByPaneKey
-    ),
-    activityClearedAtByPaneKey: sanitizeActivityClearedAtByPaneKey(ui.activityClearedAtByPaneKey),
+    acknowledgedAgentsByPaneKey: sanitizePaneKeyTimestampRecord(ui.acknowledgedAgentsByPaneKey),
+    activityClearedAtByPaneKey: sanitizePaneKeyTimestampRecord(ui.activityClearedAtByPaneKey),
     manuallyUnreadTurnsByPaneKey: sanitizePaneKeyTimestampRecord(ui.manuallyUnreadTurnsByPaneKey)
   }
 }

@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../orchestration-db'
 import { generateId } from '../generated-id'
-import { RemoteOwnedWorkerState } from '../../../../../shared/orchestration/remote-owned-wire'
+import {
+  RemoteOwnedWorkerMail,
+  RemoteOwnedWorkerState
+} from '../../../../../shared/orchestration/remote-owned-wire'
 import type { PeerRunRow } from './peer-run-store'
 
 describe("a paired Orca's Run: its queue home", () => {
@@ -58,5 +61,45 @@ describe("a paired Orca's Run: its queue home", () => {
     const after = pending()
     expect(after.length).toBeGreaterThan(0)
     expect(after.every((item) => item.sequence > throughOld)).toBe(true)
+  })
+
+  it("carries home only the Dispatch of this Run's own worker with its mail", () => {
+    const own = start()
+    const local = db.createRun({
+      objective: 'local',
+      coordinatorHandle: 'term_local',
+      coordinatorPaneKey: null
+    })
+    const foreign = db.createDispatchContext({
+      taskId: db.createTask({ runId: local.id, spec: 'Local work' }).id,
+      assigneeHandle: 'term_local_worker',
+      creator: { kind: 'terminal', handle: 'term_local' },
+      maxDepth: 5
+    })
+    const to = `run:${peerRun.run_id}`
+    db.insertMessage({
+      id: 'msg_own',
+      from: 'term_w',
+      to,
+      subject: 'mine',
+      senderDispatchId: own.dispatch.id,
+      runId: peerRun.run_id
+    })
+    db.insertMessage({
+      id: 'msg_foreign',
+      from: 'term_local_worker',
+      to,
+      subject: 'theirs',
+      senderDispatchId: foreign.id,
+      runId: local.id
+    })
+
+    const mail = pending()
+      .filter((item) => item.kind === 'worker_mail')
+      .map((item) => RemoteOwnedWorkerMail.parse(JSON.parse(item.payload)))
+    expect(mail.map((m) => [m.id, m.dispatchId, m.taskId])).toEqual([
+      ['msg_own', own.dispatch.id, own.dispatch.task_id],
+      ['msg_foreign', null, null]
+    ])
   })
 })

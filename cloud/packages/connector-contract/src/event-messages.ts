@@ -130,7 +130,9 @@ export const ConnectorReplyEventSchema = z
       .optional(),
     failure: OptionalConnectorFailureSchema,
     links: OptionalWorkLinksSchema,
-    turnId: EpochMsSchema.optional()
+    turnId: EpochMsSchema.optional(),
+    // How long the answered turn ran, by the machine's clock; shown under the answer.
+    tookMs: z.number().int().positive().optional()
   })
   .refine((reply) => reply.deliveryIds.includes(reply.answerDeliveryId))
   .refine((reply) => (reply.outcome === 'answered') === (reply.prose !== undefined))

@@ -287,7 +287,7 @@ export function AppearanceThemeSlotSelect({
         >
           {t(
             'auto.components.settings.AppearanceThemeControl.useTerminalTheme',
-            'Use its terminal colors'
+            'Use theme colors'
           )}
         </Button>
       ) : null}
