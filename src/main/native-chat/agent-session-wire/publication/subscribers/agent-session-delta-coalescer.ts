@@ -109,6 +109,8 @@ export function createAgentSessionDeltaCoalescer(
       return false
     }
     stream.dirty = false
+    // A growth save starts the quiet-save backoff over, so the next pause still saves within a second.
+    stream.quietMs = deps.idle?.ms ?? 0
     return true
   }
 

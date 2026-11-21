@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createAgentSessionDeltaCoalescer } from '../agent-session-delta-coalescer'
 
 /** Drive scheduling without wall-clock timing. */
@@ -49,5 +49,30 @@ describe('agent-session delta coalescer', () => {
     reject = false
     expect(instance.append('second', 'new stream')).toBe(true)
     expect(emitted).toEqual([['first', 'preserve me']])
+  })
+
+  it('saves the next pause within its quiet time after a growth save', () => {
+    const clock = manualClock()
+    let now = 0
+    const spy = vi.spyOn(performance, 'now').mockImplementation(() => now)
+    const quietSaves: string[] = []
+    let growth = false
+    const instance = createAgentSessionDeltaCoalescer({
+      schedule: clock.schedule,
+      shouldEmit: () => growth,
+      emit: () => true,
+      idle: { ms: 1000, run: (_key, text) => quietSaves.push(text) }
+    })
+    instance.append('reply', 'a')
+    now = 1000
+    clock.fire()
+    instance.append('reply', 'b')
+    growth = true
+    clock.fire()
+    growth = false
+    now = 2000
+    clock.fire()
+    expect(quietSaves).toEqual(['a', 'ab'])
+    spy.mockRestore()
   })
 })

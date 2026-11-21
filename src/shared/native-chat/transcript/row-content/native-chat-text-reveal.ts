@@ -43,21 +43,40 @@ function displayFramePeriod(gaps: readonly number[]): number {
   const quartile = sorted[Math.floor(sorted.length / 4)]!
   return Math.min(MAX_FRAME_MS, Math.max(MIN_FRAME_MS, quartile))
 }
+/** Recent steps whose render cost sets the spacing; their median, so one unrelated hitch doesn't. */
+const STEP_COST_SAMPLES = 3
+
+function medianStepCost(costs: readonly number[]): number {
+  const sorted = [...costs].sort((a, b) => a - b)
+  return sorted[Math.floor((sorted.length - 1) / 2)] ?? 0
+}
 /** However slowly the reply renders, it still moves at least this often. */
 const MAX_STEP_MS = 6000
 /** Hidden windows get no animation frames, so a timer steps them a little after each step is due. */
 const HIDDEN_STEP_MS = 100
 
-/** A reveal frame clock that steps at most every `stepMs`, and slower when the thread is busy: the
- *  time frames ran late since the last step, the step's own render included, is kept to at most
- *  `busyShare` of the time between steps. Restarting a request keeps the spacing. */
+/** A reveal frame clock that steps at most every `stepMs`, and slower when a step is slow to draw:
+ *  a step's cost (how late the frames right after it ran, until one came on time) is kept to at
+ *  most `busyShare` of the time between steps. Lateness elsewhere is the thread's, not the reply's,
+ *  so it never slows the reveal. Restarting a request keeps the spacing. */
 export function nativeChatRevealStepFrames(
   stepMs: number,
   busyShare = 1
 ): NativeChatTextRevealFrames {
   let steppedAt = -Infinity
   let spacing = stepMs
-  let busy = 0
+  const stepCosts: number[] = []
+  /** The last step's cost so far, while the frames after it are still running late. */
+  let measuring: number | undefined
+  const settleStep = (): void => {
+    if (measuring !== undefined) {
+      stepCosts.push(measuring)
+      if (stepCosts.length > STEP_COST_SAMPLES) {
+        stepCosts.shift()
+      }
+      measuring = undefined
+    }
+  }
   let lastFrame: number | undefined
   let activeAt = -Infinity
   const gaps: number[] = []
@@ -82,10 +101,11 @@ export function nativeChatRevealStepFrames(
       }
       const fire = (at: number): void => {
         cancel(id)
-        spacing = Math.min(MAX_STEP_MS, Math.max(stepMs, busy / busyShare))
+        settleStep()
+        spacing = Math.min(MAX_STEP_MS, Math.max(stepMs, medianStepCost(stepCosts) / busyShare))
         steppedAt = at
         activeAt = at
-        busy = 0
+        measuring = 0
         step()
       }
       const onFrame = (frameStart: number): void => {
@@ -97,8 +117,14 @@ export function nativeChatRevealStepFrames(
           }
           period = displayFramePeriod(gaps)
           // Only time past the display's own frame is late; a 30 Hz frame is not busy.
-          if (gaps.length >= 3) {
-            busy += Math.max(0, gap - period)
+          const late = gaps.length >= 3 ? Math.max(0, gap - period) : 0
+          if (measuring !== undefined) {
+            // Under half a frame late is the display's jitter, so the step has drawn.
+            if (late > period / 2) {
+              measuring += late
+            } else {
+              settleStep()
+            }
           }
         }
         lastFrame = frameStart

@@ -64,6 +64,12 @@ describe('the reveal clock on an idle thread', () => {
   })
 })
 
+it('keeps a plain reply moving through one unrelated slow frame', () => {
+  const gaps = spacings(stepTimes((frame) => (frame === 200 ? 400 : 1000 / 60), 600))
+  // Only the step the hitch itself delayed waits longer; none after it backs off.
+  expect(gaps.filter((gap) => gap > 100)).toHaveLength(1)
+})
+
 it('still spaces its steps out when each step is slow to draw', () => {
   const gaps = spacings(stepTimes(() => 1000 / 60, 600, 200))
   expect(Math.max(...gaps)).toBeGreaterThan(1000)
