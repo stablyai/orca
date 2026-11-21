@@ -275,11 +275,14 @@ export function refreshAgentModelCatalogListing(input: {
       }
       span.end()
     } catch (error) {
+      if (error instanceof AgentModelCatalogListingStoppedError) {
+        span.end()
+        return
+      }
       span.fail(error instanceof Error ? error : String(error))
       if (
         current() &&
-        !stopped.signal.aborted &&
-        !(error instanceof AgentModelCatalogListingStoppedError)
+        !stopped.signal.aborted
       ) {
         flush()
         if (entry && lastSuccess) {

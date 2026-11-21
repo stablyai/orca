@@ -85,13 +85,20 @@ export class AgentModelCatalogFailures {
 
   /** Failed probes replace prior verdicts without inventing unavailability reasons. */
   probeFailed(fingerprint: string, agent: string, error: unknown): void {
+    const unavailable: AgentSessionUnavailable | undefined =
+      error instanceof AgentModelCatalogUnavailableError
+        ? error.unavailable
+        : typeof error === 'object' &&
+            error !== null &&
+            'executableMissing' in error &&
+            (error as { executableMissing?: boolean }).executableMissing === true
+          ? { reason: 'cliMissing' }
+          : undefined
     this.failures.set(fingerprint, {
       agent,
       detail: error instanceof Error ? error.message : String(error),
       failedAt: this.now(),
-      ...(error instanceof AgentModelCatalogUnavailableError
-        ? { unavailable: error.unavailable }
-        : {})
+      ...(unavailable ? { unavailable } : {})
     })
   }
 }
