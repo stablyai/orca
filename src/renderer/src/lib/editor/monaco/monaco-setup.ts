@@ -8,6 +8,7 @@ import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
 import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
 import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
+import { registerTokenRefinements } from '../../monaco-languages/monarch-token-refinement-languages'
 import { registerAstroLanguage } from '../../monaco-languages/register-astro'
 import { registerCMakeLanguage } from '../../monaco-languages/register-cmake'
 import { registerCudaLanguage } from '../../monaco-languages/register-cuda'
@@ -75,6 +76,7 @@ monacoTS.javascriptDefaults.setCompilerOptions({
 })
 
 runMonacoSetupSteps([
+  ['token refinements', () => registerTokenRefinements(monaco)],
   ['Vue language registration', () => registerVueLanguage(monaco)],
   ['Svelte language registration', () => registerSvelteLanguage(monaco)],
   ['Astro language registration', () => registerAstroLanguage(monaco)],
