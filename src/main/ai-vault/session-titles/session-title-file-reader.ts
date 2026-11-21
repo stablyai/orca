@@ -6,6 +6,7 @@ import {
   type AiVaultSessionTitlesResult
 } from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { parseAgentSessionFileCached } from '../parse-cache/session-scanner-parse-cache'
+import { generatedSessionTitle } from '../session-scanner-accumulator'
 
 import {
   codexHomeFromSessionFilePath,
@@ -107,7 +108,9 @@ async function readOneTitle(
       signal?.aborted ||
       session?.agent !== request.agent ||
       session.sessionId !== request.sessionId ||
-      !session.title.trim()
+      !session.title.trim() ||
+      // An id placeholder is not a name; leave the tab on the agent's live title.
+      session.title === generatedSessionTitle(session.agent, session.sessionId)
     ) {
       return null
     }
