@@ -99,7 +99,9 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     provider: ActiveRateLimitProvider,
     limits: ProviderRateLimits
   ): number | null {
-    return provider === 'claude' ? this.lastClaudeCheckCompletedAt : limits.updatedAt
+    return provider === 'claude' && limits.status !== 'unavailable'
+      ? this.lastClaudeCheckCompletedAt
+      : limits.updatedAt
   }
 
   /** Whether a failing provider's backoff allows another automatic read now. */

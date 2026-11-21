@@ -24,6 +24,8 @@ import {
 import { isPathInsideOrEqual } from '../../../../../shared/file-access/cross-platform-path'
 import { defineMethod, defineStreamingMethod } from '../../core'
 import { homedir } from 'node:os'
+import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
+import { isTuiAgentEnabled } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import {
   isManagedAgentCli,
   MANAGED_AGENT_CLI_IDS,
@@ -152,6 +154,9 @@ function acpInstallation(
   return new ManagedRuntimeInstallation(agent, managedRuntime, {
     dataDirectory,
     program: 'server',
+    updatesEnabled: () =>
+      !isTuiAgent(agent) ||
+      isTuiAgentEnabled(agent, runtime.requireStore().getSettings().disabledTuiAgents),
     findExternal,
     fence,
     revisions
@@ -181,8 +186,11 @@ function agentCliInstallation(
   return new ManagedRuntimeInstallation(agent, managedRuntime, {
     dataDirectory,
     program: 'cli',
+    available: managedAgentCli(agent).available,
     findExternal,
-    updatesEnabled: () => managedCopyMayRun(agent, runtime),
+    updatesEnabled: () =>
+      isTuiAgentEnabled(agent, runtime.requireStore().getSettings().disabledTuiAgents) &&
+      managedCopyMayRun(agent, runtime),
     onRelease: (folder) => rememberManagedAgentRelease(agent, folder),
     // No launch gate tracks these processes; stopping the agent's chats first is the closest fence.
     fence: (work) => stopStructuredAgentChats(agent, managedRuntime.label).then(work),

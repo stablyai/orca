@@ -1,3 +1,4 @@
+import { defaultOnStatusBarFlags } from '../../../shared/status-bar/status-bar-defaults'
 import { normalizeGitGraphFilters } from '../../../shared/git/history/git-graph-filters'
 import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-listing/file-explorer-display-root'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
@@ -110,6 +111,7 @@ export function updatePersistedUI(
   const nextUI = {
     ...currentUI,
     ...durableUpdates,
+    ...(durableUpdates.statusBarItems !== undefined ? defaultOnStatusBarFlags() : {}),
     workspaceCleanup: mergeWorkspaceCleanupUIState(
       currentUI.workspaceCleanup,
       durableUpdates.workspaceCleanup

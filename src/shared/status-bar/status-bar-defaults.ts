@@ -62,9 +62,14 @@ export function applyDefaultOnStatusBarItems(
       items = [...items, item]
     }
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: one entry per flag.
-  const flags = Object.fromEntries(
-    DEFAULT_ON_STATUS_BAR_ITEMS.map(([flag]) => [flag, true])
-  ) as Record<DefaultOnStatusBarFlag, true>
+  const flags = defaultOnStatusBarFlags()
   return { items, flags, needsSave }
+}
+
+export function defaultOnStatusBarFlags(): Record<DefaultOnStatusBarFlag, true> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: one entry per flag.
+  return Object.fromEntries(DEFAULT_ON_STATUS_BAR_ITEMS.map(([flag]) => [flag, true])) as Record<
+    DefaultOnStatusBarFlag,
+    true
+  >
 }

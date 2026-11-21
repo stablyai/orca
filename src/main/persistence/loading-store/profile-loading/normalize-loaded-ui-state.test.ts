@@ -1,3 +1,4 @@
+import { updatePersistedUI } from '../../applying-settings/ui-state-update'
 import { homedir } from 'node:os'
 import { expect, it } from 'vitest'
 import { getDefaultPersistedState } from '../../../../shared/orca-profiles/constants'
@@ -22,25 +23,20 @@ function loadUi(ui: Partial<PersistedState['ui']>) {
   )
 }
 
-it('adds Muse on a headless profile that never ran the renderer default-on step', () => {
-  const legacyItems = getDefaultPersistedState(homedir()).ui.statusBarItems.filter(
-    (item) => item !== 'muse' && item !== 'antigravity'
+it('keeps a saved status bar removal across reloads before default migrations have run', () => {
+  const state = getDefaultPersistedState(homedir())
+  updatePersistedUI(
+    {
+      state,
+      removeRetainedBlob: () => {},
+      setActiveView: () => false,
+      getUI: () => state.ui,
+      scheduleSave: () => {},
+      notifyUIChanged: () => {}
+    },
+    { statusBarItems: ['ssh'] }
   )
-  const ui = loadUi({
-    statusBarItems: legacyItems,
-    _portsStatusBarDefaultAdded: true,
-    _kimiStatusBarDefaultAdded: true,
-    _minimaxStatusBarDefaultAdded: true,
-    _grokStatusBarDefaultAdded: true,
-    _cursorStatusBarDefaultAdded: true,
-    _zcodeStatusBarDefaultAdded: true
-  })
-
-  expect(ui.statusBarItems).toEqual([
-    ...legacyItems,
-    'antigravity',
-    'muse'
-  ] satisfies StatusBarItem[])
-  expect(ui._museStatusBarDefaultAdded).toBe(true)
-  expect(ui._antigravityStatusBarDefaultAdded).toBe(true)
+  const ui = loadUi(state.ui)
+  expect(ui.statusBarItems).toEqual(['ssh'] satisfies StatusBarItem[])
+  expect(loadUi(ui).statusBarItems).toEqual(['ssh'] satisfies StatusBarItem[])
 })
