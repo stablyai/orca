@@ -130,9 +130,10 @@ export class ClaudeAgentViewRegistryFile {
       return
     }
     this.unreadMerge = undefined
-    if (merge(saved)) {
+    if (merge(saved) || this.savedDuringRestore) {
       void this.save()
     }
+    this.savedDuringRestore = false
   }
 
   /** Whether memory is on disk, waiting up to `ms` for the restore and the writes in flight. */
@@ -153,7 +154,7 @@ export class ClaudeAgentViewRegistryFile {
       while (this.writing) {
         await this.writing
       }
-      return !this.failed && !this.closed
+      return !this.failed && !this.closed && !this.unreadMerge
     })()
     try {
       return await Promise.race([done, timeout])
@@ -171,7 +172,11 @@ export class ClaudeAgentViewRegistryFile {
   }
 
   save(): Promise<void> {
-    if (this.closed || this.unreadMerge) {
+    if (this.unreadMerge) {
+      this.savedDuringRestore = true // written once the unread file merges
+      return Promise.resolve()
+    }
+    if (this.closed) {
       return this.writing ?? Promise.resolve()
     }
     if (this.restoring) {

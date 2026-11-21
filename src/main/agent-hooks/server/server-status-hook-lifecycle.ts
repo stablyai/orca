@@ -43,8 +43,11 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
   /** Restored entries count only for panes whose hydrated status still shows a live Claude. The
    *  session may lag the registry after a crash; a click still needs the session to match. */
   protected restoreClaudeAgentViews(filePath: string): Promise<void> {
-    // No hydrated rows at all (hooks off, or the status store failed to load) proves nothing dead.
-    const unchecked = !this.statusHooksEnabled || this.state.lastStatusByPaneKey.size === 0
+    // Without hydrated status (hooks off, or the store failed to load) a missing row proves nothing.
+    const unchecked =
+      !this.statusHooksEnabled ||
+      this.statusHydrationFailed ||
+      this.state.lastStatusByPaneKey.size === 0
     return this.claudeAgentViews.restore(
       filePath,
       (view) =>
@@ -68,7 +71,8 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
     emit = true
   ): boolean {
     const committed = super.commitStatusRowMutation(before, after, emit)
-    if (before && (before.paneKey !== after?.paneKey || after.agentPresence?.ended)) {
+    // A row moving to another pane is not its Claude ending; the mod keeps its original pane key.
+    if (before && (!after || after.agentPresence?.ended)) {
       this.claudeAgentViews.forget(before.paneKey, before.providerSession?.id)
     }
     return committed
