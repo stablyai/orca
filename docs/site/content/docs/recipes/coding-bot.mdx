@@ -1,0 +1,27 @@
+---
+title: Investigate and fix a bug with a coding bot
+description: Choose a bot agent, start from the Bug investigation template, and take a reproduced issue through a tested pull request.
+---
+
+The **Bug investigation** template gives your bot a specific job. You give it a report, it sends an agent to reproduce the bug in a new workspace, and it brings the evidence back to your chat. You decide when to write a fix.
+
+## Choose the computer and agent
+
+Use a computer with the project already added to Orca. Install and sign into the coding CLI you intend to use on that computer. If you select a paired server, the bot and its agent run there.
+
+Orca supports Claude, Codex, Grok, OpenCode, OpenCode 2, OMP, Pi, Antigravity, Cursor, Hermes, and GitHub Copilot as bot agents. The agent picker in **New bot** shows what can run on the selected computer. A template supplies the workflow and skills. You can use it with a different supported agent.
+
+## Create the bot
+
+1. Open **New bot**. Before entering a name or purpose, select **Template**.
+2. Under **Coding**, choose **Bug investigation**, then **Use template…**.
+3. Pick the computer, agent, and model. Give the bot a name and keep the `bug-reproduction` skill selected. Select **Create** to open its home chat.
+
+## Take one bug through review
+
+1. In the bot’s home chat, name the Orca project and give a reproducible report. For example, “In the notes project, pasting two lines into a new note drops the second line after saving. Reproduce this in a new workspace and tell me where the text is lost.” You can paste the report directly. For a private issue link, connect the account with access or include the relevant details in the chat.
+2. Check the bot’s report for the workspace, reproduction steps, expected and actual result, and suspected cause. If it reproduced a different problem, correct the steps in the same chat.
+3. Once the report matches, ask for the change you want. For example, “Fix that paste behavior in the investigation workspace. Run the relevant tests and give me the diff and test results.”
+4. Open the worker’s workspace and review the changed files. When you’re ready to publish, ask the bot to push the branch and open a pull request, or publish it from that workspace yourself. Opening a PR requires write access to the destination branch or fork.
+
+For line-by-line feedback on the fix, see [Review an AI diff](/docs/recipes/review-ai-diff).
