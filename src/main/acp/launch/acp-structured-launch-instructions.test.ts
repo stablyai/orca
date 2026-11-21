@@ -398,21 +398,25 @@ describe('ACP launch: standing instructions', () => {
     }
   })
 
-  it('refuses to start DSH when the file it must write is a link it will not follow', async () => {
-    const home = await mkdtemp(join(tmpdir(), 'acp-instructions-dsh-link-'))
-    try {
-      const linked = join(home, 'linked-notes.md')
-      await writeFile(linked, 'Workspace instructions')
-      await symlink(linked, join(home, 'AGENTS.md'))
+  // Windows may refuse to make the link at all, which would fail the setup, not the refusal.
+  it.skipIf(process.platform === 'win32')(
+    'refuses to start DSH when the file it must write is a link it will not follow',
+    async () => {
+      const home = await mkdtemp(join(tmpdir(), 'acp-instructions-dsh-link-'))
+      try {
+        const linked = join(home, 'linked-notes.md')
+        await writeFile(linked, 'Workspace instructions')
+        await symlink(linked, join(home, 'AGENTS.md'))
 
-      await expect(launch('dsh', { instructions: PREAMBLE, workspacePath: home })).rejects.toThrow(
-        /cannot take this chat's standing instructions/
-      )
-      expect(await readFile(linked, 'utf8')).toBe('Workspace instructions')
-    } finally {
-      await rm(home, { recursive: true, force: true })
+        await expect(
+          launch('dsh', { instructions: PREAMBLE, workspacePath: home })
+        ).rejects.toThrow(/cannot take this chat's standing instructions/)
+        expect(await readFile(linked, 'utf8')).toBe('Workspace instructions')
+      } finally {
+        await rm(home, { recursive: true, force: true })
+      }
     }
-  })
+  )
 
   it("leaves no AGENTS.md holding only Orca's markers", async () => {
     for (const existing of [null, '']) {
