@@ -61,7 +61,11 @@ function countWorktreeListings(): () => number {
 async function refreshAndFollowUp(repoPath: string, owner: string, remoteOid: string) {
   await refreshLocalBaseRefForWorktreeCreate(repoPath, 'origin/main', 'refs/remotes/origin/main')
   fastForwardCheckedOutLocalBaseAfterCreate(repoPath, 'origin/main', 'refs/remotes/origin/main', {})
-  await vi.waitFor(() => expect(git(owner, ['rev-parse', 'HEAD'])).toBe(remoteOid))
+  // The follow-up runs detached; Windows Git takes seconds.
+  await vi.waitFor(() => expect(git(owner, ['rev-parse', 'HEAD'])).toBe(remoteOid), {
+    timeout: 60_000,
+    interval: 250
+  })
 }
 
 beforeEach(() => {

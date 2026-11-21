@@ -1,4 +1,4 @@
-import { readdir, readFile, readlink, realpath, stat } from 'node:fs/promises'
+import { lstat, readdir, readFile, readlink, realpath, stat } from 'node:fs/promises'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { dirname, isAbsolute, join } from 'node:path'
 
@@ -32,15 +32,20 @@ export async function readGitDirState(commonDir: string): Promise<GitDirState> {
   }
   const heads = new Map<string, string>()
   const reserved = new Set<string>()
+  // A failed scan is discarded, so it must not start follow-up reads.
+  let failed = false
   await Promise.all(
     gitDirs.map(async (gitDir) => {
       const [head, rebaseMerge, rebaseApply, updateRefs, bisectStart] = await Promise.all([
-        readHead(gitDir),
+        readHead(gitDir, () => failed),
         readOptional(join(gitDir, 'rebase-merge', 'head-name')),
         readOptional(join(gitDir, 'rebase-apply', 'head-name')),
         readOptional(join(gitDir, 'rebase-merge', 'update-refs')),
         readOptional(join(gitDir, 'BISECT_START'))
-      ])
+      ]).catch((error: unknown) => {
+        failed = true
+        throw error
+      })
       heads.set(gitDir, head)
       for (const line of [rebaseMerge, rebaseApply, updateRefs].flatMap((text) =>
         text.split('\n')
@@ -59,11 +64,11 @@ export async function readGitDirState(commonDir: string): Promise<GitDirState> {
 }
 
 // Git accepts a symlinked HEAD: read its content, else name the ref it links to.
-async function readHead(gitDir: string): Promise<string> {
+async function readHead(gitDir: string, stopped: () => boolean): Promise<string> {
   const path = join(gitDir, 'HEAD')
   const content = normalizeHead(await readOptional(path))
   // Only a HEAD without a `ref:` line can be a symlink that names a branch.
-  if (content.startsWith('ref: ')) {
+  if (content.startsWith('ref: ') || stopped()) {
     return content
   }
   let target: string
@@ -137,11 +142,6 @@ export type BranchCheckouts =
 
 const MAX_SYMREF_HOPS = 5
 const LOOSE_REF_READ_CONCURRENCY = 16
-// Case-insensitive file systems resolve `Main` to `main`.
-const foldRef =
-  process.platform === 'darwin' || process.platform === 'win32'
-    ? (ref: string) => ref.toLowerCase()
-    : (ref: string) => ref
 
 /** Git's in-use rule from files; `bareCommonDir`'s own HEAD checks nothing out. Reservations are separate. */
 export async function resolveBranchCheckouts(
@@ -150,11 +150,14 @@ export async function resolveBranchCheckouts(
   fullRef: string,
   bareCommonDir: string | undefined
 ): Promise<BranchCheckouts> {
+  // A case-insensitive file system resolves a loose `Main` to `main`.
+  const foldRef = (await pathExists(join(commonDir, 'head')))
+    ? (ref: string) => ref.toLowerCase()
+    : (ref: string) => ref
   const target = foldRef(fullRef)
   const looseRefs = new Map<string, Promise<string>>()
   const readLooseRef = (ref: string) => {
-    const known =
-      looseRefs.get(ref) ?? readOptional(join(commonDir, ref)).then((text) => normalizeHead(text))
+    const known = looseRefs.get(ref) ?? readLooseRefFile(join(commonDir, ref))
     looseRefs.set(ref, known)
     return known
   }
@@ -168,28 +171,37 @@ export async function resolveBranchCheckouts(
     if (gitDir === bareCommonDir || head === '' || COMMIT_ID.test(head)) {
       continue
     }
-    if (!head.startsWith('ref: ') || head === UNRESOLVED_HEAD) {
+    const ref = head.slice('ref: '.length)
+    if (!head.startsWith('ref: ') || head === UNRESOLVED_HEAD || !ref.startsWith('refs/')) {
       return { kind: 'unknown' }
     }
-    branches.push([gitDir, head.slice('ref: '.length)])
+    if (foldRef(ref) === target) {
+      owners.push(gitDir)
+    } else {
+      branches.push([gitDir, ref])
+    }
+  }
+  // Two direct checkouts already settle it: nothing may move.
+  if (owners.length > 1) {
+    return { kind: 'owned', gitDirs: owners }
   }
   let unknown = false
   const resolve = async ([gitDir, start]: [string, string]) => {
     let ref = start
     for (let hop = 0; hop <= MAX_SYMREF_HOPS && !unknown; hop += 1) {
-      if (!ref.startsWith('refs/heads/')) {
-        break
-      }
-      if (foldRef(ref) === target) {
-        owners.push(gitDir)
-        return
-      }
       // Packed and missing refs are never symrefs.
       const loose = await readLooseRef(ref)
       if (!loose.startsWith('ref: ')) {
         return
       }
       ref = loose.slice('ref: '.length)
+      if (!ref.startsWith('refs/heads/') || loose === UNRESOLVED_HEAD) {
+        break
+      }
+      if (foldRef(ref) === target) {
+        owners.push(gitDir)
+        return
+      }
     }
     unknown = true
   }
@@ -212,6 +224,29 @@ export async function resolveBranchCheckouts(
     return { kind: 'unknown' }
   }
   return owners.length > 0 ? { kind: 'owned', gitDirs: owners } : { kind: 'free' }
+}
+
+// A symlinked loose ref (core.preferSymlinkRefs) is a symref the content cannot show: leave it to Git.
+async function readLooseRefFile(path: string): Promise<string> {
+  try {
+    if ((await lstat(path)).isSymbolicLink()) {
+      return UNRESOLVED_HEAD
+    }
+  } catch (error) {
+    rethrowUnlessMissing(error)
+    return ''
+  }
+  return normalizeHead(await readOptional(path))
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await stat(path)
+    return true
+  } catch (error) {
+    rethrowUnlessMissing(error)
+    return false
+  }
 }
 
 /** A linked git dir's checkout, from its `gitdir` file, only when that checkout's `.git` file points back. */

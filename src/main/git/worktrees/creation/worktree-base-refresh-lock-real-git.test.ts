@@ -276,7 +276,10 @@ describe('local base refresh reads worktree ownership from git dirs with real Gi
       {}
     )
 
-    await vi.waitFor(() => expect(git(repoPath, ['rev-parse', 'HEAD'])).toBe(remoteOid))
+    await vi.waitFor(() => expect(git(repoPath, ['rev-parse', 'HEAD'])).toBe(remoteOid), {
+      timeout: 60_000,
+      interval: 250
+    })
     expect(await readFile(join(repoPath, 'version.txt'), 'utf8')).toBe('two\n')
   })
 
@@ -317,6 +320,45 @@ describe('local base refresh reads worktree ownership from git dirs with real Gi
       expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
     }
   )
+
+  // Windows needs symlink privileges.
+  it.skipIf(process.platform === 'win32')(
+    'leaves main alone while a checkout has it through a symlinked branch alias',
+    async () => {
+      const { repoPath, lockPath, localOid } = await createBehindRepo()
+      await rm(lockPath, { force: true })
+      const linkedPath = join(repoPath, '..', 'symlinked-alias')
+      git(repoPath, [
+        '-c',
+        'core.preferSymlinkRefs=true',
+        'symbolic-ref',
+        'refs/heads/alias',
+        'refs/heads/main'
+      ])
+      git(repoPath, ['worktree', 'add', '--quiet', linkedPath, '--detach'])
+      git(linkedPath, ['symbolic-ref', 'HEAD', 'refs/heads/alias'])
+      const spy = spyOnFastForwards()
+
+      await refresh(repoPath)
+
+      expect(spy.writes()).toBe(0)
+      expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
+    }
+  )
+
+  it('moves main in a bare repo whose core.bare is unset', async () => {
+    const { repoPath, lockPath, remoteOid } = await createBehindRepo()
+    await rm(lockPath, { force: true })
+    const barePath = join(repoPath, '..', 'unset.git')
+    execFileSync('git', ['clone', '--quiet', '--bare', repoPath, barePath])
+    git(barePath, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
+    git(barePath, ['update-ref', 'refs/remotes/origin/main', remoteOid])
+    git(barePath, ['config', '--unset', 'core.bare'])
+
+    await expect(refresh(barePath)).resolves.toMatchObject({ status: 'updated' })
+
+    expect(git(barePath, ['rev-parse', 'main'])).toBe(remoteOid)
+  })
 
   it('leaves main alone while a linked checkout has it through a branch alias', async () => {
     const { repoPath, lockPath, localOid } = await createBehindRepo()

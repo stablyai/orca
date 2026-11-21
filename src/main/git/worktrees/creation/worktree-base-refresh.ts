@@ -188,8 +188,8 @@ function localBaseBranchGit(
       : join(repoPath, raw)
     return { raw, path }
   }
-  // Only explicit core.bare as the common dir reads it (config.worktree included); a linked checkout's config could
-  // claim bare and hide a real primary checkout. Asked once per refresh.
+  // core.bare as the common dir reads it (config.worktree included); a linked checkout's config could claim bare and
+  // hide a real primary checkout. Unset, Git infers bare only for the git dir itself. Asked once per refresh.
   const bareRepos = new Map<string, Promise<boolean>>()
   const isBareRepo = (repoPath: string, commonDir: { raw: string; path: string }) => {
     const known =
@@ -199,7 +199,7 @@ function localBaseBranchGit(
         execOptions(repoPath)
       ).then(
         ({ stdout }) => stdout.trim() === 'true',
-        () => false
+        async (error: unknown) => isConfigUnset(error) && isSamePath(repoPath, commonDir.path)
       )
     bareRepos.set(commonDir.path, known)
     return known
@@ -236,13 +236,13 @@ function localBaseBranchGit(
       if (ownerPath !== undefined) {
         return { reserved: false, ownerPath }
       }
-      // Several owners (Git lists the primary first), or what the files cannot tell: Git's listing decides.
-      const owner = (await listWorktrees(repoPath)).find((wt) => wt.branch === fullRef)
-      return {
-        reserved: false,
-        ...(owner ? { ownerPath: owner.path } : {}),
-        ...(others.length > 0 ? { sharedCheckout: true as const } : {})
+      // No caller acts on a shared checkout's path: the refresh and follow-up skip it.
+      if (others.length > 0) {
+        return { reserved: false, ownerPath: repoPath, sharedCheckout: true }
       }
+      // What the files cannot tell: Git's listing decides.
+      const owner = (await listWorktrees(repoPath)).find((wt) => wt.branch === fullRef)
+      return { reserved: false, ...(owner ? { ownerPath: owner.path } : {}) }
     },
     // The inspection just ran; the admitted file recheck below guards the gap.
     updateRefUnlessInUse: async (repoPath, fullRef, args) => {
@@ -272,6 +272,11 @@ function localBaseBranchGit(
       return true
     }
   }
+}
+
+// `git config --get` exits 1 for an unset key.
+function isConfigUnset(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 1
 }
 
 function waitAtMost<T>(promise: Promise<T>, timeoutMs: number): Promise<T | undefined> {
