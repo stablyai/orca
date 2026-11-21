@@ -10,6 +10,9 @@ let paneKey
 let endedSessionId
 let observedView
 let viewRevision = 0
+let retryDelay = 0
+let retryQueued = false
+let announcedAt = 0
 
   async function post($, action, data = {}, session = identity) {
     if (!session) return {}
@@ -23,17 +26,28 @@ let viewRevision = 0
         token = file.token
       } catch {}
     }
-    if (!token || !/^[0-9]+$/.test(String(port)) || Number(port) < 1 || Number(port) > 65535) return {}
+    if (!token || !/^[0-9]+$/.test(String(port)) || Number(port) < 1 || Number(port) > 65535) return undefined
     const response = await $.http.fetch('http://127.0.0.1:' + port + ${JSON.stringify(CLAUDE_AGENT_VIEW_PATH)}, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-orca-agent-hook-token': token },
       body: JSON.stringify({ ...session, action, ...data })
     })
-    if (!response.ok || !response.text) return {}
+    if (!response.ok) return undefined
+    if (!response.text) return {}
     try {
       const data = JSON.parse(response.text)
       return data && typeof data === 'object' && !Array.isArray(data) ? data : {}
     } catch { return {} }
+  }
+
+  // Bounded backoff (~2 min) rides out an Orca restart; idle Claudes never poll.
+  function retry($) {
+    if (retryQueued || retryDelay >= 64000) return
+    retryDelay = retryDelay ? retryDelay * 2 : 1000
+    retryQueued = true
+    try {
+      $.clock.after(retryDelay, () => { retryQueued = false; return announce($) })
+    } catch { retryQueued = false }
   }
 
   async function announce($) {
@@ -45,14 +59,29 @@ let viewRevision = 0
         identity = { paneKey, sessionId, instanceId: String(await $.clock.now()) + '-' + String(Math.random()) }
       }
       const session = identity
-      const keybindings = await $.fs.read(configDir + '/keybindings.json')
+      let keybindings
+      try {
+        keybindings = await $.fs.read(configDir + '/keybindings.json')
+      } catch {
+        try { await post($, 'end') } catch {}
+        return {}
+      }
       if (identity !== session || endedSessionId === sessionId) return {}
-      return await post($, 'register', {
-        keybindings,
-        ...(observedView?.sessionId === sessionId ? { view: observedView.view } : {})
-      }, session)
+      let result
+      try {
+        result = await post($, 'register', {
+          keybindings,
+          ...(observedView?.sessionId === sessionId ? { view: observedView.view } : {})
+        }, session)
+      } catch {}
+      if (!result) {
+        retry($)
+        return {}
+      }
+      retryDelay = 0
+      announcedAt = await $.clock.now()
+      return result
     } catch {
-      try { await post($, 'end') } catch {}
       return {}
     }
   }
@@ -67,7 +96,10 @@ export function register(on) {
       if (observedView?.sessionId !== sessionId || observedView.view.agentId !== agentId) {
         observedView = { sessionId, view: { ...(agentId ? { agentId } : {}), revision: ++viewRevision } }
         if (identity?.sessionId === sessionId) {
-          void post($, 'observe', { view: observedView.view }).catch(() => {})
+          void post($, 'observe', { view: observedView.view }).then(
+            (reply) => { if (!reply || reply.unknown) void announce($) },
+            () => { void announce($) }
+          )
         }
       }
     }
@@ -84,16 +116,31 @@ export function register(on) {
     endedSessionId = undefined
     await $.command.register({ name: 'orca-agent-view', description: 'Open the agent selected in Orca', immediate: true })
     void announce($)
-    $.clock.every(5000, () => announce($))
     return result
   })
+
+  // Picks up keybinding edits without a timer; at most one post per 30 s of turns.
+  try {
+    on('turn.start', async ($, event, next) => {
+      const result = await next(event)
+      try {
+        if (identity && (await $.clock.now()) - announcedAt >= 30000) void announce($)
+      } catch {}
+      return result
+    })
+  } catch {}
 
   on('command.run', { command: 'orca-agent-view' }, async ($) => {
     try {
       const session = identity
       if (!session || session.sessionId !== await $.session.id()) return {}
-      const request = await post($, 'take', {}, session)
-      if (!request.requestId || request.expiresAt < await $.clock.now()) return {}
+      let request = await post($, 'take', {}, session)
+      if (request?.unknown) {
+        await announce($)
+        if (identity !== session) return {}
+        request = await post($, 'take', {}, session)
+      }
+      if (!request?.requestId || request.expiresAt < await $.clock.now()) return {}
       if (identity !== session || session.sessionId !== await $.session.id()) return {}
       let deny
       try {
