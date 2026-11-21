@@ -3,6 +3,7 @@ import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import type SyncDatabase from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import { reportSessionSearchBackgroundError, traceSessionSearch } from '../session-search-trace'
+import { reclaimSessionSearchFreePages } from './session-search-index-compaction'
 
 const SCANNED_KEY = 'tool_purge_scanned_rowid'
 const FLOOR_KEY = 'tool_purge_floor_rowid'
@@ -166,15 +167,6 @@ export class SessionSearchToolPurge {
       pages = 64
     }
     // Reclaim pages freed by merging only after the final merge step has yielded.
-    let free = this.closed() ? 0 : Number(this.db.pragma('freelist_count', { simple: true }))
-    while (free > 0 && !this.closed()) {
-      traceSessionSearch('vacuum', () => this.db.pragma('incremental_vacuum(2000)'))
-      const remaining = Number(this.db.pragma('freelist_count', { simple: true }))
-      await yieldToEventLoop()
-      if (remaining >= free) {
-        break
-      }
-      free = remaining
-    }
+    await reclaimSessionSearchFreePages(this.db, this.closed)
   }
 }
