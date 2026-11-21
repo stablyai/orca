@@ -7,6 +7,7 @@ import {
   runPtySpawnHealthProbe
 } from '../../daemon/pty-subprocess/spawn-preflight'
 import { WatcherProcessSupervisor } from '../../ipc/filesystem/watcher-process/supervision/parcel-watcher-process-supervisor'
+import { isWatcherProcessFailure } from '../../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
 import { resolveWatcherProcessEntryPath } from '../../ipc/filesystem/watcher-process/parcel-watcher-entry-path'
 import { resolveOrcadInstallRoot } from '../host-runtime/orcad-app-paths'
 import {
@@ -53,18 +54,25 @@ export async function preflightOrcadNativeRuntime(
       cancellation.abort(error)
       rejectDelivery(error)
     }, 5_000)
-    subscription = await supervisor.subscribe(
-      directory,
-      (error, events) => {
-        if (error) {
-          rejectDelivery(error)
-        } else if (events.some((event) => event.path === join(directory, 'ready'))) {
-          resolveDelivery()
-        }
-      },
-      process.platform === 'win32' ? { backend: 'windows' } : {},
-      { signal: cancellation.signal, subscribeTimeoutMs: 5_000, onTerminalError: rejectDelivery }
-    )
+    try {
+      subscription = await supervisor.subscribe(
+        directory,
+        (error, events) => {
+          if (error) {
+            rejectDelivery(error)
+          } else if (events.some((event) => event.path === join(directory, 'ready'))) {
+            resolveDelivery()
+          }
+        },
+        process.platform === 'win32' ? { backend: 'windows' } : {},
+        { signal: cancellation.signal, subscribeTimeoutMs: 5_000, onTerminalError: rejectDelivery }
+      )
+    } catch (error) {
+      // The supervisor reports our own abort as a generic failure; surface why we aborted.
+      throw isWatcherProcessFailure(error) && error.code === 'subscribe_aborted'
+        ? withInotifyHint(cancellation.signal.reason)
+        : error
+    }
     await writeFile(join(directory, 'ready'), '')
     await delivered
   } finally {
@@ -76,6 +84,17 @@ export async function preflightOrcadNativeRuntime(
       await rm(directory, { recursive: true, force: true })
     }
   }
+}
+
+// A Linux watcher with no free inotify instance hangs in subscribe() instead of failing with EMFILE.
+function withInotifyHint(reason: unknown): unknown {
+  if (process.platform !== 'linux' || !(reason instanceof Error)) {
+    return reason
+  }
+  return new Error(
+    `${reason.message}; the inotify instance limit (fs.inotify.max_user_instances) may be exhausted. ` +
+      'Raise it in /etc/sysctl.d to persist (a plain sysctl -w is lost when WSL or the host restarts)'
+  )
 }
 
 async function probePtySpawn(): Promise<void> {

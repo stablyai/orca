@@ -234,6 +234,17 @@ export class GitHubSourceCollections extends GitHubSourceOwnership {
   candidate(repo: Repo) {
     return this.owners.get(bindingKey(repo))?.candidates
   }
+  /** A status write moves only its hosts' fences, so only these rows' owners are re-captured. */
+  syncHostRepos(repos: readonly Repo[]) {
+    const owned = new Map<string, CollectionOwner>()
+    for (const repo of repos) {
+      const owner = this.owners.get(bindingKey(repo))
+      if (owner) {
+        owned.set(bindingKey(repo), owner)
+      }
+    }
+    this.sync(repos, owned)
+  }
   countKey(scopes: readonly string[], query: string, limit: number) {
     return JSON.stringify([[...scopes].sort(), query.trim(), limit])
   }

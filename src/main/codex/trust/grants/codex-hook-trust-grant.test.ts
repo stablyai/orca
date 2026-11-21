@@ -161,7 +161,7 @@ describe('grantManagedCodexHookTrust', () => {
     expect(runner).toHaveBeenCalledTimes(1)
   })
 
-  it('skips the RPC session while the ledger grant still holds, and re-grants on config drift', async () => {
+  it('reuses a grant only while the recorded hash and hook identity still match', async () => {
     const entries = [managedEntry('session_start')]
     const runner = vi.fn(async () => grantedSessionResult(entries))
     _internals.setGrantSessionRunner(runner)
@@ -184,24 +184,14 @@ describe('grantManagedCodexHookTrust', () => {
     const third = await grantManagedCodexHookTrust(plan)
     expect(third.lane).toBe('rpc')
     expect(runner).toHaveBeenCalledTimes(2)
-  })
 
-  it('re-grants when the managed hook identity changes', async () => {
-    const entries = [managedEntry('session_start')]
-    const runner = vi.fn(async () => grantedSessionResult(entries))
-    _internals.setGrantSessionRunner(runner)
-    const plan = buildPlan(entries)
-    await grantManagedCodexHookTrust(plan)
     upsertHookTrustEntries(plan.tomlPath, [
       { ...entries[0], trustedHash: 'sha256:codex-session_start' }
     ])
-
     const changedEntries = [{ ...entries[0], timeoutSec: 99 }]
-    const changedRunner = vi.fn(async () => grantedSessionResult(changedEntries))
-    _internals.setGrantSessionRunner(changedRunner)
-    const outcome = await grantManagedCodexHookTrust(buildPlan(changedEntries))
-    expect(outcome.lane).toBe('rpc')
-    expect(changedRunner).toHaveBeenCalledTimes(1)
+    runner.mockResolvedValueOnce(grantedSessionResult(changedEntries))
+    expect((await grantManagedCodexHookTrust(buildPlan(changedEntries))).lane).toBe('rpc')
+    expect(runner).toHaveBeenCalledTimes(3)
   })
 
   it('rejects duplicate granted keys instead of treating another key as covered', async () => {

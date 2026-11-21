@@ -2,6 +2,10 @@ import { useEffect } from 'react'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import {
+  readRuntimeStatuses,
+  subscribeAppStoreWithStatuses
+} from '@/store/slices/runtime-status/views/runtime-status-owner'
+import {
   subscribeStructuredChatTabNames,
   getStructuredChatTabNames
 } from '@/runtime/native-chat/naming/structured-chat-name-observation'
@@ -11,6 +15,7 @@ import {
   buildDashboardSnapshot,
   type DashboardSnapshotState
 } from '../snapshot/build-dashboard-snapshot'
+import { createDashboardSnapshotReuse } from '../snapshot/dashboard-snapshot-reuse'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 // Throttle cross-worktree snapshot rebuilds to 4Hz during agent-status bursts.
@@ -31,7 +36,8 @@ export function repoIconsUnchanged(
   return nextIds.every((id) => id in previous && next[id] === previous[id])
 }
 
-type DashboardSnapshotWatchState = DashboardSnapshotState & Pick<AppState, 'agentStatusEpoch'>
+type DashboardSnapshotWatchState = Omit<DashboardSnapshotState, 'runtimeStatusByEnvironmentId'> &
+  Pick<AppState, 'agentStatusEpoch'>
 
 export function dashboardSnapshotInputsChanged(
   state: DashboardSnapshotWatchState,
@@ -58,7 +64,6 @@ export function dashboardSnapshotInputsChanged(
     // Relay live hooks directly; rebuild snapshots for host-profile changes too, since idle boards may have no later event to correct stale byte routing.
     state.sshConnectionStates !== previousState.sshConnectionStates ||
     state.sshStateByEnvironment !== previousState.sshStateByEnvironment ||
-    state.runtimeStatusByEnvironmentId !== previousState.runtimeStatusByEnvironmentId ||
     state.paneForegroundAgentByPaneKey !== previousState.paneForegroundAgentByPaneKey ||
     state.detectedWorktreesByRepo !== previousState.detectedWorktreesByRepo ||
     // Folder workspace ownership uses folderWorkspaces/projectGroups rather than git-worktree rows.
@@ -76,12 +81,14 @@ export function dashboardSnapshotInputsChanged(
 /** Keep subscription outside the effect to avoid react-doctor’s cleanup false positive; callers must invoke the returned disposer. */
 export function watchSnapshotInputs(onChanged: () => void): () => void {
   const stopNames = subscribeStructuredChatTabNames(onChanged)
-  const unsubscribeStore = useAppStore.subscribe((state, previousState) => {
-    // Why: unrelated high-frequency store writes must not rebuild a cross-worktree snapshot.
-    if (dashboardSnapshotInputsChanged(state, previousState)) {
-      onChanged()
+  const unsubscribeStore = subscribeAppStoreWithStatuses(
+    (state, previousState, statuses, previousStatuses) => {
+      // Why: unrelated high-frequency store writes must not rebuild a cross-worktree snapshot.
+      if (statuses !== previousStatuses || dashboardSnapshotInputsChanged(state, previousState)) {
+        onChanged()
+      }
     }
-  })
+  )
   return () => {
     stopNames()
     unsubscribeStore()
@@ -117,6 +124,7 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     let disposed = false
     let unsubscribeStore: (() => void) | null = null
     let trailingTimer: ReturnType<typeof setTimeout> | null = null
+    const reuse = createDashboardSnapshotReuse()
     let lastPublishAt = 0
     let lastPublishedRepoIcons: Record<string, RepoIcon | null> | null = null
 
@@ -125,8 +133,13 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
       lastPublishAt = Date.now()
       const state = useAppStore.getState()
       const snapshot = buildDashboardSnapshot(
-        { ...state, chatNames: getStructuredChatTabNames() },
-        lastPublishAt
+        {
+          ...state,
+          runtimeStatusByEnvironmentId: readRuntimeStatuses(),
+          chatNames: getStructuredChatTabNames()
+        },
+        lastPublishAt,
+        { reuse }
       )
       const icons = snapshot.repoIconsByRepoId ?? {}
       if (!withIcons && repoIconsUnchanged(icons, lastPublishedRepoIcons)) {

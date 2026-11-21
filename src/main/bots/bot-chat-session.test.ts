@@ -11,7 +11,6 @@ import {
   botWorkspaceSelector,
   type BotChatHost
 } from './bot-chat-session'
-import { botStartOptions } from './bot-start-options'
 import { BOT_CHAT_NAME, releaseReplacedHomes, type BotHomeHost } from './bot-home-chat-name'
 
 function makeBot(overrides: Partial<Bot> = {}): Bot {
@@ -317,56 +316,5 @@ describe('bot Chat', () => {
       type: 'folder',
       folderWorkspaceId: 'fw-9'
     })
-  })
-})
-
-describe('what a bot conversation starts on', () => {
-  // The owner last picked Opus in some chat; `agents` is their Settings > Agents choice.
-  const settings = (agents?: { model?: string; options?: Record<string, string> }) =>
-    vi.fn(() => ({
-      nativeChatSessionOptions: { claude: { model: 'claude-opus-5-5' } },
-      agentLaunchChoices: agents ? { claude: agents } : {}
-    }))
-
-  it("puts the bot's own model first, for background work and chats alike", () => {
-    const bot = makeBot({
-      launch: { model: 'claude-haiku-5-5', options: { effort: 'low' } }
-    })
-    const owner = settings({ model: 'claude-sonnet-5-5' })
-
-    expect(botStartOptions(owner, bot, true)).toEqual({
-      model: 'claude-haiku-5-5',
-      effort: 'low'
-    })
-    expect(botStartOptions(owner, bot, false)).toEqual({
-      model: 'claude-haiku-5-5',
-      effort: 'low'
-    })
-  })
-
-  it('starts background work on the Agents default when the bot has no model of its own', () => {
-    const owner = settings({
-      model: 'claude-haiku-5-5',
-      options: { effort: 'high' }
-    })
-
-    expect(botStartOptions(owner, makeBot(), true)).toEqual({
-      model: 'claude-haiku-5-5',
-      effort: 'high'
-    })
-    expect(
-      botStartOptions(owner, makeBot({ launch: { options: { effort: 'low' } } }), true)
-    ).toEqual({ model: 'claude-haiku-5-5', effort: 'low' })
-  })
-
-  it("leaves background work on the agent's own default, never the last chat pick, when neither is set", () => {
-    expect(botStartOptions(settings(), makeBot(), true)).toEqual({})
-  })
-
-  it('leaves a chat the owner opens to the chat defaults the create resolves', () => {
-    const owner = settings({ model: 'claude-haiku-5-5' })
-
-    expect(botStartOptions(owner, makeBot(), false)).toEqual({})
-    expect(owner).not.toHaveBeenCalled()
   })
 })

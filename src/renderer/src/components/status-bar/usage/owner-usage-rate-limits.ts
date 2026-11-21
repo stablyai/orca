@@ -15,6 +15,7 @@ import {
 } from '../composition/status-bar-provider-visibility'
 import { hasUsageData } from '../../../../../shared/agent-usage/display/usage-provider-windows'
 import { describeOwnerNotSetUp } from '../../../../../shared/agent-usage/status-copy/owner-not-set-up-copy'
+import type { OwnerAccountsFailure } from '@/runtime/provider-accounts/observations/owner-accounts-stream'
 
 /** Whose usage the status bar shows: this device, or the remote host that owns the accounts. */
 export type OwnerUsageState =
@@ -31,8 +32,7 @@ export type OwnerUsageState =
       lastKnown: RateLimitState | null
     }
 
-/** A host that answers without usage is reachable, so "cannot reach" would be false. */
-export type OwnerUsageFailureReason = 'unreachable' | 'usage-not-published'
+export type OwnerUsageFailureReason = OwnerAccountsFailure
 
 type UsageProviderKey = {
   [K in keyof RateLimitState]-?: RateLimitState[K] extends ProviderRateLimits | null ? K : never

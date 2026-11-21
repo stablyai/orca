@@ -106,17 +106,27 @@ describe('browser tab record commands', () => {
   it('opens, replaces and closes pages in place', () => {
     const { ctx, model } = setup()
     const on = { workspace: WS, browserTabId: 'browser-1' }
+    const slot = model.workspaces[WS]!.tabs.find((tab) => tab.entityId === on.browserTabId)
     const next = build(
       ctx,
       [
         { type: 'openBrowserPage', ...on, pageId: 'page-2' },
         { type: 'openBrowserPage', ...on, pageId: 'page-2' },
-        { type: 'replaceBrowserPage', ...on, pageId: 'page-1', newPageId: 'page-3' },
-        { type: 'replaceBrowserPage', ...on, pageId: 'page-1', newPageId: 'page-3' }
+        {
+          type: 'replaceTabContent',
+          workspace: WS,
+          replacement: { kind: 'browser-page', ...on, pageId: 'page-1', newPageId: 'page-3' }
+        },
+        {
+          type: 'replaceTabContent',
+          workspace: WS,
+          replacement: { kind: 'browser-page', ...on, pageId: 'page-1', newPageId: 'page-3' }
+        }
       ],
       model
     ).model
     expect(records(next)?.at(-1)?.pageIds).toEqual(['page-3', 'page-2'])
+    expect(next.workspaces[WS]!.tabs.find((tab) => tab.entityId === on.browserTabId)).toEqual(slot)
 
     const closed = build(
       ctx,
@@ -136,7 +146,11 @@ describe('browser tab record commands', () => {
     const on = { workspace: WS, browserTabId: 'browser-1' }
     expect(outcome(model, { type: 'openBrowserPage', ...on, pageId: hostPage })).toBe('page_exists')
     expect(
-      outcome(model, { type: 'replaceBrowserPage', ...on, pageId: 'page-1', newPageId: hostPage })
+      outcome(model, {
+        type: 'replaceTabContent',
+        workspace: WS,
+        replacement: { kind: 'browser-page', ...on, pageId: 'page-1', newPageId: hostPage }
+      })
     ).toBe('page_exists')
     expect(
       outcome(model, { type: 'closeBrowserPage', workspace: WS, browserTabId: 'gone', pageId: 'x' })

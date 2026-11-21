@@ -6,7 +6,7 @@ import { resolveAccountOwner } from '@/runtime/provider-accounts/ownership/wsl-h
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
   getUsageOwnerHostScope,
-  useOwnerUsageRateLimits
+  useAccountOwnerUsage
 } from '../status-bar/usage/use-owner-usage-rate-limits'
 import { UsageAccountQuotas } from './UsageAccountQuotas'
 
@@ -25,7 +25,7 @@ export function AccountQuotaStatsPane({ host }: { host: StatsHost }): React.JSX.
       : host.target
   const accountOwner = resolveAccountOwner(selectedHost, environments ?? [])
   const { rateLimits, remoteOwner, refreshRemote, accounts, accountsUnverifiable } =
-    useOwnerUsageRateLimits(localRateLimits, accountOwner, true)
+    useAccountOwnerUsage(accountOwner, localRateLimits, true)
   return (
     <div className="@container space-y-5">
       <UsageAccountQuotas

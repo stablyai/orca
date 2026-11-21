@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 import type { editor } from 'monaco-editor'
 import type { AppState } from '@/store/types'
-import { useAppStore } from '@/store/index'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import {
   resolveNewModelLineEnding,
   type EditorLineEnding
@@ -16,6 +17,7 @@ import {
 
 export function resolveOpenFileNewModelLineEnding(
   state: AppState,
+  statuses: RuntimeStatuses,
   fileId: string,
   language: string
 ): EditorLineEnding | null {
@@ -28,7 +30,9 @@ export function resolveOpenFileNewModelLineEnding(
     setting,
     // Explicit LF/CRLF needs no host lookup.
     hostPlatform:
-      setting === 'lf' || setting === 'crlf' ? null : resolveEditorFileHostPlatform(state, file),
+      setting === 'lf' || setting === 'crlf'
+        ? null
+        : resolveEditorFileHostPlatform(state, statuses, file),
     language
   })
 }
@@ -103,8 +107,8 @@ export function useNewModelLineEnding(
   fileId: string,
   language: string
 ): void {
-  const lineEnding = useAppStore((state) =>
-    resolveOpenFileNewModelLineEnding(state, fileId, language)
+  const lineEnding = useAppStoreWithHostStatuses((state, statuses) =>
+    resolveOpenFileNewModelLineEnding(state, statuses, fileId, language)
   )
   useEffect(() => {
     const model = mountedEditor?.getModel()

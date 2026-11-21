@@ -3,12 +3,14 @@ import { makeTestBotItem } from './bot-item.test-fixture'
 import type { BotItem } from './bot-items'
 import {
   botItemsByDispatch,
+  botItemsClosedInTimeOrder,
   botItemsNeedingOwner,
   botItemsNeedingOwnerByBot,
   botNeedChat,
   filterBotItems,
   filterBotNeeds,
   groupBotItems,
+  groupBotsItems,
   type BotItemFilter
 } from './bot-item-groups'
 import type { BotNeed } from './bot-now'
@@ -54,6 +56,45 @@ describe('bot item groups', () => {
     ])
   })
 
+  it("merges several bots' items, each read by its own bot's seen mark and stale setting", () => {
+    const ana = [
+      item(1, { uid: 'a1', lastActivityAt: NOW - 1_000, othersLastEventId: 'e12' }),
+      item(2, { uid: 'a2', lastActivityAt: NOW - 4 * DAY })
+    ]
+    const bo = [
+      item(1, { uid: 'b1', lastActivityAt: NOW - 500, othersLastEventId: 'e12' }),
+      item(2, { uid: 'b2', lastActivityAt: NOW - 4 * DAY })
+    ]
+
+    const groups = groupBotsItems(
+      [
+        { items: ana, staleDays: 3, seenEventId: 'e5' },
+        { items: bo, staleDays: null, seenEventId: 'e20' }
+      ],
+      NOW
+    )
+
+    // Ana's #1 changed since Ana's mark; Bo's #1 is newer but seen by Bo's.
+    expect(groups.working.map((entry) => entry.uid)).toEqual(['a1', 'b1', 'b2'])
+    expect(groups.stale.map((entry) => entry.uid)).toEqual(['a2'])
+  })
+
+  it("lists several bots' Closed items newest first, holding back what a bot's next page may outdate", () => {
+    const closed = (uid: string, at: number) =>
+      item(1, { uid, status: 'done', lastActivityAt: NOW - at })
+    const ana = [closed('a1', 10), closed('a2', 30)]
+    const bo = [closed('b1', 20), closed('b2', 50), closed('b3', 60)]
+    const uids = (more: boolean) =>
+      botItemsClosedInTimeOrder([
+        { closed: ana, more },
+        { closed: bo, more: false }
+      ]).map((entry) => entry.uid)
+
+    // Ana's next page may hold items between 30 and 50 ago, so Bo's older ones wait for it.
+    expect(uids(true)).toEqual(['a1', 'b1', 'a2'])
+    expect(uids(false)).toEqual(['a1', 'b1', 'a2', 'b2', 'b3'])
+  })
+
   it('holds snoozed items in Snoozed, soonest back first, out of the count, until they come back', () => {
     const items = [
       item(1, { status: 'needs_you', snoozedUntil: NOW + 2 * DAY }),
@@ -93,9 +134,11 @@ describe('bot item groups', () => {
     ]
 
     expect(
-      filterBotItems(items, { chatId: 'chat-home', needsYou: true }).map((i) => i.number)
+      filterBotItems(items, { chatIds: ['chat-home'], botIds: null, needsYou: true }).map(
+        (i) => i.number
+      )
     ).toEqual([1])
-    expect(filterBotItems(items, { chatId: null, needsYou: false })).toHaveLength(3)
+    expect(filterBotItems(items, { chatIds: null, botIds: null, needsYou: false })).toHaveLength(3)
   })
 })
 
@@ -147,15 +190,20 @@ describe('Orca’s asks under the items filter', () => {
     filterBotNeeds(needs, filter, (need) => botNeedChat(need, 'home', itemOf)).map((n) => n.key)
 
   it('keeps a chat’s own ask and its workers’, by the item a worker’s newest Dispatch links', () => {
-    expect(keys({ chatId: 'side-1', needsYou: false })).toEqual([
+    expect(keys({ chatIds: ['side-1'], botIds: null, needsYou: false })).toEqual([
       'worker:d-follow-up',
       'side-chat:side-1'
     ])
-    expect(keys({ chatId: 'home', needsYou: false })).toEqual(['chat', 'worker:d-home'])
+    expect(keys({ chatIds: ['home'], botIds: null, needsYou: false })).toEqual([
+      'chat',
+      'worker:d-home'
+    ])
   })
 
   it('shows a sign-in only unfiltered or with Needs you only', () => {
-    expect(keys({ chatId: null, needsYou: true })).toContain('connector:github')
-    expect(keys({ chatId: 'home', needsYou: true })).not.toContain('connector:github')
+    expect(keys({ chatIds: null, botIds: null, needsYou: true })).toContain('connector:github')
+    expect(keys({ chatIds: ['home'], botIds: null, needsYou: true })).not.toContain(
+      'connector:github'
+    )
   })
 })

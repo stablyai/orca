@@ -170,7 +170,7 @@ describe('session tab move validation', () => {
 
     moveSessionTab.mockClear()
     // Renderer rows stay listed without a live page only while their window exists.
-    Object.assign(runtime, { getAvailableAuthoritativeWindow: () => ({}) })
+    Object.assign(runtime, { hasAuthoritativeWindow: () => true })
     const headlessSnapshot = runtime['mobileSessionTabsByWorktree'].get('wt-1')!
     setMobileSessionSnapshot(runtime, {
       ...headlessSnapshot,

@@ -1,6 +1,6 @@
 // The top of a bot's Activity tab: its picture (edited in place), name, what it is doing now or does next,
 // and its settings.
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Copy, MoreHorizontal, Pause, Play, Settings, Share2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
@@ -27,9 +27,14 @@ import type { useBotPictureSetting } from '../settings/bots/use-bot-picture-sett
 import { botErrorMessage } from './bot-presentation'
 import { setBotSettingsPlace } from './settings-view/bot-settings-place'
 import { BotPictureButton } from './BotPictureButton'
+import { BotPanelHostLine } from './BotPanelHostLine'
 import { BotRowLineText, useBotRowLine } from './BotRowActivityLine'
 import { BotShareFlow } from './sharing/BotShareFlow'
 import { formatWaitTime } from './bot-wait-copy'
+import { useBotWorkerWorkspaces } from './use-bot-worker-statuses'
+import { useBotUsageLimitStops } from './use-bot-usage-limit-stops'
+import { UsageLimitStopMark } from './BotUsageLimitMark'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 
 type BotNowCounts = Pick<BotNow, 'needsYou' | 'working'>
 
@@ -84,30 +89,62 @@ function BotNowLine({
   bot,
   home,
   quiet,
-  needsYou
+  needsYou,
+  offline
 }: {
   bot: Bot
   home: FolderWorkspace
   quiet: BotQuietFacts
   needsYou: number
+  offline: boolean
 }): React.JSX.Element {
   // Paused and an asking chat's words still come first; its count is the Items tab's.
-  const { line, now } = useBotRowLine(bot, home, needsYou)
-  if (line) {
-    return <BotRowLineText line={line} now={now} />
+  const rowLine = useBotRowLine(bot, home, needsYou)
+  const { line, now } = rowLine
+  // A running automation is live work: its line beats another session's stop, as its mark does.
+  const limit = quiet.running === null ? rowLine.limit : null
+  if (line || limit) {
+    return (
+      <BotPanelHostLine hostId={bot.hostId} offline={offline}>
+        {() => <BotRowLineText line={line} limit={limit} now={now} />}
+      </BotPanelHostLine>
+    )
   }
   const { text, short } = botQuietLine(quiet, now)
-  return short === null ? (
-    <>{text}</>
-  ) : (
-    <>
-      <span className="@max-[284px]:hidden">{text}</span>
-      <span className="hidden @max-[284px]:inline">{short}</span>
-    </>
+  // A server's name leaves room for only the short form; hovering shows the whole line.
+  return (
+    <BotPanelHostLine hostId={bot.hostId} offline={offline} title={text}>
+      {(compact) =>
+        short === null || compact ? (
+          (short ?? text)
+        ) : (
+          <>
+            <span className="@max-[284px]:hidden">{text}</span>
+            <span className="hidden @max-[284px]:inline">{short}</span>
+          </>
+        )
+      }
+    </BotPanelHostLine>
   )
 }
 
 const NOTHING_RUNS: BotQuietFacts = { running: null, next: null }
+
+/** The picture's corner while nothing waits or runs: the stopped mark when a chat, worker or run is
+ *  held at its usage limit, else Idle, so a stopped bot never reads as fine. */
+function QuietMark({ bot, home }: { bot: Bot; home: FolderWorkspace }): React.JSX.Element {
+  const { childWorktrees } = useBotWorkerWorkspaces(home)
+  const workspaces = useMemo(
+    () => [folderWorkspaceKey(home.id), ...childWorktrees.map((worktree) => worktree.id)],
+    [home.id, childWorktrees]
+  )
+  const [stop] = useBotUsageLimitStops(bot, workspaces)
+  return stop ? (
+    <UsageLimitStopMark stop={stop} className="size-2.5" />
+  ) : (
+    <AgentStateDot state="idle" title={null} />
+  )
+}
 
 export function BotPanelHeader({
   bot,
@@ -150,27 +187,42 @@ export function BotPanelHeader({
           avatarClassName="size-9 rounded-[9px] text-base"
           className="rounded-[9px]"
         >
-          {bot.paused ? null : (
+          {/* A down server's bot shows no live state, as its sidebar row doesn't. */}
+          {bot.paused || offline ? null : (
             <span className="absolute -bottom-1 -right-1 flex size-3.5 items-center justify-center rounded-full bg-sidebar">
-              <AgentStateDot
-                state={
-                  now.needsYou > 0
-                    ? 'waiting'
-                    : now.working > 0 || quiet.running !== null
-                      ? 'working'
-                      : 'idle'
-                }
-                title={null}
-              />
+              {now.needsYou > 0 || now.working > 0 || quiet.running !== null || !home ? (
+                <AgentStateDot
+                  state={
+                    now.needsYou > 0
+                      ? 'waiting'
+                      : now.working > 0 || quiet.running !== null
+                        ? 'working'
+                        : 'idle'
+                  }
+                  title={null}
+                />
+              ) : (
+                <QuietMark bot={bot} home={home} />
+              )}
             </span>
           )}
         </BotPictureButton>
       </fieldset>
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-semibold leading-5">{bot.name}</div>
-        <div className="truncate text-xs leading-4 text-muted-foreground">
-          {home ? <BotNowLine bot={bot} home={home} quiet={quiet} needsYou={now.needsYou} /> : null}
-        </div>
+        {home ? (
+          <BotNowLine
+            bot={bot}
+            home={home}
+            quiet={quiet}
+            needsYou={now.needsYou}
+            offline={offline}
+          />
+        ) : (
+          <BotPanelHostLine hostId={bot.hostId} offline={offline}>
+            {() => null}
+          </BotPanelHostLine>
+        )}
       </div>
       {filter}
       <Tooltip>

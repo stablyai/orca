@@ -1,4 +1,5 @@
 import type {
+  ClaudeAccountSelectResult,
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../../../../shared/agent-accounts/managed-account-types'
@@ -9,6 +10,7 @@ import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 import { openProviderAccountsStream } from './provider-accounts-subscription-stream'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { translate } from '@/i18n/i18n'
+import { readClaudeRunningSessionsPolicy } from '@/lib/provider-accounts/claude-account-switch-sessions'
 
 // Mirrors OrcaRuntime.getAccountsSnapshot() / the accounts.subscribe payload.
 export type ProviderAccountsSnapshot = {
@@ -225,12 +227,13 @@ export function fetchProviderAccountsSnapshot(
 export async function selectClaudeProviderAccount(
   target: RuntimeClientTarget,
   selection: ProviderAccountSelection
-): Promise<ClaudeRateLimitAccountsState> {
+): Promise<ClaudeAccountSelectResult> {
   if (target.kind === 'environment') {
-    return callRuntimeRpc<ClaudeRateLimitAccountsState>(
+    return callRuntimeRpc<ClaudeAccountSelectResult>(
       target,
       'accounts.selectClaude',
-      { accountId: selection.accountId },
+      // Why the policy: the server's own setting is not the one this app's Settings edits.
+      { accountId: selection.accountId, runningSessions: readClaudeRunningSessionsPolicy() },
       { timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS }
     )
   }

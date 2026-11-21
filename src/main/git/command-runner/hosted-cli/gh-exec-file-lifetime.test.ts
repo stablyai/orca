@@ -1,6 +1,7 @@
 import type { ChildProcess } from 'node:child_process'
 import { createFakeSpawnedChild } from '../../../../shared/__fixtures__/fake-spawned-child'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as WorkerChildProcessModule from '../../../worker-thread-child-process/worker-thread-child-process'
 
 const { groupExists } = vi.hoisted(() => ({ groupExists: vi.fn(() => true) }))
 
@@ -10,6 +11,14 @@ const { spawnMock, signalMock, forceMock, resolveSelectedMock } = vi.hoisted(() 
   forceMock: vi.fn(),
   resolveSelectedMock: vi.fn((command: string) => command)
 }))
+// These tests drive the in-thread spawn mocks; keep Windows launches off the real process worker.
+vi.mock(
+  '../../../worker-thread-child-process/worker-thread-child-process',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof WorkerChildProcessModule>()),
+    canSpawnOnWorkerThread: () => false
+  })
+)
 vi.mock('node:child_process', async (original) => ({ ...(await original()), spawn: spawnMock }))
 vi.mock('@orca/process-host/process-tree-termination', () => ({
   processGroupExists: groupExists,

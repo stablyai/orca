@@ -32,7 +32,7 @@ export async function writeIssueRelation(params: {
   signal?: AbortSignal
   beforeInvoke?: () => void
 }): Promise<LinearIssueRelationWriteResult> {
-  const entry = getClients(params.workspaceId)[0]
+  const entry = (await getClients(params.workspaceId))[0]
   if (!entry) {
     throw new LinearWriteFailure('failed', 'Not connected to Linear')
   }
@@ -62,7 +62,7 @@ export async function writeIssueRelation(params: {
     return result(params, normalizeRelation(created, params.issue.id), false)
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.workspace.id)
+      await clearToken(entry.workspace.id)
     }
     throw error
   } finally {

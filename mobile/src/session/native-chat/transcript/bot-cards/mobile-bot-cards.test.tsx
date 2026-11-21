@@ -22,6 +22,7 @@ vi.mock('react-native', async () => {
       React.createElement(name, props, children)
   return {
     Platform: { OS: 'ios' },
+    AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
     Pressable: host('Pressable'),
     Text: host('Text'),
     View: host('View'),
@@ -245,26 +246,29 @@ describe('new-bot offer card', () => {
     }
   }
 
-  it('offers Dismiss, Edit and Create bot, and creates from the offer', async () => {
+  it('offers Not now, Edit and Create bot, and creates from the offer', async () => {
     state.bots = [atlas]
     answer({ 'bots.create': { bot: { ...atlas, id: 'release', name: 'Release' } } })
     const card = await render(mobileNativeChatBotCard({ botCreateOffer: offer }, context))
     expect(card.text()).toContain('Release')
     expect(card.text()).toContain('Takes over 2 workspaces')
-    expect(card.text()).toContain('Dismiss')
+    expect(card.text()).toContain('Not now')
     expect(card.text()).toContain('Edit')
+    expect(card.text()).not.toContain('Issues labelled 1.5')
+    await card.press('Release')
+    expect(card.text()).toContain('Issues labelled 1.5')
     await card.press('Create bot')
     expect(sent('bots.create')).toEqual([
       expect.objectContaining({ name: 'Release', fromOffer: { botId: 'atlas', offerId: 'o1' } })
     ])
   })
 
-  it('claims a Dismiss on the host before telling the bot', async () => {
+  it('claims a Not now on the host before telling the bot Dismiss', async () => {
     state.bots = [atlas]
     answer({ 'bots.update': { bot: atlas } })
     const send = vi.fn(async () => true)
     const card = await render(mobileNativeChatBotCard({ botCreateOffer: offer }, context), send)
-    await card.press('Dismiss')
+    await card.press('Not now')
     expect(sent('bots.update')).toEqual([
       {
         botId: 'atlas',
@@ -277,7 +281,7 @@ describe('new-bot offer card', () => {
   it('reads dismissed, name taken and created from the bots there are', async () => {
     state.bots = [{ ...atlas, offerAnswers: [{ cardId: 'card-1', dismissed: true }] }]
     const dismissed = await render(mobileNativeChatBotCard({ botCreateOffer: offer }, context))
-    expect(dismissed.text()).not.toContain('Dismiss')
+    expect(dismissed.text()).not.toContain('Not now')
     expect(dismissed.text()).toContain('Create bot')
 
     state.bots = [atlas, { ...finance, id: 'other', name: 'release' }]
@@ -318,14 +322,6 @@ describe('new-bot offer card', () => {
     expect(card.text()).toContain('Atlas runs an agent this app doesn’t know. Edit to pick one.')
     await card.press('Edit')
     expect(state.edits).toEqual([expect.not.objectContaining({ agent: expect.anything() })])
-  })
-
-  it('opens the details in place', async () => {
-    state.bots = [atlas]
-    const card = await render(mobileNativeChatBotCard({ botCreateOffer: offer }, context))
-    expect(card.text()).not.toContain('Issues labelled 1.5')
-    await card.press('Release')
-    expect(card.text()).toContain('Issues labelled 1.5')
   })
 })
 
@@ -422,13 +418,40 @@ describe('webhook card', () => {
   })
 })
 
-describe('deferred cards', () => {
-  it('leave Google setup on the host line', async () => {
-    expect(
+describe('Google setup card', () => {
+  const run = (revision: number, steps: Record<string, unknown>) => ({
+    run: {
+      id: 'run-1',
+      botId: 'atlas',
+      state: 'running',
+      mode: 'guide-browser',
+      steps,
+      answers: {},
+      startedAt: 1,
+      updatedAt: 1,
+      revision
+    },
+    blocker: null
+  })
+
+  it('answers a step from the phone and folds to its receipt', async () => {
+    state.bots = [atlas]
+    answer({
+      'bots.googleSetup.read': run(1, { project: { status: 'needs-user' } }),
+      'bots.googleSetup.answer': run(2, { project: { status: 'done', by: 'user' } })
+    })
+    const step = await render(
       mobileNativeChatBotCard(
-        { googleSetup: { botId: 'atlas', runId: 'r1', card: 'connect' } },
+        { googleSetup: { botId: 'atlas', runId: 'run-1', card: 'step', step: 'project' } },
         context
       )
-    ).toBeNull()
+    )
+    expect(step.text()).toContain('Create a project')
+    await step.press('Done')
+    expect(sent('bots.googleSetup.answer')).toEqual([
+      { botId: 'atlas', card: 'step', values: ['done', 'project'] }
+    ])
+    expect(step.text()).toContain('✓ Done')
+    expect(step.buttons()).toEqual([])
   })
 })

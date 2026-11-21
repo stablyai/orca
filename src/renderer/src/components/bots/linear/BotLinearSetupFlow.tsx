@@ -20,6 +20,7 @@ import { BotHostSignInButton } from '../BotHostSignInButton'
 import { useBotHostLabel } from '../use-bot-host-label'
 import { botLinearWorkspaces, type Bot } from '../../../../../shared/bot-types'
 import type { ConnectorLinearWorkspace } from '../../../../../shared/connector-bot-linear-contract'
+import { signedOutHere } from '../bot-host-copy'
 import { BOT_SLACK_DESKTOP_ERRORS } from '../../../../../shared/connector-bot-slack-contract'
 import { botErrorMessage } from '../bot-presentation'
 import {
@@ -27,17 +28,20 @@ import {
   ConnectorMoreLink,
   ConnectorSetupHeader,
   ConnectorWorkspacePicker,
-  SignedInAs
+  SignedInAs,
+  connectorSetupFor
 } from '../connector-connect-parts'
+import { ConnectorTryIt } from '../ConnectorTryIt'
 import { useConfirmConnectorSignOut } from '../connector-sign-out-confirm'
 import type { useSetupStepAside } from '../connector-setup-surface'
 import {
   botLinearErrorMessage,
-  linearHowToAsk,
-  linearSetupIntro,
+  linearActsAs,
+  linearLabel,
+  linearMention,
   linearWorkspaceLabel
 } from './bot-linear-copy'
-import { LinearWorkspaceSection, LinkedPeople } from './LinearSetupParts'
+import { LinkedPeople } from './LinearSetupParts'
 import { botLinearSetupStep, withLinearWorkspace } from './linear-setup-step'
 import { OrcaCloudSignInDialogBody, orcaCloudSignInReason } from '../orca-cloud-sign-in'
 
@@ -174,8 +178,9 @@ export function BotLinearSetupFlow({
     </div>
   )
 
-  // The cloud said signed out (a sign-in that lapsed while open): the same ask, then setup again.
-  if (step.kind === 'failed' && step.code === BOT_SLACK_DESKTOP_ERRORS.signedOut) {
+  // This computer's sign-in lapsed while open: the same ask, then setup again. A server's failed
+  // step signs in that server instead.
+  if (step.kind === 'failed' && signedOutHere(step, hostName)) {
     return (
       <OrcaCloudSignInDialogBody
         title={title}
@@ -185,20 +190,24 @@ export function BotLinearSetupFlow({
       />
     )
   }
+  const signedInAt =
+    step.kind === 'turn-on' || step.kind === 'needs-admin'
+      ? step.workspace
+      : step.kind === 'done'
+        ? doneIn
+        : null
   const header = (
     <ConnectorSetupHeader
       connector={LINEAR}
       title={
         step.kind === 'done'
           ? t('bots.linear.setup.isOn', '{{name}} is on Linear', { name: bot.name })
-          : title
+          : signedInAt
+            ? title
+            : t('bots.linear.setup.connectTitle', 'Connect Linear')
       }
-      intro={step.kind === 'done' ? linearHowToAsk(bot) : linearSetupIntro(bot, hostName)}
-      line={
-        step.kind === 'turn-on' || step.kind === 'needs-admin'
-          ? signedIn(step.workspace)
-          : undefined
-      }
+      intro={connectorSetupFor(bot, hostName)}
+      line={signedInAt ? signedIn(signedInAt) : undefined}
       done={step.kind === 'done'}
     />
   )
@@ -230,19 +239,15 @@ export function BotLinearSetupFlow({
           </div>
         )
       case 'connect':
+        // Progressive disclosure: only what connecting needs; how to ask waits for Done.
         return (
           <div className="space-y-4">
             <p className="text-sm">
-              {hostName
-                ? t(
-                    'bots.linear.connect.introOnHost',
-                    'Sign in to Linear in Orca’s browser for {{host}} and pick the workspace. If Orca is not installed there yet, a workspace admin can install it on the way. Orca can then act as that Linear user from {{host}}.',
-                    { host: hostName }
-                  )
-                : t(
-                    'bots.linear.connect.intro',
-                    'Sign in to Linear in your browser and pick the workspace. If Orca is not installed there yet, a workspace admin can install it on the way. Orca can then act as you in Linear from this computer.'
-                  )}
+              {t(
+                'bots.linear.connect.pickWorkspace',
+                'Sign in and pick the Linear workspace {{name}} works in.',
+                { name: bot.name }
+              )}
             </p>
             {step.error ? (
               <p role="alert" className="text-sm text-destructive">
@@ -325,7 +330,7 @@ export function BotLinearSetupFlow({
                 }}
               >
                 <Copy />
-                {t('bots.linear.setup.copyForAdmin', 'Copy link for an admin')}
+                {t('bots.linear.setup.copyForAdmin', 'Copy admin link')}
               </Button>
             </DialogFooter>
           </div>
@@ -359,22 +364,22 @@ export function BotLinearSetupFlow({
           </div>
         )
       case 'done':
+        // Who can ask is edited later in the Linear connector's settings (BotLinearCard), not here.
         return (
           <div className="space-y-4">
-            {doneIn ? (
-              <>
-                <LinearWorkspaceSection workspace={doneIn} />
-                {/* Turned on right after the sign-in, past the step that shows who can ask. */}
-                <LinkedPeople
-                  bot={bot}
-                  linear={{
-                    workspaceId: doneIn.workspaceId,
-                    workspaceName: doneIn.name,
-                    urlKey: doneIn.urlKey
-                  }}
-                />
-              </>
-            ) : null}
+            <ConnectorTryIt
+              heading={t('bots.linear.setup.tryIt', 'Try it on any Linear issue')}
+              ways={[
+                { key: 'mention', shown: linearMention(bot), copy: linearMention(bot) },
+                {
+                  key: 'label',
+                  lead: t('bots.linear.setup.orLabel', 'or add the label'),
+                  shown: linearLabel(bot),
+                  copy: linearLabel(bot)
+                }
+              ]}
+              note={linearActsAs(hostName)}
+            />
             <DialogFooter>
               <Button autoFocus onClick={onClose}>
                 {t('bots.linear.setup.finish', 'Done')}

@@ -184,8 +184,9 @@ export class StructuredAgentSessionHost {
   /** Release resources; user-close cancels cut turns, while eviction leaves their failure reportable. */
   close: typeof this.lifetime.close = (...args) => this.lifetime.close(...args)
 
-  /** Stop a finished background run's agent now, as the idle sweep would; viewed or owed work keeps it. */
-  releaseIdleSession = (sessionId: string) => this.lifetime.idleSweep.release(sessionId)
+  /** Stop a finished background run's agent now, as the idle sweep would; owed work keeps it, and
+   *  so does a viewer unless `anyway`. */
+  releaseIdleSession = (id: string, anyway?: boolean) => this.lifetime.idleSweep.release(id, anyway)
 
   /** Stop hidden children too, using one bounded host snapshot. */
   sleepWorkspace = createStructuredAgentSessionWorkspaceSleeper(() => this.collaborators())
@@ -338,6 +339,9 @@ export class StructuredAgentSessionHost {
 
   subscribeTurnCompletions = this.clientDelivery.subscribeTurnCompletions
   readStatusSummary = this.clientDelivery.readStatusSummary
+  /** The usage-limit continue as the journal stands now, ahead of the next status publish. */
+  readUsageLimitContinue = async (id: string) =>
+    this.usageLimitContinue.readState(id, await this.clientDelivery.readUsageLimitCut(id))
   publishedWork = this.clientDelivery.readPublishedWork
 
   private collaborators = () => ({

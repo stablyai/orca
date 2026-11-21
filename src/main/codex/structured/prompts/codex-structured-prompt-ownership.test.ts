@@ -175,25 +175,28 @@ describe('Codex live prompt ownership', () => {
     expect(codex.connections[0]?.replies).toEqual([{ id: 11, result: { decision: 'accept' } }])
   })
 
-  it('lets prompt cancellation win and retains its claim until terminal cleanup', async () => {
+  it('cancels the child turn and holds its prompt claim through cleanup', async () => {
     const interruptGate = deferred()
     const codex = fakeCodex({
       'turn/interrupt': async () => {
         await interruptGate.promise
-        completeTurn(codex, THREAD_ID)
+        completeTurn(codex, 'thread-child', 'child-turn')
       }
     })
     const adapter = await acquired(codex)
-    registerPrompt(adapter, codex)
+    registerPrompt(adapter, codex, 'journal-prompt', 'thread-child', 'child-turn')
 
     const cancellation = adapter.cancelTurn({
       sessionId: 'session-1',
-      turnId: 'turn-1',
+      turnId: 'root-turn',
       fence: 7,
       prompt: { itemId: 'journal-prompt' }
     })
     await vi.waitFor(() =>
-      expect(codex.connections[0]?.calls.at(-1)?.method).toBe('turn/interrupt')
+      expect(codex.connections[0]?.calls.at(-1)).toEqual({
+        method: 'turn/interrupt',
+        params: { threadId: 'thread-child', turnId: 'child-turn' }
+      })
     )
     const commit = vi.fn(async () => undefined)
     await expect(
@@ -210,6 +213,7 @@ describe('Codex live prompt ownership', () => {
 
     interruptGate.resolve()
     await expect(cancellation).resolves.toEqual({ cancelled: true })
+    expect(codex.connections[0]?.closed).toBe(false)
     await expect(
       adapter.answerPrompt({
         sessionId: 'session-1',
@@ -266,33 +270,6 @@ describe('Codex live prompt ownership', () => {
       commit: async () => undefined
     })
     expect(codex.connections[0]?.replies).toEqual([{ id: 11, result: { decision: 'decline' } }])
-  })
-
-  it('interrupts only the child provider turn when its controller turn differs', async () => {
-    const codex = fakeCodex({
-      'turn/interrupt': () => completeTurn(codex, 'thread-child', 'child-turn')
-    })
-    const adapter = adapterFor(codex)
-    await acquireReadyCodexForTest(adapter, {
-      identity: identityFor('session-1'),
-      fence: 7,
-      spawnToken: 'spawn-9'
-    })
-    registerPrompt(adapter, codex, 'child-prompt', 'thread-child', 'child-turn')
-
-    await expect(
-      adapter.cancelTurn({
-        sessionId: 'session-1',
-        turnId: 'root-turn',
-        fence: 7,
-        prompt: { itemId: 'child-prompt' }
-      })
-    ).resolves.toEqual({ cancelled: true })
-    expect(codex.connections[0]?.calls.at(-1)).toEqual({
-      method: 'turn/interrupt',
-      params: { threadId: 'thread-child', turnId: 'child-turn' }
-    })
-    expect(codex.connections[0]?.closed).toBe(false)
   })
 
   it('settles a grouped prompt and its running turn before reporting cancellation', async () => {

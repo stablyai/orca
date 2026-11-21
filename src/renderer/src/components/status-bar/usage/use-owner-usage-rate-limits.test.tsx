@@ -42,7 +42,7 @@ vi.mock('../../../store/index', () => ({
     selector({ settings: null, runtimeEnvironments: [{ id: 'mini', name: 'Mac Mini' }] })
 }))
 
-const { useOwnerUsageRateLimits } = await import('./use-owner-usage-rate-limits')
+const { useAccountOwnerUsage, useOwnerUsageRateLimits } = await import('./use-owner-usage-rate-limits')
 
 function provider(id: ProviderRateLimits['provider'], usedPercent: number): ProviderRateLimits {
   return {
@@ -66,7 +66,7 @@ function snapshot(rateLimits: ProviderAccountsSnapshot['rateLimits']): ProviderA
 
 const local = createEmptyRateLimitState({ claude: provider('claude', 11) })
 
-describe('useOwnerUsageRateLimits', () => {
+describe('owner usage', () => {
   beforeEach(() => {
     mocks.owner = { kind: 'local' }
     mocks.watchers.length = 0
@@ -78,7 +78,7 @@ describe('useOwnerUsageRateLimits', () => {
     mocks.owner = { kind: 'environment', environmentId: 'focused-other-host' }
     const selected: RuntimeClientTarget = { kind: 'environment', environmentId: 'mini' }
     const owner = { target: selected, wslHostDistro: null }
-    const { result } = renderHook(() => useOwnerUsageRateLimits(local, owner, true))
+    const { result } = renderHook(() => useAccountOwnerUsage(owner, local, true))
     expect(result.current.owner).toEqual(owner)
     expect(mocks.watchers[0].target).toEqual(selected)
     const accounts = snapshot(createEmptyRateLimitState({ codex: provider('codex', 37) }))
@@ -89,7 +89,7 @@ describe('useOwnerUsageRateLimits', () => {
 
   it('reads local accounts and quotas from one snapshot and flags them after a stream failure', () => {
     const { result, rerender } = renderHook(
-      ({ limits }) => useOwnerUsageRateLimits(limits, localOwner, true),
+      ({ limits }) => useAccountOwnerUsage(localOwner, limits, true),
       { initialProps: { limits: local } }
     )
     expect(mocks.watchers[0].target).toEqual({ kind: 'local' })
@@ -114,7 +114,7 @@ describe('useOwnerUsageRateLimits', () => {
         finish = resolve
       })
     )
-    const { result } = renderHook(() => useOwnerUsageRateLimits(local, undefined, true))
+    const { result } = renderHook(() => useOwnerUsageRateLimits(local))
     const pending = result.current.refreshRemote?.()
     const fresh = snapshot(createEmptyRateLimitState({ codex: provider('codex', 24) }))
     act(() => mocks.watchers[0].handlers.onSnapshot(fresh))

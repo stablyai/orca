@@ -23,7 +23,7 @@ import { ConversationChain } from './external-conversation-chain'
 import { GoneChats } from './external-conversation-gone-chats'
 import { ConversationEvents, type ConversationWatchListener } from './external-conversation-events'
 import { conversationOwnsTurn } from './external-conversation-chat-turns'
-import { conversationWorkerActivity } from './external-conversation-workers'
+import { conversationWorkerActivities } from './external-conversation-workers'
 import { chatPromptReads } from './external-conversation-prompt-standing'
 import type { DeliveryReceipts } from './external-conversation-delivery-receipts'
 import {
@@ -173,7 +173,7 @@ export class ExternalConversationSeam {
       chatTurnDelivery: (sessionId, turnAt) => this.chatDeliveries.started(sessionId, turnAt),
       chatTurnWaiting: (sessionId) => this.chatDeliveries.waiting(sessionId),
       workLinks: async (link) => (await host.bots?.workLinks(link)) ?? [],
-      workerActivity: (link) => conversationWorkerActivity(host, link),
+      workerActivities: (links) => conversationWorkerActivities(host, links),
       promptsAudience: () => this.deps.promptsAudience?.() === true,
       mirrorTurn: (sessionId) => this.deps.slackMirror?.()?.turnEnded(sessionId) ?? null,
       replyFill: () => this.deps.replyFill?.() ?? null,
@@ -308,9 +308,17 @@ export class ExternalConversationSeam {
     signal: AbortSignal
   ): Promise<Delivery> {
     this.linked.set(conversationId(key), { key, worktreeId: chat.worktreeId })
+    // A bot's request may list images; they go with its words, so the agent sees them at once.
+    const images =
+      chat.bot && message.asker && this.deps.askerImages
+        ? await this.deps
+            .askerImages({ botId: chat.bot.botId, conversation: key, asker: message.asker, signal })
+            .catch(() => [])
+        : []
     const delivered = await this.chatDeliveries.deliver(host.chat, key, chat, {
       ...message,
-      signal
+      signal,
+      ...(images.length > 0 ? { images } : {})
     })
     // Its outbox row may have committed even when the send was then rejected: watch from now on.
     if (message.reply) {

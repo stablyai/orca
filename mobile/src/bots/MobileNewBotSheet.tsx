@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ChevronRight, Shuffle } from 'lucide-react-native'
+import { Shuffle } from 'lucide-react-native'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
+import { BottomDrawerModalHost } from '../components/bottom-drawer/bottom-drawer-modal-host'
 import { TextField } from '../components/composer-input/TextField'
+import { ListGroup, ListRow } from '../components/list/ListGroup'
+import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { triggerError } from '../platform/haptics/haptics'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
@@ -110,8 +113,8 @@ function NewBotForm(props: NewBotSheetProps) {
   const picture = parseBotAvatar(avatar)
   const trimmed = name.trim()
   // Until the computer says which agents it has, or when it has none, it makes no bot, as the desktop's New bot.
-  const canCreate =
-    trimmed.length > 0 && !creating && client !== null && choices !== null && choices.length > 0
+  const ready = trimmed.length > 0 && client !== null && choices !== null && choices.length > 0
+  const canCreate = ready && !creating
 
   const create = async () => {
     if (!canCreate || !client || !computer) {
@@ -149,7 +152,8 @@ function NewBotForm(props: NewBotSheetProps) {
   }
 
   return (
-    <>
+    // iOS cannot present over a closing sibling Modal; the form and its pickers share one.
+    <BottomDrawerModalHost>
       <MobileBotTemplatesSheet
         visible={props.visible && picking === 'template'}
         botNames={picking === 'template' && computer ? props.botNamesOn(computer.id) : []}
@@ -187,29 +191,35 @@ function NewBotForm(props: NewBotSheetProps) {
         onClose={props.onClose}
         onAfterClose={props.onAfterClose}
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>{t('bots.new.title', 'New bot')}</Text>
-          {proposal || !choosesComputer ? (
-            <Text style={styles.message}>
-              {proposal
-                ? proposal.origin
-                : t('bots.new.runsOnHost', 'Runs on {{host}}.', {
-                    host: computer?.label ?? ''
-                  })}
-            </Text>
-          ) : null}
-        </View>
+        <SheetHeader
+          titleAboveActions
+          title={t('bots.new.title', 'New bot')}
+          {...(proposal || !choosesComputer
+            ? {
+                subtitle: proposal
+                  ? proposal.origin
+                  : t('bots.new.runsOnHost', 'Runs on {{host}}.', { host: computer?.label ?? '' })
+              }
+            : {})}
+          leading={{
+            label: t('common.cancel', 'Cancel'),
+            onPress: props.onClose
+          }}
+          trailing={{
+            label: t('bots.new.create', 'Create'),
+            onPress: () => void create(),
+            disabled: !ready,
+            busy: creating
+          }}
+        />
         {proposal ? null : (
-          <Pressable
-            style={({ pressed }) => [styles.templateRow, pressed && styles.pressed]}
-            onPress={() => setPicking('template')}
-            accessibilityRole="button"
-          >
-            <Text style={styles.templateText}>
-              {t('bots.new.fromTemplate', 'Start from a template')}
-            </Text>
-            <ChevronRight size={16} color={colors.textMuted} />
-          </Pressable>
+          <ListGroup style={styles.templateGroup}>
+            <ListRow
+              title={t('bots.new.fromTemplate', 'Use template')}
+              navigates
+              onPress={() => setPicking('template')}
+            />
+          </ListGroup>
         )}
         {choosesComputer ? (
           <NewBotRunsOn
@@ -257,37 +267,12 @@ function NewBotForm(props: NewBotSheetProps) {
           loading={client !== null && choices === null}
           onPick={() => setPicking('agent')}
         />
-        <View style={styles.actions}>
-          <Pressable
-            style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}
-            onPress={props.onClose}
-          >
-            <Text style={styles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.submitButton,
-              pressed && styles.pressed,
-              !canCreate && styles.submitDisabled
-            ]}
-            disabled={!canCreate}
-            onPress={() => void create()}
-            accessibilityRole="button"
-          >
-            <Text style={styles.submitText}>
-              {creating ? t('bots.new.creating', 'Creating…') : t('bots.new.create', 'Create')}
-            </Text>
-          </Pressable>
-        </View>
       </BottomDrawer>
-    </>
+    </BottomDrawerModalHost>
   )
 }
 
 const styles = themedStyleSheet(() => ({
-  header: { paddingHorizontal: spacing.xs, paddingBottom: spacing.sm },
-  title: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
-  message: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
   picture: {
     alignSelf: 'center',
     alignItems: 'center',
@@ -299,45 +284,11 @@ const styles = themedStyleSheet(() => ({
     right: -spacing.sm,
     bottom: -spacing.sm,
     padding: spacing.xs,
-    borderRadius: radii.control,
+    borderRadius: radii.pill,
     backgroundColor: colors.bgRaised
   },
-  templateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderRadius: radii.surface,
-    backgroundColor: colors.sheetGroup,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    marginBottom: spacing.md
-  },
-  templateText: { fontSize: typography.bodySize, color: colors.textPrimary },
+  templateGroup: { marginBottom: spacing.md },
   takesOver: { fontSize: 13, color: colors.textMuted, marginTop: spacing.sm },
   error: { fontSize: 13, color: colors.statusRed, marginTop: spacing.sm },
-  actions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.sm,
-    marginTop: spacing.md
-  },
-  cancelButton: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.control
-  },
-  submitButton: {
-    backgroundColor: colors.textPrimary,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.control
-  },
-  pressed: { opacity: 0.7 },
-  submitDisabled: { opacity: 0.4 },
-  cancelText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '500'
-  },
-  submitText: { color: colors.bgBase, fontSize: typography.bodySize, fontWeight: '600' }
+  pressed: { opacity: 0.7 }
 }))

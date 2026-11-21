@@ -34,7 +34,8 @@ import {
   resolveKeyedFolderWorkspace,
   selectWorkspaceCandidate,
   type WorkspaceSelectorCandidate,
-  type WorkspaceSelectorOptions
+  type WorkspaceSelectorOptions,
+  WORKSPACE_SELECTOR_NOT_FOUND
 } from './catalog/workspace-selector-candidates'
 export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchContext {
   protected abstract hasFreshResolvedWorktreeCache(
@@ -88,7 +89,7 @@ export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchCont
     if (candidates.length > 1) {
       throw new Error('selector_ambiguous')
     }
-    throw new Error('selector_not_found')
+    throw new Error(WORKSPACE_SELECTOR_NOT_FOUND)
   }
 
   /** Every repo-backed row the selector names; duplicate registrations of one checkout count once. */

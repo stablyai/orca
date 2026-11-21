@@ -18,6 +18,8 @@ import {
 import { openBotAutomation } from './bot-automation-open'
 import { useBotHostLabel } from './use-bot-host-label'
 import { WorkerActivityRow } from './WorkerActivityRow'
+import { useBotUsageLimitStopIndex } from './use-bot-usage-limit-stops'
+import { UsageLimitStopMark, usageLimitStopMeta } from './BotUsageLimitMark'
 
 export function WorkerStateIcon({
   state
@@ -128,7 +130,8 @@ export function botChatTreeWorkerOpen(
           dispatchId,
           title: worker.title,
           worktreeId: worktreeId ?? null,
-          chatSessionId: null
+          chatSessionId: null,
+          host: worker.host
         },
         botTarget(bot)
       )
@@ -171,6 +174,9 @@ export function BotChatTreeWorkerRow({
     .filter(Boolean)
     .join(' · ')
   const { dispatchId, worktreeId } = worker
+  // Stopped on its usage limit, it reads stopped, never running; a question for the owner still wins.
+  const found = useBotUsageLimitStopIndex().byWorkspace.get(worktreeId ?? '')
+  const stop = found && worker.state !== 'needs-you' ? found : null
   const onOpen = botChatTreeWorkerOpen(bot, worker)
   const running = botChatTreeWorkerRunning(worker)
   return (
@@ -187,8 +193,8 @@ export function BotChatTreeWorkerRow({
       agent={worker.agent}
       summary={worker.summary}
       nested={{ settled: !running }}
-      icon={<WorkerStateIcon state={worker.state} />}
-      meta={<Meta bot={bot} worker={worker} host={host} />}
+      icon={stop ? <UsageLimitStopMark stop={stop} /> : <WorkerStateIcon state={worker.state} />}
+      meta={stop ? usageLimitStopMeta(t, stop) : <Meta bot={bot} worker={worker} host={host} />}
       detail={
         showChat ? (
           <span className="block truncate text-2xs text-muted-foreground">{line2}</span>

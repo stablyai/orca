@@ -16,6 +16,7 @@ import { RuntimeBrowserTabClose } from '../tabs/browser-tab-close'
 import { RuntimeBrowserProfiles } from './browser-profiles'
 import { RuntimeBrowserScreencasts } from '../screencast/browser-screencasts'
 import { RuntimeBrowserDialogs } from './browser-dialogs'
+import { RuntimeBrowserGrab } from './browser-grab-commands'
 
 type BrowserPageCommand = (
   params: BrowserCommandTargetParams & { index?: number },
@@ -31,6 +32,8 @@ export class RuntimeBrowserCommands {
   readonly browserGoto: RuntimeBrowserNavigation['browserGoto']
   readonly browserBack: RuntimeBrowserNavigation['browserBack']
   readonly browserReload: RuntimeBrowserNavigation['browserReload']
+  readonly browserZoom: RuntimeBrowserNavigation['browserZoom']
+  readonly browserStop: RuntimeBrowserNavigation['browserStop']
   readonly browserFill: RuntimeBrowserElementActions['browserFill']
   readonly browserType: RuntimeBrowserElementActions['browserType']
   readonly browserSelect: RuntimeBrowserElementActions['browserSelect']
@@ -106,6 +109,13 @@ export class RuntimeBrowserCommands {
   readonly browserScreencast: RuntimeBrowserScreencasts['browserScreencast']
   readonly browserDialogAccept: RuntimeBrowserDialogs['browserDialogAccept']
   readonly browserDialogDismiss: RuntimeBrowserDialogs['browserDialogDismiss']
+  readonly browserGrabSetMode: RuntimeBrowserGrab['browserGrabSetMode']
+  readonly browserGrabAwait: RuntimeBrowserGrab['browserGrabAwait']
+  readonly browserGrabCancel: RuntimeBrowserGrab['browserGrabCancel']
+  readonly browserGrabCaptureSelection: RuntimeBrowserGrab['browserGrabCaptureSelection']
+  readonly browserGrabExtractHover: RuntimeBrowserGrab['browserGrabExtractHover']
+  readonly browserGrabViewportBridge: RuntimeBrowserGrab['browserGrabViewportBridge']
+  readonly browserGrabWatch: RuntimeBrowserGrab['browserGrabWatch']
 
   readonly browserProfileDetectBrowsers: RuntimeBrowserProfiles['browserProfileDetectBrowsers']
   readonly browserProfileImportFromBrowser: RuntimeBrowserProfiles['browserProfileImportFromBrowser']
@@ -127,6 +137,7 @@ export class RuntimeBrowserCommands {
     const profiles = new RuntimeBrowserProfiles(host, targets, catalog, creation)
     const screencasts = new RuntimeBrowserScreencasts(host, targets, catalog)
     const dialogs = new RuntimeBrowserDialogs(targets)
+    const grab = new RuntimeBrowserGrab(targets, catalog)
     this.browserProfileDetectBrowsers = profiles.browserProfileDetectBrowsers.bind(profiles)
     this.browserProfileImportFromBrowser = profiles.browserProfileImportFromBrowser.bind(profiles)
     this.browserProfileClearGoogleCookies = profiles.browserProfileClearGoogleCookies.bind(profiles)
@@ -138,6 +149,8 @@ export class RuntimeBrowserCommands {
     this.browserGoto = navigation.browserGoto.bind(navigation)
     this.browserBack = navigation.browserBack.bind(navigation)
     this.browserReload = navigation.browserReload.bind(navigation)
+    this.browserZoom = navigation.browserZoom.bind(navigation)
+    this.browserStop = navigation.browserStop.bind(navigation)
     this.browserFill = elements.browserFill.bind(elements)
     this.browserType = elements.browserType.bind(elements)
     this.browserSelect = elements.browserSelect.bind(elements)
@@ -213,7 +226,18 @@ export class RuntimeBrowserCommands {
     this.browserScreencast = screencasts.browserScreencast.bind(screencasts)
     this.browserDialogAccept = dialogs.browserDialogAccept.bind(dialogs)
     this.browserDialogDismiss = dialogs.browserDialogDismiss.bind(dialogs)
+    this.browserGrabSetMode = grab.browserGrabSetMode.bind(grab)
+    this.browserGrabAwait = grab.browserGrabAwait.bind(grab)
+    this.browserGrabCancel = grab.browserGrabCancel.bind(grab)
+    this.browserGrabCaptureSelection = grab.browserGrabCaptureSelection.bind(grab)
+    this.browserGrabExtractHover = grab.browserGrabExtractHover.bind(grab)
+    this.browserGrabViewportBridge = grab.browserGrabViewportBridge.bind(grab)
+    this.browserGrabWatch = grab.browserGrabWatch.bind(grab)
     const passive = new Set([
+      // Page admission waits for the load; zoom must apply while the page is still loading.
+      'browserZoom',
+      // Page admission waits for the main-frame load, the very load a stop ends.
+      'browserStop',
       'browserTabList',
       'browserTabCurrent',
       'browserTabAnnotations',

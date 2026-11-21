@@ -110,6 +110,8 @@ export async function mergePullRequest(args: {
   mergeDisabled: boolean
   method: GitHubPRMergeMethod
   item: GitHubWorkItem
+  /** The PR head the page shows; the host refuses the merge if GitHub's head moved past it. */
+  expectedHeadSha: string | null
   repoPath: string | null
   repoId: string | null
   sourceContext?: TaskSourceContext | null
@@ -150,7 +152,8 @@ export async function mergePullRequest(args: {
               repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId ?? args.item.repoId),
               prNumber: args.item.number,
               method: args.method,
-              prRepo: args.prRepo
+              prRepo: args.prRepo,
+              expectedHeadSha: args.expectedHeadSha
             },
             { timeoutMs: 30_000 }
           )
@@ -160,7 +163,8 @@ export async function mergePullRequest(args: {
             sourceContext: args.sourceContext,
             prNumber: args.item.number,
             method: args.method,
-            prRepo: args.prRepo
+            prRepo: args.prRepo,
+            expectedHeadSha: args.expectedHeadSha
           })
     if (!result.ok) {
       toast.error(codeHostErrorText(result))

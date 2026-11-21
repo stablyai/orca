@@ -3,7 +3,6 @@ import type {
   AutomationBotTarget,
   AutomationWorkspaceMode
 } from '../../../../shared/automations/automation-definition'
-import { assertBotAgentRunsOnThisHost } from '../../../bots/bot-agent-host-refusal'
 import type { Bot } from '../../../../shared/bot-types'
 import { BotsDisabledError, isBotsEnabled } from '../../../../shared/bots-switch'
 import type { Repo } from '../../../../shared/repository/repo-types'
@@ -203,7 +202,6 @@ export function requireCreatableAutomationBot(
   }
   const bot = requireAutomationBot(store, input.bot)
   const agent = botAutomationAgent(input.bot, bot)
-  assertBotAgentRunsOnThisHost(agent)
   assertNoBotOwnedSettings(input, agent)
   assertBotHearsEventTriggers(webhooks.hearing(bot), input.on)
   return bot
@@ -234,7 +232,7 @@ export async function withCheckedBotChat(
     return target
   }
   if (saved?.chat && target.chat.sessionId === saved.chat.sessionId) {
-    // Clients can't send homeIfGone, so the saved chat keeps the host's choice.
+    // Clients can't send homeIfGone or toConversation, so the saved chat keeps the host's choice.
     return { ...target, chat: saved.chat }
   }
   const { sessionId } = target.chat
@@ -247,7 +245,8 @@ export async function withCheckedBotChat(
     chat: {
       sessionId,
       ...(chat.title ? { title: chat.title } : {}),
-      ...(target.chat.homeIfGone ? { homeIfGone: true as const } : {})
+      ...(target.chat.homeIfGone ? { homeIfGone: true as const } : {}),
+      ...(target.chat.toConversation ? { toConversation: true as const } : {})
     }
   }
 }

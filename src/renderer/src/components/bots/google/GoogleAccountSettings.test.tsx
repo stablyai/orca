@@ -60,13 +60,8 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-function renderNoApp(): HTMLElement {
+function renderNoApp(): void {
   render(<GoogleAccountSettings target={{ kind: 'local' }} />)
-  const section = screen.getByText('About 10 minutes').closest('section')
-  if (!section) {
-    throw new Error('no section')
-  }
-  return section
 }
 
 describe('Google with no app on this computer', () => {
@@ -81,39 +76,34 @@ describe('Google with no app on this computer', () => {
     mocks.bots.current = []
     renderNoApp()
     expect(screen.queryByRole('button', { name: 'Set up Google' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Create a bot to set up Google' }))
+    fireEvent.click(screen.getByRole('button', { name: 'New bot' }))
     fireEvent.click(screen.getByRole('button', { name: 'Create bot' }))
     expect(mocks.startGoogleSetupInChat).toHaveBeenCalledWith(NEW_BOT, 'settings')
   })
 
-  it('imports a team file picked through "Import file"', async () => {
-    mocks.pickClientFile.mockResolvedValue({ ok: true, text: TEAM_FILE })
-    renderNoApp()
-    fireEvent.click(screen.getByRole('button', { name: 'Import file' }))
-    await waitFor(() =>
-      expect(mocks.importGoogleApp).toHaveBeenCalledWith({ kind: 'local' }, TEAM_FILE)
-    )
-  })
-
-  it('imports a team file dropped anywhere on the section, highlighting while dragging', async () => {
-    const section = renderNoApp()
-    fireEvent.dragOver(section)
-    expect(section.getAttribute('data-dragging')).toBe('true')
-    const file = new File([TEAM_FILE], 'client_secret.json', { type: 'application/json' })
-    await act(async () => {
-      fireEvent.drop(section, { dataTransfer: { files: [file] } })
-    })
-    expect(section.getAttribute('data-dragging')).toBe('false')
-    await waitFor(() =>
-      expect(mocks.importGoogleApp).toHaveBeenCalledWith({ kind: 'local' }, TEAM_FILE)
-    )
-  })
-
-  it('shows why a file was refused', async () => {
-    mocks.pickClientFile.mockResolvedValue({ ok: false, message: 'This isn’t a Google app file.' })
+  it('shows a picker error and imports a valid file on retry', async () => {
+    mocks.pickClientFile
+      .mockResolvedValueOnce({ ok: false, message: 'This isn’t a Google app file.' })
+      .mockResolvedValueOnce({ ok: true, text: TEAM_FILE })
     renderNoApp()
     fireEvent.click(screen.getByRole('button', { name: 'Import file' }))
     expect((await screen.findByRole('alert')).textContent).toBe('This isn’t a Google app file.')
     expect(mocks.importGoogleApp).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import file' }))
+    await waitFor(() =>
+      expect(mocks.importGoogleApp).toHaveBeenCalledWith({ kind: 'local' }, TEAM_FILE)
+    )
+  })
+
+  it('imports a team file dropped on the section header', async () => {
+    renderNoApp()
+    const file = new File([TEAM_FILE], 'client_secret.json', { type: 'application/json' })
+    await act(async () => {
+      fireEvent.drop(screen.getByText('Connect Google'), { dataTransfer: { files: [file] } })
+    })
+    await waitFor(() =>
+      expect(mocks.importGoogleApp).toHaveBeenCalledWith({ kind: 'local' }, TEAM_FILE)
+    )
   })
 })
