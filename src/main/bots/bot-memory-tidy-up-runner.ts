@@ -196,14 +196,15 @@ export class BotTidyUpRunner {
     let historyRows: BotMemoryHistoryRow[] = []
     let startedAt = this.deps.now()
     let chatCount = 0
+    /** Where this run read chats from; a first run that fails keeps it, so its chats aren't lost. */
+    let readFrom: number | undefined
     try {
-      const since = tidyUpState(this.deps.store.get(bot.id)).through
-      const chats = await this.deps
-        .newChats(bot, since ?? startedAt - TIDY_UP_FIRST_LOOKBACK_MS)
-        .catch((error: unknown) => {
-          console.warn('[bots] tidy-up could not read its chats', error)
-          return null
-        })
+      const at = tidyUpState(this.deps.store.get(bot.id))
+      readFrom = at.through ?? at.firstFrom ?? startedAt - TIDY_UP_FIRST_LOOKBACK_MS
+      const chats = await this.deps.newChats(bot, readFrom).catch((error: unknown) => {
+        console.warn('[bots] tidy-up could not read its chats', error)
+        return null
+      })
       // Unread chats are never skipped: the watermark stays, and a scheduled run tries again on a
       // later tick. Tidy now says why it stopped.
       if (chats === null) {
@@ -293,13 +294,15 @@ export class BotTidyUpRunner {
         const summary = applied && tidyUpRunSummary(historyRows, applied, at)
         this.change(bot.id, (state) => {
           const quiet = 'error' in ended && ended.alerted && lookFailureIsQuiet(state, sessionId)
-          const next = endTidyUp(
-            state,
-            sessionId,
-            this.deps.now(),
-            quiet ? { ...ended, alerted: false } : ended
-          )
-          return summary ? { ...next, last: summary } : next
+          const ending = quiet ? { ...ended, alerted: false } : ended
+          // A failed first run keeps where it read from, so the next one reads those chats too.
+          const firstFrom =
+            'error' in ending && state.through === undefined
+              ? (state.firstFrom ?? readFrom)
+              : undefined
+          const next = endTidyUp(state, sessionId, this.deps.now(), ending)
+          const kept = firstFrom !== undefined ? { ...next, firstFrom } : next
+          return summary ? { ...kept, last: summary } : kept
         })
         if (summary) {
           this.deps.noteTidied(bot, { botId: bot.id, changes: tidyUpChangeCount(summary) })

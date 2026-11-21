@@ -35,34 +35,9 @@ const MEANING_WORDS = new Set([
   "isn't"
 ])
 
-/** One way to write each negation, so "don't" and "do not" read alike. */
-const SAME_MEANING: Record<string, string> = {
-  "don't": 'not',
-  dont: 'not',
-  "doesn't": 'not',
-  "isn't": 'not',
-  "can't": 'cannot',
-  cant: 'cannot',
-  "won't": 'will not',
-  "shouldn't": 'should not'
-}
-
-/** Each negation or modal in `text` with the next two words it governs, e.g. "not deploy staging":
- *  "Do not deploy staging; deploy production" never matches "deploy staging; do not deploy
- *  production". */
-function meaningMarks(text: string): string[] {
-  const words = lineWords(text)
-  return words.flatMap((word, index) => {
-    if (!MEANING_WORDS.has(word)) {
-      return []
-    }
-    const governed = words
-      .slice(index + 1)
-      .filter((next) => !STOPWORDS.has(next) && !MEANING_WORDS.has(next) && next !== 'do')
-      .slice(0, 2)
-      .map(stem)
-    return [[SAME_MEANING[word] ?? word, ...governed].join(' ')]
-  })
+/** Whether `text` holds a negation or modal: a line Orca never lets a model rewrite. */
+export function hasMeaningWords(text: string): boolean {
+  return lineWords(text).some((word) => MEANING_WORDS.has(word))
 }
 
 const MAX_NEW_WORDS = 3
@@ -93,15 +68,10 @@ function names(text: string): string[] {
 
 /**
  * Whether `text` says only what `sources` say: every number, link, path, @name, code span and name
- * in it is in them, every negation or modal is too, and at most a few other words are new. Every
- * negation or modal of `keep` (the words the text restates) stays, so "Do not deploy" can't become
- * "deploy" nor "may" become "will".
+ * in it is in them, and at most a few other words are new. Negations and modals are refused before
+ * this (hasMeaningWords), so a rewrite never moves one.
  */
-export function isDerivable(
-  text: string,
-  sources: readonly string[],
-  keep: readonly string[] = sources
-): boolean {
+export function isDerivable(text: string, sources: readonly string[]): boolean {
   const source = sources.join('\n')
   const lower = source.toLowerCase()
   if ((text.match(SPECIAL) ?? []).some((piece) => !lower.includes(piece.toLowerCase()))) {
@@ -113,16 +83,6 @@ export function isDerivable(
     return false
   }
   const words = lineWords(text)
-  // Each negation or modal with the words it governs: none new, none of `keep`'s dropped or moved.
-  const marks = meaningMarks(text)
-  const sourceMarks = new Set(sources.flatMap(meaningMarks))
-  if (marks.some((mark) => !sourceMarks.has(mark))) {
-    return false
-  }
-  const said = new Set(marks)
-  if (keep.some((line) => meaningMarks(line).some((mark) => !said.has(mark)))) {
-    return false
-  }
   const fresh = words.filter(
     (word) => !STOPWORDS.has(word) && !known.has(word) && !stems.has(stem(word))
   )

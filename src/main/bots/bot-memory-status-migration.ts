@@ -4,7 +4,7 @@
 import { botMemoryLineKey } from '../../shared/bot-memory-lines'
 import { botMemoryLineKind, isOwnerRuleLine } from '../../shared/bot-memory-line-kinds'
 import type { TidyUpPlan } from './bot-memory-tidy-up-draft'
-import { memorySnapshot } from './bot-memory-ops'
+import { lineGroups, memorySnapshot } from './bot-memory-ops'
 
 /** Lines one run moves, oldest first; the rest wait for the next run. */
 export const STATUS_MIGRATION_MAX_LINES = 1_000
@@ -46,10 +46,22 @@ export function statusMigrationPlan(memory: string, today: string): TidyUpPlan |
       .filter(({ fact }) => fact.date === null || !isStatusLine(fact.text))
       .map(({ raw }) => key(raw))
   )
-  const status = snapshot
-    .filter(({ fact, raw }) => fact.date !== null && isStatusLine(fact.text) && !kept.has(key(raw)))
-    .toSorted((a, b) => (a.fact.date ?? '').localeCompare(b.fact.date ?? ''))
-    .slice(0, STATUS_MIGRATION_MAX_LINES)
+  // Whole groups of copies, oldest first, until the run's share is used.
+  const status: typeof snapshot = []
+  const groups = new Map<string | null, typeof snapshot>()
+  for (const line of snapshot) {
+    if (line.fact.date !== null && isStatusLine(line.fact.text) && !kept.has(key(line.raw))) {
+      groups.set(key(line.raw), [...(groups.get(key(line.raw)) ?? []), line])
+    }
+  }
+  const oldest = (group: typeof snapshot): string =>
+    group.map(({ fact }) => fact.date ?? '').toSorted()[0] ?? ''
+  for (const group of [...groups.values()].toSorted((a, b) => oldest(a).localeCompare(oldest(b)))) {
+    if (status.length + group.length > STATUS_MIGRATION_MAX_LINES) {
+      break
+    }
+    status.push(...group)
+  }
   if (status.length === 0) {
     return null
   }
@@ -67,6 +79,7 @@ export function statusMigrationPlan(memory: string, today: string): TidyUpPlan |
       ]
     ]),
     filed: new Set(status.flatMap(({ raw }) => botMemoryLineKey({ line: raw, after: null }) ?? [])),
-    replaced: new Set()
+    replaced: new Set(),
+    groups: lineGroups(status.map(({ raw }) => raw))
   }
 }

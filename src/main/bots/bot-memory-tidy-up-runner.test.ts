@@ -174,6 +174,7 @@ function harness(
     last: () => store.get('b1').tidyUp?.last,
     rows: () => history.list('b1'),
     runs: () => store.get('b1').tidyUp?.runs ?? [],
+    state: () => store.get('b1').tidyUp,
     through: () => store.get('b1').tidyUp?.through,
     /** A tick, and the run it starts, to its end: every step here settles on the task queue. */
     tick: async () => {
@@ -780,9 +781,42 @@ describe('Tidy-up on ops, for a bot in the pilot', () => {
     await run.tick()
     expect(run.files.get(MEMORY)).toBe(SHOWN)
     expect(run.files.get(JOURNAL)).toContain(STATUS)
-    expect(run.runs()[0].error).toBe(TIDY_UP_FAILURES.noOps)
+    expect(run.runs()[0].error).toBe(`${TIDY_UP_FAILURES.movedOnly} (${TIDY_UP_FAILURES.noOps})`)
     expect(run.through()).toBeUndefined()
     expect(run.last()).toMatchObject({ filed: [{ topic: 'journal/2026-11', count: 1 }] })
+  })
+
+  it('keeps the status move when every op was skipped, and still fails the ops half', async () => {
+    const run = harness({
+      memory: OLD,
+      reply: '[{"op":"retire","line":"L9#0000","reason":"stale"}]'
+    })
+    run.files.set(join(HOME, TIDY_UP_OPS_PILOT_FILE), '')
+    await run.tick()
+    expect(run.files.get(MEMORY)).toBe(SHOWN)
+    expect(run.runs()[0].error).toBe(
+      `${TIDY_UP_FAILURES.movedOnly} (retire 1: names a line MEMORY.md no longer has)`
+    )
+  })
+
+  it('takes nothing out when a copy of a line it moves was written during the run', async () => {
+    const run = harness({
+      memory: OLD,
+      reply: merge(),
+      duringRun: (files) => files.set(MEMORY, `${OLD}- 2026-11-06 times in Eastern\n`)
+    })
+    run.files.set(join(HOME, TIDY_UP_OPS_PILOT_FILE), '')
+    await run.tick()
+    expect(run.files.get(MEMORY)).toBe(`${OLD}- 2026-11-06 times in Eastern\n`)
+    expect(run.runs()[0].error).toBe(TIDY_UP_FAILURES.changed)
+  })
+
+  it('keeps where a failed first run read from, so the next run reads those chats too', async () => {
+    const run = harness({ memory: SHOWN, reply: 'no ops' })
+    run.files.set(join(HOME, TIDY_UP_OPS_PILOT_FILE), '')
+    await run.tick()
+    expect(run.runs()[0].error).toBe(TIDY_UP_FAILURES.noOps)
+    expect(run.state()?.firstFrom).toBe(NIGHT - DAY)
   })
 
   it('fails a run whose every op was skipped, so its chats are read again', async () => {

@@ -54,6 +54,9 @@ export type TidyUpPlan = {
   retired?: Map<string, string>
   learned?: Set<string>
   merges?: number
+  /** Ops and the status move: how many copies of each fact they take out, which the live file
+   *  must still have, so a copy written since is never taken with them. */
+  groups?: Map<string, number>
 }
 
 /** The blocks the run replied with; null without a MEMORY.md block. A later block of a name wins. */
@@ -186,6 +189,16 @@ export function tidyUpChangeFor(plan: TidyUpPlan, file: string): BotMemoryChange
   const live = botMemoryFactKeys(file)
   if (plan.change.removed.some(({ line }) => !live.has(keyOf(line) ?? ''))) {
     throw new TidyUpRefused(TIDY_UP_FAILURES.changed)
+  }
+  if (plan.groups) {
+    const counts = new Map<string, number>()
+    for (const fact of parseBotMemoryFacts(file)) {
+      const key = keyOf(`- ${fact.text}`) ?? ''
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+    if ([...plan.groups].some(([key, count]) => counts.get(key) !== count)) {
+      throw new TidyUpRefused(TIDY_UP_FAILURES.changed)
+    }
   }
   const removing = keysOf(plan.change.removed.map(({ line }) => line))
   const seen = new Map<string, number>()

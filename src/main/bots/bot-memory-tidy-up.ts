@@ -52,6 +52,8 @@ export const TIDY_UP_FAILURES = {
   noDraft: "The last tidy-up didn't reply with a new MEMORY.md.",
   noOps: "The last tidy-up's reply wasn't a list of changes Orca could read.",
   allSkipped: 'Orca skipped every change the last tidy-up asked for, so nothing changed.',
+  movedOnly:
+    'The last tidy-up moved status lines to memory/journal/, but Orca could not use the rest of its reply.',
   badTopic: "The last tidy-up named a topic file Orca can't write, so nothing changed.",
   tooLong: `The last tidy-up's MEMORY.md was over ${BOT_MEMORY_INDEX_LINE_CAP} lines, so nothing changed.`,
   tooManyRemoved: 'The last tidy-up took out too many lines at once, so nothing changed.',
@@ -73,6 +75,8 @@ export type TidyUpMemoryFile = { name: string; text: string }
 export type BotTidyUpState = BackgroundRuns & {
   /** Its chats are read from here on: when the last tidy-up that applied started. */
   through?: number
+  /** Before any tidy-up applied: where the first one that failed read its chats from. */
+  firstFrom?: number
   /** When it last found nothing new to tidy, so it waits for the next night. */
   checkedAt?: number
   /** The last tidy-up that changed something, for its summary. */
@@ -257,7 +261,7 @@ export function ownerChatLines(
 }
 
 /** The newest chats first, each cut to its latest lines, until the total is used. */
-export function chatsText(chats: readonly TidyUpChat[]): string {
+function chatsText(chats: readonly TidyUpChat[]): string {
   let left: number = TIDY_UP_CHATS.total
   const parts: string[] = []
   for (const chat of chats.slice(0, TIDY_UP_CHATS.max)) {

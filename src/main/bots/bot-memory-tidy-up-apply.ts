@@ -3,7 +3,8 @@
 import type { BotMemoryChange } from '../../shared/bot-memory-lines'
 import type { BotHomeFilesystem } from './bot-home'
 import type { BotMemoryRecord } from './bot-memory-record'
-import { checkTidyUpOps, parseTidyUpOps } from './bot-memory-ops'
+import { checkTidyUpOps } from './bot-memory-ops'
+import { parseTidyUpOps } from './bot-memory-ops-reply'
 import { TIDY_UP_FAILURES, type TidyUpApplied } from './bot-memory-tidy-up'
 import {
   checkTidyUpDraft,
@@ -61,11 +62,12 @@ export async function applyTidyUpOps(
   if (failed && !run.migration) {
     return { error: failed, alerted: false }
   }
+  const opsFailed = failed && `${TIDY_UP_FAILURES.movedOnly} (${checked?.skipped[0] ?? failed})`
   const plan = joinedPlans(run.migration, failed ? null : (checked?.plan ?? null))
   const applied = await applyTidyUpPlan(deps, run, plan)
   return 'error' in applied
     ? applied
-    : { ...applied, skipped: checked?.skipped ?? [], ...(failed ? { opsFailed: failed } : {}) }
+    : { ...applied, skipped: checked?.skipped ?? [], ...(opsFailed ? { opsFailed } : {}) }
 }
 
 function joinedPlans(first: TidyUpPlan | null, then: TidyUpPlan | null): TidyUpPlan {
@@ -84,7 +86,8 @@ function joinedPlans(first: TidyUpPlan | null, then: TidyUpPlan | null): TidyUpP
     },
     topics,
     filed: new Set([...first.filed, ...then.filed]),
-    replaced: new Set([...first.replaced, ...then.replaced])
+    replaced: new Set([...first.replaced, ...then.replaced]),
+    groups: new Map([...(first.groups ?? []), ...(then.groups ?? [])])
   }
 }
 
