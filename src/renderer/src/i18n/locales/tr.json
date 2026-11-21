@@ -22949,6 +22949,10 @@
     "controlledByHost": "{{host}} tarafından kontrol ediliyor"
   },
   "nativeChat": {
+    "question": {
+      "selectOne": "Bir seçenek belirleyin",
+      "selectMultiple": "Bir veya daha fazla seçenek belirleyin"
+    },
     "linkedMessageMissing": "Bu mesaj bulunamadı.",
     "math": {
       "scrollDisplayEquation": "Denklemi kaydır"

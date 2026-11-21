@@ -5,7 +5,7 @@ import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatQuestionCardHeader } from './NativeChatQuestionCardHeader'
-import { NativeChatQuestionOption } from './NativeChatQuestionOption'
+import { NativeChatQuestionOption, NativeChatQuestionOptions } from './NativeChatQuestionOption'
 import { NativeChatQuestionConfirmButton } from './NativeChatQuestionConfirmButton'
 import {
   NativeChatQuestionSteps,
@@ -316,11 +316,12 @@ export function NativeChatQuestionCard({
             />
 
             {/* Option rings are inset, so the scroll clip cannot cut them. */}
-            <div className="flex flex-col gap-1.5 px-3.5 pb-3">
+            <NativeChatQuestionOptions multiSelect={q.multiSelect}>
               {q.options.map((opt, i) => (
                 <NativeChatQuestionOption
                   key={`${i}:${opt.label}`}
                   badge={String(i + 1)}
+                  multiSelect={q.multiSelect}
                   initialFocus={i === 0}
                   label={opt.label}
                   description={opt.description}
@@ -331,7 +332,7 @@ export function NativeChatQuestionCard({
                   onEnter={() => pickOption(i, 'enter')}
                 />
               ))}
-            </div>
+            </NativeChatQuestionOptions>
           </div>
           <div
             className={cn(

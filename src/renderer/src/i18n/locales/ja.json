@@ -24385,6 +24385,10 @@
     }
   },
   "nativeChat": {
+    "question": {
+      "selectOne": "1 つ選択",
+      "selectMultiple": "1 つ以上選択"
+    },
     "linkedMessageMissing": "そのメッセージが見つかりませんでした。",
     "math": {
       "scrollDisplayEquation": "数式ブロックをスクロール"

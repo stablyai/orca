@@ -23573,6 +23573,10 @@
     "controlledByHost": "Управляет {{host}}"
   },
   "nativeChat": {
+    "question": {
+      "selectOne": "Выберите один вариант",
+      "selectMultiple": "Выберите один или несколько вариантов"
+    },
     "linkedMessageMissing": "Не удалось найти это сообщение.",
     "math": {
       "scrollDisplayEquation": "Прокрутить формулу"

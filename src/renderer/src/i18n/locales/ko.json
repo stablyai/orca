@@ -22835,6 +22835,10 @@
     }
   },
   "nativeChat": {
+    "question": {
+      "selectOne": "하나 선택",
+      "selectMultiple": "하나 이상 선택"
+    },
     "linkedMessageMissing": "해당 메시지를 찾을 수 없습니다.",
     "math": {
       "scrollDisplayEquation": "수식 블록 스크롤"

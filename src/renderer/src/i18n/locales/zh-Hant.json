@@ -22496,6 +22496,10 @@
     "controlledByHost": "由 {{host}} 控制"
   },
   "nativeChat": {
+    "question": {
+      "selectOne": "選擇一項",
+      "selectMultiple": "選擇一項或多項"
+    },
     "linkedMessageMissing": "找不到該訊息。",
     "math": {
       "scrollDisplayEquation": "捲動獨立公式"

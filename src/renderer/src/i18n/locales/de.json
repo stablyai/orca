@@ -22987,6 +22987,10 @@
     "controlledByHost": "Gesteuert von {{host}}"
   },
   "nativeChat": {
+    "question": {
+      "selectOne": "Eine Option auswählen",
+      "selectMultiple": "Eine oder mehrere Optionen auswählen"
+    },
     "linkedMessageMissing": "Diese Nachricht wurde nicht gefunden.",
     "math": {
       "scrollDisplayEquation": "Abgesetzte Gleichung scrollen"

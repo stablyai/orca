@@ -24694,6 +24694,10 @@
     "controlledByHost": "由 {{host}} 控制"
   },
   "nativeChat": {
+    "question": {
+      "selectOne": "选择一项",
+      "selectMultiple": "选择一项或多项"
+    },
     "linkedMessageMissing": "找不到该消息。",
     "math": {
       "scrollDisplayEquation": "滚动显示公式"

@@ -26000,6 +26000,10 @@
     "controlledByHost": "Controlled by {{host}}"
   },
   "nativeChat": {
+    "question": {
+      "selectOne": "Select one",
+      "selectMultiple": "Select one or more"
+    },
     "linkedMessageMissing": "Couldn't find that message.",
     "math": {
       "scrollDisplayEquation": "Scroll display equation"
