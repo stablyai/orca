@@ -25,6 +25,7 @@ const reads = vi.hoisted(() => ({
   pending: new Set<Promise<void>>(),
   openTranscripts: new Set<Promise<void>>(),
   transcripts: 0,
+  transcriptStats: 0,
   ranges: [] as { at: number; bytes: number }[],
   stallTranscripts: false,
   released: Promise.resolve(),
@@ -35,6 +36,12 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>()
   return {
     ...actual,
+    stat: (...args: Parameters<typeof actual.stat>) => {
+      if (args[0].toString().endsWith('transcript.jsonl')) {
+        reads.transcriptStats++
+      }
+      return actual.stat(...args)
+    },
     open: async (...args: Parameters<typeof actual.open>) => {
       const path = args[0].toString()
       if (!path.endsWith('transcript.jsonl')) {
@@ -101,7 +108,7 @@ let dir: string
 let server: AgentHookServer
 
 beforeEach(async () => {
-  reads.started = reads.settled = reads.transcripts = 0
+  reads.started = reads.settled = reads.transcripts = reads.transcriptStats = 0
   reads.stallTranscripts = false
   reads.ranges.length = 0
   reads.released = new Promise((resolve) => (reads.release = resolve))
@@ -157,7 +164,8 @@ it.each([100, 1000])(
       await pane(index).send('PreInvocation', { initialNumSteps: 1 })
     }
     await vi.advanceTimersByTimeAsync(1000)
-    expect(reads).toMatchObject({ started: 3, transcripts: 3, settled: 0 })
+    expect(reads).toMatchObject({ started: 3, transcripts: 3, transcriptStats: 0, settled: 0 })
+    expect(reads.openTranscripts.size).toBe(3)
 
     const queued = Array.from({ length: count }, (_, index) => pane(index + 3))
     for (const entry of queued) {
@@ -170,11 +178,13 @@ it.each([100, 1000])(
     }
     await vi.advanceTimersByTimeAsync(1000)
     expect(reads).toMatchObject({ started: count + 3, transcripts: 3, settled: 0 })
+    // A Stop without reply text starts its own transcript read independently of the model poll.
     for (const entry of queued) {
-      await entry.send('Stop', { fullyIdle: true })
+      await entry.send('Stop', { fullyIdle: true, last_assistant_message: 'Finished' })
     }
     await vi.advanceTimersByTimeAsync(0)
-    expect(reads).toMatchObject({ transcripts: 3, settled: count })
+    expect(reads).toMatchObject({ transcripts: 3, transcriptStats: 0, settled: count })
+    expect(reads.openTranscripts.size).toBe(3)
 
     const successor = queued[0]!
     await successor.send('PreInvocation', { lastUserInput: 'Next task', initialNumSteps: 1 })
@@ -183,7 +193,7 @@ it.each([100, 1000])(
     reads.stallTranscripts = false
     reads.release()
     await Promise.all(reads.pending)
-    expect(reads).toMatchObject({ transcripts: 4, settled: count + 4 })
+    expect(reads).toMatchObject({ transcripts: 4, transcriptStats: 0, settled: count + 4 })
     expect(successor.row()?.model).toBe('resolved-model')
   }
 )

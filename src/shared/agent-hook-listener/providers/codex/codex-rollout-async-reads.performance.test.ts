@@ -253,11 +253,13 @@ it('defers overflow at the admission cap and admits a retry behind the accepted 
 it.each([100, 1000])(
   'unlinks %s individually retired polls without checking survivors until a slot frees',
   async (panes) => {
-    const stalled = stallEveryReadSlot()
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+    const stalled = stallEveryReadSlot()
+    const admitted: string[] = []
     const settled: string[] = []
     let checks = 0
     const scheduler = new AgentTranscriptPollScheduler<string>(1000, async (key, _, signal) => {
+      admitted.push(key)
       const size = await rolloutFileSizeAsync(
         key,
         new RolloutReadBatch(() => {
@@ -270,24 +272,28 @@ it.each([100, 1000])(
       }
     })
     const names = Array.from({ length: 2 * panes }, (_, index) => `pane-${index}`)
-    for (const key of names) {
-      scheduler.schedule(key, key)
-    }
-    await vi.advanceTimersByTimeAsync(1000)
+    try {
+      // The deadline heap does not guarantee ordering among ties.
+      for (const [index, key] of names.entries()) {
+        scheduler.schedule(key, key, undefined, 1000 + index)
+      }
+      vi.advanceTimersByTime(1000 + names.length - 1)
+      expect(admitted).toEqual(names)
+      checks = 0
+      for (let index = 0; index < names.length; index += 2) {
+        scheduler.clear(names[index]!)
+        await Promise.resolve()
+      }
+      await vi.advanceTimersByTimeAsync(0)
 
-    checks = 0
-    for (let index = 0; index < names.length; index += 2) {
-      scheduler.clear(names[index]!)
-      await Promise.resolve()
+      expect(checks).toBe(0)
+      expect(settled).toEqual(names.filter((_, index) => index % 2 === 0))
+      expect(fs.started).toEqual(['/stalled', '/stalled', '/stalled'])
+      await drain(stalled)
+      expect(fs.started.slice(3)).toEqual(names.filter((_, index) => index % 2 === 1))
+    } finally {
+      scheduler.clearAll()
+      await drain(stalled)
     }
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(checks).toBe(0)
-    expect(settled).toEqual(names.filter((_, index) => index % 2 === 0))
-    expect(fs.started).toEqual(['/stalled', '/stalled', '/stalled'])
-    vi.useRealTimers()
-    await drain(stalled)
-    expect(fs.started.slice(3)).toEqual(names.filter((_, index) => index % 2 === 1))
-    scheduler.clearAll()
   }
 )

@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 import { afterEach, expect, it, vi } from 'vitest'
 import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
@@ -24,6 +26,7 @@ afterEach(() => {
   vi.clearAllTimers()
   vi.useRealTimers()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   resetAgentStatusEpochClockForTests()
 })
 
@@ -31,6 +34,8 @@ it.each([100, 1000])(
   'publishes models for %s panes without scanning unrelated accepted rows',
   async (count) => {
     vi.useFakeTimers({ now: STARTED_AT, toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    const enqueuePRRefresh = vi.fn(async () => ({ kind: 'queued' as const }))
+    vi.stubGlobal('api', { ...window.api, gh: { ...window.api?.gh, enqueuePRRefresh } })
     const store = createTestStore()
     const worktrees = Array.from({ length: (count * 15) / 2 }, (_, index) =>
       makeWorktree({ id: `wt-${index}`, repoId: TEST_REPO.id, path: `/tmp/wt-${index}` })
@@ -47,6 +52,7 @@ it.each([100, 1000])(
     }))
     seedStore(store, {
       workspaceSessionReady: true,
+      groupBy: 'pr-status',
       worktreesByRepo: { [TEST_REPO.id]: worktrees },
       tabsByWorktree: Object.fromEntries(tabs.map((tab) => [tab.worktreeId, [tab]])),
       terminalLayoutsByTabId: Object.fromEntries(
@@ -110,6 +116,8 @@ it.each([100, 1000])(
       expect(next.sessions).toBe(initial.sessions)
       expect(next.orchestration).toBe(initial.orchestration)
     }
+    await Promise.resolve()
+    expect(enqueuePRRefresh).not.toHaveBeenCalled()
     expect(entries).not.toHaveBeenCalled()
     expect(visibleOrchestrationWorkForTest()).toEqual(routing)
     expect(store.getState().agentStatusByPaneKey.get(rows.at(-1)!.paneKey)?.model).toBe(
@@ -132,6 +140,10 @@ it.each([100, 1000])(
         }
       ])
     ).toEqual(['applied'])
+    await Promise.resolve()
+    expect(enqueuePRRefresh).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ candidate: expect.objectContaining({ worktreeId: 'wt-0' }) })
+    )
     const waiting = select()
     expect(waiting.flags.get('tab-0')?.hasPermission).toBe(true)
     expect(waiting.pet).toBe('waiting')
