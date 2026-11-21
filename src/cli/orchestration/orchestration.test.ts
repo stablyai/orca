@@ -69,6 +69,39 @@ describe('orchestration send structured payload flags', () => {
     expect(getTerminalHandleMock).not.toHaveBeenCalled()
     expect(callMock).not.toHaveBeenCalled()
   })
+
+  // `--body "$(cat missing-file)"` expands to ''; completing the Task with it would lose the report.
+  it('refuses a blank worker_done --body before sending', async () => {
+    await expect(
+      invokeSend(
+        new Map<string, string | boolean>([
+          ['from', 'term_worker'],
+          ['to', 'term_coord'],
+          ['subject', 'Done'],
+          ['type', 'worker_done'],
+          ['outcome', 'succeeded'],
+          ['body', '']
+        ])
+      )
+    ).rejects.toMatchObject({ code: 'invalid_argument' })
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses a blank worker_done --body before the peer-mail status check', async () => {
+    await expect(
+      invokeSend(
+        new Map<string, string | boolean>([
+          ['from', 'term_worker'],
+          ['to', 'term_coord'],
+          ['on', 'peer'],
+          ['subject', 'Done'],
+          ['type', 'worker_done'],
+          ['body', '  ']
+        ])
+      )
+    ).rejects.toMatchObject({ code: 'invalid_argument' })
+    expect(callMock).not.toHaveBeenCalled()
+  })
 })
 
 describe('orchestration timeout flag validation', () => {

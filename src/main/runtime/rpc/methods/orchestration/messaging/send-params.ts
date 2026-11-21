@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import {
   OptionalString,
+  OptionalPlainString,
   OptionalBoolean,
   requiredString
 } from '../../../../../../shared/rpc-contract/rpc-param-primitives'
@@ -21,7 +22,8 @@ export const SendParams = z
     to: OptionalString,
     subject: requiredString('Missing --subject'),
     from: OptionalString,
-    body: OptionalString,
+    // Keep '' until the worker_done check runs; it is normalized to undefined below.
+    body: OptionalPlainString,
     type: z
       .enum(MESSAGE_TYPES, {
         error: SEND_MESSAGE_TYPE_ERROR
@@ -46,13 +48,20 @@ export const SendParams = z
     devMode: OptionalBoolean
   })
   .superRefine((params, ctx) => {
-    if (!isDispatchMutationMessageType(params.type) || !params.to || !isGroupAddress(params.to)) {
-      return
+    if (isDispatchMutationMessageType(params.type) && params.to && isGroupAddress(params.to)) {
+      // Lifecycle authority targets one coordinator; fanout would leak signals to unrelated terminals.
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: getLifecycleGroupRecipientError(params.type),
+        path: ['to']
+      })
     }
-    // Lifecycle authority targets one coordinator; fanout would leak signals to unrelated terminals.
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: getLifecycleGroupRecipientError(params.type),
-      path: ['to']
-    })
+    if (params.type === 'worker_done' && params.body !== undefined && params.body.trim() === '') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'worker_done body must be nonempty when provided.',
+        path: ['body']
+      })
+    }
   })
+  .transform((params) => (params.body === '' ? { ...params, body: undefined } : params))

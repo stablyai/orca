@@ -82,10 +82,19 @@ function rejectLifecycleGroupRecipient(type: string | undefined, to: string): vo
 export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
   'orchestration send': async (ctx) => {
     const { flags, client, cwd, json } = ctx
+    const type = getOptionalStringFlag(flags, 'type')
+    // Validate the body before any routing RPC so a blank body always fails as invalid_argument.
+    const rawBody = flags.get('body')
+    if (type === 'worker_done' && typeof rawBody === 'string' && rawBody.trim() === '') {
+      // `--body "$(cat missing-file)"` expands to ''; completing with it would drop the report.
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'worker_done --body is empty. Pass a nonempty completion summary, or omit --body.'
+      )
+    }
     await refuseAgentServerRoute('send', ctx)
     await requirePeerMailCarrier(ctx)
     const to = getOptionalStringFlag(flags, 'to')
-    const type = getOptionalStringFlag(flags, 'type')
     if (to) {
       rejectLifecycleGroupRecipient(type, to)
     }
