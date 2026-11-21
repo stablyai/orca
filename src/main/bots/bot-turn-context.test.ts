@@ -612,7 +612,7 @@ describe('a bot chat turn context', () => {
     })
 
     // Nothing is said; the turn only vouches for the Tools and Rules the launch gave.
-    it.each(['pi', 'copilot', 'aug', 'goose', 'kilo', 'qwen-code'])(
+    it.each(['pi', 'copilot', 'aug', 'goose', 'kilo', 'qwen-code', 'devin'])(
       'a resumed %s conversation reads them again, so nothing is sent',
       async (provider) => {
         const { context, edit, fs, plan } = home('Old soul.', '- a fact')

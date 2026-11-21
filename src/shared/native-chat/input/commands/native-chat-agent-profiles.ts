@@ -117,8 +117,13 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
   },
   // Qwen lists its skills as commands once a session runs; Orca knows none of its skill folders.
   'qwen-code': null,
-  // Devin lists its skills as commands once a session runs; Orca knows none of its skill folders.
-  devin: null
+  // Devin lists its skills as commands once a session runs, and reads the shared `.agents/skills`
+  // folders at rest (`devin skills paths`), so a resting chat scans those; Orca knows none of the
+  // vendor folders Devin also reads.
+  devin: {
+    skillPrefix: '/',
+    skillSourceOwner: 'devin'
+  }
 }
 
 /** Whether `skill` under `source` reaches `profile`'s agent: shared roots, its own, and the skill
