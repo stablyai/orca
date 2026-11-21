@@ -170,3 +170,34 @@ it('refuses before sweeping children when a checkout replaces the pinned marker 
     rmSync(scratch, { recursive: true, force: true })
   }
 })
+
+it('skips child deletion and refuses non-empty folder when the pinned marker disappears during enumeration', async () => {
+  const scratch = mkdtempSync(join(tmpdir(), 'orca-win-readdir-loss-'))
+  try {
+    const gitFile = join(scratch, '.git')
+    writeFileSync(gitFile, 'gitdir: C:/repo/.git/worktrees/feature\n')
+    const initialIno = lstatSync(gitFile, { bigint: true }).ino
+    names.mockImplementationOnce(async () => {
+      unlinkSync(gitFile)
+      stat.mockImplementation(async (path: string) => {
+        if (String(path).endsWith('.git') || String(path).endsWith('locked')) {
+          throw missing
+        }
+        return { isDirectory: () => true, isSymbolicLink: () => false }
+      })
+      rmdir.mockRejectedValue(Object.assign(new Error('not empty'), { code: 'ENOTEMPTY' }))
+      return ['unsaved.txt']
+    })
+
+    await expect(
+      removeWindowsCheckout('C:/repo', scratch, true, {
+        expectedMarker: `C:/repo/.git/worktrees/feature#${initialIno}`
+      })
+    ).rejects.toThrow('is no longer a Git worktree')
+
+    expect(removeChild).not.toHaveBeenCalled()
+    expect(unlink).not.toHaveBeenCalled()
+  } finally {
+    rmSync(scratch, { recursive: true, force: true })
+  }
+})

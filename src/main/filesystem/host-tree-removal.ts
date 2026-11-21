@@ -58,7 +58,7 @@ export async function removeHostCheckout(
   targetPath: string,
   authorize: (checkClean: boolean) => Promise<boolean>,
   signal?: AbortSignal,
-  verifyBeforeChildDelete?: () => Promise<void>
+  verifyBeforeChildDelete?: () => Promise<boolean>
 ): Promise<void> {
   const root = toHostRemovalPath(targetPath)
   let markerGone = false
@@ -72,19 +72,23 @@ export async function removeHostCheckout(
           markerGone = !(await authorize(true))
           if (!markerGone) {
             const names = await namesExceptCheckoutMarker(root)
-            await verifyBeforeChildDelete?.()
-            await deleteHostChildren(root, names)
-            // Child promises settled; their internal Node sibling walks may still be running.
-            markerGone = !(await authorize(false))
+            if (verifyBeforeChildDelete) {
+              markerGone = !(await verifyBeforeChildDelete())
+            }
             if (!markerGone) {
-              try {
-                await unlink(join(root, '.git'))
-              } catch (error) {
-                if (getErrorCode(error) !== 'ENOENT') {
-                  throw error
+              await deleteHostChildren(root, names)
+              // Child promises settled; their internal Node sibling walks may still be running.
+              markerGone = !(await authorize(false))
+              if (!markerGone) {
+                try {
+                  await unlink(join(root, '.git'))
+                } catch (error) {
+                  if (getErrorCode(error) !== 'ENOENT') {
+                    throw error
+                  }
                 }
+                markerGone = true
               }
-              markerGone = true
             }
           }
         }
@@ -214,9 +218,7 @@ export async function removeUnregisteredHostCheckout(
       }
       return true
     }
-    await removeHostCheckout(targetPath, verifyInitialMarker, signal, async () => {
-      await verifyInitialMarker()
-    })
+    await removeHostCheckout(targetPath, verifyInitialMarker, signal, verifyInitialMarker)
     return
   }
 
