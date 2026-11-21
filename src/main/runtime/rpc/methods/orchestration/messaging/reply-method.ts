@@ -11,7 +11,7 @@ import {
 } from '../../../orchestration/mutations/orchestration-mutation-receipt'
 import { exposeMessage } from './mailbox-message-receipt'
 import { recordReceiptBeforeNudge, replayMutationNudge } from './mutation-replay-nudge'
-import { botAnswerPayload } from './bot-request-outcome'
+import { botAnswerPayload, showGroupAnswer } from './bot-request-outcome'
 import { resolveCheckedReplyRecipient } from './reply-follow-up'
 import { replyAccess } from './reply-access'
 import { replyToRemoteRunHome } from '../../../../orchestration/legacy-remote/reply-remote'
@@ -176,6 +176,7 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
       payload: botAnswerPayload(db, original)
     })
     db.markAsRead([original.id])
+    showGroupAnswer(runtime, original, sessionCallerOf(orchestrationCaller)?.sessionId, params.body)
 
     const receipt = {
       message: exposeMessage(reply),

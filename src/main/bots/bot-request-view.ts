@@ -103,13 +103,17 @@ function originLine(record: BotRequestRecord): Record<string, string> {
 }
 
 /** Asked by the owner in the sender's own chat, where Orca shows the answer on its own card. A
- *  worker's request has no card: its answer goes to the worker. */
+ *  worker's request has no card: its answer goes to the worker. Nor has a group room's: the room
+ *  shows the answer on the answering member's turn. */
 export function askedInOwnersChat(
-  record: Pick<BotRequestRecord, 'askers' | 'askedBy' | 'fromWorker'>
+  record: Pick<BotRequestRecord, 'askers' | 'askedBy' | 'fromWorker' | 'group'>
 ): boolean {
   const askedBy = askedByOf(record)
   return (
-    !record.fromWorker && askedBy.length > 0 && askedBy.every((asker) => asker.kind === 'owner')
+    !record.fromWorker &&
+    !record.group &&
+    askedBy.length > 0 &&
+    askedBy.every((asker) => asker.kind === 'owner')
   )
 }
 

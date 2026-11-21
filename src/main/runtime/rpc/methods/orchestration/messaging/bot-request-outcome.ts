@@ -14,6 +14,7 @@ import {
 } from '../../../../../bots/bot-request-view'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { botOfSession } from '../../../../../bots/bot-session-tabs'
+import { runtimeBotGroups } from '../../../../../bots/bot-group-runtime'
 import { awaitsAnswer } from '../../../../../bots/bot-request-policy'
 import { readBotTurn } from './bot-recipient'
 import { botRequestRecord } from './bot-request-record'
@@ -67,6 +68,23 @@ export function botAnswerOf(
     )
   }
   return { botAnswer: { requestId: original.id, view: botAnswerView(record, answer.posted) } }
+}
+
+/** A group member's answer shows in the room on the turn that sent it; elsewhere it is only mail. */
+export function showGroupAnswer(
+  runtime: OrcaRuntimeService,
+  original: MessageRow,
+  callerSessionId: string | undefined,
+  body: string
+): void {
+  const group = botRequestRecord(runtime.getOrchestrationDb(), original.id)?.group
+  if (group && callerSessionId === group.targetSessionId) {
+    void runtimeBotGroups(runtime)
+      .noteAnswer(callerSessionId, body)
+      .catch((error: unknown) =>
+        console.warn('[bot-groups] could not show an answer in the room', error)
+      )
+  }
 }
 
 /** True when a reply's payload is the answer to this request. */

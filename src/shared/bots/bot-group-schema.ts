@@ -3,7 +3,7 @@ import { BOT_AGENTS, BotNameSchema } from '../bot-types'
 import { BotAvatarColorSchema } from './bot-avatar-color'
 import { isAdmissibleAgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-schemas'
 import type { AgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-types'
-import type { NativeChatBlock } from '../native-chat/native-chat-types'
+import type { NativeChatBlock, NativeChatMessage } from '../native-chat/native-chat-types'
 
 export const BotGroupReplyMode = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('bot'), botId: z.string().min(1) }),
@@ -75,6 +75,8 @@ const BotGroupTurnSchema = z.object({
   /** The finished reply, saved when the turn ended; null when it ended without one. Absent while
    *  the turn runs, and on turns saved before replies were. */
   reply: z.string().nullable().optional(),
+  /** Its answer to another member's request: sent as mail, so its own chat shows only the call. */
+  answer: z.string().optional(),
   /** The members its reply named, saved as their hand-offs were reserved: a replay wakes none. */
   handedOff: z.array(z.string()).optional(),
   frozenItems: z
@@ -146,6 +148,26 @@ export type BotGroupMessage = z.infer<typeof BotGroupMessageSchema>
 export type BotGroupLatest = z.infer<typeof BotGroupLatestSchema>
 export type BotGroupPeerScope = z.infer<typeof BotGroupPeerScopeSchema>
 export type LegacyBotGroup = z.infer<typeof LegacyBotGroupSchema>
+
+/** A turn's rows as the room draws them on desktop and mobile: its answer to a member's request
+ *  closes them, as the reply its chat ended without. */
+export function withBotGroupTurnAnswer(
+  messages: NativeChatMessage[],
+  turn: Pick<BotGroupTurn, 'operationId' | 'answer'>
+): NativeChatMessage[] {
+  return turn.answer
+    ? [
+        ...messages,
+        {
+          id: `${turn.operationId}:answer`,
+          role: 'assistant',
+          blocks: [{ type: 'text', text: turn.answer }],
+          timestamp: null,
+          source: 'transcript'
+        }
+      ]
+    : messages
+}
 
 /** An owner post's transcript blocks for desktop and mobile message rows. */
 export function botGroupOwnerMessageBlocks(

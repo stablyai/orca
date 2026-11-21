@@ -118,4 +118,25 @@ describe('what the sender reads', () => {
     const mixed = record({ askers: [{ kind: 'owner' }, nora('direct_message')] })
     expect(botAnswerView(mixed, false).next).toMatch(/^Pass this answer on/)
   })
+
+  it('never points a group room member at a card the room does not have', () => {
+    const grouped = record({
+      askers: [{ kind: 'owner' }],
+      conversation: null,
+      group: {
+        id: 'group-1',
+        rootRequestId: 'post-1',
+        rootSequence: 1,
+        sourceSessionId: 'bot-group-member-a',
+        targetSessionId: 'bot-group-member-b'
+      }
+    })
+    expect(botRequestSentNext(grouped)).not.toMatch(/card/)
+    expect(botAnswerView(grouped, false).next).toBe(
+      'Pass this answer on to your owner as your final message.'
+    )
+    expect(botAnswerView({ ...grouped, purpose: 'question' }, false).next).toBe(
+      'Finish the job with this answer.'
+    )
+  })
 })
