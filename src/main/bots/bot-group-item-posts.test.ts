@@ -1,6 +1,4 @@
-import { randomUUID } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
-import { BOT_ITEM_MAIL_SENDER } from '../../shared/bots/bot-item-note-runs'
 import { fixture, groupNativeMocks } from './bot-group-native-runtime.test-fixture'
 import { groupItemPostId, postGroupItemMail } from './bot-group-item-posts'
 
@@ -9,7 +7,8 @@ const mocks = groupNativeMocks()
 const ANSWER = {
   id: 'msg_item_e11',
   subject: 'Your owner answered your question (item 3)',
-  body: `Your owner changed item 3:\n- item 3: answered your question "Ship Friday" (event e11)\n${'Long detail. '.repeat(2_000)}`,
+  // Names the other member, as an answer may: only the bot that asked wakes.
+  body: `Your owner changed item 3:\n- item 3: answered your question: ask @Scout first (event e11)\n${'Long detail. '.repeat(2_000)}`,
   images: []
 }
 
@@ -23,64 +22,68 @@ const delivered = () =>
   mocks.send.mock.calls.map(([input]) => (input as { sessionId: string }).sessionId)
 
 describe("an owner's item answer in a group room", () => {
-  it('posts it as the owner to that bot alone, in full, and wakes only that bot', async () => {
-    const { groups, group, scout } = await room()
-    expect(await postGroupItemMail(groups, scout.sessionId, ANSWER)).toBe(true)
-    const post = groups.store.message(groupItemPostId(ANSWER.id))
-    expect(post).toMatchObject({
+  it('posts it as the owner to the bot that asked alone, named and in full', async () => {
+    const { groups, group, forge } = await room()
+    expect(await postGroupItemMail(groups, forge.sessionId, ANSWER)).toBe(true)
+    expect(groups.store.message(groupItemPostId(ANSWER.id))).toMatchObject({
       groupId: group.id,
       author: { kind: 'owner' },
-      text: `${ANSWER.subject}\n\n${ANSWER.body}`,
-      turns: [{ botId: 'bot-0', sessionId: scout.sessionId }]
+      text: `@Forge ${ANSWER.subject}\n\n${ANSWER.body}`,
+      turns: [{ botId: 'bot-1', sessionId: forge.sessionId }]
     })
-    await vi.waitFor(() => expect(delivered()).toEqual([scout.sessionId]))
+    // Admitted before it answers, so the change is settled only once the turn is in.
+    expect(delivered()).toEqual([forge.sessionId])
   })
 
-  it('posts it once, however often the answer is sent again', async () => {
-    const { groups, group, scout } = await room()
-    await postGroupItemMail(groups, scout.sessionId, ANSWER)
-    await postGroupItemMail(groups, scout.sessionId, ANSWER)
-    await vi.waitFor(() => expect(groups.store.pending()).toEqual([]))
-    expect(groups.store.messages(group.id)).toHaveLength(1)
-    expect(delivered()).toEqual([scout.sessionId])
+  it('posts it once, even when the item was retitled or the bot left before a retry', async () => {
+    const { groups, group, forge } = await room()
+    await postGroupItemMail(groups, forge.sessionId, ANSWER)
+    const retitled = { ...ANSWER, subject: 'Your owner answered your question (item 3: renamed)' }
+    expect(await postGroupItemMail(groups, forge.sessionId, retitled)).toBe(true)
+    await groups.update({
+      groupId: group.id,
+      revision: groups.store.get(group.id).revision,
+      botIds: ['bot-0']
+    })
+    expect(await postGroupItemMail(groups, forge.sessionId, ANSWER)).toBe(true)
+    expect(
+      groups.store.messages(group.id).filter((message) => message.id.startsWith('item-mail:'))
+    ).toHaveLength(1)
+    expect(delivered()).toEqual([forge.sessionId])
   })
 
   it('still wakes the bot when the room was stopped before the answer', async () => {
     const { groups, group, scout } = await room()
     await groups.stop(group.id)
-    await postGroupItemMail(groups, scout.sessionId, ANSWER)
-    await vi.waitFor(() => expect(delivered()).toEqual([scout.sessionId]))
+    expect(await postGroupItemMail(groups, scout.sessionId, ANSWER)).toBe(true)
+    expect(delivered()).toEqual([scout.sessionId])
+  })
+
+  it('sends it Home when the room refuses the turn, and never admits it twice', async () => {
+    const { groups, scout } = await room()
+    mocks.send.mockResolvedValueOnce({ kind: 'refused', refusal: { message: 'The chat is busy.' } })
+    expect(await postGroupItemMail(groups, scout.sessionId, ANSWER)).toBe(false)
+    // A retry (after a restart, say) finds the refused post and sends it Home again, not to the room.
+    expect(await postGroupItemMail(groups, scout.sessionId, ANSWER)).toBe(false)
+    expect(mocks.send).toHaveBeenCalledTimes(1)
+  })
+
+  it('reads the room again when it changed while posting', async () => {
+    const { groups, scout } = await room()
+    const send = groups.send
+    const changed = vi
+      .spyOn(groups, 'send')
+      .mockRejectedValueOnce(
+        new Error('The group changed. Review the current members before sending.')
+      )
+      .mockImplementation(send)
+    expect(await postGroupItemMail(groups, scout.sessionId, ANSWER)).toBe(true)
+    expect(changed).toHaveBeenCalledTimes(2)
+    expect(delivered()).toEqual([scout.sessionId])
   })
 
   it('posts nothing for a session no room has, so the answer goes to Home', async () => {
     const { groups } = await room()
     expect(await postGroupItemMail(groups, 'bot-group-member-gone', ANSWER)).toBe(false)
-  })
-
-  it('runs an answer an older Orca left unread in the room session once, then marks it read', async () => {
-    const { groups, group, orchestration, scout } = await room()
-    orchestration.insertMessage({
-      id: ANSWER.id,
-      from: BOT_ITEM_MAIL_SENDER,
-      to: `orca_session_id:${scout.sessionId}`,
-      subject: ANSWER.subject,
-      body: ANSWER.body,
-      type: 'status',
-      orcaAuthored: 'item-mail'
-    })
-    const row = { id: ANSWER.id, thread_id: null, from_handle: BOT_ITEM_MAIL_SENDER }
-    expect(groups.narrowMailBatch(scout.sessionId, [row])).toEqual({ messages: [], ended: [] })
-    expect(groups.narrowMailBatch(scout.sessionId, [row])).toEqual({ messages: [], ended: [] })
-    await vi.waitFor(() => expect(orchestration.getMessageById(ANSWER.id)?.read).toBe(1))
-    await vi.waitFor(() => expect(groups.store.pending()).toEqual([]))
-    expect(groups.store.message(groupItemPostId(ANSWER.id))?.author).toEqual({ kind: 'owner' })
-    expect(groups.store.messages(group.id)).toHaveLength(1)
-    expect(delivered()).toEqual([scout.sessionId])
-  })
-
-  it('leaves other room mail to the room rules', async () => {
-    const { groups, scout } = await room()
-    const row = { id: randomUUID(), thread_id: null, from_handle: 'term_someone' }
-    expect(groups.narrowMailBatch(scout.sessionId, [row])).toEqual({ messages: [], ended: [] })
   })
 })
