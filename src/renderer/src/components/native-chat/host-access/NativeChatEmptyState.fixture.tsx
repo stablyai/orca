@@ -9,7 +9,15 @@ import { NativeChatEmptyState } from './NativeChatEmptyState'
 const LONG_PURPOSE =
   'Investigates product issues, reviews changes, checks release readiness, and helps the team ship reliable software. It explains what changed, verifies the result, and keeps the work moving across local folders, remote hosts, and every supported platform.'
 
-function WelcomePane({ purpose, height }: { purpose: string; height: number }) {
+function WelcomePane({
+  purpose,
+  height,
+  withIcon = true
+}: {
+  purpose: string
+  height: number
+  withIcon?: boolean
+}) {
   const settings = useAppStore((state) => state.settings)
   const appearance = useNativeChatAppearanceStyle(settings)
   return (
@@ -26,7 +34,9 @@ function WelcomePane({ purpose, height }: { purpose: string; height: number }) {
             persona={{
               name: 'Layout Bot',
               subtitle: purpose,
-              icon: <BotAvatarTile src={null} fallback="L" className="size-14 rounded-xl text-xl" />
+              icon: withIcon ? (
+                <BotAvatarTile src={null} fallback="L" className="size-14 rounded-xl text-xl" />
+              ) : null
             }}
           />
         </NativeChatContextClearFade>
@@ -41,10 +51,10 @@ function WelcomePane({ purpose, height }: { purpose: string; height: number }) {
   )
 }
 
-const pane = (width: number, height: number, purpose: string) =>
+const pane = (width: number, height: number, purpose: string, withIcon = true) =>
   defineFixture({
     width: width + 32,
-    render: () => <WelcomePane purpose={purpose} height={height} />
+    render: () => <WelcomePane purpose={purpose} height={height} withIcon={withIcon} />
   })
 
 export const longPurpose = pane(817, 225, LONG_PURPOSE)
@@ -53,3 +63,4 @@ export const emptyPurpose = pane(817, 225, '')
 export const ordinary = pane(817, 600, LONG_PURPOSE)
 export const narrow = pane(260, 225, LONG_PURPOSE)
 export const minimumTerminalSplit = pane(50, 600, LONG_PURPOSE)
+export const noIcon = pane(817, 225, LONG_PURPOSE, false)

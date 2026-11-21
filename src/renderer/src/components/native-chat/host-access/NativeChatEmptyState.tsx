@@ -60,23 +60,25 @@ export function NativeChatEmptyState({
         )}
       >
         <div className="native-chat-empty-state-content flex w-full shrink-0 flex-col items-center gap-3 p-6 text-center">
-          {shownPersona ? (
-            shownPersona.icon
-          ) : (
-            <div
-              className={
-                kind === 'error'
-                  ? 'flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive'
-                  : 'flex size-12 items-center justify-center rounded-full bg-accent text-accent-foreground'
-              }
-            >
-              {kind === 'error' ? (
-                <TriangleAlert className="size-6" />
-              ) : (
-                <MessageSquare className="size-6" />
-              )}
-            </div>
-          )}
+          <div className="native-chat-empty-state-icon empty:hidden">
+            {shownPersona ? (
+              shownPersona.icon
+            ) : (
+              <div
+                className={
+                  kind === 'error'
+                    ? 'flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive'
+                    : 'flex size-12 items-center justify-center rounded-full bg-accent text-accent-foreground'
+                }
+              >
+                {kind === 'error' ? (
+                  <TriangleAlert className="size-6" />
+                ) : (
+                  <MessageSquare className="size-6" />
+                )}
+              </div>
+            )}
+          </div>
           <p className="text-sm font-medium text-chat-foreground-strong">{copy.title}</p>
           {copy.subtitle ? (
             <p className="max-w-sm text-balance text-xs text-chat-foreground-faint">

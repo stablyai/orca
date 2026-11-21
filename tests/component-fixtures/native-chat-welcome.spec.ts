@@ -59,6 +59,19 @@ for (const theme of ['dark', 'light']) {
   })
 }
 
+test('an iconless short welcome keeps its title and description reachable', async ({ page }) => {
+  await open(page, 'noIcon')
+  const pane = page.locator('[data-welcome-fixture]')
+  const copy = pane.locator('[data-clearing] p')
+  await expect(copy.first()).toBeInViewport({ ratio: 1 })
+  const welcome = pane.getByRole('region')
+  await welcome.focus()
+  await page.keyboard.press('End')
+  await expect(copy.last()).toBeInViewport({ ratio: 1 })
+  await page.keyboard.press('Tab')
+  await expect(pane.getByRole('textbox')).toBeFocused()
+})
+
 test('a fitting welcome adds no tab stop, and a growing composer makes it scrollable', async ({
   page
 }) => {

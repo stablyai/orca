@@ -8,7 +8,7 @@
     padding-block: calc(var(--spacing) * 2);
   }
 
-  .native-chat-empty-state-content > :first-child {
+  .native-chat-empty-state-icon {
     display: none;
   }
 }
