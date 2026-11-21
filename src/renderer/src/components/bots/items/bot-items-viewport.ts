@@ -49,10 +49,7 @@ function listenTo(
   }
 }
 
-function createViewport(
-  scroller: HTMLElement | null,
-  list: React.RefObject<HTMLElement | null>
-): BotItemsViewport {
+function createViewport(scroller: HTMLElement | null, list: HTMLElement | null): BotItemsViewport {
   const listeners = new Set<() => void>()
   // This frame's box, shared by every group a notice reaches.
   let frameBox: BotItemsViewportBox | null = null
@@ -69,7 +66,7 @@ function createViewport(
     subscribe: (listener) => {
       listeners.add(listener)
       if (scroller && !stop) {
-        stop = listenTo(scroller, list.current, onFrame)
+        stop = listenTo(scroller, list, onFrame)
       }
       return () => {
         listeners.delete(listener)
@@ -85,7 +82,7 @@ function createViewport(
 
 export function useBotItemsViewport(
   scroller: HTMLElement | null,
-  list: React.RefObject<HTMLElement | null>
+  list: HTMLElement | null
 ): BotItemsViewport {
   return useMemo(() => createViewport(scroller, list), [scroller, list])
 }

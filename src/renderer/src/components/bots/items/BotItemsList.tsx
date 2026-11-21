@@ -33,6 +33,7 @@ import { botItemsByBot, setBotItemsStatus } from './use-bot-items'
 import { useBotItemSnoozing, type BotItemSnoozing } from './BotItemSnooze'
 import { BotItemRowsWindow, focusBotItemBackRow } from './BotItemRowsWindow'
 import { useBotItemsViewport, type BotItemsViewport } from './bot-items-viewport'
+import { useReusedArrayIdentity } from '../../sidebar/worktree-list/listing/use-reused-array-identity'
 import { listOwner, type BotItemsListMembers, type ListOwner } from './bot-items-list-owner'
 
 export type { BotItemsListMembers }
@@ -83,8 +84,9 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
   }
   const selectedItems = ordered.filter((item) => selected.has(item.uid))
   const snoozing = useBotItemSnoozing(botOf, () => setSelected(new Set()))
-  const listRef = useRef<HTMLDivElement | null>(null)
-  const viewport = useBotItemsViewport(props.scroller ?? null, listRef)
+  // State, not a ref: a group's window subscribes before a ref here would be set.
+  const [list, setList] = useState<HTMLDivElement | null>(null)
+  const viewport = useBotItemsViewport(props.scroller ?? null, list)
 
   const select = useLatestHandler((item: BotItem, on: boolean, range: boolean): void => {
     setSelected((current) => {
@@ -135,7 +137,7 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
       : t('bots.items.stale.reason', 'No activity for {{count}} days.', { count: props.staleDays })
   return (
     <div
-      ref={listRef}
+      ref={setList}
       className="flex flex-col gap-2"
       style={numberColumn}
       onKeyDown={(event) => event.key === 'Escape' && setSelected(new Set())}
@@ -220,9 +222,12 @@ function BotItemGroup({
   )
   const [shown, setShown] = useState(Math.max(BOT_ITEM_GROUP_ROWS, focusIndex + 1))
   // Only an open window draws rows: a folded group, or Needs you, copies none.
-  const shownItems = useMemo(
-    () => (open && id !== 'needs_you' ? items.slice(0, shown) : []),
-    [open, id, items, shown]
+  // The same rows keep the same list (the minute clock regroups every item), so the window does nothing.
+  const shownItems = useReusedArrayIdentity(
+    useMemo(
+      () => (open && id !== 'needs_you' ? items.slice(0, shown) : []),
+      [open, id, items, shown]
+    )
   )
   const section = useRef<HTMLElement | null>(null)
   // Back's row until it has focus; one that left the group has nothing to return to.

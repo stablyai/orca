@@ -5,6 +5,8 @@
 // group's Tab stop, and Back's row stay drawn wherever the panel scrolls. A short group draws every row
 // and leaves Tab and the keys to the panel, as a plain list does.
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { cn } from '@/lib/class-names'
+import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import type { BotItemsViewport } from './bot-items-viewport'
 
@@ -65,21 +67,48 @@ type Range = { start: number; end: number }
 /** A row by its uid and where it was: found there at once unless the rows have moved since. */
 type RowPick = { uid: string; at: number }
 
-function indexOfPick(items: readonly BotItem[], pick: RowPick | null): number {
-  if (pick === null) {
-    return -1
-  }
-  return items[pick.at]?.uid === pick.uid
-    ? pick.at
-    : items.findIndex((item) => item.uid === pick.uid)
-}
+type IndexOf = (pick: RowPick | null) => number
 
-function useIndexOf(items: readonly BotItem[], pick: RowPick | null): number {
-  return useMemo(() => indexOfPick(items, pick), [items, pick])
+/** Finds picks in one shown list: at once where they were, else by one index of the list, built on the
+ *  first miss and shared by every pick. -1 for a row that left. */
+function indexOfPicks(items: readonly BotItem[]): IndexOf {
+  let byUid: Map<string, number> | null = null
+  return (pick) => {
+    if (pick === null) {
+      return -1
+    }
+    if (items[pick.at]?.uid === pick.uid) {
+      return pick.at
+    }
+    byUid ??= new Map(items.map((item, index) => [item.uid, index]))
+    return byUid.get(pick.uid) ?? -1
+  }
 }
 
 const relocated = (pick: RowPick | null, at: number): RowPick | null =>
   pick === null || pick.at === at ? pick : at < 0 ? null : { uid: pick.uid, at }
+
+/** The rows at the top of the view and just below it, where each was, and the scroll offset then. */
+type Anchor = {
+  top: RowPick
+  topAt: number
+  below: RowPick | null
+  belowAt: number
+  scrollTop: number
+}
+
+/** How far what the owner was reading moved. Of the two rows, the one that moved least kept its place
+ *  among its neighbours: a row an update sorts to the front doesn't take the view with it. */
+function anchorShift(held: Anchor, indexOf: IndexOf, geometry: Geometry): number {
+  const top = indexOf(held.top)
+  const below = indexOf(held.below)
+  const topShift = top < 0 ? null : geometry.offset(top) - held.topAt
+  const belowShift = below < 0 ? null : geometry.offset(below) - held.belowAt
+  if (topShift === null || belowShift === null) {
+    return topShift ?? belowShift ?? 0
+  }
+  return Math.abs(belowShift) < Math.abs(topShift) ? belowShift : topShift
+}
 
 const samePick = (a: RowPick | null, b: RowPick | null): boolean =>
   a === b || (a !== null && b !== null && a.uid === b.uid && a.at === b.at)
@@ -133,57 +162,62 @@ export function BotItemRowsWindow({
         : uniformGeometry(count),
     [count, tallKey]
   )
-  const [range, setRange] = useState<Range>(() => ({
+  const indexOf = useMemo(() => indexOfPicks(items), [items])
+  const [windowRange, setRange] = useState<Range>(() => ({
     start: 0,
-    end: all ? count : Math.min(count, FIRST_ROWS)
+    end: Math.min(count, FIRST_ROWS)
   }))
-  // The row at the top of the panel's view when this group spans it, and the scroll offset then: rows
-  // added or removed above it move the view with them, so what the owner is reading stays put.
-  const anchor = useRef<(RowPick & { offset: number; scrollTop: number }) | null>(null)
-  const measure = useCallback(() => {
+  const range = useMemo(
+    () => (all ? { start: 0, end: count } : windowRange),
+    [all, count, windowRange]
+  )
+  // Where the owner is reading, when this group spans the top of the panel's view: rows added or
+  // removed above it move the view with them, so what the owner is reading stays put.
+  const anchor = useRef<Anchor | null>(null)
+  const measure = useLatestHandler((): void => {
     const box = viewport.read()
     const element = container.current
     const top = box && element ? element.getBoundingClientRect().top : null
     anchor.current = null
-    if (box && top !== null) {
-      const viewTop = box.top - top
-      if (box.scrollTop > 0 && viewTop > 0 && viewTop < geometry.total) {
-        const at = geometry.indexAt(viewTop)
-        anchor.current = {
-          uid: items[at]!.uid,
-          at,
-          offset: geometry.offset(at),
-          scrollTop: box.scrollTop
-        }
+    const first = { start: 0, end: Math.min(count, FIRST_ROWS) }
+    if (!box || top === null) {
+      setRange((prev) => (prev.start === first.start && prev.end === first.end ? prev : first))
+      return
+    }
+    const viewTop = box.top - top
+    if (box.scrollTop > 0 && viewTop > 0 && viewTop < geometry.total) {
+      const at = geometry.indexAt(viewTop)
+      const below = items[at + 1]
+      anchor.current = {
+        top: { uid: items[at]!.uid, at },
+        topAt: geometry.offset(at),
+        below: below ? { uid: below.uid, at: at + 1 } : null,
+        belowAt: geometry.offset(at + 1),
+        scrollTop: box.scrollTop
       }
     }
-    let next: Range
-    if (all) {
-      next = { start: 0, end: count }
-    } else if (!box || top === null) {
-      next = { start: 0, end: Math.min(count, FIRST_ROWS) }
-    } else {
-      const from = box.top - top - OVERSCAN_PX
-      const to = box.bottom - top + OVERSCAN_PX
-      next =
-        count === 0 || to <= 0 || from >= geometry.total
-          ? { start: 0, end: 0 }
-          : { start: geometry.indexAt(Math.max(0, from)), end: geometry.indexAt(to) + 1 }
-    }
+    const from = box.top - top - OVERSCAN_PX
+    const to = box.bottom - top + OVERSCAN_PX
+    const next =
+      count === 0 || to <= 0 || from >= geometry.total
+        ? { start: 0, end: 0 }
+        : { start: geometry.indexAt(Math.max(0, from)), end: geometry.indexAt(to) + 1 }
     setRange((prev) => (prev.start === next.start && prev.end === next.end ? prev : next))
-  }, [viewport, geometry, count, all, items])
-  useLayoutEffect(() => viewport.subscribe(measure), [measure, viewport])
+  })
+  // A short group draws every row and needs no view: the browser keeps its reading position, as for
+  // any list. A long one listens once for as long as it windows.
+  useLayoutEffect(() => (all ? undefined : viewport.subscribe(measure)), [all, viewport, measure])
   // After every render: an update can move this group (another group regrouped above it) or its rows
   // without the list changing height, which no scroll or resize would report. The kept offset is set
   // outright, so a browser clamp at the bottom of the panel isn't counted twice.
   useLayoutEffect(() => {
+    if (all) {
+      return
+    }
     const held = anchor.current
-    const at = indexOfPick(items, held)
-    if (held && at >= 0) {
-      const moved = geometry.offset(at) - held.offset
-      if (moved !== 0) {
-        viewport.scrollTo(held.scrollTop + moved)
-      }
+    const moved = held ? anchorShift(held, indexOf, geometry) : 0
+    if (held && moved !== 0) {
+      viewport.scrollTo(held.scrollTop + moved)
     }
     measure()
   })
@@ -198,17 +232,17 @@ export function BotItemRowsWindow({
   // The row an arrow moved to: drawn, then focused as it mounts.
   const [target, setTarget] = useState<RowPick | null>(null)
   const backPick = useMemo(() => (backUid === null ? null : { uid: backUid, at: 0 }), [backUid])
-  const stopIndex = useIndexOf(items, stop)
-  const focusedIndex = useIndexOf(items, focused)
-  const targetIndex = useIndexOf(items, target)
-  const backIndex = useIndexOf(items, backPick)
+  const stopIndex = useMemo(() => indexOf(stop), [indexOf, stop])
+  const focusedIndex = useMemo(() => indexOf(focused), [indexOf, focused])
+  const targetIndex = useMemo(() => indexOf(target), [indexOf, target])
+  const backIndex = useMemo(() => indexOf(backPick), [indexOf, backPick])
   // A row that moved is found at its new place from now on, and one that left is let go, so later
-  // updates find each pick at once rather than searching the group again.
+  // updates find each pick at once. A pick set since this render (focus as a row mounts) is kept.
   useLayoutEffect(() => {
-    setStop((prev) => relocated(prev, stopIndex))
-    setFocused((prev) => relocated(prev, focusedIndex))
-    setTarget((prev) => relocated(prev, targetIndex))
-  }, [stopIndex, focusedIndex, targetIndex])
+    setStop((prev) => (prev === stop ? relocated(prev, stopIndex) : prev))
+    setFocused((prev) => (prev === focused ? relocated(prev, focusedIndex) : prev))
+    setTarget((prev) => (prev === target ? relocated(prev, targetIndex) : prev))
+  }, [stop, stopIndex, focused, focusedIndex, target, targetIndex])
   const tabStop = Math.max(0, stopIndex)
   const pinned = useMemo(
     () =>
@@ -279,10 +313,13 @@ export function BotItemRowsWindow({
   }
 
   return (
+    // A long group is a grid, the role assistive tech knows may be partly drawn: it says how many rows
+    // there are and which one this is, and moves between rows with the arrows.
     <div
       ref={container}
-      role="list"
+      role={all ? 'list' : 'grid'}
       aria-label={label}
+      aria-rowcount={all ? undefined : count}
       className="relative -mb-0.5"
       style={{ height: geometry.total }}
       onKeyDown={onKeyDown}
@@ -292,12 +329,11 @@ export function BotItemRowsWindow({
         return (
           <div
             key={item.uid}
-            role="listitem"
-            aria-posinset={index + 1}
-            aria-setsize={count}
+            role={all ? 'listitem' : 'row'}
+            aria-rowindex={all ? undefined : index + 1}
             data-bot-item-index={index}
-            // The window keeps the reading position itself, so the browser mustn't anchor on a row.
-            className="absolute inset-x-0 [overflow-anchor:none]"
+            // A window keeps the reading position itself, so the browser mustn't anchor on its rows.
+            className={cn('absolute inset-x-0', !all && '[overflow-anchor:none]')}
             style={{ top: geometry.offset(index), height: geometry.height(index) }}
             ref={index === targetIndex ? focusTarget : index === backIndex ? focusBack : undefined}
             onFocus={() => {
@@ -312,7 +348,10 @@ export function BotItemRowsWindow({
               }
             }}
           >
-            {renderRow(item, all || index === tabStop)}
+            {/* The cell wraps the row at every size, so crossing into a grid remounts nothing. */}
+            <div role={all ? undefined : 'gridcell'}>
+              {renderRow(item, all || index === tabStop)}
+            </div>
           </div>
         )
       })}
