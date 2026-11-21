@@ -149,6 +149,9 @@ it("holds a peer bot's mail while an ACP member answers earlier mail, then deliv
       ])
     })
     await rig.host.drainStatusWrites()
+    // The commit observer schedules any claim; the session queue then runs it before we look.
+    await rig.host.flushStreamedEvents(SESSION)
+    await rig.host.serialize(SESSION, async () => {})
     await wake()
     await acp.settle()
     expect(prompts).toHaveLength(3)
