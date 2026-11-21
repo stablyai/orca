@@ -6,6 +6,7 @@ import {
   hasRichMarkdownReferenceDefinition
 } from './markdown-round-trip'
 import { extractFrontMatter } from '../source-scanning/markdown-frontmatter'
+import { stripMarkdownCode } from '../source-scanning/markdown-code-and-comment-scan'
 import {
   canRenderMarkdownAtSize,
   exceedsMarkdownRenderOverrideSizeLimit
@@ -15,6 +16,7 @@ import { encodeRawMarkdownHtmlForRichEditor } from '../../rich-markdown/raw-sour
 import { createRichMarkdownEditorCodec } from '../../rich-markdown/document/rich-markdown-source-transport'
 import {
   FOOTNOTE_CANDIDATE_PATTERN,
+  hasFootnoteCandidate,
   hasNonFootnoteReferenceLinkCandidate,
   preservesFootnotes
 } from '../../rich-markdown/footnotes/rich-markdown-footnote-eligibility'
@@ -107,13 +109,14 @@ export function getMarkdownRichModeUnsupportedReason(
   const htmlPattern = UNSUPPORTED_PATTERNS[0].pattern
   const refLinksPattern = UNSUPPORTED_PATTERNS[2].pattern
   const hasHtml = hasHtmlOrJsx(contentWithoutCode, htmlPattern)
-  const hasFootnotes = FOOTNOTE_CANDIDATE_PATTERN.test(contentWithoutCode)
+  const hasFootnotes = hasFootnoteCandidate(contentWithoutCode)
 
   if (
-    refLinksPattern.test(contentWithoutCode) &&
-    (body.length > FULL_ROUND_TRIP_MAX_CODE_UNITS
+    body.length > FULL_ROUND_TRIP_MAX_CODE_UNITS
       ? hasNonFootnoteReferenceLinkCandidate(contentWithoutCode)
-      : hasRichMarkdownReferenceDefinition(body))
+      : (refLinksPattern.test(contentWithoutCode) ||
+          (hasFootnotes && hasNonFootnoteReferenceLinkCandidate(contentWithoutCode))) &&
+        hasRichMarkdownReferenceDefinition(body)
   ) {
     return 'reference-links'
   }
@@ -125,7 +128,12 @@ export function getMarkdownRichModeUnsupportedReason(
         : getRichMarkdownRoundTripOutput(body)
     if (
       hasFootnotes &&
-      (!roundTripOutput || !preservesFootnotes(contentWithoutCode, roundTripOutput))
+      (!roundTripOutput ||
+        !preservesFootnotes(
+          contentWithoutCode,
+          roundTripOutput,
+          stripMarkdownCode(roundTripOutput)
+        ))
     ) {
       return 'footnotes'
     }
@@ -209,33 +217,6 @@ function isHtmlOrJsxFragment(fragment: string): boolean {
 
   const suffix = fragment.slice(tagName.length + 1, -1)
   return suffix.length > 0 || KNOWN_MARKDOWN_HTML_TAG_NAMES.has(tagName.toLowerCase())
-}
-
-function stripMarkdownCode(content: string): string {
-  let sanitized = ''
-  let activeFence: '`' | '~' | null = null
-  let lineStart = 0
-
-  while (lineStart <= content.length) {
-    const newlineIndex = content.indexOf('\n', lineStart)
-    const index = newlineIndex === -1 ? content.length : newlineIndex
-    const lineEnd = index > lineStart && content.charCodeAt(index - 1) === 13 ? index - 1 : index
-    const line = content.slice(lineStart, lineEnd)
-    const fenceMatch = line.match(/^(?:[ \t]*>[ \t]?)*[ \t]*(`{3,}|~{3,})/)
-    if (fenceMatch) {
-      const fenceMarker = fenceMatch[1][0] as '`' | '~'
-      activeFence = activeFence === fenceMarker ? null : fenceMarker
-    } else if (!activeFence) {
-      sanitized += line.replace(/`+[^`\n]*`+/g, '')
-    }
-
-    if (index < content.length) {
-      sanitized += '\n'
-    }
-    lineStart = index + 1
-  }
-
-  return sanitized
 }
 
 function preservesEmbeddedHtml(contentWithoutCode: string, roundTripOutput: string): boolean {

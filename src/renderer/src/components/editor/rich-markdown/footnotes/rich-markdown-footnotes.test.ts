@@ -185,11 +185,11 @@ describe('rich Markdown GFM footnotes', () => {
       const notePos = findTextPosition(editor, 'First paragraph.')
       editor.view.dispatch(editor.state.tr.insertText('Edited ', notePos, notePos))
       const afterFootnoteEdit = commitRichMarkdownSerialization(editor, refs, serializeSource)
-      expect(afterFootnoteEdit.markdown).toContain('[^multi]: Edited First paragraph.')
-      expect(afterFootnoteEdit.markdown).toContain('    const raw = "[^1]"')
-      expect(afterFootnoteEdit.markdown).toContain('[^2]: https://example.com/docs')
-      expect(afterFootnoteEdit.markdown).toContain('[^3]: Nested reference to [^multi].')
-      expect(afterFootnoteEdit.markdown).toContain('[^unused]: Unreferenced footnote definition.')
+      expect(afterFootnoteEdit.markdown).toBe(
+        source
+          .replace('Body claim', 'Updated Body claim')
+          .replace('First paragraph.', 'Edited First paragraph.')
+      )
 
       const reopened = createEditor(afterFootnoteEdit.markdown)
       try {
@@ -203,17 +203,28 @@ describe('rich Markdown GFM footnotes', () => {
     }
   })
 
-  it('admits large documents over 50k chars containing standard footnotes', () => {
+  it('admits large documents over 50k chars containing standard footnotes and blocks embedded reference links', () => {
     const padding = 'Standard paragraph prose without footnotes.\n\n'.repeat(1_200)
     const source = `${padding}Final sentence[^big].\n\n[^big]: Large document note.\n`
     expect(source.length).toBeGreaterThan(50_000)
     expect(getMarkdownRichModeUnsupportedReason(source)).toBeNull()
+
+    const withFootnoteRefDef = `${padding}Final sentence[^big].\n\n[^big]:\n    [ref]: https://example.com\n`
+    expect(getMarkdownRichModeUnsupportedReason(withFootnoteRefDef)).toBe('reference-links')
+
+    const withIndentedFootnoteRefDef = `${padding}Final sentence[^big].\n\n[^big]: First line.\n\n    [ref]: https://example.com\n`
+    expect(getMarkdownRichModeUnsupportedReason(withIndentedFootnoteRefDef)).toBe('reference-links')
   })
 
   it('falls back to code mode for unroundtrippable footnote syntax and preserves reference-link blocking', () => {
     expect(getMarkdownRichModeUnsupportedReason('Text[^1].\n\n[^1]:no-space-after-colon\n')).toBe(
       'footnotes'
     )
+    expect(
+      getMarkdownRichModeUnsupportedReason(
+        '> ````md\n> ```\n> ````\n\nText[^1].\n\n[^1]:no-space-after-colon\n'
+      )
+    ).toBe('footnotes')
     expect(
       getMarkdownRichModeUnsupportedReason(`Text.\n\n[^${'a'.repeat(257)}]: Overlong identifier\n`)
     ).toBe('footnotes')
@@ -232,6 +243,35 @@ describe('rich Markdown GFM footnotes', () => {
         'Body[^1].\n\n[^1]: Real footnote.\n\n[ref]: https://example.com\n'
       )
     ).toBe('reference-links')
+    expect(
+      getMarkdownRichModeUnsupportedReason('Body[^1].\n\n[^1]:\n    [ref]: https://example.com\n')
+    ).toBe('reference-links')
+  })
+
+  it('keeps unindented prose outside footnotes after indented code and skips definitions inside HTML comments', () => {
+    const indentedCodeSource = 'Body[^n].\n\n[^n]:\n        code\nOutside paragraph.\n'
+    const indentedEditor = createEditor(indentedCodeSource)
+    try {
+      const topLevelTypes: string[] = []
+      indentedEditor.state.doc.forEach((child) => {
+        topLevelTypes.push(child.type.name)
+      })
+      expect(topLevelTypes).toEqual(['paragraph', 'richMarkdownFootnoteDefinition', 'paragraph'])
+      expect(indentedEditor.state.doc.lastChild?.textContent).toBe('Outside paragraph.')
+    } finally {
+      indentedEditor.destroy()
+    }
+
+    const commentedDefSource =
+      'Body[^ghost] and [^1].\n\n<!--\n[^ghost]: hidden\n-->\n\n[^1]: Real.\n'
+    expect(getMarkdownRichModeUnsupportedReason(commentedDefSource)).toBeNull()
+    const commentEditor = createEditor(commentedDefSource)
+    try {
+      expect(collectFootnoteNodes(commentEditor)).toEqual({ refs: ['1'], defs: ['1'] })
+      expect(commentEditor.state.doc.firstChild?.textContent).toContain('[^ghost]')
+    } finally {
+      commentEditor.destroy()
+    }
   })
 
   it('ignores code blocks, inline code, escapes, undefined refs, and inline links shaped like footnotes', () => {
@@ -432,6 +472,26 @@ describe('rich Markdown GFM footnotes', () => {
     } finally {
       emptyDefEditor.destroy()
       emptyHost.remove()
+    }
+
+    const codeHost = document.createElement('div')
+    document.body.appendChild(codeHost)
+    const codeDefEditor = createEditor('Intro[^1].\n\n[^1]:\n    ```ts\n    \n    ```', codeHost)
+    try {
+      const defPos = findNodePosition(codeDefEditor, 'richMarkdownFootnoteDefinition', '1')
+      const codePos = defPos + 1
+      const codeNode = codeDefEditor.state.doc.nodeAt(codePos)!
+      expect(codeNode.type.name).toBe('codeBlock')
+      codeDefEditor.view.dispatch(
+        codeDefEditor.state.tr.delete(codePos + 1, codePos + 1 + codeNode.content.size)
+      )
+      codeDefEditor.commands.setTextSelection(codePos + 1)
+      expect(pressKey(codeDefEditor, 'Enter')).toBe(true)
+      expect(codeDefEditor.state.selection.$from.parent.type.name).toBe('codeBlock')
+      expect(codeDefEditor.state.doc.nodeAt(defPos)?.childCount).toBe(1)
+    } finally {
+      codeDefEditor.destroy()
+      codeHost.remove()
     }
   })
 
