@@ -3,7 +3,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotChatEndResult } from '../../../../shared/bots/bot-chat-end'
 
-const toast = vi.hoisted(() => ({ success: vi.fn(), message: vi.fn() }))
+/** The parts of a toast's options these tests read. */
+type Shown = {
+  id?: unknown
+  description?: unknown
+  classNames?: { actionButton?: string }
+  action?: { label: string; onClick: (event: { preventDefault: () => void }) => void }
+}
+const toast = vi.hoisted(() => ({
+  success: vi.fn((_title: string, _options?: Shown) => 'toast-0'),
+  message: vi.fn((_title: string, _options?: Shown) => 'toast-1')
+}))
 const rpc = vi.hoisted(() => ({ call: vi.fn() }))
 vi.mock('sonner', () => ({ toast }))
 vi.mock('@/lib/bot-hosts', () => ({ callBotRpc: rpc.call }))
@@ -11,7 +21,7 @@ vi.mock('@/lib/bot-catalog', () => ({ readBotsEnabled: () => true }))
 vi.mock('@/lib/bot-host-status', () => ({ botHostHas: () => true }))
 vi.mock('./bot-session-open', () => ({ openBotSession: vi.fn() }))
 
-import { endBotChatFromRow, showBotChatTabCloseResult } from './bot-chat-end'
+import { botChatEndReasonText, endBotChatFromRow, showBotChatTabCloseResult } from './bot-chat-end'
 import { closeBotSideChatTab } from '../../runtime/native-chat/tab-retirement/bot-side-chat-tab-close'
 
 const BOT: Bot = {
@@ -121,5 +131,57 @@ describe("a chat row's End chat", () => {
       "Couldn't confirm the chat ended",
       "Couldn't confirm the chat ended"
     ])
+  })
+})
+
+describe('why a chat cannot end yet', () => {
+  it('counts one of a thing as one', () => {
+    const lines = (count: number) =>
+      (['unread', 'requests', 'questions'] as const).map((kind) =>
+        botChatEndReasonText({ kind, count })
+      )
+
+    expect(lines(1)).toEqual([
+      '1 unread message',
+      '1 request waiting for an answer',
+      '1 question waiting for a reply'
+    ])
+    expect(lines(3)).toEqual([
+      '3 unread messages',
+      '3 requests waiting for an answer',
+      '3 questions waiting for a reply'
+    ])
+  })
+
+  it('names an automation in curly quotes', () => {
+    expect(botChatEndReasonText({ kind: 'automation', name: 'Morning digest' })).toBe(
+      'Automation “Morning digest” posts here'
+    )
+  })
+
+  it('offers quiet Details flush with the title, and drops it once the reasons show', async () => {
+    rpc.call.mockResolvedValueOnce({
+      outcome: 'kept',
+      reasons: [
+        { kind: 'unread', count: 1 },
+        { kind: 'automation', name: 'Morning digest' }
+      ]
+    })
+    await endBotChatFromRow(BOT, SIDE)
+    const [[title, options] = ['', undefined]] = toast.message.mock.calls
+    expect(title).toBe("Can't end yet")
+    expect(options?.classNames?.actionButton).toContain('!ml-0')
+    expect(options?.classNames?.actionButton).toContain('!bg-transparent')
+
+    options?.action?.onClick({ preventDefault: vi.fn() })
+
+    const [, [, expanded] = ['', undefined]] = toast.message.mock.calls
+    expect(expanded).toMatchObject({
+      id: 'toast-1',
+      description: '1 unread message\nAutomation “Morning digest” posts here'
+    })
+    expect(expanded !== undefined && 'action' in expanded && expanded.action === undefined).toBe(
+      true
+    )
   })
 })

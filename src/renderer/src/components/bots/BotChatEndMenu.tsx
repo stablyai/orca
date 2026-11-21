@@ -26,7 +26,10 @@ export function botChatHasEndMenu(
   return chat.origin !== 'home' && !THREAD_ORIGINS.has(chat.origin) && !chat.closed && !chat.run
 }
 
-/** Shift+F10 and the Menu key open a row's menu where it sits, as a right-click does. */
+/** Just below a row's lower left, so a menu opened from the keyboard leaves the row in view. */
+export const KEYBOARD_MENU_GAP_PX = 4
+
+/** Shift+F10 and the Menu key open a row's menu as a right-click does, anchored under the row. */
 export function openRowMenuFromKeyboard(event: React.KeyboardEvent<HTMLElement>): boolean {
   if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) {
     return false
@@ -37,8 +40,8 @@ export function openRowMenuFromKeyboard(event: React.KeyboardEvent<HTMLElement>)
     new MouseEvent('contextmenu', {
       bubbles: true,
       cancelable: true,
-      clientX: box.left + Math.min(24, box.width / 2),
-      clientY: box.top + box.height / 2
+      clientX: box.left,
+      clientY: box.bottom + KEYBOARD_MENU_GAP_PX
     })
   )
   return true
