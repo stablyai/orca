@@ -680,11 +680,11 @@ describe('Tidy-up on ops, for a bot in the pilot', () => {
   const SHOWN = OLD.replace(`${STATUS}\n`, '')
   const merge = (): string => {
     const [first, second] = memorySnapshot(SHOWN)
-    return `Done.\n[{"op":"merge","lines":["${first.ref}","${second.ref}"],"text":"all times are in Eastern"}]`
+    return `Done.\n[{"op":"merge","lines":["${first.ref}","${second.ref}"],"text":"times are in Eastern"}]`
   }
   const JOURNAL = join(HOME, 'memory', 'journal', '2026-11.md')
   const TIDIED =
-    '# Memory\n- 2026-10-02 all times are in Eastern\n- 2026-10-06 PRs open ready, not draft\n'
+    '# Memory\n- 2026-10-02 times are in Eastern\n- 2026-10-06 PRs open ready, not draft\n'
 
   it('moves status to the journal and applies the ops as one History row', async () => {
     const run = harness({ memory: OLD, reply: merge() })
@@ -703,7 +703,7 @@ describe('Tidy-up on ops, for a bot in the pilot', () => {
     expect(run.files.get(MEMORY)).toBe(TIDIED)
     expect(run.files.get(JOURNAL)).toBe(`# Status moved out of MEMORY.md, 2026-11\n${STATUS}\n`)
     expect(run.files.get(ARCHIVE)).toBe(
-      '# Archive\n- 2026-10-02 times in Eastern · merged 2026-11-06\n- 2026-10-03 times are in Eastern · merged 2026-11-06\n'
+      '# Archive\n- 2026-10-02 times in Eastern · merged 2026-11-06\n'
     )
     expect(await run.rows()).toHaveLength(1)
     expect(run.last()).toMatchObject({
@@ -712,6 +712,16 @@ describe('Tidy-up on ops, for a bot in the pilot', () => {
       moved: 0,
       skipped: []
     })
+  })
+
+  it('never falls back to the whole-file reply for a pilot bot whose file is mostly prose', async () => {
+    const prose = `${SHOWN}${Array.from({ length: 6 }, (_, i) => `prose ${i}`).join('\n')}\n`
+    const run = harness({ memory: prose, reply: reply(INDEX) })
+    run.files.set(join(HOME, TIDY_UP_OPS_PILOT_FILE), '')
+    await run.tick()
+    expect(run.startConversation).not.toHaveBeenCalled()
+    expect(run.files.get(MEMORY)).toBe(prose)
+    expect(run.runs()[0].error).toBe(TIDY_UP_FAILURES.notListLines)
   })
 
   it('stays on the whole-file reply off the pilot', async () => {
@@ -748,8 +758,9 @@ describe('Tidy-up on ops, for a bot in the pilot', () => {
     }
 
     const tagged = await rewrite([owner('Thanks, carry on')])
+    // The chat's own copy of the merged line (same words, its date) stays; the moved lines don't.
     expect(tagged?.text).toBe(
-      `${TIDIED}- 2026-11-06 Lesson: check worker liveness after a restart\n`
+      `${TIDIED.replace('2026-10-02', '2026-10-03')}- 2026-11-06 Lesson: check worker liveness after a restart\n`
     )
     expect(run.files.get(ARCHIVE)).toContain(`${STATUS} · kept out 2026-11-06`)
     expect(run.files.get(ARCHIVE)).toContain('- 2026-10-02 times in Eastern · kept out 2026-11-06')

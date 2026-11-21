@@ -10,7 +10,7 @@ import {
 } from '../../shared/bot-memory-lines'
 import { botMemoryLineKind, isProtectedBotMemoryLine } from '../../shared/bot-memory-line-kinds'
 import { redactSecretLike } from '../../shared/crash-reporting/crash-report-redaction'
-import { hasMeaningWords, isDerivable } from './bot-memory-line-words'
+import { hasMeaningWords, isShortening } from './bot-memory-line-words'
 import { TIDY_UP_ARCHIVE } from './bot-memory-tidy-up'
 import { TIDY_UP_TOPIC_NAME, type TidyUpPlan } from './bot-memory-tidy-up-draft'
 
@@ -107,7 +107,7 @@ export function checkTidyUpOps(
   const fixed = (line: MemorySnapshotLine): boolean => groupOf(line).some(guarded)
   const used = new Set<string>()
   const removed: MemorySnapshotLine[] = []
-  const added: { line: string; at: MemorySnapshotLine | null }[] = []
+  const added: { line: string; at: MemorySnapshotLine }[] = []
   const plan: TidyUpPlan = {
     change: { added: [], removed: [] },
     kept: new Map(),
@@ -116,6 +116,7 @@ export function checkTidyUpOps(
     replaced: new Set(),
     merged: new Set(),
     retired: new Map(),
+    // Ops never learn a line; the summary reads this to count none.
     learned: new Set(),
     merges: 0
   }
@@ -203,8 +204,17 @@ export function checkTidyUpOps(
     if ([text, ...sources].some(hasMeaningWords)) {
       return 'rewrites a line with a negation or modal; move it or leave it'
     }
-    if (text === '' || text.length > MAX_LINE_CHARS || !isDerivable(text, sources)) {
-      return 'says more than the lines it rewrites'
+    // A rewrite only shortens: its words, in order, are words of one of its lines, so it can't
+    // reorder ("before" swapped) or add a claim.
+    if (
+      text === '' ||
+      text.length > MAX_LINE_CHARS ||
+      !sources.some((s) => isShortening(text, s))
+    ) {
+      return 'says more than the lines it rewrites, or reorders them'
+    }
+    if (isProtectedBotMemoryLine(text)) {
+      return 'would read as your owner’s rule'
     }
     const kind = botMemoryLineKind(text).kind
     if (kind !== null && !sources.some((source) => botMemoryLineKind(source).kind === kind)) {
@@ -259,17 +269,15 @@ export function lineGroups(lines: readonly string[]): Map<string, string[]> {
 
 const changeLine = ({ raw, after }: MemorySnapshotLine): BotMemoryLine => ({ line: raw, after })
 
-/** Each new line after the nearest line before its place that stays; a learned line above the
- *  first fact. */
+/** Each rewritten line after the nearest line before the first line it took that stays. */
 function placed(
   memory: string,
-  added: readonly { line: string; at: MemorySnapshotLine | null }[],
+  added: readonly { line: string; at: MemorySnapshotLine }[],
   removed: readonly MemorySnapshotLine[]
 ): BotMemoryLine[] {
   const lines = memory.split(/\r?\n/)
   const gone = new Set(removed.map(({ fact }) => fact.line))
-  const first = parseBotMemoryFacts(memory)[0]?.line ?? lines.length
   const anchor = (at: number): string | null =>
     lines.slice(0, at).findLast((line, index) => line.trim() !== '' && !gone.has(index)) ?? null
-  return added.map(({ line, at }) => ({ line, after: anchor(at ? at.fact.line : first) }))
+  return added.map(({ line, at }) => ({ line, after: anchor(at.fact.line) }))
 }

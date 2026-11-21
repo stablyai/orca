@@ -59,10 +59,17 @@ export function statusMigrationPlan(memory: string, today: string): TidyUpPlan |
       }
     }
   }
-  const oldest = (group: typeof snapshot): string =>
-    group.reduce((min, { fact }) => ((fact.date ?? '') < min ? (fact.date ?? '') : min), '9999')
+  const oldest = new Map(
+    [...groups.values()].map((group) => [
+      group,
+      group.reduce((min, { fact }) => ((fact.date ?? '') < min ? (fact.date ?? '') : min), '9999')
+    ])
+  )
+  const byAge = [...groups.values()].toSorted((a, b) =>
+    (oldest.get(a) ?? '').localeCompare(oldest.get(b) ?? '')
+  )
   const status: typeof snapshot = []
-  for (const group of [...groups.values()].toSorted((a, b) => oldest(a).localeCompare(oldest(b)))) {
+  for (const group of byAge) {
     if (status.length > 0 && status.length + group.length > STATUS_MIGRATION_MAX_LINES) {
       continue
     }

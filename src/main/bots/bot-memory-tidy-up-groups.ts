@@ -11,7 +11,12 @@ export function liveGroupsMatch(
   for (const line of file.split(/\r?\n/)) {
     const key = botMemoryLineKey({ line, after: null })
     if (key !== null && groups.has(key)) {
-      live.set(key, [...(live.get(key) ?? []), line.trimEnd()])
+      const group = live.get(key)
+      if (group) {
+        group.push(line.trimEnd())
+      } else {
+        live.set(key, [line.trimEnd()])
+      }
     }
   }
   return [...groups].every(

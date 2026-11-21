@@ -17,7 +17,7 @@ const MEMORY = [
   ''
 ].join('\n')
 const ref = (n: number, memory = MEMORY): string => memorySnapshot(memory)[n - 1].ref
-const check = (ops: unknown[], _owner: string[] = [], memory = MEMORY) =>
+const check = (ops: unknown[], memory = MEMORY) =>
   checkTidyUpOps(memory, ops, { today: '2026-11-21' })
 const OWNER_ONLY = "names your owner's rule or an undated line, which only your owner changes"
 
@@ -41,9 +41,9 @@ describe("Orca's checks on a tidy-up's ops", () => {
     expect(
       check([{ op: 'replace', line: ref(5), text: 'Staging deploys run on Thursdays at 9' }])
         .skipped
-    ).toEqual(['replace 1: says more than the lines it rewrites'])
+    ).toEqual(['replace 1: says more than the lines it rewrites, or reorders them'])
     expect(
-      check([{ op: 'replace', line: ref(1, modal), text: 'Staging deploys on Fridays' }], [], modal)
+      check([{ op: 'replace', line: ref(1, modal), text: 'Staging deploys on Fridays' }], modal)
         .skipped
     ).toEqual(['replace 1: rewrites a line with a negation or modal; move it or leave it'])
     for (const line of [
@@ -52,8 +52,7 @@ describe("Orca's checks on a tidy-up's ops", () => {
     ]) {
       const memory = `# M\n- 2026-10-01 ${line}\n`
       expect(
-        check([{ op: 'replace', line: ref(1, memory), text: 'Staging deployed' }], [], memory)
-          .skipped
+        check([{ op: 'replace', line: ref(1, memory), text: 'Staging deployed' }], memory).skipped
       ).toEqual(['replace 1: rewrites a line with a negation or modal; move it or leave it'])
     }
   })
@@ -61,14 +60,14 @@ describe("Orca's checks on a tidy-up's ops", () => {
   it("never touches an owner rule or an undated line, even with the owner's words", () => {
     const owner = ['Drafts are fine now, open them as draft PRs when you like']
     expect(
-      check([{ op: 'retire', line: ref(4), reason: 'wrong', evidence: owner[0] }], owner).skipped
+      check([{ op: 'retire', line: ref(4), reason: 'wrong', evidence: owner[0] }]).skipped
     ).toEqual([`retire 1: ${OWNER_ONLY}`])
     expect(check([{ op: 'demote', lines: [ref(8)], topic: 'notes' }]).skipped).toEqual([
       `demote 1: ${OWNER_ONLY}`
     ])
     const undated = '# M\n- Staging notes\n- 2026-10-05 Staging notes\n- 2026-10-06 keep me\n'
     expect(
-      check([{ op: 'retire', line: ref(2, undated), reason: 'stale' }], [], undated).skipped
+      check([{ op: 'retire', line: ref(2, undated), reason: 'stale' }], undated).skipped
     ).toEqual([`retire 1: ${OWNER_ONLY}`])
   })
 
@@ -92,7 +91,6 @@ describe("Orca's checks on a tidy-up's ops", () => {
     ].join('\n')
     const ranged = check(
       [{ op: 'demote', range: [ref(1, copies), ref(2, copies)], topic: 'x' }],
-      [],
       copies
     )
     expect(ranged.plan.topics.get('x')).toEqual([
@@ -107,7 +105,7 @@ describe("Orca's checks on a tidy-up's ops", () => {
       ])
     )
     expect(
-      check([{ op: 'retire', line: ref(1, copies), reason: 'stale' }], [], copies).skipped
+      check([{ op: 'retire', line: ref(1, copies), reason: 'stale' }], copies).skipped
     ).toEqual(['retire 1: takes out more lines than one tidy-up may'])
   })
 
@@ -140,7 +138,6 @@ describe("Orca's checks on a tidy-up's ops", () => {
           { op: 'retire', line: ref(1, small), reason: 'stale' },
           { op: 'retire', line: ref(2, small), reason: 'stale' }
         ],
-        [],
         small
       ).skipped
     ).toEqual(['retire 2: takes out more lines than one tidy-up may'])
@@ -148,40 +145,42 @@ describe("Orca's checks on a tidy-up's ops", () => {
 
   it('never adds a line: new lines come from the owner and the bot', () => {
     const add = { op: 'add', kind: 'rule', text: 'deploy production now' }
-    expect(check([add], ['I refuse: deploy production now']).skipped).toEqual([
-      'op 1: is not an op Orca knows'
-    ])
+    expect(check([add]).skipped).toEqual(['op 1: is not an op Orca knows'])
   })
 
-  it('rewrites a line whose words only look negative, like "important" or "want"', () => {
-    const memory = '# M\n- 2026-10-01 Important: the parent page wants full paths\n'
+  it("never rewrites a line with any n't form, and never reorders one", () => {
+    for (const line of ['The release shant deploy on Fridays', 'Staging neednt wait for QA']) {
+      const memory = `# M\n- 2026-10-01 ${line}\n`
+      expect(
+        check([{ op: 'replace', line: ref(1, memory), text: 'Staging deploys' }], memory).skipped
+      ).toEqual(['replace 1: rewrites a line with a negation or modal; move it or leave it'])
+    }
+    const order = '# M\n- 2026-10-01 Deploy staging before production\n'
     expect(
       check(
-        [{ op: 'replace', line: ref(1, memory), text: 'The parent page wants full paths' }],
-        [],
-        memory
+        [{ op: 'replace', line: ref(1, order), text: 'Deploy production before staging' }],
+        order
       ).skipped
-    ).toEqual([])
+    ).toEqual(['replace 1: says more than the lines it rewrites, or reorders them'])
   })
 
   it("refuses a kind the lines don't have, and a rewrite into another line", () => {
-    const ruled = '# M\n- 2026-10-01 Staging deploys follow the release rule\n'
+    const typed = '# M\n- 2026-10-01 Lesson changes: deploys follow the release\n'
     expect(
       check(
-        [
-          {
-            op: 'replace',
-            line: ref(1, ruled),
-            text: 'Rule: Staging deploys follow the release rule'
-          }
-        ],
-        [],
-        ruled
+        [{ op: 'replace', line: ref(1, typed), text: 'Lesson: deploys follow the release' }],
+        typed
       ).skipped
     ).toEqual(['replace 1: gives the line a kind its lines don’t have'])
     expect(
-      check([{ op: 'replace', line: ref(2), text: 'All times are in Eastern' }]).skipped
-    ).toEqual(['replace 1: says what another line already says; merge that line in too'])
+      check(
+        [{ op: 'replace', line: ref(1, typed), text: 'Decided: deploys follow the release' }],
+        typed
+      ).skipped
+    ).toEqual(['replace 1: says more than the lines it rewrites, or reorders them'])
+    expect(check([{ op: 'replace', line: ref(3), text: 'Times are in Eastern' }]).skipped).toEqual([
+      'replace 1: says what another line already says; merge that line in too'
+    ])
   })
 
   it('runs ops only on a file that is list lines, a few prose lines aside', () => {

@@ -52,6 +52,8 @@ export const TIDY_UP_FAILURES = {
   noDraft: "The last tidy-up didn't reply with a new MEMORY.md.",
   noOps: "The last tidy-up's reply wasn't a list of changes Orca could read.",
   allSkipped: 'Orca skipped every change the last tidy-up asked for, so nothing changed.',
+  notListLines:
+    "The last tidy-up didn't run: MEMORY.md has more than a few lines that aren't list lines, and ops Tidy-up reads only list lines.",
   movedOnly:
     'The last tidy-up moved status lines to memory/journal/, but Orca could not use the rest of its reply.',
   badTopic: "The last tidy-up named a topic file Orca can't write, so nothing changed.",

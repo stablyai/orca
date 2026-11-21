@@ -50,7 +50,7 @@ import {
   tidyNowRefusal,
   tidyUpState
 } from './bot-memory-tidy-up'
-import { TIDY_UP_OPS_PILOT_FILE } from './bot-memory-ops-pilot'
+import { memoryFitsOps, TIDY_UP_OPS_PILOT_FILE } from './bot-memory-ops-pilot'
 import { tidyUpFormat } from './bot-memory-tidy-up-format'
 import type { BotTurnWatch } from './bot-run-turn-watch'
 
@@ -226,6 +226,13 @@ export class BotTidyUpRunner {
       const memory = (await this.deps.fs.readText(join(folder, 'MEMORY.md'))) ?? ''
       const files = await this.deps.memoryFiles(folder)
       const pilot = (await this.deps.fs.readText(join(folder, TIDY_UP_OPS_PILOT_FILE))) !== null
+      // A pilot bot never falls back to the whole-file reply: it waits until its file fits.
+      if (pilot && !memoryFitsOps(memory)) {
+        this.change(bot.id, (state) => beginTidyUp(state, sessionId, startedAt))
+        begun = true
+        ended = { error: TIDY_UP_FAILURES.notListLines, alerted: false }
+        return
+      }
       // Checked again after reading, as near the start as it can be: an owner turn may have begun.
       if (!this.idle(bot)) {
         return

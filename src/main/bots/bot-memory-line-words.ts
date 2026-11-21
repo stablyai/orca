@@ -1,5 +1,5 @@
-// How Orca compares a memory line's words: whether a rewrite says only what its sources said, and how
-// alike two lines are, so a model's merge can't add a claim and a moved line can't come back renamed.
+// How Orca compares a memory line's words: whether a rewrite only shortens a line, and how alike two
+// lines are, so a model's merge can't add a claim and a moved line can't come back renamed.
 
 const STOPWORDS = new Set(
   'a an the and or but of to in on at for by with from as is are was were be been being it its this that these those then than so if into over under via per their they them our we you your i he she his her has have had also just there here which who what when where how all any each every one'.split(
@@ -9,8 +9,10 @@ const STOPWORDS = new Set(
 
 /** Words that negate or make a line conditional, any "n't" form among them: one list for every
  *  check that refuses on negation, so they never drift apart. */
+// Any word ending in "nt" or "n't" counts ("shant", "neednt", but also "want" or "parent"): a
+// line wrongly kept as is costs nothing, a negation missed can flip a line.
 const NEGATING =
-  /\b\w+n['’]t\b|\b(?:dont|cant|isnt|wont|doesnt|didnt|wasnt|werent|arent|shouldnt|wouldnt|couldnt|havent|hasnt|hadnt|mustnt|aint|not|no|never|none|neither|nor|without|unless|except|avoid|stop|if|instead|cannot)\b/i
+  /\b\w+n['’]?t\b|\b(?:not|no|never|none|neither|nor|without|unless|except|avoid|stop|if|instead|cannot)\b/i
 /** Words that change how strongly a line holds. */
 const MODAL = /\b(?:always|must|only|should|will|would|can|could|may|might|shall)\b/i
 
@@ -18,9 +20,6 @@ const MODAL = /\b(?:always|must|only|should|will|would|can|could|may|might|shall
 export function hasMeaningWords(text: string): boolean {
   return NEGATING.test(text) || MODAL.test(text)
 }
-
-const MAX_NEW_WORDS = 3
-const MAX_NEW_SHARE = 0.15
 
 export function lineWords(text: string): string[] {
   return (
@@ -36,36 +35,22 @@ function stem(word: string): string {
   return word.replace(/(?:'s|ing|ed|es|s)$/, '') || word
 }
 
-const SPECIAL = /https?:\/\/\S+|`[^`]+`|@[\w-]+|[\w.-]*\/[\w./-]+|\d[\d.,:]*/g
-
-/** Capitalized words past a sentence's start: names. */
-function names(text: string): string[] {
-  return [...text.matchAll(/(?<![.!?:]\s|^)(?<=\s|\()([A-Z][\w-]+)/g)].map((m) =>
-    m[1].toLowerCase()
-  )
-}
-
-/**
- * Whether `text` says only what `sources` say: every number, link, path, @name, code span and name
- * in it is in them, and at most a few other words are new. Negations and modals are refused before
- * this (hasMeaningWords), so a rewrite never moves one.
- */
-export function isDerivable(text: string, sources: readonly string[]): boolean {
-  const source = sources.join('\n')
-  const lower = source.toLowerCase()
-  if ((text.match(SPECIAL) ?? []).some((piece) => !lower.includes(piece.toLowerCase()))) {
-    return false
-  }
-  const known = new Set(lineWords(source))
-  const stems = new Set([...known].map(stem))
-  if (names(text).some((name) => !known.has(name))) {
-    return false
-  }
+/** Whether `text`'s words are, in order, words of `source`: a shortening, never a reorder or a
+ *  new word. */
+export function isShortening(text: string, source: string): boolean {
   const words = lineWords(text)
-  const fresh = words.filter(
-    (word) => !STOPWORDS.has(word) && !known.has(word) && !stems.has(stem(word))
-  )
-  return fresh.length <= Math.min(MAX_NEW_WORDS, Math.floor(words.length * MAX_NEW_SHARE))
+  const from = lineWords(source)
+  let at = 0
+  for (const word of words) {
+    while (at < from.length && from[at] !== word) {
+      at += 1
+    }
+    if (at === from.length) {
+      return false
+    }
+    at += 1
+  }
+  return words.length > 0
 }
 
 export const keyWords = (text: string): Set<string> =>
