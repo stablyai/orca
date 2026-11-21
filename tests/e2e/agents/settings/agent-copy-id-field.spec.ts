@@ -1,6 +1,6 @@
 // An agent copy's ID field: its agent prefix is fixed, only the suffix edits, and the whole id
 // still selects and copies as one string.
-import type { Page } from '@stablyai/playwright-test'
+import type { Locator, Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
 import { test } from '../../desktop/electron-fixtures/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from '../../desktop/renderer-probes/store'
@@ -8,12 +8,8 @@ import { waitForActiveWorktree, waitForSessionReady } from '../../desktop/render
 const savedCopyIds = (page: Page) =>
   page.evaluate(() => window.__store?.getState().settings?.agentCopies?.map((copy) => copy.id))
 
-test("an agent copy's ID keeps its prefix and copies as one string", async ({
-  orcaPage: page,
-  electronApp
-}) => {
-  // A cold Orca start, then a settings save; the default 60s is tight on CI.
-  test.setTimeout(120_000)
+// Opens the settings card of a fresh `claude.code-mode` copy and returns its ID field.
+async function openCopyIdField(page: Page) {
   await waitForSessionReady(page)
   await waitForActiveWorktree(page)
   await page.evaluate(async () => {
@@ -29,6 +25,19 @@ test("an agent copy's ID keeps its prefix and copies as one string", async ({
   await toggle.click({ force: true })
   const field = page.getByRole('textbox', { name: 'Copy ID' })
   await expect(field).toHaveValue('claude.code-mode', { timeout: 15_000 })
+  return field
+}
+
+const caret = (field: Locator) =>
+  field.evaluate((element: HTMLInputElement) => [element.selectionStart, element.selectionEnd])
+
+test("an agent copy's ID keeps its prefix and copies as one string", async ({
+  orcaPage: page,
+  electronApp
+}) => {
+  // A cold Orca start, then a settings save; the default 60s is tight on CI.
+  test.setTimeout(120_000)
+  const field = await openCopyIdField(page)
 
   // A double-click selects the whole id, prefix included, and Ctrl+C copies it as one string.
   await electronApp.evaluate(({ clipboard }) => clipboard.writeText(''))
@@ -56,4 +65,22 @@ test("an agent copy's ID keeps its prefix and copies as one string", async ({
   await expect(field).toHaveValue('claude.pasted')
   await page.keyboard.press('Enter')
   await expect.poll(() => savedCopyIds(page)).toEqual(['claude.pasted'])
+})
+
+test('typing after backspace hit the prefix of an empty suffix lands in order', async ({
+  orcaPage: page
+}) => {
+  // A cold Orca start, then a settings save; the default 60s is tight on CI.
+  test.setTimeout(120_000)
+  const field = await openCopyIdField(page)
+  await field.click({ force: true })
+  await page.keyboard.press('End')
+  // Delete the whole suffix, then press Backspace into the prefix a few more times.
+  for (let i = 0; i < 'code-mode'.length + 3; i++) {
+    await page.keyboard.press('Backspace')
+  }
+  await expect(field).toHaveValue('claude.')
+  await page.keyboard.type('code')
+  await expect(field).toHaveValue('claude.code')
+  expect(await caret(field)).toEqual([11, 11])
 })

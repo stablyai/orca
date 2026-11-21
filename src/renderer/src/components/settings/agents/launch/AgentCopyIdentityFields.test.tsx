@@ -61,6 +61,23 @@ describe("an agent copy's ID field", () => {
     expect(input.value).toBe('claude.code-mode')
   })
 
+  it('types after the prefix once backspace has hit it on an empty suffix', async () => {
+    const { input } = setup()
+    // Delete the whole suffix, then press Backspace into the prefix a few more times.
+    await userEvent.type(
+      input,
+      `${'{Backspace}'.repeat('code-mode'.length)}{Backspace}{Backspace}{Backspace}`,
+      {
+        initialSelectionStart: input.value.length,
+        initialSelectionEnd: input.value.length
+      }
+    )
+    expect(input.value).toBe('claude.')
+    await userEvent.keyboard('code')
+    expect(input.value).toBe('claude.code')
+    expect([input.selectionStart, input.selectionEnd]).toEqual([11, 11])
+  })
+
   it('strips the prefix from a pasted whole id', async () => {
     const { input, onChangeId } = setup()
     input.focus()
