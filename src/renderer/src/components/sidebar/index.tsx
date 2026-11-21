@@ -244,9 +244,11 @@ function Sidebar({
       <SeveredTerminalDaemonBanner />
       <StalledTerminalDaemonBanner />
       {sidebarBody === 'conversations' && (
-        <React.Suspense fallback={<div className="min-h-0 flex-1" />}>
-          <ConversationHistory conversationNavigation onSessionOpened={closeWorkspaceBoard} />
-        </React.Suspense>
+        <SidebarProjectsListSlot botsShown={botsShown} collapsed={projectsCollapsed}>
+          <React.Suspense fallback={<div className="min-h-0 flex-1" />}>
+            <ConversationHistory conversationNavigation onSessionOpened={closeWorkspaceBoard} />
+          </React.Suspense>
+        </SidebarProjectsListSlot>
       )}
       <React.Suspense
         fallback={sidebarBody === 'agents' ? <div className="min-h-0 flex-1" /> : null}

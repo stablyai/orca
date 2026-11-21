@@ -11126,7 +11126,16 @@
             "96e32c1118": "MiniMax usage",
             "e8d2710689": "Muse usage",
             "aff6e6afdf": "IDE font",
-            "ba1f9d39a6": "Antigravity usage"
+            "ba1f9d39a6": "Antigravity usage",
+            "sidebarView": {
+              "title": "Sidebar view",
+              "description": "What the left sidebar lists: projects and their workspaces, or agent sessions by project.",
+              "sessions": "sessions",
+              "chats": "chats",
+              "conversations": "conversations",
+              "projects": "projects",
+              "workspaces": "workspaces"
+            }
           }
         },
         "auto": {
@@ -24001,7 +24010,8 @@
       "workspaces": "Workspaces",
       "loadingChatAgents": "Loading chat agents…",
       "noChatAgents": "No chat agents available on this host",
-      "activity": "Activity"
+      "activity": "Activity",
+      "sessions": "Sessions"
     }
   },
   "runtimeRpc": {

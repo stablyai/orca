@@ -43,17 +43,18 @@ import {
 import { createHostWorkspaceStatusActions } from './ui-slice-host-workspace-statuses'
 import { createUiBotPreferenceActions } from './ui-slice-bot-preference-actions'
 import { toggleCollapsedGroupSet } from './collapsed-group-toggle'
-import { DEFAULT_SIDEBAR_BODY } from '../../../../../shared/ui-chrome/sidebar-body'
+import { DEFAULT_SIDEBAR_VIEW } from '../../../../../shared/ui-chrome/sidebar-body'
 
 /** Builds preference defaults and setters for the UI slice, leaving durable writes to the persistence layer. */
 export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
     gitGraphFiltersByWorktree: {},
-    sidebarBody: DEFAULT_SIDEBAR_BODY,
+    sidebarBody: DEFAULT_SIDEBAR_VIEW,
     setSidebarBody: (body) => set({ sidebarBody: body }),
-    chooseSidebarBody: (body) => {
-      set({ sidebarBody: body })
-      window.api.ui.set({ sidebarBody: body }).catch(console.error)
+    sidebarView: DEFAULT_SIDEBAR_VIEW,
+    chooseSidebarView: (view) => {
+      set({ sidebarView: view, sidebarBody: view })
+      window.api.ui.set({ sidebarView: view }).catch(console.error)
     },
 
     groupBy: 'repo',

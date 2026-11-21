@@ -1,11 +1,13 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { ProjectConversationList } from './ProjectConversationList'
+import SidebarHeader from './chrome/SidebarHeader'
+import { ConfirmationDialogProvider } from '../dismiss/confirmation/confirmation-dialog'
 import {
   conversationListProps,
   conversationStore,
   conversationSessions
 } from './ProjectConversationList.test-fixture'
-import { getDefaultUIState } from '../../../../shared/orca-profiles/constants'
+import { getDefaultSettings, getDefaultUIState } from '../../../../shared/orca-profiles/constants'
 import { refreshLocalRuntimeCapabilities } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import type { ConversationPreferences } from '../../../../shared/conversation-navigation-preferences'
 import { updateConversationPreference } from '../../../../shared/conversation-navigation-preferences'
@@ -40,7 +42,13 @@ function fixture(
   }
   return defineFixture({
     width,
-    store: conversationStore,
+    store: {
+      ...conversationStore,
+      // English, so the interactions below find their menus by label.
+      settings: { ...getDefaultSettings('/home/fixture'), uiLanguage: 'en' },
+      sidebarView: 'conversations',
+      sidebarBody: 'conversations'
+    },
     setup: () => {
       let preferences: ConversationPreferences = {
         revision: 0,
@@ -77,7 +85,7 @@ function fixture(
       state === 'registered'
         ? async (frame) => {
             const trigger = frame.querySelector<HTMLButtonElement>(
-              'button[aria-label="Project actions for Orca"]'
+              'button[aria-label="Project actions for Acme"]'
             )
             trigger?.focus()
             trigger?.dispatchEvent(
@@ -115,10 +123,12 @@ function fixture(
               }
             : undefined,
     render: () => (
-      <div className="flex h-128 flex-col bg-sidebar text-sidebar-foreground">
-        <h2 className="px-3 pt-3 pb-1 text-sm font-medium">Projects</h2>
-        <ProjectConversationList {...props} />
-      </div>
+      <ConfirmationDialogProvider>
+        <div className="flex h-128 flex-col bg-worktree-sidebar text-worktree-sidebar-foreground">
+          <SidebarHeader onWorkspaceBoardMenuOpenChange={() => {}} />
+          <ProjectConversationList {...props} />
+        </div>
+      </ConfirmationDialogProvider>
     )
   })
 }

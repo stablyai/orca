@@ -1,9 +1,13 @@
-export const SIDEBAR_BODIES = ['conversations', 'workspaces', 'agents'] as const
+/** Lists the sidebar can open on, chosen from its title menu or Settings → Appearance. */
+export const SIDEBAR_VIEWS = ['workspaces', 'conversations'] as const
 
-export type SidebarBody = (typeof SIDEBAR_BODIES)[number]
+export type SidebarView = (typeof SIDEBAR_VIEWS)[number]
 
-export const DEFAULT_SIDEBAR_BODY: SidebarBody = 'workspaces'
+/** What the sidebar shows right now: the chosen view, a transient switch, or Activity over it. */
+export type SidebarBody = SidebarView | 'agents'
 
-export function normalizeSidebarBody(value: unknown): SidebarBody {
-  return SIDEBAR_BODIES.find((body) => body === value) ?? DEFAULT_SIDEBAR_BODY
+export const DEFAULT_SIDEBAR_VIEW: SidebarView = 'workspaces'
+
+export function normalizeSidebarView(value: unknown): SidebarView {
+  return SIDEBAR_VIEWS.find((view) => view === value) ?? DEFAULT_SIDEBAR_VIEW
 }

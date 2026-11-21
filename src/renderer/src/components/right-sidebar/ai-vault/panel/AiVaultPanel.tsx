@@ -18,6 +18,7 @@ import {
 } from '../scope/use-ai-vault-panel-projects'
 import { useAiVaultSessionRowHandlers } from '../session-actions/use-ai-vault-session-row-handlers'
 import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { AiVaultPanelHeader } from './AiVaultPanelHeader'
 import {
   aiVaultResultCountLabel,
@@ -271,7 +272,11 @@ export default function AiVaultPanel({
 
   return (
     <div
-      className="@container/ai-vault flex h-full min-h-0 flex-col bg-sidebar outline-none"
+      // The left sidebar's list takes that sidebar's own surface, tint included.
+      className={cn(
+        '@container/ai-vault flex h-full min-h-0 flex-col outline-none',
+        !conversationNavigation && 'bg-sidebar'
+      )}
       {...aiVaultPanelKeyboardRootProps(onSessionOpened ? listKeyboardRef : undefined)}
     >
       <AiVaultPanelHeader

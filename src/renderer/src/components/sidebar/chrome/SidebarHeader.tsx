@@ -7,7 +7,7 @@ import { PROJECTS_SECTION_GROUP_KEY } from '../../../../../shared/sidebar-list/s
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverArrow, PopoverContent } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Sparkles, Bell, ChevronDown, FolderTree, GitBranch, Activity } from 'lucide-react'
+import { Sparkles, Bell, ChevronDown, FolderTree, MessagesSquare, Activity } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import {
   DropdownMenu,
@@ -15,6 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { useSidebarBodyTitles } from './sidebar-view-titles'
 
 type SidebarHeaderProps = {
   activityBadgeTarget?: React.Ref<HTMLSpanElement>
@@ -35,14 +36,10 @@ const SidebarHeader = React.memo(function SidebarHeader({
   const t = useTranslate()
   const sidebarBody = useAppStore((s) => s.sidebarBody ?? 'workspaces')
   const groupBy = useAppStore((s) => s.groupBy)
-  const chooseSidebarBody = useAppStore((s) => s.chooseSidebarBody)
-  // Turning Activity off returns to the list it replaced.
-  const listBodyRef = React.useRef<'conversations' | 'workspaces'>('workspaces')
-  React.useEffect(() => {
-    if (sidebarBody !== 'agents') {
-      listBodyRef.current = sidebarBody
-    }
-  }, [sidebarBody])
+  const sidebarView = useAppStore((s) => s.sidebarView)
+  const chooseSidebarView = useAppStore((s) => s.chooseSidebarView)
+  const setSidebarBody = useAppStore((s) => s.setSidebarBody)
+  const titles = useSidebarBodyTitles()
   const updateSettings = useAppStore((s) => s.updateSettings)
   const agentsViewActive = sidebarBody === 'agents'
   const activityBadgeId = useId()
@@ -57,17 +54,12 @@ const SidebarHeader = React.memo(function SidebarHeader({
   const acknowledgeIntro = React.useCallback(() => {
     void updateSettings?.({ agentsSidebarIntroShown: true })
   }, [updateSettings])
-  const workspaceTitle = t('dashboard.sidebar.workspaces', 'Workspaces')
   const projectsCollapsed = useAppStore(
     (s) => collapsible && s.collapsedGroups.has(PROJECTS_SECTION_GROUP_KEY)
   )
   const toggleCollapsedGroup = useAppStore((s) => s.toggleCollapsedGroup)
-  const sidebarTitle =
-    sidebarBody === 'conversations'
-      ? t('dashboard.sidebar.projects', 'Projects')
-      : sidebarBody === 'agents'
-        ? t('dashboard.sidebar.activity', 'Activity')
-        : workspaceTitle
+  const sectionId = groupBy === 'repo' ? 'projects' : 'workspaces'
+  const sidebarTitle = titles[sidebarBody]
   const activityLabel = t(
     agentsViewActive ? 'dashboard.sidebar.closeActivity' : 'dashboard.sidebar.openActivity',
     agentsViewActive ? 'Turn off activity view' : 'View activity'
@@ -88,7 +80,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
   return (
     <SidebarSectionHeader
       title={sidebarTitle}
-      sectionId={groupBy === 'repo' ? 'projects' : 'workspaces'}
+      sectionId={sectionId}
       reorderable={collapsible}
       fold={fold}
       titleControl={
@@ -97,32 +89,35 @@ const SidebarHeader = React.memo(function SidebarHeader({
             <Button
               variant="ghost"
               size="xs"
-              // Truncate localized titles because fixed-width actions cannot shrink inside the short header row.
-              className="min-w-0"
+              // relative lifts the trigger above the header's full-width fold button.
+              className="relative min-w-0"
               data-sidebar-section-title={
                 sidebarBody === 'conversations'
-                  ? 'projects'
+                  ? 'sessions'
                   : sidebarBody === 'agents'
                     ? 'activity'
-                    : 'workspaces'
+                    : sectionId
               }
             >
-              {sidebarTitle}
-              <ChevronDown aria-hidden="true" className="size-3" />
+              {/* Truncate localized titles because fixed-width actions cannot shrink inside the short header row. */}
+              <span className="truncate font-semibold text-muted-foreground/80">
+                {sidebarTitle}
+              </span>
+              <ChevronDown aria-hidden="true" className="size-3 text-muted-foreground/80" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
-            <DropdownMenuItem onSelect={() => chooseSidebarBody('conversations')}>
+            <DropdownMenuItem onSelect={() => chooseSidebarView('workspaces')}>
               <FolderTree />
-              {t('dashboard.sidebar.projects', 'Projects')}
+              {titles.workspaces}
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => chooseSidebarBody('workspaces')}>
-              <GitBranch />
-              {workspaceTitle}
+            <DropdownMenuItem onSelect={() => chooseSidebarView('conversations')}>
+              <MessagesSquare />
+              {titles.conversations}
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => chooseSidebarBody('agents')}>
+            <DropdownMenuItem onSelect={() => setSidebarBody('agents')}>
               <Activity />
-              {t('dashboard.sidebar.activity', 'Activity')}
+              {titles.agents}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -135,7 +130,6 @@ const SidebarHeader = React.memo(function SidebarHeader({
           className="relative flex shrink-0 items-center empty:hidden"
         />
       }
-
       actions={
         <>
           <Popover
@@ -162,9 +156,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
                       aria-label={activityLabel}
                       aria-pressed={agentsViewActive}
                       aria-describedby={activityBadgeId}
-                      onClick={() =>
-                        chooseSidebarBody?.(agentsViewActive ? listBodyRef.current : 'agents')
-                      }
+                      onClick={() => setSidebarBody(agentsViewActive ? sidebarView : 'agents')}
                     >
                       <span className="relative h-5 w-6 shrink-0">
                         <Bell className="absolute left-0 top-1 size-3" />

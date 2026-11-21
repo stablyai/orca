@@ -36,7 +36,6 @@ import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar/st
 import { normalizeBrowserPageZoomLevel } from '../../../../../shared/browser/site-settings/browser-page-zoom'
 import { normalizeKagiSessionLink } from '../../../../../shared/browser/navigation/browser-url'
 import { isReleaseChannel } from '../../../../../shared/updater/release-channel'
-import { normalizeSidebarBody } from '../../../../../shared/ui-chrome/sidebar-body'
 import {
   filterSetupScriptPromptDismissalsToValidRepos,
   sanitizeSetupScriptPromptDismissals
@@ -58,7 +57,7 @@ import {
   hydrateUnexpectedSignoutDismissal,
   normalizeHydratedVisibleWorkspaceHostIds,
   preserveStringArrayIdentity,
-  sanitizeHydratedActiveView,
+  hydrateStartupViews,
   sanitizePersistedRepoIds,
   sanitizePerWorktreePreferences,
   sanitizeWorkspaceCleanupDismissals,
@@ -279,10 +278,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
               ? normalizeWorkspaceCleanupBrowseState(ui.workspaceCleanup?.browse)
               : s.workspaceCleanupBrowse,
           // Why: restore only on startup; on 'sync' broadcasts it would clobber the window's current per-window view.
-          activeView:
-            source === 'startup' ? sanitizeHydratedActiveView(ui.activeView) : s.activeView,
-          // Startup only, like activeView: another window's pick must not switch this one's list.
-          sidebarBody: source === 'startup' ? normalizeSidebarBody(ui.sidebarBody) : s.sidebarBody,
+          ...hydrateStartupViews(ui, source === 'startup', s),
           persistedUIReady: true
         }
         keepUnchangedHydratedFields(s, hydrated as Partial<UISlice>)

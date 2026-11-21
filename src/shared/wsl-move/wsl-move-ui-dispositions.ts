@@ -89,7 +89,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'activeView',
   'sidebarWidth',
   'sidebarOpen',
-  'sidebarBody',
+  'sidebarView',
   'rightSidebarOpen',
   'rightSidebarTab',
   'rightSidebarExplorerView',
