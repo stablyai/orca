@@ -43,6 +43,7 @@ test.use({
     ORCA_CLOUD_API_URL: 'https://auth-staging.onorca.dev',
     ORCA_CLOUD_AUTH_URL: 'https://auth-staging.onorca.dev',
     ORCA_CLOUD_CLIENT_ID: 'orca-desktop',
+    ORCA_RELAY_URL: 'https://relay.onorca.dev',
     ...(AUTH_TOKEN ? { ORCA_CLOUD_AUTH_TOKEN: AUTH_TOKEN } : {})
   }
 })

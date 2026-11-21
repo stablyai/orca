@@ -580,6 +580,29 @@
     },
     "sharedLinks": {
       "keywordBots": "봇"
+    },
+    "customRelay": {
+      "title": "사용자 지정 릴레이 서버",
+      "description": "이 데스크톱에서 사용할 클라우드 인증 및 릴레이 서버를 선택하세요. 변경 사항을 적용한 후 로그인하세요.",
+      "authUrl": "인증 서버 URL",
+      "clientId": "클라이언트 ID",
+      "relayUrl": "릴레이 디렉터 URL",
+      "validation": "HTTPS URL과 비어 있지 않은 클라이언트 ID를 사용하세요. 릴레이 URL은 경로가 없는 출처여야 합니다. URL에는 자격 증명, 쿼리 또는 프래그먼트를 포함할 수 없습니다. HTTP는 패키징되지 않은 빌드에서 localhost, 127.0.0.1 또는 [::1]에만 허용됩니다.",
+      "environment": "환경 변수는 저장된 설정보다 우선합니다. 연결 테스트는 여기에 입력한 URL을 확인합니다.",
+      "testing": "연결 테스트 중…",
+      "test": "연결 테스트",
+      "apply": "변경 사항 적용",
+      "authSuccess": "인증 서버: 연결됨",
+      "authFailure": "인증 서버: 연결 실패",
+      "relaySuccess": "릴레이 디렉터: 연결됨",
+      "relayFailure": "릴레이 디렉터: 연결 실패",
+      "invalid": "올바른 서버 URL과 클라이언트 ID를 입력하세요.",
+      "error": "요청을 완료하지 못했습니다. 서버 설정을 확인하고 다시 시도하세요.",
+      "confirmTitle": "클라우드 서버를 전환할까요?",
+      "confirmDescription": "로그아웃되고 기존 모바일 릴레이 페어링의 연결이 해제됩니다. 선택한 서버에 로그인한 후 해당 기기를 다시 페어링하세요. 로컬 전용 페어링은 유지됩니다.",
+      "cancel": "취소",
+      "saving": "서버 전환 중…",
+      "confirm": "서버 전환"
     }
   },
   "menu": {

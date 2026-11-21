@@ -20,8 +20,15 @@ export function useMobilePairingConnectionMode(): [
     resolvedFrom.savedConnectionMode !== savedConnectionMode ||
     resolvedFrom.signedIn !== signedIn
   ) {
+    // A saved-mode change with sign-in unchanged is a live pick (here or another window), so honor Relay even signed out.
+    const livePick =
+      resolvedFrom.signedIn === signedIn && resolvedFrom.savedConnectionMode !== undefined
     setResolvedFrom({ savedConnectionMode, signedIn })
-    setConnectionMode(resolveMobilePairingConnectionMode(savedConnectionMode, { signedIn }))
+    setConnectionMode(
+      livePick && savedConnectionMode
+        ? savedConnectionMode
+        : resolveMobilePairingConnectionMode(savedConnectionMode, { signedIn })
+    )
   }
   return [connectionMode, setConnectionMode]
 }

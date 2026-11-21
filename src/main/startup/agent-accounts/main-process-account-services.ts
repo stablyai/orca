@@ -1,3 +1,4 @@
+import { installCloudServerSettingsReader } from '../../orca-profiles/cloud-auth/profile-cloud-auth-config'
 import { installProviderAccountCatalogWarmup } from '../../providers/accounts/provider-account-catalog-warmup'
 import { createDesktopCodexSessionMigration } from '../../codex/history/backfill/desktop-codex-session-migration'
 import { KeybindingService } from '../../keybindings/keybinding-service'
@@ -55,6 +56,7 @@ export async function initializeMainProcessAccountServices(
   core.codexAccounts = services.codexAccounts
   core.claudeRuntimeAuth = services.claudeRuntimeAuth
   core.claudeAccounts = services.claudeAccounts
+  installCloudServerSettingsReader(() => store.getSettings().customCloudServer)
   core.orcaAccount = createDesktopOrcaAccountService(openExternal)
   // A paired client may sign this host in too (D3); the desktop keeps its own window sign-in.
   installOrcaServerSignIn(new OrcaServerSignIn({ account: core.orcaAccount }))

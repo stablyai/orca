@@ -7,6 +7,7 @@ import { getMachineNameSearchEntries } from '../machine-identity/machine-name-se
 export const MOBILE_SETTING_ANCHORS = {
   networkInterface: 'mobile-network-interface',
   pairing: 'mobile-pairing',
+  connection: 'mobile-connection',
   devices: 'mobile-paired-devices'
 } as const
 

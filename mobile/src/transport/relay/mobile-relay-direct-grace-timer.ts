@@ -13,6 +13,7 @@ export class MobileRelayDirectGraceTimer {
   private timer: ReturnType<typeof setTimeout> | null = null
   // Unknown until the path memory is read; the head start is kept meanwhile.
   private directHeadStart: boolean | null = null
+  private headStartSpent = false
 
   constructor(
     private readonly dependencies: DirectGraceTimerDependencies,
@@ -36,6 +37,15 @@ export class MobileRelayDirectGraceTimer {
     }
   }
 
+  // Once direct has had its head start this outage, relay retries run on their own backoff instead of waiting out each direct redial.
+  raceUnderway(): boolean {
+    return (
+      this.headStartSpent &&
+      this.logical.getActivePath() !== 'relay' &&
+      this.logical.getState() !== 'connected'
+    )
+  }
+
   onConnected(): void {
     this.clear()
     const path = this.logical.getActivePath() === 'relay' ? 'relay' : 'direct'
@@ -53,6 +63,7 @@ export class MobileRelayDirectGraceTimer {
       () => {
         this.timer = null
         if (this.logical.getState() !== 'connected') {
+          this.headStartSpent = true
           this.dialRelay()
         }
       },
@@ -61,6 +72,7 @@ export class MobileRelayDirectGraceTimer {
   }
 
   clear(): void {
+    this.headStartSpent = false
     if (this.timer) {
       this.dependencies.clearTimer(this.timer)
       this.timer = null

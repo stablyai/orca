@@ -17,6 +17,7 @@ export function sanitizeRendererSettingsUpdate(
   void _legacyScrollbackBytes
   // Plugin consent and enablement require main's reviewed-fingerprint handlers.
   // Account configuration must stop old writers and commit through the host account operation.
+  delete sanitizedArgs.customCloudServer
   delete sanitizedArgs.antigravityChatAuth
   delete sanitizedArgs.pluginConsents
   delete sanitizedArgs.disabledPlugins

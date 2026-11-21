@@ -24,6 +24,8 @@ import { MobileRelayDirectUpgradeController } from '../relay/mobile-relay-direct
 import { defaultCancelTimer, defaultScheduleTimer } from '../../platform/timer-scheduler'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import { skipsDirectEndpoint } from './undialable-direct-endpoint'
+import { createRelayRecoveryLog } from '../../diagnostics/connection/mobile-relay-recovery-log'
+import { logRelayRoutingMissing } from '../../diagnostics/connection/mobile-relay-diagnostic-log'
 
 type EndpointLifecycle = {
   setForeground(foreground: boolean): void
@@ -59,6 +61,7 @@ export function startMobileEndpointLifecycle(
     owner = createSupervisor(logical, initialHost, initialHost.relay, onLog)
     void owner.start()
   } else {
+    logRelayRoutingMissing(createRelayRecoveryLog(Date.now, onLog))
     owner = new MobileRelayDirectUpgradeController(logical, initialHost, {
       upgrade: (client, host) =>
         upgradeDirectMobileRelay({

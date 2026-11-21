@@ -184,6 +184,7 @@ export class ConnectorCloud {
   /** Just before the desktop signs out: stop now, and drop turn ends no other account can report. */
   signOutStarted(): void {
     this.signingOut = true
+    this.transport = null
     this.noteAccount()
     this.stopClient()
     if (this.events) {

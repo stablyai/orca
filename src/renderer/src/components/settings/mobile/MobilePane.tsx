@@ -349,6 +349,7 @@ export function MobilePane(): React.JSX.Element {
     loadDevices
   })
 
+  const automaticMintFailed = relayMintFailure != null && connectionMode === 'automatic'
   return (
     <>
       {/* empty:hidden drops the row (and its rule) when the field renders nothing on web clients. */}
@@ -363,12 +364,11 @@ export function MobilePane(): React.JSX.Element {
           addressDisclosureForcedOpen={shouldOpenMobilePairingAddress(settingsSearchQuery)}
           connectionPathControl={
             <MobilePairingConnectionOptions
+              id={MOBILE_SETTING_ANCHORS.connection}
               value={connectionMode}
               onChange={changeConnectionMode}
-              relayMintFailed={relayMintFailure != null && connectionMode === 'automatic'}
-              relayMintRetrying={
-                relayMintFailure != null && connectionMode === 'automatic' && loading
-              }
+              relayMintFailed={automaticMintFailed}
+              relayMintRetrying={automaticMintFailed && loading}
             />
           }
           networkInterfaces={networkInterfaces}

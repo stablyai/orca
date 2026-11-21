@@ -16,7 +16,14 @@ const cloud = vi.hoisted((): { fake: FakeConnectorCloud | null; mintedFrom: stri
   mintedFrom: []
 }))
 vi.mock('../orca-profiles/cloud-auth/profile-cloud-auth-config', () => ({
-  getOrcaCloudAuthConfig: () => ({ configured: true, config: {} })
+  getOrcaCloudAuthConfig: () => ({
+    configured: true,
+    config: {
+      apiBaseUrl: 'https://login.onorca.dev',
+      clientId: 'orca-desktop',
+      relayDirectorUrl: 'https://relay.onorca.dev'
+    }
+  })
 }))
 vi.mock('./connector-origin', () => ({ resolveConnectorOrigin: () => cloud.fake!.origin }))
 vi.mock('./connector-token-mint', () => ({

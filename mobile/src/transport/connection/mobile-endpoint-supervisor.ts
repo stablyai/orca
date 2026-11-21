@@ -142,10 +142,8 @@ export class MobileEndpointSupervisor {
     if (this.stopped) {
       return
     }
-    if (!this.bundle) {
-      // Re-read durable credentials each recovery attempt so an opening keychain race cannot disable relay for the process lifetime.
-      this.logRelay('credential bundle unavailable at start; recovery will re-read')
-    }
+    // Recovery re-reads durable credentials each attempt, so an opening keychain race cannot disable relay for the process lifetime.
+    relayDiagnosticLog.logRelaySupervisorStarted(this.logRelay, this.logical, this.bundle)
     this.unsubscribeState = this.logical.onStateChange((state) => {
       if (state === 'connected') {
         this.directGrace.onConnected()
@@ -218,7 +216,7 @@ export class MobileEndpointSupervisor {
       ownsRecovery = true
     }
     // Give connecting/handshaking direct its grace period before unforced relay recovery.
-    if (!forceReplacement && !this.relayReconnect.needsRecovery(this.logical.getState())) {
+    if (!forceReplacement && !this.recoveryDue()) {
       return
     }
     // Share cooldown across overlapping resume, revival and lease failures to prevent reconnect churn.
@@ -252,8 +250,7 @@ export class MobileEndpointSupervisor {
         }
         return
       }
-      const recoveryNeeded =
-        forceReplacement || this.relayReconnect.needsRecovery(this.logical.getState())
+      const recoveryNeeded = forceReplacement || this.recoveryDue()
       if (!this.isActive() || !recoveryNeeded) {
         return
       }
@@ -288,6 +285,9 @@ export class MobileEndpointSupervisor {
       }
     }
   }
+
+  private recoveryDue = (): boolean =>
+    this.relayReconnect.needsRecovery(this.logical.getState()) || this.directGrace.raceUnderway()
 
   private async rotateCredentialIfNeeded(force = false): Promise<void> {
     if (

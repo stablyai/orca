@@ -145,6 +145,7 @@ beforeEach(() => {
   vi.setSystemTime('2026-08-07T12:00:00.000Z')
   vi.stubEnv('ORCA_CLOUD_API_URL', apiUrl)
   vi.stubEnv('ORCA_CLOUD_CLIENT_ID', 'orca-test')
+  vi.stubEnv('ORCA_RELAY_URL', 'https://relay.example.test')
   vi.stubEnv('ORCA_CLOUD_ALLOW_PLAINTEXT_SESSION', '1')
 })
 

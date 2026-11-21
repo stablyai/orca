@@ -4,6 +4,7 @@ import type { RelayRevokeOutbox } from '../pairing/relay-revoke-outbox'
 type RelayDemandLedgerOptions = {
   deviceRegistry: DeviceRegistry
   revokeOutbox: RelayRevokeOutbox
+  relayDirectorUrl?: string
   relayHostId: string
   now?: () => number
 }
@@ -37,7 +38,13 @@ export class RelayDemandLedger {
     if (this.transientRefs.size > 0) {
       return true
     }
-    if (this.options.revokeOutbox.pendingFor(ownerIdentityKey, this.options.relayHostId).length) {
+    if (
+      this.options.revokeOutbox.pendingFor(
+        ownerIdentityKey,
+        this.options.relayHostId,
+        this.options.relayDirectorUrl
+      ).length
+    ) {
       return true
     }
     const now = (this.options.now ?? Date.now)()
@@ -45,6 +52,9 @@ export class RelayDemandLedger {
       const binding = device.relayBinding
       if (
         device.scope !== 'mobile' ||
+        (binding?.relayDirectorUrl !== undefined &&
+          this.options.relayDirectorUrl !== undefined &&
+          binding.relayDirectorUrl !== this.options.relayDirectorUrl) ||
         !binding ||
         binding.ownerIdentityKey !== ownerIdentityKey ||
         binding.relayHostId !== this.options.relayHostId

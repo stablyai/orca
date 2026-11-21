@@ -1,5 +1,5 @@
 import type { SettingsSearchEntry } from '../search/settings-search'
-import { getMobilePaneSearchEntries } from './mobile-pane-search'
+import { getMobilePaneSearchEntries, MOBILE_SETTING_ANCHORS } from './mobile-pane-search'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
@@ -84,10 +84,28 @@ export const getMobileSidebarShortcutSearchEntry = createLocalizedCatalog(
   })
 )
 
+export const getCustomRelayServerSearchEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
+  targetSectionId: MOBILE_SETTING_ANCHORS.connection,
+  title: translate('settings.customRelay.title', 'Custom relay server'),
+  description: translate(
+    'settings.customRelay.description',
+    'Choose the cloud auth and relay servers used by this desktop. Sign in after applying a change.'
+  ),
+  keywords: [
+    ...(getMobileOverviewSearchEntry().keywords ?? []),
+    translate('settings.customRelay.authUrl', 'Auth server URL'),
+    translate('settings.customRelay.clientId', 'Client ID'),
+    translate('settings.customRelay.relayUrl', 'Relay director URL'),
+    translate('settings.customRelay.searchOwnRelay', 'Your own relay'),
+    translate('settings.customRelay.searchSelfHosted', 'Self-hosted')
+  ]
+}))
+
 export const getMobileSettingsPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
     getMobileOverviewSearchEntry(),
     getMobileSidebarShortcutSearchEntry(),
+    getCustomRelayServerSearchEntry(),
     ...getMobilePaneSearchEntries()
   ]
 )

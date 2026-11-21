@@ -837,6 +837,29 @@
         "showMore": "Afficher {{count}} de plus",
         "notLoaded": "Aucun agent ne la charge"
       }
+    },
+    "customRelay": {
+      "title": "Serveur relais personnalisé",
+      "description": "Choisissez les serveurs cloud d’authentification et de relais de cet ordinateur. Connectez-vous après toute modification.",
+      "authUrl": "URL du serveur d’authentification",
+      "clientId": "ID client",
+      "relayUrl": "URL du directeur de relais",
+      "validation": "Utilisez des URL HTTPS et un ID client non vide. L’URL de relais doit être une origine sans chemin. Les URL ne doivent contenir ni identifiants, ni requête, ni fragment. HTTP est autorisé uniquement sur localhost, 127.0.0.1 ou [::1] dans les versions non empaquetées.",
+      "environment": "Les variables d’environnement sont prioritaires sur les réglages enregistrés. Le test vérifie les URL saisies ici.",
+      "testing": "Test de connexion…",
+      "test": "Tester la connexion",
+      "apply": "Appliquer les modifications",
+      "authSuccess": "Serveur d’authentification : connecté",
+      "authFailure": "Serveur d’authentification : échec de connexion",
+      "relaySuccess": "Directeur de relais : connecté",
+      "relayFailure": "Directeur de relais : échec de connexion",
+      "invalid": "Saisissez des URL de serveur valides et un ID client.",
+      "error": "Impossible de terminer la demande. Vérifiez les réglages du serveur et réessayez.",
+      "confirmTitle": "Changer de serveurs cloud ?",
+      "confirmDescription": "Vous serez déconnecté et les jumelages mobiles via relais seront interrompus. Jumelez à nouveau ces appareils après connexion au serveur sélectionné. Les jumelages uniquement locaux sont conservés.",
+      "cancel": "Annuler",
+      "saving": "Changement de serveurs…",
+      "confirm": "Changer de serveurs"
     }
   },
   "menu": {

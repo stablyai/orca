@@ -111,6 +111,7 @@ beforeEach(async () => {
   vi.setSystemTime(now)
   vi.stubEnv('ORCA_CLOUD_API_URL', apiUrl)
   vi.stubEnv('ORCA_CLOUD_CLIENT_ID', 'orca-test')
+  vi.stubEnv('ORCA_RELAY_URL', 'https://relay.example.test')
   vi.stubEnv('ORCA_CLOUD_ALLOW_PLAINTEXT_SESSION', '1')
   const userDataPath = await mkdtemp(join(tmpdir(), 'orca-artifact-faults-'))
   const profileId = ensureActiveOrcaProfile(userDataPath).profile.id

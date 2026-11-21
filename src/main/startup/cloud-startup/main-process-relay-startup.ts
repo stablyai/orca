@@ -10,6 +10,12 @@ import { mainProcessState as state } from '../main-process-state'
  * reach it without a direct path. Register before proxy readiness; the install waits for it.
  */
 export function startMainProcessRelayService(runtimeRpc: OrcaRuntimeRpcServer): void {
+  replaceMainProcessRelayService(runtimeRpc)
+  powerMonitor.on('resume', () => state.core.relayHost?.ensureLive())
+}
+
+export function replaceMainProcessRelayService(runtimeRpc: OrcaRuntimeRpcServer): void {
+  state.core.relayHost?.stop()
   state.core.relayHost = installRelayHost({
     runtimeRpc,
     userDataPath: getProfileUserDataPath(),
@@ -18,5 +24,4 @@ export function startMainProcessRelayService(runtimeRpc: OrcaRuntimeRpcServer): 
     isFenced: () => state.isQuitting,
     onStatus: publishDesktopRelayStatus
   })
-  powerMonitor.on('resume', () => state.core.relayHost?.ensureLive())
 }

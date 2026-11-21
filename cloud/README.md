@@ -21,6 +21,9 @@ the validation required before rolling out the updated images and host pins.
   splice state machine).
 - `apps/relay`: the relay server. The same image runs as a director or a cell
   depending on `ORCA_RELAY_ROLE`.
+- `apps/relay-auth`: a sign-in service for running your own relay; see its
+  [README](apps/relay-auth/README.md). [`self-hosted`](self-hosted/README.md) is
+  a Docker Compose example that runs it with the relay behind HTTPS.
 - `apps/relay-fence-broker`: a private, IAM-only service that owns the durable
   mutation lease, the Terraform checkout, and the narrow Compute mutation used
   when a registered target is superseded. The workflow that calls it holds read

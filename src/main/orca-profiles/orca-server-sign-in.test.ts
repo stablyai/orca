@@ -17,7 +17,8 @@ import type { OrcaCloudAuthorizationCode } from './cloud-auth/profile-cloud-pkce
 
 const ENV = {
   ORCA_CLOUD_API_URL: 'https://login.example.test',
-  ORCA_CLOUD_CLIENT_ID: 'orca-desktop'
+  ORCA_CLOUD_CLIENT_ID: 'orca-desktop',
+  ORCA_RELAY_URL: 'https://relay.example.test'
 }
 
 function signedOut(): OrcaProfileAuthStatus {

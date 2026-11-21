@@ -1,4 +1,9 @@
 import type {
+  CustomCloudServerSettings,
+  CloudServerSettingsState,
+  CloudServerConnectionTest
+} from '../../../shared/settings/custom-cloud-server'
+import type {
   OrcaCloudSignInProgress,
   ConnectCurrentOrcaProfileResult,
   CreateCloudLinkedOrcaProfileArgs,
@@ -27,6 +32,9 @@ import type {
 } from '../../../shared/orca-profiles/orca-profiles'
 
 export type OrcaProfileApi = {
+  cloudServerSettings: () => Promise<CloudServerSettingsState>
+  testCloudServer: (settings: CustomCloudServerSettings) => Promise<CloudServerConnectionTest>
+  switchCloudServer: (settings: CustomCloudServerSettings) => Promise<CustomCloudServerSettings>
   list: () => Promise<OrcaProfileListResult>
   authStatus: () => Promise<OrcaProfileAuthStatus>
   /** Fires when main changed the stored auth status on its own (e.g. a revoked session). */
