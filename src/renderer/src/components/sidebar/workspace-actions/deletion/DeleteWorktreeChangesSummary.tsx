@@ -70,7 +70,7 @@ type StatusTone = 'checking' | 'clean' | 'warning'
 
 /** An element's untransformed, fractional layout width. */
 function layoutWidth(el: Element): number {
-  return parseFloat(getComputedStyle(el).width) || 0
+  return Number.parseFloat(getComputedStyle(el).width) || 0
 }
 
 /** The on-screen width of an element's text, even where its box clips it. */
@@ -122,9 +122,9 @@ export function DeleteWorktreeChangesSummary({
     const rowWidth = layoutWidth(row)
     const scale = row.getBoundingClientRect().width / rowWidth || 1
     // Gaps and padding are rem-based, so read them rather than assume 16px type.
-    const gap = parseFloat(getComputedStyle(line).columnGap) || 0
-    const notePad = note ? parseFloat(getComputedStyle(note).paddingLeft) || 0 : 0
-    const rootFont = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+    const gap = Number.parseFloat(getComputedStyle(line).columnGap) || 0
+    const notePad = note ? Number.parseFloat(getComputedStyle(note).paddingLeft) || 0 : 0
+    const rootFont = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
     const chevronRoom = CHEVRON_ROOM_REM * rootFont
     const need = (naturalWidth(text) + (note ? naturalWidth(note) : 0)) / scale + notePad
     let fixed = 0
