@@ -23,12 +23,14 @@ describe('a session listing a terminal change outdated', () => {
     expect(cache.getSnapshot().observedAt).not.toBeNull()
   })
 
-  it('still reports a real failure', async () => {
-    const list = vi.fn().mockRejectedValue(new Error('daemon unreachable'))
+  it('reports the list as stale once terminals keep changing through every read', async () => {
+    const list = vi
+      .fn()
+      .mockRejectedValue(new Error('Terminal session owner could not be verified: stale inventory'))
     const cache = new ResourceSessionInventoryCache(list, false)
 
     cache.setActive(true)
     await vi.waitFor(() => expect(cache.getSnapshot().sessionsError).toBe(true))
-    expect(list).toHaveBeenCalledTimes(1)
+    expect(list).toHaveBeenCalledTimes(4)
   })
 })

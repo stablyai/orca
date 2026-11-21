@@ -30,11 +30,13 @@ function parsePaneKey(paneKey: string | null): { tabId: string; leafId: string }
 export function resolveSnapshotSessionLabel(
   session: SessionMemory,
   worktreeId: string,
-  index: ResourceSessionBindingIndex
+  index: ResourceSessionBindingIndex,
+  boundTabId: string | null = null
 ): string {
-  const parsed = parsePaneKey(session.paneKey)
-  if (parsed) {
-    const match = index.tabsByIdByWorktree.get(worktreeId)?.get(parsed.tabId)
+  // A restored PTY may carry no pane key yet still be bound to its tab; either names the tab.
+  const tabId = parsePaneKey(session.paneKey)?.tabId ?? boundTabId
+  if (tabId) {
+    const match = index.tabsByIdByWorktree.get(worktreeId)?.get(tabId)
     const tab = match?.tab
     const tabIndex = match?.index ?? -1
     if (tab) {

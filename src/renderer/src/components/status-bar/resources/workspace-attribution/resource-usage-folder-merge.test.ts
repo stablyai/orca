@@ -86,11 +86,11 @@ describe('folder Resource Manager rows', () => {
     const rows = repos.flatMap((repo) => repo.worktrees)
 
     expect(rows.find((row) => row.worktreeId === workspace.id)).toMatchObject({
-      chats: [chat],
+      chats: [{ agentSessionId: 'chat-1', agent: 'claude', name: 'Plan', cpu: 1, memory: 512 }],
       unplaced: undefined
     })
     expect(rows.find((row) => row.worktreeId === 'runtime:paired|folder:elsewhere')).toMatchObject({
-      chats: [chat],
+      chats: [{ agentSessionId: 'chat-1', agent: 'claude', name: 'Plan', cpu: 1, memory: 512 }],
       unplaced: true
     })
   })
@@ -114,6 +114,9 @@ describe('folder Resource Manager rows', () => {
 
     expect(
       repos.flatMap((repo) => repo.worktrees).find((row) => row.worktreeId === 'repo-1::/new')
-    ).toMatchObject({ chats: [chat], unplaced: true })
+    ).toMatchObject({
+      chats: [{ agentSessionId: 'chat-2', agent: 'codex', name: null, cpu: 1, memory: 256 }],
+      unplaced: true
+    })
   })
 })
