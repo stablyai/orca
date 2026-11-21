@@ -2022,7 +2022,7 @@
       "authUrl": "Auth server URL",
       "clientId": "Client ID",
       "relayUrl": "Relay director URL",
-      "validation": "Use HTTPS URLs and a nonempty client ID. The relay URL must be an origin without a path. URLs cannot contain credentials, queries, or fragments. HTTP is allowed only on localhost, 127.0.0.1, or [::1] in unpackaged builds.",
+      "validation": "Use HTTPS URLs and a nonempty client ID. Both URLs must be origins without a path. URLs cannot contain credentials, queries, or fragments. HTTP is allowed only on localhost, 127.0.0.1, or [::1] in unpackaged builds.",
       "environment": "Environment variables override saved settings. Test connection checks the URLs entered here.",
       "testing": "Testing connection…",
       "test": "Test connection",

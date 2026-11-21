@@ -67,6 +67,7 @@ export class OrcaAccountService {
   private readonly hooks: OrcaAccountLifecycleHooks
   private readonly accountBoundLinks: AccountBoundLinks | undefined
   private switchingCloudServer = false
+  private cloudServerGeneration = 0
   private readonly signOutListeners = new Set<() => void>()
 
   constructor(ports: OrcaAccountServicePorts) {
@@ -145,7 +146,12 @@ export class OrcaAccountService {
     onCreated?: (profileId: string) => void
   ): Promise<CreateCloudLinkedOrcaProfileResult> {
     this.assertCloudServerStable()
-    const result = await createCloudLinkedOrcaProfile(this.userDataPath(), args)
+    const generation = this.cloudServerGeneration
+    const result = await createCloudLinkedOrcaProfile(
+      this.userDataPath(),
+      args,
+      () => generation === this.cloudServerGeneration
+    )
     if (result.status === 'created') {
       onCreated?.(result.profile.id)
       this.hooks.onAuthMutation?.()
@@ -181,6 +187,7 @@ export class OrcaAccountService {
   async withCloudServerSwitch<T>(operation: () => Promise<T>): Promise<T> {
     this.assertCloudServerStable()
     this.switchingCloudServer = true
+    this.cloudServerGeneration++
     try {
       return await operation()
     } finally {

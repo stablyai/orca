@@ -41,6 +41,7 @@ export function validateCustomCloudServer(
   const auth = new URL(authServerUrl)
   const relay = new URL(relayDirectorUrl)
   if (
+    auth.pathname !== '/' ||
     auth.username ||
     auth.password ||
     auth.search ||

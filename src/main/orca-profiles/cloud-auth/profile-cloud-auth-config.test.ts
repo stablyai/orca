@@ -1,3 +1,4 @@
+import { requiresExplicitCloudServiceUrl } from './profile-cloud-server-preferences'
 import { afterEach, describe, expect, it } from 'vitest'
 import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { hasAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
@@ -141,4 +142,38 @@ it('requires a complete environment server triple and never fills missing fields
     }
   })
   expect(getOrcaCloudAuthConfig({}, false, undefined)).toMatchObject({ configured: false })
+})
+
+it('requires an explicit service URL for the effective server, ignoring overridden saved settings', () => {
+  const saved = {
+    enabled: true,
+    authServerUrl: 'https://custom-auth.example.test',
+    clientId: 'custom-client',
+    relayDirectorUrl: 'https://custom-relay.example.test'
+  }
+  const resolve = (env: NodeJS.ProcessEnv, enabled = true) => {
+    const result = getOrcaCloudAuthConfig(env, true, { ...saved, enabled })
+    if (!result.configured) {
+      throw new Error(result.setupMessage)
+    }
+    return result.config
+  }
+  const production = resolve({
+    ORCA_CLOUD_API_URL: 'https://login.onorca.dev/',
+    ORCA_CLOUD_CLIENT_ID: 'orca-desktop',
+    ORCA_RELAY_URL: 'https://relay.onorca.dev/'
+  })
+  expect(requiresExplicitCloudServiceUrl(production)).toBe(false)
+  const custom = resolve(
+    {
+      ORCA_CLOUD_API_URL: 'https://env-auth.example.test',
+      ORCA_CLOUD_CLIENT_ID: 'environment',
+      ORCA_RELAY_URL: 'https://env-relay.example.test'
+    },
+    false
+  )
+  expect(requiresExplicitCloudServiceUrl(custom)).toBe(true)
+  expect(requiresExplicitCloudServiceUrl(custom, 'https://share.example.test')).toBe(false)
+  expect(requiresExplicitCloudServiceUrl(resolve({}))).toBe(true)
+  expect(requiresExplicitCloudServiceUrl(resolve({}, false))).toBe(false)
 })

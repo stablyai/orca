@@ -248,17 +248,20 @@ export class ArtifactCloudService {
         value
       }
     }
+    const config = getOrcaCloudAuthConfig()
+    if (!config.configured) {
+      return { status: 'unconfigured', message: config.setupMessage }
+    }
     if (
-      requiresExplicitCloudServiceUrl(options.apiUrl?.trim() || process.env.ORCA_ARTIFACTS_API_URL)
+      requiresExplicitCloudServiceUrl(
+        config.config,
+        options.apiUrl?.trim() || process.env.ORCA_ARTIFACTS_API_URL
+      )
     ) {
       return {
         status: 'unconfigured',
         message: 'Configure an explicit artifact service URL before using a custom cloud server.'
       }
-    }
-    const config = getOrcaCloudAuthConfig()
-    if (!config.configured) {
-      return { status: 'unconfigured', message: config.setupMessage }
     }
     const result = await runWithFreshOrcaCloudSession(
       config.config,

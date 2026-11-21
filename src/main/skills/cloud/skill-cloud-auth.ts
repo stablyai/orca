@@ -44,8 +44,13 @@ export async function runSkillCloudOperation<T>(input: {
     assertCurrent()
     return { status: 'ok', value }
   }
+  const config = getOrcaCloudAuthConfig()
+  if (!config.configured) {
+    return { status: 'unconfigured', message: config.setupMessage }
+  }
   if (
     requiresExplicitCloudServiceUrl(
+      config.config,
       input.options.apiUrl?.trim() || process.env.ORCA_ARTIFACTS_API_URL
     )
   ) {
@@ -53,10 +58,6 @@ export async function runSkillCloudOperation<T>(input: {
       status: 'unconfigured',
       message: 'Configure an explicit skill service URL before using a custom cloud server.'
     }
-  }
-  const config = getOrcaCloudAuthConfig()
-  if (!config.configured) {
-    return { status: 'unconfigured', message: config.setupMessage }
   }
   const result = await runWithFreshOrcaCloudSession(
     config.config,
