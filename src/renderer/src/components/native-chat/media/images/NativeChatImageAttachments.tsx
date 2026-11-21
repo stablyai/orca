@@ -4,7 +4,7 @@ import { cn } from '../../../../lib/class-names'
 import { useTranslate } from '../../../../i18n/use-translate'
 import { basename } from '../../../../lib/path'
 import type { NativeChatBlock } from '../../../../../../shared/native-chat/native-chat-types'
-import { PanZoomImageDialog } from '../../../editor/document-images/PanZoomImageDialog'
+import { NativeChatMediaViewer } from '../notes/NativeChatMediaViewer'
 import {
   getLocalImageCacheKey,
   useLocalImageSrc
@@ -153,18 +153,23 @@ export function NativeChatImageTile({
   )
 }
 
+const NO_OPENER: React.RefObject<Element | null> = { current: null }
+
 /** The pan-and-zoom viewer over a message's images: previous and next step through them. */
 export function NativeChatImageViewer({
   blocks,
   index,
   onIndexChange,
-  runtimeContext
+  runtimeContext,
+  opener
 }: {
   blocks: readonly ImageRef[]
   /** The image shown; null when closed. */
   index: number | null
   onIndexChange: (index: number | null) => void
   runtimeContext: RuntimeFileOperationArgs | null | undefined
+  /** An element inside the chat, used to find its message box for notes; without one, view only. */
+  opener?: React.RefObject<Element | null>
 }): React.JSX.Element {
   const block = index === null ? undefined : blocks[index]
   const read = useTranscriptImageSrc(block, runtimeContext, block !== undefined)
@@ -186,16 +191,22 @@ export function NativeChatImageViewer({
         }
   }
   return (
-    <PanZoomImageDialog
+    <NativeChatMediaViewer
       open={block !== undefined}
       onOpenChange={(open) => !open && onIndexChange(null)}
-      src={displaySrc}
+      src={displaySrc ?? null}
       title={label}
-      showTitle
+      source={{
+        ...(block?.path ? { path: block.path } : {}),
+        ...(block?.url ? { url: block.url } : {})
+      }}
+      opener={opener ?? NO_OPENER}
+      // Web images would need a cross-origin read to draw, so they are view-only.
+      annotatable={opener !== undefined && !read.external}
       onPrevious={step(-1)}
       onNext={step(1)}
       onInteractOutside={keepPreviewOpenForChatMenu}
-      data-native-chat-copy-image-src={copyableNativeChatImageSrc(displaySrc)}
+      copySrc={copyableNativeChatImageSrc(displaySrc)}
       fallback={<ImageLabelChip label={label} />}
     />
   )
@@ -215,6 +226,7 @@ export function NativeChatImageAttachments({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const [viewing, setViewing] = useState<number | null>(null)
+  const gallery = useRef<HTMLDivElement>(null)
   const images = blocks.filter((block) => block.type === 'image-ref')
   if (images.length === 0) {
     return null
@@ -253,7 +265,7 @@ export function NativeChatImageAttachments({
     )
   }
   return (
-    <div className={cn('mb-2 flex flex-wrap gap-1.5', className)}>
+    <div ref={gallery} className={cn('mb-2 flex flex-wrap gap-1.5', className)}>
       {images.map((image, index) => {
         const label =
           image.alt ??
@@ -278,6 +290,7 @@ export function NativeChatImageAttachments({
         index={viewing}
         onIndexChange={setViewing}
         runtimeContext={runtimeContext}
+        opener={gallery}
       />
     </div>
   )

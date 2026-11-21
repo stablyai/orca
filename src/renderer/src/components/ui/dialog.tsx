@@ -70,6 +70,9 @@ const dialogContentSurfaceVariants = cva('', {
       panel: 'gap-0 p-0',
       /** `panel`, opaque: content scrolling under sticky headings (`bg-popover`) must not show through. */
       'opaque-panel': 'gap-0 bg-popover p-0',
+      /** Full window on the media surround, for viewing a picture edge to edge in either theme. */
+      media:
+        'h-dvh w-dvw max-w-none gap-0 rounded-none border-0 bg-media-canvas p-0 text-media-canvas-foreground shadow-none sm:max-w-none',
       /** Trust, consent and provenance decisions: host-owned tokens a plugin theme cannot restyle. */
       security: SECURITY_SURFACE_CLASS
     }

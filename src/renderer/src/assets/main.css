@@ -76,6 +76,13 @@
   --color-chat-composer-surface: var(--chat-composer-surface);
   --color-chat-composer-border: var(--chat-composer-border);
   --color-chat-warning: var(--chat-warning);
+  --color-media-canvas: var(--media-canvas);
+  --color-media-canvas-foreground: var(--media-canvas-foreground);
+  --color-media-note: var(--media-note);
+  --color-media-note-hover: var(--media-note-hover);
+  --color-media-note-foreground: var(--media-note-foreground);
+  --color-media-note-ring: var(--media-note-ring);
+  --color-media-note-selected: var(--media-note-selected);
   --color-chat-diff-added: var(--chat-diff-added);
   --color-chat-diff-removed: var(--chat-diff-removed);
   --color-card: var(--card);
@@ -774,6 +781,19 @@ body[data-modal-overlay-open]
   color: var(--accent-foreground);
   background: var(--accent);
   border-color: var(--notice-border);
+}
+
+/* Full-window image viewer: a neutral dark surround in either theme, so a picture's own colors read
+   true, and numbered note marks in one hue that stays visible on any picture. */
+:root,
+.dark {
+  --media-canvas: #121212;
+  --media-canvas-foreground: #f5f5f5;
+  --media-note: #2f5bd3;
+  --media-note-hover: #244bb5;
+  --media-note-foreground: #ffffff;
+  --media-note-ring: #8fb0ff;
+  --media-note-selected: #ffd54a;
 }
 
 /* Re-evaluate chat colors where the appearance producer supplies their source colors. */

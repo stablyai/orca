@@ -4,7 +4,8 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { basename } from '@/lib/path'
 import { useLocalImageSrc } from '@/components/editor/document-images/useLocalImageSrc'
-import { PanZoomImageDialog } from '@/components/editor/document-images/PanZoomImageDialog'
+import { NativeChatMediaViewer } from '../../media/notes/NativeChatMediaViewer'
+import { useNativeChatAttachmentNotes } from '../../media/notes/native-chat-attachment-notes'
 import {
   copyableNativeChatImageSrc,
   keepPreviewOpenForChatMenu
@@ -24,12 +25,15 @@ type Props = {
   number?: number
   /** The paired server the chat runs on; a file stored there is read back through it. */
   hostEnvironmentId?: string
+  /** The draft holding this chip, whose marked images keep their notes. */
+  notesScopeKey?: string
   onRemove: (id: string) => void
 }
 
 export function NativeChatImageAttachmentPreview({
   attachment,
   hostEnvironmentId,
+  notesScopeKey,
   number,
   onRemove
 }: Props): React.JSX.Element {
@@ -47,6 +51,7 @@ export function NativeChatImageAttachmentPreview({
     <NativeChatImageThumbnail
       attachment={attachment}
       hostEnvironmentId={hostEnvironmentId}
+      notesScopeKey={notesScopeKey}
       number={number}
       onRemove={onRemove}
     />
@@ -142,11 +147,14 @@ function NativeChatUnavailableImageChip({
 function NativeChatImageThumbnail({
   attachment,
   hostEnvironmentId,
+  notesScopeKey,
   number,
   onRemove
 }: Props): React.JSX.Element {
   const t = useTranslate()
   const [isOpen, setIsOpen] = useState(false)
+  // A marked image's notes reopen editable on the media they were made on.
+  const notes = useNativeChatAttachmentNotes(notesScopeKey ?? '', attachment.id)
   const [isNearViewport, setIsNearViewport] = useState(false)
   const thumbnailRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -198,6 +206,13 @@ function NativeChatImageThumbnail({
   // Use the immediate clipboard preview for thumbnails and prefer the stored file for full-size viewing.
   const thumbnailSrc = attachment.previewUrl ?? localSrc
   const fullSizeSrc = localSrc ?? attachment.previewUrl
+  const originalSrc = useLocalImageSrc(
+    isOpen && notes?.source.path ? notes.source.path : undefined,
+    notes?.source.path ?? '',
+    notes?.source.connectionId,
+    hostReadContext,
+    chatImageAccess()
+  )
   const filename = attachmentLabel(attachment.path, t)
   const pendingLabel = attachment.pendingName
     ? t('components.native-chat.composer.uploadingFile', 'Uploading {{name}}…', {
@@ -255,16 +270,30 @@ function NativeChatImageThumbnail({
           </span>
         ) : null}
         <ImageNumberBadge number={number} />
+        {notes ? (
+          <span className="pointer-events-none absolute right-0.5 bottom-0.5 rounded-full bg-background/85 px-1 text-3xs font-medium text-foreground tabular-nums">
+            {t('components.native-chat.notes.chipCount', '{{count}} notes', {
+              defaultValue_one: '{{count}} note',
+              count: notes.notes.length
+            })}
+          </span>
+        ) : null}
         <RemoveAttachmentButton onRemove={() => onRemove(attachment.id)} />
       </div>
-      <PanZoomImageDialog
+      <NativeChatMediaViewer
         open={isOpen}
         onOpenChange={setIsOpen}
-        src={fullSizeSrc}
-        title={label}
-        showTitle
+        src={(notes ? originalSrc : null) ?? fullSizeSrc ?? null}
+        title={notes?.mediaName ?? label}
+        source={notes?.source ?? { path: attachment.path }}
+        opener={thumbnailRef}
+        initialNotes={notes && originalSrc ? notes.notes : undefined}
+        // Without the original, new notes go on the marked copy, numbered after its marks.
+        offset={notes && !originalSrc ? Math.max(...notes.notes.map((note) => note.number)) : 0}
+        // The edited notes arrive as a new marked image; this one leaves with its old notes.
+        onAttached={notes && originalSrc ? () => onRemove(attachment.id) : undefined}
         onInteractOutside={keepPreviewOpenForChatMenu}
-        data-native-chat-copy-image-src={copySrc}
+        copySrc={copySrc}
         fallback={
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             {isPending ? (

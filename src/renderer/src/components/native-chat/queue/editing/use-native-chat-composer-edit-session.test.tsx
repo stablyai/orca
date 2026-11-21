@@ -44,7 +44,8 @@ function Composer() {
     setNotice: () => {},
     disabled: false,
     sendHeld: false,
-    sendMessage: () => {},
+    submission: { send: () => {}, messageDelivery: true },
+    peekSendClassification: () => 'chat',
     completeItem: () => {}
   })
   return (

@@ -25,7 +25,7 @@ function Viewer({ blocks = BLOCKS }: { blocks?: typeof BLOCKS }): React.JSX.Elem
   )
 }
 
-const shown = () => screen.getByRole('dialog').querySelector('img')?.getAttribute('alt')
+const shown = () => screen.getByRole('heading').textContent
 
 it("steps through a message's images by the toolbar arrows and the arrow keys", () => {
   render(<Viewer />)

@@ -306,7 +306,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
         sendStructured,
         ptyCommandRouting: { ...ptyCommandRouting, setActiveSuggestion },
         setNotice,
-        sendMessage: submission.send
+        submission
       })
 
     const interrupt = useNativeChatComposerInterrupt({

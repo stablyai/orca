@@ -1,5 +1,9 @@
 import { serializeNativeChatAgentReferences } from '../pickers/native-chat-agent-reference-send'
 import {
+  clearNativeChatAttachmentNotes,
+  withNativeChatAttachmentNotes
+} from '../../media/notes/native-chat-attachment-notes'
+import {
   hasNativeChatStagedFiles,
   captureNativeChatStagedInput
 } from '../../drafts/native-chat-draft-attachment-staging'
@@ -136,6 +140,9 @@ export function useNativeChatStructuredComposerSend({
           hostCommand ? 'goal' : 'message'
         )
       }
+      // A marked image's notes go with it, once; a command carries no attachments to note.
+      const notedIds = hostCommand ? [] : attachments.map((attachment) => attachment.id)
+      text = withNativeChatAttachmentNotes(text, draftScopeKey, notedIds)
       const submission = captureNativeChatComposerSubmission(draftScopeKey)
       let consumed = false
       let completeAddition = false
@@ -161,6 +168,7 @@ export function useNativeChatStructuredComposerSend({
           return
         }
         consumed = true
+        clearNativeChatAttachmentNotes(draftScopeKey, notedIds)
         const left = nativeChatComposerDraftLeftAfterSend(
           readNativeChatComposerDraft(draftScopeKey),
           submitted

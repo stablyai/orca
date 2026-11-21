@@ -131,4 +131,8 @@ export type NativeChatComposerHandle = {
   contains: (node: Node | null) => boolean
   /** Sends the draft as Enter would, for a send control outside the composer. */
   submit?: () => void
+  /** Whether Enter would send the current draft to the agent as a message. */
+  notesAdmitted?: () => boolean
+  /** Attaches an image Orca drew as a chip, like a paste; resolves its attachment id. */
+  attachGeneratedImage?: (image: Blob) => Promise<string | null>
 }

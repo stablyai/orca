@@ -115,6 +115,8 @@ export const uiClipboardAndWindowControlsApi = {
     agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
     forNativeChatDraft?: boolean
     forStructuredChat?: boolean
+    /** A marked notes image to save in place of the clipboard's image. */
+    png?: Uint8Array
   }): Promise<string | null> => ipcRenderer.invoke('clipboard:saveImageAsTempFile', args),
   savePastedTextAsFile: (args: {
     text: string

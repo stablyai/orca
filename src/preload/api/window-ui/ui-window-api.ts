@@ -21,6 +21,8 @@ export type UiWindowApi = {
     forStructuredChat?: boolean
     /** Web client only: the paste event's picture, since insecure origins have no async clipboard. */
     eventImage?: Blob
+    /** A marked notes image to save in place of the clipboard's image. */
+    png?: Uint8Array
   }) => Promise<string | null>
   /** Saves paste text on the execution host so the agent can read it. */
   savePastedTextAsFile: (args: {

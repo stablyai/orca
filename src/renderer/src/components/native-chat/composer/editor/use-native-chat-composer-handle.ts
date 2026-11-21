@@ -2,6 +2,7 @@ import { useCallback, useImperativeHandle, type ForwardedRef } from 'react'
 import type { ClipboardEventLike } from '../../paste/native-chat-clipboard-payload'
 import type { NativeChatComposerHandle } from '../native-chat-composer-types'
 import { useNativeChatComposerPaste } from '../../paste/use-native-chat-composer-paste'
+import { useNativeChatGeneratedImageAttach } from '../../paste/use-native-chat-generated-image-attach'
 import type { UseNativeChatComposerPasteArgs } from '../../paste/native-chat-composer-paste-options'
 import { useNativeChatTypedInsertion } from './use-native-chat-typed-insertion'
 import { useNativeChatPastedTextFile } from '../../paste/use-native-chat-pasted-text-file'
@@ -70,10 +71,19 @@ export function useNativeChatComposerHandle(
     setNotice: args.setNotice,
     longPasteThreshold: args.longPasteThreshold
   })
-  const { handlePaste: handlePasteEvent, pasteFromClipboard } = useNativeChatComposerPaste({
+  const {
+    handlePaste: handlePasteEvent,
+    pasteFromClipboard,
+    ...pasteParts
+  } = useNativeChatComposerPaste({
     ...pasteArgs,
     insertTypedText: insertPastedTextOrFile
   })
+  const attachGeneratedImage = useNativeChatGeneratedImageAttach(
+    pasteParts,
+    args.resolveAttachmentOwner,
+    args.setNotice
+  )
 
   useImperativeHandle(
     ref,
@@ -96,6 +106,7 @@ export function useNativeChatComposerHandle(
       appendText,
       handlePasteEvent,
       pasteFromClipboard,
+      attachGeneratedImage,
       contains
     }),
     [
@@ -109,6 +120,7 @@ export function useNativeChatComposerHandle(
       appendText,
       handlePasteEvent,
       pasteFromClipboard,
+      attachGeneratedImage,
       contains
     ]
   )
