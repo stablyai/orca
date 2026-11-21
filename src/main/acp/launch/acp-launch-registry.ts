@@ -16,7 +16,7 @@ import { agentSessionSetupFor } from '../../../shared/agent-session/lifecycle/la
 import { loadGrokSkillRoots, loadOmpSkillRoots, loadOpenCodeSkillRoots } from './acp-skill-roots'
 import {
   deliverGrokInstructions,
-  deliverOmpInstructions,
+  deliverAppendSystemPromptInstructions,
   deliverOpenCodeInstructions
 } from './acp-instructions'
 
@@ -153,7 +153,7 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
   },
   skillRoots: loadOmpSkillRoots,
   ownMcpServers: readOmpMcpServers,
-  instructions: deliverOmpInstructions,
+  instructions: deliverAppendSystemPromptInstructions,
   compaction: true,
   compactionInstructions: true,
   transcriptImport: OMP_TRANSCRIPT_IMPORT,
