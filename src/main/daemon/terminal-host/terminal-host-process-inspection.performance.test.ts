@@ -503,3 +503,115 @@ it('keeps the table-fingerprint check when the PTY cannot report its foreground 
   }
   expect(tables.strict).toHaveBeenCalledTimes(1)
 })
+
+it('stops reporting an agent once it exits under a launcher that execs a shell', async () => {
+  const LAUNCHER = 6000
+  const AGENT = 6001
+  const shellRow = {
+    ...row(SHELL, 1, SHELL, '-zsh'),
+    tpgid: LAUNCHER,
+    startTime: 'Mon Nov 20 10:00:00 2026'
+  }
+  const launcherRow = (command: string): ProcessTableRow => ({
+    ...row(LAUNCHER, SHELL, LAUNCHER, command),
+    tpgid: LAUNCHER,
+    startTime: 'Mon Nov 20 10:01:00 2026'
+  })
+  const agentRow = {
+    ...row(AGENT, LAUNCHER, LAUNCHER, 'claude'),
+    tpgid: LAUNCHER,
+    startTime: 'Mon Nov 20 10:01:01 2026'
+  }
+  let agentAlive = true
+  setLibprocAddonForTests({
+    readProcessTable: async (query) => {
+      groupReads(query)
+      // The launcher keeps its pid, start time, group and comm across `exec bash`.
+      return (query.pids ?? [])
+        .filter((pid) => pid === LAUNCHER || (agentAlive && pid === AGENT))
+        .map((pid) => ({ ...kinfo(pid, LAUNCHER), comm: pid === AGENT ? 'claude' : 'bash' }))
+    }
+  })
+  tables.strict.mockReset().mockResolvedValue({
+    rows: [shellRow, launcherRow('bash /Users/u/bin/claude'), agentRow],
+    capturedAgeMs: 0
+  })
+  const session = pane({
+    root: SHELL,
+    shellIsRootChild: false,
+    foregroundGroup: LAUNCHER,
+    foreground: 'bash'
+  })
+  const poll = (epoch: number) =>
+    settle(
+      inspectTerminalHostProcess({
+        sessionId: 'pane-1',
+        session,
+        steadyState: true,
+        authorityGeneration: 'generation-1',
+        nextObservationEpoch: () => epoch
+      })
+    )
+  expect((await poll(0)).foregroundProcess).toBe('claude')
+  vi.advanceTimersByTime(15_000)
+  expect((await poll(1)).foregroundProcess).toBe('claude')
+  expect(tables.strict).toHaveBeenCalledTimes(1)
+  agentAlive = false
+  tables.strict.mockResolvedValue({ rows: [shellRow, launcherRow('bash')], capturedAgeMs: 0 })
+  vi.advanceTimersByTime(15_000)
+  expect((await poll(2)).foregroundProcess).not.toBe('claude')
+  expect(tables.strict).toHaveBeenCalledTimes(2)
+})
+
+it('watches up to 32 group members by pid and falls back to the pane fingerprint above that', async () => {
+  const GROUP = 8000
+  async function steadyRead(members: number): Promise<{ namedPids: number; cheapTables: number }> {
+    const rows: ProcessTableRow[] = [
+      { ...row(SHELL, 1, SHELL, '-zsh'), tpgid: GROUP, startTime: 'Mon Nov 20 10:00:00 2026' },
+      ...Array.from({ length: members }, (_, i) => ({
+        ...row(GROUP + i, i === 0 ? SHELL : GROUP, GROUP, i === 0 ? 'claude' : 'sleep 100'),
+        tpgid: GROUP,
+        startTime: 'Mon Nov 20 10:01:00 2026'
+      }))
+    ]
+    setLibprocAddonForTests({
+      readProcessTable: async (query) => {
+        groupReads(query)
+        return (query.pids ?? []).map((pid) => ({
+          ...kinfo(pid, GROUP),
+          comm: pid === GROUP ? 'claude' : 'sleep'
+        }))
+      }
+    })
+    tables.cheap.mockReset().mockResolvedValue(rows)
+    tables.strict.mockReset().mockResolvedValue({ rows, capturedAgeMs: 0 })
+    const session = pane({
+      root: SHELL,
+      shellIsRootChild: false,
+      foregroundGroup: GROUP,
+      foreground: 'claude'
+    })
+    const poll = (epoch: number) =>
+      settle(
+        inspectTerminalHostProcess({
+          sessionId: 'pane-1',
+          session,
+          steadyState: true,
+          authorityGeneration: 'generation-1',
+          nextObservationEpoch: () => epoch
+        })
+      )
+    await poll(0)
+    vi.advanceTimersByTime(15_000)
+    groupReads.mockReset()
+    tables.cheap.mockClear()
+    expect((await poll(1)).foregroundProcess).toBe('claude')
+    expect(tables.strict).toHaveBeenCalledTimes(1)
+    return {
+      namedPids: groupReads.mock.calls.reduce((sum, [query]) => sum + (query.pids?.length ?? 0), 0),
+      cheapTables: tables.cheap.mock.calls.length
+    }
+  }
+  expect(await steadyRead(32)).toEqual({ namedPids: 32, cheapTables: 0 })
+  expect(await steadyRead(33)).toEqual({ namedPids: 0, cheapTables: 1 })
+})

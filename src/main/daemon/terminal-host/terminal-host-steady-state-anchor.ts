@@ -13,13 +13,15 @@ type SteadyStateAnchor = {
   | {
       kind: 'members'
       foregroundGroup: number
-      /** The agent, plus the group leader when it is a live wrapper; a pipeline's leader may have exited. */
+      /** Every live member of the foreground group in the anchoring capture (a pipeline's leader may already be gone). */
       pids: readonly number[]
       identity: string
     }
   /** While per-pid reads are unavailable (native reader backing off or missing), the pane's table fingerprint. */
   | { kind: 'fingerprint'; fingerprint: string }
 )
+
+export const MAX_ANCHORED_MEMBERS = 32
 
 // Key by Session so a new session or recycled PID cannot inherit an old anchor.
 const anchors = new WeakMap<Session, SteadyStateAnchor>()
@@ -49,11 +51,20 @@ export async function rememberSteadyStateAnchor(
   if (typeof liveGroup === 'number' && liveGroup !== foregroundGroup) {
     return
   }
-  const agentPid = evidence.fence.process.pid
-  // A PTY image that cannot report its foreground group (older node-pty) keeps the table fingerprint.
+  // Watch every group member the capture saw: a launcher that leads the group can exec a shell after the agent exits
+  // without changing its own pid, start time or name, so only the agent's own exit shows the handoff.
+  const captured = [
+    ...new Set([
+      evidence.fence.process.pid,
+      ...rows
+        .filter((row) => row.pgid === foregroundGroup && !row.stat.startsWith('Z'))
+        .map((row) => row.pid)
+    ])
+  ]
+  // A PTY image that cannot report its foreground group (older node-pty), or a crowded group, keeps the fingerprint.
   const members =
-    typeof liveGroup === 'number'
-      ? await readForegroundGroupMembers([...new Set([foregroundGroup, agentPid])], foregroundGroup)
+    typeof liveGroup === 'number' && captured.length <= MAX_ANCHORED_MEMBERS
+      ? await readForegroundGroupMembers(captured, foregroundGroup)
       : null
   const rawFallback = session.getForegroundProcess({ rawFallback: true })
   if (members === null) {
@@ -68,10 +79,11 @@ export async function rememberSteadyStateAnchor(
     }
     return
   }
-  if (!members.has(agentPid) || session.readForegroundGroup() !== foregroundGroup) {
+  // A member that already left since the capture would go unwatched; let the next poll capture again.
+  if (members.size !== captured.length || session.readForegroundGroup() !== foregroundGroup) {
     return
   }
-  const pids = [...members.keys()]
+  const pids = captured
   anchors.set(session, {
     kind: 'members',
     agentName: evidence.processName,
