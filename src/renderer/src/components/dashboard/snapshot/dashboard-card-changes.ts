@@ -1,7 +1,10 @@
 import { KeyedChangeJournal } from '../../../../../shared/collections/keyed-change-journal'
 import type { DashboardCard } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 
-type CardOwner = { journal: KeyedChangeJournal; indexes?: Map<string, number> }
+type CardOwner = {
+  journal: KeyedChangeJournal
+  paneIndex?: { positions: Map<string, number>; searched: number }
+}
 const revisions = new WeakMap<DashboardCard[], { owner: CardOwner; cursor: number }>()
 
 function revision(cards: DashboardCard[]) {
@@ -13,7 +16,7 @@ function revision(cards: DashboardCard[]) {
   return current
 }
 
-/** Replace cards at stable positions, keeping a bounded journal for readers that skip a render. */
+/** Replace card content at stable pane positions, keeping a bounded journal for readers that skip a render. */
 export function replaceDashboardCards(
   cards: DashboardCard[],
   changes: ReadonlyMap<number, DashboardCard>
@@ -62,15 +65,21 @@ export function dashboardCardIndex(cards: DashboardCard[], paneKey: string): num
   if (!current) {
     return cards.findIndex((card) => card.paneKey === paneKey)
   }
-  const { owner } = current
-  if (!owner.indexes) {
-    const indexes = new Map<string, number>()
-    cards.forEach((card, index) => {
-      if (!indexes.has(card.paneKey)) {
-        indexes.set(card.paneKey, index)
-      }
-    })
-    owner.indexes = indexes
+  const paneIndex = (current.owner.paneIndex ??= { positions: new Map(), searched: 0 })
+  const known = paneIndex.positions.get(paneKey)
+  if (known !== undefined) {
+    return known
   }
-  return owner.indexes.get(paneKey) ?? -1
+  while (paneIndex.searched < cards.length) {
+    const index = paneIndex.searched
+    const key = cards[index].paneKey
+    paneIndex.searched++
+    if (!paneIndex.positions.has(key)) {
+      paneIndex.positions.set(key, index)
+    }
+    if (key === paneKey) {
+      return index
+    }
+  }
+  return -1
 }
