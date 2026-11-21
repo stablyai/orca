@@ -27,7 +27,8 @@ permissions:
 
 concurrency:
   group: fork-build-${{ inputs.ref || 'main' }}
-  cancel-in-progress: true
+  # A running build finishes (an artifact sooner); merges meanwhile queue one build of the newest main.
+  cancel-in-progress: false
 
 env:
   ORCA_BACKGROUND_LAUNCH: '1'
