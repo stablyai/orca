@@ -269,14 +269,13 @@ export function useBotPictureSetting(
     live.saved = live.desired = choiceKey(choice, live.kept)
     live.savedChoice = live.desiredChoice = choice
   }
-  // The catalog's picture now, which can be ahead of the bot this hook was last rendered with.
-  const latestBot = useRef(bot)
-  useEffect(() => {
-    latestBot.current = bot
-  })
+  // The catalog's picture now, which a save refreshes before it resolves, so it can be ahead of the bot
+  // this hook was last rendered with. Nothing to compare when the catalog doesn't list the bot.
   const reconcile = (): void => {
-    const { hostId, id } = latestBot.current
-    adopt((readHostBots(hostId).find((entry) => entry.id === id) ?? latestBot.current).avatar)
+    const current = readHostBots(bot.hostId).find((entry) => entry.id === bot.id)
+    if (current) {
+      adopt(current.avatar)
+    }
   }
   useEffect(() => {
     adopt(bot.avatar)
