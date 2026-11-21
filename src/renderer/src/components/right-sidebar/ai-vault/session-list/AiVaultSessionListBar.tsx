@@ -10,7 +10,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import type { AiVaultSortMenu } from '../scope/ai-vault-sort-options'
+import type { AiVaultCollapseAll } from './ai-vault-collapse-all'
+import { AiVaultCollapseAllButton } from './AiVaultCollapseAllButton'
 
 /** Left-hand label while searching: how many hits the list is showing. */
 export function aiVaultResultCountLabel(count: number, t: Translate = translate): string {
@@ -44,19 +47,28 @@ export function AiVaultSessionListBar<Value extends string>({
   label,
   value,
   menu,
-  onChange
+  onChange,
+  collapseAll
 }: {
   label: string
   value: Value
   menu: AiVaultSortMenu<Value>
   onChange: (value: Value) => void
+  /** Collapse-all toggle, revealed on hover like the Projects header's; omitted with no group headers. */
+  collapseAll?: AiVaultCollapseAll | null
 }): React.JSX.Element {
   const selected = menu.options.find((option) => option.value === value)
   return (
-    <div className="flex h-8 shrink-0 items-center gap-2 border-y border-sidebar-border bg-sidebar-accent/60 pl-3 pr-1.5">
+    <div
+      className={cn(
+        'flex h-8 shrink-0 items-center gap-2 border-y border-sidebar-border bg-sidebar-accent/60 pl-3 pr-1.5',
+        collapseAll && 'group/sidebar-header'
+      )}
+    >
       <span className="min-w-0 flex-1 truncate text-xs font-semibold tabular-nums text-foreground">
         {label}
       </span>
+      {collapseAll ? <AiVaultCollapseAllButton collapseAll={collapseAll} /> : null}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button

@@ -27,6 +27,7 @@ import {
 import { aiVaultBrowseSortMenu, aiVaultSearchSortMenu } from '../scope/ai-vault-sort-options'
 import { AiVaultShowMoreSessionsRow } from '../session-list/AiVaultShowMoreSessionsRow'
 import { AiVaultSessionVirtualList } from '../session-list/AiVaultSessionVirtualList'
+import { useAiVaultCollapseAll } from '../session-list/ai-vault-collapse-all'
 import { useAiVaultSessionRefresh } from '../scanning/ai-vault-session-refresh'
 import { useAiVaultPanelHostScope } from '../scope/ai-vault-host-scope'
 import { useAiVaultPanelScope } from '../scope/use-ai-vault-panel-scope'
@@ -130,12 +131,18 @@ export default function AiVaultPanel({
     [activeRepo, activeWorktree, allWorktrees, projectHostSetupProjection, repos]
   )
   const activeProjectKey = projectScopeContext.activeProjectKey
-  const { scope, preferredScope, handleScopeChange, collapsedGroups, toggleGroup } =
-    useAiVaultPanelScope({
-      activeProjectKey,
-      activeWorktreePath,
-      local: workspace !== undefined
-    })
+  const {
+    scope,
+    preferredScope,
+    handleScopeChange,
+    collapsedGroups,
+    toggleGroup,
+    setGroupsCollapsed
+  } = useAiVaultPanelScope({
+    activeProjectKey,
+    activeWorktreePath,
+    local: workspace !== undefined
+  })
   const [query, setQuery] = useAiVaultPanelQuery(initialQuery, {
     preferredScope,
     activeWorktreeId,
@@ -236,6 +243,7 @@ export default function AiVaultPanel({
     // A group room's member rows list once, in the group's home.
     roomRows: useAiVaultGroupRoomRows()
   })
+  const collapseAll = useAiVaultCollapseAll(groups, collapsedGroups, setGroupsCollapsed)
   const searchHitHostLabels = useMemo(
     () => (searching ? aiVaultSearchHitHostLabels(filteredSessions, hostScopeOptions, t) : null),
     [filteredSessions, hostScopeOptions, searching, t]
@@ -321,6 +329,7 @@ export default function AiVaultPanel({
                 value={sort}
                 menu={aiVaultBrowseSortMenu(t)}
                 onChange={setSort}
+                collapseAll={collapseAll}
               />
             )}
         {(!searching || sessions.length > 0 || search.loading) && (
