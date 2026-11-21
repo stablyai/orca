@@ -5,7 +5,10 @@ import {
 } from '@/constants/terminal'
 
 type WakeablePaneBinding = IDisposable & {
-  wakeHibernatedAgentIfArmed?: (claimedProviderSessions?: Set<string>) => string | null
+  wakeHibernatedAgentIfArmed?: (
+    claimedProviderSessions?: Set<string>,
+    paneKey?: string
+  ) => string | null
 }
 
 /** Wakes this pane's armed hibernated agents when the worktree-wide wake event targets it. */
@@ -22,7 +25,7 @@ export function listenForHibernatedAgentWake(
       return
     }
     for (const binding of getBindings()) {
-      const claimKey = binding.wakeHibernatedAgentIfArmed?.(detail.wokenClaimKeys)
+      const claimKey = binding.wakeHibernatedAgentIfArmed?.(detail.wokenClaimKeys, detail.paneKey)
       if (claimKey) {
         detail.wokenClaimKeys?.add(claimKey)
       }

@@ -63,6 +63,7 @@ import type { WorkerTerminalAutoReleaseMethods } from './worker-terminal/worker-
 import type { WorkerTerminalListingMethods } from './worker-terminal/worker-terminal-listing'
 import type { WorkerTerminalReleaseMethods } from './worker-terminal/worker-terminal-release'
 import type { StructuredMailSendStoreMethods } from './messages/structured-mail-send-store'
+import type { MailWakeAttemptStoreMethods } from './messages/mail-wake-attempt-store'
 import type { WorkerTerminalResourceStoreMethods } from './worker-terminal/worker-terminal-resource-store'
 import type { WorkerTerminalTransferMethods } from './worker-terminal/worker-terminal-transfer'
 
@@ -70,6 +71,7 @@ export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   BotRequestStoreMethods &
   BotConversationActsForMethods &
   BotRunResendMethods &
+  MailWakeAttemptStoreMethods &
   BotRequestOutcomeMethods &
   CreateTablesMethods &
   SchemaMigrateMethods &

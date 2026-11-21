@@ -2,7 +2,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layou
 import type { TerminalIdentityReadContext } from '../../../terminal/query/terminal-identity-read-context'
 import { ptyRecordForPaneKey } from '../../../terminal/query/pty-pane-record'
 import type { RuntimeTerminalAgentPresenceOptions } from '../../../terminal/query/runtime-terminal-agent-presence'
-import { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../../../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
+import { RuntimeSleptMailboxWakes } from './slept-mailbox-runtime'
 import type { RuntimePtyWorktreeRecord } from '../../../terminal/records/runtime-terminal-state-records'
 import {
   isTerminalLeafId,
@@ -32,7 +32,7 @@ import { OPERATOR_CLOSE_EXIT_CAUSE } from '../../../../../shared/terminal/pty/li
 import { resolveTerminalIdentityFromProbes } from '../../../terminal/identity/terminal-identity-probe'
 import { observeChatWorkerWorking } from '../../workers/turn-stops/chat-worker-turn-stops'
 
-export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneMobileSessionTabGroupLayout {
+export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends RuntimeSleptMailboxWakes {
   protected terminalIdentitySources = () => ({
     handles: this.handles,
     sshTerminals: this.orchestrationCompatibilitySshTerminals,
@@ -243,6 +243,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
    *  longer owes. Visible cleanup only: it never holds up the action that called it. `mailboxes`:
    *  only those the action touched; without it, every mailbox (a reset, a store becoming readable). */
   withdrawStaleChatMail(mailboxes?: Iterable<string>): void {
+    this.publishSleepingMail(mailboxes ? { mailboxes } : undefined)
     this.orchestrationStructuredMailboxPointerDelivery.withdrawStale(mailboxes)
   }
 
