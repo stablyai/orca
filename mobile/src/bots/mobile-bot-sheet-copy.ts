@@ -9,11 +9,7 @@ import { rollUpBotStatus } from '../../../src/shared/bots/bot-sidebar-workspaces
 import type { WorktreeStatus } from '../../../src/shared/worktree/row-display/worktree-status-rollup'
 import { isConnectorSource } from '../../../src/shared/automation-event-triggers'
 import { automationUnheardSources } from '../../../src/shared/bot-event-sources'
-import { botMemberSource, type BotMember } from '../../../src/shared/bot-types'
-import {
-  CONNECTOR_SOURCE_NAMES,
-  CONNECTOR_SOURCES
-} from '../../../src/shared/connectors/external-conversation-link'
+import { CONNECTOR_SOURCE_NAMES } from '../../../src/shared/connectors/external-conversation-link'
 import { translate } from '../i18n/mobile-i18n'
 import type { AgentDotState } from '../worktree/agent-lineage/agent-row-display'
 import type { BotAutomationView } from '../../../src/shared/bots/bot-activity-schema'
@@ -115,13 +111,6 @@ export function botStatusFromDots(
     ),
     paused
   )
-}
-
-/** The service a person asks from, as Who can ask names it. */
-export function memberSourceLabel(member: BotMember): string {
-  const source = botMemberSource(member)
-  const known = CONNECTOR_SOURCES.find((entry) => entry === source)
-  return known ? CONNECTOR_SOURCE_NAMES[known] : source
 }
 
 /** The desktop's note on an automation whose events its bot has no connector for. */
