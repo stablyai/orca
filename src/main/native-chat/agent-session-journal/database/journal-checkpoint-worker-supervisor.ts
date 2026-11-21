@@ -37,8 +37,8 @@ export type JournalCheckpointWorkerOptions = {
 }
 
 /** What the supervisor needs from the owner of the writer's checkpoints. */
-export type JournalCheckpointWorkerHost = {
-  receive(message: unknown): void
+export type JournalCheckpointWorkerHost<Message> = {
+  receive(message: Message): void
   lose(error: unknown, cause: JournalCheckpointOutage['cause']): void
   /** Whether a worker stuck past STUCK_MS hands checkpoints back; false while it holds a truncate. */
   releasesStuck(): boolean
@@ -58,7 +58,7 @@ type Attached = {
 }
 
 /** Starts, watches and restarts the checkpoint thread; at most one ever runs. */
-export class JournalCheckpointWorkerSupervisor {
+export class JournalCheckpointWorkerSupervisor<Message> {
   private current: Attached | undefined
   private retiring: Promise<void> = Promise.resolve()
   private deadline: ReturnType<typeof setTimeout> | undefined
@@ -72,7 +72,7 @@ export class JournalCheckpointWorkerSupervisor {
 
   constructor(
     private readonly filename: string,
-    private readonly host: JournalCheckpointWorkerHost,
+    private readonly host: JournalCheckpointWorkerHost<Message>,
     private readonly options: JournalCheckpointWorkerOptions = {}
   ) {
     this.now = options.now ?? Date.now
@@ -133,7 +133,7 @@ export class JournalCheckpointWorkerSupervisor {
       })
     }
     this.current = attached
-    worker.on('message', (message: unknown) => {
+    worker.on('message', (message: Message) => {
       if (this.current === attached && !this.closed) {
         attached.busySince = undefined
         attached.silent = false

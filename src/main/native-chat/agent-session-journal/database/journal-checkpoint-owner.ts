@@ -1,8 +1,8 @@
 import type Database from '../../../sqlite/sync-database'
 import { JournalWalWaiters, journalWalGated } from './journal-wal-admission'
+import type { JournalCheckpointOutage } from './journal-checkpoint-outages'
 import {
   JournalCheckpointWorkerSupervisor,
-  type JournalCheckpointOutage,
   type JournalCheckpointWorkerOptions
 } from './journal-checkpoint-worker-supervisor'
 
@@ -18,7 +18,7 @@ type CheckpointResponse = {
 
 /** One writer observes outside transactions; the checkpoint thread never races an admitted truncate. */
 export class JournalCheckpointOwner {
-  private readonly worker: JournalCheckpointWorkerSupervisor
+  private readonly worker: JournalCheckpointWorkerSupervisor<CheckpointResponse>
   /** The writer checkpoints for itself: no worker yet, or one that hasn't answered since it lost them. */
   private stopped = true
   private closing = false
@@ -46,7 +46,7 @@ export class JournalCheckpointOwner {
     this.worker = new JournalCheckpointWorkerSupervisor(
       filename,
       {
-        receive: (message) => this.receive(message as CheckpointResponse),
+        receive: (message) => this.receive(message),
         lose: (error, cause) => this.lose(error, cause),
         // A truncate holds SQLite's write lock for its whole run, so writes stay parked behind it.
         releasesStuck: () => !this.stopped && !this.truncate?.acknowledged
