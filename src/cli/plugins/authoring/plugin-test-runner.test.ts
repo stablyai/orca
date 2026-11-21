@@ -67,7 +67,11 @@ describe('orca plugin test', () => {
     async () => {
       const dir = await componentsPlugin()
       await mkdir(join(dir, 'node_modules'), { recursive: true })
-      await symlink(resolve('node_modules', 'vitest'), join(dir, 'node_modules', 'vitest'), 'dir')
+      await symlink(
+        resolve('node_modules', 'vitest'),
+        join(dir, 'node_modules', 'vitest'),
+        process.platform === 'win32' ? 'junction' : 'dir'
+      )
       await writeFile(
         join(dir, 'src', 'panel.test.tsx'),
         [

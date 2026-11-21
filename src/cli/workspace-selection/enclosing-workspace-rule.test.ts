@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { selectEnclosingWorktreeSelectionOnHost } from './caller-host-worktree-selection'
 import type { CatalogRow } from './workspace-catalog-row'
 import { readEnclosingWorkspaceCatalog } from './enclosing-workspace-catalog'
@@ -18,14 +18,25 @@ function clientAnswering(answer: (method: string) => ReturnType<typeof okFixture
   return client
 }
 
-// Symlinks need privileges on Windows.
+// Symlinks need privileges on Windows. skipIf stops the cases, not this body, so the fixture is
+// built in beforeAll: work at module scope ran on every host and made the whole file fail with
+// EPERM there, before any case could be skipped.
 describe.skipIf(process.platform === 'win32')('symlink aliases on the caller filesystem', () => {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-enclosing-alias-')))
-  const real = join(root, 'real')
-  const alias = join(root, 'alias')
-  mkdirSync(join(real, 'hub', 'app', 'src'), { recursive: true })
-  symlinkSync(real, alias)
-  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  let root = ''
+  let real = ''
+  let alias = ''
+  beforeAll(() => {
+    root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-enclosing-alias-')))
+    real = join(root, 'real')
+    alias = join(root, 'alias')
+    mkdirSync(join(real, 'hub', 'app', 'src'), { recursive: true })
+    symlinkSync(real, alias)
+  })
+  afterAll(() => {
+    if (root) {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
 
   const outer = (base: string) => ({
     id: 'folder:outer',
@@ -42,14 +53,18 @@ describe.skipIf(process.platform === 'win32')('symlink aliases on the caller fil
           hostId: 'local' as const
         }
 
+  // The table is built during collection, before beforeAll runs, so it holds the spelling names
+  // and each case reads the fixture paths once the setup has made them.
   it.each([
-    ['folder', real, alias],
-    ['folder', alias, real],
-    ['worktree', real, alias],
-    ['worktree', alias, real]
+    ['folder', 'real', 'alias'],
+    ['folder', 'alias', 'real'],
+    ['worktree', 'real', 'alias'],
+    ['worktree', 'alias', 'real']
   ] as const)(
     'picks the deeper %s stored under one spelling from cwd under the other',
-    (kind, cwdBase, innerBase) => {
+    (kind, cwdName, innerName) => {
+      const cwdBase = cwdName === 'real' ? real : alias
+      const innerBase = innerName === 'real' ? real : alias
       const cwd = join(cwdBase, 'hub', 'app', 'src')
       const expected = kind === 'folder' ? 'folder:inner' : 'id:repo::inner'
       expect(select([outer(cwdBase), inner(innerBase, kind)], cwd)).toBe(expected)
