@@ -9,9 +9,11 @@ export const WATCHER_IGNORE_DIRS: string[] = [
   'target',
   '.venv',
   '__pycache__',
+  '.turbo',
+  '.pytest_cache',
+  '.codegraph',
   '.dart_tool',
-  '.gradle',
-  '.turbo'
+  '.gradle'
 ]
 
 // FSEvents rejects all exclusions above eight paths; regex filtering covers the remaining names at every depth.
