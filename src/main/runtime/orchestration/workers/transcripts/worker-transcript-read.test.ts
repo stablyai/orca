@@ -266,4 +266,92 @@ describe('worker transcript reads', () => {
     )
     expect(await read()).toMatchObject({ ok: true, turn: { state: 'completed' } })
   })
+
+  describe('pages of Chinese text larger than the response budget', () => {
+    // Six 1,200-character blocks of 3-byte characters: about 21 KB per message after bounds,
+    // so 40 of them exceed the 512 KiB response budget.
+    const bigMessage = (index: number) =>
+      `${JSON.stringify({
+        type: 'assistant',
+        sessionId: 'session-cjk',
+        uuid: `cjk-${index}`,
+        timestamp: '2026-11-21T12:00:00.000Z',
+        message: {
+          id: `cjk-${index}`,
+          role: 'assistant',
+          content: Array.from({ length: 6 }, () => ({
+            type: 'text',
+            text: `MSG${index} ${'研发测试'.repeat(300)}`
+          }))
+        }
+      })}\n`
+    const labels = (messages: { blocks: { type: string; text?: string }[] }[]) =>
+      messages.map((message) => {
+        const block = message.blocks[0]
+        return block?.type === 'text' ? block.text?.split(' ')[0] : undefined
+      })
+    const all = Array.from({ length: 45 }, (_, index) => `MSG${index}`)
+    let claudePath: string
+    const read = (cursor?: {
+      nextOffset: number
+      sourceFingerprint: string
+      boundaryCheckpoint: string
+    }) =>
+      readWorkerTranscript({
+        agent: 'claude',
+        sessionId: 'session-cjk',
+        transcriptPath: claudePath,
+        ...(cursor
+          ? {
+              offset: cursor.nextOffset,
+              expectedSourceFingerprint: cursor.sourceFingerprint,
+              expectedBoundaryCheckpoint: cursor.boundaryCheckpoint
+            }
+          : {})
+      })
+
+    beforeEach(() => {
+      claudePath = join(directory, 'session-cjk.jsonl')
+    })
+
+    it('serves the newest messages on the first page', async () => {
+      await writeFile(claudePath, all.map((_, index) => bigMessage(index)).join(''))
+
+      const first = await read()
+      if (!first.ok) {
+        throw new Error(`Expected the first page, got ${first.reason}`)
+      }
+      const served = labels(first.messages)
+      expect(served.at(-1)).toBe('MSG44')
+      expect(served.length).toBeLessThan(40)
+      expect(served).toEqual(all.slice(all.length - served.length))
+      expect(first.warnings).toContain('Transcript response was clipped to the wire-size limit.')
+      expect(first.clipping).toContain('transcript_payload')
+    })
+
+    it('resumes a forward page after its last served message, skipping none', async () => {
+      await writeFile(claudePath, bigMessage(-1))
+      const first = await read()
+      if (!first.ok) {
+        throw new Error(`Expected the first page, got ${first.reason}`)
+      }
+      await appendFile(claudePath, all.map((_, index) => bigMessage(index)).join(''))
+
+      const seen: (string | undefined)[] = []
+      let cursor = first
+      for (let page = 0; page < all.length; page++) {
+        const next = await read(cursor)
+        if (!next.ok) {
+          throw new Error(`Expected forward page ${page}, got ${next.reason}`)
+        }
+        seen.push(...labels(next.messages))
+        cursor = next
+        if (next.messages.length === 0) {
+          break
+        }
+      }
+
+      expect(seen).toEqual(all)
+    })
+  })
 })
