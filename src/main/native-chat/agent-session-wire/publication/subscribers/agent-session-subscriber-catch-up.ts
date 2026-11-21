@@ -137,7 +137,7 @@ async function deliver(
     if (!result.ok) {
       const page = {
         ...result.page,
-        items: liveText.pageWithSubscriberLiveText(port, subscriber, result.page.items, reader),
+        items: liveText.pageWithSubscriberLiveText(port, subscriber, result.page, reader),
         fence: subscriber.fence
       }
       await delivery.emit(subscriber, {
@@ -174,7 +174,7 @@ async function deliver(
         sessionId: subscriber.sessionId,
         batch: {
           cursor: page.window.nextCursor,
-          items: liveText.batchWithSubscriberLiveText(port, subscriber, page.items, reader),
+          items: liveText.batchWithSubscriberLiveText(port, subscriber, page, reader),
           removedItemIds: page.removedItemIds,
           submissions: page.submissions
         },
@@ -291,7 +291,7 @@ async function publishSnapshotFrame(
   }
   const delivery = capturedPort(port, journal, frame)
   const durable = withPublishedWork(frame.value, frame.work)
-  const items = liveText.pageWithSubscriberLiveText(port, subscriber, durable.items, reader)
+  const items = liveText.pageWithSubscriberLiveText(port, subscriber, durable, reader)
   const page = { ...durable, items }
   await delivery.emit(subscriber, {
     type: 'snapshot',

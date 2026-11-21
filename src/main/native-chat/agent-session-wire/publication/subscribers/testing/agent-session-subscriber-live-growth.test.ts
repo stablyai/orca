@@ -144,3 +144,13 @@ it('keeps a saved row whose live text would take a page past its reply limit', (
   const form = (item: AgentJournalRenderItem) => ({ item, bytes: JSON.stringify(item).length })
   expect(withSubscriberLiveText([saved], () => [live], form)).toEqual([saved])
 })
+
+it('counts the page submissions against the room live text may take', () => {
+  const saved = reply('a few words')
+  const live = reply('x'.repeat(256 * 1024))
+  const form = (item: AgentJournalRenderItem) => ({ item, bytes: JSON.stringify(item).length })
+  const submissions = ['y'.repeat(1900 * 1024)]
+  expect(withSubscriberLiveText([saved], () => [live], form, undefined, submissions)).toEqual([
+    saved
+  ])
+})

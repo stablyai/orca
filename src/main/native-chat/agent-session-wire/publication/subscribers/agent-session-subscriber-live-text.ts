@@ -123,7 +123,9 @@ export function withSubscriberLiveText(
   items: AgentJournalRenderItem[],
   readLive: () => readonly AgentJournalRenderItem[],
   form: HistoryReader['form'],
-  applied?: (live: AgentJournalRenderItem, sent: AgentJournalRenderItem, bytes: number) => void
+  applied?: (live: AgentJournalRenderItem, sent: AgentJournalRenderItem, bytes: number) => void,
+  /** The rest of the page (its submissions and removals), which shares the page's budget. */
+  besides: unknown = null
 ): AgentJournalRenderItem[] {
   const live = items.length > 0 ? readLive() : []
   if (live.length === 0) {
@@ -140,7 +142,7 @@ export function withSubscriberLiveText(
     }
     // The live row shares this revision's placement, and its object keeps one cached wire form.
     const { item: sent, bytes } = form(shown)
-    room ??= HISTORY_PAGE_CONTENT_BUDGET_BYTES - jsonBytes(items)
+    room ??= HISTORY_PAGE_CONTENT_BUDGET_BYTES - jsonBytes(items) - jsonBytes(besides)
     const grown = bytes - jsonBytes(item)
     if (grown > room) {
       return item
@@ -153,11 +155,18 @@ export function withSubscriberLiveText(
   return changed ? next : items
 }
 
+/** A durable page's rows and what shares their budget. */
+type SizedPage = {
+  items: AgentJournalRenderItem[]
+  submissions?: readonly unknown[]
+  removedItemIds?: readonly string[]
+}
+
 /** A durable batch with newer live text; phones re-split batches, so they take it too. */
 export function batchWithSubscriberLiveText(
   port: SubscriberDeliveryPort,
   subscriber: Subscriber,
-  items: AgentJournalRenderItem[],
+  page: SizedPage,
   reader: HistoryReader
 ): AgentJournalRenderItem[] {
   const live = (): readonly AgentJournalRenderItem[] => {
@@ -165,7 +174,10 @@ export function batchWithSubscriberLiveText(
     forgetEndedLiveRows(subscriber, rows)
     return rows
   }
-  return withSubscriberLiveText(items, live, reader.form, noteSubscriberLiveRow(subscriber))
+  return withSubscriberLiveText(page.items, live, reader.form, noteSubscriberLiveRow(subscriber), [
+    page.submissions,
+    page.removedItemIds
+  ])
 }
 
 /** A row whose stream ended is saved whole, so what was last sent of it is let go. */
@@ -186,14 +198,17 @@ function forgetEndedLiveRows(subscriber: Subscriber, live: readonly AgentJournal
 export function pageWithSubscriberLiveText(
   port: SubscriberDeliveryPort,
   subscriber: Subscriber,
-  items: AgentJournalRenderItem[],
+  page: SizedPage,
   reader: HistoryReader
 ): AgentJournalRenderItem[] {
   const live = () => port.hooks.readLiveText?.(subscriber.sessionId) ?? []
   subscriber.liveSent = new Map()
   return subscriber.boundedFrames
-    ? items
-    : withSubscriberLiveText(items, live, reader.form, noteSubscriberLiveRow(subscriber))
+    ? page.items
+    : withSubscriberLiveText(page.items, live, reader.form, noteSubscriberLiveRow(subscriber), [
+        page.submissions,
+        page.removedItemIds
+      ])
 }
 
 /** Send a phone the live rows its replacement page left out. */

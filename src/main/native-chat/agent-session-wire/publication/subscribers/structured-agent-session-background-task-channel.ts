@@ -100,7 +100,9 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     const items = withSubscriberLiveText(
       result.page.items,
       () => hooks.readLiveText?.(request.sessionId) ?? [],
-      (reader ?? CLIENT_HISTORY_READER).form
+      (reader ?? CLIENT_HISTORY_READER).form,
+      undefined,
+      [result.page.submissions, result.page.removedItemIds]
     )
     return {
       ...result,
