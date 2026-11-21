@@ -89,20 +89,21 @@ async function writeFolderContextText(
 }
 
 /** Writes Orca's text into `cwd`'s `path` whole, so the agent never reads a half-written file.
- *  A symlink on the way, or a file that cannot be read, stays untouched. */
+ *  A symlink on the way, or a file that cannot be read, stays untouched and is reported as not
+ *  written, so a launch that needs the text can refuse instead of starting without it. */
 export async function writeFolderContextFile(
   cwd: string,
   path: string,
   agentName: string,
   text: string
-): Promise<void> {
+): Promise<boolean> {
   const target = await realFolderContextTarget(cwd, path)
   if (!target) {
-    return
+    return false
   }
   const existing = await readExistingFolderContextFile(target)
   if (existing.kind === 'untouched') {
-    return
+    return false
   }
   if (existing.kind === 'missing') {
     await mkdir(dirname(target), { recursive: true })
@@ -112,6 +113,7 @@ export async function writeFolderContextFile(
     withOrcaText(existing.kind === 'file' ? existing.text : null, text, agentName),
     existing.kind === 'file' ? existing.mode : 0o600
   )
+  return true
 }
 
 /** Takes Orca's text back out, for a launch that brings none: Orca's own file goes whole, the

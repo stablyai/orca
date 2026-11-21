@@ -188,11 +188,10 @@ export const deliverCopilotInstructions: AcpInstructionsDelivery = async ({
 
 // DSH builds its system prompt from the folder's AGENTS.md files, so it needs no ACP channel for
 // them; only DSH's own marker block is replaced, and the file stays for later launches. A new file
-// is 0600; one the user already had keeps their mode, because the file is theirs.
-export const deliverDshInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
-  await writeFolderContextFile(cwd, 'AGENTS.md', 'DeepSeek Harness', text)
-  return {}
-}
+// is 0600; one the user already had keeps their mode, because the file is theirs. A file Orca may
+// not write (a link, or one it cannot read) refuses the launch: DSH would run without any of them.
+export const deliverDshInstructions: AcpInstructionsDelivery = async ({ text, cwd }) =>
+  (await writeFolderContextFile(cwd, 'AGENTS.md', 'DeepSeek Harness', text)) ? {} : null
 
 /** DSH reads the folder's AGENTS.md at every start, so a launch that brings no instructions takes
  *  the block an earlier one left, which DSH would otherwise keep following. */
