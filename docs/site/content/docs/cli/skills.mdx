@@ -166,7 +166,13 @@ Use when setting up or debugging per-workspace environment recipes in `orca.yaml
 npx skills add https://github.com/stablyai/orca --skill orca-plugin-authoring --global
 ```
 
-Use when an agent should make, debug, test or publish an Orca plugin: themes, syntaxes, custom editors, TSX components panels and worker commands. Load it with `orca skills get orca-plugin-authoring`; its references (components, host API, events, manifest fields, CLI) are generated from the running Orca.
+Use this guide to build, debug, test, or publish a plugin. Its references cover the manifest, user interface components, host API, events, and CLI commands for your installed Orca version.
+
+1. Pick a template and create a plugin. For a first project, `orca plugin create ./my-panel --template components` makes a TSX panel and writes type declarations under `.orca/types/`.
+2. Read `orca skills get orca-plugin-authoring --full`. Use `orca skills get orca-plugin-authoring --reference manifest` for manifest fields and `--reference host-api` for APIs and capabilities. Select the least-privileged execution profile that supports what your plugin needs to do.
+3. Run `orca plugin dev watch ./my-panel --check` to load, type-check, and reload the plugin as you edit. Review the requested grants before approving a load. Use `orca plugin types ./my-panel` to refresh declarations when working outside the watch command.
+
+The repository's [plugin examples](https://github.com/stablyai/orca/tree/main/examples/plugins) show complete manifests and implementations for panels, themes, and other contributions.
 
 ## Discovery sources
 

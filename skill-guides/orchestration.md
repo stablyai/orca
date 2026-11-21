@@ -89,7 +89,7 @@ Never:
 
 - Poll or run watch scripts: a script's plain `check` takes your mail, so it is
   hidden from you and Orca has nothing to wake you with. Orca wakes you.
-- Steer through a worker's terminal; use `send`.
+- Type into a worker's terminal to change its assignment. Use `send` for mail instead. A busy native chat queues an ordinary mail notice until it can take another turn.
 - Make checkouts yourself; let `worker-start` create a worker's workspace.
 
 ## When Orca wakes you
@@ -100,7 +100,7 @@ Never:
   `ORCA orchestration reply --id <message_id> --body "<answer>"` when the answer
   follows from the task or the user's instructions; otherwise ask the user first.
 - An `escalation` with `stopReason` means the worker stopped without
-  `worker_done`: steer it with `send`, stop and retry it, or tell the user.
+  `worker_done`: send a follow-up message, stop and retry it, or tell the user.
   `exited` or `lost` means it is gone: retry it or tell the user.
 - A `worker_done` settles its Task; never mark a reported failure completed.
 - When every worker has settled, report to the user per Task: outcome,
