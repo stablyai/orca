@@ -216,9 +216,12 @@ export function agentPickerEntriesFromRows(
       catalog: { origin: 'unknown' }
     }
   })
-  // Agents ready on this host lead, so the many it lacks never bury the few it has; the sort is stable.
-  const ready = (entry: AgentPickerEntry) => Number(entry.rows.some(agentMenuRowReady))
-  return entries.sort((left, right) => ready(right) - ready(left))
+  // Agents ready on this host lead, so the many it lacks never bury the few it has.
+  const ready = entries.map((entry) => entry.rows.some(agentMenuRowReady))
+  return [
+    ...entries.filter((_, index) => ready[index]),
+    ...entries.filter((_, index) => !ready[index])
+  ]
 }
 
 export { agentPickerHydrationQueue } from './agent-launch-picker-rows'
