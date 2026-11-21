@@ -7487,7 +7487,6 @@
           "stopped": "已停止",
           "unverifiable": "未知",
           "title": "添加 WSL 发行版",
-          "description": "Orca 在发行版内运行其服务器，因此 git、文件和终端都在 Linux 中原生运行。此发行版中通过 \\\\wsl.localhost 打开的项目会在其终端空闲时自动移到此主机；位于 Windows 驱动器 (/mnt/…) 上的项目会留在此电脑。你可以从侧边栏将已移动的项目移回",
           "distro": "发行版",
           "loading": "正在查找 WSL 发行版…",
           "placeholder": "选择发行版",

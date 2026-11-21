@@ -17,6 +17,7 @@ import {
 import {
   readHookTrustEntries,
   upsertHookTrustEntries,
+  type CodexEventLabel,
   type CodexTrustEntry
 } from '../toml/config-toml-trust'
 import {
@@ -41,18 +42,21 @@ type HookTrustProvenanceEntry = {
 }
 
 type HookTrustProvenanceFile = {
-  version: 1
+  version: 1 | 2
   entries: Record<string, HookTrustProvenanceEntry>
 }
+
+type HookTrustProvenance = { version: number; entries: Map<string, HookTrustProvenanceEntry> }
+
+// Version 1 snapshots could not record these events, so a missing entry there proves nothing.
+const EVENTS_UNRECORDED_BY_PROVENANCE_V1: ReadonlySet<CodexEventLabel> = new Set(['session_end'])
 
 export function getProvenancePath(runtimeHomePath: string): string {
   return join(runtimeHomePath, '.orca-hook-trust-provenance.json')
 }
 
 /** Missing, unreadable or malformed provenance cannot establish an approval's origin. */
-function readHookTrustProvenance(
-  runtimeHomePath: string
-): Map<string, HookTrustProvenanceEntry> | null {
+function readHookTrustProvenance(runtimeHomePath: string): HookTrustProvenance | null {
   const provenancePath = getProvenancePath(runtimeHomePath)
   let rawProvenance: string
   try {
@@ -78,7 +82,8 @@ function readHookTrustProvenance(
         })
       }
     }
-    return result
+    const version = (parsed as HookTrustProvenanceFile).version
+    return { version: typeof version === 'number' ? version : 1, entries: result }
   } catch {
     return null
   }
@@ -117,7 +122,7 @@ export function snapshotCodexRuntimeHookTrustProvenance(
         ...(state.enabled !== undefined ? { enabled: state.enabled } : {})
       }
     }
-    const file: HookTrustProvenanceFile = { version: 1, entries }
+    const file: HookTrustProvenanceFile = { version: 2, entries }
     const serialized = `${JSON.stringify(file, null, 2)}\n`
     assertGuardedFileCurrent(getProvenancePath(runtimeHomePath))
     writeFileSync(getProvenancePath(runtimeHomePath), serialized, {
@@ -184,7 +189,15 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath: string)
     if (!parsed || !codexHookSourcePathsEqual(parsed.sourcePath, canonicalRuntimeHooksPath)) {
       continue
     }
-    const previous = provenance.get(normalizeHookTrustKeyForLookup(key))
+    const previous = provenance.entries.get(normalizeHookTrustKeyForLookup(key))
+    if (
+      !previous &&
+      provenance.version < 2 &&
+      EVENTS_UNRECORDED_BY_PROVENANCE_V1.has(parsed.eventLabel)
+    ) {
+      // Why: may predate the snapshot, and promoting it could re-enable a hook disabled in ~/.codex.
+      continue
+    }
     if (
       previous &&
       previous.trustedHash === state.trustedHash &&

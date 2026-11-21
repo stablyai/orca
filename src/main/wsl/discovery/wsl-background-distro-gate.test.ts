@@ -6,9 +6,14 @@ const wslMocks = vi.hoisted(() => ({
   listWslDistrosAsync: vi.fn<() => Promise<string[]>>()
 }))
 vi.mock('./distro-catalog', () => wslMocks)
+const defaultDistroMocks = vi.hoisted(() => ({
+  resolveWslDefaultDistro: vi.fn<() => Promise<string | null | symbol>>()
+}))
+vi.mock('./wsl-default-distro', () => defaultDistroMocks)
 
 import {
   _resetWslBackgroundDistroGateForTests,
+  isWslDistroRunningForBackgroundWork,
   noteWslDistroMayHaveStopped,
   noteWslDistroWoken,
   onWslDistroGateNote
@@ -50,5 +55,17 @@ describe('gate note listeners (E9)', () => {
     )
 
     expect(insideAct).toEqual([false, false])
+  })
+})
+
+describe('isWslDistroRunningForBackgroundWork', () => {
+  it('gates an unnamed distro on the current default, not the cached list order, after a set-default', async () => {
+    // The cached list still names Debian first; `wsl --set-default Ubuntu` moved the default.
+    defaultDistroMocks.resolveWslDefaultDistro.mockResolvedValue('Ubuntu')
+
+    await expect(isWslDistroRunningForBackgroundWork(null)).resolves.toBe(true)
+
+    defaultDistroMocks.resolveWslDefaultDistro.mockResolvedValue('Debian')
+    await expect(isWslDistroRunningForBackgroundWork(undefined)).resolves.toBe(false)
   })
 })

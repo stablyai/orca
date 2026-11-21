@@ -11,6 +11,7 @@ import { readRuntimeStatuses } from './slices/runtime-status/views/runtime-statu
 import { getRuntimeMobileSessionSyncKey } from '@/runtime/sync-runtime-graph/sync-key'
 import { getTerminalTabOwners } from './terminals/ownership/terminal-tab-owner-index'
 import { selectVisibleAgentOrchestration } from '@/runtime/agent-orchestration/visible-agent-orchestration'
+import { terminalTabNamesChanged } from '@/lib/agent-session/history/session-names/terminal-session-name-sync'
 
 // Perf contract (#44954, STA-16352): every terminal title change woke store subscribers that scanned every
 // workspace's tab bucket, ~20 ms per title at 1,900 workspaces. A title change must read only its own
@@ -133,14 +134,14 @@ function scannedRowsPerTitleChange(workspaceCount: number): number {
     shouldSyncAgentHookCompletionForStoreUpdate(state, previous)
     changedOwningPaneTitleRequests(state, previous, readRuntimeStatuses())
     aiVaultTitleSyncInputsChanged(state, previous)
+    terminalTabNamesChanged(state, previous)
     syncKey = getRuntimeMobileSessionSyncKey(state, previous, syncKey)
     selectVisibleAgentOrchestration(state)
     reads.measuring = false
   })
 
   // One terminal title change, as pane title observation applies it.
-  store.getState().setRuntimePaneTitle('tab-0', 1, 'build: step 2')
-  store.getState().updateTabTitle('tab-0', 'build: step 2')
+  store.getState().setRuntimePaneTitle('tab-0', 1, 'build: step 2', { alsoTabTitle: true })
   expect(store.getState().runtimePaneTitlesByTabId['tab-0']?.[1]).toBe('build: step 2')
   expect(store.getState().tabsByWorktree['wt-0']?.[0]?.title).toBe('build: step 2')
   stopMeasuring()
@@ -152,4 +153,30 @@ function scannedRowsPerTitleChange(workspaceCount: number): number {
 it('a terminal title change reads no other workspace, at N and 10N workspaces', () => {
   expect(scannedRowsPerTitleChange(200)).toBe(0)
   expect(scannedRowsPerTitleChange(2_000)).toBe(0)
+})
+
+function titleNotifications(apply: () => void): number {
+  let notifications = 0
+  const stop = useAppStore.subscribe(() => {
+    notifications += 1
+  })
+  apply()
+  stop()
+  return notifications
+}
+
+it('a pane title that drives its tab notifies store subscribers once, and not at all when unchanged', () => {
+  useAppStore.setState({
+    tabsByWorktree: { 'wt-0': [makeTab({ id: 'tab-0', worktreeId: 'wt-0', createdAt: 0 })] },
+    unifiedTabsByWorktree: { 'wt-0': [unifiedTerminalTab('wt-0', 'tab-0')] },
+    runtimePaneTitlesByTabId: {},
+    activeWorktreeId: 'wt-1'
+  })
+  const apply = (): void =>
+    useAppStore.getState().setRuntimePaneTitle('tab-0', 1, '⠋ Codex', { alsoTabTitle: true })
+
+  expect(titleNotifications(apply)).toBe(1)
+  expect(useAppStore.getState().runtimePaneTitlesByTabId['tab-0']?.[1]).toBe('⠋ Codex')
+  expect(useAppStore.getState().tabsByWorktree['wt-0']?.[0]?.title).toBe('⠋ Codex')
+  expect(titleNotifications(apply)).toBe(0)
 })
