@@ -2,25 +2,17 @@ import { Globe, HardDrive } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import {
   isPerfNoticeOff,
-  withPerfNoticeOff,
   type PerfNoticeId
 } from '../../../../../shared/perf-notices/perf-notice-settings'
+import { setPerfNoticeOff } from '@/components/perf-notices/perf-notice-opt-out'
 import { useTranslate } from '@/i18n/use-translate'
 import { NotificationSettingToggle } from './NotificationSettingToggle'
 
 /** In-app perf warnings; each one's Don't show again turns its row off here. */
-export function PerfNoticeToggles({
-  settings,
-  updateSettings
-}: {
-  settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
-}): React.JSX.Element {
+export function PerfNoticeToggles({ settings }: { settings: GlobalSettings }): React.JSX.Element {
   const t = useTranslate()
   const toggle = (id: PerfNoticeId): void =>
-    void updateSettings({
-      perfNoticesOff: withPerfNoticeOff(settings, id, !isPerfNoticeOff(settings, id))
-    })
+    void setPerfNoticeOff(id, !isPerfNoticeOff(settings, id))
   return (
     <>
       <NotificationSettingToggle
