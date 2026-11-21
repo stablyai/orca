@@ -294,7 +294,7 @@ describeRender('a bot’s home chat in a real browser', () => {
     await page.click('[data-testid="bot-sheet-tab-settings"]')
     await waitForText(page, 'Needs permission')
     text = await bodyText(page)
-    for (const line of ['Active', 'Task complete', 'Same as chats', 'Dana Kim', 'Slack']) {
+    for (const line of ['Active', 'Task complete', 'Same as chats', 'Slack 1 with access']) {
       expect(text).toContain(line)
     }
     await expect

@@ -21,7 +21,8 @@ import { botActivityRowTitle } from './bot-activity-row-title'
 import { botErrorMessage } from './bot-presentation'
 import type { BotConnectorEntry } from './bot-connector-entries'
 import { botConnectorTitleText } from './bot-connector-titles'
-import { botToolSignInFace, botToolSignInWords } from './bot-tool-sign-in-action'
+import { botToolSignInWords } from './bot-tool-sign-in-action'
+import { botToolSignInFace } from '../../../../shared/bots/bot-tool-sign-in-face'
 import { openBotSession } from './bot-session-open'
 import { useBotHostLabel } from './use-bot-host-label'
 import { useBotSessionPrompt } from './use-bot-session-prompt'
@@ -265,7 +266,7 @@ const NeedItem = memo(function NeedItem({
           detail={connectorNeed(need.connector, name, t)}
           action={{
             label: t('bots.needs.fixConnector', 'Open {{name}}', { name }),
-            onOpen: () => manageConnectors(bot),
+            onOpen: () => manageConnectors(bot, need.connector.key),
             named: true
           }}
         />

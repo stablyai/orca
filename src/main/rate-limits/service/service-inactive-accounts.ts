@@ -3,6 +3,7 @@ import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
 import { RateLimitServicePolling } from './service-polling'
 import { INACTIVE_CODEX_PROBE_STAGGER_MS, INACTIVE_FETCH_DEBOUNCE_MS } from './service-types'
 import { delayUnlessAborted } from '../../../shared/concurrency/abort-aware-delay'
+import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export abstract class RateLimitServiceInactiveAccounts extends RateLimitServicePolling {
   async fetchInactiveClaudeAccountsOnOpen(): Promise<void> {
@@ -25,6 +26,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     const fetchGeneration = this.inactiveClaudeAccountsGeneration
     const controller = this.beginFetchCycle()
     const signal = this.claudeUsageFetchSignal(controller.signal)
+    const readsByHome = this.claudeReadsByHome()
 
     for (const account of accounts) {
       this.inactiveClaudeFetching.add(account.id)
@@ -49,6 +51,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           const fresh = await fetchInactiveClaudeAccountUsage(account, {
             allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
             networkProxySettings: this.networkProxySettingsResolver?.(),
+            readsByHome,
             signal
           })
           if (
@@ -185,6 +188,18 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
       this.inactiveCodexFetchInFlight = false
       this.finishFetchCycle(controller)
     }
+  }
+
+  /** Unselected accounts on the selected login's home (System default, legacy accounts) reuse its reading. */
+  private claudeReadsByHome(): Map<string, Promise<ProviderRateLimits>> {
+    const reads = new Map<string, Promise<ProviderRateLimits>>()
+    const active = this.state.claude
+    const home = this.usageReadingAccounts.claude?.home
+    // Why idle only: a running refresh keeps the old reading in state until it lands.
+    if (!this.isFetching && home && (active?.status === 'ok' || active?.status === 'error')) {
+      reads.set(home, Promise.resolve(active))
+    }
+    return reads
   }
 
   evictInactiveClaudeCache(accountId: string): void {

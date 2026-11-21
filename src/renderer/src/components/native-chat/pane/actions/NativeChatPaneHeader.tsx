@@ -13,7 +13,8 @@ import { useStructuredChatPaneActions } from './use-structured-chat-pane-actions
 import { NativeChatResumeInCliButton } from './NativeChatResumeInCliButton'
 import { useBotForWorkspace } from '../../../bots/bot-workspace'
 import { BotHomeBanner } from '../../../bots/home-chat/BotHomeBanner'
-import { isBotHomeTab, isLocalBotChatTab } from '../../../../../../shared/bots/bot-home-tab'
+import { isHostedBotChatTab } from '../../../../../../shared/bots/bot-home-tab'
+import { useBotHomeRuleApplies } from '@/lib/bot-host-status'
 import { NativeChatSettingsButton } from '../../appearance/NativeChatSettingsButton'
 import type { NativeChatStructuredViewProps } from '../../native-chat-view-types'
 import type { NativeChatHandOff } from './use-native-chat-hand-off'
@@ -43,20 +44,23 @@ export function NativeChatPaneHeader({
 }): React.JSX.Element {
   const t = useTranslate()
   const actions = useStructuredChatPaneActions(tabId, worktreeId, groupId)
-  const bot = useBotForWorkspace(worktreeId)
+  const tabHostId = useAppStore(
+    (state) =>
+      state.unifiedTabsByWorktree[worktreeId]?.find((entry) => entry.id === tabId)?.executionHostId
+  )
+  const bot = useBotForWorkspace(worktreeId, tabHostId)
   // A bot's chats stay native chats.
   const onBotPage = bot !== null
-  const localHome = useAppStore((state) => {
+  const homeRule = useBotHomeRuleApplies(bot)
+  const hostedChat = useAppStore((state) => {
     const tab = state.unifiedTabsByWorktree[worktreeId]?.find((entry) => entry.id === tabId)
     return Boolean(
       state.workspaceSessionReady &&
       tab &&
       tab.entityId === nativeChat.sessionId &&
-      isLocalBotChatTab(tab, bot) &&
-      isBotHomeTab(tab, bot)
+      isHostedBotChatTab(tab, bot)
     )
   })
-  const homeBot = localHome ? bot : null
   const documentDark = useDocumentDarkTheme()
   const light = colorScheme ? colorScheme === 'light' : !documentDark
   const split = t('components.native-chat.splitRight', 'Split Right')
@@ -73,7 +77,7 @@ export function NativeChatPaneHeader({
       data-pane-title-surface={light ? 'light' : 'dark'}
       style={HEADER_STYLE}
     >
-      {homeBot ? <BotHomeBanner bot={homeBot} /> : null}
+      {hostedChat && homeRule && bot ? <BotHomeBanner bot={bot} /> : null}
       <div className="pane-title-actions ml-auto flex shrink-0 items-center gap-0">
         {handOff && focused ? (
           <Tooltip>

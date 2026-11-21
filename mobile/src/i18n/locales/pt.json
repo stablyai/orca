@@ -745,6 +745,9 @@
     "selectionQuote": {
       "action": "Citar",
       "hint": "Adiciona o texto selecionado à mensagem como citação"
+    },
+    "messageTime": {
+      "yesterday": "Ontem {{time}}"
     }
   },
   "common": {

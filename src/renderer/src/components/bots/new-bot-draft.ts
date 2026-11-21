@@ -1,9 +1,11 @@
-// New bot's draft: a proposal's lines as the dialog shows them, and what the new bot is made from.
-// A built-in template reads in the UI language; a line the owner leaves as shown is saved in the
+// New bot's typed fields and what the bot is made from: a proposal as edited, or a purpose alone.
+// A built-in template reads in the UI language; text the owner leaves as shown is saved in the
 // template's English, so SOUL.md keeps the words the template was written in.
 import type { Translate } from '@/i18n/use-translate'
-import type { BotProposal } from '../../../../shared/bots/bot-proposal'
+import { proposalIdentity, type BotProposal } from '../../../../shared/bots/bot-proposal'
+import { botTemplate } from '../../../../shared/bots/bot-templates'
 import { botTemplateText } from '../../../../shared/bots/bot-template-text'
+import { finalSentenceStop, joinSentences } from '../../../../shared/text/sentence-joining'
 import type { NewBotProposalDraft } from './NewBotProposalFields'
 
 export type NewBotDraft = NewBotProposalDraft & { purpose: string }
@@ -12,14 +14,43 @@ export type NewBotDraft = NewBotProposalDraft & { purpose: string }
 const shownText = (text: string | undefined, t: Translate): string | undefined =>
   text === undefined ? undefined : botTemplateText(text, t)
 
+/** A template's identity box: what it watches, does and reports, one editable text. */
+export const templateIdentity = (proposal: BotProposal | undefined): string | undefined =>
+  (proposal && botTemplate(proposal.templateId) && proposalIdentity(proposal)) || undefined
+
+/** The identity box in the UI language: the template's lines translated, put together as sentences. */
+export function shownTemplateIdentity(
+  proposal: BotProposal | undefined,
+  t: Translate
+): string | undefined {
+  const identity = templateIdentity(proposal)
+  if (!proposal || identity === undefined) {
+    return identity
+  }
+  const watches = shownText(proposal.watches, t)
+  const does = shownText(proposal.does, t)
+  const reports = shownText(proposal.reports, t)
+  if (watches === proposal.watches && does === proposal.does && reports === proposal.reports) {
+    return identity
+  }
+  const text = joinSentences(
+    [
+      watches ? t('bots.new.identityWatches', 'Watches {{what}}', { what: watches }) : null,
+      does || null,
+      reports ? t('bots.new.identityReports', 'Reports {{what}}', { what: reports }) : null
+    ].filter((line): line is string => line !== null)
+  )
+  return `${text}${finalSentenceStop(text)}`
+}
+
 export const draftOf = (proposal: BotProposal | undefined, purpose?: string): NewBotDraft => ({
-  purpose: proposal?.purpose ?? purpose ?? '',
+  purpose: templateIdentity(proposal) ?? proposal?.purpose ?? purpose ?? '',
   watches: proposal?.watches,
   does: proposal?.does,
   reports: proposal?.reports
 })
 
-/** The draft as New bot shows it: a line still as the proposal wrote it reads in the UI language, at
+/** The draft as New bot shows it: text still as the proposal wrote it reads in the UI language, at
  *  every render, so it follows the catalog arriving or the language changing. */
 export function shownDraft(
   proposal: BotProposal | undefined,
@@ -31,12 +62,28 @@ export function shownDraft(
   }
   const shown = (value: string | undefined, own: string | undefined): string | undefined =>
     value !== undefined && value === own ? shownText(value, t) : value
+  const identity = templateIdentity(proposal)
   return {
-    purpose: shown(draft.purpose, proposal.purpose) ?? '',
+    purpose:
+      identity !== undefined && draft.purpose === identity
+        ? (shownTemplateIdentity(proposal, t) ?? identity)
+        : (shown(draft.purpose, proposal.purpose) ?? ''),
     watches: shown(draft.watches, proposal.watches),
     does: shown(draft.does, proposal.does),
     reports: shown(draft.reports, proposal.reports)
   }
+}
+
+/** Whether the identity box still holds the template's text, as written or as shown. */
+export function identityUntouched(
+  proposal: BotProposal | undefined,
+  purpose: string,
+  t: Translate
+): boolean {
+  const typed = purpose.trim()
+  return (
+    typed === templateIdentity(proposal) || typed === shownTemplateIdentity(proposal, t)?.trim()
+  )
 }
 
 // An emptied field drops out of the new bot's SOUL.md.
@@ -55,6 +102,19 @@ export function editedProposal(
   t: Translate
 ): BotProposal | null {
   const purpose = draft.purpose.trim()
+  if (proposal && templateIdentity(proposal) !== undefined) {
+    // Untouched, the template's own lines seed SOUL.md; edited, the identity text replaces them.
+    return identityUntouched(proposal, purpose, t)
+      ? { ...proposal, name }
+      : {
+          ...proposal,
+          name,
+          purpose: purpose || proposal.purpose,
+          watches: undefined,
+          does: undefined,
+          reports: undefined
+        }
+  }
   if (proposal) {
     // Why: a line left as shown keeps the proposal's own words, so SOUL.md gets the English the
     // template was written in rather than its translation; an edited line keeps the owner's words.

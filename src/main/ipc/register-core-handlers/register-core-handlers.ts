@@ -1,5 +1,4 @@
 import { app } from 'electron'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { registerAppHandlers } from '../app'
 import { registerWslMoveWiring } from '../wsl/wsl-move-driver-wiring'
 import { registerWslDriveProjectHandlers } from '../wsl/wsl-drive-project-handlers'
@@ -8,6 +7,7 @@ import { registerCliHandlers } from '../cli'
 import { registerOrcaUninstallHandlers } from '../orca-uninstall'
 import { registerPreflightHandlers } from '../preflight/preflight'
 import type { Store } from '../../persistence/loading-store/store'
+import { resolveDesktopAuthorizedPath } from '../filesystem/access/local-file-access-resolution'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { StatsCollector } from '../../stats/collector'
 import { registerFilesystemHandlers } from '../filesystem/filesystem'
@@ -129,15 +129,13 @@ export async function registerCoreHandlers(
   setTrustedClipboardRendererWebContentsId(mainWindowWebContentsId)
   setTrustedUIRendererWebContentsId(mainWindowWebContentsId)
   setAgentBrowserBridgeRef(runtime.getAgentBrowserBridge())
+  const { rendererCheckpoint } = lifecycleOptions
+  if (!rendererCheckpoint) {
+    throw new Error('Renderer shutdown checkpoint must be composed before core handlers')
+  }
   return (registration ??= (async () => {
     registerAppHandlers(store, {
-      quitResumeRecordsFor: (session) => runtime.quitResumeRecordsFor(session),
-      ...(ORCA_LAYOUT_OWNER_IS_MAIN
-        ? {
-            reconnectFactsFor: (session, partition) =>
-              runtime.shutdownReconnectFactsFor(session, partition)
-          }
-        : {}),
+      rendererCheckpoint,
       onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch,
       // Restart/profile switching closes this through will-quit; this callback covers relaunch exit.
       onBeforeRelaunchExit: () => closeNotificationDismissalsBeforeRelaunch(runtime)
@@ -268,7 +266,7 @@ export async function registerCoreHandlers(
       deleteRuntimeAiVaultSession(getRuntimeEnvironmentRegistryRoot(), environmentId, args)
     )
     registerNativeChatHandlers()
-    registerClipboardHandlers(store, {
+    registerClipboardHandlers((path) => resolveDesktopAuthorizedPath(path, store), {
       localChatAttachmentStore: async () => {
         await ensureStructuredAgentSessionHostUnlessRefused(() =>
           runtime.ensureStructuredAgentSessionHost()
@@ -276,7 +274,7 @@ export async function registerCoreHandlers(
         return getAgentSessionAttachmentStore()
       }
     })
-    registerUpdaterHandlers(store)
+    registerUpdaterHandlers()
     registerSpeechHandlers(store, commitMessageAgentEnv)
     void hostsReady.catch((error: unknown) =>
       console.warn('[startup] Host initialization failed:', error)

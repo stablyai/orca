@@ -23,6 +23,8 @@ export type RestartWorkerStopReportDeps = {
   reportDeps: WorkerTurnStopReportDeps
   /** A terminal worker's pane at rest, reported as its live stop would have been. */
   reportRestingPane: (paneKey: string) => Promise<void>
+  /** A start whose turn was never seen begin, or that the restart cut, reported once. */
+  reportUnconfirmedStart: (dispatchId: string) => Promise<void>
   /** Opens a chat so its status is read from its journal; null when this host runs no chats. */
   chats: {
     /** Only these chats were cut by the run that just ended; no other worker chat is opened. */
@@ -189,13 +191,17 @@ export async function reportWorkerStopsAcrossRestart(
   for (const dispatchId of openDispatchIds(db)) {
     // Re-read: an earlier report, a worker's own report or the terminal sweep may have closed it.
     const dispatch = db.getDispatchContextById(dispatchId)
-    if (
-      !dispatch ||
-      (dispatch.status !== 'pending' && dispatch.status !== 'dispatched') ||
-      // Its brief may not have reached the worker yet, as the live report waits out too; a stop its
-      // coordinator asked for is no news.
-      isWorkerStartOrStopUndecided(db.getWorkerDispatch(dispatchId)?.state)
-    ) {
+    if (!dispatch || (dispatch.status !== 'pending' && dispatch.status !== 'dispatched')) {
+      continue
+    }
+    const state = db.getWorkerDispatch(dispatchId)?.state
+    // No receipt outlives a restart: a start still undecided is decided now, as its live report would be.
+    if (state === 'starting' || state === 'start_unknown') {
+      visit(dispatchId, () => deps.reportUnconfirmedStart(dispatchId))
+      continue
+    }
+    // A stop its coordinator asked for is no news.
+    if (isWorkerStartOrStopUndecided(state)) {
       continue
     }
     const sessionId = dispatch.assignee_orca_session_id

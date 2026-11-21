@@ -8,14 +8,26 @@ import type {
   AvatarGenerationApi,
   AvatarImageAgentStatus
 } from '../../../../shared/avatar-generation/avatar-generation-contract'
-import { GenerateField, GenerateFaceTile, useGenerateFace } from './AvatarGenerateFace'
+import {
+  GenerateField,
+  GenerateFaceTile,
+  useGenerateFace,
+  type SlotPicture
+} from './AvatarGenerateFace'
 import type { GeneratedAvatar } from './use-avatar-generation'
+import { resetAvatarCapabilityForTest } from './avatar-generation-capability-store'
 
 // The real crop draws on a canvas, which happy-dom lacks.
 vi.mock('./bot-avatar-intake', () => ({ avatarPngFromBlob: async () => 'CROPPED' }))
 
-function Face({ onResult }: { onResult: (made: GeneratedAvatar) => void }): React.JSX.Element {
-  const face = useGenerateFace(onResult)
+function Face({
+  onResult,
+  applied = null
+}: {
+  onResult: (made: GeneratedAvatar) => boolean
+  applied?: SlotPicture | null
+}): React.JSX.Element {
+  const face = useGenerateFace(onResult, applied)
   return (
     <TooltipProvider>
       <GenerateFaceTile face={face} />
@@ -60,13 +72,14 @@ async function describeAndEnter(text: string): Promise<HTMLTextAreaElement> {
 
 describe('Generate face', () => {
   beforeEach(() => {
+    resetAvatarCapabilityForTest()
     Reflect.deleteProperty(window, 'api')
   })
   afterEach(cleanup)
 
   it('generates on Enter and folds the field to the description under the picture', async () => {
     const generate = stubAgents([CODEX], async () => ({ ok: true, agent: 'codex', image: IMAGE }))
-    const onResult = vi.fn()
+    const onResult = vi.fn(() => true)
     render(<Face onResult={onResult} />)
     const box = await describeAndEnter('a fox astronaut')
     expect(folded(box)).toBe(false)
@@ -86,7 +99,7 @@ describe('Generate face', () => {
       <Dialog open onOpenChange={onOpenChange}>
         <DialogContent>
           <DialogTitle>New</DialogTitle>
-          <Face onResult={() => {}} />
+          <Face onResult={() => true} />
         </DialogContent>
       </Dialog>
     )
@@ -99,18 +112,34 @@ describe('Generate face', () => {
     expect(onOpenChange).not.toHaveBeenCalled()
   })
 
-  it('reopens the field from the description line too', async () => {
+  it('holds the picture in use in its slot until a new one is made', async () => {
     stubAgents([CODEX], async () => ({ ok: true, agent: 'codex', image: IMAGE }))
-    render(<Face onResult={() => {}} />)
+    render(
+      <Face
+        onResult={() => true}
+        applied={{ src: 'data:image/png;base64,T0xE', description: 'Your image' }}
+      />
+    )
+    const slot = (): string | null =>
+      screen
+        .getByRole('button', { name: 'Edit description' })
+        .querySelector('img')
+        ?.getAttribute('src') ?? null
+    expect(slot()).toBe('data:image/png;base64,T0xE')
+    expect(screen.getByRole('button', { name: 'Your image' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit description' }))
     const box = await describeAndEnter('a fox astronaut')
-    fireEvent.click(await screen.findByRole('button', { name: 'a fox astronaut' }))
+    const caption = await screen.findByRole('button', { name: 'a fox astronaut' })
+    expect(slot()).toBe('data:image/png;base64,CROPPED')
+
+    fireEvent.click(caption)
     expect(folded(box)).toBe(false)
   })
 
   it('cancels a run from the face, or with Esc in the field', async () => {
     const cancel = vi.fn(async () => {})
     stubAgents([CODEX], () => new Promise(() => {}), cancel)
-    render(<Face onResult={() => {}} />)
+    render(<Face onResult={() => true} />)
     const box = await describeAndEnter('a fox astronaut')
     fireEvent.click(await screen.findByRole('button', { name: 'Cancel generating' }))
     expect(cancel).toHaveBeenCalledTimes(1)
@@ -124,7 +153,7 @@ describe('Generate face', () => {
 
   it('shows a usage limit under the field and keeps the description', async () => {
     stubAgents([CODEX], async () => ({ ok: false, error: 'usage-limit', agent: 'codex' }))
-    render(<Face onResult={() => {}} />)
+    render(<Face onResult={() => true} />)
     const box = await describeAndEnter('a fox astronaut')
     expect((await screen.findByRole('alert')).textContent).toBe(
       'Codex hit its usage limit. Try again later.'
@@ -134,14 +163,14 @@ describe('Generate face', () => {
 
   it('offers the agent menu only when two agents can make pictures', async () => {
     const generate = stubAgents([CODEX], async () => ({ ok: false, error: 'failed' }))
-    const { unmount } = render(<Face onResult={() => {}} />)
+    const { unmount } = render(<Face onResult={() => true} />)
     // A run starts only once the agents are known.
     await describeAndEnter('a fox astronaut')
     await waitFor(() => expect(generate).toHaveBeenCalled())
     expect(screen.queryByRole('button', { name: 'Generate with Codex' })).toBeNull()
     unmount()
     stubAgents([CODEX, GROK], async () => ({ ok: false, error: 'failed' }))
-    render(<Face onResult={() => {}} />)
+    render(<Face onResult={() => true} />)
     expect(await screen.findByRole('button', { name: 'Generate with Codex' })).toBeTruthy()
   })
 })

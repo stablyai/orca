@@ -905,9 +905,7 @@
       "toolAdded": {
         "heading": "已添加工具",
         "removed": "已移除",
-        "remove": "移除",
-        "signedIn": "已登录",
-        "signInOnComputer": "请在电脑上登录"
+        "remove": "移除"
       },
       "webhook": {
         "starts": "Webhook · 启动“{{automation}}”",
@@ -938,6 +936,9 @@
     "workerApproval": {
       "allow": "允许",
       "deny": "拒绝"
+    },
+    "messageTime": {
+      "yesterday": "昨天 {{time}}"
     }
   },
   "common": {
@@ -5055,8 +5056,7 @@
       "taskComplete": "任务完成",
       "taskCompleteDetail": "话题、自动化或工作者完成时",
       "couldNotFinish": "无法完成",
-      "couldNotFinishDetail": "当自动化运行或工作者失败时",
-      "general": "通用"
+      "couldNotFinishDetail": "当自动化运行或工作者失败时"
     },
     "saveFailed": "无法保存",
     "sheet": {
@@ -5106,7 +5106,6 @@
       "anyFallback": "发生事件时"
     },
     "chatStartFailed": "无法开始聊天",
-    "newChatWith": "与 {{name}} 新建聊天",
     "upNext": {
       "title": "建议",
       "looked": "巡视于 {{time}}",
@@ -5566,8 +5565,7 @@
       },
       "readFailedTitle": "无法加载事项",
       "ask": {
-        "recommended": "推荐",
-        "typeAnswer": "输入你的回答"
+        "recommended": "推荐"
       }
     },
     "needs": {

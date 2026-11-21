@@ -1046,7 +1046,6 @@
       "permissions": "权限",
       "permissionsDescription": "新会话的初始权限。超出此权限的操作会在会话中请求批准",
       "active": "已启用",
-      "activeDescription": "回复消息并运行自动化",
       "memoryFact": "记忆",
       "cancel": "取消",
       "save": "保存",
@@ -1232,7 +1231,6 @@
         "missing": "此项目已不在 Orca 中",
         "notYet": "暂不可用",
         "none": "此项目还没有技能。运行项目的设置流程来添加技能；这些技能会在 {{bot}} 的下次聊天中加载",
-        "more": "另外 {{count}} 个",
         "openFolder": "打开文件夹",
         "noneShort": "无技能",
         "link": "关联项目",
@@ -5310,13 +5308,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "工作集 (WS) 的总和，共享页可能会出现在多个进程中",
-                "privateBytesDescription": "专用字节的总和：这些进程已提交的内存，无论驻留还是已换出都会计入，这是主机计入提交限制的数值，因此在分页导致上方工作集缩小时它仍会继续上升",
-                "footprintDescription": "内存占用的总和，与“活动监视器”显示的数值相同：每个进程自身占用的内存，包括图形内存。进程之间共享的页不会被重复计算",
-                "rssDescription": "驻留集大小 (RSS) 的总和，共享页或别名映射页可能会出现在多个进程中",
                 "memColumn": "内存",
-                "memorySummary": "Σ 内存",
-                "privateSummary": "Σ 专用"
+                "memorySummary": "Σ 内存"
               }
             },
             "manager": {
@@ -17946,8 +17939,6 @@
             "27d863542c": "浏览器注释",
             "e48569ac6d": "无法访问该网站",
             "bbe8f15e83": "该窗格是从活动运行时服务器呈现的",
-            "8b7e6d1f5a": "浏览器注释仅在本地浏览器选项卡中可用",
-            "deb5293610": "浏览器注释在远程运行时不可用",
             "90d021f2ad": "添加",
             "0cb3bd6221": "注释意图",
             "532bac48c5": "描述代理应该在这里改变什么......",
@@ -20135,6 +20126,7 @@
         "optionUpdateFailed": "无法更新选项",
         "optionValue": {
           "none": "无",
+          "off": "关闭",
           "fast": "快速",
           "minimal": "最小",
           "low": "低",
@@ -25265,11 +25257,9 @@
     "restartLocal": "重启本地守护进程",
     "killAllLocal": "结束所有本地会话",
     "killFailed": "无法结束终端。将保留上次观察到的会话",
-    "metricDetails": "指标详情",
     "owner": {
       "agents": "智能体",
       "otherTerminals": "其他终端",
-      "description": "“Orca”指应用本身。“智能体”指正在运行智能体的终端；“其他终端”指你在 Orca 中运行的其余终端。条形图显示各类在三者合计内存中所占的比例",
       "privateBytes": "Orca 和终端已提交的内存"
     }
   },
@@ -25388,6 +25378,9 @@
     "linkedMessageMissing": "找不到该消息。",
     "math": {
       "scrollDisplayEquation": "滚动显示公式"
+    },
+    "messageTime": {
+      "yesterday": "昨天 {{time}}"
     }
   },
   "quitAndStopAllSessions": {
@@ -26147,7 +26140,8 @@
       "when": "何时运行",
       "option": "机器人 · {{name}}",
       "channelMissing": "请输入接收结果的频道",
-      "hostUnavailable": "这台电脑暂时无法承载新的自动化。请稍后重试",
+      "hostUnavailable": "机器人所在的电脑暂时无法承载新的自动化。请稍后重试。",
+      "hostNeedsUpdate": "请更新 {host} 上的 Orca 服务器，它的机器人才能使用自动化。",
       "promptMissing": "请输入要做的事",
       "deletedBot": "已删除的机器人",
       "fieldLabel": "机器人或项目",
@@ -26740,7 +26734,6 @@
       "close": "关闭",
       "comesWith": "包含",
       "comesWithHelp": "关于模板计划和设置",
-      "olderHost": "{{host}} 上的 Orca 版本较旧，因此不会添加此模板的技能和计划。请在该主机上更新 Orca 以添加这些内容，或仅使用模板指令创建机器人",
       "comesWithNote": "计划默认关闭。选好仓库或频道后，在首次聊天中设置自动化和连接器",
       "keepSkill": "添加 {{skill}} 技能",
       "stateOff": "关闭",
@@ -26761,7 +26754,6 @@
       "closeTooltip": "关闭 · Esc",
       "fromLink": "来自链接",
       "search": "搜索模板",
-      "originTemplateNamed": "来自 {{template}} 模板",
       "aboutTemplate": "关于 {{name}}",
       "allTemplates": "所有模板",
       "filterCategory": "按类别筛选",
@@ -27006,7 +26998,29 @@
         "google": "以你的身份使用 Gmail、Calendar 和 Drive"
       },
       "mcp": {
-        "adding": "正在添加 {{app}}…"
+        "adding": "正在添加 {{app}}…",
+        "addTitle": "添加 {{app}}",
+        "advanced": "高级",
+        "hostInvalid": "请输入主机名，例如 {{example}}。",
+        "datadog": {
+          "siteLabel": "Datadog 站点"
+        },
+        "gitlab": {
+          "hostLabel": "GitLab 地址（可选）",
+          "hostHint": "适用于自管理或 Dedicated 实例。留空则使用 GitLab.com。"
+        },
+        "place": {
+          "usEast": "美国东部",
+          "usWest": "美国西部",
+          "usCentral": "美国中部",
+          "europe": "欧洲",
+          "japan": "日本",
+          "australia": "澳大利亚",
+          "unitedKingdom": "英国"
+        },
+        "elsewhereTitle": "{{app}} 已在 {{bot}} 上",
+        "elsewhereLine": "它已添加在 {{place}}。请先在“管理”中移除，再添加其他。",
+        "elsewhereOther": "请先在“管理”中移除，再添加其他。"
       },
       "unsupported": "暂不支持此应用",
       "cantReach": "无法连接 {{app}}",
@@ -27139,7 +27153,7 @@
         "links": "链接",
         "showLess": "收起",
         "showMore": "展开",
-        "sub": "事项 {{number}} · {{chat}} · {{when}}",
+        "subWhere": "条目 {{number}} · {{chat}}",
         "showEarlier": "显示更早的内容",
         "place": "{{index}} / {{total}}",
         "deleted": "此事项已删除",
@@ -27955,7 +27969,6 @@
       "publishing": "正在发布…",
       "previewChanged": "预览已更改。请在发布前检查",
       "manageSharing": "管理分享…",
-      "sharedUpdated": "已分享 · 更新于 {{date}}",
       "secretFoundTitle": "发现密钥",
       "secretWhere": "{{flag}}，位于 {{where}} 第 {{line}} 行",
       "view": "查看",
@@ -28030,15 +28043,6 @@
         "open": "打开",
         "stopped": "此链接已失效",
         "stoppedDetail": "请向分享者索取新链接",
-        "ask": "请求批准",
-        "askDetail": "从链接创建的机器人默认使用此项",
-        "full": "完全访问权限",
-        "fullDetail": "运行命令时不询问",
-        "chatsDetail": "初始采用你的聊天权限设置",
-        "askLine": "运行命令前请求批准。你自己的允许规则仍然适用",
-        "fullLine": "运行命令时不询问",
-        "chatsLine": "按你的聊天设置请求批准",
-        "change": "（更改）",
         "origin": "来自 {{who}} 的链接",
         "originAnonymous": "来自分享链接",
         "back": "返回",
@@ -28145,7 +28149,6 @@
     },
     "host": {
       "errors": {
-        "signedOut": "请让 {{host}} 登录 Orca 以连接 {{service}}",
         "accountChanged": "{{host}} 的 Orca 登录状态已变更。请重新开始",
         "accountChangedHere": "这台电脑的 Orca 登录状态已变更。请重新开始",
         "notRouted": "{{service}} 的页面必须在 {{host}} 对应的 Orca 浏览器中打开。请重新连接 {{host}} 后重新开始"
@@ -28187,11 +28190,8 @@
       "yesterday": "昨天",
       "lastLooked": "上次查看于 {{when}}",
       "lastTidied": "上次整理于 {{when}}",
-      "memoryFiles_one": "MEMORY.md 和 {{count}} 个主题文件",
-      "memoryFiles_other": "MEMORY.md 和 {{count}} 个主题文件",
       "toolsFrom": "来自 {{agent}} 的 {{count}} 个工具",
       "toolsMore": "另有 {{count}} 个工具来自 {{agent}}",
-      "withAccess": "{{service}} 中有 {{people}} 人拥有访问权限",
       "onlyYou": "仅你"
     },
     "newHomeChat": {
@@ -28311,14 +28311,11 @@
       "copyPath": "复制路径",
       "topicFiles": "主题文件",
       "schedule": "计划",
-      "automationsFoot": "自动化位于主页 › 自动化",
       "soulAndMemory": "灵魂与记忆",
       "access": "访问权限",
       "whoCanAsk": "谁可以提问",
-      "chatDefault": "你的聊天默认设置",
       "name": "机器人名称",
       "rename": "重命名 {{name}}",
-      "share": "分享…",
       "agent": "智能体和模型",
       "computer": "电脑",
       "deleteBot": "删除机器人…",
@@ -28337,10 +28334,24 @@
       "items": "事项",
       "itemsStale": {
         "days": "{{days}} 天",
-        "detail": "无活动达到此时长后标记为“长期无活动”。计划中的事项使用 3 倍时长",
         "never": "永不",
-        "title": "多久后将事项标记为“长期无活动”"
-      }
+        "title": "多久后将事项标记为“长期无活动”",
+        "shortTitle": "多久算过期"
+      },
+      "memoryFiles_other": "{{count}} 个文件",
+      "lookAroundShort": {
+        "every4h": "4 小时",
+        "every2h": "2 小时",
+        "twiceDaily": "每天两次",
+        "mornings": "每天早上"
+      },
+      "tidyUpShort": {
+        "night": "每晚",
+        "week": "每周"
+      },
+      "youAndOthers_other": "你和另外 {{count}} 人",
+      "shareAction": "分享",
+      "sharingOn": "开"
     },
     "cloudSignIn": {
       "automationScheduledOnly": "仅按计划运行：退出 Orca 登录期间，其事件已暂停",
@@ -28354,11 +28365,8 @@
       "cancel": "取消",
       "paused": "退出登录期间已暂停",
       "needsSignIn": "需要登录",
-      "toldBot": "我现在已登录 Orca",
       "signedIn": "已登录 Orca",
-      "continue": "继续",
-      "webhooksChat": "Webhook 需要先登录 Orca。你登录后我就会创建",
-      "eventsChat": "{{source}} 事件需要先登录 Orca。你登录后我就会保存这条规则"
+      "continue": "继续"
     },
     "newAgentChat": "新建 {{agent}} 聊天",
     "newChatWithAgent": "与 {{name}} 新建聊天 · {{agent}}",
@@ -28645,7 +28653,6 @@
         "off": "GitHub 即将推出",
         "rateLimited": "尝试次数过多。请等待一分钟后重试",
         "unavailable": "GitHub 未响应。请重试",
-        "signedOut": "登录 Orca 以连接 GitHub",
         "unreachable": "无法连接 Orca Cloud。请检查网络连接后重试",
         "wrongAccount": "此次登录从另一个 Orca 账号发起。请从当前账号重新使用 GitHub 登录",
         "alreadyLinked": "此 Orca 账号已关联另一位 GitHub 用户。请先在设置 › 机器人 › GitHub 中解除关联",
@@ -28691,6 +28698,7 @@
       "titleOne": "允许 {{person}} 访问 {{name}}？",
       "titleMany": "允许 {{count}} 人访问 {{name}}？",
       "confirm": "授予访问权限",
+      "reject": "拒绝",
       "confirmWarning": "他们将以你的身份在 {{computer}} 上操作",
       "confirmComputer": "运行命令和修改文件",
       "confirmNoApprovals": "无需事先询问即可操作",
@@ -28708,6 +28716,10 @@
       "controlNone": "你添加的任何人都能通过 {{name}}，以你的身份在 {{computer}} 上工作：运行命令、打开和修改文件，以及使用你已连接的账号",
       "controlOne": "{{person}} 可以通过 {{name}}，以你的身份在 {{computer}} 上工作：运行命令、打开和修改文件，以及使用你已连接的账号",
       "controlMany": "他们可以通过 {{name}}，以你的身份在 {{computer}} 上工作：运行命令、打开和修改文件，以及使用你已连接的账号",
+      "controlBrief": "他们可以在这里以你的身份操作。",
+      "controlBriefIfAdded": "你添加的人可以在这里以你的身份操作。",
+      "controlBriefOnHost": "他们可以在{{computer}}上以你的身份操作。",
+      "controlBriefIfAddedOnHost": "你添加的人可以在{{computer}}上以你的身份操作。",
       "reachHeading": "{{name}} 可以访问什么",
       "reachComputer": "你在 {{computer}} 上的文件、命令和账号",
       "reachComputerDetail": "以你的身份操作，范围由下方权限决定",
@@ -28848,7 +28860,7 @@
       "description": "{{name}} 的主聊天将在 {{agent}} 上重新开始。当前对话会保留在历史记录中",
       "kept": "保留：灵魂、记忆、自动化、连接器",
       "notKept": "不保留：当前对话",
-      "threads": "正在运行的 Slack 话题会继续使用 {{agent}}，直至结束",
+      "threads": "已有 Orca 聊天的 Slack 话题会保留该聊天的智能体",
       "action": "切换为 {{agent}}"
     },
     "paused": {
@@ -29036,7 +29048,6 @@
         "notAMember": "只有 Linear 工作区的正式成员才能选择其中的人员",
         "rateLimited": "尝试次数过多。请稍等一分钟后重试",
         "unavailable": "Linear 未响应。请重试",
-        "signedOut": "请登录 Orca 以连接 Linear",
         "unreachable": "无法连接 Orca Cloud。请检查网络连接后重试",
         "wrongAccount": "此次登录从另一个 Orca 账号发起。请从当前账号重新连接 Linear",
         "replaced": "此次 Linear 连接未完成。较新的 Linear 或 GitHub 连接可能已将其取代。请重新开始"
@@ -29197,7 +29208,6 @@
         "unknownBot": "Orca Cloud 尚未收到此机器人的信息。请稍等一分钟后重试",
         "wrongWorkspace": "此机器人的 Slack 应用位于另一个工作区。请先将其从 Slack 中移除",
         "notInstalled": "请先将此机器人添加到 Slack",
-        "signedOut": "登录 Orca 以连接 Slack",
         "unreachable": "无法连接 Orca Cloud。请检查网络连接后重试",
         "handOffExpired": "此交接链接已过期或已使用。请重试"
       },

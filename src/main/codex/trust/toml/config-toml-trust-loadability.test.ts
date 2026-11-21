@@ -55,6 +55,7 @@ vi.mock(
         mocks.remoteFiles.get(path) ?? null,
       writeTextFileRemoteAtomic: async (_sftp: SFTPWrapper, path: string, content: string) => {
         mocks.remoteFiles.set(path, content)
+        return true
       }
     }
   }

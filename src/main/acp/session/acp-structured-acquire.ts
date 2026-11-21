@@ -28,7 +28,7 @@ import { AcpStructuredPrompts } from '../requests/acp-structured-prompts'
 import { withAcpUrlElicitation } from '../requests/acp-url-elicitation'
 import { AcpLoadHistory } from '../history/acp-history-replay'
 import { asReattachHistory } from '../history/acp-reattach-history'
-import { routeAcpSessionEvent } from '../timeline/acp-session-event-routing'
+import { reportsAcpOptions, routeAcpSessionEvent } from '../timeline/acp-session-event-routing'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 import type { AcpStructuredTurnsDeps } from '../turns/acp-turn-dispatch-contract'
 import { RequestPermissionResponseSchema } from '../generated/acp-protocol.generated'
@@ -182,7 +182,7 @@ export async function acquireAcpStructuredSession(input: {
         childState.isAcpReadySession(session) &&
         !session.ended &&
         event.kind === 'known' &&
-        event.notification.update.sessionUpdate === 'config_option_update'
+        reportsAcpOptions(event.notification.update)
       ) {
         deps.onEvent?.({
           type: 'options-reported',

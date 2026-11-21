@@ -8,6 +8,7 @@ import type { AgentStatusEntry } from '../../../../../shared/agent-status/contra
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { buildActivityEvents, type BuildActivityEventsArgs } from '../events/activity-event-builder'
 import { createActivityEventBuildCache } from '../events/activity-event-build-cache'
+import { countActivityUnread } from '../events/useActivityUnreadCount'
 import { buildAgentPaneThreads, createAgentPaneThreadReuseCache } from './activity-thread-builder'
 
 const NOW = 1_000_000_000
@@ -253,6 +254,26 @@ describe('Activity incremental build', () => {
     build.cached()
     build.expectEquivalent(NOW, store.getState().agentStatusByPaneKey.capture())
     build.expectEquivalent()
+  })
+
+  it('drops a finished pane from the list and unread count once its tab closes', () => {
+    const store = fleet(3)
+    store.setState({ migrationUnsupportedByPtyId: {} })
+    const listed = () =>
+      new Set(
+        builder(store)
+          .full()
+          .events.map((event) => event.entry.paneKey)
+      )
+    const working = makePaneKey('t0', LEAF)
+    const done = makePaneKey('t1', LEAF)
+    const waiting = makePaneKey('t2', LEAF)
+    expect(listed()).toEqual(new Set([working, done, waiting]))
+    expect(countActivityUnread(store.getState(), NOW)).toBe(7)
+
+    store.setState({ tabsByWorktree: { w2: store.getState().tabsByWorktree.w2 } })
+    expect(listed()).toEqual(new Set([working, waiting]))
+    expect(countActivityUnread(store.getState(), NOW)).toBe(6)
   })
 
   it('fills the global cap with the newest pane heads, ties in status order', () => {

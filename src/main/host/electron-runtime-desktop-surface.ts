@@ -1,8 +1,9 @@
+import { BrowserWindow, Notification, powerMonitor, webContents } from 'electron'
 import { isResourceWindowVisible } from '../window/visibility/resource-view-admission'
-import { BrowserWindow, ipcMain, Notification, powerMonitor } from 'electron'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import { showDesktopNotification } from '../notifications/desktop-notification'
 import type { RuntimeDesktopSurface } from '../runtime/construction/runtime-desktop-surface'
+import { electronRendererWindows } from './electron-renderer-windows'
 import { translateMain } from '../i18n/main-i18n'
 import { encodeRepoIconPng } from './electron-repo-icon-png'
 import { fetchWithElectronManualRedirects } from './electron-manual-redirect-fetch'
@@ -29,13 +30,10 @@ export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
       }
     }
   },
-  findWindowById: (id) => BrowserWindow.fromId(id),
-  isResourceViewVisible: (sender) => isResourceWindowVisible(BrowserWindow.fromWebContents(sender)),
-  onIpc: (channel, listener) => {
-    ipcMain.on(channel, listener as Parameters<typeof ipcMain.on>[1])
-  },
-  removeIpcListener: (channel, listener) => {
-    ipcMain.removeListener(channel, listener as Parameters<typeof ipcMain.removeListener>[1])
+  ...electronRendererWindows,
+  isResourceViewVisible: (rendererId) => {
+    const renderer = webContents.fromId(rendererId)
+    return isResourceWindowVisible(renderer ? BrowserWindow.fromWebContents(renderer) : null)
   },
   // Phone icons (repo icons, browser tab favicons) are fetched and shrunk to data URLs here.
   encodeRepoIconPng,

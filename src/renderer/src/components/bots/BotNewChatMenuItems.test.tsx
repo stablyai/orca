@@ -81,7 +81,7 @@ function settled(
 const BOTH = settled([
   { kind: 'chat', agent: 'codex' },
   { kind: 'chat', agent: 'claude' },
-  { kind: 'chat', agent: 'gemini' }
+  { kind: 'chat', agent: 'aider' }
 ])
 
 function openMenu(model: NewTabAgentMenuModel = BOTH, forBot: Bot = bot): void {
@@ -224,7 +224,7 @@ describe('botAgentChoices', () => {
   const model = settled([
     { kind: 'chat', agent: 'codex' },
     { kind: 'chat', agent: 'opencode' },
-    { kind: 'chat', agent: 'kimi' }
+    { kind: 'chat', agent: 'aider' }
   ])
 
   it('keeps the bot’s current agent even when this computer lacks it', () => {

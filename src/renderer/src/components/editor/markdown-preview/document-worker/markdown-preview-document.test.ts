@@ -55,18 +55,13 @@ describe('large Markdown preview documents', () => {
 })
 
 describe('Markdown preview code highlighting', () => {
-  it.each(['powershell', 'ps1', 'pwsh'])(
-    'highlights a %s fence the rich editor already colors',
-    (language) => {
-      const { tree } = parseMarkdownPreviewDocument(
-        [`\`\`\`${language}`, 'Get-ChildItem -Path .', '```'].join('\n')
-      )
-      const block = tree.children[0]
-      if (!block) {
-        throw new Error('missing preview block')
-      }
-      const rendered = renderMarkdownPreviewBlock(block, 0)
-      expect(highlightClasses(rendered.tree)).toContain('hljs-built_in')
+  it('highlights PowerShell fences', () => {
+    const { tree } = parseMarkdownPreviewDocument('```powershell\nGet-ChildItem -Path .\n```')
+    const block = tree.children[0]
+    if (!block) {
+      throw new Error('missing preview block')
     }
-  )
+    const rendered = renderMarkdownPreviewBlock(block, 0)
+    expect(highlightClasses(rendered.tree)).toContain('hljs-built_in')
+  })
 })

@@ -30,8 +30,9 @@ export type ConfirmationDialogOptions = {
   acknowledgeOnly?: boolean
   /** Focus starts on Cancel (or the first field); `confirm` starts on the verb instead. */
   initialFocus?: 'confirm' | 'cancel'
-  /** Ignore repeated Enter and the opening double-click’s second click; fresh presses and Escape still settle the prompt. */
-  ignoresOpeningGesture?: boolean
+  /** Ignore repeated Enter and the opening double-click’s second click; fresh presses and Escape still settle the prompt.
+   *  `true` also ignores a press outside; `'buttons'` lets it dismiss, for a prompt whose dismissal answers nothing. */
+  ignoresOpeningGesture?: boolean | 'buttons'
   /** Renders a "Don't ask again" checkbox. `onConfirmed` runs only when the user confirms with it checked. */
   dontAskAgain?: { label?: string; onConfirmed: () => void }
   /** Runs when the cancel button settles the prompt, unlike Esc, an outside press or an abort. */
