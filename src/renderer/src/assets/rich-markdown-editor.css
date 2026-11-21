@@ -271,9 +271,13 @@
   right: calc(16px + var(--rich-md-inset-end));
 }
 
-.rich-markdown-editor-shell > .rich-markdown-comment-add-btn,
+.rich-markdown-editor-shell > .rich-markdown-comment-add-btn {
+  left: calc(min(max(56px, 100% - 42px), max(8px, 100% - 32px)) - var(--rich-md-inset-end));
+}
+
 .rich-markdown-editor-shell > .orca-diff-comment-popover {
-  margin-left: calc(-1 * var(--rich-md-inset-end));
+  left: max(56px, 100% - 444px - var(--rich-md-inset-end));
+  right: calc(24px + var(--rich-md-inset-end));
 }
 
 .rich-markdown-review-rail-actions {

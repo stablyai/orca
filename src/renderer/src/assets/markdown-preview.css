@@ -352,11 +352,6 @@
   margin-right: calc(-1 * var(--md-rail-space));
 }
 
-/* Why: list items keep this wrapper without controls; don't reserve an empty rail beside them. */
-.markdown-preview:not(.has-markdown-review-rail) .markdown-annotation-list-block {
-  display: block;
-}
-
 /* Why: a nested block's rail stays inside its parent's text column, as before. */
 :is(.markdown-annotation-block, .markdown-annotation-list-block)
   :is(.markdown-annotation-block, .markdown-annotation-list-block) {
