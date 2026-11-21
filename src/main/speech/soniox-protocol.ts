@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { CLOUD_TRANSCRIPTION_SAMPLE_RATE } from '../../shared/speech/dictation/dictation-finish-deadlines'
 
 export const SONIOX_REALTIME_URL = 'wss://stt-rt.soniox.com/transcribe-websocket'
-export const SONIOX_REALTIME_MODEL = 'stt-rt-v5'
+export const SONIOX_REALTIME_MODEL = 'stt-rt-v6'
 
 // Without it a blackholed host never errors, and the dictation's audio piles up unsent.
 const HANDSHAKE_TIMEOUT_MS = 10_000
