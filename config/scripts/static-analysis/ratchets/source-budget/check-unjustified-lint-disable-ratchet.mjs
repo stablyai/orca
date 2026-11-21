@@ -17,9 +17,9 @@ export function countUnjustifiedDisables(sourceText) {
   let count = 0
   for (const [, rest] of sourceText.matchAll(DISABLE_DIRECTIVE)) {
     const reason = rest
+      .split('*/')[0]
       .split(/\s--\s/)[1]
-      ?.replace(/\*\/.*$/, '')
-      .trim()
+      ?.trim()
     if (!reason) {
       count += 1
     }
