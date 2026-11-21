@@ -11,7 +11,8 @@ import {
   loadBotItemsList,
   type BotItemsListCall
 } from '../../../../../shared/bots/bot-items-list-load'
-import { botChangeItemUids, type BotChangeKind } from '../../../../../shared/bots/bot-change-scope'
+import type { BotChangeKind } from '../../../../../shared/bots/bot-change-scope'
+import { botItemsNoticeParts } from '../../../../../shared/bots/bot-items-notice-parts'
 import { addBotReadAsk, botReadLoadAsk, type BotReadAsk } from '../bot-host-read-asks'
 import { createBotHostRead, useBotHostRead, type BotHostReadState } from '../use-bot-host-read'
 import { useBotHostReadState } from '../use-bot-host-read-state'
@@ -45,9 +46,9 @@ const itemsRead = createBotHostRead<BotItemsRead>(
   ITEMS_MIN_READ_GAP_MS,
   false,
   {
-    partsOf: (scope, botId) => botChangeItemUids(scope, botId, ITEMS_KINDS),
+    partsOf: (scope, botId, value) => botItemsNoticeParts(scope, botId, value?.items ?? null),
     maxParts: BOT_ITEM_LIMITS.listPageMax,
-    load: (bot, previous, ask) => loadBotItemsList(listCall(bot, null), previous, ask)
+    load: (bot, previous, ask, show) => loadBotItemsList(listCall(bot, null), previous, ask, show)
   }
 )
 
@@ -133,13 +134,15 @@ export function useBotChatItems(
   const [failed, setFailed] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const moreRef = useRef<() => Promise<BotItemsRead | null>>(async () => null)
+  // The last read of these chats outlives a Retry, so it keeps its loaded Closed depth.
+  const kept = useRef<{ chats: readonly string[]; value: BotItemsRead } | null>(null)
   useEffect(() => {
     if (chats === null) {
       return
     }
     const call = listCall({ hostId, id }, chats)
     let live = true
-    let last: BotItemsRead | null = null
+    let last: BotItemsRead | null = kept.current?.chats === chats ? kept.current.value : null
     let missed = false
     // One read out at a time; asks during it share one more after it, so the last to land is newest.
     let reading = false
@@ -156,23 +159,30 @@ export function useBotChatItems(
       waiting = null
       more = []
       let landed: BotItemsRead | null = null
-      loadBotItemsList(call, last, ask)
+      const land = (value: BotItemsRead): void => {
+        if (live && value !== last) {
+          last = value
+          kept.current = { chats, value }
+          setRead({ chats, value })
+        }
+      }
+      loadBotItemsList(call, last, ask, land)
         .then((value) => {
           if (live) {
             landed = value
-            if (value !== last) {
-              last = value
-              setRead({ chats, value })
-            }
+            land(value)
             missed = false
             setFailed(false)
           }
         })
         .catch((error: unknown) => {
           console.warn('[bots] items: reading a chat’s items failed', error)
-          missed = true
-          if (live) {
-            setFailed(true)
+          // A failed read of only more fails just that ask (its caller says so); the list stands.
+          if (ask.whole || ask.parts.length > 0) {
+            missed = true
+            if (live) {
+              setFailed(true)
+            }
           }
         })
         .finally(() => {
@@ -194,7 +204,7 @@ export function useBotChatItems(
       })
     load(null)
     const stop = onBotsChanged(
-      (_host, change) => load(botChangeItemUids(change, id, ITEMS_KINDS)),
+      (_host, change) => load(botItemsNoticeParts(change, id, last?.items ?? null)),
       hostId,
       { botId: id, kinds: ITEMS_KINDS }
     )

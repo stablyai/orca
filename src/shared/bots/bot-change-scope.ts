@@ -174,34 +174,19 @@ export function botChangeNotice(pending: PendingBotChanges): BotChangeScope {
     kind !== ANY_KIND && bots ? [[kind, [...bots]] as const] : []
   )
   const sameBots = allScoped && scoped.every(([, bots]) => bots.length === botIds?.length)
-  const named = [...pending.itemUids].flatMap(([botId, uids]) =>
-    uids ? [[botId, [...uids]] as const] : []
-  )
+  // An items change of every bot names none of them.
+  const named =
+    pending.kinds.get('items') === null
+      ? []
+      : [...pending.itemUids].flatMap(([botId, uids]) =>
+          uids ? [[botId, [...uids]] as const] : []
+        )
   return {
     ...(botIds ? { botIds } : {}),
     kinds,
     ...(sameBots || scoped.length === 0 ? {} : { kindBots: Object.fromEntries(scoped) }),
     ...(named.length > 0 ? { itemUids: Object.fromEntries(named) } : {})
   }
-}
-
-/** The items a notice says are all that changed in the bot's list, for a list that reads `kinds`; null
- *  when it must read whole: the notice names none for the bot, or another kind it reads changed too. */
-export function botChangeItemUids(
-  scope: BotChangeScope | undefined,
-  botId: string,
-  kinds: readonly BotChangeKind[]
-): readonly string[] | null {
-  const uids = scope?.itemUids?.[botId]
-  if (!uids || !scope?.kinds?.includes('items')) {
-    return null
-  }
-  const otherKinds = scope.kinds.filter((kind) => kind !== 'items')
-  const others = kinds.filter((kind) => kind !== 'items')
-  const otherChange =
-    otherKinds.length > 0 &&
-    botChangeConcerns({ ...scope, kinds: otherKinds }, { botId, kinds: others })
-  return otherChange ? null : uids
 }
 
 /** The scope a runtime event carries, read loosely (a peer of another version may send anything). */

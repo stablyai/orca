@@ -8,11 +8,9 @@ import {
   followAgentPhasesForBots,
   followWorktreeLifecycleForBots
 } from './bot-change-notices'
-import {
-  botChangeBotIds,
-  botChangeConcerns,
-  botChangeItemUids
-} from '../../shared/bots/bot-change-scope'
+import { botChangeBotIds, botChangeConcerns } from '../../shared/bots/bot-change-scope'
+import { botItemsNoticeParts } from '../../shared/bots/bot-items-notice-parts'
+import { makeTestBotItem } from '../../shared/bots/bot-item.test-fixture'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn(() => ({})) }))
@@ -132,12 +130,30 @@ describe('BotChangeNotices', () => {
     vi.advanceTimersByTime(0)
     const notice = emit.mock.calls[0]![0]
     expect(notice.itemUids).toEqual({ 'bot-a': ['i1', 'i2'] })
-    expect(botChangeItemUids(notice, 'bot-a', ['items', 'workers'])).toEqual(['i1', 'i2'])
-    expect(botChangeItemUids(notice, 'bot-b', ['items', 'workers'])).toBeNull()
-    // Another kind the list reads changed too: it reads whole.
+    expect(botItemsNoticeParts(notice, 'bot-a', [])).toEqual(['i1', 'i2'])
+    expect(botItemsNoticeParts(notice, 'bot-b', [])).toBeNull()
+    // Its workers changed too: the items that link a worker are read with them.
+    const linked = makeTestBotItem(7, {
+      uid: 'i7',
+      links: [
+        {
+          kind: 'dispatch',
+          ref: 'ctx_1',
+          latest: null,
+          title: null,
+          state: 'working',
+          host: null,
+          startedAt: null,
+          settledAt: null,
+          report: null,
+          pr: null
+        }
+      ]
+    })
+    const unlinked = makeTestBotItem(8, { uid: 'i8' })
     expect(
-      botChangeItemUids({ ...notice, kinds: ['items', 'workers'] }, 'bot-a', ['items', 'workers'])
-    ).toBeNull()
+      botItemsNoticeParts({ ...notice, kinds: ['items', 'workers'] }, 'bot-a', [linked, unlinked])
+    ).toEqual(['i1', 'i2', 'i7'])
   })
 
   it('stays quiet on a host without bots', () => {

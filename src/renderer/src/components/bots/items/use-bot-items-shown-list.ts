@@ -10,7 +10,7 @@ import {
   type BotItemFilter,
   type BotItemGroups
 } from '../../../../../shared/bots/bot-item-groups'
-import { botItemCursorPlace } from '../../../../../shared/bots/bot-item-merge'
+import { botItemCursorPlace, botItemReaches } from '../../../../../shared/bots/bot-item-merge'
 import { readMoreBotItems, useBotChatItems, type BotItemsRead } from './use-bot-items'
 
 /** One Show more: the Closed items it loaded, and whether more remain. */
@@ -57,10 +57,17 @@ export function useBotItemsShownList(
   const filtered = filter.chatIds !== null
   const loadMore = useCallback(async (): Promise<BotItemsClosedPage> => {
     const before = new Set(items.map((item) => item.uid))
+    const end = botItemCursorPlace(cursor)
     const after = await (filtered ? chatMore() : readMoreBotItems({ hostId, id }))
+    if (!after) {
+      throw new Error('Reading more Closed items failed')
+    }
+    // The page: rows below the old end. One closed meanwhile lands at the top, not in the page.
     return {
-      items: (after?.items ?? NONE).filter((item) => isClosed(item) && !before.has(item.uid)),
-      more: Boolean(after ? after.nextClosedCursor : cursor)
+      items: after.items.filter(
+        (item) => isClosed(item) && !before.has(item.uid) && (!end || !botItemReaches(item, end))
+      ),
+      more: Boolean(after.nextClosedCursor)
     }
   }, [items, filtered, chatMore, hostId, id, cursor])
   const staleDays = botItemStaleDays(bot.itemsStale)

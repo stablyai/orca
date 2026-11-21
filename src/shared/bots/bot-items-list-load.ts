@@ -5,6 +5,8 @@ import { BOT_ITEM_LIMITS } from './bot-items'
 import type { BotItemsListRead } from './bot-item-schema'
 import {
   appendBotItemsClosedPage,
+  botItemCursorPlace,
+  botItemReaches,
   botItemsClosedLoaded,
   mergeNamedBotItems
 } from './bot-item-merge'
@@ -15,10 +17,13 @@ export type BotItemsListCall = (params: Record<string, unknown>) => Promise<BotI
 
 export type BotItemsListAsk = { whole: boolean; parts: readonly string[]; more: boolean }
 
+/** `show`: a value to show while the read goes on (a host before `closedLimit` pages down the
+ *  depth): its first page, with the rows loaded before it below that page kept until theirs land. */
 export async function loadBotItemsList(
   call: BotItemsListCall,
   previous: BotItemsListRead | null,
-  ask: BotItemsListAsk
+  ask: BotItemsListAsk,
+  show?: (value: BotItemsListRead) => void
 ): Promise<BotItemsListRead> {
   const page = BOT_ITEM_LIMITS.listPage
   if (ask.whole || !previous) {
@@ -28,6 +33,9 @@ export async function loadBotItemsList(
     const more = ask.more && previous?.nextClosedCursor ? page : 0
     const want = Math.max(page, loaded) + more
     let value = await call({ closedLimit: Math.min(want, BOT_ITEM_LIMITS.closedLoadMax) })
+    if (show && previous && value.nextClosedCursor && botItemsClosedLoaded(value) < want) {
+      show(reuseEqualJson(previous, withLoadedBelow(value, previous)))
+    }
     while (value.nextClosedCursor && botItemsClosedLoaded(value) < want) {
       const rest = want - botItemsClosedLoaded(value)
       value = appendBotItemsClosedPage(
@@ -52,4 +60,22 @@ export async function loadBotItemsList(
     )
   }
   return value
+}
+
+/** `first` with `previous`'s Closed rows below its end, to show until the rest of the depth lands. */
+function withLoadedBelow(first: BotItemsListRead, previous: BotItemsListRead): BotItemsListRead {
+  const end = botItemCursorPlace(first.nextClosedCursor)
+  const held = new Set(first.items.map((item) => item.uid))
+  const below = previous.items.filter(
+    (item) =>
+      (item.status === 'done' || item.status === 'canceled') &&
+      !held.has(item.uid) &&
+      end !== null &&
+      !botItemReaches(item, end)
+  )
+  return {
+    ...first,
+    items: [...first.items, ...below],
+    ...(previous.nextClosedCursor ? { nextClosedCursor: previous.nextClosedCursor } : {})
+  }
 }

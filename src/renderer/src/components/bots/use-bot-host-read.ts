@@ -2,7 +2,7 @@ import { usePairedActivityRefresh } from './use-paired-activity-refresh'
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import { onBotsChanged } from '@/lib/bots-changed-window-event'
-import { botRefKey, botTarget, callBotRpc, type BotRef } from '@/lib/bot-hosts'
+import { botRefKey, botTarget } from '@/lib/bot-hosts'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
@@ -10,229 +10,12 @@ import {
   automationsChangedWindowDetail
 } from '@/components/automations/events/automations-changed-window-event'
 import type { Bot } from '../../../../shared/bot-types'
-import { reuseEqualJson } from '../../../../shared/reuse-equal-json'
 import type { BotChangeKind, BotChangeScope } from '../../../../shared/bots/bot-change-scope'
-import {
-  addBotReadAsk,
-  botReadLoadAsk,
-  type BotHostReadOptions,
-  type BotReadAsk
-} from './bot-host-read-asks'
+import type { BotHostRead } from './bot-host-read-store'
+
+export { createBotHostRead, type BotHostRead, type BotHostReadState } from './bot-host-read-store'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
-
-type BotReadEntry<T> = {
-  bot: BotRef
-  value: T | null
-  /** The last read failed. */
-  failure: 'failed' | null
-  listeners: Set<() => void>
-  /** Only the latest read lands, so an older one finishing late cannot overwrite it. */
-  latest: number
-  /** A read is queued (next microtask, or after the minimum gap). */
-  scheduled: boolean
-  timer: ReturnType<typeof setTimeout> | null
-  inFlight: boolean
-  /** Asked again while a read ran: one more read follows it. */
-  again: boolean
-  startedAt: number
-  /** What the asks since the last read began cover: some parts, or the whole. */
-  parts: BotReadAsk
-  /** Asks for more (`requestMore`) waiting on the next read, each told the value it lands. */
-  more: ((value: T | null) => void)[]
-}
-
-/** One host read about a bot (its Activity, its chats tree), shared by every surface showing that bot. */
-export type BotHostRead<T> = {
-  /** The kinds of change to the bot that can change this read. */
-  kinds: readonly BotChangeKind[]
-  /** `parts`: only these changed (`BotHostReadOptions`); absent: read whole. */
-  request: (bot: BotRef, parts?: readonly string[] | null) => void
-  /** More of the value (its next page), read at once in turn with the rest; the value it lands, or
-   *  null when that read failed or the last surface closed. */
-  requestMore: (bot: BotRef) => Promise<T | null>
-  partsOf: (scope: BotChangeScope | undefined, botId: string) => readonly string[] | null
-  subscribe: (bot: BotRef, listener: () => void) => () => void
-  snapshot: (key: string) => T | null
-  /** Ready once a value landed; until then, loading or why none came. */
-  state: (key: string) => BotHostReadState
-  /** A value landed, but the latest read of it failed: what's shown is the last good one. */
-  refreshFailed: (key: string) => boolean
-}
-
-export type BotHostReadState = 'loading' | 'ready' | 'failed'
-
-export function createBotHostRead<T>(
-  method: string,
-  pick: (result: never) => T,
-  failure: string,
-  kinds: readonly BotChangeKind[],
-  /** The least time between two reads' starts; asks in between share the one after it. */
-  minIntervalMs = 0,
-  /** Keep each bot's last value after its last surface closes, shown at once when one opens again while it re-reads. */
-  keepLast = false,
-  options?: BotHostReadOptions<T>
-): BotHostRead<T> {
-  const entries = new Map<string, BotReadEntry<T>>()
-  // One value per bot, replaced by each read that lands.
-  const lastValues = new Map<string, T>()
-
-  const entryFor = (bot: BotRef): BotReadEntry<T> => {
-    const key = botRefKey(bot)
-    let entry = entries.get(key)
-    if (!entry) {
-      const ref = { hostId: bot.hostId, id: bot.id }
-      entry = {
-        bot: ref,
-        value: lastValues.get(key) ?? null,
-        failure: null,
-        listeners: new Set(),
-        latest: 0,
-        scheduled: false,
-        timer: null,
-        inFlight: false,
-        again: false,
-        startedAt: 0,
-        parts: null,
-        more: []
-      }
-      entries.set(key, entry)
-    }
-    return entry
-  }
-
-  const read = async (key: string, entry: BotReadEntry<T>): Promise<void> => {
-    const current = ++entry.latest
-    entry.inFlight = true
-    entry.startedAt = Date.now()
-    // Parts only onto a good value: after a failed read, what it missed is unknown.
-    const previous = entry.value
-    const ask = botReadLoadAsk(
-      entry.parts,
-      entry.more.length > 0,
-      Boolean(previous && !entry.failure)
-    )
-    const waiters = entry.more
-    entry.parts = null
-    entry.more = []
-    let landed: T | null = null
-    try {
-      const value = options
-        ? await options.load(entry.bot, previous, ask)
-        : reuseEqualJson(
-            previous,
-            pick(await callBotRpc<never>(entry.bot, method, { botId: entry.bot.id }))
-          )
-      if (current === entry.latest && entries.get(key) === entry) {
-        // An unchanged answer tells no one.
-        if (value !== entry.value || entry.failure) {
-          entry.value = value
-          entry.failure = null
-          if (keepLast && value) {
-            lastValues.set(key, value)
-          }
-          entry.listeners.forEach((listener) => listener())
-        }
-        landed = value
-      }
-    } catch (error) {
-      console.error(failure, error)
-      if (current === entry.latest && entries.get(key) === entry && entry.failure !== 'failed') {
-        entry.failure = 'failed'
-        entry.listeners.forEach((listener) => listener())
-      }
-    } finally {
-      waiters.forEach((tell) => tell(landed))
-      entry.inFlight = false
-      if (entry.again && entries.get(key) === entry) {
-        entry.again = false
-        schedule(key, entry, entry.more.length > 0)
-      }
-    }
-  }
-
-  // Asks from one commit's consumers, and those while a read runs, share one read.
-  const request = (bot: BotRef, named?: readonly string[] | null): void => {
-    const entry = entryFor(bot)
-    entry.parts = addBotReadAsk(entry.parts, options ? named : null, options?.maxParts ?? 0)
-    schedule(botRefKey(bot), entry)
-  }
-
-  const requestMore = (bot: BotRef): Promise<T | null> => {
-    const entry = entryFor(bot)
-    return new Promise((tell) => {
-      entry.more.push(tell)
-      schedule(botRefKey(bot), entry, true)
-    })
-  }
-
-  /** `now`: an owner's ask for more, which waits for no gap. */
-  const schedule = (key: string, entry: BotReadEntry<T>, now = false): void => {
-    if (entry.inFlight) {
-      entry.again = true
-      return
-    }
-    if (entry.scheduled && !(now && entry.timer)) {
-      return
-    }
-    if (entry.timer) {
-      clearTimeout(entry.timer)
-    }
-    entry.scheduled = true
-    const start = (): void => {
-      entry.scheduled = false
-      entry.timer = null
-      // The last surface may have closed since the ask.
-      if (entries.get(key) === entry) {
-        void read(key, entry)
-      }
-    }
-    const wait = now ? 0 : entry.startedAt + minIntervalMs - Date.now()
-    if (wait > 0) {
-      entry.timer = setTimeout(start, wait)
-    } else {
-      entry.timer = null
-      queueMicrotask(start)
-    }
-  }
-
-  return {
-    kinds,
-    request,
-    requestMore,
-    partsOf: (scope, botId) => options?.partsOf(scope, botId) ?? null,
-    subscribe: (bot, listener) => {
-      const key = botRefKey(bot)
-      const entry = entryFor(bot)
-      entry.listeners.add(listener)
-      return () => {
-        entry.listeners.delete(listener)
-        if (entry.listeners.size === 0 && entries.get(key) === entry) {
-          // Nothing lands after the last surface closes.
-          entry.latest += 1
-          if (entry.timer) {
-            clearTimeout(entry.timer)
-          }
-          entry.more.splice(0).forEach((tell) => tell(null))
-          entries.delete(key)
-        }
-      }
-    },
-    // A surface's first render reads before it subscribes, so the kept value answers until then.
-    snapshot: (key) => (entries.has(key) ? entries.get(key)?.value : lastValues.get(key)) ?? null,
-    state: (key) => {
-      const entry = entries.get(key)
-      if (!entry) {
-        return lastValues.has(key) ? 'ready' : 'loading'
-      }
-      return entry.value ? 'ready' : (entry.failure ?? 'loading')
-    },
-    refreshFailed: (key) => {
-      const entry = entries.get(key)
-      return Boolean(entry?.value) && entry?.failure === 'failed'
-    }
-  }
-}
 
 const NO_SUBSCRIPTION = (): (() => void) => () => {}
 /** The changes the store sees first: a read of none of them (items) re-reads on its host's notices only. */
@@ -311,7 +94,7 @@ export function useBotHostRead<T>(read: BotHostRead<T>, bot: Bot | null): T | nu
     let missed = false
     const onChanged = (_host: unknown, scope: BotChangeScope | undefined): void => {
       if (document.visibilityState === 'visible') {
-        read.request(ref, read.partsOf(scope, botId))
+        read.request(ref, read.partsOf(scope, ref))
       } else {
         missed = true
       }

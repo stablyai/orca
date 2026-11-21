@@ -37,10 +37,20 @@ export function botReadLoadAsk(
 
 /** A read that reads its value itself: the whole, the parts a notice named, or more of it. */
 export type BotHostReadOptions<T> = {
-  /** The parts a notice names for the bot, or null when it must read whole. */
-  partsOf: (scope: BotChangeScope | undefined, botId: string) => readonly string[] | null
+  /** The parts a notice can have changed in the bot's value, or null when it must read whole. */
+  partsOf: (
+    scope: BotChangeScope | undefined,
+    botId: string,
+    value: T | null
+  ) => readonly string[] | null
   /** The most parts one read takes; more read whole. */
   maxParts: number
-  /** The value for this ask, built on `previous` (null for a first read). */
-  load: (bot: BotRef, previous: T | null, ask: BotHostReadLoadAsk) => Promise<T>
+  /** The value for this ask, built on `previous` (null for a first read); `show` puts up a value
+   *  while the read goes on. */
+  load: (
+    bot: BotRef,
+    previous: T | null,
+    ask: BotHostReadLoadAsk,
+    show: (value: T) => void
+  ) => Promise<T>
 }
