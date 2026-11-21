@@ -31,3 +31,29 @@ export function describeWslProcessFailure(result: {
   }
   return `exited with code ${result.code ?? 'unknown'}`
 }
+
+export const WSL_DIAGNOSTIC_LIMIT = 300
+// A line with no space or punctuation could be guest output (base64, single words); wsl.exe's text has them.
+const GUEST_OUTPUT_LINE = /^[A-Za-z0-9+/=]+$/
+const WSL_ERROR_CODE = /\bWsl\/[A-Za-z0-9_/]+/
+
+/** wsl.exe's own error (capped), only for exit -1 with no guest output: proof the guest never ran. */
+export function readWslExeFailureBeforeGuest(result: {
+  code: number | null
+  stdout: string
+  stderr: string
+  timedOut: boolean
+}): string | null {
+  if (result.timedOut || !isWslHostFailureExitCode(result.code) || result.stderr.trim()) {
+    return null
+  }
+  const diagnostic = readWslHostDiagnostic(result.stdout)
+  const lines = diagnostic.split(/\r?\n/).filter((line) => line.trim())
+  if (
+    !WSL_ERROR_CODE.test(diagnostic) ||
+    lines.some((line) => GUEST_OUTPUT_LINE.test(line.trim()))
+  ) {
+    return null
+  }
+  return diagnostic.slice(0, WSL_DIAGNOSTIC_LIMIT)
+}

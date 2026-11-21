@@ -4,8 +4,8 @@ import { wslCodexRuntimeHomeForGuestHome } from '../../pty/shell-startup/codex-h
 import { WSL_SESSION_BRIDGE_TIMEOUT_MS } from '../../codex/history/bridges/wsl-codex-session-bridge-script'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'
 import {
-  isWslHostFailureExitCode,
-  readWslHostDiagnostic
+  readWslExeFailureBeforeGuest,
+  WSL_DIAGNOSTIC_LIMIT
 } from '../../wsl/execution/wsl-process-failure'
 import { compareCodexAuthFreshness, codexAuthIsFresher } from '../credentials/codex-auth-identity'
 import {
@@ -42,7 +42,10 @@ type LegacyWslRuntimeAuthDrainOptions = {
   ) => LegacyWslRuntimeAuthDestination | null | Promise<LegacyWslRuntimeAuthDestination | null>
 }
 
-/** A read-only inspect that wsl.exe could not run; nothing moved, so the next launch retries. */
+/**
+ * wsl.exe failed before the guest ran the inspect, so its crash recovery never started. Recovery is
+ * idempotent and reruns on the next drain; until then a launch may use the destination's older auth.
+ */
 class LegacyWslAuthInspectUnavailableError extends Error {}
 
 const drainQueueByDistro = new Map<string, Promise<void>>()
@@ -142,7 +145,7 @@ export async function drainLegacyWslRuntimeAuth(
   if (inspection.code === SOURCE_AUTH_ABSENT_EXIT) {
     return 'pending'
   }
-  if (inspection.timedOut || isWslHostFailureExitCode(inspection.code)) {
+  if (readWslExeFailureBeforeGuest(inspection) !== null) {
     throw new LegacyWslAuthInspectUnavailableError(describeDrainStepFailure('inspect', inspection))
   }
   assertSuccessfulDrainStep('inspect', inspection)
@@ -298,9 +301,9 @@ function describeDrainStepFailure(
   step: string,
   result: { code: number | null; stdout: string; stderr: string; timedOut: boolean }
 ): string {
+  // Raw stdout never: inspect and recover print the auth files there.
   const detail =
-    result.stderr.trim() ||
-    (isWslHostFailureExitCode(result.code) ? readWslHostDiagnostic(result.stdout) : '')
+    result.stderr.trim().slice(0, WSL_DIAGNOSTIC_LIMIT) || readWslExeFailureBeforeGuest(result)
   return `Legacy WSL auth drain ${step} failed (${result.timedOut ? 'timeout' : `exit ${result.code}`})${detail ? `: ${detail}` : ''}`
 }
 
