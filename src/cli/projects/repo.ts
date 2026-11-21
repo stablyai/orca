@@ -10,12 +10,15 @@ import {
   getOptionalPositiveIntegerFlag,
   getOptionalRepoKind,
   getOptionalStringFlag,
+  getOptionalStringFlagAllowingEmpty,
   getRequiredStringFlag
 } from '../arguments/flags'
 import { resolveRepoPathArgument } from './repo-path-arguments'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { attachCliErrorData } from '../workspaces/worktree-setup-decision-recovery'
 import { resolveHostFlagTarget } from '../hosts/execution-host-flag'
+import type { Repo } from '../../shared/repository/repo-types'
+import { getRepoSetupAgentStartupPolicy } from '../../shared/workspace-setup/repo-hook-settings-defaults'
 
 /** `inherit` clears the pick; anything else must name a profile on the repo's Orca host. */
 async function resolveBrowserProfileFlag(
@@ -33,6 +36,60 @@ async function resolveBrowserProfileFlag(
     )
   }
   return value
+}
+
+function getOptionalChoiceFlag<const T extends string>(
+  flags: Map<string, string | boolean>,
+  name: string,
+  choices: readonly T[]
+): T | undefined {
+  // An empty value is an error, not an omitted flag, so it cannot be skipped silently.
+  const value = getOptionalStringFlagAllowingEmpty(flags, name)
+  if (value === undefined) {
+    return undefined
+  }
+  const choice = choices.find((entry) => entry === value)
+  if (choice !== undefined) {
+    return choice
+  }
+  const listed =
+    choices.length === 2
+      ? choices.join(' or ')
+      : `${choices.slice(0, -1).join(', ')}, or ${choices.at(-1)}`
+  throw new RuntimeClientError('invalid_argument', `--${name} must be ${listed}.`)
+}
+
+type RepoSetResultRow = Record<string, unknown> &
+  Pick<Repo, 'browserProfileId' | 'hookSettings' | 'workspaceCleanupPolicy'>
+
+type RepoSetSetting = {
+  saved: string
+  unsupported?: string
+  requested: boolean
+  applied: boolean
+}
+
+function listPhrases(phrases: string[]): string {
+  return phrases.length < 3
+    ? phrases.join(' and ')
+    : `${phrases.slice(0, -1).join(', ')}, and ${phrases.at(-1)}`
+}
+
+function assertRepoSetSaved(settings: RepoSetSetting[]): void {
+  const requested = settings.filter((setting) => setting.requested)
+  const dropped = requested.filter((setting) => !setting.applied)
+  if (dropped.length === 0) {
+    return
+  }
+  const saved = requested.filter((setting) => setting.applied).map((setting) => setting.saved)
+  const savedClause =
+    saved.length === 0
+      ? ''
+      : `, so only ${listPhrases(saved)} ${saved.length === 1 ? 'was' : 'were'} saved`
+  throw new RuntimeClientError(
+    'incompatible_runtime',
+    `This Orca host does not support ${listPhrases(dropped.map((setting) => setting.unsupported ?? setting.saved))}${savedClause}. Update Orca on that host.`
+  )
 }
 
 async function setRepoHidden(
@@ -86,50 +143,68 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
   },
   'repo set': async ({ flags, client, json }) => {
     const repo = getRequiredStringFlag(flags, 'repo')
-    const visibility = getOptionalStringFlag(flags, 'external-worktree-visibility')
+    const visibility = getOptionalChoiceFlag(flags, 'external-worktree-visibility', [
+      'show',
+      'hide',
+      'inherit'
+    ])
     const browserProfile = getOptionalStringFlag(flags, 'browser-profile')
-    if (visibility === undefined && browserProfile === undefined) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        'Pass --external-worktree-visibility or --browser-profile.'
-      )
-    }
+    const setupAgentStartup = getOptionalChoiceFlag(flags, 'setup-agent-startup', [
+      'wait-for-setup',
+      'start-immediately'
+    ])
+    const workspaceCleanup = getOptionalChoiceFlag(flags, 'workspace-cleanup', ['off', 'inherit'])
     if (
-      visibility !== undefined &&
-      visibility !== 'show' &&
-      visibility !== 'hide' &&
-      visibility !== 'inherit'
+      visibility === undefined &&
+      browserProfile === undefined &&
+      setupAgentStartup === undefined &&
+      workspaceCleanup === undefined
     ) {
       throw new RuntimeClientError(
         'invalid_argument',
-        '--external-worktree-visibility must be show, hide, or inherit.'
+        'Pass --external-worktree-visibility, --browser-profile, --setup-agent-startup, or --workspace-cleanup.'
       )
     }
     const browserProfileId =
       browserProfile === undefined
         ? undefined
         : await resolveBrowserProfileFlag(client, browserProfile)
-    const result = await client.call<{ repo: Record<string, unknown> }>('repo.update', {
+    const result = await client.call<{ repo: RepoSetResultRow }>('repo.update', {
       repo,
       updates: {
         ...(visibility === undefined
           ? {}
           : { externalWorktreeVisibility: visibility === 'inherit' ? null : visibility }),
-        ...(browserProfileId === undefined ? {} : { browserProfileId })
+        ...(browserProfileId === undefined ? {} : { browserProfileId }),
+        ...(setupAgentStartup === undefined ? {} : { setupAgentStartupPolicy: setupAgentStartup }),
+        ...(workspaceCleanup === undefined
+          ? {}
+          : { workspaceCleanupPolicy: workspaceCleanup === 'off' ? { mode: 'off' } : null })
       }
     })
-    // A host from before per-repo browser profiles drops the field and still answers with its row.
-    if (
-      browserProfileId !== undefined &&
-      (result.result.repo.browserProfileId ?? null) !== browserProfileId
-    ) {
-      throw new RuntimeClientError(
-        'incompatible_runtime',
-        visibility === undefined
-          ? 'This Orca host does not support per-repo browser profiles. Update Orca on that host.'
-          : 'This Orca host does not support per-repo browser profiles, so only the worktree visibility was saved. Update Orca on that host.'
-      )
-    }
+    const row = result.result.repo
+    // A host from before a setting drops its field and still answers with its row.
+    assertRepoSetSaved([
+      { saved: 'the worktree visibility', requested: visibility !== undefined, applied: true },
+      {
+        saved: 'the browser profile',
+        unsupported: 'per-repo browser profiles',
+        requested: browserProfileId !== undefined,
+        applied: (row.browserProfileId ?? null) === browserProfileId
+      },
+      {
+        saved: 'the agent startup policy',
+        unsupported: 'per-repo agent startup policies',
+        requested: setupAgentStartup !== undefined,
+        applied: getRepoSetupAgentStartupPolicy(row) === setupAgentStartup
+      },
+      {
+        saved: 'the workspace cleanup setting',
+        unsupported: 'per-repo workspace cleanup',
+        requested: workspaceCleanup !== undefined,
+        applied: (row.workspaceCleanupPolicy?.mode ?? 'inherit') === workspaceCleanup
+      }
+    ])
     printResult(result, json, formatRepoShow)
   },
   'repo hide': (context) => setRepoHidden(context, true),

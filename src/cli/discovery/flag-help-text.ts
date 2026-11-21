@@ -5,6 +5,10 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
     '--external-worktree-visibility show|hide|inherit  Override or inherit non-Orca worktree visibility',
   'browser-profile':
     '--browser-profile <id>|inherit  Browser profile for new tabs in this repo, or inherit the Browser setting',
+  'setup-agent-startup':
+    "--setup-agent-startup wait-for-setup|start-immediately  Start a new workspace's agent after setup finishes, or at once",
+  'workspace-cleanup':
+    "--workspace-cleanup off|inherit  Turn off automatic workspace cleanup for this repo, or follow the host's rules",
   agent: '--agent <id>          Launch a known TUI agent in the first terminal',
   'agent-wait': "--agent-wait           Add each agent row's terminal wait verdict to JSON output",
   'base-branch': '--base-branch <ref>    Base branch/ref to create the worktree from',

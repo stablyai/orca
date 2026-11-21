@@ -27,18 +27,29 @@ export const REPO_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['repo', 'set'],
-    summary: "Set a repo's non-Orca worktree visibility or browser profile",
+    summary:
+      "Set a repo's non-Orca worktree visibility, browser profile, agent startup policy, or workspace cleanup",
     usage:
-      'orca repo set --repo <selector> [--external-worktree-visibility show|hide|inherit] [--browser-profile <id>|inherit] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'external-worktree-visibility', 'browser-profile'],
+      'orca repo set --repo <selector> [--external-worktree-visibility show|hide|inherit] [--browser-profile <id>|inherit] [--setup-agent-startup wait-for-setup|start-immediately] [--workspace-cleanup off|inherit] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'repo',
+      'external-worktree-visibility',
+      'browser-profile',
+      'setup-agent-startup',
+      'workspace-cleanup'
+    ],
     notes: [
       'show and hide override the global non-Orca worktree visibility default for this repo; inherit clears the override.',
       'Per-worktree visibility rules still apply.',
-      "--browser-profile picks the profile new browser tabs in this repo use, overriding the Browser setting's profile for new tabs; inherit clears it. Ids come from `orca tab profile list`; `default` is the Default profile."
+      "--browser-profile picks the profile new browser tabs in this repo use, overriding the Browser setting's profile for new tabs; inherit clears it. Ids come from `orca tab profile list`; `default` is the Default profile.",
+      "--setup-agent-startup wait-for-setup starts a new workspace's agent only after its setup script finishes; start-immediately (the default) runs both at once. An orca.yaml setupAgentStartupPolicy of wait-for-setup still waits.",
+      "--workspace-cleanup off stops automatic workspace cleanup for this repo; inherit follows the host's Workspace Cleanup rules again. `repo show --json` reports the override as workspaceCleanupPolicy."
     ],
     examples: [
       'orca repo set --repo path:/path/to/repo --external-worktree-visibility show --json',
-      'orca repo set --repo name:acme-web --browser-profile <profileId> --json'
+      'orca repo set --repo name:acme-web --browser-profile <profileId> --json',
+      'orca repo set --repo name:acme-web --setup-agent-startup wait-for-setup --workspace-cleanup off --json'
     ]
   },
   {
