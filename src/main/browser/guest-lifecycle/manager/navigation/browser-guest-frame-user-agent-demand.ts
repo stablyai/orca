@@ -2,8 +2,10 @@ import { webFrameMain } from 'electron'
 import { getBrowserProcessUserAgentIdentity } from '../../../identity/browser-process-user-agent'
 import { resolveBrowserTabIdentity } from '../../../identity/browser-tab-identity'
 import {
+  clearBrowserGuestUserAgentDemand,
   getBrowserGuestFrameUserAgentDemand,
-  setBrowserGuestFrameUserAgentDemand
+  setBrowserGuestFrameUserAgentDemand,
+  setBrowserGuestPageUserAgentDemand
 } from '../../../identity/requests/browser-session-ua-demand'
 import { rewritesRequestHeaders } from './browser-manager-navigation'
 
@@ -13,7 +15,7 @@ const REMOVAL_CHECK_DELAY_MS = 250
 // pending check earns one more pass in case its frame left the tree after that check.
 const removalChecks = new Map<number, { again: boolean }>()
 
-function subframeRewritesRequestHeaders(url: string): boolean {
+function defaultIdentityRewritesRequestHeaders(url: string): boolean {
   return rewritesRequestHeaders(
     url,
     resolveBrowserTabIdentity({
@@ -30,7 +32,7 @@ export function noteBrowserGuestSubframeNavigation(
   url: string,
   frame: Electron.WebFrameMain | null | undefined
 ): void {
-  if (frame && subframeRewritesRequestHeaders(url)) {
+  if (frame && defaultIdentityRewritesRequestHeaders(url)) {
     setBrowserGuestFrameUserAgentDemand(guest.session, guest.id, frame.frameTreeNodeId, true)
   }
 }
@@ -48,7 +50,7 @@ export function settleBrowserGuestSubframe(
   if (!frame || guest.isDestroyed()) {
     return
   }
-  const demanding = frame.origin !== 'null' && subframeRewritesRequestHeaders(frame.url)
+  const demanding = frame.origin !== 'null' && defaultIdentityRewritesRequestHeaders(frame.url)
   setBrowserGuestFrameUserAgentDemand(guest.session, guest.id, frame.frameTreeNodeId, demanding)
 }
 
@@ -78,7 +80,8 @@ function scheduleRemovalCheck(guest: Electron.WebContents): void {
   removalChecks.set(guest.id, check)
   const timer = setTimeout(() => {
     removalChecks.delete(guest.id)
-    if (guest.isDestroyed()) {
+    // A commit or settle since scheduling may have cleared every site iframe; skip the tree walk.
+    if (guest.isDestroyed() || getBrowserGuestFrameUserAgentDemand(guest.id).size === 0) {
       return
     }
     try {
@@ -96,4 +99,33 @@ function scheduleRemovalCheck(guest: Electron.WebContents): void {
     }
   }, REMOVAL_CHECK_DELAY_MS)
   timer.unref?.()
+}
+
+/**
+ * Route popups skip the tab manager, so their page demand is noted here: a navigation's target
+ * needs rewrites from its first request, and the committed page until the next commit.
+ */
+export function trackBrowserPopupUserAgentDemand(contents: Electron.WebContents): void {
+  const { id, session } = contents
+  const onStart = (details: Electron.Event<{ url: string; isMainFrame: boolean }>): void => {
+    if (details.isMainFrame) {
+      setBrowserGuestPageUserAgentDemand(
+        session,
+        id,
+        defaultIdentityRewritesRequestHeaders(details.url) ||
+          defaultIdentityRewritesRequestHeaders(contents.getURL())
+      )
+    }
+  }
+  contents.on('did-start-navigation', onStart)
+  contents.on('did-redirect-navigation', onStart)
+  contents.on('did-navigate', () => {
+    setBrowserGuestPageUserAgentDemand(
+      session,
+      id,
+      defaultIdentityRewritesRequestHeaders(contents.getURL()),
+      'clear'
+    )
+  })
+  contents.once('destroyed', () => clearBrowserGuestUserAgentDemand(id))
 }
