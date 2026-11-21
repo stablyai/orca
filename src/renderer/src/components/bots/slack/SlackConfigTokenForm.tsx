@@ -5,12 +5,8 @@ import { DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useTranslate } from '@/i18n/use-translate'
-import { openBotHostPageOrSay } from '@/lib/bot-host-page'
 import { SLACK_CONFIG_REFRESH_TOKEN_PREFIX } from '../../../../../shared/connector-bot-slack-contract'
-import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-
-// Where Slack lists "Your App Configuration Tokens".
-const SLACK_APPS_URL = 'https://api.slack.com/apps'
+import { openSlackAppsHere } from './slack-page-here'
 
 // Slack shows two tokens side by side; the access token is the one Orca can't keep using.
 const SLACK_CONFIG_ACCESS_TOKEN_PREFIX = 'xoxe.xoxp-'
@@ -29,22 +25,27 @@ export function slackConfigTokenKind(text: string): 'refresh' | 'access' | null 
 }
 
 /** Paste a workspace's configuration refresh token; it is cleared the moment it is sent. Slack's
- *  page opens on the host, so the token is made with that computer's own Slack login. */
+ *  page opens in this computer's browser whatever computer the bot is on: the person here makes the
+ *  token with their own Slack login, and the page has no return to the host. */
 export function SlackConfigTokenForm({
-  hostId,
   submitLabel,
   busy,
   error,
   onSubmit,
-  aside
+  aside,
+  compact = false,
+  onCancel
 }: {
-  hostId: ExecutionHostId
   submitLabel: string
   busy: boolean
   error: string | null
   onSubmit: (token: string) => void
   /** A quiet line above the steps, such as another way to get the app. */
   aside?: React.ReactNode
+  /** Reconnecting a workspace: short steps with Slack's page as a link, the field without its label. */
+  compact?: boolean
+  /** A Cancel beside the submit button. */
+  onCancel?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const inputId = useId()
@@ -79,6 +80,18 @@ export function SlackConfigTokenForm({
       setAccessPasted(true)
     }
     return kind !== null
+  }
+
+  const openSlack = (): void => {
+    // The copied token is looked for only once this computer's browser took Slack's page, and only
+    // if nothing was read, typed or sent since this launch began: a late launch never re-arms a
+    // read over what the user has. A launch that failed never cancels one another launch armed.
+    const since = reads.current
+    void openSlackAppsHere().then((opened) => {
+      if (opened && reads.current === since) {
+        awaitingCopy.current = true
+      }
+    })
   }
 
   useEffect(
@@ -120,41 +133,49 @@ export function SlackConfigTokenForm({
       }}
     >
       {aside}
-      <Button
-        type="button"
-        variant="outline"
-        className="w-full"
-        onClick={() => {
-          awaitingCopy.current =
-            openBotHostPageOrSay(hostId, SLACK_APPS_URL, { local: 'system' }) !== 'unrouted'
-        }}
-      >
-        {t('bots.slack.token.open', 'Get config token')}
-        <ExternalLink />
-      </Button>
-      <ol className="list-decimal space-y-1.5 pl-5 text-sm">
-        <li>
-          {t(
-            'bots.slack.token.step1',
-            'In Slack app settings, find “Your App Configuration Tokens” and choose Generate Token.'
-          )}
-        </li>
-        <li>{t('bots.slack.token.step2', 'Select the workspace for your bot.')}</li>
-        <li>{t('bots.slack.token.step3', 'Copy the Refresh Token and paste it below.')}</li>
-      </ol>
-      <p className="text-sm text-muted-foreground">
-        {t(
-          'bots.slack.token.kept',
-          'Orca Cloud keeps this token encrypted, so your next bots in this workspace need one click.'
-        )}
-      </p>
+      {compact ? (
+        <ol className="list-decimal space-y-1 pl-5 text-sm">
+          <li>
+            <Button type="button" variant="link" size="inline" onClick={openSlack}>
+              {t('bots.slack.token.openSettings', 'Open Slack app settings')}
+              <ExternalLink />
+            </Button>
+          </li>
+          <li>{t('bots.slack.token.generate', 'Generate a token for this workspace')}</li>
+          <li>{t('bots.slack.token.copyRefresh', 'Copy the Refresh Token')}</li>
+        </ol>
+      ) : (
+        <>
+          <Button type="button" variant="outline" className="w-full" onClick={openSlack}>
+            {t('bots.slack.token.open', 'Get config token')}
+            <ExternalLink />
+          </Button>
+          <ol className="list-decimal space-y-1.5 pl-5 text-sm">
+            <li>
+              {t(
+                'bots.slack.token.step1',
+                'In Slack app settings, find “Your App Configuration Tokens” and choose Generate Token.'
+              )}
+            </li>
+            <li>{t('bots.slack.token.step2', 'Select the workspace for your bot.')}</li>
+            <li>{t('bots.slack.token.step3', 'Copy the Refresh Token and paste it below.')}</li>
+          </ol>
+          <p className="text-sm text-muted-foreground">
+            {t(
+              'bots.slack.token.kept',
+              'Orca Cloud keeps this token encrypted, so your next bots in this workspace need one click.'
+            )}
+          </p>
+        </>
+      )}
       <div className="space-y-1.5">
-        <Label htmlFor={inputId}>
+        <Label htmlFor={inputId} className={compact ? 'sr-only' : undefined}>
           {t('bots.slack.token.label', 'Configuration refresh token')}
         </Label>
         <Input
           id={inputId}
           type="password"
+          placeholder={compact ? `${SLACK_CONFIG_REFRESH_TOKEN_PREFIX}…` : undefined}
           autoComplete="off"
           spellCheck={false}
           value={token}
@@ -183,6 +204,11 @@ export function SlackConfigTokenForm({
         ) : null}
       </div>
       <DialogFooter>
+        {onCancel ? (
+          <Button type="button" variant="outline" onClick={onCancel}>
+            {t('bots.slack.setup.cancel', 'Cancel')}
+          </Button>
+        ) : null}
         <Button type="submit" disabled={busy || !trimmed}>
           {submitLabel}
         </Button>

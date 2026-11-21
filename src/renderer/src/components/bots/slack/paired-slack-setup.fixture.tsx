@@ -54,14 +54,27 @@ type Scene = {
   serverEmail?: string
   mineInLabs?: boolean
   handOffPending?: boolean
+  /** The longest bot, computer and account names, to check they end in an ellipsis. */
+  long?: boolean
+  /** setUpApp answers with this link instead of Slack's own page. */
+  authorizeUrl?: string
 }
+
+const LONG_EMAIL = 'alexandra.konstantinopoulou-whitfield@engineering.example.com'
+const longBot = stampBotHost('runtime:m4', {
+  ...base,
+  name: 'Eng - Reviewer - Official - Weekend Release Train Watcher'
+})
 
 // The web preload's namespace, kept apart from the methods a scene answers.
 const existing = (value: unknown): object => (typeof value === 'object' && value ? value : {})
 
 function stub(scene: Scene): void {
   publishBots(scene.mineInLabs ? [mine, mineInLabs] : [mine])
-  const teamNames: Record<string, string> = { T1: 'Acme', T2: 'Acme Labs' }
+  const teamNames: Record<string, string> = {
+    T1: scene.long ? 'Acme Platform Engineering and Developer Experience' : 'Acme',
+    T2: 'Acme Labs'
+  }
   Reflect.set(window.api, 'runtime', {
     ...existing(window.api.runtime),
     call: async ({ method, params }: { method: string; params?: { botId?: string } }) => {
@@ -90,7 +103,7 @@ function stub(scene: Scene): void {
         case 'status.get':
           return createCompatibleRuntimeStatusResponse('m4')
         case 'bots.list':
-          return answered({ bots: [base] })
+          return answered({ bots: [scene.long ? longBot : base] })
         case 'orcaAccount.status':
           return answered({ state: 'signed-in', email: scene.serverEmail ?? 'm4air@example.com' })
         case 'bots.slack.state':
@@ -98,7 +111,7 @@ function stub(scene: Scene): void {
         case 'bots.slack.setUpApp':
           return ok({
             appId: 'A1',
-            authorizeUrl: AUTHORIZE,
+            authorizeUrl: scene.authorizeUrl ?? AUTHORIZE,
             expiresAt: Date.now() + (scene.expiresInMs ?? 30 * 60_000)
           })
         case 'bots.slack.handOff':
@@ -156,20 +169,51 @@ async function whenShown(text: string, click?: string): Promise<void> {
   }
 }
 
-const dialog = () => (
+const longStore = {
+  ...store,
+  runtimeEnvironments: [{ ...m4, name: 'm4-air-build-server-in-the-upstairs-closet' }],
+  orcaProfileAuthStatus: {
+    ...store.orcaProfileAuthStatus,
+    cloud: { ...store.orcaProfileAuthStatus.cloud, email: LONG_EMAIL }
+  }
+}
+
+const dialog = (bot: Bot) => () => (
   <ConfirmationDialogProvider>
-    <BotSlackSetupDialog bot={serverBot} open onOpenChange={() => {}} />
+    <BotSlackSetupDialog bot={bot} open onOpenChange={() => {}} />
   </ConfirmationDialogProvider>
 )
 
-function scene(fields: Scene, interact: () => Promise<void>) {
+/** `width`: the dialog's, from its narrowest (340) to its widest (512); none leaves it as drawn. */
+function scene(fields: Scene, interact: () => Promise<void>, width?: number) {
   return defineFixture({
     width: 720,
-    store,
+    store: fields.long ? longStore : store,
     setup: () => stub(fields),
-    render: dialog,
-    interact
+    render: dialog(fields.long ? longBot : serverBot),
+    interact: async () => {
+      // Portaled and centred in the page whatever the frame's width, so the dialog is sized itself.
+      const content = document.querySelector<HTMLElement>('[data-slot="dialog-content"]')
+      if (content && width !== undefined) {
+        content.style.maxWidth = `${width}px`
+      }
+      await interact()
+    }
   })
+}
+
+async function clickButton(name: RegExp): Promise<void> {
+  ;[...document.querySelectorAll('button')]
+    .find((candidate) => name.test(candidate.textContent ?? ''))
+    ?.click()
+  await new Promise((resolve) => setTimeout(resolve, 100))
+}
+
+// Opened from the keyboard, as a Tab onto it does.
+async function openWhy(): Promise<void> {
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
+  document.querySelector<HTMLButtonElement>('button[aria-label="About Slack tokens"]')?.focus()
+  await new Promise((resolve) => setTimeout(resolve, 300))
 }
 
 // Today's dialog, unchanged: the server is on this desktop's own account.
@@ -210,6 +254,15 @@ export const waitingCopied = scene(
   }
 )
 
+// The server's link isn't Slack's own page: refused before Approve or Copy link exist.
+export const notSlackLink = scene(
+  {
+    server: { state: 'created', teamId: 'T1', appId: 'A1' },
+    authorizeUrl: 'https://approve.example.test/oauth/v2/authorize'
+  },
+  () => whenShown('Try again')
+)
+
 export const expired = scene(
   { server: { state: 'created', teamId: 'T1', appId: 'A1' }, expiresInMs: -1 },
   () => whenShown('expired')
@@ -221,4 +274,60 @@ export const otherUser = scene(
     await whenShown('Approve in Slack', 'Copy link')
     await whenShown('Another Slack account')
   }
+)
+
+// The server's token lapsed in a workspace this desktop's own account has one for: Use it first.
+const lapsed: Scene = { server: { state: 'grant_expired', teamId: 'T1' } }
+const lapsedLong: Scene = { ...lapsed, long: true }
+// No working token anywhere: the server is on this desktop's own account, so nothing is offered.
+const lapsedNone: Scene = { ...lapsed, serverEmail: 'alice@example.com' }
+const lapsedNoneLong: Scene = { ...lapsedNone, long: true, serverEmail: LONG_EMAIL }
+
+export const reconnectUse = scene(lapsed, () => whenShown('Use it'), 480)
+export const reconnectUse340 = scene(lapsed, () => whenShown('Use it'), 340)
+export const reconnectUseLong340 = scene(lapsedLong, () => whenShown('Use it'), 340)
+export const reconnectUseLong480 = scene(lapsedLong, () => whenShown('Use it'), 480)
+export const reconnectUseWhy340 = scene(
+  lapsedLong,
+  async () => {
+    await whenShown('Use it')
+    await openWhy()
+  },
+  340
+)
+export const reconnectUsePaste340 = scene(
+  lapsedLong,
+  async () => {
+    await whenShown('Use it')
+    await clickButton(/Paste a token instead/)
+  },
+  340
+)
+export const reconnectUsePaste480 = scene(
+  lapsedLong,
+  async () => {
+    await whenShown('Use it')
+    await clickButton(/Paste a token instead/)
+  },
+  480
+)
+export const reconnectPaste = scene(lapsedNone, () => whenShown('Paste a new token'), 480)
+export const reconnectPaste340 = scene(lapsedNone, () => whenShown('Paste a new token'), 340)
+export const reconnectPasteLong340 = scene(
+  lapsedNoneLong,
+  () => whenShown('Paste a new token'),
+  340
+)
+export const reconnectPasteLong480 = scene(
+  lapsedNoneLong,
+  () => whenShown('Paste a new token'),
+  480
+)
+export const reconnectPasteWhy340 = scene(
+  lapsedNoneLong,
+  async () => {
+    await whenShown('Paste a new token')
+    await openWhy()
+  },
+  340
 )

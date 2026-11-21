@@ -28134,8 +28134,6 @@
         "checking": "正在检查 Slack…",
         "retry": "重试",
         "settingUp": "正在设置你的 Slack 应用…",
-        "reconnect": "Slack 已不再接受此工作区的令牌。粘贴新令牌以重新连接。",
-        "reconnectSubmit": "重新连接 Slack 工作区",
         "create": "创建 Slack 应用",
         "waiting": "正在等待 Slack…",
         "waitingDetail": "请在 Slack 中完成安装。如果你的工作区需要管理员批准新应用，{{name}} 会在获批后加入。如果管理员拒绝，点击“重新安装”会复用同一个应用。",
@@ -28219,7 +28217,6 @@
       "handOff": {
         "confirmMac": "这台 Mac 上的 Orca 会使用 {{email}} 的令牌创建 Slack 应用。{{host}} 只会获得此机器人的应用。",
         "confirm": "这台电脑上的 Orca 会使用 {{email}} 的令牌创建 Slack 应用。{{host}} 只会获得此机器人的应用。",
-        "reconnect": "Slack 已不再接受 {{email}} 为此工作区保存的令牌。粘贴新令牌以重新连接。",
         "offerMac": "这台 Mac 上的 Orca 已登录 {{email}}，此账号已有 {{workspace}} 的令牌。",
         "offer": "这台电脑上的 Orca 已登录 {{email}}，此账号已有 {{workspace}} 的令牌。",
         "use": "使用此令牌 →"

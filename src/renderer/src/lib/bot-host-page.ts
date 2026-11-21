@@ -1,7 +1,9 @@
 // Where a sign-in page for a host's bots opens. This app's own bots: as before. A paired server's
 // bots: always in that server's own page in Orca's browser, whatever the link setting says, so the
 // page has the server's own logins and its traffic, a 127.0.0.1 return included, goes through the
-// server. The link setting still picks foreground or background there.
+// server. The link setting still picks foreground or background there. Slack's token and install
+// pages have no return to the server, so their callers open them with this computer's host id, in
+// the browser of the person here.
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'

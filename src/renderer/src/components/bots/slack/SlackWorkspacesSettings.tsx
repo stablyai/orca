@@ -148,7 +148,6 @@ function ReconnectDialog({
           </DialogDescription>
         </DialogHeader>
         <SlackConfigTokenForm
-          hostId={hostId}
           submitLabel={t('bots.slack.workspaces.reconnect', 'Reconnect')}
           busy={busy}
           error={error}

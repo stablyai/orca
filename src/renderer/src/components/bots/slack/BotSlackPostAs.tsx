@@ -12,7 +12,6 @@ import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { botSlackCalls } from '@/lib/bot-connector-host-calls'
-import { openBotHostPageOrSay } from '@/lib/bot-host-page'
 import { refreshBotSlack } from '@/lib/bot-slack-state'
 import { useBotHostOrcaAccount } from '@/lib/bot-host-orca-account'
 import type { Bot } from '../../../../../shared/bot-types'
@@ -23,6 +22,7 @@ import type {
 import { ConnectorAvatar } from '@/components/ConnectorAvatar'
 import { useBotHostLabel } from '../use-bot-host-label'
 import { botSlackErrorMessage } from './bot-slack-copy'
+import { openSlackApprovalHere } from './slack-page-here'
 import { SlackPersonPlaceholder } from './SlackPersonPlaceholder'
 
 type Installed = Extract<ConnectorBotSlackState, { state: 'installed' }>
@@ -100,14 +100,17 @@ export function BotSlackPostAs({
   const requestApproval = async (choice: SlackPostAs): Promise<void> => {
     setBusy(true)
     const result = await calls.setPostAs({ botId: bot.id, teamId, postAs: choice })
-    setBusy(false)
     if (!result.ok) {
+      setBusy(false)
       failed(result.error)
       return
     }
+    // Busy until the browser answers, so a second click can't launch Slack's page again. A failed
+    // launch says so, and Approve in Slack comes back to try again.
     if (result.value && 'authorizeUrl' in result.value) {
-      openBotHostPageOrSay(bot.hostId, result.value.authorizeUrl, { bot, local: 'system' })
+      await openSlackApprovalHere(result.value.authorizeUrl)
     }
+    setBusy(false)
     await refreshBotSlack(bot)
   }
 
