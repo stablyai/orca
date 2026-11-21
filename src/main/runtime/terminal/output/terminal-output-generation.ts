@@ -177,7 +177,7 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
       settle('unavailable')
       return
     }
-    request.then(settle, () => settle('unavailable'))
+    request.then(settle, () => settle('not-sent'))
   }
 
   synchronizePtyOutputSequenceFromProvider(

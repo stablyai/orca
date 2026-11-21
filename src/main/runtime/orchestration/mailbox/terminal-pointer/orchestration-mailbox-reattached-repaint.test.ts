@@ -131,4 +131,16 @@ describe('mail held by a reattached idle agent', () => {
     expect(worker.alerts()).toHaveLength(1)
     worker.db.close()
   })
+
+  it('raises nothing when the repaint request fails, as before', async () => {
+    const worker = await reattachedIdleWorker({ repaint: ['nudged'] })
+    worker.requestRepaint.mockReset().mockRejectedValue(new Error('daemon unreachable'))
+    worker.send('While the daemon is unreachable')
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(worker.requestRepaint).toHaveBeenCalledTimes(1)
+    expect(pointerCount(worker.write)).toBe(0)
+    expect(worker.alerts()).toEqual([])
+    worker.db.close()
+  })
 })

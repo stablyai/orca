@@ -18,7 +18,7 @@ export async function requestRepaintFromRuntimeController(
   try {
     return (await getProviderForPty(ptyId).requestRepaint?.(ptyId)) ?? 'unavailable'
   } catch {
-    // No provider owns this PTY any more, or its host refused.
-    return 'unavailable'
+    // No provider owns this PTY any more, or the request failed: nobody was asked, as before.
+    return 'not-sent'
   }
 }

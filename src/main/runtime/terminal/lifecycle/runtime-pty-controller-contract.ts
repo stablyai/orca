@@ -34,7 +34,7 @@ import type { StartupCwdFallback } from '../../../../shared/shell/launch/startup
 import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
 import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 
-/** `not-sent`: a phone or remote desktop drives the grid and repaints the program itself. */
+/** `not-sent`: nobody was asked (a phone or remote desktop drives the grid, or the request failed). */
 export type RuntimeRepaintResult = 'nudged' | 'unavailable' | 'not-sent'
 export type PtyInventoryRefreshOptions = {
   includeForegroundProcessEvidence?: boolean

@@ -36,6 +36,8 @@ export class TerminalCommandPaint {
   private repaintOffered = false
   /** This reattach's host answered that it cannot ask the program to redraw. */
   private repaintUnavailable = false
+  /** Restores still reading whether the quit proves the retained frame. */
+  private restoreProofsPending = 0
   /** The last read finished a command and started the next. Its reports are stamped after this
    *  observer runs, so none of them count; at the next read they are retired by identity (a
    *  millisecond clock cannot order them) and that read's arrival starts the new command. */
@@ -231,9 +233,22 @@ export class TerminalCommandPaint {
     this.repaintUnavailable ||= result === 'unavailable'
   }
 
-  /** The reattach fence still waits for a paint its host cannot ask for. */
+  beginRestoreProof(): void {
+    this.restoreProofsPending += 1
+  }
+
+  settleRestoreProof(): void {
+    this.restoreProofsPending -= 1
+  }
+
+  /** The reattach fence still waits for a paint its host cannot ask for, and no proof is pending. */
   awaitsPaintNoHostCanRequest(): boolean {
-    return this.repaintUnavailable && this.awaitingPaint && this.awaitsReattachedCommand()
+    return (
+      this.repaintUnavailable &&
+      this.restoreProofsPending === 0 &&
+      this.awaitingPaint &&
+      this.awaitsReattachedCommand()
+    )
   }
 
   /** Whether the agent's own report at `observedAt` speaks for the command now running. */
