@@ -1156,7 +1156,8 @@
         "permissionAuto": "Benim yerime onayla",
         "permissionFullAccess": "Tam erişim",
         "permissionAgentSettings": "{{agent}} ayarları",
-        "permissionAgentSettingsHint": "{{agent}} izin ayarlarınızı kullanır. Mod, ilk mesajınızdan sonra görünür.",
+        "permissionAgentSettingsUsedHint": "{{agent}} izin ayarlarınızı kullanır.",
+        "permissionAgentSettingsUnnamedHint": "{{agent}} izin ayarlarınızı kullanır. Orca bu modu gösteremiyor.",
         "permissionFromAgentSettings": "{{mode}}, {{agent}} ayarlarından"
       },
       "goal": {

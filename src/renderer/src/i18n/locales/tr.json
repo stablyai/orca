@@ -19670,6 +19670,8 @@
         "permissionFullAccess": "Tam erişim",
         "permissionAgentSettings": "{{agent}} ayarları",
         "permissionAgentSettingsHint": "{{agent}} izin ayarlarınızı kullanır. Mod, ilk mesajınızdan sonra görünür.",
+        "permissionAgentSettingsUsedHint": "{{agent}} izin ayarlarınızı kullanır.",
+        "permissionAgentSettingsUnnamedHint": "{{agent}} izin ayarlarınızı kullanır. Orca bu modu gösteremiyor.",
         "permissionFromAgentSettings": "{{mode}}, {{agent}} ayarlarından",
         "permissionFullAccessDescription": "Düzenleme veya komutlardan önce asla sormaz",
         "permissionFullAccessCodexDescription": "Asla sormaz; tüm dosyaları düzenleyebilir ve ağı kullanabilir",

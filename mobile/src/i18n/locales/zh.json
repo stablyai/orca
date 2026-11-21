@@ -1335,7 +1335,8 @@
         "permissionAuto": "替我批准",
         "permissionFullAccess": "完全访问",
         "permissionAgentSettings": "{{agent}} 设置",
-        "permissionAgentSettingsHint": "使用你的 {{agent}} 权限设置。发送第一条消息后会显示模式。",
+        "permissionAgentSettingsUsedHint": "使用你的 {{agent}} 权限设置。",
+        "permissionAgentSettingsUnnamedHint": "使用你的 {{agent}} 权限设置。Orca 无法显示此模式。",
         "permissionFromAgentSettings": "{{mode}}，来自 {{agent}} 设置"
       },
       "goal": {

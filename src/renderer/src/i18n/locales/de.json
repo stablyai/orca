@@ -19520,6 +19520,8 @@
         "permissionFullAccess": "Vollzugriff",
         "permissionAgentSettings": "{{agent}}-Einstellungen",
         "permissionAgentSettingsHint": "Verwendet deine Berechtigungseinstellungen für {{agent}}. Der Modus erscheint nach deiner ersten Nachricht.",
+        "permissionAgentSettingsUsedHint": "Verwendet deine Berechtigungseinstellungen für {{agent}}.",
+        "permissionAgentSettingsUnnamedHint": "Verwendet deine Berechtigungseinstellungen für {{agent}}. Orca kann diesen Modus nicht anzeigen.",
         "permissionFromAgentSettings": "{{mode}}, aus den {{agent}}-Einstellungen",
         "permissionFullAccessDescription": "Fragt nie vor Änderungen oder Befehlen",
         "permissionFullAccessCodexDescription": "Fragt nie nach; kann jede Datei bearbeiten und das Netzwerk nutzen",

@@ -19254,6 +19254,8 @@
         "permissionFullAccess": "完整存取權",
         "permissionAgentSettings": "{{agent}} 設定",
         "permissionAgentSettingsHint": "使用你的 {{agent}} 權限設定。傳送第一則訊息後會顯示模式。",
+        "permissionAgentSettingsUsedHint": "使用你的 {{agent}} 權限設定。",
+        "permissionAgentSettingsUnnamedHint": "使用你的 {{agent}} 權限設定。Orca 無法顯示此模式。",
         "permissionFromAgentSettings": "{{mode}}，來自 {{agent}} 設定",
         "permissionFullAccessDescription": "編輯或執行命令前從不詢問",
         "permissionFullAccessCodexDescription": "從不詢問；可以編輯任何檔案並使用網路",

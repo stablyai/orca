@@ -90,6 +90,31 @@ describe('the permission mode picker', () => {
     expect(explicit?.kind).not.toHaveProperty('reportedValue')
   })
 
+  it('expects a report only before the first message of an agent that states its start mode', () => {
+    const fresh = (agent: string) => ({
+      ...live(agent, { permissionMode: 'ask' }),
+      permissionOwnSupported: true,
+      permissionMode: 'own',
+      sessionNeverStarted: true
+    })
+    for (const agent of ['claude', 'codex']) {
+      expect(permission(fresh(agent))?.kind).toMatchObject({ reportPending: true })
+    }
+    const notPending = [
+      { ...fresh('claude'), sessionNeverStarted: false },
+      { ...fresh('claude'), sessionNeverStarted: undefined },
+      { ...fresh('claude'), permissionOwnSupported: null },
+      { ...fresh('claude'), reportedPermissionMode: 'read-only' },
+      { ...fresh('claude'), reportedPermissionMode: null },
+      { ...fresh('claude'), reportedPermissionMode: 'ask' },
+      { ...fresh('claude'), permissionMode: 'ask' },
+      fresh('opencode')
+    ]
+    for (const state of notPending) {
+      expect(permission(state)?.kind).not.toHaveProperty('reportPending')
+    }
+  })
+
   it("shows a newer child's report and keeps the read report over an older one", () => {
     const own = {
       ...live('claude', { permissionMode: 'ask' }),

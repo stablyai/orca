@@ -19165,6 +19165,8 @@
         "permissionFullAccess": "Acceso total",
         "permissionAgentSettings": "Configuración de {{agent}}",
         "permissionAgentSettingsHint": "Usa tu configuración de permisos de {{agent}}. El modo aparece después de tu primer mensaje.",
+        "permissionAgentSettingsUsedHint": "Usa tu configuración de permisos de {{agent}}.",
+        "permissionAgentSettingsUnnamedHint": "Usa tu configuración de permisos de {{agent}}. Orca no puede mostrar este modo.",
         "permissionFromAgentSettings": "{{mode}}, según la configuración de {{agent}}",
         "permissionFullAccessDescription": "Nunca pregunta antes de ediciones o comandos",
         "permissionFullAccessCodexDescription": "Nunca pregunta; puede editar cualquier archivo y usar la red",

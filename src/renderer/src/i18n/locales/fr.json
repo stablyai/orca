@@ -19436,6 +19436,8 @@
         "permissionFullAccess": "Accès complet",
         "permissionAgentSettings": "Paramètres de {{agent}}",
         "permissionAgentSettingsHint": "Utilise vos paramètres d’autorisation de {{agent}}. Le mode apparaît après votre premier message.",
+        "permissionAgentSettingsUsedHint": "Utilise vos paramètres d’autorisation de {{agent}}.",
+        "permissionAgentSettingsUnnamedHint": "Utilise vos paramètres d’autorisation de {{agent}}. Orca ne peut pas afficher ce mode.",
         "permissionFromAgentSettings": "{{mode}}, d’après les paramètres de {{agent}}",
         "permissionFullAccessDescription": "Ne demande jamais avant les modifications ou les commandes",
         "permissionFullAccessCodexDescription": "Ne demande jamais ; peut modifier n’importe quel fichier et utiliser le réseau",

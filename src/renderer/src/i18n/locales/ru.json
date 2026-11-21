@@ -20095,6 +20095,8 @@
         "permissionFullAccess": "Полный доступ",
         "permissionAgentSettings": "Настройки {{agent}}",
         "permissionAgentSettingsHint": "Использует ваши настройки разрешений {{agent}}. Режим появится после первого сообщения.",
+        "permissionAgentSettingsUsedHint": "Использует ваши настройки разрешений {{agent}}.",
+        "permissionAgentSettingsUnnamedHint": "Использует ваши настройки разрешений {{agent}}. Orca не может показать этот режим.",
         "permissionFromAgentSettings": "{{mode}}, из настроек {{agent}}",
         "permissionFullAccessDescription": "Не спрашивает перед правками и командами",
         "permissionFullAccessCodexDescription": "Не спрашивает разрешение; может менять любые файлы и использовать сеть",

@@ -9,7 +9,10 @@ import {
   isAgentChatPermissionMode,
   type AgentChatPermissionMode
 } from '../../../../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
-import { agentPermissionSettingsSourceName } from '../../../../../../src/shared/agent-launch/permissions/agent-permission-settings-source'
+import {
+  agentPermissionSettingsHint,
+  agentPermissionSettingsSourceName
+} from '../../../../../../src/shared/agent-launch/permissions/agent-permission-settings-source'
 
 /** The value a drill-in row shows beside its label; desktop lists the choices in place instead. */
 export function mobileSessionOptionSummaryValue(descriptor: SessionOptionDescriptor): string {
@@ -130,20 +133,30 @@ function mobileAgentSettingsLabel(descriptor: SessionOptionDescriptor): string {
 export function mobilePermissionSettingsHint(
   descriptor: SessionOptionDescriptor | undefined
 ): string | undefined {
-  if (
-    descriptor?.kind.type !== 'select' ||
-    descriptor.kind.currentValue !== 'own' ||
-    descriptor.valueSource === 'dispatched' ||
-    isAgentChatPermissionMode(descriptor.kind.reportedValue) ||
-    descriptor.kind.reportedValue === 'plan'
-  ) {
+  if (descriptor?.kind.type !== 'select') {
     return undefined
   }
-  return translate(
-    'components.native-chat.composer.permissionAgentSettingsHint',
-    'Uses your {{agent}} permission settings. The mode appears after your first message.',
-    { agent: agentPermissionSettingsSourceName(descriptor.kind.settingsAgent) }
-  )
+  // Mobile can't tell whether a report is still coming, so a missing one promises nothing.
+  const hint = agentPermissionSettingsHint({
+    current: descriptor.kind.currentValue,
+    reported: descriptor.kind.reportedValue,
+    deferred: descriptor.valueSource === 'dispatched'
+  })
+  if (!hint) {
+    return undefined
+  }
+  const agent = agentPermissionSettingsSourceName(descriptor.kind.settingsAgent)
+  return hint === 'unnamed-report'
+    ? translate(
+        'components.native-chat.composer.permissionAgentSettingsUnnamedHint',
+        "Uses your {{agent}} permission settings. Orca can't show this mode.",
+        { agent }
+      )
+    : translate(
+        'components.native-chat.composer.permissionAgentSettingsUsedHint',
+        'Uses your {{agent}} permission settings.',
+        { agent }
+      )
 }
 
 /** A reported mode is not an explicit pick, so its spoken value says where it comes from. */

@@ -10,17 +10,12 @@ export type NativeChatComposerControl = {
   content: ReactNode
   /** Lower priorities give way first; absent pins a control beside Send. */
   priority?: number
-  /** Grows into spare row space; counts as at most SHRINK_BUDGET_PX when deciding to compact. */
+  /** Grows into spare row space; counts at its natural width, up to max-w-64, when compacting. */
   shrink?: boolean
   overflow?: (close: () => void) => ReactNode
 }
 
 type Layout = { compact: boolean; hidden: string[]; terminal: boolean }
-
-// Why 256: every shipped permission name fits in full (the widest, Portuguese, is about 230px), so
-// the toolbar compacts rather than truncating a name. Only a longer sentence, such as a deferred
-// pick, is counted at this width and truncates instead of compacting the whole toolbar.
-const SHRINK_BUDGET_PX = 256
 
 export function NativeChatComposerToolbar({
   left,
@@ -76,13 +71,12 @@ export function NativeChatComposerToolbar({
     // Probe the same mounted controls before paint; hidden controls retain their natural measure.
     for (const compact of open ? [true] : [false, true]) {
       bar.dataset.compact = String(compact)
-      // Shrinkable controls are measured at natural width, not at their current squeezed width.
+      // Shrinkable controls are measured at natural width, not their squeezed width, capped at
+      // max-w-64 so the cap scales with chat text. Every shipped permission name fits that cap, so
+      // the toolbar compacts rather than truncating a name; only a longer deferred sentence truncates.
       bar.dataset.measuring = 'true'
       for (const node of nodes) {
-        const id = node.dataset.composerControl!
-        const width = node.getBoundingClientRect().width
-        const shrinkable = controls.some((item) => item.id === id && item.shrink)
-        widths.set(id, shrinkable ? Math.min(width, SHRINK_BUDGET_PX) : width)
+        widths.set(node.dataset.composerControl!, node.getBoundingClientRect().width)
       }
       bar.dataset.measuring = 'false'
       next = { compact, hidden: open ? [...menuControls.current] : [], terminal: false }
@@ -183,7 +177,7 @@ export function NativeChatComposerToolbar({
         data-composer-control={item.id}
         aria-hidden={hidden || undefined}
         inert={hidden || undefined}
-        className={`inline-flex w-max ${item.shrink ? 'min-w-0 shrink group-data-[measuring=true]/toolbar:shrink-0' : 'shrink-0'} ${hidden ? 'pointer-events-none invisible absolute' : ''}`}
+        className={`inline-flex w-max ${item.shrink ? 'min-w-0 shrink group-data-[measuring=true]/toolbar:max-w-64 group-data-[measuring=true]/toolbar:shrink-0' : 'shrink-0'} ${hidden ? 'pointer-events-none invisible absolute' : ''}`}
       >
         {item.content}
       </div>

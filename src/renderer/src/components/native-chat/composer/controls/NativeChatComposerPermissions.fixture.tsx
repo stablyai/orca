@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 import type { UiLanguage } from '../../../../../../shared/i18n/ui-language'
@@ -18,16 +19,29 @@ function permissionFixture({
   current = 'own',
   active,
   width = 767,
-  tooltip = false
+  tooltip = false,
+  chatTextPx,
+  reportPending = false,
+  agent = 'claude'
 }: {
   language?: UiLanguage
   reported?: string
+  /** The host expects a report from the chat's first message. */
+  reportPending?: boolean
+  agent?: string
   current?: string
   active?: string
   /** Opens the pill's tooltip by keyboard focus and checks it is fully on screen. */
   tooltip?: boolean
   width?: number
+  /** Chat text size setting; controls and spacing scale with it. */
+  chatTextPx?: number
 } = {}) {
+  const chatScale:
+    | (CSSProperties & Record<'--chat-font-size' | '--chat-ui-font-size', string>)
+    | undefined = chatTextPx
+    ? { '--chat-font-size': `${chatTextPx}px`, '--chat-ui-font-size': `${chatTextPx}px` }
+    : undefined
   let sent = false
   const snapshot: SessionOptionDescriptor[] = [
     {
@@ -42,7 +56,8 @@ function permissionFixture({
         type: 'select',
         currentValue: current,
         reportedValue: reported,
-        settingsAgent: 'claude',
+        ...(reportPending ? { reportPending: true as const } : {}),
+        settingsAgent: agent,
         choices: [
           { value: 'ask', label: 'Ask for approval' },
           { value: 'accept-edits', label: 'Accept edits' },
@@ -76,6 +91,7 @@ function permissionFixture({
     render: () => (
       <div
         data-composer-field
+        style={chatScale}
         className="native-chat-appearance rounded-xl border border-chat-composer-border bg-chat-composer-surface p-1.5"
       >
         <NativeChatComposerActions
@@ -94,7 +110,7 @@ function permissionFixture({
           }}
           sessionOptionsSurface={surface}
           sessionOptionsSnapshot={snapshot}
-          agent="claude"
+          agent={agent}
         />
       </div>
     ),
@@ -184,8 +200,22 @@ function permissionFixture({
 }
 
 export const unknown = permissionFixture()
-export const unknownTooltip = permissionFixture({ tooltip: true })
-export const unknownTooltipNarrow = permissionFixture({ width: 292, tooltip: true })
+// Before the first message, the tooltip says the mode is coming.
+export const unknownTooltip = permissionFixture({ tooltip: true, reportPending: true })
+export const unknownTooltipNarrow = permissionFixture({
+  width: 292,
+  tooltip: true,
+  reportPending: true
+})
+// After it, with still no report, the tooltip promises nothing.
+export const unreportedTooltip = permissionFixture({ tooltip: true })
+// Codex in read-only reports a mode Orca has no name for.
+export const unnamedTooltip = permissionFixture({
+  language: 'pt',
+  agent: 'codex',
+  reported: 'read-only',
+  tooltip: true
+})
 export const reportedTooltip = permissionFixture({ reported: 'full-access', tooltip: true })
 export const reported = permissionFixture({ reported: 'full-access' })
 export const longFallback = permissionFixture({ language: 'pt' })
@@ -198,6 +228,18 @@ export const longFallbackEs420 = permissionFixture({ language: 'es', width: 420 
 export const longFallbackEs480 = permissionFixture({ language: 'es', width: 480 })
 export const longFallbackEs520 = permissionFixture({ language: 'es', width: 520 })
 export const longFallbackTooltip = permissionFixture({ language: 'pt', tooltip: true })
+// The largest chat text setting scales the pill and the toolbar's measurement together.
+export const longFallbackScaled = permissionFixture({ language: 'pt', chatTextPx: 20 })
+export const longFallbackScaled460 = permissionFixture({
+  language: 'pt',
+  width: 460,
+  chatTextPx: 20
+})
+export const longFallbackScaled520 = permissionFixture({
+  language: 'pt',
+  width: 520,
+  chatTextPx: 20
+})
 export const longMode = permissionFixture({ language: 'fr', reported: 'accept-edits' })
 export const longModeRu = permissionFixture({ language: 'ru', reported: 'ask' })
 export const narrow = permissionFixture({ width: 292 })

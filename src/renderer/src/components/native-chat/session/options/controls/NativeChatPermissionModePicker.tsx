@@ -16,7 +16,10 @@ import {
   isAgentChatPermissionMode,
   type AgentChatPermissionMode
 } from '../../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import { agentPermissionSettingsSourceName } from '../../../../../../../shared/agent-launch/permissions/agent-permission-settings-source'
+import {
+  agentPermissionSettingsHint,
+  agentPermissionSettingsSourceName
+} from '../../../../../../../shared/agent-launch/permissions/agent-permission-settings-source'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
@@ -91,6 +94,8 @@ export type NativeChatPermissionModePickerProps = {
   current: string | undefined
   /** The mode the agent reports running in when `current` is Own. */
   reported?: string
+  /** No report yet, and the next message can produce one. */
+  reportPending?: boolean
   modes: readonly AgentChatPermissionMode[]
   /** Whose descriptions to show; absent describes every agent's. */
   agent?: string | null
@@ -108,6 +113,7 @@ const INHERIT_VALUE = 'inherit'
 function NativeChatPermissionModePickerInner({
   current,
   reported,
+  reportPending = false,
   modes,
   agent,
   disabled = false,
@@ -161,14 +167,32 @@ function NativeChatPermissionModePickerInner({
           { mode: label, agent: settingsAgent }
         )
       : label
+  const hint = agentPermissionSettingsHint({
+    current,
+    reported,
+    reportPending,
+    deferred: activeLabel !== null
+  })
   const tooltipLabel =
-    own && !activeLabel && shown === current && !ownPlan
+    hint === 'report-pending'
       ? t(
           'components.native-chat.composer.permissionAgentSettingsHint',
           'Uses your {{agent}} permission settings. The mode appears after your first message.',
           { agent: settingsAgent }
         )
-      : described
+      : hint === 'unnamed-report'
+        ? t(
+            'components.native-chat.composer.permissionAgentSettingsUnnamedHint',
+            "Uses your {{agent}} permission settings. Orca can't show this mode.",
+            { agent: settingsAgent }
+          )
+        : hint === 'settings'
+          ? t(
+              'components.native-chat.composer.permissionAgentSettingsUsedHint',
+              'Uses your {{agent}} permission settings.',
+              { agent: settingsAgent }
+            )
+          : described
   // `shrink` overrides the button's shrink-0 so a narrow composer truncates the mode name.
   return (
     <DropdownMenu>
@@ -274,6 +298,7 @@ export function NativeChatComposerPermissionPicker({
     <NativeChatPermissionModePicker
       current={current}
       reported={descriptor.kind.reportedValue}
+      reportPending={descriptor.kind.reportPending === true}
       modes={modes}
       activeValue={descriptor.valueSource === 'dispatched' ? descriptor.activeValue : undefined}
       agent={agent ?? descriptor.kind.settingsAgent ?? null}
