@@ -280,6 +280,60 @@ export const newTabSubmenu = defineFixture({
   }
 })
 
+const kiroEntry = {
+  ...entry('kiro', 'Kiro', ['chat', 'terminal'], [model('auto', 'Auto', [], { isDefault: true })]),
+  worktreeId: 'fixture',
+  draftTarget: { key: 'fixture', executionHostId: 'local', worktreeId: 'fixture' }
+}
+
+function kiroAgentsFixture(names: string[]) {
+  return defineFixture({
+    width: 760,
+    setup() {
+      const call = window.api.runtime.call
+      window.api.runtime.call = async (request) =>
+        request.method === 'agentSession.createSupport'
+          ? {
+              ok: true,
+              id: 'kiro-agents',
+              _meta: { runtimeId: 'fixture' },
+              result: { supported: true, kiroAgents: names }
+            }
+          : call(request)
+    },
+    render: () => <NewTabMenu entries={[kiroEntry]} />,
+    interact: async () => {
+      await settle()
+      const configure = document.querySelector<HTMLButtonElement>(
+        '[data-agent-launch-row] [aria-haspopup="menu"]'
+      )
+      if (!configure || configure.disabled) {
+        throw new Error('Kiro launch setup unavailable')
+      }
+      configure.click()
+      await settle()
+      if (names.length) {
+        const field = document.querySelector<HTMLElement>(
+          '[role="combobox"][data-slot="select-trigger"]'
+        )
+        if (!field) {
+          throw new Error('Kiro agent picker did not open')
+        }
+        field.dispatchEvent(
+          new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })
+        )
+        await settle()
+        if (!document.querySelector('[role="option"]')) {
+          throw new Error('Kiro agent choices did not open')
+        }
+      }
+    }
+  })
+}
+
+export const newTabKiroDefault = kiroAgentsFixture([])
+export const newTabKiroAgents = kiroAgentsFixture(['code-reviewer', 'planner'])
+
 export const newTabSubmenuCodex = defineFixture({
   width: 760,
   render: () => <NewTabMenu />,

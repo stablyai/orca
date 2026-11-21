@@ -7,6 +7,16 @@ import {
 import { applyAgentPickerEdit } from './agent-launch-picker-edits'
 import { TEXT_ACTION_DEFAULT_MODEL } from './agent-launch-picker-text-action'
 
+it('sends the Kiro agent only when launching Chat', () => {
+  const draft = { agent: 'kiro' as const, choices: {}, kiroChatAgent: 'code-reviewer' }
+  expect(agentPickerLaunchInputs({ ...draft, surface: 'chat' }).chatSessionOptions).toMatchObject({
+    kiroAgentMode: 'code-reviewer'
+  })
+  expect(
+    agentPickerLaunchInputs({ ...draft, surface: 'terminal' }).chatSessionOptions
+  ).toBeUndefined()
+})
+
 const entry: AgentPickerEntry = {
   agent: 'claude',
   label: 'Claude',

@@ -245,6 +245,7 @@ export function structuredLaunchRequestedOptions(selection: {
   return {
     ...(permissionMode ? { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode } : {}),
     ...(explicit.interactionMode ? { interactionMode: explicit.interactionMode } : {}),
+    ...(explicit.kiroAgentMode ? { kiroAgentMode: explicit.kiroAgentMode } : {}),
     ...(changed ? {} : explicit),
     ...held
   }

@@ -126,7 +126,11 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     const refusal = structuredAgentSessionOptionOverridesRefusal(
       host.deps.agents,
       args.agent,
-      args.options
+      args.agent === 'kiro' && !args.resumeFrom && !args.forkFrom
+        ? Object.fromEntries(
+            Object.entries(args.options).filter(([key]) => key !== 'kiroAgentMode')
+          )
+        : args.options
     )
     if (refusal) {
       throw new AgentSessionRefusalError(refusal)

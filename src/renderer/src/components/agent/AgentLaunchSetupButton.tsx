@@ -1,3 +1,4 @@
+import { KiroChatAgentSetup } from './KiroChatAgentField'
 import { useState, type ReactElement } from 'react'
 import { AgentLaunchSetupSubmenu } from './AgentLaunchSetupSubmenu'
 import { useTranslate } from '@/i18n/use-translate'
@@ -93,7 +94,15 @@ export function AgentLaunchSetupButton({
             }
             return accepted
           }}
-        />
+        >
+          <KiroChatAgentSetup
+            entry={entry}
+            draft={setup.draft}
+            disabled={disabled}
+            getDraft={setup.getDraft}
+            onDraftChange={setup.change}
+          />
+        </AgentLaunchSetupPanel>
       ) : null}
     </div>
   )

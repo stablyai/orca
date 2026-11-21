@@ -81,6 +81,7 @@ export const AttachParams = z
 
 export const CreateSupportParams = z
   .object({
+    listKiroAgents: z.literal(true).optional(),
     worktree: Identifier('Invalid worktree selector'),
     agent: StructuredAgent,
     resumeFrom: ResumeWriterAdmission.optional()

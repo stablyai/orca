@@ -1,3 +1,4 @@
+import { listKiroChatAgents } from '../../../../../kiro/kiro-chat-agent-list'
 import type { StructuredSessionSurface } from '../../../../agent-session/lifecycle/structured-agent-session-close'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode-option-id'
 import type { z } from 'zod'
@@ -183,5 +184,12 @@ export async function handleStructuredAgentSessionCreateSupport(
   const seedOptions = support.supported
     ? ctx.runtime.structuredAgentSessionLaunchSeedOptions(params.agent)
     : undefined
+  if (params.listKiroAgents && params.agent === 'kiro' && support.supported && !params.resumeFrom) {
+    return {
+      ...support,
+      seedOptions,
+      kiroAgents: await listKiroChatAgents(ctx.runtime, params.worktree, ctx.signal)
+    }
+  }
   return seedOptions ? { ...support, seedOptions } : support
 }
