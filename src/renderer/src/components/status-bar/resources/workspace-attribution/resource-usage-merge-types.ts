@@ -20,7 +20,10 @@ export type UnifiedSessionRow = {
   incarnationId?: string
   paneKey: string | null
   pid: number
+  /** Live pane titles change often, so they are applied where the row renders, not in the merge. */
   label: string
+  /** The tab whose live pane title, when it has one, replaces `label`. */
+  liveTitleTabId?: string
   bound: boolean
   /** Ownership as the provider could establish it; anything but `absent` means confirm first. */
   agentOwnership: AgentOwnershipEvidence
@@ -72,8 +75,6 @@ export type MergeContext = {
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
   /** From useAppStore: SSH sessions known live but not yet reattached; no other binding sees them. */
   deferredSshSessionIdsByTabId?: Record<string, string>
-  /** From useAppStore: per-tab live pane titles (for label resolution). */
-  runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   /** From useAppStore: false until renderer state can distinguish bound/orphan. */
   workspaceSessionReady: boolean
   /** Project display names for sampled and daemon-only groups. */

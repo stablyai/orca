@@ -220,7 +220,6 @@ export function useResourceUsageStatusController() {
     runtimeHostResources,
     sessions,
     resourceSessionBindings,
-    runtimePaneTitlesByTabId,
     repos,
     allWorktrees,
     projectGroups,

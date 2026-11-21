@@ -56,9 +56,15 @@ export function useRuntimeHostResources(
             const missed =
               result.status === 'unreachable' ? (misses.get(environmentId) ?? 0) + 1 : 0
             misses.set(environmentId, missed)
-            // One slow answer keeps the last result; a server is unreachable only after two misses in a row.
-            if (!cancelled && missed !== 1) {
-              setState((prev) => withRuntimeHostResult(prev, sessionKey, environmentId, result))
+            if (!cancelled) {
+              setState((prev) =>
+                // One slow answer keeps a shown sample; with nothing shown yet, the failure shows now.
+                missed === 1 &&
+                prev.key === sessionKey &&
+                prev.results[environmentId]?.status === 'sampled'
+                  ? prev
+                  : withRuntimeHostResult(prev, sessionKey, environmentId, result)
+              )
             }
           }
         )
