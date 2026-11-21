@@ -22,7 +22,8 @@ export type DiffCommentsSlice = {
   updateDiffComment: (owner: DiffCommentOwner, commentId: string, body: string) => Promise<boolean>
   clearDeliveredDiffComments: (
     owner: DiffCommentOwner,
-    comments: readonly DiffCommentDeliverySnapshot[]
+    comments: readonly DiffCommentDeliverySnapshot[],
+    options?: { suppressLostOwnerToast?: boolean }
   ) => Promise<boolean>
   markDiffCommentsSent: (
     owner: DiffCommentOwner,
@@ -167,9 +168,12 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     }
   },
 
-  clearDeliveredDiffComments: async (owner, comments) => {
+  clearDeliveredDiffComments: async (owner, comments, options) => {
     if (!readOwnedDiffComments(get(), owner)) {
-      reportLostDiffCommentOwner('clear')
+      // The Rich Markdown confirmation owns its error toast; other callers keep the existing behavior.
+      if (!options?.suppressLostOwnerToast) {
+        reportLostDiffCommentOwner('clear')
+      }
       return false
     }
     const worktreeId = owner.worktreeId

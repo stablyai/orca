@@ -123,3 +123,87 @@ describe('captured note owners across delivery and selection', () => {
     expect(updateMeta).not.toHaveBeenCalled()
   })
 })
+
+describe('snapshot-matched Markdown review note bulk clear', () => {
+  it('preserves edited notes, newly added notes, and other document/diff notes', async () => {
+    const original = {
+      ...note('one', 'original'),
+      source: 'markdown' as const,
+      filePath: 'notes.md'
+    }
+    const revised = { ...original, body: 'edited after confirmation' }
+    const unchanged = {
+      ...note('unchanged', 'already handled'),
+      source: 'markdown' as const,
+      filePath: 'notes.md'
+    }
+    const newer = {
+      ...note('new', 'added after confirmation'),
+      source: 'markdown' as const,
+      filePath: 'notes.md'
+    }
+    const unrelated = {
+      ...note('other-file', 'other document'),
+      source: 'markdown' as const,
+      filePath: 'other.md'
+    }
+    const diffNote = {
+      ...note('diff', 'normal diff note'),
+      source: 'diff' as const,
+      filePath: 'notes.md'
+    }
+    const store = createTwinStore('local')
+    store.setState({
+      worktreesByRepo: {
+        [REPO]: [
+          worktree('local', [original, unchanged, unrelated, diffNote]),
+          worktree('ssh:box', [original])
+        ]
+      }
+    })
+    const owner = capturedOwner(store, WT)
+    // Simulate editing one note and adding another while the confirmation is open.
+    store.setState({
+      worktreesByRepo: {
+        [REPO]: [
+          worktree('local', [revised, unchanged, newer, unrelated, diffNote]),
+          worktree('ssh:box', [original])
+        ]
+      }
+    })
+    expect(await store.getState().clearDeliveredDiffComments(owner, [original, unchanged])).toBe(
+      true
+    )
+    expect(rowNotes(store, 'local')).toEqual([
+      'edited after confirmation',
+      'added after confirmation',
+      'other document',
+      'normal diff note'
+    ])
+    expect(rowNotes(store, 'ssh:box')).toEqual(['original'])
+  })
+
+  it('allows a confirmation dialog to own lost-owner error feedback without double toast', async () => {
+    const store = createTwinStore('ssh:box')
+    const sent = { ...note('same-id', 'same body'), source: 'markdown' as const }
+    store.setState({
+      worktreesByRepo: { [REPO]: [worktree('local', [sent]), worktree('ssh:box', [sent])] }
+    })
+    const owner = capturedOwner(store, WT)
+    store.setState({
+      activeWorkspaceExecutionHostId: 'local',
+      worktreesByRepo: { [REPO]: [worktree('local', [sent])] }
+    })
+
+    expect(
+      await store.getState().clearDeliveredDiffComments(owner, [sent], {
+        suppressLostOwnerToast: true
+      })
+    ).toBe(false)
+    expect(toast.error).not.toHaveBeenCalled()
+    // Existing send-to-agent callers retain their default notification.
+    expect(await store.getState().clearDeliveredDiffComments(owner, [sent])).toBe(false)
+    expect(toast.error).toHaveBeenCalledTimes(1)
+    expect(rowNotes(store, 'local')).toEqual(['same body'])
+  })
+})

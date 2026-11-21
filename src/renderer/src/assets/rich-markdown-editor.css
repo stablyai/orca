@@ -287,6 +287,11 @@
   color: var(--foreground);
 }
 
+.rich-markdown-review-rail-action-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--destructive) 10%, transparent);
+  color: var(--destructive);
+}
+
 .rich-markdown-review-rail-action:disabled,
 .rich-markdown-review-note-action:disabled {
   cursor: default;

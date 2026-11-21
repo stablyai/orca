@@ -13761,7 +13761,7 @@
             "abortRebaseFailed": "中止變基失敗",
             "abortMergeFailed": "中止合併失敗",
             "clearNotesFromWorkspace_other": "清除此工作區中的 {{count}} 則筆記？",
-            "clearNotesFromFile_other": "清除 {{path}} 中的 {{count}} 則筆記？",
+            "clearNotesFromFile_other": "要清除 {{path}} 中的 {{count}} 則筆記嗎？",
             "markResolved": "標記為已解決",
             "keepFile": "保留檔案",
             "keepDeletion": "保留刪除",
@@ -20659,6 +20659,9 @@
       "runsOn": "在 WSL 上執行：{{distro}}（Linux）"
     },
     "editor": {
+      "RichMarkdownReviewRailActions": {
+        "clearAllNotes": "清除所有備註"
+      },
       "formatOnSave": {
         "failed": "無法格式化 {{file}}。將不經格式化直接儲存：{{reason}}"
       }

@@ -350,6 +350,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   skipDeleteAutomationConfirm: boolean
   /** Why: deleting an artifact breaks a public link others may already hold; keep this skip separate from local deletions. */
   skipDeleteArtifactConfirm: boolean
+  /** Why: bulk-clearing Markdown review notes removes all annotations for a document at once; keep this skip separate from other deletions. */
+  skipClearMarkdownReviewNotesConfirm?: boolean
   /** Why: a Codex rate-limit reset spends a scarce credit on the live account; keep this skip separate from local confirmations. */
   skipCodexRateLimitResetConfirm: boolean
   /** Default preset in the new-workspace GitHub task view. */

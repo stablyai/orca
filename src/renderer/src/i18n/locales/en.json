@@ -1332,7 +1332,9 @@
         "automationHelp": "Its run history is deleted too.",
         "automation": "Deleting an automation",
         "title": "Confirmations",
-        "running": "Closing a running chat or terminal"
+        "running": "Closing a running chat or terminal",
+        "markdownReviewNotes": "Clearing Markdown review notes",
+        "markdownReviewNotesHelp": "Ask before clearing all review notes in a Markdown document."
       },
       "pages": {
         "folder": "Workspace folder",
@@ -23765,6 +23767,9 @@
     "editor": {
       "formatOnSave": {
         "failed": "Could not format {{file}}. Saving without formatting: {{reason}}"
+      },
+      "RichMarkdownReviewRailActions": {
+        "clearAllNotes": "Clear all notes"
       }
     },
     "contextualTours": {

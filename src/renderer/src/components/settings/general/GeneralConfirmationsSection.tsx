@@ -51,6 +51,16 @@ export function GeneralConfirmationsSection({
       checked: !settings.skipDeleteArtifactConfirm,
       onChange: () =>
         updateSettings({ skipDeleteArtifactConfirm: !settings.skipDeleteArtifactConfirm })
+    },
+    {
+      ...entries.markdownReviewNotes,
+      checked: !(settings.skipClearMarkdownReviewNotesConfirm ?? false),
+      onChange: () =>
+        updateSettings({
+          skipClearMarkdownReviewNotesConfirm: !(
+            settings.skipClearMarkdownReviewNotesConfirm ?? false
+          )
+        })
     }
   ].filter((row) => matchesSettingsSearch(query, row))
   if (rows.length === 0) {
