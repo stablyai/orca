@@ -51,7 +51,9 @@ const noPicture: Parameters<typeof BotPanelHeader>[0]['picture'] = {
   upload: () => {},
   undo: () => {},
   color: null,
-  pickColor: () => {}
+  pickColor: () => {},
+  outfit: null,
+  pickOutfit: () => {}
 }
 
 type Row = {
