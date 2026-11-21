@@ -101,7 +101,8 @@ Never:
   follows from the task or the user's instructions; otherwise ask the user first.
 - An `escalation` with `stopReason` means the worker stopped without
   `worker_done`: steer it with `send`, stop and retry it, or tell the user.
-  `exited` or `lost` means it is gone: retry it or tell the user.
+  `exited` confirms process exit. For `lost`, inspect `worker-show` before
+  sending mail or retrying: the original agent may still be running.
 - A `worker_done` settles its Task; never mark a reported failure completed.
 - When every worker has settled, report to the user per Task: outcome,
   evidence, open blockers.
@@ -154,5 +155,6 @@ assignment does not prove its agent stopped.
 | Another project or machine, child worktrees, SSH, WSL, a connected server | `references/placement-and-remote.md` |
 | Group messages                                                            | `references/messaging-and-gates.md`  |
 | A failed or unknown worker; retry, stop, reset                            | `references/recovery-and-cleanup.md` |
+| How a worker ends: settled, ended, destroyed                              | `references/worker-teardown.md`      |
 | Several independent workers at once                                       | `references/parallel-start.md`       |
 | Custom argv or terminal layout                                            | `references/low-level-topology.md`   |

@@ -192,6 +192,14 @@ orca orchestration reset --all
 
 `reset` affects runtime-global orchestration state. Do not run it while another coordinator is active unless that is the intended cleanup.
 
+## When a worker ends
+
+- **Settled** means the Task has an outcome. A `worker_done` report completes or fails it. If a terminal worker exits without reporting, Orca fails the Dispatch and mails the coordinator. An `exited` report confirms process exit. A `lost` report can follow a pane close or a restart that left exit or continuation unconfirmed. Inspect `worker-show` before sending mail or retrying, since the original agent may still be running.
+- **Ended** means the session is dormant. A finished worker can auto-close while its agent rests, unless kept open. Records persist. A closed local worker can resume on `send`. For a finished paired-server worker, start new work with `worker-start --on`.
+- **Destroyed** requires proof the process is gone. An unsettled worker's `worker-stop` settles only on a confirmed kill. Inspect `worker-show` after `stop_unknown`. For a reclaimable terminal left by a failed start, use `worker-release`. A `release_pending` is retried after inventory. For `release_unknown`, inspect the worker and retry release with a fresh request ID. The sweep releases only proven exits.
+
+Silence, a timeout, or unverifiable liveness cannot prove exit. `worker-abandon` fences the assignment even if its agent is still running. For the full state glossary, run `orca skills get orchestration --reference references/worker-teardown.md`.
+
 ## Choosing the right command
 
 Use `orca orchestration send` for a one-way message to another agent. For ordinary mail, a chat receives the whole message with its sender header (a message too large for one chat message gets a note to run `orca orchestration check` instead), Orca never types your words into a terminal agent's input (it reads mail through `check`), and the receipt means the mail was stored, not read. A send to a finished worker's `dispatch:<id>` can instead start a follow-up Task, whose body the worker gets as its task; the receipt says which. Use `orca terminal send` for shells, dev servers and REPLs, never to message an agent.
