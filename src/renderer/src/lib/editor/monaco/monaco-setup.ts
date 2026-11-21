@@ -10,6 +10,7 @@ import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { registerAstroLanguage } from '../../monaco-languages/register-astro'
 import { registerCMakeLanguage } from '../../monaco-languages/register-cmake'
+import { registerControlKeywordTokenizers } from '../../monaco-languages/register-control-keywords'
 import { registerCudaLanguage } from '../../monaco-languages/register-cuda'
 import { registerDotenvLanguage } from '../../monaco-languages/register-dotenv'
 import { registerGlimmerLanguages } from '../../monaco-languages/register-glimmer'
@@ -90,6 +91,7 @@ runMonacoSetupSteps([
   ['dotenv language registration', () => registerDotenvLanguage(monaco)],
   ['Quarto language registration', () => registerQuartoLanguage(monaco)],
   ['Markdown language registration', () => registerMarkdownLanguage(monaco)],
+  ['TS/JS control keyword tokenization', () => registerControlKeywordTokenizers(monaco)],
   ['shell Markdown alias registration', () => registerShellMarkdownAliases(monaco)],
   ['delayer cancellation guard', installMonacoDelayerCancellationGuard],
   ['diff editor disposal guard', () => installMonacoDiffEditorDisposalGuard(monaco)],
