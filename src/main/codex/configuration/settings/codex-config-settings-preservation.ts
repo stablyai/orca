@@ -1,7 +1,39 @@
 import { removePromotedSettingsFromContent } from './codex-config-settings-removal'
 import { upsertPromotedSettingsInContent } from './codex-config-settings-upsert'
+import {
+  applyCodexRegistrationPromotions,
+  planCodexRegistrationPromotion,
+  readCodexRegistrationBaseline,
+  type CodexRegistrationBaseline
+} from './config-plugin-registration-promotion'
+import type { CodexSettingsPromotionPlan } from './config-settings-promotion'
 
-export function preserveRuntimeConflictValues(
+/** Reapply runtime values the promotion kept out of the canonical config onto the merged mirror. */
+export function preserveRuntimeEdits(
+  merged: string,
+  runtimeConfig: string,
+  systemConfig: string,
+  plan: CodexSettingsPromotionPlan
+): {
+  content: string
+  keys: ReadonlySet<string>
+  registrationBaseline?: CodexRegistrationBaseline
+} {
+  const kept = plan.keptRuntimeRegistrations
+  const withRegistrations = kept
+    ? applyCodexRegistrationPromotions(
+        merged,
+        planCodexRegistrationPromotion(runtimeConfig, merged, kept)
+      )
+    : merged
+  return {
+    ...preserveRuntimeConflictValues(withRegistrations, plan.runtimeValuesToPreserve),
+    // Kept tables must stay absent from the baseline, or the next pass reads them as mirrored.
+    registrationBaseline: kept ? readCodexRegistrationBaseline(systemConfig) : undefined
+  }
+}
+
+function preserveRuntimeConflictValues(
   content: string,
   values: ReadonlyMap<string, string | null>
 ): { content: string; keys: ReadonlySet<string> } {

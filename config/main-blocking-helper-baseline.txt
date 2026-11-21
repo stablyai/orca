@@ -299,8 +299,8 @@
 27 src/main/codex/configuration/settings/codex-config-mirror.ts
 2 src/main/codex/configuration/settings/codex-config-path-reference-rewrite.ts
 1 src/main/codex/configuration/settings/codex-config-runtime-owned-values.ts
-2 src/main/codex/configuration/settings/config-settings-baseline.ts
-1 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts
+3 src/main/codex/configuration/settings/config-settings-baseline.ts # writeFileAtomically replaces a direct writeFileSync: same one write per baseline change after the equal-content skip, now torn-write safe because kept WSL edits live only here (#45247)
+2 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts # +1 resolveThroughLinkedAncestor: realpathSync of the nearest existing folder, only when config.toml is absent or unresolvable (each promotion pass while it stays so; launch/sync cadence), so a linked ~/.codex never creates a file inside a WSL guest (#45247)
 8 src/main/codex/configuration/settings/config-settings-promotion.ts
 1 src/main/codex/configuration/settings/config-sync-stall.ts
 1 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts

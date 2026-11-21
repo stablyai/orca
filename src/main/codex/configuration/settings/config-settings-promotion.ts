@@ -1,16 +1,13 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { observeAgentStateFile } from '../codex-path-observation'
 import { resolvePromotionWriteTarget } from './config-settings-promotion-write-target'
-import { observeFilePublication } from '../../../filesystem/file-content-observation'
-import {
-  assertGuardedFileCurrent,
-  ConcurrentFileEditError
-} from '../../../filesystem/concurrent-file-edit-guard'
+import { ConcurrentFileEditError } from '../../../filesystem/concurrent-file-edit-guard'
 import { writeTomlConfigAtomically } from '../toml/config-toml-atomic-write'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../homes/codex-home-paths'
-import { upsertPromotedSettingsInContent } from './codex-config-settings-upsert'
+import { tableStructuredKey, upsertPromotedSettingsInContent } from './codex-config-settings-upsert'
+import { CODEX_DAEMON_OVERRIDE_MARKER } from '../shared-server/codex-daemon-socket-path-guard'
 import {
   PROMOTED_STRUCTURED_KEYS,
   readPromotedSettingValues,
@@ -28,7 +25,8 @@ import { extractOrdinaryCodexSettings } from '../toml/config-toml-runtime-owned-
 import {
   applyCodexRegistrationPromotions,
   planCodexRegistrationPromotion,
-  readCodexRegistrationBaseline
+  readCodexRegistrationBaseline,
+  type CodexRegistrationBaseline
 } from './config-plugin-registration-promotion'
 import { hasCodexRegistrationEntries } from '../toml/config-toml-plugin-registration-tables'
 
@@ -36,6 +34,8 @@ export type CodexSettingsBaselineSnapshotOptions = {
   conflicts?: ReadonlyMap<string, CodexSettingsConflict>
   /** False for bootstrap baselines, which cannot establish canonical registration ownership. */
   mirroredRegistrations?: boolean
+  /** Overrides the runtime's tables when registration edits were kept in the managed home. */
+  registrations?: CodexRegistrationBaseline
   /** Names copied from the canonical source in this mirror pass. */
   mirroredMcpServers?: ReadonlySet<string>
   mirroredMcpServerRoot?: boolean
@@ -68,7 +68,7 @@ export function snapshotCodexRuntimeSettingsBaseline(
       settings,
       conflicts,
       registrations: options.mirroredRegistrations
-        ? readCodexRegistrationBaseline(runtimeConfig)
+        ? (options.registrations ?? readCodexRegistrationBaseline(runtimeConfig))
         : new Map(),
       mcpServers: options.mirroredMcpServers ?? new Set(),
       mcpServerRoot: options.mirroredMcpServerRoot ?? false
@@ -93,6 +93,8 @@ export type CodexSettingsPromotionPlan = {
   /** MCP names the previous mirror copied from the canonical source. */
   mirroredMcpServers: ReadonlySet<string>
   mirroredMcpServerRoot: boolean
+  /** Set when the canonical config is in a WSL guest: registration edits stay in the managed home. */
+  keptRuntimeRegistrations?: CodexRegistrationBaseline
 }
 
 function getHostPromotionHomes(): CodexSettingsPromotionHomes {
@@ -123,6 +125,9 @@ export function promoteCodexRuntimeSettingsToSystem(
 }
 
 const PUBLISH_ATTEMPTS = 3
+const DAEMON_OVERRIDE_KEYS: ReadonlySet<string> = new Set([
+  tableStructuredKey('features', 'daemon_auto_start')
+])
 
 /** Null when the user saved the source config after Orca read it; the caller redoes the pass. */
 function promoteCodexRuntimeSettingsToSystemUnsafe(
@@ -154,15 +159,33 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   const updates = new Map<string, string>()
   const conflicts = new Map<string, CodexSettingsConflict>()
   const runtimeValuesToPreserve = new Map<string, string | null>()
+  const systemValues = baseline ? readPromotedSettingValues(systemTomlPath) : new Map()
   if (baseline) {
     collectPromotionChanges({
       baseline,
       runtimeValues: readPromotedSettingValues(runtimeTomlPath),
-      systemValues: readPromotedSettingValues(systemTomlPath),
+      systemValues,
       updates,
       conflicts,
-      runtimeValuesToPreserve
+      runtimeValuesToPreserve,
+      maskedRuntimeKeys: runtimeTomlObservation.value.includes(CODEX_DAEMON_OVERRIDE_MARKER)
+        ? DAEMON_OVERRIDE_KEYS
+        : new Set()
     })
+  }
+  // Orca never writes a WSL guest's own Codex config; runtime edits stay in the managed home.
+  const keepInManagedHome = (): CodexSettingsPromotionPlan =>
+    keepRuntimeEditsInManagedHome({
+      updates,
+      conflicts,
+      runtimeValuesToPreserve,
+      mirroredMcpServers,
+      mirroredMcpServerRoot,
+      registrations: baseline?.registrations ?? new Map(),
+      systemValues
+    })
+  if (parseWslUncPath(systemTomlPath)) {
+    return keepInManagedHome()
   }
   // Registrations can promote before the first mirror because untracked tables are additions.
   if (updates.size === 0 && !hasCodexRegistrationEntries(runtimeTomlObservation.value)) {
@@ -171,6 +194,10 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   // A new home may later hold auth.json, so create it owner-only.
   mkdirSync(systemHomePath, { recursive: true, mode: 0o700 })
   const writeTarget = resolvePromotionWriteTarget(systemTomlPath)
+  // A host config can be a dotfile link into a distro.
+  if (parseWslUncPath(writeTarget.path)) {
+    return keepInManagedHome()
+  }
   // Dangling dotfile links may target a parent directory that does not exist yet.
   mkdirSync(dirname(writeTarget.path), { recursive: true, mode: 0o700 })
   // Read the target before reconstructing it; registration promotion can run without a baseline.
@@ -198,25 +225,40 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
     return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
   }
   const computedFrom = targetExists ? writeTargetObservation.value : null
-  if (targetExists && parseWslUncPath(writeTarget.path)) {
-    // WSL 9P symlink metadata is unreliable; write through to preserve the guest inode.
-    assertGuardedFileCurrent(writeTarget.path)
-    const current = observeAgentStateFile(writeTarget.path)
-    if (current.kind === 'indeterminate') {
-      throw current.error
-    }
-    if (current.kind !== 'present' || current.value !== computedFrom) {
-      return null
-    }
-    writeFileSync(writeTarget.path, nextContent, 'utf-8')
-    observeFilePublication(writeTarget.path, nextContent)
-    return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
-  }
   // Promotion never rotated the user's config.toml.bak; keep it that way.
   if (!writeTomlConfigAtomically(writeTarget.path, nextContent, computedFrom, { backup: false })) {
     return null
   }
   return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
+}
+
+type KeptRuntimeEdits = Pick<
+  CodexSettingsPromotionPlan,
+  'mirroredMcpServers' | 'mirroredMcpServerRoot'
+> & {
+  updates: ReadonlyMap<string, string>
+  conflicts: Map<string, CodexSettingsConflict>
+  runtimeValuesToPreserve: Map<string, string | null>
+  registrations: CodexRegistrationBaseline
+  systemValues: ReadonlyMap<string, TopLevelSettingValue>
+}
+
+/** Recorded as conflicts so each mirror keeps the runtime value until either side edits it. */
+function keepRuntimeEditsInManagedHome(edits: KeptRuntimeEdits): CodexSettingsPromotionPlan {
+  for (const [key, raw] of edits.updates) {
+    edits.conflicts.set(key, {
+      runtime: raw,
+      system: getComparableRaw(edits.systemValues.get(key)) ?? null
+    })
+    edits.runtimeValuesToPreserve.set(key, raw)
+  }
+  return {
+    conflicts: edits.conflicts,
+    runtimeValuesToPreserve: edits.runtimeValuesToPreserve,
+    mirroredMcpServers: edits.mirroredMcpServers,
+    mirroredMcpServerRoot: edits.mirroredMcpServerRoot,
+    keptRuntimeRegistrations: edits.registrations
+  }
 }
 
 type PromotionCollectionContext = {
@@ -226,6 +268,8 @@ type PromotionCollectionContext = {
   updates: Map<string, string>
   conflicts: Map<string, CodexSettingsConflict>
   runtimeValuesToPreserve: Map<string, string | null>
+  /** Keys Orca's daemon override currently replaces in the runtime config. */
+  maskedRuntimeKeys: ReadonlySet<string>
 }
 
 function collectPromotionChanges(context: PromotionCollectionContext): void {
@@ -237,6 +281,14 @@ function collectPromotionChanges(context: PromotionCollectionContext): void {
     }
 
     const existingConflict = context.baseline.conflicts.get(key)
+    if (existingConflict && runtimeRaw === null && context.maskedRuntimeKeys.has(key)) {
+      // The override hides the kept value, not a user deletion; a canonical edit still wins.
+      if (systemRaw === existingConflict.system) {
+        context.conflicts.set(key, existingConflict)
+        context.runtimeValuesToPreserve.set(key, existingConflict.runtime)
+      }
+      continue
+    }
     if (existingConflict || !context.baseline.settings.has(key)) {
       const resolution = resolveUntrackedCodexSetting(runtimeRaw, systemRaw, existingConflict)
       if (resolution.action === 'promote-runtime') {
