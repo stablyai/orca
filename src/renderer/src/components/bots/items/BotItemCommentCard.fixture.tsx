@@ -258,13 +258,17 @@ export const recommendedShortNarrow = defineFixture({
   render: () => <Recommended data={MERGE} />
 })
 
-// One unbroken label: the star stays with it when it wraps.
+// Unbroken labels: the star stays with the recommended one when it wraps; each breaks inside its chip.
 const TOKEN: BotItemAsk = {
   ...ROTATED,
   questions: [
     {
       ...ROTATED.questions[0]!,
-      options: [{ label: 'TOKEN_PRODUCTION_US_EAST_1' }, { label: 'Not yet' }],
+      options: [
+        { label: 'TOKEN_PRODUCTION_US_EAST_1' },
+        { label: 'TOKEN_STAGING_EU_WEST_2_AND_CANARY' },
+        { label: 'Not yet' }
+      ],
       recommended: 0
     }
   ]
