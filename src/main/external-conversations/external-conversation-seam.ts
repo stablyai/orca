@@ -8,6 +8,7 @@ import { isBotAgent } from '../../shared/bot-types'
 import {
   type ConversationChatHost,
   runningTurnOpenedByConversationReport,
+  claimedTurn,
   watchChatNews
 } from './external-conversation-chat'
 import { answerConversation } from './external-conversation-answer'
@@ -144,7 +145,7 @@ export class ExternalConversationSeam {
 
   private turnFacts(chats: ConversationChatHost | undefined) {
     return {
-      delivered: (sessionId: string) => this.chatDeliveries.pending(sessionId),
+      delivered: (id: string) => this.chatDeliveries.pending(id) || claimedTurn(chats, id),
       reported: (sessionId: string) => runningTurnOpenedByConversationReport(chats, sessionId)
     }
   }

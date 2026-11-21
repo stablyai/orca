@@ -142,6 +142,12 @@ export function runningTurnOpenedByConversationReport(
   return opener ? isConversationReport(opener.body) : false
 }
 
+/** A continuation answering requests a restart or usage limit cut: durable, unlike a delivery's mark. */
+export function claimedTurn(chats: ConversationChatHost | undefined, sessionId: string): boolean {
+  const opener = currentChat(chats)?.publishedWork(sessionId)?.activeTurnOpener
+  return opener?.body.kind === 'message' && opener.body.connectorClaim !== undefined
+}
+
 /** The pane key the chat's status row is published under. */
 export function chatPaneKey(sessionId: string): string {
   return structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId)
