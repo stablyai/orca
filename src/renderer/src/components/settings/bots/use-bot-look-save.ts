@@ -124,7 +124,7 @@ export function useBotLookSave(
       avatarOutfit: saved.avatarOutfit,
       ...picked
     }
-    const fields = Object.keys(change) as (keyof BotLookUpdate)[]
+    const fields = (['avatarColor', 'avatarOutfit'] as const).filter((field) => field in change)
     if (fields.every((field) => (change[field] ?? null) === (shown[field] ?? null))) {
       return
     }
