@@ -83,9 +83,12 @@ export function SlackConfigTokenForm({
   }
 
   const openSlack = (): void => {
-    // The copied token is looked for only once this computer's browser took Slack's page.
+    // The copied token is looked for only once this computer's browser took Slack's page. A launch
+    // that failed never cancels the read another, successful one armed.
     void openSlackAppsHere().then((opened) => {
-      awaitingCopy.current = opened
+      if (opened) {
+        awaitingCopy.current = true
+      }
     })
   }
 

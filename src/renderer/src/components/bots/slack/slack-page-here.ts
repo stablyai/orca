@@ -19,10 +19,9 @@ export const NOT_SLACK_LINK = 'not_slack_link'
  * case-insensitive; everything else must be spelled exactly.
  */
 export function isSlackAuthorizeUrl(url: string): boolean {
-  if (
-    url.slice(0, SLACK_ORIGIN.length).toLowerCase() !== SLACK_ORIGIN ||
-    !SLACK_AUTHORIZE_PATH.test(url.slice(SLACK_ORIGIN.length))
-  ) {
+  // ASCII-only case folding: Unicode lowercasing would let a look-alike letter spell the host.
+  const origin = url.slice(0, SLACK_ORIGIN.length).replace(/[A-Z]/g, (c) => c.toLowerCase())
+  if (origin !== SLACK_ORIGIN || !SLACK_AUTHORIZE_PATH.test(url.slice(SLACK_ORIGIN.length))) {
     return false
   }
   let parsed: URL

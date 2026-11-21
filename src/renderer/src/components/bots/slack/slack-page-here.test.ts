@@ -46,7 +46,10 @@ describe('slack-page-here', () => {
       'https://slack.com/oauth/v2/../v2/authorize',
       'https://slack.com/oauth/./v2/authorize',
       'https://slack.com//oauth/v2/authorize',
-      'HTTPS://slack.com/OAUTH/v2/authorize'
+      'HTTPS://slack.com/OAUTH/v2/authorize',
+      // Letters whose Unicode lowercase is ASCII: the copied text would not be Slack's host.
+      'https://slac\u212A.com/oauth/v2/authorize',
+      'https://\u017Flack.com/oauth/v2/authorize'
     ]) {
       expect(isSlackAuthorizeUrl(url), url).toBe(false)
     }

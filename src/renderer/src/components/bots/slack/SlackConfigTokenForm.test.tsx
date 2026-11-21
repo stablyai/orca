@@ -81,6 +81,32 @@ describe('SlackConfigTokenForm', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ['opened, then failed', [true, false]],
+    ['failed, then opened', [false, true]]
+  ])('keeps the read a launch armed when another one fails (%s)', async (_, outcomes) => {
+    const { readClipboardText } = shown(REFRESH)
+    const settle: (() => void)[] = []
+    vi.stubGlobal('api', {
+      ui: { readClipboardText },
+      shell: {
+        openUrl: () =>
+          new Promise<void>((resolve, reject) => {
+            const ok = outcomes[settle.length]
+            settle.push(() => (ok ? resolve() : reject(new Error('no default browser'))))
+          })
+      }
+    })
+    const open = screen.getByRole('button', { name: /Get config token/ })
+    fireEvent.click(open)
+    fireEvent.click(open)
+    await act(async () => settle[0]())
+    await act(async () => settle[1]())
+    fireEvent.focus(window)
+    const field = screen.getByLabelText<HTMLInputElement>('Configuration refresh token')
+    await waitFor(() => expect(field.value).toBe(REFRESH))
+  })
+
   it('drops a read still pending when another token is pasted', async () => {
     let resolve: (text: string) => void = () => {}
     const { onSubmit, readClipboardText } = shown('')

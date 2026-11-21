@@ -291,19 +291,27 @@ export function useBotSlackSetup(
     [step, bot.hostId, hostName, setUp, handOff]
   )
 
+  // One launch per step, and it moves on only from the step it began on, in the dialog it began
+  // in: a later Install again, Copy link or close wins over a launch that answers late.
+  const launching = useRef<BotSlackSetupStep | null>(null)
+  const latest = useRef(step)
+  useEffect(() => {
+    latest.current = step
+  }, [step])
   const approve = useCallback(() => {
-    if (step.kind !== 'ready' && step.kind !== 'waiting') {
+    const at = step
+    if ((at.kind !== 'ready' && at.kind !== 'waiting') || !at.link || launching.current === at) {
       return
     }
-    const link = step.link
-    if (!link) {
-      return
-    }
-    const { teamId: approving } = step
+    const [mount, link] = [mounted.current, at.link]
+    launching.current = at
     // Waits only once this computer's browser took Slack's page; a failed launch stays here.
     void openSlackApprovalHere(link.authorizeUrl).then((opened) => {
-      if (opened) {
-        wait(approving, link, false)
+      if (launching.current === at) {
+        launching.current = null
+      }
+      if (opened && latest.current === at && mounted.current === mount) {
+        wait(at.teamId, link, false)
       }
     })
   }, [step, wait])

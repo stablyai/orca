@@ -325,6 +325,28 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeTruthy()
   })
 
+  it('launches Approve once, and a late launch never undoes a later Copy link', async () => {
+    mocks.bots.push(bot({ id: 'other', slack: { appId: 'A9', teamId: 'T1' } }))
+    serverState({ state: 'not_created' })
+    mocks.hosts[SERVER].setUpApp.mockResolvedValue(
+      ok({ appId: 'A1', authorizeUrl: AUTHORIZE, expiresAt: NOW + 60_000 })
+    )
+    let launched: () => void = () => {}
+    openUrl.mockReturnValue(new Promise<void>((resolve) => (launched = resolve)))
+    openDialog()
+
+    const approve = await screen.findByRole('button', { name: 'Approve in Slack' })
+    fireEvent.click(approve)
+    fireEvent.click(approve)
+    expect(openUrl).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+    await screen.findByText('Link copied')
+    // The browser answers only now: the copied link's wait stands.
+    await act(async () => launched())
+    expect(screen.getByText('Link copied')).toBeTruthy()
+    expect(openUrl).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps a reconnect to its workspace when the pasted token is for another one', async () => {
     serverState({ state: 'grant_expired', teamId: 'T1' })
     mocks.hostEmail = 'me@example.test'
