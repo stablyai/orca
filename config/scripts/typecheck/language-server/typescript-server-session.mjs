@@ -15,6 +15,8 @@ const REQUEST_FAILED = -32803
 const MAX_QUEUED_REQUESTS = 64
 // A server this far behind on answers is treated as stuck, and an agent this far behind gets no more server requests.
 const MAX_OPEN_REQUESTS = 4096
+// Servers given up on but not yet exited; a new one waits until one is gone.
+const MAX_RETIRED = 2
 // Without a running server these only update what the next one is given at start.
 const SESSION_STATE = new Set([
   'textDocument/didOpen',
@@ -54,7 +56,8 @@ export function createServerSession({
   let killTimer
   let idleExpired = false
   let generation = 0
-  const retired = new Set()
+  // Retired server -> its SIGKILL timer, until it exits.
+  const retired = new Map()
   // Requests by id (in arrival order) plus a queued exit; notifications never wait here.
   const queue = new Map()
   let wakeWanted = false
@@ -114,10 +117,18 @@ export function createServerSession({
   const launch = () => {
     state = 'starting'
     const own = ++generation
-    server = startServer({
+    const handle = startServer({
       onMessage: (message) => own === generation && fromServer(message),
-      onExit: (code, signal) => own === generation && onExit(code, signal)
+      onExit: (code, signal) => {
+        if (own === generation) {
+          onExit(code, signal)
+        } else {
+          clearTimer(retired.get(handle))
+          retired.delete(handle)
+        }
+      }
     })
+    server = handle
   }
 
   // A server that misses a deadline is treated as gone now, then killed for good if it lingers.
@@ -127,17 +138,20 @@ export function createServerSession({
     }
     const stuck = server
     stuck.kill()
-    retired.add(stuck)
-    setTimer(() => {
-      retired.delete(stuck)
-      stuck.kill('SIGKILL')
-    }, SHUTDOWN_GRACE_MS)
+    retired.set(
+      stuck,
+      setTimer(() => {
+        retired.delete(stuck)
+        stuck.kill('SIGKILL')
+      }, SHUTDOWN_GRACE_MS)
+    )
     onExit(null, 'SIGTERM')
   }
 
   // The wrapper never exits while a server it gave up on may still be running.
   const end = (code) => {
-    for (const stuck of retired) {
+    for (const [stuck, timer] of retired) {
+      clearTimer(timer)
       stuck.kill('SIGKILL')
     }
     retired.clear()
@@ -195,6 +209,10 @@ export function createServerSession({
 
   // Same initialize the client sent, then its open documents, so the new server sees what the old one saw.
   const wake = () => {
+    if (retired.size >= MAX_RETIRED) {
+      failWake('previous servers have not exited yet')
+      return
+    }
     try {
       launch()
     } catch (error) {
@@ -337,8 +355,6 @@ export function createServerSession({
     }
     if (message.id !== undefined && pending.size >= MAX_OPEN_REQUESTS) {
       console.error('agent-typescript-lsp: server stopped answering; restarting it')
-      // The client's registrations belong to this server, so with any it ends like a crash and the client restarts it.
-      closed = registered
       retire()
       if (!registered) {
         dispatch(message)
@@ -385,6 +401,7 @@ export function createServerSession({
     } else if (message.method && message.id !== undefined) {
       if (message.method === 'client/registerCapability') {
         registered = true
+        idleExpired = false
         clearTimer(idleTimer)
       }
       relayToClient(message)
@@ -417,6 +434,11 @@ export function createServerSession({
     shutdownId = null
     if (closed || !(expected || waking)) {
       end(code ?? (signal ? 1 : 0))
+      return
+    }
+    // The client's registrations belong to this server, so with any it ends like a crash and the client restarts it.
+    if (registered) {
+      end(1)
       return
     }
     if (waking) {
