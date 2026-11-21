@@ -15,7 +15,12 @@ const NOT_NAMES = new Set([
   'claude',
   'codex',
   'orca',
-  'the'
+  'the',
+  'test',
+  'team',
+  'dev',
+  'administrator',
+  'staff'
 ])
 
 async function output(program: string, args: string[]): Promise<string | null> {
@@ -36,13 +41,20 @@ export function hostOwnerNames(): Promise<string[]> {
     }
     const words = Object.values(sources)
       .flatMap((full) => full?.split(/\s+/) ?? [])
-      .filter((word) => /^\p{L}[\p{L}'-]{2,}$/u.test(word) && !NOT_NAMES.has(word.toLowerCase()))
+      .filter(
+        (word) => /^\p{L}[\p{L}'\u2019-]{2,}$/u.test(word) && !NOT_NAMES.has(word.toLowerCase())
+      )
     const found = Object.entries(sources).flatMap(([source, full]) => (full ? [source] : []))
     console.info(`[bots] owner names for memory from: ${found.join(', ') || 'none'}`)
     return [...new Set(words)]
   })()
   const read = names
-  // An empty read (a slow or failed source) is tried again next time, never kept.
-  void read.then((found) => found.length === 0 && names === read && (names = null))
+  // An empty or failed read (a slow or broken source) is tried again next time, never kept.
+  const forget = (): void => {
+    if (names === read) {
+      names = null
+    }
+  }
+  void read.then((found) => found.length === 0 && forget(), forget)
   return read
 }

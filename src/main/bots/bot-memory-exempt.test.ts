@@ -70,7 +70,7 @@ describe('a status line that reads as the owner deciding', () => {
   })
 })
 
-describe('the decision check, widened so a miss is rare', () => {
+describe('the decision check, wide where a false match only costs bytes', () => {
   it.each([
     '- 2026-11-03 export menu: CSV first, approved by Dana, #5900',
     '- 2026-11-03 tabs per owner, PR #5902',
@@ -88,7 +88,9 @@ describe('the decision check, widened so a miss is rare', () => {
     "- 2026-11-03 #5922 merged; Dana's call: CSV first",
     '- 2026-11-03 Dana\u2019s decision is tabs, #5924',
     '- 2026-11-03 Dana: CSV first, then JSON',
-    "- 2026-11-03 owner: 'no auto-merge' on #5926"
+    "- 2026-11-03 owner: 'no auto-merge' on #5926",
+    // Kept on purpose: a name's label line costs only its bytes.
+    '- 2026-11-03 Dana: worker ctx_ab12cd34 on #5928'
   ])('keeps %s', (line) => {
     expect(isDecision(line)).toBe(true)
   })

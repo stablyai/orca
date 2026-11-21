@@ -15,9 +15,9 @@ describe("the owner's names as this computer knows them", () => {
   })
 
   it('keeps every word of a name, minus short and generic words', async () => {
-    runProcess.mockResolvedValue({ code: 0, stdout: 'Dana Al Root-Smith Bot\n' })
+    runProcess.mockResolvedValue({ code: 0, stdout: 'Dana Al Root-Smith Bot Team O\u2019Brien\n' })
     const names = await (await freshNames())()
-    expect(names).toEqual(['Dana', 'Root-Smith'])
+    expect(names).toEqual(['Dana', 'Root-Smith', 'O\u2019Brien'])
   })
 
   it('reads again after an empty read, and keeps a read that found names', async () => {

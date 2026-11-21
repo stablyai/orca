@@ -26,8 +26,10 @@ export function salvageLineHash(month: string, line: string): string {
   return createHash('sha256').update(`${month}\n${line.trimEnd()}`).digest('hex')
 }
 
-/** What the owner deciding sounds like. Wide on purpose: a line that matches stays in MEMORY.md,
- *  so a false match only costs its bytes, while a miss moves a decision out. */
+/** What the owner deciding sounds like. A line that matches stays in MEMORY.md, so a false match
+ *  only costs its bytes, while a miss moves a decision out to the journal, where the bot's rule
+ *  is to search before saying nothing is recorded. Most hits name the owner, so they need the
+ *  owner's names to be found. */
 const VERBS = [
   'pick(?:s|ed)?',
   'decid(?:e|es|ed)',
