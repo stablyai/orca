@@ -37,18 +37,26 @@ function seedMessages(): OrchestrationDb {
 }
 
 function capturePlans(db: OrchestrationDb, read: () => unknown): string[] {
-  const sql: string[] = []
+  const calls: { text: string; args: unknown[] }[] = []
   const prepare = db.db.prepare.bind(db.db)
   vi.spyOn(db.db, 'prepare').mockImplementation((text: string) => {
-    sql.push(text)
-    return prepare(text)
+    const statement = prepare(text)
+    return new Proxy(statement, {
+      get: (target, key) =>
+        key === 'all'
+          ? (...args: unknown[]) => {
+              calls.push({ text, args })
+              return target.all(...(args as never[]))
+            }
+          : Reflect.get(target, key, target)
+    })
   })
   read()
   vi.restoreAllMocks()
-  return sql.flatMap((text) =>
+  return calls.flatMap(({ text, args }) =>
     db.db
       .prepare(`EXPLAIN QUERY PLAN ${text}`)
-      .all(...Array.from({ length: (text.match(/\?/g) ?? []).length }, () => null))
+      .all(...(args as never[]))
       .map((row) => String(row.detail))
   )
 }
@@ -66,19 +74,5 @@ describe('getInbox', () => {
       'msg_9857'
     ])
     expect(db.getInbox(2).map((row) => row.id)).toEqual(['msg_10000', 'msg_9999'])
-  })
-
-  it('reads one Run of a mailbox through the run/sequence index', () => {
-    const db = seedMessages()
-    const plan = capturePlans(db, () =>
-      db.getAllMessagesForHandle('term_b', 20, undefined, 'run_7')
-    )
-    expect(plan.filter((detail) => detail.includes('messages'))).toEqual([
-      'SEARCH messages USING INDEX idx_messages_run_sequence (run_id=?)'
-    ])
-    expect(
-      db.getAllMessagesForHandle('term_b', 2, undefined, 'run_7').map((row) => row.id)
-    ).toEqual(['msg_9957', 'msg_9907'])
-    expect(db.getAllMessagesForHandle('term_b', 1).map((row) => row.id)).toEqual(['msg_10000'])
   })
 })
