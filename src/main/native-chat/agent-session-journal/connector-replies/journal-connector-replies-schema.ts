@@ -23,22 +23,34 @@ CREATE TABLE IF NOT EXISTS journal_connector_replies (
   filled_at INTEGER,
   sent_at INTEGER,
   took_ms INTEGER,
+  admitted_at INTEGER,
+  expired_reason TEXT,
   PRIMARY KEY(account, delivery_id)
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS journal_connector_replies_open
   ON journal_connector_replies(session_id, outcome, sent_at);
 `
 
-/** A table an earlier build made has no took_ms; added the same way, with no user_version change. */
+// Columns later builds added; a table an earlier build made gets each the same way, with no
+// user_version change. admitted_at: when the admission committed (request age); expired_reason:
+// local only, why recovery settled a row quietly.
+const ADDED_COLUMNS = [
+  ['took_ms', 'INTEGER'],
+  ['admitted_at', 'INTEGER'],
+  ['expired_reason', 'TEXT']
+] as const
+
 export function ensureJournalConnectorRepliesSchema(db: {
   exec(sql: string): unknown
   prepare(sql: string): { get(): unknown }
 }): void {
   db.exec(JOURNAL_CONNECTOR_REPLIES_SCHEMA)
-  const present = db
-    .prepare(`SELECT 1 FROM pragma_table_info('journal_connector_replies') WHERE name='took_ms'`)
-    .get()
-  if (!present) {
-    db.exec('ALTER TABLE journal_connector_replies ADD COLUMN took_ms INTEGER')
+  for (const [name, type] of ADDED_COLUMNS) {
+    const present = db
+      .prepare(`SELECT 1 FROM pragma_table_info('journal_connector_replies') WHERE name='${name}'`)
+      .get()
+    if (!present) {
+      db.exec(`ALTER TABLE journal_connector_replies ADD COLUMN ${name} ${type}`)
+    }
   }
 }

@@ -89,14 +89,19 @@ const submission = (
   ...fields
 })
 
-const row = (deliveryId: string, messageId = deliveryId): JournalConnectorReplyRow => ({
+const row = (
+  deliveryId: string,
+  messageId = deliveryId,
+  admittedAt: number | undefined = 1
+): JournalConnectorReplyRow => ({
   account: 'account-a',
   deliveryId,
   conversation: SLACK,
   sessionId: 'chat-1',
   epoch: 'e',
   messageId,
-  queued: false
+  queued: false,
+  ...(admittedAt === undefined ? {} : { admittedAt })
 })
 
 function fixture(
@@ -145,7 +150,9 @@ function fixture(
       () => journal,
       () => {}
     ),
-    filled
+    filled,
+    // The fixture's journal times are its sequence numbers: everything here is recent.
+    now: () => 1_000
   })
   const publish = async () => {
     observers.forEach((observer) => observer())

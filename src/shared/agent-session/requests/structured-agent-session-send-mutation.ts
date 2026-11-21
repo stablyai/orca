@@ -52,6 +52,7 @@ export function agentSessionMessagePayload(body: AgentJournalMessageItem): Agent
     asker: _asker,
     connectorConversation: _connectorConversation,
     connectorDelivery: _connectorDelivery,
+    restartOf: _restartOf,
     memorySource: _memorySource,
     triggeredBy: _triggeredBy,
     automationRun: _automationRun,

@@ -206,6 +206,9 @@ export const storedMessageBody = messageBody.extend({
       carried: z.array(z.string()).optional()
     })
     .optional(),
+  restartOf: z
+    .object({ kind: z.enum(['turn', 'turn-item', 'submission']), id: z.string() })
+    .optional(),
   tookOver: z
     .object({ workspace: z.string(), goal: text, home: z.literal(true).optional() })
     .optional(),

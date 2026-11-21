@@ -53,7 +53,8 @@ export async function continueInterruptedStructuredAgentSessionTurn(
       // A paired client may time out before provider startup completes.
       { ...continuationDeps(host, stillCut), answerAtAcceptance: true },
       sessionId,
-      input.offer ?? {},
+      // The cut turn by its row's key: its requests are this continuation's to answer.
+      { ...input.offer, restartOf: { kind: 'turn-item', id: turnItemId } },
       continuationId
     )
     if ('verdict' in started) {

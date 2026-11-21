@@ -22,6 +22,10 @@ import {
   type ConversationReplyFill
 } from './external-conversation-reply-fill'
 import { ConnectorReplyRecovery } from './external-conversation-reply-recovery'
+import {
+  replyRecoveryMirrorsTo,
+  replyRecoveryOffers
+} from './external-conversation-reply-recovery-deps'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { canonicalOrcaSessionId } from '../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id'
 import { threadActsFor } from '../../shared/bots/bot-acts-for'
@@ -189,7 +193,9 @@ function connectorReplyOutbox(
     agentOf: (sessionId) =>
       [...allLinks(store)].find(({ link }) => link.sessionId === sessionId)?.link.agent ?? '',
     fillTurn: fill,
-    filled
+    filled,
+    offers: replyRecoveryOffers,
+    mirrorsTo: replyRecoveryMirrorsTo(store)
   })
   const boot = () => {
     recovery.dispose()

@@ -15,7 +15,8 @@ export type EndedTurnReplies = {
   turnItemId: string
   /** The deliveries the turn answered, opener first (connectorReplyTurnStamps). */
   stamps: readonly AgentJournalConnectorDelivery[]
-  outcome: AgentJournalTurnOutcome
+  /** The turn's verdict; recovery passes a restart's derived interruption too. */
+  outcome: AgentJournalTurnOutcome | 'interruption'
   prose: string
   bot: boolean
   failure?: ConnectorFailure

@@ -1,17 +1,35 @@
 import { createHash } from 'node:crypto'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRestartOf } from '../../../../shared/agent-session/journal/agent-journal-bot-message-fields'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import { restartContinuationMessage } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-continuation'
 import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import type { AgentSessionMutationEnvelope } from '../../../../shared/agent-session/agent-session-wire'
 
+/** What a continuation is sent for: the offer's wording, and the interrupted work it resumes (a
+ *  restart offer's `work`, or a cut turn's row named outright). */
+export type RestartContinuationSource = Pick<AgentSessionResumeMarker, 'activity'> & {
+  work?: AgentSessionResumeMarker['work']
+  restartOf?: AgentJournalRestartOf
+}
+
+/** The work a continuation resumes, written on it so the requests that work answered are answered
+ *  by the continuation (design: slack-reply-lost-restart). */
+export function restartContinuationOf(
+  source: RestartContinuationSource
+): AgentJournalRestartOf | undefined {
+  return source.restartOf ?? (source.work && { kind: source.work.kind, id: source.work.id })
+}
+
 export function restartContinuationBody(
-  marker: Pick<AgentSessionResumeMarker, 'activity'>
+  source: RestartContinuationSource
 ): AgentJournalMessageItem {
+  const restartOf = restartContinuationOf(source)
   return {
     kind: 'message',
     role: 'user',
-    blocks: [{ type: 'text', text: restartContinuationMessage(marker) }]
+    blocks: [{ type: 'text', text: restartContinuationMessage(source) }],
+    ...(restartOf ? { restartOf } : {})
   }
 }
 
@@ -52,7 +70,7 @@ export function isRestartContinuationOf(
 export function restartContinuationEnvelope(
   sessionId: string,
   fence: number,
-  marker: Pick<AgentSessionResumeMarker, 'activity'>,
+  marker: RestartContinuationSource,
   continuationId: string
 ): { envelope: AgentSessionMutationEnvelope; body: AgentJournalMessageItem } {
   const body = restartContinuationBody(marker)

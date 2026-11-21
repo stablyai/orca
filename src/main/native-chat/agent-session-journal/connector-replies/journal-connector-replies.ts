@@ -20,15 +20,16 @@ export function recordJournalConnectorReplies(
   target: Target,
   messageId: string,
   queued: boolean,
-  body: AgentJournalMessageItem
+  body: AgentJournalMessageItem,
+  now: number = Date.now()
 ): void {
   const stamp = body.connectorDelivery
   if (!stamp || stamp.conversation.source !== 'slack') {
     return
   }
   const insert = db.prepare(`INSERT INTO journal_connector_replies
-    (account,delivery_id,source,external_id,session_id,epoch,message_id,queued)
-    VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(account,delivery_id) DO NOTHING`)
+    (account,delivery_id,source,external_id,session_id,epoch,message_id,queued,admitted_at)
+    VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(account,delivery_id) DO NOTHING`)
   for (const deliveryId of [stamp.deliveryId, ...(stamp.carried ?? [])]) {
     insert.run(
       stamp.account,
@@ -38,7 +39,8 @@ export function recordJournalConnectorReplies(
       target.sessionId,
       target.epoch,
       messageId,
-      Number(queued)
+      Number(queued),
+      now
     )
   }
 }
@@ -50,7 +52,7 @@ export function fillJournalConnectorReplies(
   now: number
 ): number {
   const fill = db.prepare(`UPDATE journal_connector_replies SET outcome=?,answer_delivery_id=?,
-    turn_item_id=?,prose=?,failure_json=?,links_json=?,took_ms=?,filled_at=?
+    turn_item_id=?,prose=?,failure_json=?,links_json=?,took_ms=?,expired_reason=?,filled_at=?
     WHERE account=? AND delivery_id=? AND outcome IS NULL`)
   let filled = 0
   for (const row of fills) {
@@ -63,6 +65,7 @@ export function fillJournalConnectorReplies(
         row.failure === undefined ? null : JSON.stringify(row.failure),
         row.links?.length ? JSON.stringify(row.links) : null,
         row.tookMs ?? null,
+        row.expiredReason ?? null,
         now,
         row.account,
         row.deliveryId
@@ -164,6 +167,9 @@ export function readJournalConnectorReplies(
       epoch: String(row.epoch),
       messageId: String(row.message_id),
       queued: Number(row.queued) === 1,
+      ...(row.admitted_at === null || row.admitted_at === undefined
+        ? {}
+        : { admittedAt: Number(row.admitted_at) }),
       ...(outcome === undefined
         ? {}
         : {
@@ -179,6 +185,9 @@ export function readJournalConnectorReplies(
               ...(row.took_ms === null || row.took_ms === undefined
                 ? {}
                 : { tookMs: Number(row.took_ms) }),
+              ...(row.expired_reason === null || row.expired_reason === undefined
+                ? {}
+                : { expiredReason: String(row.expired_reason) }),
               filledAt: Number(row.filled_at)
             }
           })

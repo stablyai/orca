@@ -33,6 +33,8 @@ export type JournalConnectorReplyFill = JournalConnectorReplyKey & {
   links?: ConnectorWorkLink[]
   /** How long the answered turn ran, on the machine's own clock. */
   tookMs?: number
+  /** Local only, never sent: why recovery settled this row quietly instead of posting it. */
+  expiredReason?: string
 }
 
 /** An outbox row not yet accepted by the cloud. */
@@ -43,5 +45,7 @@ export type JournalConnectorReplyRow = JournalConnectorReplyKey & {
   /** The message that admitted it: a submission's clientMessageId, or a queue card's id. */
   messageId: string
   queued: boolean
+  /** When the admission committed; absent on rows an earlier build wrote. */
+  admittedAt?: number
   fill?: Omit<JournalConnectorReplyFill, keyof JournalConnectorReplyKey> & { filledAt: number }
 }
