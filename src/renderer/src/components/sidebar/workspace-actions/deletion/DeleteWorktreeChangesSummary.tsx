@@ -256,7 +256,7 @@ export function DeleteWorktreeChangesSummary({
           ) : null}
           {/* Rows mount on first open and stay, so neither opening nor reopening rebuilds them early. */}
           {opened && ignoredPaths.length > 0 && atRiskLocalFiles ? (
-            <DeleteWorktreeLocalFilesDetails files={atRiskLocalFiles} />
+            <MemoLocalFilesDetails files={atRiskLocalFiles} />
           ) : null}
           {opened ? (
             <DeleteWorktreeChangesFileList preview={preview} unsavedFiles={unsavedFiles} />
@@ -271,6 +271,9 @@ export function DeleteWorktreeChangesSummary({
     </div>
   )
 }
+
+// The ignored-files list changes only when its scan publishes, never on focus or resize.
+const MemoLocalFilesDetails = memo(DeleteWorktreeLocalFilesDetails)
 
 /** Memoized so status, scan and focus updates of the line never rebuild a long list. */
 const DeleteWorktreeChangesFileList = memo(function DeleteWorktreeChangesFileList({
