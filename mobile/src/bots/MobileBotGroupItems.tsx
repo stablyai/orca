@@ -1,7 +1,7 @@
 // A group's Items: every member's items in one list, scoped to the group's rooms, each row naming its
 // bot, as the desktop's group Home panel shows them. A row opens that bot's item in place; the filter
 // (a page here, as the drawer takes no sheet over it) picks bots, a room or all their work.
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { ScrollView, Text, View } from 'react-native'
 import { Inbox, ListFilter } from 'lucide-react-native'
 import { BOT_ITEM_GROUP_IDS, type BotItemGroupId } from '../../../src/shared/bots/bot-item-groups'
@@ -40,7 +40,12 @@ import { ItemGroup, ReadFailed } from './items/MobileBotItemsTab'
 import { MobileBotNeedsYouGroup } from './items/MobileBotNeedsYouGroup'
 import { useBotItemMoves } from './items/use-bot-item-moves'
 import { MobileBotGroupItemsFilter } from './MobileBotGroupItemsFilter'
-import { useMobileBotGroupItems, type BotGroupItemsScope } from './use-mobile-bot-group-items'
+import {
+  memberItemReads,
+  useMobileBotGroupItems,
+  type BotGroupItemsScope
+} from './use-mobile-bot-group-items'
+import type { BotGroupItemReads } from './use-mobile-bot-group-transcript'
 
 type Translate = ReturnType<typeof useMobileTranslation>
 type Page = 'filter' | `item:${string}`
@@ -71,6 +76,7 @@ export function MobileBotGroupItems({
   bots,
   needsYou,
   reads,
+  memberIds,
   online,
   hostName,
   onOpenRoom
@@ -84,8 +90,8 @@ export function MobileBotGroupItems({
   bots: readonly PhoneBot[]
   /** Each bot's Needs you items that aren't stale, from the bot list. */
   needsYou: Readonly<Record<string, number>>
-  /** Bumps on each change the members' items may show. */
-  reads: number
+  reads: BotGroupItemReads
+  memberIds: RefObject<readonly string[]>
   online: boolean
   hostName: string
   /** Opens one of the group's rooms: the original's (undefined) or a thread's. */
@@ -115,7 +121,17 @@ export function MobileBotGroupItems({
   const now = useNow(60_000, visible)
   const moves = useBotItemMoves({ client, hostName, showToast })
 
-  const read = useMobileBotGroupItems({ visible, client, groupId, bots, needsYou, reads, now, t })
+  const read = useMobileBotGroupItems({
+    visible,
+    client,
+    groupId,
+    bots,
+    needsYou,
+    reads,
+    memberIds,
+    now,
+    t
+  })
   const {
     group,
     members,
@@ -299,7 +315,7 @@ export function MobileBotGroupItems({
         uid={itemUid}
         stepper={null}
         showToast={showToast}
-        reads={reads}
+        reads={memberItemReads(reads, itemBot.id)}
         online={online}
         hostName={hostName}
         onBack={pager.close}
