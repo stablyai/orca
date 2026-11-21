@@ -11,20 +11,18 @@ export function isAntigravityFeedbackTool(toolName: string | undefined): boolean
   return toolName === 'ask_question' || toolName === 'ask_permission'
 }
 
-export function isAntigravityHelperSpawnTool(toolName: string | undefined): boolean {
-  return toolName === 'invoke_subagent' || toolName === 'swarm' || toolName === 'run_workflow'
-}
-
-/** A tool call that starts subagents; `swarm` does only for `add`, not for status, kill or messages. */
 export function isAntigravityHelperSpawnCall(toolName: string | undefined, args: unknown): boolean {
-  return toolName === 'swarm'
-    ? isRecord(args) && args.action === 'add'
-    : isAntigravityHelperSpawnTool(toolName)
+  return (
+    toolName === 'invoke_subagent' ||
+    (toolName === 'swarm' && isRecord(args) && args.action === 'add')
+  )
 }
 
-export function isAntigravitySubagentTool(toolName: string | undefined): boolean {
+export function isAntigravityAgentCoordinationTool(toolName: string | undefined): boolean {
   return (
-    isAntigravityHelperSpawnTool(toolName) ||
+    toolName === 'invoke_subagent' ||
+    toolName === 'swarm' ||
+    toolName === 'run_workflow' ||
     toolName === 'send_message' ||
     toolName === 'manage_subagents' ||
     toolName === 'swarm_wait' ||

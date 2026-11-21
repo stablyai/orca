@@ -19,10 +19,10 @@ import { resolvePrompt, resolveToolState } from '../../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../../provider-event-routing'
 import { readLastUserPromptFromTranscript } from '../../transcript-lines'
 import {
+  isAntigravityAgentCoordinationTool,
   isAntigravityFeedbackTool,
   isAntigravityHelperSpawnCall,
   isAntigravityStopStillBusy,
-  isAntigravitySubagentTool,
   isRecognizedAntigravityEvent,
   resolveSimpleAntigravityEventState
 } from './antigravity-event-rules'
@@ -160,7 +160,7 @@ export function normalizeAntigravityEvent(
     (origin === 'root' ||
       (origin === 'unknown' &&
         (Boolean(promptText || readFirstString(hookPayload, ['lastUserInput'])) ||
-          isAntigravitySubagentTool(toolName))))
+          isAntigravityAgentCoordinationTool(toolName))))
   ) {
     paneState.rootConversationId = conversationId
   }

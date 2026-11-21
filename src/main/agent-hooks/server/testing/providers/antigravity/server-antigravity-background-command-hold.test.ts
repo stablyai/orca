@@ -60,22 +60,50 @@ function programDone(): void {
 const state = () => server.getStatusSnapshot()[0]?.state
 const worker = (id: string) => ({ id, state: 'working' as const, startedAt: 1, description: id })
 
-it('keeps a turn waiting on a background command working past the hook-silence fallback, then bounds it', async () => {
-  const command = {
-    stepIdx: 2,
-    toolCall: { name: 'run_command', args: { CommandLine: 'sleep 600', IsDaemon: false } }
-  }
-  await agyHook('PreInvocation', {})
-  await agyHook('PreToolUse', command)
-  await agyHook('Stop', { fullyIdle: false, terminationReason: 'NO_TOOL_CALL' })
-  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-  // agy reports this done once; only the hook-silence recheck can offer it again.
-  programDone()
+const workflowCall = {
+  stepIdx: 3,
+  toolCall: { id: 'workflow-3', name: 'run_workflow', args: { Script: 'print("complete")' } }
+}
 
-  vi.advanceTimersByTime(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
+it.each([
+  ['', false],
+  [' and a workflow that started no subagent', true]
+])(
+  'keeps a turn waiting on a background command%s monitoring past the hook-silence fallback, then bounds it',
+  async (_case, workflow) => {
+    const command = {
+      stepIdx: 2,
+      toolCall: { name: 'run_command', args: { CommandLine: 'sleep 600', IsDaemon: false } }
+    }
+    await agyHook('PreInvocation', {})
+    await agyHook('PreToolUse', command)
+    if (workflow) {
+      await agyHook('PreToolUse', workflowCall)
+      await agyHook('PostToolUse', { ...workflowCall, error: '' })
+    }
+    await agyHook('Stop', { fullyIdle: false, terminationReason: 'NO_TOOL_CALL' })
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    // agy reports this done once; only the hook-silence recheck can offer it again.
+    programDone()
+
+    vi.advanceTimersByTime(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'working',
+      workingMode: 'monitoring'
+    })
+
+    vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS)
+    expect(state()).toBe('done')
+  }
+)
+
+it('ends the turn on root idle after a workflow that started no subagent', async () => {
+  await agyHook('PreInvocation', {})
+  await agyHook('PreToolUse', workflowCall)
+  await agyHook('PostToolUse', { ...workflowCall, error: '' })
   expect(state()).toBe('working')
 
-  vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS)
+  await agyHook('Stop', { fullyIdle: true, terminationReason: 'NO_TOOL_CALL' })
   expect(state()).toBe('done')
 })
 
