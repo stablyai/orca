@@ -163,14 +163,4 @@ describe('mail held by a reattached idle agent', () => {
     expect(worker.alerts()).toHaveLength(1)
     worker.db.close()
   })
-
-  it('asks again after a phone driving the grid kept the request from being sent', async () => {
-    const worker = await reattachedIdleWorker({ repaint: ['not-sent', 'nudged'], quit: null })
-    worker.send('While a phone drives it')
-
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(worker.requestRepaint).toHaveBeenCalledTimes(2)
-    expect(worker.alerts()).toEqual([])
-    worker.db.close()
-  })
 })

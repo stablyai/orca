@@ -37,12 +37,13 @@ describe('terminal command paint after a reattach', () => {
     request.settleReattachedRepaintRequest('nudged')
     expect(request.beginReattachedRepaintRequest()).toBe(false)
 
-    // A phone driving the grid was not asked: the request is still due.
+    // A phone driving the grid repaints through its own layout: no request again, and no alert.
     const phone: TerminalCommandPaintRecord = {}
     awaitReattachedTerminalPaint(phone, 1_000)
     phone.commandPaint?.beginReattachedRepaintRequest()
     phone.commandPaint?.settleReattachedRepaintRequest('not-sent')
-    expect(phone.commandPaint?.beginReattachedRepaintRequest()).toBe(true)
+    expect(phone.commandPaint?.beginReattachedRepaintRequest()).toBe(false)
+    expect(phone.commandPaint?.awaitsPaintNoHostCanRequest()).toBe(false)
 
     // A host that cannot repaint is not asked again for this reattach.
     const conpty: TerminalCommandPaintRecord = {}

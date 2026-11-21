@@ -133,7 +133,7 @@ function describeNextStep(
   }
   if (stop.reason === 'mail-held') {
     return [
-      "Ask the user to open the worker's terminal: Orca delivers the mail as soon as it shows output.",
+      "Ask the user to open the worker's terminal and resize its pane or the window (opening alone may not redraw it): Orca delivers the mail as soon as the agent redraws.",
       `If the worker is no longer needed, stop it with your Orca CLI's \`orchestration worker-stop --dispatch ${dispatchId}\`.`,
       "You won't be told about this hold again; it ends when the mail is delivered."
     ]

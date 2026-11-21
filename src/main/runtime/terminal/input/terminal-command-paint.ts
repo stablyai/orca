@@ -222,8 +222,7 @@ export class TerminalCommandPaint {
     }
   }
 
-  /** True once per reattach while nothing has painted: the one repaint request it allows. One the
-   *  host did not send (`not-sent`, a phone drives the grid) is due again. */
+  /** True once per reattach while nothing has painted: the one repaint request it allows. */
   beginReattachedRepaintRequest(): boolean {
     const begin = this.repaintRequestable && !this.repaintUnavailable
     this.repaintRequestable = false
@@ -231,8 +230,6 @@ export class TerminalCommandPaint {
   }
 
   settleReattachedRepaintRequest(result: RuntimeRepaintResult): void {
-    // Nobody was asked: due again while the fence still waits for this command's paint.
-    this.repaintRequestable ||= result === 'not-sent' && this.awaitingPaint && !this.startSeen
     this.repaintUnavailable ||= result === 'unavailable'
   }
 
