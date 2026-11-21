@@ -66,6 +66,7 @@ export class EligibilityGuest extends DestroyedGuestTestContents {
     ...guestNavigationMethods().navigationHistory,
     length: () => 1,
     getActiveIndex: () => 0,
+    getEntryAtIndex: () => ({ pageState: GET_PAGE_STATE }),
     getAllEntries: () => [{ url: this.getURL(), title: 'Clean', pageState: GET_PAGE_STATE }],
     restore: () => this.load
   }

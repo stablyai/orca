@@ -166,6 +166,7 @@ it('runs production reload after a failed cold restore, then admits an ordinary 
           { url: 'https://example.test/', title: 'Original', pageState: GET_PAGE_STATE }
         ],
         getActiveIndex: () => 0,
+        getEntryAtIndex: () => ({ pageState: GET_PAGE_STATE }),
         restore: vi.fn(() => load)
       },
       close: () => {

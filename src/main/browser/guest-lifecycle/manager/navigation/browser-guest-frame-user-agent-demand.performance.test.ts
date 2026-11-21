@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { afterEach, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ webFrameMain: { fromId: vi.fn() } }))
@@ -21,7 +22,8 @@ import {
 import {
   countTrackedBrowserGuestFrames,
   noteBrowserGuestSubframeNavigation,
-  noteBrowserGuestSubframeUnloaded
+  noteBrowserGuestSubframeUnloaded,
+  trackBrowserPopupUserAgentDemand
 } from './browser-guest-frame-user-agent-demand'
 
 afterEach(() => {
@@ -113,3 +115,33 @@ it.each([30, 300])(
     expect(checks).toBe(2)
   }
 )
+
+it('checks an idle popup a fixed number of times, not on a timer for its lifetime', () => {
+  vi.useFakeTimers()
+  let checks = 0
+  const frame = {
+    frameTreeNodeId: 3,
+    detached: false,
+    isDestroyed: () => {
+      checks += 1
+      return false
+    }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: has every WebContents member the popup tracker reads.
+  const popup = Object.assign(new EventEmitter(), {
+    id: 7,
+    session: {},
+    isDestroyed: () => false,
+    getURL: () => 'https://login.example.test/'
+  }) as unknown as Electron.WebContents
+  trackBrowserPopupUserAgentDemand(popup)
+  popup.emit('did-start-navigation', {
+    url: 'https://teams.microsoft.com/v2/',
+    isMainFrame: false,
+    frame
+  })
+  vi.advanceTimersByTime(10 * 60_000)
+  // Checks 2, 4, 8 and 16 s apart, then none while the popup sits idle.
+  expect(checks).toBe(4)
+  expect(vi.getTimerCount()).toBe(0)
+})

@@ -12,7 +12,7 @@ import { rewritesRequestHeaders } from './browser-manager-navigation'
 
 // An unloading frame leaves the frame tree just after its pagehide.
 const REMOVAL_CHECK_DELAY_MS = 250
-const POPUP_FRAME_RECHECK_MS = { first: 2_000, last: 32_000 }
+const POPUP_FRAME_RECHECK_MS = { first: 2_000, last: 16_000 }
 // One check per guest covers a burst of unloads; churn can't postpone it, and an unload during a
 // pending check earns one more pass in case its frame left the tree after that check.
 const removalChecks = new Map<number, { again: boolean }>()
@@ -161,31 +161,34 @@ function scheduleRemovalCheck(guest: Electron.WebContents): void {
 export function trackBrowserPopupUserAgentDemand(contents: Electron.WebContents): void {
   const { id, session } = contents
   // Electron 43 reports frame creation but not removal, and route popups run no guest preload to
-  // report an iframe's unload. So only while a popup has a site iframe, its tracked frames (only
-  // those, not the frame tree) are rechecked, backing off from 2 s to 32 s; a new site iframe
-  // starts over, and the checks stop once demand is gone or can't change the header listener.
-  const popupSiteFramesMatter = (): boolean =>
-    !contents.isDestroyed() &&
-    getBrowserGuestFrameUserAgentDemand(id).size > 0 &&
-    !browserSessionHeaderListenerIgnoresDemand(session)
+  // report an iframe's unload. So each new site iframe earns a few checks of the tracked frames
+  // (only those, not the frame tree), 2 s to 16 s apart, then none: an idle popup does no work,
+  // and an iframe removed later keeps the header listener (as every session had before) until the
+  // popup navigates or closes.
   let recheck: NodeJS.Timeout | null = null
-  let recheckDelay = POPUP_FRAME_RECHECK_MS.first
-  const scheduleRecheck = (): void => {
+  const scheduleRecheck = (delay: number): void => {
     recheck = setTimeout(() => {
       recheck = null
-      if (!popupSiteFramesMatter()) {
+      if (
+        contents.isDestroyed() ||
+        getBrowserGuestFrameUserAgentDemand(id).size === 0 ||
+        browserSessionHeaderListenerIgnoresDemand(session)
+      ) {
         return
       }
       scheduleRemovalCheck(contents)
-      recheckDelay = Math.min(recheckDelay * 2, POPUP_FRAME_RECHECK_MS.last)
-      scheduleRecheck()
-    }, recheckDelay)
+      if (delay < POPUP_FRAME_RECHECK_MS.last) {
+        scheduleRecheck(delay * 2)
+      }
+    }, delay)
     recheck.unref?.()
   }
-  const watchPopupSiteFrames = (): void => {
-    recheckDelay = POPUP_FRAME_RECHECK_MS.first
-    if (!recheck && popupSiteFramesMatter()) {
-      scheduleRecheck()
+  const watchNewSiteFrames = (demandBefore: number): void => {
+    if (getBrowserGuestFrameUserAgentDemand(id).size > demandBefore) {
+      if (recheck) {
+        clearTimeout(recheck)
+      }
+      scheduleRecheck(POPUP_FRAME_RECHECK_MS.first)
     }
   }
   const onStart = (
@@ -196,8 +199,9 @@ export function trackBrowserPopupUserAgentDemand(contents: Electron.WebContents)
     }>
   ): void => {
     if (!details.isMainFrame) {
+      const demandBefore = getBrowserGuestFrameUserAgentDemand(id).size
       noteBrowserGuestSubframeNavigation(contents, details.url, details.frame)
-      watchPopupSiteFrames()
+      watchNewSiteFrames(demandBefore)
     } else {
       setBrowserGuestPageUserAgentDemand(
         session,

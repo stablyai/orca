@@ -93,7 +93,8 @@ export async function attach(pageId: string, rendererId = 99) {
       getAllEntries: () => [
         { url: 'https://example.test/', title: 'Page', pageState: GET_PAGE_STATE }
       ],
-      getActiveIndex: () => 0
+      getActiveIndex: () => 0,
+      getEntryAtIndex: () => ({ pageState: GET_PAGE_STATE })
     },
     close: () => {
       destroyed = true

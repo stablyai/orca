@@ -86,6 +86,7 @@ export function createModalAdmissionFixture(
           { url: 'https://localhost/app', title: 'Modal', pageState: GET_PAGE_STATE }
         ],
         getActiveIndex: () => 0,
+        getEntryAtIndex: () => ({ pageState: GET_PAGE_STATE }),
         restore: () => new Promise<void>(() => {})
       },
       close: () => {

@@ -32,7 +32,7 @@ vi.mock('../../window/visibility/renderer-publication-throttle', () => ({
 }))
 vi.mock('./manager/registration/browser-guest-discard-protection', () => ({
   readBrowserGuestDiscardProtection: () => ({ protection: 'discardable' }),
-  markBrowserGuestFormPostResult: markFormPost
+  noteBrowserGuestFormData: markFormPost
 }))
 function startNavigation(guest: Electron.WebContents, url = 'https://example.test/b'): void {
   guest.emit('did-start-navigation', { url, isSameDocument: false, isMainFrame: true })
@@ -71,6 +71,7 @@ function attach(id: number, partition = 'persist:profile') {
         { url: 'https://example.test/b', title: 'B', pageState: GET_PAGE_STATE }
       ],
       getActiveIndex: () => 1,
+      getEntryAtIndex: (_index: number) => ({ pageState: GET_PAGE_STATE }),
       restore: vi.fn(() => load)
     },
     close: () => {
@@ -308,10 +309,9 @@ it('keeps a page Chromium recorded as a form POST result, and remembers it', asy
   const page = attach(1)
   page.finishLoad()
   await waitForBrowserPageReady(pageId, page.guest)
-  vi.spyOn(page.guest.navigationHistory, 'getAllEntries').mockReturnValue([
-    { url: 'https://example.test/a', title: 'A', pageState: GET_PAGE_STATE },
-    { url: 'https://example.test/b', title: 'B', pageState: POST_PAGE_STATE }
-  ])
+  vi.spyOn(page.guest.navigationHistory, 'getEntryAtIndex').mockReturnValue({
+    pageState: POST_PAGE_STATE
+  })
   expect(reserveBrowserPageDiscard(pageId, page.guest)).toBe(false)
-  expect(markFormPost).toHaveBeenCalledWith(page.guest)
+  expect(markFormPost).toHaveBeenCalledWith(page.guest, 'form-data')
 })

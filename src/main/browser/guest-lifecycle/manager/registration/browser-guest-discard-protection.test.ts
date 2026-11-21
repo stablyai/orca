@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { expect, it, vi } from 'vitest'
 import {
   installBrowserGuestDiscardProtection,
-  markBrowserGuestFormPostResult,
+  noteBrowserGuestFormData,
   readBrowserGuestDiscardAdmission,
   readBrowserGuestDiscardProtection,
   registerBrowserSessionNotificationGrant,
@@ -118,7 +118,7 @@ it('protects only the current document, never earlier history', () => {
     expect(readBrowserGuestDiscardProtection(guest).reason).toBe('edits')
     navigate('https://example.test/result')
     // A discard found Chromium recorded this page's form body.
-    markBrowserGuestFormPostResult(guest)
+    noteBrowserGuestFormData(guest, 'form-data')
     expect(readBrowserGuestDiscardProtection(guest).reason).toBe('post')
     // A POST result that rewrites its address keeps its protection after Chromium drops the body.
     pageState = POST_PAGE_STATE

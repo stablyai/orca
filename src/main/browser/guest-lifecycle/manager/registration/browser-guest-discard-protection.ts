@@ -7,7 +7,10 @@ export {
   registerBrowserSessionNotificationGrant
 } from './browser-guest-idle-protection'
 import { randomUUID } from 'node:crypto'
-import { readBrowserGuestCurrentFormData } from './browser-page-state-form-data'
+import {
+  type BrowserPageStateFormData,
+  readBrowserGuestCurrentFormData
+} from './browser-page-state-form-data'
 import {
   BROWSER_GUEST_PROTECTION_CHALLENGE,
   BROWSER_GUEST_PROTECTION_REPORT,
@@ -288,10 +291,13 @@ export function protectBrowserGuestMedia(guest: Electron.WebContents): void {
   }
 }
 
-/** A discard found the current page is a form POST result; keep it from further attempts. */
-export function markBrowserGuestFormPostResult(guest: Electron.WebContents): void {
+/** A discard read the current page's form data; a POST result is kept from further attempts. */
+export function noteBrowserGuestFormData(
+  guest: Electron.WebContents,
+  formData: BrowserPageStateFormData
+): void {
   const owner = owners.get(guest)
-  if (owner) {
+  if (owner && formData === 'form-data') {
     owner.currentPost = true
   }
 }
