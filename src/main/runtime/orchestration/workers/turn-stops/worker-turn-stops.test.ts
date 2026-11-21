@@ -117,7 +117,7 @@ function writeAndTake(ctx: ReturnType<typeof setup>) {
     subject: 'Keep going',
     runId: ctx.run.id
   })
-  ctx.db.markAsRead([mail.id])
+  ctx.db.markAsRead([mail.id], { kind: 'orca' })
 }
 
 describe('terminal worker turn stops', () => {
@@ -204,7 +204,7 @@ describe('terminal worker turn stops', () => {
         subject: 'Start',
         runId: ctx.run.id
       })
-      ctx.db.markAsRead([mail.id])
+      ctx.db.markAsRead([mail.id], { kind: 'orca' })
     }
     const report = (type: 'worker_done' | 'heartbeat') => {
       const sent = ctx.db.insertMessage({
