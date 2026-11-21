@@ -137,4 +137,17 @@ describe('saved picks for Update link', () => {
     expect(last.selection).toEqual({ skills: ['deploy', 'electron'], outsideSkills: [] })
     expect(await packed(await read(), last.selection)).toEqual(DEPLOY)
   })
+
+  it('saves no tick the published link left out, even once the skill is back in that folder', async () => {
+    await linkElectronIn('devex')
+    const ticked = tick(await read())
+    // Relinked while Share is open, then published: the link leaves it out.
+    await linkElectronIn('elsewhere')
+    const saved = await published(ticked)
+    expect(saved.selection.outsideSkills).toBeUndefined()
+
+    await linkElectronIn('devex')
+    const last = restoredPicks(saved, await read())
+    expect(await packed(await read(), last.selection)).toEqual(DEPLOY)
+  })
 })
