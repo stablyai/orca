@@ -58,6 +58,8 @@ export class FakeEdgePath {
   readonly connections: WebSocket[] = []
   readonly hellos: Hello[] = []
   readonly acks: string[] = []
+  // Tokens the host sent in auth-refresh frames on this path.
+  readonly authRefreshes: string[] = []
   pings = 0
   answersPings = true
   behaviour: PathBehaviour = 'resume'
@@ -134,6 +136,10 @@ export class FakeEdgePath {
       if (this.behaviour !== 'silent' && socket.readyState === socket.OPEN) {
         socket.send(this.challenge(socket, hello))
       }
+      return
+    }
+    if (message.type === 'auth-refresh') {
+      this.authRefreshes.push('relayJwt' in message ? String(message.relayJwt) : '')
       return
     }
     if (message.type === 'host-challenge-ack') {

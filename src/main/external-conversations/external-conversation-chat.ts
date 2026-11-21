@@ -13,7 +13,7 @@ import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-sessio
 import type { AgentSessionMutationEnvelope } from '../../shared/agent-session/agent-session-wire'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import {
-  allLinks,
+  findLinkForSession,
   sameConversation,
   type ExternalConversationLinkStore
 } from './external-conversation-links'
@@ -161,10 +161,10 @@ export function chatTurnFacts(
   // A continuation answering this link's requests a restart or usage limit cut: durable, unlike a
   // delivery's mark. One claiming another conversation's (the chat moved since) is not this one's.
   const claimed = (sessionId: string): boolean => {
-    const link = [...allLinks(store)].find((linked) => linked.link.sessionId === sessionId)?.link
-    const opener = link && currentChat(chats)?.publishedWork(sessionId)?.activeTurnOpener
+    const opener = currentChat(chats)?.publishedWork(sessionId)?.activeTurnOpener
     const claim = opener?.body.kind === 'message' ? opener.body.connectorClaim : undefined
-    return claim?.origin.some((stamp) => sameConversation(link!, stamp.conversation)) === true
+    const link = claim && findLinkForSession(store, sessionId)?.link
+    return !!link && claim.origin.some((stamp) => sameConversation(link, stamp.conversation))
   }
   return {
     delivered: (sessionId: string) => pending(sessionId) || claimed(sessionId),

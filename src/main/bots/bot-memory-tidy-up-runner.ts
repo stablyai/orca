@@ -34,6 +34,7 @@ import type { BotLookAroundStore } from './bot-look-around-store'
 import { withoutBackgroundRun } from './bot-look-around-state'
 import type { BotMemoryHistoryRow } from '../../shared/bots/bot-memory-history'
 import type { BotMemoryRecord } from './bot-memory-record'
+import type { BotSalvageStore } from './bot-memory-salvage-store'
 import {
   beginTidyUp,
   type BotTidyUpState,
@@ -63,6 +64,8 @@ export type BotTidyUpRunnerDeps = {
   busy: (bot: Bot) => boolean
   memory: Pick<BotMemoryRecord, 'change' | 'history'>
   fs: TidyUpFiles
+  /** Where the status move's lines are noted for salvage. */
+  salvage?: Pick<BotSalvageStore, 'recordMoved'>
   /** The files in the bot's memory/ folder, the archive among them, as far as the prompt reads. */
   memoryFiles: (folder: string) => Promise<TidyUpMemoryFile[]>
   homeFolder: (bot: Bot) => string

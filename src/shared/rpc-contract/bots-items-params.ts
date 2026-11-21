@@ -1,5 +1,9 @@
 import * as z from 'zod'
-import { BOT_ITEM_COMMENT_FILE_MAX_COUNT, BOT_ITEM_STATUSES } from '../bots/bot-items'
+import {
+  BOT_ITEM_COMMENT_FILE_MAX_COUNT,
+  BOT_ITEM_LIMITS,
+  BOT_ITEM_STATUSES
+} from '../bots/bot-items'
 import { BotItemAskSchema } from '../bots/bot-item-ask'
 import { AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT } from '../agent-session/agent-session-attachments'
 import {
@@ -109,7 +113,16 @@ export const BotItemsOwnerList = z.object({
   chatId: OptionalString,
   /** Only these chats' items, counts included; a host before it ignores it, so one chat goes as `chatId`. */
   chatIds: z.array(z.string().min(1)).max(BOT_ITEM_LIST_CHATS_MAX).optional(),
-  closedCursor: OptionalString
+  closedCursor: OptionalString,
+  /** Each item without its description, done means and close note; its own read has them. A host
+   *  before it ignores these three and answers whole. */
+  summary: OptionalBoolean,
+  /** With `closedCursor`: only that Closed page, not the open items again. */
+  closedOnly: OptionalBoolean,
+  /** How many Closed items this read returns (default one page): a list's loaded depth in one read. */
+  closedLimit: z.number().int().min(1).max(BOT_ITEM_LIMITS.listPage).optional(),
+  /** Only these items (those still in scope), with the counts: what a notice named as changed. */
+  uids: z.array(z.string().min(1)).max(BOT_ITEM_LIMITS.listPageMax).optional()
 })
 
 /** Events after `after`, oldest first; or with `newest`, the newest page before `before`. */

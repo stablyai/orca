@@ -906,6 +906,12 @@
     },
     "sharedLinks": {
       "keywordBots": "ボット"
+    },
+    "automaticUpdates": {
+      "title": "自動アップデート",
+      "description": "対応するデスクトップ環境では、Orca が定期チェック時に対象のアップデートをダウンロードし、自動的に再起動してインストールします。",
+      "info": "自動アップデートについて",
+      "saveFailed": "自動アップデートの設定を保存できませんでした。"
     }
   },
   "menu": {
@@ -1898,7 +1904,7 @@
         "hostLocalFolderProject": "フォルダープロジェクトは他のホストにリンクできません"
       },
       "updateCheckClickOptions": {
-        "releaseHint": "{{rcKey}}+クリックで最新の RC を、{{perfKey}}+クリックで最新の perf ビルドを確認します。",
+        "releaseHint": "{{rcKey}}+クリックで最新のリリース候補版（RC）を、{{perfKey}}+クリックで最新のパフォーマンステスト用ビルドを確認します。",
         "localMacBuildHint": "⌥+クリックでローカルの macOS ビルドを選択します。"
       },
       "workspacePortScan": {
@@ -7200,7 +7206,6 @@
           "stopped": "停止中",
           "unverifiable": "不明",
           "title": "WSL ディストリビューションを追加",
-          "description": "Orca はディストリビューション内でサーバーを実行するため、git、ファイル、ターミナルは Linux 上でネイティブに動作します。このディストリビューション内で \\\\wsl.localhost 経由で開いたプロジェクトは、ターミナルがアイドル状態になると自動的にこのホストへ移動します。Windows ドライブ (/mnt/…) 上のプロジェクトはこのコンピューターに残ります。移動したプロジェクトはサイドバーから戻せます。",
           "distro": "ディストリビューション",
           "loading": "WSL ディストリビューションを探しています…",
           "placeholder": "ディストリビューションを選択",
@@ -8080,21 +8085,21 @@
         },
         "GeneralUpdateSettingsSection": {
           "8a52ca1d02": "リリースノート",
-          "d89806cc89": "インストールする準備ができました。",
-          "a6b37929dc": "バージョン",
-          "8311da27ba": "利用可能です。",
           "02dc082e70": "アップデートのダウンロードを開始できませんでした。",
           "ceb579abaf": "アプリのアップデートを確認し、新規 Orca バージョンをインストールします。",
           "bd79d412f0": "更新チェックに失敗しました。 {{value0}}",
           "b9ad70c30d": "アップデートエラー。 {{value0}}",
-          "2a48034c4c": "v{{value0}}... {{value1}}% をダウンロード中",
           "f40d88390d": "最新バージョンを使用しています。",
           "31fd7150cf": "アップデートをチェックしています…",
           "d69a09b672": "アップデートは起動時に自動的にチェックされます。",
-          "e3b9d21c07": "利用可能です。システムパッケージマネージャーを通じて Orca を更新します。Orca はこのリリース自体をインストールできません。",
           "6d27bd46e3": "アップデートをチェックする",
-          "857ca887da": "アップデートのインストール (",
-          "c0a8f827c7": "再起動してアップデート ("
+          "downloadUpdate": "アップデートをダウンロード",
+          "restartToUpdate": "再起動して更新",
+          "versionAvailable": "バージョン {{version}} が利用できます。",
+          "externallyManagedVersionAvailable": "バージョン {{version}} が利用できます。このバージョンは Orca からインストールできないため、システムのパッケージマネージャーで更新してください。",
+          "versionReadyToInstall": "バージョン {{version}} をインストールできます。",
+          "versionInstalling": "バージョン {{version}} をインストールしています。",
+          "downloadingVersion": "バージョン {{version}} をダウンロード中（{{percent}}%）…"
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "ワークスペースの「開く」メニューから利用可能なアプリを選択します。",
@@ -11923,7 +11928,8 @@
           "updating": "サーバーを更新しています…",
           "serverCountOne": "ペアリング済みサーバー 1 台",
           "fdd271abf0": "リモート Orca サーバー",
-          "e4e5937469": "アップデートをチェックする"
+          "e4e5937469": "アップデートをチェックする",
+          "newerCount": "このアプリより新しいサーバー {{value0}} 台"
         },
         "RemoteServerUpdateDialog": {
           "versionUnavailable": "バージョンを取得できません",
@@ -12364,13 +12370,10 @@
         },
         "ReleaseChannelSection": {
           "switchFailed": "そのバージョンに切り替えられませんでした。",
-          "title": "リリースチャンネル",
+          "title": "更新チャンネル",
           "description": "更新チャンネルや、旧バージョンを含む公開済みのバージョンに切り替えられます。ダウングレードも可能ですが、未検証のバージョンは正常に動作しない場合があります。",
           "devOnly": "開発用",
-          "channelAriaLabel": "更新チャンネル",
-          "hourlyWarning": "Hourly のバージョンはテストを経ずに main ブランチから直接公開され、Windows 版は署名されていません。安定版を手元に用意しておいてください。",
-          "dailyWarning": "Daily のバージョンはテストを経ずに main ブランチから直接公開され、Windows 版は署名されていません。安定版を手元に用意しておいてください。",
-          "adhocWarning": "Adhoc のバージョンは未マージのブランチから作成され、Windows 版は署名されていません。公開者がメンテナンスを終了する可能性があるため、安定版を手元に用意しておいてください。",
+          "adhocWarning": "Windows 版は署名されていません。作成者が保守を終了することがあるため、安定版を手元に用意しておいてください。",
           "loadingBuilds": "バージョンを読み込み中…",
           "noBuilds": "バージョンが見つかりません",
           "refresh": "バージョン一覧を更新",
@@ -12380,9 +12383,21 @@
           "willSwitch": "{{value0}} → {{value1}}",
           "webUnavailable": "バージョンの切り替えはデスクトップアプリでのみ利用できます。",
           "devChannelUnsupportedAria": "{{value0}} ({{value1}} のみ)",
-          "devChannelUnsupported": "{{value0}} のバージョンは {{value1}} 向けにのみ提供されます。Linux では Stable または RC を利用してください。",
+          "devChannelUnsupported": "「{{value0}}」チャンネルのバージョンは {{value1}} 向けにのみ提供されます。Linux では「{{stable}}」または「{{rc}}」を利用してください。",
           "downloadInstaller": "インストーラーをダウンロードする",
-          "manualInstallHint": "{{value0}} の Windows 版は署名されていないため、アプリ内の更新機能では署名済みのバージョンに上書きインストールできません。ダウンロードしたインストーラーを一度実行してください。Windows に発行元不明の警告が表示されます。その後は、Stable に戻す場合も含め、ここからバージョンを切り替えられます。"
+          "manualInstallHint": "「{{value0}}」チャンネルの Windows 版は署名されていないため、アプリ内の更新機能では署名済みのバージョンに上書きインストールできません。ダウンロードしたインストーラーを一度実行してください。Windows に発行元不明の警告が表示されます。その後は、「{{stable}}」に戻す場合も含め、ここからバージョンを切り替えられます。",
+          "stableLabel": "安定版",
+          "stableDescription": "一般利用向けの安定版です。",
+          "rcLabel": "RC",
+          "rcDescription": "安定版の公開前に提供されるリリース候補版です。",
+          "hourlyLabel": "毎時",
+          "hourlyDescription": "main から 1 時間ごとに作成されます。",
+          "dailyLabel": "毎日",
+          "dailyDescription": "main から毎日 1 回作成されます。",
+          "adhocLabel": "ブランチ版",
+          "adhocDescription": "マージ前の変更を試すため、ブランチから個別に作成したバージョンです。",
+          "devChannelPlatforms": "macOS と Windows",
+          "scheduledWarning": "このバージョンの公開前に必須のテストはありません。Windows 版は署名されていません。安定版を手元に用意しておいてください。"
         },
         "VoiceMicrophoneSetting": {
           "systemDefault": "システムのデフォルト",
@@ -13119,10 +13134,10 @@
           "resultUpdateSkippedAgent": "{{result}} · {{agent}} で更新をスキップ: {{reason}}"
         },
         "ReleaseBuildPicker": {
-          "build": "ビルド",
-          "searchLabel": "ビルドの検索",
-          "searchPlaceholder": "ビルドを検索…",
-          "noMatches": "一致するビルドはありません。"
+          "build": "バージョン",
+          "searchLabel": "バージョンの検索",
+          "searchPlaceholder": "バージョンを検索…",
+          "noMatches": "一致するバージョンが見つかりません。"
         },
         "AppearanceThemeControl": {
           "useTerminalTheme": "テーマの色を使用",
@@ -19787,6 +19802,10 @@
         "permissionAuto": "代わりに承認",
         "permissionAutoDescription": "承認リクエストを代わりに審査します",
         "permissionFullAccess": "フルアクセス",
+        "permissionAgentSettings": "{{agent}} の設定",
+        "permissionAgentSettingsUsedHint": "{{agent}} の権限設定を使用します。",
+        "permissionAgentSettingsUnnamedHint": "{{agent}} の権限設定を使用します。Orca ではこのモードを表示できません。",
+        "permissionFromAgentSettings": "{{mode}}（{{agent}} の設定より）",
         "permissionFullAccessDescription": "編集やコマンドの前に確認しません",
         "permissionFullAccessCodexDescription": "確認しません。任意のファイルを編集し、ネットワークを使用できます",
         "permissionFullAccessSharedDescription": "編集やコマンドの前に確認しません",
@@ -19803,6 +19822,7 @@
         "sessionAttachmentsFailed": "{{agent}} チャットを開けませんでした。チャットで [再試行] を使用して、ファイルを再度添付してください。",
         "moreControls": "その他のチャット操作",
         "exitPlanMode": "プランモードを終了",
+        "permissionAppliesNextMessage": "{{saved}} は次のメッセージから適用されます。現在は {{active}} を使用しています",
         "botFor": "用途: {{detail}}",
         "bots": "ボット",
         "backToBots": "ボットに戻る",
@@ -22131,9 +22151,9 @@
       "noWorkspace": "何も開いていません",
       "fullPageView": "このページにはサイドバーの行がありません",
       "archived": "アーカイブされたワークスペースはサイドバーに表示されません",
-      "botsOff": "ボットがオフのため、このボットは表示されません",
-      "botHidden": "このボットは一時停止中で、ボットのオプションにより非表示になっています",
-      "renameBotPage": "ボットやグループのページはワークツリーではありません。名前を変更するには、その行のメニューの「名前を変更」を使ってください。",
+      "botsOff": "Bots がオフのため、この bot は表示されません",
+      "botHidden": "この bot は一時停止中で、Bot のオプションにより非表示になっています",
+      "renameBotPage": "bot やグループのページはワークツリーではありません。名前を変更するには、その行のメニューの「名前を変更」を使ってください。",
       "renameUnlisted": "このワークスペースは現在サイドバーに表示されていないため、そこで名前を変更できません。"
     },
     "wslMoved": {
@@ -22290,6 +22310,10 @@
       "showOnHostAriaLabel": "{{host}} の {{name}} をサイドバーに表示",
       "keywordShow": "表示",
       "keywordUnhide": "再表示"
+    },
+    "cardSlot": {
+      "needYouCount": "要対応 {{count}} 件",
+      "needsYou": "要対応"
     }
   },
   "editor": {
@@ -23847,8 +23871,8 @@
     "failure": {
       "releaseNotReady": "このデバイス向けの新しいリリースはまだ利用できません。後でもう一度確認してください。",
       "updateServerUnreachable": "更新サーバーに接続できませんでした。数分後にもう一度お試しください。",
-      "channelUnsupportedPlatform": "{{channel}} ビルドは macOS と Windows 向けにのみ提供されます。",
-      "unsignedDevChannel": "{{channel}} ビルドは未署名で、この署名済みビルドでは Orca の発行元が署名した更新のみをインストールできます。リリースページからインストーラーをダウンロードして一度実行してください。その後は Stable に戻す場合も含め、通常どおり更新できます。",
+      "channelUnsupportedPlatform": "「{{channel}}」チャンネルのバージョンは macOS と Windows 向けにのみ提供されます。",
+      "unsignedDevChannel": "「{{channel}}」チャンネルのバージョンは署名されていません。現在の署名済みバージョンでは、Orca の発行元が署名した更新だけをインストールできます。リリースページからインストーラーをダウンロードし、一度実行してください。その後は、安定版チャンネルへの切り替えも含めて、通常どおり更新できます。",
       "linuxPackageMissing": "ダウンロードしたパッケージが更新キャッシュにありません。更新を再ダウンロードするか、公式リリースページから入手してください。",
       "linuxPackageNotRegular": "更新キャッシュ内のダウンロード済みパッケージが有効なファイルではなくなっています。更新を再ダウンロードするか、公式リリースページから入手してください。",
       "linuxPackageHashMismatch": "ダウンロードしたパッケージが検証済みリリースと一致しなくなったため、Orca はパッケージマネージャーに渡しません。更新を再ダウンロードするか、公式リリースページから入手してください。",
@@ -23863,14 +23887,17 @@
       "unknownReleaseChannel": "不明なリリースチャンネル「{{channel}}」。",
       "invalidReleaseTag": "「{{tag}}」は有効なリリースタグではありません。",
       "releaseRepoNotFound": "{{repo}} にリリース用リポジトリが見つかりません。",
-      "releaseListFailed": "{{channel}} ビルドの一覧を取得できませんでした（HTTP {{status}}）。",
-      "releaseListUnreadable": "{{channel}} のリリース一覧を読み取れませんでした。",
+      "releaseListFailed": "「{{channel}}」チャンネルのバージョン一覧を取得できませんでした（HTTP {{status}}）。",
+      "releaseListUnreadable": "「{{channel}}」チャンネルのバージョン一覧を読み取れませんでした。",
       "rateLimitedSoon": "GitHub のレート制限に達しました。数分後にもう一度お試しください。",
       "rateLimitedSoonSignedOut": "GitHub のレート制限に達しました。数分後にもう一度試すか、`gh auth login` を実行して Orca がアカウントのより高い上限を利用できるようにしてください。",
       "rateLimitedInMinute": "GitHub のレート制限に達しました。約 1 分後にもう一度お試しください。",
       "rateLimitedInMinuteSignedOut": "GitHub のレート制限に達しました。約 1 分後にもう一度試すか、`gh auth login` を実行して Orca がアカウントのより高い上限を利用できるようにしてください。",
       "rateLimitedInMinutes_other": "GitHub のレート制限に達しました。約 {{count}} 分後にもう一度お試しください。",
-      "rateLimitedInMinutesSignedOut_other": "GitHub のレート制限に達しました。約 {{count}} 分後にもう一度試すか、`gh auth login` を実行して Orca がアカウントのより高い上限を利用できるようにしてください。"
+      "rateLimitedInMinutesSignedOut_other": "GitHub のレート制限に達しました。約 {{count}} 分後にもう一度試すか、`gh auth login` を実行して Orca がアカウントのより高い上限を利用できるようにしてください。",
+      "automaticInstallCheckpointFailed": "再起動前に現在のウィンドウを保存できませんでした。アップデートのインストールをやり直してください。",
+      "automaticInstallTerminalBusy": "再起動すると一部のターミナルが終了します。Orca は次回以降のアップデート確認時に再試行します。",
+      "macStagingTimeout": "macOS がアップデートを準備しています。この状態が続く場合は、Orca を終了して開き直してください。"
     }
   },
   "onboarding": {
@@ -25281,7 +25308,8 @@
       "title": "アクティビティ"
     },
     "connectors": {
-      "tab": "コネクター"
+      "tab": "コネクター",
+      "needYou_other": "要対応 {{count}} 件"
     },
     "files": {
       "tab": "ファイル"
@@ -25304,23 +25332,23 @@
       "needsSignIn": "サインインが必要です"
     },
     "palette": {
-      "placeholder": "ボット、チャット、ターミナル、ワークスペース、タスク、設定、操作を検索します…",
-      "description": "ボット、チャット、ターミナル、ワークスペース、タスク、設定、操作を検索します",
-      "scopedPlaceholder": "ボットを検索…",
-      "scopedLabel": "ボットを検索",
-      "scopeHint": "@ を入力するとボットだけを表示します",
-      "chip": "ボット",
-      "chipLabel": "ボット、すべて表示に戻す",
+      "placeholder": "bots、チャット、ターミナル、ワークスペース、タスク、設定、操作を検索します…",
+      "description": "bots、チャット、ターミナル、ワークスペース、タスク、設定、操作を検索します",
+      "scopedPlaceholder": "bots を検索…",
+      "scopedLabel": "bots を検索",
+      "scopeHint": "@ を入力すると bots だけを表示します",
+      "chip": "Bots",
+      "chipLabel": "Bots、すべて表示に戻す",
       "searchEverything": "「{{text}}」をすべての項目から検索",
-      "noMatch": "「{{text}}」に一致するボットはありません",
-      "noBotsYet": "ボットはまだありません",
-      "filtersPaused": "フィルターはワークスペースに適用され、ボットには適用されません",
+      "noMatch": "「{{text}}」に一致する bots はありません",
+      "noBotsYet": "bots はまだありません",
+      "filtersPaused": "フィルターはワークスペースに適用され、bots には適用されません",
       "showEverything": "すべて表示",
-      "footerBots": "ボット",
+      "footerBots": "Bots",
       "matchesPurpose": "目的が一致しています。",
-      "scopedStatus_other": "ボットのみ表示中。{{count}} 件の結果が見つかりました。",
-      "sidebarSearchLabel": "ボット、ワークスペース、ブラウザタブを検索する",
-      "section": "ボット"
+      "scopedStatus_other": "bots のみ表示中。{{count}} 件の結果が見つかりました。",
+      "sidebarSearchLabel": "bots、ワークスペース、ブラウザタブを検索する",
+      "section": "Bots"
     },
     "templates": {
       "browse": "テンプレートを見る",

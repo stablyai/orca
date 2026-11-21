@@ -22,7 +22,7 @@ import { settleDeadGroupMailTurns } from './bot-group-dead-mail-turns'
 import { reserveGroupTurns } from './bot-group-turn-reservation'
 import { BOT_ORCA_CLI } from './bot-preamble'
 import { assertRemotePoster, deliverRemoteAsks } from './bot-group-remote'
-import { collectRemoteAnswers, presentRemoteAsks } from './bot-group-remote-answers'
+import { collectRemoteAnswers, presentPageAnswers } from './bot-group-remote-answers'
 import { remoteAsksFor } from './bot-group-remote-question'
 
 /** Turns members' @Name replies may wake per person's post: the Slack connector's agent-to-agent cap. */
@@ -294,7 +294,7 @@ export function readBotGroup(
   return {
     group,
     // Saved replies feed later posts' context only; the room renders each turn from its chat.
-    messages: presentRemoteAsks(messages).map((message) => ({
+    messages: presentPageAnswers(messages).map((message) => ({
       ...message,
       turns: message.turns.map(({ reply: _reply, ...turn }) => turn)
     })),
