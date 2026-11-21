@@ -75,6 +75,7 @@ export class Session extends SessionProcessInspection {
     })
     try {
       this.subprocess.onData((data) => {
+        this._outputChunks += 1
         if (!this._disposed) {
           this.shellReady.ingestSubprocessData(data)
         }

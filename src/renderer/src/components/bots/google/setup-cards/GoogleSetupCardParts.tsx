@@ -9,7 +9,6 @@ import {
   NativeChatCardAvatar,
   NativeChatCardFrame
 } from '@/components/native-chat/NativeChatCardFrame'
-import type { GoogleSetupRun } from '../../../../../../shared/google/google-setup-run'
 
 /** A setup card's frame: the Google mark, a heading, an optional right-hand state, title and action bar. */
 export function GoogleSetupCardFrame({
@@ -102,11 +101,6 @@ export function GoogleSetupChoiceRow({
       )}
     </button>
   )
-}
-
-/** A choice made before the bot started in Google Cloud can still change; after, it says so in chat. */
-export function googleSetupChoiceChangeable(run: GoogleSetupRun): boolean {
-  return run.state === 'running' && (run.steps.project?.status ?? 'pending') === 'pending'
 }
 
 /** What to do on a step, one numbered line each, with its key words in bold. */

@@ -9,10 +9,10 @@ import {
   buildRuntimeMobileBrowserProjection,
   buildRuntimeMobileEditorDraftsProjection,
   buildRuntimeMobileOpenFilesProjection,
-  buildRuntimeMobileTabsProjection,
   getBrowserPagesByWorkspace,
   getBrowserTabsByWorktree
 } from './sync-projections'
+import { buildRuntimeMobileTabsProjection } from './mobile-tabs-projection'
 import { resolveMobileTerminalTheme } from '../../../../shared/terminal-themes/mobile-terminal-theme'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AppState } from '@/store/types'

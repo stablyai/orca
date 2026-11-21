@@ -18,7 +18,8 @@ vi.mock(
   '../../../worker-thread-child-process/worker-thread-child-process',
   async (importOriginal) => ({
     ...(await importOriginal<object>()),
-    canSpawnOnWorkerThread: () => false
+    canSpawnOnWorkerThread: () => false,
+    whenSpawnWorkerReady: async () => false
   })
 )
 

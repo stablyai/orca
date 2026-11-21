@@ -27,11 +27,13 @@ type LocalPartialRemovalRecoveryArgs = {
   deleteBranch: boolean
   closeWatcher: (worktreePath: string) => Promise<void>
   signal?: AbortSignal
+  /** Rechecks the folder is still the accepted checkout immediately before its files are deleted. */
+  beforeLeftoverDelete?: () => Promise<void>
 }
 
 type StaleLocalWorktreeRegistrationArgs = Omit<
   LocalPartialRemovalRecoveryArgs,
-  'error' | 'force' | 'closeWatcher' | 'signal'
+  'error' | 'force' | 'closeWatcher' | 'signal' | 'beforeLeftoverDelete'
 >
 
 function preservedBranchResult(
@@ -124,6 +126,7 @@ export async function recoverPartialLocalWorktreeRemoval(
   // Release watcher handles before recursively finishing Git’s partial removal; abort if closing fails.
   await args.closeWatcher(args.canonicalWorktreePath)
   throwIfSignalAborted(args.signal)
+  await args.beforeLeftoverDelete?.()
   try {
     await removeLocalWorktreePath(
       args.canonicalWorktreePath,
