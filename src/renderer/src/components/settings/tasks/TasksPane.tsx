@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Github, Gitlab } from 'lucide-react'
+import { FolderOpen, Github, Gitlab } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 import {
@@ -92,6 +92,18 @@ const PROVIDER_META: Record<
       )
     },
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  local: {
+    get label() {
+      return translate('auto.components.settings.TasksPane.localLabel', 'Local')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.localDescription',
+        'Browse task files stored on this machine. No account needed.'
+      )
+    },
+    Icon: ({ className }) => <FolderOpen className={className} />
   }
 }
 
