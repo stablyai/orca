@@ -1,5 +1,6 @@
 import {
   holdPaneForNewerDaemon,
+  serverHoldHost,
   type HeldPaneReopenOutcome
 } from '../../session-restore/newer-daemon/newer-daemon-hold-state'
 import { recordPtyConnectDiagnostic } from '../instrumentation/pty-connect-diagnostics'
@@ -8,7 +9,7 @@ import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 // Clears the saved screen the hold painted so the restore below paints it once.
 const CLEAR_HELD_SCREEN = '\x1b[0m\x1b[2J\x1b[3J\x1b[H'
 
-/** Hold refused local restores read-only with saved output while a newer daemon may own the session; release reconnects. */
+/** Hold a refused restore read-only while a newer daemon may own the session; release reconnects. */
 export function holdForNewerDaemon(
   session: ConnectPanePtySession,
   // Null when main refused a saved id the renderer never had; such a pane has no screen to paint.
@@ -26,24 +27,35 @@ export function holdForNewerDaemon(
   let paintedScreen = false
   // Why: nothing backs this pane, so keystrokes have nowhere to go.
   terminal.options.disableStdin = true
-  const forget = holdPaneForNewerDaemon(session.cacheKey, {
-    resumable: Boolean(session.buildColdRestoreAgentResumeStartup()),
-    release: async () => {
-      held = false
-      forget()
-      if (!isCurrent()) {
-        return { reopened: false, agentResumed: false }
+  const { runtimeEnvironmentId } = session
+  // A paired server's newer build can only be stopped on that server, so its panes can only retry.
+  const host = runtimeEnvironmentId ? serverHoldHost(runtimeEnvironmentId) : undefined
+  const forget = holdPaneForNewerDaemon(
+    session.cacheKey,
+    {
+      resumable: Boolean(session.buildColdRestoreAgentResumeStartup()),
+      release: async () => {
+        held = false
+        forget()
+        if (!isCurrent()) {
+          return { reopened: false, agentResumed: false }
+        }
+        terminal.options.disableStdin = false
+        if (paintedScreen) {
+          session.writeReplayData(CLEAR_HELD_SCREEN)
+        }
+        return reconnect()
       }
-      terminal.options.disableStdin = false
-      if (paintedScreen) {
-        session.writeReplayData(CLEAR_HELD_SCREEN)
-      }
-      return reconnect()
-    }
-  })
+    },
+    host
+  )
   session.waitTeardowns.push(forget)
   // Why: a remote pane's layout restore already painted its saved buffer; local panes keep none.
-  if (!sessionId || session.deps.restoredViewportBlankingPanesRef?.current.has(session.pane.id)) {
+  if (
+    !sessionId ||
+    runtimeEnvironmentId ||
+    session.deps.restoredViewportBlankingPanesRef?.current.has(session.pane.id)
+  ) {
     return
   }
   void window.api.pty

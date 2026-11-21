@@ -6,6 +6,7 @@ import { PaneTopWarningBanner } from '../../appearance/pane-top-banner/PaneTopWa
 import {
   dismissHeldPaneBanner,
   reopenHeldTerminals,
+  retryHeldPane,
   useNewerDaemonHold
 } from './newer-daemon-hold-state'
 
@@ -25,6 +26,23 @@ export function NewerDaemonHoldBanner({
   }
   const reopening = hold.phase === 'reopening'
   const failed = hold.phase === 'failed'
+  // Why: Reopen stops the newer build's terminals, which the user would not expect from the label alone.
+  const consequence = hold.canReopen
+    ? t(
+        'terminal.newerDaemonBanner.reopenStopsNewer',
+        'Reopening stops every terminal still running in the newer version. To keep them, open the newer version instead.'
+      )
+    : t(
+        'terminal.newerDaemonBanner.reopenOnHost',
+        "It may still be running in a newer version of Orca on the computer you're connected to. Reopen it there or update Orca there, then try again."
+      )
+  const resumeNote =
+    hold.resumable && hold.canReopen
+      ? t(
+          'terminal.newerDaemonBanner.resumableBody',
+          'Reopen it here to keep working. Your agent session will resume.'
+        )
+      : null
   return (
     <PaneTopWarningBanner
       title={
@@ -35,32 +53,36 @@ export function NewerDaemonHoldBanner({
               'This terminal was opened in a newer version of Orca'
             )
       }
-      body={
-        !failed && hold.resumable
-          ? t(
-              'terminal.newerDaemonBanner.resumableBody',
-              'Reopen it here to keep working. Your agent session will resume.'
-            )
-          : undefined
-      }
+      body={failed ? undefined : resumeNote ? `${consequence} ${resumeNote}` : consequence}
       primaryAction={
-        <Button
-          type="button"
-          variant="outline"
-          size="xs"
-          disabled={reopening}
-          onClick={() => void reopenHeldTerminals(paneKey)}
-        >
-          {reopening ? <LoadingSpinner className="size-3" /> : null}
-          {reopening
-            ? t('terminal.newerDaemonBanner.reopening', 'Reopening…')
-            : failed
-              ? t('terminal.newerDaemonBanner.tryAgain', 'Try again')
-              : t('terminal.newerDaemonBanner.reopenTerminal', 'Reopen {{count}} terminals', {
-                  count: hold.heldCount,
-                  defaultValue_one: 'Reopen terminal'
-                })}
-        </Button>
+        !hold.canReopen ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            onClick={() => void retryHeldPane(paneKey)}
+          >
+            {t('terminal.newerDaemonBanner.tryAgain', 'Try again')}
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            disabled={reopening}
+            onClick={() => void reopenHeldTerminals(paneKey)}
+          >
+            {reopening ? <LoadingSpinner className="size-3" /> : null}
+            {reopening
+              ? t('terminal.newerDaemonBanner.reopening', 'Reopening…')
+              : failed
+                ? t('terminal.newerDaemonBanner.tryAgain', 'Try again')
+                : t('terminal.newerDaemonBanner.reopenTerminal', 'Reopen {{count}} terminals', {
+                    count: hold.heldCount,
+                    defaultValue_one: 'Reopen terminal'
+                  })}
+          </Button>
+        )
       }
       onDismiss={reopening ? undefined : () => dismissHeldPaneBanner(paneKey)}
     />

@@ -72,20 +72,27 @@ function flushPendingHolds(): void {
   newerDaemonHoldStore.setState(({ panes }) => ({ panes: { ...panes, ...added } }))
 }
 
+/** The hold host of a pane a paired server refused; it has no Reopen unless that server's frames give one. */
+export function serverHoldHost(environmentId: string): string {
+  return `server:${environmentId}`
+}
+
 /** Registers a held pane; the returned teardown forgets it if it unmounts while held. */
 export function holdPaneForNewerDaemon(
   paneKey: string,
-  pane: { resumable: boolean; release: () => Promise<HeldPaneReopenOutcome> }
+  pane: { resumable: boolean; release?: () => Promise<HeldPaneReopenOutcome> },
+  host: string = LOCAL_HOLD_HOST
 ): () => void {
-  pendingHolds.set(paneKey, { ...pane, host: LOCAL_HOLD_HOST, phase: 'held', dismissed: false })
+  pendingHolds.set(paneKey, { ...pane, host, phase: 'held', dismissed: false })
   pendingHoldsFlush ??= setTimeout(flushPendingHolds, HOLD_REGISTRATION_BATCH_MS)
   return () => {
-    if (pendingHolds.get(paneKey)?.release === pane.release) {
+    const pending = pendingHolds.get(paneKey)
+    if (pending?.host === host && pending.release === pane.release) {
       pendingHolds.delete(paneKey)
       return
     }
     newerDaemonHoldStore.setState(({ panes }) => {
-      if (panes[paneKey]?.release !== pane.release) {
+      if (panes[paneKey]?.host !== host || panes[paneKey]?.release !== pane.release) {
         return {}
       }
       const { [paneKey]: _forgotten, ...rest } = panes
@@ -109,15 +116,23 @@ function heldCountOnHost(panes: Record<string, HeldPane>, host: string | undefin
 }
 
 /** This pane's banner state, null when not held or dismissed; heldCount is every pane one Reopen releases. */
-export function useNewerDaemonHold(
-  paneKey: string
-): { resumable: boolean; phase: NewerDaemonHoldPhase; heldCount: number } | null {
+export function useNewerDaemonHold(paneKey: string): {
+  resumable: boolean
+  phase: NewerDaemonHoldPhase
+  heldCount: number
+  canReopen: boolean
+} | null {
   const pane = useStore(newerDaemonHoldStore, (state) => state.panes[paneKey])
   const heldCount = useStore(newerDaemonHoldStore, (state) =>
     heldCountOnHost(state.panes, pane?.host)
   )
   return pane && !pane.dismissed
-    ? { resumable: pane.resumable, phase: pane.phase, heldCount }
+    ? {
+        resumable: pane.resumable,
+        phase: pane.phase,
+        heldCount,
+        canReopen: hostReopens.has(pane.host)
+      }
     : null
 }
 
@@ -150,7 +165,7 @@ export function showServerHeldPanes(
   paneKeys: readonly string[],
   reopen: () => Promise<boolean>
 ): void {
-  const host = `server:${environmentId}`
+  const host = serverHoldHost(environmentId)
   if (paneKeys.length === 0) {
     hostReopens.delete(host)
   } else {
@@ -169,6 +184,20 @@ export function showServerHeldPanes(
     }
     return { panes: next }
   })
+}
+
+/** Starts one held pane again where its host's newer build can't be stopped from here. */
+export async function retryHeldPane(paneKey: string): Promise<void> {
+  flushPendingHolds()
+  const release = newerDaemonHoldStore.getState().panes[paneKey]?.release
+  if (!release) {
+    return
+  }
+  newerDaemonHoldStore.setState(({ panes }) => {
+    const { [paneKey]: _retried, ...rest } = panes
+    return { panes: rest }
+  })
+  await release().catch(() => undefined)
 }
 
 /** Stops the newer build holding this pane, then lets each of that host's held panes start. */

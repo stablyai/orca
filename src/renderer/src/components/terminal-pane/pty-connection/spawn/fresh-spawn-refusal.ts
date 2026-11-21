@@ -11,8 +11,7 @@ export function freshSpawnRefusal(
   session: ConnectPanePtySession,
   message: string
 ): FreshSpawnRefusal | null {
-  // Why local only: a paired host refuses for its own daemon, which this window cannot stop.
-  if (!session.runtimeEnvironmentId && message.includes(NEWER_DAEMON_HOLD_ERROR)) {
+  if (message.includes(NEWER_DAEMON_HOLD_ERROR)) {
     return 'newer-daemon'
   }
   return isPaneOwnerRefusal(message) ? 'pane-owner' : null
