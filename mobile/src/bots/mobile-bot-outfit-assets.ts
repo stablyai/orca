@@ -12,8 +12,7 @@ const OUTFIT_SHEETS: Record<BotAvatarOutfit, () => ImageSourcePropType> = {
   'night-shift': () => require('../../../src/shared/bot-mascots/outfits/night-shift.webp'),
   artist: () => require('../../../src/shared/bot-mascots/outfits/artist.webp'),
   scientist: () => require('../../../src/shared/bot-mascots/outfits/scientist.webp'),
-  party: () => require('../../../src/shared/bot-mascots/outfits/party.webp'),
-  security: () => require('../../../src/shared/bot-mascots/outfits/security.webp')
+  party: () => require('../../../src/shared/bot-mascots/outfits/party.webp')
 }
 
 /** Mascots per row of an outfit sheet. */

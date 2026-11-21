@@ -163,8 +163,7 @@ export function BotPictureOutfits({
     'night-shift': t('bots.new.outfitNightShift', 'Night shift'),
     artist: t('bots.new.outfitArtist', 'Artist'),
     scientist: t('bots.new.outfitScientist', 'Scientist'),
-    party: t('bots.new.outfitParty', 'Party'),
-    security: t('bots.new.outfitSecurity', 'Security')
+    party: t('bots.new.outfitParty', 'Party')
   }
   const label = t('bots.new.pictureOutfit', 'Outfit')
   return (

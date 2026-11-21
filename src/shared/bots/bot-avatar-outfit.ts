@@ -10,8 +10,7 @@ export const BOT_AVATAR_OUTFITS = [
   'night-shift',
   'artist',
   'scientist',
-  'party',
-  'security'
+  'party'
 ] as const
 
 export type BotAvatarOutfit = (typeof BOT_AVATAR_OUTFITS)[number]
