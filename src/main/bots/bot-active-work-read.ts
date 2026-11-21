@@ -68,7 +68,9 @@ export function createBotActiveWorkReader() {
       const items = await reads.views([...waiting, ...working.items])
       return botActiveWorkSection(items, workers, {
         // Items the reads left out still count toward "N more".
-        unread: Math.max(0, (working.counts.working ?? 0) - working.items.length),
+        unread:
+          Math.max(0, (working.counts.working ?? 0) - working.items.length) +
+          Math.max(0, (page.counts.needs_you ?? 0) - waiting.length),
         now
       })
     })()
