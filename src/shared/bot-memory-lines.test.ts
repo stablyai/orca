@@ -183,7 +183,9 @@ describe('an undashed line', () => {
     const file = 'releases on Tuesdays\n'
     const [fact] = parseBotMemoryFacts(file)
     expect(editBotMemoryFact(file, fact, '# not a heading')).toBe('- # not a heading\n')
-    // Text no line can state as a fact leaves the line as it was.
+    // Text no line can state as a fact leaves the line as it was, undashed or not.
+    const undashed = 'releases\nother\n'
+    expect(editBotMemoryFact(undashed, parseBotMemoryFacts(undashed)[0], '***')).toBe(undashed)
     for (const rule of ['***', '---', '===', '* * *']) {
       expect(
         editBotMemoryFact(
