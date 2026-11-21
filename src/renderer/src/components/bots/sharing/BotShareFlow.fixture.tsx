@@ -410,3 +410,18 @@ export const skillsAllLeftOut = defineFixture({
     }),
   render: flow(builder, null)
 })
+/** A skill a linked project links in from outside itself: listed with the project, unticked. */
+const linkedIn = { name: 'electron', description: '', homePath: null, optInFrom: 'team-skills' }
+export const skillsLinkedIn = defineFixture({
+  ...base,
+  setup: () =>
+    stub({
+      prepare: async () => {
+        const { available } = candidate()
+        const skills = [{ ...available.skills[0], homePath: null }, linkedIn]
+        return ok({ candidate: candidate({ available: { ...available, skills } }) })
+      }
+    }),
+  render: flow(builder, null),
+  interact: () => click('Skills')
+})
