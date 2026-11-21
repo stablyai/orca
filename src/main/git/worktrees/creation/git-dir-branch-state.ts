@@ -81,23 +81,21 @@ export async function readRefLink(path: string): Promise<string | undefined> {
     rethrowUnlessMissing(error)
     return undefined
   }
-  return target.startsWith('refs/') ? `ref: ${target}` : readLinkedRefTarget(path)
+  return target.startsWith('refs/') ? `ref: ${target}` : readRefContent(path)
 }
 
 // Refs are a short line; anything larger, or not a regular file, is left to Git's listing.
 const MAX_REF_BYTES = 4096
 
-/** The content a non-ref symlink leads to, without blocking on a FIFO or buffering a large file. */
-async function readLinkedRefTarget(path: string): Promise<string> {
-  let handle: Awaited<ReturnType<typeof open>>
-  try {
-    handle = await open(path, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0))
-  } catch (error) {
-    rethrowUnlessMissing(error)
-    return ''
-  }
+/** A ref's content without blocking on a FIFO or buffering a large file; '' for a directory. */
+async function readSmallRef(path: string, extraFlags = 0): Promise<string> {
+  const handle = await open(path, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0) | extraFlags)
   try {
     const info = await handle.stat()
+    // A ref-name directory (`refs/heads/feature/` beside an unborn `feature`) holds no ref.
+    if (info.isDirectory()) {
+      return ''
+    }
     if (!info.isFile() || info.size > MAX_REF_BYTES) {
       return UNRESOLVED_HEAD
     }
@@ -108,6 +106,15 @@ async function readLinkedRefTarget(path: string): Promise<string> {
       : normalizeHead(buffer.toString('utf8', 0, bytesRead))
   } finally {
     await handle.close()
+  }
+}
+
+async function readRefContent(path: string): Promise<string> {
+  try {
+    return await readSmallRef(path)
+  } catch (error) {
+    rethrowUnlessMissing(error)
+    return ''
   }
 }
 
@@ -224,15 +231,12 @@ export async function readRefFile(path: string): Promise<string> {
     return readRefFileByLstat(path)
   }
   try {
-    return normalizeHead(
-      await readFile(path, { encoding: 'utf8', flag: constants.O_RDONLY | NO_FOLLOW })
-    )
+    return await readSmallRef(path, NO_FOLLOW)
   } catch (error) {
     const code = errorCode(error)
     if (code === 'ELOOP' || code === 'EMLINK') {
       return (await readRefLink(path)) ?? UNRESOLVED_HEAD
     }
-    // A ref-name directory (`refs/heads/feature/` beside an unborn `feature`) holds no ref.
     if (code === 'EISDIR') {
       return ''
     }
@@ -254,5 +258,5 @@ async function readRefFileByLstat(path: string): Promise<string> {
     rethrowUnlessMissing(error)
     return ''
   }
-  return normalizeHead(await readOptional(path))
+  return readRefContent(path)
 }

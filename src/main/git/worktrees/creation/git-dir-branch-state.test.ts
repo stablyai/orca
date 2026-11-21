@@ -13,7 +13,7 @@ afterEach(async () => {
 
 // Windows has neither FIFOs nor unprivileged symlinks.
 it.skipIf(process.platform === 'win32')(
-  'leaves a ref symlinked to a FIFO or an oversized file unresolved instead of reading it',
+  'leaves a ref that is, or links to, a FIFO or an oversized file unresolved instead of reading it',
   async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-ref-link-'))
     execFileSync('mkfifo', [join(root, 'fifo')])
@@ -23,5 +23,7 @@ it.skipIf(process.platform === 'win32')(
 
     await expect(readRefFile(join(root, 'to-fifo'))).resolves.toBe(UNRESOLVED_HEAD)
     await expect(readRefFile(join(root, 'to-large'))).resolves.toBe(UNRESOLVED_HEAD)
+    await expect(readRefFile(join(root, 'fifo'))).resolves.toBe(UNRESOLVED_HEAD)
+    await expect(readRefFile(join(root, 'large'))).resolves.toBe(UNRESOLVED_HEAD)
   }
 )
