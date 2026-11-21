@@ -480,3 +480,24 @@ it.each([
     expect(exits).toEqual(expected)
   }
 )
+
+describe('a hibernated pane whose agent reports after its terminal stopped', () => {
+  it('keeps the sleep record main saved for the wake', async () => {
+    const slept: SleepingAgentSessionRecord = {
+      ...OLDER_CHECKPOINT,
+      origin: 'worktree-sleep',
+      restoreOnTabOpenOnly: true
+    }
+    const fixture = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        sleepingAgentSessionsByPaneKey: { [PANE_KEY]: slept }
+      })
+    )
+    const runtime = new OrcaRuntimeService(fixture.runtimeStore)
+    const { providerSession: _session, ...lateStatus } = NEWER_STATUS
+    runtime.recordHookStatusResume({ ...lateStatus, state: 'working' })
+    runtime.recordHookStatusResume({ ...lateStatus, receivedAt: 300, stateStartedAt: 300 })
+
+    expect(await runtime.readSavedResumeSource(TEST_WORKTREE_ID, PANE_KEY)).toEqual(slept)
+  })
+})

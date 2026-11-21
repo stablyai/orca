@@ -143,4 +143,73 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     expect(state.lastTerminalInputAtByPaneKey[targetPaneKey]).toBeUndefined()
     expect(state.lastTerminalInputAtByPaneKey[siblingPaneKey]).toBe(1100)
   })
+
+  // The killed agent reports once more while the PTY stops (and can after); that echo must not rewrite the resume record.
+  it('keeps the hibernation resume record when the stopping agent reports a late status', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const leaf = '11111111-1111-4111-8111-111111111111'
+    const paneKey = `tab-1:${leaf}`
+    seedStore(store, {
+      worktreesByRepo: { repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })] },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex', ptyId: 'pty-agent' })]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: leaf },
+          activeLeafId: leaf,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leaf]: 'pty-agent' }
+        }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-agent'] }
+    })
+    const routing = { tabId: 'tab-1', worktreeId: wt }
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'done', prompt: 'resume target', agentType: 'codex' },
+        'Codex',
+        { updatedAt: 2000, stateStartedAt: 1000 },
+        routing,
+        { providerSession: { key: 'session_id', id: 'target-session' } }
+      )
+    mockApi.pty.kill.mockImplementation(async () => {
+      store
+        .getState()
+        .setAgentStatus(
+          paneKey,
+          { state: 'working', prompt: '', agentType: 'codex' },
+          'Codex',
+          { updatedAt: 3000, stateStartedAt: 3000 },
+          routing,
+          { providerSession: { key: 'session_id', id: 'target-session' } }
+        )
+    })
+
+    await store.getState().shutdownCompletedAgentPaneForHibernation(wt, {
+      paneKey,
+      tabId: 'tab-1',
+      leafId: leaf,
+      ptyId: 'pty-agent'
+    })
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'working', prompt: '', agentType: 'codex' },
+        'Codex',
+        { updatedAt: 4000, stateStartedAt: 4000 },
+        routing,
+        { providerSession: { key: 'session_id', id: 'target-session' } }
+      )
+    store.getState().captureAllSleepingAgentSessions('periodic')
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+      origin: 'worktree-sleep',
+      providerSession: { key: 'session_id', id: 'target-session' }
+    })
+  })
 })
