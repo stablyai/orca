@@ -71,3 +71,6 @@ export type AgentCopy = {
   /** Hidden from agent pickers, like a turned-off agent. */
   disabled?: true
 }
+
+/** Named copies of built-in agents, each with its own launch setup. */
+export type AgentCopyGlobalSettings = { agentCopies?: AgentCopy[] }

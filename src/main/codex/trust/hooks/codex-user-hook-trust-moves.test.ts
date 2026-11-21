@@ -125,18 +125,22 @@ describe('real-home user hook trust rebasing', () => {
 
   // Expected key bytes use POSIX path spelling.
   it.skipIf(process.platform === 'win32')(
-    'rewrites only the moved blocks, carrying each body verbatim and computing nothing',
+    'moves mixed TOML hook key spellings and keeps both bodies verbatim',
     () => {
       const orca = command('orca-hook')
       const user = command('user-hook')
+      const disabled = command('disabled-hook')
       const other = command('other-event-hook')
       const userBody =
         'trusted_hash = "sha256:written-by-codex"\nnote = "a field Orca does not know"'
+      const disabledBody = 'enabled = false\ntrusted_hash = "sha256:disabled"'
       const unrelated = [
-        'model = "user-model" # the user\'s own comment',
+        'model = "user-model" # a user comment',
         '',
         '[projects."/work/app"]',
         'trust_level = "trusted"',
+        '',
+        '["hooks"."state"]',
         '',
         `[hooks.state."${hooksPath}:post_tool_use:0:0"]`,
         'trusted_hash = "sha256:untouched"',
@@ -144,43 +148,28 @@ describe('real-home user hook trust rebasing', () => {
       ].join('\n')
       writeFileSync(
         configPath,
-        `${unrelated}\n[hooks.state."${hooksPath}:stop:1:0"]\n${userBody}\n`
+        `${unrelated}\n[hooks.state."${hooksPath}:stop:1:0"]\n${userBody}\n` +
+          `\n["hooks"."state"."${hooksPath}:stop:2:0"]\n${disabledBody}\n`
       )
 
       mutate(
-        { Stop: [{ hooks: [orca] }, { hooks: [user] }], PostToolUse: [{ hooks: [other] }] },
-        { Stop: [{ hooks: [user] }], PostToolUse: [{ hooks: [other] }] }
+        {
+          Stop: [{ hooks: [orca] }, { hooks: [user] }, { hooks: [disabled] }],
+          PostToolUse: [{ hooks: [other] }]
+        },
+        { Stop: [{ hooks: [user] }, { hooks: [disabled] }], PostToolUse: [{ hooks: [other] }] }
       )
 
-      const after = readFileSync(configPath, 'utf-8')
-      expect(after.startsWith(unrelated)).toBe(true)
-      expect(after.slice(unrelated.length)).toBe(
-        `\n[hooks.state."${hooksPath}:stop:0:0"]\n${userBody}\n`
+      expect(readFileSync(configPath, 'utf-8')).toBe(
+        `${unrelated}\n[hooks.state."${hooksPath}:stop:0:0"]\n${userBody}\n` +
+          `\n[hooks.state."${hooksPath}:stop:1:0"]\n${disabledBody}\n`
       )
-    }
-  )
-
-  // Codex writes quoted keys; missed spellings leave stale tables (#22592).
-  it.skipIf(process.platform === 'win32')(
-    'moves a block in Codex quoted spelling verbatim, leaving no second table behind',
-    () => {
-      const orca = command('orca-hook')
-      const user = command('user-hook')
-      const userBody = 'enabled = false\ntrusted_hash = "sha256:written-by-codex"'
-      const unrelated = ['model = "user-model"', '', '["hooks"."state"]', ''].join('\n')
-      writeFileSync(
-        configPath,
-        `${unrelated}\n["hooks"."state"."${hooksPath}:stop:1:0"]\n${userBody}\n`
+      expect(readHookTrustEntries(configPath).get(computeTrustKey(stopEntry(1, disabled)))).toEqual(
+        {
+          trustedHash: 'sha256:disabled',
+          enabled: false
+        }
       )
-
-      mutate({ Stop: [{ hooks: [orca] }, { hooks: [user] }] }, { Stop: [{ hooks: [user] }] })
-
-      const after = readFileSync(configPath, 'utf-8')
-      expect(after).toBe(`${unrelated}\n[hooks.state."${hooksPath}:stop:0:0"]\n${userBody}\n`)
-      expect(readHookTrustEntries(configPath).get(computeTrustKey(stopEntry(0, user)))).toEqual({
-        trustedHash: 'sha256:written-by-codex',
-        enabled: false
-      })
     }
   )
 })

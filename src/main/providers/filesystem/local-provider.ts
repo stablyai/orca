@@ -1,4 +1,14 @@
-import { constants, copyFile, lstat, mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import {
+  constants,
+  copyFile,
+  lstat,
+  mkdir,
+  open,
+  readdir,
+  rm,
+  stat,
+  writeFile
+} from 'node:fs/promises'
 import { dirname } from 'node:path'
 import {
   throwIfSignalAborted,
@@ -81,7 +91,20 @@ export function createLocalFilesystemProvider(
     const content = Buffer.from(contentBase64, 'base64')
     const authorizedPath = await authorize(filePath)
     await mkdir(dirname(authorizedPath), { recursive: true })
-    await writeFile(authorizedPath, content, { flag: append ? 'a' : 'wx' })
+    if (append) {
+      await writeFile(authorizedPath, content, { flag: 'a' })
+      return
+    }
+    // An exclusive-open failure leaves the existing file alone; only a partial this call created is removed.
+    const handle = await open(authorizedPath, 'wx')
+    try {
+      await handle.writeFile(content)
+      await handle.close()
+    } catch (error) {
+      await handle.close().catch(() => undefined)
+      await rm(authorizedPath, { force: true }).catch(() => undefined)
+      throw error
+    }
   }
   const writeTextFile = async (
     filePath: string,

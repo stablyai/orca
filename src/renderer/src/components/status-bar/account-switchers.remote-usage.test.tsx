@@ -302,6 +302,12 @@ describe('Claude account usage on a paired host', () => {
         rateLimits: { ...usage(25), provider: 'claude' },
         updatedAt: 1,
         isFetching: false
+      },
+      {
+        accountId: 'claude-system-default',
+        rateLimits: { ...usage(37), provider: 'claude' },
+        updatedAt: 1,
+        isFetching: false
       }
     ]
     render(<ClaudeSwitcherMenu claude={claude} ownerUsage={owned} />)
@@ -313,6 +319,8 @@ describe('Claude account usage on a paired host', () => {
     expect(within(other).getByRole('img').getAttribute('aria-label')).toContain('25%')
     const active = screen.getByRole('menuitem', { name: /active@laptop.test/ })
     expect(within(active).getByRole('img').getAttribute('aria-label')).toContain('4%')
+    const systemDefault = screen.getByRole('menuitem', { name: /System default/ })
+    expect(within(systemDefault).getByRole('img').getAttribute('aria-label')).toContain('37%')
     expect(screen.queryByRole('img', { name: /99%|91%/ })).toBeNull()
   })
 })

@@ -18,6 +18,7 @@ import type { PluginSystemSettings } from '../plugins/plugin-system-settings'
 import type { TerminalScrollSettings } from '../terminal/appearance/terminal-scroll-settings'
 import type { WorktreeDeletionPreferences } from '../worktree/removal/worktree-deletion-preferences'
 import type { AgentPermissionGlobalSettings } from '../agent-launch/permissions/tui-agent-permission-choice'
+import type { AgentCopyGlobalSettings } from '../agent-launch/catalog/tui-agent'
 import type { TerminalColorOverrideGlobalSettings } from '../terminal-themes/terminal-color-overrides'
 import type { BotsGlobalSettings } from '../bots-global-settings'
 import type { WindowMaterialSettings } from '../app-lifecycle/windows/window-material'
@@ -52,6 +53,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   WorktreeCardDisplaySettings &
   ClaudeAccountSwitchSettings &
   AgentPermissionGlobalSettings &
+  AgentCopyGlobalSettings &
   BrowserLinkOpeningSettings &
   BrowserExtensionGlobalSettings &
   PluginAppearanceSettings &

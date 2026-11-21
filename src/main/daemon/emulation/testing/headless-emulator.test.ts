@@ -96,10 +96,13 @@ describe('HeadlessEmulator', () => {
       }
     })
 
-    it('preserves the normal buffer behind an alternate-screen snapshot', async () => {
+    it('restores the alternate screen with its active link and keeps the normal buffer', async () => {
       emulator = new HeadlessEmulator({ cols: 40, rows: 6 })
+      const url = 'https://example.com/alternate'
       await emulator.write('shell history one\r\nshell history two')
-      await emulator.write('\x1b[?1049h\x1b[2J\x1b[HTUI frame')
+      await emulator.write(
+        `\x1b[?1049h\x1b[2J\x1b[HTUI frame \x1b]8;id=alternate;${url}\x1b\\linked`
+      )
 
       const snapshot = emulator.getSnapshot()
       expect(snapshot.scrollbackAnsi).toContain('shell history one')
@@ -111,7 +114,11 @@ describe('HeadlessEmulator', () => {
         await replay.write(
           snapshot.scrollbackAnsi + snapshot.rehydrateSequences + snapshot.snapshotAnsi
         )
-        expect(replay.getVisibleLines().join('\n')).toContain('TUI frame')
+        expect(replay.getVisibleLines()[0]).toBe('TUI frame linked')
+        await replay.write('Z\x1b]8;;\x1b\\')
+        expect(replay.getSnapshot().oscLinks).toEqual([
+          { row: 0, startCol: 10, endCol: 17, uri: url }
+        ])
 
         await replay.write('\x1b[?1049l')
         expect(replay.getVisibleLines().join('\n')).toContain('shell history one')

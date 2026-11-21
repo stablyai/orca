@@ -67,18 +67,19 @@ export type BotRunFields = {
   memorySource?: string
   triggeredBy?: AutomationTriggeredBy
   automationRun?: AutomationRunMessage
+  images?: readonly { path: string }[]
 }
 
 /** A message to a bot's session, as native chat sends it. */
 export function botMessageBody(
   text: string,
-  run: BotRunFields = {}
+  { memorySource, triggeredBy, automationRun, images = [] }: BotRunFields = {}
 ): StructuredAgentSessionFirstMessage['body'] {
-  const { memorySource, triggeredBy, automationRun } = run
+  const imageBlocks = images.map(({ path }) => ({ type: 'image-ref' as const, path }))
   return {
     kind: 'message',
     role: 'user',
-    blocks: [{ type: 'text', text }],
+    blocks: [{ type: 'text', text }, ...imageBlocks],
     ...(memorySource ? { memorySource } : {}),
     ...(memorySource && triggeredBy ? { triggeredBy } : {}),
     ...(automationRun ? { origin: 'automation-run' as const, automationRun } : {})

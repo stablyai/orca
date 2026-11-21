@@ -202,7 +202,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     const submits = submitWithPaste
       ? 1
       : 1 +
-        (await this.resubmitHeldAgentPrompt(
+        (await this.resubmitHeldAgentPromptForSend(
           ptyId,
           generation,
           {

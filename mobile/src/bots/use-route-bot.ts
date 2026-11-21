@@ -185,10 +185,11 @@ export function useRouteBot({
       appState: AppState,
       refresh: read,
       listed: () => listedBots,
-      // Until the first read finds the bot, every bot's change could be its.
+      // Until the first read finds the bot, every bot's change could be its. `access`: its waiting
+      // access requests re-read with each route read.
       interest: () => ({
         ...(routeBotId ? { botId: routeBotId } : {}),
-        kinds: [...BOT_VIEW_KINDS, 'items']
+        kinds: [...BOT_VIEW_KINDS, 'items', 'access']
       })
     })
     return () => {

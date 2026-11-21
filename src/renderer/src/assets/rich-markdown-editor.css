@@ -246,7 +246,8 @@
 
 .rich-markdown-review-rail-actions {
   position: absolute;
-  top: 12px;
+  /* Why: (40px toolbar row - 26px action buttons) / 2 keeps these centered with the formatting buttons. */
+  top: 7px;
   right: 14px;
   z-index: 45;
   display: inline-flex;

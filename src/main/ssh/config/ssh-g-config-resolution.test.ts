@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeOs from 'node:os'
-import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -153,15 +153,11 @@ describe('siteConfigMayRestrictHostKeys', () => {
   })
 
   it('treats an unreadable config as doubt rather than permission', async () => {
+    // A directory fails readFile everywhere; chmod 0o000 does not block Windows owners or root.
     const file = join(dir, 'ssh_config')
-    await writeFile(file, 'Host *\n', 'utf-8')
-    await chmod(file, 0o000)
+    await mkdir(file)
 
-    try {
-      await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(true)
-    } finally {
-      await chmod(file, 0o600)
-    }
+    await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(true)
   })
 })
 

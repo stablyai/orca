@@ -16,6 +16,8 @@ const calls = vi.hoisted(() => {
   const expired = new Set<string>()
   const shares: BotOwnedShare[] = []
   const statusReady: { promise?: Promise<void> } = {}
+  const skills: BotShareCandidateSummary['available']['skills'] = []
+  const leftOut: BotShareCandidateSummary['leftOut'] = []
   return {
     rpc,
     last,
@@ -25,7 +27,9 @@ const calls = vi.hoisted(() => {
     digest: 'digest',
     failMemory: false,
     failStatus: false,
-    memory: [{ topic: 'area-owners', lines: 3 }]
+    memory: [{ topic: 'area-owners', lines: 3 }],
+    skills,
+    leftOut
   }
 })
 
@@ -71,12 +75,12 @@ function candidate(id: string): BotShareCandidateSummary {
       memory: []
     },
     files: [],
-    leftOut: [],
+    leftOut: calls.leftOut,
     notIncluded: [],
     rewritten: [],
     available: {
       soulLines: 1,
-      skills: [],
+      skills: calls.skills,
       schedules: [],
       eventSuggestions: [],
       tools: [],
@@ -138,6 +142,8 @@ afterEach(() => {
   calls.expired.clear()
   calls.failMemory = false
   calls.memory = [{ topic: 'area-owners', lines: 3 }]
+  calls.skills = []
+  calls.leftOut = []
   calls.failStatus = false
   calls.statusReady.promise = undefined
   calls.shares.length = 0
@@ -183,6 +189,29 @@ it('never publishes a candidate built for other picks after a rebuild fails', as
 
   await screen.findByRole('alert')
   expect(screen.getByRole('button', { name: 'Publish link' }).hasAttribute('disabled')).toBe(true)
+})
+
+it('lists a same-named skill that is left out with the folder it is in', async () => {
+  calls.skills = [
+    {
+      name: 'changelog-style',
+      description: 'House style',
+      homePath: '.agents/skills/changelog-style'
+    }
+  ]
+  calls.leftOut = [
+    {
+      kind: 'skill',
+      name: 'changelog-style',
+      why: 'duplicate',
+      from: '.claude/skills/changelog-style'
+    }
+  ]
+  render(<BotShareFlow bot={bot} link={null} onClose={() => {}} />)
+  fireEvent.click(await screen.findByRole('button', { name: /Skills/ }))
+  expect(
+    await screen.findByText('Same name, in .claude/skills/changelog-style · not shared')
+  ).toBeDefined()
 })
 
 it('picks every memory file with Include memory, and All clears or picks them all', async () => {

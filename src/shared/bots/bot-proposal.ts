@@ -8,7 +8,12 @@ import type {
 import type { BotCreateParams } from '../rpc-contract/bots-params'
 import { isBotMascotId, mascotAvatar } from '../bot-avatar'
 import { type Bot, type BotAgent, BotNameSchema } from '../bot-types'
-import { type BotTemplate, botTemplate, isLegacyBotTemplateId } from './bot-templates'
+import {
+  BOT_CONNECTOR_NAMES,
+  type BotTemplate,
+  botTemplate,
+  isLegacyBotTemplateId
+} from './bot-templates'
 import { HANDED_WORKSPACES_MAX, HandedWorkspaceSchema } from './bot-made-for-workspaces'
 
 const line = (max: number) => z.string().trim().min(1).max(max)
@@ -110,6 +115,30 @@ export function proposalCreateParams(
 }
 
 const oneLine = (text: string): string => text.replace(/\s+/g, ' ').trim()
+
+// Names that keep their capital mid-sentence ("Watches Linear projects", "Watches your Orca workspaces").
+const PROPER_NAMES = new Set([...Object.values(BOT_CONNECTOR_NAMES), 'Orca'])
+const midSentence = (text: string): string =>
+  PROPER_NAMES.has(text.split(' ', 1)[0] ?? '')
+    ? text
+    : text.charAt(0).toLowerCase() + text.slice(1)
+const sentence = (text: string): string => (/[.!?]$/.test(text) ? text : `${text}.`)
+
+/** What a template's bot watches, does and reports, as the plain sentences New bot's identity box shows. */
+export function proposalIdentity({
+  watches,
+  does,
+  reports
+}: Pick<BotProposal, 'watches' | 'does' | 'reports'>): string {
+  return [
+    watches ? `Watches ${midSentence(oneLine(watches))}` : null,
+    does ? oneLine(does) : null,
+    reports ? `Reports ${midSentence(oneLine(reports))}` : null
+  ]
+    .filter((entry): entry is string => entry !== null)
+    .map(sentence)
+    .join(' ')
+}
 
 const READ_ONLY_START =
   '- Change anything (comments, labels, pull requests, posts anywhere but here) until my owner says I can. I start by reading and reporting only.'

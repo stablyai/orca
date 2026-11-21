@@ -1,4 +1,5 @@
 import '../dispatch/testing/unused-default-rpc-methods.test-fixture'
+import { hostname } from 'node:os'
 import { describe, expect, it, vi } from 'vitest'
 import { BOTS_DISABLED_CODE, BotsDisabledError } from '../../../../shared/bots-switch'
 import { RpcDispatcher } from '../dispatcher'
@@ -51,6 +52,12 @@ vi.mock('../../../bots/bot-session-tabs', () => ({
   botOfSession: (bots: { list: () => Bot[] }, sessionId: string) =>
     bots.list().find((bot) => bot.id === chats.homes.get(sessionId)) ?? null
 }))
+// The bot delete signs out the bot's tools under the real agent home; a refusal must stop first.
+const forgetDeletedBotTools = vi.hoisted(() => vi.fn())
+vi.mock('./bots-tools', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  forgetDeletedBotTools
+}))
 
 function request(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
@@ -65,12 +72,13 @@ describe('bots RPC methods with bots turned off', () => {
       create: vi.fn(),
       listing: vi.fn(() => ({ bots: [], botsEnabled: false, hideBotCreatedWorkspaces: true }))
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these methods read only runtime.bots, its webhooks, its connector cloud and the runtime id, which the stub provides.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these methods read only runtime.bots, its webhooks, its connector cloud, whether it has a window and the runtime id, which the stub provides.
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getWebhooks: () => null,
       getUIState: () => ({}),
       getConnectorCloud: () => null,
+      servesWithoutWindow: () => false,
       bots
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: BOT_METHODS })
@@ -235,12 +243,13 @@ describe('bots.list', () => {
   it("carries each bot's waits still waiting, for its sidebar row", async () => {
     const bot = makeTestBot()
     const wait = { id: 'w1', name: "Nora's reply", once: { by: 5000 }, bot: { botId: bot.id } }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: bots.list reads only runtime.bots, its webhooks, its connector cloud, its automations and its item counts, which the stub provides.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: bots.list reads only runtime.bots, its webhooks, its connector cloud, whether it has a window, its automations and its item counts, which the stub provides.
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getWebhooks: () => null,
       getUIState: () => ({}),
       getConnectorCloud: () => null,
+      servesWithoutWindow: () => false,
       bots: {
         listing: () => ({ bots: [bot], botsEnabled: true, hideBotCreatedWorkspaces: true })
       },
@@ -255,6 +264,29 @@ describe('bots.list', () => {
       result: { waits: { [bot.id]: [{ label: "Nora's reply", by: 5000 }] } }
     })
   })
+
+  it.each<[boolean, string | null]>([
+    [true, hostname().slice(0, 256)],
+    [false, null]
+  ])(
+    'names a headless server for its signed-out copy, and says null with a window (headless %s)',
+    async (headless, signInServer) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: bots.list reads only runtime.bots, its webhooks, its connector cloud, whether it has a window and its UI state, which the stub provides.
+      const runtime = {
+        getRuntimeId: () => 'test-runtime',
+        getWebhooks: () => null,
+        getUIState: () => ({}),
+        getConnectorCloud: () => null,
+        servesWithoutWindow: () => headless,
+        bots: { listing: () => ({ bots: [], botsEnabled: true, hideBotCreatedWorkspaces: true }) }
+      } as unknown as OrcaRuntimeService
+      const answer = await new RpcDispatcher({ runtime, methods: BOT_METHODS }).dispatch(
+        request('bots.list')
+      )
+      expect(answer).toMatchObject({ ok: true })
+      expect(answer).toHaveProperty('result.signInServer', signInServer)
+    }
+  )
 })
 
 describe('bots.session.start', () => {
@@ -293,7 +325,7 @@ describe('bots.session.start', () => {
       { id: 'b1', agent: 'claude' }
     ])
     expect(
-      await dispatcher.dispatch(request('bots.session.start', { botId: 'b1', agent: 'gemini' }))
+      await dispatcher.dispatch(request('bots.session.start', { botId: 'b1', agent: 'aider' }))
     ).toMatchObject({ ok: false })
   })
 })
@@ -428,6 +460,33 @@ describe('bots.activity', () => {
     expect(await dispatcher.dispatch(request('bots.activity', { botId: 'missing' }))).toMatchObject(
       { ok: false, error: { message: expect.stringContaining('bot_not_found') } }
     )
+  })
+})
+
+describe('bots.delete', () => {
+  it("refuses before anything goes when the bot's home holds an unsaved editor draft", async () => {
+    const bot = makeTestBot({ id: 'b1', folderWorkspaceId: 'home-1' })
+    const draft = { filePath: '/bots/b1/SOUL.md', dirtyDraftContent: 'unsaved' }
+    const store = {
+      getFolderWorkspaces: () => [{ id: 'home-1' }],
+      getWorkspaceSessionHostIds: () => ['local'],
+      getWorkspaceSession: () => ({ openFilesByWorktree: { 'folder:home-1': [draft] } })
+    }
+    const bots = { list: () => [bot], delete: vi.fn(async () => ({ deleted: true })) }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a refused delete reads only runtime.bots and the store's folder rows and session, which the stub provides.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      requireStore: () => store,
+      bots
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: BOT_METHODS })
+
+    expect(await dispatcher.dispatch(request('bots.delete', { botId: 'b1' }))).toMatchObject({
+      ok: false,
+      error: { message: 'Unsaved editor changes. Save or close them in Orca, then delete again.' }
+    })
+    expect(forgetDeletedBotTools).not.toHaveBeenCalled()
+    expect(bots.delete).not.toHaveBeenCalled()
   })
 })
 

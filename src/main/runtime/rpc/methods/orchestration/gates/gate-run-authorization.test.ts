@@ -103,28 +103,6 @@ describe('orchestration gate Run authorization', () => {
     expect(adoptedTaskState(harness)).toEqual(before)
   })
 
-  it('keeps gate-list from leaking gates outside the caller Run', async () => {
-    const harness = createHarness()
-    const runA = bindCurrentCoordinatorRun(harness)
-    const ownTask = harness.db.createTask({ spec: 'own assignment', runId: runA })
-    const ownGate = harness.db.createGate({ taskId: ownTask.id, question: 'Own?' })
-    harness.db.createGate({ taskId: harness.taskId, question: 'Adopted?' })
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.gateList',
-        { from: CURRENT_COORDINATOR_HANDLE },
-        currentEvidence('coordinator'),
-        'gate-list-scope'
-      )
-    )
-
-    expect(response).toMatchObject({
-      ok: true,
-      result: { runId: runA, count: 1, gates: [{ id: ownGate.id }] }
-    })
-  })
-
   it('lets the bound coordinator create, list, and resolve its own Run gates', async () => {
     const harness = createHarness()
     const runA = bindCurrentCoordinatorRun(harness)
@@ -146,6 +124,21 @@ describe('orchestration gate Run authorization', () => {
 
     expect(created).toMatchObject({ ok: true, result: { gate: { task_id: ownTask.id } } })
     expect(harness.db.getTask(ownTask.id)?.status).toBe('blocked')
+
+    harness.db.createGate({ taskId: harness.taskId, question: 'Adopted?' })
+    await expect(
+      harness.dispatcher.dispatch(
+        request(
+          'orchestration.gateList',
+          { from: CURRENT_COORDINATOR_HANDLE },
+          currentEvidence('coordinator'),
+          'gate-list-scope'
+        )
+      )
+    ).resolves.toMatchObject({
+      ok: true,
+      result: { runId: runA, count: 1, gates: [{ id: created.result.gate.id }] }
+    })
 
     const resolved = await harness.dispatcher.dispatch(
       request(

@@ -86,7 +86,7 @@ function expectChatOpen(): void {
 }
 
 describe('worker-start --terminal names a chat', () => {
-  it('is ready once an idle chat takes its task, and records the chat as an external worker', async () => {
+  it('assigns an idle chat as an external worker and stops or abandons it without closing the chat', async () => {
     await openChat(COORDINATOR)
     const worker = await openChat(PEER_CHAT)
     const { taskId } = await coordinatorRunAndTask()
@@ -120,6 +120,24 @@ describe('worker-start --terminal names a chat', () => {
       terminal_handle: WORKER,
       ownership_state: 'external'
     })
+
+    expect(await call('orchestration.workerList', {})).toMatchObject({
+      workers: [{ dispatchId, projection: { liveness: { verdict: 'live' } } }]
+    })
+    // User input/clear cannot take over a chat worker: it was adopted rather than minted.
+    expect(await call('orchestration.workerTerminalUserInput', { sessionId: PEER_CHAT })).toEqual({
+      changed: 0
+    })
+    expect(await call('orchestration.workerStop', { dispatch: dispatchId })).toMatchObject({
+      state: 'stop_unknown',
+      processAction: 'none'
+    })
+    expectChatOpen()
+    expect(await call('orchestration.workerAbandon', { dispatch: dispatchId })).toMatchObject({
+      state: 'abandoned',
+      processAction: 'none'
+    })
+    expectChatOpen()
   })
 
   it('hands a busy chat its task as a queued card and reads the start as unknown, not failed', async () => {
@@ -151,35 +169,6 @@ describe('worker-start --terminal names a chat', () => {
     await vi.waitFor(() => expect(worker.turns).toHaveLength(2), WAIT)
     expect(turnText(worker.turns[1]!)).toContain(dispatchId)
   })
-
-  it('is stopped and abandoned without closing or interrupting the chat', async () => {
-    await openChat(COORDINATOR)
-    const worker = await openChat(PEER_CHAT)
-    const { taskId } = await coordinatorRunAndTask()
-    const started = startWorker({ task: taskId })
-    await vi.waitFor(() => expect(worker.turns).toHaveLength(1), WAIT)
-    await settleTurn(PEER_CHAT, 0)
-    const dispatchId = String((await started).dispatchId)
-
-    expect(await call('orchestration.workerList', {})).toMatchObject({
-      workers: [{ dispatchId, projection: { liveness: { verdict: 'live' } } }]
-    })
-    // User input/clear cannot take over a chat worker: it was adopted rather than minted.
-    expect(await call('orchestration.workerTerminalUserInput', { sessionId: PEER_CHAT })).toEqual({
-      changed: 0
-    })
-    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.ownership_state).toBe('external')
-    expect(await call('orchestration.workerStop', { dispatch: dispatchId })).toMatchObject({
-      state: 'stop_unknown',
-      processAction: 'none'
-    })
-    expectChatOpen()
-    expect(await call('orchestration.workerAbandon', { dispatch: dispatchId })).toMatchObject({
-      state: 'abandoned',
-      processAction: 'none'
-    })
-    expectChatOpen()
-  })
 })
 
 describe('worker-start --terminal refuses a chat before anything is created', () => {
@@ -188,20 +177,9 @@ describe('worker-start --terminal refuses a chat before anything is created', ()
     expect(db.db.prepare('SELECT COUNT(*) AS n FROM dispatch_contexts').get()).toEqual({ n: 0 })
   }
 
-  it('when it was closed', async () => {
+  it('on another host or after it closes', async () => {
     await openChat(COORDINATOR)
     await openChat(PEER_CHAT)
-    const { taskId } = await coordinatorRunAndTask()
-    await host.setSessionTabVisibility(PEER_CHAT, false)
-
-    await expectNothingCreated(
-      await refusal({ task: taskId, terminal: WORKER }),
-      'session_caller_not_live'
-    )
-  })
-
-  it('when it is named on another host, before any remote call', async () => {
-    await openChat(COORDINATOR)
     const { taskId } = await coordinatorRunAndTask()
     const remote = vi.spyOn(runtime, 'resolveOrchestrationWorkerServer')
 
@@ -210,5 +188,11 @@ describe('worker-start --terminal refuses a chat before anything is created', ()
       'session_caller_host_boundary'
     )
     expect(remote).not.toHaveBeenCalled()
+
+    await host.setSessionTabVisibility(PEER_CHAT, false)
+    await expectNothingCreated(
+      await refusal({ task: taskId, terminal: WORKER }),
+      'session_caller_not_live'
+    )
   })
 })

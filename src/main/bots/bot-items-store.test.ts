@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { botItemEventId } from '../../shared/bots/bot-items'
 import SyncDatabase from '../sqlite/sync-database'
 import type { BotItemAddInput, BotItemBotActor } from './bot-items-input'
 import { BotItemsStore } from './bot-items-store'
@@ -14,6 +15,7 @@ const NOW = 1_800_000_000_000
 const HOUR = 60 * 60_000
 
 const stores: BotItemsStore[] = []
+const dirs: string[] = []
 
 function open(): BotItemsStore {
   const store = BotItemsStore.open(':memory:')
@@ -23,6 +25,7 @@ function open(): BotItemsStore {
 
 afterEach(() => {
   stores.splice(0).forEach((store) => store.dispose())
+  dirs.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true }))
 })
 
 function input(overrides: Partial<BotItemAddInput> = {}): BotItemAddInput {
@@ -68,6 +71,38 @@ describe('bot items store', () => {
     const events = store.events(uid, 0, 50)
     expect(events.at(-2)?.data).toEqual({ text: 'Legal said yes.' })
     expect(events.at(-1)?.data).toEqual({ from: 'needs_you', to: 'working' })
+  })
+
+  it("keeps a plain comment from answering the bot's question, while any other answers it", () => {
+    const store = open()
+    const { uid } = store.add(input(), owner)
+    store.set(uid, { status: 'needs_you', comment: 'Where should the card show?' }, owner)
+    const asked = store.get(uid)?.questionEvent
+
+    store.ownerComment(
+      uid,
+      'Which one is the paired server?',
+      ownerActor,
+      [],
+      1,
+      undefined,
+      undefined,
+      true
+    )
+    expect(store.events(uid, 0, 50).at(-1)?.data).toEqual({
+      text: 'Which one is the paired server?',
+      plain: true
+    })
+    expect(store.get(uid)?.status).toBe('needs_you')
+    expect(store.get(uid)?.questionEvent).toBe(asked)
+
+    store.ownerComment(uid, 'Above the composer.', ownerActor, [], 2)
+    const events = store.events(uid, 0, 50)
+    expect(events.at(-2)?.data).toEqual({
+      text: 'Above the composer.',
+      answers: botItemEventId(asked!)
+    })
+    expect(events.at(-1)?.data).toEqual({ from: 'needs_you', to: 'working', cause: 'answer' })
   })
 
   it("marks the newest event anyone but the owner made, so the owner's own changes stay seen", () => {
@@ -297,6 +332,35 @@ describe('bot items store', () => {
     ])
   })
 
+  it('refuses a quick reply aimed at a question the agent has since replaced', () => {
+    const store = open()
+    const uid = store.add(input({ title: 'Asking' }), owner).uid
+    store.set(uid, { status: 'needs_you', comment: 'First?' }, owner)
+    const first = store.get(uid)?.questionEvent
+    store.set(uid, { status: 'needs_you', comment: 'Second?' }, owner)
+
+    expect(() =>
+      store.ownerComment(uid, 'Yes', { kind: 'owner' }, [], undefined, undefined, first ?? -1)
+    ).toThrow(/new question/)
+    expect(store.get(uid)?.status).toBe('needs_you')
+    const second = store.get(uid)?.questionEvent ?? -1
+    store.ownerComment(uid, 'Yes', { kind: 'owner' }, [], undefined, undefined, second)
+    expect(store.get(uid)?.status).toBe('working')
+  })
+
+  it('takes a quick reply to a part-answered ask after the owner moved the item to Needs you', () => {
+    const store = open()
+    const uid = store.add(input({ title: 'Asking' }), owner).uid
+    store.set(uid, { status: 'needs_you', comment: 'First?' }, owner)
+    const ask = store.get(uid)?.questionEvent ?? -1
+    store.ownerComment(uid, 'Yes', { kind: 'owner' })
+    store.ownerStatus({ uids: [uid], to: 'needs_you', comment: 'Parking this' }, { kind: 'owner' })
+
+    store.ownerComment(uid, 'Second answer', { kind: 'owner' }, [], undefined, undefined, ask)
+
+    expect(store.get(uid)?.status).toBe('working')
+  })
+
   it('closes with set: done like `done`, canceled only with a reason like `cancel`', () => {
     const store = open()
     const a = store.add(input({ title: 'A' }), owner).uid
@@ -334,27 +398,24 @@ describe('bot items store', () => {
   })
   it('fills who last wrote besides the owner on items an older file holds', () => {
     const dir = mkdtempSync(join(tmpdir(), 'bot-items-migrate-'))
-    try {
-      const path = join(dir, 'bot-items.sqlite')
-      const first = BotItemsStore.open(path)
-      const { uid } = first.add(input(), owner)
-      const { eventId } = first.comment(uid, 'Switched to outline.', owner)
-      first.ownerComment(uid, 'Use the outline button.', { kind: 'owner' })
-      const quiet = first.add(input(), owner).uid
-      first.dispose()
-      const older = new SyncDatabase(path)
-      older.exec(`DROP INDEX idx_items_needs_you; ALTER TABLE items DROP COLUMN others_last_event_id;
-        ALTER TABLE items DROP COLUMN snoozed_until; PRAGMA user_version = 1`)
-      older.close()
+    dirs.push(dir)
+    const path = join(dir, 'bot-items.sqlite')
+    const first = BotItemsStore.open(path)
+    const { uid } = first.add(input(), owner)
+    const { eventId } = first.comment(uid, 'Switched to outline.', owner)
+    first.ownerComment(uid, 'Use the outline button.', { kind: 'owner' })
+    const quiet = first.add(input(), owner).uid
+    first.dispose()
+    const older = new SyncDatabase(path)
+    older.exec(`DROP INDEX idx_items_needs_you; ALTER TABLE items DROP COLUMN others_last_event_id;
+      ALTER TABLE items DROP COLUMN snoozed_until; PRAGMA user_version = 1`)
+    older.close()
 
-      const store = BotItemsStore.open(path)
-      stores.push(store)
-      const made = store.events(quiet, 0, 1)[0]?.id
+    const store = BotItemsStore.open(path)
+    stores.push(store)
+    const made = store.events(quiet, 0, 1)[0]?.id
 
-      expect(store.viewRows([uid, quiet]).othersLast).toEqual({ [uid]: eventId, [quiet]: made })
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
+    expect(store.viewRows([uid, quiet]).othersLast).toEqual({ [uid]: eventId, [quiet]: made })
   })
 
   it("keeps a snooze through the bot's comments and in-progress moves, and ends it on a new question or a close", () => {

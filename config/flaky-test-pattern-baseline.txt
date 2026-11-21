@@ -317,7 +317,7 @@
 1 test-timeout-needs-reason:src/cli/agents/agent-launch-process.test.ts
 1 test-timeout-needs-reason:src/cli/runtime/serve/startup/serve-pid1-init-reaper.test.ts
 1 test-timeout-needs-reason:src/cli/skills/skills-install.test.ts
-2 test-timeout-needs-reason:src/main/acp/journal/acp-structured-broken-stream.test.ts
+1 test-timeout-needs-reason:src/main/acp/journal/acp-structured-broken-stream.test.ts
 1 test-timeout-needs-reason:src/main/agent-hooks/wsl-relay/testing/wsl-hook-relay-live.integration.test.ts
 2 test-timeout-needs-reason:src/main/antigravity/windows-hook-json-post.test.ts
 3 test-timeout-needs-reason:src/main/antigravity/windows-hook-payload-delivery.test.ts
@@ -325,7 +325,6 @@
 1 test-timeout-needs-reason:src/main/browser/client-pages/renderer/browser-client-page-renderer-lifecycle.electron.test.ts
 2 test-timeout-needs-reason:src/main/browser/cookies/browser-cookie-import-partition-reland.electron.test.ts
 1 test-timeout-needs-reason:src/main/browser/cookies/browser-cookie-import-partition-rollback.electron.test.ts
-1 test-timeout-needs-reason:src/main/browser/cookies/browser-cookie-import-partition-success.electron.test.ts
 1 test-timeout-needs-reason:src/main/browser/cookies/browser-cookie-import-partition.electron.test.ts
 1 test-timeout-needs-reason:src/main/browser/cookies/browser-cookie-import-validated-partition.electron.test.ts
 1 test-timeout-needs-reason:src/main/browser/guest-lifecycle/find/browser-find-frame-traversal.electron.test.ts
@@ -339,8 +338,8 @@
 1 test-timeout-needs-reason:src/main/daemon/executable-host/linux/testing/daemon-appimage-copy-host.electron.test.ts
 2 test-timeout-needs-reason:src/main/daemon/health/testing/issue-6814-daemon-failure-classification.test.ts
 1 test-timeout-needs-reason:src/main/daemon/history/restoration/testing/terminal-history-large-checkpoint-cold-restore.test.ts
-2 test-timeout-needs-reason:src/main/daemon/providers/checkpointing/testing/daemon-reattach-checkpoint-isolation.test.ts
-3 test-timeout-needs-reason:src/main/daemon/providers/checkpointing/testing/daemon-shutdown-final-checkpoint-caller-deadline.test.ts
+1 test-timeout-needs-reason:src/main/daemon/providers/checkpointing/testing/daemon-reattach-checkpoint-isolation.test.ts
+1 test-timeout-needs-reason:src/main/daemon/providers/checkpointing/testing/daemon-shutdown-final-checkpoint-caller-deadline.test.ts
 1 test-timeout-needs-reason:src/main/daemon/providers/routing/testing/daemon-pty-router-unanswering-legacy.test.ts
 2 test-timeout-needs-reason:src/main/daemon/pty-subprocess/testing/node-pty-conout-worker-errors.test.ts
 4 test-timeout-needs-reason:src/main/daemon/pty-subprocess/testing/node-pty-fd-leak.test.ts
@@ -386,7 +385,6 @@
 1 test-timeout-needs-reason:tests/e2e/agents/settings/cursor-quota-transport.unit.test.ts
 1 test-timeout-needs-reason:tests/e2e/browser/client-hosted/paired-client-hosted-browser-markup.spec.ts
 1 test-timeout-needs-reason:tests/e2e/browser/client-hosted/paired-client-hosted-profile-cookies.spec.ts
-2 test-timeout-needs-reason:tests/e2e/browser/remote-hosted/headless-serve-browser-tab-restart.spec.ts
 1 test-timeout-needs-reason:tests/e2e/browser/remote-hosted/paired-remote-browser-ghost-subscriber-rejoin.spec.ts
 3 test-timeout-needs-reason:tests/e2e/cross-version-wire/relay/legacy-relay-bridge.unit.test.ts
 2 test-timeout-needs-reason:tests/e2e/cross-version-wire/release-checkouts/release-checkout.unit.test.ts

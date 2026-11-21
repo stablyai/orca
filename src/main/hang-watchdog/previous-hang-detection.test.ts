@@ -85,6 +85,9 @@ describe('previous hang detection', () => {
     expect(existsSync(markerPath)).toBe(false)
     expect(reportPreviousHangDetection(dir)).toBeNull()
     expect(existsSync(`${markerPath}.previous`)).toBe(true)
+    writeHangDetectionMarker(markerPath, retainHangObservation(emptyHangObservations(), gap))
+    preservePreviousHangDetection(dir)
+    expect(existsSync(markerPath)).toBe(false)
     writeHangDetectionMarker(markerPath, { ...marker, parentPid: 789 })
     const records: unknown[] = []
     setActiveSink({ push: (record) => records.push(record), flush() {}, close() {} })
@@ -97,11 +100,18 @@ describe('previous hang detection', () => {
             previousPid: 456
           })
         })
+      }),
+      expect.objectContaining({
+        attributes: expect.objectContaining({
+          'breadcrumb.name': 'main_thread_watchdog_gap',
+          'breadcrumb.data': expect.objectContaining({ previousPid: 789 })
+        })
       })
     ])
     expect(existsSync(`${markerPath}.previous`)).toBe(false)
     expect(JSON.parse(readFileSync(markerPath, 'utf8')).parentPid).toBe(789)
     expect(reportPreviousHangDetection(dir)).toBeNull()
+    expect(records).toHaveLength(2)
   })
 
   it('keeps the hang marker and its telemetry for hangs only while later short stalls arrive', () => {
@@ -247,17 +257,6 @@ describe('previous hang detection', () => {
     preservePreviousHangDetection(dir)
     setActiveSink({ push() {}, flush() {}, close() {} })
     expect(reportPreviousHangDetection(dir)).toBeNull()
-  })
-
-  it('retains a pending note when a launch ends before sink installation', () => {
-    const markerPath = hangDetectionMarkerPath(dir)
-    writeHangDetectionMarker(markerPath, marker)
-    preservePreviousHangDetection(dir)
-    writeHangDetectionMarker(markerPath, retainHangObservation(emptyHangObservations(), gap))
-    preservePreviousHangDetection(dir)
-    expect(existsSync(`${markerPath}.previous`)).toBe(true)
-    setActiveSink({ push() {}, flush() {}, close() {} })
-    expect(reportPreviousHangDetection(dir)).toEqual(marker)
   })
 
   it('carries gap and overlapping-stall evidence through the real trace and bundle', () => {

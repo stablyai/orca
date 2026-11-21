@@ -66,6 +66,11 @@ export function agentMenuRowSupportsChat(row: NewTabAgentMenuRow): boolean {
   return row.kind === 'chat' || (row.kind === 'cli' && row.chat === true)
 }
 
+/** Launches the agent as it is on the host now: not a chat that installs it first, not an unavailable one. */
+export function agentMenuRowReady(row: NewTabAgentMenuRow): boolean {
+  return row.kind === 'cli' || row.kind === 'terminal' || (row.kind === 'chat' && !row.setup)
+}
+
 export type NewTabAgentMenuSettings = NativeChatDefaultSettings &
   Partial<Pick<GlobalSettings, 'defaultTuiAgent' | 'disabledTuiAgents'>>
 
@@ -141,14 +146,17 @@ export function buildNewTabAgentMenuRows(args: {
       ...chatAgents.filter((agent) => needsSetup(agent) && args.hostChatAnswer(agent) === 'yes')
     )
   }
+  const chats = orderAgentLaunchPickerAgents(defaultAgent, runnable).map((agent) => ({
+    kind: 'chat' as const,
+    agent,
+    ...(!args.detectedOnHost?.includes(agent) && !chatProgramInstalled(args.chatProgram(agent))
+      ? { setup: true as const }
+      : {})
+  }))
   return [
-    ...orderAgentLaunchPickerAgents(defaultAgent, runnable).map((agent) => ({
-      kind: 'chat' as const,
-      agent,
-      ...(!args.detectedOnHost?.includes(agent) && !chatProgramInstalled(args.chatProgram(agent))
-        ? { setup: true as const }
-        : {})
-    })),
+    // Chats the host runs now lead the ones that install their agent first.
+    ...chats.filter(agentMenuRowReady),
+    ...chats.filter((row) => !agentMenuRowReady(row)),
     ...orderAgentLaunchPickerAgents(defaultAgent, [...unavailable.keys()]).map((agent) => ({
       kind: 'chat-unavailable' as const,
       agent,

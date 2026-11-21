@@ -23,6 +23,27 @@ export const botUpdate = bindDeferredRpcOperation(
   })
 )
 
+export const botAvatarUpload = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.avatar.upload',
+    method: 'bots.avatar.upload',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('bot-avatar-uploaded', phoneBotReply)
+  })
+)
+
+/** Its folder, soul and memory stay: the phone never sends deleteFolder, as the desktop never does. */
+export const botDelete = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.delete',
+    method: 'bots.delete',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('bot-deleted', z.looseObject({ deleted: z.boolean() }))
+  })
+)
+
 /** A New bot from the phone; the host speaks first in its Home Chat, as for one made on the desktop. */
 export const botCreate = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -41,6 +62,39 @@ export const botSessionStart = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('bot-session-started', z.looseObject({ sessionId: z.string().min(1) }))
+  })
+)
+
+/** Sends a new bot's setup again; the host answers a repeat of the same send with the first. */
+export const botKickoffRetry = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.kickoff-retry',
+    method: 'bots.kickoff.retry',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('bot-kickoff-retried', z.looseObject({}))
+  })
+)
+
+/** A fresh Home Chat for the bot; its old conversation stays in its chats. */
+export const botHomeChatReset = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.chat-reset',
+    method: 'bots.chat.reset',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('bot-chat-reset', z.looseObject({ sessionId: z.string().min(1) }))
+  })
+)
+
+/** Sends a wait's run that couldn't start into its chat, once ever; the host refuses a second. */
+export const botRunSendAgain = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.send-run-again',
+    method: 'bots.sendRunAgain',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('bot-run-sent-again', z.looseObject({ sessionId: z.string().min(1) }))
   })
 )
 

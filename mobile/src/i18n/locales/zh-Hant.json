@@ -687,6 +687,53 @@
     "selectionQuote": {
       "action": "引用",
       "hint": "將所選文字作為引用加入訊息"
+    },
+    "messageTime": {
+      "yesterday": "昨天 {{time}}"
+    },
+    "mcp": {
+      "status": {
+        "notStarted": "尚未啟動",
+        "connected": "已連線",
+        "failed": "失敗",
+        "failedReason": "失敗：{{error}}",
+        "finishOnPage": "請在開啟的頁面完成",
+        "needsAuth": "需要登入",
+        "needsAuthAfterSend": "需要登入。傳送訊息後即可在此登入。",
+        "off": "關閉",
+        "pending": "正在連線…",
+        "tools_other": "{{count}} 個工具",
+        "waitingForSignIn": "正在等待登入…"
+      },
+      "source": {
+        "project": "專案",
+        "local": "本機",
+        "user": "使用者",
+        "plugin": "外掛",
+        "session": "工作階段"
+      },
+      "title": "MCP 伺服器",
+      "notRunning": "MCP 伺服器會在您傳送下一則訊息時連線。",
+      "unsupported": "更新此聊天主機上的 Orca，即可在這裡管理 MCP 伺服器。",
+      "readFailed": "無法載入 MCP 伺服器。",
+      "retry": "重試",
+      "empty": "此聊天尚未設定任何 MCP 伺服器。",
+      "signIn": "登入",
+      "reconnect": "重新連線",
+      "toggleLabel": "使用 {{name}}",
+      "actionFailed": "無法執行此操作。請再試一次。",
+      "openAgain": "再次開啟",
+      "pastePlaceholder": "貼上網址",
+      "pasteLabel": "登入頁面網址",
+      "finish": "完成",
+      "signInUnfinished": "登入尚未完成。請先在開啟的頁面上完成登入，再點選「完成」。",
+      "summary": {
+        "signingIn": "正在登入 {{name}}",
+        "connected": "已連線：{{count}}",
+        "needsAuth_other": "{{count}} 個需要登入",
+        "failed": "失敗：{{count}}"
+      },
+      "pasteHint": "當瀏覽器前往無法載入的頁面時，請複製網址並貼到這裡。"
     }
   },
   "common": {
@@ -2013,6 +2060,9 @@
       "sendFailed": "無法傳送恢復命令"
     },
     "aiVaultResumePreparation": {
+      "openInChat": "此 {{agent}} 對話已在聊天中開啟。請重新整理工作階段歷史記錄以開啟它。",
+      "ownershipUnknown": "Orca 無法確認此 {{agent}} 對話的歸屬。請重新整理工作階段歷史記錄並重試。",
+      "preparationRefused": "Orca 無法準備此 {{agent}} 對話。請開啟新聊天以繼續。",
       "prepareFailed": "無法準備此舊版 Codex 工作階段。請再次嘗試恢復。"
     },
     "backgroundTask": {

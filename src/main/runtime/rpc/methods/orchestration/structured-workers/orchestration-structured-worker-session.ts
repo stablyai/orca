@@ -20,6 +20,7 @@ import type {
 import type { StructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import { ANTIGRAVITY_LEVEL_SUFFIX } from '../../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-antigravity'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { mintAgentSessionOperationId } from '../../../../orchestration/mailbox/structured-pointer/structured-pointer-operation-id'
@@ -85,6 +86,14 @@ export function rebindReusedStructuredWorker(handle: string, db: OrchestrationDb
   }
 }
 
+/** A leveled Antigravity id names its effort, so a saved effort for the seeded model must not override it (#45701). */
+function structuredWorkerModelReplacesSavedSelection(
+  agent: TuiAgent,
+  model: string | undefined
+): boolean {
+  return agent === 'antigravity' && model !== undefined && ANTIGRAVITY_LEVEL_SUFFIX.test(model)
+}
+
 export async function createStructuredWorkerSession(args: {
   runtime: OrcaRuntimeService
   worktreeId: string
@@ -99,7 +108,7 @@ export async function createStructuredWorkerSession(args: {
   host: StructuredAgentSessionHost
   /** The lease the create was admitted at. */
   fence: number
-  /** The provider options the session launches with: the dispatch's own over the seeded saved selection. */
+  /** The provider options the session launches with: the dispatch's own over the seeded saved selection, or in its place for a leveled Antigravity model. */
   options?: Readonly<Record<string, string>>
 }> {
   const sessionId = randomUUID()
@@ -135,6 +144,9 @@ export async function createStructuredWorkerSession(args: {
       // Absent, the host seeds the user's saved selection — the same fallback a chat gets.
       ...(args.options ? { options: args.options } : {}),
       ...(args.agentCopy ? { agentCopy: args.agentCopy } : {}),
+      ...(structuredWorkerModelReplacesSavedSelection(args.agent, args.options?.model)
+        ? { optionsMode: 'replace-model-selection' as const }
+        : {}),
       // Dispatching a worker is background work; it must not pull the surface away from the user.
       atRest: true,
       activate: false

@@ -13,6 +13,8 @@ export function sendEmulatorGestureSequence(
   return sendServeSimFrameSequence(wsUrl, points.map(encodeServeSimTouchFrame))
 }
 
+const WS_OPEN_TIMEOUT_MS = 5_000
+
 /** Sends encoded helper frames 16 ms apart over one socket, then closes it. */
 export async function sendServeSimFrameSequence(
   wsUrl: string,
@@ -22,7 +24,14 @@ export async function sendServeSimFrameSequence(
     const ws = new WebSocket(wsUrl)
     let index = 0
     let timer: NodeJS.Timeout | null = null
+    // A helper that accepts the TCP connection but never completes the upgrade must not hold the queue.
+    const openTimer = setTimeout(() => {
+      cleanup()
+      reject(new Error('Emulator input stream did not open in time'))
+      ws.terminate()
+    }, WS_OPEN_TIMEOUT_MS)
     const cleanup = (): void => {
+      clearTimeout(openTimer)
       if (timer) {
         clearTimeout(timer)
         timer = null
@@ -40,7 +49,10 @@ export async function sendServeSimFrameSequence(
       ws.send(Buffer.from(frames[index++]))
       timer = setTimeout(sendNext, 16)
     }
-    ws.on('open', sendNext)
+    ws.on('open', () => {
+      clearTimeout(openTimer)
+      sendNext()
+    })
     ws.on('error', (error) => {
       cleanup()
       reject(error)

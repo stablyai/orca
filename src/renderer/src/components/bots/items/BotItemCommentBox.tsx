@@ -1,7 +1,8 @@
-// The item view's comment box: chat's prompt editor and attachment pieces in one growing row (attach,
-// text, mic, send); while the agent's question waits, "Replying to" names it. Enter sends, Shift+Enter adds a line;
-// images paste, drop or attach as thumbnails with an "Image #N" pill at the caret, other files as `@path`
-// pills. Uploads go to the item's chat on the bot's host, which then holds them as its own.
+// The item view's comment box: chat's prompt editor and attachment pieces in one row (attach, text, mic,
+// send), the text on its own row above them from its second line; while the agent's question waits,
+// "Replying to" names it and the text opens on its own row, four lines tall. Enter sends, Shift+Enter
+// adds a line; images paste, drop or attach as thumbnails with an "Image #N" pill at the caret, other
+// files as `@path` pills. Uploads go to the item's chat on the bot's host, which then holds them as its own.
 import {
   useCallback,
   useImperativeHandle,
@@ -57,6 +58,7 @@ import {
   type BotItemWaitingQuestion
 } from './BotItemReplyingTo'
 import { cn } from '@/lib/class-names'
+import { useBotItemCommentStacked } from './use-bot-item-comment-stacked'
 import {
   useBotItemCommentAttachments,
   type BotItemCommentAttachTarget
@@ -68,8 +70,9 @@ export type BotItemCommentBoxHandle = {
   focusEnd: () => void
   /** Focus the box and type `text` at its caret. */
   type: (text: string) => void
-  /** Put `text` in the box in place of its words, to add to before sending. */
-  fill: (text: string) => void
+  /** Put `text` in the box in place of its words, to add to before sending; `plain`: as a comment
+   *  of its own, with "Replying to" hidden. */
+  fill: (text: string, plain?: boolean) => void
   /** Focus the box to answer the waiting question in your own words: it glows once, naming it. */
   answer: () => void
 }
@@ -93,8 +96,9 @@ export function BotItemCommentBox({
   item: BotItem
   /** The bot's folder workspace and host, which file drops and uploads resolve against. */
   attachTo: BotItemCommentAttachTarget | null
-  /** Takes the comment as the box empties: it shows and goes to the host from there. */
-  onSend: (text: string, paths: readonly string[]) => void
+  /** Takes the comment as the box empties, with the waiting line "Replying to" names (null once
+   *  hidden): it shows and goes to the host from there. */
+  onSend: (text: string, paths: readonly string[], replyingTo: string | null) => void
   /** Not on screen: files dropped on the pane are not taken into its hidden draft. */
   hidden?: boolean
   /** The agent's question the item waits on: its first line, and whether it gave quick replies. */
@@ -224,6 +228,8 @@ export function BotItemCommentBox({
   }, [draft, ime])
 
   const reply = useBotItemReplyMark(box, question ?? null, scopeKey)
+  // Replying to a question, the text has its own row and room for an answer from the start.
+  const { field, stacked, height } = useBotItemCommentStacked(draft, reply.quote !== null)
   const caretToEnd = (): void => {
     const node = input.current
     node?.focus()
@@ -237,7 +243,10 @@ export function BotItemCommentBox({
       reply.show()
       composer.current?.focus({ caretAtEnd: true, glow: true })
     },
-    fill: (text) => {
+    fill: (text, plain) => {
+      if (plain) {
+        reply.hide()
+      }
       setDraft(`${text} `)
       if (input.current) {
         input.current.value = `${text} `
@@ -269,7 +278,7 @@ export function BotItemCommentBox({
       attachments.clearImageAttachments()
     }
     setNotice(null)
-    onSend(text, paths)
+    onSend(text, paths, reply.quote?.id ?? null)
   }
   // Stable identities let the memoized editor skip the per-keystroke render, as in chat.
   const editorChange = useLatestHandler((node: NativeChatComposerInput) => {
@@ -325,7 +334,6 @@ export function BotItemCommentBox({
     }
   })
   const focusAtEnd = (event: React.MouseEvent<HTMLDivElement>): void => {
-    const node = input.current
     const target = event.target
     const control =
       target instanceof Element
@@ -334,19 +342,18 @@ export function BotItemCommentBox({
           )
         : null
     if (
-      !node ||
+      !input.current ||
       // Only controls inside the card keep the click; the item pane around it is focusable too.
       (control && event.currentTarget.contains(control)) ||
       window.getSelection()?.toString()
     ) {
       return
     }
-    node.focus()
-    node.setSelectionRange(node.value.length, node.value.length)
+    caretToEnd()
   }
   return (
     // Click-to-focus for the padding; the editor itself stays the keyboard target.
-    // The chat composer's surface, in one row: attach, the text, then mic and send at its foot.
+    // The chat composer's surface: attach, the text, then mic and send at its foot.
     <div
       ref={box}
       data-native-chat-composer-scope={scopeKey}
@@ -380,9 +387,9 @@ export function BotItemCommentBox({
           ))}
         </div>
       ) : null}
-      <div className={cn('flex items-end gap-0.5', nav ? BOT_ITEM_TOOL_ROW_TOUCH_FIT : null)}>
+      <div className={cn('flex flex-wrap items-end gap-0.5', nav && BOT_ITEM_TOOL_ROW_TOUCH_FIT)}>
         {access.session ? <NativeChatAttachButton onAttach={fileDrops.pickAttachments} /> : null}
-        <div className="min-w-0 flex-1">
+        <div ref={field} className={cn('min-w-0 flex-1', stacked && 'order-first basis-full')}>
           <NativeChatPromptEditor
             key={scopeKey}
             scopeKey={scopeKey}
@@ -402,12 +409,11 @@ export function BotItemCommentBox({
             onCompositionStart={editorCompositionStart}
             onCompositionEnd={editorCompositionEnd}
             onBlur={editorBlur}
-            // One row, growing to six lines (less in a short pane: `cqh`), then it scrolls.
-            className="scrollbar-sleek block max-h-[min(132px,25cqh)] min-h-8 overflow-y-auto bg-transparent px-1 py-1.5 text-sm leading-5 text-chat-foreground-strong outline-none [&_p.is-editor-empty:only-child]:before:!h-auto [&_p.is-editor-empty:only-child]:before:mr-[-100%] [&_p.is-editor-empty:only-child]:before:w-full [&_p.is-editor-empty:only-child]:before:truncate"
+            className={`scrollbar-sleek block overflow-y-auto bg-transparent px-1 py-1.5 text-sm leading-5 text-chat-foreground-strong outline-none [&_p.is-editor-empty:only-child]:before:!h-auto [&_p.is-editor-empty:only-child]:before:mr-[-100%] [&_p.is-editor-empty:only-child]:before:w-full [&_p.is-editor-empty:only-child]:before:truncate ${height}`}
           />
         </div>
         {nav}
-        <span className="flex shrink-0">
+        <span className="ml-auto flex shrink-0">
           <NativeChatDictationButton
             disabled={dictation.dictationDisabled}
             isDictating={dictation.isDictating}

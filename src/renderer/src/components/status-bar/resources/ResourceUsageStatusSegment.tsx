@@ -48,7 +48,6 @@ export function ResourceUsageStatusSegment(): React.JSX.Element {
     orphanCount,
     triggerSessionCount,
     memoryMetricCopy,
-    commitMetricCopy,
     ownerSplit,
     commitToneClass,
     commitBadgeLabel,
@@ -154,9 +153,7 @@ export function ResourceUsageStatusSegment(): React.JSX.Element {
                 {renderResourceUsageSummary(
                   {
                     ownerSplit,
-                    memoryMetricCopy,
                     commitBadgeLabel,
-                    commitMetricCopy,
                     commitToneClass,
                     orphanCount
                   },

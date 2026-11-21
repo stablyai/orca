@@ -161,60 +161,6 @@ it('keeps ready-generated recovery behind owner backoff and the cap, then admits
   await stopped
 })
 
-it('retires only the exited renderer document and rejects its pending port delivery', async () => {
-  const child = Object.assign(new EventEmitter(), { postMessage: vi.fn(), kill: vi.fn() })
-  rig.fork.mockReturnValue(child)
-  const supervisor = new BackendSupervisor({
-    getRepos: () => [],
-    getAllWorktreeMeta: () => ({}),
-    getRememberedWorktreeDisplayNames: () => new Map(),
-    whenLoaded: async () => {}
-  })
-  const frame = { postMessage: vi.fn() }
-  const sender = Object.assign(new EventEmitter(), {
-    id: 3,
-    mainFrame: frame,
-    isDestroyed: () => false,
-    getType: () => 'window',
-    getURL: () => 'file:///index.html'
-  })
-  const request = rig.handle.mock.calls.find(([channel]) => channel === BACKEND_PORT_REQUEST)?.[1]
-  const gone = rig.appOn.mock.calls.find(([event]) => event === 'render-process-gone')?.[1]
-  const token = '33333333-3333-3333-3333-333333333333'
-  const initial = request({ sender, senderFrame: frame }, token)
-  const rejected = expect(initial).rejects.toThrow('The document was replaced')
-  gone({}, { id: 99 })
-  expect(
-    child.postMessage.mock.calls.filter(([message]) => message.type === 'retire')
-  ).toHaveLength(0)
-  gone({}, sender)
-  expect(
-    child.postMessage.mock.calls.filter(([message]) => message.type === 'retire')
-  ).toHaveLength(1)
-  child.emit('message', {
-    type: 'ready',
-    protocol: 1,
-    capabilities: ['usage'],
-    incarnation: 'backend-1'
-  })
-  await rejected
-  expect(frame.postMessage.mock.calls.some(([channel]) => channel === BACKEND_PORT_DELIVERY)).toBe(
-    false
-  )
-  await request({ sender, senderFrame: frame }, token)
-  expect(
-    child.postMessage.mock.calls.filter(([message]) => message.type === 'client')
-  ).toHaveLength(1)
-  gone({}, sender)
-  expect(
-    child.postMessage.mock.calls.filter(([message]) => message.type === 'retire')
-  ).toHaveLength(2)
-  const stopped = supervisor.stop()
-  expect(rig.appOff).toHaveBeenCalledWith('render-process-gone', gone)
-  child.emit('exit', 0)
-  await stopped
-})
-
 function startupFixture() {
   const children: (EventEmitter & {
     postMessage: ReturnType<typeof vi.fn>
@@ -370,36 +316,53 @@ it('rejects old requests when ownership changes across readiness instead of rero
   await stopped
 })
 
-it('retires a document that navigates while its port is connecting and binds its successor', async () => {
+it('retires pending documents on navigation and renderer exit and binds a successor', async () => {
   const { children, supervisor, frame, sender, request } = startupFixture()
-  const pending = expect(request()).rejects.toThrow('The document was replaced')
+  const gone = rig.appOn.mock.calls.find(([event]) => event === 'render-process-gone')?.[1]
+  const child = children[0]
+  const retiredDocuments = () =>
+    child.postMessage.mock.calls
+      .map(([message]) => message)
+      .filter((message) => message.type === 'retire')
+      .map((message) => message.document)
+
+  const navigated = expect(request()).rejects.toThrow('The document was replaced')
+  gone({}, { id: 99 })
+  expect(retiredDocuments()).toEqual([])
   sender.emit('did-frame-navigate', {}, 'file:///index.html', 200, 'OK', true)
-  const retired = children[0].postMessage.mock.calls.filter(
-    ([message]) => message.type === 'retire'
-  )
-  expect(retired).toHaveLength(1)
-  children[0].emit('message', {
+  expect(retiredDocuments()).toHaveLength(1)
+
+  const exited = expect(request()).rejects.toThrow('The document was replaced')
+  gone({}, sender)
+  expect(retiredDocuments()).toHaveLength(2)
+
+  child.emit('message', {
     type: 'ready',
     protocol: 1,
     capabilities: ['usage'],
     incarnation: 'backend-1'
   })
-  await pending
+  await Promise.all([navigated, exited])
   expect(frame.postMessage.mock.calls.some(([channel]) => channel === BACKEND_PORT_DELIVERY)).toBe(
     false
   )
+
   await request()
-  const admitted = children[0].postMessage.mock.calls.filter(
-    ([message]) => message.type === 'client'
-  )
+  const admitted = child.postMessage.mock.calls.filter(([message]) => message.type === 'client')
   expect(admitted).toHaveLength(1)
-  expect(admitted[0][0].document.id).not.toBe(retired[0][0].document)
+  const successor = admitted[0][0].document.id
+  expect(retiredDocuments()).not.toContain(successor)
   expect(frame.postMessage).toHaveBeenCalledWith(
     BACKEND_PORT_DELIVERY,
     { token: '44444444-4444-4444-4444-444444444444', incarnation: 'backend-1' },
     [{}]
   )
+
+  gone({}, sender)
+  expect(retiredDocuments()).toHaveLength(3)
+  expect(retiredDocuments().at(-1)).toBe(successor)
   const stopped = supervisor.stop()
-  children[0].emit('exit', 0)
+  expect(rig.appOff).toHaveBeenCalledWith('render-process-gone', gone)
+  child.emit('exit', 0)
   await stopped
 })

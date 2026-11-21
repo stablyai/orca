@@ -36,14 +36,15 @@ function setup(requestTail: Buffer = Buffer.alloc(0)) {
 afterEach(() => vi.restoreAllMocks())
 
 describe('pending browser SOCKS route buffering', () => {
-  it('forwards every fragmented pending byte at the existing cap', async () => {
-    const { server, socket, upstream, write, opened } = setup()
+  it('forwards the request tail before later fragments at the pending byte limit', async () => {
     const payload = Buffer.alloc(256 * 1024)
     for (let index = 0; index < payload.length; index += 1) {
       payload[index] = index % 251
     }
+    const requestTail = payload.subarray(0, 32)
+    const { server, socket, upstream, write, opened } = setup(requestTail)
     try {
-      for (let index = 0; index < payload.length; index += 256) {
+      for (let index = requestTail.length; index < payload.length; index += 256) {
         socket.emit('data', payload.subarray(index, index + 256))
       }
       opened.resolve(upstream)
@@ -51,23 +52,6 @@ describe('pending browser SOCKS route buffering', () => {
       expect(Buffer.isBuffer(write.mock.calls[0][0])).toBe(true)
       expect(write.mock.calls[0][0]).toHaveLength(payload.length)
       expect(Buffer.prototype.equals.call(write.mock.calls[0][0], payload)).toBe(true)
-    } finally {
-      await server.close()
-      upstream.destroy()
-    }
-  })
-
-  it('keeps request-tail bytes ahead of later fragments in the pending payload', async () => {
-    const tail = Buffer.from('GET / HTTP/1.1\r\n')
-    const { server, socket, upstream, write, opened } = setup(tail)
-    const rest = Buffer.from('Host: example.com\r\n\r\n')
-    try {
-      for (const byte of rest) {
-        socket.emit('data', Buffer.from([byte]))
-      }
-      opened.resolve(upstream)
-      await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(1))
-      expect(write.mock.calls[0][0]).toEqual(Buffer.concat([tail, rest]))
     } finally {
       await server.close()
       upstream.destroy()

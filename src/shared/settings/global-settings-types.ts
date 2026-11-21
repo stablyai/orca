@@ -28,7 +28,7 @@ import type {
 import type { NotificationSettings } from '../notifications/notification-settings-types'
 import type { CtrlTabOrderMode } from '../workspace-layout/tab-groups/tab-types'
 import type { TerminalQuickCommand } from '../terminal/quick-commands/terminal-quick-command-types'
-import type { AgentCopy, TuiAgent } from '../agent-launch/catalog/tui-agent'
+import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type { ZcodePlanSite } from '../agent-accounts/usage-credentials/zcode-plan-sites'
 import type {
   AgentDashboardMode,
@@ -275,6 +275,10 @@ export type GlobalSettings = GlobalSettingsBase & {
    *  chats use the user's own signed-in agy or Orca's server, and chats already on agy run the
    *  user's own agy (same history) or, where there is none, refuse as agy not found. Absent means on. */
   antigravityManagedAgyEnabled?: boolean
+  /** How chats on the Google account method sign in: agy's own login, or Orca's built-in sign-in
+   *  on Google's ACP server. Absent or 'auto': the server where Orca's sign-in is already in use,
+   *  else agy. */
+  antigravityGoogleSignIn?: 'auto' | 'agy' | 'orca'
   /** Browser profile new tabs in a workspace use; missing = 'shared' (the Default profile). */
   browserProfileScope?: BrowserProfileScope
   /** Profile new tabs use per browser host when no repo/workspace profile applies; missing = Default. */
@@ -396,8 +400,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   agentLaunchChoices?: AgentLaunchChoices
   /** Per-agent launch environment defaults used when yolo mode is exposed as env. */
   agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
-  /** Named copies of built-in agents, each with its own command, arguments and environment. */
-  agentCopies?: AgentCopy[]
   /** One-shot guard for adding yolo-mode default args to untouched agent launch profiles. */
   agentYoloDefaultsMigrated?: boolean
   /** Why: disabling must persist so startup doesn't reinstall global agent hook entries the user just removed. */

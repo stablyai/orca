@@ -10,6 +10,7 @@ import { BranchSwitchCollisionError } from './branch-switch-target'
 import { checkoutBranch, listLocalBranches } from './checkout'
 import { getStatus } from '../../source-control/status/status-read'
 import { searchRemoteRefPage } from '../../refs/resolution/repo-remote-ref-search'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 
 let directory: string
 let initialHead: string
@@ -241,13 +242,22 @@ it('reads live worktree occupancy and discovers remotes despite 50 local matches
     { refName: 'refs/remotes/origin/topic', localBranchName: 'topic' }
   ])
   const occupied = join(directory, '.git', 'checkout-test')
+  const occupiedKey = normalizeRuntimePathForComparison(occupied)
   await git('worktree', 'add', '-q', occupied, 'topic-0')
-  expect((await listLocalBranches(directory)).worktreePaths?.['topic-0']).toBe(occupied)
+  expect(
+    normalizeRuntimePathForComparison(
+      (await listLocalBranches(directory)).worktreePaths?.['topic-0'] ?? ''
+    )
+  ).toBe(occupiedKey)
   await git('worktree', 'remove', occupied)
   expect((await listLocalBranches(directory)).worktreePaths?.['topic-0']).toBeUndefined()
   await git('worktree', 'add', '-q', occupied, 'topic-1')
   await rm(occupied, { recursive: true })
-  expect((await listLocalBranches(directory)).worktreePaths?.['topic-1']).toBe(occupied)
+  expect(
+    normalizeRuntimePathForComparison(
+      (await listLocalBranches(directory)).worktreePaths?.['topic-1'] ?? ''
+    )
+  ).toBe(occupiedKey)
   await git('checkout', '-qb', 'external-current')
   const updated = await listLocalBranches(directory)
   expect(updated.current).toBe('external-current')

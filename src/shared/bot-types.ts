@@ -14,7 +14,7 @@ import { BotCancelledWaitSchema } from './bots/bot-cancelled-waits'
 import { BotAvatarColorSchema } from './bots/bot-avatar-color'
 
 /** Native-chat agents a bot cannot run on yet; each waits on a live check of its preamble delivery. */
-export const BOT_HELD_BACK_AGENTS = ['kimi'] as const
+export const BOT_HELD_BACK_AGENTS = [] as const
 
 /** Bots run in a native chat; every native-chat agent but the held-back ones. */
 export const BOT_AGENTS = [
@@ -28,8 +28,45 @@ export const BOT_AGENTS = [
   'cursor',
   'hermes',
   'copilot',
-  'opencode2'
+  'opencode2',
+  'kimi',
+  'kiro',
+  'aug',
+  'goose',
+  'kilo',
+  'mimo-code',
+  'gemini',
+  'droid',
+  'qwen-code'
 ] as const satisfies readonly Exclude<NativeChatAgent, (typeof BOT_HELD_BACK_AGENTS)[number]>[]
+
+/** Agents the previous release's bot schema reads; it drops bots on any other agent when it loads. */
+const BOT_AGENTS_OLDER_BUILDS_READ: ReadonlySet<string> = new Set([
+  'claude',
+  'codex',
+  'grok',
+  'opencode',
+  'omp',
+  'pi',
+  'antigravity'
+])
+
+/** Bots saved where an older build, after a rollback, cannot drop them: it ignores keys it does not know. */
+export function splitBotsByOlderBuildSupport(bots: readonly Bot[]): {
+  readable: Bot[]
+  newer: Bot[]
+} {
+  const readable: Bot[] = []
+  const newer: Bot[] = []
+  for (const bot of bots) {
+    if (BOT_AGENTS_OLDER_BUILDS_READ.has(bot.agent)) {
+      readable.push(bot)
+    } else {
+      newer.push(bot)
+    }
+  }
+  return { readable, newer }
+}
 
 export function isBotAgent(agent: string): agent is BotAgent {
   return BOT_AGENTS.some((entry) => entry === agent)
@@ -117,6 +154,10 @@ export const BotItemsStaleSchema = z.union([
   z.literal('never')
 ])
 export type BotItemsStale = z.infer<typeof BotItemsStaleSchema>
+/** Its choices in order, as Settings offers them. */
+export const BOT_ITEMS_STALE_CHOICES: readonly BotItemsStale[] = BotItemsStaleSchema.options.map(
+  (option) => option.value
+)
 
 export const BotSchema = z.object({
   id: z.string().min(1),

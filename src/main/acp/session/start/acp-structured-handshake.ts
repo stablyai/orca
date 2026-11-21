@@ -73,12 +73,16 @@ export async function initializeAcpStructuredSession(
   const initialized = await connection.initialize()
   assertStarting()
   observeAcpForkSupport(spec.agent, initialized)
-  if (launch.sessionMeta && launch.takesSessionMeta && !launch.takesSessionMeta(initialized)) {
+  const sessionMetaRefused = Boolean(
+    launch.sessionMeta && launch.takesSessionMeta && !launch.takesSessionMeta(initialized)
+  )
+  if (sessionMetaRefused && !launch.sessionMetaOptional) {
     const version = initialized.agentInfo?.version
     throw new Error(
       `${agentName}${version ? ` ${version}` : ''} cannot take this chat's standing instructions, so it did not start`
     )
   }
+  const sessionMeta = sessionMetaRefused ? undefined : launch.sessionMeta
   options.adoptInitialize(initialized)
   const meta = await spec.resolveSessionMeta?.({
     initialized,
@@ -125,9 +129,7 @@ export async function initializeAcpStructuredSession(
               cwd,
               mcpServers: launch.mcpServers ?? [],
               sessionId: resume.sessionId,
-              ...(launch.sessionMeta && launch.sessionMetaOnReopen
-                ? { _meta: launch.sessionMeta }
-                : {}),
+              ...(sessionMeta && launch.sessionMetaOnReopen ? { _meta: sessionMeta } : {}),
               ...setup
             },
             acceptSession
@@ -193,7 +195,7 @@ export async function initializeAcpStructuredSession(
         {
           cwd: launch.cwd,
           mcpServers: launch.mcpServers ?? [],
-          ...(launch.sessionMeta ? { _meta: launch.sessionMeta } : {}),
+          ...(sessionMeta ? { _meta: sessionMeta } : {}),
           ...setup
         },
         acceptSession

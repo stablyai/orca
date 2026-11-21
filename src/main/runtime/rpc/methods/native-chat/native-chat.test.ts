@@ -149,12 +149,6 @@ function ctxWith(clientKind: RpcContext['clientKind']): RpcContext {
   return { runtime: handlerRuntime, clientKind }
 }
 
-function firstOutput(result: unknown): string {
-  const messages = (result as { messages: NativeChatMessage[] }).messages
-  const block = messages[0].blocks[0] as { output: string }
-  return block.output
-}
-
 function activeWatcherArgs(): NonNullable<typeof watcher.args> {
   if (!watcher.args) {
     throw new Error('native-chat transcript watcher was not subscribed')
@@ -163,41 +157,31 @@ function activeWatcherArgs(): NonNullable<typeof watcher.args> {
 }
 
 describe('nativeChat.readSession clientKind truncation gating', () => {
-  it('clips oversized tool output for mobile clients', async () => {
-    cachedResult.value = { messages: [makeMessage(OVERSIZED)] }
-    const result = await readSessionHandler()(
-      { agent: 'claude', sessionId: 's' },
-      ctxWith('mobile')
-    )
-    const output = firstOutput(result)
-    expect(output).toBe(`${OVERSIZED.slice(0, 4000)}\n… (truncated)`)
-  })
-
   // Preserve full assistant replies beyond the tool-preview cap; mobile has no way to read clipped text (STA-3230).
-  it('passes a long assistant text block through unclipped for mobile clients', async () => {
-    const text = 'prose '.repeat(1000)
-    cachedResult.value = { messages: [makeTextMessage(text)] }
+  it('applies separate mobile limits to tool previews and assistant text', async () => {
+    const prose = 'prose '.repeat(1000)
+    const oversizedProse = 'y'.repeat(70_000)
+    cachedResult.value = {
+      messages: [
+        { ...makeMessage(OVERSIZED), id: 'tool' },
+        { ...makeTextMessage(prose), id: 'reply' },
+        { ...makeTextMessage(oversizedProse), id: 'oversized-reply' }
+      ]
+    }
     const result = await readSessionHandler()(
       { agent: 'claude', sessionId: 's' },
       ctxWith('mobile')
     )
-    const block = (result as { messages: NativeChatMessage[] }).messages[0].blocks[0] as {
-      text: string
-    }
-    expect(block.text).toBe(text)
-  })
-
-  it('clips a pathological text block at the safety ceiling for mobile clients', async () => {
-    const text = 'y'.repeat(70_000)
-    cachedResult.value = { messages: [makeTextMessage(text)] }
-    const result = await readSessionHandler()(
-      { agent: 'claude', sessionId: 's' },
-      ctxWith('mobile')
-    )
-    const block = (result as { messages: NativeChatMessage[] }).messages[0].blocks[0] as {
-      text: string
-    }
-    expect(block.text).toBe(`${text.slice(0, 64_000)}\n… (truncated)`)
+    expect(result).toMatchObject({
+      messages: [
+        { id: 'tool', blocks: [{ output: `${OVERSIZED.slice(0, 4000)}\n… (truncated)` }] },
+        { id: 'reply', blocks: [{ text: prose }] },
+        {
+          id: 'oversized-reply',
+          blocks: [{ text: `${oversizedProse.slice(0, 64_000)}\n… (truncated)` }]
+        }
+      ]
+    })
   })
 
   it.each(['mobile', 'runtime', undefined] as const)(
@@ -315,6 +299,29 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
         ]
       }
     })
+  })
+
+  it('clips an emoji straddling the 4000-char mobile budget without leaving a lone surrogate', async () => {
+    const straddling = `${'x'.repeat(3999)}\u{1F7E2} HQ`
+    cachedResult.value = {
+      messages: [
+        {
+          ...makeMessage('ignored'),
+          blocks: [
+            { type: 'tool-result', output: straddling, isError: false },
+            { type: 'tool-call', name: 'Bash', input: straddling }
+          ]
+        }
+      ]
+    }
+    const result = await readSessionHandler()(
+      { agent: 'claude', sessionId: 's' },
+      ctxWith('mobile')
+    )
+    const [output, call] = (result as { messages: NativeChatMessage[] }).messages[0].blocks
+
+    expect(output).toMatchObject({ output: `${'x'.repeat(3999)}\n… (truncated)` })
+    expect(call).toMatchObject({ input: `${'x'.repeat(3999)}… (truncated)` })
   })
 
   it('keeps sibling tool-call keys that share a 128-char prefix distinct', async () => {

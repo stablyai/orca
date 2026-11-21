@@ -116,7 +116,7 @@ describe('BotSlackCard', () => {
       expect(await screen.findByText('Paused while signed out')).toBeDefined()
       expect(screen.getByText('Needs sign-in')).toBeDefined()
       expect(screen.queryByText('Can’t check')).toBeNull()
-      expect(screen.queryByText('Sign in to Orca to connect Slack.')).toBeNull()
+      expect(screen.queryByText('Sign in to Orca Cloud to connect Slack.')).toBeNull()
 
       expect(screen.getByText('Access requests need Orca sign-in.')).toBeDefined()
       fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))

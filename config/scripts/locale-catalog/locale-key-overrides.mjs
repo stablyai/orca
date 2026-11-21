@@ -187,6 +187,18 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'auto.components.automations.listGroups.active': { zh: '已启用' },
   'auto.components.automations.AutomationDetail.active': { zh: '已启用' },
   'auto.components.automations.ExternalAutomationManagers.b3feba84c7': { zh: '已启用' },
+  'bots.settingsPage.active': { zh: '已启用' },
+  'settings.bots.active': { zh: '已启用' },
+  'settings.bots.tools.sourcePlaceholder': { zh: 'https://… 或 npx …' },
+  // Bots: "Next" labels the next run time; "New" badges an unseen chat or a just-added install.
+  'bots.automations.next': { zh: '下次运行' },
+  'bots.chats.newTag': { zh: '新' },
+  'bots.github.setup.new': { zh: '新增' },
+  // Bots: "Review" opens items, an access request, a finished setup or a tidy-up, not a code review (评审).
+  'bots.hover.review': { zh: '查看' },
+  'bots.accessRequest.review': { zh: '审核' },
+  'bots.github.pill.review': { zh: '查看' },
+  'settings.bots.tidyUp.review': { zh: '查看' },
   'auto.components.sidebar.SidebarSettingsHelpMenu.eb9884e55b': {
     ko: 'Discord',
     zh: 'Discord',
