@@ -70,6 +70,23 @@ export function retryRequestFlag(flags: Map<string, string | boolean>): string |
   return value
 }
 
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function jsonObjectPayload(raw: string): Record<string, unknown> {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    throw new Error('--payload must be a JSON object when combined with structured payload flags.')
+  }
+  if (!isJsonObject(parsed)) {
+    throw new Error('--payload must be a JSON object when combined with structured payload flags.')
+  }
+  return parsed
+}
+
 /** `--payload`, or the structured flags the worker preamble uses instead of raw JSON. */
 export function messagePayload(flags: Map<string, string | boolean>): string | undefined {
   const raw = stringFlag(flags, 'payload')
@@ -82,16 +99,13 @@ export function messagePayload(flags: Map<string, string | boolean>): string | u
   }
   const filesModified = stringFlag(flags, 'files-modified')
   const structured = Object.values(fields).some(Boolean) || filesModified !== undefined
-  if (!structured) {
-    return raw
-  }
-  if (raw !== undefined) {
-    throw new Error('Use either --payload or structured payload flags, not both.')
-  }
   if (fields.outcome && fields.outcome !== 'succeeded' && fields.outcome !== 'failed') {
     throw new Error('Invalid --outcome. Expected succeeded or failed.')
   }
-  return JSON.stringify({
+  if (!structured) {
+    return raw
+  }
+  const built = {
     ...Object.fromEntries(Object.entries(fields).filter(([, value]) => value)),
     ...(filesModified
       ? {
@@ -101,5 +115,10 @@ export function messagePayload(flags: Map<string, string | boolean>): string | u
             .filter(Boolean)
         }
       : {})
-  })
+  }
+  if (raw === undefined) {
+    return JSON.stringify(built)
+  }
+  // Structured flags override the same keys. Other payload keys stay.
+  return JSON.stringify({ ...jsonObjectPayload(raw), ...built })
 }
