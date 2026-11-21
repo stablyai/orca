@@ -401,7 +401,7 @@ it('confirms N resting agents polled together with one native read', async () =>
   expect(await steadyRoundReads(1_000)).toBe(1)
 })
 
-it('anchors an agent whose pipeline group leader already exited', async () => {
+it('keeps the pane fingerprint check for a pipeline whose group leader already exited', async () => {
   const GROUP = 7000
   const AGENT = 7001
   const rows: ProcessTableRow[] = [
@@ -426,6 +426,7 @@ it('anchors an agent whose pipeline group leader already exited', async () => {
     foregroundGroup: GROUP,
     foreground: 'claude'
   })
+  tables.cheap.mockReset().mockResolvedValue(rows)
   tables.strict.mockReset().mockResolvedValue({ rows, capturedAgeMs: 0 })
   for (let epoch = 0; epoch < 10; epoch++) {
     const result = await settle(
@@ -536,6 +537,9 @@ it('stops reporting an agent once it exits under a launcher that execs a shell',
     rows: [shellRow, launcherRow('bash /Users/u/bin/claude'), agentRow],
     capturedAgeMs: 0
   })
+  tables.cheap
+    .mockReset()
+    .mockResolvedValue([shellRow, launcherRow('bash /Users/u/bin/claude'), agentRow])
   const session = pane({
     root: SHELL,
     shellIsRootChild: false,
@@ -558,60 +562,70 @@ it('stops reporting an agent once it exits under a launcher that execs a shell',
   expect(tables.strict).toHaveBeenCalledTimes(1)
   agentAlive = false
   tables.strict.mockResolvedValue({ rows: [shellRow, launcherRow('bash')], capturedAgeMs: 0 })
+  tables.cheap.mockResolvedValue([shellRow, launcherRow('bash')])
   vi.advanceTimersByTime(15_000)
   expect((await poll(2)).foregroundProcess).not.toBe('claude')
   expect(tables.strict).toHaveBeenCalledTimes(2)
 })
 
-it('watches up to 32 group members by pid and falls back to the pane fingerprint above that', async () => {
-  const GROUP = 8000
-  async function steadyRead(members: number): Promise<{ namedPids: number; cheapTables: number }> {
-    const rows: ProcessTableRow[] = [
-      { ...row(SHELL, 1, SHELL, '-zsh'), tpgid: GROUP, startTime: 'Mon Nov 20 10:00:00 2026' },
-      ...Array.from({ length: members }, (_, i) => ({
-        ...row(GROUP + i, i === 0 ? SHELL : GROUP, GROUP, i === 0 ? 'claude' : 'sleep 100'),
-        tpgid: GROUP,
-        startTime: 'Mon Nov 20 10:01:00 2026'
-      }))
-    ]
-    setLibprocAddonForTests({
-      readProcessTable: async (query) => {
-        groupReads(query)
-        return (query.pids ?? []).map((pid) => ({
-          ...kinfo(pid, GROUP),
-          comm: pid === GROUP ? 'claude' : 'sleep'
-        }))
-      }
-    })
-    tables.cheap.mockReset().mockResolvedValue(rows)
-    tables.strict.mockReset().mockResolvedValue({ rows, capturedAgeMs: 0 })
-    const session = pane({
-      root: SHELL,
-      shellIsRootChild: false,
-      foregroundGroup: GROUP,
-      foreground: 'claude'
-    })
-    const poll = (epoch: number) =>
-      settle(
-        inspectTerminalHostProcess({
-          sessionId: 'pane-1',
-          session,
-          steadyState: true,
-          authorityGeneration: 'generation-1',
-          nextObservationEpoch: () => epoch
-        })
-      )
-    await poll(0)
-    vi.advanceTimersByTime(15_000)
-    groupReads.mockReset()
-    tables.cheap.mockClear()
-    expect((await poll(1)).foregroundProcess).toBe('claude')
-    expect(tables.strict).toHaveBeenCalledTimes(1)
-    return {
-      namedPids: groupReads.mock.calls.reduce((sum, [query]) => sum + (query.pids?.length ?? 0), 0),
-      cheapTables: tables.cheap.mock.calls.length
-    }
+it('notices an agent a launcher starts after the anchoring capture, and its exit', async () => {
+  const LAUNCHER = 6100
+  const AGENT = 6101
+  const shellRow = {
+    ...row(SHELL, 1, SHELL, '-zsh'),
+    tpgid: LAUNCHER,
+    startTime: 'Mon Nov 20 10:00:00 2026'
   }
-  expect(await steadyRead(32)).toEqual({ namedPids: 32, cheapTables: 0 })
-  expect(await steadyRead(33)).toEqual({ namedPids: 0, cheapTables: 1 })
+  const launcherRow = (command: string): ProcessTableRow => ({
+    ...row(LAUNCHER, SHELL, LAUNCHER, command),
+    tpgid: LAUNCHER,
+    startTime: 'Mon Nov 20 10:01:00 2026'
+  })
+  const agentRow = {
+    ...row(AGENT, LAUNCHER, LAUNCHER, 'claude'),
+    tpgid: LAUNCHER,
+    startTime: 'Mon Nov 20 10:01:05 2026'
+  }
+  setLibprocAddonForTests({
+    readProcessTable: async (query) => {
+      groupReads(query)
+      return (query.pids ?? [])
+        .filter((pid) => pid === LAUNCHER)
+        .map((pid) => ({ ...kinfo(pid, LAUNCHER), comm: 'bash' }))
+    }
+  })
+  const before = [shellRow, launcherRow('bash /Users/u/bin/claude')]
+  const running = [...before, agentRow]
+  const after = [shellRow, launcherRow('bash')]
+  tables.strict.mockReset().mockResolvedValue({ rows: before, capturedAgeMs: 0 })
+  tables.cheap.mockReset().mockResolvedValue(before)
+  const session = pane({
+    root: SHELL,
+    shellIsRootChild: false,
+    foregroundGroup: LAUNCHER,
+    foreground: 'bash'
+  })
+  const poll = (epoch: number) =>
+    settle(
+      inspectTerminalHostProcess({
+        sessionId: 'pane-1',
+        session,
+        steadyState: true,
+        authorityGeneration: 'generation-1',
+        nextObservationEpoch: () => epoch
+      })
+    )
+  await poll(0)
+  for (const [epoch, rows] of [
+    [1, running],
+    [2, after]
+  ] as const) {
+    vi.advanceTimersByTime(15_000)
+    tables.strict.mockResolvedValue({ rows, capturedAgeMs: 0 })
+    tables.cheap.mockResolvedValue(rows)
+    await poll(epoch)
+  }
+  expect(tables.strict).toHaveBeenCalledTimes(3)
+  vi.advanceTimersByTime(15_000)
+  expect((await poll(3)).foregroundProcess).not.toBe('claude')
 })

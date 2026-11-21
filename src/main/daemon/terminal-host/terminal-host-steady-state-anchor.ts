@@ -2,6 +2,11 @@ import { recognizeAgentProcess } from '../../../shared/agent-status/process/agen
 import type { RemoteForegroundEvidence } from '../../../shared/terminal/pty/foreground/foreground-process-evidence'
 import { getCheapProcessTableSnapshot } from '../../../shared/process-observation/tables/cheap-process-table-snapshot-reader'
 import { buildPaneProcessFingerprint } from '../../providers/foreground/posix-pane-fingerprint'
+import {
+  getCommandTokenPathBasename,
+  getFirstCommandToken
+} from '../../../shared/shell/command-resolution/command-token-scanner'
+import { getProcessTableIndex } from '../../../shared/process-observation/tables/process-table-index'
 import type { Session } from '../sessions/session'
 import { readForegroundGroupMembers } from './terminal-host-foreground-group-identity'
 
@@ -13,15 +18,13 @@ type SteadyStateAnchor = {
   | {
       kind: 'members'
       foregroundGroup: number
-      /** Every live member of the foreground group in the anchoring capture (a pipeline's leader may already be gone). */
+      /** The group leader, which is the agent itself. */
       pids: readonly number[]
       identity: string
     }
-  /** While per-pid reads are unavailable (native reader backing off or missing), the pane's table fingerprint. */
+  /** Main's pane table fingerprint, wherever a leader-only per-pid read would not be exact or cannot run. */
   | { kind: 'fingerprint'; fingerprint: string }
 )
-
-export const MAX_ANCHORED_MEMBERS = 32
 
 // Key by Session so a new session or recycled PID cannot inherit an old anchor.
 const anchors = new WeakMap<Session, SteadyStateAnchor>()
@@ -51,20 +54,20 @@ export async function rememberSteadyStateAnchor(
   if (typeof liveGroup === 'number' && liveGroup !== foregroundGroup) {
     return
   }
-  // Watch every group member the capture saw: a launcher that leads the group can exec a shell after the agent exits
-  // without changing its own pid, start time or name, so only the agent's own exit shows the handoff.
-  const captured = [
-    ...new Set([
-      evidence.fence.process.pid,
-      ...rows
-        .filter((row) => row.pgid === foregroundGroup && !row.stat.startsWith('Z'))
-        .map((row) => row.pid)
-    ])
-  ]
-  // A PTY image that cannot report its foreground group (older node-pty), or a crowded group, keeps the fingerprint.
+  // Per-pid reads cannot see a process that joins the group later, so they are exact only while the agent's own binary
+  // leads its group: its exit then ends the group. A launcher-led group (which may fork the agent later, or exec a
+  // shell after it exits with the same pid, start time and name) keeps main's pane fingerprint, as do PTY images that
+  // cannot report their foreground group.
+  const leader = getProcessTableIndex(rows).byPid.get(foregroundGroup)
+  const agentLeads =
+    evidence.fence.process.pid === foregroundGroup &&
+    leader !== undefined &&
+    recognizeAgentProcess(
+      getCommandTokenPathBasename(getFirstCommandToken(leader.command)).replace(/^-/, '')
+    ) !== null
   const members =
-    typeof liveGroup === 'number' && captured.length <= MAX_ANCHORED_MEMBERS
-      ? await readForegroundGroupMembers(captured, foregroundGroup)
+    typeof liveGroup === 'number' && agentLeads
+      ? await readForegroundGroupMembers([foregroundGroup], foregroundGroup)
       : null
   const rawFallback = session.getForegroundProcess({ rawFallback: true })
   if (members === null) {
@@ -79,11 +82,10 @@ export async function rememberSteadyStateAnchor(
     }
     return
   }
-  // A member that already left since the capture would go unwatched; let the next poll capture again.
-  if (members.size !== captured.length || session.readForegroundGroup() !== foregroundGroup) {
+  if (!members.has(foregroundGroup) || session.readForegroundGroup() !== foregroundGroup) {
     return
   }
-  const pids = captured
+  const pids = [foregroundGroup]
   anchors.set(session, {
     kind: 'members',
     agentName: evidence.processName,
@@ -94,7 +96,7 @@ export async function rememberSteadyStateAnchor(
   })
 }
 
-/** The anchored agent while tcgetpgrp and per-pid reads of the anchored members (agent, plus a live leader) still match. */
+/** The anchored agent while its check still matches: a per-pid read of the agent leading the group, or main's fingerprint. */
 export async function readAnchoredForeground(session: Session): Promise<string | null> {
   const anchor = anchors.get(session)
   if (!anchor || session.getForegroundProcess({ rawFallback: true }) !== anchor.rawFallback) {
