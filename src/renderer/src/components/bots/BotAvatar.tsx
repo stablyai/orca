@@ -11,17 +11,17 @@ export function BotAvatar({
   bot,
   className,
   style,
-  waitToRetry
+  paused
 }: {
   bot: Pick<Bot, 'id' | 'name' | 'avatar' | 'avatarColor'> & BotOnHost
   className?: string
   style?: React.CSSProperties
-  /** Drawn as its list scrolls: a failed picture read is retried only after a while. */
-  waitToRetry?: boolean
+  /** Don't read the picture now (its host is offline); it's read when this turns false. */
+  paused?: boolean
 }): React.JSX.Element {
   return (
     <BotAvatarTile
-      src={useBotAvatarSrc(bot, waitToRetry)}
+      src={useBotAvatarSrc(bot, paused)}
       fallback={botFallback(bot)}
       className={className}
       style={style}

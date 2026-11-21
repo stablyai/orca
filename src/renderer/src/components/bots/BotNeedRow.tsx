@@ -123,7 +123,7 @@ export function NeedRow({
       <span className="flex h-5 w-4 shrink-0 items-center justify-center">
         <NeedGlyph kind={kind} />
       </span>
-      {face ? <BotItemRowFace bot={face} waitToRetry={false} /> : null}
+      {face ? <BotItemRowFace bot={face} /> : null}
       <BotRowHoverCard card={card}>
         {action ? (
           <button

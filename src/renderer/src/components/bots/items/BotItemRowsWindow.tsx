@@ -150,8 +150,8 @@ export function BotItemRowsWindow({
   viewport: BotItemsViewport
   /** The group's name, which the list is announced by. */
   label: string
-  /** `tabbable`: the row is in the Tab order. */
-  renderRow: (item: BotItem, tabbable: boolean) => React.ReactNode
+  /** `tabbable`: the row is in the Tab order; `windowed`: it mounts and unmounts as the panel scrolls. */
+  renderRow: (item: BotItem, tabbable: boolean, windowed: boolean) => React.ReactNode
   /** Back's row: drawn until it has focus, then `onBackFocused`. */
   backUid: string | null
   onBackFocused: () => void
@@ -450,7 +450,7 @@ export function BotItemRowsWindow({
             >
               {/* The cell wraps the row at every size, so crossing into a grid remounts nothing. */}
               <div role={all ? undefined : 'gridcell'}>
-                {renderRow(item, all || index === tabStop)}
+                {renderRow(item, all || index === tabStop, !all)}
               </div>
             </div>
           </Fragment>
