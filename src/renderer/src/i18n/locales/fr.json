@@ -20747,6 +20747,8 @@
         }
       },
       "nativeChat": {
+        "sendKeyTitle": "Envoyer les messages avec",
+        "sendKeyCopy": "Choisissez Shift+Enter pour insérer un saut de ligne avec Enter. Cmd/Ctrl+Enter conserve son action de mise en file ou d’envoi immédiat.",
         "followUpBehaviorTitle": "Mettre les messages suivants en file d’attente",
         "scrollToLatestOnSendTitle": "Défiler jusqu’au dernier message à l’envoi",
         "scrollToLatestOnSendCopy": "Envoyer après avoir remonté le fil fait défiler jusqu’au dernier message et suit la réponse. Désactivez cette option pour garder votre position.",

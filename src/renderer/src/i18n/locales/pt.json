@@ -22248,6 +22248,8 @@
         }
       },
       "nativeChat": {
+        "sendKeyTitle": "Enviar mensagens com",
+        "sendKeyCopy": "Escolha Shift+Enter para inserir quebras de linha com Enter. Cmd/Ctrl+Enter mantém a ação de colocar na fila ou enviar imediatamente.",
         "followUpBehaviorTitle": "Colocar mensagens de acompanhamento na fila",
         "scrollToLatestOnSendTitle": "Rolar até o mais recente ao enviar",
         "scrollToLatestOnSendCopy": "Enviar com o chat rolado para cima leva à mensagem mais recente e acompanha a resposta. Desative para manter sua posição.",

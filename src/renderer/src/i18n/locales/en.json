@@ -23004,6 +23004,8 @@
         }
       },
       "nativeChat": {
+        "sendKeyTitle": "Send messages with",
+        "sendKeyCopy": "Choose Shift+Enter to use Enter for newlines. Cmd/Ctrl+Enter keeps its queue/steer action.",
         "followUpBehaviorTitle": "Queue follow-ups",
         "scrollToLatestOnSendTitle": "Scroll to latest when sending",
         "scrollToLatestOnSendCopy": "Sending while scrolled up jumps to the latest message and follows the reply. Turn off to keep your place.",

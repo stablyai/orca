@@ -19888,6 +19888,8 @@
         }
       },
       "nativeChat": {
+        "sendKeyTitle": "메시지 제출 키",
+        "sendKeyCopy": "Shift+Enter를 선택하면 Enter로 줄바꿈합니다. Cmd/Ctrl+Enter의 대기열·즉시 전달 동작은 유지됩니다.",
         "followUpBehaviorTitle": "후속 메시지를 대기열에 추가",
         "scrollToLatestOnSendTitle": "보낼 때 최신 메시지로 스크롤",
         "scrollToLatestOnSendCopy": "위로 스크롤한 상태에서 보내면 최신 메시지로 이동하고 답장을 따라갑니다. 끄면 현재 위치가 유지됩니다.",

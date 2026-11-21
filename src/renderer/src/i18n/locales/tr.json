@@ -20781,6 +20781,8 @@
         }
       },
       "nativeChat": {
+        "sendKeyTitle": "Mesaj gönderme tuşu",
+        "sendKeyCopy": "Enter ile yeni satır eklemek için Shift+Enter seçin. Cmd/Ctrl+Enter, kuyruğa ekleme veya hemen gönderme işlevini korur.",
         "followUpBehaviorTitle": "Takip mesajlarını sıraya al",
         "scrollToLatestOnSendTitle": "Gönderirken en son mesaja kaydır",
         "scrollToLatestOnSendCopy": "Yukarı kaydırılmışken göndermek en son mesaja atlar ve yanıtı takip eder. Konumunuzu korumak için kapatın.",

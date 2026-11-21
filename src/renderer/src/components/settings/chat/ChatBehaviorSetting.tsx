@@ -11,6 +11,7 @@ import { useAppStore } from '../../../store/index'
 import { ChatPermissionSetting } from './ChatPermissionSetting'
 import { NativeChatShellEnvironmentSetting } from './NativeChatShellEnvironmentSetting'
 import { NativeChatIdleStopSetting } from './NativeChatIdleStopSetting'
+import { NativeChatSendKeySetting } from './NativeChatSendKeySetting'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { nativeChatQueueFollowUps } from '../../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import {
@@ -59,6 +60,7 @@ export function ChatBehaviorSetting({
       ? [getChatPermissionSearchEntry(typedPermissions)]
       : []),
     entries.resumeOnRestart,
+    entries.sendKey,
     entries.idleStop,
     ...(hostContinuesUsageLimits ? [entries.autoContinueAfterUsageLimit] : []),
     ...(hostQueuesMessages ? [entries.queueFollowUps] : []),
@@ -86,6 +88,19 @@ export function ChatBehaviorSetting({
         updateSettings={updateSettings}
         forceVisible={forceVisible}
       />
+      <SearchableSetting
+        {...entries.sendKey}
+        id={entries.sendKey.targetSectionId}
+        forceVisible={forceVisible}
+        className="max-w-none"
+      >
+        <NativeChatSendKeySetting
+          settings={settings}
+          updateSettings={updateSettings}
+          title={entries.sendKey.title}
+          description={entries.sendKey.description}
+        />
+      </SearchableSetting>
       <SearchableSetting
         {...entries.resumeOnRestart}
         id={entries.resumeOnRestart.targetSectionId}

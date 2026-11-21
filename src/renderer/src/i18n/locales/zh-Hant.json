@@ -20316,6 +20316,8 @@
         }
       },
       "nativeChat": {
+        "sendKeyTitle": "訊息傳送按鍵",
+        "sendKeyCopy": "選擇 Shift+Enter 後，Enter 用於換行。Cmd/Ctrl+Enter 仍用於加入佇列或立即傳送。",
         "followUpBehaviorTitle": "將後續訊息加入佇列",
         "scrollToLatestOnSendTitle": "傳送時捲動到最新訊息",
         "scrollToLatestOnSendCopy": "向上捲動時傳送訊息會跳到最新訊息並跟隨回覆。關閉後會保留目前位置。",

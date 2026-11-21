@@ -21058,6 +21058,8 @@
         }
       },
       "nativeChat": {
+        "sendKeyTitle": "メッセージ送信キー",
+        "sendKeyCopy": "Shift+Enterを選ぶと、Enterで改行できます。Cmd/Ctrl+Enterのキュー追加・即時送信の動作は変わりません。",
         "followUpBehaviorTitle": "フォローアップをキューに入れる",
         "scrollToLatestOnSendTitle": "送信時に最新までスクロール",
         "scrollToLatestOnSendCopy": "上にスクロールした状態で送信すると、最新のメッセージに移動して返信を追従します。オフにすると現在の位置を維持します。",

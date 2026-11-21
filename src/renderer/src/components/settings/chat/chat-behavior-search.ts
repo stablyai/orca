@@ -10,6 +10,14 @@ export const getChatBehaviorTitle = (t: Translate = translate): string =>
   t('components.settings.nativeChat.behaviorTitle', 'Behavior')
 
 export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
+  sendKey: {
+    targetSectionId: 'chat-send-key',
+    title: translate('components.settings.nativeChat.sendKeyTitle', 'Send messages with'),
+    description: translate(
+      'components.settings.nativeChat.sendKeyCopy',
+      'Choose Shift+Enter to use Enter for newlines. Cmd/Ctrl+Enter keeps its queue/steer action.'
+    )
+  },
   resumeOnRestart: {
     targetSectionId: NATIVE_CHAT_RESUME_SETTING_SECTION_ID,
     title: translate(
