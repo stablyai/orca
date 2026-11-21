@@ -99,8 +99,18 @@ export function NativeChatToolAddedCard({
           ) : null
         }
       >
-        {lead} <span className="text-chat-foreground">{title}</span>
-        {after.map((part) => ` · ${part}`).join('')}
+        <span className="shrink-0">{lead}</span>
+        <span
+          className="min-w-0 max-w-[min(16rem,100%)] truncate text-chat-foreground"
+          title={title}
+        >
+          {title}
+        </span>
+        {after.length > 0 ? (
+          <span className="min-w-0 max-w-max grow basis-0 truncate" title={after.join(' · ')}>
+            {after.map((part) => `· ${part}`).join(' ')}
+          </span>
+        ) : null}
       </NativeChatEventRow>
       {present && signIn.pasteBack ? (
         <div className="ml-5">

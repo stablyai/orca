@@ -158,14 +158,18 @@ function BotSidebarChat({
 }): React.JSX.Element {
   const t = useTranslate()
   const { chat, foldable, open, lines, paging, steps } = view
-  const { active, toggle } = useBotChatPress(bot, chat.chatId)
+  const { active, toggle, highlight } = useBotChatPress(bot, chat.chatId)
   const title = chatTitle(t, chat)
   const label = useBotChatLabel(chat, title)
   const trailing = trailingText(t, view.trailing)
-  // A press only switches to the chat; only the chevron shows or hides its workers.
+  // A press only switches to the chat; only the chevron shows or hides its workers. Pressed while
+  // its chat is already in front, it flashes that chat's pane so the press visibly lands.
   const pressRow = (event: { detail: number; repeat?: boolean }): void => {
     if (event.detail > 1 || event.repeat) {
       return
+    }
+    if (active) {
+      highlight()
     }
     if (chat.origin === 'home') {
       void openBotHomeTab(bot)
