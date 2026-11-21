@@ -1,4 +1,7 @@
-import { defineFixture, type ComponentFixture } from '../../../../component-fixtures/component-fixture'
+import {
+  defineFixture,
+  type ComponentFixture
+} from '../../../../component-fixtures/component-fixture'
 import type { RuntimeAccessGrant } from '../../../../../../shared/remote-runtime/host-catalog/runtime-access-grants'
 import { RuntimeAccessGrantList } from './RuntimeAccessGrantList'
 

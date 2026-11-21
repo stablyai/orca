@@ -38,8 +38,56 @@ function readScrollEdges(el: HTMLElement, current: ScrollEdges): ScrollEdges {
     above: el.scrollTop > 1,
     below: el.scrollTop + el.clientHeight < el.scrollHeight - 1
   }
-  // Why: keep the same object when nothing changed so scrolling does not re-render every row.
   return next.above === current.above && next.below === current.below ? current : next
+}
+
+/**
+ * Caps the rows at ~3.5 (56px row + 8px gap) and fades only the edges that hide rows.
+ * Why a separate component: edge state lives here, so a fade change re-renders only this
+ * wrapper; the row elements arrive as the same `children` and React skips them.
+ */
+function ActiveLinksScroller({ children }: { children: React.ReactNode }): React.JSX.Element {
+  const listRef = useRef<HTMLDivElement>(null)
+  const [edges, setEdges] = useState<ScrollEdges>({ above: false, below: false })
+
+  // Why: measure before paint so a capped list never flashes a hard cut. Rows change on revoke
+  // and refresh (new children); the box changes when the window narrows.
+  useLayoutEffect(() => {
+    const el = listRef.current
+    if (!el) {
+      return
+    }
+    const update = (): void => setEdges((current) => readScrollEdges(el, current))
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [children])
+
+  return (
+    // Why: scroll-py-4 keeps a focused Revoke clear of the 1rem fades when Tab scrolls to it.
+    <div
+      ref={listRef}
+      onScroll={(event) => {
+        const el = event.currentTarget
+        setEdges((current) => readScrollEdges(el, current))
+      }}
+      className={cn(
+        'scrollbar-sleek max-h-[13.75rem] scroll-py-4 space-y-2 overflow-y-auto',
+        edges.above &&
+          edges.below &&
+          '[mask-image:linear-gradient(to_bottom,transparent,black_1rem,black_calc(100%-1rem),transparent)]',
+        edges.above &&
+          !edges.below &&
+          '[mask-image:linear-gradient(to_bottom,transparent,black_1rem)]',
+        !edges.above &&
+          edges.below &&
+          '[mask-image:linear-gradient(to_bottom,black_calc(100%-1rem),transparent)]'
+      )}
+    >
+      {children}
+    </div>
+  )
 }
 
 type RuntimeAccessGrantListProps = {
@@ -61,23 +109,6 @@ export function RuntimeAccessGrantList({
 }: RuntimeAccessGrantListProps): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
-  const listRef = useRef<HTMLDivElement>(null)
-  const [edges, setEdges] = useState<ScrollEdges>({ above: false, below: false })
-
-  // Why: fade only the edges that hide rows; measure before paint so a capped list never flashes
-  // a hard cut. Rows change on revoke and refresh; the box changes when the window narrows.
-  useLayoutEffect(() => {
-    const el = listRef.current
-    if (!el) {
-      return
-    }
-    const update = (): void => setEdges((current) => readScrollEdges(el, current))
-    update()
-    const observer = new ResizeObserver(update)
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [grants])
-
   return (
     <div className={className}>
       <div className="mb-2 flex items-center justify-between gap-3">
@@ -91,28 +122,8 @@ export function RuntimeAccessGrantList({
           {t('auto.components.settings.RuntimeAccessGrantList.noActiveLinks', 'No active links.')}
         </p>
       ) : (
-        // Why: links pile up over time; past ~3.5 rows (56px row + 8px gap) the list scrolls
-        // under a fixed heading, and the faded half row that peeks shows there is more.
-        // scroll-py-4 keeps a focused Revoke clear of the 1rem fades when Tab scrolls to it.
-        <div
-          ref={listRef}
-          onScroll={(event) => {
-            const el = event.currentTarget
-            setEdges((current) => readScrollEdges(el, current))
-          }}
-          className={cn(
-            'scrollbar-sleek max-h-[13.75rem] scroll-py-4 space-y-2 overflow-y-auto',
-            edges.above &&
-              edges.below &&
-              '[mask-image:linear-gradient(to_bottom,transparent,black_1rem,black_calc(100%-1rem),transparent)]',
-            edges.above &&
-              !edges.below &&
-              '[mask-image:linear-gradient(to_bottom,transparent,black_1rem)]',
-            !edges.above &&
-              edges.below &&
-              '[mask-image:linear-gradient(to_bottom,black_calc(100%-1rem),transparent)]'
-          )}
-        >
+        // Why: links pile up over time; past ~3.5 rows the list scrolls under a fixed heading.
+        <ActiveLinksScroller>
           {grants.map((grant) => {
             const isCurrent = currentGrantId === grant.deviceId
             const isRevoking = revokingGrantId === grant.deviceId
@@ -187,7 +198,7 @@ export function RuntimeAccessGrantList({
               </div>
             )
           })}
-        </div>
+        </ActiveLinksScroller>
       )}
       {grants.length > 0 ? (
         <p className="text-muted-foreground mt-3 text-xs">
