@@ -25,6 +25,7 @@ import {
 } from '../../../../orchestration/workers/reports/report-follow-up-action'
 import { formatFinishedReportReplyRefusal } from '../../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
 import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
 
 export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
   name: 'orchestration.reply',
@@ -168,21 +169,26 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
       sessionCallerOf(orchestrationCaller)?.sessionId,
       params.body
     )
-    const reply = db.insertMessage({
-      from: replyFrom,
-      senderDispatchId: db.getActiveDispatchForIdentity(
-        replyFrom,
-        runtime.getTerminalPaneKey(replyFrom) ?? undefined
-      )?.id,
-      to: recipient.to,
-      subject: `Re: ${original.subject}`,
-      body: params.body,
-      threadId: original.thread_id ?? original.id,
-      runId: recipient.runId,
-      // Refuses a second answer to a bot request, before the original is marked read.
-      payload: botAnswerPayload(db, original, answerTurn !== null)
+    const senderDispatchId = db.getActiveDispatchForIdentity(
+      replyFrom,
+      runtime.getTerminalPaneKey(replyFrom) ?? undefined
+    )?.id
+    // The answer's record and its mail commit together, so a crash between them can't keep one alone.
+    const reply = runLifecycleWriteTransaction(db.db, 'reply_with_answer', () => {
+      const stored = db.insertMessage({
+        from: replyFrom,
+        senderDispatchId,
+        to: recipient.to,
+        subject: `Re: ${original.subject}`,
+        body: params.body,
+        threadId: original.thread_id ?? original.id,
+        runId: recipient.runId,
+        // Refuses a second answer to a bot request, before the original is marked read.
+        payload: botAnswerPayload(db, original, answerTurn !== null)
+      })
+      db.markAsRead([original.id])
+      return stored
     })
-    db.markAsRead([original.id])
     // Written only now, so a reply refused above (a second answer) never shows in the room.
     if (answerTurn) {
       runtimeBotGroups(runtime).saveAnswer(answerTurn, params.body)
