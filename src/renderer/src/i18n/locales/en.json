@@ -27755,7 +27755,8 @@
       "here": "here",
       "thisServer": "this server",
       "there": "there",
-      "executionComputer": "the computer this agent runs on"
+      "executionComputer": "the computer this agent runs on",
+      "yourComputer": "your computer"
     },
     "accessRequest": {
       "toast": "{{person}} asked for access to {{name}}",

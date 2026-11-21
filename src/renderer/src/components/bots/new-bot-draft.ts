@@ -7,6 +7,7 @@ import { botTemplate } from '../../../../shared/bots/bot-templates'
 import { botTemplateText } from '../../../../shared/bots/bot-template-text'
 import { finalSentenceStop, joinSentences } from '../../../../shared/text/sentence-joining'
 import type { NewBotProposalDraft } from './NewBotProposalFields'
+import { PURPOSE_MAX_LENGTH } from './NewBotPurposeField'
 
 export type NewBotDraft = NewBotProposalDraft & { purpose: string }
 
@@ -80,6 +81,28 @@ export function shownDraft(
   }
 }
 
+/** A field typed back to exactly what New bot shows keeps the proposal's own words, so a later
+ *  language change can't make restored text look edited. */
+export function canonicalDraft(
+  proposal: BotProposal | undefined,
+  draft: NewBotDraft,
+  t: Translate
+): NewBotDraft {
+  if (!proposal) {
+    return draft
+  }
+  const own = draftOf(proposal)
+  const shown = shownDraft(proposal, own, t)
+  const kept = (typed: string | undefined, seen: string | undefined, mine: string | undefined) =>
+    typed !== undefined && mine !== undefined && typed.trim() === seen?.trim() ? mine : typed
+  return {
+    purpose: kept(draft.purpose, shown.purpose, own.purpose) ?? '',
+    watches: kept(draft.watches, shown.watches, own.watches),
+    does: kept(draft.does, shown.does, own.does),
+    reports: kept(draft.reports, shown.reports, own.reports)
+  }
+}
+
 /** Whether the identity box still holds the template's text, as written or as shown. */
 export function identityUntouched(
   proposal: BotProposal | undefined,
@@ -89,6 +112,19 @@ export function identityUntouched(
   const typed = purpose.trim()
   return (
     typed === templateIdentity(proposal) || typed === shownTemplateIdentity(proposal, t)?.trim()
+  )
+}
+
+/** An edited template identity becomes the bot's purpose, so it keeps the purpose's limit. */
+export function templateIdentityTooLong(
+  proposal: BotProposal | undefined,
+  purpose: string,
+  t: Translate
+): boolean {
+  return (
+    templateIdentity(proposal) !== undefined &&
+    !identityUntouched(proposal, purpose, t) &&
+    purpose.trim().length > PURPOSE_MAX_LENGTH
   )
 }
 

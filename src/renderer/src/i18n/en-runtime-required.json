@@ -1571,7 +1571,8 @@
       "trust": "Add only people you’d trust at your keyboard.",
       "undo": "Undo",
       "whoCanAsk": "Who can ask {{name}}",
-      "whoeverAskedApproves": "If it asks, whoever asked can approve."
+      "whoeverAskedApproves": "If it asks, whoever asked can approve.",
+      "yourComputer": "your computer"
     },
     "accessRequest": {
       "decideFailed": "Couldn’t save your answer. Try again.",

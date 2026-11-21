@@ -244,7 +244,8 @@
       "whatTheyCanDo": "What {{person}} can do",
       "whoCanAsk": "Who can ask {{name}}",
       "whoeverAskedApproves": "If it asks, whoever asked can approve.",
-      "yourAccess": "Their requests use your access, not their own. Anything {{name}} can do {{there}}, they can ask it to do."
+      "yourAccess": "Their requests use your access, not their own. Anything {{name}} can do {{there}}, they can ask it to do.",
+      "yourComputer": "your computer"
     },
     "chats": {
       "moreMatches_one": "{{count}} more match. Search for more of a name to narrow it.",

@@ -48,16 +48,17 @@ import { botTemplate, type BotTemplateSkill } from '../../../../shared/bots/bot-
 import { NewBotTemplateParts } from './NewBotTemplateParts'
 import type { BotCreateParams } from '../../../../shared/rpc-contract/bots-params'
 import { NewBotProposalFields, NewBotTakesOver } from './NewBotProposalFields'
-import { NewBotPurposeField, PURPOSE_MAX_LENGTH } from './NewBotPurposeField'
+import { NewBotPurposeField } from './NewBotPurposeField'
 import { botTemplateShownName } from '../../../../shared/bots/bot-template-text'
 import { BotCreateButton } from './BotCreateButton'
 import { BARE_HEADING_CLASS, keyboardNavMarkerHandlers } from './new-bot-bare-fields'
 import { openBotTemplates } from './templates/bot-templates-open'
 import { pictureTintFor } from './avatar-picture-tint'
 import {
+  canonicalDraft,
   draftOf,
   editedProposal,
-  identityUntouched,
+  templateIdentityTooLong,
   shownDraft,
   shownTemplateIdentity
 } from './new-bot-draft'
@@ -132,6 +133,7 @@ export function NewBotDialog({
   const [addHostMode, setAddHostMode] = useState<AddRemoteHostMode | null>(null)
   const [draft, setDraft] = useState(() => draftOf(proposal, initialPurpose))
   const shown = shownDraft(proposal, draft, t)
+  const keepDraft = (next: typeof draft): void => setDraft(canonicalDraft(proposal, next, t))
   const hostChoice = useBotCreateHost(open, hosts, offerHostId)
   const { hostId, blocked } = hostChoice.host
   const hostBots = useHostBots(hostId)
@@ -157,11 +159,7 @@ export function NewBotDialog({
   // Pasted, dropped and uploaded pictures, from the dialog and the picture popover alike.
   const intake = useBotAvatarIntakeState({ onPicture: picture.placeUpload, undoable: false })
   const shownIdentity = shownTemplateIdentity(proposal, t)
-  // An edited template identity becomes the bot's purpose, so it keeps the purpose's limit.
-  const identityTooLong =
-    shownIdentity !== undefined &&
-    !identityUntouched(proposal, draft.purpose, t) &&
-    draft.purpose.trim().length > PURPOSE_MAX_LENGTH
+  const identityTooLong = templateIdentityTooLong(proposal, draft.purpose, t)
   // A picture still being read would miss the bot, so Create waits for it.
   const canCreate =
     !creating &&
@@ -222,7 +220,10 @@ export function NewBotDialog({
         }
         bot = shared
       } else {
-        const made = editedProposal(proposal, draft, trimmedName, t)
+        const goesBy = shownName.trim()
+        // A shown name differs from the English one it is created under, which must be free too.
+        const createName = goesBy === trimmedName ? trimmedName : freeBotName(trimmedName, hostBots)
+        const made = editedProposal(proposal, draft, createName, t)
         const offerHere = hostId === (offerHostId ?? LOCAL_EXECUTION_HOST_ID)
         bot = await createBot(hostId, {
           ...(made
@@ -235,14 +236,13 @@ export function NewBotDialog({
                   fromOffer: offerHere ? fromOffer : undefined
                 }
               )
-            : { name: trimmedName }),
+            : { name: createName }),
           ...agentSetup.setup,
           avatar: picture.avatar,
           avatarColor: picture.avatarColor,
           ...(takingOver ? { takingOver } : {})
         })
-        const goesBy = shownName.trim()
-        if (goesBy !== trimmedName) {
+        if (goesBy !== createName) {
           // A rename that fails leaves the English name, which still names the bot correctly.
           bot = await updateBot(bot, { name: goesBy }).catch(() => bot)
         }
@@ -369,7 +369,7 @@ export function NewBotDialog({
                 <NewBotPurposeField
                   value={shown.purpose}
                   prefilled={shownIdentity}
-                  onChange={(purpose) => setDraft({ ...draft, purpose })}
+                  onChange={(purpose) => keepDraft({ ...draft, purpose })}
                 />
               )}
             </div>
@@ -405,7 +405,7 @@ export function NewBotDialog({
                 <NewBotProposalFields
                   draft={shown}
                   worktrees={proposal.worktrees}
-                  onChange={(fields) => setDraft({ ...draft, ...fields })}
+                  onChange={(fields) => keepDraft({ ...draft, ...fields })}
                 />
               </div>
             ) : null}

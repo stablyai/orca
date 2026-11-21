@@ -6741,7 +6741,8 @@
       "controlBrief": "他们可以在这里以你的身份操作",
       "controlBriefIfAdded": "你添加的人可以在这里以你的身份操作",
       "controlBriefOnHost": "他们可以在{{computer}}上以你的身份操作",
-      "controlBriefIfAddedOnHost": "你添加的人可以在{{computer}}上以你的身份操作"
+      "controlBriefIfAddedOnHost": "你添加的人可以在{{computer}}上以你的身份操作",
+      "yourComputer": "你的电脑"
     },
     "accessDecide": {
       "expired": "此请求已被回复或已过期",

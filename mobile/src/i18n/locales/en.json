@@ -6336,7 +6336,8 @@
       "controlBrief": "They can act as you here.",
       "controlBriefIfAdded": "Anyone you add can act as you here.",
       "controlBriefOnHost": "They can act as you on {{computer}}.",
-      "controlBriefIfAddedOnHost": "Anyone you add can act as you on {{computer}}."
+      "controlBriefIfAddedOnHost": "Anyone you add can act as you on {{computer}}.",
+      "yourComputer": "your computer"
     },
     "accessDecide": {
       "expired": "This request was already answered or has expired.",

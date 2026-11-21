@@ -24631,7 +24631,7 @@
       "oldTerminalDialogTitle": "为什么此 Codex 共享服务器",
       "oldTerminalDialogRisk": "共享服务器的 Codex 会话可能会一起结束，并且代理状态可能会错误",
       "oldTerminalDialogCause": "较旧的终端仍然共享 Codex 服务器，打开一个新终端以在单独的服务器上运行 Codex",
-      "fix": "使固定",
+      "fix": "修复",
       "copied": "已复制",
       "turningOff": "正在关闭…",
       "stopServer": "停止服务器",
@@ -24647,7 +24647,7 @@
       "alsoStop": "同时停止正在运行的服务器（会关闭所有使用它的 Codex 会话，包括 Orca 之外的）",
       "couldNotTurnOff": "无法关闭共享。",
       "stopFailedAfterOff": "共享已关闭，但服务器未停止。",
-      "turnOffAndStop": "Turn off and stop server"
+      "turnOffAndStop": "关闭共享并停止服务器"
     },
     "paneMove": {
       "failed": "无法将窗格移动到新选项卡"
@@ -28909,7 +28909,8 @@
       "here": "这里",
       "thisServer": "此服务器",
       "there": "那里",
-      "executionComputer": "运行此智能体的电脑"
+      "executionComputer": "运行此智能体的电脑",
+      "yourComputer": "你的电脑"
     },
     "import": {
       "nudgeOne": "在 {{app}} 中发现了一个机器人",

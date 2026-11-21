@@ -25,6 +25,14 @@ export function botTemplateText(english: string, t: Translate): string {
 /** A template's proposed name as New bot shows it: in the UI language and free among `taken`; any
  *  other name as typed. Left as shown, the bot is made under the English name, which names its
  *  folder, its Linear and GitHub handle and its SOUL.md, and then takes this one. */
+/** The template's own name, or that name with the number that keeps it free ("Support triage 2"). */
+function isTemplateDefaultName(name: string, templateName: string): boolean {
+  return (
+    name === templateName ||
+    (name.startsWith(`${templateName} `) && /^\d+$/.test(name.slice(templateName.length + 1)))
+  )
+}
+
 export function botTemplateShownName(
   proposal: Pick<BotProposal, 'name' | 'templateId'> | null | undefined,
   name: string,
@@ -32,7 +40,7 @@ export function botTemplateShownName(
   t: Translate
 ): string {
   const template = botTemplate(proposal?.templateId)
-  if (!template || name !== proposal?.name) {
+  if (!template || name !== proposal?.name || !isTemplateDefaultName(name, template.name)) {
     return name
   }
   const translated = botTemplateText(template.name, t)
