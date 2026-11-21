@@ -8,6 +8,7 @@ import type { TerminalHost } from '../terminal-host/terminal-host'
 import type { DaemonPtySpawnPreparations } from './daemon-pty-spawn-preparations'
 import type { DaemonSessionAttachments } from './daemon-session-attachments'
 import { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } from '../../../shared/process-observation/tables/process-table-snapshot'
+import { recheckPosixTerminalIdle } from '../terminal-host/terminal-host-running-work'
 
 type FencedOwner<T extends IPtyProvider> = DaemonSessionOwnerResolution<T> | { kind: 'replaced' }
 
@@ -49,20 +50,27 @@ export async function handleDaemonFencedTermination(
   if (!payload.expectedIncarnationId) {
     return { outcome: 'refused', reason: 'unsupported' }
   }
-  if (payload.requireIdle) {
+  const idleGuardStartedAt = payload.requireIdle ? Date.now() : undefined
+  if (idleGuardStartedAt !== undefined) {
     try {
-      const now = Date.now()
       const boundary = Number.isSafeInteger(payload.idleCheckSinceMs)
         ? payload.idleCheckSinceMs!
-        : now
+        : idleGuardStartedAt
       const inspection = await deps.host.inspectProcess(payload.sessionId, {
         expectedIncarnationId: payload.expectedIncarnationId,
-        runningWorkSinceMs: Math.max(boundary, now - PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS)
+        runningWorkSinceMs: Math.max(
+          boundary,
+          idleGuardStartedAt - PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
+        )
       })
-      if (inspection.runningWork !== 'idle') {
+      const runningWork =
+        inspection.runningWork === 'idle' && process.platform !== 'win32'
+          ? await recheckPosixTerminalIdle(inspection)
+          : inspection.runningWork
+      if (runningWork !== 'idle') {
         return {
           outcome: 'refused',
-          reason: inspection.runningWork === 'running' ? 'running_work' : 'unverifiable'
+          reason: runningWork === 'running' ? 'running_work' : 'unverifiable'
         }
       }
     } catch {
@@ -73,7 +81,10 @@ export async function handleDaemonFencedTermination(
     id: payload.sessionId,
     expectedIncarnationId: payload.expectedIncarnationId,
     requireNoAgentOwner: payload.requireIdle === true || payload.requireNoAgentOwner === true,
-    requireUnattached: payload.requireUnattached === true
+    requireUnattached: payload.requireUnattached === true,
+    ...(idleGuardStartedAt === undefined
+      ? {}
+      : { requireIdle: true, idleCheckSinceMs: idleGuardStartedAt })
   })
   if (!termination.accepted) {
     return termination.result

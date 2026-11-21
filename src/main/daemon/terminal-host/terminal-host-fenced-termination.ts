@@ -36,6 +36,12 @@ export function beginTerminalHostFencedTermination(
   if (request.requireUnattached && session.hasAttachedClients) {
     return { accepted: false, result: { outcome: 'refused', reason: 'attached' } }
   }
+  if (
+    request.requireIdle &&
+    session.getCommandActivity(request.idleCheckSinceMs ?? Date.now()) !== 'idle'
+  ) {
+    return { accepted: false, result: { outcome: 'refused', reason: 'running_work' } }
+  }
   try {
     // kill reserves the exact Session synchronously, before its first OS probe.
     const completion = deps

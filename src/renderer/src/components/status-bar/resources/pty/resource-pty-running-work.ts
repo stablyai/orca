@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { waitForPromiseWithSignal } from '../../../../../../shared/concurrency/abort-signal-reason'
 import { PrioritySemaphore } from '../../../../../../shared/concurrency/priority-semaphore'
 import type { PtyRunningWorkObservation } from '../../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
@@ -84,9 +84,7 @@ export function useResourcePtyWorkspaceCheck(
   const [checkingGroup, setCheckingGroup] = useState<string | null>(null)
   const check = useRef<AbortController | null>(null)
   useLayoutEffect(() => {
-    if (active) {
-      return () => check.current?.abort()
-    }
+    return active ? () => check.current?.abort() : undefined
   }, [active])
   const start = useCallback(
     (group: string, targets: readonly ResourcePtyRow[]) => {

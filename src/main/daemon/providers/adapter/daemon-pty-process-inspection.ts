@@ -26,11 +26,7 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
   }
 
   async hasChildProcesses(id: string): Promise<boolean> {
-    if (
-      this.protocolVersion < GET_FOREGROUND_PROCESS_PROTOCOL_VERSION ||
-      (options?.runningWorkSinceMs !== undefined &&
-        this.protocolVersion < IDLE_FENCED_TERMINATION_PROTOCOL_VERSION)
-    ) {
+    if (this.protocolVersion < GET_FOREGROUND_PROCESS_PROTOCOL_VERSION) {
       return true
     }
     return this.hasChildProcessesFromForeground(await this.getForegroundProcess(id))
@@ -44,7 +40,11 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
     id: string,
     options?: PtyProcessInspectionOptions
   ): Promise<PtyProcessInspection> {
-    if (this.protocolVersion < GET_FOREGROUND_PROCESS_PROTOCOL_VERSION) {
+    if (
+      this.protocolVersion < GET_FOREGROUND_PROCESS_PROTOCOL_VERSION ||
+      (options?.runningWorkSinceMs !== undefined &&
+        this.protocolVersion < IDLE_FENCED_TERMINATION_PROTOCOL_VERSION)
+    ) {
       return clientOnlyUnverifiableInspection('old_host')
     }
     if (this.protocolVersion < COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION) {
