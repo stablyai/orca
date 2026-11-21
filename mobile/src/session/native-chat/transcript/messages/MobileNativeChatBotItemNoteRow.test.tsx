@@ -83,6 +83,35 @@ describe('owner comments', () => {
       'Clipped  here, not [Image #2]'
     )
   })
+  it('put the item chip above their bubble, so the bubble holds only their words', () => {
+    let renderer: ReactTestRenderer | undefined
+    act(() => {
+      renderer = create(
+        createElement(MobileNativeChatBotItemNoteRow, {
+          note: {
+            noteId: 'n3',
+            by: 'owner',
+            entries: [
+              {
+                uid: 'a',
+                number: 1,
+                title: 'Share dialog',
+                status: 'working',
+                event: 'commented',
+                text: 'Same root cause?'
+              }
+            ]
+          },
+          rowId: 'r',
+          fontScale: 1
+        })
+      )
+    })
+    const root = renderer!.root
+    const chip = root.find((node) => node.props.accessibilityLabel === 'Share dialog, In progress')
+    const bubble = root.find((node) => String(node.type) === 'Prose').parent!
+    expect(bubble.findAll((node) => node === chip)).toHaveLength(0)
+  })
 })
 
 describe("another chat's write", () => {
