@@ -5,7 +5,7 @@ import {
   observeFilePublication
 } from './file-content-observation'
 import { createHash, randomUUID } from 'node:crypto'
-import { linkSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { linkSync, lstatSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { grantDirAcl } from '../windows/windows-directory-acl'
 import { isPermissionError } from './permission-errors'
@@ -253,8 +253,12 @@ function attemptGuardedAtomicWrite(
       // Why: \\wsl$ shares and FAT/exFAT have no hard links. Check the bytes (a create: no file), then
       // rename a complete file in, once: a busy file fails this pass instead of sleeping on main.
       try {
-        const matches = nodeFileContentsEqualSync(targetPath, expectedContents ?? '')
-        if (expectedContents === null || !matches) {
+        // lstat for a create: a dangling symlink is still an entry this must not replace.
+        if (expectedContents === null) {
+          lstatSync(targetPath)
+          return false
+        }
+        if (!nodeFileContentsEqualSync(targetPath, expectedContents)) {
           return false
         }
       } catch (readError) {

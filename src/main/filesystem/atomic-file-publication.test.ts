@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  lstatSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -360,6 +369,12 @@ describe('writeFileAtomically', () => {
       expect(writeFileAtomicallyIfUnchanged(target, null, 'fresh\n')).toBe(true)
       expect(readFileSync(target, 'utf-8')).toBe('fresh\n')
       expect(readdirSync(dir)).toEqual(['config.toml'])
+      if (process.platform !== 'win32') {
+        const dangling = join(dir, 'linked.toml')
+        symlinkSync(join(dir, 'missing.toml'), dangling)
+        expect(writeFileAtomicallyIfUnchanged(dangling, null, 'fresh\n')).toBe(false)
+        expect(lstatSync(dangling).isSymbolicLink()).toBe(true)
+      }
     } finally {
       fsMock.linkSync.mockImplementation(link)
       cleanup()
