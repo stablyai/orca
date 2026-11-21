@@ -19,10 +19,10 @@ import {
   sanitizeHydratedEntry,
   sanitizePersistedAuthorityCommitment
 } from './server-persistence-validation'
-import { AgentHookServerTabCleanup } from './server-tab-cleanup'
+import { AgentHookServerMarkedExitProof } from './server-marked-exit-proof'
 import { readPersistedAgentExits, recordAgentExit } from './agent-exit-evidence'
 
-export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup {
+export abstract class AgentHookServerHydration extends AgentHookServerMarkedExitProof {
   protected hydrateLastStatusFromDisk(): void {
     if (!this.lastStatusFilePath) {
       return
