@@ -29,7 +29,9 @@ it('trusts only the exact endpoint, certificate and error, in its own session, u
   const approved = identity(3443)
   expect(decisions.accept(profile, approved)).toBe(true)
   expect(decisions.trusts(profile, approved)).toBe(true)
-  expect(decisions.trusts(profile, { ...approved, error: 'net::ERR_CERT_DATE_INVALID' })).toBe(false)
+  expect(decisions.trusts(profile, { ...approved, error: 'net::ERR_CERT_DATE_INVALID' })).toBe(
+    false
+  )
   expect(decisions.trusts(profile, { ...approved, leafCertificateSha256: 'sha-other' })).toBe(false)
   expect(decisions.trusts(profile, { ...approved, secureEndpoint: 'https://localhost:3444' })).toBe(
     false
