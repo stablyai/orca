@@ -1,4 +1,6 @@
 import { afterEach, expect, it } from 'vitest'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import { readTestHostJournal } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 import type { AgentMessageSource } from '../../../shared/agent-session/journal/agent-session-message-source'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import { agentSessionMessagePayload } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
@@ -134,6 +136,20 @@ it("holds a peer bot's mail while an ACP member answers earlier mail, then deliv
     await waitFor(() => expect(prompts).toHaveLength(3))
     expect(promptText(prompts[2])).toContain('peer bot follows up')
     agent.reply(prompts[2]!, { stopReason: 'end_turn' })
+    // Exactly once: let the host commit every turn and settle every send, then drain the queue
+    // once more, so a duplicate that this commit made eligible would have gone out by now.
+    await waitFor(async () => {
+      const journal = await readTestHostJournal(rig.host, SESSION)
+      const turns = journal.items.flatMap((item) => readAgentJournalTurn(item.body) ?? [])
+      expect(turns.map((turn) => turn.state)).toEqual(['completed', 'completed', 'completed'])
+      expect(journal.submissions.map((send) => send.dispatchState)).toEqual([
+        'accepted',
+        'accepted',
+        'accepted'
+      ])
+    })
+    await rig.host.drainStatusWrites()
+    await wake()
     await acp.settle()
     expect(prompts).toHaveLength(3)
     expect(acp.sent('session/cancel')).toHaveLength(0)
