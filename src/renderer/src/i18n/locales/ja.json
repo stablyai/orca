@@ -21754,6 +21754,24 @@
       "ssh": "SSH ホスト",
       "remoteNamed": "リモート Orca ホスト · {{host}}",
       "remote": "リモート Orca ホスト"
+    },
+    "fleet": {
+      "view": {
+        "label": "ダッシュボードの表示",
+        "board": "ボード",
+        "fleet": "フリート"
+      },
+      "empty": "Agent はありません",
+      "solo": {
+        "title": "独立した Agent"
+      },
+      "summary": {
+        "agents": "Agent",
+        "projects": "プロジェクト",
+        "teams": "チーム"
+      },
+      "agentCount_other": "{{count}} 個の Agent",
+      "moreSubagents_other": "ほか {{count}} 件"
     }
   },
   "dashboard": {

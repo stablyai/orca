@@ -1,9 +1,17 @@
-import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
+import type {
+  AgentStatusEntry,
+  AgentStatusOrchestrationContext
+} from '../../../../../shared/agent-status/contracts/agent-status-types'
 
-/** Minimal lineage input for real dashboard rows and synthetic thread-list rows. */
+/** Minimal lineage input for real dashboard rows, synthetic thread-list rows and dashboard cards. */
 export type AgentLineageSourceRow = {
   paneKey: string
-  entry: Pick<AgentStatusEntry, 'terminalHandle' | 'orchestration'>
+  entry: Pick<AgentStatusEntry, 'terminalHandle'> & {
+    orchestration?: Pick<
+      AgentStatusOrchestrationContext,
+      'parentPaneKey' | 'parentTerminalHandle' | 'coordinatorHandle'
+    >
+  }
 }
 
 export type AgentRowLineageTree<T extends AgentLineageSourceRow> = {

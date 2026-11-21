@@ -21254,6 +21254,26 @@
       "ssh": "SSH sunucusu",
       "remoteNamed": "Uzak Orca ana makinesi · {{host}}",
       "remote": "Uzak Orca ana makinesi"
+    },
+    "fleet": {
+      "view": {
+        "label": "Ajan Panosu görünümü",
+        "board": "Pano",
+        "fleet": "Filo"
+      },
+      "empty": "Ajan yok",
+      "solo": {
+        "title": "Bağımsız ajanlar"
+      },
+      "summary": {
+        "agents": "Ajanlar",
+        "projects": "Projeler",
+        "teams": "Takımlar"
+      },
+      "agentCount_one": "{{count}} ajan",
+      "agentCount_other": "{{count}} ajan",
+      "moreSubagents_other": "+{{count}} tane daha",
+      "moreSubagents_one": "+{{count}} tane daha"
     }
   },
   "dashboard": {

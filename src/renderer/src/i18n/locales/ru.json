@@ -21801,6 +21801,30 @@
       "ssh": "SSH-хост",
       "remoteNamed": "Удалённый хост Orca · {{host}}",
       "remote": "Удалённый хост Orca"
+    },
+    "fleet": {
+      "view": {
+        "label": "Вид панели",
+        "board": "Доска",
+        "fleet": "Парк агентов"
+      },
+      "empty": "Нет агентов",
+      "solo": {
+        "title": "Независимые агенты"
+      },
+      "summary": {
+        "agents": "Агенты",
+        "projects": "Проекты",
+        "teams": "Команды"
+      },
+      "agentCount_one": "{{count}} агент",
+      "agentCount_few": "{{count}} агента",
+      "agentCount_many": "{{count}} агентов",
+      "agentCount_other": "{{count}} агента",
+      "moreSubagents_one": "+{{count}} ещё",
+      "moreSubagents_few": "+{{count}} ещё",
+      "moreSubagents_many": "+{{count}} ещё",
+      "moreSubagents_other": "+{{count}} ещё"
     }
   },
   "dashboard": {

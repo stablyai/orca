@@ -23985,6 +23985,26 @@
       "ssh": "SSH host",
       "remoteNamed": "Remote Orca host · {{host}}",
       "remote": "Remote Orca host"
+    },
+    "fleet": {
+      "view": {
+        "label": "Dashboard view",
+        "board": "Board",
+        "fleet": "Fleet"
+      },
+      "empty": "No agents",
+      "solo": {
+        "title": "Independent agents"
+      },
+      "summary": {
+        "agents": "Agents",
+        "projects": "Projects",
+        "teams": "Teams"
+      },
+      "agentCount_one": "{{count}} agent",
+      "agentCount_other": "{{count}} agents",
+      "moreSubagents_one": "+{{count}} more",
+      "moreSubagents_other": "+{{count}} more"
     }
   },
   "dashboard": {

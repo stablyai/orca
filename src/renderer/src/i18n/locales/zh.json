@@ -22350,6 +22350,24 @@
       "ssh": "SSH 主机",
       "remoteNamed": "远程 Orca 主机 · {{host}}",
       "remote": "远程 Orca 主机"
+    },
+    "fleet": {
+      "view": {
+        "label": "仪表盘视图",
+        "board": "看板",
+        "fleet": "编队"
+      },
+      "empty": "没有智能体",
+      "solo": {
+        "title": "独立智能体"
+      },
+      "summary": {
+        "agents": "智能体",
+        "projects": "项目",
+        "teams": "团队"
+      },
+      "agentCount_other": "{{count}} 个智能体",
+      "moreSubagents_other": "另有 {{count}} 个"
     }
   },
   "dashboard": {

@@ -1096,6 +1096,28 @@
       "ssh": "Host SSH",
       "remoteNamed": "Host Orca remoto · {{host}}",
       "remote": "Host Orca remoto"
+    },
+    "fleet": {
+      "view": {
+        "label": "Visualização do painel",
+        "board": "Quadro",
+        "fleet": "Frota"
+      },
+      "empty": "Nenhum agente",
+      "solo": {
+        "title": "Agentes independentes"
+      },
+      "summary": {
+        "agents": "Agentes",
+        "projects": "Projetos",
+        "teams": "Equipes"
+      },
+      "agentCount_one": "{{count}} agente",
+      "agentCount_many": "{{count}} agentes",
+      "agentCount_other": "{{count}} agentes",
+      "moreSubagents_one": "+{{count}} a mais",
+      "moreSubagents_other": "+{{count}} a mais",
+      "moreSubagents_many": "+{{count}} a mais"
     }
   },
   "browser": {

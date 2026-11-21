@@ -18,101 +18,12 @@ import {
   type DashboardCard
 } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
-import { translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
 import { DashboardHostBadge } from './DashboardHostBadge'
+import { dashboardCardAgeLabel, dashboardCardSurfaceClass } from './dashboard-card-presentation'
 import { AgentCardLastMessages, hasAgentCardLastMessages } from './AgentCardLastMessages'
-
-function formatStartedAgo(startedAt: number, now: number, t: Translate = translate): string {
-  const seconds = Math.max(0, Math.floor((now - startedAt) / 1000))
-  if (seconds < 60) {
-    return t('dashboardPopout.card.time.justNow', 'just now')
-  }
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) {
-    return t('dashboardPopout.card.time.minutes', '{{count}}m', { count: minutes })
-  }
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) {
-    return t('dashboardPopout.card.time.hours', '{{count}}h', { count: hours })
-  }
-  return t('dashboardPopout.card.time.days', '{{count}}d', {
-    count: Math.floor(hours / 24)
-  })
-}
-
-/** Count from completion when present, otherwise start, matching the worktree sidebar. */
-function displayTimestamp(card: DashboardCard): number {
-  return card.finishedAt ?? card.startedAt
-}
-
-function formatSubagentCount(count: number, t: Translate = translate): string {
-  return t('dashboardPopout.card.subagents', '{{count}} subagents', {
-    count,
-    defaultValue_one: '{{count}} subagent'
-  })
-}
-
-function sameSubagents(a: DashboardCard['subagents'], b: DashboardCard['subagents']): boolean {
-  if (a === b) {
-    return true
-  }
-  if (!a || !b || a.length !== b.length) {
-    return false
-  }
-  for (let index = 0; index < a.length; index += 1) {
-    if (!(index in a) || !(index in b)) {
-      if (index in a !== index in b) {
-        return false
-      }
-      continue
-    }
-    const subagent = a[index]
-    const other = b[index]
-    if (
-      subagent.id !== other.id ||
-      subagent.name !== other.name ||
-      subagent.dotState !== other.dotState
-    ) {
-      return false
-    }
-  }
-  return true
-}
-
-function sameCard(a: DashboardCard, b: DashboardCard): boolean {
-  return (
-    a.paneKey === b.paneKey &&
-    a.ptyId === b.ptyId &&
-    a.agentType === b.agentType &&
-    a.bucket === b.bucket &&
-    a.dotState === b.dotState &&
-    a.workingMode === b.workingMode &&
-    a.verdict === b.verdict &&
-    a.task === b.task &&
-    a.lastUserMessage === b.lastUserMessage &&
-    a.lastAgentMessage === b.lastAgentMessage &&
-    a.repoId === b.repoId &&
-    a.worktreeId === b.worktreeId &&
-    a.tabId === b.tabId &&
-    a.leafId === b.leafId &&
-    a.repoName === b.repoName &&
-    a.worktreeName === b.worktreeName &&
-    a.hostKind === b.hostKind &&
-    a.executionHostId === b.executionHostId &&
-    a.hostLabel === b.hostLabel &&
-    a.hasReview === b.hasReview &&
-    a.review?.number === b.review?.number &&
-    a.review?.state === b.review?.state &&
-    sameSubagents(a.subagents, b.subagents) &&
-    a.startedAt === b.startedAt &&
-    a.finishedAt === b.finishedAt &&
-    a.stateChangedAt === b.stateChangedAt &&
-    a.unseen === b.unseen &&
-    a.askSummary === b.askSummary &&
-    a.conversationName === b.conversationName
-  )
-}
+import { DashboardSubagentList, formatSubagentCount } from './DashboardSubagentList'
+import { sameDashboardCard } from './dashboard-card-equality'
 
 const REVIEW_PRESENTATION = {
   open: {
@@ -207,10 +118,8 @@ export const AgentKanbanCard = memo(
   }: AgentKanbanCardProps): React.JSX.Element {
     const t = useTranslate()
     useTranslation()
-    // Tint only attention and done so scan-worthy outcomes retain distinct meaning.
-    const needsYou = card.bucket === 'attention'
     const displayState = dashboardCardDisplayState(card)
-    const isDone = displayState === 'done'
+    const ageLabel = dashboardCardAgeLabel(card, now, t)
     // Prefer the conversation heading; otherwise use the worktree once and omit its duplicate footer.
     const heading = card.conversationName ?? card.worktreeName
     const worktreeInFooter = card.conversationName !== undefined
@@ -221,11 +130,7 @@ export const AgentKanbanCard = memo(
         style={{ viewTransitionName: `agentcard-${card.paneKey.replace(/[^a-zA-Z0-9]/g, '-')}` }}
         className={cn(
           'group flex w-full flex-col gap-1.5 rounded-lg border p-2.5 text-left transition-colors',
-          needsYou
-            ? 'border-agent-question/40 bg-agent-question/[0.06] hover:border-agent-question/60 hover:bg-agent-question/10'
-            : isDone
-              ? 'border-emerald-500/40 bg-emerald-500/[0.06] hover:border-emerald-500/60 hover:bg-emerald-500/10'
-              : 'border-border/60 bg-card hover:border-border hover:bg-accent/40'
+          dashboardCardSurfaceClass(card)
         )}
       >
         <button
@@ -278,19 +183,7 @@ export const AgentKanbanCard = memo(
               />
               {formatSubagentCount(card.subagents.length, t)}
             </button>
-            {subagentsOpen ? (
-              <div className="ml-1 flex flex-col gap-1 border-l border-border pl-2">
-                {card.subagents.map((subagent) => (
-                  <div
-                    key={subagent.id}
-                    className="flex items-center gap-1.5 py-0.5 text-[11px] text-muted-foreground"
-                  >
-                    <AgentStateDot state={subagent.dotState} />
-                    <span className="truncate">{subagent.name}</span>
-                  </div>
-                ))}
-              </div>
-            ) : null}
+            {subagentsOpen ? <DashboardSubagentList subagents={card.subagents} /> : null}
           </>
         ) : null}
 
@@ -320,11 +213,7 @@ export const AgentKanbanCard = memo(
           />
           {worktreeInFooter ? <span className="truncate">{card.worktreeName}</span> : null}
           <ReviewPill card={card} />
-          {displayTimestamp(card) > 0 ? (
-            <span className="ml-auto shrink-0 pl-1 tabular-nums">
-              {formatStartedAgo(displayTimestamp(card), now, t)}
-            </span>
-          ) : null}
+          {ageLabel ? <span className="ml-auto shrink-0 pl-1 tabular-nums">{ageLabel}</span> : null}
         </button>
       </div>
     )
@@ -333,9 +222,8 @@ export const AgentKanbanCard = memo(
     previous.onOpenTerminal === next.onOpenTerminal &&
     previous.subagentsOpen === next.subagentsOpen &&
     previous.onToggleSubagents === next.onToggleSubagents &&
-    sameCard(previous.card, next.card) &&
+    sameDashboardCard(previous.card, next.card) &&
     sameRepoIcon(previous.repoIcon, next.repoIcon) &&
-    (displayTimestamp(previous.card) <= 0 ||
-      formatStartedAgo(displayTimestamp(previous.card), previous.now) ===
-        formatStartedAgo(displayTimestamp(next.card), next.now))
+    dashboardCardAgeLabel(previous.card, previous.now) ===
+      dashboardCardAgeLabel(next.card, next.now)
 )
