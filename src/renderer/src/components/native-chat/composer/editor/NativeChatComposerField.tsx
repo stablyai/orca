@@ -62,6 +62,7 @@ export function NativeChatComposerField({
   onChoosePickerItem,
   onRetrySkills,
   onChooseMentionFile,
+  onHoverMentionOption,
   onRemoveImageAttachment,
   onAttach,
   onDictationToggle,
@@ -208,6 +209,7 @@ export function NativeChatComposerField({
               activeIndex={activeSuggestion}
               listboxId={pickerListboxId}
               onChoose={onChooseMentionFile}
+              onHover={onHoverMentionOption}
             />
           ) : null}
           <NativeChatComposerNotices

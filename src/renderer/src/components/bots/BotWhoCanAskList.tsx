@@ -40,6 +40,8 @@ export type BotWhoCanAskService = {
   idleHint?: { title: string; detail: string }
   /** The owner's own account here, listed as the owner rather than offered; null when unknown. */
   ownerId: string | null
+  /** The owner's other accounts here (GitHub's other linked logins): found as the owner, never offered. */
+  otherOwnerIds?: readonly string[]
   /** Its name there, e.g. "@orca-bots"; null when unknown. */
   ownerName: string | null
   kind: BotAccessConnector

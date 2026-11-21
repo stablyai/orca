@@ -6,8 +6,8 @@ import type { NativeChatStructuredComposerTransport } from './composer/submit/na
 
 vi.mock('../bots/bot-workspace', () => ({ useBotForWorkspace: () => ({ id: 'bot-1' }) }))
 
-const { nativeChatFirstScreenSignIn, useNativeChatBotKickoffView } =
-  await import('./native-chat-bot-kickoff-view')
+const { useNativeChatBotKickoffView } = await import('./native-chat-bot-kickoff-view')
+const { nativeChatFirstScreenSignIn } = await import('../../../../shared/bots/bot-first-screen')
 
 afterEach(cleanup)
 

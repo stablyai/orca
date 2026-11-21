@@ -2,6 +2,7 @@
 // reopening member chats on every send.
 import {
   botGroupCompletedText,
+  botGroupTurnReplyText,
   type BotGroupMessage,
   type BotGroupTurn
 } from '../../shared/bots/bot-group'
@@ -27,12 +28,22 @@ export async function completedGroupReplies(
       read.set(operationId, items)
     }
   }
+  const replies = new Map<string, string>()
   const completed = new Map<string, string>()
   for (const turn of turns) {
-    const text =
+    const reply =
       turn.reply === undefined
         ? botGroupCompletedText(turn.frozenItems ?? read.get(turn.operationId) ?? [])
         : turn.reply
+    if (reply) {
+      replies.set(turn.operationId, reply)
+    }
+    // An answer to a member's request went by mail; the room history carries it too. Read as it
+    // stands now: one may have been saved during the reads above.
+    const answer = groups.store
+      .operationMessage(turn.operationId)
+      ?.turns.find((candidate) => candidate.operationId === turn.operationId)?.answer
+    const text = botGroupTurnReplyText(reply, answer ?? turn.answer)
     if (text) {
       completed.set(turn.operationId, text)
     }
@@ -43,8 +54,8 @@ export async function completedGroupReplies(
   const settled = new Map<string, string | null>()
   for (const [operationId, items] of read) {
     const ended = items.some((item) => item.body.kind === 'turn' && item.body.state !== 'running')
-    if (completed.has(operationId) || ended) {
-      settled.set(operationId, completed.get(operationId) ?? null)
+    if (replies.has(operationId) || ended) {
+      settled.set(operationId, replies.get(operationId) ?? null)
     }
   }
   const found = (turn: BotGroupTurn) => turn.reply === undefined && settled.has(turn.operationId)

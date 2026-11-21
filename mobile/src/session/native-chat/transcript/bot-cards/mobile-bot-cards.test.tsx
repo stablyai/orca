@@ -22,6 +22,7 @@ vi.mock('react-native', async () => {
       React.createElement(name, props, children)
   return {
     Platform: { OS: 'ios' },
+    AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
     Pressable: host('Pressable'),
     Text: host('Text'),
     View: host('View'),
@@ -56,6 +57,10 @@ vi.mock('../../../../platform/clipboard/clipboard', () => ({
   })
 }))
 vi.mock('../../../../hooks/use-now', () => ({ useNow: () => 1_000_000 }))
+vi.mock('../../../../platform/external-links/external-link', () => ({
+  openExternalLink: (url: string) => state.links.push(url)
+}))
+vi.mock('../../../../components/composer-input/TextField', () => ({ TextField: 'TextField' }))
 vi.mock('../../../../worktree/execution-hosts/use-route-capability', () => ({
   useRouteCapability: () => true
 }))
@@ -155,6 +160,11 @@ async function render(node: ReactNode, send = vi.fn(async () => true)) {
         await new Promise((resolve) => setTimeout(resolve, 0))
       })
     },
+    type: async (text: string) => {
+      await act(async () => {
+        root.find((n) => String(n.type) === 'TextField').props.onChangeText(text)
+      })
+    },
     buttons: () =>
       root
         .findAll((n) => String(n.type) === 'Pressable' && n.props.hitSlop === 8)
@@ -245,13 +255,13 @@ describe('new-bot offer card', () => {
     }
   }
 
-  it('offers Dismiss, Edit and Create bot, and creates from the offer', async () => {
+  it('offers Not now, Edit and Create bot, and creates from the offer', async () => {
     state.bots = [atlas]
     answer({ 'bots.create': { bot: { ...atlas, id: 'release', name: 'Release' } } })
     const card = await render(mobileNativeChatBotCard({ botCreateOffer: offer }, context))
     expect(card.text()).toContain('Release')
     expect(card.text()).toContain('Takes over 2 workspaces')
-    expect(card.text()).toContain('Dismiss')
+    expect(card.text()).toContain('Not now')
     expect(card.text()).toContain('Edit')
     expect(card.text()).not.toContain('Issues labelled 1.5')
     await card.press('Release')
@@ -262,12 +272,12 @@ describe('new-bot offer card', () => {
     ])
   })
 
-  it('claims a Dismiss on the host before telling the bot', async () => {
+  it('claims a Not now on the host before telling the bot Dismiss', async () => {
     state.bots = [atlas]
     answer({ 'bots.update': { bot: atlas } })
     const send = vi.fn(async () => true)
     const card = await render(mobileNativeChatBotCard({ botCreateOffer: offer }, context), send)
-    await card.press('Dismiss')
+    await card.press('Not now')
     expect(sent('bots.update')).toEqual([
       {
         botId: 'atlas',
@@ -280,7 +290,7 @@ describe('new-bot offer card', () => {
   it('reads dismissed, name taken and created from the bots there are', async () => {
     state.bots = [{ ...atlas, offerAnswers: [{ cardId: 'card-1', dismissed: true }] }]
     const dismissed = await render(mobileNativeChatBotCard({ botCreateOffer: offer }, context))
-    expect(dismissed.text()).not.toContain('Dismiss')
+    expect(dismissed.text()).not.toContain('Not now')
     expect(dismissed.text()).toContain('Create bot')
 
     state.bots = [atlas, { ...finance, id: 'other', name: 'release' }]
@@ -351,17 +361,62 @@ describe('tool added card', () => {
     addedAt: 1
   }
 
-  it('points a tool that needs a sign-in to the computer, and removes it', async () => {
-    answer({
-      'bots.tools.list': { own: [{ ...added.tool, signIn: { state: 'signed-out' } }] },
-      'bots.tools.remove': {}
+  it('signs a tool in from the address its browser landed on, pasted back', async () => {
+    const waiting = {
+      flowId: 'flow-1',
+      revision: 1,
+      expiresAt: 4_000_000_000_000,
+      state: 'waiting',
+      authorizationUrl: 'https://mcp.notion.com/authorize?client_id=c&state=st-9',
+      redirectUri: 'http://127.0.0.1:49731/callback'
+    }
+    let signedIn = false
+    state.rpc.mockImplementation(async (method: string) => {
+      if (method === 'bots.tools.signIn.wait') {
+        return new Promise(() => {})
+      }
+      const result = {
+        'bots.tools.list': {
+          own: [{ ...added.tool, signIn: { state: signedIn ? 'signed-in' : 'signed-out' } }]
+        },
+        'bots.tools.signIn.start': waiting,
+        'bots.tools.signIn.finish': { ...waiting, revision: 3, state: 'done' }
+      }[method]
+      if (method === 'bots.tools.signIn.finish') {
+        signedIn = true
+      }
+      return { id: '1', ok: true, result }
     })
     const card = await render(
       mobileNativeChatOtherBotCard({ kind: 'toolAdded', value: added }, context)
     )
-    expect(card.text()).toContain('Notion')
-    expect(card.text()).toContain('Sign in on your computer')
+    expect(card.text()).toContain('Needs sign-in')
+    await card.press('Sign in')
+    expect(sent('bots.tools.signIn.start')).toEqual([
+      { botId: 'atlas', name: 'notion', mode: 'paste' }
+    ])
+    expect(state.links).toEqual([waiting.authorizationUrl])
+    expect(card.text()).toContain('After you sign in, paste the address you landed on.')
+
+    await card.type('http://127.0.0.1:49731/callback?code=abc&state=other')
+    await card.press('Finish')
+    expect(card.text()).toContain('That address isn’t from this sign-in.')
+    expect(sent('bots.tools.signIn.finish')).toEqual([])
+
+    await card.type('http://127.0.0.1:49731/callback?code=abc&state=st-9')
+    await card.press('Finish')
+    expect(sent('bots.tools.signIn.finish')).toEqual([
+      { flowId: 'flow-1', query: 'code=abc&state=st-9' }
+    ])
+    expect(card.text()).toContain('Signed in')
     expect(card.buttons()).toEqual(['Remove'])
+  })
+
+  it('removes the tool', async () => {
+    answer({ 'bots.tools.list': { own: [added.tool] }, 'bots.tools.remove': {} })
+    const card = await render(
+      mobileNativeChatOtherBotCard({ kind: 'toolAdded', value: added }, context)
+    )
     await card.press('Remove')
     expect(sent('bots.tools.remove')).toEqual([{ botId: 'atlas', name: 'notion' }])
   })
@@ -414,5 +469,43 @@ describe('webhook card', () => {
     )
     expect(card.text()).toContain('Webhook “Deploy finished” is live.')
     expect(card.text()).not.toContain(hook.url)
+  })
+})
+
+describe('Google setup card', () => {
+  const run = (revision: number, steps: Record<string, unknown>) => ({
+    run: {
+      id: 'run-1',
+      botId: 'atlas',
+      state: 'running',
+      mode: 'guide-browser',
+      steps,
+      answers: {},
+      startedAt: 1,
+      updatedAt: 1,
+      revision
+    },
+    blocker: null
+  })
+
+  it('answers a step from the phone and folds to its receipt', async () => {
+    state.bots = [atlas]
+    answer({
+      'bots.googleSetup.read': run(1, { project: { status: 'needs-user' } }),
+      'bots.googleSetup.answer': run(2, { project: { status: 'done', by: 'user' } })
+    })
+    const step = await render(
+      mobileNativeChatBotCard(
+        { googleSetup: { botId: 'atlas', runId: 'run-1', card: 'step', step: 'project' } },
+        context
+      )
+    )
+    expect(step.text()).toContain('Create a project')
+    await step.press('Done')
+    expect(sent('bots.googleSetup.answer')).toEqual([
+      { botId: 'atlas', card: 'step', values: ['done', 'project'] }
+    ])
+    expect(step.text()).toContain('✓ Done')
+    expect(step.buttons()).toEqual([])
   })
 })

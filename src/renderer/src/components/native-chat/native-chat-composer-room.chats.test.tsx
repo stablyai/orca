@@ -2,7 +2,11 @@
 import { act, renderHook } from '@testing-library/react'
 import type { KeyboardEvent, ReactNode } from 'react'
 import { expect, it, vi } from 'vitest'
-import type { ComposerAutocomplete } from '../../../../shared/native-chat/input/composer/native-chat-composer-autocomplete'
+import {
+  matchMentionTrigger,
+  type ComposerAutocomplete
+} from '../../../../shared/native-chat/input/composer/native-chat-composer-autocomplete'
+import { nativeChatRoomNameMatches } from '../../../../shared/native-chat/input/native-chat-room-mentions'
 import { useNativeChatComposerMentions } from './native-chat-composer-room'
 import {
   applyNativeChatMention,
@@ -170,4 +174,146 @@ it('returns from chat selection without editing the draft and replaces the filte
   expect(draft).toBe('Ask @two words')
   act(() => result.current.chooseMention('src/main.ts'))
   expect(draft).toBe('Ask @src/main.ts ')
+})
+
+it('steps back from a chat list on Escape, then leaves the next Escape to close the `@` list', () => {
+  const draft = 'Ask @perf b'
+  const found = matchMentionTrigger(draft, (query) =>
+    nativeChatRoomNameMatches(room.mentions, query)
+  )
+  const { result } = renderHook(
+    () =>
+      useNativeChatComposerMentions(
+        undefined,
+        draft,
+        {
+          autocomplete: found
+            ? { mode: 'mention', query: found.query, triggerKey: `@:${found.start}` }
+            : { mode: 'none' },
+          completeMention: vi.fn()
+        },
+        { terminalTabId: 'tab', structuredWorktreeId: undefined, caret: draft.length }
+      ),
+    { wrapper }
+  )
+  act(() => {
+    expect(result.current.handleKey(key('ArrowRight'), 0)).toBe(true)
+  })
+  act(() => {
+    expect(result.current.handleKey(key('Escape'), 0)).toBe(true)
+  })
+  expect(result.current.mentionFiles.files).toContain('Perf bot')
+  // The bots are showing again; the editor's dismissal owns the second Escape.
+  act(() => {
+    expect(result.current.handleKey(key('Escape'), 0)).toBe(false)
+  })
+})
+
+it("opens a bot's chats over an `@` query with spaces, and a picked chat replaces all of it", () => {
+  const draft = 'Ask @perf b'
+  const found = matchMentionTrigger(draft, (query) =>
+    nativeChatRoomNameMatches(room.mentions, query)
+  )
+  const completeMention = vi.fn()
+  const { result } = renderHook(
+    () =>
+      useNativeChatComposerMentions(
+        undefined,
+        draft,
+        {
+          autocomplete: found
+            ? { mode: 'mention', query: found.query, triggerKey: `@:${found.start}` }
+            : { mode: 'none' },
+          completeMention
+        },
+        { terminalTabId: 'tab', structuredWorktreeId: undefined, caret: draft.length }
+      ),
+    { wrapper }
+  )
+  expect(result.current.mentionFiles.files).toEqual(['Perf bot'])
+  act(() => {
+    result.current.handleKey(key('ArrowRight'), 0)
+  })
+  act(() => {
+    result.current.handleKey(key('ArrowDown'), 0)
+  })
+  act(() => {
+    result.current.handleKey(key('Enter'), 0)
+  })
+  expect(completeMention).toHaveBeenCalledWith('', '[Bot: Perf bot](bot-chat:perf/two)', 4)
+})
+
+const engBots: NativeChatBotChatRoom = {
+  withFiles: true,
+  mentions: [
+    { name: 'Eng - Perf', id: 'perf', key: 'local:perf', icon: null },
+    { name: 'Eng - Reviewer', id: 'rev', key: 'local:rev', icon: null },
+    { name: 'Eng - Reviewer - Official', id: 'off', key: 'runtime:air:off', icon: null }
+  ],
+  placeholder: '',
+  token: (value) => (value === 'runtime:air:off' ? '[Bot: Official](bot:off@air)' : undefined)
+}
+
+it('keeps `@` open past spaces while the words still name a bot, so a later one can be picked', () => {
+  const completeMention = vi.fn()
+  const trigger = (draft: string): ComposerAutocomplete => {
+    const found = matchMentionTrigger(draft, (query) =>
+      nativeChatRoomNameMatches(engBots.mentions, query)
+    )
+    return found
+      ? { mode: 'mention', query: found.query, triggerKey: `@:${found.start}` }
+      : { mode: 'none' }
+  }
+  const { result, rerender } = renderHook(
+    ({ draft }: { draft: string }) =>
+      useNativeChatComposerMentions(
+        undefined,
+        draft,
+        { autocomplete: trigger(draft), completeMention },
+        { terminalTabId: 'tab', structuredWorktreeId: undefined, caret: draft.length }
+      ),
+    {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <NativeChatBotChatRoomContext.Provider value={engBots}>
+          {children}
+        </NativeChatBotChatRoomContext.Provider>
+      ),
+      initialProps: { draft: 'notify @eng - reviewer - o' }
+    }
+  )
+  expect(result.current.autocomplete).toEqual({
+    mode: 'mention',
+    query: 'eng - reviewer - o',
+    triggerKey: '@:7'
+  })
+  expect(result.current.mentionFiles.files).toEqual(['runtime:air:off'])
+  act(() => {
+    result.current.chooseMention('runtime:air:off')
+  })
+  expect(completeMention).toHaveBeenCalledExactlyOnceWith(
+    'runtime:air:off',
+    '[Bot: Official](bot:off@air)'
+  )
+  // Without a recentKey the pick is remembered by name, the key the ranking reads.
+  expect(JSON.parse(localStorage.getItem('orca.nativeChat.recentMentions') ?? '[]')[0]).toBe(
+    'Eng - Reviewer - Official'
+  )
+
+  // A finished name followed by more words, an `@` inside a word, and a bare punctuation query
+  // are text, so the real detector closes the list for each.
+  for (const draft of ['notify @eng - reviewer please', 'a@eng - rev', '@- x']) {
+    rerender({ draft })
+    expect(result.current.autocomplete).toEqual({ mode: 'none' })
+  }
+  // An unfinished name keeps the list across its first space; a finished one plus space is text.
+  rerender({ draft: 'notify @eng ' })
+  expect(result.current.autocomplete).toEqual({ mode: 'mention', query: 'eng ', triggerKey: '@:7' })
+  rerender({ draft: 'notify @eng - ' })
+  expect(result.current.autocomplete).toEqual({
+    mode: 'mention',
+    query: 'eng - ',
+    triggerKey: '@:7'
+  })
+  rerender({ draft: 'notify @Eng - Reviewer ' })
+  expect(result.current.autocomplete).toEqual({ mode: 'none' })
 })

@@ -10,7 +10,8 @@ import {
   FIXTURE_FOLDER_WORKTREE_ID,
   FIXTURE_GIT_WORKTREE_ID,
   openTopologyStore,
-  reopenTopologyStore
+  reopenTopologyStore,
+  closeTrackedTopologyStores
 } from '../testing/terminal-topology-profile-fixture'
 
 vi.mock('../../../telemetry/client', () => ({ track: vi.fn() }))
@@ -25,7 +26,8 @@ const NEW_TAB = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
 const NEW_LEAF = '22222222-2222-4222-8222-222222222222'
 const directories: string[] = []
 
-afterEach(() => {
+afterEach(async () => {
+  await closeTrackedTopologyStores()
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }

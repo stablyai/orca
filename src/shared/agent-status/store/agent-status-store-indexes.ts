@@ -9,7 +9,7 @@ import type {
   AgentStatusFactRecord,
   AgentStatusTombstoneRecord
 } from './agent-status-store-contract'
-import type { AgentStatusParentRecord } from './agent-status-store-parent'
+import type { StoredAgentStatusParentRecord } from './agent-status-store-parent'
 import { storedRetiredAlias } from './agent-status-store-record-keys'
 import type { AgentStatusStoreState } from './agent-status-store-state'
 import type { AgentStatusStoreDraftTable } from './agent-status-store-table'
@@ -32,7 +32,7 @@ export type AgentStatusStoreIndexes = {
 }
 
 export type AgentStatusStoreDrafts = {
-  parents: AgentStatusStoreDraftTable<AgentStatusParentRecord>
+  parents: AgentStatusStoreDraftTable<StoredAgentStatusParentRecord>
   children: AgentStatusStoreDraftTable<AgentChildWorkRecord>
   aliases: AgentStatusStoreDraftTable<AgentChildWorkAliasRecord>
   facts: AgentStatusStoreDraftTable<AgentStatusFactRecord>

@@ -76,6 +76,13 @@ describe('readOmpMcpServers', () => {
     expect(servers).toEqual([{ name: 'memory', command: 'user-memory', args: [], env: [] }])
   })
 
+  it('sends none when the OMP settings file cannot be parsed', async () => {
+    await writeFile(join(agentDir, 'config.yml'), 'mcp:\n  enableProjectConfig: [false\n')
+    const env = { PI_CODING_AGENT_DIR: agentDir, DOCS_TOKEN: 'secret' }
+
+    await expect(readOmpMcpServers({ cwd, env, version: '19.0.1' })).resolves.toEqual([])
+  })
+
   it('sends none to releases where a failing server stops the chat opening', async () => {
     const env = { PI_CODING_AGENT_DIR: agentDir }
 
