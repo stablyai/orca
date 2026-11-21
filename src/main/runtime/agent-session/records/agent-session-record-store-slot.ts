@@ -7,6 +7,7 @@ import {
   journalDomainDatabasePath
 } from '../../../native-chat/agent-session-journal/database/journal-host-database'
 import { journalDatabaseHoldsAgentSessions } from '../../../native-chat/agent-session-journal/database/journal-database'
+import { captureJournalLegacySourceReceipt } from '../../../native-chat/agent-session-journal/database/journal-legacy-source-capture'
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
 import { openStructuredAgentSessionSqlJournalDatabase } from '../installation/structured-agent-session-journal-open'
@@ -167,26 +168,28 @@ function finishRetirement(slot: RecordStoreSlot): Promise<void> {
   return slot.retiring
 }
 
-/** Whether this profile holds a structured chat: a record or tab in the journal database, or an
- *  original journal an older Orca may have written beside an empty store. */
+/** Whether this profile holds a structured chat: a record or tab in the journal database, or
+ *  chats an older Orca wrote to the original since an empty store last took it in. */
 export function hasPersistedStructuredAgentSessionStore(
   stateDirectory: string,
   fileExists: (path: string) => boolean = existsSync
 ): boolean {
   const currentPath = journalDomainDatabasePath(stateDirectory)
-  const databasePath = fileExists(currentPath) ? currentPath : journalDatabasePath(stateDirectory)
+  const originalPath = journalDatabasePath(stateDirectory)
+  const databasePath = fileExists(currentPath) ? currentPath : originalPath
   if (!fileExists(databasePath)) {
     return false
   }
   try {
-    if (journalDatabaseHoldsAgentSessions(databasePath)) {
-      return true
-    }
+    return journalDatabaseHoldsAgentSessions(
+      databasePath,
+      // Opening the store is what takes those chats in; an unchanged original starts nothing.
+      databasePath === currentPath && fileExists(originalPath)
+        ? () => captureJournalLegacySourceReceipt(originalPath)
+        : undefined
+    )
   } catch {
     // A database that cannot be read cannot say it is empty.
     return true
   }
-  // An empty store beside the original: an older Orca may have written chats there since, and
-  // opening the store is what takes them in.
-  return databasePath === currentPath && fileExists(journalDatabasePath(stateDirectory))
 }

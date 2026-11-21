@@ -12,6 +12,12 @@ import {
 import { ensurePRWatchTables } from '../../../github/pr-watch/pr-watch-tables'
 import { JournalUnreleasedSchemaError } from '../replay/journal-open-failure'
 import { readForgottenJournalChats } from '../journal-forgotten-chats'
+import {
+  JOURNAL_LEGACY_REVISIONS_KEPT,
+  JOURNAL_LEGACY_SOURCE_RECEIPT,
+  sameJournalLegacySource,
+  type JournalLegacySourceReceipt
+} from './journal-legacy-source-receipt'
 import { ensureQueuedMessagesTable } from '../queued-messages/queued-message-schema'
 import { ensureCommandReceiptsTable } from '../writing/command-receipt-schema'
 import { ensureAgentSessionAttachmentClaimTables } from '../../agent-session-attachments/agent-session-attachment-claims'
@@ -29,8 +35,24 @@ export function journalPragmaNumber(db: Database.Database, name: string): number
   return Number(db.pragma(name, { simple: true }) ?? 0)
 }
 
-export function journalDatabaseHoldsAgentSessions(dbPath: string): boolean {
+/** `original` reads the original journal's receipt: an empty store holds what it hasn't taken in. */
+export function journalDatabaseHoldsAgentSessions(
+  dbPath: string,
+  original?: () => JournalLegacySourceReceipt
+): boolean {
   const db = new Database(dbPath, { readonly: true, fileMustExist: true })
+  // The reconcile's early return for a store without chats: copies due follow chats it holds.
+  const holdsOriginal = (current: JournalLegacySourceReceipt): boolean => {
+    const meta = db.prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
+    const value = (key: string): string | undefined => {
+      const row = meta.get(key)
+      return row === undefined ? undefined : String(row.value)
+    }
+    return (
+      value(JOURNAL_LEGACY_REVISIONS_KEPT) !== undefined &&
+      sameJournalLegacySource(value(JOURNAL_LEGACY_SOURCE_RECEIPT), current)
+    )
+  }
   try {
     const tables = new Set(
       db
@@ -44,7 +66,8 @@ export function journalDatabaseHoldsAgentSessions(dbPath: string): boolean {
           tables.has(table) && db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get() !== undefined
       ) ||
       // Deleted chats whose rows are still being removed: opening the store finishes them.
-      (tables.has('agent_session_store_meta') && readForgottenJournalChats(db, null).length > 0)
+      (tables.has('agent_session_store_meta') && readForgottenJournalChats(db, null).length > 0) ||
+      (original !== undefined && !holdsOriginal(original()))
     )
   } finally {
     db.close()

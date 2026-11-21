@@ -297,6 +297,7 @@
 4 src/main/muse/hook-service.ts
 2 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
+3 src/main/native-chat/agent-session-journal/database/journal-legacy-source-capture.ts # launch probe: an empty chat store opens only if an older Orca wrote the original since; 2 stats at startup/restore, not per event
 1 src/main/native-chat/transcript-discovery/host-readable-transcript-path.ts
 2 src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-spawn.ts
 2 src/main/node-runtime/managed-runtime-release-install.ts

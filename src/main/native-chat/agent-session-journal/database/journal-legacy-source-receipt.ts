@@ -2,6 +2,8 @@ import type { BigIntStats } from 'node:fs'
 import { stat } from 'node:fs/promises'
 
 export const JOURNAL_LEGACY_SOURCE_RECEIPT = 'journal.legacy-source-copy.v1'
+/** Set after a pass absorbed every original chat, so each chat here carries its revision. */
+export const JOURNAL_LEGACY_REVISIONS_KEPT = 'journal.legacy-revisions-kept.v1'
 export const JOURNAL_LEGACY_SOURCE_RECEIPT_VERSION = {
   version: 1,
   profileCopyInventoryVersion: 1
