@@ -1,31 +1,36 @@
 // Native agent CLIs (chat providers, app servers) run outside terminals, under main or the agent host.
 // One per live registration, so a reused pid's late release can't touch its successor.
-type AgentRegistration = { chats: Set<string> }
+type AgentRegistration = { chats: Set<string>; release: () => void }
 const roots = new Map<number, Set<AgentRegistration>>()
 // The CLI's own pid, which chats record, to its newest registration under the root whose tree is counted.
 const registrationByAgentPid = new Map<number, AgentRegistration>()
 
 /** Counts this root's process tree as agent memory until the returned release runs. */
 export function registerAgentProcess(rootPid: number, agentPid = rootPid): () => void {
-  const registration: AgentRegistration = { chats: new Set<string>() }
+  // A live process owns its pid, so an older registration on it belongs to a process that already exited.
+  const superseded = registrationByAgentPid.get(agentPid)
+  if (superseded) {
+    superseded.release()
+  }
   const registrations = roots.get(rootPid) ?? new Set<AgentRegistration>()
+  const registration: AgentRegistration = {
+    chats: new Set<string>(),
+    release: () => {
+      if (!registrations.delete(registration)) {
+        return
+      }
+      if (registrations.size === 0 && roots.get(rootPid) === registrations) {
+        roots.delete(rootPid)
+      }
+      if (registrationByAgentPid.get(agentPid) === registration) {
+        registrationByAgentPid.delete(agentPid)
+      }
+    }
+  }
   registrations.add(registration)
   roots.set(rootPid, registrations)
   registrationByAgentPid.set(agentPid, registration)
-  let released = false
-  return () => {
-    if (released) {
-      return
-    }
-    released = true
-    registrations.delete(registration)
-    if (registrations.size === 0 && roots.get(rootPid) === registrations) {
-      roots.delete(rootPid)
-    }
-    if (registrationByAgentPid.get(agentPid) === registration) {
-      registrationByAgentPid.delete(agentPid)
-    }
-  }
+  return registration.release
 }
 
 /** Names the chat this run started on a live agent process; it is forgotten with the registration. */
