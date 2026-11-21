@@ -12,8 +12,10 @@ const {
   getAzureDevOpsRepoSlugMock,
   getAzureDevOpsPullRequestForBranchMock,
   getGiteaRepoSlugMock,
-  getGiteaPullRequestForBranchMock
+  getGiteaPullRequestForBranchMock,
+  withCachedGitLabApprovalMock
 } = vi.hoisted(() => ({
+  withCachedGitLabApprovalMock: vi.fn((review: unknown) => review),
   getProjectSlugMock: vi.fn(),
   getMergeRequestForBranchMock: vi.fn(),
   getRepoSlugMock: vi.fn(),
@@ -31,6 +33,10 @@ vi.mock('../gitlab/merge-requests/merge-request-lookup', () => ({
   getMergeRequestForBranch: getMergeRequestForBranchMock,
   getMergeRequestForBranchOrThrow: getMergeRequestForBranchMock,
   getMergeRequest: vi.fn()
+}))
+
+vi.mock('../gitlab/merge-requests/mr-approval-batch', () => ({
+  withCachedGitLabApproval: withCachedGitLabApprovalMock
 }))
 
 vi.mock('../github/client/fetch/repo-slug-upstream', () => ({
@@ -125,5 +131,12 @@ describe('getHostedReviewForBranch', () => {
     })
     expect(getProjectSlugMock).toHaveBeenCalledWith('/repo', 'ssh-1')
     expect(getPRForBranchOutcomeMock).not.toHaveBeenCalled()
+    // Approval is attached outside the branch cache, from its own batched read.
+    expect(withCachedGitLabApprovalMock).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'gitlab', number: 7 }),
+      '/repo',
+      'ssh-1',
+      expect.objectContaining({ repoPath: '/repo' })
+    )
   })
 })
