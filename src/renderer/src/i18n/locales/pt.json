@@ -20840,6 +20840,10 @@
         "permissionAuto": "Aprovar por mim",
         "permissionAutoDescription": "Analisa os pedidos de aprovação por você",
         "permissionFullAccess": "Acesso total",
+        "permissionAgentSettings": "Configurações do {{agent}}",
+        "permissionAgentSettingsUsedHint": "Usa suas configurações de permissão do {{agent}}.",
+        "permissionAgentSettingsUnnamedHint": "Usa suas configurações de permissão do {{agent}}. O Orca não consegue exibir este modo.",
+        "permissionFromAgentSettings": "{{mode}}, conforme as configurações do {{agent}}",
         "permissionFullAccessDescription": "Nunca pede aprovação antes de edições ou comandos",
         "permissionFullAccessCodexDescription": "Nunca pede aprovação; pode editar qualquer arquivo e usar a rede",
         "permissionFullAccessSharedDescription": "Nunca pede aprovação antes de edições ou comandos",
@@ -20854,6 +20858,7 @@
         "imageUnavailable": "Prévia indisponível",
         "exitPlanMode": "Sair do modo de planejamento",
         "moreControls": "Mais controles do chat",
+        "permissionAppliesNextMessage": "{{saved}} vale para a próxima mensagem; usando {{active}} no momento",
         "botFor": "Para: {{detail}}",
         "bots": "Bots"
       },

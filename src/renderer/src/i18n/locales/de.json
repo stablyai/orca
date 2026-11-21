@@ -19576,6 +19576,10 @@
         "permissionAuto": "Genehmigen lassen",
         "permissionAutoDescription": "Prüft Genehmigungsanfragen stellvertretend",
         "permissionFullAccess": "Vollzugriff",
+        "permissionAgentSettings": "{{agent}}-Einstellungen",
+        "permissionAgentSettingsUsedHint": "Verwendet deine Berechtigungseinstellungen für {{agent}}.",
+        "permissionAgentSettingsUnnamedHint": "Verwendet deine Berechtigungseinstellungen für {{agent}}. Orca kann diesen Modus nicht anzeigen.",
+        "permissionFromAgentSettings": "{{mode}}, aus den {{agent}}-Einstellungen",
         "permissionFullAccessDescription": "Fragt nie vor Änderungen oder Befehlen",
         "permissionFullAccessCodexDescription": "Fragt nie nach; kann jede Datei bearbeiten und das Netzwerk nutzen",
         "permissionFullAccessSharedDescription": "Fragt nie vor Änderungen oder Befehlen",
@@ -19590,6 +19594,7 @@
         "imageUnavailable": "Vorschau nicht verfügbar",
         "moreControls": "Weitere Chat-Steuerelemente",
         "exitPlanMode": "Planungsmodus verlassen",
+        "permissionAppliesNextMessage": "{{saved}} gilt für deine nächste Nachricht; derzeit wird {{active}} verwendet",
         "botFor": "Für: {{detail}}",
         "bots": "Bots"
       },

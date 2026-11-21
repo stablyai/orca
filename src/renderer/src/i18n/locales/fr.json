@@ -19494,6 +19494,10 @@
         "permissionAuto": "Approuver pour moi",
         "permissionAutoDescription": "Examine les demandes d’approbation pour vous",
         "permissionFullAccess": "Accès complet",
+        "permissionAgentSettings": "Paramètres de {{agent}}",
+        "permissionAgentSettingsUsedHint": "Utilise vos paramètres d’autorisation de {{agent}}.",
+        "permissionAgentSettingsUnnamedHint": "Utilise vos paramètres d’autorisation de {{agent}}. Orca ne peut pas afficher ce mode.",
+        "permissionFromAgentSettings": "{{mode}}, d’après les paramètres de {{agent}}",
         "permissionFullAccessDescription": "Ne demande jamais avant les modifications ou les commandes",
         "permissionFullAccessCodexDescription": "Ne demande jamais ; peut modifier n’importe quel fichier et utiliser le réseau",
         "permissionFullAccessSharedDescription": "Ne demande jamais avant les modifications ou les commandes",
@@ -19509,6 +19513,7 @@
         "sessionAttachmentsStarting": "Le chat de {{agent}} est encore en cours d’ouverture. Attendez qu’il soit ouvert, puis joignez à nouveau les fichiers.",
         "moreControls": "Plus de commandes de conversation",
         "exitPlanMode": "Quitter le mode plan",
+        "permissionAppliesNextMessage": "{{saved}} s’applique à votre prochain message ; réglage utilisé actuellement : {{active}}",
         "botFor": "Pour : {{detail}}",
         "bots": "Bots"
       },

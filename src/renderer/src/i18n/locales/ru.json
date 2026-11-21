@@ -20153,6 +20153,10 @@
         "permissionAuto": "Одобрять за меня",
         "permissionAutoDescription": "Проверяет запросы разрешений за вас",
         "permissionFullAccess": "Полный доступ",
+        "permissionAgentSettings": "Настройки {{agent}}",
+        "permissionAgentSettingsUsedHint": "Использует ваши настройки разрешений {{agent}}.",
+        "permissionAgentSettingsUnnamedHint": "Использует ваши настройки разрешений {{agent}}. Orca не может показать этот режим.",
+        "permissionFromAgentSettings": "{{mode}}, из настроек {{agent}}",
         "permissionFullAccessDescription": "Не спрашивает перед правками и командами",
         "permissionFullAccessCodexDescription": "Не спрашивает разрешение; может менять любые файлы и использовать сеть",
         "permissionFullAccessSharedDescription": "Не спрашивает перед правками и командами",
@@ -20167,6 +20171,7 @@
         "imageUnavailable": "Предпросмотр недоступен",
         "exitPlanMode": "Выйти из режима планирования",
         "moreControls": "Другие элементы управления чатом",
+        "permissionAppliesNextMessage": "{{saved}} применяется со следующего сообщения; сейчас используется: {{active}}",
         "botFor": "Для: {{detail}}",
         "bots": "Боты"
       },

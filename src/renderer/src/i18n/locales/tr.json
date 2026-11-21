@@ -19703,6 +19703,10 @@
         "permissionAuto": "Benim yerime onayla",
         "permissionAutoDescription": "Onay isteklerini sizin yerinize değerlendirir",
         "permissionFullAccess": "Tam erişim",
+        "permissionAgentSettings": "{{agent}} ayarları",
+        "permissionAgentSettingsUsedHint": "{{agent}} izin ayarlarınızı kullanır.",
+        "permissionAgentSettingsUnnamedHint": "{{agent}} izin ayarlarınızı kullanır. Orca bu modu gösteremiyor.",
+        "permissionFromAgentSettings": "{{mode}}, {{agent}} ayarlarından",
         "permissionFullAccessDescription": "Düzenleme veya komutlardan önce asla sormaz",
         "permissionFullAccessCodexDescription": "Asla sormaz; tüm dosyaları düzenleyebilir ve ağı kullanabilir",
         "permissionFullAccessSharedDescription": "Düzenleme veya komutlardan önce asla sormaz",
@@ -19717,6 +19721,7 @@
         "imageUnavailable": "Önizleme kullanılamıyor",
         "exitPlanMode": "Plan modundan çık",
         "moreControls": "Diğer sohbet kontrolleri",
+        "permissionAppliesNextMessage": "{{saved}} sonraki mesajınızda geçerli olur; şu anda {{active}} kullanılıyor",
         "botFor": "Amaç: {{detail}}",
         "bots": "Botlar"
       },
