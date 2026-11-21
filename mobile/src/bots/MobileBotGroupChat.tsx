@@ -76,6 +76,7 @@ export function MobileBotGroupChat() {
         outage={outage}
         groupId={params.groupId}
         hostId={params.hostId}
+        hostName={hostName}
         visible={focused}
       />
     )
