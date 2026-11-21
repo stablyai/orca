@@ -6,6 +6,7 @@ import { useControllableState } from 'radix-ui/internal'
 import { cva, type VariantProps } from 'class-variance-authority'
 
 import { usePortalContainer } from './portal-container-context'
+import { FLOATING_SURFACE_CLASSES } from './floating-surface'
 import { cn } from '@/lib/class-names'
 
 const HoverCardInteractionContext = React.createContext({
@@ -121,7 +122,8 @@ function HoverCardContent({
         sideOffset={sideOffset}
         // Match dropdown surface/border/shadow tokens so hover cards remain distinct from the dark canvas.
         className={cn(
-          'z-50 origin-(--radix-hover-card-content-transform-origin) rounded-md border border-black/14 bg-floating-surface text-popover-foreground shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl outline-hidden dark:border-white/14 dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)]',
+          'z-50 origin-(--radix-hover-card-content-transform-origin) rounded-md outline-hidden',
+          FLOATING_SURFACE_CLASSES,
           hoverCardContentVariants({ variant, motion }),
           className
         )}
