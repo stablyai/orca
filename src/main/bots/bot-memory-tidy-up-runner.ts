@@ -266,7 +266,10 @@ export class BotTidyUpRunner {
         ended = outcome
       } else {
         applied = outcome
-        ended = { through: startedAt }
+        // The status move applied but the ops failed: kept as a failure, its chats read again.
+        ended = outcome.opsFailed
+          ? { error: outcome.opsFailed, alerted: false }
+          : { through: startedAt }
         // Its own row, read now: a summary without it only loses its Undo link.
         historyRows = await this.deps.memory.history(bot.id).catch(() => [])
       }

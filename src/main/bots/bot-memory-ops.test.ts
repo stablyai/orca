@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { checkTidyUpOps, memorySnapshot, parseTidyUpOps } from './bot-memory-ops'
 import { memoryFitsOps } from './bot-memory-ops-pilot'
-import { tidyUpFileLines } from './bot-memory-tidy-up-draft'
 import { statusMigrationPlan } from './bot-memory-status-migration'
 
 const MEMORY = [
@@ -139,6 +138,22 @@ describe("Orca's checks on a tidy-up's ops", () => {
     ])
   })
 
+  it('keeps each negation on the words it governs', () => {
+    const owner = ['Do not deploy staging on Fridays; deploy production']
+    const { skipped } = check(
+      [
+        {
+          op: 'add',
+          kind: 'rule',
+          text: 'Do deploy staging on Fridays; do not deploy production',
+          evidence: 'Do not deploy staging on Fridays; deploy production'
+        }
+      ],
+      owner
+    )
+    expect(skipped).toEqual(['add 1: says more than its evidence'])
+  })
+
   it("keeps a source's negations and modals, so a rewrite can't flip or harden it", () => {
     const owner = ['Do not deploy staging on Fridays, please']
     const add = (text: string) =>
@@ -224,8 +239,9 @@ describe("Orca's checks on a tidy-up's ops", () => {
     expect(skipped).toEqual(['retire 2: takes out more lines than one tidy-up may'])
   })
 
-  it('archives every copy of a line it files, not only the one it named', () => {
-    const memory = '# M\n- 2026-10-05 Staging notes\n- Staging notes\n- 2026-10-06 keep me\n'
+  it('moves every copy of a line it names, and none when one copy is an owner or undated line', () => {
+    const memory =
+      '# M\n- 2026-10-05 Staging notes\n- 2026-10-07 Staging notes\n- 2026-10-06 keep me\n'
     const [dated] = memorySnapshot(memory)
     const { plan } = checkTidyUpOps(
       memory,
@@ -235,13 +251,50 @@ describe("Orca's checks on a tidy-up's ops", () => {
         today: '2026-11-21'
       }
     )
-    const removed = [
-      { line: '- 2026-10-05 Staging notes', after: '# M' },
-      { line: '- Staging notes', after: '- 2026-10-05 Staging notes' }
-    ]
-    expect(tidyUpFileLines(plan, removed, '2026-11-21').get('archive')).toEqual([
-      '- Staging notes · moved 2026-11-21'
+    expect(plan.topics.get('staging')).toEqual([
+      '- 2026-10-05 Staging notes',
+      '- 2026-10-07 Staging notes'
     ])
+    const undated = '# M\n- 2026-10-05 Staging notes\n- Staging notes\n'
+    const [first] = memorySnapshot(undated)
+    const ops = [
+      { op: 'demote', lines: [first.ref], topic: 'staging' },
+      { op: 'retire', line: first.ref, reason: 'stale' }
+    ]
+    expect(checkTidyUpOps(undated, ops, { ownerWords: [], today: '2026-11-21' }).skipped).toEqual([
+      "demote 1: moves your owner's rule or an undated line out of MEMORY.md",
+      "retire 2: changes your owner's rule without their words"
+    ])
+  })
+
+  it('needs words about each owner rule a merge takes, and evidence inside one typed line', () => {
+    const rules = [
+      '# M',
+      '- 2026-10-01 Owner rule: always open PRs ready, not draft',
+      '- 2026-10-02 Owner rule: never name other products in notes',
+      ''
+    ].join('\n')
+    const [a, b] = memorySnapshot(rules)
+    const merge = {
+      op: 'merge',
+      lines: [a.ref, b.ref],
+      text: 'Owner rule: always open PRs ready, not draft',
+      evidence: 'always open PRs ready, not draft'
+    }
+    const owner = ['Yes: always open PRs ready, not draft']
+    expect(
+      checkTidyUpOps(rules, [merge], { ownerWords: owner, today: '2026-11-21' }).skipped
+    ).toEqual(["merge 1: changes your owner's rule without their words"])
+    const retire = {
+      op: 'retire',
+      line: a.ref,
+      reason: 'wrong',
+      evidence: 'open PRs ready not draft'
+    }
+    const split = ['open PRs ready', 'not draft']
+    expect(
+      checkTidyUpOps(rules, [retire], { ownerWords: split, today: '2026-11-21' }).skipped
+    ).toEqual(["retire 1: changes your owner's rule without their words"])
   })
 
   it('runs ops only on a file that is list lines, a few prose lines aside', () => {
@@ -253,6 +306,7 @@ describe("Orca's checks on a tidy-up's ops", () => {
     expect(parseTidyUpOps('Done.\n```json\n[{"op":"retire"}]\n```')).toEqual([{ op: 'retire' }])
     expect(parseTidyUpOps('[{"op":"retire",')).toBeNull()
     expect(parseTidyUpOps('{"op":"retire"}')).toBeNull()
+    expect(parseTidyUpOps('[Orca] done: [{"op":"retire"}] [end]')).toEqual([{ op: 'retire' }])
     expect(parseTidyUpOps('[Orca] done:\n```json\n[{"op":"retire"}]\n```\n[end]')).toEqual([
       { op: 'retire' }
     ])
@@ -268,6 +322,7 @@ describe('the status move', () => {
       '- 2026-11-11 Owner rule: PR #4400 style reviews go to the official reviewer, waiting is fine',
       '- 2026-11-09 Times are in Eastern',
       '- 2026-11-07 Never merge PR #4417 while CI red, round 2 pending',
+      '- 2026-11-06 PR #4418 pending: never merge while CI red at a1b2c3d4',
       '- 2026-11-08 Lesson: after round 2 of #4390 the head moved; re-read it before a verdict',
       '- #4380 merged at 9f8e7d6c5b'
     ].join('\n')

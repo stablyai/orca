@@ -18,20 +18,18 @@ export function memoryFitsOps(memory: string): boolean {
 
 const PASTED = /<pasted_content\b[^>]*>[\s\S]*?<\/pasted_content\b[^>]*>/g
 
-/** The owner's own typed words in the chats: their lines without pasted blocks or quoted lines. */
+/** The owner's own typed words in the chats, one entry per typed line: pasted blocks and quoted
+ *  lines are cut out, and evidence must sit inside one entry, never across a cut. */
 export function ownerTypedWords(chats: readonly TidyUpChat[]): string[] {
   return chats.flatMap(({ lines }) =>
-    lines.flatMap(({ by, text }) => {
-      if (by !== 'owner') {
-        return []
-      }
-      const typed = text
-        .replace(PASTED, '\n')
-        .split('\n')
-        .filter((line) => !line.trimStart().startsWith('>'))
-        .join('\n')
-        .trim()
-      return typed ? [typed] : []
-    })
+    lines.flatMap(({ by, text }) =>
+      by !== 'owner'
+        ? []
+        : text
+            .replace(PASTED, '\n')
+            .split('\n')
+            .map((line) => line.trim())
+            .filter((line) => line !== '' && !line.startsWith('>'))
+    )
   )
 }

@@ -90,19 +90,23 @@ type Op = z.infer<typeof OpSchema>
 
 /** The reply's one JSON array of ops; null when it has none or it doesn't parse (nothing applies). */
 export function parseTidyUpOps(reply: string): unknown[] | null {
-  // A fenced block when there is one, so brackets in prose around it don't count.
+  // A fenced block when there is one; else the widest bracketed span that parses as an array, so
+  // bracketed prose around it ("[Orca] done") doesn't count.
   const body = /```(?:json)?\s*\n([\s\S]*?)```/.exec(reply)?.[1] ?? reply
-  const start = body.indexOf('[')
-  const end = body.lastIndexOf(']')
-  if (start === -1 || end < start) {
-    return null
+  const ends = [...body.matchAll(/\]/g)].map((match) => match.index).toReversed()
+  for (const start of [...body.matchAll(/\[/g)].map((match) => match.index).slice(0, 20)) {
+    for (const end of ends.filter((at) => at > start).slice(0, 20)) {
+      try {
+        const parsed: unknown = JSON.parse(body.slice(start, end + 1))
+        if (Array.isArray(parsed)) {
+          return parsed
+        }
+      } catch {
+        // Not this span.
+      }
+    }
   }
-  try {
-    const parsed: unknown = JSON.parse(body.slice(start, end + 1))
-    return Array.isArray(parsed) ? parsed : null
-  } catch {
-    return null
-  }
+  return null
 }
 
 const squash = (text: string): string => text.replace(/\s+/g, ' ').trim()
@@ -135,16 +139,16 @@ export function checkTidyUpOps(
 ): { plan: TidyUpPlan; skipped: string[] } {
   const snapshot = memorySnapshot(memory)
   const byRef = new Map(snapshot.map((line) => [line.ref, line]))
+  const copiesOf = (lines: readonly MemorySnapshotLine[]): MemorySnapshotLine[] => {
+    const keys = new Set(lines.map(({ raw }) => keyOf(raw)))
+    return snapshot.filter(({ raw }) => keys.has(keyOf(raw)))
+  }
   const owner = input.ownerWords.map((words) => squash(words).toLowerCase())
   // Words from one of the owner's own lines, not a span across two.
   const ownerSaid = (evidence: string | undefined): evidence is string =>
     evidence !== undefined &&
     squash(evidence).length >= MIN_EVIDENCE_CHARS &&
     owner.some((line) => line.includes(squash(evidence).toLowerCase()))
-  // ... and about the lines they change.
-  const ownerSaidOf = (evidence: string | undefined, lines: readonly MemorySnapshotLine[]) =>
-    ownerSaid(evidence) &&
-    lines.some(({ fact }) => lineCoverage(fact.text, evidence) >= EVIDENCE_ABOUT)
   // Owner rules, and undated lines, which every tidy-up keeps unless the owner says otherwise.
   const guarded = (line: MemorySnapshotLine): boolean =>
     line.fact.date === null || isProtectedBotMemoryLine(line.fact.text)
@@ -172,11 +176,13 @@ export function checkTidyUpOps(
     }
   }
   const apply = (op: Op): string | null => {
+    // Lines leave by their words, so every copy of a named line (another date or mark) goes too.
     const named = (refs: readonly string[]): MemorySnapshotLine[] | string => {
-      const found = refs.flatMap((ref) => byRef.get(ref.trim()) ?? [])
-      if (found.length < refs.length) {
+      const picked = refs.flatMap((ref) => byRef.get(ref.trim()) ?? [])
+      if (picked.length < refs.length) {
         return 'names a line MEMORY.md no longer has'
       }
+      const found = copiesOf(picked)
       return found.some((line) => used.has(line.ref)) ? 'names a line an earlier op took' : found
     }
     if (op.op === 'add') {
@@ -215,7 +221,13 @@ export function checkTidyUpOps(
           return 'names a range MEMORY.md no longer has'
         }
         // Lines an earlier op took or the owner's own lines are left where they are.
-        lines = snapshot.slice(from, to + 1).filter((line) => !used.has(line.ref) && !guarded(line))
+        lines = copiesOf(
+          snapshot
+            .slice(from, to + 1)
+            .filter((line) =>
+              copiesOf([line]).every((copy) => !used.has(copy.ref) && !guarded(copy))
+            )
+        )
       } else {
         const found = named(op.lines ?? [])
         if (typeof found === 'string') {
@@ -239,13 +251,16 @@ export function checkTidyUpOps(
     if (typeof found === 'string') {
       return found
     }
-    // Only the owner's own words about these lines may join what a rewrite draws on.
-    const evidence = ownerSaidOf(op.evidence, found) ? op.evidence : undefined
-    if (found.some(guarded) && evidence === undefined) {
+    // Only the owner's own words about these lines may join what a rewrite draws on, and an owner
+    // or undated line changes only with words about that line itself.
+    const about = (line: MemorySnapshotLine): boolean =>
+      op.evidence !== undefined && lineCoverage(line.fact.text, op.evidence) >= EVIDENCE_ABOUT
+    const evidence = ownerSaid(op.evidence) && found.some(about) ? op.evidence : undefined
+    if (found.some(guarded) && !(evidence && found.filter(guarded).every(about))) {
       return "changes your owner's rule without their words"
     }
-    // A merge keeps one line of the ones it takes.
-    const loss = op.op === 'merge' ? found.length - 1 : 1
+    // Every copy taken counts; a merge keeps one line of the ones it takes.
+    const loss = op.op === 'merge' ? found.length - 1 : found.length
     if (lost + loss > lossCap) {
       return 'takes out more lines than one tidy-up may'
     }

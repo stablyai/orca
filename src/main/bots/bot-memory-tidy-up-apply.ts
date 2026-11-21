@@ -19,7 +19,7 @@ type ApplyDeps = {
   memory: Pick<BotMemoryRecord, 'change'>
   fs: Pick<BotHomeFilesystem, 'readText' | 'writeText' | 'replaceText' | 'makeDirectory'>
 }
-type Applied = { error: string; alerted: false } | TidyUpApplied
+type Applied = { error: string; alerted: false } | (TidyUpApplied & { opsFailed?: string })
 
 export async function applyTidyUpDraft(
   deps: ApplyDeps,
@@ -49,22 +49,23 @@ export async function applyTidyUpOps(
   }
 ): Promise<Applied> {
   const ops = parseTidyUpOps(run.reply)
-  if (!ops && !run.migration) {
-    return { error: TIDY_UP_FAILURES.noOps, alerted: false }
+  const checked = ops ? checkTidyUpOps(run.memory, ops, run) : null
+  const asked = checked?.plan.change
+  // No readable reply, or every op skipped: the ops failed, with their first reason, so the run
+  // keeps its chats for the next time even when the status move still applies.
+  const failed = !checked
+    ? TIDY_UP_FAILURES.noOps
+    : asked?.added.length === 0 && asked.removed.length === 0 && checked.skipped.length > 0
+      ? `${TIDY_UP_FAILURES.allSkipped} (${checked.skipped[0]})`
+      : null
+  if (failed && !run.migration) {
+    return { error: failed, alerted: false }
   }
-  const checked = ops
-    ? checkTidyUpOps(run.memory, ops, run)
-    : { plan: null, skipped: [TIDY_UP_FAILURES.noOps] }
-  const { plan: asked } = checked
-  const nothing =
-    asked !== null && asked.change.added.length === 0 && asked.change.removed.length === 0
-  // Every op skipped: a failure with its first reason, so its chats are read again next time.
-  if (!run.migration && nothing && checked.skipped.length > 0) {
-    return { error: `${TIDY_UP_FAILURES.allSkipped} (${checked.skipped[0]})`, alerted: false }
-  }
-  const plan = joinedPlans(run.migration, checked.plan)
+  const plan = joinedPlans(run.migration, failed ? null : (checked?.plan ?? null))
   const applied = await applyTidyUpPlan(deps, run, plan)
-  return 'error' in applied ? applied : { ...applied, skipped: checked.skipped }
+  return 'error' in applied
+    ? applied
+    : { ...applied, skipped: checked?.skipped ?? [], ...(failed ? { opsFailed: failed } : {}) }
 }
 
 function joinedPlans(first: TidyUpPlan | null, then: TidyUpPlan | null): TidyUpPlan {

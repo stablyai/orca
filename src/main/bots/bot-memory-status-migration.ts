@@ -38,8 +38,16 @@ export function journalTopic(today: string): string {
 /** Moves the dated status lines to this month's journal; null when there are none. Undated lines
  *  stay, as every tidy-up keeps them. */
 export function statusMigrationPlan(memory: string, today: string): TidyUpPlan | null {
-  const status = memorySnapshot(memory)
-    .filter(({ fact }) => fact.date !== null && isStatusLine(fact.text))
+  const snapshot = memorySnapshot(memory)
+  const key = (raw: string): string | null => botMemoryLineKey({ line: raw, after: null })
+  // Lines leave by their words, so a line whose copy must stay (undated, an owner rule) stays too.
+  const kept = new Set(
+    snapshot
+      .filter(({ fact }) => fact.date === null || !isStatusLine(fact.text))
+      .map(({ raw }) => key(raw))
+  )
+  const status = snapshot
+    .filter(({ fact, raw }) => fact.date !== null && isStatusLine(fact.text) && !kept.has(key(raw)))
     .toSorted((a, b) => (a.fact.date ?? '').localeCompare(b.fact.date ?? ''))
     .slice(0, STATUS_MIGRATION_MAX_LINES)
   if (status.length === 0) {

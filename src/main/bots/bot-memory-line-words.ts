@@ -35,6 +35,36 @@ const MEANING_WORDS = new Set([
   "isn't"
 ])
 
+/** One way to write each negation, so "don't" and "do not" read alike. */
+const SAME_MEANING: Record<string, string> = {
+  "don't": 'not',
+  dont: 'not',
+  "doesn't": 'not',
+  "isn't": 'not',
+  "can't": 'cannot',
+  cant: 'cannot',
+  "won't": 'will not',
+  "shouldn't": 'should not'
+}
+
+/** Each negation or modal in `text` with the next two words it governs, e.g. "not deploy staging":
+ *  "Do not deploy staging; deploy production" never matches "deploy staging; do not deploy
+ *  production". */
+function meaningMarks(text: string): string[] {
+  const words = lineWords(text)
+  return words.flatMap((word, index) => {
+    if (!MEANING_WORDS.has(word)) {
+      return []
+    }
+    const governed = words
+      .slice(index + 1)
+      .filter((next) => !STOPWORDS.has(next) && !MEANING_WORDS.has(next) && next !== 'do')
+      .slice(0, 2)
+      .map(stem)
+    return [[SAME_MEANING[word] ?? word, ...governed].join(' ')]
+  })
+}
+
 const MAX_NEW_WORDS = 3
 const MAX_NEW_SHARE = 0.15
 
@@ -83,11 +113,14 @@ export function isDerivable(
     return false
   }
   const words = lineWords(text)
-  if (words.some((word) => MEANING_WORDS.has(word) && !known.has(word))) {
+  // Each negation or modal with the words it governs: none new, none of `keep`'s dropped or moved.
+  const marks = meaningMarks(text)
+  const sourceMarks = new Set(sources.flatMap(meaningMarks))
+  if (marks.some((mark) => !sourceMarks.has(mark))) {
     return false
   }
-  const said = new Set(words)
-  if (keep.some((line) => lineWords(line).some((w) => MEANING_WORDS.has(w) && !said.has(w)))) {
+  const said = new Set(marks)
+  if (keep.some((line) => meaningMarks(line).some((mark) => !said.has(mark)))) {
     return false
   }
   const fresh = words.filter(

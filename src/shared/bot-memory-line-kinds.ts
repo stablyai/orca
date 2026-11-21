@@ -45,9 +45,11 @@ export function hasStandingWords(text: string): boolean {
 const OWNER_RULE_MARKS =
   /\bowner rule\b|\bfrom now on\b|\bowner (?:said|says|wants|prefers|decided)\b/i
 
-// "Never merge … while CI is red": a line that opens with a standing word is shaped as a rule.
+// "Never merge … while CI is red", also after a clause break ("PR #4417 pending: never merge …"):
+// a standing word that starts a clause is shaped as a rule; one inside a clause ("CI never went
+// green") is not.
 const RULE_OPENING =
-  /^(?:\d{4}-\d{2}-\d{2}\s+)?(?:always|never|don['’]?t|do not|must|only|stop|from now on)\b/i
+  /(?:^|[:;.!?\u2013\u2014]\s*|\s-\s+)(?:always|never|don['’]?t|do not|must|only|stop|from now on)\b/i
 
 /** A line a status cleanup must never move: typed as the owner's, marked as an owner rule, or
  *  opening with a standing word. */
@@ -55,7 +57,7 @@ export function isOwnerRuleLine(text: string): boolean {
   return (
     isOwnerKind(botMemoryLineKind(text).kind) ||
     OWNER_RULE_MARKS.test(text) ||
-    RULE_OPENING.test(text.trim())
+    RULE_OPENING.test(text.trim().replace(/^\d{4}-\d{2}-\d{2}\s+/, ''))
   )
 }
 

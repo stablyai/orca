@@ -774,6 +774,17 @@ describe('Tidy-up on ops, for a bot in the pilot', () => {
     expect(run.files.get(ARCHIVE)).toBe(archive)
   })
 
+  it('keeps the status move but fails the ops half when the reply is unreadable', async () => {
+    const run = harness({ memory: OLD, reply: 'Sorry, I could not do that.' })
+    run.files.set(join(HOME, TIDY_UP_OPS_PILOT_FILE), '')
+    await run.tick()
+    expect(run.files.get(MEMORY)).toBe(SHOWN)
+    expect(run.files.get(JOURNAL)).toContain(STATUS)
+    expect(run.runs()[0].error).toBe(TIDY_UP_FAILURES.noOps)
+    expect(run.through()).toBeUndefined()
+    expect(run.last()).toMatchObject({ filed: [{ topic: 'journal/2026-11', count: 1 }] })
+  })
+
   it('fails a run whose every op was skipped, so its chats are read again', async () => {
     const run = harness({
       memory: SHOWN,
