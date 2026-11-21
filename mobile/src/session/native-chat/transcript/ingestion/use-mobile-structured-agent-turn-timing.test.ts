@@ -22,14 +22,15 @@ it("keeps the turn journal while only a streaming reply's text grows", () => {
     journals.push(useMobileStructuredAgentTurnTiming({ items, submissions }, null).turnJournal)
     return null
   }
-  let renderer: ReturnType<typeof create> | undefined
+  let rerender = (): void => {}
   act(() => {
-    renderer = create(createElement(Reader))
+    const renderer = create(createElement(Reader))
+    rerender = () => renderer.update(createElement(Reader))
   })
   const grown = [reply('The reply, and more of it')]
   noteStreamedTextRevision(grown, items)
   items = grown
-  act(() => renderer?.update(createElement(Reader)))
+  act(rerender)
   expect(journals.length).toBeGreaterThan(1)
   expect(journals.at(-1)).toBe(journals[0])
 })
