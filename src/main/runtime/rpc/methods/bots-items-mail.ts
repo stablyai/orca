@@ -8,6 +8,9 @@ import {
   BOT_ITEM_MAIL_SENDER
 } from '../../../../shared/bots/bot-item-note-runs'
 import { runtimeBotChats } from '../../../bots/bot-chat-session'
+import { postGroupItemMail } from '../../../bots/bot-group-item-posts'
+import { runtimeBotGroups } from '../../../bots/bot-group-runtime'
+import { isBotGroupMemberSession } from '../../../../shared/bots/bot-group'
 import type { BotItemNoteBy } from '../../../../shared/bots/bot-item-note'
 import { appendBotItemNote, botItemNote } from '../../../bots/bot-item-chat-notes'
 import { botItemChangeMail, botItemMailImages } from '../../../bots/bot-items-mail-text'
@@ -60,9 +63,19 @@ export async function sendBotItemMail(
     return true
   }
   const chat = await botChatTakingMail(runtime, bot, owed.chatId)
-  const sessionId = chat?.sessionId ?? (await runtimeBotChats(runtime).ensure(bot.id))
-  const to = `orca_session_id:${sessionId}`
+  let sessionId = chat?.sessionId ?? (await runtimeBotChats(runtime).ensure(bot.id))
   const images = botItemMailImages(owed.changes)
+  if (isBotGroupMemberSession(sessionId)) {
+    // The owner's change reaches a room bot as their post in its room; anything else, or a session
+    // no room has any more, goes to the Home chat.
+    const owners = owed.changes[0]?.event.actor?.kind === 'owner'
+    const room = { id, ...mail, images }
+    if (owners && (await postGroupItemMail(runtimeBotGroups(runtime), sessionId, room))) {
+      return true
+    }
+    sessionId = await runtimeBotChats(runtime).ensure(bot.id)
+  }
+  const to = `orca_session_id:${sessionId}`
   const payload = JSON.stringify({
     botItems: owed.changes.map(({ event, item }) => ({
       uid: item.uid,

@@ -21,6 +21,18 @@ vi.mock('./bots-chats', () => ({
 vi.mock('../../../bots/bot-chat-session', () => ({
   runtimeBotChats: () => ({ ensure: async () => 'home-chat' })
 }))
+// A room session still in a room takes the owner's change as their post there.
+const rooms = vi.hoisted(() => ({ live: new Set<string>(), posted: [] as unknown[] }))
+vi.mock('../../../bots/bot-group-runtime', () => ({ runtimeBotGroups: () => ({}) }))
+vi.mock('../../../bots/bot-group-item-posts', () => ({
+  postGroupItemMail: async (_groups: unknown, sessionId: string, mail: unknown) => {
+    if (!rooms.live.has(sessionId)) {
+      return false
+    }
+    rooms.posted.push({ sessionId, mail })
+    return true
+  }
+}))
 
 const CHAT = '0f1e2d3c-4b5a-4968-8778-695a4b3c2d1e'
 const dbs: OrchestrationDb[] = []
@@ -124,6 +136,56 @@ describe("the item chat's note for another chat's write", () => {
     await sendBotItemMail(runtimeOf(db, { 'home-chat': null }), owed(byChat('home-chat')))
     expect(db.getMessageById('msg_item_e11')?.to_handle).toBe('orca_session_id:home-chat')
     expect(notes.append).not.toHaveBeenCalled()
+  })
+})
+
+describe('item mail for a group room session', () => {
+  const ROOM = 'bot-group-member-room-1'
+  const inRoom = (actor?: BotItemActor): BotItemMail => ({
+    ...owed(actor),
+    chatId: ROOM,
+    changes: owed(actor).changes.map((change) => ({ ...change, item: { ...item, chatId: ROOM } }))
+  })
+  const mailDb = () => {
+    const db = new OrchestrationDb(':memory:')
+    dbs.push(db)
+    return db
+  }
+  afterEach(() => {
+    rooms.live.clear()
+    rooms.posted.length = 0
+  })
+
+  it("posts the owner's change in the room, whole, and mails nothing", async () => {
+    rooms.live.add(ROOM)
+    const db = mailDb()
+    expect(await sendBotItemMail(runtimeOf(db, {}), inRoom())).toBe(true)
+    expect(rooms.posted).toEqual([
+      {
+        sessionId: ROOM,
+        mail: expect.objectContaining({
+          id: 'msg_item_e11',
+          subject: expect.stringContaining('item 4'),
+          body: expect.stringContaining('Use the short link'),
+          images: []
+        })
+      }
+    ])
+    expect(db.getMessageById('msg_item_e11')).toBeUndefined()
+  })
+
+  it('mails Home when no room has the session, or another of the bot’s chats made the change', async () => {
+    const gone = mailDb()
+    await sendBotItemMail(runtimeOf(gone, {}), inRoom())
+    expect(gone.getMessageById('msg_item_e11')?.to_handle).toBe('orca_session_id:home-chat')
+    rooms.live.add(ROOM)
+    const byBot = mailDb()
+    await sendBotItemMail(
+      runtimeOf(byBot, { 'chat-a': null }),
+      inRoom({ kind: 'bot', botId: 'ranger', chatId: 'chat-a' })
+    )
+    expect(rooms.posted).toEqual([])
+    expect(byBot.getMessageById('msg_item_e11')?.to_handle).toBe('orca_session_id:home-chat')
   })
 })
 
