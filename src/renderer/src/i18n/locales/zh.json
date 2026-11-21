@@ -1191,6 +1191,12 @@
       "soulStats": "{{lines}} 行 · {{words}} 个词",
       "soulDoubleClickHint": "双击编辑",
       "soulEmpty": "尚未添加指令。双击或选择“编辑”即可编写。"
+    },
+    "automaticUpdates": {
+      "title": "自动更新",
+      "description": "在支持此功能的桌面安装中，Orca 会在定期检查时下载符合条件的更新，并自动重启以完成安装。",
+      "info": "关于自动更新",
+      "saveFailed": "无法保存自动更新设置。"
     }
   },
   "menu": {
@@ -2260,8 +2266,8 @@
         "hostLocalFolderProject": "文件夹项目无法关联到其他主机"
       },
       "updateCheckClickOptions": {
-        "releaseHint": "{{rcKey}}+ 点击检查最新候选发布版(RC)，{{perfKey}}+ 点击检查最新性能测试构建",
-        "localMacBuildHint": "⌥+点击选择本地 macOS 构建"
+        "releaseHint": "按住 {{rcKey}} 点击可检查最新候选版本（RC），按住 {{perfKey}} 点击可检查最新性能测试版。",
+        "localMacBuildHint": "按住 ⌥ 点击可选择本地 macOS 版本。"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "请更新服务器以查看其 SSH 主机上的端口",
@@ -8369,21 +8375,21 @@
         },
         "GeneralUpdateSettingsSection": {
           "8a52ca1d02": "发行说明",
-          "d89806cc89": "已准备好安装",
-          "a6b37929dc": "版本",
-          "8311da27ba": "可用。",
           "02dc082e70": "无法开始更新下载",
           "ceb579abaf": "检查应用程序更新并安装较新的 Orca 版本",
           "bd79d412f0": "更新检查失败，{{value0}}",
           "b9ad70c30d": "更新错误，{{value0}}",
-          "2a48034c4c": "正在下载 v{{value0}}... {{value1}}%",
           "f40d88390d": "您使用的是最新版本",
-          "31fd7150cf": "正在检查更新...",
+          "31fd7150cf": "正在检查更新…",
           "d69a09b672": "启动时会自动检查更新",
-          "e3b9d21c07": "现已可用，请通过系统包管理器更新 Orca——Orca 无法自行安装此版本",
           "6d27bd46e3": "检查更新",
-          "857ca887da": "安装更新（",
-          "c0a8f827c7": "重新启动以更新（"
+          "downloadUpdate": "下载更新",
+          "restartToUpdate": "重启并更新",
+          "versionAvailable": "版本 {{version}} 已可用。",
+          "externallyManagedVersionAvailable": "版本 {{version}} 已可用。Orca 无法自行安装此版本，请通过系统软件包管理器更新。",
+          "versionReadyToInstall": "版本 {{version}} 已准备就绪，可以安装。",
+          "versionInstalling": "正在安装版本 {{version}}。",
+          "downloadingVersion": "正在下载版本 {{version}}（{{percent}}%）…"
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "从工作区的\"打开方式\"菜单中选择可用的应用程序",
@@ -12228,7 +12234,8 @@
           "updating": "正在更新服务器…",
           "serverCountOne": "1 台已配对服务器",
           "fdd271abf0": "远程 Orca 服务器",
-          "e4e5937469": "检查更新"
+          "e4e5937469": "检查更新",
+          "newerCount": "{{value0}} 台服务器的版本比此应用更新"
         },
         "RemoteServerUpdateDialog": {
           "versionUnavailable": "版本不可用",
@@ -12680,26 +12687,35 @@
           "leaveToTerminalLabel": "交由终端处理"
         },
         "ReleaseChannelSection": {
-          "switchFailed": "无法切换到该构建",
-          "title": "发布通道",
-          "description": "切换更新通道，或跳到任意已发布构建(包括旧版)，允许降级，未经审查的构建可能损坏",
-          "devOnly": "仅开发",
-          "channelAriaLabel": "更新通道",
-          "hourlyWarning": "Hourly 构建仅限 macOS，直接从 main 发布且无测试门禁，请保留一个稳定构建",
-          "dailyWarning": "Daily 构建仅限 macOS，直接从 main 发布且无测试门禁，请保留一个稳定构建",
-          "adhocWarning": "Adhoc 构建仅限 macOS，来自尚未合入的分支，发布者可能随时弃用 — 请保留一个稳定构建",
-          "loadingBuilds": "正在加载构建…",
-          "noBuilds": "未找到构建",
+          "switchFailed": "无法切换到此版本。",
+          "title": "更新渠道",
+          "description": "可更换更新渠道或切换到已发布的版本，包括旧版。未经验证的版本可能无法运行。",
+          "devOnly": "仅供开发",
+          "adhocWarning": "Windows 版未签名。发布者可能停止维护，请留一个稳定版备用。",
+          "loadingBuilds": "正在加载版本…",
+          "noBuilds": "未找到版本",
           "refresh": "刷新版本列表",
-          "cacheHint": "构建列表会缓存 5 分钟，刷新以检查新构建",
-          "switchTo": "切换到此构建",
-          "alreadyRunning": "这是你当前运行的构建",
+          "cacheHint": "版本列表会缓存 5 分钟。刷新列表可查看是否有新版本。",
+          "switchTo": "切换到此版本",
+          "alreadyRunning": "当前正在运行此版本。",
           "willSwitch": "{{value0}} → {{value1}}",
-          "webUnavailable": "切换构建仅在桌面应用中可用",
+          "webUnavailable": "只能在桌面应用中切换版本。",
           "devChannelUnsupportedAria": "{{value0}}（仅限 {{value1}}）",
-          "devChannelUnsupported": "{{value0}} 构建仅针对 {{value1}} 产出，Linux 仍使用 Stable 或 RC",
+          "devChannelUnsupported": "“{{value0}}”渠道仅适用于 {{value1}}。Linux 仍可使用{{stable}}或 {{rc}}。",
           "downloadInstaller": "下载安装程序",
-          "manualInstallHint": "{{value0}} 版本在 Windows 上未签名，因此应用内更新程序无法用它覆盖已签名版本，请手动运行一次下载的安装程序——Windows 会显示未知发布者警告——之后的每次切换（包括切回稳定版）都可以在此完成"
+          "manualInstallHint": "“{{value0}}”渠道的 Windows 版本未签名，应用内更新无法将其安装到已签名的版本上。请运行一次下载的安装程序，Windows 会提示发布者未知。此后可以在这里切换版本，包括切回{{stable}}。",
+          "stableLabel": "稳定版",
+          "stableDescription": "面向日常使用的稳定版本。",
+          "rcLabel": "RC",
+          "rcDescription": "稳定版发布前提供的候选版本。",
+          "hourlyLabel": "每小时版",
+          "hourlyDescription": "每小时从 main 分支打包一次。",
+          "dailyLabel": "每日版",
+          "dailyDescription": "每天从 main 分支打包一次。",
+          "adhocLabel": "分支版",
+          "adhocDescription": "从分支单独打包，可试用尚未合并的改动。",
+          "devChannelPlatforms": "macOS 和 Windows",
+          "scheduledWarning": "发布前不要求通过测试。Windows 版未签名。请留一个稳定版备用。"
         },
         "TerminalTccAttributionNotice": {
           "body": "终端守护进程由已卸载的 Orca 启动，macOS 无法正确归因权限，重启守护进程可修复(运行中会话会关闭)",
@@ -13452,10 +13468,10 @@
           }
         },
         "ReleaseBuildPicker": {
-          "build": "构建版本",
-          "searchPlaceholder": "搜索构建...",
+          "build": "版本",
+          "searchPlaceholder": "搜索版本…",
           "noMatches": "没有匹配的版本",
-          "searchLabel": "搜索构建"
+          "searchLabel": "搜索版本"
         },
         "AppearanceThemeControl": {
           "useTerminalTheme": "使用主题配色",
@@ -24442,7 +24458,7 @@
       "waitingLabel": "更新等待中",
       "busyTitle": "另一个 Orca 正在更新",
       "busySummary": "另一个 Orca 实例已在安装更新",
-      "busyGuidance": "请稍候片刻再重试，你下载的更新已就绪",
+      "busyGuidance": "请稍候片刻后重试。已下载的更新可继续安装。",
       "unresponsiveTitle": "正在等待后台服务器",
       "unresponsiveSummary": "Orca 未能为更新暂停其后台服务器",
       "unresponsiveGuidance": "请从启动它的终端或服务中停止它，然后重试，已连接的设备将断开连接",
@@ -24463,8 +24479,8 @@
     "failure": {
       "releaseNotReady": "此设备暂时还无法获取更新的版本。请稍后再检查",
       "updateServerUnreachable": "无法连接更新服务器。请几分钟后重试",
-      "channelUnsupportedPlatform": "{{channel}} 构建仅针对 macOS 和 Windows 提供",
-      "unsignedDevChannel": "{{channel}} 构建未签名，而当前已签名的构建仅安装由 Orca 发布者签名的更新。请从版本发布页面下载安装程序并运行一次，之后更新即可正常进行，包括切回稳定版",
+      "channelUnsupportedPlatform": "“{{channel}}”渠道仅适用于 macOS 和 Windows。",
+      "unsignedDevChannel": "“{{channel}}”渠道的版本未签名。当前版本已签名，只能安装 Orca 发布者签名的更新。请从版本发布页面下载安装程序并运行一次，此后即可正常更新，包括切回稳定版。",
       "linuxPackageMissing": "下载的安装包已不在更新缓存中。请重新下载更新，或从官方版本发布页面获取",
       "linuxPackageNotRegular": "更新缓存中下载的安装包已不再是有效文件。请重新下载更新，或从官方版本发布页面获取",
       "linuxPackageHashMismatch": "下载的安装包与已验证的版本不再匹配，因此 Orca 不会将其交给包管理器。请重新下载更新，或从官方版本发布页面获取",
@@ -24479,14 +24495,17 @@
       "unknownReleaseChannel": "未知的发布渠道“{{channel}}”",
       "invalidReleaseTag": "“{{tag}}”不是有效的发布标签",
       "releaseRepoNotFound": "在 {{repo}} 未找到发布版本的仓库",
-      "releaseListFailed": "无法列出 {{channel}} 构建（HTTP {{status}}）",
-      "releaseListUnreadable": "无法读取 {{channel}} 的版本发布列表",
+      "releaseListFailed": "无法获取“{{channel}}”渠道的版本列表（HTTP {{status}}）。",
+      "releaseListUnreadable": "无法读取“{{channel}}”渠道的版本列表。",
       "rateLimitedSoon": "已达到 GitHub 速率限制。请几分钟后重试",
       "rateLimitedSoonSignedOut": "已达到 GitHub 速率限制。请几分钟后重试，或运行 `gh auth login`，以便 Orca 使用你账户的更高限额",
       "rateLimitedInMinute": "已达到 GitHub 速率限制。请约一分钟后重试",
       "rateLimitedInMinuteSignedOut": "已达到 GitHub 速率限制。请约一分钟后重试，或运行 `gh auth login`，以便 Orca 使用你账户的更高限额",
       "rateLimitedInMinutes_other": "已达到 GitHub 速率限制。请约 {{count}} 分钟后重试",
-      "rateLimitedInMinutesSignedOut_other": "已达到 GitHub 速率限制。请约 {{count}} 分钟后重试，或运行 `gh auth login`，以便 Orca 使用你账户的更高限额"
+      "rateLimitedInMinutesSignedOut_other": "已达到 GitHub 速率限制。请约 {{count}} 分钟后重试，或运行 `gh auth login`，以便 Orca 使用你账户的更高限额",
+      "automaticInstallCheckpointFailed": "Orca 无法在重启前保存当前窗口。请重试安装更新。",
+      "automaticInstallTerminalBusy": "重启会结束部分终端会话。Orca 会在之后检查更新时重试。",
+      "macStagingTimeout": "macOS 仍在准备更新。如果长时间停留在此状态，请退出并重新打开 Orca。"
     }
   },
   "onboarding": {

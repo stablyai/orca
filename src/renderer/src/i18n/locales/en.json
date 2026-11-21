@@ -1948,8 +1948,7 @@
       "saveFailed": "Could not save automatic updates.",
       "title": "Automatic updates",
       "description": "On supported desktop installs, Orca downloads eligible updates on its regular check schedule and restarts to install them automatically.",
-      "info": "About automatic updates",
-      "installingStatus": "is being installed."
+      "info": "About automatic updates"
     }
   },
   "menu": {
@@ -9319,21 +9318,21 @@
         },
         "GeneralUpdateSettingsSection": {
           "8a52ca1d02": "Release notes",
-          "d89806cc89": "is ready to install.",
-          "a6b37929dc": "Version",
-          "8311da27ba": "is available.",
           "02dc082e70": "Could not start the update download.",
           "ceb579abaf": "Check for app updates and install a newer Orca version.",
           "bd79d412f0": "Update check failed. {{value0}}",
           "b9ad70c30d": "Update error. {{value0}}",
-          "2a48034c4c": "Downloading v{{value0}}... {{value1}}%",
           "f40d88390d": "You’re on the latest version.",
           "31fd7150cf": "Checking for updates...",
           "d69a09b672": "Updates are checked automatically on launch.",
-          "e3b9d21c07": "is available. Update Orca through your system package manager — Orca cannot install this release itself.",
           "6d27bd46e3": "Check for updates",
-          "857ca887da": "Download update (",
-          "c0a8f827c7": "Restart to update ("
+          "downloadUpdate": "Download update",
+          "restartToUpdate": "Restart to update",
+          "versionAvailable": "Version {{version}} is available.",
+          "externallyManagedVersionAvailable": "Version {{version}} is available. Update Orca through your system package manager — Orca cannot install this release itself.",
+          "versionReadyToInstall": "Version {{version}} is ready to install.",
+          "versionInstalling": "Version {{version}} is being installed.",
+          "downloadingVersion": "Downloading version {{version}} ({{percent}}%)…"
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "Choose apps available from a workspace's Open in menu.",
@@ -13528,13 +13527,10 @@
         },
         "ReleaseChannelSection": {
           "switchFailed": "Could not switch to that build.",
-          "title": "Release channel",
+          "title": "Update channel",
           "description": "Switch update channels or jump to any published build, including older ones. Downgrades are allowed and unvetted builds can be broken.",
           "devOnly": "Dev only",
-          "channelAriaLabel": "Update channel",
-          "hourlyWarning": "Hourly builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy.",
-          "dailyWarning": "Daily builds ship straight from main with no test gate, and the Windows ones are unsigned. Keep a stable build handy.",
-          "adhocWarning": "Adhoc builds come from a branch that has not landed, and the Windows ones are unsigned. Whoever cut one may abandon it — keep a stable build handy.",
+          "adhocWarning": "Windows builds are unsigned. The author may stop maintaining a build, so keep a stable build handy.",
           "loadingBuilds": "Loading builds…",
           "noBuilds": "No builds found",
           "refresh": "Refresh build list",
@@ -13544,9 +13540,21 @@
           "willSwitch": "{{value0}} → {{value1}}",
           "webUnavailable": "Switching builds is only available in the desktop app.",
           "devChannelUnsupportedAria": "{{value0}} ({{value1}} only)",
-          "devChannelUnsupported": "{{value0}} builds are produced only for {{value1}}. Linux stays on Stable or RC.",
+          "devChannelUnsupported": "{{value0}} builds are produced only for {{value1}}. Linux stays on {{stable}} or {{rc}}.",
           "downloadInstaller": "Download installer",
-          "manualInstallHint": "{{value0}} builds are unsigned on Windows, so the in-app updater cannot install one over a signed build. Run the downloaded installer once — Windows will warn about an unknown publisher — and every later switch, including back to Stable, works from here."
+          "manualInstallHint": "{{value0}} builds are unsigned on Windows, so the in-app updater cannot install one over a signed build. Run the downloaded installer once — Windows will warn about an unknown publisher — and every later switch, including back to {{stable}}, works from here.",
+          "stableLabel": "Stable",
+          "stableDescription": "Stable releases for general use.",
+          "rcLabel": "RC",
+          "rcDescription": "Release candidates published before a stable release.",
+          "hourlyLabel": "Hourly",
+          "hourlyDescription": "Built every hour from main.",
+          "dailyLabel": "Daily",
+          "dailyDescription": "Built once a day from main.",
+          "adhocLabel": "Ad hoc",
+          "adhocDescription": "One-off builds from a branch for trying changes before they merge.",
+          "devChannelPlatforms": "macOS and Windows",
+          "scheduledWarning": "These builds ship with no test gate. Windows builds are unsigned. Keep a stable build handy."
         },
         "VoiceMicrophoneSetting": {
           "systemDefault": "System default",
