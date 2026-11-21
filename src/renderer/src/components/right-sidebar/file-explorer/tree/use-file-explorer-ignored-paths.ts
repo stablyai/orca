@@ -18,10 +18,6 @@ export type IgnoredPathResult = {
 
 const lastIgnoredPathResults = createFileExplorerWorktreeSnapshots<IgnoredPathResult>()
 
-function lastIgnoredPathResult(key: string | null): IgnoredPathResult | null {
-  return key ? (lastIgnoredPathResults.peek(key) ?? null) : null
-}
-
 export function getEffectiveFileExplorerIgnoredPaths({
   activeWorktreeId,
   canLoadIgnoredPaths,
@@ -59,15 +55,14 @@ export function useFileExplorerIgnoredPaths({
   shouldDebounceIgnoredQuery: boolean
   worktreePath: string | null
 }): readonly string[] {
-  const key =
+  // Opens on the workspace's last answer, kept past unmounts, until git replies again.
+  const [ignoredPathResult, setIgnoredPathResult] = useState(() =>
     activeWorktreeId && worktreePath
-      ? fileExplorerWorktreeSnapshotKey(activeWorktreeId, worktreePath)
+      ? (lastIgnoredPathResults.peek(
+          fileExplorerWorktreeSnapshotKey(activeWorktreeId, worktreePath)
+        ) ?? null)
       : null
-  // Opens on the workspace's last answer, kept past unmounts and switches, until git replies again.
-  const [shown, setShown] = useState(() => ({ key, result: lastIgnoredPathResult(key) }))
-  if (shown.key !== key) {
-    setShown({ key, result: lastIgnoredPathResult(key) })
-  }
+  )
 
   useEffect(() => {
     if (!canLoadIgnoredPaths || !activeWorktreeId || !worktreePath) {
@@ -76,10 +71,12 @@ export function useFileExplorerIgnoredPaths({
 
     let canceled = false
     const show = (paths: string[]): void => {
-      const resultKey = fileExplorerWorktreeSnapshotKey(activeWorktreeId, worktreePath)
       const result = { activeWorktreeId, paths, worktreePath }
-      lastIgnoredPathResults.keep(resultKey, result)
-      setShown({ key: resultKey, result })
+      lastIgnoredPathResults.keep(
+        fileExplorerWorktreeSnapshotKey(activeWorktreeId, worktreePath),
+        result
+      )
+      setIgnoredPathResult(result)
     }
     const refresh = (): void => {
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
@@ -133,7 +130,7 @@ export function useFileExplorerIgnoredPaths({
   return getEffectiveFileExplorerIgnoredPaths({
     activeWorktreeId,
     canLoadIgnoredPaths,
-    ignoredPathResult: shown.result,
+    ignoredPathResult,
     worktreePath
   })
 }

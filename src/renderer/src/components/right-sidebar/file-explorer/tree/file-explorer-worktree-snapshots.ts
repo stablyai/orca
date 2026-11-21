@@ -1,3 +1,5 @@
+import { useAppStore } from '@/store/index'
+import { getFileExplorerOperationOwner } from '../navigation/file-explorer-operation-owner'
 import type { DirCache } from './file-explorer-types'
 
 // Bounds what Files keeps for workspaces it is not showing: the few most recent, listings only.
@@ -32,12 +34,16 @@ export function createFileExplorerWorktreeSnapshots<T>(): FileExplorerWorktreeSn
   }
 }
 
-// The id keeps a local and a remote workspace at the same path apart.
+// The operation owner keeps folder twins on different hosts apart, as FileExplorer's own key does.
 export function fileExplorerWorktreeSnapshotKey(
   worktreeId: string | null | undefined,
   worktreePath: string
 ): string {
-  return JSON.stringify([worktreeId ?? null, worktreePath])
+  return JSON.stringify([
+    worktreeId ?? null,
+    worktreePath,
+    getFileExplorerOperationOwner(worktreeId)
+  ])
 }
 
 /** The workspace a tree's listings were read for. */
@@ -49,9 +55,18 @@ export function fileExplorerTreeOwner(
   worktreeId: string | null | undefined,
   worktreePath: string | null
 ): FileExplorerTreeOwner | null {
-  return worktreePath
-    ? { key: fileExplorerWorktreeSnapshotKey(worktreeId, worktreePath), rootPath: worktreePath }
-    : null
+  if (!worktreePath) {
+    return null
+  }
+  // Followed folder links survive rereads, so a tree listed under the other setting is not reused.
+  const followSymlinks = useAppStore.getState().settings?.followSymlinkedDirectories ?? false
+  return {
+    key: JSON.stringify([
+      fileExplorerWorktreeSnapshotKey(worktreeId, worktreePath),
+      followSymlinks
+    ]),
+    rootPath: worktreePath
+  }
 }
 
 /** Keeps a tree whose root listed; a pending or failed root has nothing worth repainting. */
@@ -71,8 +86,10 @@ export function switchFileExplorerTree(
   leavingCache: Record<string, DirCache>,
   next: FileExplorerTreeOwner | null
 ): Record<string, DirCache> | undefined {
+  // Taken first so keeping the departing tree cannot evict the one being returned to.
+  const restored = next ? treeSnapshots.take(next.key) : undefined
   if (leaving?.key !== next?.key) {
     keepFileExplorerTree(leaving, leavingCache)
   }
-  return next ? treeSnapshots.take(next.key) : undefined
+  return restored
 }

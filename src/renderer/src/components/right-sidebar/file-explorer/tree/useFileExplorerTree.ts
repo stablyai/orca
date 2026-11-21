@@ -191,7 +191,10 @@ export function useFileExplorerTree(
   )
 
   const refreshTree = useCallback(
-    async (options?: { wakeWslDistro?: boolean }): Promise<FileExplorerTreeRefreshOutcome> => {
+    async (options?: {
+      wakeWslDistro?: boolean
+      recheckListedOnly?: boolean
+    }): Promise<FileExplorerTreeRefreshOutcome> => {
       if (!worktreePath) {
         // No read means superseded; root-unreadable tells callers to drop pending refreshes.
         return 'superseded'
@@ -226,6 +229,11 @@ export function useFileExplorerTree(
       // Exclude the root already force-loaded above to avoid reading it twice.
       const expandedDirs = Array.from(expanded)
         .filter((dirPath) => dirPath !== worktreePath)
+        // The expansion effect already loads unlisted and empty folders (decideExpandedDirLoad).
+        .filter((dirPath) => {
+          const cached = dirCacheRef.current[dirPath]
+          return !options?.recheckListedOnly || Boolean(cached?.children.length || cached?.error)
+        })
         .map((dirPath) => ({ dirPath, depth: fileExplorerDirDepth(worktreePath, dirPath) }))
       const allDirsCommitted = await refreshFileExplorerExpandedDirs({
         dirs: expandedDirs,
@@ -298,7 +306,7 @@ export function useFileExplorerTree(
       setRootError(null)
       if (snapshot) {
         // Nothing applied this workspace's file changes while it was away, so recheck the snapshot.
-        void refreshTree({ wakeWslDistro: options?.wakeWslDistro })
+        void refreshTree({ wakeWslDistro: options?.wakeWslDistro, recheckListedOnly: true })
       } else if (worktreePath) {
         void loadDir(worktreePath, -1, { force: true, wakeWslDistro: options?.wakeWslDistro })
       }
