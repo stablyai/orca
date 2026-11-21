@@ -24,8 +24,10 @@ export async function reserveGroupTurns(
   history: BotGroupMessage[]
   completed: Awaited<ReturnType<typeof completedGroupReplies>>
 }> {
-  const history = collectRemoteAnswers(groups, groups.store.roomMessages(group.id, threadId, 40))
-  const completed = await completedGroupReplies(groups, history)
+  const page = groups.store.roomMessages(group.id, threadId, 40)
+  const completed = await completedGroupReplies(groups, page)
+  // Remote answers are merged after that read, so one that arrived during it is in this context.
+  const history = collectRemoteAnswers(groups, page)
   const contexts = new Map<string, string>()
   const turns = botIds.flatMap((botId) => {
     const bot = bots.find((bot) => bot.id === botId)

@@ -89,8 +89,11 @@ export function remoteVisibleHistory(
   )
 }
 
+// The whole path, from its root, even when a folder name has spaces ("/Users/Alice Smith/…"); a
+// path written without its root is masked from its first character.
 const STORE_PATH = new RegExp(
-  `[^\\s"]*${AGENT_SESSION_ATTACHMENTS_DIR_NAME}[\\\\/]+[0-9a-f-]{36}[^\\s"]*`,
+  `(?:(?<=^|[\\s"'(\\[])(?:~|[A-Za-z]:)?(?:[\\\\/][^\\n"\\\\/]*)+?[\\\\/]|[^\\s"]*)` +
+    `${AGENT_SESSION_ATTACHMENTS_DIR_NAME}[\\\\/]+[0-9a-f-]{36}[^\\s"]*`,
   'gi'
 )
 

@@ -442,6 +442,16 @@ describe('what a remote member is sent and shown', () => {
     const body = String(base.delivered.at(-1)?.body)
     expect(body).toContain('Saved [image]')
     expect(body).not.toContain('agent-session-attachments')
+    // A folder name with a space doesn't leave the start of the path behind.
+    const second = await post(base, group, '@Atlas and another')
+    arrive(base, group.id, second.remoteAsks![0].requestId, {
+      answer:
+        'See /Users/Alice Smith/.orca/agent-session-attachments/0b5c6f0e-8e8e-4f0e-9a9a-0123456789ab/a.png please'
+    })
+    await post(base, group, '@Beta and that one?')
+    const spaced = String(base.delivered.at(-1)?.body)
+    expect(spaced).toContain('See [image] please')
+    expect(spaced).not.toContain('Alice')
   })
 
   it('hands a post over once, however often its send is replayed', async () => {
