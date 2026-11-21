@@ -399,13 +399,35 @@ describe('shared Codex app-servers', () => {
     }
     expect(server.readingPaused).toBe(true)
     draining = true
-    // About 1 MiB a second: slow, but always moving.
+    // About 5 MiB a second: slower than its frames arrive, but always moving.
     for (let i = 0; i < 30 && server.readingPaused; i += 1) {
       connA.resumeReading?.()
-      await vi.advanceTimersByTimeAsync(1_000)
+      await vi.advanceTimersByTimeAsync(200)
     }
     expect(a.exits).toEqual([])
     expect(b.exits).toEqual([])
+    expect(server.readingPaused).toBe(false)
+  })
+
+  it('holds a waiting chat at most a few seconds behind a chat that catches up very slowly', async () => {
+    vi.useFakeTimers()
+    const { server, a, connA, threadA, threadB, megabyte } = await backloggedPair()
+    server.handlers.onNotification?.('turn/started', { threadId: threadB, turn: { id: 'tb' } })
+    const handlers = a.handlers.onNotification
+    a.handlers.onNotification = (method, params) => {
+      handlers?.(method, params)
+      connA.pauseReading?.()
+    }
+    connA.pauseReading?.()
+    for (let i = 0; i < 33; i += 1) {
+      megabyte(threadA)
+    }
+    // 1 MiB a second, progress in every grace, would hold the server for 17 s.
+    for (let i = 0; i < 10 && a.exits.length === 0; i += 1) {
+      connA.resumeReading?.()
+      await vi.advanceTimersByTimeAsync(1_000)
+    }
+    expect(a.exits).toHaveLength(1)
     expect(server.readingPaused).toBe(false)
   })
 

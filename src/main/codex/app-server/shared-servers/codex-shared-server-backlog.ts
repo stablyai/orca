@@ -5,6 +5,9 @@ export const CODEX_SHARED_SERVER_BACKLOG_BYTES = 32 * 1024 * 1024
 /** How long a waiting chat gives the chats holding the backlog to make progress before they're
  *  dropped; well inside a Stop's 5 s interrupt timeout. */
 export const CODEX_SHARED_SERVER_SHED_GRACE_MS = 1_500
+/** However steady its progress, a backlog holds a waiting chat no longer than this: inside a
+ *  Stop's 5 s interrupt timeout, so a co-tenant's Stop is never failed by it. */
+const MAX_SHED_GRACE_MS = 4_500
 
 type BacklogLease = {
   /** Owed a reply or a running turn's frames, or cleaning up: a paused reader would stall it. */
@@ -27,6 +30,8 @@ export class CodexSharedServerBacklog {
   private shedding = false
   private grace: ReturnType<typeof setTimeout> | undefined
   private graceFrom = 0
+  /** When the current wait began; null while nobody waits on the backlog. */
+  private graceSince: number | null = null
 
   constructor(
     private readonly reader: () => Pick<
@@ -60,6 +65,7 @@ export class CodexSharedServerBacklog {
   dispose(): void {
     clearTimeout(this.grace)
     this.grace = undefined
+    this.graceSince = null
     this.bytes.clear()
     this.waiters.clear()
     this.total = 0
@@ -71,8 +77,10 @@ export class CodexSharedServerBacklog {
     if (this.total > (this.paused ? half : CODEX_SHARED_SERVER_BACKLOG_BYTES)) {
       this.setPaused(true)
       if ([...this.leases, ...this.waiters].some((lease) => lease.waiting)) {
-        // A grace that saw the backlog shrink starts over: catching up slowly isn't stalling.
-        if (graceOver && this.total >= this.graceFrom) {
+        // A grace that saw the backlog shrink starts over, up to a cap: catching up isn't stalling.
+        this.graceSince ??= Date.now()
+        const capped = Date.now() - this.graceSince >= MAX_SHED_GRACE_MS
+        if (graceOver && (this.total >= this.graceFrom || capped)) {
           this.shedUntil(half)
         } else if (!this.grace) {
           this.graceFrom = this.total
@@ -86,6 +94,7 @@ export class CodexSharedServerBacklog {
     if (this.total <= half) {
       clearTimeout(this.grace)
       this.grace = undefined
+      this.graceSince = null
       this.setPaused(false)
     }
   }
