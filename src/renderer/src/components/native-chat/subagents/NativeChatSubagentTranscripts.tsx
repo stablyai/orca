@@ -1,3 +1,4 @@
+import { NativeChatWaitingAgentMailContext } from '../queue/NativeChatWaitingAgentMailActions'
 import { slackPeopleOf } from '../../../../../shared/connectors/slack-mention-tokens'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { cn } from '@/lib/class-names'
@@ -105,20 +106,23 @@ export function NativeChatSubagentTranscripts({
           >
             {/* `/btw` forks from the conversation, never from a subagent's rows. */}
             <NativeChatSideChatForkPointContext value={undefined}>
-              <NativeChatMessageList
-                key={shown.agentId}
-                session={props.session}
-                journalItems={props.journalItems}
-                journalSubmissions={props.journalSubmissions}
-                journalLatestTurn={props.journalLatestTurn}
-                subagentRoster={props.subagentRoster}
-                subagentView={shown}
-                isVisible={isVisible}
-                isWorking={false}
-                expandSignal={props.expandSignal}
-                structuredAttachments={props.structuredAttachments}
-                runtimeContext={props.runtimeContext}
-              />
+              {/* The conversation's waiting mail draws in the conversation, not in a subagent's rows. */}
+              <NativeChatWaitingAgentMailContext value={null}>
+                <NativeChatMessageList
+                  key={shown.agentId}
+                  session={props.session}
+                  journalItems={props.journalItems}
+                  journalSubmissions={props.journalSubmissions}
+                  journalLatestTurn={props.journalLatestTurn}
+                  subagentRoster={props.subagentRoster}
+                  subagentView={shown}
+                  isVisible={isVisible}
+                  isWorking={false}
+                  expandSignal={props.expandSignal}
+                  structuredAttachments={props.structuredAttachments}
+                  runtimeContext={props.runtimeContext}
+                />
+              </NativeChatWaitingAgentMailContext>
             </NativeChatSideChatForkPointContext>
           </div>
         ) : null}

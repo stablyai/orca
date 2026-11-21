@@ -25,10 +25,10 @@ import type { StructuredAgentSessionPendingSend } from '../session/structured/de
 import {
   headSteerableQueuedMessageCard,
   projectQueuedMessageCards,
-  queuedMessagesQueuePause,
-  waitingAgentMailEchoes,
   type QueuedMessageCard
 } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
+import { useStructuredAgentSessionWaitingAgentMail } from './use-structured-agent-session-waiting-agent-mail'
+import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import {
   pendingQueueSendsOnTheirWay,
   sendingQueuedMessageCards
@@ -69,6 +69,10 @@ export type StructuredAgentSessionQueuedMessagesController = {
   isWorking: boolean
   /** The host still holds this message: a card here, or another agent's mail the transcript draws. */
   holds: (messageId: string) => boolean
+  /** Other agents' waiting mail, drawn after the chat's live activity instead of as cards. */
+  agentMail: readonly NativeChatMessage[]
+  /** Whether a waiting agent message offers Edit, which opens it in the queue's editor. */
+  agentMailEditable: (messageId: string) => boolean
   /** A Stop is ending the turn: nothing steers into it. */
   stopping: boolean
 }
@@ -108,14 +112,13 @@ export function useStructuredAgentSessionQueuedMessages(args: {
   const { admit, capturePresentation, isWorking, queuePause } = args
   const sending = args.sending ?? NO_SENDS
 
-  const cards = useMemo(
+  const allCards = useMemo(
     () => [
       ...projectQueuedMessageCards(queuedMessages, submissions, {
         // A command card offers no send while the agent works.
         agentWorking: isWorking,
         queuePaused: queuePause !== null,
-        steersInTranscript: true,
-        agentMailInTranscript: true
+        steersInTranscript: true
       }),
       ...sendingQueuedMessageCards(
         pendingQueueSendsOnTheirWay(
@@ -128,6 +131,24 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     ],
     [isWorking, sending, queuePause, queuedMessages, submissions]
   )
+  const editing = useStructuredAgentSessionQueuedEdit({
+    transport: args.editTransport,
+    messages: queuedMessages,
+    cards: allCards,
+    submissions,
+    composerScopeKey,
+    promptOpen: hasPendingPrompt
+  })
+  const editingMessageId = editing.editor?.messageId
+  const mail = useStructuredAgentSessionWaitingAgentMail({
+    queuedMessages,
+    submissions,
+    queuePause,
+    allCards,
+    editingMessageId,
+    editCapable: editing.capable
+  })
+  const { cards, pause } = mail
   const reordered = useStructuredAgentSessionQueuedReorder(
     cards,
     args.editTransport,
@@ -195,16 +216,6 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     [capturePresentation, mutate, run]
   )
 
-  const editing = useStructuredAgentSessionQueuedEdit({
-    transport: args.editTransport,
-    messages: queuedMessages,
-    cards,
-    submissions,
-    composerScopeKey,
-    promptOpen: hasPendingPrompt
-  })
-
-  const editingMessageId = editing.editor?.messageId
   const steerHead = useCallback((): boolean => {
     if (!enabled) {
       return false
@@ -236,23 +247,6 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     [mutate, run]
   )
 
-  const waitingAgentMailIds = useMemo(
-    () =>
-      new Set(
-        waitingAgentMailEchoes(queuedMessages, submissions).map((echo) => echo.clientMessageId)
-      ),
-    [queuedMessages, submissions]
-  )
-  const pause = useMemo(
-    () => queuedMessagesQueuePause(cards, queuePause, waitingAgentMailIds.size > 0),
-    [cards, queuePause, waitingAgentMailIds]
-  )
-  const holds = useCallback(
-    (messageId: string): boolean =>
-      waitingAgentMailIds.has(messageId) ||
-      reordered.cards.some((card) => card.messageId === messageId),
-    [reordered.cards, waitingAgentMailIds]
-  )
   const pending = useCallback(
     (messageId: string): QueuedMessagesPendingAction | null => inFlight.get(messageId) ?? null,
     [inFlight]
@@ -325,7 +319,9 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     editor: editing.editor,
     steerHead: headSteers ? steerHead : undefined,
     isWorking,
-    holds,
-    stopping: args.stopping
+    holds: mail.holds,
+    stopping: args.stopping,
+    agentMail: mail.agentMail,
+    agentMailEditable: mail.agentMailEditable
   }
 }

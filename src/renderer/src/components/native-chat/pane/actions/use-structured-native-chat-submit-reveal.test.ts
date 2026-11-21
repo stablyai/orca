@@ -33,13 +33,15 @@ it('sends no queued card and retries no start on a host held for its permission 
     steerHead: vi.fn(() => true),
     isWorking: false,
     holds: () => false,
-    stopping: false
+    stopping: false,
+    agentMail: [],
+    agentMailEditable: () => false
   }
   const controller = {
     capturePresentation: () => () => true,
     respond: vi.fn(async () => null),
     queuedMessages,
-    rewind: {} as Parameters<typeof useStructuredNativeChatSubmitReveal>[0]['rewind']
+    rewind: { surface: undefined }
   }
   const retryLaunch = vi.fn()
   useAppStore.setState({

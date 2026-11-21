@@ -1,21 +1,28 @@
 import { createContext, useContext } from 'react'
-import { CornerDownRight, Send, Trash2 } from 'lucide-react'
+import { CornerDownRight, Pencil, Send, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
+import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import { NativeChatPendingIcon } from './NativeChatPendingIcon'
 import { queuedMessageCardSendNow } from './NativeChatQueuedMessageCard'
 import type { StructuredAgentSessionQueuedMessagesController } from './use-structured-agent-session-queued-messages'
 
-type WaitingAgentMailActions = Pick<
+/** Other agents' waiting mail and what a person can do with it before the agent takes it. */
+export type NativeChatWaitingAgentMail = Pick<
   StructuredAgentSessionQueuedMessagesController,
-  'steer' | 'remove' | 'pending' | 'isWorking' | 'stopping'
->
+  'steer' | 'remove' | 'pending' | 'isWorking' | 'stopping' | 'edit'
+> & {
+  rows: readonly NativeChatMessage[]
+  /** Whether a row offers Edit, which opens it in the queue's editor above the composer. */
+  editable: (messageId: string) => boolean
+}
 
-/** The chat's queue actions, for other agents' mail the transcript draws while it waits. */
-export const NativeChatWaitingAgentMailContext = createContext<WaitingAgentMailActions | null>(null)
+export const NativeChatWaitingAgentMailContext = createContext<NativeChatWaitingAgentMail | null>(
+  null
+)
 
-/** Steer (Send while idle) and Delete on a waiting agent message, as its queued card offered. */
+/** Steer (Send while idle), Edit and Delete on a waiting agent message, as its queued card offered. */
 export function NativeChatWaitingAgentMailActions({
   queuedMessageId
 }: {
@@ -29,6 +36,7 @@ export function NativeChatWaitingAgentMailActions({
   const pending = actions.pending(queuedMessageId)
   const busy = pending !== null
   const sendNow = queuedMessageCardSendNow({ hold: 'turn' }, actions.isWorking, t)
+  const editLabel = t('components.native-chat.queuedMessages.editMessage', 'Edit message')
   const deleteLabel = t('components.native-chat.queuedMessages.delete', 'Delete')
   return (
     <span className="flex items-center gap-0.5">
@@ -55,6 +63,25 @@ export function NativeChatWaitingAgentMailActions({
           {sendNow.hint}
         </TooltipContent>
       </Tooltip>
+      {actions.editable(queuedMessageId) ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label={editLabel}
+              disabled={busy}
+              onClick={() => void actions.edit(queuedMessageId)}
+            >
+              <Pencil className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            {editLabel}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button

@@ -30,8 +30,7 @@ import {
   type AgentMessageSource
 } from '../journal/agent-session-message-source'
 import { handedOffQueuedMessageIds } from './structured-agent-session-draft-hand-off'
-import type { StructuredAgentSessionOptimisticMessage } from './structured-agent-session-message-projection'
-import { structuralValuesEqual } from '../../collections/structural-value-equality'
+import { queuedMessageIsWaitingAgentMail } from './structured-agent-session-waiting-agent-mail'
 import {
   NATIVE_CHAT_IMAGE_LABEL_ENGLISH,
   nativeChatImageLabel,
@@ -90,72 +89,6 @@ type QueuedMessageCardSession = {
   agentWorking?: boolean
   /** Draw a steer on its way into the running turn as the person's message, not as a card. */
   steersInTranscript?: true
-  /** Draw another agent's waiting message at the transcript's end, not as a card. */
-  agentMailInTranscript?: true
-}
-
-/** Another agent's message waiting its turn: drawn at the transcript's end in its delivered shape.
- *  One that failed to send or came back stays a card, where its caption says why. */
-export function queuedMessageIsWaitingAgentMail(message: AgentSessionQueuedMessage): boolean {
-  return (
-    message.state === 'waiting' &&
-    !message.paused &&
-    message.body.command === undefined &&
-    readAgentMessageSource(message.body.from) !== undefined
-  )
-}
-
-/** Waiting agent mail as transcript rows, in queue order, until a hand-off's own row replaces it. */
-export function waitingAgentMailEchoes(
-  queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined,
-  submissions: readonly AgentJournalSubmission[]
-): StructuredAgentSessionOptimisticMessage[] {
-  const waiting = (queuedMessages ?? []).filter(queuedMessageIsWaitingAgentMail)
-  if (waiting.length === 0) {
-    return []
-  }
-  const handedOff = handedOffQueuedMessageIds(
-    submissions.filter((submission) => submission.dispatchState !== 'rejected')
-  )
-  return waiting
-    .filter((message) => !handedOff.has(message.messageId))
-    .sort((left, right) => left.position - right.position)
-    .map((message) => ({
-      clientMessageId: message.messageId,
-      body: message.body,
-      queuedAt: null,
-      waitingAgentMail: true as const
-    }))
-}
-
-/** One chat's echoes with its waiting agent mail after them. While the mail is unchanged it returns
- *  the previous list, so a queue change elsewhere keeps the transcript's incremental projection. */
-export function createTranscriptEchoes(): (
-  sends: readonly StructuredAgentSessionOptimisticMessage[],
-  queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined,
-  submissions: readonly AgentJournalSubmission[]
-) => readonly StructuredAgentSessionOptimisticMessage[] {
-  let previous: readonly StructuredAgentSessionOptimisticMessage[] = []
-  return (sends, queuedMessages, submissions) => {
-    const mail = waitingAgentMailEchoes(queuedMessages, submissions)
-    const next = mail.length > 0 ? [...sends, ...mail] : sends
-    const same =
-      previous.length === next.length &&
-      next.every((entry, index) => {
-        const before = previous[index]!
-        return (
-          entry === before ||
-          (entry.waitingAgentMail === true &&
-            before.waitingAgentMail === true &&
-            entry.clientMessageId === before.clientMessageId &&
-            structuralValuesEqual(entry.body, before.body))
-        )
-      })
-    if (!same) {
-      previous = next
-    }
-    return previous
-  }
 }
 
 /** A person's steer the running turn will take in: never a card where the transcript draws it. */
@@ -184,9 +117,6 @@ export function projectQueuedMessageCards(
   )
   const ordered = [...(queuedMessages ?? [])]
     .filter((message) => !session.steersInTranscript || !queuedMessageSteersIn(message, session))
-    .filter(
-      (message) => !session.agentMailInTranscript || !queuedMessageIsWaitingAgentMail(message)
-    )
     // Orca's own sends draw nothing in the chat, so they wait unseen; one on hold needs the person, so it shows.
     .filter(
       (message) =>

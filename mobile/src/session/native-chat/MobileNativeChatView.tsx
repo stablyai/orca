@@ -1,3 +1,4 @@
+import { MobileWaitingAgentMailRows } from './transcript/agent-messages/MobileWaitingAgentMailRows'
 import { MobileWaitingAgentMail } from './transcript/agent-messages/MobileWaitingAgentMailActions'
 import { MobileBotCardSendContext } from './transcript/bot-cards/mobile-bot-card-host'
 import { mobileNativeChatOtherBotCard } from './transcript/bot-cards/mobile-native-chat-bot-cards'
@@ -270,7 +271,12 @@ export function MobileNativeChatView({
   const header = mobileNativeChatListHeader(hasMore, olderPages, loadEarlier)
   // Changing text size, face or spacing relays out every row, so preserve the page’s reading anchor.
   const layoutKey = `${fontScale}:${font}:${lineSpacing}`
-  const footer = mobileNativeChatListFooter(liveStatus, turns.waitingRows, renderItem)
+  const footer = mobileNativeChatListFooter(
+    liveStatus,
+    turns.waitingRows,
+    renderItem,
+    waitingAgentMail?.rows.length ? <MobileWaitingAgentMailRows fontScale={fontScale} /> : undefined
+  )
   const emptyState = mobileNativeChatEmptyState(status, agent, error, sessionLive, clearing)
 
   const composerPlaceholder = mobileNativeChatComposerPlaceholder(

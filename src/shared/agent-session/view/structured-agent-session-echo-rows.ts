@@ -2,11 +2,10 @@ import type { AgentJournalSubmission } from '../journal/agent-session-journal-ty
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
 import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../requests/structured-agent-session-send-evidence'
 import type { NativeChatMessage } from '../../native-chat/native-chat-types'
-import { nativeChatMessageSenderFields } from '../../native-chat-message-sender-fields'
 import type { StructuredAgentSessionOptimisticMessage } from './structured-agent-session-message-projection'
 
 /** Client echoes after the conversation until host rows supersede them under either client or
- *  provider IDs; another agent's waiting mail draws in its delivered shape, marked queued. */
+ *  provider IDs. */
 export function structuredAgentSessionEchoRows(
   optimistic: readonly StructuredAgentSessionOptimisticMessage[],
   journalled: ReadonlySet<string>,
@@ -29,18 +28,6 @@ export function structuredAgentSessionEchoRows(
       const hostPending =
         submission?.dispatchState === 'pending' &&
         submission.reason !== STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING
-      if (entry.waitingAgentMail) {
-        return {
-          id,
-          role: 'user',
-          source: 'transcript',
-          timestamp: null,
-          blocks: entry.body.blocks,
-          ...nativeChatMessageSenderFields(entry.body, 'user'),
-          queued: true,
-          queuedMessageId: entry.clientMessageId
-        }
-      }
       return {
         id,
         role: 'user',

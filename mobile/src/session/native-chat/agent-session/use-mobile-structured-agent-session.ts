@@ -130,9 +130,7 @@ export function useMobileStructuredAgentSession(
     onSendError,
     confirmRecorded: useMobileStructuredSendRecorded(client, sessionId, hostSupport)
   })
-  const transcript = useMobileStructuredTranscript(agent, state, sends.optimistic, sessionKey, {
-    queuedMessages
-  })
+  const transcript = useMobileStructuredTranscript(agent, state, sends.optimistic, sessionKey)
   const { clearing, transcriptItems, messages, receipts } = transcript
   const timing = useMobileStructuredAgentTurnTiming({ ...state, items: transcriptItems }, turnId)
   const isWorking = mobileStructuredAgentSessionWorking(state)

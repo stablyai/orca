@@ -46,8 +46,6 @@ export type StructuredAgentSessionOptimisticMessage = {
   options?: Readonly<Record<string, string>>
   /** Sent while the chat read Stopping: drawn after the turn being stopped. */
   sentWhileStopping?: true
-  /** Another agent's message the host holds until the agent takes it; `clientMessageId` is its queued id. */
-  waitingAgentMail?: true
 }
 
 export function structuredAgentSessionCommandItemIds(

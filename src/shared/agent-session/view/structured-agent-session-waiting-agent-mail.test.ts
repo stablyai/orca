@@ -19,12 +19,13 @@ import {
   type StructuredAgentSessionOptimisticMessage
 } from './structured-agent-session-message-projection'
 import {
-  createTranscriptEchoes,
   projectQueuedMessageCards,
-  queuedMessagesQueuePause,
-  waitingAgentMailEchoes
+  queuedMessagesQueuePause
 } from './structured-agent-session-queued-cards'
-import { nativeChatMessagesWaitingBehindLiveTurn } from '../../native-chat/transcript/turns/native-chat-messages-waiting-behind-live-turn'
+import {
+  composerQueuedCards,
+  createWaitingAgentMailRows
+} from './structured-agent-session-waiting-agent-mail'
 
 const FROM: AgentMessageSource = {
   kind: 'agent',
@@ -103,32 +104,36 @@ function sentRow(queuedMessageId: string, sequence: number): AgentJournalRenderI
   }
 }
 
-/** What a chat draws for the host's published state: transcript rows and the composer's cards. */
+/** What a chat draws for the host's published state: the transcript's rows, then the waiting mail
+ *  drawn after its live activity, and the composer's cards. */
 function drawn(host: {
   queued?: AgentSessionQueuedMessage[]
   submissions?: AgentJournalSubmission[]
   items?: AgentJournalRenderItem[]
   sends?: StructuredAgentSessionOptimisticMessage[]
   queuePaused?: boolean
+  editing?: string
 }) {
   const { queued = [], submissions = [], items = [], sends = [] } = host
-  const rows = projectStructuredAgentSessionMessages(
-    items,
-    [...sends, ...waitingAgentMailEchoes(queued, submissions)],
-    submissions
+  const mail = createWaitingAgentMailRows()(queued, submissions)
+  const { cards, agentMail } = composerQueuedCards(
+    projectQueuedMessageCards(queued, submissions, {
+      agentWorking: true,
+      queuePaused: host.queuePaused === true
+    }),
+    mail,
+    host.editing
   )
   return {
-    rows: rows.map((row) => ({
-      id: row.id,
-      by: row.from ? 'agent' : 'person',
-      waiting: row.queued === true,
-      actsOn: agentMessageWaitingQueuedId(row)
-    })),
-    cards: projectQueuedMessageCards(queued, submissions, {
-      agentWorking: true,
-      queuePaused: host.queuePaused === true,
-      agentMailInTranscript: true
-    }).map((each) => each.messageId)
+    rows: [...projectStructuredAgentSessionMessages(items, sends, submissions), ...agentMail].map(
+      (row) => ({
+        id: row.id,
+        by: row.from ? 'agent' : 'person',
+        waiting: row.queued === true,
+        actsOn: agentMessageWaitingQueuedId(row)
+      })
+    ),
+    cards: cards.map((each) => each.messageId)
   }
 }
 
@@ -280,32 +285,20 @@ describe("worker mail, which the host delivers past a Stop and ahead of the pers
   })
 })
 
-it("keeps the transcript's echoes across a queue change that leaves the waiting mail alone", () => {
-  const echoes = createTranscriptEchoes()
-  const before = echoes([], [card('mail', 1), personCard('a', 2), personCard('b', 3)], [])
+it('keeps the same rows across a queue change that leaves the waiting mail alone', () => {
+  const rowsOf = createWaitingAgentMailRows()
+  const before = rowsOf([card('mail', 1), personCard('a', 2), personCard('b', 3)], [])
   // A fresh publication of the same mail, after the person reorders their own follow-ups.
-  const after = echoes([], [card('mail', 1), personCard('b', 2), personCard('a', 3)], [])
+  const after = rowsOf([card('mail', 1), personCard('b', 2), personCard('a', 3)], [])
   expect(after).toBe(before)
-  expect(echoes([], [card('mail', 1), card('more', 2)], []).length).toBe(2)
+  expect(rowsOf([card('mail', 1), card('more', 2)], []).length).toBe(2)
 })
 
-it("draws waiting agent mail after the running turn's live activity, not inside it", () => {
-  const working: AgentJournalRenderItem = {
-    itemId: 'orca:reply',
-    revision: 0,
-    sequence: 4,
-    observedAt: 4,
-    body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'working' }] },
-    turnScope: { kind: 'thread' }
-  }
-  const behind = nativeChatMessagesWaitingBehindLiveTurn(
-    [
-      { id: 'orca:reply', role: 'assistant', journalPosition: { sequence: 4, index: 0 } },
-      { id: 'orca:mail', role: 'user', queued: true, from: FROM }
-    ],
-    [working]
-  )
-  expect([...behind]).toEqual(['orca:mail'])
+it('Edit opens a waiting message in the queue editor, and its row steps aside meanwhile', () => {
+  expect(drawn({ queued: [card('mail', 1), card('other', 2)], editing: 'mail' })).toEqual({
+    rows: [waitingRow('other')],
+    cards: ['mail']
+  })
 })
 
 it('keeps Resume while a paused queue holds only agent mail the transcript draws', () => {

@@ -13,8 +13,10 @@ import { useNativeChatTabOwnerWorktreeId } from '@/components/native-chat/pane/o
 import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
 import type { NativeChatRewindSurface } from '@/components/native-chat/messages/actions/use-native-chat-rewind-host'
 import type { NativeChatPaneForks } from '@/components/native-chat/messages/actions/use-native-chat-fork'
-import { NativeChatWaitingAgentMailContext } from '@/components/native-chat/queue/NativeChatWaitingAgentMailActions'
-import type { StructuredAgentSessionQueuedMessagesController } from '@/components/native-chat/queue/use-structured-agent-session-queued-messages'
+import {
+  NativeChatWaitingAgentMailContext,
+  type NativeChatWaitingAgentMail
+} from '@/components/native-chat/queue/NativeChatWaitingAgentMailActions'
 
 /** What the pane's transcript rows offer: rewind on prompts, fork on responses, the chat a
  *  "Forked from" divider opens, and Steer and Delete on other agents' waiting mail. */
@@ -27,7 +29,7 @@ export function NativeChatRowActionsProvider({
   pane: Pick<NativeChatStructuredViewProps, 'tabId' | 'agent' | 'target'>
   chat: {
     rewind: { surface: NativeChatRewindSurface | undefined }
-    queuedMessages: StructuredAgentSessionQueuedMessagesController
+    waitingAgentMail: NativeChatWaitingAgentMail
   }
   /** The session's fork, shared with its `/fork` and `/btw` commands. */
   forks: NativeChatPaneForks
@@ -62,7 +64,7 @@ export function NativeChatRowActionsProvider({
         <NativeChatSideChatForkPointContext.Provider value={forks.sideChat?.reportForkPoint}>
           <NativeChatForkedFromContext.Provider value={openSource}>
             <NativeChatForkSlotContext.Provider value>
-              <NativeChatWaitingAgentMailContext.Provider value={chat.queuedMessages}>
+              <NativeChatWaitingAgentMailContext.Provider value={chat.waitingAgentMail}>
                 {children}
               </NativeChatWaitingAgentMailContext.Provider>
             </NativeChatForkSlotContext.Provider>
