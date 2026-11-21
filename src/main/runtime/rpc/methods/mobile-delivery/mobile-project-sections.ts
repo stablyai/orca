@@ -19,6 +19,9 @@ export const MOBILE_PROJECT_SECTIONS_METHODS = [
               requireSwitchedOn(runtime.pairedServerRows).catalogs()
             )
           }
-        : readMobileProjectSections()
+        : // A headless host has no window to publish the catalog, so main builds its own.
+          runtime.hasHeadlessAuthority()
+          ? { catalog: readSidebarProjectCatalog(runtime.requireStore(), []) }
+          : readMobileProjectSections()
   })
 ]
