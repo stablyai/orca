@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store/index'
 import { getFileExplorerOperationOwner } from '../navigation/file-explorer-operation-owner'
-import type { DirCache } from './file-explorer-types'
+import type { DirCache, FileExplorerTreeRefreshOptions } from './file-explorer-types'
 
 // Bounds what Files keeps for workspaces it is not showing: the few most recent, listings only.
 const MAX_WORKTREE_SNAPSHOTS = 4
@@ -92,4 +92,19 @@ export function switchFileExplorerTree(
     keepFileExplorerTree(leaving, leavingCache)
   }
   return restored
+}
+
+/** Expanded folders a tree refresh rereads; the root is read on its own first. */
+export function foldersToRecheck(
+  expanded: ReadonlySet<string>,
+  rootPath: string,
+  dirCache: Readonly<Record<string, DirCache>>,
+  options: FileExplorerTreeRefreshOptions | undefined
+): string[] {
+  // On a restore the expansion effect reads unlisted and empty folders (decideExpandedDirLoad).
+  return Array.from(expanded).filter(
+    (dirPath) =>
+      dirPath !== rootPath &&
+      (!options?.restoredSnapshot || Boolean(dirCache[dirPath]?.children.length))
+  )
 }

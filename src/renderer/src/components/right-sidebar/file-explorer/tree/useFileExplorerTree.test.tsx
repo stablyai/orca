@@ -24,19 +24,27 @@ vi.mock('./file-explorer-directory-listing', async (importOriginal) => ({
 
 import { useFileExplorerTree } from './useFileExplorerTree'
 
-const EXPANDED = new Set<string>()
 let tree: UseFileExplorerTreeResult | null = null
 let root: Root | null = null
 
-function TreeProbe(): null {
-  tree = useFileExplorerTree('/repo', EXPANDED, 'repo-1')
+function TreeProbe(props: { worktreeId: string; expanded: Set<string> }): null {
+  tree = useFileExplorerTree('/repo', props.expanded, props.worktreeId)
   return null
 }
 
-async function mountFilesPanel(): Promise<void> {
+async function mountFilesPanel(worktreeId = 'repo-1', expanded = new Set<string>()): Promise<void> {
   root = createRoot(document.createElement('div'))
-  await act(async () => root!.render(createElement(TreeProbe)))
+  await act(async () => root!.render(createElement(TreeProbe, { worktreeId, expanded })))
   await act(async () => tree!.resetAndLoad())
+}
+
+function answerLatest(entries: { name: string; isDirectory: boolean }[]): Promise<void> {
+  return act(async () =>
+    reads.answers.at(-1)!({
+      entries: entries.map((entry) => ({ ...entry, isSymlink: false })),
+      operationOwner: { kind: 'local' }
+    })
+  )
 }
 
 afterEach(() => {
@@ -60,5 +68,32 @@ describe('useFileExplorerTree across panel visits', () => {
 
     expect(tree!.dirCache['/repo']?.children.map((node) => node.name)).toEqual(['src'])
     expect(reads.dirs).toEqual(['/repo', '/repo'])
+  })
+
+  it('rechecks expanded folders later when a watcher read supersedes the reopen', async () => {
+    const expanded = new Set(['/repo/src'])
+    await mountFilesPanel('repo-2', expanded)
+    await answerLatest([{ name: 'src', isDirectory: true }])
+    act(() => {
+      void tree!.loadDir('/repo/src', 0)
+    })
+    await answerLatest([{ name: 'old.ts', isDirectory: false }])
+    act(() => root!.unmount())
+    root = null
+
+    await mountFilesPanel('repo-2', expanded)
+    const reopenRead = reads.answers.at(-1)!
+    act(() => {
+      void tree!.refreshDir('/repo')
+    })
+    await answerLatest([{ name: 'src', isDirectory: true }])
+    await act(async () =>
+      reopenRead({
+        entries: [{ name: 'src', isDirectory: true, isSymlink: false }],
+        operationOwner: { kind: 'local' }
+      })
+    )
+
+    expect(tree!.isDirStale('/repo/src')).toBe(true)
   })
 })
