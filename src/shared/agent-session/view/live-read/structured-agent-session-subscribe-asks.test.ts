@@ -30,9 +30,11 @@ describe('a live-text viewer', () => {
     const reader = viewer(true, false)
     const asks = createStructuredAgentSessionSubscribeAsks({ liveTextViewer: reader.viewer })
     const ask = asks.read()
-    expect('then' in ask).toBe(false)
-    const id = (ask as Awaited<typeof ask>).capabilities?.liveTextViewer?.id
-    expect((ask as Awaited<typeof ask>).capabilities?.liveTextViewer).toEqual({ id, shown: false })
+    if (ask instanceof Promise) {
+      throw new Error('a local viewer opens in the same turn')
+    }
+    const id = ask.capabilities?.liveTextViewer?.id
+    expect(ask.capabilities?.liveTextViewer).toEqual({ id: expect.any(String), shown: false })
 
     // Shown before the host registered the stream: sent once it is.
     reader.show(true)

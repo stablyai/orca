@@ -549,6 +549,8 @@ it('delivers live and saved text with the delivered queue baseline until a queue
     sessionId: identity.sessionId,
     journal,
     fence: 1,
+    liveTextViewer: 'desktop',
+    liveTextShown: true,
     emit: (event) => received.resolve(event)
   })
   const opening = await received.promise
