@@ -3,7 +3,10 @@ import type {
   MemorySnapshot,
   WorktreeMemory
 } from '../../../../../../shared/diagnostics/process-stats-types'
-import { readRuntimeHostResources } from '../../host-connections/runtime-host-resources'
+import {
+  readRuntimeHostResources,
+  withRuntimeHostResult
+} from '../../host-connections/runtime-host-resources'
 import { sharedAgentProcessUsage } from './resource-owner-split'
 
 function terminalOnlyWorktrees(count: number): WorktreeMemory[] {
@@ -57,5 +60,20 @@ describe('terminal-only Resource Manager samples pay nothing for chats', () => {
 
     expect(result).toBeNull()
     expect(parsedRows).not.toHaveBeenCalled()
+  })
+
+  it('keeps the same state when a host fails the same way again', () => {
+    const first = withRuntimeHostResult({ key: null, results: {} }, 'k', 'studio', {
+      status: 'unreachable'
+    })
+    const again = withRuntimeHostResult(first, 'k', 'studio', { status: 'unreachable' })
+    const recovered = withRuntimeHostResult(again, 'k', 'studio', {
+      status: 'sampled',
+      worktrees: []
+    })
+
+    expect(again).toBe(first)
+    expect(recovered).not.toBe(first)
+    expect(recovered.results.studio).toEqual({ status: 'sampled', worktrees: [] })
   })
 })

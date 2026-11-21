@@ -1,4 +1,5 @@
 import { defineMethod } from '../../core'
+import { toMemorySnapshotReply } from '../../../../memory/memory-snapshot-reply'
 
 export const DIAGNOSTICS_METHODS = [
   defineMethod({
@@ -6,7 +7,7 @@ export const DIAGNOSTICS_METHODS = [
     permission: 'workspace',
     params: null,
     handler: async (_params, { runtime }) => {
-      return await runtime.getMemorySnapshot()
+      return toMemorySnapshotReply(await runtime.getMemorySnapshot())
     }
   })
 ]

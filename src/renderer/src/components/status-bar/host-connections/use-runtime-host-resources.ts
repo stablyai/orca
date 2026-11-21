@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { readRuntimeHostResources, type RuntimeHostResourceResult } from './runtime-host-resources'
+import {
+  readRuntimeHostResources,
+  withRuntimeHostResult,
+  type RuntimeHostResourceResult,
+  type RuntimeHostResourceState
+} from './runtime-host-resources'
 
 const RUNTIME_RESOURCE_TIMEOUT_MS = 5_000
 const EMPTY_RESULTS: Readonly<Record<string, RuntimeHostResourceResult>> = {}
@@ -26,10 +31,7 @@ export function useRuntimeHostResources(
   const environmentKey = environmentIds.join('\n')
   const sessionKey = open ? environmentKey : null
   // Why keyed and reset on cleanup: a reopened panel or changed host set never shows old samples.
-  const [state, setState] = useState<{
-    key: string | null
-    results: Readonly<Record<string, RuntimeHostResourceResult>>
-  }>({ key: null, results: {} })
+  const [state, setState] = useState<RuntimeHostResourceState>({ key: null, results: {} })
 
   useEffect(() => {
     if (sessionKey === null || sessionKey === '') {
@@ -56,13 +58,7 @@ export function useRuntimeHostResources(
             misses.set(environmentId, missed)
             // One slow answer keeps the last result; a server is unreachable only after two misses in a row.
             if (!cancelled && missed !== 1) {
-              setState((prev) => ({
-                key: sessionKey,
-                results: {
-                  ...(prev.key === sessionKey ? prev.results : {}),
-                  [environmentId]: result
-                }
-              }))
+              setState((prev) => withRuntimeHostResult(prev, sessionKey, environmentId, result))
             }
           }
         )
