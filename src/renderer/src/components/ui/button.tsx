@@ -7,9 +7,6 @@ import { cn } from '@/lib/class-names'
 const outlineButtonClasses =
   'border border-border bg-background text-foreground shadow-xs hover:border-muted-foreground/35 hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50'
 
-// An outline that must read as a control on a card: its border reaches 3:1 in both themes.
-const outlineStrongButtonClasses = `${outlineButtonClasses} border-muted-foreground/75 hover:border-muted-foreground dark:border-muted-foreground/60 dark:hover:border-muted-foreground`
-
 const disabledOnAccentButtonClasses =
   'disabled:bg-accent disabled:text-muted-foreground disabled:opacity-100 disabled:hover:bg-accent disabled:hover:text-muted-foreground'
 
@@ -23,7 +20,8 @@ const buttonVariants = cva(
           'bg-destructive text-white hover:bg-destructive/90 focus-visible:border-destructive focus-visible:ring-destructive/40 dark:bg-destructive/60 dark:focus-visible:ring-destructive/50',
         outline: outlineButtonClasses,
         'orchestration-tab': `${outlineButtonClasses} border-(--crew-border) bg-(--crew-surface) text-card-foreground shadow-floating dark:border-(--crew-border) dark:bg-(--crew-surface) dark:hover:bg-accent dark:hover:text-accent-foreground`,
-        'outline-strong': outlineStrongButtonClasses,
+        // An outline that must read as a control on a card: its border reaches 3:1 in both themes.
+        'outline-strong': `${outlineButtonClasses} border-muted-foreground/75 hover:border-muted-foreground dark:border-muted-foreground/60 dark:hover:border-muted-foreground`,
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
         ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
         // A row action over its hovered row's accent fill, where ghost's accent hover would not show.
@@ -35,8 +33,9 @@ const buttonVariants = cva(
         // Keep icon states visible on muted fields, which share accent's light-theme fill.
         'muted-field-icon':
           'text-muted-foreground hover:bg-foreground/[0.08] hover:text-foreground focus-visible:bg-foreground/[0.08] focus-visible:text-foreground aria-expanded:bg-foreground/[0.08] aria-expanded:text-foreground data-[state=open]:bg-foreground/[0.08] data-[state=open]:text-foreground',
-        // The head queued card's Steer: `outline-strong`, filled as the primary while the composer previews Steer queued.
-        'queued-head-steer': `${outlineStrongButtonClasses} [[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:border-primary [[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:bg-primary [[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:text-primary-foreground [[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:hover:bg-primary/90`,
+        // The head queued card's Steer: ghost, filled as the primary while the composer previews Steer queued.
+        'queued-head-steer':
+          'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 [[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:bg-primary [[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:text-primary-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
         // A quiet secondary link, such as a dialog footer's "Manual steps".
         'link-muted':
