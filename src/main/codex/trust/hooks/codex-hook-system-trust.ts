@@ -1,6 +1,7 @@
 import type { HookDefinition } from '../../../agent-hooks/installation/configuration/hook-config-schema'
 import {
   readHookTrustEntries,
+  type CodexEventLabel,
   type CodexHookTrustState,
   type CodexTrustEntry
 } from '../toml/config-toml-trust'
@@ -8,7 +9,6 @@ import {
   codexTrustSourcePathsEqual as codexHookSourcePathsEqual,
   computeCodexTrustKey as computeTrustKey,
   computeCodexTrustedHash as computeTrustedHash,
-  normalizeCodexHookTrustLookupKey as normalizeTrustKey,
   normalizeCodexTrustSourcePath as normalizeCodexHookSourcePath,
   parseCodexTrustKey as parseTrustKey
 } from '../identity/codex-trust-identity'
@@ -23,17 +23,12 @@ export type TrustedSystemHookSignatureState = {
   trustedHash: string
 }
 
-/** Each signature's states in ~/.codex order, null for an occurrence that holds no trust. */
-export type TrustedSystemHookSignatures = Map<string, (TrustedSystemHookSignatureState | null)[]>
-
-type SystemUserHook = { entry: CodexTrustEntry; key: string; expectedHash: string }
-
 export function getTrustedSystemUserHookSignatures(
   systemConfigPath: string,
   systemHooks: Record<string, HookDefinition[]>,
   isManagedCommand: (command: string | undefined) => boolean
-): TrustedSystemHookSignatures {
-  const signatures: TrustedSystemHookSignatures = new Map()
+): Map<string, TrustedSystemHookSignatureState> {
+  const signatures = new Map<string, TrustedSystemHookSignatureState>()
   let trustEntries: Map<string, CodexHookTrustState>
   try {
     trustEntries = readHookTrustEntries(getSystemCodexConfigTomlPath())
@@ -42,29 +37,14 @@ export function getTrustedSystemUserHookSignatures(
     console.warn('[codex-hook-service] failed to read system hook trust entries', error)
     return signatures
   }
-  const hooks = listSystemUserHooks(systemConfigPath, systemHooks, isManagedCommand)
-  const moves = findUnambiguousTrustMoves(systemConfigPath, hooks, trustEntries)
-  for (const hook of hooks) {
-    const state = resolveTrustedSystemHookState(hook, trustEntries, moves)
-    const signature = getCodexUserHookMirrorSignature(hook.entry)
-    signatures.set(signature, [...(signatures.get(signature) ?? []), state])
-  }
-  return signatures
-}
-
-function listSystemUserHooks(
-  systemConfigPath: string,
-  systemHooks: Record<string, HookDefinition[]>,
-  isManagedCommand: (command: string | undefined) => boolean
-): SystemUserHook[] {
-  const hooks: SystemUserHook[] = []
+  const trustedHashesByEvent = getTrustedSystemHookHashesByEvent(systemConfigPath, trustEntries)
   for (const [eventName, definitions] of Object.entries(systemHooks)) {
     if (!Array.isArray(definitions)) {
       continue
     }
     definitions.forEach((definition, groupIndex) => {
-      const handlers = Array.isArray(definition.hooks) ? definition.hooks : []
-      handlers.forEach((hook, handlerIndex) => {
+      const hooks = Array.isArray(definition.hooks) ? definition.hooks : []
+      hooks.forEach((hook, handlerIndex) => {
         if (isManagedCommand(hook.command)) {
           return
         }
@@ -76,35 +56,37 @@ function listSystemUserHooks(
           definition,
           hook
         )
-        if (entry) {
-          hooks.push({
-            entry,
-            key: computeTrustKey(entry),
-            expectedHash: computeTrustedHash(entry)
-          })
+        if (!entry) {
+          return
+        }
+        const state = resolveTrustedSystemHookState(entry, trustEntries, trustedHashesByEvent)
+        if (!state) {
+          return
+        }
+        const signature = getCodexUserHookMirrorSignature(entry)
+        // Deduplication must keep a hook enabled if any copy is enabled.
+        if (state.enabled || !signatures.has(signature)) {
+          signatures.set(signature, state)
         }
       })
     })
   }
-  return hooks
+  return signatures
 }
 
 function resolveTrustedSystemHookState(
-  { key, expectedHash }: SystemUserHook,
+  entry: CodexTrustEntry,
   trustEntries: ReadonlyMap<string, CodexHookTrustState>,
-  moves: ReadonlyMap<string, CodexHookTrustState>
+  trustedHashesByEvent: ReadonlyMap<CodexEventLabel, Map<string, boolean>>
 ): TrustedSystemHookSignatureState | null {
-  const state = trustEntries.get(key)
+  const expectedHash = computeTrustedHash(entry)
+  const state = trustEntries.get(computeTrustKey(entry))
   if (state?.trustedHash === expectedHash) {
     return { enabled: state.enabled !== false, trustedHash: expectedHash }
   }
-  if (state?.trustedHash && state.enabled === false) {
-    // A disable at this position stands even when the hook changed since.
-    return { enabled: false, trustedHash: state.trustedHash }
-  }
-  const moved = moves.get(key)
-  if (moved) {
-    return { enabled: moved.enabled !== false, trustedHash: expectedHash }
+  const reorderedEnabled = trustedHashesByEvent.get(entry.eventLabel)?.get(expectedHash)
+  if (reorderedEnabled !== undefined) {
+    return { enabled: reorderedEnabled, trustedHash: expectedHash }
   }
   if (state?.trustedHash) {
     // #7110: preserve Codex's verbatim hash to avoid reapproval loops from recomputation.
@@ -113,44 +95,30 @@ function resolveTrustedSystemHookState(
   return null
 }
 
-/**
- * Content hashes carry approval across reorders, but only where one stale record and one hook
- * share the hash: otherwise a disabled or never-approved copy could inherit another's approval.
- */
-function findUnambiguousTrustMoves(
+function getTrustedSystemHookHashesByEvent(
   systemConfigPath: string,
-  hooks: readonly SystemUserHook[],
   trustEntries: ReadonlyMap<string, CodexHookTrustState>
-): Map<string, CodexHookTrustState> {
+): Map<CodexEventLabel, Map<string, boolean>> {
+  const trustedHashesByEvent = new Map<CodexEventLabel, Map<string, boolean>>()
   const canonicalSystemConfigPath = normalizeCodexHookSourcePath(systemConfigPath)
-  const hashAtKey = new Map(hooks.map((hook) => [normalizeTrustKey(hook.key), hook.expectedHash]))
-  const staleRecords = new Map<string, CodexHookTrustState[]>()
   for (const [key, state] of trustEntries) {
     const parsed = parseTrustKey(key)
-    if (
-      !parsed ||
-      !state.trustedHash ||
-      !codexHookSourcePathsEqual(parsed.sourcePath, canonicalSystemConfigPath) ||
-      hashAtKey.get(normalizeTrustKey(key)) === state.trustedHash
-    ) {
+    if (!parsed || !state.trustedHash) {
       continue
     }
-    const group = `${parsed.eventLabel}\0${state.trustedHash}`
-    staleRecords.set(group, [...(staleRecords.get(group) ?? []), state])
-  }
-  const unmatchedHooks = new Map<string, SystemUserHook[]>()
-  for (const hook of hooks) {
-    if (trustEntries.get(hook.key)?.trustedHash !== hook.expectedHash) {
-      const group = `${hook.entry.eventLabel}\0${hook.expectedHash}`
-      unmatchedHooks.set(group, [...(unmatchedHooks.get(group) ?? []), hook])
+    if (!codexHookSourcePathsEqual(parsed.sourcePath, canonicalSystemConfigPath)) {
+      continue
+    }
+    let hashes = trustedHashesByEvent.get(parsed.eventLabel)
+    if (!hashes) {
+      hashes = new Map()
+      trustedHashesByEvent.set(parsed.eventLabel, hashes)
+    }
+    const enabled = state.enabled !== false
+    // Content hashes preserve approval across positional-key changes after reordering.
+    if (enabled || !hashes.has(state.trustedHash)) {
+      hashes.set(state.trustedHash, enabled)
     }
   }
-  const moves = new Map<string, CodexHookTrustState>()
-  for (const [group, candidates] of unmatchedHooks) {
-    const records = staleRecords.get(group)
-    if (candidates.length === 1 && records?.length === 1) {
-      moves.set(candidates[0].key, records[0])
-    }
-  }
-  return moves
+  return trustedHashesByEvent
 }

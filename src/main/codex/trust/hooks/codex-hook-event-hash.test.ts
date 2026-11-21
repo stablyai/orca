@@ -1,8 +1,7 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import { computeCodexTrustedHash as computeTrustedHash } from '../identity/codex-trust-identity'
 import type { CodexTrustEntry } from '../toml/config-toml-trust'
-import { createCodexHookTrustEntry } from '../../hooks/definitions/codex-hook-identity'
 
 // Frozen form-1 fixture: codex-cli 0.159.3 hooks/list reported this Interrupt hash with timeout 3.
 const ORCA_FORM_1_COMMAND =
@@ -50,23 +49,5 @@ describe('the SessionEnd hook', () => {
         ...entry
       })
     ).toBe(hash)
-  })
-})
-
-describe('a hook with a Windows command override', () => {
-  const originalPlatform = process.platform
-  afterEach(() => {
-    Object.defineProperty(process, 'platform', { value: originalPlatform })
-  })
-  const hook = { type: 'command' as const, command: 'echo unix', commandWindows: 'echo windows' }
-
-  it.each([
-    ['C:\\Users\\dev\\.codex\\hooks.json', 'echo windows'],
-    ['\\\\wsl.localhost\\Ubuntu\\home\\dev\\.codex\\hooks.json', 'echo unix']
-  ])('is trusted for the command Codex runs from %s on Windows', (sourcePath, command) => {
-    Object.defineProperty(process, 'platform', { value: 'win32' })
-    expect(
-      createCodexHookTrustEntry(sourcePath, 'Stop', 0, 0, { hooks: [hook] }, hook)?.command
-    ).toBe(command)
   })
 })

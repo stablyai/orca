@@ -257,35 +257,6 @@ describe('codex hook trust write-back promotion', () => {
     expect(readHookTrustEntries(runtimeTomlPath).get(approvalKey)?.enabled).toBe(false)
   })
 
-  it('promotes an in-Orca approval only to its own copy of an identical hook', async () => {
-    mkdirSync(systemCodexDir(), { recursive: true })
-    const handler = { type: 'command', command: USER_HOOK_COMMAND }
-    writeFileSync(
-      join(systemCodexDir(), 'hooks.json'),
-      JSON.stringify({ hooks: { Stop: [{ hooks: [handler, handler] }] } })
-    )
-    const systemTomlPath = join(systemCodexDir(), 'config.toml')
-    const secondCopy: CodexTrustEntry = { ...systemUserStopEntry(), handlerIndex: 1 }
-    writeFileSync(
-      systemTomlPath,
-      upsertHookTrustEntriesInContent('', [
-        systemUserStopEntry(),
-        { ...secondCopy, enabled: false }
-      ])
-    )
-    const service = new CodexHookService()
-    await service.install()
-
-    simulateCodexApproval(runtimeUserStopEntry(), {
-      hash: 'sha256:codex-next-gen-hash-orca-cannot-reproduce'
-    })
-    await service.install()
-
-    expect(readHookTrustEntries(systemTomlPath).get(computeTrustKey(secondCopy))?.enabled).toBe(
-      false
-    )
-  })
-
   it('carries a Codex-written hash verbatim when it differs from the reproduced hash', async () => {
     writeSystemUserHook()
     const service = new CodexHookService()

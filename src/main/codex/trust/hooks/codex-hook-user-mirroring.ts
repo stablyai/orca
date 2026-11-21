@@ -14,7 +14,7 @@ import {
 } from '../../hooks/definitions/codex-hook-definition'
 import {
   getTrustedSystemUserHookSignatures,
-  type TrustedSystemHookSignatures
+  type TrustedSystemHookSignatureState
 } from './codex-hook-system-trust'
 
 type MirroredRuntimeUserHookTrustEntry = {
@@ -92,14 +92,14 @@ export function getRuntimeHooksWithSystemUserHooks(
 function collectMirroredRuntimeUserHookTrustEntries(
   runtimeConfigPath: string,
   runtimeHooks: Record<string, HookDefinition[]>,
-  trustedSystemHookSignatures: TrustedSystemHookSignatures,
+  trustedSystemHookSignatures: ReadonlyMap<string, TrustedSystemHookSignatureState>,
   isManagedCommand: (command: string | undefined) => boolean
 ): MirroredRuntimeUserHookTrustEntry[] {
   if (trustedSystemHookSignatures.size === 0) {
     return []
   }
 
-  const runtimeEntries: { entry: CodexTrustEntry; signature: string }[] = []
+  const entries: MirroredRuntimeUserHookTrustEntry[] = []
   const trustSourcePath = getCodexExplicitHomeHookSourcePath(runtimeConfigPath)
   for (const [eventName, definitions] of Object.entries(runtimeHooks)) {
     if (!Array.isArray(definitions)) {
@@ -119,33 +119,19 @@ function collectMirroredRuntimeUserHookTrustEntries(
           definition,
           hook
         )
-        if (entry) {
-          runtimeEntries.push({ entry, signature: getCodexUserHookMirrorSignature(entry) })
+        if (!entry) {
+          return
+        }
+        const signature = getCodexUserHookMirrorSignature(entry)
+        const state = trustedSystemHookSignatures.get(signature)
+        if (state !== undefined) {
+          entries.push({
+            entry: { ...entry, trustedHash: state.trustedHash },
+            enabled: state.enabled
+          })
         }
       })
     })
-  }
-  const runtimeCounts = new Map<string, number>()
-  for (const { signature } of runtimeEntries) {
-    runtimeCounts.set(signature, (runtimeCounts.get(signature) ?? 0) + 1)
-  }
-  const seen = new Map<string, number>()
-  const entries: MirroredRuntimeUserHookTrustEntry[] = []
-  for (const { entry, signature } of runtimeEntries) {
-    const states = trustedSystemHookSignatures.get(signature)
-    if (!states) {
-      continue
-    }
-    const occurrence = seen.get(signature) ?? 0
-    seen.set(signature, occurrence + 1)
-    // Copies pair up in order; when deduplication merged copies, the merged hook runs if any copy did.
-    const state =
-      runtimeCounts.get(signature) === states.length
-        ? states[occurrence]
-        : (states.find((candidate) => candidate?.enabled) ?? states.find(Boolean))
-    if (state) {
-      entries.push({ entry: { ...entry, trustedHash: state.trustedHash }, enabled: state.enabled })
-    }
   }
   return entries
 }

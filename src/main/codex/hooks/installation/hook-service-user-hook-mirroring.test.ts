@@ -215,39 +215,6 @@ describe('CodexHookService', () => {
     expect(runtimeToml).toContain(runtimeTrust(1, true))
   })
 
-  it('does not hand one approval to an identical hook the user never approved', async () => {
-    const systemCodexHome = join(homes.tmpHome, '.codex')
-    const systemHooksPath = join(systemCodexHome, 'hooks.json')
-    mkdirSync(systemCodexHome, { recursive: true })
-    const handler = { type: 'command', command: 'echo bye' }
-    writeFileSync(
-      systemHooksPath,
-      `${JSON.stringify({ hooks: { PreCompact: [{ hooks: [handler, handler] }] } })}\n`,
-      'utf-8'
-    )
-    writeFileSync(
-      join(systemCodexHome, 'config.toml'),
-      upsertHookTrustEntriesInContent('model = "system-model"\n', [
-        {
-          sourcePath: systemHooksPath,
-          eventLabel: 'pre_compact',
-          groupIndex: 0,
-          handlerIndex: 0,
-          command: 'echo bye'
-        }
-      ]),
-      'utf-8'
-    )
-
-    expect((await new CodexHookService().install()).state).toBe('installed')
-
-    const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
-    const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
-    const runtimeHooksPath = join(managedCodexHome, 'hooks.json')
-    expect(runtimeToml).toContain(hookTrustHeader(`${runtimeHooksPath}:pre_compact:0:0`))
-    expect(runtimeToml).not.toContain(hookTrustHeader(`${runtimeHooksPath}:pre_compact:0:1`))
-  })
-
   it('removes runtime user hook trust after system approval is revoked', async () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')
     const systemHooksPath = join(systemCodexHome, 'hooks.json')
