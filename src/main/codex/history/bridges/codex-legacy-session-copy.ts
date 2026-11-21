@@ -14,6 +14,10 @@ import { sourceStartsWithCopy } from './codex-legacy-session-copy-prefix'
 import { restoreMovedCopy } from './codex-legacy-session-copy-recovery'
 import { runAloneForCopy } from './codex-legacy-session-copy-turns'
 import {
+  LEGACY_SESSION_COPY_ASIDE_SUFFIX,
+  LEGACY_SESSION_COPY_MAX_ASIDES
+} from './codex-legacy-session-copy-asides'
+import {
   distinctFolders,
   isCopyIdle,
   keepsThreadLocks,
@@ -27,17 +31,14 @@ import {
   unlinkIfPresent
 } from './codex-legacy-session-copy-name-ops'
 
-/**
- * The legacy copy's own bytes stay under `<name>.orca-legacy-copy.<attempt>` once its source is
- * linked in; each attempt reserves a name of its own, so no step ever replaces or removes one.
- */
 export { settleLegacySessionCopyName } from './codex-legacy-session-copy-recovery'
+export {
+  LEGACY_SESSION_COPY_ASIDE_SUFFIX,
+  LEGACY_SESSION_COPY_MAX_ASIDES
+} from './codex-legacy-session-copy-asides'
 
-export const LEGACY_SESSION_COPY_ASIDE_SUFFIX = '.orca-legacy-copy'
 /** What one publish costs a background pass's read budget, bounding publishes per pass. */
 const PUBLISH_BUDGET_BYTES = 64 * 1024
-/** Attempts that each keep an aside name; past this a copy settles as kept. */
-export const LEGACY_SESSION_COPY_MAX_ASIDES = 16
 
 /** `kept`: the copy holds bytes its source lacks, or its source can't be linked beside it, for good. */
 export type LegacySessionCopySwap = 'swapped' | 'kept' | 'deferred' | 'none'

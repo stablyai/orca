@@ -426,6 +426,16 @@ describe('legacy session copy swap', () => {
     await expect(settle()).rejects.toThrow()
   })
 
+  it('refuses to settle a malformed marker while a copy is moved aside', async () => {
+    writeFile(markerPath, '{not json')
+    const settle = (): Promise<void> =>
+      settleLegacySessionCopyName({ managedHome: runtimeHome(), relativePath: RELATIVE_PATH })
+
+    await expect(settle()).resolves.toBeUndefined()
+    writeFile(`${copyPath}.orca-legacy-copy.2`, OLD_TURNS)
+    await expect(settle()).rejects.toThrow()
+  })
+
   it('keeps the exact source spelling of a copy written since it was copied', async () => {
     legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
     writeFileSync(copyPath, `${OLD_TURNS}{"resumed":true}\n`)
