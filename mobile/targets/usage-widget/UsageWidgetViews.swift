@@ -146,7 +146,7 @@ struct UsageWidgetSmallRow: View {
       let meter = UsageWidgetMeter(only.window(of: provider), remaining: remaining, at: date)
       VStack(alignment: .leading, spacing: 3) {
         HStack(alignment: .firstTextBaseline) {
-          Text(provider.title).font(.caption).foregroundStyle(UsageWidgetColors.secondary).lineLimit(1)
+          UsageWidgetAgentLabel(provider: provider, font: .caption, color: UsageWidgetColors.secondary, iconSize: 12)
           Spacer(minLength: 4)
           Text(meter.label(remaining: remaining))
             .font(.subheadline.weight(.semibold).monospacedDigit())
@@ -156,7 +156,7 @@ struct UsageWidgetSmallRow: View {
       }
     } else {
       VStack(alignment: .leading, spacing: 3) {
-        Text(provider.title).font(.caption).foregroundStyle(UsageWidgetColors.secondary).lineLimit(1)
+        UsageWidgetAgentLabel(provider: provider, font: .caption, color: UsageWidgetColors.secondary, iconSize: 12)
         HStack(alignment: .top, spacing: 8) {
           ForEach(windows, id: \.self) { kind in
             UsageWidgetWindowMeter(
@@ -177,8 +177,8 @@ struct UsageWidgetProviderColumn: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
-      Text(provider.title).font(.subheadline.weight(.semibold))
-        .foregroundStyle(UsageWidgetColors.primary).lineLimit(1)
+      UsageWidgetAgentLabel(
+        provider: provider, font: .subheadline.weight(.semibold), color: UsageWidgetColors.primary, iconSize: 14)
       ForEach(windows, id: \.self) { kind in
         UsageWidgetWindowMeter(kind: kind, window: kind.window(of: provider), remaining: remaining, date: date)
       }
@@ -196,9 +196,9 @@ struct UsageWidgetLargeRow: View {
 
   var body: some View {
     HStack(alignment: .top, spacing: 12) {
-      Text(provider.title).font(.subheadline.weight(.semibold))
-        .foregroundStyle(UsageWidgetColors.primary).lineLimit(1)
-        .frame(width: 84, alignment: .leading)
+      UsageWidgetAgentLabel(
+        provider: provider, font: .subheadline.weight(.semibold), color: UsageWidgetColors.primary, iconSize: 14)
+        .frame(width: 104, alignment: .leading)
       ForEach(windows, id: \.self) { kind in
         UsageWidgetWindowMeter(kind: kind, window: kind.window(of: provider), remaining: remaining, date: date)
       }
@@ -230,5 +230,37 @@ struct UsageWidgetWindowMeter: View {
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
+  }
+}
+
+/// The agent's name with its mark, as the desktop status bar shows it; agents without a bundled mark get their initial.
+struct UsageWidgetAgentLabel: View {
+  let provider: UsageWidgetProvider
+  let font: Font
+  let color: Color
+  let iconSize: CGFloat
+
+  var body: some View {
+    HStack(spacing: 4) {
+      icon.frame(width: iconSize, height: iconSize)
+      Text(provider.title).font(font).foregroundStyle(color).lineLimit(1)
+    }
+  }
+
+  @ViewBuilder private var icon: some View {
+    // Assets.xcassets follows the desktop's ProviderIcon (provider-usage-panel.tsx): Claude and Codex are the
+    // AgentIcons.tsx paths, the rest copy the src/shared/agent-icons file mobile-agent-icon-assets.ts uses.
+    let asset = "agent-\(provider.provider)"
+    if UIImage(named: asset) != nil {
+      // Codex's mark is a template image, so it takes the text color in light and dark.
+      Image(asset).resizable().scaledToFit().foregroundStyle(UsageWidgetColors.primary)
+        .clipShape(RoundedRectangle(cornerRadius: iconSize * 0.2))
+    } else {
+      Circle().fill(UsageWidgetColors.track)
+        .overlay(
+          Text(provider.title.prefix(1).uppercased())
+            .font(.system(size: iconSize * 0.6, weight: .semibold))
+            .foregroundStyle(UsageWidgetColors.secondary))
+    }
   }
 }
