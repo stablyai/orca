@@ -2,5 +2,7 @@ import { chatFontSizeForAction, type ChatFontSizeAction } from './native-chat-fo
 import { writeNativeChatAppearance } from './native-chat-appearance-write'
 
 export function writeNativeChatFontSize(action: Exclude<ChatFontSizeAction, null>): Promise<void> {
-  return writeNativeChatAppearance((appearance) => chatFontSizeForAction(appearance, action))
+  return writeNativeChatAppearance((appearance) => chatFontSizeForAction(appearance, action)).then(
+    () => {}
+  )
 }

@@ -49,6 +49,7 @@ import type {
   NotificationsApi
 } from './api/desktop-permissions/os-permission-api'
 import type { PetApi } from './api/pets/pet-api'
+import type { NativeChatBackgroundApi } from './api/native-chat-background/native-chat-background-api'
 import type { AppIconApi } from './api/window-ui/app-icon-api'
 import type { BrowserPasswordsApi } from './api/browser/browser-passwords-api'
 import type { PluginsApi } from './api/plugins/plugin-host-api'
@@ -152,6 +153,7 @@ export type PreloadApi = {
   avatarGeneration: AvatarGenerationApi
   skills: SkillsApi
   pet: PetApi
+  nativeChatBackground: NativeChatBackgroundApi
   appIcon: AppIconApi
   browser: BrowserApi
   browserPasswords: BrowserPasswordsApi

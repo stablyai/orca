@@ -60,6 +60,7 @@ import { slackHandOffApi } from './api/slack-hand-off-bridge'
 import { avatarGenerationApi } from './api/avatar-generation-bridge'
 import { skillsApi } from './api/skills/skills-bridge'
 import { petApi } from './api/pets/pet-bridge'
+import { nativeChatBackgroundApi } from './api/native-chat-background/native-chat-background-bridge'
 import { appIconApi } from './api/window-ui/app-icon-bridge'
 import { browserPasswordsApi } from './api/browser/browser-passwords-bridge'
 import { browserApi } from './api/browser/browser-bridge'
@@ -175,6 +176,7 @@ const api = {
   avatarGeneration: avatarGenerationApi,
   skills: skillsApi,
   pet: petApi,
+  nativeChatBackground: nativeChatBackgroundApi,
   appIcon: appIconApi,
   browser: browserApi,
   browserPasswords: browserPasswordsApi,

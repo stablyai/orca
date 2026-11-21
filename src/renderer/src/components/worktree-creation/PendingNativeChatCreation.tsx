@@ -25,6 +25,7 @@ import {
   nativeChatTranscriptOuterClass
 } from '@/components/native-chat/appearance/native-chat-appearance-style'
 import { useNativeChatStoreAppearanceStyle } from '@/components/native-chat/appearance/use-native-chat-store-appearance-style'
+import { useNativeChatBackdrop } from '@/components/native-chat/appearance/use-native-chat-backdrop'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import WorktreeCreationTabStrip from './WorktreeCreationTabStrip'
@@ -78,6 +79,7 @@ export default function PendingNativeChatCreation({
   })
   const options = usePendingNativeChatOptions(entry, executionHostId, sourceWorktreeId)
   const appearanceStyle = useNativeChatStoreAppearanceStyle()
+  const backdrop = useNativeChatBackdrop(appearanceStyle)
   const composerRef = React.useRef<NativeChatComposerHandle>(null)
   const { composerError, reportComposerError } = useNativeChatComposerError(NO_COMMAND_CAUSES)
   const status = entry?.status
@@ -209,10 +211,10 @@ export default function PendingNativeChatCreation({
       <div
         data-native-chat-root="true"
         className={cn(NATIVE_CHAT_APPEARANCE_ROOT_CLASS, 'flex min-h-0 w-full flex-1 flex-col')}
-        style={appearanceStyle}
+        {...backdrop}
         data-native-chat-scheme={appearanceStyle.colorScheme}
       >
-        <div className="relative flex min-h-0 flex-1 flex-col bg-chat-canvas">
+        <div className="relative flex min-h-0 flex-1 flex-col bg-chat-pane">
           {steps ? (
             <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable_both-edges]">
               <div className={nativeChatTranscriptOuterClass(false)}>

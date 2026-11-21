@@ -11,7 +11,7 @@ export function NativeChatUserBubble({
   return (
     <div
       className={cn(
-        'max-w-[80%] rounded-xl border border-chat-user-border bg-chat-user-surface px-3.5 py-2.5 text-sm text-chat-foreground-strong',
+        'native-chat-user-bubble max-w-[80%] rounded-xl border border-chat-user-border bg-chat-user-surface px-3.5 py-2.5 text-sm text-chat-foreground-strong',
         className
       )}
     >

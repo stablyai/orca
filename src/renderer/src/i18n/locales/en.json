@@ -837,7 +837,19 @@
         "softer": "Softer",
         "sharper": "Sharper",
         "terminalControlledHint": "Set by terminal interface.",
-        "terminalControlledTooltip": "Matching your terminal interface. Turn off Match terminal interface to change this."
+        "terminalControlledTooltip": "Matching your terminal interface. Turn off Match terminal interface to change this.",
+        "backgroundImage": "Background image",
+        "backgroundImageChoose": "Choose…",
+        "backgroundImageChange": "Change…",
+        "backgroundImageRemove": "Remove",
+        "backgroundImageFailed": "Could not use that image.",
+        "backgroundKeywordPhoto": "photo",
+        "backgroundKeywordWallpaper": "wallpaper",
+        "backgroundVisibility": "Background visibility",
+        "glassMessages": "Glass messages",
+        "glassKeywordTransparency": "transparency",
+        "glassKeywordBlur": "blur",
+        "glassKeywordBubble": "bubble"
       },
       "editorTheme": {
         "light": "Light editor theme",

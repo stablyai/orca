@@ -41,6 +41,42 @@ export const getChatContrastEntriesByKey = createLocalizedCatalog(
     }) satisfies Record<string, SettingsSearchEntry>
 )
 
+export const getChatBackgroundEntriesByKey = createLocalizedCatalog(
+  () =>
+    ({
+      backgroundImage: {
+        title: translate('settings.appearance.chat.backgroundImage', 'Background image'),
+        keywords: [
+          translate('settings.appearance.chat.title', 'Chat UI'),
+          ...translateSearchKeyword('settings.appearance.chat.backgroundKeywordPhoto', 'photo'),
+          ...translateSearchKeyword(
+            'settings.appearance.chat.backgroundKeywordWallpaper',
+            'wallpaper'
+          )
+        ],
+        targetSectionId: 'chat-background-image'
+      },
+      backgroundVisibility: {
+        title: translate('settings.appearance.chat.backgroundVisibility', 'Background visibility'),
+        keywords: [translate('settings.appearance.chat.title', 'Chat UI')],
+        targetSectionId: 'chat-background-visibility'
+      },
+      glassMessages: {
+        title: translate('settings.appearance.chat.glassMessages', 'Glass messages'),
+        keywords: [
+          translate('settings.appearance.chat.title', 'Chat UI'),
+          ...translateSearchKeyword(
+            'settings.appearance.chat.glassKeywordTransparency',
+            'transparency'
+          ),
+          ...translateSearchKeyword('settings.appearance.chat.glassKeywordBlur', 'blur'),
+          ...translateSearchKeyword('settings.appearance.chat.glassKeywordBubble', 'bubble')
+        ],
+        targetSectionId: 'chat-glass-messages'
+      }
+    }) satisfies Record<string, SettingsSearchEntry>
+)
+
 export function getChatContrastSearchEntries(): SettingsSearchEntry[] {
   return Object.values(getChatContrastEntriesByKey())
 }
@@ -124,7 +160,8 @@ export function getChatAppearanceSearchEntries(t: Translate = translate): Settin
   return [
     { title: t('auto.components.settings.Settings.2b4474780a', 'Appearance') },
     ...Object.values(getChatAppearanceEntriesByKey(undefined, t)),
-    ...getChatContrastSearchEntries()
+    ...getChatContrastSearchEntries(),
+    ...Object.values(getChatBackgroundEntriesByKey())
   ]
 }
 

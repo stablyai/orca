@@ -771,7 +771,19 @@
         "softer": "Мягче",
         "sharper": "Чётче",
         "terminalControlledHint": "Задаётся интерфейсом терминала.",
-        "terminalControlledTooltip": "Используются настройки интерфейса терминала. Выключите «Как в интерфейсе терминала», чтобы изменить это значение."
+        "terminalControlledTooltip": "Используются настройки интерфейса терминала. Выключите «Как в интерфейсе терминала», чтобы изменить это значение.",
+        "backgroundImage": "Фоновое изображение",
+        "backgroundImageChoose": "Выбрать…",
+        "backgroundImageChange": "Изменить…",
+        "backgroundImageRemove": "Убрать",
+        "backgroundImageFailed": "Не удалось использовать это изображение.",
+        "backgroundKeywordPhoto": "фото",
+        "backgroundKeywordWallpaper": "обои",
+        "backgroundVisibility": "Видимость фона",
+        "glassMessages": "Стеклянные сообщения",
+        "glassKeywordTransparency": "прозрачность",
+        "glassKeywordBlur": "размытие",
+        "glassKeywordBubble": "пузырь"
       },
       "editorTheme": {
         "light": "Светлая тема редактора",
