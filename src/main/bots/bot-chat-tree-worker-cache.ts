@@ -1,6 +1,7 @@
 // Settled Dispatches' worker reads, kept between chat-tree refreshes so a refresh re-reads only running
 // workers and Dispatches whose rows changed since. A write to any of a Dispatch's rows drops its read.
 import type { OrchestrationSessionWorker } from '../../shared/orchestration-session-workers'
+import type { DispatchRowChange } from '../runtime/orchestration/db/worker-status-notice'
 
 const SETTLED_STATES = new Set<OrchestrationSessionWorker['state']>([
   'completed',
@@ -63,6 +64,13 @@ export class BotChatTreeWorkerCache {
       this.trim()
     }
     return [...kept, ...fresh]
+  }
+
+  /** The database's notice of a Dispatch row write; one to a row no Dispatch owns changes no read. */
+  rowChanged(dispatchId: string | null, change: DispatchRowChange): void {
+    if (dispatchId !== null || change === 'deleted') {
+      this.drop(dispatchId)
+    }
   }
 
   /** These Dispatches' rows changed; null drops every read (a reset). */
