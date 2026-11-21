@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import type { RuntimeAccessGrant } from '../../../../../../shared/remote-runtime/host-catalog/runtime-access-grants'
 import { RuntimeAccessGrantList } from './RuntimeAccessGrantList'
@@ -33,7 +33,13 @@ function renderList(grants: RuntimeAccessGrant[]) {
   Object.defineProperties(scroller, {
     clientHeight: { configurable: true, get: () => LIST_HEIGHT },
     scrollHeight: { configurable: true, get: () => grants.length * ROW_STRIDE },
-    scrollTop: { configurable: true, get: () => scrollTop, set: (v: number) => (scrollTop = v) }
+    scrollTop: {
+      configurable: true,
+      get: () => scrollTop,
+      set: (value: number) => {
+        scrollTop = value
+      }
+    }
   })
   const scrollTo = (top: number): void => {
     scroller.scrollTop = top
@@ -47,27 +53,16 @@ function renderList(grants: RuntimeAccessGrant[]) {
 const fade = (scroller: HTMLElement): string =>
   /mask-image:linear-gradient\(([^)]*\))/.exec(scroller.className)?.[1] ?? 'none'
 
-let formatterCount = 0
-const RealDateTimeFormat = Intl.DateTimeFormat
-
-beforeEach(() => {
-  formatterCount = 0
-  // Why: each row builds date formatters while rendering, so the count shows row re-renders.
-  Intl.DateTimeFormat = function (...args: ConstructorParameters<typeof Intl.DateTimeFormat>) {
-    formatterCount += 1
-    return new RealDateTimeFormat(...args)
-  } as unknown as typeof Intl.DateTimeFormat
-})
-
 afterEach(() => {
-  Intl.DateTimeFormat = RealDateTimeFormat
+  vi.restoreAllMocks()
   cleanup()
 })
 
 describe('RuntimeAccessGrantList scroller', () => {
   it('fades only the edges that hide rows without re-rendering the rows', () => {
     const { scroller, scrollTo } = renderList(links(12))
-    formatterCount = 0
+    // Why: each row builds date formatters while rendering, so new ones mean the rows re-rendered.
+    const formatters = vi.spyOn(Intl, 'DateTimeFormat')
 
     scrollTo(0)
     expect(fade(scroller)).toMatch(/^to_bottom,black_calc/)
@@ -77,7 +72,7 @@ describe('RuntimeAccessGrantList scroller', () => {
     scrollTo(12 * ROW_STRIDE - LIST_HEIGHT)
     expect(fade(scroller)).toBe('to_bottom,transparent,black_1rem)')
 
-    expect(formatterCount).toBe(0)
+    expect(formatters).not.toHaveBeenCalled()
   })
 
   it('keeps the same scroller, and its scroll position, when a row is revoked', () => {
