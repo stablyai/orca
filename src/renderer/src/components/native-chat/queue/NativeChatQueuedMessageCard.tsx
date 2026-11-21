@@ -259,7 +259,7 @@ export function NativeChatQueuedMessageCard({
           ) : null}
         </div>
         {card.images ? <QueuedMessageImageCount images={card.images} /> : null}
-        {expanded || clipped ? (
+        {expanded || clipped || fullText !== line ? (
           <QueuedMessageExpandToggle
             expanded={expanded}
             controls={expanded ? textId : undefined}

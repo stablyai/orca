@@ -9,15 +9,20 @@ export const NATIVE_CHAT_REPLY_EXCERPT_MAX = 500
 const AGENT_HEAD = /^> Replying to the earlier message from (.+):$/
 const OWN_HEAD = '> Replying to my earlier message:'
 
-/** The message's own words up to the cap: an earlier reply's quote and markdown markers are left out. */
-export function nativeChatReplyExcerpt(text: string): string {
+/** The message's own words: an earlier reply's quote and markdown markers are left out. */
+export function nativeChatReplyOwnWords(text: string): string {
   const own = nativeChatReplyQuoteOf(text)?.rest ?? text
-  const trimmed = own
+  return own
     .split(/\r?\n/)
     .filter((line) => !/^\s*(```|~~~)/.test(line))
     .map((line) => line.replace(/^\s{0,3}(#{1,6}\s+|>\s?|[-*+]\s+)/, ''))
     .join('\n')
     .trim()
+}
+
+/** The message's own words up to the cap. */
+export function nativeChatReplyExcerpt(text: string): string {
+  const trimmed = nativeChatReplyOwnWords(text)
   if (trimmed.length <= NATIVE_CHAT_REPLY_EXCERPT_MAX) {
     return trimmed
   }

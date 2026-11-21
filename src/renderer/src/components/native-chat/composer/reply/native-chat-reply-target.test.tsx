@@ -304,6 +304,12 @@ describe('reply quotes', () => {
       blocks: [text('Done. Next I will fix it.')]
     }
     expect(nativeChatReplyOriginalId([longer], { author: 'agent', excerpt: 'Done.' })).toBeNull()
+    // A message that itself ends in "…" was not cut, so a later one starting with it is no match.
+    const trailing = { id: 'm4', role: 'assistant' as const, blocks: [text('Done…')] }
+    const later = { id: 'm5', role: 'assistant' as const, blocks: [text('Done… Next step.')] }
+    expect(
+      nativeChatReplyOriginalId([trailing, later], { author: 'agent', excerpt: 'Done…' })
+    ).toBe('m4')
   })
 
   it('shows the whole quote when a queued card is expanded', () => {
@@ -344,6 +350,16 @@ describe('restored replies', () => {
     returnMessageToComposer('agent-session:busy', 'rw', [text(sent)])
     expect(readNativeChatComposerDraft('agent-session:busy').text).toBe(sent)
     expect(readNativeChatReplyTarget('agent-session:busy')?.id).toBe('open')
+  })
+
+  it('a reply remembered from before a reload is still fenced when its workspace is removed', () => {
+    const owner = { workspaceId: 'ws-3', executionHostId: 'local' } as const
+    setNativeChatReplyTarget('agent-session:reloaded', { ...reply('r'), owner })
+    resetNativeChatReplyTargetsForTests()
+    settleNativeChatReplySend('agent-session:reloaded', 'r')
+    const takenAt = nativeChatReplyCustody('agent-session:reloaded')
+    deleteNativeChatComposerDraftsOwnedBy(owner)
+    expect(restoreNativeChatReplyTarget('agent-session:reloaded', reply('r'), takenAt)).toBe(false)
   })
 
   it('a send in flight cannot bring its reply back once its workspace is removed', () => {
@@ -400,6 +416,16 @@ describe('where Reply goes', () => {
     registerNativeChatComposerDestination(box, handle, primary, scope)
     return root
   }
+
+  it('does nothing while a question card hides the message box', () => {
+    const chat = registered(true, 'agent-session:hidden')
+    chat.firstElementChild?.setAttribute('hidden', '')
+    expect(startNativeChatReply(chat, { messageId: 'm-1', author: 'agent', text: 'Hi' })).toBe(
+      false
+    )
+    expect(readNativeChatReplyTarget('agent-session:hidden')).toBeNull()
+    chat.remove()
+  })
 
   it('picks the chat message box and never a queued-message editor', () => {
     const onlyEditor = registered(false, 'queued-edit:1')

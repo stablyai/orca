@@ -73,10 +73,16 @@ function load(): void {
     }
     for (const entry of entries) {
       if (Array.isArray(entry) && typeof entry[0] === 'string' && isTarget(entry[1])) {
-        targets.set(entry[0], {
-          ...entry[1],
-          excerpt: entry[1].excerpt.slice(0, NATIVE_CHAT_REPLY_EXCERPT_MAX + 1)
+        const [scopeKey, target] = entry
+        targets.set(scopeKey, {
+          ...target,
+          excerpt: target.excerpt.slice(0, NATIVE_CHAT_REPLY_EXCERPT_MAX + 1)
         })
+        // Tracked like a reply picked this session, so deleting its chat still fences a pending send.
+        custody.set(scopeKey, custody.get(scopeKey) ?? 0)
+        if (target.owner) {
+          custodyOwners.set(scopeKey, target.owner)
+        }
       }
     }
   } catch {

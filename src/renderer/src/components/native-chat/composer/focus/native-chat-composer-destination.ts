@@ -82,7 +82,8 @@ export function nativeChatPrimaryComposer(
 ): { scopeKey: string; handle: NativeChatComposerHandle } | null {
   for (const entry of (root ? descendants.get(root) : undefined) ?? []) {
     const handle = entry.handle.current
-    if (entry.primary && entry.scopeKey && handle) {
+    // Not while a question card hides it: Reply then does nothing.
+    if (entry.primary && entry.scopeKey && handle && !entry.root.closest('[hidden], [inert]')) {
       return { scopeKey: entry.scopeKey, handle }
     }
   }

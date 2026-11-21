@@ -1,18 +1,26 @@
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { withoutNativeChatVisualDirectiveLines } from '../../../../../../shared/native-chat/visuals/native-chat-visual-directive'
-import { nativeChatReplyExcerpt } from './native-chat-reply-quote'
+import { NATIVE_CHAT_REPLY_EXCERPT_MAX, nativeChatReplyOwnWords } from './native-chat-reply-quote'
 
 const collapsed = (text: string): string => text.replace(/\s+/g, ' ').trim()
 
 /** Whether `text` is the message an excerpt was taken from, judged by the message's own words only. */
 function excerptMatches(excerpt: string, text: string): boolean {
-  const own = collapsed(nativeChatReplyExcerpt(text))
+  const words = nativeChatReplyOwnWords(text)
+  const own = collapsed(words)
   const quoted = collapsed(excerpt)
   if (!quoted) {
     return false
   }
-  // A cut excerpt ends in "…"; the message then only has to start with what was kept.
-  return quoted.endsWith('…') ? own.startsWith(quoted.slice(0, -1).trimEnd()) : own === quoted
+  if (own === quoted) {
+    return true
+  }
+  // Only a message too long to quote whole was cut to "…"; then it has to start with what was kept.
+  return (
+    words.length > NATIVE_CHAT_REPLY_EXCERPT_MAX &&
+    quoted.endsWith('…') &&
+    own.startsWith(quoted.slice(0, -1).trimEnd())
+  )
 }
 
 /** A reply restored from sent text names no message: the latest one (`messages` oldest first) by its
