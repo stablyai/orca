@@ -77,9 +77,9 @@ describe('Cursor opening rule', () => {
       "---\ndescription: Orca's standing instructions for this chat\nalwaysApply: true\n---\ncrashed\n"
     )
     await writeFile(edited, 'my edits\n')
-    const hourAgo = new Date(Date.now() - 60 * 60_000)
-    await utimes(leftover, hourAgo, hourAgo)
-    await utimes(edited, hourAgo, hourAgo)
+    const longAgo = new Date(0)
+    await utimes(leftover, longAgo, longAgo)
+    await utimes(edited, longAgo, longAgo)
 
     const undo = await placeCursorOpeningRule(home, 'next')
     await undo()
