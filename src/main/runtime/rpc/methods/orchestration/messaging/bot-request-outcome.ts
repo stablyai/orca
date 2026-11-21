@@ -14,6 +14,7 @@ import {
 } from '../../../../../bots/bot-request-view'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { botOfSession } from '../../../../../bots/bot-session-tabs'
+import { runtimeBotGroups } from '../../../../../bots/bot-group-runtime'
 import { awaitsAnswer } from '../../../../../bots/bot-request-policy'
 import { readBotTurn } from './bot-recipient'
 import { botRequestRecord } from './bot-request-record'
@@ -30,13 +31,18 @@ import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-
 import type { TurnEndedVerdict } from '../../../../../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import type { StructuredAgentSessionRequestFailure } from '../../../../../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
 import { readChatRequestError } from '../../../../orchestration/workers/turn-stops/chat-request-error-read'
+import { redactFailure } from '../../../../orchestration/workers/turn-stops/worker-turn-stop-wording'
 import { readAgentSessionRecordStore } from '../../../../orchestration/addressing/session-lineage/structured-session-lineage'
 
 const ACTIVE_DISPATCH = new Set(['pending', 'dispatched'])
 
 /** The payload a reply to a request carries: what the sender does with the answer. */
-export function botAnswerPayload(db: OrchestrationDb, original: MessageRow): string | undefined {
-  const answer = botAnswerOf(db, original).botAnswer
+export function botAnswerPayload(
+  db: OrchestrationDb,
+  original: MessageRow,
+  shownInRoom = false
+): string | undefined {
+  const answer = botAnswerOf(db, original, shownInRoom).botAnswer
   return answer
     ? JSON.stringify({ requestId: answer.requestId, botAnswer: answer.view })
     : undefined
@@ -45,7 +51,8 @@ export function botAnswerPayload(db: OrchestrationDb, original: MessageRow): str
 /** The answer a reply to a request is, recorded once; empty for a reply to other mail. */
 export function botAnswerOf(
   db: OrchestrationDb,
-  original: MessageRow
+  original: MessageRow,
+  shownInRoom = false
 ): { botAnswer?: { requestId: string; view: Record<string, string> } } {
   const record = botRequestRecord(db, original.id)
   if (!record) {
@@ -65,7 +72,30 @@ export function botAnswerOf(
       "You already answered that request, so send new mail if there's more to say."
     )
   }
-  return { botAnswer: { requestId: original.id, view: botAnswerView(record, answer.posted) } }
+  return {
+    botAnswer: { requestId: original.id, view: botAnswerView(record, answer.posted, shownInRoom) }
+  }
+}
+
+/** The room turn a group member's answer to a request shows on, read before the reply is written;
+ *  null outside a group room, or where the room cannot show it. Never fails the reply. */
+export async function groupAnswerTurn(
+  runtime: OrcaRuntimeService,
+  original: MessageRow,
+  callerSessionId: string | undefined,
+  body: string
+): Promise<string | null> {
+  const record = botRequestRecord(runtime.getOrchestrationDb(), original.id)
+  const group = record?.group
+  if (!group || callerSessionId !== group.targetSessionId || !awaitsAnswer(record.purpose)) {
+    return null
+  }
+  return runtimeBotGroups(runtime)
+    .answerTurn(callerSessionId, body)
+    .catch((error: unknown) => {
+      console.warn('[bot-groups] could not find the room turn for an answer', error)
+      return null
+    })
 }
 
 /** True when a reply's payload is the answer to this request. */
@@ -127,7 +157,13 @@ export async function settleBotRequestFailure(
   }
   const error = await readChatRequestError(failure)
   const why = (await continuesAfterUsageLimit(failure.sessionId)) ? 'failed-continues' : 'failed'
-  await settleBotRequests(runtime, failure.sessionId, why, error?.text)
+  // The reason is mailed to other agents and paired computers, so redact it as worker escalations do.
+  await settleBotRequests(
+    runtime,
+    failure.sessionId,
+    why,
+    error ? redactFailure(error.text) : undefined
+  )
 }
 
 async function settleBotRequests(

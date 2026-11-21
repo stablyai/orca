@@ -10,6 +10,7 @@ import type * as ReleaseModule from './managed-runtime-release'
 import {
   ManagedRuntimeStartError,
   RUNTIME_RELEASE_RECEIPT,
+  writeRuntimeReleaseReceipt,
   type ManagedRuntime,
   type ManagedRuntimePin
 } from './managed-runtime-release'
@@ -55,6 +56,7 @@ async function rig(bodies: ('hang' | 'whole')[], validate?: ManagedRuntime['vali
   const host = () =>
     new ManagedRuntimeInstallation('agent', runtime, {
       dataDirectory,
+      program: 'server',
       findExternal: async () => false,
       fence: (work) => work(),
       fetcher
@@ -139,43 +141,56 @@ it.each([
   expect(await readdir(root)).toEqual([])
 })
 
-it('installs a single-file release that is only known after looking up the latest', async () => {
-  const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-runtime-install-'))
-  roots.push(dataDirectory)
-  const root = join(dataDirectory, 'agent-runtimes', 'agent')
-  const binary = 'binary bytes'
-  let latest: ManagedRuntimePin | null = null
-  const runtime: ManagedRuntime = {
-    label: 'Agent',
-    root: () => root,
-    pin: () => latest,
-    refreshPin: async () => {
-      latest = {
-        version: '2.0',
-        url: 'https://example.test/2.0/agent',
-        archiveSha256: sha256(binary),
-        archiveBytes: 12,
-        format: 'file',
-        members: [{ path: 'agent', sha256: sha256(binary), bytes: 12 }]
+const BINARY = 'binary bytes'
+it.each([
+  {
+    archiveSha256: sha256(BINARY),
+    members: [{ path: 'agent', sha256: sha256(BINARY), bytes: 12 }]
+  },
+  {
+    archiveSha512: createHash('sha512').update(BINARY).digest('hex'),
+    executables: ['agent']
+  }
+])(
+  'installs a single-file release that is only known after looking up the latest',
+  async (digest) => {
+    const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-runtime-install-'))
+    roots.push(dataDirectory)
+    const root = join(dataDirectory, 'agent-runtimes', 'agent')
+    const binary = 'binary bytes'
+    let latest: ManagedRuntimePin | null = null
+    const runtime: ManagedRuntime = {
+      label: 'Agent',
+      root: () => root,
+      pin: () => latest,
+      refreshPin: async () => {
+        latest = {
+          version: '2.0',
+          url: 'https://example.test/2.0/agent',
+          archiveBytes: 12,
+          format: 'file',
+          ...digest
+        }
       }
     }
+    const installation = new ManagedRuntimeInstallation('agent', runtime, {
+      dataDirectory,
+      program: 'server',
+      findExternal: async () => false,
+      fence: (work) => work(),
+      fetcher: async () => new Response(binary)
+    })
+    installation.install()
+    await vi.waitFor(async () =>
+      expect((await installation.status()).operation?.phase).toBe('succeeded')
+    )
+    expect(await installation.status()).toMatchObject({
+      installedVersion: '2.0',
+      installedCurrent: true
+    })
+    expect(await readFile(join(root, '2.0', 'agent'), 'utf8')).toBe(binary)
   }
-  const installation = new ManagedRuntimeInstallation('agent', runtime, {
-    dataDirectory,
-    findExternal: async () => false,
-    fence: (work) => work(),
-    fetcher: async () => new Response(binary)
-  })
-  installation.install()
-  await vi.waitFor(async () =>
-    expect((await installation.status()).operation?.phase).toBe('succeeded')
-  )
-  expect(await installation.status()).toMatchObject({
-    installedVersion: '2.0',
-    installedCurrent: true
-  })
-  expect(await readFile(join(root, '2.0', 'agent'), 'utf8')).toBe(binary)
-})
+)
 
 it('updates only an installed copy that is behind, keeping the release running chats may use', async () => {
   const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-runtime-install-'))
@@ -199,6 +214,7 @@ it('updates only an installed copy that is behind, keeping the release running c
   }
   const installation = new ManagedRuntimeInstallation('agent', runtime, {
     dataDirectory,
+    program: 'server',
     findExternal: async () => false,
     fence: (work) => work(),
     fetcher: async (url) => new Response(binary(new URL(url).pathname.split('/')[1] ?? ''))
@@ -265,6 +281,7 @@ it.each([
     }
     const installation = new ManagedRuntimeInstallation('agent', runtime, {
       dataDirectory,
+      program: 'server',
       findExternal: async () => false,
       fence: (work) => work(),
       fetcher: async () => new Response(archive)
@@ -324,6 +341,7 @@ it.each([
     }
     const installation = new ManagedRuntimeInstallation('agent', runtime, {
       dataDirectory,
+      program: 'server',
       findExternal: async () => false,
       fence: (work) => work(),
       fetcher: async () => new Response(archive)
@@ -340,3 +358,69 @@ it.each([
     }
   }
 )
+
+it('never looks up the latest release for a copy that is not installed', async () => {
+  const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-runtime-install-'))
+  roots.push(dataDirectory)
+  const refreshPin = vi.fn(async () => {})
+  const fetcher = vi.fn(async () => new Response(''))
+  const installation = new ManagedRuntimeInstallation(
+    'agent',
+    {
+      label: 'Agent',
+      root: () => join(dataDirectory, 'agent-runtimes', 'agent'),
+      pin: () => null,
+      refreshPin
+    },
+    {
+      dataDirectory,
+      program: 'cli',
+      findExternal: async () => false,
+      fence: (work) => work(),
+      fetcher
+    }
+  )
+
+  await installation.updateIfBehind()
+
+  expect(refreshPin).not.toHaveBeenCalled()
+  expect(fetcher).not.toHaveBeenCalled()
+})
+
+it("doesn't keep a copy current while Orca is told not to", async () => {
+  const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-runtime-install-'))
+  roots.push(dataDirectory)
+  const root = join(dataDirectory, 'agent-runtimes', 'agent')
+  const pin: ManagedRuntimePin = {
+    version: '1.0',
+    url: 'https://example.test/1.0/agent',
+    archiveSha512: 'a'.repeat(128),
+    archiveBytes: 5,
+    format: 'file',
+    executables: ['agent']
+  }
+  await mkdir(join(root, '1.0'), { recursive: true })
+  await writeFile(join(root, '1.0', 'agent'), 'agent', { mode: 0o755 })
+  await writeRuntimeReleaseReceipt(join(root, '1.0'), pin)
+  const refreshPin = vi.fn(async () => {})
+  const fetcher = vi.fn(async () => new Response(''))
+  const installation = new ManagedRuntimeInstallation(
+    'agent',
+    { label: 'Agent', root: () => root, pin: () => pin, refreshPin },
+    {
+      dataDirectory,
+      program: 'cli',
+      findExternal: async () => false,
+      fence: (work) => work(),
+      fetcher,
+      updatesEnabled: () => false
+    }
+  )
+
+  await installation.updateIfBehind()
+
+  expect(refreshPin).not.toHaveBeenCalled()
+  expect(fetcher).not.toHaveBeenCalled()
+  // So the copy offers its own Update instead.
+  expect((await installation.status(false)).updatesAutomatically).toBeUndefined()
+})

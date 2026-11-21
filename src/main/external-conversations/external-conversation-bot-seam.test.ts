@@ -493,7 +493,7 @@ describe('a connector conversation in a bot’s home', () => {
   it('refuses an agent no bot can be before opening anything', async () => {
     const h = botSeam(null)
 
-    await expect(start(h, 'd1', 'bot', 'gemini')).resolves.toMatchObject({
+    await expect(start(h, 'd1', 'bot', 'aider')).resolves.toMatchObject({
       initial: { outcome: 'refused', reason: 'unsupported_agent' }
     })
     expect(h.bots.open).not.toHaveBeenCalled()

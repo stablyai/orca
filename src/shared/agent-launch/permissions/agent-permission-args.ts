@@ -81,6 +81,8 @@ const EXTRA_CARRIERS: Partial<Record<TuiAgent, readonly string[]>> = {
   grok: ['--permission-mode', '--always-approve', '--yolo', '--dangerously-skip-permissions'],
   gemini: ['--approval-mode', '-y'],
   antigravity: ['--dangerously-skip-permissions', '--mode', '--sandbox'],
+  // Why: Cursor exits when --auto-review meets --force (or its -f, --yolo aliases).
+  cursor: ['-f', '--force'],
   // Why: Kimi rejects --yolo (and its aliases) combined with --auto.
   kimi: ['-y', '--yolo', '--yes', '--auto-approve']
 }

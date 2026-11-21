@@ -97,7 +97,11 @@ export class InProcessAgentIdentityClient implements AgentIdentityClient {
     return Promise.resolve()
   }
 
-  dispose(): void {}
+  /** The handler caches one store per path; moving it to memory releases the file, as a worker's
+   *  exit does, so Windows can delete it. */
+  dispose(): void {
+    handleAgentIdentityRequest({ id: 0, kind: 'has', path: ':memory:', orcaSessionId: '' })
+  }
 }
 
 type ScriptedAnswer = AgentIdentityWorkerResponse | 'never'

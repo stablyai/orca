@@ -22,6 +22,7 @@ import {
   selectWorktreesByRepo
 } from '../../../workspaces/catalog/workspace-record-fields'
 import type { AppState } from '../../../types'
+import type { RuntimeStatuses } from '../../runtime-status/views/runtime-status-owner'
 
 type CrossStoreLineageInputs = Pick<
   AppState,
@@ -29,16 +30,18 @@ type CrossStoreLineageInputs = Pick<
   | 'worktreeLineageById'
   | 'crossStoreLineageByStoreKey'
   | 'ownLineageInstallationId'
-  | 'runtimeStatusByEnvironmentId'
   | 'removedRuntimeEnvironmentIds'
 > &
   Partial<Pick<AppState, 'workspaceLineageByChildKey' | 'folderWorkspaces'>>
 
-function buildView(state: CrossStoreLineageInputs): CrossStoreLineageView {
+function buildView(
+  state: CrossStoreLineageInputs,
+  statuses: RuntimeStatuses
+): CrossStoreLineageView {
   const { [OWN_LINEAGE_STORE_KEY]: own, ...paired } = state.crossStoreLineageByStoreKey
   return buildCrossStoreLineageView({
     own: { installationId: state.ownLineageInstallationId, crossStoreLineageByChildKey: own },
-    statusByEnvironmentId: state.runtimeStatusByEnvironmentId,
+    statusByEnvironmentId: statuses,
     removedEnvironmentIds: state.removedRuntimeEnvironmentIds,
     crossStoreLineageByEnvironmentId: new Map(Object.entries(paired))
   })
@@ -52,9 +55,10 @@ function storeIdentityKey(view: CrossStoreLineageView): string {
 /** A store's identity as the viewer verified it: its own lineage list, or a paired server's descriptor. */
 export function selectLineageStoreInstallationId(
   state: CrossStoreLineageInputs,
+  statuses: RuntimeStatuses,
   storeKey: string
 ): string | undefined {
-  return buildView(state).get(storeKey)?.installationId
+  return buildView(state, statuses).get(storeKey)?.installationId
 }
 
 let cached: {
@@ -64,13 +68,16 @@ let cached: {
 } | null = null
 
 /** Every resolution input, compared by identity to skip recomputation. */
-function resolutionInputs(state: CrossStoreLineageInputs): readonly unknown[] {
+function resolutionInputs(
+  state: CrossStoreLineageInputs,
+  statuses: RuntimeStatuses
+): readonly unknown[] {
   return [
     selectWorktreesByRepo(state),
     state.worktreeLineageById,
     state.crossStoreLineageByStoreKey,
     state.ownLineageInstallationId,
-    state.runtimeStatusByEnvironmentId,
+    statuses,
     state.removedRuntimeEnvironmentIds,
     state.workspaceLineageByChildKey,
     selectFolderWorkspaces(state)
@@ -86,15 +93,16 @@ let lastCall: {
  * holds a cross-store record or a folder workspace parent (the sidebar then resolves same-store
  * parents exactly as before). */
 export function selectSidebarLineageParentIdentities(
-  state: CrossStoreLineageInputs
+  state: CrossStoreLineageInputs,
+  statuses: RuntimeStatuses
 ): SidebarLineageParentIdentities | undefined {
   // Every subscriber runs this on unrelated writes; unchanged inputs skip the record scans.
-  const inputs = resolutionInputs(state)
+  const inputs = resolutionInputs(state, statuses)
   const previous = lastCall
   if (previous && inputs.every((input, index) => input === previous.inputs[index])) {
     return previous.result
   }
-  const result = resolveSidebarParents(state)
+  const result = resolveSidebarParents(state, statuses)
   lastCall = { inputs, result }
   return result
 }
@@ -122,14 +130,15 @@ function hasFolderParentRecords(state: CrossStoreLineageInputs): boolean {
 }
 
 function resolveSidebarParents(
-  state: CrossStoreLineageInputs
+  state: CrossStoreLineageInputs,
+  statuses: RuntimeStatuses
 ): SidebarLineageParentIdentities | undefined {
   const crossStore = hasCrossStoreRecords(state)
   const folderParents = hasFolderParentRecords(state)
   if (!crossStore && !folderParents) {
     return undefined
   }
-  const view = crossStore ? buildView(state) : undefined
+  const view = crossStore ? buildView(state, statuses) : undefined
   const identityKey = view ? storeIdentityKey(view) : ''
   // Status probes churn the status map; only store identities change resolution.
   const inputs = [
@@ -179,9 +188,10 @@ let lastSidebarChildren: {
  * the folder panels and Bots section read them. Keyed on the resolved parents, so a status update
  * that keeps every store identity keeps this identity. */
 export function selectSidebarChildrenByParentIdentity(
-  state: FolderChildrenInputs
+  state: FolderChildrenInputs,
+  statuses: RuntimeStatuses
 ): ReadonlyMap<string, readonly Worktree[]> {
-  const parentIdentities = selectSidebarLineageParentIdentities(state)
+  const parentIdentities = selectSidebarLineageParentIdentities(state, statuses)
   const inputs = [
     parentIdentities,
     selectWorktreesByRepo(state),

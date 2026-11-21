@@ -1,13 +1,16 @@
 import type { AppState } from '../../../store/types'
 import { isDecorativeAgentTitleFrameChange } from '../../../../../shared/agent-status/title/agent-decorative-title-signature'
 import type { WorkspaceSessionPatch } from '../../../../../shared/workspace-session/workspace-session-state-types'
-import { SESSION_RELEVANT_FIELDS, shouldPersistWorkspaceSession } from './workspace-session'
+import {
+  SESSION_RELEVANT_FIELDS,
+  shouldPersistWorkspaceSession,
+  type SessionRelevantField
+} from './workspace-session'
 import { buildWorkspaceSessionPatch } from './workspace-session-patch'
 import { createWorktreeTabBucketProjection } from '../tabs/worktree-tab-bucket-projection'
 import { createBrowserSessionHandlesProjection } from './browser-session-handles-projection'
 import { createUnifiedTabSessionCache } from './workspace-session-unified-tabs'
 
-type SessionRelevantField = (typeof SESSION_RELEVANT_FIELDS)[number]
 type TabsByWorktree = AppState['tabsByWorktree']
 type TerminalTab = TabsByWorktree[string][number]
 type UnifiedTabsByWorktree = AppState['unifiedTabsByWorktree']
@@ -86,7 +89,10 @@ export type SessionWriteSubscriberDeps = {
     subscribe: (listener: (state: AppState) => void) => () => void
     getState: () => AppState
   }
-  persist: (payload: WorkspaceSessionWrite) => void | Promise<void>
+  /** `pendingFields`: accepted but not applied yet (a fenced partition); kept for the next store wake. */
+  persist: (
+    payload: WorkspaceSessionWrite
+  ) => void | Promise<void | { pendingFields?: readonly SessionRelevantField[] }>
   onPersistError?: (error: unknown) => void
   debounceMs?: number
 }
@@ -109,6 +115,8 @@ export function createSessionWriteSubscriber({
   let prevBrowserHandlesSource: AppState['remoteBrowserPageHandlesByPageId'] | null = null
   // Pending fields are the only owed-write ledger after prev advances. In-flight writes own their fields until ACK; failures merge them back without replacing newer same-field edits.
   const pendingChangedFields = new Set<SessionRelevantField>()
+  // Accepted but not applied (a fenced partition): they ride along with the next real session change.
+  const deferredFields = new Set<SessionRelevantField>()
   const terminalTabsProjection = createTerminalSessionTabsProjection()
   const unifiedTabsProjection = createUnifiedSessionTabsProjection()
   const browserHandlesProjection = createBrowserSessionHandlesProjection()
@@ -131,10 +139,17 @@ export function createSessionWriteSubscriber({
       return
     }
     writing = true
-    const settle = (failed: boolean, error?: unknown): void => {
+    const settle = (
+      failed: boolean,
+      error?: unknown,
+      pendingFields: readonly SessionRelevantField[] = []
+    ): void => {
       writing = false
       if (disposed) {
         return
+      }
+      for (const field of pendingFields) {
+        deferredFields.add(field)
       }
       if (failed) {
         for (const field of changed) {
@@ -143,6 +158,11 @@ export function createSessionWriteSubscriber({
         // A rejection waits for the next store wake, not a retry loop.
         onPersistError?.(error)
       } else if (pendingChangedFields.size > 0) {
+        // A real change is already queued: it carries the deferred fields too.
+        for (const field of deferredFields) {
+          pendingChangedFields.add(field)
+        }
+        deferredFields.clear()
         armFlushTimer()
       }
     }
@@ -150,7 +170,7 @@ export function createSessionWriteSubscriber({
       const result = persist({ patch })
       if (result && typeof result.then === 'function') {
         void result.then(
-          () => settle(false),
+          (outcome) => settle(false, undefined, outcome?.pendingFields),
           (error: unknown) => settle(true, error)
         )
       } else {
@@ -234,6 +254,12 @@ export function createSessionWriteSubscriber({
     prev = next
     for (const field of changedFields) {
       pendingChangedFields.add(field)
+    }
+    if (changedFields.length > 0) {
+      for (const field of deferredFields) {
+        pendingChangedFields.add(field)
+      }
+      deferredFields.clear()
     }
     // Unrelated updates may wake deferred writes but must not reset an armed debounce and recreate reset storms.
     if (timer !== null && changedFields.length === 0) {

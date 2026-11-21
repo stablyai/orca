@@ -32,6 +32,7 @@ import {
 } from './claude-profile-installed-router'
 import { ClaudeObservedConfigDirs } from './claude-observed-config-dirs'
 import { claudeRoutedHomeAsync } from './claude-profile-routed-home'
+import { CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID } from '../../../../shared/agent-accounts/claude/claude-system-default-usage'
 
 vi.mock('@orca/process-host', () => ({ runProcess: vi.fn() }))
 const command = vi.hoisted(() => ({ path: '/unused-claude' }))
@@ -157,7 +158,7 @@ function claudeShellProbe(root: string): (env: Record<string, string>, rc?: stri
 }
 
 describe('ClaudeProfileRouter', () => {
-  it('runs an account with no login of its own on System default while that is signed in to it', async () => {
+  it('uses System default only while it matches an account without its own login', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const f = fixture()
     mkdirSync(f.home('a'), { recursive: true })
@@ -182,6 +183,16 @@ describe('ClaudeProfileRouter', () => {
     expect(readFileSync(f.router.pointerPath, 'utf8')).toBe('')
     expect(f.router.coveredBySystemDefault('a')).toBe(true)
 
+    signIn(f.userHome, 'b@example.test')
+    const anotherAccountLaunch = f.router.prepareLaunch()
+    await advanceRefreshDeadline(anotherAccountLaunch, 500)
+    await expect(anotherAccountLaunch).resolves.toMatchObject({ configDir: f.home('a') })
+    writeFileSync(join(f.userHome, '.claude.json'), '{}')
+    const signedOutLaunch = f.router.prepareLaunch()
+    await advanceRefreshDeadline(signedOutLaunch, 500)
+    await expect(signedOutLaunch).resolves.toMatchObject({ configDir: f.home('a') })
+
+    signIn(f.userHome, 'a@example.test')
     signIn(f.home('a'), 'a@example.test')
     const ownFolderLaunch = f.router.prepareLaunch()
     await advanceRefreshDeadline(ownFolderLaunch, 500)
@@ -195,26 +206,13 @@ describe('ClaudeProfileRouter', () => {
     await expect(claudeRoutedHomeAsync(f.router)).resolves.toBe(f.home('a'))
   })
 
-  it('keeps an account on its own folder when System default is signed in to another email, or out', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  it('reads System default usage from its own login while a saved account is selected', () => {
     const f = fixture()
-    mkdirSync(f.home('a'), { recursive: true })
-    prepareClaudeProfileDirectory(
-      f.dataRoot,
-      describeClaudeProfile(f.dataRoot, 'a', {
-        executionHostId: 'local',
-        runtime: 'host'
-      }),
-      f.userHome
-    )()
-    signIn(f.userHome, 'b@example.test')
-    const anotherAccountLaunch = f.router.prepareLaunch()
-    await advanceRefreshDeadline(anotherAccountLaunch, 500)
-    await expect(anotherAccountLaunch).resolves.toMatchObject({ configDir: f.home('a') })
-    writeFileSync(join(f.userHome, '.claude.json'), '{}')
-    const signedOutLaunch = f.router.prepareLaunch()
-    await advanceRefreshDeadline(signedOutLaunch, 500)
-    await expect(signedOutLaunch).resolves.toMatchObject({ configDir: f.home('a') })
+    expect(f.router.accountUsagePreparation(CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID)).toEqual({
+      configDir: join(f.userHome, '.claude'),
+      envPatch: {},
+      provenance: 'system'
+    })
   })
 
   it('publishes the selected folder, System default as empty, and no file without accounts', async () => {

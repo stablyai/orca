@@ -72,6 +72,8 @@ export function createMobileWebShellSession(
     requestedBuildId: null,
     requestedCompat: null,
     verdicted: false,
+    manifestFirst: false,
+    pageFaultBuildId: null,
     flow: 0
   }
 }
@@ -109,34 +111,34 @@ function onCacheRead(
   if (gates === null) {
     return step(session, { cached: generation })
   }
+  // Only this read honors Try again's ask-first; a later flow opens cache as usual.
+  const patch = { cached: generation, manifestFirst: false }
   const verdict = gateVerdict(gates)
   if (verdict.kind === 'open') {
     // A reachable host judges cache before it shows; bytes outside its window or routes let the manifest decide, as without cache.
     if (
       generation !== null &&
+      !session.manifestFirst &&
       shellRunsGeneration(generation.compat) &&
       cachedGenerationWall(verdict, gates, generation.compat) === null
     ) {
-      const opened = openByOwnRoutes(session, generation, {
-        unclaimed: CHECKING,
-        patch: { cached: generation }
-      })
+      const opened = openByOwnRoutes(session, generation, { unclaimed: CHECKING, patch })
       if (opened.session.state.kind === 'activating') {
         return opened
       }
     }
-    return step(session, { cached: generation, state: CHECKING }, [{ kind: 'read-manifest' }])
+    return step(session, { ...patch, state: CHECKING }, [{ kind: 'read-manifest' }])
   }
   if (generation === null || !shellRunsGeneration(generation.compat)) {
     // Nothing to show yet: offline says so unless the dial is still retrying; dialling and pending wait for the host.
     const settledOffline = verdict.kind === 'offline' && gates.retrying !== true
-    return step(session, { cached: generation, ...(settledOffline ? { state: OFFLINE } : {}) })
+    return step(session, { ...patch, ...(settledOffline ? { state: OFFLINE } : {}) })
   }
   // Render before the verdict: the bridge holds every desktop-bound frame until this connection's status opens it.
   // An absent route offline means offline, not evidence the unreachable desktop is outdated.
   return openByOwnRoutes(session, generation, {
     unclaimed: verdict.kind === 'offline' ? OFFLINE : CHECKING,
-    patch: { cached: generation }
+    patch
   })
 }
 

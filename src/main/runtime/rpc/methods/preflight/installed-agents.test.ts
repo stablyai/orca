@@ -50,6 +50,8 @@ describe('installed agents for acquired folder workspaces', () => {
     'preserves candidate association for $connectionId and $repoCount repos',
     async ({ connectionId, repoCount, agents }) => {
       const runtime = folderRuntime(connectionId, repoCount)
+      // On Windows the project's WSL runtime would otherwise reach this machine's real distro.
+      vi.spyOn(detection, 'assertAgentDetectionHostRunning').mockResolvedValue()
       vi.spyOn(detection, 'detectAgentsOnHost').mockImplementation(async (host) =>
         host.kind === 'local' && host.context?.projectRuntime ? ['codex'] : ['claude']
       )

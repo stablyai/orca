@@ -363,10 +363,14 @@ describe('saving root project order', () => {
     ])
   })
 
-  it('merges confirmed initial ranks into a group already refreshed by the catalog', async () => {
-    const remote = group('remote', { rootProjectOrder: 4000, tabOrder: 4 })
+  it('appends after ranked roots and merges confirmed ranks into a refreshed group', async () => {
+    const remote = group('remote', {
+      executionHostId: 'runtime:remote',
+      rootProjectOrder: 4000,
+      tabOrder: 4
+    })
     const created = group('new')
-    const started = Promise.withResolvers<void>()
+    const started = Promise.withResolvers<ProjectGroupUpdate>()
     const updated = Promise.withResolvers<ProjectGroup>()
     const store = createTestStore()
     store.setState({ projectGroups: [remote], repos: [repo('x', { projectGroupOrder: 5000 })] })
@@ -374,15 +378,18 @@ describe('saving root project order', () => {
       api: {
         projectGroups: {
           create: async () => created,
-          update: () => {
-            started.resolve()
+          update: ({ updates }: { updates: ProjectGroupUpdate }) => {
+            started.resolve(updates)
             return updated.promise
           }
         }
       }
     })
     const pending = store.getState().createProjectGroup('new', 'local')
-    await started.promise
+    await expect(started.promise).resolves.toMatchObject({
+      rootProjectOrder: 6000,
+      tabOrder: 1004
+    })
     store.setState({
       projectGroups: [
         remote,
@@ -390,7 +397,11 @@ describe('saving root project order', () => {
       ]
     })
     updated.resolve({ ...created, rootProjectOrder: 6000, tabOrder: 1004 })
-    await pending
+    await expect(pending).resolves.toMatchObject({
+      id: 'new',
+      rootProjectOrder: 6000,
+      tabOrder: 1004
+    })
     expect(store.getState().projectGroups).toMatchObject([
       { id: 'remote', rootProjectOrder: 4000, tabOrder: 4 },
       {
@@ -401,37 +412,6 @@ describe('saving root project order', () => {
         rootProjectOrder: 6000,
         tabOrder: 1004
       }
-    ])
-  })
-
-  it('appends a new group after ranked roots from the merged host catalog', async () => {
-    const remote = group('remote', {
-      executionHostId: 'runtime:remote',
-      rootProjectOrder: 4000,
-      tabOrder: 4
-    })
-    const created = group('new')
-    const store = createTestStore()
-    store.setState({ projectGroups: [remote], repos: [repo('x', { projectGroupOrder: 5000 })] })
-    vi.stubGlobal('window', {
-      api: {
-        projectGroups: {
-          create: async () => created,
-          update: async ({ updates }: { updates: ProjectGroupUpdate }) => ({
-            ...created,
-            ...updates
-          })
-        }
-      }
-    })
-    await expect(store.getState().createProjectGroup('new', 'local')).resolves.toMatchObject({
-      id: 'new',
-      rootProjectOrder: 6000,
-      tabOrder: 1004
-    })
-    expect(store.getState().projectGroups).toMatchObject([
-      { id: 'remote', rootProjectOrder: 4000, tabOrder: 4 },
-      { id: 'new', rootProjectOrder: 6000, tabOrder: 1004 }
     ])
   })
 })

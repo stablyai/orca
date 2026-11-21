@@ -40,6 +40,13 @@ import * as resultNote from './bot-run-result-note'
 import { writeStructuredAgentSessionOrcaNote } from '../native-chat/agent-session-wire/structured-agent-session-orca-note'
 import { resultPlaceValue } from '../automations/bot-automation-place-refs'
 import { watchBotTurnEnds, type BotRunUnavailable, type BotTurnEnd } from './bot-run-turn-watch'
+import { orcaSignInServer } from './orca-sign-in-server'
+import {
+  hostNotSignedIn,
+  orcaCloudNeedsSignIn,
+  serverSignInSteps,
+  type OrcaSignInServer
+} from '../../shared/bots/host-orca-sign-in'
 
 export type BotRunCompletion = Awaited<NonNullable<AutomationLaunch['completion']>>
 
@@ -53,6 +60,8 @@ export type BotRunDeliveryDependencies = BotOwnerNoticeDeps &
     ): Promise<ConnectorResult<ConnectorBotPostAnswer>> | null
     /** This host is signed out of Orca, so nothing posts through Orca Cloud. */
     cloudSignedOut(): boolean
+    /** This host's name when it is a headless server, whose signed-out note says how it signs in. */
+    signInServer?(): OrcaSignInServer
     /** An Orca note in the run's own conversation, where its result shows. */
     noteToRun(sessionId: string, noteId: string, text: string): Promise<unknown>
     /** The bot's words in an event's thread through the run's own cloud conversation, linking no
@@ -104,7 +113,12 @@ const COPY = {
   failed: (outcome: string) => `The bot's turn ended without finishing (${outcome}).`,
   chatResult: (automation: string, message: string) => `Result of "${automation}":\n\n${message}`,
   cloudOff: "Orca Cloud isn't connected, so the result wasn't posted.",
-  signedOut: (place: string) => `Not posted to ${place}: this computer is signed out of Orca.`,
+  signedOut: (place: string, server: OrcaSignInServer, botName: string) => {
+    const steps = serverSignInSteps(server, botName, 'owner')
+    return steps
+      ? `Not posted to ${place}. ${hostNotSignedIn(server)}. ${steps}`
+      : `Not posted to ${place}: this computer isn't signed in to Orca Cloud.`
+  },
   postFailed: "The result couldn't be posted.",
   chatFailed: "The result couldn't be sent to the bot's Chat.",
   notInThread:
@@ -204,7 +218,11 @@ export async function deliverBotRunResult(
   const place = resultPlaceValue(resultsTo)
   // Said where the result shows, not only in run history afterwards.
   if (deps.cloudSignedOut()) {
-    const error = COPY.signedOut('channel' in resultsTo ? 'Slack' : 'Linear')
+    const error = COPY.signedOut(
+      'channel' in resultsTo ? 'Slack' : 'Linear',
+      deps.signInServer?.(),
+      bot.name
+    )
     await deps
       .noteToRun(result.sessionId, `result-not-posted:${result.run.id}`, error)
       .catch((noteError: unknown) =>
@@ -272,7 +290,8 @@ export function runtimeBotRunResults(runtime: OrcaRuntimeService): BotRunResults
             chatThatTookIt(await chats.sendToChat(bot.id, text, from)),
           noteToChat: resultNote.runtimeNoteToChat(runtime, chats),
           postAsBot: (bot, body) => runtime.getConnectorCloud()?.postAsBot(bot.id, body) ?? null,
-          cloudSignedOut: () => runtime.getConnectorCloud()?.status() === 'signed-out',
+          cloudSignedOut: () => orcaCloudNeedsSignIn(runtime.getConnectorCloud()?.status()),
+          signInServer: () => orcaSignInServer(runtime),
           noteToRun: async (sessionId, noteId, text) =>
             writeStructuredAgentSessionOrcaNote(
               await requireStructuredHost(runtime),

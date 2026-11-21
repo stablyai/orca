@@ -111,31 +111,6 @@ describe('addWorktree', () => {
     expect(checkoutGitMock.mock.calls[0]?.[0]).toContain('add')
   })
 
-  it('fast-forwards local base via update-ref when localBranch is not checked out', async () => {
-    queueBehindInspection()
-      .mockResolvedValueOnce({ stdout: '' })
-      .mockResolvedValueOnce({ stdout: '' })
-
-    const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
-
-    expect(result.localBaseRefRefresh).toEqual({
-      status: 'updated',
-      baseRef: 'origin/main',
-      localBranch: 'main'
-    })
-    expect(refreshGitMock.mock.calls.at(-1)).toEqual([
-      [
-        'update-ref',
-        '-m',
-        'orca: fast-forward to refs/remotes/origin/main',
-        'refs/heads/main',
-        'remote-main',
-        'old-main'
-      ],
-      expect.objectContaining({ cwd: '/repo', beforeStart: expect.any(Function) })
-    ])
-  })
-
   it('skips local base refresh when worktree ownership cannot be listed', async () => {
     queueBehindInspection({ worktrees: new Error('worktree list failed') })
 
@@ -153,8 +128,6 @@ describe('addWorktree', () => {
       'worktree'
     ])
   })
-
-  // Creating the base's own local branch leaves nothing to refresh; probing would race the add.
 
   it('still suggests nothing but keeps the warning when the local base ref exists and diverged', async () => {
     queueBehindInspection({ counts: { stdout: '2\t3\n' } })

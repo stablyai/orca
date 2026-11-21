@@ -1,5 +1,6 @@
 import * as z from 'zod'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host/execution-host'
+import type { ConnectorCloudStatus } from '../../../src/shared/bots/connector-cloud-status'
 import {
   BOTS_CREATE_RUNTIME_CAPABILITY,
   BOTS_MOBILE_RUNTIME_CAPABILITY,
@@ -47,6 +48,10 @@ export type HostBotsRead =
       needsYou: Readonly<Record<string, number>>
       /** When those counts next change, as one goes stale or a snoozed one comes back. */
       needsYouChangeInMs?: number
+      /** The host's Orca Cloud link; absent from an older host, which keeps today's card line. */
+      connectorStatus?: ConnectorCloudStatus
+      /** Its Orca Cloud answers an event in that event's thread, for an automation's results. */
+      threadReplies?: boolean
     }
   | { kind: 'no-capability' }
   | { kind: 'unreadable' }

@@ -337,7 +337,7 @@ it('reads live pairing names from the standalone RPC registry', async () => {
   }
 })
 
-it('starts push after RPC identity is available and stops dispatch on shutdown', async () => {
+it('serves the startup profile and starts and stops its push dispatch', async () => {
   state.root = mkdtempSync(join(tmpdir(), 'orca-headless-push-'))
   state.controller = new RuntimeMobileNotificationController()
   state.registry = new DeviceRegistry(state.root)
@@ -345,6 +345,9 @@ it('starts push after RPC identity is available and stops dispatch on shutdown',
   const { startOrcad } = await import('./host-runtime/orcad-entry')
   const host = await startOrcad({ noPairing: true, json: true })
   try {
+    const [store] = runs.runtimeArgs[0] ?? []
+    expect(store).toBe(runs.profileStore)
+    expect(runs.servedProfiles).toEqual(['headless-profile'])
     const result = await state.controller.registerPushDevice({
       deviceId: phone.deviceId,
       platform: 'android',
@@ -497,20 +500,6 @@ it('leaves agent configs alone when status hooks are off', async () => {
     await new Promise((resolve) => setImmediate(resolve))
     expect(state.installManagedAgentHooks).not.toHaveBeenCalled()
     expect(state.startCodexHooks.mock.calls[0]![0].isEnabled()).toBe(false)
-  } finally {
-    await host.stop()
-  }
-})
-
-// Bots record link owners from this profile's account; it must be the one whose store this is.
-it("serves the startup profile's store and names that same profile", async () => {
-  state.root = mkdtempSync(join(tmpdir(), 'orca-headless-served-profile-'))
-  const { startOrcad } = await import('./host-runtime/orcad-entry')
-  const host = await startOrcad({ noPairing: true, json: true })
-  try {
-    const [store] = runs.runtimeArgs[0] ?? []
-    expect(store).toBe(runs.profileStore)
-    expect(runs.servedProfiles).toEqual(['headless-profile'])
   } finally {
     await host.stop()
   }

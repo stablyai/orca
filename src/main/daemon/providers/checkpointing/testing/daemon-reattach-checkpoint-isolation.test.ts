@@ -163,7 +163,7 @@ describe('STA-4173 reattach isolation from a stalled checkpoint', () => {
     await stalledReattach
   })
 
-  it('falls back to the live window when the session own checkpoint blows the deadline', async () => {
+  it('reattaches from the live window on timeout and commits the checkpoint later', async () => {
     const stalledId = await spawnWithOutput('deadline-session', 'DEADLINE_OUTPUT\r\n')
     const stall = await stallCheckpointFor(stalledId)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -214,6 +214,24 @@ describe('STA-4173 reattach isolation from a stalled checkpoint', () => {
       stall.release()
       warn.mockRestore()
     }
+    expect(await withinBudget(stall.completedPromise, DEADLINE_BUDGET_MS)).toBe('committed')
+    const checkpointRead = await readTerminalHistoryCheckpoint(
+      join(dir, 'history', getHistorySessionDirName(stalledId), 'checkpoint.json')
+    )
+    if (checkpointRead.status !== 'readable') {
+      throw new Error(`Abandoned checkpoint is ${checkpointRead.status}`)
+    }
+    expect(
+      `${checkpointRead.checkpoint.scrollbackAnsi}${checkpointRead.checkpoint.snapshotAnsi}`
+    ).toContain('DEADLINE_OUTPUT')
+    await vi.waitFor(async () => {
+      const restore = await new HistoryReader(join(dir, 'history')).detectColdRestore(stalledId, {
+        ignoreCleanEnd: true
+      })
+      expect(`${restore?.scrollbackAnsi ?? ''}${restore?.snapshotAnsi ?? ''}`).toContain(
+        'DEADLINE_OUTPUT'
+      )
+    })
   }, 30_000)
 
   it('bounds overlay compacts across distinct sessions without blocking reattach', async () => {
@@ -258,60 +276,4 @@ describe('STA-4173 reattach isolation from a stalled checkpoint', () => {
       await Promise.allSettled(reattaches)
     }
   })
-
-  it('still commits the abandoned checkpoint once the history write completes', async () => {
-    const stalledId = await spawnWithOutput('resumed-session', 'RESUMED_OUTPUT\r\n')
-    const stall = await stallCheckpointFor(stalledId)
-
-    try {
-      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldClearNativeTimers: true })
-      const pendingReattach = withinBudget(
-        adapter.spawn({ cols: 80, rows: 24, sessionId: stalledId, cwd: '/tmp' }),
-        DEADLINE_BUDGET_MS
-      )
-      let settled = false
-      void pendingReattach.then(
-        () => {
-          settled = true
-        },
-        () => {
-          settled = true
-        }
-      )
-      const checkpointEntry = await withinBudget(
-        Promise.race([
-          stall.enteredPromise.then(() => 'entered' as const),
-          pendingReattach.then(() => 'reattach-settled' as const)
-        ]),
-        DEADLINE_BUDGET_MS
-      )
-      expect(checkpointEntry, 'Reattach must enter its checkpoint before settling').toBe('entered')
-      await vi.advanceTimersByTimeAsync(4_999)
-      expect(settled).toBe(false)
-      await vi.advanceTimersByTimeAsync(1)
-      const reattach = await pendingReattach
-      expect(reattach).not.toBe('timed-out')
-    } finally {
-      vi.useRealTimers()
-      stall.release()
-    }
-    expect(await withinBudget(stall.completedPromise, DEADLINE_BUDGET_MS)).toBe('committed')
-    const checkpointRead = await readTerminalHistoryCheckpoint(
-      join(dir, 'history', getHistorySessionDirName(stalledId), 'checkpoint.json')
-    )
-    if (checkpointRead.status !== 'readable') {
-      throw new Error(`Abandoned checkpoint is ${checkpointRead.status}`)
-    }
-    expect(
-      `${checkpointRead.checkpoint.scrollbackAnsi}${checkpointRead.checkpoint.snapshotAnsi}`
-    ).toContain('RESUMED_OUTPUT')
-    await vi.waitFor(async () => {
-      const restore = await new HistoryReader(join(dir, 'history')).detectColdRestore(stalledId, {
-        ignoreCleanEnd: true
-      })
-      expect(`${restore?.scrollbackAnsi ?? ''}${restore?.snapshotAnsi ?? ''}`).toContain(
-        'RESUMED_OUTPUT'
-      )
-    })
-  }, 30_000)
 })

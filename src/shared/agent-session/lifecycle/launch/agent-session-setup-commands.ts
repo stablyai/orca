@@ -57,8 +57,62 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     loginCommand: ['hermes', 'model'],
     installCommand: 'curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash'
   },
-  // Host `agy acp` uses `agy acp --login`; managed Antigravity chats keep their own sign-in in Settings.
-  { agent: 'antigravity', loginCommand: ['agy', 'acp', '--login'] }
+  {
+    agent: 'kiro',
+    loginCommand: ['kiro-cli', 'login'],
+    remoteLoginCommand: ['kiro-cli', 'login', '--use-device-flow'],
+    installCommand: 'curl -fsSL https://cli.kiro.dev/install | bash'
+  },
+  // `goose configure` picks a provider and model and stores their keys; Goose has no separate login.
+  {
+    agent: 'goose',
+    loginCommand: ['goose', 'configure'],
+    installCommand:
+      'curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | bash',
+    windowsInstallScript: 'https://raw.githubusercontent.com/aaif-goose/goose/main/download_cli.ps1'
+  },
+  // `--json` takes the pasted sign-in response instead of the browser's localhost callback.
+  {
+    agent: 'aug',
+    loginCommand: ['auggie', 'auth', 'login', '--headless'],
+    remoteLoginCommand: ['auggie', 'auth', 'login', '--headless', '--json'],
+    installCommand: 'npm install -g @augmentcode/auggie'
+  },
+  {
+    agent: 'kilo',
+    loginCommand: ['kilo', 'auth', 'login'],
+    installCommand: 'curl -fsSL https://kilo.ai/cli/install | bash'
+  },
+  {
+    agent: 'mimo-code',
+    loginCommand: ['mimo', 'auth', 'login'],
+    installCommand: 'curl -fsSL https://mimo.xiaomi.com/install | bash',
+    windowsInstallScript: 'https://mimo.xiaomi.com/install.ps1'
+  },
+  { agent: 'gemini', loginCommand: ['gemini'], slashCommand: '/auth' },
+  {
+    agent: 'droid',
+    loginCommand: ['droid'],
+    slashCommand: '/login',
+    installCommand: 'curl -fsSL https://app.factory.ai/cli | sh'
+  },
+  // Qwen has no login command; `/auth` in its CLI connects a provider.
+  {
+    agent: 'qwen-code',
+    loginCommand: ['qwen'],
+    slashCommand: '/auth',
+    installCommand:
+      'curl -fsSL https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.sh | bash',
+    windowsInstallScript:
+      'https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.ps1'
+  },
+  // Host `agy acp` uses `agy acp --login` (`system`); managed Antigravity chats keep their own sign-in in Settings.
+  {
+    agent: 'antigravity',
+    loginCommand: ['agy', 'acp', '--login'],
+    systemLoginCommand: ['agy', 'acp', '--login'],
+    loginEnv: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' }
+  }
 ] as const
 
 export function agentSessionSetupFor(agent: string | undefined) {
@@ -86,9 +140,21 @@ export function agentSessionSignInCommand(
     return options.shell === null ? null : claudeSystemSignInCommand(options.shell ?? 'posix')
   }
   const argv =
-    options.remote && 'remoteLoginCommand' in entry ? entry.remoteLoginCommand : entry.loginCommand
+    options.account === 'system' && 'systemLoginCommand' in entry
+      ? entry.systemLoginCommand
+      : options.remote && 'remoteLoginCommand' in entry
+        ? entry.remoteLoginCommand
+        : entry.loginCommand
   // Why a plain join: every word is a bare token, which POSIX, PowerShell and cmd all read alike.
   return argv.length > 0 ? argv.join(' ') : null
+}
+
+/** What the sign-in terminal adds to its environment, e.g. so a self-updating CLI doesn't update. */
+export function agentSessionSignInEnv(
+  agent: string | undefined
+): Record<string, string> | undefined {
+  const entry = agentSessionSetupFor(agent)
+  return entry && 'loginEnv' in entry ? { ...entry.loginEnv } : undefined
 }
 
 /** Bypass the selected-profile function and restore the config Orca replaced for this login. */

@@ -39,7 +39,12 @@ export type LaunchEnvironmentSettings = Pick<
   | 'httpProxyUrl'
   | 'httpProxyBypassRules'
 > &
-  Partial<Pick<GlobalSettings, 'agentCmdOverrides' | 'antigravityChatAuth'>> &
+  Partial<
+    Pick<
+      GlobalSettings,
+      'agentCmdOverrides' | 'antigravityChatAuth' | 'antigravityManagedAgyEnabled'
+    >
+  > &
   AgentLaunchProfileSettings
 
 /** What the check reads from the runtime asking it. */

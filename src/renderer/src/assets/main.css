@@ -45,9 +45,6 @@
 
 /* Not inline: the chat root rescales these, so utilities must read the variables. */
 @theme {
-  /* Paused on purpose: a running loop redraws the window every refresh. looping-animation-clock.ts steps these. */
-  --animate-spin: spin 1s linear infinite paused;
-  --animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite paused;
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: calc(1 / 0.6875);
   --text-3xs: 0.625rem;
@@ -603,6 +600,9 @@
   --notice-border: color-mix(in srgb, var(--popover-foreground) 14%, transparent);
   --notice-secondary: color-mix(in srgb, var(--foreground) 6%, var(--notice-surface));
   --notice-shadow: 0 11px 32px -6px rgb(0 0 0 / 0.2), 0 2px 6px rgb(0 0 0 / 0.08);
+  /* The bot pill's ring + lift: an approved exception to the three elevation levels, lighter than notices. */
+  --bot-home-banner-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.04), 0 1px 2px rgb(0 0 0 / 0.015), 0 4px 14px rgb(0 0 0 / 0.02);
 }
 
 .dark {
@@ -612,6 +612,8 @@
   --notice-shadow:
     0 11px 32px -6px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.22),
     inset 0 1px 0 rgb(255 255 255 / 0.06);
+  --bot-home-banner-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.06), 0 1px 2px rgb(0 0 0 / 0.075), 0 4px 14px rgb(0 0 0 / 0.075);
 }
 
 /* Why: buttons, text and inner panels paint from these; foregrounds pair with the popover the surface lifts,
@@ -2223,26 +2225,40 @@ html.native-shell .app-layout {
   grid-template-rows: 1fr;
 }
 
-/* The ring holds still on its own: a running animation ticks the compositor every refresh.
-   looping-animation-clock.ts steps it inside frames an elapsed-time label already draws. */
+/* Keep rotation on the compositor: JS style writes caused typing stalls (#12359). */
+/* One day per iteration avoids per-second React animation events; still 12 steps/second. */
 @keyframes agent-spinner-rotate {
   to {
-    transform: rotate(1turn);
+    transform: rotate(86400turn);
   }
 }
 
 .agent-working-spinner {
-  animation: agent-spinner-rotate 1s linear infinite paused;
+  animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
 }
 
-/* Offscreen subtrees pause their loops: a running animation ticks the compositor even out of view. */
+/* The rings' cadence and clock: a smooth spin made the GPU present every refresh; these steps land on the rings' frames. */
+.loading-spinner {
+  animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
+}
+
+/* Offscreen subtrees pause their loops; spinners drop their animation instead so reveal re-anchors phase. */
 [data-animation-offscreen],
 [data-animation-offscreen] * {
   animation-play-state: paused;
 }
 
+.agent-working-spinner[data-animation-offscreen],
+.loading-spinner[data-animation-offscreen] {
+  animation: none;
+}
+
+/* Generic spinners and pulses hold still under reduced motion even where a caller forgot motion-reduce:. */
 @media (prefers-reduced-motion: reduce) {
-  .agent-working-spinner {
+  .agent-working-spinner,
+  .loading-spinner,
+  .animate-spin,
+  .animate-pulse {
     animation: none;
   }
 }
@@ -4341,8 +4357,7 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
 
 .browser-agent-cursor-layer[data-agent-active]::before {
   opacity: 1;
-  /* Paused: looping-animation-clock.ts steps it, so the glow never redraws the window by itself. */
-  animation: browser-agent-glow-breathe 2.4s ease-in-out infinite paused;
+  animation: browser-agent-glow-breathe 2.4s ease-in-out infinite;
 }
 
 @keyframes browser-agent-glow-breathe {

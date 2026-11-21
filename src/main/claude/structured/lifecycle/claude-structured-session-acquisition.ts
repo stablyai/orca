@@ -10,7 +10,7 @@ import { claudeConfigDirEnvPatch } from '../launch/claude-config-dir-pin'
 import { claudeProcessIdentity } from './claude-structured-owner-identity'
 import { ClaudePromptRegistry } from '../permissions/claude-prompt-registry'
 import { adoptClaudeStructuredSpawnOptions } from '../launch/claude-structured-spawn-options'
-import { observeClaudeExecutionModel } from '../turns/claude-structured-execution-observations'
+import { observeClaudeFrameModels } from '../turns/claude-structured-execution-observations'
 import { observeClaudeFastModeFacts } from '../launch/claude-structured-session-options'
 import {
   createClaudeSessionPublication,
@@ -29,6 +29,7 @@ import { isRootClaudeFrame } from '../turns/claude-turn-opening'
 import * as outcome from '../startup/claude-structured-startup-outcome'
 import { claudeStartupResultError } from '../../sdk-transport/claude-stream-json-exit-error'
 import * as ui from './claude-structured-plugin-ui-recovery'
+import { observeClaudeRootInit } from '../permissions/claude-permission-mode-ladder'
 
 export async function acquireClaudeSession({
   input,
@@ -98,12 +99,10 @@ export async function acquireClaudeSession({
       firstRootInit ??= {
         permissionMode: proof.readClaudeFrameString(message, 'permissionMode')
       }
-      if (liveSession) {
-        liveSession.firstRootInit = firstRootInit
-      }
+      observeClaudeRootInit(liveSession, firstRootInit)
     }
     const permissionChanged = proof.observeClaudeReportedPermissionMode(observedOptions, message)
-    const modelReport = observeClaudeExecutionModel(liveSession, init?.model)
+    const modelReport = observeClaudeFrameModels(liveSession, message, init?.model)
     if (init) {
       initProof.resolve(init)
       if (liveSession) {
