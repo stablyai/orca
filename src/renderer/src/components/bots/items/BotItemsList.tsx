@@ -396,6 +396,7 @@ function BotItemGroup({
             renderRow={(item, tabbable) => row(item, tabbable)}
             backUid={backItem?.uid ?? null}
             onBackFocused={backFocused}
+            disabled={offline}
           />
           {more > 0 ? (
             <button

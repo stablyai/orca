@@ -130,7 +130,8 @@ export function BotItemRowsWindow({
   label,
   renderRow,
   backUid,
-  onBackFocused
+  onBackFocused,
+  disabled = false
 }: {
   /** The group's shown rows, in order. */
   items: readonly BotItem[]
@@ -144,6 +145,9 @@ export function BotItemRowsWindow({
   /** Back's row: drawn until it has focus, then `onBackFocused`. */
   backUid: string | null
   onBackFocused: () => void
+  /** The rows' controls are off (the host is offline): rows themselves take focus, so the keys still
+   *  reach every row and a screen reader reads each one. */
+  disabled?: boolean
 }): React.JSX.Element {
   const container = useRef<HTMLDivElement | null>(null)
   const count = items.length
@@ -266,22 +270,36 @@ export function BotItemRowsWindow({
   // takes it, without scrolling, so the owner carries on from there. Only focus this commit dropped is
   // handed on; focus the owner had already taken elsewhere stays there.
   const focusedAtRender = typeof document === 'undefined' ? null : document.activeElement
-  const refocus = useLatestHandler((at: number): void => {
-    const index = Math.min(at, count - 1)
+  // A row the panel shows: focus handed to one out of view would act on a row the owner can't see.
+  const inView = (index: number): boolean => {
+    const box = viewport.read()
+    const element = container.current
+    if (!box || !element) {
+      return false
+    }
+    const top = element.getBoundingClientRect().top + geometry.offset(index)
+    return top < box.bottom && top + geometry.height(index) > box.top
+  }
+  const refocus = useLatestHandler((left: RowPick): void => {
+    const index = Math.min(left.at, count - 1)
     const next = items[index]
-    if (next && focusedAtRender !== null && !focusedAtRender.isConnected && focusFellToNothing()) {
+    // The dropped control was in the row that left (still its parent, off the page), not another list's.
+    const inRow =
+      focusedAtRender?.closest<HTMLElement>('[data-bot-item-row]')?.dataset.botItemRow === left.uid
+    if (next && inRow && !focusedAtRender?.isConnected && focusFellToNothing() && inView(index)) {
       setTarget({ uid: next.uid, at: index, quiet: true })
     }
   })
   useLayoutEffect(() => {
     if (focused !== null && focusedIndex < 0) {
-      refocus(focused.at)
+      refocus(focused)
     }
     setStop((prev) => (prev === stop ? relocated(prev, stopIndex) : prev))
     setFocused((prev) => (prev === focused ? relocated(prev, focusedIndex) : prev))
     setTarget((prev) => (prev === target ? relocated(prev, targetIndex) : prev))
   }, [stop, stopIndex, focused, focusedIndex, target, targetIndex, refocus])
   const tabStop = stopIndex >= 0 ? stopIndex : 0
+  const rowsTakeFocus = disabled && !all
   const pinned = useMemo(
     () =>
       [tabStop, focusedIndex, targetIndex, backIndex].filter(
@@ -301,11 +319,12 @@ export function BotItemRowsWindow({
   const focusTarget = useCallback(
     (node: HTMLElement | null) => {
       if (node) {
-        node.querySelector<HTMLElement>('[data-bot-item-open]')?.focus({ preventScroll: quiet })
+        const control = disabled ? node : node.querySelector<HTMLElement>('[data-bot-item-open]')
+        control?.focus({ preventScroll: quiet })
         setTarget(null)
       }
     },
-    [quiet]
+    [quiet, disabled]
   )
   const focusBack = useCallback(
     (node: HTMLElement | null) => {
@@ -376,6 +395,8 @@ export function BotItemRowsWindow({
               role={all ? 'listitem' : 'row'}
               aria-rowindex={all ? undefined : index + 1}
               data-bot-item-index={index}
+              data-bot-item-row={item.uid}
+              tabIndex={rowsTakeFocus ? (index === tabStop ? 0 : -1) : undefined}
               style={{ height: geometry.height(index) }}
               ref={
                 index === targetIndex ? focusTarget : index === backIndex ? focusBack : undefined

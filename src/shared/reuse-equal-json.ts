@@ -60,12 +60,12 @@ function uidPairing(previous: readonly unknown[], next: readonly unknown[]): Uid
   const find = (index: number, uid: string): unknown => {
     // A record moved a few places (others added, removed or swapped near it) is found close by. One found
     // nowhere near is usually new, or moved to the front for new activity and so changed anyway: it's
-    // taken as new. Past one such, every previous record is indexed once.
+    // taken as new. Past a few such (a burst of new items), every previous record is indexed once.
     const near = byUid === undefined ? nearbyByUid(previous, index, uid) : undefined
     if (near !== undefined) {
       return near
     }
-    if (byUid === undefined && unplaced++ === 0) {
+    if (byUid === undefined && unplaced++ < NEARBY) {
       return undefined
     }
     byUid = byUid === undefined ? indexByUid(previous) : byUid
@@ -103,7 +103,8 @@ export function reuseEqualJson<T>(previous: unknown, next: T): T {
     let same = previous.length === next.length
     // Records pair by place, as in base, until one differs whose `uid` moved (a list of records with a
     // `uid`, items); from there each pairs with the previous record carrying its `uid`, so it keeps its
-    // identity and is compared once, with itself. An equal array, or one in the same order, pays nothing.
+    // identity and is compared once, with itself. An equal array reads no `uid`; one in the same order
+    // reads two per changed record.
     let pairing: UidPairing | undefined
     const merged = next.map((item: unknown, index) => {
       let kept: unknown
