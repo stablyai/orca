@@ -199,46 +199,53 @@ const pill: JSONContent = {
   attrs: { token: '@src/main.ts', path: '' }
 }
 
-it.each<[string, (string | JSONContent)[][], (doc: ProseMirrorNode) => Selection, string, number]>([
-  ['at the caret', [['see  please']], (doc) => TextSelection.create(doc, 5), 'see \n please', 5],
-  [
-    'in place of a selected pill',
-    [['see ', pill, ' please']],
-    (doc) => NodeSelection.create(doc, 5),
-    'see \n please',
-    5
-  ],
-  ['in place of everything', [['abc'], ['def']], (doc) => new AllSelection(doc), '\n', 1],
-  [
-    'in place of a whole selected line',
-    [['abc'], ['def']],
-    (doc) => NodeSelection.create(doc, 5),
-    'abc\n\n',
-    5
-  ]
-])('starts a new paragraph on Shift+Enter %s', (_name, lines, select, expected, caret) => {
-  const { input, editor } = setup()
-  act(() => {
-    editor.commands.setContent({
-      type: 'doc',
-      content: lines.map((line) => ({
-        type: 'paragraph',
-        content: line.map((part) =>
-          typeof part === 'string' ? { type: 'text', text: part } : part
-        )
-      }))
+describe.each([
+  ['Shift+Enter', { shiftKey: true }],
+  ['Alt+Enter', { altKey: true }]
+])('%s', (_chord, modifier) => {
+  it.each<
+    [string, (string | JSONContent)[][], (doc: ProseMirrorNode) => Selection, string, number]
+  >([
+    ['at the caret', [['see  please']], (doc) => TextSelection.create(doc, 5), 'see \n please', 5],
+    [
+      'in place of a selected pill',
+      [['see ', pill, ' please']],
+      (doc) => NodeSelection.create(doc, 5),
+      'see \n please',
+      5
+    ],
+    ['in place of everything', [['abc'], ['def']], (doc) => new AllSelection(doc), '\n', 1],
+    [
+      'in place of a whole selected line',
+      [['abc'], ['def']],
+      (doc) => NodeSelection.create(doc, 5),
+      'abc\n\n',
+      5
+    ]
+  ])('starts a new paragraph %s', (_name, lines, select, expected, caret) => {
+    const { input, editor } = setup()
+    act(() => {
+      editor.commands.setContent({
+        type: 'doc',
+        content: lines.map((line) => ({
+          type: 'paragraph',
+          content: line.map((part) =>
+            typeof part === 'string' ? { type: 'text', text: part } : part
+          )
+        }))
+      })
+      editor.view.dispatch(editor.state.tr.setSelection(select(editor.state.doc)))
     })
-    editor.view.dispatch(editor.state.tr.setSelection(select(editor.state.doc)))
+    act(() => {
+      fireEvent.keyDown(editor.view.dom, { key: 'Enter', ...modifier })
+    })
+    expect(
+      editor
+        .getJSON()
+        .content?.some((line) => line.content?.some((node) => node.type === 'hardBreak'))
+    ).toBe(false)
+    expect([input.value, input.selectionStart]).toEqual([expected, caret])
   })
-  act(() => {
-    fireEvent.keyDown(editor.view.dom, { key: 'Enter', shiftKey: true })
-  })
-  expect(
-    editor
-      .getJSON()
-      .content?.some((line) => line.content?.some((node) => node.type === 'hardBreak'))
-  ).toBe(false)
-  expect([input.value, input.selectionStart]).toEqual([expected, caret])
 })
 
 function mockMacPlatform(): void {
