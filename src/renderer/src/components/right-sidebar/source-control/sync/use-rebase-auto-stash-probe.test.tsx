@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-import { cleanup, renderHook, waitFor } from '@testing-library/react'
+import { cleanup, renderHook } from '@testing-library/react'
+import { flush } from '../panel/source-control-hook-test-harness'
 import { afterEach, expect, it, vi } from 'vitest'
 import { getWorktreeOperationStore } from '../panel/worktree-operation-store'
 import { useRebaseAutoStashProbe } from './use-rebase-auto-stash-probe'
@@ -29,7 +30,8 @@ it('forgets an earlier rebase.autoStash answer when a later probe fails', async 
     })
   )
 
-  await waitFor(() => expect(probe.read).toHaveBeenCalledTimes(1))
+  await flush()
+  expect(probe.read).toHaveBeenCalledTimes(1)
   // A failed re-read must not leave the old `true` enabling Rebase over a dirty tree.
-  await waitFor(() => expect(operationStore.getState().rebaseAutoStash).toBeNull())
+  expect(operationStore.getState().rebaseAutoStash).toBeNull()
 })
