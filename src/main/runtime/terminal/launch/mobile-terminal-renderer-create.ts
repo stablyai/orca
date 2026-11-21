@@ -108,9 +108,11 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
     if (opts.signal?.aborted) {
       throw new Error('client_disconnected')
     }
-    if (opts.clientMutationId && startupCommand.command && startupCommand.launchAgent === 'qoder') {
+    const reconcileQoder = startupCommand.command && startupCommand.launchAgent === 'qoder'
+    if (opts.clientMutationId && (opts.reopen || reconcileQoder)) {
       const clientIdentity = opts.clientNavigationId ?? 'local'
       const seed = `${clientIdentity}\0${worktreeId}\0${opts.clientMutationId}`
+      const identityPrefix = opts.reopen ? 'mobile-reopen' : 'mobile-qoder'
       // A command-bearing retry must reconcile the owning PTY before delivering the resume again.
       return await this.createRuntimeOwnedMobileSessionTerminal(
         worktreeId,
@@ -120,11 +122,13 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           // The paired client's own create: its user's act.
           wslUserAct: true,
           ...startupCommand,
+          reopen: opts.reopen,
+          ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
           ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
           cwd,
           identity: {
-            tabId: deterministicAgentSessionUuid(`mobile-qoder-tab\0${seed}`),
-            leafId: deterministicAgentSessionUuid(`mobile-qoder-leaf\0${seed}`)
+            tabId: deterministicAgentSessionUuid(`${identityPrefix}-tab\0${seed}`),
+            leafId: deterministicAgentSessionUuid(`${identityPrefix}-leaf\0${seed}`)
           },
           createMutation: { clientIdentity, id: opts.clientMutationId },
           viewMode: opts.viewMode,

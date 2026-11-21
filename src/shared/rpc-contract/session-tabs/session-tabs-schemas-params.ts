@@ -156,6 +156,16 @@ export const SetTabProps = WorktreeTabSelector.extend({
   customTitle: z.string().max(512).nullable().optional()
 })
 
+export const ReopenTerminalTab = WorktreeTabSelector.extend({
+  clientMutationId: z.string().uuid(),
+  afterTabId: z.string().optional(),
+  targetGroupId: z.string().optional(),
+  cwd: z.string().min(1).optional(),
+  shell: WindowsShellOverrideParam.optional(),
+  customTitle: SetTabProps.shape.customTitle,
+  color: SetTabProps.shape.color
+})
+
 export const CreateTerminalTab = WorktreeTabSelector.extend({
   sourceChatFork: z
     .object({ sessionId: z.string().min(1) })

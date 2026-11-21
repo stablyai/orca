@@ -222,7 +222,7 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     const customTitle =
       existingSurface?.customTitle !== undefined
         ? existingSurface.customTitle
-        : this.getPtyManualTitle(livePty.pty, false) || undefined
+        : this.getPtyManualTitle(livePty.pty, false) || opts.reopen?.customTitle || undefined
     const tab: RuntimeMobileSessionTerminalTab = {
       type: 'terminal',
       id: `${parentTabId}::${leafId}`,
@@ -232,6 +232,9 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
       incarnationId: livePty.pty.incarnationId,
       title: terminal.title ?? livePty.pty.title ?? 'Terminal',
       ...(customTitle !== undefined ? { customTitle } : {}),
+      ...(opts.reopen
+        ? { color: existingSurface ? existingSurface.color : opts.reopen.color }
+        : {}),
       // Omit only a proven root correction; an unverifiable fallback keeps its saved request.
       ...((terminal.savedStartupCwd ?? cwd) && (terminal.savedStartupCwd ?? cwd) !== workspace.path
         ? { startupCwd: terminal.savedStartupCwd ?? cwd }

@@ -13,7 +13,10 @@ import {
 import { SESSION_TAB_MARKDOWN_METHODS } from './session-tab-markdown-methods'
 import { SESSION_TAB_MUTATION_METHODS } from './session-tab-mutation-methods'
 import { SESSION_TAB_SHELL_CHOICE_METHODS } from './session-tab-shell-choice-methods'
-import { SESSION_TAB_CREATE_TERMINAL_METHOD } from './session-tab-create-terminal-method'
+import {
+  SESSION_TAB_CREATE_TERMINAL_METHOD,
+  SESSION_TAB_REOPEN_TERMINAL_METHOD
+} from './session-tab-create-terminal-method'
 import { createSessionTabsStreamDelta } from './session-tabs-sender-delta'
 import {
   projectSessionTabUnreadForClient,
@@ -64,6 +67,7 @@ export const SESSION_TAB_METHODS = [
   ...SESSION_TAB_CLOSE_METHODS,
   ...SESSION_TAB_SHELL_CHOICE_METHODS,
   SESSION_TAB_CREATE_TERMINAL_METHOD,
+  SESSION_TAB_REOPEN_TERMINAL_METHOD,
   defineStreamingMethod({
     name: 'session.tabs.subscribe',
     permission: 'workspace',

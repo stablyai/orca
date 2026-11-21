@@ -2,10 +2,36 @@ import { terminalCreateFeatureRequirement } from '../../startup/agent-launch-fea
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import { resolveRuntimeNavigationTarget } from '../../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import { defineMethod } from '../../core'
-import { CreateTerminalTab } from '../../../../../shared/rpc-contract/session-tabs/session-tabs-schemas-params'
+import {
+  CreateTerminalTab,
+  ReopenTerminalTab
+} from '../../../../../shared/rpc-contract/session-tabs/session-tabs-schemas-params'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-sessions/structured-session-ownership'
 import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
+
+export const SESSION_TAB_REOPEN_TERMINAL_METHOD = defineMethod({
+  name: 'session.tabs.reopenTerminal',
+  permission: 'workspace',
+  params: ReopenTerminalTab,
+  handler: async (params, context) => {
+    const { runtime, pairedDeviceId, signal } = context
+    return runtime.createMobileSessionTerminal(params.worktree, {
+      reopen: { customTitle: params.customTitle, color: params.color },
+      clientMutationId: params.clientMutationId,
+      clientNavigationId: pairedDeviceId,
+      afterTabId: params.afterTabId,
+      targetGroupId: params.targetGroupId,
+      supportsSplitGroupPlacement: true,
+      shellOverride: params.shell,
+      cwd: params.cwd,
+      select: false,
+      activate: false,
+      terminalImageViewerSupported: terminalImageViewerSupported(context),
+      signal
+    })
+  }
+})
 
 export const SESSION_TAB_CREATE_TERMINAL_METHOD = defineMethod({
   name: 'session.tabs.createTerminal',

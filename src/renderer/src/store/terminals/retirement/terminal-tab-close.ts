@@ -5,7 +5,10 @@ import {
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { sweepRetiredTerminalTabState } from './retired-terminal-tab-state-sweep'
 import { getRecentlyClosedTabPosition } from '../../slices/tabs/recently-closed-tab-position'
-import { pushClosedTerminalTabSnapshot } from '../tabs/recently-closed-terminal-tabs'
+import {
+  captureClosedTerminalTabSnapshot,
+  pushClosedTerminalTabSnapshot
+} from '../tabs/recently-closed-terminal-tabs'
 import { pushRecentlyClosedTabKind } from '../../slices/tabs/recently-closed-tabs'
 // Use store-free registry to avoid reentering slice creation through terminal-parked-tab-watchers.
 import { retireParkedTerminalTab } from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
@@ -132,13 +135,11 @@ export function createTerminalTabCloseActions(
             opts?.captureRecentlyClosed !== false &&
             closedTab &&
             closedWorktreeId
-              ? {
-                  ...(closedTab.startupCwd ? { startupCwd: closedTab.startupCwd } : {}),
-                  ...(closedTab.shellOverride ? { shellOverride: closedTab.shellOverride } : {}),
-                  ...(closedTab.customTitle ? { customTitle: closedTab.customTitle } : {}),
-                  ...(closedTab.color ? { color: closedTab.color } : {}),
-                  ...(closedPosition ? { position: closedPosition } : {})
-                }
+              ? captureClosedTerminalTabSnapshot(
+                  closedTab,
+                  closedPosition,
+                  opts?.reopenEnvironmentId
+                )
               : null
           const nextExpanded = omitByTabId(s.expandedPaneByTabId)
           const nextCanExpand = omitByTabId(s.canExpandPaneByTabId)
@@ -261,7 +262,9 @@ export function createTerminalTabCloseActions(
                   recentlyClosedTabKindsByWorktree: pushRecentlyClosedTabKind(
                     s.recentlyClosedTabKindsByWorktree,
                     closedWorktreeId,
-                    'terminal'
+                    capturedSnapshot.remote
+                      ? { remoteTerminalId: capturedSnapshot.remote.mutationId }
+                      : 'terminal'
                   )
                 }
               : {})

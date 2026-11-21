@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 
-export type RecentlyClosedTabKind = 'terminal' | 'browser' | 'editor'
+export type RecentlyClosedTabKind = 'terminal' | 'browser' | 'editor' | { remoteTerminalId: string }
 
 // Cross-type history exceeds per-type cap 10; drained snapshot kinds are skipped on pop.
 const MAX_RECENT_CLOSED_TAB_KINDS = 30
@@ -45,6 +45,15 @@ export const createRecentlyClosedTabsSlice: StateCreator<
   reopenClosedTab: (worktreeId) => {
     // Kind entries can outlive tighter/deduped snapshots; skip drained kinds, bounded by one shift per entry.
     for (;;) {
+      const head = get().recentlyClosedTabKindsByWorktree[worktreeId]?.[0]
+      if (typeof head === 'object') {
+        const snapshot = get().recentlyClosedTerminalTabsByWorktree[worktreeId]?.find(
+          (tab) => tab.remote?.mutationId === head.remoteTerminalId
+        )
+        if (snapshot) {
+          return get().reopenRemoteTerminalTab(worktreeId, snapshot)
+        }
+      }
       let kind: RecentlyClosedTabKind | undefined
       set((s) => {
         const kinds = s.recentlyClosedTabKindsByWorktree[worktreeId] ?? []
@@ -61,6 +70,9 @@ export const createRecentlyClosedTabsSlice: StateCreator<
       })
       if (!kind) {
         return false
+      }
+      if (typeof kind === 'object') {
+        continue
       }
       const reopened =
         kind === 'terminal'

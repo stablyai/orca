@@ -22,6 +22,7 @@ const MOBILE_TERMINAL_CREATE_RESULT_TTL_MS = 60_000
 
 /** A paired client's terminal create request. */
 export type MobileTerminalCreateOptions = {
+  reopen?: { customTitle?: string | null; color?: string | null }
   terminalImageViewerSupported?: boolean
   afterTabId?: string
   sourceChatFork?: { sessionId: string }
@@ -46,6 +47,7 @@ export type MobileTerminalCreateOptions = {
 }
 
 export type OwnedMobileTerminalCreateOptions = {
+  reopen?: MobileTerminalCreateOptions['reopen']
   /** A paired client's own create or tab open; without it a stopped WSL distro holds the start. */
   wslUserAct?: true
   command?: string
@@ -97,6 +99,7 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
   async createMobileSessionTerminal(
     worktreeSelector: string,
     opts: {
+      reopen?: MobileTerminalCreateOptions['reopen']
       afterTabId?: string
       sourceChatFork?: { sessionId: string }
       targetGroupId?: string

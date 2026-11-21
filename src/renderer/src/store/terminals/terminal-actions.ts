@@ -109,6 +109,7 @@ export type TerminalActions = {
       reason?: TerminalTabCloseReason
       captureRecentlyClosed?: boolean
       remoteCloseOwnedByHost?: boolean
+      reopenEnvironmentId?: string
       /** See closeUnifiedTab. */
       preserveWorktreeSelection?: boolean
       localPtyTeardownOwnedExternally?: boolean

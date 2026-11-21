@@ -19,6 +19,7 @@ export type WebRuntimeTerminalCreateOutcome =
 
 export type CreateWebRuntimeSessionTerminalArgs = {
   worktreeId: string
+  reopen?: { mutationId: string; pairingRevision: number; customTitle?: string; color?: string }
   environmentId?: string | null
   afterTabId?: string
   targetGroupId?: string
