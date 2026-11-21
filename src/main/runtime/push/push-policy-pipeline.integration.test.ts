@@ -7,7 +7,7 @@ import { DeviceRegistry } from '../rpc/server/pairing/device-registry'
 import { RuntimeMobileNotificationController } from './notifications/runtime-mobile-notification-controller'
 import { setRuntimeDesktopSurface } from '../construction/runtime-desktop-surface'
 import { RuntimeSubscriptionRegistry } from '../client/runtime-subscription-registry'
-import { reportDesktopPresence } from '../rpc/methods/notifications/notifications'
+import { pushCoverage, reportDesktopPresence } from '../rpc/methods/notifications/notifications'
 import { DESKTOP_PRESENCE_TTL_MS } from '../../../shared/app-lifecycle/presence/desktop-client-presence'
 import { DesktopPushService } from './desktop-push-service'
 import { PushUnregisterOutbox } from './push-unregister-outbox'
@@ -36,7 +36,10 @@ async function pipeline() {
   const client = {
     registerDevice: vi.fn(async () => ({ ok: true, registrationId: 'policy-registration' })),
     deleteDevice: vi.fn(async () => true),
-    send: vi.fn(async () => ({ ok: true, results: [] }))
+    send: vi.fn(async () => ({
+      ok: true,
+      results: [{ registrationId: 'policy-registration', status: 'queued' }]
+    }))
   }
   const service = DesktopPushService.create({
     runtime: {
@@ -182,4 +185,44 @@ it('expires persisted registration at seven days despite host activity and renew
   h.dispatch()
   await flush()
   expect(h.client.send).toHaveBeenCalledTimes(2)
+})
+
+it('answers a mirroring desktop from the phones this host pushed', async () => {
+  const h = await pipeline()
+  const digest = new DeviceRegistry(h.path).getDevice(h.device.deviceId)?.pushRegistration
+    ?.tokenDigest
+  const context = (clientKind: 'runtime' | 'mobile' = 'runtime') => ({
+    clientKind,
+    runtime: {
+      coveredMobilePushTokenDigests: h.controller.coveredPushTokenDigests.bind(h.controller)
+    }
+  })
+  const request = (subject: string) => ({
+    tokenDigests: [digest ?? '', 'phone-paired-only-with-the-mirror'],
+    subject
+  })
+  const finish = async (worktreeId: string) => {
+    h.controller.dispatch({
+      type: 'notification',
+      emittedAt: Date.now(),
+      source: 'agent-task-complete',
+      agentState: 'done',
+      worktreeId,
+      title: 'Finished',
+      body: 'Finished'
+    })
+    await flush()
+  }
+
+  await finish('repo::pushed')
+  expect(h.client.send).toHaveBeenCalledTimes(1)
+  expect(await pushCoverage(request('repo::pushed'), context('mobile'))).toEqual({
+    coveredTokenDigests: []
+  })
+  expect(await pushCoverage(request('repo::pushed'), context())).toEqual({
+    coveredTokenDigests: [digest]
+  })
+  expect(await pushCoverage(request('repo::not-pushed'), context())).toEqual({
+    coveredTokenDigests: []
+  })
 })

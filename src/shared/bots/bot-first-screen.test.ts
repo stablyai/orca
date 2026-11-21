@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import type { NativeChatMessage } from '../native-chat/native-chat-types'
 import {
   nativeChatFirstScreen,
   nativeChatFirstScreenSignIn,
   nativeChatKickoffEnded,
   nativeChatKickoffRefusal
-} from './native-chat-bot-kickoff-view'
+} from './bot-first-screen'
 
 function message(
   id: string,

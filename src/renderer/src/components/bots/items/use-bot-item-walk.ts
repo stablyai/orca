@@ -8,7 +8,7 @@ import {
   botItemWalkOf,
   botItemWalkStep,
   type BotItemWalk
-} from './bot-item-walk'
+} from '../../../../../shared/bots/bot-item-walk'
 import type { BotItemsShownList } from './use-bot-items-shown-list'
 
 type Open = {

@@ -1473,7 +1473,6 @@
       "permissions": "Permissions",
       "permissionsDescription": "The starting permission for new sessions. Anything beyond it asks in the session.",
       "active": "Active",
-      "activeDescription": "Answers messages and runs automations.",
       "memoryFact": "Memory",
       "cancel": "Cancel",
       "save": "Save",
@@ -26538,6 +26537,7 @@
   },
   "automations": {
     "runFailures": {
+      "botProviderErrorNotSaved": "The bot's turn failed, but this run did not save the provider's error. The original Chat may contain more details.",
       "noDispatchHost": "No Orca window was available to launch the automation.",
       "unevaluableSchedule": "Orca could not evaluate this automation and skipped the occurrence.",
       "noRunnableHost": "This automation has no host to run on.",
@@ -28625,7 +28625,6 @@
       "publishing": "Publishing…",
       "previewChanged": "The preview changed. Review it before publishing.",
       "manageSharing": "Manage sharing…",
-      "sharedUpdated": "Shared · updated {{date}}",
       "secretFoundTitle": "Secret found",
       "secretWhere": "{{flag}} in {{where}}, line {{line}}",
       "view": "View",
@@ -28870,7 +28869,9 @@
       "tomorrowAt": "tomorrow {{time}}",
       "idleNext": "Idle · next {{when}} · {{name}}",
       "runningNamed": "Running {{name}}",
-      "nextAt": "Next {{when}}"
+      "nextAt": "Next {{when}}",
+      "runsOn": "Runs on {{host}}",
+      "disconnected": "Disconnected"
     },
     "needs": {
       "access": "{{person}} asked for access",
@@ -28991,11 +28992,8 @@
       "yesterday": "yesterday",
       "lastLooked": "last looked {{when}}",
       "lastTidied": "last tidied {{when}}",
-      "memoryFiles_one": "MEMORY.md and {{count}} topic file",
-      "memoryFiles_other": "MEMORY.md and {{count}} topic files",
       "toolsFrom": "{{count}} from {{agent}}",
       "toolsMore": "{{count}} more from {{agent}}",
-      "withAccess": "{{service}} {{people}} with access",
       "onlyYou": "Only you"
     },
     "page": {
@@ -29130,14 +29128,11 @@
       "copyPath": "Copy path",
       "topicFiles": "Topic files",
       "schedule": "Schedule",
-      "automationsFoot": "Automations are in Home › Automations.",
       "soulAndMemory": "Soul and memory",
       "access": "Access",
       "whoCanAsk": "Who can ask",
-      "chatDefault": "your chat default",
       "name": "Bot name",
       "rename": "Rename {{name}}",
-      "share": "Share…",
       "agent": "Agent and model",
       "computer": "Computer",
       "deleteBot": "Delete bot…",
@@ -29156,10 +29151,26 @@
       "items": "Items",
       "itemsStale": {
         "days": "{{days}} days",
-        "detail": "No activity for this long. Planned items get 3 times as long.",
         "never": "Never",
-        "title": "Mark items stale after"
-      }
+        "title": "Mark items stale after",
+        "shortTitle": "Stale after"
+      },
+      "memoryFiles_one": "{{count}} file",
+      "memoryFiles_other": "{{count}} files",
+      "lookAroundShort": {
+        "every4h": "4h",
+        "every2h": "2h",
+        "twiceDaily": "Twice a day",
+        "mornings": "Mornings"
+      },
+      "tidyUpShort": {
+        "night": "Nightly",
+        "week": "Weekly"
+      },
+      "youAndOthers_one": "You and {{count}} other",
+      "youAndOthers_other": "You and {{count}} others",
+      "shareAction": "Share",
+      "sharingOn": "On"
     },
     "items": {
       "activity": {
