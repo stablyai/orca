@@ -13,10 +13,7 @@ import {
 } from './codex-shared-server-lease'
 import { CodexSharedServer } from './codex-shared-server'
 import type { CodexSharedServerProcessSweep } from './codex-shared-server-chat-workload'
-import {
-  CodexSharedServerMemoryCeiling,
-  type CodexSharedServerToolUsage
-} from './codex-shared-server-memory-ceiling'
+import { CodexSharedServerMemoryCeiling } from './codex-shared-server-memory-ceiling'
 
 /** Bounds how many chats one crash or hang can reach. */
 export const CODEX_SHARED_SERVER_MAX_CHATS = 20
@@ -30,14 +27,6 @@ export type CodexSharedServerOpenOptions = {
   skillRoots: readonly string[]
   /** What the launch's `codex --version` reported; part of the drain generation. */
   codexVersion?: string | null
-}
-
-export type CodexSharedServerSummary = {
-  pid: number | undefined
-  draining: boolean
-  memoryBytes: number | null
-  sessionIds: string[]
-  toolUsage: CodexSharedServerToolUsage[]
 }
 
 /** Servers grouped by launch key; a chat joins the first with room, else a new one starts. */
@@ -83,16 +72,6 @@ export class CodexSharedServerPool {
       throw error
     }
     return lease
-  }
-
-  summaries(): CodexSharedServerSummary[] {
-    return this.allServers().map((server) => ({
-      pid: server.pid,
-      draining: server.draining,
-      memoryBytes: server.memoryBytes,
-      sessionIds: [...server.leases].flatMap((lease) => (lease.sessionId ? [lease.sessionId] : [])),
-      toolUsage: server.toolUsage
-    }))
   }
 
   private allServers(): CodexSharedServer[] {
@@ -195,9 +174,4 @@ let pool: CodexSharedServerPool | null = null
 export function sharedCodexServerPool(): CodexSharedServerPool {
   pool ??= new CodexSharedServerPool()
   return pool
-}
-
-/** Shared servers now running, for diagnostics; empty when the pool was never used. */
-export function sharedCodexServerSummaries(): CodexSharedServerSummary[] {
-  return pool?.summaries() ?? []
 }

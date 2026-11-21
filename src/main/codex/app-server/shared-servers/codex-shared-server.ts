@@ -9,12 +9,12 @@ import {
 import type { CodexSharedServerFrame } from './codex-shared-server-frames'
 import type { DescendantTreeVerdict } from '../../../pty/process-retirement/pty-descendant-exit-verification'
 import type { CodexSharedServerSpec } from './codex-shared-server-key'
-import type { CodexSharedServerToolUsage } from './codex-shared-server-memory-ceiling'
 import type {
   CodexLeaseRelease,
   CodexSharedLeaseHost,
   CodexSharedServerLease
 } from './codex-shared-server-lease'
+import { CodexSharedServerBacklog } from './codex-shared-server-backlog'
 import { CodexSharedServerTurns, withDeadline } from './codex-shared-server-turns'
 import { CodexSharedServerRouter } from './codex-shared-server-router'
 
@@ -29,10 +29,6 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   readonly leases = new Set<CodexSharedServerLease>()
   /** Not offered to new chats; stops once its last chat leaves. */
   draining = false
-  /** Bytes the server process used at the last sample. */
-  memoryBytes: number | null = null
-  /** Each chat's own tool processes under this server, at the last sample. */
-  toolUsage: CodexSharedServerToolUsage[] = []
   private physical: CodexAppServerConnection | null = null
   private hasExited = false
   private reaping: Promise<void> | null = null
@@ -40,6 +36,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   private readonly releasingThreads = new Map<string, Promise<void>>()
   private readonly releases = new WeakMap<CodexSharedServerLease, Promise<CodexLeaseRelease>>()
   private readonly turns = new CodexSharedServerTurns()
+  private readonly backlogs = new CodexSharedServerBacklog(() => this.physical, this.leases)
   private readonly router = new CodexSharedServerRouter(
     () => this.leases,
     (frame) => this.refuse(frame)
@@ -112,6 +109,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     this.router.claim(threadId, lease)
   }
 
+  backlog = (deltaBytes: number): void => this.backlogs.change(deltaBytes)
   heldByOther = (threadId: string, lease: CodexSharedServerLease): boolean =>
     this.router.heldByOther(threadId, lease)
 
@@ -339,6 +337,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     this.hasExited = true
     this.draining = true
     this.turns.endAll()
+    this.backlogs.dispose()
     // Root exit says nothing of the commands it ran; reap and judge the tree for every chat.
     const physical = this.physical
     this.reaping = physical

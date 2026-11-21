@@ -154,7 +154,7 @@ export const getExperimentalSearchEntry = createLocalizedCatalog(
         ),
         description: translate(
           'auto.components.settings.experimental.search.sharedCodexServers.description',
-          'Codex chats share a few app-servers, up to 20 chats each, instead of starting one per chat.'
+          'Codex chats share a few background processes, up to 20 chats each, instead of starting one per chat.'
         ),
         keywords: [
           ...translateSearchKeyword(

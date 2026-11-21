@@ -8,9 +8,9 @@ import type {
 import { codexSharedFrameParams, type CodexSharedServerFrame } from './codex-shared-server-frames'
 import { sendCodexLeaseRequest } from './codex-shared-server-lease-requests'
 
-/** A paused chat holds its own frames; past these it is dropped instead of stalling the server. */
+/** A paused chat holds its own frames; past this it is dropped instead of stalling the server.
+ *  Bytes are bounded per server (codex-shared-server-backlog.ts). */
 export const CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES = 20_000
-export const CODEX_SHARED_LEASE_MAX_QUEUED_BYTES = 64 * 1024 * 1024
 
 /** A release's outcome: whether the chat's turns are proven over (else it stays on the server for
  *  a retry), and whether its commands are proven gone. */
@@ -25,6 +25,8 @@ export type CodexSharedLeaseHost = {
   readonly closed: boolean
   readonly connection: CodexAppServerConnection
   claim: (threadId: string, lease: CodexSharedServerLease) => void
+  /** Bytes this chat's queue grew (or shrank) by. */
+  backlog: (deltaBytes: number) => void
   /** Another chat on this server has the thread open. */
   heldByOther: (threadId: string, lease: CodexSharedServerLease) => boolean
   /** A thread that opened after its chat left: nobody will use it, so the server lets it go.
@@ -62,6 +64,8 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   /** Next frame to dispatch; drained slots are dropped in one splice so a drain stays linear. */
   private queueHead = 0
   private queuedBytes = 0
+  /** Dropped for falling behind: its frames are discarded until it ends. */
+  private shedding = false
 
   constructor(
     readonly host: CodexSharedLeaseHost,
@@ -152,22 +156,38 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   }
 
   deliver(frame: CodexSharedServerFrame): void {
-    if (this.state === 'ended') {
+    if (this.state === 'ended' || this.shedding) {
       return
     }
     if (this.paused || this.queue.length > this.queueHead) {
       const bytes = Buffer.byteLength(JSON.stringify(codexSharedFrameParams(frame) ?? null), 'utf8')
       this.queue.push({ frame, bytes })
       this.queuedBytes += bytes
-      if (
-        this.queue.length - this.queueHead > CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES ||
-        this.queuedBytes > CODEX_SHARED_LEASE_MAX_QUEUED_BYTES
-      ) {
-        this.fail(new Error('codex chat fell too far behind its shared app-server'), true)
+      this.host.backlog(bytes)
+      if (this.queue.length - this.queueHead > CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES) {
+        this.shed()
       }
       return
     }
     this.dispatch(frame)
+  }
+
+  get backlogBytes(): number {
+    return this.queuedBytes
+  }
+
+  /** Too far behind: drops its queue and ends it alone; it reopens its thread on its next send. */
+  shed(): void {
+    this.dropQueue()
+    this.shedding = true
+    this.fail(new Error('codex chat fell too far behind its shared app-server'), true)
+  }
+
+  private dropQueue(): void {
+    this.host.backlog(-this.queuedBytes)
+    this.queue = []
+    this.queueHead = 0
+    this.queuedBytes = 0
   }
 
   private drainQueue(): void {
@@ -175,14 +195,17 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
       return
     }
     this.draining = true
+    let drained = 0
     try {
       while (!this.paused && this.queueHead < this.queue.length && this.state !== 'ended') {
         const { frame, bytes } = this.queue[this.queueHead]!
         this.queueHead += 1
         this.queuedBytes -= bytes
+        drained += bytes
         this.dispatch(frame)
       }
     } finally {
+      this.host.backlog(-drained)
       this.queue.splice(0, this.queueHead)
       this.queueHead = 0
       this.draining = false
@@ -309,9 +332,7 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
       return
     }
     this.state = 'ended'
-    this.queue = []
-    this.queueHead = 0
-    this.queuedBytes = 0
+    this.dropQueue()
     this.workload = typeof workload === 'function' ? workload : () => workload
     for (const giveUp of this.outstanding) {
       giveUp(new Error('codex app-server connection closed'))

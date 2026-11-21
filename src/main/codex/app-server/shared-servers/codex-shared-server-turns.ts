@@ -20,7 +20,8 @@ export async function withDeadline(promise: Promise<unknown>, ms: number): Promi
 export class CodexSharedServerTurns {
   private readonly running = new Map<string, string>()
   private readonly recentlyCompleted = new Set<string>()
-  private readonly endWaiters = new Map<string, (() => void)[]>()
+  /** One per turn, shared by every Stop retry, so a turn that never ends holds one waiter. */
+  private readonly endWaiters = new Map<string, { ended: Promise<void>; resolve: () => void }>()
   private readonly pendingStarts = new Map<string, Set<Promise<unknown>>>()
 
   trackStart(threadId: string, request: Promise<unknown>): void {
@@ -71,21 +72,24 @@ export class CodexSharedServerTurns {
     if (![...this.running.values()].includes(turnId)) {
       return Promise.resolve()
     }
-    return new Promise((resolve) => {
-      const waiters = this.endWaiters.get(turnId) ?? []
-      waiters.push(resolve)
-      this.endWaiters.set(turnId, waiters)
+    const known = this.endWaiters.get(turnId)
+    if (known) {
+      return known.ended
+    }
+    let resolve = (): void => {}
+    const ended = new Promise<void>((done) => {
+      resolve = done
     })
+    this.endWaiters.set(turnId, { ended, resolve })
+    return ended
   }
 
   /** The process is gone, so every turn it ran is over. */
   endAll(): void {
     this.running.clear()
     this.pendingStarts.clear()
-    for (const waiters of this.endWaiters.values()) {
-      for (const resolve of waiters) {
-        resolve()
-      }
+    for (const { resolve } of this.endWaiters.values()) {
+      resolve()
     }
     this.endWaiters.clear()
   }
@@ -101,9 +105,7 @@ export class CodexSharedServerTurns {
         this.recentlyCompleted.delete(oldest.value)
       }
     }
-    for (const resolve of this.endWaiters.get(turnId) ?? []) {
-      resolve()
-    }
+    this.endWaiters.get(turnId)?.resolve()
     this.endWaiters.delete(turnId)
   }
 }

@@ -7,7 +7,10 @@ import type {
 import { CodexSharedServerPool } from './codex-shared-server-pool'
 import { CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES } from './codex-shared-server-lease'
 import { codexOpenedThreadId } from './codex-shared-server-frames'
-import { codexConnectionOpener } from '../../structured/acquisition/codex-structured-connection-opener'
+import {
+  codexConnectionOpener,
+  opensSharedCodexServer
+} from '../../structured/acquisition/codex-structured-connection-opener'
 import { spawnCodexAppServerConnection } from '../codex-app-server-connection'
 
 type FakeServer = {
@@ -16,6 +19,8 @@ type FakeServer = {
   requests: { method: string; params?: Record<string, unknown> }[]
   /** Background terminals per thread, as Codex lists them. */
   terminals: Map<string, Set<string>>
+  /** Whether Orca stopped reading this server's output. */
+  readingPaused: boolean
   /** Answers the thread/start held by `holdOpen`. */
   releaseOpen: () => void
   crash: () => void
@@ -45,6 +50,7 @@ function fakeCodex(
       handlers,
       requests: [],
       terminals: new Map(),
+      readingPaused: false,
       releaseOpen: () => {},
       crash: () => {
         closed = true
@@ -123,6 +129,12 @@ function fakeCodex(
         }
         options?.onReply?.(result)
         return result
+      },
+      pauseReading: () => {
+        server.readingPaused = true
+      },
+      resumeReading: () => {
+        server.readingPaused = false
       },
       notify: () => {},
       respond: () => {},
@@ -292,6 +304,41 @@ describe('shared Codex app-servers', () => {
     expect(a.exits[0]?.expected).toBe(false)
     expect(connB.closed).toBe(false)
     expect(b.notifications.at(-1)?.method).toBe('item/started')
+  })
+
+  it('makes the server wait once paused chats hold its frame budget, and drops a chat that stalls it', async () => {
+    vi.useFakeTimers()
+    const { servers, pool } = fakeCodex()
+    const a = chat()
+    const b = chat()
+    const connA = await pool.open(launch(), a.handlers, { sessionId: 'a', skillRoots: [] })
+    const connB = await pool.open(launch(), b.handlers, { sessionId: 'b', skillRoots: [] })
+    const threadA = await startThread(connA)
+    const threadB = await startThread(connB)
+    connA.pauseReading?.()
+    connB.pauseReading?.()
+    const delta = { delta: 'x'.repeat(1024 * 1024) }
+    for (let i = 0; i < 20; i += 1) {
+      servers[0]!.handlers.onNotification?.('item/agentMessage/delta', {
+        threadId: threadA,
+        ...delta
+      })
+      servers[0]!.handlers.onNotification?.('item/agentMessage/delta', {
+        threadId: threadB,
+        ...delta
+      })
+    }
+    // 40 MiB queued across the two chats: past the 32 MiB server budget, Codex now waits.
+    expect(servers[0]!.readingPaused).toBe(true)
+    connB.resumeReading?.()
+    expect(b.notifications.filter((n) => n.method === 'item/agentMessage/delta')).toHaveLength(20)
+    // A alone still holds 20 MiB, above the 16 MiB the server resumes at.
+    expect(servers[0]!.readingPaused).toBe(true)
+    await vi.advanceTimersByTimeAsync(20_000)
+    // The chat still holding the server is dropped alone; the other keeps it.
+    await vi.waitFor(() => expect(a.exits).toHaveLength(1))
+    expect(servers[0]!.readingPaused).toBe(false)
+    expect(connB.closed).toBe(false)
   })
 
   it('interrupts a turn whose start is still queued behind a paused chat', async () => {
@@ -471,6 +518,17 @@ describe('shared Codex app-servers', () => {
     expect(codexConnectionOpener({ sharedServers: () => true }, 's', {}, 'win32')).toBe(
       spawnCodexAppServerConnection
     )
+  })
+
+  it("marks a shared opener, so a chat's recovery never signals the server it shares", () => {
+    expect(
+      opensSharedCodexServer(codexConnectionOpener({ sharedServers: () => true }, 's', {}, 'linux'))
+    ).toBe(true)
+    expect(
+      opensSharedCodexServer(
+        codexConnectionOpener({ sharedServers: () => false }, 's', {}, 'linux')
+      )
+    ).toBe(false)
   })
 
   it('does not count a server exit during Stop as the turn ending', async () => {
