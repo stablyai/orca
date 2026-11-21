@@ -95,7 +95,7 @@ function postsFrom(event: NavigateEvent): boolean {
   )
 }
 
-/** The action URL of a POST that replaces the top page; null for GET or another target. */
+/** The action URL of a submitted POST form; null for GET or an unsubmitted form. */
 function postedFormAction(
   target: EventTarget | null,
   lastSubmitByForm: WeakMap<HTMLFormElement, SubmitEvent>,
@@ -126,34 +126,16 @@ function postedFormAction(
   const method = button?.hasAttribute('formmethod')
     ? button.formMethod
     : formProperty(target, 'method')
-  const formTarget =
-    (button?.hasAttribute('formtarget') ? button.formTarget : formProperty(target, 'target')) ||
-    baseTarget(target.ownerDocument)
-  if (method !== 'post' || !targetsTopPage(formTarget.toLowerCase())) {
+  // Any target counts (a named window can be the top page): main marks only a top navigation to
+  // this address, and that navigation's own method disproves a report for another frame.
+  if (method !== 'post') {
     return null
   }
   return button?.hasAttribute('formaction') ? button.formAction : formProperty(target, 'action')
 }
 
-// With no target of its own, a form follows the document's first `<base target>`.
-function baseTarget(doc: Document): string {
-  return doc.querySelector('base[target]')?.getAttribute('target') ?? ''
-}
-
-function targetsTopPage(formTarget: string): boolean {
-  const frame =
-    formTarget === '' || formTarget === '_self'
-      ? window
-      : formTarget === '_parent'
-        ? window.parent
-        : formTarget === '_top'
-          ? window.top
-          : null
-  return frame !== null && frame === window.top
-}
-
-// A field named `action`, `method` or `target` shadows the form's own property; read the getter.
-function formProperty(form: HTMLFormElement, name: 'action' | 'method' | 'target'): string {
+// A field named `action` or `method` shadows the form's own property; read the getter.
+function formProperty(form: HTMLFormElement, name: 'action' | 'method'): string {
   const value: unknown = Object.getOwnPropertyDescriptor(
     HTMLFormElement.prototype,
     name
