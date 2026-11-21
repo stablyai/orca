@@ -71,7 +71,7 @@ export function createPtyShellLaunchPlan(
   const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
   const requestedCwd = opts.cwd || resolveSafePtyDefaultCwd()
   if (opts.command && startupAgentRecognition) {
-    assertSafeAgentStartupCwd(requestedCwd, opts.command)
+    assertSafeAgentStartupCwd(requestedCwd, opts.command, opts.workspaceRoot)
   }
   let spawnCwd = requestedCwd
   let validationCwd = spawnCwd

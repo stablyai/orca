@@ -21,6 +21,7 @@ export type TerminalHostOptions = {
     terminalShellArgs?: string[]
     terminalWindowsWslDistro?: string | null
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
+    workspaceRoot?: string
     onCreationDisposition?: (disposition: PtyCreationDisposition) => void
     assertCreateAllowed?: () => void
     isCanceled?: () => boolean

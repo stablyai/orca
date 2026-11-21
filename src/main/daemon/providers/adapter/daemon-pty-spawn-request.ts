@@ -133,6 +133,7 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
         terminalWindowsPowerShellImplementation: context.attachOnly
           ? undefined
           : opts.terminalWindowsPowerShellImplementation,
+        ...(!context.attachOnly && opts.workspaceRoot ? { workspaceRoot: opts.workspaceRoot } : {}),
         shellReadySupported: context.attachOnly ? false : context.shellReadySupported,
         ...(!context.attachOnly && context.shellReadyTimeoutMs !== undefined
           ? { shellReadyTimeoutMs: context.shellReadyTimeoutMs }
