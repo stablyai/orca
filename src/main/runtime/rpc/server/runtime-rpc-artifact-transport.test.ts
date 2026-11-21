@@ -57,7 +57,7 @@ it('keeps an archive across separate paired calls and releases it on cancellatio
       throw new Error('Fixture pairing unavailable')
     }
     const clientPath = join(directory, 'client')
-    const environment = addEnvironmentFromPairingCode(clientPath, {
+    const environment = await addEnvironmentFromPairingCode(clientPath, {
       name: 'fixture',
       pairingCode: offer.pairingUrl
     })

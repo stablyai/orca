@@ -1,9 +1,10 @@
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { buildAgentResumeStartupPlan } from '../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
 import '@/diagnostics/telemetry/telemetry'
-import { tuiAgentToAgentKind } from '../../../../../shared/agent-kind'
+import { tuiAgentToAgentKind } from '../../../../../shared/agent-status/identity/agent-kind'
 import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
 import {
   resolveRuntimeHostReportedPlatform,
@@ -48,8 +49,11 @@ function getResumeLaunchTarget(worktreeId: string): AgentResumeLaunchTarget {
       runtimeEnvironmentIdUnlessTwin(state, worktreeId),
       connectionId
     ),
-    runtimeHostPlatform: resolveRuntimeHostReportedPlatform(state, executionHostId),
-    runtimeHostTerminalWindowsShell: resolveRuntimeHostTerminalWindowsShell(state, executionHostId)
+    runtimeHostPlatform: resolveRuntimeHostReportedPlatform(readRuntimeStatuses(), executionHostId),
+    runtimeHostTerminalWindowsShell: resolveRuntimeHostTerminalWindowsShell(
+      readRuntimeStatuses(),
+      executionHostId
+    )
   })
 }
 
@@ -81,6 +85,7 @@ export function launchSleepingAgentSession(
     return false
   }
 
+  const expectedStatus = state.agentStatusByPaneKey.get(record.paneKey)
   const tab = state.createTab(record.worktreeId, undefined, undefined, {
     launchAgent: record.agent,
     pendingStartup: {
@@ -92,12 +97,12 @@ export function launchSleepingAgentSession(
       resumeSource: {
         cancelled: false,
         record,
-        ...(state.agentStatusByPaneKey[record.paneKey]
+        ...(expectedStatus
           ? {
               expectedStatus: {
                 paneKey: record.paneKey,
-                receivedAt: state.agentStatusByPaneKey[record.paneKey].updatedAt,
-                stateStartedAt: state.agentStatusByPaneKey[record.paneKey].stateStartedAt
+                receivedAt: expectedStatus.updatedAt,
+                stateStartedAt: expectedStatus.stateStartedAt
               }
             }
           : {})

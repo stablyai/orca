@@ -1,6 +1,6 @@
 // Runs in AudioWorkletGlobalScope, off the renderer's main thread.
-import { measureDictationAudioChunk } from '../../../../shared/dictation-audio-meter'
-import { StreamingSincResampler } from '../../../../shared/streaming-sinc-resampler'
+import { measureDictationAudioChunk } from '../../../../shared/speech/dictation/dictation-audio-meter'
+import { StreamingSincResampler } from './streaming-sinc-resampler'
 import {
   DICTATION_CAPTURE_WORKLET_NAME,
   type DictationCaptureWorkletMessage,

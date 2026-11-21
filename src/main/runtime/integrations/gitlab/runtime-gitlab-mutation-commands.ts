@@ -3,8 +3,8 @@ import type {
   GitLabMRInlineCommentInput,
   GitLabMRUpdate,
   GitLabProjectRef
-} from '../../../../shared/gitlab-types'
-import type { Repo } from '../../../../shared/repo-types'
+} from '../../../../shared/gitlab/gitlab-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { addIssueComment, createIssue } from '../../../gitlab/issues/gitlab-issue-queries'
 import {
   addMRComment,
@@ -20,7 +20,7 @@ import {
 import { getJobTrace, retryJob } from '../../../gitlab/pipelines/pipeline-job-mutations'
 import { updateIssue } from '../../../gitlab/issues/issue-update'
 import { updateMR } from '../../../gitlab/merge-requests/merge-request-update'
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 
 type LocalGitArgs = [] | [{ wslDistro?: string }]
 

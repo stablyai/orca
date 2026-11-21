@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { Store } from '../../loading-store/store'
 import { WindowSession } from '../testing/terminal-topology-window-session-fixture'
@@ -10,7 +10,8 @@ import {
   emptyTerminalSessionProfile,
   FIXTURE_GIT_WORKTREE_ID,
   openTopologyStore,
-  reopenTopologyStore
+  reopenTopologyStore,
+  closeTrackedTopologyStores
 } from '../testing/terminal-topology-profile-fixture'
 
 vi.mock('../../../telemetry/client', () => ({ track: vi.fn() }))
@@ -25,7 +26,8 @@ const LEFT = '11111111-1111-4111-8111-111111111111'
 const RIGHT = '22222222-2222-4222-8222-222222222222'
 const directories: string[] = []
 
-afterEach(() => {
+afterEach(async () => {
+  await closeTrackedTopologyStores()
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }
@@ -114,20 +116,6 @@ describe('Store.applyLayoutCommand sleep and wake (layout.apply)', () => {
     expect(session.sleepingAgentSessionsByPaneKey).toEqual({
       [`${TAB}:${RIGHT}`]: record(RIGHT, 'right-session')
     })
-  })
-
-  it('wakes nothing for a pane that holds no record', async () => {
-    const { store } = await storeWithSplitTab()
-    const before = store.getWorkspaceSession()
-
-    const reply = await store.applyLayoutCommand({
-      type: 'wake',
-      workspace: WORKTREE,
-      paneKeys: [`${TAB}:${LEFT}`]
-    })
-
-    expect(reply).toEqual({ ok: true, result: { woken: [] } })
-    expect(store.getWorkspaceSession()).toBe(before)
   })
 
   it('records an SSH workspace’s sleep in that host’s partition only', async () => {

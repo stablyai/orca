@@ -1,10 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { createServer, type Server, type ServerResponse } from 'node:http'
-import { shell } from 'electron'
 import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
+import { serveHeldLoopbackCallback } from './loopback-callback'
 import {
-  ORCA_CLOUD_CALLBACK_RESPONSE_HEADERS,
-  ORCA_CLOUD_CALLBACK_SUCCESS_PAGE
+  orcaCallbackReceivedPage,
+  orcaCloudCallbackOutcome,
+  type OrcaCloudCallbackOutcome
 } from './profile-cloud-callback-page'
 
 export type OrcaCloudAuthorizationCode = {
@@ -15,7 +15,13 @@ export type OrcaCloudAuthorizationCode = {
   state: string
 }
 
+export type OrcaCloudBrowserReturn = OrcaCloudAuthorizationCode & {
+  /** Ends the browser tab with the real outcome; only the first answer counts. */
+  respond: (outcome: OrcaCloudCallbackOutcome) => void
+}
+
 const AUTH_TIMEOUT_MS = 5 * 60 * 1000
+const BROWSER_RESPONSE_TIMEOUT_MS = 45 * 1000
 
 function base64Url(buffer: Buffer): string {
   return buffer.toString('base64').replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '')
@@ -29,115 +35,76 @@ function createCodeChallenge(verifier: string): string {
   return base64Url(createHash('sha256').update(verifier).digest())
 }
 
-function closeServer(server: Server): void {
-  try {
-    // Browser keep-alive sockets can delay close and timeout cleanup.
-    server.closeAllConnections?.()
-    server.close()
-  } catch {
-    // Already closed.
+/** The secret half (verifier) stays with the host that redeems the code; the rest goes into the link. */
+export function createOrcaCloudPkceSecrets(): {
+  codeVerifier: string
+  codeChallenge: string
+  nonce: string
+  state: string
+} {
+  const codeVerifier = createCodeVerifier()
+  return {
+    codeVerifier,
+    codeChallenge: createCodeChallenge(codeVerifier),
+    nonce: base64Url(randomBytes(32)),
+    state: base64Url(randomBytes(32))
   }
 }
 
 export function beginOrcaCloudPkceFlow(
   config: OrcaCloudAuthConfig,
   localProfileId: string,
-  options: { onAuthorizeUrl?: (url: string) => void; signal?: AbortSignal } = {}
-): Promise<OrcaCloudAuthorizationCode> {
-  const codeVerifier = createCodeVerifier()
-  const nonce = base64Url(randomBytes(32))
-  const state = base64Url(randomBytes(32))
+  options: {
+    openBrowser: (url: string) => Promise<void>
+    onAuthorizeUrl?: (url: string) => void
+    signal?: AbortSignal
+  }
+): Promise<OrcaCloudBrowserReturn> {
+  const { codeVerifier, codeChallenge, nonce, state } = createOrcaCloudPkceSecrets()
+  let redirectUri = ''
 
-  return new Promise((resolve, reject) => {
-    let settled = false
-    let redirectUri = ''
-
-    function rejectFlow(error: Error): void {
-      if (settled) {
-        return
+  const returned = serveHeldLoopbackCallback<OrcaCloudAuthorizationCode>({
+    path: '/auth/callback',
+    timeoutMs: AUTH_TIMEOUT_MS,
+    signal: options.signal,
+    // The tab waits for the code exchange so it never claims a sign-in the app did not finish.
+    hold: {
+      received: orcaCallbackReceivedPage(),
+      pending: orcaCloudCallbackOutcome({
+        status: 'failed',
+        error: 'orca_cloud_auth_response_timeout'
+      }),
+      ms: BROWSER_RESPONSE_TIMEOUT_MS
+    },
+    errors: {
+      timeout: 'orca_cloud_auth_timeout',
+      cancelled: 'orca_cloud_auth_cancelled',
+      unavailable: 'orca_cloud_auth_loopback_unavailable',
+      failed: 'orca_cloud_auth_callback_failed'
+    },
+    read: (url) => {
+      const invalid = { kind: 'stray', message: 'Invalid Orca sign-in response.' } as const
+      // Stray loopback probes must not cancel the user’s login.
+      if (url.searchParams.get('state') !== state) {
+        return invalid
       }
-      settled = true
-      reject(error)
-      closeServer(server)
-    }
-
-    function resolveFlow(code: string): void {
-      if (settled) {
-        return
+      if (url.searchParams.has('error')) {
+        const cancelled = url.searchParams.get('error') === 'access_denied'
+        return {
+          kind: 'reject',
+          message: cancelled
+            ? 'Orca sign-in was cancelled.'
+            : 'Orca sign-in failed. Return to Orca and try again.',
+          error: new Error(cancelled ? 'orca_cloud_auth_denied' : 'orca_cloud_auth_callback_failed')
+        }
       }
-      settled = true
-      resolve({
-        code,
-        codeVerifier,
-        nonce,
-        redirectUri,
-        state
-      })
-      closeServer(server)
-    }
-
-    function writeInvalidCallback(response: ServerResponse): void {
-      response.writeHead(400)
-      response.end('Invalid Orca sign-in response.')
-    }
-
-    const server = createServer((request, response) => {
-      try {
-        const url = new URL(request.url ?? '/', 'http://127.0.0.1')
-        if (url.pathname !== '/auth/callback') {
-          response.writeHead(404)
-          response.end('Not found')
-          return
-        }
-        const code = url.searchParams.get('code')
-        const returnedState = url.searchParams.get('state')
-        if (returnedState !== state) {
-          // Stray loopback probes must not cancel the user’s login.
-          writeInvalidCallback(response)
-          return
-        }
-        if (url.searchParams.has('error')) {
-          const cancelled = url.searchParams.get('error') === 'access_denied'
-          response.writeHead(400)
-          response.end(
-            cancelled
-              ? 'Orca sign-in was cancelled.'
-              : 'Orca sign-in failed. Return to Orca and try again.'
-          )
-          rejectFlow(
-            new Error(cancelled ? 'orca_cloud_auth_denied' : 'orca_cloud_auth_callback_failed')
-          )
-          return
-        }
-        if (!code) {
-          writeInvalidCallback(response)
-          return
-        }
-        response.writeHead(200, ORCA_CLOUD_CALLBACK_RESPONSE_HEADERS)
-        response.end(ORCA_CLOUD_CALLBACK_SUCCESS_PAGE)
-        resolveFlow(code)
-      } catch (error) {
-        rejectFlow(error instanceof Error ? error : new Error('orca_cloud_auth_callback_failed'))
-      }
-    })
-
-    const timeout = setTimeout(() => {
-      rejectFlow(new Error('orca_cloud_auth_timeout'))
-    }, AUTH_TIMEOUT_MS)
-    const cancel = (): void => rejectFlow(new Error('orca_cloud_auth_cancelled'))
-    options.signal?.addEventListener('abort', cancel, { once: true })
-    server.once('close', () => {
-      clearTimeout(timeout)
-      options.signal?.removeEventListener('abort', cancel)
-    })
-    server.once('error', rejectFlow)
-    server.listen(0, '127.0.0.1', () => {
-      const address = server.address()
-      if (!address || typeof address === 'string') {
-        rejectFlow(new Error('orca_cloud_auth_loopback_unavailable'))
-        return
-      }
-      redirectUri = `http://127.0.0.1:${address.port}/auth/callback`
+      const code = url.searchParams.get('code')
+      return code
+        ? { kind: 'accept', value: { code, codeVerifier, nonce, redirectUri, state } }
+        : invalid
+    },
+    onListening: async (port) => {
+      redirectUri = `http://127.0.0.1:${port}/auth/callback`
       const authorizeUrl = new URL(config.authorizeEndpoint)
       authorizeUrl.searchParams.set('client_id', config.clientId)
       authorizeUrl.searchParams.set('response_type', 'code')
@@ -145,15 +112,19 @@ export function beginOrcaCloudPkceFlow(
       authorizeUrl.searchParams.set('scope', config.scope)
       authorizeUrl.searchParams.set('nonce', nonce)
       authorizeUrl.searchParams.set('state', state)
-      authorizeUrl.searchParams.set('code_challenge', createCodeChallenge(codeVerifier))
+      authorizeUrl.searchParams.set('code_challenge', codeChallenge)
       authorizeUrl.searchParams.set('code_challenge_method', 'S256')
       authorizeUrl.searchParams.set('local_profile_id', localProfileId)
       options.onAuthorizeUrl?.(authorizeUrl.toString())
-      void shell.openExternal(authorizeUrl.toString()).catch((error) => {
-        rejectFlow(
-          error instanceof Error ? error : new Error('orca_cloud_auth_browser_open_failed')
-        )
-      })
-    })
+      try {
+        await options.openBrowser(authorizeUrl.toString())
+      } catch (error) {
+        throw error instanceof Error ? error : new Error('orca_cloud_auth_browser_open_failed')
+      }
+    }
   })
+  return returned.then(({ value, answer }) => ({
+    ...value,
+    respond: (outcome) => answer(orcaCloudCallbackOutcome(outcome))
+  }))
 }

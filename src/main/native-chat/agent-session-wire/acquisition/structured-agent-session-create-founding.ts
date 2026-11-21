@@ -1,4 +1,5 @@
-import type { StructuredAgentSessionCreateOptions } from './structured-agent-session-create'
+import type { StructuredAgentSessionCreateOptions } from './structured-agent-session-create-options'
+import { settleOpeningThenRegister } from './structured-agent-session-opening-withdrawal'
 import {
   openingMessageReceipt,
   openingMessageReceiptRefusal
@@ -10,7 +11,7 @@ import { prepareForkFounding, readForkHydration } from './agent-session-fork-fou
 
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 
-import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
+import { isFloatingWorkspaceId } from '../../../../shared/workspace/identity/floating-workspace-worktree'
 
 import { isAgentSessionCreateAdmissionRefusal } from '../../../../shared/agent-session/failures/agent-session-definitive-refusal'
 
@@ -181,6 +182,12 @@ export async function foundConversation(
   const { session } = opened
   const fence = candidate.record.lease.runtimeFence
   let committed = replayed
+  // The caller's last word on the opening message, then the chat joins the host; nothing delivers
+  // before that, and a withdrawal that fails leaves the chat closed and unregistered.
+  const keep = () => existing || context.sessions.set(sessionId, session)
+  const unsaved = () => (committed = false)
+  const register = () =>
+    settleOpeningThenRegister(session.journal, replayed ? {} : options, fence, unsaved, keep)
   let installation: Awaited<ReturnType<typeof importAdoptedTranscript>>
   try {
     if (!replayed) {
@@ -194,6 +201,7 @@ export async function foundConversation(
       await params.fork?.revalidate()
       const first = options.firstMessage
       if (first) {
+        await options.beforeFirstMessage?.()
         const send = () =>
           performSend(
             {
@@ -262,9 +270,7 @@ export async function foundConversation(
         sessionId,
         error
       })
-      if (!existing) {
-        context.sessions.set(sessionId, session)
-      }
+      await register()
       return {
         ok: false,
         refusal: refuse(
@@ -274,9 +280,7 @@ export async function foundConversation(
         )
       }
     }
-    if (!existing) {
-      context.sessions.set(sessionId, session)
-    }
+    await register()
     context.publishStatus(sessionId)
     const tabId = store.getSessionTabId(sessionId)
     const [cursor, firstMessage] = await Promise.all([

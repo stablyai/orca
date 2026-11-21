@@ -1,11 +1,12 @@
-import { randomUUID } from 'node:crypto'
-import { ipcMain } from 'electron'
+import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
+import { captureActiveRpcCall } from '../../rpc/callers/active-call'
+import { retainBrowserMemoryPageForAgent } from '../../../browser/guest-lifecycle/browser-page-memory'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'
-import type { BrowserTabSplitDirection } from '../../../../shared/browser-tab-split-direction'
-import type { BrowserTabCreateRequest } from '../../../../shared/browser-tab-create-request'
+import type { BrowserTabSplitDirection } from '../../../../shared/browser/workspaces/browser-tab-split-direction'
+import type { BrowserTabCreateRequest } from '../../../../shared/browser/workspaces/browser-tab-create-request'
 
 export async function createBrowserTabInRenderer(
-  host: Pick<RuntimeBrowserCommandHost, 'getAuthoritativeWindow'>,
+  host: Pick<RuntimeBrowserCommandHost, 'getAuthoritativeWindowId'>,
   url: string,
   worktreeId: string | undefined,
   profileId: string | undefined,
@@ -16,45 +17,38 @@ export async function createBrowserTabInRenderer(
   fallbackWorktreeId?: string,
   split?: { direction: BrowserTabSplitDirection; fromTabId?: string }
 ): Promise<{ browserPageId: string }> {
-  const rendererWebContents = host.getAuthoritativeWindow().webContents
-  const requestId = randomUUID()
-
-  const browserPageId = await new Promise<string>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      ipcMain.removeListener('browser:tabCreateReply', handler)
-      reject(new Error('Tab creation timed out'))
-    }, 10_000)
-
-    const handler = (
-      event: Electron.IpcMainEvent,
-      reply: { requestId: string; browserPageId?: string; error?: string }
-    ): void => {
-      if (event.sender !== rendererWebContents || reply.requestId !== requestId) {
-        return
-      }
-      clearTimeout(timer)
-      ipcMain.removeListener('browser:tabCreateReply', handler)
-      if (reply.error) {
-        reject(new Error(reply.error))
-      } else {
-        resolve(reply.browserPageId!)
-      }
-    }
-    ipcMain.on('browser:tabCreateReply', handler)
-    const request: BrowserTabCreateRequest = {
-      requestId,
-      url,
-      worktreeId,
-      ...(requestedPageId ? { browserPageId: requestedPageId } : {}),
-      // undefined preserves renderer default-profile inheritance; null would override it.
-      sessionProfileId: profileId,
-      sessionPartition,
-      activate,
-      ...(fallbackWorktreeId ? { fallbackWorktreeId } : {}),
-      ...(split ? { split: split.direction, splitFromTabId: split.fromTabId } : {})
-    }
-    rendererWebContents.send('browser:requestTabCreate', request)
+  const windowId = host.getAuthoritativeWindowId()
+  const desktop = getRuntimeDesktopSurface()
+  const withCaller = captureActiveRpcCall()
+  const request: Omit<BrowserTabCreateRequest, 'requestId'> = {
+    url,
+    worktreeId,
+    ...(requestedPageId ? { browserPageId: requestedPageId } : {}),
+    // undefined preserves renderer default-profile inheritance; null would override it.
+    sessionProfileId: profileId,
+    sessionPartition,
+    activate,
+    ...(fallbackWorktreeId ? { fallbackWorktreeId } : {}),
+    ...(split ? { split: split.direction, splitFromTabId: split.fromTabId } : {})
+  }
+  const reply = await desktop.requestRenderer<{
+    requestId: string
+    browserPageId?: string
+    error?: string
+  }>(windowId, {
+    channel: 'browser:requestTabCreate',
+    replyChannel: 'browser:tabCreateReply',
+    payload: request,
+    timeoutMs: 10_000,
+    timeoutMessage: 'Tab creation timed out'
   })
+  if (reply.error) {
+    throw new Error(reply.error)
+  }
+  const browserPageId = reply.browserPageId!
+  withCaller(() =>
+    retainBrowserMemoryPageForAgent(browserPageId, desktop.rendererIdOfWindow?.(windowId) ?? null)
+  )
 
   return { browserPageId }
 }

@@ -9,7 +9,7 @@ import { getRepoSlug, getRepoUpstream } from '../../github/client/fetch/repo-slu
 import { resolveReviewThread } from '../../github/client/update/resolve-review-thread'
 import { setPRCommentReaction } from '../../github/client/update/pr-comment-reaction'
 import type { Store } from '../../persistence/loading-store/store'
-import { getRepoSshConnectionId } from '../../../shared/execution-host'
+import { getRepoSshConnectionId } from '../../../shared/execution-host/execution-host'
 import {
   assertRegisteredGitHubRepo,
   getGitHubLocalGitOptionArgs,

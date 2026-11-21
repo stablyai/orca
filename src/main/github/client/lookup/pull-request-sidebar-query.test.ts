@@ -91,7 +91,7 @@ describe('sidebar PR query', () => {
     )
     const policy = createImplicitDefaultBranchPRPolicy({
       originHeadRepo: null,
-      trackedUpstream: null,
+      secondaryHeads: [],
       branchName: fields.headRefName,
       repoPath: '/folder-workspace',
       localGitOptions: {},
@@ -121,6 +121,51 @@ describe('sidebar PR query', () => {
       title: fields.title,
       checksUnavailable: true,
       statusCheckRollup: []
+    })
+  })
+
+  it('offers the merge methods of the branch the stack merges into', async () => {
+    const rules = { main: ['SQUASH'], 'feature/a': ['MERGE'] }
+    exec.mockImplementation(async (args: string[]) => {
+      if (!args.includes('branch=main') && !args.includes('branch=feature/a')) {
+        return response({
+          ...fields,
+          state: 'OPEN',
+          baseRefName: 'feature/a',
+          stack: { number: 7, size: 2, baseRefName: 'main' },
+          stackEntry: { position: 2 }
+        })
+      }
+      const branch = args.includes('branch=main') ? 'main' : 'feature/a'
+      return {
+        stdout: JSON.stringify({
+          data: {
+            repository: {
+              viewerDefaultMergeMethod: 'MERGE',
+              mergeCommitAllowed: true,
+              rebaseMergeAllowed: false,
+              squashMergeAllowed: true,
+              autoMergeAllowed: true,
+              mergeQueue: null,
+              ref: {
+                rules: {
+                  nodes: [
+                    { type: 'PULL_REQUEST', parameters: { allowedMergeMethods: rules[branch] } }
+                  ]
+                }
+              }
+            }
+          }
+        })
+      }
+    })
+    const data = await getPRByNumber(repository, 42, options, 'local:host', undefined, {
+      includeStackSummary: true
+    })
+    expect(data?.stack?.baseRefName).toBe('main')
+    expect(data?.mergeMethodSettings).toEqual({
+      defaultMethod: 'squash',
+      allowedMethods: { squash: true, merge: false, rebase: false }
     })
   })
 

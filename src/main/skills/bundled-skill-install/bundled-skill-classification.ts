@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
-import type { BundledSkillObserved } from '../../../shared/bundled-skill-plan'
+import type { BundledSkillObserved } from '../../../shared/skills/bundled/bundled-skill-plan'
 import { isOsMetadataSkillEntryName } from '../package-archive/skill-package-identity'
 import type { BundledSkillSource } from './bundled-skill-sources'
 import { bundledSkillTreeSignature } from './bundled-skill-tree-signature'

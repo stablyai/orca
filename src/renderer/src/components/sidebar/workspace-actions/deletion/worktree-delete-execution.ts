@@ -3,9 +3,9 @@ import { getWorktreeOnHostFromState } from '@/store/workspaces/selection/worktre
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
-} from '../../../../../../shared/cross-platform-path'
+} from '../../../../../../shared/file-access/cross-platform-path'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity

@@ -1,13 +1,14 @@
 // Hold provisional chats in server-drawn groups until publication; send placement in server IDs so created tabs retain their intended position (L270).
 
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { StructuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
-import { AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-create-capabilities'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { StructuredAgentSessionCreateParams } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
+import { AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { findTabByIdOrChatAlias } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
 import { useAppStore } from '@/store/index'
 import { readCachedRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { serverLayoutApplyRoute } from '@/runtime/workspace-layout/server/server-layout-apply-routes'
-import { isFrameDrawnServerWorkspace } from '@/runtime/web-session-tabs-sync/frame-drawn-server-workspace-set'
+import { isFrameDrawnServerWorkspace } from '@/runtime/web-session-tabs-sync/frame-drawn/frame-drawn-server-workspace-set'
 import { noteDesktopCreatedServerTab } from './desktop-created-server-tabs'
 import type { StructuredLaunchSurfaceAddress } from '../../../lib/agent-session/launch/structured-agent-session-launch-record'
 
@@ -93,17 +94,22 @@ export function withFrameDrawnChatTabPlacement(intent: {
     return intent.params
   }
   // Probed earlier in the launch; unknown sends no place, so the server saves the tab at the group's end.
-  const supported =
+  if (
     readCachedRuntimeEnvironmentCapability(
       environmentId,
       AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY
-    ) === true
-  const tabPlacement = supported
-    ? (chatTabPlacement(
-        environmentId,
-        intent.worktreeId,
-        structuredAgentSessionTabId(intent.sessionId)
-      ) ?? addressTabPlacement(environmentId, intent.worktreeId, intent.surfaceAddress))
-    : undefined
+    ) !== true
+  ) {
+    return intent.params
+  }
+  const legacyTabId = structuredAgentSessionTabId(intent.sessionId)
+  const tabId =
+    findTabByIdOrChatAlias(
+      useAppStore.getState().unifiedTabsByWorktree[intent.worktreeId],
+      legacyTabId
+    )?.id ?? legacyTabId
+  const tabPlacement =
+    chatTabPlacement(environmentId, intent.worktreeId, tabId) ??
+    addressTabPlacement(environmentId, intent.worktreeId, intent.surfaceAddress)
   return tabPlacement ? { ...intent.params, tabPlacement } : intent.params
 }

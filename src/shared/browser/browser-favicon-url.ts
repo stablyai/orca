@@ -1,4 +1,4 @@
-import { isEligibleLocalCertificateHost, isWildcardBindHost } from '../browser-url'
+import { isEligibleLocalCertificateHost, isWildcardBindHost } from './navigation/browser-url'
 
 // Chromium emits icon updates only when the URL list changes; rendering and navigation listeners must share origin/icon rules.
 
@@ -31,7 +31,7 @@ export function pickDisplayableFaviconUrl(favicons: readonly string[] | undefine
 }
 
 // Session-tab rows resend whole on every change, so a page's inline data: icon must not grow them.
-const MAX_REMOTE_TAB_FAVICON_URL_LENGTH = 2048
+export const MAX_REMOTE_TAB_FAVICON_URL_LENGTH = 2048
 // URL serializes [::ffff:127.0.0.1] as [::ffff:7f00:1].
 const IPV4_MAPPED_LOOPBACK = /^\[::ffff:7f[0-9a-f]{2}:[0-9a-f]{1,4}\]$/i
 

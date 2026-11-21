@@ -1,6 +1,6 @@
 // A recipe VM's suspend and resume never overlap, and one reopening runs its resume once.
 import { describe, expect, it, vi } from 'vitest'
-import type { EphemeralVmRuntimeRecord } from '../../../../shared/ephemeral-vm-runtimes'
+import type { EphemeralVmRuntimeRecord } from '../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { WorkspaceSleepCoordinator, type WorkspaceSleepRuntime } from './workspace-sleep-runtime'
 import type { WorkspaceSleepPlatform } from './workspace-sleep-platform'
 import type { WorkspaceLifecycleQueue } from '../lifecycle/workspace-lifecycle-queue'

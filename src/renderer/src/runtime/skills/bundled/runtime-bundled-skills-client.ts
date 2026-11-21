@@ -2,13 +2,13 @@ import type {
   BundledSkillInstallResult,
   BundledSkillPlan,
   BundledSkillPlanRequest
-} from '../../../../../shared/bundled-skill-plan'
+} from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import {
   BUNDLED_ORCA_SKILL_AUTO_UPDATE_CAPABILITY,
   BUNDLED_ORCA_SKILL_CAPABILITY,
   BUNDLED_ORCA_SKILL_RENAMES_CAPABILITY
-} from '../../../../../shared/skill-install-capability'
-import { bundledSkillNames } from '../../../../../shared/bundled-skill-names'
+} from '../../../../../shared/skills/capabilities/skill-install-capability'
+import { bundledSkillNames } from '../../../../../shared/skills/bundled/bundled-skill-names'
 import type { BundledSkillTarget } from '@/lib/skills/runtime/bundled-skill-target'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import {

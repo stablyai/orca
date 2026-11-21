@@ -1,17 +1,18 @@
 import type {
   BrowserCookieImportResult,
   BrowserSessionProfileSource
-} from '../../../../shared/browser-workspace-types'
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   browserCookieImportFailure,
   type BrowserCookieImportFailure
-} from '../../../../shared/browser-cookie-import-failure-copy'
+} from '../../../../shared/browser/cookies/browser-cookie-import-failure-copy'
 import { detectInstalledBrowsers, selectBrowserProfile } from '../sources/browser-cookie-detection'
 import { importCookiesFromBrowser } from '../browser-cookie-import'
 import { importCookiesFromFile } from '../imports/import-cookie-file'
 import type { DetectedBrowser } from '../sources/browser-cookie-source-profiles'
 
 import { recordClientRouteCookieImportSource } from './client-route-cookie-import-source-store'
+import { restoreBrowserRoutePartitionSessionCookies } from '../session-restore/browser-session-cookie-restore'
 import { currentBrowserRoutePartitionBindingStore } from '../../routing/partitions/browser-route-partition-binding-runtime'
 import { resolveBrowserRoutePartitionBinding } from '../../routing/partitions/browser-route-partition-migration'
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
@@ -90,6 +91,8 @@ async function importIntoClientRoutePartition(
   } catch (error) {
     return { ok: false, reason: error instanceof Error ? error.message : String(error) }
   }
+  // Saved session cookies go back first, or the next page's restore would overwrite the import.
+  await restoreBrowserRoutePartitionSessionCookies(partition)
   const result = await source.importInto(partition)
   // Re-pairing while picking or importing changes the destination; reject a stale success.
   const settled = settledRoutePartition(target)

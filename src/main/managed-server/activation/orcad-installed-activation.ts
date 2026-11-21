@@ -17,7 +17,7 @@ import { planOrcadUpdate } from './orcad-update-plan'
 import {
   type OrcadTerminalCensus,
   UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
-} from '../../../shared/orcad-terminal-census'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import { runFencedStop } from './orcad-fenced-stop'
 import {
   censusNeedsHostDaemonProtocols,
@@ -66,7 +66,7 @@ import {
 } from './orcad-transaction-incumbent'
 import { withOrcadLogTail } from '../install/orcad-remote-log-tail'
 import { orcadCandidateLaunchFailureCode } from '../../orcad/diagnostics/orcad-host-unavailable'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 
 type Outcome = Extract<OrcadDeployResult, { outcome: 'installed-not-activated' }>
 
@@ -136,7 +136,7 @@ export async function activateInstalledOrcad(
     asksCandidate
   )
   if ('failure' in preflight) {
-    return notActivated('orcad_candidate_preflight_failed', preflight.failure, true)
+    return notActivated(preflight.code, preflight.failure, true)
   }
   const { hostDaemonProtocols } = preflight
   plan = planFor(census, hostDaemonProtocols)

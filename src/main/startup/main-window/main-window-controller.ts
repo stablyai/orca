@@ -46,28 +46,28 @@ import {
   applyServeDesktopWindowActivationPolicy
 } from '../../window/activation/foreground-activation-policy'
 import type { MainWindowOpenOptions } from '../../window/main-window/main-window-contracts'
-import { argvRequestsBackgroundOpen } from '../../../shared/background-open-argv'
+import { argvRequestsBackgroundOpen } from '../../../shared/app-lifecycle/launch/background-open-argv'
 
 const TRAY_CREATE_FALLBACK_MS = 12_000
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 
-export function openMainWindow(options: MainWindowOpenOptions = {}): BrowserWindow {
+export async function openMainWindow(options: MainWindowOpenOptions = {}): Promise<BrowserWindow> {
   logStartupMilestone('open-main-window-start')
   // The launch's first window honours the background request `orca open` put on its argv.
   const revealInBackground =
     options.revealInBackground ??
     (!state.hasOpenedMainWindow && argvRequestsBackgroundOpen(process.argv))
-  const { store, keybindings } = requireMainWindowServices({
+  const { keybindings } = requireMainWindowServices({
     store: state.store,
-    runtime: state.runtime,
-    stats: state.stats,
-    rateLimits: state.rateLimits,
-    automations: state.automations,
-    codexAccounts: state.codexAccounts,
-    codexRuntimeHome: state.codexRuntimeHome,
-    claudeAccounts: state.claudeAccounts,
-    claudeRuntimeAuth: state.claudeRuntimeAuth,
-    keybindings: state.keybindings
+    runtime: state.core.runtime,
+    stats: state.core.stats,
+    rateLimits: state.core.rateLimits,
+    automations: state.core.automations,
+    codexAccounts: state.core.codexAccounts,
+    codexRuntimeHome: state.core.codexRuntimeHome,
+    claudeAccounts: state.core.claudeAccounts,
+    claudeRuntimeAuth: state.core.claudeRuntimeAuth,
+    keybindings: state.core.keybindings
   })
   if (process.platform === 'win32') {
     logStartupMilestone('acl-grant-start')
@@ -97,7 +97,7 @@ export function openMainWindow(options: MainWindowOpenOptions = {}): BrowserWind
   if (state.isServeMode) {
     applyServeDesktopWindowActivationPolicy({ warn: console.warn, background: revealInBackground })
   }
-  const window = createMainWindow(store, {
+  const window = createMainWindow(state.nativeSettings, {
     getIsQuitting: () => state.isQuitting,
     onQuitAborted: () => {
       state.isQuitting = false
@@ -195,13 +195,36 @@ export function openMainWindow(options: MainWindowOpenOptions = {}): BrowserWind
     }
   }
   window.webContents.on('did-finish-load', onFirstWindowLoad)
-  attachMainWindowCoreServices(window, {
-    markExpectedRendererReload,
-    recordRendererReload: (ignoreCache) =>
-      recordCrashBreadcrumb('renderer_reload_requested', { ignoreCache })
-  })
   state.mainWindow = window
   state.hasOpenedMainWindow = true
+  window.on('closed', () => {
+    if (state.mainWindow === window) {
+      state.mainWindow = null
+      if (state.isServeMode) {
+        applyBackgroundActivationPolicy({ serveWithoutDesktopWindow: true, warn: console.warn })
+      }
+    }
+    clearExpectedRendererReload(rendererWebContentsId)
+    clearMainWindowAgentStatusListeners()
+  })
+  const hostInitialization = Promise.withResolvers<void>()
+  try {
+    await attachMainWindowCoreServices(window, {
+      hostInitialization: hostInitialization.promise,
+      markExpectedRendererReload,
+      recordRendererReload: (ignoreCache) =>
+        recordCrashBreadcrumb('renderer_reload_requested', { ignoreCache })
+    })
+    if (window.isDestroyed() || state.mainWindow !== window || state.isQuitting) {
+      throw new Error('Main window closed while preparing services')
+    }
+  } catch (error) {
+    hostInitialization.resolve()
+    if (!window.isDestroyed()) {
+      window.destroy()
+    }
+    throw error
+  }
   const publishResourceVisibility = (): void => {
     if (!window.isDestroyed()) {
       window.webContents.send('memory:resourceWindowVisibility', isResourceWindowVisible(window))
@@ -230,17 +253,8 @@ export function openMainWindow(options: MainWindowOpenOptions = {}): BrowserWind
         minIntervalMs: AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS
       })
   })
-  window.on('closed', () => {
-    if (state.mainWindow === window) {
-      state.mainWindow = null
-      if (state.isServeMode) {
-        applyBackgroundActivationPolicy({ serveWithoutDesktopWindow: true, warn: console.warn })
-      }
-    }
-    clearExpectedRendererReload(rendererWebContentsId)
-    clearMainWindowAgentStatusListeners()
-  })
   logStartupMilestone('load-start')
-  loadMainWindow(window)
+  loadMainWindow(window, options.loadObserver)
+  hostInitialization.resolve()
   return window
 }

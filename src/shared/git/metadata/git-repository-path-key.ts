@@ -1,5 +1,5 @@
 import { posix, win32 } from 'node:path'
-import { foldWslUncPathCaseInsensitiveParts, isWslUncPath } from '../../wsl-paths'
+import { foldWslUncPathCaseInsensitiveParts, isWslUncPath } from '../../file-access/wsl-paths'
 
 /** Preserve POSIX bytes; comparison keys must never become filesystem paths. */
 export function gitRepositoryPathKey(value: string): string {

@@ -3,7 +3,7 @@ import { getRelativePathInsideRoot } from '@/lib/path'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 import { HtmlDocPreview } from './HtmlDocPreview'
-import type { BrowserPage } from '../../../../../shared/browser-workspace-types'
+import type { BrowserPage } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 
 /** Document previews replace the whole URL pane because document state supplies chrome, history and identity. */
 export function WorkspaceDocPagePane({

@@ -1,9 +1,9 @@
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type Database from '../../sqlite/sync-database'
 import { journalMailSenderKey, type JournalMailCustody } from './journal-writer-host-facts'
-import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../shared/agent-session/journal/agent-session-message-source'
 import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
-import { orchestrationMailNotice } from '../../../shared/agent-session/agent-session-message-source'
+import { orchestrationMailNotice } from '../../../shared/agent-session/journal/agent-session-message-source'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalWriterOperation } from './journal-writer-command'
 import type {
@@ -31,6 +31,10 @@ type JournalDomainQueueSelection = {
   /** Manual sends pass edit holds; automatic delivery waits behind them. */
   automatic: boolean
   mail?: JournalMailCustody
+  /** Only other agents' mail may join a turn that has not taken in earlier mail yet. */
+  mailOnly?: boolean
+  /** False keeps mail out of a running turn, as for a person's card queued without steering. */
+  mailJoinsTurn?: boolean
 }
 
 export type JournalDomainQueuePick =
@@ -102,8 +106,13 @@ export function nextJournalDomainQueueCard(
         continue
       }
       const mail = orchestrationMailNotice(card.body.from)
-      if (steer && (card.body.command || (!mail && card.deliveryMode !== 'steer'))) {
+      const joins = card.deliveryMode === 'steer' || (mail && selection.mailJoinsTurn !== false)
+      if (steer && (card.body.command || !joins)) {
         continue
+      }
+      if (selection.mailOnly && !mail) {
+        // A person's card that could go now holds every later card until earlier mail is taken in.
+        return { kind: 'selected', card: null }
       }
       if (pastUnavailableMail && mail) {
         continue

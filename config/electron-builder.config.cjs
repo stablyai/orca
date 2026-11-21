@@ -43,6 +43,10 @@ const {
   finalizePackagedWaylandClipboard
 } = require('./wayland-clipboard-resources.cjs')
 const {
+  ensureBundledProviderExec,
+  finalizePackagedProviderExec
+} = require('./provider-exec-resources.cjs')
+const {
   writeMacBuildCompatibility
 } = require('./scripts/desktop-distribution/macos/mac-build-compatibility.cjs')
 const {
@@ -91,6 +95,10 @@ const {
 const {
   buildMacShipItScheduling
 } = require('./scripts/desktop-distribution/macos/macos-shipit-scheduling.cjs')
+
+const {
+  buildMacNativeAddon
+} = require('./scripts/desktop-distribution/macos/build-macos-native-addon.cjs')
 
 // Dev channels need release bundle ID/signature/notarization so Squirrel.Mac accepts updates and macOS retains app identity.
 const isMacHourly = process.env.ORCA_MAC_HOURLY === '1'
@@ -165,9 +173,11 @@ const emojiShortcodeDatasetResource = {
   from: 'node_modules/emojibase-data/en/shortcodes/emojibase.json',
   to: 'node_modules/emojibase-data/en/shortcodes/emojibase.json'
 }
+// The native dependency rebuild runs after beforePack and replaces node-pty/build.
+const journalFileLockBuildDir = 'native/journal-file-lock/.build'
 const commonExtraResources = [
   {
-    from: 'node_modules/node-pty/build/Release',
+    from: `${journalFileLockBuildDir}/\${arch}`,
     to: 'bin',
     filter: ['journal-file-lock', 'journal-file-lock.exe']
   },
@@ -187,6 +197,8 @@ const commonExtraResources = [
 const debElectronRuntimeDependencies = [
   'libgtk-3-0',
   'libnotify4',
+  'dbus-bin | dbus',
+  'libglib2.0-bin',
   'libnss3',
   'libxss1',
   'libxtst6',
@@ -201,6 +213,7 @@ const debElectronRuntimeDependencies = [
 const rpmElectronRuntimeDependencies = [
   'gtk3',
   'libnotify',
+  '/usr/bin/dbus-send',
   'nss',
   'libXScrnSaver',
   '(libXtst or libXtst6)',
@@ -339,6 +352,7 @@ module.exports = {
     'out/package.json',
     'out/cli/**',
     'out/shared/**',
+    'out/main/worker-threads/{worker-thread-entry-path,worker-thread-spawn,worker-send-ledger}.js',
     'out/main/agent-hooks/**',
     'out/main/antigravity/**',
     'out/main/claude/**',
@@ -358,6 +372,7 @@ module.exports = {
     'out/main/persistence/profile-state/**',
     'out/main/plugins/artifacts/plugin-artifact-validation.js',
     'out/main/plugins/artifacts/plugin-content-hash.js',
+    'out/main/plugins/artifacts/plugin-host-call-validation.js',
     'out/main/plugins/catalog/plugin-catalog-release-entry.js',
     'out/main/environment-doctor/environment-doctor.js',
     'out/main/environment-doctor/environment-doctor-host.js',
@@ -366,11 +381,15 @@ module.exports = {
     'out/main/skills/bundled-skill-install/bundled-skill-local-host.js',
     'out/main/skills/bundled-skill-install/bundled-skill-installation.js',
     'out/main/startup/network-compatibility/http1-compatibility-marker.js',
+    // `orca agent hooks` gives main hook code an app environment in the CLI process.
+    'out/main/backend/node-service-environment.js',
     'out/main/daemon-entry.js',
     'out/main/session-scanner-service-entry.js',
     'out/main/wsl-transcript-fs-process-entry.js',
     'out/main/foreign-sqlite-reader-entry.js',
     'out/main/agent-identity-worker-entry.js',
+    'out/main/bots-db-worker-entry.js',
+    'out/main/orchestration-reader-entry.js',
     'out/main/session-search-worker-entry.js',
     'out/main/journal-sql-worker-entry.js',
     'out/main/journal-sql-reader-entry.js',
@@ -401,7 +420,8 @@ module.exports = {
     context,
     mobileWebBundleDir = MOBILE_WEB_BUNDLE_DIR,
     ensureWaylandClipboard = ensureBundledWaylandClipboard,
-    orcadTemplateDir = join(__dirname, '..', orcadTemplateExtraResource.from)
+    orcadTemplateDir = join(__dirname, '..', orcadTemplateExtraResource.from),
+    ensureProviderExec = ensureBundledProviderExec
   ) => {
     // The template is the server every SSH host gets, so a dark test template must never ship.
     assertNotDarkBuild([join(__dirname, '..', 'out', 'main'), mobileWebBundleDir, orcadTemplateDir])
@@ -413,15 +433,17 @@ module.exports = {
     if (context.electronPlatformName === 'linux') {
       ensureWaylandClipboard(context.arch)
     }
+    if (context.electronPlatformName !== 'win32') {
+      ensureProviderExec(context.electronPlatformName, context.arch)
+    }
     return import('./scripts/native-build/build-journal-file-lock.mjs').then(
       ({ buildJournalFileLock }) => {
         const lockName =
           context.electronPlatformName === 'win32' ? 'journal-file-lock.exe' : 'journal-file-lock'
-        buildJournalFileLock(
-          join(__dirname, '..', 'node_modules', 'node-pty', 'build', 'Release', lockName),
-          context.arch === 3 ? 'arm64' : 'x64',
-          { glibcFloor: context.electronPlatformName === 'linux' ? 'desktop' : false }
-        )
+        const arch = normalizeElectronArchitecture(context.arch)
+        buildJournalFileLock(join(__dirname, '..', journalFileLockBuildDir, arch, lockName), arch, {
+          glibcFloor: context.electronPlatformName === 'linux' ? 'desktop' : false
+        })
       }
     )
   },
@@ -461,6 +483,13 @@ module.exports = {
       const architecture = macSliceArch(context.arch, 'local-build compatibility')
       const schedulingAddon = buildMacShipItScheduling(resourcesDir, architecture)
       await signMacStandaloneHelper(schedulingAddon, 'ShipIt scheduling', context.packager)
+      const menuDeadKeyAddon = buildMacNativeAddon(
+        resourcesDir,
+        architecture,
+        'macos-menu-dead-key',
+        'orca_menu_dead_key.node'
+      )
+      await signMacStandaloneHelper(menuDeadKeyAddon, 'Menu dead-key guard', context.packager)
       const version = context.packager.appInfo.version
       let commit = process.env.ORCA_BUILD_COMMIT || process.env.GITHUB_SHA || 'unknown'
       if (commit === 'unknown') {
@@ -493,6 +522,7 @@ module.exports = {
       // Why the arch is passed: symbol-version checks pass happily on a wrong-architecture binary,
       // so a cross-built slice could ship the host's pty.node and only fail at runtime.
       finalizePackagedWaylandClipboard(resourcesDir)
+      finalizePackagedProviderExec(resourcesDir, 'linux')
       verifyLinuxGlibcFloor(context.appOutDir, { targetArch })
     }
     verifyPackagedMainRuntimeDeps(resourcesDir)
@@ -530,10 +560,16 @@ module.exports = {
     assertPackagedWebClient(resourcesDir)
     assertPackagedServeSelectionEntry(resourcesDir)
     finalizePackagedRipgrep(resourcesDir)
-    for (const filename of readdirSync(resourcesDir)) {
-      if (!filename.startsWith('agent-browser-')) {
-        continue
-      }
+    const agentBrowserDrivers = readdirSync(resourcesDir).filter((filename) =>
+      filename.startsWith('agent-browser-')
+    )
+    // Each driver now comes from its own optional package, which a host-only install skips.
+    if (agentBrowserDrivers.length === 0) {
+      throw new Error(
+        `No agent-browser driver in ${resourcesDir}; install with --cpu/--os for the target`
+      )
+    }
+    for (const filename of agentBrowserDrivers) {
       // Upstream executable bits vary (notably darwin-x64); restore them so packaged execFile works.
       chmodSync(join(resourcesDir, filename), 0o755)
       // The orcad template hashes this exact file next, so app signing must not rewrite it later.
@@ -574,6 +610,11 @@ module.exports = {
         'orca-process-footprint',
         context.packager
       )
+      await signMacStandaloneHelper(
+        finalizePackagedProviderExec(resourcesDir, 'darwin'),
+        'orca-provider-exec',
+        context.packager
+      )
       await packageMacTerminalHost(join(resourcesDir, '..', '..'), context)
     }
   },
@@ -609,7 +650,7 @@ module.exports = {
         to: 'bin/orca-agent-hook.exe'
       },
       {
-        from: 'node_modules/agent-browser/bin/agent-browser-win32-x64.exe',
+        from: 'node_modules/@agent-browser/cli-win32-x64-msvc/bin/agent-browser.exe',
         to: 'agent-browser-win32-x64.exe'
       },
       {
@@ -675,7 +716,7 @@ module.exports = {
         to: 'bin/orca'
       },
       {
-        from: 'node_modules/agent-browser/bin/agent-browser-darwin-${arch}',
+        from: 'node_modules/@agent-browser/cli-darwin-${arch}/bin/agent-browser',
         to: 'agent-browser-darwin-${arch}'
       },
       {
@@ -697,6 +738,11 @@ module.exports = {
       {
         from: 'native/process-footprint-macos/.build/release/orca-process-footprint',
         to: 'MacOS/orca-process-footprint'
+      },
+      // Nested executables belong in Contents/MacOS, where afterPack signs them before the app.
+      {
+        from: 'native/provider-exec/.build/darwin-${arch}/orca-provider-exec',
+        to: 'MacOS/orca-provider-exec'
       }
     ],
     target: [
@@ -739,11 +785,15 @@ module.exports = {
         to: 'bin/orca-wayland-clipboard'
       },
       {
+        from: 'native/provider-exec/.build/linux-${arch}/orca-provider-exec',
+        to: 'bin/orca-provider-exec'
+      },
+      {
         from: 'resources/linux/bin/orca-ide',
         to: 'bin/orca-ide'
       },
       {
-        from: 'node_modules/agent-browser/bin/agent-browser-linux-${arch}',
+        from: 'node_modules/@agent-browser/cli-linux-${arch}-gnu/bin/agent-browser',
         to: 'agent-browser-linux-${arch}'
       },
       {

@@ -11,7 +11,7 @@ import { createTerminalTabNavigationActions } from './tabs/terminal-tab-navigati
 import { createTerminalTabPresentationActions } from './tabs/presentation/terminal-tab-presentation'
 import { createTerminalTabAppearanceActions } from './tabs/presentation/terminal-tab-appearance'
 import { routeTerminalTabChangesThroughLayoutOwner } from './tabs/presentation/terminal-tab-layout-owner-actions'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { createTerminalPtyBindingActions } from './pty/terminal-pty-bindings'
 import { createTerminalPtyReleaseActions } from './pty/terminal-pty-release'
 import { createTerminalUnverifiedPtyLossActions } from './pty/terminal-unverified-pty-loss'
@@ -24,6 +24,7 @@ import { createTerminalStartupQueueActions } from './tabs/creation/terminal-star
 import { createWorkspaceTerminalHydrationActions } from './hydration/workspace-terminal-hydration'
 import { createWorkspaceTerminalReconnectActions } from './hydration/workspace-terminal-reconnect'
 import { createPairedTerminalTabCloseIntentSlice } from './retirement/paired-terminal-tab-close-intent-actions'
+import { recordTerminalTabRename } from '@/lib/agent-session/history/session-names/terminal-session-name-recording'
 
 export const createTerminalSlice: (
   ...args: [
@@ -84,11 +85,14 @@ export const createTerminalSlice: (
   ...createActiveWorkspaceTerminalActions(set, get),
   ...createTerminalTabCloseActions(set, get),
   ...createTerminalTabNavigationActions(set, get),
-  ...withLayoutOwnerTerminalTabChanges(
-    {
-      ...createTerminalTabPresentationActions(set, get),
-      ...createTerminalTabAppearanceActions(set, get)
-    },
+  ...withTerminalSessionNameRecording(
+    withLayoutOwnerTerminalTabChanges(
+      {
+        ...createTerminalTabPresentationActions(set, get),
+        ...createTerminalTabAppearanceActions(set, get)
+      },
+      get
+    ),
     get
   ),
   ...createTerminalPtyBindingActions(set, get),
@@ -112,4 +116,25 @@ function withLayoutOwnerTerminalTabChanges<
   return ORCA_LAYOUT_OWNER_IS_MAIN
     ? { ...actions, ...routeTerminalTabChangesThroughLayoutOwner(actions, get) }
     : actions
+}
+
+/** Every rename, routed or not, names the tab's agent session before it lands, so a close right
+ *  after keeps the name in Session History. */
+export function withTerminalSessionNameRecording<
+  T extends Pick<TerminalSlice, 'setTabCustomTitle'>
+>(actions: T, get: TerminalStoreGet): T {
+  return {
+    ...actions,
+    setTabCustomTitle: (tabId, title, opts) => {
+      try {
+        recordTerminalTabRename(get(), tabId, title, {
+          interactive: opts?.recordInteraction !== false
+        })
+      } catch (error) {
+        // Remembering the name for Session History must never block the rename itself.
+        console.warn('[terminal-session-names] could not record tab rename:', error)
+      }
+      actions.setTabCustomTitle(tabId, title, opts)
+    }
+  }
 }

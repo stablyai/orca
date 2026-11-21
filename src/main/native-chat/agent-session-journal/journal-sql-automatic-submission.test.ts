@@ -74,7 +74,8 @@ it('keeps live capture and custody through committed receipt adoption on the jou
       operationalRevision: 0
     },
     child: null,
-    steering: { kind: 'codex-unavailable' }
+    steering: { kind: 'codex-unavailable' },
+    mailJoinsTurn: true
   }
   const started = Promise.withResolvers<void>()
   const resume = Promise.withResolvers<void>()
@@ -121,7 +122,11 @@ it('keeps live capture and custody through committed receipt adoption on the jou
     return reads.submission('send')
   })
   resume.resolve()
-  expect(await claiming).toEqual({ kind: 'claimed', messageId: 'mail', clientMessageId: 'send' })
+  expect(await claiming).toMatchObject({
+    kind: 'claimed',
+    messageId: 'mail',
+    clientMessageId: 'send'
+  })
   expect(await after).toMatchObject({
     clientMessageId: 'send',
     queuedMessageId: 'mail',

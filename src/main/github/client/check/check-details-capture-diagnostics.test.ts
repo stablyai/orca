@@ -2,6 +2,7 @@ import type { ChildProcess } from 'node:child_process'
 import { getEventListeners } from 'node:events'
 import type * as ProcessHostModule from '@orca/process-host'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as WorkerChildProcessModule from '../../../worker-thread-child-process/worker-thread-child-process'
 import {
   completeFakeSpawn,
   createFakeSpawnedChild
@@ -15,6 +16,8 @@ import * as ghUtilsOwner2 from '../../../git/command-runner/hosted-cli/gh-exec-f
 import { getPRCheckDetails } from './get-pr-check-details'
 import { prCheckLogTailCache } from './check-job-log-tails'
 
+const { groupExists } = vi.hoisted(() => ({ groupExists: vi.fn(() => true) }))
+
 const { spawnMock, resolverMock, signalMock, forceMock, captureCap } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
   resolverMock: vi.fn(),
@@ -22,11 +25,20 @@ const { spawnMock, resolverMock, signalMock, forceMock, captureCap } = vi.hoiste
   forceMock: vi.fn(),
   captureCap: { bytes: 4096, metadata: false }
 }))
+// These tests drive the in-thread spawn mocks; keep Windows launches off the real process worker.
+vi.mock(
+  '../../../worker-thread-child-process/worker-thread-child-process',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof WorkerChildProcessModule>()),
+    canSpawnOnWorkerThread: () => false
+  })
+)
 vi.mock('node:child_process', async (original) => ({ ...(await original()), spawn: spawnMock }))
 vi.mock('../../repositories/github-api-repository', () => ({
   resolveGitHubRepoExecution: resolverMock
 }))
 vi.mock('@orca/process-host/process-tree-termination', () => ({
+  processGroupExists: groupExists,
   signalProcessTree: signalMock,
   forceTerminateProcessTree: forceMock
 }))
@@ -126,6 +138,7 @@ async function verifyAdmissionIsRetained(): Promise<void> {
 
 describe('real capture and gh diagnostics through check details RPC', () => {
   beforeEach(() => {
+    groupExists.mockReturnValue(true)
     vi.useFakeTimers()
     children.length = 0
     signals.clear()
@@ -143,6 +156,7 @@ describe('real capture and gh diagnostics through check details RPC', () => {
   })
   afterEach(async () => {
     for (const child of children) {
+      groupExists.mockReturnValue(false)
       child.emit('close', 0, null)
     }
     await vi.advanceTimersByTimeAsync(15_000)
@@ -216,6 +230,7 @@ describe('real capture and gh diagnostics through check details RPC', () => {
         child.emit('error', privateFailure())
         await vi.advanceTimersByTimeAsync(0)
         expect(children).toHaveLength(4)
+        groupExists.mockReturnValue(false)
         child.emit('close', 1, null)
       } else {
         // Lower only the test capture cap; the real sinks still report truncation.
@@ -233,6 +248,7 @@ describe('real capture and gh diagnostics through check details RPC', () => {
         // The physical child still holds admission after unverified grace.
         expect(getEventListeners(child, 'close')).toHaveLength(1)
         await verifyAdmissionIsRetained()
+        groupExists.mockReturnValue(false)
         child.emit('close', null, 'SIGKILL')
       }
       const response = await result

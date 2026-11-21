@@ -1,0 +1,173 @@
+// The desktop's Request access wording, from the shared table, for the phone's bot sheet.
+import {
+  botAccessPlace,
+  botAccessCopy,
+  type BotAccessHost
+} from '../../../src/shared/bots/bot-access-copy'
+import {
+  accessRequestIdentity,
+  accessRequestPerson
+} from '../../../src/shared/bots/bot-access-request'
+import type { ConnectorAccessRequest } from '../../../src/shared/connector-bot-access-contract'
+import { botAccessGrantFacts } from '../../../src/shared/bots/bot-access-grant'
+import { CONNECTOR_SOURCE_NAMES } from '../../../src/shared/connectors/external-conversation-link'
+import type { HostStatusReply } from '../transport/hosts/host-status-reply-schema'
+import { normalizeMachineName } from '../../../src/shared/remote-runtime/host-metadata/machine-name'
+import type { AgentChatPermissionMode } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
+import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
+import { agentChatPermissionModeCopy } from '../../../src/shared/agent-session/options/permissions/structured-agent-session-permission-option'
+import {
+  botAccessConfirm,
+  botAccessReach,
+  botReachLineText,
+  botStartingPermission,
+  type BotAccessConfirmRow,
+  type BotAccessConnector
+} from '../../../src/shared/bots/bot-access-reach'
+
+/** What the phone knows of a bot's access. */
+export type PhoneAccessBot = {
+  name: string
+  accessHost?: BotAccessHost
+  agent: string
+  permissionMode?: AgentChatPermissionMode
+  google?: boolean
+}
+
+export function phoneAccessHost(status: HostStatusReply | undefined): BotAccessHost {
+  return {
+    kind: 'unknown',
+    name: normalizeMachineName(status?.machineName) || null
+  }
+}
+
+export function phoneBotReachLines(bot: PhoneAccessBot): { title: string; detail?: string }[] {
+  const permission = botStartingPermission(bot, null)
+  return botAccessReach({
+    agent: bot.agent,
+    permission,
+    connector: null,
+    google: bot.google === true ? null : []
+  }).map((line) =>
+    botReachLineText(line, {
+      name: bot.name,
+      agentLabel: isTuiAgent(bot.agent) ? TUI_AGENT_DISPLAY_NAMES[bot.agent] : bot.agent,
+      place: botAccessPlace(bot.accessHost ?? { kind: 'unknown', name: null }),
+      mode: (mode) => agentChatPermissionModeCopy(bot.agent, mode)
+    })
+  )
+}
+
+function accessRequestPlace(request: ConnectorAccessRequest): string {
+  const connector = CONNECTOR_SOURCE_NAMES[request.source]
+  return request.workspaceName
+    ? botAccessCopy('place', { connector, workspace: request.workspaceName })
+    : connector
+}
+
+/** Who the connector says they are, without a real name that only repeats their name. */
+function uniqueRequestIdentity(request: ConnectorAccessRequest): string {
+  const { requester } = request
+  const unique =
+    requester.detail === accessRequestPerson(request) ? { ...requester, detail: '' } : requester
+  return accessRequestIdentity({ ...request, requester: unique })
+}
+
+/** Under the person's name: who the connector says they are, and where they asked. */
+export function accessRequestLine(request: ConnectorAccessRequest): string {
+  return [uniqueRequestIdentity(request), accessRequestPlace(request)].filter(Boolean).join(' · ')
+}
+
+/** One fact row of the access decision, as the desktop's confirm lists it; `warn` rows read red. */
+export type AccessDecisionRow = {
+  kind: BotAccessConfirmRow['kind']
+  text: string
+  warn?: true
+  connector?: BotAccessConnector
+}
+
+/** The desktop's "Give access" confirm: its title, who and where, the warning line in its tone, and
+ *  what they reach, one line each. The bot runs on the computer, not this phone. */
+export function accessDecisionCopy(
+  request: ConnectorAccessRequest,
+  bot: PhoneAccessBot
+): {
+  title: string
+  firstName: string
+  who: string
+  warning: string
+  tone: 'high' | 'medium'
+  rows: AccessDecisionRow[]
+} {
+  const person = accessRequestPerson(request)
+  const firstName =
+    botAccessGrantFacts({
+      botName: bot.name,
+      people: [{ id: request.requester.id, name: person }],
+      connector: CONNECTOR_SOURCE_NAMES[request.source],
+      workspace: request.workspaceName || null
+    }).firstName ?? person
+  // Without a handle, the full name, since the title shows only the first.
+  const who = uniqueRequestIdentity(request) || (person !== firstName ? person : '')
+  const { tone, rows } = botAccessConfirm({
+    permission: botStartingPermission(bot, null),
+    connector: request.source,
+    // Unknown counts, as on the desktop: the phone can't read which Google areas are on.
+    google: bot.google === true
+  })
+  return {
+    title: botAccessCopy('titleOne', { person: firstName, name: bot.name }),
+    firstName,
+    who: [who, accessRequestPlace(request)].filter(Boolean).join(' · '),
+    warning: botAccessCopy(
+      'confirmWarning',
+      botAccessPlace(bot.accessHost ?? { kind: 'unknown', name: null })
+    ),
+    tone,
+    rows: rows.map((row): AccessDecisionRow => {
+      switch (row.kind) {
+        case 'computer':
+          return { kind: row.kind, text: botAccessCopy('confirmComputer') }
+        case 'no-approvals':
+          return { kind: row.kind, text: botAccessCopy('confirmNoApprovals'), warn: true }
+        case 'may-skip-approvals':
+          return { kind: row.kind, text: botAccessCopy('confirmMaySkipApprovals'), warn: true }
+        case 'approves':
+          return { kind: row.kind, text: botAccessCopy('confirmApproveOne', { person: firstName }) }
+        case 'google':
+          return { kind: row.kind, text: botAccessCopy('confirmGoogle') }
+        case 'connector':
+          return {
+            kind: row.kind,
+            connector: row.connector,
+            text:
+              row.connector === 'slack'
+                ? botAccessCopy('reachSlack', { name: bot.name })
+                : row.connector === 'github'
+                  ? botAccessCopy('confirmGitHub')
+                  : botAccessCopy('confirmLinear')
+          }
+      }
+    })
+  }
+}
+
+/** A request answered elsewhere or gone by when the phone asks about it. */
+export const ACCESS_REQUEST_EXPIRED_LINE = 'This request was already answered or has expired.'
+
+/** Why the host didn't save an answer. */
+export function accessDecideFailureLine(request: ConnectorAccessRequest, error: string): string {
+  switch (error) {
+    case 'expired':
+      return ACCESS_REQUEST_EXPIRED_LINE
+    case 'full':
+      return botAccessCopy('full', { person: accessRequestPerson(request) })
+    case 'granted_not_added':
+      return `Access was given, but ${accessRequestPerson(request)} isn’t listed yet. Orca will add them.`
+    case 'signed_out':
+      return 'Sign in to Orca on your computer to answer requests.'
+    default:
+      return botAccessCopy('decideFailed')
+  }
+}

@@ -28,8 +28,14 @@ vi.mock('react-native-gesture-handler', () => {
     runOnJS: () => GestureChain
     onStart: () => GestureChain
     onUpdate: () => GestureChain
+    onFinalize: () => GestureChain
   }
-  const chain: GestureChain = { runOnJS: () => chain, onStart: () => chain, onUpdate: () => chain }
+  const chain: GestureChain = {
+    runOnJS: () => chain,
+    onStart: () => chain,
+    onUpdate: () => chain,
+    onFinalize: () => chain
+  }
   return {
     Gesture: { Simultaneous: () => ({}), Native: () => ({}), Pinch: () => chain },
     GestureDetector: 'GestureDetector',
@@ -54,7 +60,13 @@ vi.mock('lucide-react-native', () =>
       'Square',
       'X',
       'Check',
-      'CircleHelp'
+      'CircleHelp',
+      // The automation mark's icon table is read when its module loads.
+      'Clock',
+      'Hourglass',
+      'Play',
+      'Webhook',
+      'Zap'
     ].map((x) => [x, x])
   )
 )
@@ -79,11 +91,19 @@ vi.mock('../native-chat/input/prompts/MobileNativeChatAsk', () => ({
 vi.mock('../native-chat/input/session-options/MobileNativeChatSessionOptionPickers', () => ({
   MobileNativeChatSessionOptionPickers: 'SessionOptions'
 }))
+vi.mock('../native-chat/mcp/MobileNativeChatMcpTray', () => ({
+  MobileNativeChatMcpTray: 'McpTray'
+}))
+vi.mock('../native-chat/usage/MobileNativeChatAccountUsageSheet', () => ({
+  MobileNativeChatAccountUsageSheet: 'AccountUsageSheet'
+}))
 vi.mock('../native-chat/composer/menus/MobileNativeChatComposerMenu', () => ({
   MobileNativeChatComposerSuggestions: 'Suggestions'
 }))
-vi.mock('../../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
-vi.mock('../../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
+vi.mock('../../components/sheets/ActionSheetModal', () => ({
+  ActionSheetModal: 'ActionSheetModal'
+}))
+vi.mock('../../components/reorder/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
 vi.mock('react-native-reanimated', async () => {
   const { useRef } = await import('react')
   return {
@@ -92,4 +112,4 @@ vi.mock('react-native-reanimated', async () => {
     useSharedValue: (value: unknown) => useRef({ value }).current
   }
 })
-vi.mock('../../components/MobileMarkdown', () => ({ MobileMarkdown: 'Markdown' }))
+vi.mock('../../components/markdown/MobileMarkdown', () => ({ MobileMarkdown: 'Markdown' }))

@@ -4,7 +4,7 @@ import type {
   WorkspaceSpaceAnalysis,
   WorkspaceSpaceScanProgress
 } from '../../../shared/workspace-disk-space/workspace-space-types'
-import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 import {
   WorkspaceSpaceScanCancelledError,
   createWorkspaceSpaceScanLimiter,

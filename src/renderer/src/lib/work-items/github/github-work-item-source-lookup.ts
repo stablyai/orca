@@ -2,6 +2,7 @@ import {
   capturePRCheckContract,
   type PRCheckContract
 } from '../../source-control/checks/pr-check-observation-contract'
+import { runtimeStatusSubscriptionsFor } from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
 import { acceptPRCheckObservation } from '../../../../../shared/github/checks/complete-pr-check-owner'
 import type { GhAccountBinding } from '../../../../../shared/github/accounts/account-binding'
 import { getWorkItemRepo } from '../work-item-repo-row'
@@ -9,7 +10,7 @@ import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
 } from '../../../../../shared/github/work-items/work-item-types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -25,6 +26,10 @@ import {
   getGitHubSourceRuntimeHost,
   getGitHubSourceRuntimeTarget
 } from './github-source-runtime-context'
+
+// The store is imported lazily here, so read host statuses from its owner once it has loaded.
+const statusReader = (store: Parameters<typeof runtimeStatusSubscriptionsFor>[0]) => () =>
+  runtimeStatusSubscriptionsFor(store).readStatuses()
 
 type GitHubWorkItemLookupArgs = {
   repoPath: string
@@ -88,7 +93,7 @@ export async function lookupGitHubWorkItemForSource(
     args.type === 'pr'
       ? (args.checkContract ??
         capturePRCheckContract(
-          (await import('@/store/index')).useAppStore.getState,
+          statusReader((await import('@/store/index')).useAppStore),
           target,
           args.sourceContext
         ))
@@ -136,7 +141,7 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
     args.type === 'pr'
       ? (args.checkContract ??
         capturePRCheckContract(
-          (await import('@/store/index')).useAppStore.getState,
+          statusReader((await import('@/store/index')).useAppStore),
           target,
           args.sourceContext
         ))
@@ -224,7 +229,7 @@ export async function lookupGitHubWorkItemDetailsForSource(
   const contract =
     args.type === 'pr'
       ? capturePRCheckContract(
-          (await import('@/store/index')).useAppStore.getState,
+          statusReader((await import('@/store/index')).useAppStore),
           args.target ?? getGitHubSourceRuntimeTarget(sourceContext),
           sourceContext
         )

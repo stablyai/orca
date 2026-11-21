@@ -1,4 +1,7 @@
-import type { ClaudeUsageRange, ClaudeUsageScope } from '../../shared/claude-usage-types'
+import type {
+  ClaudeUsageRange,
+  ClaudeUsageScope
+} from '../../shared/agent-usage/analytics/claude-usage-types'
 import type { ClaudeUsagePersistedState } from './types'
 import {
   getLocalUsageDay,

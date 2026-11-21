@@ -1,6 +1,7 @@
 // Derive attention edges on the host so background chats work without a renderer reader.
 // Completion and prompt events are live-only; late subscribers receive no replay.
 
+import { structuredAgentSessionAwaitsAnswer } from '../../../../shared/agent-session/view/structured-agent-session-async-questions'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   AgentSessionTurnCompletion,
@@ -9,7 +10,7 @@ import type {
 import type {
   AgentSessionAttentionEdge,
   StructuredAttentionState
-} from '../../../../shared/agent-session/agent-session-attention'
+} from '../../../../shared/agent-session/view/agent-session-attention'
 import {
   foldAgentLeadStatus,
   heldTurnCountsAsFinished
@@ -32,6 +33,8 @@ export type StructuredAgentSessionTurnCompletionSubscriber = {
   includePrompts?: boolean
   /** In-process reconciliation on restore and prompt removal. */
   onState?: (state: StructuredAttentionState) => void
+  /** The session closed; a turn it was running ends with no completion. */
+  onClosed?: (sessionId: string) => void
 }
 
 type CompletionFeedCursor = { epoch: string; sequence: number }
@@ -50,6 +53,8 @@ export type StructuredAgentSessionTurnCompletionFeedDeps = {
     journal?: AgentSessionJournal
   ) => Promise<StructuredAgentSessionStatusState | null>
   readChildWork: (sessionId: string) => readonly AgentChildWorkLivenessCandidate[] | undefined
+  /** The person's Skip on the chat's async questions, saved on its record. */
+  readAsyncQuestionsSkippedThrough?: (sessionId: string) => string | undefined
 }
 
 type RequestMark = Pick<StructuredAgentSessionLatestRequest, 'kind' | 'id'>
@@ -57,6 +62,8 @@ type RequestMark = Pick<StructuredAgentSessionLatestRequest, 'kind' | 'id'>
 /** Missing baseline makes first observation silent; settled/prompts track already-accounted edges. */
 type SessionBaseline = CompletionFeedCursor & {
   settled: RequestMark | null
+  heldCompletedTurns: number
+  heldRequest: RequestMark | null
   prompts: ReadonlySet<string>
 }
 
@@ -88,9 +95,16 @@ export class StructuredAgentSessionTurnCompletionFeed {
     }
   }
 
-  /** Reattachments baseline silently instead of announcing old work. */
+  /** A closed session: its reattachment baselines silently instead of announcing old work. */
   forget(sessionId: string): void {
     this.baselines.delete(sessionId)
+    for (const subscriber of this.subscribers.values()) {
+      try {
+        subscriber.onClosed?.(sessionId)
+      } catch {
+        // One subscriber's bookkeeping cannot cost another its close.
+      }
+    }
   }
 
   /** When prompt and clean completion coincide, keep prompt identity; send completion only to legacy clients.
@@ -136,7 +150,13 @@ export class StructuredAgentSessionTurnCompletionFeed {
       this.publishState(session, sessionId, state.pendingPromptIds)
     }
     if (!baseline || options?.historical) {
-      this.baselines.set(sessionId, { ...cursor, settled: settledMark(request), prompts })
+      this.baselines.set(sessionId, {
+        ...cursor,
+        settled: settledMark(request),
+        heldCompletedTurns: 0,
+        heldRequest: null,
+        prompts
+      })
       return
     }
     if (baseline.epoch !== cursor.epoch || cursor.sequence < baseline.sequence) {
@@ -144,6 +164,8 @@ export class StructuredAgentSessionTurnCompletionFeed {
       baseline.epoch = cursor.epoch
       baseline.sequence = cursor.sequence
       baseline.settled = settledMark(request)
+      baseline.heldCompletedTurns = 0
+      baseline.heldRequest = null
       baseline.prompts = prompts
       return
     }
@@ -201,32 +223,63 @@ export class StructuredAgentSessionTurnCompletionFeed {
     if (request?.turnState === 'running') {
       // Clear on running so each running-to-settled transition can fire, even for a reused ID.
       baseline.settled = null
+      baseline.heldRequest = null
       return null
     }
-    // Wait until all owed sends are answered; pending prompts announce immediately.
-    // Withdrawn sends expose the older request without making it news.
+    // Repeated publications of one held end must not count as more provider turns.
+    if (state.owesWork) {
+      if (
+        request?.kind === 'turn' &&
+        request.turnState === 'completed' &&
+        request.outcome &&
+        baseline.settled?.id !== request.id &&
+        baseline.heldRequest?.id !== request.id
+      ) {
+        // A held quiet answer said nothing, so it is no reply the merged end could have dropped.
+        baseline.heldCompletedTurns += state.quietAnswer ? 0 : 1
+        baseline.heldRequest = { kind: request.kind, id: request.id }
+      }
+      return null
+    }
     if (
-      state.owesWork ||
       !request ||
-      (baseline.settled?.kind === request.kind && baseline.settled.id === request.id) ||
-      this.heldByLiveWork(sessionId, state, request)
+      (baseline.settled?.kind === request.kind && baseline.settled.id === request.id)
     ) {
+      // No end to announce: what was held stays unannounced, so it can't inflate a later end.
+      this.clearHeld(baseline)
+      return null
+    }
+    // Live work defers this end; its held turns still merge into whichever end is announced.
+    if (this.heldByLiveWork(sessionId, state, request)) {
       return null
     }
     baseline.settled = settledMark(request)
     // No outcome means unknown; inferring success would alert on failures.
     if (!request.outcome) {
+      this.clearHeld(baseline)
       return null
     }
+    const mergedTurnCount =
+      baseline.heldCompletedTurns +
+      (request.kind === 'turn' && baseline.heldRequest?.id !== request.id ? 1 : 0)
+    this.clearHeld(baseline)
     return {
       scope: session.params.location,
       sessionId,
       turnId: request.id,
+      ...(mergedTurnCount > 1 ? { mergedTurnCount } : {}),
       outcome: request.outcome,
       completedAt: this.deps.now(),
       // Include attention here: remote clients receive status and completion streams unordered.
-      ...(state.summary.status === 'attention' ? { awaitingUser: true as const } : {})
+      ...(state.summary.status === 'attention' ? { awaitingUser: true as const } : {}),
+      ...(state.turnFailure ? { failure: state.turnFailure } : {}),
+      ...(state.quiet ? { quiet: true as const } : {})
     }
+  }
+
+  private clearHeld(baseline: SessionBaseline): void {
+    baseline.heldCompletedTurns = 0
+    baseline.heldRequest = null
   }
 
   /** A successful turn is finished only when the combined row would be done; a held request stays unaccounted so a later observe can announce it. */
@@ -237,6 +290,16 @@ export class StructuredAgentSessionTurnCompletionFeed {
   ): boolean {
     if (request.outcome !== 'success' || state.summary.status === 'attention') {
       return false
+    }
+    // An open async question pauses the goal on the user, so it is news now.
+    if (
+      state.goalContinues &&
+      !structuredAgentSessionAwaitsAnswer(
+        state.summary.openAsyncQuestion,
+        this.deps.readAsyncQuestionsSkippedThrough?.(sessionId)
+      )
+    ) {
+      return true
     }
     const held = foldAgentLeadStatus({
       leadState: 'done',

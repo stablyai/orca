@@ -34,7 +34,8 @@ import type { AutomationHostTarget } from '../hosts/automation-host-client'
 import type { AutomationAuthorityChangeReason } from '../hosts/automation-host-invalidation'
 import type { AutomationSaveContext } from './automation-save-context'
 import { automationAuthorityCatalogKey } from '../hosts/automation-host-catalog-types'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { withoutIgnoredRruleParts } from '../../../../../shared/automations/scheduling/automation-schedule-parsing'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 
 export type AutomationMoveOperationContext = {
   automationDispatchContext: AutomationDispatchContext
@@ -175,7 +176,8 @@ export async function moveAutomationToDestination(
   const created = toDispatchResult(
     await createAutomationAtDestination(
       target.authority,
-      { ...input, creationKey },
+      // Why: the destination refuses parts this host dropped; send the cadence that actually runs (#45519).
+      { ...input, rrule: withoutIgnoredRruleParts(input.rrule), creationKey },
       target.destination
     )
   )

@@ -2,9 +2,9 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../../shared/constants'
-import { toSshExecutionHostId } from '../../../../../shared/execution-host'
-import type { SshTarget } from '../../../../../shared/ssh-types'
+import { getDefaultWorkspaceSession } from '../../../../../shared/orca-profiles/constants'
+import { toSshExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { SshTarget } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { closeTestStores, createSqliteTestStore } from '../../../persistence-test-harness'
 import { Store } from '../../../loading-store/store'
@@ -82,22 +82,18 @@ function sourceStore(): Store {
 }
 
 describe('exporting a relay-hosted SSH target from the profile store', () => {
-  it('refuses a chunk once the dormant buffer changed after export', () => {
-    const store = sourceStore()
-    const manifest = createOrcadMigrationManifest(store, TARGET)
-    const ref = manifest.payload.dormantState?.terminalScrollbackSnapshots?.[0]?.ref ?? ''
-    store.setWorkspaceSession(dormantSession('rewritten output'), toSshExecutionHostId(TARGET.id))
-    expect(() => store.readOrcadMigrationSourceSnapshotChunk(manifest, ref, 0)).toThrow(
-      'orcad_migration_source_snapshot_changed'
-    )
-  })
-
-  it('serves an inline dormant buffer after its tab closes, across retries, until released', () => {
+  it('protects a dormant export until its original retained buffer is released', () => {
     const store = sourceStore()
     const hostId = toSshExecutionHostId(TARGET.id)
     const storage = { snapshotRoot: getProfileTerminalScrollbackSnapshotRoot(dataFiles.at(-1)!) }
     const manifest = createOrcadMigrationManifest(store, TARGET)
     const ref = manifest.payload.dormantState?.terminalScrollbackSnapshots?.[0]?.ref ?? ''
+    store.setWorkspaceSession(dormantSession('rewritten output'), hostId)
+    expect(() => store.readOrcadMigrationSourceSnapshotChunk(manifest, ref, 0)).toThrow(
+      'orcad_migration_source_snapshot_changed'
+    )
+
+    store.setWorkspaceSession(dormantSession('dormant output\r\n'), hostId)
     store.syncOrcadMigrationScrollbackRetention([manifest])
     store.setWorkspaceSession(getDefaultWorkspaceSession(), hostId)
 

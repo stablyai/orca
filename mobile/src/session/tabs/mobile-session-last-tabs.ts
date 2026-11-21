@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import { hashKey, skipToken, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as z from 'zod'
-import type { ExecutionHostId } from '../../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
 import { hostQueryKey } from '../../query/host-query-key'
 import type { PersistedHostFamily } from '../../query/host-query-persistence'
@@ -9,14 +9,14 @@ import type { MobileSessionTab } from './mobile-session-tabs'
 
 const storedTabSchema = z.looseObject({ type: z.string(), id: z.string(), title: z.string() })
 
-/** Agent dots come only from the host's live snapshot (K1), so a stored strip carries no agent state. */
+/** Agent dots and unread marks come only from the host's live snapshot (K1), so a stored strip carries no agent state. */
 function withoutAgentState(tab: MobileSessionTab): MobileSessionTab {
-  if (tab.type === 'terminal' && tab.agentStatus !== undefined) {
-    const { agentStatus: _agentStatus, ...rest } = tab
+  if (tab.type === 'terminal' && (tab.agentStatus !== undefined || tab.unread)) {
+    const { agentStatus: _agentStatus, unread: _unread, ...rest } = tab
     return rest
   }
-  if (tab.type === 'agent-session' && tab.chatStatus !== undefined) {
-    const { chatStatus: _chatStatus, ...rest } = tab
+  if (tab.type === 'agent-session' && (tab.chatStatus !== undefined || tab.unread)) {
+    const { chatStatus: _chatStatus, unread: _unread, ...rest } = tab
     return rest
   }
   return tab

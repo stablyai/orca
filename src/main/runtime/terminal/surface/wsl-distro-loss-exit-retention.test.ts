@@ -5,9 +5,9 @@ import {
   ACK_SECOND_LEAF,
   ACK_TAB,
   createAcknowledgedTabRetirementFixture
-} from '../../session-tabs/acknowledged-terminal-tab-retirement-fixture'
+} from '../../session-tabs/terminal-retirement/acknowledged-terminal-tab-retirement-fixture'
 
-const fixtures: ReturnType<typeof createAcknowledgedTabRetirementFixture>[] = []
+const fixtures: Awaited<ReturnType<typeof createAcknowledgedTabRetirementFixture>>[] = []
 afterEach(async () => {
   for (const fixture of fixtures.splice(0)) {
     await fixture.dispose()
@@ -15,7 +15,7 @@ afterEach(async () => {
 })
 
 async function boundFixture() {
-  const f = createAcknowledgedTabRetirementFixture(true)
+  const f = await createAcknowledgedTabRetirementFixture(true)
   fixtures.push(f)
   await f.store.flushPendingOrThrowAsync()
   return f

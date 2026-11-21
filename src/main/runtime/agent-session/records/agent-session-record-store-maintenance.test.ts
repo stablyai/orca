@@ -14,7 +14,7 @@ import {
   journalSqlWorkerPath
 } from '../../../native-chat/agent-session-journal/journal-sql-worker-bundle.test-fixture'
 import { agentSessionRecordFixture } from '../../../native-chat/testing/agent-session-record-test-fixture'
-import { storedTestAgentSessionRecord } from './agent-session-record-store-test-harness'
+import { storedTestAgentSessionRecord } from './agent-session-record-store-persistence.test-fixture'
 import {
   closeAgentSessionRecordStoreDatabase,
   openAgentSessionRecordStoreOnce,
@@ -41,6 +41,7 @@ vi.mock(
   async (importOriginal) => {
     const original = await importOriginal<{ JournalSqlActivity: new () => JournalSqlActivity }>()
     return {
+      ...original,
       JournalSqlActivity: vi.fn(function () {
         const activity = new original.JournalSqlActivity()
         const wait = activity.waitForIdle

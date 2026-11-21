@@ -1,12 +1,12 @@
-import { withDurableRuntimeStore } from '../../orca-runtime-tests/runtime-durable-store-fixture'
+import { withDurableRuntimeStore } from '../../construction/test-context/runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { sessionLayoutApply } from '../../__fixtures__/main-layout-close-fixture'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../../shared/runtime-session-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { OrcaRuntimeService } from '../../orca-runtime'
 
@@ -80,11 +80,11 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
     }
   }
 
-  function createHost(): {
+  async function createHost(): Promise<{
     runtime: OrcaRuntimeService
     handle: string
     retirePersistedSurface: () => Promise<void>
-  } {
+  }> {
     let session = makePersistedSession()
     const runtime = new OrcaRuntimeService(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This runtime fixture supplies the persistence and graph methods exercised by the test.
@@ -103,7 +103,7 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
       }) as never
     )
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'tab',
@@ -152,8 +152,8 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
   }
 
   /** What the host renderer publishes once it has retired the tab it was told to close. */
-  function republishWithoutTheSurface(runtime: OrcaRuntimeService): void {
-    runtime.syncWindowGraph(1, {
+  async function republishWithoutTheSurface(runtime: OrcaRuntimeService): Promise<void> {
+    await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: [
@@ -172,10 +172,10 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
 
   describe('retirement proof publication vs. renderer republication order', () => {
     it('publishes the proof when the exit lands before the renderer drops the surface', async () => {
-      const { runtime, handle } = createHost()
+      const { runtime, handle } = await createHost()
 
       await runtime.onPtyExit('pty-left', 0, 'incarnation-a')
-      republishWithoutTheSurface(runtime)
+      await republishWithoutTheSurface(runtime)
 
       const published = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
       expect(published.tabs).toEqual([])
@@ -184,23 +184,8 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
       ])
     })
 
-    it('publishes the proof when the renderer drops the surface before the exit lands', async () => {
-      const { runtime, handle, retirePersistedSurface } = createHost()
-
-      await retirePersistedSurface()
-      republishWithoutTheSurface(runtime)
-      await runtime.onPtyExit('pty-left', 0, 'incarnation-a')
-
-      const published = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
-      expect(published.tabs).toEqual([])
-      expect(published.retiredTerminalSurfaces).toEqual([
-        expect.objectContaining({ parentTabId: 'tab', leafId: LEAF_ID, terminal: handle })
-      ])
-    })
-
-    // Assert subscriber frames: a proof stored without publication is invisible to the mirror.
-    it('fans the proof out to a paired subscriber, not just into stored state', async () => {
-      const { runtime, handle, retirePersistedSurface } = createHost()
+    it('stores and sends the proof when the renderer drops the surface before the exit lands', async () => {
+      const { runtime, handle, retirePersistedSurface } = await createHost()
       const frames: RuntimeMobileSessionTabsResult[] = []
       const unsubscribe = runtime.onMobileSessionTabsChanged(
         (frame) => frames.push(frame),
@@ -209,20 +194,25 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
 
       try {
         await retirePersistedSurface()
-        republishWithoutTheSurface(runtime)
+        await republishWithoutTheSurface(runtime)
         await runtime.onPtyExit('pty-left', 0, 'incarnation-a')
       } finally {
         unsubscribe()
       }
 
-      expect(
-        frames.some((frame) =>
-          frame.retiredTerminalSurfaces?.some(
-            (proof) =>
-              proof.terminal === handle && proof.parentTabId === 'tab' && proof.leafId === LEAF_ID
-          )
-        )
-      ).toBe(true)
+      const proof = expect.objectContaining({
+        parentTabId: 'tab',
+        leafId: LEAF_ID,
+        terminal: handle
+      })
+      const published = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+      expect(published.tabs).toEqual([])
+      expect(published.retiredTerminalSurfaces).toEqual([proof])
+      expect(frames).toContainEqual(
+        expect.objectContaining({
+          retiredTerminalSurfaces: expect.arrayContaining([proof])
+        })
+      )
     })
   })
 }

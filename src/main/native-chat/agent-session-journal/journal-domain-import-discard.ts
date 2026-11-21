@@ -19,6 +19,11 @@ export function discardJournalDomainImportPage(
   if (ready?.epoch !== null && ready?.epoch !== undefined) {
     return { more: false, epoch: String(ready.epoch) }
   }
+  return { more: deleteJournalDomainChatRowsPage(db, sessionId), epoch: null }
+}
+
+/** One bounded page (64 rows, 1 MB or 8 ms) of a chat's rows in every epoch; true while rows remain. */
+export function deleteJournalDomainChatRowsPage(db: Database.Database, sessionId: string): boolean {
   const start = performance.now()
   let deleted = 0
   let bytes = 0
@@ -37,14 +42,14 @@ export function discardJournalDomainImportPage(
     for (const row of rows) {
       const size = Number(row.work_bytes)
       if (deleted && bytes + size > 1024 * 1024) {
-        return { more: true, epoch: null }
+        return true
       }
       deleted += Number(remove.run(...columns.map((column) => row[column])).changes)
       bytes += size
       if (deleted === 64 || bytes >= 1024 * 1024 || performance.now() - start >= 8) {
-        return { more: true, epoch: null }
+        return true
       }
     }
   }
-  return { more: false, epoch: null }
+  return false
 }

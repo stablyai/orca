@@ -4,7 +4,7 @@ import {
   isSameGitLabProjectRef,
   type CheckRunDetailsTabPatch
 } from '@/components/editor/check-details/actions/check-run-details-tab'
-import type { OpenCheckRunDetailsState } from '../../../../../../shared/editor-tab-view-types'
+import type { OpenCheckRunDetailsState } from '../../../../../../shared/editor/views/editor-tab-view-types'
 import { reconcileCheckDetailsReadingCache } from '@/components/editor/check-details/reading/check-details-reading-cache'
 
 /** Patch one known detail tab without stealing focus or overwriting a newer request generation. */

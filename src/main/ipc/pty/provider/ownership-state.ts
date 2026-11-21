@@ -3,7 +3,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 
 // Later write/resize/kill requests carry only PTY ID; preserve its execution host for routing.
 export const ptyOwnership = new Map<string, ExecutionHostId>()

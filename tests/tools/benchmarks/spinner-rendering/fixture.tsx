@@ -1,8 +1,11 @@
 import React from 'react'
 import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
-import { AgentStateDot } from '../../../../src/renderer/src/components/AgentStateDot'
-import { UI_ZOOM_MIN, UI_ZOOM_MAX } from '../../../../src/shared/ui-zoom-level'
+import { AgentStateDot } from '../../../../src/renderer/src/components/agent/status/AgentStateDot'
+import {
+  UI_ZOOM_MIN,
+  UI_ZOOM_MAX
+} from '../../../../src/shared/app-lifecycle/windows/ui-zoom-level'
 import './fixture.css'
 
 type FixtureOptions = { count: number; baseline?: boolean; offset?: number; paired?: boolean }
@@ -60,12 +63,13 @@ function Fixture({ count, baseline = false, offset = 0, paired = false }: Fixtur
 }
 
 const root = createRoot(document.getElementById('root')!)
-let generation = 0
 Object.assign(window, {
   spinnerBenchmark: {
     zoomExtremes: [1.2 ** UI_ZOOM_MIN, 1.2 ** UI_ZOOM_MAX],
     render(options: FixtureOptions) {
-      flushSync(() => root.render(<Fixture key={++generation} {...options} />))
+      // Unmount first so every render starts fresh mounts.
+      flushSync(() => root.render(null))
+      flushSync(() => root.render(<Fixture {...options} />))
     }
   }
 })

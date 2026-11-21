@@ -41,7 +41,7 @@ import type { TerminalInputKind } from '../../../../../../shared/terminal/input/
 import { isSshSignInPendingTerminalError } from '../../errors/terminal-ssh-sign-in-error'
 import { terminalCreateThemeParams } from '../../appearance/terminal-view-attributes-publisher'
 /* eslint-disable max-lines -- Why: remote PTY transport keeps lifecycle, JSON fallback, and binary stream wiring together so reconnect/destroy ordering stays testable as one behavior surface. */
-import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   isRecoverableRemoteRuntimeConnectionError,
   isRuntimeRpcQueueOverloadError,
@@ -50,21 +50,21 @@ import {
 import type {
   RuntimeCreateAgentSessionResult,
   RuntimeEnsureAgentSessionResult
-} from '../../../../../../shared/agent-session/agent-session-host-authority'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { TabActivationIntent } from '../../../../../../shared/tab-activation-intent'
-import type { RuntimeMobileSessionTerminalClientTab } from '../../../../../../shared/runtime-mobile-session-tab-contracts'
+} from '../../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { TabActivationIntent } from '../../../../../../shared/workspace-layout/tab-groups/tab-activation-intent'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeStatus
-} from '../../../../../../shared/runtime-session-contracts'
-import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
+} from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeTerminalCreate } from '../../../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type {
   RuntimeTerminalResolvePane,
   RuntimeTerminalShow
-} from '../../../../../../shared/runtime-terminal-contracts'
-import type { RuntimeTerminalSend } from '../../../../../../shared/runtime-terminal-send-contract'
-import { SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
+} from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeTerminalSend } from '../../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
+import { SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY } from '../../../../../../shared/remote-runtime/protocol/protocol-version'
 import { TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { agentResumeHostAuthorityCapability } from '../../../../runtime/hosted-terminals/creation/agent-launch/agent-resume-host-authority-capability'
 import {
@@ -118,7 +118,7 @@ import { RemoteRuntimePtyRecoveryState } from './recovery/remote-runtime-pty-rec
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './recovery/remote-runtime-pty-recovery-limits'
 import { registerRemoteRuntimePtyControlReadyReviver } from './recovery/remote-runtime-pty-control-ready-revivers'
 import type { RemoteRuntimePtyRecoveryPhase } from './recovery/remote-runtime-pty-recovery-state'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   createAgentSessionCreateOperation,
   withAgentSessionCreateOperationId
@@ -135,9 +135,10 @@ import {
 } from '../../../../../../shared/workspace-layout/terminal-surface-id'
 import { listRemoteRuntimeSessionTabsAfterCurrentInFlight } from '@/runtime/web-session-tabs-sync/inventory/remote-runtime-session-tabs-inflight'
 import { subscribeAcceptedWebSessionTerminalHandle } from '@/runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events'
-import { hostSnapshotAffirmsWorktreeContents } from '@/runtime/web-session-tabs-sync/hydration/host-session-snapshot-authority'
+import { hostSnapshotAffirmsWorktreeContents } from '../../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
 import { runRemoteAgentSessionLaunch } from '@/runtime/hosted-terminals/creation/agent-launch/remote-agent-session-launch'
 import { useAppStore } from '@/store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { recordWebAgentSessionHandoff } from '@/runtime/hosted-terminals/creation/agent-launch/web-agent-session-handoff'
 import { refreshWebRuntimeSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 import {
@@ -3140,6 +3141,11 @@ export function createRemoteRuntimePtyTransport(
             storedCallbacks.onPausedOutputDropped?.()
           }
         },
+        onOutputGapRecovered: () => {
+          if (isCurrentSubscription()) {
+            storedCallbacks.onOutputGapRecovered?.()
+          }
+        },
         onSubscribeAcknowledged: (result) => {
           if (isCurrentSubscription()) {
             if (
@@ -3701,9 +3707,7 @@ export function createRemoteRuntimePtyTransport(
       }
       const freshLaunch = !resumeProviderSessionToSend ? opts.freshAgentLaunch : undefined
       const promptStatus = freshLaunch
-        ? lastVerifiedRuntimeStatus(
-            useAppStore.getState().runtimeStatusByEnvironmentId.get(createEnvironmentId)
-          )
+        ? lastVerifiedRuntimeStatus(readRuntimeStatuses().get(createEnvironmentId))
         : null
       const promptPlatform = authoritativeHostPlatform ?? promptStatus?.hostPlatform
       let promptPlan =

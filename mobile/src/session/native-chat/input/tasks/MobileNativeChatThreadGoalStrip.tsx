@@ -3,8 +3,8 @@ import { Pressable, ScrollView, Text, View } from 'react-native'
 import { ChevronDown, Goal, Pause, Play, Trash2 } from 'lucide-react-native'
 import {
   agentSessionThreadGoalElapsedSeconds,
-  agentSessionThreadGoalStatusChange
-} from '../../../../../../src/shared/agent-session/agent-session-thread-goal'
+  agentSessionThreadGoalOfferedStatusChange
+} from '../../../../../../src/shared/agent-session/thread-goals/agent-session-thread-goal'
 import {
   agentSessionThreadGoalStatusLabel,
   formatAgentSessionThreadGoalElapsed,
@@ -15,7 +15,6 @@ import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
-import { COMPOSER_TUCK } from '../../composer/field/mobile-native-chat-composer-styles'
 import { queuedMessageStyles } from '../queued-messages/mobile-native-chat-queued-message-styles'
 import type { MobileStructuredThreadGoal } from './use-mobile-structured-thread-goal'
 
@@ -52,11 +51,23 @@ export function MobileNativeChatThreadGoalStrip({
     return null
   }
   const status = statusText(label, t)
+  const checks = goal.checks
+    ? t('chat.goal.checks', '{{count}} checks', {
+        count: goal.checks,
+        defaultValue_one: '{{count}} check'
+      })
+    : null
   // Goal times are host-stamped; read them on the host's clock.
   const elapsed = formatAgentSessionThreadGoalElapsed(
     agentSessionThreadGoalElapsedSeconds(goal, now - threadGoal.hostClockOffsetMs, runningTurn)
   )
-  const statusChange = changes === 'host' ? agentSessionThreadGoalStatusChange(goal.status) : null
+  const statusChange =
+    changes === null
+      ? null
+      : agentSessionThreadGoalOfferedStatusChange(goal.status, {
+          hostChanges: changes === 'host',
+          agentResumes: threadGoal.agentResumes
+        })
   const toggleLabel = expanded
     ? t('chat.goal.collapse', 'Hide full goal')
     : t('chat.goal.expand', 'Show full goal')
@@ -67,7 +78,10 @@ export function MobileNativeChatThreadGoalStrip({
     </View>
   )
   return (
-    <View style={[queuedMessageStyles.box, styles.tab]} testID="thread-goal-strip">
+    <View
+      style={[queuedMessageStyles.box, queuedMessageStyles.composerTab]}
+      testID="thread-goal-strip"
+    >
       {expanded ? (
         <>
           <View style={styles.openLine}>
@@ -77,7 +91,10 @@ export function MobileNativeChatThreadGoalStrip({
             <ScrollView style={styles.objectiveScroll} nestedScrollEnabled>
               <Text style={[styles.text, styles.openText]}>
                 <Text style={styles.status}>{status}</Text> {goal.objective}
-                <Text style={styles.elapsed}>{` · ${elapsed}`}</Text>
+                <Text style={styles.elapsed}>{` · ${elapsed}${checks ? ` · ${checks}` : ''}`}</Text>
+                {goal.lastCheck
+                  ? `\n\n${t('chat.goal.last-check', 'Last goal check')}\n${goal.lastCheck}`
+                  : null}
               </Text>
             </ScrollView>
             <Pressable
@@ -100,7 +117,7 @@ export function MobileNativeChatThreadGoalStrip({
                       ? t('chat.goal.pause', 'Pause')
                       : t('chat.goal.resume', 'Resume')
                   }
-                  disabled={locked}
+                  disabled={changes === 'agent' ? threadGoal.clearLocked : locked}
                   onPress={() => void threadGoal.change({ kind: 'status', status: statusChange })}
                   icon={
                     statusChange === 'paused' ? (
@@ -124,7 +141,7 @@ export function MobileNativeChatThreadGoalStrip({
       ) : (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${status} ${goal.objective}, ${elapsed}`}
+          accessibilityLabel={`${status} ${goal.objective}, ${elapsed}${checks ? `, ${checks}` : ''}`}
           accessibilityHint={toggleLabel}
           accessibilityState={{ expanded }}
           style={({ pressed }) => [styles.line, pressed && styles.pressed]}
@@ -134,7 +151,9 @@ export function MobileNativeChatThreadGoalStrip({
           <Text style={[styles.text, styles.lineText]} numberOfLines={1} ellipsizeMode="tail">
             <Text style={styles.status}>{status}</Text> {goal.objective}
           </Text>
-          <Text style={[styles.text, styles.elapsed]}>{elapsed}</Text>
+          <Text style={[styles.text, styles.elapsed]}>
+            {checks ? `${elapsed} · ${checks}` : elapsed}
+          </Text>
           {chevron}
         </Pressable>
       )}
@@ -177,11 +196,6 @@ const LINE_MIN_HEIGHT = 34
 const CHEVRON_SIZE = 32
 
 const styles = themedStyleSheet(() => ({
-  // The queued-message box, docked on the composer's top edge and tucked under it.
-  tab: {
-    marginHorizontal: spacing.xs,
-    marginBottom: -COMPOSER_TUCK
-  },
   line: {
     minHeight: LINE_MIN_HEIGHT,
     flexDirection: 'row',

@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { ipcMain, type BrowserWindow } from 'electron'
 
 import { addFanoutListener } from '../../runtime/events/event-listener-fanout'
-import { abortWhenRendererGone } from '../../ipc/renderer-lifetime-abort'
+import { abortWhenRendererGone } from '../../ipc/renderer-requests/renderer-lifetime-abort'
 
 /** Sends one request to the window and resolves with the reply its own renderer sends; rejects when it goes away or times out. */
 export function requestRendererReply<TReply extends { requestId: string }>(
@@ -14,10 +14,16 @@ export function requestRendererReply<TReply extends { requestId: string }>(
     payload: object
     timeoutMs: number
     timeoutError: string
+    signal?: AbortSignal
+    abortError?: string
   }
 ): Promise<TReply> {
   if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) {
     return Promise.reject(new Error('renderer_unavailable'))
+  }
+  const abortError = options.abortError ?? 'renderer_request_cancelled'
+  if (options.signal?.aborted) {
+    return Promise.reject(new Error(abortError))
   }
   const webContents = mainWindow.webContents
   const requestId = randomUUID()
@@ -40,6 +46,7 @@ export function requestRendererReply<TReply extends { requestId: string }>(
       }
     }
     const onRendererUnavailable = (): void => finish(new Error('renderer_unavailable'))
+    const onAbort = (): void => finish(new Error(abortError))
     const timeout = setTimeout(() => finish(new Error(options.timeoutError)), options.timeoutMs)
     const onReply = (event: Electron.IpcMainEvent, reply: TReply): void => {
       // Visible request IDs confer no authority; only the targeted window can answer.
@@ -56,6 +63,11 @@ export function requestRendererReply<TReply extends { requestId: string }>(
       addFanoutListener(mainWindow, 'closed', onRendererUnavailable),
       addFanoutListener(ipcMain, options.replyChannel, onReply)
     )
+    if (options.signal) {
+      const signal = options.signal
+      signal.addEventListener('abort', onAbort, { once: true })
+      releaseListeners.push(() => signal.removeEventListener('abort', onAbort))
+    }
     try {
       webContents.send(options.requestChannel, { ...options.payload, requestId })
     } catch {

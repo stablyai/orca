@@ -1,15 +1,10 @@
-import {
-  selectCrossStoreFolderChildrenById,
-  selectSidebarLineageParentIdentities
-} from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
-import {
-  selectFolderWorkspaces,
-  selectWorktreesByRepo
-} from '@/store/workspaces/catalog/workspace-record-fields'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   getAttachedWorktreesForFolderWorkspace,
   attachedWorktreeOwnerKey
@@ -21,7 +16,7 @@ import { OverlayActivityOwner } from '@/components/ui/use-overlay-focus-scope'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getWorktreeGitIdentityDisplay } from '../../../../../shared/worktree/row-display/git-identity-display'
-import { isFolderRepo } from '../../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import { SourceControlPanel } from '../source-control/panel/panel'
 import {
   SourceControlScopeProvider,
@@ -30,7 +25,7 @@ import {
 import { SourceControlHeaderOverflowMenu } from '../source-control/panel/header-overflow-menu'
 import { SourceControlHeaderActionsSlot } from '../source-control/panel/header-actions-slot'
 import { useWorktreeGitStatusObservation } from '../source-control/sync/use-worktree-git-status-observation'
-import { useSourceControlWatchConsumer } from '@/hooks/source-control-watch-consumers'
+import { useSourceControlWatchConsumer } from '@/components/editor/external-changes/watching/source-control-watch-consumers'
 import { useSectionOnScreen } from '../source-control/panel/section-viewport-presence'
 import { sourceControlFileWatchRuntimeEnvironmentId } from '../source-control/sync/worktree-git-owner-target'
 import { FolderWorkspaceEmptyState } from './folder-workspace-empty-state'
@@ -196,11 +191,11 @@ export default function FolderWorkspaceSourceControlPanel() {
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const executionHostId = useAppStore((state) => state.activeWorkspaceExecutionHostId)
   const folderWorkspaces = useAppStore(selectFolderWorkspaces)
-  const worktreesByRepo = useAppStore(selectWorktreesByRepo)
+  const childrenByParentIdentity = useAppStoreWithHostStatuses(
+    selectSidebarChildrenByParentIdentity
+  )
   const workspaceLineageByChildKey = useAppStore((state) => state.workspaceLineageByChildKey)
   const worktreeLineageById = useAppStore((state) => state.worktreeLineageById)
-  const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
-  const crossStoreChildrenByFolderId = useAppStore(selectCrossStoreFolderChildrenById)
   const repos = useAppStore((state) => state.repos)
   const resolution = useMemo(
     () =>
@@ -209,22 +204,18 @@ export default function FolderWorkspaceSourceControlPanel() {
         activeWorktreeId,
         executionHostId,
         folderWorkspaces,
-        worktreesByRepo,
+        childrenByParentIdentity,
         workspaceLineageByChildKey,
-        worktreeLineageById,
-        lineageParentIdentities,
-        crossStoreChildrenByFolderId
+        worktreeLineageById
       }),
     [
       activeWorkspaceKey,
       activeWorktreeId,
       executionHostId,
       folderWorkspaces,
-      worktreesByRepo,
+      childrenByParentIdentity,
       workspaceLineageByChildKey,
-      worktreeLineageById,
-      lineageParentIdentities,
-      crossStoreChildrenByFolderId
+      worktreeLineageById
     ]
   )
   const owners = useMemo(

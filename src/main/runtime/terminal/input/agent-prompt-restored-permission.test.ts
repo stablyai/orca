@@ -59,6 +59,19 @@ async function createReattachedClaudePane(
 }> {
   let handle = ''
   const askedAt = Date.now() - 24 * 60_000
+  const rows = () => [
+    {
+      paneKey: 'restored-pane',
+      terminalHandle: handle,
+      state: 'waiting' as const,
+      prompt: 'clean up scratch audio',
+      agentType: 'claude',
+      connectionId: null,
+      receivedAt: askedAt,
+      stateStartedAt: askedAt,
+      restoredUnconfirmed: true
+    }
+  ]
   const pane = await createAgentPromptSubmissionRuntime(
     (runtime, data) => {
       // Echo the paste as Claude does, so the send outlives the frame that let it start.
@@ -67,19 +80,8 @@ async function createReattachedClaudePane(
     'claude',
     () => true,
     {
-      getAgentStatusSnapshot: () => [
-        {
-          paneKey: 'restored-pane',
-          terminalHandle: handle,
-          state: 'waiting',
-          prompt: 'clean up scratch audio',
-          agentType: 'claude',
-          connectionId: null,
-          receivedAt: askedAt,
-          stateStartedAt: askedAt,
-          restoredUnconfirmed: true
-        }
-      ]
+      getAgentStatusSnapshot: rows,
+      getPublicAgentStatusSnapshotForPane: rows
     },
     controller
   )
@@ -129,7 +131,7 @@ describe('agent prompt into a pane reattached at a permission dialog (#35962)', 
     await expect(submission).resolves.toMatchObject({ accepted: true })
   })
 
-  it('releases a held prompt once the provider-owned dialog is dismissed', async () => {
+  it('holds a prompt through a local repaint until the provider dismisses the dialog', async () => {
     let provider = { screen: PERMISSION_DIALOG, seq: 0 }
     const { runtime, handle, writes } = await createReattachedClaudePane(PERMISSION_DIALOG, {
       serializeProviderBuffer: async () => ({
@@ -137,38 +139,6 @@ describe('agent prompt into a pane reattached at a permission dialog (#35962)', 
         cols: 80,
         rows: 24,
         seq: provider.seq,
-        source: 'headless' as const
-      })
-    })
-    runtime.seedHeadlessTerminal(PTY_ID, PERMISSION_DIALOG, undefined, {
-      preferProviderIfExisting: true
-    })
-    vi.useFakeTimers()
-
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'hello', {
-      inputKind: 'driving',
-      onPermission: 'wait'
-    })
-    await vi.advanceTimersByTimeAsync(5_000)
-    expect(writes).toEqual([])
-
-    // Esc repaints the composer: new output outdates the cached frame, and the provider has caught up.
-    runtime.onPtyData(PTY_ID, COMPOSER, Date.now())
-    provider = { screen: COMPOSER, seq: 1_000 }
-    // Well inside the restored row's window, so only the re-read screen can release the hold.
-    await vi.advanceTimersByTimeAsync(20_000)
-
-    await expect(submission).resolves.toMatchObject({ accepted: true })
-  })
-
-  it('keeps the wait while only the live grid, not the provider, shows the dialog gone', async () => {
-    // A provider-preferred grid may hold only the bytes since reattach, so it cannot rule a dialog out.
-    const { runtime, handle, writes } = await createReattachedClaudePane(PERMISSION_DIALOG, {
-      serializeProviderBuffer: async () => ({
-        data: PERMISSION_DIALOG,
-        cols: 80,
-        rows: 24,
-        seq: 0,
         alternateScreen: false,
         source: 'headless' as const
       })
@@ -177,17 +147,29 @@ describe('agent prompt into a pane reattached at a permission dialog (#35962)', 
       preferProviderIfExisting: true
     })
     await runtime.readTerminal(handle, { screen: true })
-    // Live bytes outdate the provider's normal-screen frame, which has not caught up with them.
     runtime.onPtyData(PTY_ID, COMPOSER, Date.now())
     await runtime.readTerminal(handle, { screen: true })
     vi.useFakeTimers()
 
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'hello', { inputKind: 'driving' })
-    const outcome = expect(submission).rejects.toThrow('agent_prompt_blocked')
+    const blocked = runtime.sendTerminalAgentPrompt(handle, 'hello', { inputKind: 'driving' })
+    const outcome = expect(blocked).rejects.toThrow('agent_prompt_blocked')
     await vi.runAllTimersAsync()
-
     await outcome
+
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'hello', {
+      inputKind: 'driving',
+      onPermission: 'wait'
+    })
+    await vi.advanceTimersByTimeAsync(5_000)
     expect(writes).toEqual([])
+
+    // The provider now catches up to the local repaint.
+    runtime.onPtyData(PTY_ID, COMPOSER, Date.now())
+    provider = { screen: COMPOSER, seq: 1_000 }
+    // Well inside the restored row's window, so only the re-read screen can release the hold.
+    await vi.advanceTimersByTimeAsync(20_000)
+
+    await expect(submission).resolves.toMatchObject({ accepted: true })
   })
 
   it('sends once the reattached screen shows the composer instead', async () => {

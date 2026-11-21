@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { ManagedRuntimeInstallState } from '../../../../shared/managed-runtime-install'
+import type { ManagedRuntimeInstallState } from '../../../../shared/agent-launch/installation/managed-runtime-install'
 import type { ManagedRuntimeInstallSnapshot } from '@/runtime/hosts/installation/managed-runtime-install-status'
 
 export type ManagedRuntimeInstallAction =
@@ -104,13 +104,28 @@ function settledView(
     note
   })
   const install = t('components.managed-runtime.installShort', 'Install')
-  // A copy found outside Orca already runs; Orca's own, once installed, runs first.
+  // A copy found outside Orca runs; with Orca's already installed, installing again changes nothing.
   if (state.source === 'external') {
     return view(
       t('components.managed-runtime.external', 'Uses the copy of {{agent}} found on this host.', {
         agent
       }),
-      state.available ? t('components.managed-runtime.installManaged', "Install Orca's copy") : null
+      // The user's own copy outranks one Orca keeps updated, so installing Orca's adds nothing.
+      state.available && state.installedVersion === null && !state.updatesAutomatically
+        ? t('components.managed-runtime.installManaged', "Install Orca's copy")
+        : null
+    )
+  }
+  if (state.installedVersion !== null && state.updatesAutomatically) {
+    return view(
+      t('components.managed-runtime.installedByOrca', 'Installed by Orca · {{version}}', {
+        version: state.installedVersion
+      }),
+      null,
+      null,
+      state.available
+        ? t('components.managed-runtime.reinstall', 'Reinstall {{agent}}', { agent })
+        : null
     )
   }
   if (state.installedVersion !== null) {
@@ -123,7 +138,13 @@ function settledView(
       : state.available
         ? reinstall
         : null
-    const status = t('components.managed-runtime.installed', 'Installed')
+    const status = t(
+      'components.managed-runtime.installedByOrca',
+      'Installed by Orca · {{version}}',
+      {
+        version: state.installedVersion
+      }
+    )
     return state.installedCurrent
       ? view(status, null, null, label)
       : { ...view(status, label), prominent: true }

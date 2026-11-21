@@ -6,7 +6,7 @@ import {
   ActionsArtifactTransferQuery
 } from '../../../shared/rpc-contract/github/github-actions-artifact-params'
 import type { ActionsRequestContext } from '../../../shared/github/actions/actions-types'
-import { getRepoSshConnectionId } from '../../../shared/execution-host'
+import { getRepoSshConnectionId } from '../../../shared/execution-host/execution-host'
 import { registeredActionsRepo } from './github-actions-repo-routing'
 import { getGitHubLocalGitOptionArgs } from './github-repo-routing'
 import {
@@ -18,7 +18,7 @@ import {
   readArtifactSession,
   releaseArtifactSession
 } from '../../github/client/actions/artifact-download-sessions'
-import { abortWhenRendererGone } from '../renderer-lifetime-abort'
+import { abortWhenRendererGone } from '../renderer-requests/renderer-lifetime-abort'
 /** Register owner-checked chunk transfers and retain renderer cleanup until the archive session ends. */
 export function registerGitHubActionsArtifactHandlers(store: Store): void {
   ipcMain.handle('gh:actionsArtifacts', (_event, args: ActionsRequestContext) => {

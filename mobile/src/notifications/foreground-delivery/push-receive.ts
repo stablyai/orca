@@ -1,4 +1,5 @@
 import { wasPushDismissed } from '../dismissal/push-dismissal-watermarks'
+import { botAccessRequestIdOfNotice } from '../../../../src/shared/bots/bot-access-request'
 import { dismissPresentedPushNotification } from '../dismissal/push-tray-dismissal'
 import { shouldSuppressNotificationWhileViewing } from '../delivery-policy/notification-viewing-policy'
 import { loadPushNotificationsEnabled } from '../../storage/preferences'
@@ -11,7 +12,7 @@ import {
   loadNotificationDeliveryPreferences,
   type NotificationDeliveryPreferences
 } from '../delivery-policy/notification-delivery-preferences'
-import { allowsMobilePushAlertKind } from '../../../../src/shared/mobile-push-alert'
+import { allowsMobilePushAlertKind } from '../../../../src/shared/notifications/mobile-push-alert'
 
 const RECENT_FOREGROUND_PUSH_CAP = 512
 const recentForegroundPushes = new Set<string>()
@@ -137,10 +138,13 @@ export function pushNotificationRouteData(
   if (!hostId) {
     return null
   }
+  const accessRequestId = botAccessRequestIdOfNotice(payload.notificationId)
   return {
     hostId,
     ...(payload.paneKey ? { paneKey: payload.paneKey } : {}),
     ...(payload.worktreeId ? { worktreeId: payload.worktreeId } : {}),
-    ...(payload.executionHost ? { executionHost: payload.executionHost } : {})
+    ...(payload.executionHost ? { executionHost: payload.executionHost } : {}),
+    // The contract has no request field: an access request's notice names it in its id.
+    ...(accessRequestId ? { accessRequestId } : {})
   }
 }

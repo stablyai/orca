@@ -1,13 +1,13 @@
 import { branchName } from '@/lib/source-control/branches/branch-name'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
 import type { AppState } from '@/store/types'
-import type { DashboardCardReview } from '../../../../../shared/dashboard-snapshot'
+import type { DashboardCardReview } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../../shared/source-control/hosted-review/hosted-review-github'
 import { isPositiveHostedReviewNumber } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../shared/worktree/types'
-import { getWorkspaceStatus } from '../../../../../shared/workspace-statuses'
-import { DEFAULT_WORKSPACE_STATUSES } from '../../../../../shared/workspace-status-defaults'
+import { getWorkspaceStatus } from '../../../../../shared/workspace/status/workspace-statuses'
+import { DEFAULT_WORKSPACE_STATUSES } from '../../../../../shared/workspace/status/workspace-status-defaults'
 import {
   canUseParentPrChecksGitHubPRCacheEntry,
   getParentPrChecksGitHubPRCacheEntry

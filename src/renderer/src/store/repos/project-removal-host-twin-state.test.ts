@@ -6,7 +6,7 @@ import { makeOpenFile } from '../slices/editor/types/open-file.test-fixture'
 import { makeTab } from '../terminals/testing/terminal-tab.test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '../slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -26,7 +26,7 @@ vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (import
 )
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { ClosedEditorTabSnapshot } from '../slices/editor/types/open-file'
-import '../../../../shared/workspace-scope'
+import '../../../../shared/workspace/identity/workspace-scope'
 
 const recoveryNotice = vi.hoisted(() => vi.fn())
 vi.mock('@/components/editor/model-lifetime/retention/closed-unsaved-files-toast', () => ({

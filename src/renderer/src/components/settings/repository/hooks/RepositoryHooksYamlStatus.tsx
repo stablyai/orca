@@ -1,6 +1,6 @@
 import { AlertTriangle, ChevronRight } from 'lucide-react'
 import { Trans } from 'react-i18next'
-import type { OrcaHooks } from '../../../../../../shared/orca-yaml-hook-types'
+import type { OrcaHooks } from '../../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import { Button } from '../../../ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../ui/collapsible'
 import { i18n, translate } from '@/i18n/i18n'

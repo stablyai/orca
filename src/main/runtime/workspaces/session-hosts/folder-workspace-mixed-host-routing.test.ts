@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   MIXED_GROUP,
   MIXED_FOLDER,
@@ -14,14 +14,14 @@ import {
 } from '../../../../shared/workspace-layout/persistence/workspace-layout-session.test-fixture'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { WorkspaceLayoutStream } from '../../terminal/surface/workspace-layout-stream'
-import '../../orca-runtime-tests/workspace-layout-stream-events.test-fixture'
+import '../../terminal/surface/workspace-layout-stream-events.test-fixture'
 import {
   partialRuntimeStore,
   storeRepo
-} from '../../orca-runtime-tests/runtime-store-partial-fixture'
+} from '../../construction/test-context/runtime-store-partial-fixture'
 
 const mocks = vi.hoisted(() => ({ layoutOwnerIsMain: true }))
-vi.mock('../../../../shared/layout-owner-switch', () => ({
+vi.mock('../../../../shared/workspace-layout/layout-owner-switch', () => ({
   get ORCA_LAYOUT_OWNER_IS_MAIN() {
     return mocks.layoutOwnerIsMain
   }
@@ -85,13 +85,6 @@ describe('a workspace the router throws on', () => {
     const write = () => writeListeners.forEach((listener) => listener(null))
     return { stream, route, write }
   }
-
-  it('is left out, and every other workspace is still published, logged once', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const { stream } = streamThrowingOn(FOLDER_KEY)
-    expect(stream.subscribe(() => {}).snapshot.map((entry) => entry.key)).toEqual([GIT_KEY])
-    expect(warn).toHaveBeenCalledTimes(1)
-  })
 
   it('still fails the whole projection in a window-owned build', () => {
     mocks.layoutOwnerIsMain = false

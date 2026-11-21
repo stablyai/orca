@@ -7,7 +7,7 @@ import type { OrcadMigrationBlobDescriptor } from '../../../../shared/orcad-migr
 import type { OrcadMigrationManifest } from '../../../../shared/orcad-migration/orcad-migration-manifest'
 import { getOrcadMigrationReceivedBlobPath } from '../blob-transfer/orcad-migration-blob-staging'
 import { commitStagedOrcadMigrationCatalogDurably } from '../../../runtime/hosts/migration/orcad-migration-catalog-import'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   DORMANT_LEAF_ID,
   DORMANT_WORKTREE_ID,
@@ -15,7 +15,7 @@ import {
   dormantState,
   manifest as baseManifest
 } from '../catalog-commit/persistence-orcad-migration-catalog-fixture'
-import { createStore, testState } from '../../persistence-test-harness'
+import { closeTestStores, createStore, testState } from '../../persistence-test-harness'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -144,7 +144,8 @@ describe('orcad migration terminal restore hints through the store', () => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-migration-restore-hints-'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 

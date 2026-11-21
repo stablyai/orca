@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
 import { actionsCandidateRepos, actionsRepoProbeKey } from './actions-repositories'
 import { fetchActionsRepository } from '@/store/github/actions/actions-requests'
-import { isFolderRepo } from '../../../../../shared/repo-kind'
-import type { Repo } from '../../../../../shared/repo-types'
+import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { GitHubRepositoryIdentity } from '../../../../../shared/github/repositories/repository-identity'
 
 export type ActionsRepositoryOption = { repo: Repo; repository: GitHubRepositoryIdentity }

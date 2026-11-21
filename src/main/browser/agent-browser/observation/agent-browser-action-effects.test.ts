@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { WebContents } from 'electron'
 import { runWithActionEffects, type ActionEffectsHost } from './agent-browser-action-effects'
 import type { BrowserPageEvent } from '../../guest-lifecycle/page-activity/browser-page-events'
-import { readBrowserActionEffects } from '../../../../shared/browser-action-effects'
+import { readBrowserActionEffects } from '../../../../shared/browser/automation/browser-action-effects'
 
 vi.mock('../../routing/input-ownership/remote-cli-page-admission', () => ({
   readRemoteCliAdmittedPage: (_id: number, read: () => Promise<unknown>) => read()
@@ -51,6 +51,7 @@ function fakeHost(
     guest: () => guest as unknown as WebContents,
     tabUrls: () => new Map(tabs),
     loadError: () => null,
+    withholdsPageText: () => false,
     hasDeltaBaseline: () => hasDeltaBaseline,
     forgetDeltaBaseline: vi.fn(),
     snapshotDelta: vi.fn(async () => {
@@ -70,6 +71,35 @@ function fakeHost(
 }
 
 describe('runWithActionEffects', () => {
+  it('returns no page text while the page may show a secret', async () => {
+    const guest = fakeGuest('https://console.cloud.google.com/auth/clients', 'Clients')
+    const secretDialog = {
+      snapshot: {
+        kind: 'delta',
+        baseRevision: 1,
+        revision: 2,
+        changes: [],
+        treeChange: {
+          startLine: 3,
+          deleteCount: 0,
+          lines: [
+            '  - dialog "OAuth client created"',
+            '    - StaticText "Client secret GOCSPX-fake-secret-123"'
+          ]
+        }
+      }
+    }
+    const { host } = fakeHost(guest, [UNCHANGED, secretDialog])
+    host.withholdsPageText = () => true
+
+    const result = await runWithActionEffects(host, async () => ({ clicked: '@e9' }))
+
+    expect(JSON.stringify(result)).not.toContain('GOCSPX-fake-secret-123')
+    expect(readBrowserActionEffects(result)?.page).toBeUndefined()
+    // The agent never saw that reading, so the next action doesn't diff against it.
+    expect(host.forgetDeltaBaseline).toHaveBeenCalled()
+  })
+
   it('does not read a replacement guest the caller was never admitted to', async () => {
     const guest = fakeGuest()
     const replacement = Object.assign(fakeGuest('http://127.0.0.1/app.html', 'App'), { id: 8 })

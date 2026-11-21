@@ -3,7 +3,10 @@ import { pruneGitWorktrees } from '../../git/worktrees/removal/worktree-prune-gu
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import { assertWorktreeUnlockedForRemoval } from '../../../shared/worktree/removal/removal'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
-import { formatWorktreeRemovalError, isOrphanedWorktreeError } from '../../ipc/worktree-logic'
+import {
+  formatWorktreeRemovalError,
+  isOrphanedWorktreeError
+} from '../../ipc/worktrees/paths/worktree-logic'
 import { listWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
 import {
   normalizeLocalBranchRef,
@@ -12,7 +15,7 @@ import {
 import { deleteBranchOfUnregisteredWorktree } from '../../git/worktrees/removal/worktree-removal'
 import { removeLocalWorktreePath } from './local-worktree-filesystem'
 import { assertWorktreeDoesNotContainRegisteredWorktree } from './worktree-removal-safety'
-import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
+import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 
 type LocalPartialRemovalRecoveryArgs = {
   error: unknown
@@ -24,11 +27,13 @@ type LocalPartialRemovalRecoveryArgs = {
   deleteBranch: boolean
   closeWatcher: (worktreePath: string) => Promise<void>
   signal?: AbortSignal
+  /** Rechecks the folder is still the accepted checkout immediately before its files are deleted. */
+  beforeLeftoverDelete?: () => Promise<void>
 }
 
 type StaleLocalWorktreeRegistrationArgs = Omit<
   LocalPartialRemovalRecoveryArgs,
-  'error' | 'force' | 'closeWatcher' | 'signal'
+  'error' | 'force' | 'closeWatcher' | 'signal' | 'beforeLeftoverDelete'
 >
 
 function preservedBranchResult(
@@ -121,11 +126,13 @@ export async function recoverPartialLocalWorktreeRemoval(
   // Release watcher handles before recursively finishing Git’s partial removal; abort if closing fails.
   await args.closeWatcher(args.canonicalWorktreePath)
   throwIfSignalAborted(args.signal)
+  await args.beforeLeftoverDelete?.()
   try {
     await removeLocalWorktreePath(
       args.canonicalWorktreePath,
       args.localWorktreeGitOptions,
-      args.signal
+      args.signal,
+      { markerLast: true }
     )
   } catch (error) {
     throwIfSignalAborted(args.signal)

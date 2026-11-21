@@ -1,4 +1,4 @@
-import type { CrashReportBreadcrumbData } from '../../../../shared/crash-reporting'
+import type { CrashReportBreadcrumbData } from '../../../../shared/crash-reporting/crash-reporting'
 
 // Keep free of value imports/import.meta: Playwright collection reaches terminal constants but cannot load crash-diagnostics and its webview chain.
 

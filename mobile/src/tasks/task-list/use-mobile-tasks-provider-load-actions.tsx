@@ -1,4 +1,4 @@
-import type { ClassifiedError } from '../../../../src/shared/classified-error'
+import type { ClassifiedError } from '../../../../src/shared/errors/classified-error'
 import { getWorkItemPageErrorTypes } from '../../../../src/shared/github/work-items/work-item-page-errors'
 import type { RuntimeHydrationModel } from '../screen-state/use-mobile-tasks-runtime-hydration'
 import {
@@ -38,6 +38,7 @@ import {
   linearWorkspaceTeamListRead
 } from './mobile-task-list-operations'
 import { githubWorkItemSearchRead } from '../providers/mobile-task-source-search-operations'
+import { linearAccountClient } from './linear-account-host'
 import { taskSettingsWrite } from '../screen-state/mobile-task-runtime-operations'
 
 export type ProviderLoadActionsInput = Pick<
@@ -49,6 +50,7 @@ export type ProviderLoadActionsInput = Pick<
   | 'defaultLinearTeamSelectionRef'
   | 'githubKind'
   | 'keepSettings'
+  | 'linearAccountBindingRef'
   | 'setJiraConnection'
   | 'jiraStatusRequestIdRef'
   | 'setLinearConnected'
@@ -71,6 +73,7 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
     defaultLinearTeamSelectionRef,
     githubKind,
     keepSettings,
+    linearAccountBindingRef,
     setJiraConnection,
     jiraStatusRequestIdRef,
     setLinearConnected,
@@ -97,7 +100,9 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
     if (!client || connState !== 'connected' || !tasksSupported) {
       return
     }
-    const statusReply = await linearAccountStatusRead.request(client)
+    const statusReply = await linearAccountStatusRead.request(
+      await linearAccountClient(linearAccountBindingRef.current, client)
+    )
     const status = linearAccountStatusRead.interpret(statusReply)
     setLinearConnected(status.connected === true)
     if (status.connected !== true) {

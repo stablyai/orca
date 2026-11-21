@@ -8,10 +8,12 @@ import type { AgentSessionExecutionLocation } from '../../../../shared/agent-ses
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import {
   closeTestAgentSessionRecordStores,
-  openTestAgentSessionRecordStore,
+  openTestAgentSessionRecordStore
+} from './agent-session-record-store-test-harness'
+import {
   readPersistedTestAgentSessionStore,
   withTestAgentSessionDatabase
-} from './agent-session-record-store-test-harness'
+} from './agent-session-record-store-persistence.test-fixture'
 import type { AgentSessionReserveRequest } from '../ownership/agent-session-reservation-admission'
 
 const NOW = 1_800_000_000_000
@@ -124,5 +126,21 @@ describe('chat tab table', () => {
     )
     await store.setSessionTabVisibility('session-beta', true, 'tab-alpha')
     expect(store.getSessionTabId('session-beta')).toBe('tab-alpha')
+  })
+
+  it('keeps a background chat open across a restart, until a shown tab is closed', async () => {
+    const store = await open()
+    await store.reserveOwner(reserveRequest())
+    await store.setSessionTabVisibility('session-alpha', false, undefined, { background: true })
+    expect(store.isSessionInBackground('session-alpha')).toBe(true)
+
+    const reopened = await open()
+    expect(reopened.isSessionInBackground('session-alpha')).toBe(true)
+    expect(reopened.getSessionTabId('session-alpha')).toBeNull()
+
+    await reopened.setSessionTabVisibility('session-alpha', true)
+    expect(reopened.isSessionInBackground('session-alpha')).toBe(false)
+    await reopened.setSessionTabVisibility('session-alpha', false)
+    expect((await open()).isSessionInBackground('session-alpha')).toBe(false)
   })
 })

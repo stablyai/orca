@@ -124,9 +124,12 @@ describe('client-hosted downloads', () => {
           return { ok: true, result: { released: true }, _meta: {} } as never
         }
         const chunk = params as { transferId: string; final: boolean }
-        writes.push(chunk)
-        if (writes.length === 1) {
-          await firstWrite
+        // The download's begin isn't a write; its answer is never read.
+        if (!method.endsWith('begin')) {
+          writes.push(chunk)
+          if (writes.length === 1) {
+            await firstWrite
+          }
         }
         return {
           ok: true,
@@ -180,6 +183,7 @@ function createGuest(id: number) {
     ...guestNavigationMethods(),
     id,
     isDestroyed: vi.fn(() => false),
+    isCrashed: vi.fn(() => false),
     isCurrentlyAudible: vi.fn(() => false),
     getType: vi.fn(() => 'webview'),
     setBackgroundThrottling: browserMocks.guestSetBackgroundThrottlingMock,

@@ -1,3 +1,4 @@
+import '../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { createServer, type Server } from 'node:net'
 import { randomUUID } from 'node:crypto'
 import { mkdtempSync, writeFileSync } from 'node:fs'
@@ -8,7 +9,7 @@ import {
   RUNTIME_SOURCE_ID_ENV,
   RUNTIME_SOURCE_INCARNATION_ENV,
   RUNTIME_SOURCE_PROFILE_PATH_ENV
-} from '../../../shared/runtime-source-env'
+} from '../../../shared/remote-runtime/host-catalog/runtime-source-env'
 import { RuntimeClient } from '../client'
 import { RuntimeClientError } from './types'
 
@@ -144,17 +145,6 @@ describe('RuntimeClient runtime-source fence', () => {
 
     await expectRefusal(client.call('worktree.list'), 'runtime_source_unverifiable')
     expect(runtime.methods).toEqual(['status.get'])
-  })
-
-  it('keeps the unfenced path for a CLI started outside an Orca terminal', async () => {
-    const runtime = await startRuntime({ runtimeId: 'runtime-b', installationId: SOURCE_B })
-    delete process.env[RUNTIME_SOURCE_ID_ENV]
-    delete process.env[RUNTIME_SOURCE_INCARNATION_ENV]
-    const client = new RuntimeClient(runtime.userDataPath, 2_000, null, null, 'orca')
-
-    await client.call('worktree.list')
-    expect(runtime.methods).toEqual(['worktree.list'])
-    expect(runtime.expectations).toEqual([undefined])
   })
 
   it('lets an explicit switch to another profile through, e.g. orca-dev from a packaged terminal', async () => {

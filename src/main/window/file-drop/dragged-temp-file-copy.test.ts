@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import type * as RuntimeImportLimits from '../../ipc/runtime-import-limits'
+import type * as RuntimeImportLimits from '../../ipc/runtime-transfers/runtime-import-limits'
 
 const fsFaults: {
   beforeCopyWrite: (() => void) | null
@@ -36,7 +36,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   }
 })
 
-vi.mock('../../ipc/runtime-import-limits', async (importOriginal) => ({
+vi.mock('../../ipc/runtime-transfers/runtime-import-limits', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeImportLimits>()),
   REMOTE_IMPORT_MAX_FILE_BYTES: 10,
   REMOTE_IMPORT_MAX_TOTAL_BYTES: 16
@@ -86,18 +86,6 @@ afterEach(async () => {
 })
 
 describe('materializeDragTempPaths', () => {
-  it('copies a drag-temp file, keeping its basename and bytes', async () => {
-    const source = await dragTempFile(SCREENSHOT_NAME, 'png-bytes')
-
-    const [result] = await materializeDragTempPaths([source], env)
-
-    const dest = importedPath(result)
-    expect(basename(dest)).toBe(SCREENSHOT_NAME)
-    expect(basename(dirname(dest))).toMatch(/^orca-drop-/)
-    expect(dirname(dirname(dest))).toBe(env.copyRoot)
-    expect(await readFile(dest, 'utf8')).toBe('png-bytes')
-  })
-
   it.skipIf(process.platform === 'win32')(
     'creates a 0600 copy in a 0700 directory for a 0644 source',
     async () => {
@@ -191,16 +179,21 @@ describe('materializeDragTempPaths', () => {
   })
 
   it('gives concurrent batches distinct copy directories', async () => {
-    const source = await dragTempFile('shot.png', 'x')
+    const source = await dragTempFile(SCREENSHOT_NAME, 'png-bytes')
 
     const [[left], [right]] = await Promise.all([
       materializeDragTempPaths([source], env),
       materializeDragTempPaths([source], env)
     ])
 
-    expect(dirname(importedPath(left))).not.toBe(dirname(importedPath(right)))
-    expect(await readFile(importedPath(left), 'utf8')).toBe('x')
-    expect(await readFile(importedPath(right), 'utf8')).toBe('x')
+    const leftPath = importedPath(left)
+    const rightPath = importedPath(right)
+    expect(dirname(leftPath)).not.toBe(dirname(rightPath))
+    for (const path of [leftPath, rightPath]) {
+      expect(basename(path)).toBe(SCREENSHOT_NAME)
+      expect(dirname(dirname(path))).toBe(env.copyRoot)
+      expect(await readFile(path, 'utf8')).toBe('png-bytes')
+    }
   })
 
   it('reports a broken copy root as a storage failure, not a problem with the dropped file', async () => {
@@ -222,23 +215,5 @@ describe('materializeDragTempPaths', () => {
     expect(await materializeDragTempPaths([source], env)).toEqual([
       { sourcePath: source, status: 'failed', reason: 'storage-not-private' }
     ])
-  })
-
-  it('removes copies it already made when aborted partway through a drop', async () => {
-    const first = await dragTempFile('a.png', 'a')
-    const second = await dragTempFile('b.png', 'b')
-    const controller = new AbortController()
-    let writes = 0
-    fsFaults.beforeCopyWrite = () => {
-      writes += 1
-      if (writes === 2) {
-        controller.abort(new Error('timed out'))
-      }
-    }
-
-    await expect(
-      materializeDragTempPaths([first, second], env, controller.signal)
-    ).rejects.toThrow()
-    expect(await copyDirs()).toEqual([])
   })
 })

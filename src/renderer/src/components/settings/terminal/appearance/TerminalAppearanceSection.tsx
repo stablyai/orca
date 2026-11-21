@@ -1,6 +1,6 @@
 import { Cat } from 'lucide-react'
 import { Fragment, useState, type ReactNode } from 'react'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { TerminalThemeSlot } from '../../../../../../shared/terminal-themes/terminal-color-overrides'
 import {
   matchesSettingsSearch,

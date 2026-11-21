@@ -9,12 +9,12 @@ import {
   agentSessionFailureWords,
   type AgentJournalDispatchRejection
 } from '../../../shared/agent-session/failures/agent-session-failure-words'
-import { formatNativeChatFileReference } from '../../../shared/agent-image-paste'
+import { formatNativeChatFileReference } from '../../../shared/native-chat/input/composer/agent-image-paste'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentInlineImageMimeType,
   isAgentInlineImageMimeType
-} from '../../../shared/agent-inline-image-types'
+} from '../../../shared/native-chat/input/composer/agent-inline-image-types'
 import type { NativeChatImageRefBlock } from '../../../shared/native-chat/native-chat-types'
 import {
   NodeFileReadTooLargeError,
@@ -194,8 +194,8 @@ export async function acpPromptBlocks(
 function isWithheldCommand(body: AgentJournalMessageItem, withheld: readonly string[]): boolean {
   const [block, ...rest] = body.blocks
   const text = block?.type === 'text' && rest.length === 0 ? block.text.trim() : ''
-  // Arguments do not make a withheld command safe, e.g. `/allow-all on`.
-  return text.startsWith('/') && withheld.includes(text.slice(1).split(/\s/, 1)[0])
+  // Neither arguments nor case make a withheld command safe, e.g. `/allow-all on`, `/CLEAR`.
+  return text.startsWith('/') && withheld.includes(text.slice(1).split(/\s/, 1)[0].toLowerCase())
 }
 
 export async function acpDispatchPrompt(

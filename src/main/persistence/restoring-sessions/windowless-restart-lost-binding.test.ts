@@ -6,13 +6,16 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session/wo
 import type { Store } from '../loading-store/store'
 import { leafIds } from '../terminal-topology/testing/terminal-topology-window-session-fixture'
 import {
+  closeTrackedTopologyStores,
   emptyTerminalSessionProfile,
   FIXTURE_GIT_WORKTREE_ID,
   openTopologyStore,
   reopenTopologyStore
 } from '../terminal-topology/testing/terminal-topology-profile-fixture'
 
-vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../../../shared/workspace-layout/layout-owner-switch', () => ({
+  ORCA_LAYOUT_OWNER_IS_MAIN: true
+}))
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
@@ -25,7 +28,8 @@ const LEAF = '11111111-1111-4111-8111-111111111111'
 const PTY = 'pty-live'
 const directories: string[] = []
 
-afterEach(() => {
+afterEach(async () => {
+  await closeTrackedTopologyStores()
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }

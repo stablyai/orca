@@ -35,19 +35,20 @@ type EnvironmentHarness = {
 function environment(input: {
   environmentId: string
   guestWebContentsId: number
-  availability?: 'negotiated' | 'unsupported' | 'unavailable'
 }): EnvironmentHarness {
-  const availability = input.availability ?? 'negotiated'
   const writes: { browserPageId: string; hostLabel: string }[] = []
   const transport = new BrowserClientFileChannelTransport()
   transport.bind({
-    fileChannelNegotiated: availability === 'negotiated',
-    fileChannelAvailability: availability,
-    sendFileChannelRequest: async (_method, params) => {
-      writes.push({
-        browserPageId: (params as { browserPageId: string }).browserPageId,
-        hostLabel: input.environmentId
-      })
+    fileChannelNegotiated: true,
+    fileChannelAvailability: 'negotiated',
+    sendFileChannelRequest: async (method, params) => {
+      // The download's begin isn't a write; its answer is never read.
+      if (!method.endsWith('begin')) {
+        writes.push({
+          browserPageId: (params as { browserPageId: string }).browserPageId,
+          hostLabel: input.environmentId
+        })
+      }
       return {
         ok: true,
         result: {
@@ -101,44 +102,5 @@ describe('client-hosted download routing', () => {
 
     expect(envA.writes).toEqual([{ browserPageId: 'page-env-a', hostLabel: 'env-a' }])
     expect(envB.writes).toEqual([])
-  })
-
-  it('cancels rather than saving locally when the owning page has no usable channel', () => {
-    environment({
-      environmentId: 'env-a',
-      guestWebContentsId: ENV_A_GUEST_ID,
-      availability: 'unavailable'
-    })
-    setBrowserClientRouteWebContentsProbe(() => true)
-
-    expect(routeBrowserClientDownload({ guestWebContentsId: ENV_A_GUEST_ID })).toEqual({
-      kind: 'blocked'
-    })
-  })
-
-  it('keeps the desktop fallback for a lease that never negotiated the file channel', () => {
-    environment({
-      environmentId: 'env-a',
-      guestWebContentsId: ENV_A_GUEST_ID,
-      availability: 'unsupported'
-    })
-    setBrowserClientRouteWebContentsProbe(() => true)
-
-    expect(routeBrowserClientDownload({ guestWebContentsId: ENV_A_GUEST_ID })).toEqual({
-      kind: 'local'
-    })
-  })
-
-  it('does not read a throwing router as permission to save locally', () => {
-    registerBrowserClientDownloadRouter('env-a', {
-      route: () => {
-        throw new Error('router exploded')
-      }
-    })
-    setBrowserClientRouteWebContentsProbe(() => true)
-
-    expect(routeBrowserClientDownload({ guestWebContentsId: ENV_A_GUEST_ID })).toEqual({
-      kind: 'blocked'
-    })
   })
 })

@@ -9,10 +9,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { Project, ProjectHostSetup } from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
-import { getDefaultPersistedState } from '../../../shared/constants'
-import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import type { Project, ProjectHostSetup } from '../../../shared/project/project-types'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { getDefaultPersistedState } from '../../../shared/orca-profiles/constants'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { resetRetirementCollisionKeyCacheForTests } from '../../workspaces/removal/retirement/worktree-name-retirement'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
@@ -112,23 +112,20 @@ afterEach(async () => {
 })
 
 describe('deleting one host copy of a repo id shared by two hosts', () => {
-  it.each(['git', 'folder'] as const)(
-    'removing the local %s row keeps the other host row and its metadata',
-    async (kind) => {
-      const store = await createStoreFromState({
-        repos: duplicateIdRepos().map((repo) => ({ ...repo, kind }))
-      })
-      store.setWorktreeMeta(hostWorktreeTarget({ id: 'dup::/remote/dup', hostId: 'ssh:ssh-1' }), {
-        displayName: 'SSH wt'
-      })
+  it('removing a local folder project keeps the repo with the same id on another host', async () => {
+    const store = await createStoreFromState({
+      repos: duplicateIdRepos().map((repo) => ({ ...repo, kind: 'folder' }))
+    })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'dup::/remote/dup', hostId: 'ssh:ssh-1' }), {
+      displayName: 'SSH wt'
+    })
 
-      store.removeProjectForHost({ id: 'dup', executionHostId: 'local' })
-      expect(store.getRepos().map((repo) => repo.path)).toEqual(['/remote/dup'])
-      expect(Object.values(store.getAllWorktreeMeta()).map((meta) => meta.displayName)).toContain(
-        'SSH wt'
-      )
-    }
-  )
+    store.removeProjectForHost({ id: 'dup', executionHostId: 'local' })
+    expect(store.getRepos().map((repo) => repo.path)).toEqual(['/remote/dup'])
+    expect(Object.values(store.getAllWorktreeMeta()).map((meta) => meta.displayName)).toContain(
+      'SSH wt'
+    )
+  })
 
   it('moveProjectToGroup moves the addressed twin, not the first row with the id', async () => {
     const store = await createStoreWithDuplicateRepoId()

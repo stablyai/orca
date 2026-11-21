@@ -7,7 +7,7 @@ import {
 } from './artifact-download-sessions'
 import { ACTIONS_ARTIFACT_CHUNK_BYTES } from '../../../../shared/github/actions/actions-artifact-types'
 import { EventEmitter } from 'node:events'
-import { abortWhenRendererGone } from '../../../ipc/renderer-lifetime-abort'
+import { abortWhenRendererGone } from '../../../ipc/renderer-requests/renderer-lifetime-abort'
 afterEach(() => vi.useRealTimers())
 it.each(['destroyed', 'render-process-gone', 'did-navigate'])(
   'releases only the dead renderer’s transfer on %s without evicting active transfers',

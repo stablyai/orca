@@ -1,7 +1,7 @@
 import { useAppViewExternalStore } from '@/store/retained-views/app-state-view'
 import { useMemo } from 'react'
 import { shallow } from 'zustand/shallow'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store/index'
 import { getStructuredAgentSessionTabs } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import {
@@ -15,7 +15,7 @@ import {
   type StructuredChatTabNames
 } from './structured-chat-tab-name'
 import { isUnifiedTabOwnedByWorktree } from '@/lib/workspace/ownership/unified-tab-host-ownership'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 
 const listeners = new Set<() => void>()
@@ -25,7 +25,9 @@ let nameMaps = new Map<ExecutionHostId, unknown>()
 let stopObserving: (() => void) | undefined
 export function getStructuredChatTabNames(): StructuredChatTabNames {
   const state = useAppStore.getState()
-  const nextInputs = [state.unifiedTabsByWorktree, ...structuredAgentSessionOwnerInputs(state)]
+  // The chat list keeps its identity across terminal title and focus writes, so those skip the rescan.
+  const chats = getStructuredAgentSessionTabs(state.unifiedTabsByWorktree)
+  const nextInputs = [chats, ...structuredAgentSessionOwnerInputs(state)]
   const nextMaps = new Map<ExecutionHostId, unknown>()
   for (const owner of nameMaps.keys()) {
     const target = structuredAgentSessionTargetForHost(owner)
@@ -37,7 +39,7 @@ export function getStructuredChatTabNames(): StructuredChatTabNames {
     return snapshot
   }
   const next = new Map(
-    getStructuredAgentSessionTabs(state.unifiedTabsByWorktree).map((tab) => {
+    chats.map((tab) => {
       const value = resolveStructuredChatTabName(tab, state)
       const target = structuredAgentSessionTargetForHost(value.owner)
       if (value.owner && target) {

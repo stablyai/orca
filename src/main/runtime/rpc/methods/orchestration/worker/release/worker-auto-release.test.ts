@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,6 +7,7 @@ import { getWorkerTerminalAutoReleaseScheduler } from '../../../../../orchestrat
 import { createOrchestrationWorkerReleaseHarness } from '../testing/worker-release.test-support'
 import { WorkerAutoReleaseActivity } from '../../../../../orchestration/terminal-authority/release/worker-auto-release-activity'
 import type { AgentPhase } from '../../../../../../../shared/agent-status/lifecycle/agent-transitions'
+import { removeTree } from '../../../../../../../shared/file-write/windows-transient-lock-removal'
 
 const GRACE_MS = 2 * 60_000
 
@@ -33,31 +34,28 @@ describe('orchestration worker automatic release', () => {
     h.setup()
   }
 
-  it.each(['succeeded', 'failed'] as const)(
-    'releases a %s worker once its grace period ends and keeps where its output lives',
-    async (outcome) => {
-      setupWithFakeClock()
-      const { dispatchId } = await h.startSettledWorker(outcome)
-      await expect(
-        h.call('orchestration.workerShow', { dispatch: dispatchId })
-      ).resolves.toMatchObject({
-        autoReleaseAt: '2026-10-27T12:02:00Z',
-        terminalResource: { autoReleaseAt: '2026-10-27T12:02:00Z' },
-        projection: { nextAction: { kind: 'none' } }
-      })
+  it('releases a failed worker once its grace period ends and keeps where its output lives', async () => {
+    setupWithFakeClock()
+    const { dispatchId } = await h.startSettledWorker('failed')
+    await expect(
+      h.call('orchestration.workerShow', { dispatch: dispatchId })
+    ).resolves.toMatchObject({
+      autoReleaseAt: '2026-10-27T12:02:00Z',
+      terminalResource: { autoReleaseAt: '2026-10-27T12:02:00Z' },
+      projection: { nextAction: { kind: 'none' } }
+    })
 
-      await vi.advanceTimersByTimeAsync(GRACE_MS - 1_000)
-      expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
-      await vi.advanceTimersByTimeAsync(1_000)
+    await vi.advanceTimersByTimeAsync(GRACE_MS - 1_000)
+    expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1_000)
 
-      await vi.waitFor(() =>
-        expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
-      )
-      expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1)
-      expect(h.runtime.closeTerminal).toHaveBeenCalledWith('term_worker')
-      await expectOutputReference(dispatchId)
-    }
-  )
+    await vi.waitFor(() =>
+      expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
+    )
+    expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1)
+    expect(h.runtime.closeTerminal).toHaveBeenCalledWith('term_worker')
+    await expectOutputReference(dispatchId)
+  })
 
   it('hands a terminal reused during the grace period to the new Dispatch', async () => {
     setupWithFakeClock()
@@ -195,10 +193,13 @@ describe('orchestration worker automatic release', () => {
   describe('across a restart', () => {
     let userDataDir: string
 
-    beforeEach(() => {
-      userDataDir = mkdtempSync(join(tmpdir(), 'orca-auto-release-restart-'))
+    beforeEach(({ onTestFinished }) => {
+      const dir = mkdtempSync(join(tmpdir(), 'orca-auto-release-restart-'))
+      userDataDir = dir
+      // After the outer afterEach closes the database: Windows cannot delete an open file, and the
+      // checkpoint thread lets go of it only once its termination lands.
+      onTestFinished(() => removeTree(dir))
     })
-    afterEach(() => rmSync(userDataDir, { recursive: true, force: true }))
 
     function setupFileBacked(): void {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })

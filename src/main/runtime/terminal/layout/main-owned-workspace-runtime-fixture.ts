@@ -1,15 +1,15 @@
 // Windowless main-owned layout fixture: apply in memory and notify writes so terminal listings refresh.
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-session-contracts'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { applyCommandToSession } from '../../../persistence/terminal-topology/pane-admission/terminal-pane-admission'
 import { resolveHostId } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import {
   withDurableRuntimeStore,
   withRuntimePaneAdmission
-} from '../../orca-runtime-tests/runtime-durable-store-fixture'
+} from '../../construction/test-context/runtime-durable-store-fixture'
 import { OrcaRuntimeService } from '../../orca-runtime'
 
 export const REPO = {
@@ -63,7 +63,7 @@ function session(split: boolean, pinned: boolean): WorkspaceSessionState {
   }
 }
 
-export function setupMainOwnedWorkspace(opts: { split?: boolean; pinned?: boolean } = {}) {
+export async function setupMainOwnedWorkspace(opts: { split?: boolean; pinned?: boolean } = {}) {
   let current = session(opts.split === true, opts.pinned === true)
   const written = new Set<(hostId: string | null) => void>()
   const write = (next: WorkspaceSessionState): void => {
@@ -107,7 +107,7 @@ export function setupMainOwnedWorkspace(opts: { split?: boolean; pinned?: boolea
     },
     getForegroundProcess: async () => null
   })
-  runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
   const ptyIds = opts.split ? [PTY_A, PTY_B] : [PTY_A]
   for (const [index, ptyId] of ptyIds.entries()) {
     const leafId = index === 0 ? LEAF_A : LEAF_B

@@ -189,7 +189,7 @@ export function AutomationRunSetupSkippedNotice({
       </span>
       {canReview ? (
         <Button type="button" variant="outline" size="xs" onClick={onReview}>
-          {t('automations.setupTrust.reviewAction', 'Review and approve setup')}
+          {t('automations.setupTrust.reviewAction', 'Review setup')}
         </Button>
       ) : null}
     </div>

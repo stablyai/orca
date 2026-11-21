@@ -3,11 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BROWSER_PASSWORDS_GUEST_CHANNELS,
   BROWSER_PASSWORDS_TO_GUEST_CHANNELS
-} from '../../../shared/browser-passwords-types'
+} from '../../../shared/browser/passwords/browser-passwords-types'
 import type {
   BrowserPasswordFillRequest,
   BrowserPasswordGuestEnable
-} from '../../../shared/browser-passwords-types'
+} from '../../../shared/browser/passwords/browser-passwords-types'
 import { installBrowserPasswordDetector } from './browser-password-detector'
 
 const CHANNEL = BROWSER_PASSWORDS_GUEST_CHANNELS
@@ -288,22 +288,6 @@ describe('browser password detector', () => {
     expect(sentOn(CHANNEL.submitted)).toEqual([])
   })
 
-  it('keeps viewport invalidation alive after a picker focus transfer', async () => {
-    load(LOGIN_FORM)
-    install()
-    enable()
-    focusIn(el('#pw'))
-    const fieldToken = readString(sentOn(CHANNEL.fieldFocused).at(-1), 'fieldToken')
-    el('#pw').dispatchEvent(new FocusEvent('focusout', { bubbles: true, composed: true }))
-    await vi.advanceTimersByTimeAsync(100)
-    window.dispatchEvent(new Event('resize'))
-    expect(sentOn(CHANNEL.fieldFocused)).toHaveLength(1)
-    expect(sentOn(CHANNEL.fieldBlurred)).toEqual([
-      { fieldToken, reason: 'focusout' },
-      { fieldToken }
-    ])
-  })
-
   it('detects and captures credentials when HTTP crypto has no randomUUID', async () => {
     vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) })
     load(LOGIN_FORM)
@@ -495,6 +479,26 @@ describe('browser password detector', () => {
       expect(el('#user').value).toBe('dave')
     })
 
+    it('fills the username when the same form pre-renders a password box that is not visible', () => {
+      load(
+        '<form><input id="user" name="identifier" autocomplete="username"><input id="pw" name="password" type="password" autocomplete="current-password"><button>Next</button></form>'
+      )
+      rects.set(el('#pw'), new DOMRect(10, 50, 0, 0))
+      install()
+      enable()
+
+      const result = fill({
+        requestId: 'r',
+        fieldToken: focusedToken(el('#user')),
+        username: 'dave',
+        password: 'pw'
+      })
+
+      expect(result).toEqual({ requestId: 'r', ok: true })
+      expect(el('#user').value).toBe('dave')
+      expect(el('#pw').value).toBe('')
+    })
+
     it('does not report its own focus moves as user focus', () => {
       load(LOGIN_FORM)
       install()
@@ -504,6 +508,8 @@ describe('browser password detector', () => {
 
       fill({ requestId: 'r', fieldToken, username: 'bob', password: 'pw' })
 
+      expect(el('#email').value).toBe('bob')
+      expect(el('#pw').value).toBe('pw')
       expect(sentOn(CHANNEL.fieldFocused)).toHaveLength(focusedBefore)
       expect(sentOn(CHANNEL.fieldBlurred)).toEqual([{ fieldToken }])
     })

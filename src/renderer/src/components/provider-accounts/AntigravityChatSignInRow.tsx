@@ -1,6 +1,7 @@
 import { AntigravityChatAuthForm } from './AntigravityChatAuthForm'
+import type { AntigravityGoogleSignInState } from './AntigravityGoogleSignInChoice'
 import type { ReactNode } from 'react'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { AntigravityChatAccountRow } from './AntigravityChatSignInAction'
 import { useAntigravityChatSignInControls } from './use-antigravity-chat-sign-in'
 
@@ -11,6 +12,10 @@ export function AntigravityChatSignInRow(props: {
   disabled: boolean
   /** The chat server's install row, last because it is set up once. */
   runtime?: ReactNode
+  /** The Google sign-in choice's state from the host's answer. */
+  googleSignIn?: AntigravityGoogleSignInState
+  /** After the sign-in method saves; the host's answer about the route is read again. */
+  onSaved?: () => void
 }): React.JSX.Element {
   const signIn = useAntigravityChatSignInControls({
     owner: props.owner,
@@ -25,6 +30,8 @@ export function AntigravityChatSignInRow(props: {
         onSignIn={signIn.start}
         signInError={signIn.alert}
         heading={null}
+        googleSignIn={props.googleSignIn}
+        onSaved={props.onSaved}
         fieldsRow={(fields) => (
           <div data-settings-row="" className="py-3">
             {fields}

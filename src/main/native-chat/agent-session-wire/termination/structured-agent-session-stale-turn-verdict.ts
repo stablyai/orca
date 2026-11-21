@@ -3,7 +3,7 @@
 import {
   interruptedAgentJournalToolCall,
   isUnverifiedEndAgentJournalToolCall
-} from '../../../../shared/agent-journal-tool-call-lifecycle'
+} from '../../../../shared/agent-session/journal/agent-journal-tool-call-lifecycle'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem,
@@ -14,7 +14,7 @@ import {
   readAgentJournalTurn
 } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { AgentSessionDeathEvidence } from '../../../../shared/agent-session/lifecycle/leases/agent-session-death-evidence'
-import type { AgentSessionReplacedRuntime } from '../../../runtime/agent-session/agent-session-replaced-runtime'
+import type { AgentSessionReplacedRuntime } from '../../../runtime/agent-session/ownership/agent-session-replaced-runtime'
 import type { JournalLifecycleMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
 import type { JournalLatestStop } from '../../agent-session-journal/context-epochs/journal-stop-turn-end'
 

@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { RuntimeEnvironmentStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { remoteRestartRuntimeId } from './native-chat-remote-restart-offer'
 import { createNativeChatRestartOccurrence } from './native-chat-restart-occurrence'
@@ -49,8 +49,11 @@ export function createNativeChatRestartStore(target: RuntimeClientTarget) {
     releaseFinishedNativeChatRestartRun: () => occurrence.releaseFinishedNativeChatRestartRun(),
     refreshNativeChatRestartOffer: () => occurrence.refreshNativeChatRestartOffer(),
     reopenNativeChatRestartOffer: () => occurrence.reopenNativeChatRestartOffer(),
-    continueNativeChatRestartOffer: (ids: readonly string[], starter?: ResumeRunStarter) =>
-      occurrence.continueNativeChatRestartOffer(ids, starter),
+    continueNativeChatRestartOffer: (
+      ids: readonly string[],
+      starter?: ResumeRunStarter,
+      took?: Parameters<typeof occurrence.continueNativeChatRestartOffer>[2]
+    ) => occurrence.continueNativeChatRestartOffer(ids, starter, took),
     dismissNativeChatRestartOffer: (ids?: readonly string[]) =>
       occurrence.dismissNativeChatRestartOffer(ids),
     readNativeChatRestartOffer: () => occurrence.readNativeChatRestartOffer(),

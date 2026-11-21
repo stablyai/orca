@@ -47,27 +47,33 @@ describe('guardPaneFocusForAgentInput', () => {
     vi.useRealTimers()
   })
 
-  it('ignores a ready reply from another renderer', async () => {
+  it('lets the input through when a busy pane answers a second late', async () => {
     vi.useFakeTimers()
-    const { renderer } = fakeRenderer(7, false)
-    let settled: 'pending' | 'ready' | 'refused' = 'pending'
+    const { sent, renderer } = fakeRenderer(7, false)
 
-    void guardPaneFocusForAgentInput(renderer, 'page-1').then(
-      () => {
-        settled = 'ready'
-      },
-      () => {
-        settled = 'refused'
-      }
-    )
+    const guarded = guardPaneFocusForAgentInput(renderer, 'page-1')
+    await vi.advanceTimersByTimeAsync(1000)
     const [listener] = ipcListeners.get(AGENT_INPUT_FOCUS_GUARD_READY_CHANNEL) ?? []
-    const { calls } = vi.mocked(renderer.send).mock
-    listener({ sender: { id: 8 } }, { token: calls[0][1].token })
-    await Promise.resolve()
+    listener({ sender: { id: 7 } }, { token: sent[0].data.token })
 
-    expect(settled).toBe('pending')
-    await vi.advanceTimersByTimeAsync(150)
-    expect(settled).toBe('refused')
+    await expect(guarded).resolves.toBeTypeOf('function')
+    expect(sent.map(({ data }) => data.active)).toEqual([true])
+  })
+  it('times out and closes the guard when only a different renderer answers', async () => {
+    vi.useFakeTimers()
+    const { sent, renderer } = fakeRenderer(7, false)
+
+    const guarded = guardPaneFocusForAgentInput(renderer, 'page-1')
+    const refusal = expect(guarded).rejects.toMatchObject({
+      code: 'browser_focus_guard_unavailable',
+      data: { phase: 'no_pane_answer' }
+    })
+    const [listener] = ipcListeners.get(AGENT_INPUT_FOCUS_GUARD_READY_CHANNEL) ?? []
+    listener({ sender: { id: 8 } }, { token: sent[0].data.token })
+    await vi.advanceTimersByTimeAsync(2000)
+
+    await refusal
+    expect(sent.map(({ data }) => data.active)).toEqual([true, false])
   })
   it('refuses the input at once and ends the guard while the user composes', async () => {
     const { sent, renderer } = fakeRenderer(7, false)

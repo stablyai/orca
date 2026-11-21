@@ -10,8 +10,10 @@ import { resolveOriginWithStandIn } from '../../git/remotes/origin-stand-in-remo
 
 import {
   getEnterpriseGitHubRepoSlug,
-  getEnterpriseGitHubRepoSlugForRemote
+  getEnterpriseGitHubRepoSlugForRemote,
+  getEnterpriseGitHubRepoSlugForRemoteUrl
 } from './github-enterprise-repository'
+import { classifyGitHubOwnerRepoFromRemoteUrl } from './github-ssh-host-alias-resolution'
 import {
   githubApiRepositoryProbeCacheKey,
   resolveGitHubApiRepositoryProbe
@@ -138,5 +140,30 @@ export async function getOriginGitHubApiRepository(
 ): Promise<GitHubApiRepository | null> {
   return resolveOriginWithStandIn(repoPath, connectionId, localGitOptions, (name) =>
     getGitHubApiRepositoryForRemote(repoPath, name, connectionId, localGitOptions, probeOptions)
+  )
+}
+
+/** A remote URL's repository, for URLs no remote name resolves to (a separate `pushurl`). */
+export async function getGitHubApiRepositoryForRemoteUrl(
+  repoPath: string,
+  remoteUrl: string,
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<GitHubApiRepository | null> {
+  const github = await classifyGitHubOwnerRepoFromRemoteUrl(remoteUrl, {
+    repoPath,
+    connectionId,
+    ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
+  })
+  if (github.kind === 'github') {
+    return { ...github.ownerRepo, host: 'github.com' }
+  }
+  return (
+    (await getEnterpriseGitHubRepoSlugForRemoteUrl(
+      repoPath,
+      remoteUrl,
+      connectionId,
+      localGitOptions
+    )) ?? null
   )
 }

@@ -2,14 +2,14 @@ import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
 } from '../../../../../../shared/worktree/creation/launch-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { shouldAutoCreateInitialTerminal } from '@/lib/workspace/activation/initial-surface/initial-terminal'
 import { hasSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
-import { shouldSeedWorktreePrimaryTerminal } from '../../../../../../shared/worktree-first-surface'
+import { shouldSeedWorktreePrimaryTerminal } from '../../../../../../shared/worktree/creation/worktree-first-surface'
 import { createSequencedSetupAgentCommands } from '../../../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { getSetupRunnerCommandPlatformForPath } from '../../../../../../shared/agent-launch/startup/setup-runner-command'
-import { agentKindToTuiAgent } from '../../../../../../shared/agent-kind'
+import { agentKindToTuiAgent } from '../../../../../../shared/agent-status/identity/agent-kind'
 import { useAppStore } from '@/store/index'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/workspace/creation/setup/hook-command-delayed-delivery'
 import { resolveWorkspaceTerminalHostAuthority } from '@/lib/workspace/ownership/workspace-terminal-host-authority'

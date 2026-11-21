@@ -1,9 +1,9 @@
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type {
   BrowserScreencastReadyResult,
   BrowserScreencastResult
 } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
-import { withBrowserPaneUiRuntimeRpcSource } from '../../../../../shared/runtime-rpc-feature-interaction-source'
+import { withBrowserPaneUiRuntimeRpcSource } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-feature-interaction-source'
 import { e2eConfig } from '@/app-shell/startup/e2e-config'
 import { isRemoteBrowserPageMissingCode } from './remote-browser-stream-errors'
 import type {
@@ -87,7 +87,9 @@ export async function openRemoteBrowserScreencastStream(
         viewportWidth: request.viewportSize?.width,
         viewportHeight: request.viewportSize?.height,
         deviceScaleFactor: request.deviceScaleFactor,
-        everyNthFrame: 2
+        // Pace by time, not by skipping frames: a skipped frame on a static page (one hover repaint) never arrives, while the host holds the newest paced frame.
+        everyNthFrame: 1,
+        minFrameIntervalMs: 33
       }),
       timeoutMs: 15_000
     },

@@ -13,7 +13,7 @@ import {
 } from '@/components/editor/check-details/actions/check-run-details-tab'
 import { fetchActionsRunDetails } from './actions-requests'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 /** Open a run tab pinned to repository, host and account so later focus changes cannot retarget reads. */
 export function openActionsRun(

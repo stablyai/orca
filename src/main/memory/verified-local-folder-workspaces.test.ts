@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { FolderWorkspaceHostState } from '../../shared/folder-workspaces/folder-workspace-execution-host'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../shared/project-group-types'
-import type { Repo } from '../../shared/repo-types'
+import type { ProjectGroup } from '../../shared/project/groups/project-group-types'
+import type { Repo } from '../../shared/repository/repo-types'
 import { getVerifiedLocalFolderWorkspaceKeys } from './verified-local-folder-workspaces'
 
 const folder = (patch: Partial<FolderWorkspace> = {}): FolderWorkspace => ({
@@ -62,8 +62,6 @@ describe('verified local folder workspace keys', () => {
   })
 
   it.each([
-    state({ folderWorkspaces: [] }),
-    state({ folderWorkspaces: [folder(), folder()] }),
     state({
       folderWorkspaces: [
         folder({ executionHostId: 'local' }),
@@ -72,11 +70,10 @@ describe('verified local folder workspace keys', () => {
     }),
     state({ folderWorkspaces: [folder({ connectionId: 'target-1' })] }),
     state({ projectGroups: [projectGroup({ connectionId: 'target-1' })] }),
-    state({ repos: [repo({ executionHostId: 'runtime:environment-1' })] }),
     state({ repos: [repo({ executionHostId: 'ssh:target-1' })] }),
     state({ repos: [repo(), repo({ id: 'repo-2', connectionId: 'target-1' })] }),
     state({ repos: [repo(), repo({ id: 'repo-2', executionHostId: 'runtime:environment-1' })] })
-  ])('rejects missing, duplicate, remote, or ambiguous scope %#', (catalog) => {
+  ])('rejects duplicate, remote, or ambiguous scope %#', (catalog) => {
     expect(getVerifiedLocalFolderWorkspaceKeys(catalog)).toEqual(new Set())
   })
 

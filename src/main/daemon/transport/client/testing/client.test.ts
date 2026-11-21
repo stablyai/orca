@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { DaemonClient } from '../daemon-client'
-import { encodeNdjson } from '../../../../../shared/main-process-ndjson-framer'
+import { encodeNdjson } from '../../../../../shared/json-stream/main-process-ndjson-framer'
 import { DaemonConnectionLostError } from '../../../protocol/daemon-errors'
 import type { HelloMessage } from '../../../protocol/daemon-hello-protocol'
 import type { DaemonRequest } from '../../../protocol/daemon-rpc-contract'
@@ -141,19 +141,15 @@ describe('DaemonClient', () => {
   }
 
   describe('connect', () => {
-    it('rejects a v24 daemon that omits endpoint identity', async () => {
-      await startMockDaemon({ omitHelloIdentity: true })
-      client = new DaemonClient({ socketPath, tokenPath })
-
-      await expect(client.ensureConnected()).rejects.toThrow('Invalid daemon identity')
-    })
-
-    it('allows a legacy v23 daemon to omit endpoint identity', async () => {
+    it('allows a missing endpoint identity only on the legacy protocol', async () => {
       await startMockDaemon({ omitHelloIdentity: true })
       client = new DaemonClient({ socketPath, tokenPath, protocolVersion: 23 })
-
       await expect(client.ensureConnected()).resolves.toBeUndefined()
       expect(client.getDaemonIdentity()).toBeNull()
+      client.disconnect()
+
+      client = new DaemonClient({ socketPath, tokenPath })
+      await expect(client.ensureConnected()).rejects.toThrow('Invalid daemon identity')
     })
 
     it('rejects when control and stream sockets report different daemon identities', async () => {

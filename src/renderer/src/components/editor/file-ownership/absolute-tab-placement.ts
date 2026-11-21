@@ -1,12 +1,15 @@
 import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   findWorkspaceFileRoute,
   type RuntimeWorkspaceFileRoute
 } from '@/lib/files/access/runtime-workspace-file-route'
-import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
+import { isFloatingWorkspaceId } from '../../../../../shared/workspace/identity/floating-workspace-worktree'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { chatScratchFileAddress } from '@/runtime/files/addressing/runtime-chat-scratch-file-address'
 import {

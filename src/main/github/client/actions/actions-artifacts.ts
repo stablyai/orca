@@ -15,7 +15,7 @@ import {
 } from '../../../../shared/rpc-contract/github/github-actions-artifact-params'
 import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
 import type { LocalGitExecOptions } from '../../repositories/github-repository-identity'
-import { sanitizeLocalDownloadFilename } from '../../../ipc/filesystem/local-download-filename'
+import { sanitizeLocalDownloadFilename } from '../../../ipc/filesystem/downloads/local-download-filename'
 import { actionsJson, withActionsRead } from './actions-read-request'
 import { actionsCount, actionsNumber, actionsRecord } from './workflow-run-field-mapping'
 import { nullableString } from '../check/check-detail-field-mapping'

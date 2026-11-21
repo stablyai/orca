@@ -1,10 +1,13 @@
 import type { ChildProcess } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as WorkerChildProcessModule from '../../../worker-thread-child-process/worker-thread-child-process'
 import {
   completeFakeSpawn,
   createFakeSpawnedChild
 } from '../../../../shared/__fixtures__/fake-spawned-child'
 import type { GhExecOptions } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+
+const { groupExists } = vi.hoisted(() => ({ groupExists: vi.fn(() => true) }))
 
 const { spawnMock, resolverMock, signalMock, forceMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -12,8 +15,17 @@ const { spawnMock, resolverMock, signalMock, forceMock } = vi.hoisted(() => ({
   signalMock: vi.fn(),
   forceMock: vi.fn()
 }))
+// These tests drive the in-thread spawn mocks; keep Windows launches off the real process worker.
+vi.mock(
+  '../../../worker-thread-child-process/worker-thread-child-process',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof WorkerChildProcessModule>()),
+    canSpawnOnWorkerThread: () => false
+  })
+)
 vi.mock('node:child_process', async (original) => ({ ...(await original()), spawn: spawnMock }))
 vi.mock('@orca/process-host/process-tree-termination', () => ({
+  processGroupExists: groupExists,
   signalProcessTree: signalMock,
   forceTerminateProcessTree: forceMock
 }))
@@ -36,6 +48,7 @@ function spawn(): ChildProcess {
 
 describe('check details existing admission ownership', () => {
   beforeEach(() => {
+    groupExists.mockReturnValue(true)
     vi.useFakeTimers()
     children.length = 0
     spawnMock.mockReset().mockImplementation(spawn)
@@ -51,6 +64,7 @@ describe('check details existing admission ownership', () => {
   })
   afterEach(async () => {
     for (const child of children) {
+      groupExists.mockReturnValue(false)
       child.emit('close', 0, null)
     }
     await vi.advanceTimersByTimeAsync(15_000)
@@ -80,6 +94,7 @@ describe('check details existing admission ownership', () => {
     }
     await vi.advanceTimersByTimeAsync(12_000)
     expect(children).toHaveLength(4)
+    groupExists.mockReturnValue(false)
     children[0].emit('close', null, 'SIGKILL')
     await vi.advanceTimersByTimeAsync(0)
     expect(children).toHaveLength(5)
@@ -139,6 +154,7 @@ describe('check details existing admission ownership', () => {
     await vi.advanceTimersByTimeAsync(12_000)
     expect(logChildren).toHaveLength(4)
     expect(prCheckLogTailCache.size).toBe(0)
+    groupExists.mockReturnValue(false)
     logChildren[0].emit('close', null, 'SIGKILL')
     await vi.advanceTimersByTimeAsync(0)
     await expect(fifth).resolves.toMatchObject({ jobs: [{ logTail: 'Error: fifth' }] })
@@ -180,6 +196,7 @@ describe('check details existing admission ownership', () => {
     }
     await vi.advanceTimersByTimeAsync(0)
     expect(children).toHaveLength(5)
+    groupExists.mockReturnValue(false)
     children[1].emit('close', 1, null)
     await vi.advanceTimersByTimeAsync(0)
     expect(children).toHaveLength(6)

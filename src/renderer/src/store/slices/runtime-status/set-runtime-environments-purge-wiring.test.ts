@@ -1,7 +1,7 @@
 /** Exercise optional-chained purge wiring (#8881): pure reducer tests cannot catch a missing/renamed call. */
 import { describe, it, expect, vi } from 'vitest'
-import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
-import type { ProjectHostSetup } from '../../../../../shared/project-types'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { ProjectHostSetup } from '../../../../../shared/project/project-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 vi.mock('sonner', () => ({

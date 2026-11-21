@@ -5,7 +5,7 @@ import {
   ActionsWorkflowsQuery as WorkflowsSchema,
   ActionsDetailsQuery as DetailsSchema
 } from '../../../shared/rpc-contract/github/github-actions-params'
-import { getRepoSshConnectionId } from '../../../shared/execution-host'
+import { getRepoSshConnectionId } from '../../../shared/execution-host/execution-host'
 import { ipcMain } from 'electron'
 import type {
   ActionsRequestContext,

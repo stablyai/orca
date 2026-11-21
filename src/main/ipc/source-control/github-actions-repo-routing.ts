@@ -1,5 +1,8 @@
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
-import { isFolderRepo } from '../../../shared/repo-kind'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../shared/execution-host/execution-host'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import type { Store } from '../../persistence/loading-store/store'
 import type { ActionsRequestContext } from '../../../shared/github/actions/actions-types'
 import { assertRegisteredGitHubRepo } from './github-repo-routing'

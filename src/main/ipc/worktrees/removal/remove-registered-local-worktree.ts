@@ -1,12 +1,12 @@
 import { worktreeRemovalLifetime } from '../../../workspaces/removal/worktree-removal-lifetime'
 import { assertRegisteredLocalWorktreePreflight } from './registered-local-worktree-preflight'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   nativeWindowsMarkerMissing,
   usesNativeWindowsRemoval
 } from '../../../git/worktrees/removal/windows-worktree-removal'
 import { pruneGitWorktrees } from '../../../git/worktrees/removal/worktree-prune-guard'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
 import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal/removal'
@@ -20,12 +20,12 @@ import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentat
 import { assertNestedWorktreeRemovalApproval } from '../../../workspaces/removal/nested-worktree-removal-plan'
 import { findRegisteredDeletableWorktree } from '../../../workspaces/removal/worktree-removal-safety'
 import { CLIENT_REMOVAL_HOME } from '../../../workspaces/removal/worktree-removal-home-guard'
-import { cleanupUnusedWorktreePushTargetRemote } from '../../worktree-remote'
+import { cleanupUnusedWorktreePushTargetRemote } from '../worktree-remote'
 import { findExistingWorktreeSymlinkPaths } from '../../../git/worktrees/content-paths/worktree-symlink-detection'
-import { removeWorktreeLinkedPaths } from '../../worktree-symlinks'
+import { removeWorktreeLinkedPaths } from '../linked-paths/worktree-symlinks'
 import { invalidateAuthorizedRootsCacheForRepo } from './registered-worktree-roots-scoped-invalidation'
 import { runWorktreeChangeInvalidators } from '../listing/worktree-change-invalidators'
-import { formatWorktreeRemovalError, isOrphanedWorktreeError } from '../../worktree-logic'
+import { formatWorktreeRemovalError, isOrphanedWorktreeError } from '../paths/worktree-logic'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import {
@@ -34,7 +34,7 @@ import {
   rememberPreservedBranchCleanupTarget
 } from './preserved-branch-cleanup'
 import {
-  removeWorktreeMetadataAndTransientState,
+  removeDeletedCheckoutMetadataAndTransientState,
   stopPtysForDestructiveWorktreeRemoval
 } from './worktree-removal-ownership'
 import { preservedBranchCleanupScopeKey } from '../../../../shared/git/branches/preserved-branch-cleanup'
@@ -162,6 +162,7 @@ export async function removeRegisteredLocalWorktree(
         repoId,
         repoPath: repo.path,
         worktree: refreshedRegisteredWorktree,
+        gitdir: await backgroundRemoval.markerIdentity(refreshedRegisteredWorktree.path),
         deleteBranch,
         force: args.force ?? false
       },
@@ -176,8 +177,7 @@ export async function removeRegisteredLocalWorktree(
         return result
       },
       publish: () => context.runtime.publishWorktreeRemovalChange(repoId),
-      admissionFailed: () => removalGate.finish(false),
-      cleanupPushTargetRemote: cleanupPushTarget
+      admissionFailed: () => removalGate.finish(false)
     })
     await backgroundRemoval.waitForWorktreeRemovalAcceptance(args.worktreeId)
     return { removing: true }
@@ -265,7 +265,7 @@ async function finishLocalWorktreeRemoval({
         await pruneGitWorktrees({ cwd: repo.path, ...localWorktreeGitOptions }).catch(() => {})
         await cleanupPushTarget()
         context.runtime.clearOptimisticReconcileToken(args.worktreeId)
-        removeWorktreeMetadataAndTransientState(
+        await removeDeletedCheckoutMetadataAndTransientState(
           context,
           args.worktreeId,
           removalHostId,
@@ -301,7 +301,7 @@ async function finishLocalWorktreeRemoval({
   )
   context.runtime.clearOptimisticReconcileToken(args.worktreeId)
   await withWorktreeRemoveStageSpan('metadata_purge', 'local', async () => {
-    removeWorktreeMetadataAndTransientState(
+    await removeDeletedCheckoutMetadataAndTransientState(
       context,
       args.worktreeId,
       removalHostId,

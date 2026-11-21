@@ -1,9 +1,9 @@
 import type { AppState } from '@/store/types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { findFolderWorkspaceCandidateRepos } from '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
-import { isFolderRepo } from '../../../../../shared/repo-kind'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
+import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 /** Find registered Git repositories for worktree or folder scope, deduplicated by execution host and path. */
 export function actionsCandidateRepos(state: AppState, workspaceId: string | null): Repo[] {
