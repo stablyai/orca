@@ -85,6 +85,20 @@ function buildWslCodexCommand(
   }
 }
 
+/** A background poll must not start a stopped distro (E9); the home gate ran before slow awaits. */
+async function stoppedWslHomeRefusal(codexHomePath: string): Promise<ProviderRateLimits | null> {
+  const blocked = await blockedWslDistroForPath(codexHomePath)
+  if (!blocked) {
+    return null
+  }
+  return codexUnavailable(
+    blocked.state === 'stopped'
+      ? wslDistroStoppedMessage(blocked.distro, false)
+      : wslDistroUnverifiableMessage(blocked.distro),
+    'error'
+  )
+}
+
 function processEnvWithoutCodexHome(): NodeJS.ProcessEnv {
   const env = { ...process.env }
   delete env.CODEX_HOME
@@ -104,14 +118,9 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
   const codexHomePath = options?.codexHomePath
   const wslCodex = codexHomePath ? buildWslCodexCommand(codexHomePath, codexArgs) : null
   // The home was gated before the process lock, which can wait tens of seconds; a stop since must hold.
-  const blocked = wslCodex && codexHomePath ? await blockedWslDistroForPath(codexHomePath) : null
-  if (blocked) {
-    return codexUnavailable(
-      blocked.state === 'stopped'
-        ? wslDistroStoppedMessage(blocked.distro, false)
-        : wslDistroUnverifiableMessage(blocked.distro),
-      'error'
-    )
+  const refusal = wslCodex && codexHomePath ? await stoppedWslHomeRefusal(codexHomePath) : null
+  if (refusal) {
+    return refusal
   }
   if (options?.signal?.aborted) {
     return abortedCodexRateLimitResult()
@@ -220,6 +229,12 @@ async function readCodexRateLimits(
     }
   }
 
+  // The pending check reads state.sqlite over UNC after the auth probe and HTTP read.
+  const homeRefusal =
+    isWslHome && options?.codexHomePath ? await stoppedWslHomeRefusal(options.codexHomePath) : null
+  if (homeRefusal) {
+    return homeRefusal
+  }
   if (options?.codexHomePath && isCodexStateDbBackfillPending(options.codexHomePath)) {
     void startCodexStateDbBackfillRecoveryInBackground(options.codexHomePath)
     // HTTP usage never opens the state DB, so it cannot contend with the backfill (#15741).
