@@ -38,6 +38,7 @@ import { MobileBotComputerPage } from './MobileBotComputerPage'
 import { MobileBotWhoCanAskPage } from './MobileBotWhoCanAskPage'
 import { ensureBotHomeChat } from './host-bots-read'
 import { useMobileBotWebhookSettings } from './webhooks/MobileBotWebhooks'
+import { MobileBotToolsPage, MobileBotToolsRow } from './tools/MobileBotToolsPage'
 
 /** The bot's home folder on its computer (null until read), and where to go once Settings deletes it. */
 export type BotSettingsHome = { folderPath: string | null; onDeleted: () => void }
@@ -74,7 +75,8 @@ export function MobileBotSettingsTab(props: {
   const [tidyPage, setTidyPage] = useState<TidyUpPage | null>(null)
   const closePage = () => setPage(null)
   useBackClaim(
-    page && !lookPage && !tidyPage
+    // Tools claims Back itself, for the pages it opens.
+    page && page !== 'tools' && !lookPage && !tidyPage
       ? () => {
           closePage()
           return true
@@ -314,6 +316,9 @@ export function MobileBotSettingsTab(props: {
       />
     )
   }
+  if (page === 'tools') {
+    return <MobileBotToolsPage {...props} bot={bot} onBack={closePage} />
+  }
   if (page === 'who-can-ask') {
     return (
       <MobileBotWhoCanAskPage
@@ -393,6 +398,7 @@ export function MobileBotSettingsTab(props: {
         void save({ notifications: { ...bot.notifications, [key]: on } })
       }
       onDelete={() => setDeleting(true)}
+      accessRows={<MobileBotToolsRow {...props} bot={bot} onOpen={() => setPage('tools')} />}
       afterAccess={webhooks.row}
       header={
         <>
