@@ -169,13 +169,16 @@ it('registers on change only, retries undelivered posts, and rejects in-flight c
   await invoke('session.end', { reason: 'clear', sessionId })
   releaseTake()
   await command
+  expect(timers.map(({ ms }) => ms)).toEqual([1000])
+  await timers.shift()?.callback()
   await invoke('turn.start')
   await invoke('command.run')
   expect(posts.at(-1)?.action).toBe('end')
   expect(view).not.toHaveBeenCalled()
   expect(posts.filter(({ action }) => action === 'ack')).toHaveLength(0)
   sessionId = 'session-after-clear'
-  await invoke('session.start', { isInteractive: true, surface: 'terminal' })
+  // Claude runs no mod session.start for /clear; the next turn announces the new session.
+  await invoke('turn.start')
   await vi.waitFor(() => expect(posts.at(-1)).toMatchObject({ action: 'register', sessionId }))
   expect(posts.at(-1)?.instanceId).not.toBe(firstInstance)
   expect(posts.at(-1)?.view).toBeUndefined()

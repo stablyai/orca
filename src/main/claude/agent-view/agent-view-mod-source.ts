@@ -11,7 +11,6 @@ let endedSessionId
 let observedView
 let viewRevision = 0
 let retryDelay = 0
-let retryStartedAt = 0
 let timerQueued = false
 let announcedAt = 0
 
@@ -49,15 +48,9 @@ let announcedAt = 0
     } catch { timerQueued = false }
   }
 
-  // Undelivered: back off 1 s doubling to 60 s, for up to an hour (an Orca restart or quit).
-  async function retry($) {
-    const now = await $.clock.now()
-    if (!retryDelay) retryStartedAt = now
-    if (now - retryStartedAt > 3600000) {
-      retryDelay = 0 // the next failure opens a new window
-      return
-    }
-    retryDelay = Math.min(retryDelay ? retryDelay * 2 : 1000, 60000)
+  // Undelivered (Orca restarting, quit or unreachable): back off 1 s doubling to 5 min.
+  function retry($) {
+    retryDelay = Math.min(retryDelay ? retryDelay * 2 : 1000, 300000)
     schedule($, retryDelay)
   }
 
@@ -111,6 +104,8 @@ export function register(on) {
             (reply) => { if (!reply?.observed) void announce($) },
             () => { void announce($) }
           )
+        } else {
+          void announce($) // a /clear or resume started a session this mod has not announced
         }
       }
     }
@@ -135,7 +130,7 @@ export function register(on) {
     on('turn.start', async ($, event, next) => {
       const result = await next(event)
       try {
-        if (identity && (await $.clock.now()) - announcedAt >= 30000) void announce($)
+        if (paneKey && (!identity || (await $.clock.now()) - announcedAt >= 30000)) void announce($)
       } catch {}
       return result
     })
@@ -169,6 +164,8 @@ export function register(on) {
     endedSessionId = event.sessionId
     identity = undefined
     if (event.reason !== 'clear' && event.reason !== 'resume') paneKey = undefined
+    // This mod's session.start does not run again for /clear or resume; announce the next session.
+    else schedule($, 1000)
     return result
   })
 }

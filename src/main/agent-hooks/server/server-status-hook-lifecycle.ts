@@ -40,7 +40,8 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
     await respondAfterAgentToolPluginHooks(res, source, body, req.headers, accepted)
   }
 
-  /** Restored entries count only for panes whose hydrated status still names that Claude session. */
+  /** Restored entries count only for panes whose hydrated status still shows a live Claude. The
+   *  session may lag the registry after a crash; a click still needs the session to match. */
   protected restoreClaudeAgentViews(filePath: string): Promise<void> {
     const hooksOn = this.statusHooksEnabled
     return this.claudeAgentViews.restore(
@@ -48,11 +49,7 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
       (view) =>
         !hooksOn ||
         (!this.claudeAgentEnded(view.paneKey) &&
-          this.getStatusSnapshotForPane(view.paneKey).some(
-            (row) =>
-              row.agentType === 'claude' &&
-              (!row.providerSession?.id || row.providerSession.id === view.sessionId)
-          ))
+          this.getStatusSnapshotForPane(view.paneKey).some((row) => row.agentType === 'claude'))
     )
   }
 
