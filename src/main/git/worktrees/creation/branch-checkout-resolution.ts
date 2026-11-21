@@ -33,7 +33,7 @@ const lastUnresolved = new Map<string, readonly [gitDir: string, ref: string]>()
 const MAX_UNRESOLVED_HINTS = 64
 const PER_WORKTREE_REF = /^refs\/(?:worktree|bisect|rewritten)\//
 
-/** Git's in-use rule from files; `bareCommonDir`'s own HEAD checks nothing out. Reservations are separate. */
+/** Git's in-use rule from files for a branch (not an alias: see resolveAliasedBranch); `bareCommonDir`'s own HEAD checks nothing out. */
 export async function resolveBranchCheckouts(
   state: GitDirState,
   commonDir: string,
@@ -52,10 +52,6 @@ export async function resolveBranchCheckouts(
     const known = looseRefs.get(path) ?? readRefFile(path).catch(unlessUnreadable)
     looseRefs.set(path, known)
     return known
-  }
-  // update-ref follows a symref, which would move some other branch.
-  if ((await readLooseRef(fullRef, commonDir)).startsWith('ref: ')) {
-    return { kind: 'unknown' }
   }
   const owners: string[] = []
   const branches: [gitDir: string, ref: string][] = []
@@ -179,6 +175,34 @@ function rememberUnresolved(commonDir: string, gitDir: string, ref: string): voi
     }
     lastUnresolved.delete(stale)
   }
+}
+
+/** The branch `update-ref` moves for `fullRef`, following loose symrefs as Git does; undefined when the chain leaves `refs/heads/` or does not end. */
+async function followBranchAlias(commonDir: string, fullRef: string): Promise<string | undefined> {
+  let ref = fullRef
+  for (let hop = 0; hop <= MAX_SYMREF_HOPS; hop += 1) {
+    const loose = await readRefFile(join(commonDir, ref)).catch(unlessUnreadable)
+    if (!loose.startsWith('ref: ')) {
+      return ref
+    }
+    ref = loose.slice('ref: '.length)
+    if (loose === UNRESOLVED_HEAD || !ref.startsWith('refs/heads/')) {
+      return undefined
+    }
+  }
+  return undefined
+}
+
+/** The branch `update-ref` would move, and whether a rebase or bisect reserves it under either name. */
+export async function resolveAliasedBranch(
+  state: GitDirState,
+  commonDir: string,
+  fullRef: string
+): Promise<{ branch?: string; reserved: boolean }> {
+  const branch = await followBranchAlias(commonDir, fullRef)
+  const reserved =
+    state.reserved.has(fullRef) || (branch !== undefined && state.reserved.has(branch))
+  return { branch, reserved }
 }
 
 // Git cannot follow a ref it cannot read either, so that ref aliases nothing.

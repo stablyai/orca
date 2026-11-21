@@ -482,6 +482,29 @@ describe('local base refresh reads worktree ownership from git dirs with real Gi
     }
   )
 
+  it('moves the branch main aliases, as update-ref does', async () => {
+    const { repoPath, lockPath, localOid, remoteOid } = await createBehindRepo()
+    await rm(lockPath, { force: true })
+    git(repoPath, ['branch', '--quiet', 'actual', localOid])
+    git(repoPath, ['symbolic-ref', 'refs/heads/main', 'refs/heads/actual'])
+
+    await expect(refresh(repoPath)).resolves.toMatchObject({ status: 'updated' })
+
+    expect(git(repoPath, ['rev-parse', 'refs/heads/actual'])).toBe(remoteOid)
+  })
+
+  it('leaves main alone while a checkout has the branch main aliases', async () => {
+    const { repoPath, lockPath, localOid } = await createBehindRepo()
+    await rm(lockPath, { force: true })
+    git(repoPath, ['branch', '--quiet', 'actual', localOid])
+    git(repoPath, ['symbolic-ref', 'refs/heads/main', 'refs/heads/actual'])
+    git(repoPath, ['worktree', 'add', '--quiet', join(repoPath, '..', 'actual'), 'actual'])
+
+    await refresh(repoPath)
+
+    expect(git(repoPath, ['rev-parse', 'refs/heads/actual'])).toBe(localOid)
+  })
+
   it('moves main in a bare repo whose core.bare is unset', async () => {
     const { repoPath, lockPath, remoteOid } = await createBehindRepo()
     await rm(lockPath, { force: true })

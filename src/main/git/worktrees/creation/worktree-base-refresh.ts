@@ -16,7 +16,7 @@ import {
 } from '../../../../shared/worktree/base-refs/local-base-branch-fast-forward'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { hasLinkedPlaceholderHead, isSamePath, readGitDirState } from './git-dir-branch-state'
-import { resolveBranchCheckouts } from './branch-checkout-resolution'
+import { resolveAliasedBranch, resolveBranchCheckouts } from './branch-checkout-resolution'
 import { readOwnerCheckoutPath } from './checkout-dir-from-files'
 import {
   translateWslOutputPath,
@@ -183,8 +183,7 @@ function localBaseBranchGit(
       : join(repoPath, raw)
     return { raw, path }
   }
-  // core.bare as the common dir reads it (config.worktree included); a linked checkout's config could claim bare and
-  // hide a real primary checkout. Unset, Git infers bare only for the git dir itself. Asked once per refresh.
+  // core.bare as the common dir reads it (a linked checkout's config could claim bare and hide the primary); unset, Git infers bare only for the git dir itself.
   const bareRepos = new Map<string, Promise<boolean>>()
   const isBareRepo = (repoPath: string, commonDir: { raw: string; path: string }) => {
     const known =
@@ -214,17 +213,19 @@ function localBaseBranchGit(
       // Only a sole direct owner is located, and it stays owners[0].
       let located: Promise<string | undefined> | undefined
       const locate = (gitDir: string) => (located ??= ownerPathOf(repoPath, gitDir, commonDir.path))
-      if (state.reserved.has(fullRef)) {
+      const { branch, reserved } = await resolveAliasedBranch(state, commonDir.path, fullRef)
+      if (reserved) {
         return { reserved: true }
       }
       // A linked reftable placeholder already needs Git's listing, whatever core.bare says.
-      const use = hasLinkedPlaceholderHead(state, commonDir.path)
-        ? { kind: 'unknown' as const }
-        : await resolveBranchCheckouts(state, commonDir.path, fullRef, {
-            bareCommonDir: await bareDirOf(repoPath, commonDir),
-            firstOwnerSettles: occupancyOnly,
-            canLocate: async (gitDir) => (await locate(gitDir)) !== undefined
-          })
+      const use =
+        branch === undefined || hasLinkedPlaceholderHead(state, commonDir.path)
+          ? { kind: 'unknown' as const }
+          : await resolveBranchCheckouts(state, commonDir.path, branch, {
+              bareCommonDir: await bareDirOf(repoPath, commonDir),
+              firstOwnerSettles: occupancyOnly,
+              canLocate: async (gitDir) => (await locate(gitDir)) !== undefined
+            })
       if (use.kind === 'free') {
         return { reserved: false }
       }
@@ -242,13 +243,14 @@ function localBaseBranchGit(
         return { reserved: false, ownerPath: repoPath, sharedCheckout: true }
       }
       // What the files cannot tell: Git's listing decides.
-      const owner = (await listWorktrees(repoPath)).find((wt) => wt.branch === fullRef)
+      const owner = (await listWorktrees(repoPath)).find(
+        (wt) => wt.branch === fullRef || wt.branch === branch
+      )
       return { reserved: false, ...(owner ? { ownerPath: owner.path } : {}) }
     },
-    // The inspection just ran; the admitted file recheck below guards the gap.
     updateRefUnlessInUse: async (repoPath, fullRef, args) => {
       const commonDir = await commonDirOf(repoPath)
-      // Resolve before admission: the recheck below must not run Git while it holds the slot.
+      // The inspection just ran; resolve before admission, as the recheck below must not run Git in the slot.
       const bareCommonDir = await bareDirOf(repoPath, commonDir)
       let inUse = false
       try {
@@ -257,10 +259,12 @@ function localBaseBranchGit(
           // Recheck from files once admitted: running Git here could wait on its own slot.
           beforeStart: async () => {
             const state = await readGitDirState(commonDir.path)
+            const { branch, reserved } = await resolveAliasedBranch(state, commonDir.path, fullRef)
             inUse =
-              state.reserved.has(fullRef) ||
+              reserved ||
+              branch === undefined ||
               (
-                await resolveBranchCheckouts(state, commonDir.path, fullRef, {
+                await resolveBranchCheckouts(state, commonDir.path, branch, {
                   bareCommonDir,
                   firstOwnerSettles: true
                 })
