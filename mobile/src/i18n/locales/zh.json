@@ -819,7 +819,7 @@
         "tools_one": "{{count}} 个工具",
         "tools_other": "{{count}} 个工具",
         "off": "已关闭",
-        "notStarted": "未启动"
+        "notStarted": "尚未启动"
       },
       "title": "MCP 服务器",
       "notRunning": "MCP 服务器会在你发送下一条消息时连接",
@@ -5334,7 +5334,8 @@
       "staleDays": "{{days}} 天",
       "requests_other": "{{count}} 个请求",
       "modelDefault": "默认",
-      "staleNever": "从不"
+      "staleNever": "从不",
+      "deleteUnsavedDrafts": "它的文件夹中有未保存的编辑器更改。请先在 {{host}} 上保存或关闭这些更改，然后再删除"
     },
     "saveFailed": "无法保存",
     "sheet": {

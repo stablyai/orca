@@ -37,6 +37,8 @@ import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/publ
 export type PtyInventoryRefreshOptions = {
   includeForegroundProcessEvidence?: boolean
   refreshForegroundAgents?: boolean
+  /** false: accepting this answer leaves listings still in flight current, for a census others need not yield to. */
+  supersedesPendingListings?: boolean
 }
 
 export type RuntimePtyController = {

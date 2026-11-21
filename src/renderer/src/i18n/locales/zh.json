@@ -21044,7 +21044,6 @@
         "copyFailed": "复制失败",
         "copyIdentity": "复制 {{value0}}",
         "detachedCommit": "提交 {{head}}（非分支）",
-        "folder": "文件夹",
         "mainCheckout": "主工作副本",
         "turnWorking": "此聊天的智能体正在工作。请在其回合结束后再切换分支。",
         "worktree": "工作树"
@@ -21244,8 +21243,8 @@
           "failed": "失败",
           "failedReason": "失败：{{error}}",
           "disabled": "已禁用",
-          "notStarted": "未启动",
-          "needsAuthAfterSend": "需要登录，发送一条消息即可在这里登录"
+          "needsAuthAfterSend": "需要登录，发送一条消息即可在这里登录",
+          "notStarted": "尚未启动"
         },
         "signIn": {
           "action": "登录",
@@ -22454,12 +22453,12 @@
           "archiveUnavailable": "无法归档",
           "archiveScript": "有归档脚本",
           "removing": "正在移除中",
-          "folderWorkspaceSibling": "此工作区中的另一个仓库仍在使用中",
           "waiting": "等待中",
           "notRemovable": "主工作区或文件夹项目",
           "projectOff": "此项目已关闭清理",
           "rulesOff": "未开启任何规则",
-          "withDetail": "{{cause}} · {{detail}}"
+          "withDetail": "{{cause}} · {{detail}}",
+          "folderWorkspaceSibling": "此工作区中的另一个仓库仍在使用中"
         },
         "trigger": {
           "startup": "启动时",
@@ -25586,10 +25585,10 @@
       "1524825c2c": "切换工作区看板",
       "d286d1ab85": "清除窗格标题",
       "botItemBack": "返回事项列表",
-      "botItemPrevious": "上一个事项",
-      "botItemNext": "下一个事项",
       "tabNewBrowserSplitRight": "在右侧拆分窗格中新建浏览器标签页",
-      "5468defe61": "折叠/展开所有项目"
+      "5468defe61": "折叠/展开所有项目",
+      "botItemPrevious": "上一个事项",
+      "botItemNext": "下一个事项"
     },
     "group": {
       "global": "全局",
@@ -28263,10 +28262,10 @@
     },
     "host": {
       "errors": {
+        "signedOut": "要连接 {{service}}，请先让 {{host}} 登录 Orca Cloud",
         "accountChanged": "{{host}} 的 Orca 登录已变更。请重新开始",
         "accountChangedHere": "此电脑的 Orca 登录已变更。请重新开始",
-        "notRouted": "{{service}} 的页面必须在 Orca 中 {{host}} 的浏览器里打开。请重新连接 {{host}}，然后重新开始",
-        "signedOut": "要连接 {{service}}，请先让 {{host}} 登录 Orca Cloud"
+        "notRouted": "{{service}} 的页面必须在 Orca 中 {{host}} 的浏览器里打开。请重新连接 {{host}}，然后重新开始"
       },
       "thisComputer": "此电脑",
       "pageUnrouted": "无法连接到 {{host}}，因此无法在其浏览器中打开此页面。请重新连接 {{host}}，然后重试",
@@ -28420,7 +28419,20 @@
         "noMembers": "此群组中没有机器人"
       },
       "attachmentsHostTooOld": "{{host}} 需要更新才能在群组聊天中附加文件",
-      "handoffsPaused": "已在 {{count}} 次移交后暂停。回复即可继续"
+      "handoffsPaused": "已在 {{count}} 次移交后暂停。回复即可继续",
+      "pairedComputersOnly": "群组只能添加来自已配对电脑的机器人",
+      "needsLocalBot": "此群组至少需要一个位于这台电脑上的机器人",
+      "thisComputer": "这台电脑",
+      "remoteNeedsChat": "请先与 {{name}} 打开一次聊天，然后再将它添加到群组",
+      "remoteReplied": "已在 {{computer}} 上回复",
+      "remoteNotice": "未在 {{computer}} 上回答",
+      "remoteNotSent": "未发送到 {{computer}}",
+      "remoteUnknown": "送达状态未知",
+      "remoteStopped": "已在此处停止",
+      "remoteSending": "正在 {{computer}} 上提问…",
+      "remoteAsked": "已在 {{computer}} 上提问",
+      "remoteMayAnswer": "可能仍会在 {{computer}} 上回答",
+      "remoteShortened": "已缩短。完整回答在 {{computer}} 上"
     },
     "settingsView": {
       "pathCopied": "路径已复制",
@@ -28487,9 +28499,9 @@
       "cancel": "取消",
       "paused": "未登录期间已暂停",
       "needsSignIn": "需要登录",
+      "toldBot": "我现在已登录 Orca Cloud",
       "signedIn": "已登录 Orca",
       "continue": "继续",
-      "toldBot": "我现在已登录 Orca Cloud",
       "webhooksChat": "Webhook 需要登录 Orca Cloud。你登录后，我就会创建它",
       "eventsChat": "{{source}} 事件需要登录 Orca Cloud。你登录后，我就会保存这条规则",
       "webhooksHostChat": "Webhook 需要 {{host}} 登录 Orca Cloud。它登录后，我就会创建它",
@@ -28786,11 +28798,11 @@
         "off": "GitHub 即将推出",
         "rateLimited": "尝试次数过多。请等待一分钟，然后重试",
         "unavailable": "GitHub 未响应。请重试",
+        "signedOut": "登录 Orca Cloud 以连接 GitHub",
         "unreachable": "无法连接到 Orca Cloud。请检查网络连接，然后重试",
         "wrongAccount": "此登录是从另一个 Orca 账户发起的。请从当前账户重新使用 GitHub 登录",
         "alreadyLinked": "此 Orca 账户已关联到另一个 GitHub 用户。请先在“设置 › 机器人 › GitHub”中取消关联",
-        "replaced": "GitHub 连接未完成，可能已被之后发起的 Linear 或 GitHub 连接取代。请重新开始",
-        "signedOut": "登录 Orca Cloud 以连接 GitHub"
+        "replaced": "GitHub 连接未完成，可能已被之后发起的 Linear 或 GitHub 连接取代。请重新开始"
       },
       "howToAsk": "在议题或 PR 中提及 <code>{{mention}} {{handle}} …</code>",
       "allRepositories": "{{account}} 的所有仓库",
@@ -29182,10 +29194,10 @@
         "notAMember": "只有该 Linear 工作区的正式成员才能从中选择人员",
         "rateLimited": "尝试次数过多。请等待一分钟，然后重试",
         "unavailable": "Linear 未响应。请重试",
+        "signedOut": "登录 Orca Cloud 以连接 Linear",
         "unreachable": "无法连接到 Orca Cloud。请检查网络连接，然后重试",
         "wrongAccount": "此登录是从另一个 Orca 账户发起的。请从当前账户重新连接 Linear",
-        "replaced": "Linear 连接未完成，可能已被之后发起的 Linear 或 GitHub 连接取代。请重新开始",
-        "signedOut": "登录 Orca Cloud 以连接 Linear"
+        "replaced": "Linear 连接未完成，可能已被之后发起的 Linear 或 GitHub 连接取代。请重新开始"
       },
       "howToAsk": "在议题中提及 <code>@Orca {{handle}}</code>，或添加标签 <code>bot:{{handle}}</code>",
       "connect": {
@@ -29259,7 +29271,8 @@
     "errors": {
       "nameTaken": "已有其他机器人使用此名称",
       "generic": "出了点问题，请重试",
-      "avatarInvalid": "无法使用该图片。请选择 PNG 或 JPG 图片"
+      "avatarInvalid": "无法使用该图片。请选择 PNG 或 JPG 图片",
+      "unsavedDrafts": "它的文件夹中有未保存的编辑器更改。请先保存或关闭这些更改，然后再删除"
     },
     "slack": {
       "setup": {
@@ -29343,9 +29356,9 @@
         "unknownBot": "Orca Cloud 尚未识别此机器人。请过一分钟后重试",
         "wrongWorkspace": "此机器人的 Slack 应用位于另一个工作区。请先将其从 Slack 中移除",
         "notInstalled": "请先将此机器人添加到 Slack",
+        "signedOut": "登录 Orca Cloud 以连接 Slack",
         "unreachable": "无法连接到 Orca Cloud。请检查网络连接，然后重试",
-        "handOffExpired": "该移交已过期或已被使用。请重试",
-        "signedOut": "登录 Orca Cloud 以连接 Slack"
+        "handOffExpired": "该移交已过期或已被使用。请重试"
       },
       "howToAsk": "在频道中提及 <code>@{{name}}</code>，或给它发私信",
       "handOff": {

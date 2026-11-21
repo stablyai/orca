@@ -1,6 +1,7 @@
 import type { AgentMessageSource } from '../../shared/agent-session/journal/agent-session-message-source'
 import { chatMailPlace } from '../external-conversations/external-conversation-links'
 import * as botGroups from '../bots/bot-group-runtime'
+import * as botGroupRemote from '../bots/bot-group-remote-answers'
 import { chatReplyFollowUp } from './rpc/methods/orchestration/messaging/reply-follow-up'
 import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
 import { conversationRecordReader } from './orchestration/addressing/session-lineage/structured-session-lineage'
@@ -92,6 +93,10 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
 
   protected override chatConversationPlace(sessionId: string, from: AgentMessageSource) {
     return this.store ? chatMailPlace(this.store, sessionId, from) : null
+  }
+
+  protected override botGroupRoomMailArrived(groupId: string): void {
+    botGroupRemote.remoteRoomMailArrived(botGroups.runtimeBotGroups(this), groupId)
   }
 
   protected override leaveBotGroups(botId: string): Promise<void> {

@@ -729,6 +729,54 @@
     },
     "messageTime": {
       "yesterday": "Hier {{time}}"
+    },
+    "mcp": {
+      "status": {
+        "notStarted": "Non démarré",
+        "connected": "Connecté",
+        "failed": "Échec",
+        "failedReason": "Échec : {{error}}",
+        "finishOnPage": "Terminez sur la page qui s’est ouverte",
+        "needsAuth": "Connexion requise",
+        "needsAuthAfterSend": "Connexion requise. Envoyez un message pour vous connecter ici.",
+        "off": "Désactivé",
+        "pending": "Connexion…",
+        "tools_many": "{{count}} outils",
+        "tools_one": "{{count}} outil",
+        "tools_other": "{{count}} outils",
+        "waitingForSignIn": "En attente de connexion…"
+      },
+      "source": {
+        "project": "Projet",
+        "local": "Local",
+        "user": "Utilisateur",
+        "plugin": "Plugin",
+        "session": "Session"
+      },
+      "title": "Serveurs MCP",
+      "notRunning": "Les serveurs MCP se connectent lorsque vous envoyez votre prochain message.",
+      "unsupported": "Mettez Orca à jour sur l’hôte de ce chat pour gérer les serveurs MCP ici.",
+      "readFailed": "Impossible de charger les serveurs MCP.",
+      "retry": "Réessayer",
+      "empty": "Aucun serveur MCP n’est configuré pour ce chat.",
+      "signIn": "Se connecter",
+      "reconnect": "Reconnecter",
+      "toggleLabel": "Utiliser {{name}}",
+      "actionFailed": "Impossible d’effectuer cette action. Réessayez.",
+      "openAgain": "Rouvrir",
+      "pastePlaceholder": "Coller l’adresse",
+      "pasteLabel": "Adresse de la page de connexion",
+      "finish": "Terminer",
+      "signInUnfinished": "La connexion n’est pas encore terminée. Terminez-la sur la page qui s’est ouverte, puis touchez « Terminé ».",
+      "summary": {
+        "signingIn": "connexion à {{name}}",
+        "connected": "Connectés : {{count}}",
+        "needsAuth_one": "{{count}} connexion requise",
+        "needsAuth_other": "{{count}} connexions requises",
+        "failed": "Échecs : {{count}}",
+        "needsAuth_many": "{{count}} connexions requises"
+      },
+      "pasteHint": "Lorsque le navigateur arrive sur une page qui ne se charge pas, copiez son adresse et collez-la ici."
     }
   },
   "common": {

@@ -1,9 +1,11 @@
 import type { Bot } from '../bot-types'
 import { replaceImageReferences } from '../native-chat/attachments/native-chat-image-reference'
 import { NATIVE_CHAT_QUOTED_FILE_REFERENCE } from '../native-chat/input/composer/agent-image-paste'
-import type { BotGroup } from './bot-group-schema'
+import type { BotGroup, BotGroupRemoteMember } from './bot-group-schema'
 
-type Room = Pick<BotGroup, 'members' | 'replyMode'>
+type Room = Pick<BotGroup, 'members' | 'replyMode'> & {
+  remoteMembers?: readonly Pick<BotGroupRemoteMember, 'environmentId' | 'botId' | 'name'>[]
+}
 type Named = Pick<Bot, 'id' | 'name'>
 
 export type BotGroupMention = {
@@ -86,9 +88,35 @@ export function botGroupMentions(
   return mentions
 }
 
+/** A remote member's id in mentions and audiences (as `botGroupRemoteKey`): bot ids are unique only
+ *  per computer, so a remote one never collides with a local id. */
+export function remoteMemberKey(member: Pick<BotGroupRemoteMember, 'environmentId' | 'botId'>) {
+  return `remote:${member.environmentId}:${member.botId}`
+}
+
+type RoomRoster = Pick<Room, 'members' | 'remoteMembers'>
+
+/** The room's members as mentions name them: local bots by id, remote ones by their key. */
+function roomNamed(group: RoomRoster, bots: readonly Named[]): Named[] {
+  return [
+    ...bots.filter((bot) => group.members.some((member) => member.botId === bot.id)),
+    ...(group.remoteMembers ?? []).map((member) => ({
+      id: remoteMemberKey(member),
+      name: member.name
+    }))
+  ]
+}
+
+function roomMemberIds(group: RoomRoster): string[] {
+  return [
+    ...group.members.map((member) => member.botId),
+    ...(group.remoteMembers ?? []).map(remoteMemberKey)
+  ]
+}
+
 function roomMentions(
   text: string,
-  group: Pick<Room, 'members'>,
+  group: RoomRoster,
   bots: readonly Named[],
   nameEnd?: RegExp,
   unaddressed = UNADDRESSED_PROSE
@@ -97,8 +125,8 @@ function roomMentions(
     text
       .replace(FILE_REFERENCE, (file) => ' '.repeat(file.length))
       .replace(unaddressed, (prose) => ' '.repeat(prose.length)),
-    bots.filter((bot) => group.members.some((member) => member.botId === bot.id)),
-    group.members.map((member) => member.botId),
+    roomNamed(group, bots),
+    roomMemberIds(group),
     nameEnd
   )
 }
@@ -109,15 +137,24 @@ function roomMentions(
  *  speaker never itself. */
 export function botGroupReplyMentions(
   prose: string,
-  group: Pick<Room, 'members'>,
+  group: RoomRoster,
   bots: readonly Named[],
   speakerId: string
 ): { id: string; start: number }[] {
   const unquoted = prose.replace(QUOTED_ROOM_HISTORY, (quoted) => ' '.repeat(quoted.length))
   const named = new Map<string, number>()
+  // Names are matched against the whole room, so "@Sage Bot" never wakes a local "Sage"; but a
+  // hand-off wakes only this computer's members: a remote member is never asked by another bot.
+  const local = new Set(group.members.map((member) => member.botId))
   for (const mention of roomMentions(unquoted, group, bots, REPLY_MENTION_END, QUOTED_STRINGS)) {
     const [id] = mention.ids
-    if (mention.match === 'member' && id !== undefined && id !== speakerId && !named.has(id)) {
+    if (
+      mention.match === 'member' &&
+      id !== undefined &&
+      local.has(id) &&
+      id !== speakerId &&
+      !named.has(id)
+    ) {
       named.set(id, mention.start)
     }
   }
@@ -127,7 +164,7 @@ export function botGroupReplyMentions(
 /** Who the room's reply mode reaches when no one is mentioned; a default that left reaches no one. */
 function replyModeAudience(group: Room): string[] {
   const { replyMode } = group
-  const members = group.members.map((member) => member.botId)
+  const members = roomMemberIds(group)
   return replyMode.kind === 'all'
     ? members
     : replyMode.kind === 'bot' && members.includes(replyMode.botId)
@@ -222,12 +259,14 @@ export function formatBotGroupAudience(
     return t('bots.groups.onlyWhenMentioned', 'Only when mentioned')
   }
   if (ids.length === 1) {
+    // A remote member is named by its key, so it is found among the room's members, not this
+    // computer's bots.
     return (
-      bots.find((bot) => bot.id === ids[0])?.name ??
+      roomNamed(group, bots).find((bot) => bot.id === ids[0])?.name ??
       t('bots.groups.unavailableBot', 'Unavailable bot')
     )
   }
-  return ids.length === group.members.length
+  return ids.length === roomMemberIds(group).length
     ? t('bots.groups.allBotsCount', 'All bots · {{count}}', { count: ids.length })
     : t('bots.groups.mentionedCount', '{{count}} mentioned', { count: ids.length })
 }

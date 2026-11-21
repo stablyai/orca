@@ -22143,7 +22143,6 @@
         "copyFailed": "Failed to copy",
         "copyIdentity": "Copy {{value0}}",
         "detachedCommit": "Commit {{head}} (not a branch)",
-        "folder": "Folder",
         "mainCheckout": "Main checkout",
         "turnWorking": "This chat's agent is working. Switch branches after its turn finishes.",
         "worktree": "Worktree"
@@ -27155,7 +27154,8 @@
     "errors": {
       "nameTaken": "Another bot already has that name.",
       "generic": "Something went wrong. Try again.",
-      "avatarInvalid": "That picture could not be used. Pick a PNG or JPG image."
+      "avatarInvalid": "That picture could not be used. Pick a PNG or JPG image.",
+      "unsavedDrafts": "Its folder has unsaved editor changes. Save or close them, then delete again."
     },
     "slack": {
       "setup": {
@@ -28082,6 +28082,19 @@
       "filter": "Filter bots",
       "pickTwo": "Pick 2 or more bots",
       "sameComputer": "Bots in a group must be on the same computer.",
+      "pairedComputersOnly": "Groups can add bots only from paired computers.",
+      "needsLocalBot": "This group needs at least one bot on this computer.",
+      "thisComputer": "This computer",
+      "remoteNeedsChat": "Open a chat with {{name}} once, then add it to the group.",
+      "remoteReplied": "Replied on {{computer}}",
+      "remoteNotice": "Didn't answer on {{computer}}",
+      "remoteNotSent": "Not sent to {{computer}}",
+      "remoteUnknown": "Delivery unknown",
+      "remoteStopped": "Stopped here",
+      "remoteSending": "Asking on {{computer}}…",
+      "remoteAsked": "Asked on {{computer}}",
+      "remoteMayAnswer": "May still answer on {{computer}}.",
+      "remoteShortened": "Shortened. Full answer is on {{computer}}.",
       "homeUnavailable": "The home workspace for “{{name}}” on {{host}} is unavailable.",
       "createdNotOpened": "Created “{{name}}”, but couldn’t open it.",
       "retryOpen": "Retry",

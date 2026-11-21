@@ -5368,6 +5368,7 @@
       "couldNotFinishDetail": "An automation run or worker fails.",
       "nameTaken": "Another bot already has that name.",
       "deleteFailed": "Something went wrong. Try again.",
+      "deleteUnsavedDrafts": "Its folder has unsaved editor changes. Save or close them on {{host}}, then delete again.",
       "deleteTitle": "Delete {{name}}?",
       "deleteDetail": "Its folder stays at {{path}}, with its soul and memory.",
       "deleteConfirm": "Delete bot",

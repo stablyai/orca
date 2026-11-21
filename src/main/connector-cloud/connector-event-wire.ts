@@ -8,7 +8,8 @@ import {
 } from '../../shared/connectors/connector-cloud-contract'
 import {
   CONNECTOR_CLOUD_LONG_ANSWERS_FEATURE,
-  CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE
+  CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE,
+  CONNECTOR_REPLIES_PAUSED_FEATURE
 } from '../../shared/connector-cloud-features'
 import { CONNECTOR_LONG_ANSWER_BYTES } from '../../shared/connectors/connector-turn-activity-contract'
 import { SLACK_MIRROR_FEATURE } from '../../shared/connectors/connector-slack-mirror-contract'
@@ -100,6 +101,10 @@ export function toConnectorEvent(
             ...(event.mirror && cloudFeatures.has(SLACK_MIRROR_FEATURE) ? { mirror: true } : {}),
             // Any deployed cloud honours it, whatever its hello lists (design item 125 §3).
             ...(event.stateOnly ? { stateOnly: true } : {}),
+            // A cloud without the paused line would read it as nothing; only one that lists it.
+            ...(event.resumes && cloudFeatures.has(CONNECTOR_REPLIES_PAUSED_FEATURE)
+              ? { resumes: true }
+              : {}),
             ...(event.turnFor ? { turnFor: event.turnFor } : {})
           }
     case 'workers':

@@ -42,6 +42,7 @@ import { botHomeFolder } from '../../../bots/bot-home'
 import { listedBotsFacts } from './bots-list-facts'
 import { normalizeBotSidebarView } from '../../../../shared/bots/bot-sidebar-view'
 import { orcaSignInServer } from '../../../bots/orca-sign-in-server'
+import { refuseUnsavedFolderDrafts } from '../../repositories/folder-workspace-deletion'
 
 async function updateBot(params: BotUpdateParams, context: RpcContext) {
   if (params.updates.slackMirror !== undefined) {
@@ -241,6 +242,8 @@ export const BOT_METHODS = [
     handler: async (params, { runtime }) => {
       const bot = runtime.bots.list().find((entry) => entry.id === params.botId)
       if (bot) {
+        // Before anything goes: its home's purge would drop unsaved editor text, as on the desktop.
+        refuseUnsavedFolderDrafts(runtime.requireStore(), bot.folderWorkspaceId)
         // Listed first so a crash mid-delete still cleans up; nothing goes while the bot is here.
         await composioBotsOf(runtime).willDelete(bot.id)
         await forgetDeletedBotTools(runtime, bot)

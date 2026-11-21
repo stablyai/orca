@@ -6,7 +6,8 @@ import {
   botGroupMentionSegments,
   botGroupReplyMentions,
   botGroupSingleRecipient,
-  botGroupReplyDraft
+  botGroupReplyDraft,
+  formatBotGroupAudience
 } from './bot-group-mentions'
 
 const bots = [
@@ -214,5 +215,53 @@ describe("a member's reply hand-offs", () => {
     const everyone = [...members, { id: 'everyone', name: 'Everyone' }]
     const room = { members: everyone.map((bot) => ({ botId: bot.id, sessionId: bot.id })) }
     expect(botGroupReplyMentions('[@everyone] and @everyone', room, everyone, 'x')).toEqual([])
+  })
+})
+
+describe('a member on another computer', () => {
+  // Same bot id as a local member: only the host-qualified key tells them apart.
+  const mixed = {
+    ...room({ kind: 'bot', botId: 'scout' }),
+    remoteMembers: [{ environmentId: 'ws', botId: 'scout', name: 'Willow' }]
+  }
+  const label = (draft: string, group = mixed) =>
+    formatBotGroupAudience(
+      botGroupDraftAudience(draft, group, bots),
+      group,
+      bots,
+      (_k, fallback, values) => fallback.replace('{{count}}', String(values?.count ?? ''))
+    )
+
+  it('is reached by its mention or by everyone, never by the local default', () => {
+    expect(botGroupAudience('hi', mixed, bots)).toEqual(['scout'])
+    expect(botGroupAudience('@Willow hi', mixed, bots)).toEqual(['remote:ws:scout'])
+    expect(botGroupAudience('@everyone hi', mixed, bots)).toEqual([
+      'scout',
+      'sage',
+      'code-scout',
+      'remote:ws:scout'
+    ])
+  })
+
+  it('is named in the Replies label, and counted among all bots', () => {
+    expect(label('@Willow hi')).toBe('Willow')
+    expect(label('@everyone hi')).toBe('All bots · 4')
+  })
+
+  it("is never woken by another member's @Name reply", () => {
+    expect(botGroupReplyMentions('@Willow and @Sage', mixed, bots, 'scout')).toEqual([
+      { id: 'sage', start: 12 }
+    ])
+  })
+
+  it('keeps its longer name from waking a local member whose name starts it', () => {
+    const sageBot = {
+      ...mixed,
+      remoteMembers: [{ environmentId: 'ws', botId: 'sb', name: 'Sage Bot' }]
+    }
+    expect(botGroupReplyMentions('@Sage Bot can you check', sageBot, bots, 'scout')).toEqual([])
+    expect(botGroupReplyMentions('@Sage can you check', sageBot, bots, 'scout')).toEqual([
+      { id: 'sage', start: 0 }
+    ])
   })
 })
