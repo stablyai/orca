@@ -17,8 +17,9 @@ import { Text, View, type HostInstance, type TextInputInstance } from 'react-nat
 import { WifiOff } from 'lucide-react-native'
 import type { BotItem, BotItemCommentSkill } from '../../../../src/shared/bots/bot-items'
 import { folderWorkspaceKey } from '../../../../src/shared/workspace/identity/workspace-scope'
-import { pickedSkillsInText } from '../../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
-import { getNativeChatAgentProfile } from '../../../../src/shared/native-chat/input/commands/native-chat-agent-profiles'
+import { SkillRefLimitError } from '../../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
+import { sentBotItemCommentSkills } from '../../../../src/shared/bots/bot-item-comment-skills'
+import { MAX_SKILL_REFS } from '../../../../src/shared/rpc-contract/structured-agent-session/structured-agent-session-message-params'
 import { SKILL_DISCOVER_WORKSPACE_CAPABILITY } from '../../../../src/shared/skills/capabilities/skill-install-capability'
 import { MobileNativeChatComposerSuggestions } from '../../session/native-chat/composer/menus/MobileNativeChatComposerMenu'
 import { useMobileNativeChatComposerMenu } from '../../session/native-chat/composer/menus/use-mobile-native-chat-composer-menu'
@@ -99,7 +100,9 @@ export function MobileBotItemCommentBox({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const mic = useContext(BotItemCommentMicContext)
-  const [text, setTextState] = useState(() => drafts.get(item.uid) ?? '')
+  // Keyed by host too: two hosts can hold the same item ids.
+  const key = `${hostId}\0${item.uid}`
+  const [text, setTextState] = useState(() => drafts.get(key) ?? '')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const input = useRef<TextInputInstance>(null)
@@ -110,23 +113,23 @@ export function MobileBotItemCommentBox({
       setTextState(next)
       setError(null)
       if (next) {
-        drafts.set(uid, next)
+        drafts.set(key, next)
       } else {
-        drafts.delete(uid)
+        drafts.delete(key)
       }
     },
-    [uid]
+    [key]
   )
   useEffect(() => {
-    shownDrafts.set(uid, setText)
+    shownDrafts.set(key, setText)
     return () => {
-      shownDrafts.delete(uid)
+      shownDrafts.delete(key)
     }
-  }, [uid, setText])
+  }, [key, setText])
   // A late transcript lands in this item's draft even after the box closed.
   const insertDictation = useCallback(
-    (insert: (draft: string) => string) => setText(insert(drafts.get(uid) ?? '')),
-    [setText, uid]
+    (insert: (draft: string) => string) => setText(insert(drafts.get(key) ?? '')),
+    [setText, key]
   )
   const boxRef = useRef<HostInstance>(null)
   const catalog = useMobileNativeChatWorkspaceCatalog(
@@ -156,8 +159,8 @@ export function MobileBotItemCommentBox({
       const path = skill.path ?? skill.sources[0]?.skillFilePath
       const name = skill.token.slice(1)
       if (path) {
-        const kept = (pickedSkills.get(uid) ?? NO_SKILLS).filter((held) => held.name !== name)
-        pickedSkills.set(uid, [...kept, { name, path }])
+        const kept = (pickedSkills.get(key) ?? NO_SKILLS).filter((held) => held.name !== name)
+        pickedSkills.set(key, [...kept, { name, path }])
       }
     },
     focusField: () => input.current?.focus()
@@ -182,7 +185,7 @@ export function MobileBotItemCommentBox({
     client,
     uid,
     sessionId: attachTo,
-    editText: (change) => (shownDrafts.get(uid) ?? setText)(change(drafts.get(uid) ?? '')),
+    editText: (change) => (shownDrafts.get(key) ?? setText)(change(drafts.get(key) ?? '')),
     showToast
   })
   const micActive = mic?.micActive ?? false
@@ -209,13 +212,25 @@ export function MobileBotItemCommentBox({
   }
   const send = () => {
     if (canSend) {
-      const sigil = getNativeChatAgentProfile(bot.agent)?.skillPrefix ?? '/'
+      let skills: BotItemCommentSkill[]
+      try {
+        skills = sentBotItemCommentSkills(text, pickedSkills.get(key) ?? NO_SKILLS, bot.agent)
+      } catch (error) {
+        if (!(error instanceof SkillRefLimitError)) {
+          throw error
+        }
+        // The phone chat's words for the same refusal.
+        setError(
+          `Message not sent. Keep at most ${MAX_SKILL_REFS} selected skill files and try again.`
+        )
+        return
+      }
       onComment(
         text.trim(),
         photos.images.map((image) => image.path),
-        pickedSkillsInText(text, pickedSkills.get(uid) ?? NO_SKILLS, [sigil])
+        skills
       )
-      pickedSkills.delete(uid)
+      pickedSkills.delete(key)
       setText('')
       photos.clear()
     }

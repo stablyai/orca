@@ -160,3 +160,32 @@ it("offers the chat composer's files at @ and skills at /, and sends a picked sk
     [{ name: 'release-notes', path: '/bots/b/.claude/skills/release-notes/SKILL.md' }]
   )
 })
+
+it("keeps each host's draft of the same item id apart", async () => {
+  const box = (hostId: string) =>
+    createElement(MobileBotItemCommentBox, {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every read the box makes is mocked.
+      client: {} as RpcClient,
+      hostId,
+      bot: { folderWorkspaceId: 'fw-1', agent: 'claude' },
+      item: makeTestBotItem(10),
+      online: true,
+      hostName: hostId,
+      attachTo: null,
+      onComment: () => {},
+      showToast: () => {}
+    })
+  let first!: ReactTestRenderer
+  await act(async () => {
+    first = create(box('studio'))
+  })
+  const fieldOf = (tree: ReactTestRenderer) =>
+    tree.root.find((node) => String(node.type) === 'Field')
+  await act(async () => fieldOf(first).props.onChangeText('Studio only'))
+
+  let second!: ReactTestRenderer
+  await act(async () => {
+    second = create(box('laptop'))
+  })
+  expect(fieldOf(second).props.value).toBe('')
+})
