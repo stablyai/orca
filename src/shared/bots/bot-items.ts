@@ -45,6 +45,8 @@ export const BOT_ITEM_LIMITS = {
   listPage: 50,
   /** Also the most items one list read names by uid. */
   listPageMax: 100,
+  /** The most Closed items one list read returns (`closedLimit`): a list's loaded depth read again. */
+  closedLoadMax: 1_000,
   eventsPage: 50
 } as const
 

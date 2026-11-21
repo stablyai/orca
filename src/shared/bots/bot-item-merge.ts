@@ -22,10 +22,15 @@ export function mergeBotItemEvents(
   return [...first, ...second.filter((event) => !seen.has(event.id))]
 }
 
-/** A list read with the named items read again, shaped as a whole read: each named one replaced,
- *  dropped when the read no longer has it (deleted), or added; every open item and, while more pages
- *  remain, the first page of Closed with its end moved to match. Every other item keeps its identity.
- *  `previous` itself when nothing changed. */
+/** How many Closed items a list read holds: the depth its owner has loaded. */
+export function botItemsClosedLoaded(read: BotItemsListRead): number {
+  return read.items.filter(isClosedItem).length
+}
+
+/** A list read with the named items read again, shaped as a whole read of the same depth: each named
+ *  one replaced, dropped when the read no longer has it (deleted), or added; every open item and the
+ *  loaded Closed depth, its end moved to match. Every other item keeps its identity. `previous` itself
+ *  when nothing changed. */
 export function mergeNamedBotItems(
   previous: BotItemsListRead,
   named: BotItemsListRead,
@@ -35,7 +40,6 @@ export function mergeNamedBotItems(
   const fresh = new Map(
     named.items.flatMap((item) => (asked.has(item.uid) ? [[item.uid, item] as const] : []))
   )
-  const copies = new Map<string, BotItem | null>(uids.map((uid) => [uid, fresh.get(uid) ?? null]))
   let same = true
   const items = previous.items.flatMap((item) => {
     if (!asked.has(item.uid)) {
@@ -44,56 +48,70 @@ export function mergeNamedBotItems(
     const next = fresh.get(item.uid)
     fresh.delete(item.uid)
     const kept = next ? reuseEqualJson(item, next) : null
-    copies.set(item.uid, kept)
     same &&= kept === item
     return kept ? [kept] : []
   })
-  // A Closed item stays in or joins the read only above where its first page ends: one below (new to
-  // it, or moved down by a host clock set back) belongs to a later page, and its copy reaches loaded
-  // pages through this step. So the page's new end never passes its old one.
-  const firstPageEnd = botItemCursorPlace(previous.nextClosedCursor)
-  const onFirstPage = (item: BotItem) =>
-    !isClosedItem(item) || !firstPageEnd || botItemReaches(item, firstPageEnd)
-  const added = [...fresh.values()].filter(onFirstPage)
-  const movedDown = items.some((item) => asked.has(item.uid) && !onFirstPage(item))
-  same &&= !movedDown
+  // A Closed item stays in or joins the read only above where its loaded Closed ends: one below (new
+  // to it, or moved down by a host clock set back) is on a page not loaded yet, which reads it then.
+  const loadedEnd = botItemCursorPlace(previous.nextClosedCursor)
+  const loaded = (item: BotItem) =>
+    !isClosedItem(item) || !loadedEnd || botItemReaches(item, loadedEnd)
+  const added = [...fresh.values()].filter(loaded)
+  same &&= items.every(loaded)
   const counts = reuseEqualJson(previous.counts, named.counts)
-  // A named item this read didn't hold may sit in a loaded Closed page: its step still tells them.
-  const held = new Set(previous.items.map((item) => item.uid))
-  const elsewhere = uids.some((uid) => !held.has(uid))
-  if (same && added.length === 0 && counts === previous.counts && !elsewhere) {
+  if (same && added.length === 0 && counts === previous.counts) {
     return previous.seenEventId === named.seenEventId
       ? previous
-      : stepFrom(previous, copies, { ...previous, seenEventId: named.seenEventId })
+      : { ...previous, seenEventId: named.seenEventId }
   }
   // In the host's order (open, then Closed; each newest activity first), as a whole read has them.
-  const ordered = [...items.filter(onFirstPage), ...added].sort(
+  const ordered = [...items.filter(loaded), ...added].sort(
     (a, b) =>
       Number(isClosedItem(a)) - Number(isClosedItem(b)) ||
       b.lastActivityAt - a.lastActivityAt ||
       b.number - a.number
   )
-  const openCount = ordered.findIndex(isClosedItem)
-  const closedFrom = openCount === -1 ? ordered.length : openCount
-  // More pages remain: Closed keeps its first page, ending where the page now ends.
-  const page = previous.nextClosedCursor
-    ? ordered.slice(0, closedFrom + BOT_ITEM_LIMITS.listPage)
-    : ordered
+  // No deeper than it was loaded (a page at least): rows pushed past the end wait behind Show more.
+  const depth = Math.max(BOT_ITEM_LIMITS.listPage, botItemsClosedLoaded(previous))
+  const firstClosed = ordered.findIndex(isClosedItem)
+  const keep = (firstClosed === -1 ? ordered.length : firstClosed) + depth
+  const page = ordered.slice(0, keep)
   const end = page.at(-1)
   const cursor =
-    previous.nextClosedCursor && page.length < ordered.length && end
-      ? { nextClosedCursor: `${end.lastActivityAt}:${end.number}` }
+    page.length < ordered.length && end
+      ? `${end.lastActivityAt}:${end.number}`
       : previous.nextClosedCursor
-        ? { nextClosedCursor: previous.nextClosedCursor }
-        : {}
   const { nextClosedCursor: _old, ...rest } = previous
-  return stepFrom(previous, copies, {
+  return {
     ...rest,
     items: page,
     counts,
     seenEventId: named.seenEventId,
-    ...cursor
+    ...(cursor ? { nextClosedCursor: cursor } : {})
+  }
+}
+
+/** A list read with the next Closed page read after it: the page's Closed items appended (a copy it
+ *  already held replaced by the page's newer one), and its end moved to the page's. */
+export function appendBotItemsClosedPage(
+  previous: BotItemsListRead,
+  page: BotItemsListRead
+): BotItemsListRead {
+  const fresh = new Map(
+    page.items.flatMap((item) => (isClosedItem(item) ? [[item.uid, item] as const] : []))
+  )
+  const items = previous.items.map((item) => {
+    const next = fresh.get(item.uid)
+    fresh.delete(item.uid)
+    return next ? reuseEqualJson(item, next) : item
   })
+  const { nextClosedCursor: _old, ...rest } = previous
+  return {
+    ...rest,
+    items: [...items, ...fresh.values()],
+    counts: reuseEqualJson(previous.counts, page.counts),
+    ...(page.nextClosedCursor ? { nextClosedCursor: page.nextClosedCursor } : {})
+  }
 }
 
 /** A Closed cursor's place: `at:number` of the last row before it. */
@@ -114,44 +132,4 @@ export function botItemReaches(item: BotItem, place: { at: number; number: numbe
 
 function isClosedItem(item: BotItem): boolean {
   return item.status === 'done' || item.status === 'canceled'
-}
-
-type NamedStep = {
-  from: WeakRef<BotItemsListRead>
-  /** Each named item's copy now; null for one the host no longer has. */
-  copies: ReadonlyMap<string, BotItem | null>
-}
-
-/** Each merged read's step: the read it was merged into, held weakly so a chain of reads isn't kept. */
-const steps = new WeakMap<BotItemsListRead, NamedStep>()
-
-function stepFrom(
-  previous: BotItemsListRead,
-  copies: ReadonlyMap<string, BotItem | null>,
-  next: BotItemsListRead
-): BotItemsListRead {
-  steps.set(next, { from: new WeakRef(previous), copies })
-  return next
-}
-
-/** The named items read again between `from` and `read`, each with its newest copy (null: gone), when
- *  `read` is `from` with only named items merged in (over at most `limit` merges); null when it isn't,
- *  or the chain is no longer known. */
-export function botItemsNamedSince(
-  read: BotItemsListRead,
-  from: BotItemsListRead,
-  limit = 20
-): Map<string, BotItem | null> | null {
-  const copies = new Map<string, BotItem | null>()
-  let at: BotItemsListRead | undefined = read
-  for (let hop = 0; at && at !== from && hop < limit; hop++) {
-    const step = steps.get(at)
-    if (!step) {
-      return null
-    }
-    // Walking back from the newest: the first copy seen is the newest.
-    step.copies.forEach((copy, uid) => copies.has(uid) || copies.set(uid, copy))
-    at = step.from.deref()
-  }
-  return at === from ? copies : null
 }

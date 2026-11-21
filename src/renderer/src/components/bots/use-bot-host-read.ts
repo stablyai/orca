@@ -14,7 +14,7 @@ import { reuseEqualJson } from '../../../../shared/reuse-equal-json'
 import type { BotChangeKind, BotChangeScope } from '../../../../shared/bots/bot-change-scope'
 import {
   addBotReadAsk,
-  askedParts,
+  botReadLoadAsk,
   type BotHostReadOptions,
   type BotReadAsk
 } from './bot-host-read-asks'
@@ -36,16 +36,21 @@ type BotReadEntry<T> = {
   /** Asked again while a read ran: one more read follows it. */
   again: boolean
   startedAt: number
-  /** What the asks since the last read began cover: some parts (`BotHostReadParts`), or the whole. */
+  /** What the asks since the last read began cover: some parts, or the whole. */
   parts: BotReadAsk
+  /** Asks for more (`requestMore`) waiting on the next read, each told the value it lands. */
+  more: ((value: T | null) => void)[]
 }
 
 /** One host read about a bot (its Activity, its chats tree), shared by every surface showing that bot. */
 export type BotHostRead<T> = {
   /** The kinds of change to the bot that can change this read. */
   kinds: readonly BotChangeKind[]
-  /** `parts`: only these changed (`BotHostReadParts`); absent: read whole. */
+  /** `parts`: only these changed (`BotHostReadOptions`); absent: read whole. */
   request: (bot: BotRef, parts?: readonly string[] | null) => void
+  /** More of the value (its next page), read at once in turn with the rest; the value it lands, or
+   *  null when that read failed or the last surface closed. */
+  requestMore: (bot: BotRef) => Promise<T | null>
   partsOf: (scope: BotChangeScope | undefined, botId: string) => readonly string[] | null
   subscribe: (bot: BotRef, listener: () => void) => () => void
   snapshot: (key: string) => T | null
@@ -66,9 +71,8 @@ export function createBotHostRead<T>(
   minIntervalMs = 0,
   /** Keep each bot's last value after its last surface closes, shown at once when one opens again while it re-reads. */
   keepLast = false,
-  options: BotHostReadOptions<T> = {}
+  options?: BotHostReadOptions<T>
 ): BotHostRead<T> {
-  const { parts } = options
   const entries = new Map<string, BotReadEntry<T>>()
   // One value per bot, replaced by each read that lands.
   const lastValues = new Map<string, T>()
@@ -89,7 +93,8 @@ export function createBotHostRead<T>(
         inFlight: false,
         again: false,
         startedAt: 0,
-        parts: null
+        parts: null,
+        more: []
       }
       entries.set(key, entry)
     }
@@ -102,20 +107,24 @@ export function createBotHostRead<T>(
     entry.startedAt = Date.now()
     // Parts only onto a good value: after a failed read, what it missed is unknown.
     const previous = entry.value
-    const named = parts && previous && !entry.failure ? askedParts(entry.parts) : null
+    const ask = botReadLoadAsk(
+      entry.parts,
+      entry.more.length > 0,
+      Boolean(previous && !entry.failure)
+    )
+    const waiters = entry.more
     entry.parts = null
+    entry.more = []
+    let landed: T | null = null
     try {
-      const result = await callBotRpc<never>(entry.bot, method, {
-        botId: entry.bot.id,
-        ...options.params,
-        ...(named && parts ? parts.params(named) : {})
-      })
+      const value = options
+        ? await options.load(entry.bot, previous, ask)
+        : reuseEqualJson(
+            previous,
+            pick(await callBotRpc<never>(entry.bot, method, { botId: entry.bot.id }))
+          )
       if (current === entry.latest && entries.get(key) === entry) {
-        // What the answer repeats keeps its identity; an unchanged answer tells no one.
-        const value =
-          named && parts && previous
-            ? parts.merge(previous, pick(result), named)
-            : reuseEqualJson(entry.value, pick(result))
+        // An unchanged answer tells no one.
         if (value !== entry.value || entry.failure) {
           entry.value = value
           entry.failure = null
@@ -124,6 +133,7 @@ export function createBotHostRead<T>(
           }
           entry.listeners.forEach((listener) => listener())
         }
+        landed = value
       }
     } catch (error) {
       console.error(failure, error)
@@ -132,10 +142,11 @@ export function createBotHostRead<T>(
         entry.listeners.forEach((listener) => listener())
       }
     } finally {
+      waiters.forEach((tell) => tell(landed))
       entry.inFlight = false
       if (entry.again && entries.get(key) === entry) {
         entry.again = false
-        schedule(key, entry)
+        schedule(key, entry, entry.more.length > 0)
       }
     }
   }
@@ -143,17 +154,29 @@ export function createBotHostRead<T>(
   // Asks from one commit's consumers, and those while a read runs, share one read.
   const request = (bot: BotRef, named?: readonly string[] | null): void => {
     const entry = entryFor(bot)
-    entry.parts = addBotReadAsk(entry.parts, parts ? named : null, parts?.max ?? 0)
+    entry.parts = addBotReadAsk(entry.parts, options ? named : null, options?.maxParts ?? 0)
     schedule(botRefKey(bot), entry)
   }
 
-  const schedule = (key: string, entry: BotReadEntry<T>): void => {
+  const requestMore = (bot: BotRef): Promise<T | null> => {
+    const entry = entryFor(bot)
+    return new Promise((tell) => {
+      entry.more.push(tell)
+      schedule(botRefKey(bot), entry, true)
+    })
+  }
+
+  /** `now`: an owner's ask for more, which waits for no gap. */
+  const schedule = (key: string, entry: BotReadEntry<T>, now = false): void => {
     if (entry.inFlight) {
       entry.again = true
       return
     }
-    if (entry.scheduled) {
+    if (entry.scheduled && !(now && entry.timer)) {
       return
+    }
+    if (entry.timer) {
+      clearTimeout(entry.timer)
     }
     entry.scheduled = true
     const start = (): void => {
@@ -164,10 +187,11 @@ export function createBotHostRead<T>(
         void read(key, entry)
       }
     }
-    const wait = entry.startedAt + minIntervalMs - Date.now()
+    const wait = now ? 0 : entry.startedAt + minIntervalMs - Date.now()
     if (wait > 0) {
       entry.timer = setTimeout(start, wait)
     } else {
+      entry.timer = null
       queueMicrotask(start)
     }
   }
@@ -175,7 +199,8 @@ export function createBotHostRead<T>(
   return {
     kinds,
     request,
-    partsOf: (scope, botId) => parts?.of(scope, botId) ?? null,
+    requestMore,
+    partsOf: (scope, botId) => options?.partsOf(scope, botId) ?? null,
     subscribe: (bot, listener) => {
       const key = botRefKey(bot)
       const entry = entryFor(bot)
@@ -188,6 +213,7 @@ export function createBotHostRead<T>(
           if (entry.timer) {
             clearTimeout(entry.timer)
           }
+          entry.more.splice(0).forEach((tell) => tell(null))
           entries.delete(key)
         }
       }

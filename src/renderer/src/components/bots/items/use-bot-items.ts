@@ -7,10 +7,12 @@ import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItem, BotItemEvent, BotItemStatus } from '../../../../../shared/bots/bot-items'
 import type { BotItemsListRead } from '../../../../../shared/bots/bot-item-schema'
 import { BOT_ITEM_LIMITS } from '../../../../../shared/bots/bot-items'
-import { mergeNamedBotItems } from '../../../../../shared/bots/bot-item-merge'
+import {
+  loadBotItemsList,
+  type BotItemsListCall
+} from '../../../../../shared/bots/bot-items-list-load'
 import { botChangeItemUids, type BotChangeKind } from '../../../../../shared/bots/bot-change-scope'
-import { reuseEqualJson } from '../../../../../shared/reuse-equal-json'
-import { addBotReadAsk, type BotReadAsk } from '../bot-host-read-asks'
+import { addBotReadAsk, botReadLoadAsk, type BotReadAsk } from '../bot-host-read-asks'
 import { createBotHostRead, useBotHostRead, type BotHostReadState } from '../use-bot-host-read'
 import { useBotHostReadState } from '../use-bot-host-read-state'
 
@@ -24,6 +26,17 @@ const ITEMS_KINDS: readonly BotChangeKind[] = ['items', 'workers']
 /** Rows need no description, done means or close note: the opened item reads its own. */
 const SUMMARY = { summary: true }
 
+/** The list call for a bot (or some of its chats), every read a summary. */
+function listCall(bot: BotRef, chatIds: readonly string[] | null): BotItemsListCall {
+  return (params) =>
+    callBotRpc<BotItemsRead>(bot, 'bots.items.owner.list', {
+      botId: bot.id,
+      ...chatScope(chatIds),
+      ...SUMMARY,
+      ...params
+    })
+}
+
 const itemsRead = createBotHostRead<BotItemsRead>(
   'bots.items.owner.list',
   (result: BotItemsRead) => result,
@@ -32,15 +45,16 @@ const itemsRead = createBotHostRead<BotItemsRead>(
   ITEMS_MIN_READ_GAP_MS,
   false,
   {
-    params: SUMMARY,
-    parts: {
-      of: (scope, botId) => botChangeItemUids(scope, botId, ITEMS_KINDS),
-      params: (uids) => ({ uids }),
-      merge: mergeNamedBotItems,
-      max: BOT_ITEM_LIMITS.listPageMax
-    }
+    partsOf: (scope, botId) => botChangeItemUids(scope, botId, ITEMS_KINDS),
+    maxParts: BOT_ITEM_LIMITS.listPageMax,
+    load: (bot, previous, ask) => loadBotItemsList(listCall(bot, null), previous, ask)
   }
 )
+
+/** The bot's next Closed page, read in turn with its list's other reads; the list as it lands. */
+export function readMoreBotItems(bot: BotRef): Promise<BotItemsRead | null> {
+  return itemsRead.requestMore(bot)
+}
 
 export function useBotItems(bot: Bot | null): {
   read: BotItemsRead | null
@@ -102,50 +116,53 @@ export function useStableBotItemChats(chatIds: readonly string[] | null): readon
 }
 
 /** These chats' items while the filter shows them, with their own counts and Closed pages; re-read on
- *  change. */
+ *  change, one read at a time. */
 export function useBotChatItems(
   bot: BotRef,
   chatIds: readonly string[] | null
-): { read: BotItemsRead | null; failed: boolean; retry: () => void } {
+): {
+  read: BotItemsRead | null
+  failed: boolean
+  retry: () => void
+  /** Their next Closed page; the list as it lands, or null when that read failed. */
+  readMore: () => Promise<BotItemsRead | null>
+} {
   const { hostId, id } = bot
   const chats = useStableBotItemChats(chatIds)
   const [read, setRead] = useState<{ chats: readonly string[]; value: BotItemsRead } | null>(null)
   const [failed, setFailed] = useState(false)
   const [attempt, setAttempt] = useState(0)
+  const moreRef = useRef<() => Promise<BotItemsRead | null>>(async () => null)
   useEffect(() => {
     if (chats === null) {
       return
     }
-    const scope = chatScope(chats)
+    const call = listCall({ hostId, id }, chats)
     let live = true
     let last: BotItemsRead | null = null
     let missed = false
-    // One read out at a time; notices during it share one more after it, so the last to land is newest.
+    // One read out at a time; asks during it share one more after it, so the last to land is newest.
     let reading = false
     let waiting: BotReadAsk = null
+    let more: ((value: BotItemsRead | null) => void)[] = []
     const start = (): void => {
-      if (reading || !waiting) {
+      if (reading || (!waiting && more.length === 0)) {
         return
       }
       reading = true
       // After a failed read, what it missed is unknown: the next reads whole.
-      const asked = last && !missed && waiting instanceof Set ? [...waiting] : null
+      const ask = botReadLoadAsk(waiting, more.length > 0, Boolean(last && !missed))
+      const tell = more
       waiting = null
-      callBotRpc<BotItemsRead>({ hostId }, 'bots.items.owner.list', {
-        botId: id,
-        ...scope,
-        ...SUMMARY,
-        ...(asked ? { uids: asked } : {})
-      })
+      more = []
+      let landed: BotItemsRead | null = null
+      loadBotItemsList(call, last, ask)
         .then((value) => {
           if (live) {
-            // What the answer repeats keeps its identity. A whole read is a new read even when equal,
-            // so loaded Closed pages are read again after it.
-            const merged = asked && last ? mergeNamedBotItems(last, value, asked) : null
-            const next = merged ?? reuseEqualJson(last, value)
-            if (next !== last || !merged) {
-              last = next === last ? { ...next } : next
-              setRead({ chats, value: last })
+            landed = value
+            if (value !== last) {
+              last = value
+              setRead({ chats, value })
             }
             missed = false
             setFailed(false)
@@ -154,14 +171,12 @@ export function useBotChatItems(
         .catch((error: unknown) => {
           console.warn('[bots] items: reading a chat’s items failed', error)
           missed = true
-          if (asked) {
-            // Named items that failed are read whole next.
-            waiting = 'whole'
-          } else if (live) {
+          if (live) {
             setFailed(true)
           }
         })
         .finally(() => {
+          tell.forEach((told) => told(landed))
           reading = false
           if (live) {
             start()
@@ -172,6 +187,11 @@ export function useBotChatItems(
       waiting = addBotReadAsk(waiting, uids, BOT_ITEM_LIMITS.listPageMax)
       start()
     }
+    moreRef.current = () =>
+      new Promise((told) => {
+        more.push(told)
+        start()
+      })
     load(null)
     const stop = onBotsChanged(
       (_host, change) => load(botChangeItemUids(change, id, ITEMS_KINDS)),
@@ -181,29 +201,12 @@ export function useBotChatItems(
     return () => {
       live = false
       stop()
+      more.splice(0).forEach((told) => told(null))
     }
   }, [hostId, id, chats, attempt])
   const retry = useCallback(() => setAttempt((value) => value + 1), [])
-  return { read: read && read.chats === chats ? read.value : null, failed, retry }
-}
-
-/** Closed items past the first page (of some chats', given them), read on Show more. */
-export async function readMoreClosedItems(
-  bot: BotRef,
-  cursor: string,
-  chatIds: readonly string[] | null
-): Promise<{ items: BotItem[]; nextClosedCursor?: string }> {
-  const result = await callBotRpc<BotItemsRead>(bot, 'bots.items.owner.list', {
-    botId: bot.id,
-    closedCursor: cursor,
-    closedOnly: true,
-    ...SUMMARY,
-    ...chatScope(chatIds)
-  })
-  return {
-    items: result.items.filter((item) => item.status === 'done' || item.status === 'canceled'),
-    ...(result.nextClosedCursor ? { nextClosedCursor: result.nextClosedCursor } : {})
-  }
+  const readMore = useCallback(() => moreRef.current(), [])
+  return { read: read && read.chats === chats ? read.value : null, failed, retry, readMore }
 }
 
 export type BotItemShow = {

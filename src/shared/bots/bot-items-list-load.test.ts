@@ -1,0 +1,103 @@
+import { describe, expect, it } from 'vitest'
+import { makeTestBotItem } from './bot-item.test-fixture'
+import type { BotItem } from './bot-items'
+import type { BotItemsListRead } from './bot-item-schema'
+import { loadBotItemsList, type BotItemsListCall } from './bot-items-list-load'
+
+const closed = (item: BotItem) => item.status === 'done' || item.status === 'canceled'
+const order = (a: BotItem, b: BotItem) => b.lastActivityAt - a.lastActivityAt || b.number - a.number
+
+/** A host's list call over these items, as `bots.items.owner.list` pages them; `older` ignores the
+ *  params a host before them doesn't know (it answers every open item and one Closed page). */
+function host(items: BotItem[], older = false): BotItemsListCall {
+  return async (params) => {
+    const counts: Partial<Record<BotItem['status'], number>> = {}
+    items.forEach((item) => (counts[item.status] = (counts[item.status] ?? 0) + 1))
+    if (!older && Array.isArray(params.uids)) {
+      const uids = new Set(params.uids)
+      return { items: items.filter((item) => uids.has(item.uid)), counts, seenEventId: 'e0' }
+    }
+    const size = !older && typeof params.closedLimit === 'number' ? params.closedLimit : 50
+    const [at, number] = String(params.closedCursor ?? '')
+      .split(':')
+      .map(Number)
+    const after = (item: BotItem) =>
+      !Number.isFinite(at) ||
+      item.lastActivityAt < at! ||
+      (item.lastActivityAt === at && item.number < number!)
+    const open = !older && params.closedOnly ? [] : items.filter((item) => !closed(item))
+    const rest = items.filter((item) => closed(item) && after(item)).sort(order)
+    const page = rest.slice(0, size)
+    const end = page.at(-1)
+    return {
+      items: [...open.sort(order), ...page],
+      counts,
+      seenEventId: 'e0',
+      ...(rest.length > size && end
+        ? { nextClosedCursor: `${end.lastActivityAt}:${end.number}` }
+        : {})
+    }
+  }
+}
+
+function seeded(): BotItem[] {
+  return Array.from({ length: 300 }, (_, index) =>
+    makeTestBotItem(index + 1, {
+      uid: `i${index + 1}`,
+      status: index < 100 ? 'working' : 'done',
+      lastActivityAt: index + 1
+    })
+  )
+}
+
+const WHOLE = { whole: true, parts: [], more: false }
+const MORE = { whole: false, parts: [], more: true }
+
+async function drain(call: BotItemsListCall, read: BotItemsListRead): Promise<BotItemsListRead> {
+  let value = read
+  while (value.nextClosedCursor) {
+    value = await loadBotItemsList(call, value, MORE)
+  }
+  return value
+}
+
+describe('loadBotItemsList', () => {
+  it('reaches every Closed item once through Show more after named changes at the loaded edge', async () => {
+    const items = seeded()
+    const call = host(items)
+    let read = await loadBotItemsList(call, null, WHOLE)
+    read = await loadBotItemsList(call, read, MORE)
+    expect(read.items.filter(closed)).toHaveLength(100)
+
+    // 60 open items close at once, and a loaded Closed one reopens.
+    const changed: string[] = []
+    for (const item of items.slice(0, 60)) {
+      Object.assign(item, { status: 'done', lastActivityAt: 1000 + item.number, version: 2 })
+      changed.push(item.uid)
+    }
+    Object.assign(items[250]!, { status: 'working', lastActivityAt: 2000, version: 2 })
+    changed.push('i251')
+    read = await loadBotItemsList(call, read, { whole: false, parts: changed, more: false })
+    // No deeper than loaded: the rows pushed past the end wait behind Show more.
+    expect(read.items.filter(closed)).toHaveLength(100)
+
+    read = await drain(call, read)
+    const uids = read.items.filter(closed).map((item) => item.uid)
+    expect(uids).toHaveLength(259)
+    expect(new Set(uids).size).toBe(259)
+    expect(read.items.filter((item) => !closed(item))).toHaveLength(41)
+  })
+
+  it('reads the loaded depth again on a whole read, page by page from an older host', async () => {
+    const items = seeded()
+    for (const older of [false, true]) {
+      const call = host(items, older)
+      let read = await loadBotItemsList(call, null, WHOLE)
+      read = await loadBotItemsList(call, read, MORE)
+      read = await loadBotItemsList(call, read, MORE)
+      read = await loadBotItemsList(call, read, WHOLE)
+      expect(read.items.filter(closed)).toHaveLength(150)
+      expect(read.items.filter((item) => !closed(item))).toHaveLength(100)
+    }
+  })
+})

@@ -100,14 +100,15 @@ const LIST = defineMethod({
     const closedCursor = parseCursor(params.closedCursor)
     const open =
       closedCursor && params.closedOnly ? [] : await allOpenItems(store, params.botId, chat)
+    const pageSize = params.closedLimit ?? BOT_ITEM_LIMITS.listPage
     const closed = await store.list({
       botId: params.botId,
       ...chat,
       statuses: ['done', 'canceled'],
-      limit: BOT_ITEM_LIMITS.listPage + 1,
+      limit: pageSize + 1,
       ...(closedCursor ? { cursor: closedCursor } : {})
     })
-    const closedRows = closed.items.slice(0, BOT_ITEM_LIMITS.listPage)
+    const closedRows = closed.items.slice(0, pageSize)
     const lastClosed = closedRows.at(-1)
     // An item closed between the two reads is in both: once, as Closed.
     const closedUids = new Set(closedRows.map((item) => item.uid))
@@ -116,7 +117,7 @@ const LIST = defineMethod({
       items: await botItems.views([...stillOpen, ...closedRows], params.summary),
       counts: closed.counts,
       seenEventId: seenEventId(),
-      ...(closed.items.length > BOT_ITEM_LIMITS.listPage && lastClosed
+      ...(closed.items.length > pageSize && lastClosed
         ? { nextClosedCursor: `${lastClosed.lastActivityAt}:${lastClosed.number}` }
         : {})
     }

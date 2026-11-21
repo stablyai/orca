@@ -1,6 +1,6 @@
-// The Items list as the filter shows it: the bot's read (or one chat's), its Closed pages, filtered and
-// grouped. Read above the list/item switch, so an open item walks the same list and Back finds it.
-import { useMemo } from 'react'
+// The Items list as the filter shows it: the bot's read (or one chat's), Closed as deep as loaded,
+// filtered and grouped. Read above the list/item switch, so an open item walks the same list and Back finds it.
+import { useCallback, useMemo } from 'react'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import {
@@ -10,8 +10,15 @@ import {
   type BotItemFilter,
   type BotItemGroups
 } from '../../../../../shared/bots/bot-item-groups'
-import { useBotChatItems, type BotItemsRead } from './use-bot-items'
-import { useBotItemsClosedPages, type BotItemsClosedPage } from './use-bot-items-closed-pages'
+import { botItemCursorPlace } from '../../../../../shared/bots/bot-item-merge'
+import { readMoreBotItems, useBotChatItems, type BotItemsRead } from './use-bot-items'
+
+/** One Show more: the Closed items it loaded, and whether more remain. */
+export type BotItemsClosedPage = { items: readonly BotItem[]; more: boolean }
+
+const NONE: readonly BotItem[] = []
+
+const isClosed = (item: BotItem): boolean => item.status === 'done' || item.status === 'canceled'
 
 export type BotItemsShownList = {
   /** The bot's read, or the filtered chats'; null while that chat's first read is out. */
@@ -42,8 +49,20 @@ export function useBotItemsShownList(
   // Some chats shown: their own read, so counts and Closed pages are theirs, not the first page's.
   const chatRead = useBotChatItems(bot, filter.chatIds)
   const read = filter.chatIds === null ? botRead : chatRead.read
-  const closedPages = useBotItemsClosedPages(bot, read, filter.chatIds)
-  const { items } = closedPages
+  // Closed loads as deep as asked inside the read itself: Show more is one more read of it, in turn.
+  const items = read?.items ?? NONE
+  const cursor = read?.nextClosedCursor ?? null
+  const { hostId, id } = bot
+  const chatMore = chatRead.readMore
+  const filtered = filter.chatIds !== null
+  const loadMore = useCallback(async (): Promise<BotItemsClosedPage> => {
+    const before = new Set(items.map((item) => item.uid))
+    const after = await (filtered ? chatMore() : readMoreBotItems({ hostId, id }))
+    return {
+      items: (after?.items ?? NONE).filter((item) => isClosed(item) && !before.has(item.uid)),
+      more: Boolean(after ? after.nextClosedCursor : cursor)
+    }
+  }, [items, filtered, chatMore, hostId, id, cursor])
   const staleDays = botItemStaleDays(bot.itemsStale)
   const shown = useMemo(() => filterBotItems(items, filter), [items, filter])
   const groups = useMemo(
@@ -61,8 +80,8 @@ export function useBotItemsShownList(
       filter.needsYou || !read
         ? groups.closed.length
         : (read.counts.done ?? 0) + (read.counts.canceled ?? 0),
-    loadMoreClosed: filter.needsYou ? null : closedPages.loadMore,
-    closedEnded: filter.needsYou || closedPages.ended,
-    closedEndAt: filter.needsYou ? null : closedPages.endAt
+    loadMoreClosed: filter.needsYou || !cursor ? null : loadMore,
+    closedEnded: filter.needsYou || (read !== null && !cursor),
+    closedEndAt: filter.needsYou ? null : (botItemCursorPlace(cursor)?.at ?? null)
   }
 }

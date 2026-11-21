@@ -20,8 +20,11 @@ import { useBotActivity } from './use-bot-activity'
 import { useBotNeedsYouCount, useBotNow, type BotNeedView } from './use-bot-now'
 import type { BotHostReadState } from './use-bot-host-read'
 import { useBotItems, useBotItemsSeenMark } from './items/use-bot-items'
-import { useBotItemsShownList, type BotItemsShownList } from './items/use-bot-items-shown-list'
-import type { BotItemsClosedPage } from './items/use-bot-items-closed-pages'
+import {
+  useBotItemsShownList,
+  type BotItemsClosedPage,
+  type BotItemsShownList
+} from './items/use-bot-items-shown-list'
 import type { BotItemWalkList } from './items/use-bot-item-walk'
 
 /** One member as the group panel reads it. */

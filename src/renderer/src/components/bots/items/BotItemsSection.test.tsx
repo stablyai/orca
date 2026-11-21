@@ -43,9 +43,10 @@ vi.mock('./use-bot-items', () => ({
   useBotChatItems: () => ({
     read: { items: [item(1, 'chat-release')], counts: { working: 1 }, seenEventId: 'e0' },
     failed: true,
-    retry: chat.retry
+    retry: chat.retry,
+    readMore: vi.fn()
   }),
-  readMoreClosedItems: vi.fn(),
+  readMoreBotItems: vi.fn(),
   useStableBotItemChats: (chatIds: readonly string[] | null) => chatIds
 }))
 vi.mock('../AddConnectorDialog', () => ({ manageConnectors: vi.fn() }))
