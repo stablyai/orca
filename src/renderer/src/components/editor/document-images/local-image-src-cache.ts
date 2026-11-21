@@ -4,6 +4,8 @@ import {
   prunePinnedLocalImageCache,
   unpinLocalImageCacheKey
 } from './local-image-cache-pinning'
+import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
+import { IMAGE_AND_PDF_PREVIEW_MIME_TYPES } from '../../../../../shared/file-preview/file-preview-kind'
 
 const BLOB_URL_CACHE_MAX_SIZE = 100
 // Bound retained encoded image payload separately from the reusable entry target.
@@ -125,11 +127,47 @@ function scheduleBlobUrlRevocation(urls: string[]): void {
   pendingBlobUrlRevocationTimer = setTimeout(revokePendingBlobUrls, 30_000)
 }
 
-export function invalidateLocalImageCache(): void {
-  const staleUrls = Array.from(blobUrlCache.values())
-  blobUrlCache.clear()
-  blobUrlCacheBytes.clear()
-  inFlightBlobUrlLoads.clear()
+function matchesCacheKeyPath(key: string, targetPath: string): boolean {
+  if (key === targetPath || key.endsWith(`\0${targetPath}`)) {
+    return true
+  }
+  const normalizedTarget = targetPath.replace(/\\/g, '/')
+  const lastIndex = key.lastIndexOf('\0')
+  const keyPath = lastIndex === -1 ? key : key.slice(lastIndex + 1)
+  return keyPath.replace(/\\/g, '/') === normalizedTarget
+}
+
+function isImageFilePath(filePath: string): boolean {
+  const dotIndex = filePath.lastIndexOf('.')
+  if (dotIndex === -1) {
+    return false
+  }
+  const mime = IMAGE_AND_PDF_PREVIEW_MIME_TYPES[filePath.slice(dotIndex).toLowerCase()]
+  return mime !== undefined && mime !== 'application/pdf'
+}
+
+export function invalidateLocalImageCache(targetPath?: string): void {
+  const staleUrls: string[] = []
+  if (!targetPath) {
+    for (const url of blobUrlCache.values()) {
+      staleUrls.push(url)
+    }
+    blobUrlCache.clear()
+    blobUrlCacheBytes.clear()
+    inFlightBlobUrlLoads.clear()
+  } else {
+    for (const [key, url] of blobUrlCache.entries()) {
+      if (matchesCacheKeyPath(key, targetPath)) {
+        blobUrlCache.delete(key)
+        blobUrlCacheBytes.delete(key)
+        staleUrls.push(url)
+      }
+    }
+    // The generation bump below rejects every in-flight load, not just matching
+    // keys. Drop them all so listener re-runs start fresh reads instead of
+    // reusing promises that are doomed to resolve null (blank unrelated images).
+    inFlightBlobUrlLoads.clear()
+  }
   cacheGeneration += 1
   for (const listener of cacheListeners) {
     listener()
@@ -157,15 +195,43 @@ export function resetLocalImageCacheState(): void {
   cacheListeners.clear()
 }
 
+function handleWorktreeFileChange(
+  event: WindowEventMap[typeof ORCA_WORKTREE_FILE_CHANGE_EVENT]
+): void {
+  const { payload } = event.detail
+  if (payload.resync) {
+    invalidateLocalImageCache()
+    return
+  }
+  for (const fsEvent of payload.events) {
+    if (fsEvent.kind === 'overflow') {
+      invalidateLocalImageCache()
+      return
+    }
+    if (isImageFilePath(fsEvent.absolutePath)) {
+      invalidateLocalImageCache(fsEvent.absolutePath)
+    }
+    if (fsEvent.oldAbsolutePath && isImageFilePath(fsEvent.oldAbsolutePath)) {
+      invalidateLocalImageCache(fsEvent.oldAbsolutePath)
+    }
+  }
+}
+
+function onWindowFocus(): void {
+  invalidateLocalImageCache()
+}
+
 export function disposeLocalImageCacheState(): void {
   if (typeof window !== 'undefined') {
-    window.removeEventListener('focus', invalidateLocalImageCache)
+    window.removeEventListener('focus', onWindowFocus)
+    window.removeEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleWorktreeFileChange)
   }
   resetLocalImageCacheState()
 }
 
 if (typeof window !== 'undefined') {
-  window.addEventListener('focus', invalidateLocalImageCache)
+  window.addEventListener('focus', onWindowFocus)
+  window.addEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleWorktreeFileChange)
 }
 
 if (import.meta !== undefined && import.meta.hot) {
