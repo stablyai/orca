@@ -82,7 +82,7 @@ describe('Agent-slept window pane wake', () => {
   it("waits on through Agent Sleep's stop when the exit wait began while the agent was awake", async () => {
     const db = createDatabase('orca-slept-wake-')
     const rows: AgentStatusIpcPayload[] = []
-    const { runtime } = await createRuntime(db, { getAgentStatusSnapshot: () => rows })
+    const { runtime } = await createRuntime(db, { getAgentStatusSnapshotForPane: () => rows })
     await driveToLiveIdle(runtime)
     const handle = runtime.getTerminalHandleForPaneKey(PANE_KEY)!
     const waiting = runtime.waitForTerminal(handle, { condition: 'exit', timeoutMs: 5_000 })
@@ -140,7 +140,7 @@ describe('Agent-slept window pane wake', () => {
 async function sleptPane() {
   const db = createDatabase('orca-slept-wake-')
   const slept: { db: typeof db; rows: AgentStatusIpcPayload[] } = { db, rows: [] }
-  const { runtime } = await createRuntime(db, { getAgentStatusSnapshot: () => slept.rows })
+  const { runtime } = await createRuntime(db, { getAgentStatusSnapshotForPane: () => slept.rows })
   await driveToLiveIdle(runtime)
   const handle = runtime.getTerminalHandleForPaneKey(PANE_KEY)!
   slept.rows = [statusRow({ receivedAt: 1, paneSleep: { ptyId: PTY_ID } })]

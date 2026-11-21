@@ -13,11 +13,13 @@ function runBatchedMessageMutation(
   db: OrchestrationDb,
   ids: string[],
   sqlForPlaceholders: (placeholders: string) => string,
-  leadingBindings: string[] = []
+  leadingBindings: string[] = [],
+  consuming = false
 ): void {
   if (ids.length === 0) {
     return
   }
+  const readMailboxes = consuming && db.mailReadListener ? unreadMailboxesOf(db, ids) : []
   db.db.exec(`SAVEPOINT ${MESSAGE_MUTATION_SAVEPOINT}`)
   try {
     for (let offset = 0; offset < ids.length; offset += MESSAGE_ID_UPDATE_BATCH_SIZE) {
@@ -31,6 +33,30 @@ function runBatchedMessageMutation(
     db.db.exec(`RELEASE ${MESSAGE_MUTATION_SAVEPOINT}`)
     throw error
   }
+  if (readMailboxes.length > 0) {
+    try {
+      db.mailReadListener?.(readMailboxes)
+    } catch {
+      // A listener fault cannot undo a committed read.
+    }
+  }
+}
+
+function unreadMailboxesOf(db: OrchestrationDb, ids: string[]): string[] {
+  const mailboxes = new Set<string>()
+  for (let offset = 0; offset < ids.length; offset += MESSAGE_ID_UPDATE_BATCH_SIZE) {
+    const batch = ids.slice(offset, offset + MESSAGE_ID_UPDATE_BATCH_SIZE)
+    for (const row of db.db
+      .prepare(
+        `SELECT DISTINCT to_handle FROM messages WHERE read = 0 AND id IN (${batch.map(() => '?').join(',')})`
+      )
+      .all(...batch)) {
+      if (typeof row?.to_handle === 'string') {
+        mailboxes.add(row.to_handle)
+      }
+    }
+  }
+  return [...mailboxes]
 }
 
 export function getUnreadMessages(
@@ -149,7 +175,9 @@ export function markAsRead(this: OrchestrationDb, ids: string[]): void {
       `UPDATE messages
        SET read = 1, pointer_enter_pending = 0, pointer_pty_id = NULL,
            pointer_process_incarnation = NULL
-       WHERE id IN (${placeholders})`
+       WHERE id IN (${placeholders})`,
+    [],
+    true
   )
 }
 
@@ -206,7 +234,9 @@ export function markAsReadAndDelivered(this: OrchestrationDb, ids: string[]): vo
        SET read = 1, delivered_at = COALESCE(delivered_at, datetime('now')),
            pointer_enter_pending = 0, pointer_pty_id = NULL,
            pointer_process_incarnation = NULL
-       WHERE id IN (${placeholders})`
+       WHERE id IN (${placeholders})`,
+    [],
+    true
   )
 }
 
