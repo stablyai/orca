@@ -2336,6 +2336,8 @@
       "sourceControl": "ソース管理",
       "newTab": "新規タブ",
       "quickCommands": "クイックコマンド",
+      "switchToSingleTabBar": "全幅タブバーに切り替え",
+      "switchToCompactTabStrip": "コンパクトタブストリップに切り替え",
       "items": "アイテム"
     },
     "headerMoreActionsSheet": {
@@ -2548,7 +2550,8 @@
     "tabStrip": {
       "checkingCapabilities": "デスクトップの対応機能を確認中です。少し待ってから再試行してください。",
       "newTab": "新規タブ",
-      "quickCommandsUpdateRequired": "クイックコマンドの利用にはデスクトップの更新が必要です。"
+      "quickCommandsUpdateRequired": "クイックコマンドの利用にはデスクトップの更新が必要です。",
+      "tabStatus": "{{title}}、{{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "ターミナルをクリア",
@@ -2853,6 +2856,19 @@
       "title": "プロファイル",
       "default": "デフォルト"
     },
+    "recentSessionCards": {
+      "decreaseLimit": "最近の表示上限を減らす",
+      "increaseLimit": "最近の表示上限を増やす",
+      "cardClosed": "カードは閉じられました",
+      "waitingForHost": "ホストを待機中…",
+      "workspaceGone": "ワークスペースは存在しません",
+      "cardClosedOpeningWorkspace": "カードは閉じられました。ワークスペースを開いています"
+    },
+    "tabsSheet": {
+      "recentCaption": "ワークスペース横断の履歴",
+      "recentSegment": "最近",
+      "workspaceSegment": "このワークスペース ({{count}})"
+    },
     "tabBar": {
       "tabCount": "{{count}} 個のタブ",
       "hint": "すべてのタブを表示"
@@ -3024,6 +3040,17 @@
       "download": "この端末にダウンロード",
       "downloadSize": "約 {{size}} MB",
       "phoneChecking": "確認中…"
+    },
+    "nativeChat": {
+      "recentlyUsed": "最近使用した項目",
+      "recentlyUsedFooter": "タブバーの表示形式と最近のタブ表示件数をカスタマイズします（既定: 7）。",
+      "compactTabStrip": "コンパクトタブバー",
+      "compactTabStripOn": "上部バーに狭いタブを横スクロール表示",
+      "compactTabStripOff": "上部バーに現在のタブを全幅表示",
+      "maxRecentItems": "最大表示件数",
+      "cardsUnit": "件",
+      "decreaseMaxRecent": "最大表示件数を減らす",
+      "increaseMaxRecent": "最大表示件数を増やす"
     }
   },
   "sourceControl": {
@@ -5069,5 +5096,7 @@
     "panel": {
       "backTo": "{{name}} に戻る"
     }
-  }
+  },
+  "recentSessionCardsSectionTitle": "最近使用した項目",
+  "recentSessionCardsEmpty": "他に最近のカードはありません"
 }

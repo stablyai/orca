@@ -2413,6 +2413,8 @@
       "sourceControl": "Contrôle de code source",
       "newTab": "Nouvel onglet",
       "quickCommands": "Commandes rapides",
+      "switchToSingleTabBar": "Passer à la barre d’onglet pleine largeur",
+      "switchToCompactTabStrip": "Passer à la barre d’onglets compacte",
       "items": "Éléments"
     },
     "headerMoreActionsSheet": {
@@ -2626,7 +2628,8 @@
     "tabStrip": {
       "checkingCapabilities": "Vérification des fonctionnalités de l'ordinateur — réessayez dans un instant",
       "newTab": "Nouvel onglet",
-      "quickCommandsUpdateRequired": "Mettez à jour Orca sur l'ordinateur pour utiliser les commandes rapides"
+      "quickCommandsUpdateRequired": "Mettez à jour Orca sur l'ordinateur pour utiliser les commandes rapides",
+      "tabStatus": "{{title}}, {{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Effacer le terminal",
@@ -2930,6 +2933,19 @@
     "browserProfile": {
       "default": "Par défaut"
     },
+    "recentSessionCards": {
+      "decreaseLimit": "Diminuer la limite des cartes récentes",
+      "increaseLimit": "Augmenter la limite des cartes récentes",
+      "cardClosed": "La carte a été fermée",
+      "waitingForHost": "En attente de l’hôte…",
+      "workspaceGone": "L’espace de travail n’existe plus",
+      "cardClosedOpeningWorkspace": "Carte fermée ; ouverture de l’espace de travail"
+    },
+    "tabsSheet": {
+      "recentCaption": "Récents entre espaces",
+      "recentSegment": "Récents",
+      "workspaceSegment": "Cet espace ({{count}})"
+    },
     "tabBar": {
       "tabCount": "Onglets : {{count}}",
       "hint": "Affiche tous les onglets"
@@ -3105,6 +3121,17 @@
       "download": "Télécharger pour ce téléphone",
       "downloadSize": "Environ {{size}} Mo",
       "phoneChecking": "Vérification…"
+    },
+    "nativeChat": {
+      "recentlyUsed": "RÉCEMMENT UTILISÉS",
+      "recentlyUsedFooter": "Personnalisez la barre d’onglets et le nombre d’onglets récents affichés (7 par défaut).",
+      "compactTabStrip": "Barre d’onglets compacte",
+      "compactTabStripOn": "Onglets étroits défilants dans la barre supérieure",
+      "compactTabStripOff": "Un seul onglet actif pleine largeur en haut",
+      "maxRecentItems": "Max. d’éléments récents",
+      "cardsUnit": "cartes",
+      "decreaseMaxRecent": "Diminuer le max. d’éléments récents",
+      "increaseMaxRecent": "Augmenter le max. d’éléments récents"
     }
   },
   "sourceControl": {
@@ -5101,5 +5128,7 @@
     "panel": {
       "backTo": "Retour à {{name}}"
     }
-  }
+  },
+  "recentSessionCardsSectionTitle": "Récemment utilisés",
+  "recentSessionCardsEmpty": "Aucune autre carte récente pour l’instant"
 }

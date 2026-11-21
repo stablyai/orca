@@ -2774,6 +2774,8 @@
       "sourceControl": "Controle de código-fonte",
       "newTab": "Nova aba",
       "quickCommands": "Comandos rápidos",
+      "switchToSingleTabBar": "Alternar para barra de aba em largura total",
+      "switchToCompactTabStrip": "Alternar para barra de abas compacta",
       "items": "Itens"
     },
     "headerMoreActionsSheet": {
@@ -2988,7 +2990,8 @@
     "tabStrip": {
       "checkingCapabilities": "Verificando os recursos do desktop — tente novamente em instantes",
       "newTab": "Nova aba",
-      "quickCommandsUpdateRequired": "Atualize o desktop para usar comandos rápidos"
+      "quickCommandsUpdateRequired": "Atualize o desktop para usar comandos rápidos",
+      "tabStatus": "{{title}}, {{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Limpar Terminal",
@@ -3327,6 +3330,19 @@
     "browserProfile": {
       "default": "Padrão"
     },
+    "recentSessionCards": {
+      "decreaseLimit": "Diminuir limite de cartões recentes",
+      "increaseLimit": "Aumentar limite de cartões recentes",
+      "cardClosed": "O cartão foi fechado",
+      "waitingForHost": "Aguardando o host…",
+      "workspaceGone": "O espaço de trabalho não existe mais",
+      "cardClosedOpeningWorkspace": "Cartão fechado; abrindo espaço de trabalho"
+    },
+    "tabsSheet": {
+      "recentCaption": "Recentes entre espaços",
+      "recentSegment": "Recentes",
+      "workspaceSegment": "Este espaço ({{count}})"
+    },
     "tabBar": {
       "tabCount": "Abas: {{count}}",
       "hint": "Mostra todas as abas"
@@ -3503,6 +3519,17 @@
       "download": "Baixar para este celular",
       "downloadSize": "Cerca de {{size}} MB",
       "phoneChecking": "Verificando…"
+    },
+    "nativeChat": {
+      "recentlyUsed": "USADOS RECENTEMENTE",
+      "recentlyUsedFooter": "Personalize o layout da barra de abas e quantas abas recentes aparecem (padrão 7).",
+      "compactTabStrip": "Barra de abas compacta",
+      "compactTabStripOn": "Abas estreitas roláveis na barra superior",
+      "compactTabStripOff": "Apenas a aba ativa em largura total no topo",
+      "maxRecentItems": "Máx. de itens recentes",
+      "cardsUnit": "cartões",
+      "decreaseMaxRecent": "Diminuir máx. de itens recentes",
+      "increaseMaxRecent": "Aumentar máx. de itens recentes"
     }
   },
   "sourceControl": {
@@ -5675,5 +5702,7 @@
     "panel": {
       "backTo": "Voltar para {{name}}"
     }
-  }
+  },
+  "recentSessionCardsSectionTitle": "Usados recentemente",
+  "recentSessionCardsEmpty": "Ainda não há outros cartões recentes"
 }

@@ -20,6 +20,7 @@ import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobileAllowAutoCloseActions } from './tabs/mobile-worker-auto-close'
 import { MobileAgentSessionTabActionSheet } from './tabs/MobileAgentSessionTabActionSheet'
 import { MobileSessionBotSheet } from './MobileSessionBotSheet'
+import { MobileSessionRecentCardsSheet } from './RecentSessionCardsSheet'
 import { MobileNewTabSheet } from './tabs/MobileNewTabSheet'
 import { MobileNewHomeChatConfirm } from './MobileNewHomeChatConfirm'
 import {
@@ -119,6 +120,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
   )
   return (
     <>
+      <MobileSessionRecentCardsSheet controller={controller} />
       <MobileSessionBotSheet controller={controller} />
       <MobileSessionTerminalLayoutSheet
         controller={controller}

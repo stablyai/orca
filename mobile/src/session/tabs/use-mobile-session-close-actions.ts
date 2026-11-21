@@ -13,6 +13,7 @@ import type { TerminalRecord as Terminal } from '../../terminal/session/inventor
 import type { MobileSessionContentCreateActionsModel } from '../use-mobile-session-content-create-actions'
 import { mobileNativeChatScopeKey } from '../native-chat/conversation/mobile-native-chat-scope-key'
 import { closeMobileNativeChatTabDraft } from '../native-chat/composer/drafts/mobile-native-chat-draft-store'
+import { removeRecentSessionCard } from '../recent-session-cards'
 import {
   defineHostMutation,
   useHostMutation,
@@ -115,6 +116,9 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
       if (!response.accepted) {
         showCloseFailed(reply.ok ? undefined : reply.error.code)
       } else {
+        if (hostId && worktreeId) {
+          removeRecentSessionCard(hostId, worktreeId, undefined, target.handle)
+        }
         unsubscribeTerminal(target.handle)
         terminalRefs.current.delete(target.handle)
         const next = terminalsRef.current.filter((terminal) => terminal.handle !== target.handle)
@@ -157,6 +161,14 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
       if (!response.accepted || response.value.refused) {
         showCloseFailed(reply.ok ? undefined : reply.error.code)
       } else {
+        if (hostId && worktreeId) {
+          removeRecentSessionCard(
+            hostId,
+            worktreeId,
+            tab.id,
+            tab.type === 'terminal' ? tab.terminal : undefined
+          )
+        }
         const chatScope = mobileNativeChatScopeKey(hostId, worktreeId, tab.id)
         if (chatScope && response.value.retirementConfirmed) {
           closeMobileNativeChatTabDraft(chatScope)

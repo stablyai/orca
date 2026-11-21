@@ -195,6 +195,17 @@
       "downloadSize": "About {{size}} MB",
       "phoneChecking": "Checking…"
     },
+    "nativeChat": {
+      "recentlyUsed": "RECENTLY USED",
+      "recentlyUsedFooter": "Customize the tab bar layout and how many recent tabs appear (default 7).",
+      "compactTabStrip": "Compact tab strip",
+      "compactTabStripOn": "Narrow scrollable tabs in the top bar",
+      "compactTabStripOff": "Single full-width active tab in the top bar",
+      "maxRecentItems": "Max recent items",
+      "cardsUnit": "cards",
+      "decreaseMaxRecent": "Decrease max recent items",
+      "increaseMaxRecent": "Increase max recent items"
+    },
     "bots": {
       "slackStatus": {
         "notInstalled": "Not installed",
@@ -2383,7 +2394,9 @@
       "sourceControl": "Source control",
       "itemsNeedYou": "Items, {{count}} need you",
       "items": "Items",
-      "textSize": "Text size"
+      "textSize": "Text size",
+      "switchToSingleTabBar": "Switch to full-width tab bar",
+      "switchToCompactTabStrip": "Switch to compact tab strip"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Agent History",
@@ -2438,7 +2451,8 @@
     "tabStrip": {
       "newTab": "New tab",
       "quickCommandsUpdateRequired": "Desktop update required for quick commands",
-      "checkingCapabilities": "Checking desktop capabilities — try again in a moment"
+      "checkingCapabilities": "Checking desktop capabilities — try again in a moment",
+      "tabStatus": "{{title}}, {{status}}"
     },
     "terminalInputActions": {
       "sendingImage": "Sending image",
@@ -3180,7 +3194,10 @@
       "working": "Working",
       "everythingElse": "Everything else",
       "open": "Open",
-      "closeTab": "Close {{title}}"
+      "closeTab": "Close {{title}}",
+      "recentCaption": "Recent across workspaces",
+      "recentSegment": "Recent",
+      "workspaceSegment": "This workspace ({{count}})"
     },
     "tabRows": {
       "browser": "Browser",
@@ -3213,6 +3230,14 @@
     },
     "orcaCommands": {
       "desktopOnly": "Available in the desktop app"
+    },
+    "recentSessionCards": {
+      "decreaseLimit": "Decrease recent cards limit",
+      "increaseLimit": "Increase recent cards limit",
+      "cardClosed": "Card was closed",
+      "waitingForHost": "Waiting for host…",
+      "workspaceGone": "Workspace no longer exists",
+      "cardClosedOpeningWorkspace": "Card was closed; opening workspace"
     }
   },
   "chat": {
@@ -7282,5 +7307,7 @@
       "needsWindow": "Couldn’t update. Open Orca on {{desktop}}.",
       "failed": "Couldn’t update the agent list."
     }
-  }
+  },
+  "recentSessionCardsSectionTitle": "Recently Used",
+  "recentSessionCardsEmpty": "No other recent cards yet"
 }

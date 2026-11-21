@@ -2334,6 +2334,8 @@
       "sourceControl": "原始碼控制",
       "newTab": "新分頁",
       "quickCommands": "快速命令",
+      "switchToSingleTabBar": "切換為全寬分頁列",
+      "switchToCompactTabStrip": "切換為緊湊分頁列",
       "items": "項目"
     },
     "headerMoreActionsSheet": {
@@ -2546,7 +2548,8 @@
     "tabStrip": {
       "checkingCapabilities": "正在檢查桌面版支援的功能，請稍後再試",
       "newTab": "新分頁",
-      "quickCommandsUpdateRequired": "需更新桌面版才能使用快速命令"
+      "quickCommandsUpdateRequired": "需更新桌面版才能使用快速命令",
+      "tabStatus": "{{title}}，{{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "清除終端機",
@@ -2850,6 +2853,19 @@
     "browserProfile": {
       "default": "預設"
     },
+    "recentSessionCards": {
+      "decreaseLimit": "減少最近數量上限",
+      "increaseLimit": "增加最近數量上限",
+      "cardClosed": "該卡片已關閉",
+      "waitingForHost": "正在等待主機連線…",
+      "workspaceGone": "工作區已不存在",
+      "cardClosedOpeningWorkspace": "該卡片已關閉，正在開啟工作區"
+    },
+    "tabsSheet": {
+      "recentCaption": "跨工作區最近造訪",
+      "recentSegment": "最近使用",
+      "workspaceSegment": "目前工作區 ({{count}})"
+    },
     "tabBar": {
       "tabCount": "{{count}} 個分頁",
       "hint": "顯示所有分頁"
@@ -3021,6 +3037,17 @@
       "download": "下載到此手機",
       "downloadSize": "約 {{size}} MB",
       "phoneChecking": "正在檢查…"
+    },
+    "nativeChat": {
+      "recentlyUsed": "最近使用",
+      "recentlyUsedFooter": "自訂分頁列樣式與最近分頁顯示數量（預設 7 筆）。",
+      "compactTabStrip": "緊湊分頁列",
+      "compactTabStripOn": "頂列橫向捲動顯示多個窄分頁",
+      "compactTabStripOff": "頂列僅全寬顯示目前作用中分頁",
+      "maxRecentItems": "最多顯示數量",
+      "cardsUnit": "張卡片",
+      "decreaseMaxRecent": "減少最多顯示數量",
+      "increaseMaxRecent": "增加最多顯示數量"
     }
   },
   "sourceControl": {
@@ -4982,5 +5009,7 @@
     "panel": {
       "backTo": "返回 {{name}}"
     }
-  }
+  },
+  "recentSessionCardsSectionTitle": "最近使用",
+  "recentSessionCardsEmpty": "尚無其他最近使用的工作階段"
 }

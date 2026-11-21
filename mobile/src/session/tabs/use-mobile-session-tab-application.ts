@@ -28,7 +28,10 @@ import {
 import type { SessionTabsApplyOutcome } from './mobile-session-tabs-stream-health'
 import { getActiveTabIdForHandle } from './terminal-tab-selection'
 import { resolveActiveSessionTab } from './active-session-tab'
-import { activateMobileSessionTab } from './mobile-session-tab-activation'
+import {
+  activateMobileSessionTab,
+  applyPendingCrossWorktreeSelection
+} from './mobile-session-tab-activation'
 import { releaseTerminalCreateLock } from '../../terminal/session/creation/terminal-create-lock'
 import { withSessionTabStatusReceipts } from './mobile-session-tab-status-clock'
 import { withRememberedNativeChatIdentity } from '../native-chat/conversation/mobile-native-chat-eligibility'
@@ -199,6 +202,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
           }).catch(() => {})
         }
       }
+      applyPendingCrossWorktreeSelection(result.worktree, nextTabs, pendingSelectionRef)
       const pendingActiveSessionTabId = pendingSelectionTabId(pendingSelectionRef.current)
       const pendingActiveTerminalHandle = pendingSelectionHandle(pendingSelectionRef.current)
       const resolved = resolveActiveSessionTab(nextTabs, {
@@ -262,37 +266,23 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       activeSessionTabTypeRef.current = active?.type ?? null
       activeSessionTabIdRef.current = active?.id ?? null
       setActiveSessionTabId(active?.id ?? null)
-      if (active?.type === 'terminal') {
-        if (typeof active.terminal !== 'string') {
-          const previous = activeHandleRef.current
-          if (previous) {
-            if (!keepsTerminalPaneVisible(previous, visibleTerminalHandlesRef?.current)) {
-              unsubscribeTerminal(previous)
-            }
-          }
-          activeHandleRef.current = null
-          setActiveHandle(null)
-          return outcome
-        }
-        const previous = activeHandleRef.current
-        if (previous && previous !== active.terminal) {
-          if (!keepsTerminalPaneVisible(previous, visibleTerminalHandlesRef?.current)) {
-            unsubscribeTerminal(previous)
-          }
-        }
-        activeHandleRef.current = active.terminal
-        setActiveHandle(active.terminal)
-        subscribeToTerminal(active.terminal)
-      } else if (active) {
+      if (active) {
         // Transient empty snapshots may omit a live terminal; only explicit successful close clears it.
+        const nextHandle =
+          active.type === 'terminal' && typeof active.terminal === 'string' ? active.terminal : null
         const previous = activeHandleRef.current
-        if (previous) {
-          if (!keepsTerminalPaneVisible(previous, visibleTerminalHandlesRef?.current)) {
-            unsubscribeTerminal(previous)
-          }
+        if (
+          previous &&
+          previous !== nextHandle &&
+          !keepsTerminalPaneVisible(previous, visibleTerminalHandlesRef?.current)
+        ) {
+          unsubscribeTerminal(previous)
         }
-        activeHandleRef.current = null
-        setActiveHandle(null)
+        activeHandleRef.current = nextHandle
+        setActiveHandle(nextHandle)
+        if (nextHandle) {
+          subscribeToTerminal(nextHandle)
+        }
       }
       return outcome
     },

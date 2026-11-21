@@ -2741,6 +2741,8 @@
       "sourceControl": "源代码管理",
       "newTab": "新标签页",
       "quickCommands": "快捷命令",
+      "switchToSingleTabBar": "切换为全宽单标签栏",
+      "switchToCompactTabStrip": "切换为窄标签栏",
       "items": "条目"
     },
     "headerMoreActionsSheet": {
@@ -2956,7 +2958,8 @@
     "tabStrip": {
       "checkingCapabilities": "正在检查桌面支持的功能，请稍后重试",
       "newTab": "新标签页",
-      "quickCommandsUpdateRequired": "使用快捷命令需更新桌面应用"
+      "quickCommandsUpdateRequired": "使用快捷命令需更新桌面应用",
+      "tabStatus": "{{title}}，{{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "清空终端",
@@ -3317,7 +3320,10 @@
       "working": "工作中",
       "everythingElse": "其他",
       "open": "当前",
-      "closeTab": "关闭 {{title}}"
+      "closeTab": "关闭 {{title}}",
+      "recentCaption": "跨项目最近访问",
+      "recentSegment": "最近使用",
+      "workspaceSegment": "当前项目 ({{count}})"
     },
     "tabRows": {
       "browser": "浏览器",
@@ -3338,6 +3344,14 @@
     "browserProfile": {
       "title": "配置文件",
       "default": "默认"
+    },
+    "recentSessionCards": {
+      "decreaseLimit": "减少最近数量上限",
+      "increaseLimit": "增加最近数量上限",
+      "cardClosed": "该卡片已关闭",
+      "waitingForHost": "正在等待主机连接…",
+      "workspaceGone": "工作区已不存在",
+      "cardClosedOpeningWorkspace": "该卡片已关闭，正在打开工作区"
     }
   },
   "settings": {
@@ -3507,6 +3521,17 @@
       "download": "下载到此手机",
       "downloadSize": "约 {{size}} MB",
       "phoneChecking": "正在检查…"
+    },
+    "nativeChat": {
+      "recentlyUsed": "最近使用",
+      "recentlyUsedFooter": "自定义标签栏样式和最近会话列表显示的数量（默认 7 条）。",
+      "compactTabStrip": "窄标签栏",
+      "compactTabStripOn": "顶栏横向滚动显示多个窄标签",
+      "compactTabStripOff": "顶栏仅全宽显示当前活跃标签",
+      "maxRecentItems": "最多显示条数",
+      "cardsUnit": "条",
+      "decreaseMaxRecent": "减少最多显示条数",
+      "increaseMaxRecent": "增加最多显示条数"
     }
   },
   "sourceControl": {
@@ -5837,5 +5862,7 @@
       "needsWindow": "无法更新，请在 {{desktop}} 上打开 Orca",
       "failed": "无法更新智能体列表"
     }
-  }
+  },
+  "recentSessionCardsSectionTitle": "最近使用",
+  "recentSessionCardsEmpty": "暂无其他最近使用的会话"
 }
