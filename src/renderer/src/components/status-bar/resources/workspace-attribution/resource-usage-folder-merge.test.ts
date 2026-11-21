@@ -128,10 +128,8 @@ describe('folder Resource Manager rows', () => {
       displayName: 'Remote',
       hostId: 'runtime:wsl:Ubuntu'
     }
-    // A local sample of the same id (an older placement) must not add a second row.
     const repos = mergeSnapshotAndSessions(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the merge reads only worktrees.
-      { worktrees: [{ ...oldRow, worktreeId: worktree.id, repoId: 'repo-1' }] } as MemorySnapshot,
+      null,
       [],
       context({
         worktreeById: new Map([[worktree.id, worktree]]),
@@ -151,6 +149,36 @@ describe('folder Resource Manager rows', () => {
         runtimeHostId: 'runtime:wsl%3AUbuntu',
         unplaced: undefined
       })
+    ])
+  })
+
+  it("keeps this machine's live terminal when a same-id record is stamped with a paired machine", () => {
+    const worktree: Worktree = {
+      ...workspace,
+      id: 'repo-1::/shared',
+      repoId: 'repo-1',
+      displayName: 'Shared',
+      hostId: 'runtime:wsl:Ubuntu'
+    }
+    const repos = mergeSnapshotAndSessions(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the merge reads only worktrees.
+      { worktrees: [{ ...oldRow, worktreeId: worktree.id, repoId: 'repo-1' }] } as MemorySnapshot,
+      [],
+      context({
+        worktreeById: new Map([[worktree.id, worktree]]),
+        runtimeHostResources: [
+          {
+            hostId: 'runtime:wsl%3AUbuntu',
+            hostLabel: 'Studio',
+            worktrees: [{ ...oldRow, worktreeId: worktree.id, repoId: 'repo-1' }]
+          }
+        ]
+      })
+    )
+
+    expect(repos.flatMap((repo) => repo.worktrees.map((row) => row.worktreeId)).sort()).toEqual([
+      'repo-1::/shared',
+      'runtime:wsl%3AUbuntu|repo-1::/shared'
     ])
   })
 

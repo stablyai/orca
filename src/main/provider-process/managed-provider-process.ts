@@ -1,4 +1,5 @@
-import { awaitProviderChildSpawn, type ProviderChild } from './provider-child'
+import { awaitProviderChildSpawn, directOwnerUnreaped, type ProviderChild } from './provider-child'
+import { DirectProviderChild } from './direct-provider-child'
 import { registerAgentProcess } from '../memory/agent-process-registry'
 import { spawnProviderProcess, type ProviderProcessSpawner } from './provider-process-spawn'
 import { RetryableProcessExitProof } from '@orca/process-host/retryable-process-exit-proof'
@@ -195,11 +196,15 @@ export function spawnManagedProviderProcess(
   // Hosted launches publish their pid only once the agent host starts them.
   void awaitProviderChildSpawn(child).then(() => {
     if (child.pid !== undefined && !agentMemoryRetired && !child.numericIdentityRetired) {
-      // Once the leader exits, or its outcome is lost, its pid can be reused while cleanup still runs.
+      // A directly spawned owner keeps its pid until reaped, so its tree (what it still holds after the
+      // CLI exits) counts until then. Otherwise, once the leader exits or its outcome is lost, its pid
+      // can be reused while cleanup still runs.
       releaseAgentMemory = registerAgentProcess(
         child.ownerPid ?? child.pid,
         child.pid,
-        () => child.leaderExited !== true && child.numericIdentityRetired !== true
+        () =>
+          (child instanceof DirectProviderChild ? directOwnerUnreaped(child.raw) : undefined) ??
+          (child.leaderExited !== true && child.numericIdentityRetired !== true)
       )
     }
   })

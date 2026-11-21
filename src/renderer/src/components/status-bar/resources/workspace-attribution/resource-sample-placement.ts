@@ -5,6 +5,7 @@ import type {
   RuntimeHostResourceSample,
   UnifiedWorktreeRow
 } from './resource-usage-merge-types'
+import { isChatOnlySample } from './resource-chat-row-groups'
 import {
   resolveResourceFolderWorkspace,
   resolveResourceWorkspaceHost,
@@ -35,7 +36,10 @@ export function placementInputs(ctx: MergeContext): readonly unknown[] {
   ]
 }
 
-/** Null for a workspace a paired machine hosts, so its load is never attributed here. */
+/**
+ * Null for a workspace a paired machine hosts, so its load is never attributed here. A record
+ * stamped with a paired host drops only chat-only samples: a live local terminal is local evidence.
+ */
 export function localSamplePlacement(
   ctx: MergeContext,
   wt: WorktreeMemory
@@ -43,7 +47,7 @@ export function localSamplePlacement(
   const worktree = resolveResourceFolderWorkspace(ctx, wt.worktreeId)
   const repoId = worktree?.repoId ?? wt.repoId
   const { isRemote, runtimeHostId } = resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId)
-  if (runtimeHostId || stampedRuntimeHostId(ctx, wt.worktreeId)) {
+  if (runtimeHostId || (isChatOnlySample(wt) && stampedRuntimeHostId(ctx, wt.worktreeId))) {
     return null
   }
   return {
@@ -55,19 +59,23 @@ export function localSamplePlacement(
   }
 }
 
+/** `shownLocally` holds workspaces this machine's terminals already show; a paired sample beside them is host-qualified. */
 export function pairedSamplePlacement(
   ctx: MergeContext,
   host: RuntimeHostResourceSample,
-  wt: WorktreeMemory
+  wt: WorktreeMemory,
+  shownLocally?: ReadonlySet<string>
 ): SamplePlacement {
   const worktree = resolveResourceFolderWorkspace(ctx, wt.worktreeId)
   const repoId = worktree?.repoId ?? wt.repoId
   // A worktree stamped with a paired host belongs to that host alone, wherever its repo is tracked.
   const ambiguous = ctx.ambiguousWorktreeIds?.has(wt.worktreeId) ?? false
   const recordHostId = stampedRuntimeHostId(ctx, wt.worktreeId)
-  const owned = recordHostId
-    ? recordHostId === canonicalExecutionHostId(host.hostId)
-    : resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId).runtimeHostId === host.hostId
+  const owned =
+    !shownLocally?.has(wt.worktreeId) &&
+    (recordHostId
+      ? recordHostId === canonicalExecutionHostId(host.hostId)
+      : resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId).runtimeHostId === host.hostId)
   // Keep foreign/unplaced server load host-qualified so same-ID workspaces elsewhere cannot absorb it.
   return {
     worktreeId: owned ? wt.worktreeId : `${host.hostId}|${wt.worktreeId}`,

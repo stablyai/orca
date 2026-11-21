@@ -51,7 +51,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
   private readonly reapRequested = Promise.withResolvers<void>()
 
   constructor(
-    private readonly raw: ProviderOwnerProcess,
+    readonly raw: ProviderOwnerProcess,
     private readonly spec: ProviderSpawnSpec,
     private readonly bootId: string
   ) {

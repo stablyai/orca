@@ -111,7 +111,45 @@ export function ResourceTree({
     [repos, sortOption, sortedGroups]
   )
 
-  const renderWorktree = (wt: UnifiedWorktreeRow): React.JSX.Element => {
+  // An unchanged row (and an unchanged project's rows) reuses its element, so React skips it untouched.
+  const [elements] = useState(
+    () =>
+      new WeakMap<
+        UnifiedWorktreeRow | UnifiedProjectGroup,
+        { inputs: readonly unknown[]; element: React.JSX.Element }
+      >()
+  )
+  const shared = [
+    activeWorktreeId,
+    collapsedWorktrees,
+    worktreeById,
+    toggleWorktree,
+    navigateToWorktree,
+    onDelete,
+    onKillSession,
+    navigateToTab,
+    onOpenChat
+  ]
+  const cachedElement = (
+    owner: UnifiedWorktreeRow | UnifiedProjectGroup,
+    inputs: readonly unknown[],
+    build: () => React.JSX.Element
+  ): React.JSX.Element => {
+    const cached = elements.get(owner)
+    if (cached && cached.inputs.every((input, i) => input === inputs[i])) {
+      return cached.element
+    }
+    const element = build()
+    elements.set(owner, { inputs, element })
+    return element
+  }
+
+  const renderWorktree = (wt: UnifiedWorktreeRow): React.JSX.Element =>
+    cachedElement(wt, shared, () => buildWorktree(wt))
+  const renderRows = (group: UnifiedProjectGroup): React.JSX.Element =>
+    cachedElement(group, shared, () => <>{group.worktrees.map(renderWorktree)}</>)
+
+  const buildWorktree = (wt: UnifiedWorktreeRow): React.JSX.Element => {
     const storeRecord = worktreeById.get(wt.worktreeId) ?? null
     return (
       <WorktreeRow
@@ -131,7 +169,7 @@ export function ResourceTree({
   }
 
   if (sortedRepos.length === 1) {
-    return <>{sortedRepos[0].worktrees.map(renderWorktree)}</>
+    return renderRows(sortedRepos[0])
   }
 
   return (
@@ -184,9 +222,7 @@ export function ResourceTree({
               </div>
             </div>
 
-            {!repoCollapsed && (
-              <div className="border-t border-border/30">{group.worktrees.map(renderWorktree)}</div>
-            )}
+            {!repoCollapsed && <div className="border-t border-border/30">{renderRows(group)}</div>}
           </div>
         )
       })}

@@ -124,15 +124,17 @@ export function mergeSnapshotAndSessions(
       groups.addChatRowGroup(part)
     }
   }
+  const shownLocally = new Set<string>()
   for (const wt of local?.terminalSamples ?? []) {
     const placement = localSamplePlacement(ctx, wt)
     if (placement) {
+      shownLocally.add(placement.worktreeId)
       ingestSampledWorktree(wt, placement)
     }
   }
   for (const { host, rows } of paired) {
     for (const wt of rows.terminalSamples) {
-      ingestSampledWorktree(wt, pairedSamplePlacement(ctx, host, wt))
+      ingestSampledWorktree(wt, pairedSamplePlacement(ctx, host, wt, shownLocally))
     }
   }
 
@@ -169,7 +171,11 @@ export function mergeSnapshotAndSessions(
       finalWorktreeId,
       finalRepoId
     )
-    if (runtimeHostId || stampedRuntimeHostId(ctx, finalWorktreeId)) {
+    // A paired-stamped record keeps local terminals only where this machine's sample shows them.
+    if (
+      runtimeHostId ||
+      (!shownLocally.has(finalWorktreeId) && stampedRuntimeHostId(ctx, finalWorktreeId))
+    ) {
       continue
     }
 

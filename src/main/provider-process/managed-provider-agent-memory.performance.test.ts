@@ -3,6 +3,7 @@ import type { spawnProcess } from '@orca/process-host'
 import { createFakeSpawnedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { listAgentProcessRoots } from '../memory/agent-process-registry'
 import { spawnManagedProviderProcess } from './managed-provider-process'
+import { DirectProviderChild } from './direct-provider-child'
 
 vi.mock('./provider-process-spawn', () => ({
   spawnProviderProcess: (spec: unknown, spawnImpl: (spec: unknown) => unknown) => spawnImpl(spec)
@@ -42,5 +43,27 @@ describe('agent memory registrations', () => {
     expect(listAgentProcessRoots()).toEqual([{ pid: 9_200_000, agentSessionId: null }])
     live.emit('close', null, null)
     expect(listAgentProcessRoots()).toEqual([])
+  })
+
+  it("keep counting an unreaped owner's tree after the agent CLI exits", async () => {
+    const child = launch(9_300_000)
+    const owner: { pid: number; exitCode: number | null; signalCode: null } = {
+      pid: 9_300_001,
+      exitCode: null,
+      signalCode: null
+    }
+    // A native launch: the agent runs under its own directly spawned owner.
+    Object.setPrototypeOf(child, DirectProviderChild.prototype)
+    Object.defineProperties(child, {
+      ownerPid: { value: 9_300_001 },
+      leaderExited: { value: true },
+      raw: { value: owner }
+    })
+    await settle()
+
+    expect(listAgentProcessRoots()).toEqual([{ pid: 9_300_001, agentSessionId: null }])
+    owner.exitCode = 0
+    expect(listAgentProcessRoots()).toEqual([])
+    child.emit('close', 0, null)
   })
 })

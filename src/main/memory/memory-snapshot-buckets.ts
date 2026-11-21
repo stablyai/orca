@@ -36,9 +36,21 @@ export function pushMemoryHistorySample(key: string, memoryBytes: number, now: n
   ring.touchedAt = now
 }
 
-/** A workspace's history including its chats; the plain key keeps the terminal-only series. */
-export function chatInclusiveHistoryKey(worktreeId: string): string {
-  return `${worktreeId}\u0000chats`
+/** A workspace's terminal-only series, kept once it has had chats; the plain key includes them. */
+export function terminalOnlyHistoryKey(worktreeId: string): string {
+  return `${worktreeId}\u0000terminals`
+}
+
+export function hasMemoryHistory(key: string): boolean {
+  return historyByKey.has(key)
+}
+
+/** Starts `key` as a copy of `fromKey`'s series, so a new series continues the old one. */
+export function seedMemoryHistory(key: string, fromKey: string, now: number): void {
+  historyByKey.set(key, {
+    samples: [...(historyByKey.get(fromKey)?.samples ?? [])],
+    touchedAt: now
+  })
 }
 
 export function readMemoryHistory(key: string): number[] {

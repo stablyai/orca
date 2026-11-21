@@ -187,7 +187,7 @@ export function useResourceUsageDerivedModel({
         resolveResourceFolderWorkspace(hostCtx, worktree.worktreeId)?.repoId ?? worktree.repoId
       return (
         !resolveResourceWorkspaceHost(hostCtx, worktree.worktreeId, repoId).runtimeHostId &&
-        !stampedRuntimeHostId(hostCtx, worktree.worktreeId)
+        (worktree.sessions.length > 0 || !stampedRuntimeHostId(hostCtx, worktree.worktreeId))
       )
     })
   }, [
