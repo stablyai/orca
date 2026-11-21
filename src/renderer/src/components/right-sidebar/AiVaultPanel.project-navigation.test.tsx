@@ -79,7 +79,7 @@ it('keeps the loaded project list and expanded chats while navigating across pro
   await act(async () => {
     await vi.advanceTimersByTimeAsync(1200)
   })
-  const project = screen.getByRole('region', { name: 'Orca' })
+  const project = screen.getByRole('region', { name: 'Acme' })
   fireEvent.click(within(project).getByRole('button', { name: 'Show more' }))
   expect(project.querySelectorAll('[data-conversation-id]')).toHaveLength(7)
   const list = project.parentElement
@@ -96,7 +96,7 @@ it('keeps the loaded project list and expanded chats while navigating across pro
       await vi.advanceTimersByTimeAsync(1200)
     })
     expect(listSessions).toHaveBeenCalledTimes(requests)
-    expect(screen.getByRole('region', { name: 'Orca' })).toBe(project)
+    expect(screen.getByRole('region', { name: 'Acme' })).toBe(project)
     expect(project.querySelectorAll('[data-conversation-id]')).toHaveLength(7)
     expect(list.scrollTop).toBe(240)
   }

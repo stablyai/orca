@@ -7,18 +7,18 @@ import { toAiVaultProjectKey } from '../../../../shared/ai-vault/scanning/ai-vau
 
 export const conversationRepos: Repo[] = [
   {
-    id: 'orca',
-    displayName: 'Orca',
-    path: '/projects/orca',
+    id: 'acme',
+    displayName: 'Acme',
+    path: '/projects/acme',
     badgeColor: '',
     addedAt: 0,
     executionHostId: 'local',
-    repoIcon: { type: 'emoji', emoji: '🐋' }
+    repoIcon: { type: 'emoji', emoji: '🚀' }
   },
   {
-    id: 'djinn',
-    displayName: 'Djinn',
-    path: '/projects/djinn',
+    id: 'example',
+    displayName: 'Example',
+    path: '/projects/example',
     badgeColor: '',
     addedAt: 0,
     executionHostId: 'local',
@@ -46,13 +46,13 @@ export const conversationWorktrees: Worktree[] = conversationRepos.map((repo) =>
 }))
 export const conversationCatalog = projectHostSetupProjectionFromRepos(conversationRepos)
 const titles = [
-  'Keep history steady while loading',
-  'Make project navigation clearer',
-  'Restore image attachments on mobile',
+  'Fix the login redirect',
+  'Add CSV export to reports',
+  'Speed up the search index',
   'Improve keyboard navigation',
-  'Show provider account quotas',
-  'Review saved worker roles',
-  'Update the Russian locale'
+  'Write release notes',
+  'Review the billing webhook',
+  'Update the onboarding copy'
 ]
 export const conversationSessions: AiVaultSession[] = titles.map((title, index) => ({
   id: `chat-${index}`,
@@ -60,7 +60,7 @@ export const conversationSessions: AiVaultSession[] = titles.map((title, index) 
   executionHostId: 'local',
   agent: index % 3 === 0 ? 'claude' : index % 3 === 1 ? 'codex' : 'gemini',
   title,
-  cwd: '/projects/orca',
+  cwd: '/projects/acme',
   branch: null,
   model: null,
   filePath: '/logs/chat',
@@ -81,16 +81,16 @@ export const conversationSessionProjects = new Map(
     session.id,
     {
       kind: 'repo' as const,
-      key: toAiVaultProjectKey(conversationCatalog.setups[0]?.projectId, 'orca') ?? 'repo:orca',
-      label: 'Orca',
-      repoId: 'orca',
+      key: toAiVaultProjectKey(conversationCatalog.setups[0]?.projectId, 'acme') ?? 'repo:acme',
+      label: 'Acme',
+      repoId: 'acme',
       hostKey: 'local' as const
     }
   ])
 )
 export function conversationListProps(): ProjectConversationListProps {
   return {
-    groups: [{ key: 'orca', label: 'Orca', sessions: conversationSessions }],
+    groups: [{ key: 'acme', label: 'Acme', sessions: conversationSessions }],
     sessionProjects: conversationSessionProjects,
     collapsedGroups: new Set(),
     loading: false,
@@ -139,7 +139,7 @@ export const conversationStore = {
   repos: conversationRepos,
   projects: conversationCatalog.projects,
   projectHostSetups: conversationCatalog.setups,
-  worktreesByRepo: { orca: [conversationWorktrees[0]!], djinn: [conversationWorktrees[1]!] },
+  worktreesByRepo: { acme: [conversationWorktrees[0]!], example: [conversationWorktrees[1]!] },
   activeWorktreeId: conversationWorktrees[1]!.id,
   projectOrderBy: 'manual' as const
 }

@@ -112,10 +112,10 @@ describe('project conversation ownership', () => {
     const result = groups({
       repos,
       catalog: projectHostSetupProjectionFromRepos(repos),
-      sessions: [{ ...conversationSessions[0]!, projectOwnerKey: 'repo:orca' }]
+      sessions: [{ ...conversationSessions[0]!, projectOwnerKey: 'repo:acme' }]
     })
     expect(result).toHaveLength(1)
-    expect(result[0]?.repo?.id).toBe('orca')
+    expect(result[0]?.repo?.id).toBe('acme')
     expect(result[0]?.sessions).toHaveLength(1)
   })
   it('does not guess a host for unqualified workspace twins', () => {

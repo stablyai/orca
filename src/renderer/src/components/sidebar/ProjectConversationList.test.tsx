@@ -77,7 +77,7 @@ describe('Projects containing conversations', () => {
       loading: true
     }
     const view = mount(props)
-    expect(screen.getByRole('region', { name: 'Orca' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Acme' })).toBeTruthy()
     expect(screen.queryAllByText('No chats yet')).toHaveLength(0)
     expect(screen.getByRole('status').textContent).toBe('Loading chats…')
     view.rerender(
@@ -93,9 +93,9 @@ describe('Projects containing conversations', () => {
 
   it('shows five recent chats with project icons, then progressively reveals more', () => {
     mount()
-    const project = screen.getByRole('region', { name: 'Orca' })
+    const project = screen.getByRole('region', { name: 'Acme' })
     expect(project.querySelectorAll('[data-conversation-id]')).toHaveLength(5)
-    expect(within(project).getByText('🐋')).toBeTruthy()
+    expect(within(project).getByText('🚀')).toBeTruthy()
     fireEvent.click(within(project).getByRole('button', { name: 'Show more' }))
     expect(project.querySelectorAll('[data-conversation-id]')).toHaveLength(7)
     expect(within(project).queryByRole('button', { name: 'Show more' })).toBeNull()
@@ -155,10 +155,10 @@ describe('Projects containing conversations', () => {
   })
   it('targets each project’s new-chat action at its own workspace', () => {
     mount()
-    expect(screen.getByRole('button', { name: 'New chat in Orca' }).dataset.workspace).toBe(
+    expect(screen.getByRole('button', { name: 'New chat in Acme' }).dataset.workspace).toBe(
       conversationWorktrees[0]!.id
     )
-    expect(screen.getByRole('button', { name: 'New chat in Djinn' }).dataset.workspace).toBe(
+    expect(screen.getByRole('button', { name: 'New chat in Example' }).dataset.workspace).toBe(
       conversationWorktrees[1]!.id
     )
   })
@@ -204,12 +204,12 @@ describe('Projects containing conversations', () => {
 
 it('reuses registered project settings and removal confirmation actions', async () => {
   mount()
-  await userEvent.click(screen.getByRole('button', { name: 'Project actions for Orca' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Project actions for Acme' }))
   expect(screen.getByRole('menuitem', { name: 'Project Settings' })).toBeTruthy()
   expect(screen.getByRole('menuitem', { name: 'Change Project Icon' })).toBeTruthy()
   await userEvent.click(screen.getByRole('menuitem', { name: 'Remove Project' }))
   expect(useAppStore.getState().activeModal).toBe('confirm-remove-folder')
-  expect(useAppStore.getState().modalData).toMatchObject({ repoId: 'orca', hostId: 'local' })
+  expect(useAppStore.getState().modalData).toMatchObject({ repoId: 'acme', hostId: 'local' })
 })
 
 it('hides a history-only group and restores it through management without requiring a workspace', async () => {
@@ -242,7 +242,7 @@ it('hides a history-only group and restores it through management without requir
 it('keeps visibility actions disabled until the host advertises support', async () => {
   state.projectVisibilitySupported = false
   mount()
-  await userEvent.click(screen.getByRole('button', { name: 'Project actions for Orca' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Project actions for Acme' }))
   const hide = screen.getByRole('menuitem', { name: 'Hide project from list' })
   expect(hide.getAttribute('aria-disabled')).toBe('true')
   await userEvent.click(hide)
@@ -253,7 +253,7 @@ it('moves only the selected host project when adjacent projects share a repo id'
   const local: Repo = { ...conversationRepos[0]!, id: 'same', executionHostId: 'local' }
   const remote: Repo = {
     ...local,
-    path: '/remote/orca',
+    path: '/remote/acme',
     executionHostId: 'ssh:box',
     connectionId: 'box'
   }
