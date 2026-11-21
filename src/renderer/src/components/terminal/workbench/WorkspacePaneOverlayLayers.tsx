@@ -11,6 +11,7 @@ export function WorkspacePaneOverlayLayers({
   worktreeId,
   worktreePath,
   isVisible,
+  isFocused = isVisible,
   shouldMeasureHiddenWorktree,
   hiddenTerminalPrewarm = null,
   shouldColdParkTerminalPanes,
@@ -25,6 +26,8 @@ export function WorkspacePaneOverlayLayers({
   worktreeId: string
   worktreePath: string
   isVisible: boolean
+  /** False for a visible grid view member: its panes paint but must not take keyboard focus. */
+  isFocused?: boolean
   shouldMeasureHiddenWorktree: boolean
   hiddenTerminalPrewarm?: HiddenTerminalPrewarm | null
   shouldColdParkTerminalPanes: boolean
@@ -43,6 +46,7 @@ export function WorkspacePaneOverlayLayers({
         worktreeId={worktreeId}
         worktreePath={worktreePath}
         isWorktreeActive={isVisible}
+        isWorktreeFocused={isFocused}
         coldParkTerminalPanes={shouldColdParkTerminalPanes}
         isForceParked={isForceParked}
         shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
@@ -55,6 +59,7 @@ export function WorkspacePaneOverlayLayers({
       <RetainedBrowserPaneOverlayLayer
         worktreeId={worktreeId}
         isWorktreeActive={isVisible}
+        isWorktreeFocused={isFocused}
         mountEligible={mountRetainedBrowserOverlay}
       />
       {mountEmulatorOverlay ? (
@@ -63,6 +68,7 @@ export function WorkspacePaneOverlayLayers({
       <StructuredAgentSessionPaneOverlayLayer
         worktreeId={worktreeId}
         isWorktreeActive={isVisible}
+        isWorktreeFocused={isFocused}
       />
       <AiVaultSessionDropLayer worktreeId={worktreeId} enabled={isVisible} />
     </>

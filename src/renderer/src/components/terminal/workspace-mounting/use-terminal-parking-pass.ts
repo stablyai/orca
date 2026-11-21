@@ -37,6 +37,7 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
     terminalProviderSnapshotCapabilityRevision,
     terminalRetentionBudgetEnabled,
     terminalSshParkingEnabled,
+    visibleWorkspaceIds,
     workspaceSurfaceIds
   } = controller
   // Why: this effect is the sole writer, so these mirror the queued state without a render.
@@ -63,13 +64,15 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
     if (previous) {
       if (
         previous.activeView !== activeView ||
-        previous.renderedActiveWorktreeId !== renderedActiveWorktreeId
+        previous.renderedActiveWorktreeId !== renderedActiveWorktreeId ||
+        previous.visibleWorkspaceIds !== visibleWorkspaceIds
       ) {
-        if (previous.renderedActiveWorktreeId) {
-          dirty.add(previous.renderedActiveWorktreeId)
-        }
-        if (renderedActiveWorktreeId) {
-          dirty.add(renderedActiveWorktreeId)
+        // Why the visible ids: every grid view cell is on screen, not just the active one.
+        const ids = [previous.renderedActiveWorktreeId, renderedActiveWorktreeId]
+        for (const id of [...ids, ...previous.visibleWorkspaceIds, ...visibleWorkspaceIds]) {
+          if (id) {
+            dirty.add(id)
+          }
         }
       }
       if (previous.activityTerminalPortals !== activityTerminalPortals) {
@@ -298,6 +301,7 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
     terminalProviderSnapshotCapabilityRevision,
     terminalRetentionBudgetEnabled,
     terminalSshParkingEnabled,
+    visibleWorkspaceIds,
     workspaceSurfaceIds
   ])
 }

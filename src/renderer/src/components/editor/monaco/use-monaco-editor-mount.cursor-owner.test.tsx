@@ -132,7 +132,8 @@ it('keeps cursor state on the current file owner after migration', async () => {
       }
     ],
     runtimeEnvironments: [],
-    detectedWorktreesByRepo: {}
+    detectedWorktreesByRepo: {},
+    workspaceGridViewMemberIds: []
   })
   const params = mountParams(store, oldId, filePath)
   let emitCursor:
