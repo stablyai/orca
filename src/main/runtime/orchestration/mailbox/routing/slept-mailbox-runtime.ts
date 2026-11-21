@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines -- temporary wake-debug branch, never merged */
 import { reconcileSleepingMail, refreshSleepingMailScope } from './sleeping-mail-owner-mailboxes'
 import { sessionCrewChanges, type CrewInvalidation } from '../../crew/crew-changes'
 import { MailWakeAttempts } from './mail-wake-attempts'
@@ -37,6 +38,9 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
           kind: 'wake',
           run: async () => {
             const current = this.sleepingMailRecord(record.paneKey)
+            console.log(
+              `[wake-debug] ${new Date().toISOString()} main mailWakeRun pane=${record.paneKey} origin=${current?.origin} mailWake=${!!current?.mailWake} owes=${this.hasSleepingMailForPane(record.paneKey)} connected=${this.getPtyRecordForPaneKey(record.paneKey)?.connected} capturedSame=${current?.capturedAt === record.capturedAt}`
+            )
             if (
               !current ||
               !this.hasSleepingMailForPane(record.paneKey) ||
@@ -63,6 +67,9 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
                   claimed.mailWake?.id
                 )
               ).catch(() => false)) === true
+            console.log(
+              `[wake-debug] ${new Date().toISOString()} main mailWake pane=${current.paneKey} claimed=${claimed.mailWake?.id} resumed=${resumed}`
+            )
             if (!resumed) {
               // Nothing was launched, so a later edge may wake this pane again.
               this.settleMailWakeAttempt(claimed)
@@ -77,6 +84,9 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
         timeout = setTimeout(() => stop.abort(), 30_000)
         void this.probeMailWakeForeground(record.paneKey, stop.signal)
         const woke = await confirmed
+        console.log(
+          `[wake-debug] ${new Date().toISOString()} main mailWakeConfirmed pane=${record.paneKey} woke=${woke} attempt=${JSON.stringify(this.mailWakeAttempts.get(record.paneKey)?.mailWake)}`
+        )
         const attempt = this.mailWakeAttempts.get(record.paneKey)
         // A window that answered but never launched under this attempt leaves no process to wait for.
         if (

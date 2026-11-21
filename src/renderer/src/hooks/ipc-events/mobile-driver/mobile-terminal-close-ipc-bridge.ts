@@ -230,6 +230,9 @@ export function registerMobileAndTerminalCloseIpcBridge(
   unsubs.push(
     window.api.ui.onResumeSleepingAgents(
       ({ worktreeId, paneKey, prepareOnly, requestId, launchToken }) => {
+        console.log(
+          `[wake-debug] ${new Date().toISOString()} ipcWakeRequest wt=${worktreeId} pane=${paneKey} prepareOnly=${prepareOnly} token=${launchToken}`
+        )
         if (paneKey && !prepareOnly) {
           rememberMailWakeLaunchToken(paneKey, launchToken)
         }
@@ -238,6 +241,9 @@ export function registerMobileAndTerminalCloseIpcBridge(
         void Promise.resolve(result)
           .catch(() => false)
           .then((woke) => {
+            console.log(
+              `[wake-debug] ${new Date().toISOString()} ipcWakeReply pane=${paneKey} prepareOnly=${prepareOnly} woke=${woke}`
+            )
             // A wake that never reached the pane's startup must not lend its id to a later launch.
             if (paneKey && launchToken && woke !== true) {
               forgetMailWakeLaunchToken(paneKey, launchToken)

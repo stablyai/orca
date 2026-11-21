@@ -154,6 +154,9 @@ export function bindPanePtyExit(session: ConnectPanePtySession): void {
       }
       const sleepingRecordEntry = session.getSleepingRecordForPane(useAppStore.getState())
       if (sleepingRecordEntry && noteArmsHibernatedPaneWake(sleepingRecordEntry.record)) {
+        console.log(
+          `[wake-debug] ${new Date().toISOString()} exitArm pane=${session.cacheKey} pty=${ptyId} curPty=${session.transport.getPtyId()} origin=${sleepingRecordEntry.record.origin}`
+        )
         // Disarm input-eating modes on the dead frozen TUI, then arm its reveal wake.
         session.writeInputModeGround(POST_REPLAY_MODE_RESET)
         session.hibernatedWakeTarget = { ptyId, record: sleepingRecordEntry.record }

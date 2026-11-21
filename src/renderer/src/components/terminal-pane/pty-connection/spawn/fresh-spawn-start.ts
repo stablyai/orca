@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines -- temporary wake-debug branch, never merged */
 import { applyTerminalLaunchResult } from '../startup/terminal-launch-result-policy'
 import { armPaneOwnerRetry, isPaneOwnerRefusal } from '../host-ownership/pane-owner-recovery'
 import type { SpawnDeferralReason } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
@@ -39,6 +40,9 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     options: FreshSpawnOptions = {}
   ): Promise<string | null> => {
     const effectiveStartup = startupOverride === undefined ? session.paneStartup : startupOverride
+    console.log(
+      `[wake-debug] ${new Date().toISOString()} freshSpawnEnter pane=${session.cacheKey} cancelled=${!!effectiveStartup?.resumeSource?.cancelled}`
+    )
     if (
       effectiveStartup?.resumeSource?.cancelled ||
       hasWorktreeTeardownStarted(
@@ -87,6 +91,9 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       },
       toProcessExitStartup(coldRestoreOverride ?? effectiveStartup),
       coldRestoreOverride ?? effectiveStartup
+    )
+    console.log(
+      `[wake-debug] ${new Date().toISOString()} freshSpawn pane=${session.cacheKey} override=${startupOverride === undefined ? 'undef' : startupOverride ? 'yes' : 'null'} cmdPassed=${!!(startupOverride?.command && session.pendingStartupCommand?.command !== startupOverride.command)} pending=${!!session.pendingStartupCommand} curPty=${session.transport.getPtyId()} connected=${session.transport.isConnected()} visible=${session.deps.isVisibleRef.current}`
     )
     const spawnedRaw = session.transport.connect({
       url: '',
@@ -139,6 +146,9 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
             : typeof spawnedPtyId === 'string'
               ? spawnedPtyId
               : session.transport.getPtyId()
+        console.log(
+          `[wake-debug] ${new Date().toISOString()} freshSpawnResult pane=${session.cacheKey} raw=${JSON.stringify(spawnedPtyId)?.slice(0, 200)} resolved=${resolvedPtyId} deferral=${session.pendingSpawnDeferral} genOk=${outputCallbacks.generation === session.transportStreamGeneration}`
+        )
         const deferral: SpawnDeferralReason | null = resolvedPtyId
           ? null
           : session.pendingSpawnDeferral
@@ -268,6 +278,9 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       })
       .catch(async (error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
+        console.log(
+          `[wake-debug] ${new Date().toISOString()} freshSpawnError pane=${session.cacheKey} ${message}`
+        )
         if (!ownerRefused && isPaneOwnerRefusal(message)) {
           outputCallbacks.callbacks.onError(message)
         }

@@ -83,6 +83,9 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
         return
       }
     }
+    console.log(
+      `[wake-debug] ${new Date().toISOString()} keepQuitRecord pane=${session.cacheKey} curPty=${session.transport.getPtyId()}`
+    )
     // Spawn proves a PTY exists, not that the agent has replaced its resume identity.
     const record = paneResumeRecord(session, startup)
     if (record) {
@@ -117,6 +120,9 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     options: FreshSpawnOptions = {},
     automatic?: boolean
   ): Promise<string | null> => {
+    console.log(
+      `[wake-debug] ${new Date().toISOString()} spawnColdResume pane=${session.cacheKey} startup=${startup ? 'yes' : 'NULL'} pending=${session.pendingStartupCommand ? session.pendingStartupCommand.command.slice(0, 300) : 'none'} paste=${session.shouldDeliverStartupViaTerminalPaste} cmd=${startup?.command?.slice(0, 300)} curPty=${session.transport.getPtyId()} connected=${session.transport.isConnected()}`
+    )
     if (startup?.resumeSource?.cancelled) {
       return Promise.resolve(null)
     }
@@ -193,6 +199,9 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
           return
         }
         const command = startup.command
+        console.log(
+          `[wake-debug] ${new Date().toISOString()} deliverStartup pane=${session.cacheKey} paste=${session.shouldDeliverStartupViaTerminalPaste} pty=${session.transport.getPtyId()} cmd=${command.slice(0, 400)}`
+        )
         const submitted = session.shouldDeliverStartupViaTerminalPaste
           ? await runTerminalPasteStartupCommand(command, isCurrent)
           : session.transport.sendInput(`${command}\r`, 'launch')

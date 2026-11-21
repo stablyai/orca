@@ -77,6 +77,9 @@ export function installSpawnDeferredSleep(session: ConnectPanePtySession): void 
     options: FreshSpawnOptions,
     visibleAtSpawn: boolean
   ): void => {
+    console.log(
+      `[wake-debug] ${new Date().toISOString()} spawnDeferred pane=${session.cacheKey} reason=${reason} visible=${visibleAtSpawn}`
+    )
     releaseDeferredCwdFence(session)
     session.keepUnrunResumeHandle(startupOverride)
     session.deferredSpawn = { reason, startupOverride, options }

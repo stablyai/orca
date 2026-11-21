@@ -192,6 +192,9 @@ export function wakeSleepingAgentsForWorktreeInBackground(
   )
   if (paneKey) {
     // A mounted pane resumed itself on the event; mounting is only for a tab that isn't mounted yet.
+    console.log(
+      `[wake-debug] ${new Date().toISOString()} targetedWake pane=${paneKey} claimed=${wokenClaimKeys.size} tab=${sleptRecords[0] && getSleepingRecordTabId(sleptRecords[0])}`
+    )
     if (wokenClaimKeys.size > 0) {
       return
     }
@@ -254,6 +257,9 @@ async function wakeSleepingPaneInBackground(
   if (prepareOnly) {
     return true
   }
+  console.log(
+    `[wake-debug] ${new Date().toISOString()} bgPaneWake pane=${paneKey} origin=${record?.origin} state=${record?.state} rotoo=${record?.restoreOnTabOpenOnly} wt=${record?.worktreeId === worktreeId}`
+  )
   const record = useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]
   if (
     !record ||

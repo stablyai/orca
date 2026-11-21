@@ -30,6 +30,9 @@ export function installHibernatedPaneWake(session: ConnectPanePtySession): void 
   // Share guarded wake consumption between reveal and arm-time visibility checks so a reveal racing kill resumes exactly once.
   session.consumeHibernatedAgentWake = (claimedProviderSessions?: Set<string>): string | null => {
     const target = session.hibernatedWakeTarget
+    console.log(
+      `[wake-debug] ${new Date().toISOString()} consume pane=${session.cacheKey} target=${target ? `${target.ptyId}/${target.wake ? 'held' : 'exit'}` : 'none'} disposed=${session.disposed} transportMatch=${session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport} curPty=${session.transport.getPtyId()} rec=${session.getSleepingRecordForPane(useAppStore.getState())?.record.origin} hasWakeFn=${!!session.wakeHibernatedAgentPane}`
+    )
     if (!target || session.disposed) {
       return null
     }
@@ -69,6 +72,9 @@ export function installHibernatedPaneWake(session: ConnectPanePtySession): void 
     const wake: () => Promise<string | null> = target.wake ?? session.wakeHibernatedAgentPane
     void wake()
       .then((spawnedPtyId) => {
+        console.log(
+          `[wake-debug] ${new Date().toISOString()} wakeResult pane=${session.cacheKey} spawned=${spawnedPtyId} curPty=${session.transport.getPtyId()}`
+        )
         if (!spawnedPtyId) {
           // On transient spawn failure, re-arm the exact retained record so later mobile wakes can retry after full ownership validation.
           session.hibernatedWakeTarget = target
@@ -92,6 +98,9 @@ export function wakeHibernatedPaneIfArmed(
   if (paneKey && paneKey !== session.cacheKey) {
     return null
   }
+  console.log(
+    `[wake-debug] ${new Date().toISOString()} armedCheck pane=${session.cacheKey} inFlight=${session.hibernatedWakeInFlightClaimKey} target=${session.hibernatedWakeTarget?.ptyId ?? 'none'} connected=${session.transport.isConnected()} curPty=${session.transport.getPtyId()} hasWakeFn=${!!session.wakeHibernatedAgentPane} disposed=${session.disposed} transportMatch=${session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport} visible=${session.deps.isVisibleRef.current} pendingStartup=${!!session.pendingStartupCommand}`
+  )
   if (session.hibernatedWakeInFlightClaimKey) {
     if (claimedProviderSessions?.has(session.hibernatedWakeInFlightClaimKey)) {
       return null

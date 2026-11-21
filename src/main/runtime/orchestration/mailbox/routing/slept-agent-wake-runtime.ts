@@ -164,6 +164,9 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
   ): Promise<void> {
     const deadline = Date.now() + SLEPT_AGENT_WAKE_TIMEOUT_MS
     await this.requestSleptPaneResume(pane)
+    console.log(
+      `[wake-debug] ${new Date().toISOString()} main wakeSleptPane handle=${handle} pane=${pane.paneKey} resumeRequested`
+    )
     try {
       await this.awaitWokenHandle(handle, deadline, undefined, parsePaneKey(pane.paneKey)?.leafId)
     } catch (error) {
@@ -171,6 +174,9 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
         ? new Error('terminal_handle_stale')
         : error
     }
+    console.log(
+      `[wake-debug] ${new Date().toISOString()} main wokenHandle handle=${handle} pty=${this.wokenHandlePtyId(handle)}`
+    )
     // The wait controller directly: the main-owned starter would route back into this wake.
     const ready = await this.terminalWait.wait(handle, {
       condition: 'tui-idle',
@@ -186,6 +192,9 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
     paneKey: string
     worktreeId: string
   }): Promise<void> {
+    console.log(
+      `[wake-debug] ${new Date().toISOString()} main requestSleptPaneResume pane=${pane.paneKey} obligation=${mailWakeObligation(this.sleepingMailRecord(pane.paneKey))} origin=${this.sleepingMailRecord(pane.paneKey)?.origin}`
+    )
     // A mail wake already holds this pane's resume; joining it never starts a second process.
     if (mailWakeObligation(this.sleepingMailRecord(pane.paneKey)) === 'retained') {
       return
@@ -196,6 +205,9 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
         this.getPtyRecordForPaneKey(pane.paneKey)?.connected === true ||
         (await this.notifier?.resumeSleepingAgents?.(pane.worktreeId, pane.paneKey)) === true
     })
+    console.log(
+      `[wake-debug] ${new Date().toISOString()} main requestSleptPaneResume pane=${pane.paneKey} woke=${woke}`
+    )
     if (!woke) {
       throw new Error('agent_wake_failed')
     }

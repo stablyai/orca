@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines -- temporary wake-debug branch, never merged */
 import {
   applyTerminalLaunchResult,
   captureTerminalLaunchContext
@@ -299,6 +300,9 @@ export function createReattachPayloadHandlers(
         session.showSessionRestoredBanner()
       }
       if (didPrepareResume) {
+        console.log(
+          `[wake-debug] ${new Date().toISOString()} reattachKeep pane=${session.cacheKey} pty=${session.transport.getPtyId()}`
+        )
         session.keepResumeRecordAfterColdRestoreSpawn(preparedStartup)
       }
       // Why: cold-restore spawned a fresh shell; reset mode bytes a crashed TUI (e.g. Claude's \e[?1004h) left in scrollback that no live TUI now consumes.

@@ -34,6 +34,9 @@ export function requestBackgroundTerminalWorktreeMount(
     return
   }
   // Only targeted wakes mark sleeping agents; whole-worktree mounts must not authorize every hidden remount.
+  console.log(
+    `[wake-debug] ${new Date().toISOString()} bgMount wt=${detail.worktreeId} tabs=${detail.tabIds?.join(',')} wakePane=${detail.wakePaneKey}`
+  )
   if (detail.tabIds) {
     requestSleepingAgentWakeOnMount(detail.worktreeId, detail.tabIds, detail.wakePaneKey)
   }

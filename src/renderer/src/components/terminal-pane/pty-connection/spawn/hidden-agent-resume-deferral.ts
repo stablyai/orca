@@ -16,6 +16,9 @@ export function deferHiddenAgentResume(
   wake?: () => Promise<string | null>
 ): boolean {
   const recordEntry = startup?.sleepingRecordEntry
+  console.log(
+    `[wake-debug] ${new Date().toISOString()} deferHidden pane=${session.cacheKey} hasRecord=${!!recordEntry} visible=${session.deps.isVisibleRef.current} released=${session.hiddenAgentResumeReleased} customWake=${!!wake} curPty=${session.transport.getPtyId()}`
+  )
   if (
     !recordEntry ||
     session.disposed ||
@@ -40,6 +43,9 @@ export function deferHiddenAgentResume(
       }
       session.hiddenAgentResumeReleased = true
       return start().then((ptyId) => {
+        console.log(
+          `[wake-debug] ${new Date().toISOString()} heldWakeStarted pane=${session.cacheKey} ptyId=${ptyId}`
+        )
         // Why the transport: a held reattach resolves before it binds, and the hold must cover its fallback.
         if (
           session.transport.getPtyId() !== null &&
@@ -119,6 +125,9 @@ export function startDeferredSessionReattachUnlessHiddenAgentResume(
         return
       }
       // Why only false: a live or unverifiable session must attach, and only the host's "exited" may hold it.
+      console.log(
+        `[wake-debug] ${new Date().toISOString()} remountReattach pane=${session.cacheKey} session=${sessionId} isLive=${isLive} visible=${session.deps.isVisibleRef.current}`
+      )
       const deferred =
         isLive === false &&
         deferHiddenAgentResume(session, session.buildColdRestoreAgentResumeStartup(), () => {
