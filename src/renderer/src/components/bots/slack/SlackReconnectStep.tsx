@@ -101,7 +101,8 @@ export function SlackReconnectStep({
   const pasteId = useId()
   const offered = offer !== null && hostName !== null
   // An offer arriving never hides the paste form someone is in: a token in the field, or focus
-  // anywhere in the form, opens the disclosure on it, unless they closed it themselves.
+  // anywhere in the form, opens the disclosure on it, unless they closed it themselves and have not
+  // gone back to the form since.
   const [hasToken, setHasToken] = useState(false)
   const [inPasteForm, setInPasteForm] = useState(false)
   const [closedByUser, setClosedByUser] = useState(false)
@@ -119,16 +120,35 @@ export function SlackReconnectStep({
   const pasteToggleRef = useRef<HTMLButtonElement>(null)
   const focusInStep = useRef(false)
   const focusedFor = useRef(offered)
+  // Set while this step moves focus itself, so that is not taken for the user going back to the form.
+  const movingFocus = useRef(false)
   useEffect(() => {
-    // Where focus last went. A focused control that is removed moves focus to nothing, with no
-    // focusin, so this still says it was in the step.
+    // Whether focus is in the step. Focus moving anywhere says where it went. Focus moving to nothing
+    // is checked once the moment settles: a control still shown and no longer focused was left (an
+    // ordinary blur); one removed or hidden was taken away, and one still focused lost only its
+    // window (switching apps), so focus still counts as in the step.
     const onFocusIn = (event: FocusEvent): void => {
       focusInStep.current =
         event.target instanceof Node && stepRef.current?.contains(event.target) === true
     }
+    const onFocusOut = (event: FocusEvent): void => {
+      const left = event.target
+      if (event.relatedTarget !== null || !(left instanceof HTMLElement)) {
+        return
+      }
+      queueMicrotask(() => {
+        if (left.isConnected && !left.closest('[hidden]') && document.activeElement !== left) {
+          focusInStep.current = false
+        }
+      })
+    }
     focusInStep.current = stepRef.current?.contains(document.activeElement) === true
     document.addEventListener('focusin', onFocusIn)
-    return () => document.removeEventListener('focusin', onFocusIn)
+    document.addEventListener('focusout', onFocusOut)
+    return () => {
+      document.removeEventListener('focusin', onFocusIn)
+      document.removeEventListener('focusout', onFocusOut)
+    }
   }, [])
   useLayoutEffect(() => {
     if (focusedFor.current === offered) {
@@ -143,7 +163,9 @@ export function SlackReconnectStep({
     if (focusInStep.current && lost) {
       const target =
         offered && !pasting ? pasteToggleRef.current : pasteRef.current?.querySelector('input')
+      movingFocus.current = true
       target?.focus()
+      movingFocus.current = false
     }
   }, [offered, pasting])
   const kept = t(
@@ -228,11 +250,19 @@ export function SlackReconnectStep({
         {/* Hidden, not unmounted, while closed: a token typed before closing it is still there. */}
         <div
           id={pasteId}
-          onFocus={() => setInPasteForm(true)}
-          onBlur={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget)) {
-              setInPasteForm(false)
+          onFocus={() => {
+            setInPasteForm(true)
+            // Back in the form: an earlier close no longer keeps it shut.
+            if (!movingFocus.current) {
+              setClosedByUser(false)
             }
+          }}
+          onBlur={(event) => {
+            // Switching apps blurs the field but leaves it the focused element: still in the form.
+            setInPasteForm(
+              event.currentTarget.contains(event.relatedTarget) ||
+                event.currentTarget.contains(document.activeElement)
+            )
           }}
           ref={pasteRef}
           hidden={offered && !pasting}
@@ -247,7 +277,12 @@ export function SlackReconnectStep({
             error={error}
             onSubmit={onSubmit}
             // A token already in the paste-only field stays in view when an offer arrives.
-            onTokenChange={(token) => setHasToken(token !== '')}
+            onTokenChange={(token) => {
+              setHasToken(token !== '')
+              if (token !== '') {
+                setClosedByUser(false)
+              }
+            }}
             // A refused paste comes back open, with focus on the field and its error; the
             // paste-only step focuses the field.
             autoFocusField={offered ? error !== null : true}
