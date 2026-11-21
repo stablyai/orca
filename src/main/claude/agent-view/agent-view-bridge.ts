@@ -36,8 +36,7 @@ export class ClaudeAgentViewBridge {
     }
   }
 
-  /** Mods register only on change, so a restarted main reloads what idle Claudes told the last one;
-   *  `isLive` drops panes whose Claude is gone. */
+  /** Idle mods stay quiet, so a restarted main reloads them; `isLive` drops panes whose Claude is gone. */
   restore(
     filePath: string,
     isLive: (session: RegisteredClaudeAgentView) => boolean = () => true
@@ -179,7 +178,6 @@ export class ClaudeAgentViewBridge {
     return answerPendingView(current.pending, message)
   }
 
-  /** Whether memory is on disk, so an idle mod may stop checking in. */
   saved(): Promise<boolean> {
     return this.registry?.settled() ?? Promise.resolve(false)
   }
@@ -261,7 +259,6 @@ export class ClaudeAgentViewBridge {
     }
   }
 
-  /** Settles waiting views; the saved registry stays for the next main. */
   release(): void {
     for (const session of this.sessions.values()) {
       session.pending?.finish({ status: 'unavailable' })
