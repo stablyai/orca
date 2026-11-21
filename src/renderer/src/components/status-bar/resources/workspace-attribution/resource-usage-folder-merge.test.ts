@@ -121,12 +121,13 @@ describe('folder Resource Manager rows', () => {
 
   it('opens chats in a worktree this window placed on a paired machine whose repo is local', () => {
     const chat = { agentSessionId: 'chat-3', agent: 'claude', name: null, cpu: 1, memory: 256 }
-    const worktree = {
+    const worktree: Worktree = {
+      ...workspace,
       id: 'repo-1::/remote',
       repoId: 'repo-1',
       displayName: 'Remote',
       hostId: 'runtime:wsl:Ubuntu'
-    } as Worktree
+    }
     const repos = mergeSnapshotAndSessions(
       null,
       [],
