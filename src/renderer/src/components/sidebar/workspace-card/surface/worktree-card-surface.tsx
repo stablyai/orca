@@ -84,6 +84,9 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
           ? 'border-worktree-sidebar-foreground/40 bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground ring-1 ring-inset ring-worktree-sidebar-ring/60'
           : !isActiveSurface && 'worktree-sidebar-card-hover',
         isActiveSurface && isMultiSelected && 'ring-1 ring-worktree-sidebar-ring/35',
+        // The workspace menu acts on the whole card, even when opened from one of its agent rows.
+        card.detailsHoverControl.contextMenuOpen &&
+          'ring-1 ring-inset ring-worktree-sidebar-ring/60',
         revealHighlight && [
           'scroll-to-current-workspace-reveal-highlight',
           revealHighlightTone === 'ai' && 'scroll-to-current-workspace-reveal-highlight--ai'

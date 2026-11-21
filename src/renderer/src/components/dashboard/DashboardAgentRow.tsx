@@ -46,6 +46,7 @@ import {
   agentChildRowNoUpdateLabel
 } from '@/components/agent/status/agent-child-row-text'
 import { translate } from '@/i18n/i18n'
+import { WORKSPACE_AGENT_ROW_ATTR } from '@/components/sidebar/workspace-actions/context-menu/workspace-agent-row-marker'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
@@ -264,6 +265,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         sendTargetStatus === 'sending' && 'cursor-progress opacity-75',
         sendTargetStatus === 'disabled' && 'cursor-default opacity-60'
       )}
+      {...{ [WORKSPACE_AGENT_ROW_ATTR]: 'true' }}
       data-focused-agent-pane={highlighted ? 'true' : undefined}
       data-current={view?.current ? 'true' : undefined}
       aria-current={view?.current ? 'true' : undefined}

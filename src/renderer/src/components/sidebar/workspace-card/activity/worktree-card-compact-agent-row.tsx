@@ -27,6 +27,7 @@ import { getCompactAgentLineOrder } from './worktree-card-compact-agent-line-ord
 import type { ProgramStatusPresentation } from '../../../../../../shared/program-status/presentation'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { WORKSPACE_AGENT_ROW_ATTR } from '../../workspace-actions/context-menu/workspace-agent-row-marker'
 
 function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
@@ -318,6 +319,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       onMouseDown={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
       onDragStart={(e) => e.stopPropagation()}
+      {...{ [WORKSPACE_AGENT_ROW_ATTR]: 'true' }}
       data-focused-agent-pane={highlighted ? 'true' : undefined}
       data-current={view?.current ? 'true' : undefined}
       aria-current={view?.current ? 'true' : undefined}

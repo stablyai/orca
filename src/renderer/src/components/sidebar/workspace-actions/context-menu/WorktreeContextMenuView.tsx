@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +36,7 @@ import {
 } from './worktree-context-menu-policy'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { WorktreeHandToBotMenuItem } from '@/components/bots/hand-to-bot/WorktreeHandToBotMenuItem'
+import { isFromWorkspaceAgentRow } from './workspace-agent-row-marker'
 
 export default function WorktreeContextMenuView({ model }: { model: WorktreeContextMenuModel }) {
   const {
@@ -78,6 +80,8 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     workspaceStatuses
   } = model
   const t = useTranslate()
+  // Recomputed on every open, the only place this menu opens.
+  const [openedFromAgentRow, setOpenedFromAgentRow] = useState(false)
   const sleepItems = (
     <WorkspaceSleepMenuItems
       isMultiContext={isMultiContext}
@@ -108,6 +112,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
         contextMenuOpenedAtRef.current = Date.now()
         window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
         setDeveloperMenuRevealed(event.altKey)
+        setOpenedFromAgentRow(isFromWorkspaceAgentRow(event.currentTarget, event.target))
         setContextWorktrees(onContextMenuSelect?.(event) ?? effectiveSelectedWorktrees)
         const bounds = event.currentTarget.getBoundingClientRect()
         setMenuPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
@@ -179,7 +184,8 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           {!isMultiContext && (
             <WorktreeNotificationMuteMenuItem worktreeId={worktree.id} disabled={isDeleting} />
           )}
-          <WorktreeContextMenuDeleteItems model={model} />
+          {/* From an agent row, Delete would read as deleting that agent; it removes the whole workspace. */}
+          {!openedFromAgentRow && <WorktreeContextMenuDeleteItems model={model} />}
           <DropdownMenuSeparator />
           {!isMultiContext && (
             <>
