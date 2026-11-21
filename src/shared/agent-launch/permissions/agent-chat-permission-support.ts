@@ -46,7 +46,8 @@ export const NATIVE_CHAT_AGENTS = [
   'aug',
   'kilo',
   'mimo-code',
-  'gemini'
+  'gemini',
+  'droid'
 ] as const
 
 export type NativeChatAgent = (typeof NATIVE_CHAT_AGENTS)[number]
@@ -66,6 +67,7 @@ const AGENT_CHAT_PERMISSION_MODES_BY_AGENT: Record<
   kimi: ASK_WHEN_NEEDED_CHAT_PERMISSION_MODES,
   kiro: ACP_CHAT_PERMISSION_MODES,
   goose: ASK_WHEN_NEEDED_CHAT_PERMISSION_MODES,
+  droid: ASK_WHEN_NEEDED_CHAT_PERMISSION_MODES,
   // Pi asks no approvals, so its chats run with every tool it has, as its terminal does.
   pi: null,
   antigravity: EDIT_ACCEPTING_CHAT_PERMISSION_MODES,

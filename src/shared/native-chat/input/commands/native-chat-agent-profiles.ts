@@ -109,7 +109,12 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
   'mimo-code': null,
   omp: null,
   // No folder scan until Gemini's ACP is checked to load a picked skill.
-  gemini: null
+  gemini: null,
+  // Droid reports skills only once a session starts, so resting chats rely on the scan.
+  droid: {
+    skillPrefix: '/',
+    skillSourceOwner: 'droid'
+  }
 }
 
 /** Whether `skill` under `source` reaches `profile`'s agent: shared roots, its own, and the skill

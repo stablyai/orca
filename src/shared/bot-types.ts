@@ -34,7 +34,8 @@ export const BOT_AGENTS = [
   'goose',
   'kilo',
   'mimo-code',
-  'gemini'
+  'gemini',
+  'droid'
 ] as const satisfies readonly Exclude<NativeChatAgent, (typeof BOT_HELD_BACK_AGENTS)[number]>[]
 
 /** Agents the previous release's bot schema reads; it drops bots on any other agent when it loads. */
