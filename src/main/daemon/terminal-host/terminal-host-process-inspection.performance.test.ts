@@ -322,3 +322,76 @@ it('keeps a known agent from per-pid reads alone, and captures once it exits', a
   await poll(10)
   expect(tables.strict).toHaveBeenCalledTimes(2)
 })
+
+it('confirms N resting agents polled together with one native read', async () => {
+  async function steadyRoundReads(panes: number): Promise<number> {
+    const rows: ProcessTableRow[] = []
+    const sessions: Session[] = []
+    for (let i = 0; i < panes; i++) {
+      const shell = 10_000 + i * 2
+      const agent = shell + 1
+      const tty = `ttys${i}`
+      rows.push(
+        {
+          pid: shell,
+          ppid: 1,
+          pgid: shell,
+          tpgid: agent,
+          stat: 'S',
+          tty,
+          command: '-zsh',
+          startTime: 'Mon Nov 20 10:00:00 2026'
+        },
+        {
+          pid: agent,
+          ppid: shell,
+          pgid: agent,
+          tpgid: agent,
+          stat: 'S',
+          tty,
+          command: 'claude',
+          startTime: 'Mon Nov 20 10:01:00 2026'
+        }
+      )
+      sessions.push({
+        ...pane({
+          root: shell,
+          shellIsRootChild: false,
+          foregroundGroup: agent,
+          foreground: 'claude'
+        }),
+        pid: shell
+      } as Session)
+    }
+    setLibprocAddonForTests({
+      readProcessTable: async (query) => {
+        groupReads(query)
+        return (query.pids ?? []).map((pid) => ({ ...kinfo(pid, pid), comm: 'claude' }))
+      }
+    })
+    tables.strict.mockReset().mockResolvedValue({ rows, capturedAgeMs: 0 })
+    const round = (epoch: number) =>
+      settle(
+        Promise.all(
+          sessions.map((session, i) =>
+            inspectTerminalHostProcess({
+              sessionId: `pane-${i}`,
+              session,
+              steadyState: true,
+              authorityGeneration: 'generation-1',
+              nextObservationEpoch: () => epoch
+            })
+          )
+        )
+      )
+    await round(0)
+    vi.advanceTimersByTime(15_000)
+    groupReads.mockReset()
+    const results = await round(1)
+    expect(results.every((result) => result.foregroundProcess === 'claude')).toBe(true)
+    expect(tables.strict).toHaveBeenCalledTimes(panes)
+    return groupReads.mock.calls.length
+  }
+  expect(await steadyRoundReads(10)).toBe(1)
+  expect(await steadyRoundReads(100)).toBe(1)
+})
