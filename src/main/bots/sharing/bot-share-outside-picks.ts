@@ -16,7 +16,10 @@ export function savedPicks(candidate: NotedCandidate): BotSharePicks {
       selection[part] = [...names]
     }
   }
-  const outside = currentTicks(candidate.selection.outsideSkills, candidate.shareable)
+  const packed = candidate.content.bot.skills
+  const outside = currentTicks(candidate.selection.outsideSkills, candidate.shareable)?.filter(
+    (pick) => packed.some((skill) => skill.name === pick.name)
+  )
   if (outside && outside.length > 0) {
     selection.outsideSkills = outside.map(({ name, key }) => ({ name, key }))
   }

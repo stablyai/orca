@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -140,6 +140,21 @@ describe.skipIf(process.platform === 'win32')('saved picks for Update link', () 
     expect(last.selection).toEqual({ skills: ['deploy', 'electron'], outsideSkills: [] })
     expect(await packed(await read(), last.selection)).toEqual(DEPLOY)
   })
+
+  it.skipIf(process.getuid?.() === 0)(
+    'saves no tick for a skill packing refused, even once it can be read',
+    async () => {
+      await linkElectronIn()
+      await write(root, 'devex/electron/big.md', 'Reference\n')
+      await chmod(join(root, 'devex/electron/big.md'), 0o000)
+      const saved = await published(tick(await read()))
+      expect(saved.selection.outsideSkills).toBeUndefined()
+
+      await chmod(join(root, 'devex/electron/big.md'), 0o644)
+      const last = restoredPicks(saved, await read())
+      expect(await packed(await read(), last.selection)).toEqual(DEPLOY)
+    }
+  )
 
   it('saves no tick the published link left out, even once the skill is back in that folder', async () => {
     await linkElectronIn('devex')
