@@ -10,7 +10,17 @@ import {
   createWslDistroHolder
 } from './wsl-distro-holder'
 import type { WslDistroHolderChild, WslDistroHolderDependencies } from './wsl-distro-holder-types'
-import { wslDistroHolderDirectory, type WslDistroHolderRecord } from './wsl-distro-holder-record'
+import type * as holderRecord from './wsl-distro-holder-record'
+import {
+  wslDistroHolderDirectory,
+  writeWslDistroHolderRecord,
+  type WslDistroHolderRecord
+} from './wsl-distro-holder-record'
+
+vi.mock('./wsl-distro-holder-record', async (importOriginal) => {
+  const actual = await importOriginal<typeof holderRecord>()
+  return { ...actual, writeWslDistroHolderRecord: vi.fn(actual.writeWslDistroHolderRecord) }
+})
 
 const HOLDER_COMMAND = (distro: string): string =>
   `C:\\Windows\\System32\\wsl.exe -d ${distro} --exec /bin/sh -c "while :; do sleep 3600; done" ${WSL_DISTRO_HOLDER_MARKER}`
@@ -185,6 +195,25 @@ describe('createWslDistroHolder', () => {
     await expect(holder.ensureHeld('Missing')).rejects.toThrow(/exited before the distro started/)
     expect(await recordFiles()).toEqual([])
   })
+
+  it.each(['ENOSPC', 'EACCES'])(
+    'stops each holder whose record write fails with %s, so retries never pile up',
+    async (code) => {
+      const failure = Object.assign(new Error(`${code}: record write failed`), { code })
+      vi.mocked(writeWslDistroHolderRecord).mockRejectedValueOnce(failure)
+      vi.mocked(writeWslDistroHolderRecord).mockRejectedValueOnce(failure)
+      const holder = makeHolder()
+      await expect(holder.ensureHeld('Alpine')).rejects.toBe(failure)
+      await expect(holder.ensureHeld('Alpine')).rejects.toBe(failure)
+      expect(host.killed).toEqual([4000, 4001])
+      expect([...host.processes.keys()]).toEqual([])
+      expect(await recordFiles()).toEqual([])
+      // Once the disk recovers, one holder is spawned and recorded.
+      expect((await holder.ensureHeld('Alpine')).outcome).toBe('spawned')
+      expect([...host.processes.keys()]).toEqual([4002])
+      expect(await recordFiles()).toEqual(['alpine.json'])
+    }
+  )
 
   it('stops the holder when the distro never starts', async () => {
     let clock = 0

@@ -156,8 +156,9 @@ export function createWslDistroHolder(dependencies: WslDistroHolderDependencies)
         creationTimeMs: evidence.status === 'present' ? evidence.startedAtMs : null,
         startedAtMs: now()
       }
-      await writeWslDistroHolderRecord(userDataPath, record)
       try {
+        // A failed publish (ENOSPC, EACCES) must not leave an unrecorded holder behind.
+        await writeWslDistroHolderRecord(userDataPath, record)
         await waitForDistroRunning(distro, () => observed.exit)
       } catch (error) {
         // This process spawned it moments ago, so its pid is ours even without a start time.
