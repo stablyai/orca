@@ -60,6 +60,8 @@ export function useMobileNativeChatPacedText(
     list?.begun.delete(rowKey)
   }, [text, streaming, immediate, list, rowKey, frames])
 
+  // A step's cost is its own render, from the step to its commit, so other work never slows it.
+  const stepStartedAt = useRef<number | null>(null)
   const behind = !immediate && shown < text.length
   // Held, the reveal waits; its deadlines keep running, so it catches up in one step after.
   useEffect(() => {
@@ -77,12 +79,19 @@ export function useMobileNativeChatPacedText(
       (next) => {
         pace.current = next
         list?.drawn.set(rowKey, next)
+        stepStartedAt.current = performance.now()
         setShown(next.shown)
       },
       frames,
       REVEAL_MS
     )
   }, [behind, text, list, rowKey, streaming, held, frames])
+  useLayoutEffect(() => {
+    if (stepStartedAt.current !== null) {
+      frames.stepCost?.(performance.now() - stepStartedAt.current)
+      stepStartedAt.current = null
+    }
+  }, [shown, frames])
 
   return immediate
     ? { text, revealing: false }

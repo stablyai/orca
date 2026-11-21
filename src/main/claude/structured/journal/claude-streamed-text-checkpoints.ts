@@ -10,6 +10,7 @@ import type {
 import { StructuredAgentSessionLiveTextRows } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-live-text-rows'
 import {
   AGENT_SESSION_TEXT_IDLE_SAVE_MS,
+  AGENT_SESSION_DELTA_SHOWN_ONLY,
   createAgentSessionDeltaCoalescer,
   type AgentSessionDeltaCoalescerDeps
 } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
@@ -91,13 +92,17 @@ export function createClaudeStreamedTextCheckpoints(
     return agentJournalLinkageFields(deps.producer.settledLinkageFor(scope).linkage)
   }
 
-  const persist = (key: string, text: string, force: boolean): void => {
+  const persist = (
+    key: string,
+    text: string,
+    force: boolean
+  ): void | typeof AGENT_SESSION_DELTA_SHOWN_ONLY => {
     latestText.set(key, text)
     const checkpointLength = checkpointLengths.get(key) ?? 0
     const nextLength = Math.max(checkpointLength + 32, Math.ceil(checkpointLength * 1.125))
     if (!force && checkpointLength > 0 && text.length < nextLength) {
       live.publish()
-      return
+      return AGENT_SESSION_DELTA_SHOWN_ONLY
     }
     const identity = identities.get(key)
     if (!identity) {

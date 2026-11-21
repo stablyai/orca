@@ -5,6 +5,7 @@ import {
 } from '@/components/comment-markdown/CommentMarkdownWords'
 import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 import { NativeChatReplyRevealsContext } from './native-chat-reply-reveals'
+import { documentShownCount } from '../session/structured/read/document-viewer-visibility'
 import {
   nativeChatRevealStepFrames,
   nativeChatTextAppended,
@@ -61,8 +62,11 @@ export function useNativeChatPacedText(
   // still while a range is selected, so the selection keeps its nodes.
   const [frames] = useState(() => nativeChatRevealStepFrames(ARRIVAL_STEP_MS, REVEAL_BUSY_SHARE))
   const setShown = useCallback(
-    (length: number): void => {
+    (length: number, plain = false): void => {
       const now = performance.now()
+      if (plain) {
+        samples.current = [{ at: -Infinity, length }]
+      }
       const history = samples.current
       history.push({ at: now, length })
       while (history.length > 1 && history[1]!.at <= now - WORD_FADE_MS) {
@@ -82,26 +86,32 @@ export function useNativeChatPacedText(
     [root]
   )
   const [grew, setGrew] = useState(initial.shown < text.length)
+  const shownCount = useRef(documentShownCount())
 
   useLayoutEffect(() => {
     const previous = pace.current
     if (streaming && nativeChatTextAppended(previous, text)) {
       setGrew(true)
     }
+    // Text held while the window was hidden is drawn at once, without a fade.
+    const caughtUp = shownCount.current !== documentShownCount()
+    shownCount.current = documentShownCount()
     pace.current = receiveNativeChatText(
       previous,
       text,
       streaming,
-      reducedMotion,
+      reducedMotion || caughtUp,
       performance.now()
     )
     // While text is still to reveal, only the frame clock steps it, so arrivals don't add renders.
-    if (reducedMotion || pace.current.shown >= text.length) {
-      setShown(pace.current.shown)
+    if (reducedMotion || caughtUp || pace.current.shown >= text.length) {
+      setShown(pace.current.shown, caughtUp)
     }
     reveals?.drawn.set(rowKey, pace.current)
   }, [text, streaming, reducedMotion, reveals, rowKey, setShown])
 
+  // A step's cost is its own render, from the step to its commit, so other work never slows it.
+  const stepStartedAt = useRef<number | null>(null)
   const behind = !reducedMotion && shown < text.length
   useEffect(() => {
     if (!behind) {
@@ -115,11 +125,18 @@ export function useNativeChatPacedText(
       (next) => {
         pace.current = next
         reveals?.drawn.set(rowKey, next)
+        stepStartedAt.current = performance.now()
         setShown(next.shown)
       },
       frames
     )
   }, [behind, text, reveals, rowKey, streaming, setShown, frames])
+  useLayoutEffect(() => {
+    if (stepStartedAt.current !== null) {
+      frames.stepCost?.(performance.now() - stepStartedAt.current)
+      stepStartedAt.current = null
+    }
+  }, [shown, frames])
 
   const revealing = !reducedMotion && ((streaming && grew) || behind)
   const [lingering, setLingering] = useState(false)

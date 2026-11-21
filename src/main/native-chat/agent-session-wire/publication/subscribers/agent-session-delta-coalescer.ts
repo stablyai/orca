@@ -19,6 +19,9 @@ export type AgentSessionDeltaSnapshot = {
   truncated: boolean
 }
 
+/** What `emit` returns when it took the snapshot without saving it (only shown it live). */
+export const AGENT_SESSION_DELTA_SHOWN_ONLY = 'shown-only'
+
 export type AgentSessionDeltaCoalescerDeps = {
   /** Emit the complete snapshot, not the increment. */
   emit: (key: string, text: string, snapshot: AgentSessionDeltaSnapshot) => unknown
@@ -109,8 +112,10 @@ export function createAgentSessionDeltaCoalescer(
       return false
     }
     stream.dirty = false
-    // A growth save starts the quiet-save backoff over, so the next pause still saves within a second.
-    stream.quietMs = deps.idle?.ms ?? 0
+    // A save starts the quiet-save backoff over, so the next pause still saves within a second.
+    if (emitted !== AGENT_SESSION_DELTA_SHOWN_ONLY) {
+      stream.quietMs = deps.idle?.ms ?? 0
+    }
     return true
   }
 

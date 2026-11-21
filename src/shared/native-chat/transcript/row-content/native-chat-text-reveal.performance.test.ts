@@ -34,6 +34,7 @@ it('sleeps through a long wait instead of asking for every frame', () => {
     frames.request(step)
     // Each step takes 200 ms to draw, so steps are spaced seconds apart.
     clock += 200
+    frames.stepCost?.(200)
   }
   frames.request(step)
   // 10 s of a 60 Hz display.

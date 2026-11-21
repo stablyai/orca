@@ -22,12 +22,12 @@ export type NativeChatTextRevealFrames = {
   now: () => number
   request: (step: () => void) => number
   cancel: (frame: number) => void
+  /** How long the last step took to render, timed by the surface from the step to its commit. */
+  stepCost?: (ms: number) => void
 }
 
 /** Until the display's own frames are measured, assume 60 Hz. */
 const FRAME_MS = 1000 / 60
-/** The measured period stays between a 240 Hz and a 30 Hz display, so a saturated thread whose
- *  every frame runs long still reads as busy. */
 const MIN_FRAME_MS = 1000 / 240
 const MAX_FRAME_MS = 1000 / 30
 /** Recent frame gaps the display period is read from. */
@@ -43,7 +43,8 @@ function displayFramePeriod(gaps: readonly number[]): number {
   const quartile = sorted[Math.floor(sorted.length / 4)]!
   return Math.min(MAX_FRAME_MS, Math.max(MIN_FRAME_MS, quartile))
 }
-/** Recent steps whose render cost sets the spacing; their median, so one unrelated hitch doesn't. */
+
+/** Recent steps whose render cost sets the spacing; their median, so one slow step doesn't. */
 const STEP_COST_SAMPLES = 3
 
 function medianStepCost(costs: readonly number[]): number {
@@ -52,15 +53,15 @@ function medianStepCost(costs: readonly number[]): number {
 }
 /** However slowly the reply renders, it still moves at least this often. */
 const MAX_STEP_MS = 6000
-/** A wait longer than this many frames sleeps on a timer instead of a frame per frame. */
-const PARK_FRAMES = 4
+/** A wait longer than this many frames sleeps on a timer instead of asking for every frame. */
+const PARK_FRAMES = 2
 /** Hidden windows get no animation frames, so a timer steps them a little after each step is due. */
 const HIDDEN_STEP_MS = 100
 
-/** A reveal frame clock that steps at most every `stepMs`, and slower when a step is slow to draw:
- *  a step's cost (how late the frames right after it ran, until one came on time) is kept to at
- *  most `busyShare` of the time between steps. Lateness elsewhere is the thread's, not the reply's,
- *  so it never slows the reveal. Restarting a request keeps the spacing. */
+/** A reveal frame clock that steps at most every `stepMs`, and slower when a step is slow to
+ *  render: the surface reports each step's own render time, and the median of the last few is
+ *  kept to at most `busyShare` of the time between steps. Other work on the thread never slows the
+ *  reveal. Restarting a request keeps the spacing. */
 export function nativeChatRevealStepFrames(
   stepMs: number,
   busyShare = 1
@@ -68,105 +69,81 @@ export function nativeChatRevealStepFrames(
   let steppedAt = -Infinity
   let spacing = stepMs
   const stepCosts: number[] = []
-  /** The last step's cost so far, while the frames after it are still running late. */
-  let measuring: number | undefined
-  const settleStep = (): void => {
-    if (measuring !== undefined) {
-      stepCosts.push(measuring)
-      if (stepCosts.length > STEP_COST_SAMPLES) {
-        stepCosts.shift()
-      }
-      measuring = undefined
-    }
-  }
   let lastFrame: number | undefined
-  let activeAt = -Infinity
   const gaps: number[] = []
   let period = FRAME_MS
   let nextId = 0
   const pending = new Map<
     number,
-    {
-      frame: number
-      timer: ReturnType<typeof setTimeout>
-      park?: ReturnType<typeof setTimeout>
-    }
+    { frame: number; park?: ReturnType<typeof setTimeout>; timer: ReturnType<typeof setTimeout> }
   >()
   const cancel = (id: number): void => {
     const waiting = pending.get(id)
     if (waiting) {
       cancelAnimationFrame(waiting.frame)
-      clearTimeout(waiting.timer)
       clearTimeout(waiting.park)
+      clearTimeout(waiting.timer)
       pending.delete(id)
     }
   }
   return {
     now: () => performance.now(),
+    stepCost: (ms) => {
+      stepCosts.push(Math.max(0, ms))
+      if (stepCosts.length > STEP_COST_SAMPLES) {
+        stepCosts.shift()
+      }
+    },
     request: (step) => {
       const id = ++nextId
-      const now = performance.now()
-      if (now - activeAt > 2 * period) {
-        lastFrame = undefined
-      }
       const fire = (at: number): void => {
         cancel(id)
-        settleStep()
         spacing = Math.min(MAX_STEP_MS, Math.max(stepMs, medianStepCost(stepCosts) / busyShare))
         steppedAt = at
-        activeAt = at
-        measuring = 0
         step()
+      }
+      // Frames between steps are only waited through: a long wait sleeps until a frame before the step.
+      const awaitFrame = (from: number): void => {
+        const waiting = pending.get(id)!
+        const due = steppedAt + spacing
+        // Waking two frames early leaves a gap between frames to keep reading the display's rate.
+        if (due - from > (PARK_FRAMES + 1) * period) {
+          lastFrame = undefined
+          waiting.park = setTimeout(
+            () => {
+              waiting.frame = requestAnimationFrame(onFrame)
+            },
+            due - from - PARK_FRAMES * period
+          )
+          return
+        }
+        waiting.frame = requestAnimationFrame(onFrame)
       }
       const onFrame = (frameStart: number): void => {
         if (lastFrame !== undefined) {
-          const gap = frameStart - lastFrame
-          gaps.push(gap)
+          gaps.push(frameStart - lastFrame)
           if (gaps.length > FRAME_GAP_SAMPLES) {
             gaps.shift()
           }
           period = displayFramePeriod(gaps)
-          // Only time past the display's own frame is late; a 30 Hz frame is not busy.
-          const late = gaps.length >= 3 ? Math.max(0, gap - period) : 0
-          if (measuring !== undefined) {
-            // Under half a frame late is the display's jitter, so the step has drawn.
-            if (late > period / 2) {
-              measuring += late
-            } else {
-              settleStep()
-            }
-          }
         }
         lastFrame = frameStart
-        activeAt = frameStart
         // Half a frame early is the nearest frame to the step's time.
-        const due = steppedAt + spacing
-        if (frameStart < due - period / 2) {
-          const waiting = pending.get(id)!
-          // A long wait sleeps until a frame before the step, instead of waking every frame.
-          if (measuring === undefined && due - frameStart > PARK_FRAMES * period) {
-            lastFrame = undefined
-            waiting.frame = -1
-            waiting.park = setTimeout(
-              () => {
-                waiting.frame = requestAnimationFrame(onFrame)
-              },
-              due - frameStart - period
-            )
-            return
-          }
-          waiting.frame = requestAnimationFrame(onFrame)
+        if (frameStart < steppedAt + spacing - period / 2) {
+          awaitFrame(frameStart)
           return
         }
         fire(frameStart)
       }
+      const now = performance.now()
       pending.set(id, {
-        frame: requestAnimationFrame(onFrame),
+        frame: -1,
         timer: setTimeout(
           () => fire(performance.now()),
           Math.max(0, steppedAt + spacing - now) + HIDDEN_STEP_MS
         )
       })
+      awaitFrame(now)
       return id
     },
     cancel

@@ -61,3 +61,26 @@ it('shows a long reply’s paused tail every window but saves it only once the s
   expect(saved.at(-1)).toBe(`${prefix} paused tail final tail`)
   checkpoints.dispose()
 })
+
+it('spaces a trickling reply’s quiet saves further apart instead of saving at every pause', () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+  const saved: string[] = []
+  const checkpoints = createClaudeStreamedTextCheckpoints({
+    producer: new ClaudeSubagentIdentities({}).linkage,
+    sink: { bindLiveText: () => () => {}, publishLiveText: () => ({ accepted: true }) },
+    liveBody: claudeStreamingMessageBody,
+    persist: (_identity, text) => {
+      saved.push(text)
+    }
+  })
+  const identity = { provider: 'orca' as const, clientMessageId: 'reply' }
+  checkpoints.append(identity, 'a'.repeat(20000))
+  vi.advanceTimersByTime(60)
+  // 100 short additions, each followed by just over a second of quiet.
+  for (let pause = 0; pause < 100; pause++) {
+    checkpoints.append(identity, ' word')
+    vi.advanceTimersByTime(1100)
+  }
+  expect(saved.length).toBeLessThan(15)
+  checkpoints.dispose()
+})

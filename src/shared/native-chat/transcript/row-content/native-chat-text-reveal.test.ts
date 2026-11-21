@@ -32,6 +32,7 @@ function stepTimes(frameGaps: (frame: number) => number, frames: number, render 
     clockFrames.request(step)
     // The step's render runs after its frame callback, so the next frame starts late.
     clock += render
+    clockFrames.stepCost?.(render)
   }
   clockFrames.request(step)
   for (let frame = 0; frame < frames; frame++) {
