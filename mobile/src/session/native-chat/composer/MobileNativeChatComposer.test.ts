@@ -38,6 +38,7 @@ vi.mock('react-native', async () => {
     Image: 'Image',
     Keyboard: { dismiss: vi.fn() },
     Platform: { OS: 'ios' },
+    useWindowDimensions: () => ({ width: 390, height: 844, scale: 1, fontScale: 1 }),
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('ScrollView', props, children),
@@ -60,6 +61,7 @@ vi.mock('lucide-react-native', () => ({
   Mic: 'Mic',
   Package: 'Package',
   Plus: 'Plus',
+  Search: 'Search',
   ShieldAlert: 'ShieldAlert',
   Square: 'Square',
   Terminal: 'Terminal',
