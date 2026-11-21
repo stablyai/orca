@@ -7,7 +7,7 @@ import {
   AccountRuntimeToggle,
   CodexRestartStatusPrompt
 } from '../composition/StatusBarAccountControls'
-import { AccountUsageGauge } from './AccountUsageGauge'
+import { AccountUsageWindowsGauge } from './AccountUsageGauge'
 import {
   InlineUsageSignInAction,
   InlineUsageSkeleton,
@@ -117,13 +117,16 @@ export function CodexSwitcherMenu({
     inactiveUsage: (typeof rows)[number]['inactiveUsage']
   ): React.ReactNode {
     if (active) {
-      return <AccountUsageGauge limits={codex} isFetching={codex.status === 'fetching'} />
+      return <AccountUsageWindowsGauge limits={codex} isFetching={codex.status === 'fetching'} />
     }
     if (inactiveUsage?.isFetching && !inactiveUsage.rateLimits) {
       return <InlineUsageSkeleton />
     }
     return inactiveUsage?.rateLimits ? (
-      <AccountUsageGauge limits={inactiveUsage.rateLimits} isFetching={inactiveUsage.isFetching} />
+      <AccountUsageWindowsGauge
+        limits={inactiveUsage.rateLimits}
+        isFetching={inactiveUsage.isFetching}
+      />
     ) : null
   }
 
