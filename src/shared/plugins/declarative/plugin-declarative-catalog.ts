@@ -102,6 +102,7 @@ const inputProps = z
     placeholder: label.optional(),
     type: z.enum(['text', 'search', 'password']).optional(),
     maxLength: z.number().int().positive().max(LIMITS.maxTextLength).optional(),
+    autoFocus: flag,
     invalid: flag,
     disabled: flag,
     onChange: callback,

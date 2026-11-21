@@ -60,4 +60,23 @@ describe('PluginDeclarativeView', () => {
     rerender(raw('', 2))
     expect(input.value).toBe('')
   })
+
+  it('autofocuses search input by default and honors explicit autoFocus prop', () => {
+    // Search input defaults to autoFocus true
+    const { rerender } = view(node('Input', { label: 'Search', type: 'search' }))
+    const searchInput = screen.getByLabelText<HTMLInputElement>('Search')
+    expect(searchInput.autofocus).toBe(true)
+
+    // Text input defaults to autoFocus false
+    rerender(node('Input', { label: 'Search', type: 'text' }))
+    expect(searchInput.autofocus).toBe(false)
+
+    // Explicit autoFocus=true on text input
+    rerender(node('Input', { label: 'Search', type: 'text', autoFocus: true }))
+    expect(searchInput.autofocus).toBe(true)
+
+    // Explicit autoFocus=false on search input
+    rerender(node('Input', { label: 'Search', type: 'search', autoFocus: false }))
+    expect(searchInput.autofocus).toBe(false)
+  })
 })
