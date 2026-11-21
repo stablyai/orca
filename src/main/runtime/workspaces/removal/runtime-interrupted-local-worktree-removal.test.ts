@@ -18,6 +18,8 @@ import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-ty
 import type { Store } from '../../../persistence/loading-store/store'
 import type * as HostTreeRemoval from '../../../filesystem/host-tree-removal'
 import { removeHostTree } from '../../../filesystem/host-tree-removal'
+import type * as RemovalTable from '../../../workspaces/removal/worktree-removal-table'
+import { worktreeCheckoutExists } from '../../../workspaces/removal/worktree-removal-table'
 
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import '../../../git/worktrees/catalog/worktree-listing'
@@ -48,6 +50,11 @@ vi.mock('../../../workspaces/execution-host/project-runtime-git-options', () => 
 vi.mock('../../../filesystem/host-tree-removal', async (importOriginal) => {
   const actual = await importOriginal<typeof HostTreeRemoval>()
   return { ...actual, removeHostTree: vi.fn(actual.removeHostTree) }
+})
+
+vi.mock('../../../workspaces/removal/worktree-removal-table', async (importOriginal) => {
+  const actual = await importOriginal<typeof RemovalTable>()
+  return { ...actual, worktreeCheckoutExists: vi.fn(actual.worktreeCheckoutExists) }
 })
 
 const execFileAsync = promisify(execFile)
@@ -238,6 +245,60 @@ describe('finishing an interrupted worktree removal after a restart', () => {
     expect(outcome).toMatchObject({ status: 'removed' })
     expect(purged).toEqual([`repo-1::${worktreePath}`])
     expect(records).toEqual([])
+  })
+
+  it('prunes a reviewed checkout whose folder is gone but Git still registers', async () => {
+    await removeTree(worktreePath)
+    const expectedCheckoutIdentity = {
+      instanceId: 'removal-fixture',
+      root: worktreePath,
+      rootKey: 'recorded',
+      markerKey: 'recorded',
+      gitDir: join(repoPath, '.git', 'worktrees', 'feature'),
+      adminKey: 'recorded',
+      nonce: '00000000-0000-0000-0000-000000000000'
+    }
+
+    const { outcome, purged } = await finishAfterRestart({
+      reviewed: { expectedInstanceId: 'removal-fixture', expectedCheckoutIdentity }
+    })
+
+    expect(outcome).toMatchObject({ status: 'removed' })
+    expect(await git(['worktree', 'list', '--porcelain'])).not.toContain(worktreePath)
+    expect(await git(['branch', '--list', 'feature'])).toBe('')
+    expect(purged).toEqual([`repo-1::${worktreePath}`])
+  })
+
+  it('leaves a different checkout that appears right after the resume found the reviewed one gone', async () => {
+    await git(['worktree', 'remove', worktreePath])
+    const expectedCheckoutIdentity = {
+      instanceId: 'removal-fixture',
+      root: worktreePath,
+      rootKey: 'recorded',
+      markerKey: 'recorded',
+      gitDir: join(repoPath, '.git', 'worktrees', 'feature'),
+      adminKey: 'recorded',
+      nonce: '00000000-0000-0000-0000-000000000000'
+    }
+    // The seam: the resume sees the path empty, then another checkout of the same branch and
+    // head is registered there before the finish reads Git.
+    const exists = vi.mocked(worktreeCheckoutExists)
+    const actualExists = exists.getMockImplementation()!
+    exists.mockImplementationOnce(async (path) => {
+      const found = await actualExists(path)
+      // Clean, so a guardless `git worktree remove` would delete it.
+      await git(['worktree', 'add', '-q', worktreePath, 'feature'])
+      return found
+    })
+
+    const { outcome, purged } = await finishAfterRestart({
+      reviewed: { expectedInstanceId: 'removal-fixture', expectedCheckoutIdentity }
+    })
+
+    expect(outcome).toMatchObject({ status: 'failed', error: expect.stringMatching(/not removed/) })
+    expect(existsSync(join(worktreePath, 'seed.txt'))).toBe(true)
+    expect(await git(['worktree', 'list', '--porcelain'])).toContain(`worktree ${worktreePath}`)
+    expect(purged).toEqual([])
   })
 })
 

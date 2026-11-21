@@ -57,6 +57,7 @@ import type {
   InterruptedLocalWorktreeRemovalArgs,
   InterruptedWorktreeRemovalHost
 } from './runtime-interrupted-local-worktree-removal-types'
+import { finishGoneCheckoutBookkeeping } from './runtime-interrupted-gone-checkout-removal'
 
 /** The background job that finishes one interrupted removal on this host. */
 export function interruptedLocalWorktreeRemovalJob(
@@ -79,7 +80,7 @@ export function interruptedLocalWorktreeRemovalJob(
     )?.pushTarget
   return {
     run: async (stopSignal) => {
-      // A reviewed checkout Git already deleted leaves only bookkeeping, finished without its guard.
+      // A reviewed checkout Git already deleted leaves only bookkeeping, which deletes no files.
       const checkoutGone = (await expectation?.resumeCheckout(record.worktreePath)) === 'gone'
       const removedPushTarget = resolveRemovedPushTarget()
       const result = await finishInterruptedLocalWorktreeRemoval({
@@ -87,6 +88,7 @@ export function interruptedLocalWorktreeRemovalJob(
         store: host.store,
         stopSignal,
         expectation: checkoutGone ? undefined : expectation,
+        goneCheckout: checkoutGone ? expectation : undefined,
         removedPushTarget,
         acquireWatcherRemoval: (path) => {
           // Take the gate in the same tick as the loading fence so no spawn can enter between them.
@@ -140,6 +142,9 @@ async function finishInterruptedLocalWorktreeRemoval(
     force: record.force,
     deleteBranch: record.deleteBranch,
     target: { id: record.worktreeId }
+  }
+  if (args.goneCheckout) {
+    return finishGoneCheckoutBookkeeping(args, args.goneCheckout, finishArgs)
   }
   const worktrees = await listWorktreesStrict(repo.path, {
     ...localOptions,

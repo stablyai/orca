@@ -85,6 +85,16 @@ export class WorktreeRemovalExpectation {
     return 'present'
   }
 
+  /** Bookkeeping after resumeCheckout found the path empty: anything there now must be the
+   * reviewed checkout, and even that is left for a retry, since bookkeeping deletes no files. */
+  async assertCheckoutStillGone(root: string): Promise<void> {
+    this.check()
+    if (await worktreeCheckoutExists(root)) {
+      await this.verifyCheckout(root)
+      throw new Error('The reviewed workspace folder is back on disk. Retry deletion to remove it.')
+    }
+  }
+
   async bindCheckout(root: string, repoPath: string): Promise<void> {
     this.check()
     this.checkout ??= await captureWorktreeCheckoutIdentity(
