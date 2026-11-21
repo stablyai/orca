@@ -98,6 +98,31 @@ describe('repos-project-groups-owner-routing', () => {
       ])
     })
 
+    it('keeps a colliding ssh row unchanged when the local group is updated', async () => {
+      const store = createTestStore()
+      store.setState({
+        settings: { activeRuntimeEnvironmentId: null } as never,
+        projectGroups: [
+          { ...folderScanGroup, executionHostId: 'local' },
+          { ...folderScanGroup, name: 'Ssh', executionHostId: 'ssh:box' }
+        ]
+      })
+      projectGroupsUpdate.mockResolvedValue({ ...folderScanGroup, name: 'Renamed' })
+
+      await expect(
+        store
+          .getState()
+          .updateProjectGroup(folderScanGroup.id, { name: 'Renamed' }, { hostId: 'local' })
+      ).resolves.toBe(true)
+
+      expect(
+        store.getState().projectGroups.map((group) => [group.executionHostId, group.name])
+      ).toEqual([
+        ['local', 'Renamed'],
+        ['ssh:box', 'Ssh']
+      ])
+    })
+
     it('refuses, rather than following focus, when a colliding id has no unambiguous owner', async () => {
       projectGroupsDelete.mockResolvedValue(true)
       const store = createTestStore()

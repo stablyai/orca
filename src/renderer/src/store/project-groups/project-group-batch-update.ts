@@ -6,9 +6,10 @@ import type {
   ProjectGroupMutation
 } from '../../../../shared/project/groups/project-group-types'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import { catalogOwnsHost, resolveProjectGroupMutationTarget } from './project-group-owner-routing'
+import { resolveProjectGroupMutationTarget } from './project-group-owner-routing'
 import {
   getRepoExecutionHostId,
+  isRepoOnCatalogHost,
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'
@@ -82,7 +83,8 @@ export function createProjectGroupBatchUpdateAction(
           const hostId = getRepoExecutionHostId(group)
           return (
             owners?.get(hostId) ??
-            (catalogOwnsHost('local', hostId) ? owners?.get('local') : undefined) ??
+            // Legacy local fallback must never claim an ssh/runtime row sharing the id.
+            (isRepoOnCatalogHost(group) ? owners?.get('local') : undefined) ??
             group
           )
         }),
