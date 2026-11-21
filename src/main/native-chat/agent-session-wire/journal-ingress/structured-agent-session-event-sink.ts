@@ -64,6 +64,10 @@ export type StructuredAgentSessionItemAppendOptions = StructuredAgentSessionAppe
 
 export type StructuredAgentSessionRevisionOptions = StructuredAgentSessionItemAppendOptions
 
+/** Who a live read is for; a source whose rows only an append reader takes skips the read without one. */
+export type LiveTextReaders = { appends: boolean }
+export type LiveTextRead = (readers?: LiveTextReaders) => readonly AgentJournalRenderItem[]
+
 /** The row as written, so live text can reuse its placement without saving. */
 export type StructuredAgentSessionItemCommitted = (
   item: AgentJournalRenderItem,
@@ -73,7 +77,7 @@ export type StructuredAgentSessionItemCommitted = (
 export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSink & {
   /** Reads the existing stream owner; no text is copied into the sink. */
   bindLiveText?(source: {
-    read(epoch: string): readonly AgentJournalRenderItem[]
+    read(epoch: string, readers?: LiveTextReaders): readonly AgentJournalRenderItem[]
     flush(): void
   }): () => void
   publishLiveText?(): StructuredAgentSessionSinkAdmission
@@ -168,7 +172,7 @@ export type StructuredAgentSessionEventTarget = {
   publishPromptSuggestion?: (suggestion: AgentSessionPromptSuggestion | null) => void
   /** `read` runs only when someone is subscribed. */
   hasLiveTextSubscribers?: () => boolean
-  publishLiveText?: (read: () => readonly AgentJournalRenderItem[]) => void
+  publishLiveText?: (read: LiveTextRead) => void
   /** Turn rows any writer's commit left terminal on this journal. */
   observeSettledTurns?: (listener: (turnItemIds: readonly string[]) => void) => () => void
 }

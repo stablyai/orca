@@ -22,6 +22,7 @@ vi.mock('../../history/agent-session-item-wire-form', async (importOriginal) => 
 })
 
 const cursor = { epoch: 'e', sequence: 5 }
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: live publication reads only the journal's cursor.
 const journal = { cursor: () => cursor } as unknown as SqlAgentSessionJournal
 const reply = (text: string): AgentJournalRenderItem => ({
   itemId: 'reply',
@@ -33,6 +34,7 @@ const reply = (text: string): AgentJournalRenderItem => ({
 
 function stream(boundedFrames: boolean, holdsTextBase?: () => boolean) {
   const events: AgentSessionSubscribeEvent[] = []
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: live publication reads only these subscriber fields.
   const subscriber = {
     id: 'reader',
     sessionId: 's',
@@ -40,22 +42,24 @@ function stream(boundedFrames: boolean, holdsTextBase?: () => boolean) {
     boundedFrames,
     ...(holdsTextBase ? { holdsTextBase } : {})
   } as unknown as Subscriber
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: live publication uses only the port's hooks and emit.
   const port = {
     hooks: {},
     emit: async (_subscriber: Subscriber, event: AgentSessionSubscribeEvent) => {
       events.push(event)
     }
   } as unknown as SubscriberDeliveryPort
-  const publish = (text: string): Promise<void> =>
+  const publishItems = (items: readonly AgentJournalRenderItem[]): Promise<void> =>
     publishSubscriberLiveText(port, {
       sessionId: 's',
       journal,
       fence: 1,
-      items: [reply(text)],
+      items,
       subscribers: [subscriber],
       hostNow: 0
     })
-  return { events, publish }
+  const publish = (text: string): Promise<void> => publishItems([reply(text)])
+  return { events, publish, publishItems }
 }
 
 describe('a live reply that only grows', () => {
@@ -105,22 +109,8 @@ describe('a live reply that only grows', () => {
       (_key, text) => reply(text).body
     )
     rows.committed('reply')(reply(''), 'e')
-    const events: AgentSessionSubscribeEvent[] = []
-    const port = {
-      hooks: {},
-      emit: async (_subscriber: Subscriber, event: AgentSessionSubscribeEvent) => {
-        events.push(event)
-      }
-    } as unknown as SubscriberDeliveryPort
-    const olderPhone = { id: 'phone', sessionId: 's', cursor, boundedFrames: true }
-    await publishSubscriberLiveText(port, {
-      sessionId: 's',
-      journal,
-      fence: 1,
-      items: read?.('e') ?? [],
-      subscribers: [olderPhone as unknown as Subscriber],
-      hostNow: 0
-    })
+    const { events, publishItems } = stream(true)
+    await publishItems(read?.('e') ?? [])
     expect(read?.('e')).toHaveLength(1)
     expect(events).toEqual([])
   })

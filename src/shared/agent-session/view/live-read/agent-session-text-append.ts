@@ -24,6 +24,34 @@ export type AgentSessionTextAppendItem = AgentJournalRenderItem & {
   textAppend: { from: number; text: string }
 }
 
+/** New rows whose reply text is known to extend a previous row's, with that row's text. */
+const knownGrowth = new WeakMap<AgentJournalRenderItem, string>()
+
+function replyText(item: AgentJournalRenderItem): string | null {
+  const { body } = item
+  return body.kind === 'message' && body.blocks.length === 1 && body.blocks[0]?.type === 'text'
+    ? body.blocks[0].text
+    : null
+}
+
+/** Compares a new row with the one it follows once, where it is built, so every reader's check
+ *  that it extends what that reader holds is a reference compare instead of a scan of the reply. */
+export function noteReplyTextGrowth(
+  item: AgentJournalRenderItem,
+  previous: AgentJournalRenderItem | undefined
+): void {
+  const base = previous ? replyText(previous) : null
+  const text = replyText(item)
+  if (base !== null && text !== null && text.length > base.length && text.startsWith(base)) {
+    knownGrowth.set(item, base)
+  }
+}
+
+/** Whether `item`'s `text` starts with `base`. */
+export function textExtends(item: AgentJournalRenderItem, text: string, base: string): boolean {
+  return knownGrowth.get(item) === base || text.startsWith(base)
+}
+
 // Bases are only unfinished replies and running tool calls, so a few cover every stream a turn grows at once.
 // Text-only readers already shipped evict past 8, so a host must never hold more for them.
 const MAX_REPLY_APPEND_BASES = 8
@@ -146,7 +174,7 @@ export function sendingTextAppends<R>(
 ): ((event: AgentSessionSubscribeEvent) => R) & { holdsBase: (itemId: string) => boolean } {
   const send = textAppendStream(rules, (base, item) => {
     const text = growingText(item, rules)
-    if (base === undefined || text === null || !text.startsWith(base)) {
+    if (base === undefined || text === null || !textExtends(item, text, base)) {
       return item
     }
     return {

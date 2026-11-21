@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
-  isDocumentRangeSelected,
+  isDocumentRangeSelectedIn,
   watchDocumentRange
 } from '@/components/comment-markdown/CommentMarkdownWords'
 import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
@@ -35,7 +35,9 @@ type Shown = { length: number; fadeFrom: number }
 export function useNativeChatPacedText(
   rowKey: string,
   text: string,
-  streaming: boolean
+  streaming: boolean,
+  /** The reply's element; only a selection inside it holds its words still. */
+  root: React.RefObject<HTMLElement | null>
 ): NativeChatPacedText {
   const reducedMotion = usePrefersReducedMotion()
   const reveals = useContext(NativeChatReplyRevealsContext)
@@ -58,24 +60,27 @@ export function useNativeChatPacedText(
   // Recorded as text is shown, so only words shown in the last fade window are elements. Holds
   // still while a range is selected, so the selection keeps its nodes.
   const [frames] = useState(() => nativeChatRevealStepFrames(ARRIVAL_STEP_MS, REVEAL_BUSY_SHARE))
-  const setShown = useCallback((length: number): void => {
-    const now = performance.now()
-    const history = samples.current
-    history.push({ at: now, length })
-    while (history.length > 1 && history[1]!.at <= now - WORD_FADE_MS) {
-      history.shift()
-    }
-    setShownState((previous) =>
-      previous.length === length
-        ? previous
-        : {
-            length,
-            fadeFrom: isDocumentRangeSelected()
-              ? previous.fadeFrom
-              : Math.min(history[0]!.length, length)
-          }
-    )
-  }, [])
+  const setShown = useCallback(
+    (length: number): void => {
+      const now = performance.now()
+      const history = samples.current
+      history.push({ at: now, length })
+      while (history.length > 1 && history[1]!.at <= now - WORD_FADE_MS) {
+        history.shift()
+      }
+      setShownState((previous) =>
+        previous.length === length
+          ? previous
+          : {
+              length,
+              fadeFrom: isDocumentRangeSelectedIn(root.current)
+                ? previous.fadeFrom
+                : Math.min(history[0]!.length, length)
+            }
+      )
+    },
+    [root]
+  )
   const [grew, setGrew] = useState(initial.shown < text.length)
 
   useLayoutEffect(() => {
@@ -123,22 +128,24 @@ export function useNativeChatPacedText(
       setLingering(true)
       return
     }
+    let due = false
     // Dropping the word spans while text is selected would take the selection's nodes with them.
     const settle = (): void => {
-      if (!isDocumentRangeSelected()) {
+      if (due && !isDocumentRangeSelectedIn(root.current)) {
         document.removeEventListener('selectionchange', settle)
         setLingering(false)
       }
     }
+    document.addEventListener('selectionchange', settle)
     const timer = setTimeout(() => {
-      document.addEventListener('selectionchange', settle)
+      due = true
       settle()
     }, WORD_FADE_MS)
     return () => {
       clearTimeout(timer)
       document.removeEventListener('selectionchange', settle)
     }
-  }, [revealing])
+  }, [revealing, root])
 
   const fading = !reducedMotion && (revealing || lingering)
   useEffect(() => (fading ? watchDocumentRange() : undefined), [fading])

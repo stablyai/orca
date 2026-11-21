@@ -1,4 +1,3 @@
-import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { subscriberDeliveryPort } from './agent-session-subscriber-delivery-port'
 import type { QueuePublication } from '../../delivery/structured-agent-session-queued-publication'
 import { ForkMarkerSubscriptions } from './agent-session-fork-marker-delivery'
@@ -21,7 +20,7 @@ import {
   type SubscriberDeliveryPort
 } from './agent-session-subscriber-catch-up'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
-import { publishSubscriberLiveText, subscriberAtHead } from './agent-session-subscriber-live-text'
+import * as liveText from './agent-session-subscriber-live-text'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { rememberLatestPerSession } from './structured-agent-session-activity-retention'
 import { resumeSubscriber } from './agent-session-stop-note-refresh'
@@ -106,7 +105,7 @@ export class AgentSessionSubscribers {
         await publishSubscriberSnapshot(port, subscriber, journal, input.fence, hostNow)
         subscriber.forkMarkerView = JSON.stringify(subscriber.readForkMarker?.())
       }
-      await publishSubscriberLiveText(this.deliveryPort(), {
+      await liveText.publishSubscriberLiveText(this.deliveryPort(), {
         sessionId: input.sessionId,
         journal,
         fence: input.fence,
@@ -150,16 +149,14 @@ export class AgentSessionSubscribers {
     sessionId: string,
     journal: AgentSessionJournal,
     fence: number,
-    read: readonly AgentJournalRenderItem[] | (() => readonly AgentJournalRenderItem[]),
+    read: liveText.SubscriberLiveTextSource,
     targets = this.subscribers(sessionId)
   ): void => {
     const hostNow = this.now()
-    // Read once per fan-out, so every subscriber shares one snapshot.
-    let items: readonly AgentJournalRenderItem[] | undefined
+    const items = targets.some(this.isActive) ? liveText.liveTextFor(read, targets) : []
     for (const subscriber of targets) {
       // Checked per subscriber, in case ending one ends another mid fan-out.
       if (this.isActive(subscriber)) {
-        items ??= typeof read === 'function' ? read() : read
         this.lanes.of(subscriber).liveText({ journal, fence, items, hostNow })
       }
     }
@@ -203,7 +200,7 @@ export class AgentSessionSubscribers {
     for (const subscriber of this.subscribers(sessionId)) {
       this.enqueue(subscriber, async () => {
         await publishSubscriberSnapshot(port, subscriber, journal, fence, hostNow)
-        await publishSubscriberLiveText(this.deliveryPort(), {
+        await liveText.publishSubscriberLiveText(this.deliveryPort(), {
           sessionId,
           journal,
           fence,
@@ -251,12 +248,11 @@ export class AgentSessionSubscribers {
   }
 
   hasSubscribers = (sessionId: string): boolean => (this.bySession.get(sessionId)?.size ?? 0) > 0
-
   /** Live text an opening or snapshot sends itself counts against its subscriber's cap. */
   private sentLiveText(subscriber: Subscriber, sessionId: string, journal: AgentSessionJournal) {
     const items = this.hooks.readLiveText?.(sessionId) ?? []
     // Sending nothing leaves any waiting live text for after the subscriber catches up.
-    if (items.length === 0 || !subscriberAtHead(subscriber, journal)) {
+    if (items.length === 0 || !liveText.subscriberAtHead(subscriber, journal)) {
       return []
     }
     return this.lanes.of(subscriber).sendsLiveText(items) ? items : []

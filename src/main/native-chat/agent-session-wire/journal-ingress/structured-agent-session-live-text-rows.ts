@@ -7,6 +7,7 @@ import type {
   StructuredAgentSessionItemCommitted
 } from './structured-agent-session-event-sink'
 import { CHAT_LIVE_TEXT_SUBSCRIBER_BYTES } from '../../retention/subscriber-live-text-cap'
+import { noteReplyTextGrowth } from '../../../../shared/agent-session/view/live-read/agent-session-text-append'
 
 /** Characters of live text one stream offers. Two snapshots (one sending, one waiting) at two bytes
  *  a character stay well inside a viewer's cap, so a long reply never ends its viewers' streams;
@@ -44,7 +45,10 @@ export class StructuredAgentSessionLiveTextRows {
     private readonly body: (key: string, text: string) => AgentJournalItemBody | null
   ) {
     // Translators own lifecycle flushes; a write barrier must not force saves of streaming rows.
-    this.release = sink.bindLiveText?.({ read: (epoch) => this.read(epoch), flush: () => {} })
+    this.release = sink.bindLiveText?.({
+      read: (epoch, readers) => (readers?.appends === false ? [] : this.read(epoch)),
+      flush: () => {}
+    })
   }
 
   /** Pass to the save; a late commit for a forgotten row is ignored. */
@@ -93,6 +97,7 @@ export class StructuredAgentSessionLiveTextRows {
       if (body) {
         const item = { ...placement.row, body }
         appendOnlyRows.add(item)
+        noteReplyTextGrowth(item, shown?.placement === placement ? shown.item : undefined)
         this.shown.set(key, { placement, length: text.length, item })
         items.push(item)
       }

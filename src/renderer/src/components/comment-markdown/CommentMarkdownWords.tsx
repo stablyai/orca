@@ -2,16 +2,19 @@ import type { ComponentProps } from 'react'
 import type { ExtraProps } from 'react-markdown'
 import { markdownWordTokens } from './comment-markdown-word-fade'
 
-/** Reading the selection flushes layout, so one listener tracks whether any range is selected. */
-let documentHasRange = false
+/** Reading the selection flushes layout, so one listener keeps the selected range. A Range is
+ *  live, so testing it against a node later touches only the DOM tree. */
+let selectedRange: Range | null = null
 let rangeWatchers = 0
 function readDocumentRange(): void {
-  documentHasRange = document.getSelection()?.isCollapsed === false
+  const selection = document.getSelection()
+  selectedRange =
+    selection && !selection.isCollapsed && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
 }
 
-/** Whether the document holds a selected range; current while watched. */
-export function isDocumentRangeSelected(): boolean {
-  return documentHasRange
+/** Whether a selected range reaches into `root`; current while watched. */
+export function isDocumentRangeSelectedIn(root: Node | null): boolean {
+  return root !== null && selectedRange?.intersectsNode(root) === true
 }
 
 export function watchDocumentRange(): () => void {

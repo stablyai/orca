@@ -116,7 +116,11 @@ describe('structured agent-session read transport generations', () => {
       ])
     )
     expect(asked).toEqual({
-      local: { sessionId: 'session-a', capabilities: { promptSuggestions: 1 } },
+      // The local host ships with this renderer, so it is asked for appends without a check.
+      local: {
+        sessionId: 'session-a',
+        capabilities: { promptSuggestions: 1, textAppend: 1, toolOutputAppend: 1 }
+      },
       'env-new': { sessionId: 'session-a', capabilities: { promptSuggestions: 1 } },
       'env-old': { sessionId: 'session-a' }
     })

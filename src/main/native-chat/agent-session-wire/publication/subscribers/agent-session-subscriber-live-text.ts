@@ -4,7 +4,9 @@ import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../age
 import type { Subscriber } from './agent-session-subscribe-input'
 import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
+import { textExtends } from '../../../../../shared/agent-session/view/live-read/agent-session-text-append'
 import { isAppendOnlyLiveRow } from '../../journal-ingress/structured-agent-session-live-text-rows'
+import type { LiveTextRead } from '../../journal-ingress/structured-agent-session-event-sink'
 import {
   markBoundedBatchFits,
   subscriberHistoryReader
@@ -101,7 +103,7 @@ function liveRow(
   if (prior && stale && before.startsWith(after)) {
     return prior
   }
-  if (prior && before !== null && after !== null && after.startsWith(before)) {
+  if (prior && before !== null && after !== null && textExtends(source, after, before)) {
     // A shortened row shows its head, which more text cannot move.
     if (prior.sent.shortened) {
       return { ...prior, source }
@@ -212,6 +214,19 @@ function fitsBoundedFrame(subscriber: Subscriber, rowBytes: number): boolean {
     subscriber.boundedFrames &&
     rowBytes + FRAME_SIZE_SLACK_BYTES <= BOUNDED_FRAME_CONTENT_BUDGET_BYTES
   )
+}
+
+export type SubscriberLiveTextSource = readonly AgentJournalRenderItem[] | LiveTextRead
+
+/** One snapshot per fan-out, shared by every subscriber; rows only an append reader takes are not
+ *  built when none of them is one. */
+export function liveTextFor(
+  read: SubscriberLiveTextSource,
+  subscribers: readonly Subscriber[]
+): readonly AgentJournalRenderItem[] {
+  return typeof read === 'function'
+    ? read({ appends: subscribers.some((subscriber) => subscriber.holdsTextBase !== undefined) })
+    : read
 }
 
 /** Live text goes only to a subscriber that has every journal row; one behind waits for catch-up. */

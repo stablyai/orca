@@ -8,9 +8,9 @@ import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal
 import type {
   StructuredAgentSessionEventTarget,
   StructuredAgentSessionSinkAdmission,
-  StructuredAgentSessionAppendOptions
+  StructuredAgentSessionAppendOptions,
+  LiveTextRead
 } from './structured-agent-session-event-sink'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
 export type StructuredAgentSessionPublishOptions = Pick<
   StructuredAgentSessionAppendOptions,
@@ -29,7 +29,7 @@ export function createLiveTextPublication(
     operation: Omit<StructuredAgentSessionSinkOperation, 'sequence'>
   ) => StructuredAgentSessionSinkAdmission,
   target: () => StructuredAgentSessionEventTarget | null,
-  read: () => readonly AgentJournalRenderItem[]
+  read: LiveTextRead
 ): () => StructuredAgentSessionSinkAdmission {
   // Asked each window, so a viewer who arrives mid-stream gets the next one.
   return () =>

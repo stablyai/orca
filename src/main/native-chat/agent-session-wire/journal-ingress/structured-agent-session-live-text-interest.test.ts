@@ -5,6 +5,7 @@ import type { StructuredAgentSessionEventTarget } from './structured-agent-sessi
 it('admits no live operations while nobody views the stream, and resumes for a new viewer', () => {
   const submit = vi.fn(() => ({ accepted: true as const }))
   let viewers = 0
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the publication reads only this member of its target.
   const target = { hasLiveTextSubscribers: () => viewers > 0 } as StructuredAgentSessionEventTarget
   const publish = createLiveTextPublication(
     submit,

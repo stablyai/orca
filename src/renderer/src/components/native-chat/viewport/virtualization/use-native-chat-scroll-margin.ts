@@ -68,19 +68,7 @@ export function useNativeChatScrollMargin({
   // Only the scroller or the column above the rows (lead content, and the inset that makes room
   // for the older-history row) moves the margin. Observer callbacks run after layout, so reading
   // there forces none, unlike a read after every render.
-  const marginObserverRef = useRef<ResizeObserver | null>(null)
-  const observeAbove = useCallback((sizer: HTMLDivElement | null) => {
-    const column = sizer?.parentElement
-    const observer = marginObserverRef.current
-    if (!column || !observer) {
-      return
-    }
-    observer.observe(column)
-    // The inset's padding grows when the older-history row shows; only its border box sees that.
-    if (column.parentElement) {
-      observer.observe(column.parentElement, { box: 'border-box' })
-    }
-  }, [])
+  const [sizer, setSizer] = useState<HTMLDivElement | null>(null)
   useLayoutEffect(() => {
     const container = scrollRef.current
     if (!container) {
@@ -91,25 +79,22 @@ export function useNativeChatScrollMargin({
       return
     }
     const observer = new ResizeObserver(readScrollMargin)
-    marginObserverRef.current = observer
     observer.observe(container)
-    observeAbove(sizerElementRef.current)
-    return () => {
-      observer.disconnect()
-      marginObserverRef.current = null
+    const column = sizer?.parentElement
+    if (column) {
+      observer.observe(column)
     }
-  }, [observeAbove, readScrollMargin, scrollRef])
+    // The inset's padding grows when the older-history row shows; only its border box sees that.
+    if (column?.parentElement) {
+      observer.observe(column.parentElement, { box: 'border-box' })
+    }
+    return () => observer.disconnect()
+  }, [readScrollMargin, scrollRef, sizer])
 
-  const sizerRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      sizerElementRef.current = node
-      if (node) {
-        readScrollMargin()
-        observeAbove(node)
-      }
-    },
-    [observeAbove, readScrollMargin]
-  )
+  const sizerRef = useCallback((node: HTMLDivElement | null) => {
+    sizerElementRef.current = node
+    setSizer(node)
+  }, [])
 
   return { scrollMargin, sizerRef }
 }
