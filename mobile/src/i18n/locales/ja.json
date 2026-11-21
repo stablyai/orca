@@ -2887,7 +2887,7 @@
     },
     "appearance": {
       "agentIcon": {
-        "heading": "チャットのエージェントアイコン",
+        "heading": "チャットの Agent アイコン",
         "model": "モデル名の横",
         "field": "メッセージ入力欄の先頭",
         "off": "オフ"
