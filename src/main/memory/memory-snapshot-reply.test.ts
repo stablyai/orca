@@ -20,4 +20,45 @@ describe('the memory snapshot sent over RPC', () => {
     expect(reply.worktrees.every((worktree) => worktree.history.length === 20)).toBe(true)
     expect(reply.worktrees[3_999]?.history.at(-1)).toBe(60)
   })
+
+  it('leaves out history, then chat detail, before a large host would exceed the size limit', () => {
+    const history = Array.from({ length: 60 }, () => 123_456_789)
+    const id = (prefix: string, i: number): string => `${prefix}-${i}-${'x'.repeat(330)}`
+    const worktrees = Array.from({ length: 4_000 }, (_, i) => ({
+      worktreeId: id('w', i),
+      worktreeName: 'main',
+      repoId: 'repo',
+      repoName: 'repo',
+      cpu: 1,
+      memory: 123_456_789,
+      sessions: [
+        { sessionId: id('pty', i), paneKey: null, pid: 1_000 + i, cpu: 1, memory: 123_456_789 }
+      ],
+      ...(i % 4 === 0
+        ? {
+            chats: [
+              {
+                agentSessionId: '2015f7a9-8b8c-4018-8466-92a245c1f0fb',
+                agent: 'claude',
+                name: 'n'.repeat(50),
+                cpu: 1,
+                memory: 123_456_789
+              }
+            ]
+          }
+        : {}),
+      history
+    }))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reply reads only app and worktrees.
+    const snapshot = {
+      app: { cpu: 0, memory: 0, main: {}, renderer: {}, other: {}, history },
+      worktrees
+    } as unknown as MemorySnapshot
+
+    const reply = toMemorySnapshotReply(snapshot)
+
+    expect(Buffer.byteLength(JSON.stringify(reply))).toBeLessThan(4 * 1024 * 1024)
+    expect(reply.worktrees).toHaveLength(4_000)
+    expect(reply.worktrees[3_999]?.sessions).toHaveLength(1)
+  })
 })
