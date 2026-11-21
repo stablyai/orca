@@ -41,7 +41,8 @@ const settings: NotificationSettings = {
   customSoundPath: null,
   customSoundVolume: 1,
   mutedNotificationSourceIds: [],
-  notifyHiddenWorkspaces: true
+  notifyHiddenWorkspaces: true,
+  dockUnreadBadge: true
 }
 
 function dispatch() {

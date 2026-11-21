@@ -68,6 +68,7 @@ function settings(overrides: Partial<NotificationSettings> = {}): NotificationSe
     customSoundVolume: 1,
     mutedNotificationSourceIds: [],
     notifyHiddenWorkspaces: true,
+    dockUnreadBadge: true,
     ...overrides
   }
 }

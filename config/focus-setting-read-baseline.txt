@@ -5,6 +5,8 @@
 # Prune after removing reads: pnpm check:focus-read-ratchet --prune
 3 src/renderer/src/app-shell/ActiveWorkspaceSyncGate.tsx # existing watch selector now visible through useCallback; includes its import-path occurrence
 2 src/renderer/src/app-shell/use-app-shell-services.ts
+1 src/renderer/src/attention/unread/UnreadDockBadgeSync.tsx # Dock count follows the sidebar's default host
+3 src/renderer/src/attention/unread/unread-badge-count-selector.ts # Dock count follows the sidebar's default host
 1 src/renderer/src/component-fixtures/component-fixture-explorer.tsx # dev-only fixture page seeds default settings
 1 src/renderer/src/components/activity/ActivityPrototypePage.tsx
 1 src/renderer/src/components/activity/sidebar/SidebarAgentsList.tsx

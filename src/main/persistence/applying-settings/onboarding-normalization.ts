@@ -69,7 +69,8 @@ export function normalizeNotificationSettings(value: unknown): NotificationSetti
     notifyHiddenWorkspaces: booleanOr(
       candidate.notifyHiddenWorkspaces,
       defaults.notifyHiddenWorkspaces
-    )
+    ),
+    dockUnreadBadge: booleanOr(candidate.dockUnreadBadge, defaults.dockUnreadBadge)
   }
 }
 

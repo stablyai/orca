@@ -39,6 +39,8 @@ export type NotificationSettings = {
   mutedNotificationSourceIds: NotificationSourceId[]
   /** Off silences every notification from a workspace the sidebar's Filters switches hide. Local only. */
   notifyHiddenWorkspaces: boolean
+  /** macOS Dock unread-workspace count. Local only. */
+  dockUnreadBadge: boolean
 }
 
 /** The switches a host applies to its own phone pushes; sounds and per-source mutes stay with each client. */

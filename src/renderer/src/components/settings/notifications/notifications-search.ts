@@ -214,6 +214,18 @@ export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate('settings.notifications.dockUnreadBadge.label', 'Unread count on Dock icon'),
+    description: translate(
+      'settings.notifications.dockUnreadBadge.description',
+      'Show how many workspaces have unread activity on the Dock icon.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.notifications.dockUnreadBadge.search.dock', 'dock'),
+      ...translateSearchKeyword('settings.notifications.dockUnreadBadge.search.badge', 'badge'),
+      ...translateSearchKeyword('settings.notifications.dockUnreadBadge.search.unread', 'unread')
+    ]
+  },
+  {
     title: translate('settings.notifications.perfNotices.disk.label', 'Disk almost full'),
     description: translate(
       'settings.notifications.perfNotices.disk.description',
