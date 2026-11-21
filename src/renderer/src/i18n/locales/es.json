@@ -11560,7 +11560,7 @@
           "description": "Verifique y actualice los servidores Orca emparejados desde este cliente.",
           "updating": "Actualizando servidores…",
           "serverCountOne": "1 servidor emparejado",
-          "fdd271abf0": "Remote Orca Servers",
+          "fdd271abf0": "Servidores Orca remotos",
           "e4e5937469": "Buscar actualizaciones",
           "newerCount": "{{value0}} con una versión más reciente que esta aplicación"
         },
