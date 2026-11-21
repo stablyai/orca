@@ -14,7 +14,8 @@ import {
 } from '../worktree-operation-options'
 
 const BATCH_SIZE = 256
-const PROCESS_CONCURRENCY = 8
+// APFS cloning scales to about four parallel streams and slows beyond that.
+const PROCESS_CONCURRENCY = 4
 const FILE_CONCURRENCY = 64
 const MAX_BUFFER = 256 * 1024 * 1024
 const CONVERSION_ATTRIBUTES = ['eol', 'filter', 'ident', 'working-tree-encoding']
@@ -221,16 +222,28 @@ async function removeMismatchedClones(
   if (present.length === 0) {
     return
   }
-  const { stdout } = await runGit(
-    context,
-    ['hash-object', '--no-filters', '--stdin-paths'],
-    `${present.map((file) => file.path).join('\n')}\n`
-  )
-  const hashes = stdout.trim().split('\n')
-  if (hashes.length !== present.length) {
-    throw new Error(`Expected ${present.length} clone hashes, received ${hashes.length}`)
+  // hash-object hashes on one core; split the list so hashing uses several.
+  const chunkSize = Math.ceil(present.length / PROCESS_CONCURRENCY)
+  const chunks: TrackedFile[][] = []
+  for (let index = 0; index < present.length; index += chunkSize) {
+    chunks.push(present.slice(index, index + chunkSize))
   }
-  const mismatched = present.filter((file, index) => hashes[index] !== file.oid)
+  const mismatched = (
+    await Promise.all(
+      chunks.map(async (chunk) => {
+        const { stdout } = await runGit(
+          context,
+          ['hash-object', '--no-filters', '--stdin-paths'],
+          `${chunk.map((file) => file.path).join('\n')}\n`
+        )
+        const hashes = stdout.trim().split('\n')
+        if (hashes.length !== chunk.length) {
+          throw new Error(`Expected ${chunk.length} clone hashes, received ${hashes.length}`)
+        }
+        return chunk.filter((file, index) => hashes[index] !== file.oid)
+      })
+    )
+  ).flat()
   await forEachWithConcurrency(mismatched, FILE_CONCURRENCY, (file) =>
     unlink(join(context.worktreePath, file.path))
   )
