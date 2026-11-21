@@ -1,9 +1,10 @@
 import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
-import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
 import { getAgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog'
 import { matchNativeChatCatalogModelId } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-state'
 import type { SessionOptionDescriptor } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
+import type { CatalogModel } from '../../../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import { sayNativeChatSessionOptionTranslated } from '../controls/native-chat-session-option-labels-text'
 import {
   createNativeChatPtySessionOptions,
@@ -12,6 +13,7 @@ import {
 import type { NativeChatSessionOptionDispatchCommand } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-dispatch'
 import {
   ensureNativeChatModelEnrichment,
+  nativeChatModelDiscoveryListedNothing,
   readNativeChatEnrichedModels,
   subscribeNativeChatEnrichedModels
 } from '../catalog/native-chat-session-option-enrichment'
@@ -19,7 +21,11 @@ import {
   discoverNativeChatCatalogModels,
   resolveNativeChatModelDiscoveryContext
 } from '../catalog/native-chat-session-option-discovery'
-import { readClaudeSessionOptionsFromTerminalScreen } from './claude-terminal-session-options'
+import {
+  readClaudeSessionOptionsFromResponse,
+  readClaudeSessionOptionsFromTerminalScreen,
+  type ClaudeResponseEvidence
+} from './claude-terminal-session-options'
 
 import { enqueueSessionOptionSettingsWrite } from '../native-chat-session-option-settings-write'
 
@@ -28,6 +34,12 @@ const subscribeEmpty = (): (() => void) => () => {}
 const getEmptySnapshot = (): SessionOptionDescriptor[] => EMPTY_SNAPSHOT
 
 const CLIENT_SETTINGS_TARGET = { kind: 'local' } as const
+
+/** The newest response, bound to the surface it was committed for. */
+type CommittedClaudeResponse = {
+  surface: NativeChatPtySessionOptionsSurface
+  response: ClaudeResponseEvidence
+}
 
 export function useNativeChatSessionOptions(args: {
   agent: AgentType
@@ -38,6 +50,8 @@ export function useNativeChatSessionOptions(args: {
   readTerminalScreen?: () => string | null
   /** OMP model evidence comes from its hook; Claude uses its terminal frame. */
   paneKey?: string
+  /** Claude: the newest transcript response, which still names the model after the frame scrolls away. */
+  claudeResponse?: ClaudeResponseEvidence | null
 }): {
   surface: NativeChatPtySessionOptionsSurface | null
   snapshot: SessionOptionDescriptor[]
@@ -49,7 +63,8 @@ export function useNativeChatSessionOptions(args: {
     dispatchCommand,
     onAgentPicker,
     readTerminalScreen,
-    paneKey
+    paneKey,
+    claudeResponse
   } = args
   const status = useAgentStatus(paneKey)
   const reportedModel = status?.model ?? null
@@ -58,11 +73,12 @@ export function useNativeChatSessionOptions(args: {
   const appliedReportedModelRef = useRef<string | null>(null)
   // Cache parsed screen text so late discovery can resolve real host model IDs.
   const reportedScreenRef = useRef<string | null>(null)
+  const responseRef = useRef<CommittedClaudeResponse | null>(null)
   const discoveryContext = useMemo(
     () => resolveNativeChatModelDiscoveryContext(terminalTabId),
     [terminalTabId]
   )
-  const surface = useMemo(() => {
+  const built = useMemo(() => {
     // Chat attaches after startup is queued, so a draft picker could no longer change its command.
     if (!targetPtyId) {
       return null
@@ -78,7 +94,7 @@ export function useNativeChatSessionOptions(args: {
             discoveredModels ?? undefined
           )
         : null
-    return createNativeChatPtySessionOptions({
+    const surface = createNativeChatPtySessionOptions({
       agent,
       scopeKey,
       ...(targetPtyId ? { fallbackScopeKey: terminalTabId } : {}),
@@ -98,6 +114,7 @@ export function useNativeChatSessionOptions(args: {
           picks: [{ modelId, optionId, value, adoptModelAsLaunchDefault }]
         })
     })
+    return { surface, builtWithListing: discoveredModels !== null }
   }, [
     agent,
     canSwitchOmpModel,
@@ -108,6 +125,8 @@ export function useNativeChatSessionOptions(args: {
     targetPtyId,
     terminalTabId
   ])
+  const surface = built?.surface ?? null
+  const builtWithListing = built?.builtWithListing ?? false
 
   useEffect(() => {
     if (!surface || agent !== 'claude') {
@@ -154,6 +173,36 @@ export function useNativeChatSessionOptions(args: {
     }
   }, [agent, discoveryContext, readTerminalScreen, surface, targetPtyId])
 
+  const responseModel = claudeResponse?.model
+  const responseEffort = claudeResponse?.effort
+  // Written at commit: a discovery callback between commit and passive effects must see this response.
+  useLayoutEffect(() => {
+    responseRef.current =
+      surface && responseModel
+        ? {
+            surface,
+            response: {
+              model: responseModel,
+              ...(responseEffort ? { effort: responseEffort } : {})
+            }
+          }
+        : null
+  }, [responseEffort, responseModel, surface])
+  useEffect(() => {
+    if (!surface || agent !== 'claude') {
+      return
+    }
+    if (!discoveryContext) {
+      fillClaudeModelFromResponse(surface, responseRef.current)
+      return
+    }
+    // Before the host listing arrives the response's API id would become an option-less stand-in.
+    const models = readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
+    if (models || nativeChatModelDiscoveryListedNothing(agent, discoveryContext.hostKey)) {
+      fillClaudeModelFromResponse(surface, responseRef.current, models ?? undefined)
+    }
+  }, [agent, discoveryContext, responseEffort, responseModel, surface])
+
   // Scope survives surface rebuilds; reapplying an unchanged report would revert the user’s pick.
   useEffect(() => {
     appliedReportedModelRef.current = null
@@ -189,28 +238,51 @@ export function useNativeChatSessionOptions(args: {
     if (!surface || !discoveryContext) {
       return
     }
+    const applyModels = (models: CatalogModel[]): void => {
+      surface.replaceModels(models)
+      const screen = agent === 'claude' ? reportedScreenRef.current : null
+      const reportedValues = screen
+        ? readClaudeSessionOptionsFromTerminalScreen(screen, models)
+        : null
+      if (reportedValues) {
+        surface.reportSessionOptions(reportedValues)
+      } else if (agent === 'claude') {
+        fillClaudeModelFromResponse(surface, responseRef.current, models)
+      }
+    }
     const unsubscribe = subscribeNativeChatEnrichedModels(
       agent,
       discoveryContext.hostKey,
-      (models) => {
-        surface.replaceModels(models)
-        const screen = agent === 'claude' ? reportedScreenRef.current : null
-        const reportedValues = screen
-          ? readClaudeSessionOptionsFromTerminalScreen(screen, models)
-          : null
-        if (reportedValues) {
-          surface.reportSessionOptions(reportedValues)
-        }
-      }
+      applyModels
     )
-    ensureNativeChatModelEnrichment({
+    // A listing that settled after the surface was built is never notified again; one present at build is already applied.
+    const settled = builtWithListing
+      ? null
+      : readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
+    if (settled) {
+      applyModels(settled)
+    }
+    let active = true
+    void ensureNativeChatModelEnrichment({
       agent,
       hostKey: discoveryContext.hostKey,
       discover: () =>
         discoverNativeChatCatalogModels(agent, discoveryContext.runtime, discoveryContext.hostKey)
+    }).then(() => {
+      // A failed or empty probe notifies no listener, so a waiting response would never be named.
+      if (
+        active &&
+        agent === 'claude' &&
+        nativeChatModelDiscoveryListedNothing(agent, discoveryContext.hostKey)
+      ) {
+        fillClaudeModelFromResponse(surface, responseRef.current)
+      }
     })
-    return unsubscribe
-  }, [agent, discoveryContext, surface])
+    return () => {
+      active = false
+      unsubscribe()
+    }
+  }, [agent, builtWithListing, discoveryContext, surface])
 
   const snapshot = useSyncExternalStore(
     surface?.subscribe ?? subscribeEmpty,
@@ -218,4 +290,21 @@ export function useNativeChatSessionOptions(args: {
     surface?.getSnapshot ?? getEmptySnapshot
   )
   return { surface, snapshot }
+}
+
+function shownModelId(surface: NativeChatPtySessionOptionsSurface): string | undefined {
+  const kind = surface.getSnapshot().find((descriptor) => descriptor.id === 'model')?.kind
+  return kind?.type === 'select' ? kind.currentValue : undefined
+}
+
+/** Only fill an unknown model: a startup frame or a pick made in chat stays authoritative. */
+function fillClaudeModelFromResponse(
+  surface: NativeChatPtySessionOptionsSurface,
+  committed: CommittedClaudeResponse | null,
+  models?: readonly CatalogModel[]
+): void {
+  // A callback of a replaced surface runs until passive cleanup; it must not take the new session's response.
+  if (committed?.surface === surface && !shownModelId(surface)) {
+    surface.reportSessionOptions(readClaudeSessionOptionsFromResponse(committed.response, models))
+  }
 }

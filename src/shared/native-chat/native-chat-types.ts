@@ -253,6 +253,8 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   transcriptOrder?: number
   /** Model id that produced an assistant response, as the provider API names it. */
   model?: string
+  /** Reasoning effort the agent recorded with that response, in its own words. */
+  effort?: string
   /** The agent's provider that served `model`, where the agent records one. */
   provider?: string
   /** On assistant responses whose accounting reflects the prompt the model read. */

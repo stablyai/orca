@@ -141,6 +141,10 @@ export function decodeClaudeTranscriptLine(
     return null
   }
   const messageId = extractString(record.uuid) ?? extractString(message?.id)
+  // Sidechain rows are a subagent's turns, served by the subagent's model.
+  const model =
+    role === 'assistant' && record.isSidechain !== true ? claudeResponseModel(message) : null
+  const effort = model ? extractString(record.effort) : null
   return {
     id: messageId ?? fallbackId,
     role: claudeMessageRole(role, blocks, message?.content),
@@ -151,8 +155,16 @@ export function decodeClaudeTranscriptLine(
         : blocks,
     timestamp,
     source: 'transcript',
+    ...(model ? { model } : {}),
+    ...(effort ? { effort } : {}),
     ...parent
   }
+}
+
+/** `<synthetic>` marks rows the CLI wrote itself, not a model's response. */
+function claudeResponseModel(message: Record<string, unknown> | null): string | null {
+  const model = extractString(message?.model)
+  return model && model !== '<synthetic>' ? model : null
 }
 
 /** Chat reads keep where Claude resumed on its own, so journal-less turns split there as structured turns do. */
