@@ -42,4 +42,14 @@ describe('agent process registry', () => {
     releaseNew()
     expect(listAgentProcessRoots()).toEqual([])
   })
+
+  it('stops counting a pid once its process has exited, before its cleanup releases it', () => {
+    let exited = false
+    const release = registerAgentProcess(4545, 4545, () => !exited)
+    noteAgentProcessChat(4545, 'chat')
+    exited = true
+
+    expect(listAgentProcessRoots()).toEqual([])
+    release()
+  })
 })

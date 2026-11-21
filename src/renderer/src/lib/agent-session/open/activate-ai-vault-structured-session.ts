@@ -8,6 +8,8 @@ import { activateWslMovedWorkspace } from '../../workspace/activation/wsl-moved-
 import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../../workspace/ownership/worktree-runtime-owner'
 import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
@@ -117,13 +119,15 @@ export function openDesktopStructuredSession(
   })
 }
 
-/** The paired host an open targets, so its same-id workspace is selected, never a local checkout. */
+/** The host an open targets, so its same-id workspace is selected, never a twin on another host. */
 function openingPairedHostId(
   source: StructuredSessionOpenSource,
   host: RuntimeClientTarget | undefined
 ): ExecutionHostId | null {
   if (host) {
-    return host.kind === 'environment' ? toRuntimeExecutionHostId(host.environmentId) : null
+    return host.kind === 'environment'
+      ? toRuntimeExecutionHostId(host.environmentId)
+      : LOCAL_EXECUTION_HOST_ID
   }
   const workspace =
     source.kind === 'history'
@@ -137,6 +141,19 @@ function openingPairedHostId(
   return environmentId ? toRuntimeExecutionHostId(environmentId) : null
 }
 
+/** Whether the selection shows another host's copy; a local open only moves off a paired twin. */
+function selectsOtherHost(
+  selected: ExecutionHostId | null,
+  wanted: ExecutionHostId | null
+): boolean {
+  if (wanted === null) {
+    return false
+  }
+  return wanted === LOCAL_EXECUTION_HOST_ID
+    ? parseExecutionHostId(selected)?.kind === 'runtime'
+    : selected !== wanted
+}
+
 function presentDesktopStructuredSession(
   result: StructuredSessionOpenResult,
   source: StructuredSessionOpenSource,
@@ -147,14 +164,14 @@ function presentDesktopStructuredSession(
     const workspace = result.target.worktreeId
     const { activeWorktreeId, activeView, activeWorkspaceExecutionHostId } = useAppStore.getState()
     // Settings or another page may cover the chat's own workspace; its tab is selected but not shown.
-    // A same-id local checkout can be selected while the chat lives on a paired host.
+    // A same-id twin on another host can be selected while the chat lives on this one.
+    const otherHostSelected = selectsOtherHost(activeWorkspaceExecutionHostId, pairedHostId)
     if (
-      (activeWorktreeId !== workspace ||
-        activeView !== 'terminal' ||
-        (pairedHostId !== null && activeWorkspaceExecutionHostId !== pairedHostId)) &&
+      (activeWorktreeId !== workspace || activeView !== 'terminal' || otherHostSelected) &&
       !activateWslMovedWorkspace(workspace)
     ) {
-      if (pairedHostId) {
+      // A local open names its host only to move off a paired twin, as every other local open does.
+      if (pairedHostId && (pairedHostId !== LOCAL_EXECUTION_HOST_ID || otherHostSelected)) {
         activateAndRevealWorktree(workspace, { executionHostId: pairedHostId })
       } else {
         activateAndRevealWorktree(workspace)

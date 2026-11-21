@@ -97,9 +97,9 @@ export function useResourceUsageStatusController() {
       lastSeenScannedAt: workspaceSpaceScannedAt
     })
   )
-  // Why: tab titles churn on every keystroke; subscribe to those maps only while open so closed badges don't rerender.
+  // Why: tab titles churn on every keystroke; only the PTYs tab reads the whole map. Resource rows watch their own title.
   const runtimePaneTitlesByTabId = useAppStore((s) =>
-    getResourceUsageRuntimePaneTitlesByTabId(s, viewActive)
+    getResourceUsageRuntimePaneTitlesByTabId(s, ptyViewActive)
   )
   const repos = useAppStore((s) => getResourceUsageRepos(s, viewActive))
   const gitWorktrees = useAppStore((s) => getResourceUsageAllWorktrees(s, viewActive))

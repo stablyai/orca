@@ -15,25 +15,44 @@ import { MetricPair, ROW_TRAILING_GUTTER_CLS, Sparkline } from './resource-usage
 import { isResourceSessionActivationKey } from '../session-actions/resource-session-navigation'
 import { ChatRow } from './resource-usage-chat-row'
 import { firstRuntimePaneTitle } from '../workspace-attribution/resource-session-labels'
+import { useAppStore } from '@/store/index'
 
-export function SessionRow({
-  session: sampled,
-  worktreeId,
-  onNavigate,
-  onKill,
-  runtimePaneTitlesByTabId
-}: {
+type SessionRowProps = {
   session: UnifiedSessionRow
   worktreeId: string
   onNavigate: (tabId: string, paneKey: string | null) => void
   onKill: (session: UnifiedSessionRow) => void
-  runtimePaneTitlesByTabId: Record<string, Record<number, string>>
-}): React.JSX.Element {
+}
+
+export function SessionRow(props: SessionRowProps): React.JSX.Element {
+  return props.session.liveTitleTabId ? (
+    <LiveTitledSessionRow {...props} tabId={props.session.liveTitleTabId} />
+  ) : (
+    <SessionRowView {...props} />
+  )
+}
+
+/** Only rows named by a live pane title watch titles, so a title change re-renders just its row. */
+function LiveTitledSessionRow({
+  tabId,
+  ...props
+}: SessionRowProps & { tabId: string }): React.JSX.Element {
+  const liveTitle = useAppStore((s) => firstRuntimePaneTitle(s.runtimePaneTitlesByTabId[tabId]))
+  return (
+    <SessionRowView
+      {...props}
+      session={liveTitle ? { ...props.session, label: liveTitle } : props.session}
+    />
+  )
+}
+
+function SessionRowView({
+  session,
+  worktreeId,
+  onNavigate,
+  onKill
+}: SessionRowProps): React.JSX.Element {
   const t = useTranslate()
-  const liveTitle = sampled.liveTitleTabId
-    ? firstRuntimePaneTitle(runtimePaneTitlesByTabId[sampled.liveTitleTabId])
-    : undefined
-  const session = liveTitle ? { ...sampled, label: liveTitle } : sampled
   const clickable = session.tabId !== null && session.bound
   const handleClick = (): void => {
     if (clickable && session.tabId) {
@@ -122,8 +141,7 @@ export function WorktreeRow({
   onDelete,
   onKillSession,
   navigateToTab,
-  onOpenChat,
-  runtimePaneTitlesByTabId
+  onOpenChat
 }: {
   worktree: UnifiedWorktreeRow
   storeRecord: Worktree | null
@@ -135,7 +153,6 @@ export function WorktreeRow({
   onKillSession: (session: UnifiedSessionRow) => void
   navigateToTab: (tabId: string, paneKey: string | null) => void
   onOpenChat: (worktreeId: string, agentSessionId: string, runtimeHostId?: string) => void
-  runtimePaneTitlesByTabId: Record<string, Record<number, string>>
 }): React.JSX.Element {
   const t = useTranslate()
   const hasResources =
@@ -286,7 +303,6 @@ export function WorktreeRow({
             worktreeId={worktree.worktreeId}
             onNavigate={navigateToTab}
             onKill={onKillSession}
-            runtimePaneTitlesByTabId={runtimePaneTitlesByTabId}
           />
         ))}
       {!isCollapsed &&

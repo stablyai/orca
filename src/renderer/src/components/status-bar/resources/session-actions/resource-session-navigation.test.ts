@@ -9,13 +9,13 @@ vi.mock('@/lib/bot-group-catalog', () => ({ BotGroupRoomUnavailableError: class 
 import { openResourceChat } from './resource-session-navigation'
 
 describe('opening a chat row', () => {
-  it("opens it as a history click does, which reveals a tabless chat and a group member's room", () => {
+  it('opens a local chat as a history click does, on this machine even if a paired twin is selected', () => {
     openResourceChat('repo::/w1', 'chat-1')
 
     expect(open).toHaveBeenCalledWith(
       { structuredSession: { workspaceId: 'repo::/w1', sessionId: 'chat-1' } },
       undefined,
-      undefined
+      { kind: 'local' }
     )
   })
 

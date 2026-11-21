@@ -185,8 +185,7 @@ export function ResourceUsageStatusSegment(): React.JSX.Element {
                 appCollapsed,
                 setAppCollapsed,
                 daemonUnreachable,
-                runtimeHostNotices,
-                runtimePaneTitlesByTabId: controller.runtimePaneTitlesByTabId
+                runtimeHostNotices
               },
               t
             )}
