@@ -1,8 +1,6 @@
 // Keep mounted for fading; hidden state is inert and excluded from assistive technology.
-// Why no rim: a fill a clear step off the transcript, plus the shadow, separates the pill from text behind it.
-// The transparent border keeps the size and gives forced-colors mode a button edge.
-// Light mixes its own foreground in because light accent equals secondary; dark rests on accent.
-// The label leans past its foreground so a dim Match Terminal palette still reads at 4.5:1 on the fill.
+// No rim: a raised fill and the shadow separate the pill; the transparent border keeps a forced-colors edge.
+// The label leans past its token (no stronger one exists) so a dim Match Terminal palette still reads 4.5:1.
 
 import { ArrowDown } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
