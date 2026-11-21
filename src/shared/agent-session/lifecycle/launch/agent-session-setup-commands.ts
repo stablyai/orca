@@ -1,6 +1,7 @@
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../agent-launch/catalog/tui-agent-display-names'
 import type { AgentSessionAccountKind } from '../../failures/agent-session-availability'
 import {
+  buildShellCommandFromArgv,
   quoteStartupArg,
   type AgentStartupShell
 } from '../../../agent-launch/startup/tui-agent-startup-shell'
@@ -124,7 +125,13 @@ export function agentSessionSetupFor(agent: string | undefined) {
 /** The terminal command that signs `agent` in on its chat host; `remote` when the user watches from another device. */
 export function agentSessionSignInCommand(
   agent: string | undefined,
-  options: { account?: AgentSessionAccountKind; remote: boolean; shell?: AgentStartupShell | null }
+  options: {
+    account?: AgentSessionAccountKind
+    remote: boolean
+    shell?: AgentStartupShell | null
+    /** Full path to Orca's copy, when the host has no CLI of the user's own. */
+    managedCommand?: string | null
+  }
 ): string | null {
   const entry = agentSessionSetupFor(agent)
   // Why: host terminals follow the selected managed Claude account; other managed logins aren't known to land.
@@ -132,7 +139,9 @@ export function agentSessionSignInCommand(
     return null
   }
   if (entry.agent === 'claude' && options.account === 'system') {
-    return options.shell === null ? null : claudeSystemSignInCommand(options.shell ?? 'posix')
+    return options.shell === null
+      ? null
+      : claudeSystemSignInCommand(options.shell ?? 'posix', options.managedCommand)
   }
   const argv =
     options.account === 'system' && 'systemLoginCommand' in entry
@@ -140,8 +149,18 @@ export function agentSessionSignInCommand(
       : options.remote && 'remoteLoginCommand' in entry
         ? entry.remoteLoginCommand
         : entry.loginCommand
+  if (argv.length === 0) {
+    return null
+  }
+  // Orca's copy is run by its full path, quoted for the host's shell.
+  if (options.managedCommand && options.shell !== null) {
+    return buildShellCommandFromArgv(
+      [options.managedCommand, ...argv.slice(1)],
+      options.shell ?? 'posix'
+    )
+  }
   // Why a plain join: every word is a bare token, which POSIX, PowerShell and cmd all read alike.
-  return argv.length > 0 ? argv.join(' ') : null
+  return argv.join(' ')
 }
 
 /** What the sign-in terminal adds to its environment, e.g. so a self-updating CLI doesn't update. */
@@ -153,7 +172,11 @@ export function agentSessionSignInEnv(
 }
 
 /** Bypass the selected-profile function and restore the config Orca replaced for this login. */
-function claudeSystemSignInCommand(shell: AgentStartupShell): string {
+function claudeSystemSignInCommand(
+  shell: AgentStartupShell,
+  managedCommand?: string | null
+): string {
+  const program = managedCommand ? buildShellCommandFromArgv([managedCommand], shell) : null
   if (shell === 'powershell') {
     return [
       "& { $names = @('CLAUDE_CONFIG_DIR', 'ORCA_CLAUDE_INJECTED_CONFIG_DIR', 'ORCA_CLAUDE_PROFILE_POINTER'); $saved = @{};",
@@ -162,19 +185,21 @@ function claudeSystemSignInCommand(shell: AgentStartupShell): string {
       'if ($env:ORCA_CLAUDE_USER_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR = $env:ORCA_CLAUDE_USER_CONFIG_DIR }',
       'else { Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue } };',
       'Remove-Item Env:ORCA_CLAUDE_INJECTED_CONFIG_DIR, Env:ORCA_CLAUDE_PROFILE_POINTER -ErrorAction SilentlyContinue;',
-      '& (Get-Command claude -CommandType Application,ExternalScript -ErrorAction Stop | Select-Object -First 1).Source auth login',
+      program
+        ? `${program} auth login`
+        : '& (Get-Command claude -CommandType Application,ExternalScript -ErrorAction Stop | Select-Object -First 1).Source auth login',
       '} finally { foreach ($name in $names) { if ($null -eq $saved[$name]) {',
       'Remove-Item -LiteralPath "Env:$name" -ErrorAction SilentlyContinue',
       "} else { [Environment]::SetEnvironmentVariable($name, $saved[$name], 'Process') } } } }"
     ].join(' ')
   }
   if (shell === 'cmd') {
-    return 'if defined ORCA_CLAUDE_INJECTED_CONFIG_DIR if "%CLAUDE_CONFIG_DIR%"=="%ORCA_CLAUDE_INJECTED_CONFIG_DIR%" set "CLAUDE_CONFIG_DIR=%ORCA_CLAUDE_USER_CONFIG_DIR%" & set "ORCA_CLAUDE_INJECTED_CONFIG_DIR=" & set "ORCA_CLAUDE_PROFILE_POINTER=" & claude auth login'
+    return `if defined ORCA_CLAUDE_INJECTED_CONFIG_DIR if "%CLAUDE_CONFIG_DIR%"=="%ORCA_CLAUDE_INJECTED_CONFIG_DIR%" set "CLAUDE_CONFIG_DIR=%ORCA_CLAUDE_USER_CONFIG_DIR%" & set "ORCA_CLAUDE_INJECTED_CONFIG_DIR=" & set "ORCA_CLAUDE_PROFILE_POINTER=" & ${program ?? 'claude'} auth login`
   }
   const script =
     'if [ -n "${ORCA_CLAUDE_INJECTED_CONFIG_DIR:-}" ] && [ "${CLAUDE_CONFIG_DIR:-}" = "$ORCA_CLAUDE_INJECTED_CONFIG_DIR" ]; then ' +
     'if [ -n "${ORCA_CLAUDE_USER_CONFIG_DIR:-}" ]; then export CLAUDE_CONFIG_DIR="$ORCA_CLAUDE_USER_CONFIG_DIR"; else unset CLAUDE_CONFIG_DIR; fi; fi; ' +
-    'unset ORCA_CLAUDE_INJECTED_CONFIG_DIR ORCA_CLAUDE_PROFILE_POINTER; exec claude auth login'
+    `unset ORCA_CLAUDE_INJECTED_CONFIG_DIR ORCA_CLAUDE_PROFILE_POINTER; exec ${program ?? 'claude'} auth login`
   return `sh -c ${quoteStartupArg(script, shell)}`
 }
 

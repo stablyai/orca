@@ -4,6 +4,7 @@ import { runPreflightCheck } from '../../preflight/agent-detection'
 import { detectRemoteWindowsTerminalCapabilities } from './preflight-remote-windows-terminal-capabilities'
 import {
   assertAgentDetectionHostRunning,
+  detectAgentInventoryOnHost,
   detectAgentsOnHost,
   refreshAgentsOnHost,
   type AgentDetectionHost
@@ -18,7 +19,10 @@ import { runAsWslExecUserAct } from '../../wsl/discovery/wsl-background-exec-gat
 import { deferRefusedPreflight } from './preflight-wsl-refusal-retry'
 import { agentCommandOverrideDetectionOptions } from '../../preflight/installed-agent-detection'
 
-type AgentDetectionRequest = PreflightRuntimeContext & { enabledOnly?: boolean }
+type AgentDetectionRequest = PreflightRuntimeContext & {
+  enabledOnly?: boolean
+  withManagedAgentCommands?: boolean
+}
 /** Set by a user act (window focus, a click, opening a picker): it may start its WSL distro. */
 type PreflightWake = { wakeWslDistro?: boolean }
 
@@ -64,7 +68,9 @@ export function registerPreflightHandlers(store?: Pick<Store, 'getSettings'>): v
       runPreflightAct(args, async () => {
         const host: AgentDetectionHost = { kind: 'local', context: args }
         await assertAgentDetectionHostRunning(host)
-        return detectAgentsOnHost(host, detectionOptions(args))
+        return args?.withManagedAgentCommands
+          ? detectAgentInventoryOnHost(host, detectionOptions(args))
+          : detectAgentsOnHost(host, detectionOptions(args))
       })
   )
 

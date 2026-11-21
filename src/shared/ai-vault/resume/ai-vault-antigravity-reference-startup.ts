@@ -2,6 +2,7 @@ import { resolveAgentStartupPlanInputs } from '../../agent-launch/startup/agent-
 import { buildAgentStartupPlan } from '../../agent-launch/startup/tui-agent-startup'
 import type { AgentStartupShell } from '../../agent-launch/startup/tui-agent-startup-shell'
 import { buildAiVaultResumeCommand } from './ai-vault-resume-command'
+import type { ManagedAgentCommands } from '../../agent-launch/startup/managed-agent-launch-program'
 import type { AiVaultResumeLaunchSettings, AiVaultResumeStartup } from './ai-vault-resume-startup'
 
 /** References are fresh launches, so preserve normal model arguments and environment. */
@@ -12,6 +13,7 @@ export function buildAntigravityReferenceStartup(args: {
   shell?: AgentStartupShell
   commandOverride?: string | null
   settings?: AiVaultResumeLaunchSettings | null
+  managedAgentCommands?: ManagedAgentCommands
 }): AiVaultResumeStartup | null {
   const plan = buildAgentStartupPlan({
     ...resolveAgentStartupPlanInputs({
@@ -25,7 +27,8 @@ export function buildAntigravityReferenceStartup(args: {
           ...args.settings?.agentCmdOverrides,
           ...(args.commandOverride?.trim() ? { antigravity: args.commandOverride } : {})
         }
-      }
+      },
+      managedAgentCommands: args.managedAgentCommands
     }),
     prompt: '',
     allowEmptyPromptLaunch: true

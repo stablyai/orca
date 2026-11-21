@@ -1,3 +1,4 @@
+import { readManagedAgentCommandsForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import {
   getConnectionIdForWorktreeCopy,
@@ -122,7 +123,8 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       platform: resumeTarget.platform,
       agentHostPlatform: resumeTarget.agentHostPlatform,
       shell: resumeTarget.shell,
-      launchCwd: session.worktree?.path
+      launchCwd: session.worktree?.path,
+      managedAgentCommands: readManagedAgentCommandsForWorktree(state, session.deps.worktreeId)
     })
     if (!startupPlan) {
       return null

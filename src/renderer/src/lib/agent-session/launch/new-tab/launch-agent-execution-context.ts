@@ -14,6 +14,8 @@ import {
 } from '@/runtime/hosts/platform/execution-host-facts'
 import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
 import type { useAppStore } from '@/store/index'
+import type { ManagedAgentCommands } from '../../../../../../shared/agent-launch/startup/managed-agent-launch-program'
+import { readManagedAgentCommandsForWorktree } from '../inventory/agent-detection-target-inventory'
 
 export type AgentLaunchExecutionContext = {
   /** `undefined` means rival host rows disagree, which is not evidence of a remote. */
@@ -22,6 +24,8 @@ export type AgentLaunchExecutionContext = {
   isRemote: boolean
   /** Only set for a local Windows launch; remote targets need their own shell signal. */
   queuedShell: AgentStartupShell | undefined
+  /** Full paths to Orca's copies on the workspace's host, for agents the user has none of. */
+  managedAgentCommands: ManagedAgentCommands | undefined
 }
 
 /** Scope the ordinary owner resolvers without changing the user's live selection. */
@@ -73,6 +77,7 @@ export function resolveAgentLaunchExecutionContext(
     queuedShell: resolveExecutionHostAgentStartupShell(
       launchHost,
       store.settings?.terminalWindowsShell
-    )
+    ),
+    managedAgentCommands: readManagedAgentCommandsForWorktree(store, args.worktreeId)
   }
 }

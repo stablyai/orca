@@ -12,7 +12,13 @@ import { hasPathSeparatorToken } from '../../shared/agent-launch/installation/ma
 
 export async function detectAgentCommandsOnHost(
   commands: readonly string[],
-  options: { connectionId?: string | null; context?: PreflightRuntimeContext } = {}
+  options: {
+    connectionId?: string | null
+    context?: PreflightRuntimeContext
+    /** Filled with the full path of each command found only outside PATH (in an installer's
+     *  folder), which a terminal can't run by name. */
+    outsidePath?: Map<string, string>
+  } = {}
 ): Promise<Set<string>> {
   if (options.connectionId) {
     throw new SshHostNotServedError(options.connectionId)
@@ -41,5 +47,6 @@ export async function detectAgentCommandsOnHost(
   const foundCommands = new Set(
     commands.filter((cmd) => onPathCommands.has(cmd) || installDirCommands.has(cmd))
   )
+  installDirCommands.forEach((path, command) => options.outsidePath?.set(command, path))
   return foundCommands
 }

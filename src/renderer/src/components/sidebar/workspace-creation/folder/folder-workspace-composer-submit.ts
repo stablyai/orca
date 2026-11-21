@@ -29,6 +29,7 @@ import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-sessio
 import '@/lib/workspace/creation/new-workspace-project-options'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store/index'
+import { readManagedAgentCommandsForRepo } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { resolveExecutionHostAgentStartupShell } from '@/runtime/hosts/platform/execution-host-facts'
 import {
@@ -89,6 +90,7 @@ export async function submitFolderWorkspaceCreate({
   // SSH folders use the plain orca relay shim; keep the Linux-only local executable rename out of remote launches.
   const launchIsRemote = Boolean(projectGroup.connectionId)
   const launchShell = resolveExecutionHostAgentStartupShell(launchHost, terminalWindowsShell)
+  const managedAgentCommands = readManagedAgentCommandsForRepo(projectGroup, launchPlatform)
   const preferences =
     quickAgent && settings
       ? await ensureAgentLaunchPreferences(useAppStore.getState(), {
@@ -118,7 +120,8 @@ export async function submitFolderWorkspaceCreate({
           agentEnv,
           platform: launchPlatform,
           shell: launchShell,
-          isRemote: launchIsRemote
+          isRemote: launchIsRemote,
+          managedAgentCommands
         })
       : quickAgent && launchPlatform
         ? buildAgentStartupPlan({
@@ -129,7 +132,8 @@ export async function submitFolderWorkspaceCreate({
               sessionOptions,
               platform: launchPlatform,
               shell: launchShell,
-              isRemote: launchIsRemote
+              isRemote: launchIsRemote,
+              managedAgentCommands
             }),
             ...(agentEnv ? { agentEnv } : {}),
             prompt: note,

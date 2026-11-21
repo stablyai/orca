@@ -3,6 +3,10 @@ import type { PreflightRuntimeContext, RefreshAgentsResult } from './preflight-a
 import type { PreloadApi } from '../../api-types'
 import type { ZCodeInteractiveCapability } from '../../../shared/agent-launch/installation/zcode-missing-tui'
 
+const detectAgents = (
+  args?: PreflightRuntimeContext & { withManagedAgentCommands?: boolean }
+): Promise<unknown> => ipcRenderer.invoke('preflight:detectAgents', args)
+
 export const preflightApi = {
   check: (args?: {
     force?: boolean
@@ -28,13 +32,8 @@ export const preflightApi = {
     }
     linear: { connected: boolean }
   }> => ipcRenderer.invoke('preflight:check', args),
-  detectAgents: (
-    args?: PreflightRuntimeContext & {
-      enabledOnly?: boolean
-      wakeWslDistro?: boolean
-      userInitiated?: boolean
-    }
-  ): Promise<string[]> => ipcRenderer.invoke('preflight:detectAgents', args),
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: main answers the inventory exactly when withManagedAgentCommands is set, as the overloads say.
+  detectAgents: detectAgents as PreloadApi['preflight']['detectAgents'],
   onWslDistroRunning: (callback: (distro: string) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, distro: string): void => callback(distro)
     ipcRenderer.on('preflight:wslDistroRunning', listener)

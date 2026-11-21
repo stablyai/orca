@@ -1,3 +1,4 @@
+import { readManagedAgentCommandsForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
@@ -215,7 +216,8 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
           : null,
         launchHost: resolveDirectWorkItemLaunchHost(hostArgs),
         terminalWindowsShell: resolveDirectWorkItemTabShell(hostArgs),
-        launchConnectionId
+        launchConnectionId,
+        managedAgentCommands: readManagedAgentCommandsForWorktree(latestStore, args.worktreeId)
       })
 
   return {

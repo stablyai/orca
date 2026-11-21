@@ -42,6 +42,8 @@ export const PreflightAgentRefresh = PreflightAgentDetection.safeExtend({
 })
 
 export const PreflightProjectAgentDetection = PreflightAgentDetection.safeExtend({
+  /** Answer `{ agents, managedAgentCommands }`; older hosts drop it and answer the list alone. */
+  withManagedAgentCommands: z.boolean().optional(),
   project: RepoSelector.extend({ repo: RepoSelector.shape.repo.pipe(z.string().max(4096)) })
     .strict()
     .optional()

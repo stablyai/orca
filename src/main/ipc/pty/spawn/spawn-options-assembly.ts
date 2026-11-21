@@ -6,6 +6,7 @@ import type { GlobalSettings } from '../../../../shared/settings/global-settings
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { withCodexTerminalServerIsolationEnv } from '../../../../shared/agent-launch/startup/codex-terminal-server-isolation'
 import { withCodexStartupImageCommand } from '../../../../shared/agent-launch/startup/codex-startup-image-command'
+import { withManagedAgentProgramAtSpawn } from '../../../managed-agent-cli/managed-agent-spawn-program'
 import { getLegacyOpenCodeEnvKeysToDelete } from '../../../opencode/status-hooks/legacy-shared-config-dir'
 import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/shell-startup/legacy-terminal-shim-dir'
@@ -191,7 +192,10 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     envToDelete: input.envToDelete,
     cwd: input.cwd
   })
-  const command = noDaemonLaunch ? await noDaemonLaunch : launchCommand
+  const planned = noDaemonLaunch ? await noDaemonLaunch : launchCommand
+  const command = connectionId
+    ? planned
+    : withManagedAgentProgramAtSpawn(planned, shell, { wsl: input.codexRuntime === 'wsl' })
   if (command !== undefined) {
     spawnOptions.command =
       !connectionId && inlineImagesEnabled && !input.envToDelete.includes('KITTY_WINDOW_ID')

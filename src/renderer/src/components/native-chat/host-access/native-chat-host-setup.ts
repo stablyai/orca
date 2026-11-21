@@ -1,3 +1,4 @@
+import { useNativeChatSignInCommand } from './native-chat-sign-in-command'
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -10,7 +11,6 @@ import { readAgentInventoryForTarget } from '@/lib/agent-session/launch/inventor
 import { runtimeHostPlatform } from '@/components/terminal-pane/pty-transport/host-ownership/pty-owner-machine-platform'
 import {
   agentSessionInstallCommand,
-  agentSessionSignInCommand,
   agentSessionSignInEnv
 } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -20,8 +20,6 @@ import {
 } from '../../../../../shared/agent-session/failures/agent-session-visible-failures'
 import type { AgentSessionAccountKind } from '../../../../../shared/agent-session/failures/agent-session-availability'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import { resolveHostAgentStartupShell } from '../../../../../shared/shell/launch/windows-terminal-shell'
 import {
   useNativeChatHostCommandTerminal,
   type NativeChatHostCommandTerminal
@@ -197,31 +195,7 @@ function useNativeChatSignIn(
     input.failure,
     input.startFailures.filter((fact) => isNativeChatSignInFailureKind(fact.kind)).length
   )
-  const shell = useAppStoreWithHostStatuses((s, statuses) => {
-    const status =
-      input.target.kind === 'environment'
-        ? lastVerifiedRuntimeStatus(statuses.get(input.target.environmentId))
-        : null
-    const platform = input.target.kind === 'local' ? getRendererAppPlatform() : status?.hostPlatform
-    if (!platform) {
-      return null
-    }
-    return (
-      resolveHostAgentStartupShell({
-        platform,
-        isRemote: input.target.kind !== 'local',
-        hostTerminalWindowsShell:
-          input.target.kind === 'local'
-            ? s.settings?.terminalWindowsShell
-            : status?.terminalWindowsShell
-      }) ?? (platform === 'win32' ? null : 'posix')
-    )
-  })
-  const command = agentSessionSignInCommand(input.agent, {
-    account: input.account,
-    remote: input.target.kind !== 'local',
-    shell
-  })
+  const command = useNativeChatSignInCommand(input)
   const { agent } = input
   const viaTerminal = useMemo(
     () =>
