@@ -17,6 +17,7 @@ import { COPILOT_MANAGED_CLI } from '../copilot/copilot-managed-runtime'
 import { GROK_MANAGED_CLI } from '../grok/grok-managed-runtime'
 import { KIMI_MANAGED_CLI } from '../kimi/kimi-managed-runtime'
 import { OMP_MANAGED_CLI } from '../omp/omp-managed-runtime'
+import { AGY_MANAGED_CLI } from '../antigravity/agy-managed-runtime'
 import {
   CURSOR_MINIMUM_VERSIONS,
   OPENCODE2_MINIMUM_VERSIONS,
@@ -24,6 +25,7 @@ import {
 } from '../acp/launch/acp-minimum-versions'
 import { readInheritedPath } from '../ipc/pty/host-env/path'
 import { resolvePathEnvKey } from '../pty/environment/windows-path-segment-merge'
+import { isPathInsideOrEqual } from '../../shared/file-access/cross-platform-path'
 
 // Hermes ships only as a git checkout its installer builds with uv, so it stays the user's own install.
 export const MANAGED_AGENT_CLI_IDS = [
@@ -35,7 +37,8 @@ export const MANAGED_AGENT_CLI_IDS = [
   'copilot',
   'grok',
   'kimi',
-  'omp'
+  'omp',
+  'antigravity'
 ] as const
 export type ManagedAgentCliId = (typeof MANAGED_AGENT_CLI_IDS)[number]
 
@@ -80,7 +83,9 @@ const MANAGED_AGENT_CLIS: Record<ManagedAgentCliId, ManagedAgentCli> = {
   copilot: COPILOT_MANAGED_CLI,
   grok: GROK_MANAGED_CLI,
   kimi: KIMI_MANAGED_CLI,
-  omp: OMP_MANAGED_CLI
+  omp: OMP_MANAGED_CLI,
+  // Stands in for `agy` only, never for the legacy ACP server Antigravity chats may run instead.
+  antigravity: AGY_MANAGED_CLI
 }
 
 export function isManagedAgentCli(agent: string): agent is ManagedAgentCliId {
@@ -100,6 +105,38 @@ export function rememberManagedAgentRelease(agent: ManagedAgentCliId, folder: st
   } else {
     installedFolders.delete(agent)
   }
+}
+
+/** Whether Orca's copy of `agent` may replace `command`, the program a launch looks for. */
+export function managedAgentStandsInFor(agent: ManagedAgentCliId, command: string): boolean {
+  const only = MANAGED_AGENT_CLIS[agent].standsInFor
+  return only === undefined || only === command
+}
+
+/** Whether `path` is inside Orca's own copies of `agent`, e.g. found on a PATH an Orca terminal
+ *  passed on; such a path is never the user's own install. */
+export function isManagedAgentCopyPath(agent: string, path: string): boolean {
+  const folder = isManagedAgentCli(agent) ? installedFolders.get(agent) : undefined
+  return folder !== undefined && isPathInsideOrEqual(dirname(folder), path)
+}
+
+/** Orca's copy standing in for `command` when the user has none; null without one. Only a launch
+ *  counts as use: reads that just weigh the program pass `use: false`. */
+export function managedAgentCommandFor(
+  agent: string,
+  command: string,
+  { use }: { use: boolean } = { use: true }
+): string | null {
+  if (!isManagedAgentCli(agent) || !managedAgentStandsInFor(agent, command)) {
+    return null
+  }
+  return use ? managedAgentCommand(agent) : installedManagedAgentCommand(agent)
+}
+
+/** Orca's installed copy of `agent`, read without counting as use. */
+export function installedManagedAgentCommand(agent: ManagedAgentCliId): string | null {
+  const folder = installedFolders.get(agent)
+  return folder ? MANAGED_AGENT_CLIS[agent].executable(folder) : null
 }
 
 /** Orca's installed copy of `agent` on this host, used only when the user has none of their own. */

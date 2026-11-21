@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AppHttpLinkOpen from '@/lib/browser/navigation/app-http-link-open'
 
@@ -44,7 +44,6 @@ import {
   botToolSignInFailure,
   botToolSignInOutcome,
   connectBotTool,
-  finishBotToolSignIn,
   resetBotToolSignInsForTest,
   signInOnHost,
   useBotToolSignIn
@@ -98,31 +97,31 @@ describe("signing in to a bot's app on its host from another device", () => {
     Reflect.deleteProperty(window, '__ORCA_WEB_CLIENT__')
   })
 
-  it('opens the page on this device and finishes with only the query of the address pasted back', async () => {
+  it('opens the page locally and accepts only the pasted address for the active sign-in', async () => {
     await connectBotTool({ hostId: 'local', id: 'bot-1' }, 'notion', true)
     expect(calls('bots.tools.signIn.start')).toEqual([
       { botId: 'bot-1', name: 'notion', mode: 'paste' }
     ])
     expect(mocks.openUrl).toHaveBeenCalledWith(PAGE)
 
-    await expect(
-      finishBotToolSignIn(
-        { hostId: 'local', id: 'bot-1' },
-        'notion',
-        `${RETURN}?code=c-1&state=someone-else`
-      )
-    ).rejects.toThrow('isn’t from this sign-in')
+    render(<BotToolFinishSignIn bot={{ hostId: 'local', id: 'bot-1' }} name="notion" />)
+    const paste = (state: string) => {
+      fireEvent.change(screen.getByLabelText('Address'), {
+        target: { value: `${RETURN}?code=c-1&state=${state}` }
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Finish' }))
+    }
+    paste('someone-else')
+    expect((await screen.findByRole('alert')).textContent).toContain('isn’t from this sign-in')
     expect(calls('bots.tools.signIn.finish')).toEqual([])
 
-    await finishBotToolSignIn(
-      { hostId: 'local', id: 'bot-1' },
-      'notion',
-      `${RETURN}?code=c-1&state=s-1`
+    paste('s-1')
+    await waitFor(() =>
+      expect(botToolSignInOutcome({ hostId: 'local', id: 'bot-1' }, 'notion')).toBe('done')
     )
     expect(calls('bots.tools.signIn.finish')).toEqual([
       { flowId: 'flow-1', query: 'code=c-1&state=s-1' }
     ])
-    expect(botToolSignInOutcome({ hostId: 'local', id: 'bot-1' }, 'notion')).toBe('done')
   })
 
   it('starts nothing on a host whose Orca predates it, and says it needs an update', async () => {
@@ -203,18 +202,5 @@ describe("signing in to a bot's app on its host from another device", () => {
     await connecting
     expect(calls('bots.tools.signIn.cancel')).toEqual([{ flowId: 'flow-9' }])
     expect(mocks.openUrl).not.toHaveBeenCalled()
-  })
-
-  it('says at the paste field why an address isn’t this sign-in’s', async () => {
-    await connectBotTool({ hostId: 'local', id: 'bot-1' }, 'notion', true)
-    render(<BotToolFinishSignIn bot={{ hostId: 'local', id: 'bot-1' }} name="notion" />)
-    fireEvent.change(screen.getByLabelText('Address'), {
-      target: { value: `${RETURN}?code=c-1&state=someone-else` }
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Finish' }))
-    expect((await screen.findByRole('alert')).textContent).toBe(
-      'That address isn’t from this sign-in. Paste the address you landed on.'
-    )
-    expect(calls('bots.tools.signIn.finish')).toEqual([])
   })
 })

@@ -20,11 +20,11 @@ export type AcpOptionWrite =
   | { method: 'config'; configId: string; value: string }
   | { method: 'model'; modelId: string }
 
-function acpFastOption(
+function acpConfigOptionById(
   configOptions: readonly SessionConfigOption[],
-  fastConfigId: string | undefined
+  id: string | undefined
 ): AcpSelectOption | null {
-  const option = fastConfigId ? configOptions.find((entry) => entry.id === fastConfigId) : undefined
+  const option = id ? configOptions.find((entry) => entry.id === id) : undefined
   return option?.type === 'select' ? option : null
 }
 
@@ -33,13 +33,19 @@ export function buildAcpOptionWrite(input: {
   value: string
   configOptions: readonly SessionConfigOption[]
   models: SessionModelState | null
-  dialect: Pick<AcpDialect, 'chatModelIds' | 'fastConfigId' | 'interactionModes'>
+  dialect: Pick<
+    AcpDialect,
+    'chatModelIds' | 'fastConfigId' | 'thinkingConfigId' | 'interactionModes'
+  >
   buildMode: string
 }): AcpOptionWrite | null {
   const { key, value, configOptions, models, dialect, buildMode } = input
-  if (key === 'fastMode') {
-    const fast = acpFastOption(configOptions, dialect.fastConfigId)
-    return fast ? { method: 'config', configId: fast.id, value } : null
+  if (key === 'fastMode' || key === 'thinking') {
+    const option = acpConfigOptionById(
+      configOptions,
+      key === 'fastMode' ? dialect.fastConfigId : dialect.thinkingConfigId
+    )
+    return option ? { method: 'config', configId: option.id, value } : null
   }
   if (key === 'model') {
     const option = acpSelectOption(configOptions, 'model')
@@ -149,7 +155,7 @@ export function readAcpOptionsMenu(input: {
       ? ('plan' as const)
       : ('default' as const)
     : undefined
-  const fastOption = acpFastOption(input.configOptions, input.dialect.fastConfigId)
+  const fastOption = acpConfigOptionById(input.configOptions, input.dialect.fastConfigId)
   const menu = {
     models: acpModelMenuModels({
       dialect: input.dialect,

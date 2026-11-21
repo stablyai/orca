@@ -40,12 +40,14 @@ export class AcpStructuredOptions {
       | 'builtinCommands'
       | 'skillDescription'
       | 'fastConfigId'
+      | 'thinkingConfigId'
       | 'interactionModes'
     > = {}
   ) {}
 
   private forkSupport: AgentSessionOptionsResult['forkSupport'] = 'unknown'
-  private configOptions: SessionConfigOption[] = []
+  /** As the agent last reported them; replace through `adoptConfigOptions`. */
+  configOptions: SessionConfigOption[] = []
   private models: SessionModelState | null = null
   private buildMode = 'default'
   private commands: AgentSessionSlashCommand[] | undefined
@@ -93,9 +95,10 @@ export class AcpStructuredOptions {
       this.unobservedCurrent.add(key)
     }
     if (key === 'model') {
-      // Each model has its own effort and Fast defaults, so both are written again.
+      // Each model has its own effort, thinking and Fast defaults, so all are written again.
       this.appliedInput.delete('effort')
       this.appliedInput.delete('fastMode')
+      this.appliedInput.delete('thinking')
       this.unobservedCurrent.add('effort')
     }
     if (key === 'effort' && this.dialect.effortChangesModel) {

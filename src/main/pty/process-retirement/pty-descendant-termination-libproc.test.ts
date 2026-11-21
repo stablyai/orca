@@ -79,12 +79,13 @@ describe('descendant teardown over the in-process process table', () => {
         readProcessCwd: async () => null,
         readProcessPath: async () => null
       })
-      expect(await captureDescendantSnapshot(100, { timeoutMs: 10 })).toBeNull()
+      expect(await captureDescendantSnapshot(100, { platform: 'darwin', timeoutMs: 10 })).toBeNull()
 
       vi.setSystemTime(WALL_CLOCK + stepMs)
       const sendSignal = vi.fn()
       const killRoot = vi.fn()
       const teardown = killWithDescendantSweep(100, killRoot, {
+        platform: 'darwin',
         sendSignal,
         timeoutMs: 1_000,
         graceMs: 60_000

@@ -44,7 +44,7 @@ afterEach(() => {
 })
 
 describe('writeCodexHookApprovalsBeforeEntries', () => {
-  it('writes the approval before the entry', () => {
+  it('writes the approval before the entry and leaves it intact on retry', () => {
     let approvedAtWrite: string | undefined
     writeCodexHookApprovalsBeforeEntries(
       tomlPath(),
@@ -59,11 +59,8 @@ describe('writeCodexHookApprovalsBeforeEntries', () => {
     )
 
     expect(approvedAtWrite).toBe('sha256:codex-stop')
-  })
-
-  it('writes nothing to config.toml when the approval is already there', () => {
-    upsertHookTrustEntries(tomlPath(), [approval('stop', 'sha256:codex-stop')])
-    const before = readFileSync(tomlPath(), 'utf-8')
+    const before = `# User comment\n${readFileSync(tomlPath(), 'utf-8')}`
+    writeFileSync(tomlPath(), before)
 
     writeCodexHookApprovalsBeforeEntries(
       tomlPath(),

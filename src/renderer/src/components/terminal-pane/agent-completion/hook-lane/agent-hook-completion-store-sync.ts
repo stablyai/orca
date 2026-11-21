@@ -1,3 +1,4 @@
+import { keyedListsMatch } from '@/store/record-transitions/keyed-list-match'
 import { isAgentTaskCompleteTrackingEnabledFromState as isAgentHookCompletionTrackingEnabled } from '@/components/terminal-pane/notifications/agent-task-complete-policy'
 
 type CompletionNotificationSettings = {
@@ -31,45 +32,11 @@ function terminalTabLivenessMatches(
   previous: AgentHookCompletionStoreSnapshot['tabsByWorktree'],
   visitTab?: TabVisit
 ): boolean {
-  if (current === previous) {
-    return true
-  }
-
-  const currentWorktreeIds = Object.keys(current)
-  const previousWorktreeIds = Object.keys(previous)
-  if (currentWorktreeIds.length !== previousWorktreeIds.length) {
-    return false
-  }
-
-  // Indexed loops avoid per-entry tuple allocation on every tab/title write.
-  for (let worktreeIndex = 0; worktreeIndex < currentWorktreeIds.length; worktreeIndex += 1) {
-    const worktreeId = currentWorktreeIds[worktreeIndex]
-    // First-worktree-wins IDs make worktree-key reorder a liveness change even with reused arrays.
-    if (previousWorktreeIds[worktreeIndex] !== worktreeId) {
-      return false
-    }
-    const currentTabs = current[worktreeId]
-    const previousTabs = previous[worktreeId]
-    if (currentTabs === previousTabs) {
-      continue
-    }
-    if (!currentTabs || !previousTabs || currentTabs.length !== previousTabs.length) {
-      return false
-    }
-    for (let tabIndex = 0; tabIndex < currentTabs.length; tabIndex += 1) {
-      const currentTab = currentTabs[tabIndex]
-      visitTab?.()
-      const previousTab = previousTabs[tabIndex]
-      if (
-        !previousTab ||
-        currentTab.id !== previousTab.id ||
-        currentTab.ptyId !== previousTab.ptyId
-      ) {
-        return false
-      }
-    }
-  }
-  return true
+  // Key order counts: first-worktree-wins IDs make a reorder a liveness change even with reused arrays.
+  return keyedListsMatch(current, previous, (currentTab, previousTab) => {
+    visitTab?.()
+    return currentTab.id === previousTab.id && currentTab.ptyId === previousTab.ptyId
+  })
 }
 
 function shouldSync(

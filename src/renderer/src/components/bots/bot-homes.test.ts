@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import type { Bot } from '../../../../shared/bot-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
@@ -72,11 +73,14 @@ const lineage = {
 
 // The sidebar's children over these records, as the Bots section reads them.
 function sidebarChildrenOf(records: typeof lineage) {
-  return selectSidebarChildrenByParentIdentity({
-    ...useAppStore.getState(),
-    folderWorkspaces: [home],
-    ...records
-  })
+  return selectSidebarChildrenByParentIdentity(
+    {
+      ...useAppStore.getState(),
+      folderWorkspaces: [home],
+      ...records
+    },
+    readRuntimeStatuses()
+  )
 }
 
 describe('sortBotsBySidebarOrder', () => {

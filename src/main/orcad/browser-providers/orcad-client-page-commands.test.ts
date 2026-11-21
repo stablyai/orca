@@ -38,9 +38,9 @@ describe('orcad client page commands', () => {
       getRuntimeBrowserPageRegistry: () => pages,
       getBrowserHostLeaseRegistry: unexpected('lease registry'),
       getBrowserHostRequestRegistry: unexpected('request registry'),
-      getAvailableAuthoritativeWindow: () => null,
+      getAvailableAuthoritativeWindowId: () => null,
       getOffscreenBrowserBackend: () => null,
-      getAuthoritativeWindow: unexpected('window')
+      getAuthoritativeWindowId: unexpected('window')
     }
     const show = orcadClientPageCommand(
       host,
@@ -72,9 +72,9 @@ describe('orcad client page commands', () => {
       getRuntimeBrowserPageRegistry: () => new RuntimeBrowserPageRegistry(),
       getBrowserHostLeaseRegistry: () => leases,
       getBrowserHostRequestRegistry: () => volunteers,
-      getAvailableAuthoritativeWindow: () => null,
+      getAvailableAuthoritativeWindowId: () => null,
       getOffscreenBrowserBackend: () => null,
-      getAuthoritativeWindow: unexpected('window')
+      getAuthoritativeWindowId: unexpected('window')
     }
     const engine = vi.fn(async () => ({ browserPageId: 'engine-page' }))
     const create = orcadClientPageCommand(host, 'browserTabCreate', engine, () => true)!

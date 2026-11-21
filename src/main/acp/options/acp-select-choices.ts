@@ -58,6 +58,18 @@ export function acpSelectOffers(option: AcpSelectOption | null, value: string): 
   return !!(option && acpSelectChoices(option).some((choice) => choice.value === value))
 }
 
+/** The options with a mode the agent reported apart from them; null when it lists no mode select. */
+export function acpWithCurrentMode(
+  options: readonly SessionConfigOption[],
+  modeId: string
+): SessionConfigOption[] | null {
+  const isMode = (option: SessionConfigOption): option is AcpSelectOption =>
+    option.category === 'mode' && option.type === 'select'
+  return options.some(isMode)
+    ? options.map((option) => (isMode(option) ? { ...option, currentValue: modeId } : option))
+    : null
+}
+
 /** An agent may list an on/off thinking switch beside its effort levels; effort is the longer menu. */
 export function acpEffortOption(options: readonly SessionConfigOption[]): AcpSelectOption | null {
   let effort: AcpSelectOption | null = null

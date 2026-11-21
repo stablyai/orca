@@ -1,10 +1,9 @@
 // The execution host's own `agy acp`: preferred for new chats when it answers as a compatible server.
 
-import { existsSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { InitializeResponse } from '../acp/generated/acp-protocol.generated'
-import { AcpConnectionClosedError } from '../acp/transport/acp-errors'
+import { AcpAgentError, AcpConnectionClosedError } from '../acp/transport/acp-errors'
 import {
   isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
@@ -15,12 +14,6 @@ import {
 } from '../../shared/app-lifecycle/identity/app-version'
 import { initializeAntigravityAcp } from './antigravity-acp-runtime-probe'
 import { antigravityTakesSystemPrompt } from '../acp/launch/acp-instructions'
-import {
-  antigravityKeyringFallbackMarker,
-  createAntigravityHostCredentialBackend,
-  isAntigravityFileStorageHost
-} from './native-credential-backend'
-import { hasAntigravityMacOSCredential } from './native-macos-credentials'
 
 /** First release verified with Orca chats; it also leaves the chat's folder untouched. */
 export const ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION = '1.5.2'
@@ -31,6 +24,8 @@ export const AGY_SKIP_PERMISSIONS_FLAG = '--dangerously-skip-permissions'
 // agy.exe took 6-7s to list sessions while Orca started, and Windows has no managed fallback.
 const PROBE_TIMEOUT_MS = process.platform === 'win32' ? 15_000 : 5_000
 const RECHECK_MS = 5 * 60_000
+// ACP's "authentication required" error.
+const ACP_AUTH_REQUIRED_CODE = -32000
 
 export function isCompatibleAntigravityHostAcp(initialized: InitializeResponse): boolean {
   const capabilities = initialized.agentCapabilities
@@ -63,16 +58,33 @@ export function isAntigravityHostAccountHome(home: AgentSessionAccountHome): boo
   )
 }
 
+/** What `agy acp` answered: serving sessions, a compatible server asking to sign in, a binary
+ *  that can't serve Orca's chats, or no answer (hung or crashed). */
+export type AntigravityHostAcpAnswer = 'ready' | 'signedOut' | 'incompatible' | 'unanswered'
 // Keyed by the binary's identity so an upgrade or reinstall is checked again.
-type HostCheck = { identity: string; answer: Promise<boolean>; retryAt?: number; version?: string }
+type HostCheck = {
+  identity: string
+  answer: Promise<AntigravityHostAcpAnswer>
+  retryAt?: number
+  version?: string
+}
 const checks = new Map<string, HostCheck>()
 
 class IncompatibleHostAcp extends Error {}
+
+let answersRevision = 0
+const answerListeners = new Set<() => void>()
+
+function answersChanged(): void {
+  answersRevision += 1
+  answerListeners.forEach((listener) => listener())
+}
 
 /** After agy's login changes, the next check asks again instead of trusting the last answer. */
 export function forgetAntigravityHostAcpChecks(): void {
   checks.clear()
   latestAsked = null
+  answersChanged()
 }
 
 // The check behind the latest answer, cached or not, so the version is never another binary's.
@@ -84,24 +96,72 @@ export function readyAntigravityHostAcpVersion(): string | null {
   return latestAsked?.version ?? null
 }
 
-/** Whether `command acp` initializes as a compatible server that serves session requests. An
- *  incompatible binary is not asked again; a sign-in can lapse or a hung agy recover, so any other
- *  answer is checked again after a while. */
+/** Rises when checks are forgotten or a recheck answers differently, so remembered choices retire. */
+export function antigravityHostAcpChecksRevision(): number {
+  return answersRevision
+}
+
+export function onAntigravityHostAcpAnswersChanged(listener: () => void): () => void {
+  answerListeners.add(listener)
+  return () => answerListeners.delete(listener)
+}
+
+/** Whether `command acp` initializes as a compatible server that serves session requests. */
 export async function antigravityHostAcpReady(
   command: string,
   env: Record<string, string>,
   envToDelete: string[],
   now = Date.now
 ): Promise<boolean> {
+  return (await checkAntigravityHostAcp(command, env, envToDelete, now)) === 'ready'
+}
+
+/** One check answers every question about `command acp`. An incompatible binary is not asked
+ *  again; a sign-in can land or lapse and a hung agy recover, so other answers are rechecked. */
+export function checkAntigravityHostAcp(
+  command: string,
+  env: Record<string, string>,
+  envToDelete: string[],
+  now: () => number = Date.now
+): Promise<AntigravityHostAcpAnswer> {
+  return askAntigravityHostAcp(command, env, envToDelete, now, true)
+}
+
+/** Whether `command acp` is a compatible server, asked without a session request, which would make
+ *  agy read its login: `ready` here means compatible, signed in or not. */
+export function checkAntigravityHostAcpCompatible(
+  command: string,
+  env: Record<string, string>,
+  envToDelete: string[],
+  { start }: { start: boolean }
+): Promise<AntigravityHostAcpAnswer> {
+  return askAntigravityHostAcp(command, env, envToDelete, Date.now, false, start)
+}
+
+async function askAntigravityHostAcp(
+  command: string,
+  env: Record<string, string>,
+  envToDelete: string[],
+  now: () => number,
+  sessions: boolean,
+  start = true
+): Promise<AntigravityHostAcpAnswer> {
   const stats = await stat(command).catch(() => null)
   if (!stats?.isFile()) {
-    return false
+    return 'unanswered'
   }
   const identity = `${stats.size}:${stats.mtimeMs}`
-  const cached = checks.get(command)
+  const key = sessions ? command : `${command}\u0000initialize`
+  const cached = checks.get(key)
   if (cached?.identity === identity && (cached.retryAt === undefined || now() < cached.retryAt)) {
-    latestAsked = cached
+    if (sessions) {
+      latestAsked = cached
+    }
     return cached.answer
+  }
+  // Nobody is using Antigravity yet, so agy isn't started to answer.
+  if (!start) {
+    return 'unanswered'
   }
   let answered = false
   const check: HostCheck = {
@@ -119,27 +179,47 @@ export async function antigravityHostAcpReady(
         // A present keychain item does not prove agy can sign in silently; session requests
         // answer "Authentication required" until it has. Unlike session/new, listing writes no
         // conversation into agy's history.
-        await connection.listSessions({ cwd: folder })
+        if (sessions) {
+          await connection.listSessions({ cwd: folder })
+        }
       }
     ).then(
-      (initialized) => {
-        check.version = initialized.agentInfo?.version
-        return true
+      (initialized): AntigravityHostAcpAnswer => {
+        if (sessions) {
+          check.version = initialized.agentInfo?.version
+        } else {
+          // Compatibility changes only with the binary, whose identity keys this check.
+          check.retryAt = undefined
+        }
+        return 'ready'
       },
-      (error: unknown) => {
+      (error: unknown): AntigravityHostAcpAnswer => {
+        if (error instanceof AcpAgentError && error.code === ACP_AUTH_REQUIRED_CODE) {
+          return 'signedOut'
+        }
         // An exit before initialize answers is a binary rejecting the launch flag, not a lapse.
         if (
           error instanceof IncompatibleHostAcp ||
           (!answered && error instanceof AcpConnectionClosedError)
         ) {
           check.retryAt = undefined
+          return 'incompatible'
         }
-        return false
+        return 'unanswered'
       }
     )
   }
-  checks.set(command, check)
-  latestAsked = check
+  checks.set(key, check)
+  if (sessions) {
+    latestAsked = check
+  }
+  // A first answer or a changed one retires choices made without it.
+  const previous = cached?.answer ?? Promise.resolve(null)
+  void Promise.all([previous, check.answer]).then(([before, after]) => {
+    if (before !== after) {
+      answersChanged()
+    }
+  })
   return check.answer
 }
 
@@ -160,25 +240,5 @@ export async function agyUsesApiKey(homePath: string): Promise<boolean> {
   } catch {
     // Settings agy may read differently than JSON.parse could select a provider.
     return true
-  }
-}
-
-/** Whether agy itself may be signed in on this host; an unreadable store counts as signed out. */
-export async function hasAgyCredential(homePath: string): Promise<boolean> {
-  // After a keyring timeout agy may use either store, so the ACP readiness probe decides.
-  if (await stat(antigravityKeyringFallbackMarker(homePath)).catch(() => null)) {
-    return true
-  }
-  try {
-    // Reading the macOS secret would ask the person for keychain access; its attributes do not.
-    if (process.platform === 'darwin' && !isAntigravityFileStorageHost(process.env)) {
-      return (
-        (await hasAntigravityMacOSCredential()) ||
-        existsSync(join(homePath, '.gemini', 'antigravity-cli', 'antigravity-oauth-token'))
-      )
-    }
-    return (await createAntigravityHostCredentialBackend(homePath).read()) !== null
-  } catch {
-    return false
   }
 }

@@ -192,13 +192,13 @@ describe('host stack navigation', () => {
   })
 
   it('hands a pane request’s own intent to the session on screen and to its document', () => {
-    const target = mobileSessionRouteTarget({
-      hostId: 'host/one',
-      worktreeId: 'wt',
-      paneKey: 'pane-1'
-    })
-    // The session on screen still holds an earlier request's intent.
-    const shown: Record<string, string> = { ...target.params, paneIntent: 'old' }
+    const workspace = { hostId: 'host/one', worktreeId: 'wt' }
+    const pane = { ...workspace, paneKey: 'pane-1' }
+    const shown = mobileSessionRouteTarget(pane)
+    const target = mobileSessionRouteTarget(pane)
+    expect(target.params.paneIntent).toEqual(expect.any(String))
+    expect(target.params.paneIntent).not.toBe(shown.params.paneIntent)
+    expect(mobileSessionRouteTarget(workspace).params).not.toHaveProperty('paneIntent')
     const onScreen = navigationHarness({
       index: 0,
       routes: [
@@ -207,7 +207,7 @@ describe('host stack navigation', () => {
           state: {
             key: '/h',
             index: 0,
-            routes: [{ key: 'chat', ...target, params: shown }]
+            routes: [{ key: 'chat', ...shown }]
           }
         }
       ]

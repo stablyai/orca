@@ -4,11 +4,11 @@
 # Prune: node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-main-blocking-helper-ratchet.mjs --prune
 1 src/main/acp/conversation-copy/acp-conversation-copies.ts
 3 src/main/acp/conversation-copy/acp-conversation-copy.ts
-5 src/main/acp/launch/acp-launch-command.ts
+3 src/main/acp/launch/acp-launch-command.ts
 2 src/main/acp/launch/acp-private-temp.ts
+1 src/main/acp/launch/acp-structured-launch-preparation.ts # moved from acp-structured-acquire.ts with the private-temp connect call
 1 src/main/acp/launch/acp-structured-launch-resolution.ts
 1 src/main/acp/process/acp-agent-connection.ts
-1 src/main/acp/session/acp-structured-acquire.ts
 1 src/main/acp/text-task/acp-text-task.ts
 1 src/main/agent-hooks/first-work/first-work-generation-target.ts
 1 src/main/agent-hooks/installation/bare-shell-plugin-agent-presence.ts
@@ -72,9 +72,7 @@
 1 src/main/ai-vault/session-titles/session-title-resolver.ts
 1 src/main/ai-vault/transcripts/session-transcript-reader.ts
 4 src/main/amp/hook-service.ts
-1 src/main/antigravity/antigravity-acp-launch-spec.ts
 1 src/main/antigravity/antigravity-chat-sign-in.ts
-2 src/main/antigravity/antigravity-host-acp.ts
 8 src/main/antigravity/hook-service.ts
 1 src/main/antigravity/native-account-host.ts
 3 src/main/antigravity/native-account-launch.ts
@@ -309,12 +307,12 @@
 1 src/main/codex/configuration/shared-server/codex-shared-server-fix.ts
 3 src/main/codex/configuration/shared-server/codex-shared-server-pane.ts
 2 src/main/codex/configuration/shared-server/codex-shared-server-probe.ts
-6 src/main/codex/configuration/toml/config-toml-atomic-write.ts
+7 src/main/codex/configuration/toml/config-toml-atomic-write.ts # compare-before-publish re-read of config.toml so a save made after Orca read it is never overwritten (moved here from the worker-only trust transaction)
 4 src/main/codex/configuration/toml/config-toml-runtime-owned-sections.ts
 9 src/main/codex/history/backfill/codex-session-backfill-marker.ts
 6 src/main/codex/history/backfill/codex-session-backfill.ts
 3 src/main/codex/history/backfill/desktop-codex-session-migration.ts
-22 src/main/codex/history/bridges/codex-session-bridge.ts
+13 src/main/codex/history/bridges/codex-session-bridge.ts
 2 src/main/codex/history/cleanup/codex-host-rollout-homes.ts
 1 src/main/codex/history/index/codex-account-session-index-heal.ts
 1 src/main/codex/history/index/codex-session-index-heal-state.ts
@@ -343,7 +341,7 @@
 1 src/main/codex/hooks/installation/codex-wsl-hook-install-plan.ts
 2 src/main/codex/hooks/installation/hook-service.ts
 4 src/main/codex/hooks/reconciliation/codex-account-home-hook.ts
-13 src/main/codex/hooks/reconciliation/codex-hook-legacy-cleanup.ts
+14 src/main/codex/hooks/reconciliation/codex-hook-legacy-cleanup.ts # legacy profile delete re-reads the file right before unlinking so a newer save is never deleted
 4 src/main/codex/hooks/reconciliation/codex-hook-reconcile.ts
 8 src/main/codex/hooks/reconciliation/codex-hook-status.ts
 12 src/main/codex/hooks/reconciliation/codex-real-home-hook-install.ts
@@ -373,7 +371,7 @@
 15 src/main/codex/trust/hooks/hook-trust-promotion.ts
 1 src/main/codex/trust/identity/codex-trust-identity.ts
 1 src/main/codex/trust/toml/config-toml-project-trust.ts
-23 src/main/codex/trust/toml/config-toml-trust.ts
+18 src/main/codex/trust/toml/config-toml-trust.ts
 6 src/main/command-code/hook-service.ts
 7 src/main/composio/composio-bot-tool.ts
 5 src/main/composio/composio-bots.ts
@@ -388,6 +386,9 @@
 7 src/main/connector-cloud/connector-token-mint.ts
 1 src/main/connector-cloud/connector-turn-outbox-file.ts # Windows only: the addon load (realpathSync, once per process) and a sync DACL read per staged file, plus a second after a failed check; I/O is async
 6 src/main/copilot/hook-service.ts
+6 src/main/core-desktop/desktop-core-composition.ts # moved unchanged from main-process-ready-runtime.ts (one-shot startup composition)
+1 src/main/core-desktop/desktop-core-shutdown.ts # moved unchanged from main-process-quit.ts (one-shot quit metadata clear)
+2 src/main/core-desktop/renderer-shutdown-checkpoint-service.ts # moved unchanged from ipc/renderer-shutdown-checkpoint.ts (unload staging drift report)
 4 src/main/crash-reporting/capture/appimage-crashpad-handler-exit.ts
 1 src/main/crash-reporting/capture/crashpad-capture.ts
 2 src/main/crash-reporting/process-exits/process-gone-diagnostics.ts
@@ -510,11 +511,11 @@
 3 src/main/ephemeral-vm/workspace-suspend.ts
 8 src/main/external-editors/external-editor-launch.ts
 1 src/main/external-editors/remote-ssh-editor-launch.ts
-28 src/main/filesystem/atomic-file-publication.ts
+24 src/main/filesystem/atomic-file-publication.ts
 5 src/main/filesystem/durable-file-write.ts
 2 src/main/filesystem/local-file-io/filesystem-path-containment.ts
 7 src/main/filesystem/owner-only-durable-file-write.ts # Windows only: the addon load (realpathSync, once per process) and a sync DACL read per staged file, plus a second after a failed check; I/O is async
-2 src/main/filesystem/rolling-file-backup.ts
+4 src/main/filesystem/rolling-file-backup.ts # stageRollingFileBackup + commit (same sync copy and rename); the staged-copy rmSync moved into removeFileWithWindowsRetry so Windows AV locks are retried
 1 src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry-path.ts
 5 src/main/foreign-sqlite-readers/foreign-sqlite-reader-spawn.ts
 6 src/main/gemini/hook-service.ts
@@ -574,7 +575,7 @@
 2 src/main/host/deferred-secret-protection-report.ts
 1 src/main/host/electron-speech-services.ts
 1 src/main/host/secret-protection-report.ts
-14 src/main/index.ts
+13 src/main/index.ts
 2 src/main/ipc/accounts/codex-accounts.ts
 1 src/main/ipc/accounts/codex-config-sync.ts
 1 src/main/ipc/accounts/cursor-accounts.ts
@@ -582,7 +583,7 @@
 3 src/main/ipc/accounts/zcode-plan-credentials.ts
 1 src/main/ipc/ai-vault/ai-vault-search.ts
 1 src/main/ipc/ai-vault/ai-vault-subagent-list.ts
-5 src/main/ipc/app.ts
+4 src/main/ipc/app.ts
 1 src/main/ipc/automations.ts
 3 src/main/ipc/browser/browser-client-host-cookie-import-ipc.ts
 1 src/main/ipc/browser/browser-extensions.ts
@@ -662,9 +663,8 @@
 1 src/main/ipc/pty/runtime/spawn-options.ts
 1 src/main/ipc/pty/spawn/spawn-begin.ts
 1 src/main/ipc/pty/spawn/spawn-options-assembly.ts
-16 src/main/ipc/register-core-handlers/register-core-handlers.ts
+17 src/main/ipc/register-core-handlers/register-core-handlers.ts # clipboard path authorization moved here from window/clipboard/clipboard-ipc-handlers.ts
 1 src/main/ipc/register-core-handlers/runtime-host-handler-registration.ts
-2 src/main/ipc/renderer-shutdown-checkpoint.ts
 5 src/main/ipc/repos.ts
 1 src/main/ipc/repos/local-repo-registration.ts
 1 src/main/ipc/repos/nested-repo-import-handler.ts
@@ -785,7 +785,7 @@
 5 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # tail table create at store open (one-shot startup); worker-only: +2 create the retired-epoch pending table in a transaction on the journal SQL worker
 3 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 1 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
-2 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts
+3 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts # +1: Continue in Chat UI's pre-close folder check reuses validateAdoptedOpenCodeSource; its only sync step is the worker entry existsSync when the shared OpenCode SQLite worker first spawns
 1 src/main/native-chat/agent-session-journal/history-import/journal-hermes-import.ts
 5 src/main/native-chat/agent-session-journal/history-import/journal-legacy-import.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-import-discard.ts
@@ -1141,7 +1141,7 @@
 1 src/main/runtime/agent-session/environment/structured-agent-account-home.ts
 2 src/main/runtime/agent-session/environment/structured-session-child-env.ts
 2 src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
-6 src/main/runtime/agent-session/installation/structured-agent-runtime-metadata.ts
+3 src/main/runtime/agent-session/installation/structured-agent-runtime-metadata.ts
 2 src/main/runtime/agent-session/installation/structured-agent-runtime-registrations.ts
 1 src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
 1 src/main/runtime/agent-session/installation/structured-agent-session-runtime-teardown.ts
@@ -1183,7 +1183,7 @@
 8 src/main/runtime/orchestration/db/dispatch-context/attempt-task-settlement.ts
 19 src/main/runtime/orchestration/db/dispatch-context/dispatch-completion.ts
 3 src/main/runtime/orchestration/db/dispatch-context/dispatch-context-store.ts
-2 src/main/runtime/orchestration/db/dispatch-context/task-dispatch-reconciliation.ts
+3 src/main/runtime/orchestration/db/dispatch-context/task-dispatch-reconciliation.ts # one Task unblock shared by a federated start and a local start seen only late, inside orchestration DB writes that were already synchronous
 10 src/main/runtime/orchestration/db/dispatch-context/worker-report-settlement.ts
 2 src/main/runtime/orchestration/db/lifecycle-transition.ts
 3 src/main/runtime/orchestration/db/lifecycle-write-transaction-runner.ts
@@ -1209,7 +1209,7 @@
 9 src/main/runtime/orchestration/db/tasks/task-status-transition.ts
 2 src/main/runtime/orchestration/db/tasks/task-store.ts
 5 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-abandon.ts
-11 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-outcome.ts
+12 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-outcome.ts # the same ready transaction lifts the Task block of a start seen only late, inside orchestration DB writes that were already synchronous
 5 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-settlement.ts
 4 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-stage.ts
 6 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-start.ts
@@ -1274,6 +1274,7 @@
 2 src/main/runtime/session-construction/agent-session/get-agent-session-execution-namespace.ts
 3 src/main/runtime/session-lifecycle/projection/restored-pane-materialize.ts
 1 src/main/runtime/session-tabs/chat/structured-session-create-support.ts
+1 src/main/runtime/session-tabs/chat/structured-session-resume-folder-check.ts # per Continue in Chat UI click: assertAdoptedTranscriptFolder, whose only sync step is the OpenCode SQLite worker entry existsSync on first spawn
 1 src/main/runtime/sidebar-inputs/sidebar-inputs-feed-domains.ts
 1 src/main/runtime/speech/runtime-mobile-dictation-controller.ts
 2 src/main/runtime/speech/runtime-mobile-speech-catalog.ts
@@ -1383,11 +1384,12 @@
 1 src/main/startup/main-process-preflight-failure.ts
 25 src/main/startup/main-process-preflight.ts
 15 src/main/startup/main-process-ready-foundation.ts
-7 src/main/startup/main-process-ready-runtime.ts
+3 src/main/startup/main-process-ready-runtime.ts
 4 src/main/startup/main-process-ready.ts
 1 src/main/startup/main-window/main-process-i18n-menu.ts
 15 src/main/startup/main-window/main-window-controller.ts
 4 src/main/startup/main-window/main-window-core-services.ts
+1 src/main/startup/native-setting-subscriptions.ts # HTTP/1 marker write moved here from main-process-ready-foundation.ts (settings change only)
 3 src/main/startup/network-compatibility/http1-compatibility-marker.ts
 9 src/main/startup/network-compatibility/http1-compatibility-profile-state.ts
 1 src/main/startup/plugin-startup/main-process-plugin-rpc.ts
@@ -1396,7 +1398,7 @@
 5 src/main/startup/profile-startup/profile-state-recovery-preflight.ts
 2 src/main/startup/profile-startup/single-instance-lock.ts
 12 src/main/startup/pty-startup/main-process-pty-startup.ts
-2 src/main/startup/quit/main-process-quit.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
+1 src/main/startup/quit/main-process-quit.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
 15 src/main/startup/runtime-startup/main-process-runtime-launch.ts
 4 src/main/startup/runtime-startup/main-process-runtime-service.ts
 1 src/main/startup/serve-launch/headless-serve-ssh-registration.ts
@@ -1452,9 +1454,9 @@
 1 src/main/warp-themes/index.ts
 2 src/main/webhooks/webhook-call-file.ts
 1 src/main/webhooks/webhook-call-runs.ts
-3 src/main/webhooks/webhook-host-ledger.ts
+1 src/main/webhooks/webhook-host-ledger.ts
+2 src/main/webhooks/webhook-host-newer-agent-hooks.ts # the ledger's two secure writes, moved out of webhook-host-ledger.ts (its count dropped by 2)
 8 src/main/window/attach-main-window-services.ts
-1 src/main/window/clipboard/clipboard-ipc-handlers.ts
 2 src/main/window/createMainWindow.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
 3 src/main/window/desktop-integration/app-icon.ts
 1 src/main/window/desktop-integration/custom-app-icon.ts

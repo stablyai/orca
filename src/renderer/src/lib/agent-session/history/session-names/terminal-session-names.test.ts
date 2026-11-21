@@ -6,7 +6,6 @@ import {
   forgetTerminalSessionNames,
   getSavedTerminalSessionName,
   getTerminalSessionNameEntry,
-  normalizeTerminalSessionName,
   resetTerminalSessionNamesForTest,
   saveTerminalSessionName,
   subscribeTerminalSessionNames,
@@ -37,7 +36,7 @@ describe('terminal session names', () => {
   })
 
   it('saves, reads per host, and persists a name', () => {
-    save('s1', 'Fix auth bug')
+    save('s1', '  Fix auth\nbug  ')
     expect(getSavedTerminalSessionName('local', 'claude', 's1')).toBe('Fix auth bug')
     expect(getSavedTerminalSessionName('runtime:other', 'claude', 's1')).toBeNull()
     expect(getSavedTerminalSessionName('local', 'codex', 's1')).toBeNull()
@@ -54,16 +53,6 @@ describe('terminal session names', () => {
       title: 'Docs'
     })
     expect(getSavedTerminalSessionName('local', 'opencode2', 'oc')).toBe('Docs')
-  })
-
-  it('normalizes names once so an unchanged name writes nothing', () => {
-    const long = `  ${'x'.repeat(250)}\n`
-    expect(normalizeTerminalSessionName(long)).toHaveLength(200)
-    save('s1', long)
-    const setItem = vi.spyOn(Storage.prototype, 'setItem')
-    save('s1', long)
-    save('s1', 'x'.repeat(200))
-    expect(setItem).not.toHaveBeenCalled()
   })
 
   it('keeps valid entries and drops malformed ones on load', () => {
@@ -185,10 +174,23 @@ describe('terminal session names', () => {
   it('evicts the least recently used names, counting a tab taking a name as use', () => {
     let now = 1_000
     vi.spyOn(Date, 'now').mockImplementation(() => now++)
-    save('kept', 'Resumed often', 'tab-old')
-    for (let index = 0; index < TERMINAL_SESSION_NAMES_MAX_ENTRIES - 1; index++) {
-      save(`filler-${index}`, `Name ${index}`)
-    }
+    localStorage.setItem(
+      TERMINAL_SESSION_NAMES_STORAGE_KEY,
+      JSON.stringify({
+        [terminalSessionNameKey('local', 'kept')]: {
+          title: 'Resumed often',
+          agent: 'claude',
+          tabId: 'tab-old',
+          savedAt: 1
+        },
+        ...Object.fromEntries(
+          Array.from({ length: TERMINAL_SESSION_NAMES_MAX_ENTRIES - 1 }, (_, index) => [
+            terminalSessionNameKey('local', `filler-${index}`),
+            { title: `Name ${index}`, agent: 'claude', tabId: 'tab-1', savedAt: index + 2 }
+          ])
+        )
+      })
+    )
     // A resumed tab takes the old name, then more names arrive past the limit.
     save('kept', 'Resumed often', 'tab-new')
     save('newest', 'Newest')

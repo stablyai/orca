@@ -13,8 +13,14 @@ import {
   createTestStore,
   mockApi,
   resetRemoteRuntimeMocks,
-  resetWorktreeSliceModuleMemory
+  resetWorktreeSliceModuleMemory,
+  runtimeEnvironmentCall
 } from './worktrees/worktrees-slice-test-harness'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
+import {
+  createCompatibleRuntimeStatusResponse,
+  type RuntimeEnvironmentCallRequest
+} from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 
 vi.mock('sonner', () => ({
   toast: {
@@ -99,6 +105,135 @@ describe('createWorktree from a bot home', () => {
     } finally {
       publishBots([], undefined, botHost)
       setBotHostListing({ hosts: [{ hostId: 'local', state: 'live' }], updateNeeded: [] })
+    }
+  })
+
+  it("doesn't attach a new workspace to an open home whose folder record isn't loaded yet", () => {
+    publishBots([makeBot()])
+    try {
+      const store = createParentPickStore()
+      store.setState({
+        activeWorkspaceKey: folderWorkspaceKey('bot-home'),
+        activeWorkspaceExecutionHostId: 'local',
+        folderWorkspaces: []
+      })
+
+      const parent = resolveWorktreeCreateParent(store.getState(), undefined, 'local')
+
+      expect(parent.parentWorkspace).toBeUndefined()
+      expect(parent.crossStoreParentRow).toBeUndefined()
+    } finally {
+      publishBots([])
+    }
+  })
+
+  it("doesn't attach a new workspace to an open home on an unknown host before its record loads", () => {
+    const botHost: ExecutionHostId = 'runtime:air'
+    setBotHostListing({
+      hosts: [
+        { hostId: 'local', state: 'live' },
+        { hostId: botHost, state: 'live' }
+      ],
+      updateNeeded: []
+    })
+    publishBots([makeBot()], undefined, botHost)
+    try {
+      const store = createParentPickStore()
+      store.setState({
+        activeWorkspaceKey: folderWorkspaceKey('bot-home'),
+        activeWorkspaceExecutionHostId: null,
+        folderWorkspaces: []
+      })
+
+      const parent = resolveWorktreeCreateParent(store.getState(), undefined, 'local')
+
+      expect(parent.parentWorkspace).toBeUndefined()
+      expect(parent.crossStoreParentRow).toBeUndefined()
+    } finally {
+      publishBots([], undefined, botHost)
+      setBotHostListing({ hosts: [{ hostId: 'local', state: 'live' }], updateNeeded: [] })
+    }
+  })
+
+  // Owner decision: a task id typed in the note is deliberate attribution, so it still names the
+  // parent while a bot's page is open; only the open home itself is never the fallback parent.
+  // Also the only check of the home guard for a local home with a server repo.
+  it("lets a note's task id name the parent while this computer's bot home is open", async () => {
+    publishBots([makeBot()])
+    // The note's inference reads the server's identity through an abortable subscription.
+    const status = createCompatibleRuntimeStatusResponse()
+    const serverStatus = {
+      ...status,
+      result: { ...status.result, hostDescriptor: { installationId: 'server-install' } }
+    }
+    const runtimeEnvironments = Object.assign(mockApi.runtimeEnvironments, {
+      subscribe: vi.fn(
+        async (
+          _request: RuntimeEnvironmentCallRequest,
+          handlers: { onResponse: (response: unknown) => void }
+        ) => {
+          queueMicrotask(() => handlers.onResponse(serverStatus))
+          return { unsubscribe: () => undefined }
+        }
+      ),
+      cancelSubscription: vi.fn(async () => undefined)
+    })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'create',
+      ok: true,
+      result: { worktree: makeWorktree({ id: 'repo1::/path/child', repoId: 'repo1' }) },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    mockApi.runtime.call.mockResolvedValueOnce({
+      id: 'resolve',
+      ok: true,
+      result: {
+        parent: {
+          installationId: 'desktop-install',
+          workspaceKey: 'worktree:repo2::/path/task-parent',
+          instanceId: 'instance-1'
+        },
+        source: 'orchestration-context'
+      }
+    })
+    try {
+      const store = createParentPickStore()
+      store.setState({
+        settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-1' },
+        activeWorkspaceKey: folderWorkspaceKey('bot-home'),
+        activeWorkspaceExecutionHostId: 'local',
+        folderWorkspaces: [makeFolderWorkspace({ id: 'bot-home', executionHostId: 'local' })]
+      })
+      const createWorktree = store.getState().createWorktree
+      const args: Parameters<typeof createWorktree> = ['repo1', 'feature']
+      args[25] = { executionHostId: 'runtime:env-1', note: 'Follow-up for task_abc123' }
+
+      await createWorktree(...args)
+
+      const create = runtimeEnvironmentCall.mock.calls.find(
+        ([call]) => call.method === 'worktree.create'
+      )
+      expect(create?.[0].params).toMatchObject({
+        crossStoreParent: {
+          installationId: 'desktop-install',
+          workspaceKey: 'worktree:repo2::/path/task-parent',
+          instanceId: 'instance-1'
+        },
+        crossStoreParentInferredFrom: 'orchestration-context'
+      })
+      expect(runtimeEnvironments.subscribe).toHaveBeenCalled()
+      expect(toast.warning).not.toHaveBeenCalled()
+    } finally {
+      publishBots([])
+      Reflect.deleteProperty(runtimeEnvironments, 'subscribe')
+      Reflect.deleteProperty(runtimeEnvironments, 'cancelSubscription')
+      // A failure before inference would leave the queued answer for a later test.
+      mockApi.runtime.call.mockReset()
+      mockApi.runtime.call.mockResolvedValue({
+        id: 'runtime-call',
+        ok: true,
+        result: { stoppedWorktreeIds: [] }
+      })
     }
   })
 })

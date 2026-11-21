@@ -4,6 +4,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
+import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { ephemeralVmErrorText } from '@/runtime/ephemeral-vm/ephemeral-vm-error-copy'
 import type { EphemeralVmFailure } from '../../../../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
 import type { ExecutionHostVmState } from '../../../../../../shared/execution-host/execution-host-health'
@@ -84,7 +85,11 @@ export function VmStateIcon({
     case 'waking':
       return (
         <Loader2
-          className={cn(sizeClassName, 'animate-spin text-muted-foreground')}
+          ref={observeOffscreenAnimation}
+          className={cn(
+            sizeClassName,
+            'animate-spin text-muted-foreground motion-reduce:animate-none'
+          )}
           aria-hidden="true"
         />
       )

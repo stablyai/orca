@@ -41,6 +41,8 @@ export type RouteBot = {
   /** Counts the reads that may have moved its items (an items or workers notice, reconnect,
    *  foreground), so its item list and page re-read with these only, not with each pane's phase. */
   itemReads: number
+  /** The store key for the route's execution host (`hostBotsKey`). */
+  hostKey: string
 }
 
 /** The notices that can change what an item list or page shows: its items, and their linked workers. */
@@ -185,10 +187,11 @@ export function useRouteBot({
       appState: AppState,
       refresh: read,
       listed: () => listedBots,
-      // Until the first read finds the bot, every bot's change could be its.
+      // Until the first read finds the bot, every bot's change could be its. `access`: its waiting
+      // access requests re-read with each route read.
       interest: () => ({
         ...(routeBotId ? { botId: routeBotId } : {}),
-        kinds: [...BOT_VIEW_KINDS, 'items']
+        kinds: [...BOT_VIEW_KINDS, 'items', 'access']
       })
     })
     return () => {
@@ -215,7 +218,8 @@ export function useRouteBot({
     applyBot,
     refresh,
     reads,
-    itemReads
+    itemReads,
+    hostKey
   }
 }
 

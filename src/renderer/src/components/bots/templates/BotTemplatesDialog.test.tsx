@@ -111,15 +111,62 @@ describe('BotTemplatesDialog', () => {
     expect(mocks.createBot).not.toHaveBeenCalled()
     expect(screen.getByLabelText('Name')).toHaveProperty('value', 'Pull request review 2')
 
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Add the pr-review-checklist skill' }))
+    fireEvent.click(within(newBot).getByRole('button', { name: '1 skill' }))
+    fireEvent.click(
+      await screen.findByRole('switch', { name: 'Add the pr-review-checklist skill' })
+    )
+    expect(within(newBot).getByRole('button', { name: '0/1 skill' })).toBeTruthy()
     fireEvent.submit(newBot.querySelector('form')!)
     await waitFor(() => expect(mocks.createBot).toHaveBeenCalledTimes(1))
+    // Left as the template wrote it, its own lines seed SOUL.md.
     expect(mocks.createBot.mock.calls[0]?.[1]).toMatchObject({
       name: 'Pull request review 2',
-      seed: { templateId: 'pr-review' },
+      seed: {
+        templateId: 'pr-review',
+        purpose: 'Reviews pull requests you’re asked to review and lists risky changes.',
+        watches: 'Pull requests waiting on your review, in the repos you pick',
+        reports: 'Here, when a review is requested'
+      },
       fromTemplate: { id: 'pr-review', skills: [] }
     })
     await waitFor(() => expect(useAppStore.getState().activeModal).toBe('none'))
+  })
+
+  it('opens a template with its name unfocused, and ⌘↩ creates straight away', async () => {
+    openBotTemplates('pr-review')
+    renderDialog()
+    fireEvent.click(screen.getByRole('button', { name: 'Use Pull request review' }))
+    const newBot = await screen.findByRole('dialog', { name: 'New bot' })
+    const form = newBot.querySelector('form')!
+    await waitFor(() => expect(document.activeElement).toBe(form))
+    fireEvent.keyDown(document.activeElement!, {
+      key: 'Enter',
+      ...(navigator.userAgent.includes('Mac') ? { metaKey: true } : { ctrlKey: true })
+    })
+    await waitFor(() => expect(mocks.createBot).toHaveBeenCalledTimes(1))
+  })
+
+  it('makes an edited identity the new bot’s purpose, in place of the template’s lines', async () => {
+    openBotTemplates('pr-review')
+    renderDialog()
+    fireEvent.click(screen.getByRole('button', { name: 'Use Pull request review' }))
+    const newBot = await screen.findByRole('dialog', { name: 'New bot' })
+    const identity = within(newBot).getByRole('textbox', { name: 'Identity' })
+    expect(identity).toHaveProperty(
+      'value',
+      'Watches pull requests waiting on your review, in the repos you pick. Reviews each one and lists risky changes and missing tests, with file and line. Reports here, when a review is requested.'
+    )
+
+    fireEvent.change(identity, {
+      target: { value: 'Review my pull requests for security issues.' }
+    })
+    fireEvent.submit(newBot.querySelector('form')!)
+    await waitFor(() => expect(mocks.createBot).toHaveBeenCalledTimes(1))
+    const seed = mocks.createBot.mock.calls[0]?.[1].seed
+    expect(seed).toEqual({
+      purpose: 'Review my pull requests for security issues.',
+      templateId: 'pr-review'
+    })
   })
 
   it('gives focus back to what opened New bot: Blank bot after an earlier Use', async () => {

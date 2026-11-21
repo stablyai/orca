@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createUIStore } from './ui-slice-test-harness'
 import { AcceptedAgentStatuses } from '../agent-status/status-ownership/accepted-agent-statuses'
+import { hydrateAgentReadState } from './ui-slice-hydration-values'
+import { getDefaultUIState } from '../../../../../shared/orca-profiles/constants'
 
 const NOW = 1_800_000_000_000
 
@@ -30,5 +32,17 @@ describe('acknowledging agents', () => {
       'tab-2:leaf-1': NOW,
       'tab-3:leaf-1': NOW
     })
+  })
+})
+
+describe('hydrating read state', () => {
+  it('keeps a week-old read mark, since a placed agent row outlives the hook TTL', () => {
+    const weekOld = NOW - 8 * 24 * 60 * 60 * 1000
+    expect(
+      hydrateAgentReadState({
+        ...getDefaultUIState(),
+        acknowledgedAgentsByPaneKey: { 'tab-1:leaf-1': weekOld }
+      }).acknowledgedAgentsByPaneKey
+    ).toEqual({ 'tab-1:leaf-1': weekOld })
   })
 })

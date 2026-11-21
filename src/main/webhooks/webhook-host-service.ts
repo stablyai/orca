@@ -24,14 +24,19 @@ import type {
 } from '../../shared/rpc-contract/webhooks-params'
 import type { EventStartGate } from '../automations/automation-trigger-runs'
 import type { ConnectorCloud } from '../connector-cloud/connector-cloud'
-import type { ConnectorResult } from '../connector-cloud/connector-cloud-request'
 import { webhookCallView } from './webhook-call-file'
 import { WebhookRecoverySweep } from './webhook-recovery-sweep'
 import { WebhookCallRuns, type WebhookCallRunsDeps } from './webhook-call-runs'
-import { webhookCloudCalls, webhookSummary, type WebhookCloudCalls } from './webhook-cloud-routes'
+import {
+  webhookCloudCalls,
+  webhookReadValue,
+  webhookSummary,
+  type WebhookCloudCalls
+} from './webhook-cloud-routes'
 import { WebhookHooks } from './webhook-hooks'
 import { webhookNoticeText } from './webhook-notice-text'
 import { WebhookHostLedger } from './webhook-host-ledger'
+import { orcaCloudNeedsSignIn } from '../../shared/bots/host-orca-sign-in'
 
 type TriggerDelivery = Extract<ConnectorDelivery, { kind: 'trigger' }>
 
@@ -62,6 +67,8 @@ export type WebhookHostServiceDeps = {
   /** Every bot's folder on this host, for the call-file sweep. */
   botFolders: () => readonly string[]
   botExists: (botId: string) => boolean
+  /** Bots on agents the previous release can't read; their hooks stay out of the ledger file it reads. */
+  newerAgentBotIds: () => ReadonlySet<string>
   bot: (botId: string) => Bot | undefined
   /** The bot's "couldn't finish" notification, on this computer and paired phones; never an agent turn. */
   notifyOwner: (
@@ -78,19 +85,6 @@ export type WebhookHostServiceDeps = {
   routes?: WebhookCloudCalls
 }
 
-/** A failed read, as one of WEBHOOK_ERROR_CODES. */
-function unwrap<T>(result: ConnectorResult<T> | null): T {
-  if (!result) {
-    throw new Error('webhooks_unavailable')
-  }
-  if (!result.ok) {
-    throw new Error(
-      result.status === 404 && result.error !== null ? 'webhook_not_found' : 'webhooks_unavailable'
-    )
-  }
-  return result.value
-}
-
 export class WebhookHostService {
   private readonly ledger: WebhookHostLedger
   private readonly routes: WebhookCloudCalls
@@ -101,7 +95,7 @@ export class WebhookHostService {
   private router: WebhookCallRunsDeps['route'] | null = null
 
   constructor(private readonly deps: WebhookHostServiceDeps) {
-    this.ledger = new WebhookHostLedger(deps.userDataPath, deps.account)
+    this.ledger = new WebhookHostLedger(deps.userDataPath, deps.account, deps.newerAgentBotIds)
     this.routes = deps.routes ?? webhookCloudCalls(deps.cloud)
     this.hooks = new WebhookHooks({
       ledger: this.ledger,
@@ -138,6 +132,7 @@ export class WebhookHostService {
 
   /** One recovery pass now, resolved once done; the sweep timer runs only while something is left to recover. */
   start(): Promise<void> {
+    this.ledger.refile()
     this.runs.resume()
     void this.hooks.reconcile()
     return this.sweep.start()
@@ -150,7 +145,7 @@ export class WebhookHostService {
 
   /** Signed out of Orca, so no event or webhook call reaches this host's bots. */
   signedOut(): boolean {
-    return this.deps.cloud()?.status?.() === 'signed-out'
+    return orcaCloudNeedsSignIn(this.deps.cloud()?.status?.())
   }
 
   /** Whether this host's Orca Cloud takes webhooks; until a hello says, assume it does and let the mint decide. */
@@ -181,6 +176,12 @@ export class WebhookHostService {
   async lifecyclePending(hookId: string): Promise<boolean> {
     await this.hooks.reconcile()
     return this.ledger.hook(hookId)?.change !== undefined
+  }
+
+  /** A bot was saved or removed; only this can move a hook between the ledger files. */
+  botsWritten(): void {
+    this.ledger.refile()
+    this.changed()
   }
 
   /** An automation, run or bot changed. */
@@ -250,7 +251,7 @@ export class WebhookHostService {
   }
 
   async list(botId: string): Promise<WebhookSummary[]> {
-    const { hooks } = unwrap(await this.routes.list(botId))
+    const { hooks } = webhookReadValue(await this.routes.list(botId))
     const here = new Map(
       this.deps.automations.list().flatMap((automation) => {
         const rule = automationWebhookTrigger(automation)
@@ -265,7 +266,7 @@ export class WebhookHostService {
 
   async card(hookId: string): Promise<WebhookSummary> {
     const automation = this.automationOf(hookId)
-    const hook = unwrap(await this.routes.get(hookId))
+    const hook = webhookReadValue(await this.routes.get(hookId))
     this.hooks.remember(hook)
     return webhookSummary(hook, automation)
   }
@@ -273,7 +274,7 @@ export class WebhookHostService {
   /** The cloud's verdicts, with what this host did with each call it took. */
   async calls(hookId: string): Promise<WebhookCallRow[]> {
     const automation = this.automationOf(hookId)
-    const { calls } = unwrap(await this.routes.calls(hookId))
+    const { calls } = webhookReadValue(await this.routes.calls(hookId))
     return calls.map((row) => {
       if (row.kind !== 'call') {
         return row
@@ -298,22 +299,22 @@ export class WebhookHostService {
   /** The key, for Orca's UI alone. */
   async reveal(hookId: string): Promise<WebhookKey> {
     this.automationOf(hookId)
-    const hook = unwrap(await this.routes.get(hookId))
-    const { key } = unwrap(await this.routes.reveal(hookId, {}))
+    const hook = webhookReadValue(await this.routes.get(hookId))
+    const { key } = webhookReadValue(await this.routes.reveal(hookId, {}))
     return { key, url: `${hook.url}/${key}` }
   }
 
   /** One call, fenced as the caller's words. */
   async callText(hookId: string, callId: string): Promise<{ callId: string; text: string }> {
     this.automationOf(hookId)
-    const envelope = unwrap(await this.routes.envelope(callId))
+    const envelope = webhookReadValue(await this.routes.envelope(callId))
     return { callId, text: fenceQuotedText(JSON.stringify(envelope, null, 2)) }
   }
 
   /** How the filters, or the hook's own, sort the calls the cloud still keeps. */
   async check(hookId: string, filters?: WebhookFilters): Promise<WebhookCheckResult> {
     const rule = automationWebhookTrigger(this.automationOf(hookId))
-    const { calls } = unwrap(await this.routes.calls(hookId))
+    const { calls } = webhookReadValue(await this.routes.calls(hookId))
     const ids = calls
       .flatMap((row) => (row.kind === 'call' ? [row.callId] : []))
       .slice(0, CHECK_CALLS)
@@ -339,7 +340,7 @@ export class WebhookHostService {
 
   async sample(hookId: string, operationId: string): Promise<{ callId: string }> {
     this.automationOf(hookId)
-    return unwrap(await this.routes.sample(hookId, operationId))
+    return webhookReadValue(await this.routes.sample(hookId, operationId))
   }
 
   async rotate(
@@ -347,11 +348,11 @@ export class WebhookHostService {
     body: { operationId: string; stopNow: boolean }
   ): Promise<{ cancelledCalls: number }> {
     this.automationOf(hookId)
-    return unwrap(await this.routes.rotate(hookId, body))
+    return webhookReadValue(await this.routes.rotate(hookId, body))
   }
 
   async setSecret({ hookId, ...body }: WebhookSecretParams): Promise<{ secret?: string }> {
     this.automationOf(hookId)
-    return unwrap(await this.routes.setSecret(hookId, body))
+    return webhookReadValue(await this.routes.setSecret(hookId, body))
   }
 }

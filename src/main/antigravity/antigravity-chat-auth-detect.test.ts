@@ -81,6 +81,18 @@ describe('detectAntigravityChatAuth', () => {
     expect(enterprise.adc.project).toBe('adc-project')
   })
 
+  it.each([
+    [true, { agySignedOut: true }],
+    [false, { agySignedOut: false }],
+    [null, {}]
+  ])('says agy is signed out only when the host knows (%s)', async (known, expected) => {
+    const detection = await detectAntigravityChatAuth(
+      sources({ CLOUDSDK_CONFIG: folder() }, { agySignedOut: () => known })
+    )
+    expect(detection).toMatchObject(expected)
+    expect('agySignedOut' in detection).toBe(known !== null)
+  })
+
   it('reports nothing when the host has no key or ADC file', async () => {
     const detection = await detectAntigravityChatAuth(sources({ CLOUDSDK_CONFIG: folder() }))
     expect(detection.apiKey).toEqual({ available: false, source: null })

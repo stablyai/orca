@@ -22,3 +22,7 @@ export async function runUnderWorktreeDeleteLimit<T>(operation: () => Promise<T>
     }
   }
 }
+
+export function _queuedWorktreeDeletesForTests(): number {
+  return waiting.length
+}

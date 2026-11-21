@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from '@/runtime/web-session-tabs-sync/actions/web-session-tab-rpc-timeout'
 import { parseRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
@@ -80,16 +81,14 @@ function liveTabIds(): Set<string> {
 /** Only explicit disconnected/reconnecting states prove an outage; never-probed hosts do not. Generation alone misses disconnects until a new runtime reconnects. */
 function environmentContactIsLost(environmentId: string): boolean {
   const connectionState = runtimeHostConnectionStateForEntry(
-    useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)
+    readRuntimeStatuses().get(environmentId)
   )
   return isDisconnectedRuntimeHostState(connectionState) || connectionState === 'reconnecting'
 }
 
 /** Detect contact recovery inside a budget even if the host is reachable again by its deadline. */
 function hostContactEpochFor(environmentId: string): number {
-  return (
-    useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)?.hostContactEpoch ?? 0
-  )
+  return readRuntimeStatuses().get(environmentId)?.hostContactEpoch ?? 0
 }
 
 function recordExpiredWait(environmentId: string, key: string): void {

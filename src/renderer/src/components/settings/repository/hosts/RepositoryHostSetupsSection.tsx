@@ -254,7 +254,8 @@ export function RepositoryHostSetupsSection({
           const nestedSshStatus =
             runtimeOwnerEnvironmentId && executionHost?.kind === 'ssh'
               ? selectRuntimeAwareSshStatus(
-                  { sshConnectionStates, sshStateByEnvironment, runtimeStatusByEnvironmentId },
+                  { sshConnectionStates, sshStateByEnvironment },
+                  runtimeStatusByEnvironmentId,
                   runtimeOwnerEnvironmentId,
                   executionHost.targetId
                 )
@@ -294,8 +295,7 @@ export function RepositoryHostSetupsSection({
                         sshTargetLabels,
                         removedSshTargetLabels,
                         sshTargetsHydrated,
-                        sshStateByEnvironment,
-                        runtimeStatusByEnvironmentId
+                        sshStateByEnvironment
                       },
                       runtimeOwnerEnvironmentId,
                       executionHost.targetId
