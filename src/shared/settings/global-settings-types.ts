@@ -21,9 +21,7 @@ import type { CommitMessageAiSettings } from '../source-control/ai/generation/co
 import type { HostSettingOverrides } from '../execution-host/host-setting-overrides'
 import type {
   ClaudeManagedAccount,
-  ClaudeManagedAccountRuntimeSelection,
-  CodexManagedAccount,
-  CodexManagedAccountRuntimeSelection
+  ClaudeManagedAccountRuntimeSelection
 } from '../agent-accounts/managed-account-types'
 import type { NotificationSettings } from '../notifications/notification-settings-types'
 import type { CtrlTabOrderMode } from '../workspace-layout/tab-groups/tab-types'
@@ -308,10 +306,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   promptCacheTimerEnabled: boolean
   /** Prompt-cache TTL (ms); only 300000 (5 min standard) or 3600000 (1 hr, extended-TTL plans). */
   promptCacheTtlMs: number
-  /** Why: durable main-owned pref so Orca can prepare shared ~/.codex before the renderer hydrates. */
-  codexManagedAccounts: CodexManagedAccount[]
-  activeCodexManagedAccountId: string | null
-  activeCodexManagedAccountIdsByRuntime?: CodexManagedAccountRuntimeSelection
   /** Why: persist only per-account auth (not a CLAUDE_CONFIG_DIR swap) so switching accounts doesn't fork Claude's shared chat/session context. */
   claudeManagedAccounts: ClaudeManagedAccount[]
   activeClaudeManagedAccountId: string | null
