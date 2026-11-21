@@ -48,7 +48,7 @@ type ResumeRecoveryDependencies = {
   getConnectionManager: () => SshConnectionManager | null
   getManagerGeneration: () => number
   getTargetStore: () => ReturnType<typeof getSshTargetRegistryStore>
-  inFlight: Map<string, Promise<void>>
+  inFlight: Map<string, Promise<number | null>>
   ownershipGenerations: Map<string, number>
   probeTunnel?: OrcadManagedTunnelProbe
   targeting: OrcadManagedTunnelTargeting
@@ -146,11 +146,13 @@ export class OrcadManagedTunnelResumeRecovery {
       ownershipGeneration,
       managerGeneration,
       options
-    ).finally(() => {
-      if (this.dependencies.inFlight.get(environmentId) === operation) {
-        this.dependencies.inFlight.delete(environmentId)
-      }
-    })
+    )
+      .then(() => this.dependencies.active.get(environmentId)?.remotePort ?? null)
+      .finally(() => {
+        if (this.dependencies.inFlight.get(environmentId) === operation) {
+          this.dependencies.inFlight.delete(environmentId)
+        }
+      })
     this.dependencies.inFlight.set(environmentId, operation)
     await operation
   }

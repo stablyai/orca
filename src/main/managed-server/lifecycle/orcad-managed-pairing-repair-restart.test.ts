@@ -142,7 +142,7 @@ describe('a managed orcad that dropped this desktop and restarted', () => {
     const { repairs, refresh } = repairsAgainst(savedEnvironment(reached), readiness)
     const repaired = await repairs.repair('env-1', 1)
     expect(refresh).toHaveBeenCalledOnce()
-    await expect(verifyManagedOrcadTunnelIdentity(repaired)).resolves.toEqual({
+    await expect(verifyManagedOrcadTunnelIdentity(repaired)).resolves.toMatchObject({
       verdict: 'verified'
     })
   })

@@ -5,6 +5,7 @@ import {
   getPreferredLoopbackRuntimePort,
   getOrcadSshDeployment,
   getPreferredPairingOffer,
+  OrcadSshDeploymentLinkSchema,
   PersistedRuntimeEnvironmentSchema,
   type KnownRuntimeEnvironment,
   type OrcadSshDeploymentLink
@@ -132,6 +133,60 @@ export function moveManagedOrcadLocalPort(
     localPort,
     now
   )
+}
+
+/** Records a verified active server port without changing pairing or the local tunnel endpoint. */
+export function moveManagedOrcadRemotePort(
+  userDataPath: string,
+  environmentId: string,
+  args: {
+    expectedPairingRevision: number
+    expectedRemotePort: number
+    remotePort: number
+    verifiedRuntimeId: string
+  }
+): KnownRuntimeEnvironment {
+  const current = resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environmentId)
+  const deployment = getOrcadSshDeployment(current)
+  if (!deployment) {
+    throw new RuntimeEnvironmentStoreError(
+      'invalid_argument',
+      'This server is not managed over SSH.'
+    )
+  }
+  const pairingRevision = current.pairingRevision ?? current.createdAt
+  if (
+    !args.verifiedRuntimeId.trim() ||
+    pairingRevision !== args.expectedPairingRevision ||
+    (current.runtimeId !== null && current.runtimeId !== args.verifiedRuntimeId)
+  ) {
+    throw new RuntimeEnvironmentStoreError(
+      'invalid_argument',
+      'The managed runtime identity changed during port recovery. Retry the connection.'
+    )
+  }
+  if (deployment.remotePort === args.remotePort) {
+    return current
+  }
+  if (deployment.remotePort !== args.expectedRemotePort) {
+    throw new RuntimeEnvironmentStoreError(
+      'invalid_argument',
+      'The managed deployment port changed during recovery. Retry the connection.'
+    )
+  }
+  const nextDeployment = OrcadSshDeploymentLinkSchema.parse({
+    ...deployment,
+    remotePort: args.remotePort
+  })
+  const store = readPersistedEnvironmentStore(userDataPath)
+  const existing = resolveEnvironmentFromStore(store, environmentId)
+  const entry = readCurrentRuntimeEnvironmentSidecarEntry(userDataPath, existing)
+  const { binding: _binding, ...rest } = entry ?? {}
+  writeRuntimeEnvironmentSidecarEntry(userDataPath, store.environments, existing, {
+    ...rest,
+    orcadDeployment: nextDeployment
+  })
+  return resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environmentId)
 }
 
 function rebindManagedOrcadPairing(

@@ -46,7 +46,7 @@ type OrcadManagedTunnelDependencies = {
 
 export class OrcadManagedTunnelManager {
   private readonly active = new Map<string, ActiveOrcadTunnel>()
-  private readonly inFlight = new Map<string, Promise<void>>()
+  private readonly inFlight = new Map<string, Promise<number | null>>()
   private readonly ownershipGenerations = new Map<string, number>()
   // Track in-flight build targets so Disconnect can supersede unrecorded forwards.
   private readonly buildTargets = new Map<string, string>()
@@ -90,9 +90,9 @@ export class OrcadManagedTunnelManager {
       | null
       | Promise<KnownRuntimeEnvironment | null> = () => environment,
     retryJoined = true
-  ): Promise<void> {
+  ): Promise<number | null> {
     if (!getRuntimeSshAccess(environment)) {
-      return Promise.resolve()
+      return Promise.resolve(null)
     }
     const pending = this.inFlight.get(environment.id)
     if (pending) {
@@ -248,7 +248,7 @@ export class OrcadManagedTunnelManager {
     environment: KnownRuntimeEnvironment,
     resolveCurrent: () => KnownRuntimeEnvironment | null | Promise<KnownRuntimeEnvironment | null>,
     rebound = false
-  ): Promise<void> {
+  ): Promise<number | null> {
     const { deployment, targetStore, connectionManager, target } = resolveManagedTunnelBinding(
       environment,
       this.dependencies
@@ -271,7 +271,7 @@ export class OrcadManagedTunnelManager {
     const transportGeneration = connection.getConnectGeneration()
     const active = this.active.get(environment.id)
     if (activeTunnelMatches(active, { connection, transportGeneration, target, deployment })) {
-      return
+      return active?.remotePort ?? null
     }
     const checks = await environmentForwardChecks(this.targeting, {
       environment,
@@ -314,8 +314,8 @@ export class OrcadManagedTunnelManager {
       }
       throw supersededTunnelError()
     }
-    if (serving.rebind && !rebound) {
-      await this.ensureManagedTunnel(environment, resolveCurrent, true)
-    }
+    return serving.rebind && !rebound
+      ? this.ensureManagedTunnel(environment, resolveCurrent, true)
+      : (this.active.get(environment.id)?.remotePort ?? null)
   }
 }

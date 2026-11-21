@@ -28,6 +28,8 @@ import {
   buildWithPairingRepair,
   type ManagedOrcadPairingRecovery
 } from './orcad-managed-tunnel-pairing-recovery'
+import { reconcileManagedOrcadRemotePort } from './orcad-managed-remote-port-recovery'
+import { getOrcadSshDeployment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 const managedTunnels = new OrcadManagedTunnelManager({
   getConnectionManager: getSshConnectionManager,
@@ -53,7 +55,8 @@ function pairingRecovery(userDataPath: string): ManagedOrcadPairingRecovery {
     resolve: async (environmentId) => await resolveEnvironment(userDataPath, environmentId),
     repairs,
     ensure: (environment) =>
-      managedTunnels.ensure(
+      ensureTunnelAndReconcileRemotePort(
+        userDataPath,
         environment,
         async () => await resolveEnvironmentOrNull(userDataPath, environment.id)
       )
@@ -68,13 +71,33 @@ export async function ensureOrcadManagedTunnel(
   const { id } = await resolveEnvironment(userDataPath, selector)
   await buildOnBindableLocalPort(userDataPath, id, () =>
     buildWithPairingRepair(pairingRecovery(userDataPath), id, (environment) =>
-      managedTunnels.ensure(
+      ensureTunnelAndReconcileRemotePort(
+        userDataPath,
         environment,
         async () => await resolveEnvironmentOrNull(userDataPath, id)
       )
     )
   )
   return await resolveEnvironment(userDataPath, id)
+}
+
+async function ensureTunnelAndReconcileRemotePort(
+  userDataPath: string,
+  environment: KnownRuntimeEnvironment,
+  resolveCurrent: () => Promise<KnownRuntimeEnvironment | null>
+): Promise<void> {
+  const remotePort = await managedTunnels.ensure(environment, resolveCurrent)
+  const deployment = getOrcadSshDeployment(environment)
+  if (!deployment || remotePort === null || deployment.remotePort === remotePort) {
+    return
+  }
+  try {
+    const current = await reconcileManagedOrcadRemotePort(userDataPath, environment, remotePort)
+    await managedTunnels.ensure(current, resolveCurrent)
+  } catch (error) {
+    await managedTunnels.close(environment.id)
+    throw error
+  }
 }
 
 export async function rebuildOrcadManagedTunnel(

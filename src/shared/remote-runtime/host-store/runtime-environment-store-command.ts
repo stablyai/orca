@@ -68,6 +68,11 @@ export function executeEnvironmentStoreCommand(
         operation: command.operation,
         value: core1.moveManagedOrcadLocalPort(...command.args)
       }
+    case 'moveManagedOrcadRemotePort':
+      return {
+        operation: command.operation,
+        value: core1.moveManagedOrcadRemotePort(...command.args)
+      }
     case 'recordManagedOrcadMigration':
       return {
         operation: command.operation,

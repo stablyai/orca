@@ -53,6 +53,19 @@ export async function moveManagedOrcadLocalPort(
   return reply.value
 }
 
+export async function moveManagedOrcadRemotePort(
+  ...args: Parameters<typeof core.moveManagedOrcadRemotePort>
+): Promise<ReturnType<typeof core.moveManagedOrcadRemotePort>> {
+  const reply = await submitEnvironmentStoreCommand({
+    operation: 'moveManagedOrcadRemotePort',
+    args
+  })
+  if (reply.operation !== 'moveManagedOrcadRemotePort') {
+    throw new Error('Unexpected environment store response')
+  }
+  return reply.value
+}
+
 export async function recordManagedOrcadMigration(
   ...args: Parameters<typeof core.recordManagedOrcadMigration>
 ): Promise<ReturnType<typeof core.recordManagedOrcadMigration>> {

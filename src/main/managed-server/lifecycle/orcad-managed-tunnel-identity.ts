@@ -24,7 +24,7 @@ import { RUNTIME_SERVER_REPLACED_STATUS_CODE } from '../../../shared/remote-runt
 
 /** Unreachable proves no identity; unpaired is a refusal sealed by the pinned server key. */
 export type OrcadTunnelIdentity =
-  | { verdict: 'verified' }
+  | { verdict: 'verified'; runtimeId?: string }
   | { verdict: 'foreign' | 'unreachable' | 'unpaired'; detail: string }
 
 export const ORCAD_IDENTITY_MISMATCH_CODE = 'orcad_identity_mismatch'
@@ -68,6 +68,16 @@ export class OrcadManagedIdentityError extends Error {
         `${environmentName} in Settings › Remote Orca Servers and choose Forget… (or run ` +
         `\`orca environment forget --environment ${selector} --yes\`), then click ` +
         'Connect on the SSH host',
+      detail
+    )
+  }
+
+  static unverifiedRemotePort(remotePort: number, detail: string): OrcadManagedIdentityError {
+    return new OrcadManagedIdentityError(
+      'foreign-port',
+      `the active runtime on remote port ${remotePort} could not be verified as the paired runtime, ` +
+        'so the saved endpoint was not changed. Retry the SSH connection; if the runtime was ' +
+        'replaced, pair with it again instead of reusing this deployment',
       detail
     )
   }
@@ -130,8 +140,8 @@ export async function verifyOrcadPairingIdentity(
   expected: Pick<KnownRuntimeEnvironment, 'runtimeId' | 'pairedDeviceId'>
 ): Promise<OrcadTunnelIdentity> {
   try {
-    await verifyRuntimePairingIdentity(connection, expected)
-    return { verdict: 'verified' }
+    const verified = await verifyRuntimePairingIdentity(connection, expected)
+    return { verdict: 'verified', runtimeId: verified.verifiedRuntimeId }
   } catch (error) {
     return classifyOrcadTunnelIdentityFailure(error)
   }
@@ -143,10 +153,8 @@ export function verifyManagedOrcadTunnelIdentity(
   if (!environment.orcadDeployment) {
     return Promise.resolve({ verdict: 'verified' })
   }
-  // Runtime/device IDs can change or become stale; pinned-key handshake and token acceptance prove identity.
-  return verifyOrcadPairingIdentity(getPreferredPairedRuntimeConnection(environment), {
-    runtimeId: null
-  })
+  // The pinned key authenticates the server; a learned runtime ID must also match.
+  return verifyOrcadPairingIdentity(getPreferredPairedRuntimeConnection(environment), environment)
 }
 
 /** Fresh deploys have no saved pairing; reread readiness after foreign answers to follow port changes. */

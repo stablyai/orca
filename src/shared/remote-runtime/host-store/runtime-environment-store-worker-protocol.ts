@@ -51,6 +51,10 @@ export type EnvironmentStoreCommand =
       args: Parameters<typeof core1.moveManagedOrcadLocalPort>
     }
   | {
+      operation: 'moveManagedOrcadRemotePort'
+      args: Parameters<typeof core1.moveManagedOrcadRemotePort>
+    }
+  | {
       operation: 'recordManagedOrcadMigration'
       args: Parameters<typeof core1.recordManagedOrcadMigration>
     }
@@ -136,6 +140,10 @@ export type EnvironmentStoreSuccess =
   | {
       operation: 'moveManagedOrcadLocalPort'
       value: ReturnType<typeof core1.moveManagedOrcadLocalPort>
+    }
+  | {
+      operation: 'moveManagedOrcadRemotePort'
+      value: ReturnType<typeof core1.moveManagedOrcadRemotePort>
     }
   | {
       operation: 'recordManagedOrcadMigration'
