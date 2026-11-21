@@ -1,5 +1,5 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, create } from 'react-test-renderer'
 import { expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatTurnJournal } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
@@ -22,7 +22,7 @@ it("keeps the turn journal while only a streaming reply's text grows", () => {
     journals.push(useMobileStructuredAgentTurnTiming({ items, submissions }, null).turnJournal)
     return null
   }
-  let renderer: ReactTestRenderer | undefined
+  let renderer: ReturnType<typeof create> | undefined
   act(() => {
     renderer = create(createElement(Reader))
   })
