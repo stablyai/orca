@@ -1,5 +1,5 @@
 // Every bot's own side chats are classed with one party read per bot, not two SQLite lookups per
-// chat: a host with many chats spent hundreds of milliseconds of main-thread time per refresh (PR #TBD).
+// chat: a host with many chats spent hundreds of milliseconds of main-thread time per refresh (PR #46120).
 import { afterEach, expect, it, vi } from 'vitest'
 import { readBotOwnChatPanes } from './bot-own-chat-panes'
 import { closeOwnChatHost, homeRecord, ownChatHost } from './bot-own-chat-panes.test-fixture'
