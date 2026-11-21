@@ -52,6 +52,33 @@ describe('local detected agent context lifecycle', () => {
     })
   })
 
+  it('updates enabled-only inventories in place when an agent is toggled', async () => {
+    const store = createTestStore([])
+    detectAgents.mockResolvedValueOnce(['claude', 'kiro'])
+    await store.getState().ensureAllDetectedAgents()
+    refreshAgents.mockResolvedValueOnce({
+      agents: ['claude', 'codex', 'kiro'],
+      pathSource: 'process_env',
+      pathFailureReason: 'none'
+    })
+    await store.getState().refreshDetectedAgents()
+    detectAgents.mockClear()
+    refreshAgents.mockClear()
+    const settings = store.getState().settings!
+
+    store.setState({ settings: { ...settings, disabledTuiAgents: ['codex'] } })
+    expect(store.getState().detectedAgentIds).toEqual(['claude', 'kiro'])
+
+    store.setState({ settings: { ...settings, disabledTuiAgents: [] } })
+    await expect(store.getState().ensureDetectedAgents()).resolves.toEqual([
+      'claude',
+      'kiro',
+      'codex'
+    ])
+    expect(detectAgents).not.toHaveBeenCalled()
+    expect(refreshAgents).not.toHaveBeenCalled()
+  })
+
   it('re-detects re-enabled agents and prevents pre-change requests from restoring caches', async () => {
     const store = createTestStore([])
     let finishOld: (ids: string[]) => void = () => {}
