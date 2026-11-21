@@ -109,6 +109,7 @@ import {
   AiVaultDeleteSessionParams,
   AiVaultListSessionsParams,
   AiVaultPrepareSessionHandoffParams,
+  AiVaultPrepareSessionHandoffPromptParams,
   AiVaultPrepareSessionResumeParams,
   AiVaultSessionTitlesParams
 } from './ai-vault/ai-vault-params'
@@ -1166,6 +1167,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'aiVault.deleteSession': AiVaultDeleteSessionParams,
   'aiVault.listSessions': AiVaultListSessionsParams,
   'aiVault.prepareSessionHandoff': AiVaultPrepareSessionHandoffParams,
+  'aiVault.prepareSessionHandoffPrompt': AiVaultPrepareSessionHandoffPromptParams,
   'aiVault.prepareSessionResume': AiVaultPrepareSessionResumeParams,
   'aiVault.resolveSessionTitles': AiVaultSessionTitlesParams,
   'aiVault.searchSessions': AiVaultSearchRequestSchema,

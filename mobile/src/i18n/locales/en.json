@@ -473,6 +473,18 @@
       "reset": "Reset",
       "done": "Done",
       "sortBy": "Sort by"
+    },
+    "actions": {
+      "resume": "Resume"
+    },
+    "handoff": {
+      "title": "Hand off to agent",
+      "context": "Context",
+      "latestStatus": "Latest status",
+      "fullTranscript": "Full transcript",
+      "noContext": "No session context is available to continue in a new session.",
+      "launchFailed": "Could not start a new session.",
+      "promptCopied": "Prompt copied. Open the agent to paste it."
     }
   },
   "diagnostics": {

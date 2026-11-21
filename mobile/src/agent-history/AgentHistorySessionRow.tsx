@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { MobileForkMarkedName } from '../session/fork/MobileForkMarkedName'
 import { mobileForkAccessibleName } from '../session/fork/mobile-fork-marked-name'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { ChevronDown, Play } from 'lucide-react-native'
+import { ChevronDown, MessageSquarePlus, Play } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -28,7 +28,10 @@ type Props = {
   showCurrentWorktreeBadge: boolean
   resumeActionState?: MobileAgentHistoryResumeActionState
   onResume?: (session: AiVaultSession) => void | Promise<void>
+  /** What the trailing button does: resume, or hand the session off while History picks one. */
+  primaryAction?: 'resume' | 'handoff'
   onPress: () => void
+  onLongPress?: (session: AiVaultSession) => void
 }
 
 export function AgentHistorySessionRow({
@@ -38,7 +41,9 @@ export function AgentHistorySessionRow({
   showCurrentWorktreeBadge,
   resumeActionState,
   onResume,
-  onPress
+  primaryAction = 'resume',
+  onPress,
+  onLongPress
 }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -52,6 +57,7 @@ export function AgentHistorySessionRow({
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={session && onLongPress ? () => onLongPress(session) : undefined}
       accessibilityRole="button"
       accessibilityState={{ expanded }}
       accessibilityLabel={card.forked ? mobileForkAccessibleName(card.title) : card.title}
@@ -114,13 +120,17 @@ export function AgentHistorySessionRow({
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel={
-                isAntigravityReferenceSession(session)
-                  ? t('agentHistory.sessionHistoryList.continueInCli', 'Continue in CLI')
-                  : t('agentHistory.sessionHistoryList.resumeSession', 'Resume agent session')
+                primaryAction === 'handoff'
+                  ? t('agentHistory.handoff.title', 'Hand off to agent')
+                  : isAntigravityReferenceSession(session)
+                    ? t('agentHistory.sessionHistoryList.continueInCli', 'Continue in CLI')
+                    : t('agentHistory.sessionHistoryList.resumeSession', 'Resume agent session')
               }
             >
               {resumeActionState?.loading ? (
                 <ActivityIndicator size="small" color={colors.textPrimary} />
+              ) : primaryAction === 'handoff' ? (
+                <MessageSquarePlus size={15} color={colors.textPrimary} />
               ) : (
                 <Play size={14} color={colors.textPrimary} fill={colors.textPrimary} />
               )}
