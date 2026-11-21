@@ -10,11 +10,14 @@ import { registerGitHubPRReviewHandlers } from './github-pr-review-handlers'
 import { registerGitHubProjectViewHandlers } from './github-project-view-handlers'
 import { registerGitHubWorkItemHandlers } from './github-work-item-handlers'
 
+import { registerGitHubActionsReadHandlers } from './github-actions-read-handlers'
+
 export function registerGitHubHandlers(
   store: Store,
   stats: StatsCollector,
   runtime: Pick<OrcaRuntimeService, 'notifyPullRequestChangedForRemoteClients'>
 ): void {
+  registerGitHubActionsReadHandlers(store)
   registerGitHubPRRefreshHandlers(store, stats, runtime)
   registerGitHubWorkItemHandlers(store)
   registerGitHubPRReadHandlers(store)

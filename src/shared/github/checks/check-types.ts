@@ -1,4 +1,6 @@
+import type { ActionsDetailMetadata } from '../actions/actions-types'
 export type PRCheckDetail = {
+  actionsIdentity?: string
   name: string
   status: 'queued' | 'in_progress' | 'completed'
   conclusion:
@@ -45,6 +47,8 @@ export type PRCheckStep = {
 }
 
 export type PRCheckJob = {
+  runnerName?: string | null
+  runnerLabels?: string[]
   id: number | null
   name: string
   status: string | null
@@ -58,6 +62,7 @@ export type PRCheckJob = {
 }
 
 export type PRCheckRunDetails = {
+  actions?: ActionsDetailMetadata
   name: string
   status: PRCheckDetail['status'] | (string & {}) | null
   conclusion: PRCheckDetail['conclusion'] | (string & {}) | null

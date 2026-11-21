@@ -1,3 +1,4 @@
+import { ActionsRunDetailsPanel } from './actions-run/ActionsRunDetailsPanel'
 import { GitGraphTab } from './git-graph/git-graph-tab'
 import { useAppStore } from '@/store'
 import type { ActivePluginCustomEditor } from '@/store/plugins/file-editors/plugin-custom-editors'
@@ -46,6 +47,7 @@ export function getMarkdownSourceLineOffset(frontMatterRaw: string): number {
   return offset
 }
 
+/** Choose Actions details only for tabs carrying Actions context; preserve the existing editor-kind dispatch. */
 export function EditorContent({
   activeFile,
   viewStateScopeId,
@@ -150,6 +152,9 @@ export function EditorContent({
           {t('auto.components.editor.EditorContent.6c4f1a8d2e', 'Check details are unavailable.')}
         </div>
       )
+    }
+    if (checkRunDetails.actionsContext) {
+      return <ActionsRunDetailsPanel file={activeFile} />
     }
     const details = checkRunDetails.details
     return (
