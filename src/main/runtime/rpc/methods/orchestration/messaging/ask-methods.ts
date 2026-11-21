@@ -1,3 +1,4 @@
+import { dropReaderlessRunQuestions } from '../../../../orchestration/db/questions/readerless-run-questions'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration/mailbox/orchestration-ask-timeout'
@@ -164,6 +165,8 @@ export const ORCHESTRATION_ASK_METHODS = [
           to
         })
         question = created.question
+        // No one coordinates the Run: its worker is told at once instead of waiting.
+        dropReaderlessRunQuestions(db, run.id)
         runtime.notifyMessageArrived(to, created.message.type)
       }
 

@@ -180,7 +180,7 @@ export class QuestionReconciler {
   }
 
   private async decide(taker: string): Promise<void> {
-    const questions = awaitingQuestions(this.db, taker)
+    const questions = awaitingQuestions(this.db, taker).map((question) => question.messageId)
     if (questions.length === 0) {
       this.forget(taker)
       this.unverified.delete(taker)
@@ -238,7 +238,7 @@ export class QuestionReconciler {
     } else if (this.unverified.delete(taker) && this.unverified.size === 0) {
       this.seenSinceUnverified.clear()
     }
-    return awaitingQuestions(this.db, taker)
+    return awaitingQuestions(this.db, taker).map((question) => question.messageId)
   }
 
   /** Remembers what holds a taker's questions, so the edge that ends the hold decides again. */

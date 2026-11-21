@@ -19,7 +19,14 @@ export type QuestionPartyFacts = {
   dispatchParty(dispatchId: string): string | null
 }
 
-export type QuestionNotice = { messageId: string; taker: string }
+export type QuestionKind = 'worker-ask' | 'bot'
+export type QuestionNotice = { messageId: string; taker: string; kind: QuestionKind }
+
+/** The question tables, worker asks first: telling one can wake a worker started for another. */
+const QUESTION_TABLES = [
+  ['worker-ask', 'question_threads'],
+  ['bot', 'bot_requests']
+] as const
 
 /** Writes the notice and the question's outcome, inside the decision's transaction. 'unverified'
  *  leaves the question awaiting: its asker can't be resolved yet, so a later edge tries again. */
@@ -70,18 +77,28 @@ function linkedWorking(db: OrchestrationDb, facts: QuestionPartyFacts, messageId
   })
 }
 
-/** Questions this taker holds whose asker may still be owed a notice. */
-export function awaitingQuestions(db: OrchestrationDb, taker: string): string[] {
-  return db.db
-    .prepare('SELECT message_id FROM bot_requests WHERE awaiting = 1 AND taken_by = ?')
-    .all(taker)
-    .flatMap(({ message_id }) => (typeof message_id === 'string' ? [message_id] : []))
+/** Questions this taker holds whose asker may still be owed a notice, worker asks first. */
+export function awaitingQuestions(
+  db: OrchestrationDb,
+  taker: string
+): { messageId: string; kind: QuestionKind }[] {
+  return QUESTION_TABLES.flatMap(([kind, table]) =>
+    db.db
+      .prepare(`SELECT message_id FROM ${table} WHERE awaiting = 1 AND taken_by = ?`)
+      .all(taker)
+      .flatMap(({ message_id }) =>
+        typeof message_id === 'string' ? [{ messageId: message_id, kind }] : []
+      )
+  )
 }
 
 /** Every taker still holding a question whose asker may be owed a notice. */
 export function awaitingTakers(db: OrchestrationDb): string[] {
   return db.db
-    .prepare('SELECT DISTINCT taken_by FROM bot_requests WHERE awaiting = 1')
+    .prepare(
+      `SELECT taken_by FROM question_threads WHERE awaiting = 1
+       UNION SELECT taken_by FROM bot_requests WHERE awaiting = 1`
+    )
     .all()
     .flatMap(({ taken_by }) => (typeof taken_by === 'string' ? [taken_by] : []))
 }
@@ -95,8 +112,10 @@ export function takersLinkedTo(db: OrchestrationDb, dispatchId: string): string[
          UNION SELECT d.id, d.creator_dispatch_id, d.for_message_id
          FROM dispatch_contexts d JOIN up ON d.id = up.creator
        )
-       SELECT DISTINCT b.taken_by FROM up JOIN bot_requests b ON b.message_id = up.for_id
-       WHERE b.awaiting = 1`
+       SELECT b.taken_by FROM up JOIN bot_requests b ON b.message_id = up.for_id
+       WHERE b.awaiting = 1
+       UNION SELECT q.taken_by FROM up JOIN question_threads q ON q.message_id = up.for_id
+       WHERE q.awaiting = 1`
     )
     .all(dispatchId)
     .flatMap(({ taken_by }) => (typeof taken_by === 'string' ? [taken_by] : []))
@@ -114,24 +133,26 @@ export function reconcileQuestions(
     return []
   }
   const told: QuestionNotice[] = []
-  for (const messageId of candidates) {
+  for (const { messageId, kind } of candidates) {
+    const table = kind === 'bot' ? 'bot_requests' : 'question_threads'
     const notice = runLifecycleWriteTransaction(db.db, 'agent_question_notice', () => {
-      // Decided again inside the write, so a commit that raced the reads above is seen.
+      // Decided again inside the write, so a commit that raced the reads above is seen; a worker
+      // ask told just before can have woken the worker started for this one.
       if (busy(db, facts, taker) || linkedWorking(db, facts, messageId)) {
         return null
       }
       const still = db.db
-        .prepare('SELECT 1 FROM bot_requests WHERE message_id = ? AND awaiting = 1')
+        .prepare(`SELECT 1 FROM ${table} WHERE message_id = ? AND awaiting = 1`)
         .get(messageId)
       if (!still) {
         return null
       }
-      const decided: QuestionNotice = { messageId, taker }
+      const decided: QuestionNotice = { messageId, taker, kind }
       if (write(decided) === 'unverified') {
         return null
       }
       // Every outcome writer clears it; a question with no record to tell ends here too.
-      db.db.prepare('UPDATE bot_requests SET awaiting = NULL WHERE message_id = ?').run(messageId)
+      db.db.prepare(`UPDATE ${table} SET awaiting = NULL WHERE message_id = ?`).run(messageId)
       return decided
     })
     if (notice) {

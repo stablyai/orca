@@ -7,6 +7,7 @@ type QuestionState = {
   status: 'pending' | 'answered' | 'closed'
   answer_body: string | null
   answer_message_id: string | null
+  told?: 'unanswered' | 'dropped' | null
 }
 
 /** Every waiting ask on a Dispatch's questions, which a Dispatch notification wakes to recheck closure. */
@@ -103,6 +104,9 @@ export async function waitForQuestionAnswer(args: {
         timeoutMs
       }
     }
+    if (current.told) {
+      return { ...unanswered, ...takeNotice(args.runtime, current), told: current.told }
+    }
     const remainingMs = deadline - Date.now()
     if (remainingMs <= 0) {
       return { ...unanswered, timedOut: true, cancelled: false, connectionLost: false }
@@ -112,4 +116,23 @@ export async function waitForQuestionAnswer(args: {
       signal: args.signal
     })
   }
+}
+
+/** A waiting ask told its question went unanswered takes the notice, so its mail isn't delivered again. */
+function takeNotice(
+  runtime: Pick<OrcaRuntimeService, 'getOrchestrationDb'>,
+  question: QuestionState
+): { notice: string | null; timedOut: false; cancelled: false; connectionLost: false } {
+  const db = runtime.getOrchestrationDb()
+  const row = db.db
+    .prepare(
+      `SELECT id, body FROM messages WHERE thread_id = ? AND to_handle = ? AND id <> ?
+       ORDER BY sequence DESC LIMIT 1`
+    )
+    .get(question.message_id, `dispatch:${question.dispatch_id}`, question.message_id)
+  if (typeof row?.id === 'string') {
+    db.markAsReadAndDelivered([row.id], { kind: 'orca' })
+  }
+  const notice = typeof row?.body === 'string' ? row.body : null
+  return { notice, timedOut: false, cancelled: false, connectionLost: false }
 }

@@ -18,6 +18,8 @@ import { readBotTurn } from './bot-recipient'
 import { botRequestRecord } from './bot-request-record'
 import { ensureSenderRecords, tellSender } from './bot-request-sender-notice'
 import { noteBotQuestionFailure } from './bot-question-notices'
+import { dropReaderlessRunQuestions } from '../../../../orchestration/db/questions/readerless-run-questions'
+import { isOrcaSessionId } from '../../../../../../shared/agent-session/identity/orca-session-address'
 import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
 import {
   stampQuestionTakes,
@@ -223,6 +225,16 @@ export async function dropUnreadBotRequests(
             stampQuestionTakes(db, [message.id], dropped)
           }
         })
+      }
+    }
+    if (why === 'new-chat' && onlyTo && isOrcaSessionId(onlyTo)) {
+      // Worker asks in the Runs the old Chat coordinated have no reader now either.
+      for (const run of db.runsBoundToCoordinator({
+        orcaSessionId: onlyTo,
+        paneKey: null,
+        terminalHandle: null
+      })) {
+        dropReaderlessRunQuestions(db, run.id, onlyTo)
       }
     }
     const dropped = unread
