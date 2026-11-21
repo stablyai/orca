@@ -12,9 +12,11 @@ import {
   type BotPackageV1,
   type BotShareCandidateSummary
 } from '../../../shared/bots/bot-package'
-import type { BotShareOutsidePick } from '../../../shared/bots/bot-share-picks'
 import { botPackageName } from '../../../shared/bots/bot-share-status'
-import { pickedSkillNames } from '../../../shared/bots/bot-share-skill-picks'
+import {
+  pickedSkillNames,
+  type BotShareOutsidePick
+} from '../../../shared/bots/bot-share-skill-picks'
 import { writeBotPackageArchive } from './bot-package-archive'
 import { scanBotText } from '../../../shared/bots/bot-text-scan'
 import {
@@ -22,7 +24,6 @@ import {
   withoutHiddenCharacters,
   type BotPackageContent
 } from './bot-package-content'
-import { withOutsideConsent } from './bot-share-outside-picks'
 import {
   rewrittenPaths,
   sharerRawFiles,
@@ -40,6 +41,8 @@ export type BotShareSelection = {
   schedules?: readonly string[]
   eventSuggestions?: readonly string[]
   memory?: readonly string[]
+  /** The owner's ticks on skills linked into a project from outside it. */
+  outsideSkills?: readonly BotShareOutsidePick[]
   purpose?: string
 }
 
@@ -64,7 +67,7 @@ export function botPackageFor(
     agentHint: bot.agent,
     skills: picked(
       shareable.skills,
-      pickedSkillNames(selection.skills, shareable.skills),
+      pickedSkillNames(selection.skills, shareable.skills, selection.outsideSkills),
       (entry) => entry.name
     ).map(({ name }) => ({ name })),
     tools: picked(shareable.tools, selection.tools, (entry) => entry.name),
@@ -121,20 +124,15 @@ export class BotShareCandidates {
     packageId: string
     /** Built in, so a candidate opened with the last published note digests as that version did. */
     setupNote?: string
-    outsideConsent?: readonly BotShareOutsidePick[]
   }): Promise<BotShareCandidateSummary> {
     return this.change(() => this.build(input))
   }
 
-  private async build(request: Parameters<BotShareCandidates['prepare']>[0]) {
+  private async build(input: Parameters<BotShareCandidates['prepare']>[0]) {
     await this.prune()
     // One candidate per bot: a rebuild (a changed tick, a reopened dialog) replaces the last one.
     const previous = [...this.candidates.entries()].filter(
-      ([, entry]) => entry.botId === request.bot.id
-    )
-    const input = withOutsideConsent(
-      request,
-      previous.map(([, entry]) => entry.shareable)
+      ([, entry]) => entry.botId === input.bot.id
     )
     await Promise.all(previous.map(([id]) => this.remove(id)))
     if (!isLandingText(input.bot.name, BOT_DISPLAY_NAME_MAX)) {

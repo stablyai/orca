@@ -273,8 +273,14 @@ export type BotShareFlag = {
 export type BotShareAvailable = {
   soulLines: number
   /** homePath: null for a linked project's skill, outside the bot home. optInFrom: the project's name
-   *  for a skill it links in from outside itself, listed unticked. */
-  skills: { name: string; description: string; homePath: string | null; optInFrom?: string }[]
+   *  for a skill it links in from outside itself, listed unticked; optInKey: its folder's key. */
+  skills: {
+    name: string
+    description: string
+    homePath: string | null
+    optInFrom?: string
+    optInKey?: string
+  }[]
   schedules: { automationId: string; name: string; rrule: string; timezone?: string }[]
   eventSuggestions: { automationId: string; name: string; source: string; event: string }[]
   tools: { name: string; url: string }[]

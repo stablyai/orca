@@ -6,6 +6,7 @@ import { describeAutomationSchedule } from '../../../../../shared/automations/sc
 import { automationEventKind } from '../../../../../shared/automation-event-triggers'
 import { formatUiAutomationScheduleDescriptor } from '../../automations/details/automation-schedule-label'
 import { eventLabel } from '../bot-automation-when'
+import { toggledOutside } from '../../../../../shared/bots/bot-share-skill-picks'
 import {
   pickedOf,
   pickedSkills,
@@ -52,7 +53,7 @@ function SkillsList({ ctx }: { ctx: BotShareContext }): React.JSX.Element {
     (entry) => entry.kind === 'skill' && entry.why === 'duplicate'
   )
   const unpackable = unpackableSkills(ctx.candidate.leftOut)
-  const picked = pickedSkills(ctx)
+  const picked = pickedSkills(ctx.selection, all)
   return (
     <>
       {all.map((skill) => (
@@ -62,7 +63,20 @@ function SkillsList({ ctx }: { ctx: BotShareContext }): React.JSX.Element {
             <Tick
               checked={picked.includes(skill.name)}
               label={skill.name}
-              onChange={(on) => ctx.select({ skills: toggled(picked, skill.name, on) })}
+              onChange={(on) =>
+                ctx.select({
+                  skills: toggled(picked, skill.name, on),
+                  ...(skill.optInKey === undefined
+                    ? {}
+                    : {
+                        outsideSkills: toggledOutside(
+                          ctx.selection.outsideSkills ?? [],
+                          { name: skill.name, optInKey: skill.optInKey },
+                          on
+                        )
+                      })
+                })
+              }
             />
           }
           title={skill.name}

@@ -2,6 +2,7 @@
 // the other agent's, then its linked projects' (as Settings lists them). Every place a skill was found
 // is checked on its own before precedence applies, so a copy reached through another folder's link
 // never hides the real one.
+import { createHash } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import type { Bot } from '../../../shared/bot-types'
@@ -30,6 +31,8 @@ export type BotShareSkill = {
   homePath: string | null
   /** The linked project's name, for a skill it links in from outside itself: listed, not ticked. */
   optInFrom?: string
+  /** That skill's folder as a key the owner's tick names, so a tick holds only for this folder. */
+  optInKey?: string
 }
 
 /** A project the bot links for skills, on this host. */
@@ -147,7 +150,7 @@ export async function readShareSkills(
         description: skill.description,
         directory: skill.folder,
         homePath: source.homePath(skill.folder),
-        ...optInField(source.optInFrom(skill.folder))
+        ...optInField(source.optInFrom(skill.folder), skill.folder)
       })
     }
   }
@@ -162,8 +165,15 @@ export async function readShareSkills(
   )
 }
 
-function optInField(project: string | undefined): { optInFrom?: string } {
-  return project === undefined ? {} : { optInFrom: project }
+function optInField(
+  project: string | undefined,
+  folder: string
+): Pick<BotShareSkill, 'optInFrom' | 'optInKey'> {
+  if (project === undefined) {
+    return {}
+  }
+  const optInKey = createHash('sha256').update(folder).digest('hex').slice(0, 32)
+  return { optInFrom: project, optInKey }
 }
 
 /** How many skill folders are checked at once. */

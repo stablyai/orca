@@ -429,13 +429,16 @@ describe('sharing a bot by link', () => {
 
     // Opened with defaults, then the owner ticks the outside skill and publishes.
     const service = session('run-1')
-    expect(names((await service.prepare(linked, {})).candidate)).toEqual(['deploy'])
-    const { candidate } = await service.prepare(linked, { skills: ['deploy', 'electron'] })
+    const opened = (await service.prepare(linked, {})).candidate
+    expect(names(opened)).toEqual(['deploy'])
+    const key = opened.available.skills.find((entry) => entry.name === 'electron')?.optInKey ?? ''
+    const selection = { skills: ['deploy', 'electron'], outsideSkills: [{ name: 'electron', key }] }
+    const { candidate } = await service.prepare(linked, selection)
     expect(names(candidate)).toEqual(['deploy', 'electron'])
     expect((await service.publish(linked, candidate.candidateId, '')).status).toBe('ok')
 
     const again = await session('run-2').prepare(linked, {}, { last: true })
-    expect(again.last).toEqual({ selection: { skills: ['deploy', 'electron'] }, setupNote: '' })
+    expect(again.last).toEqual({ selection, setupNote: '' })
     expect(names(again.candidate)).toEqual(['deploy', 'electron'])
 
     // Linked in from another folder since: the owner ticks it again.
@@ -443,7 +446,7 @@ describe('sharing a bot by link', () => {
     await skill(join(root, 'other/electron'), 'electron')
     await symlink(join(root, 'other/electron'), join(project, '.agents/skills/electron'))
     const moved = await session('run-3').prepare(linked, {}, { last: true })
-    expect(moved.last?.selection.skills).toEqual(['deploy'])
+    expect(moved.last?.selection).toEqual({ skills: ['deploy', 'electron'], outsideSkills: [] })
     expect(names(moved.candidate)).toEqual(['deploy'])
   })
 

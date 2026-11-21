@@ -112,10 +112,11 @@ describe("a bot's linked projects' skills in the Share dialog", () => {
     expect(byDefault.available.skills).toContainEqual(
       expect.objectContaining({ name: 'electron', optInFrom: 'team-skills' })
     )
+    const key = shareable.skills.find((skill) => skill.name === 'electron')?.optInKey ?? ''
     const ticked = await candidates.prepare({
       bot,
       shareable,
-      selection: { skills: ['deploy', 'electron'] },
+      selection: { skills: ['deploy', 'electron'], outsideSkills: [{ name: 'electron', key }] },
       packageId: 'package-1'
     })
     expect(ticked.bot.skills.map((skill) => skill.name)).toEqual(['deploy', 'electron'])

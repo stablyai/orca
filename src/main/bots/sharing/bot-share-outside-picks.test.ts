@@ -1,13 +1,12 @@
-import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { BotSharePicks } from '../../../shared/bots/bot-share-picks'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { makeTestBot } from '../bot.test-fixture'
 import { useBotToolCredentialsRoot } from '../bot-tool-credentials'
 import { BotShareCandidates, type BotShareSelection } from './bot-package-export'
-import { outsideSkillPicks, restoredPicks } from './bot-share-outside-picks'
+import { restoredPicks, savedPicks } from './bot-share-outside-picks'
 import { readBotShareable, type BotShareable } from './bot-share-sources'
 
 let root: string
@@ -56,120 +55,86 @@ const read = (displayName = 'team-skills') => {
   return readBotShareable({ bot, home, automations: [], repos: [repo] })
 }
 
-async function packed(
-  shareable: BotShareable,
-  selection: BotShareSelection,
-  outsideConsent?: BotSharePicks['outsideSkills']
-): Promise<string[]> {
-  const summary = await candidates.prepare({
-    bot,
-    shareable,
-    selection,
-    outsideConsent,
-    packageId: 'package-1'
-  })
+async function packed(shareable: BotShareable, selection: BotShareSelection): Promise<string[]> {
+  const summary = await candidates.prepare({ bot, shareable, selection, packageId: 'package-1' })
   return summary.files.map((file) => file.path).filter((path) => path.startsWith('skills/'))
 }
 
-/** The skill electron, linked into the project from a folder outside it. */
-async function linkElectronIn(): Promise<void> {
-  await write(root, 'devex/electron/SKILL.md', skillText('electron', 'Drive the app'))
-  await symlink(join(root, 'devex/electron'), join(project, '.agents/skills/electron'))
+/** The skill electron, linked into the project from `folder` outside it. */
+async function linkElectronIn(folder = 'devex'): Promise<void> {
+  await write(root, `${folder}/electron/SKILL.md`, skillText('electron', 'Drive the app'))
+  await rm(join(project, '.agents/skills/electron'), { recursive: true, force: true })
+  await symlink(join(root, folder, 'electron'), join(project, '.agents/skills/electron'))
 }
 
+/** The owner's tick on electron, as the dialog sends it for the folder it shows. */
+function tick(shareable: BotShareable): BotShareSelection {
+  const key = shareable.skills.find((skill) => skill.name === 'electron')?.optInKey
+  return { skills: ['deploy', 'electron'], outsideSkills: key ? [{ name: 'electron', key }] : [] }
+}
+
+const BOTH = ['skills/deploy/SKILL.md', 'skills/electron/SKILL.md']
+const DEPLOY = ['skills/deploy/SKILL.md']
+
 describe('a skill linked into a project from outside it', () => {
-  it('is named for its project and left out by default even when the project has no name', async () => {
+  it('is named for its project and left out until ticked, even when the project has no name', async () => {
     await linkElectronIn()
     const shareable = await read('')
     expect(shareable.skills.find((skill) => skill.name === 'electron')?.optInFrom).toBe(
       'team-skills'
     )
-    expect(await packed(shareable, {})).toEqual(['skills/deploy/SKILL.md'])
-    expect(await packed(shareable, { skills: ['deploy', 'electron'] })).toContain(
-      'skills/electron/SKILL.md'
-    )
+    expect(await packed(shareable, {})).toEqual(DEPLOY)
+    expect(await packed(shareable, tick(shareable))).toEqual(BOTH)
   })
 
-  it('starts unticked on Update link once a skill picked inside the project is linked in from outside', async () => {
+  it('stays out of every rebuild after it moves outside, until the owner ticks it there', async () => {
     await write(project, '.agents/skills/electron/SKILL.md', skillText('electron', 'Old copy'))
-    const before = await read()
-    const saved: BotSharePicks = {
-      selection: { skills: ['deploy', 'electron'] },
-      setupNote: '',
-      outsideSkills: outsideSkillPicks(['deploy', 'electron'], before)
-    }
-    expect(saved.outsideSkills).toBeUndefined()
+    const names = { skills: ['deploy', 'electron'] }
+    expect(await packed(await read(), names)).toEqual(BOTH)
 
-    await rm(join(project, '.agents/skills/electron'), { recursive: true })
-    await linkElectronIn()
-    const after = await read()
-    const last = restoredPicks(saved, after)
-    expect(last.selection.skills).toEqual(['deploy'])
-    expect(await packed(after, last.selection)).toEqual(['skills/deploy/SKILL.md'])
-  })
-
-  it('keeps an outside skill the owner ticked, from the same folder, on Update link', async () => {
     await linkElectronIn()
     const shareable = await read()
-    const saved: BotSharePicks = {
-      selection: { skills: ['deploy', 'electron'] },
-      setupNote: '',
-      outsideSkills: outsideSkillPicks(['deploy', 'electron'], shareable)
-    }
-    expect(saved.outsideSkills).toEqual([
-      { name: 'electron', directory: join(await realpath(root), 'devex/electron') }
-    ])
-    const last = restoredPicks(saved, await read())
-    expect(last.selection.skills).toEqual(['deploy', 'electron'])
-    expect(await packed(shareable, last.selection, saved.outsideSkills)).toContain(
-      'skills/electron/SKILL.md'
-    )
-
-    // Ticked from one folder, now linked in from another: the owner ticks it again.
-    const moved = restoredPicks(
-      { ...saved, outsideSkills: [{ name: 'electron', directory: join(root, 'elsewhere') }] },
-      shareable
-    )
-    expect(moved.selection.skills).toEqual(['deploy'])
+    // Unrelated toggles and Retry send the same names again.
+    expect(await packed(shareable, names)).toEqual(DEPLOY)
+    expect(await packed(shareable, names)).toEqual(DEPLOY)
+    expect(await packed(shareable, tick(shareable))).toEqual(BOTH)
   })
 
-  it("stays out of an open dialog's rebuilds when it moves outside after being ticked inside", async () => {
-    await write(project, '.agents/skills/electron/SKILL.md', skillText('electron', 'Old copy'))
-    const names = ['deploy', 'electron']
-    expect(await packed(await read(), { skills: names })).toContain('skills/electron/SKILL.md')
-
-    await rm(join(project, '.agents/skills/electron'), { recursive: true })
+  it('takes a first tick with no candidate before it, as after expiry or a failed build', async () => {
     await linkElectronIn()
-    // The same picks rebuilt, by an unrelated toggle: the owner hasn't seen it outside yet.
-    expect(await packed(await read(), { skills: names })).toEqual(['skills/deploy/SKILL.md'])
-    // Seen outside on that candidate, then ticked: it goes out.
-    expect(await packed(await read(), { skills: names })).toContain('skills/electron/SKILL.md')
+    const shareable = await read()
+    expect(await packed(shareable, tick(shareable))).toEqual(BOTH)
+  })
+
+  it('drops a tick once the skill is linked in from another folder', async () => {
+    await linkElectronIn('devex')
+    const ticked = tick(await read())
+    await linkElectronIn('elsewhere')
+    expect(await packed(await read(), ticked)).toEqual(DEPLOY)
   })
 })
 
 describe('saved picks for Update link', () => {
-  const shareable = {
-    skills: [
-      { name: 'deploy', description: '', directory: '/p/deploy', homePath: null },
-      {
-        name: 'electron',
-        description: '',
-        directory: `/${'d'.repeat(5000)}`,
-        homePath: null,
-        optInFrom: 'team-skills'
-      }
-    ]
+  async function published(selection: BotShareSelection) {
+    const shareable = await read()
+    const summary = await candidates.prepare({ bot, shareable, selection, packageId: 'p' })
+    return savedPicks(candidates.get(summary.candidateId)!)
   }
 
-  it('drops a skill that is no longer there', () => {
-    const last = restoredPicks(
-      { selection: { skills: ['deploy', 'gone'] }, setupNote: '' },
-      shareable
-    )
-    expect(last.selection.skills).toEqual(['deploy'])
+  it('keeps an outside tick while the skill is linked in from that folder', async () => {
+    await linkElectronIn()
+    const saved = await published(tick(await read()))
+    const last = restoredPicks(saved, await read())
+    expect(last.selection).toEqual(saved.selection)
+    expect(await packed(await read(), last.selection)).toEqual(BOTH)
   })
 
-  it("saves the other picks when an outside skill's folder is too long to keep", () => {
-    expect(outsideSkillPicks(['deploy', 'electron'], shareable)).toBeUndefined()
+  it('drops the tick when it moved, and a skill no longer there', async () => {
+    await linkElectronIn()
+    const saved = await published({ ...tick(await read()), skills: ['deploy', 'electron', 'gone'] })
+    await linkElectronIn('elsewhere')
+    const last = restoredPicks(saved, await read())
+    expect(last.selection).toEqual({ skills: ['deploy', 'electron'], outsideSkills: [] })
+    expect(await packed(await read(), last.selection)).toEqual(DEPLOY)
   })
 })

@@ -145,7 +145,7 @@ export function BotShareOverview({ ctx }: { ctx: BotShareContext }): React.JSX.E
   const { candidate, selection } = ctx
   const { available, leftOut } = candidate
   const list = (name: BotShareList) => () => ctx.open({ kind: 'list', list: name })
-  const skills = pickedSkills(ctx)
+  const skills = pickedSkills(selection, available.skills)
   const events = available.eventSuggestions.filter(
     (entry, index, all) => all.findIndex((e) => e.automationId === entry.automationId) === index
   )

@@ -221,7 +221,8 @@ it('lists a skill linked into a project from outside it unticked, with the proje
       name: 'electron',
       description: 'Drive the app',
       homePath: null,
-      optInFrom: 'team-skills'
+      optInFrom: 'team-skills',
+      optInKey: 'devex-electron'
     }
   ]
   render(<BotShareFlow bot={bot} link={null} onClose={() => {}} />)
@@ -229,10 +230,21 @@ it('lists a skill linked into a project from outside it unticked, with the proje
   expect(row.textContent).toContain('1 of 2')
   fireEvent.click(row)
   expect(await screen.findByText('From outside team-skills · Drive the app')).toBeDefined()
-  expect(screen.getByRole('checkbox', { name: 'electron' }).getAttribute('aria-checked')).toBe(
-    'false'
-  )
+  const electron = screen.getByRole('checkbox', { name: 'electron' })
+  expect(electron.getAttribute('aria-checked')).toBe('false')
   expect(screen.getByRole('checkbox', { name: 'deploy' }).getAttribute('aria-checked')).toBe('true')
+
+  // Ticking it sends the owner's tick for the folder it is shown from.
+  fireEvent.click(electron)
+  await waitFor(() =>
+    expect(
+      calls.rpc.findLast(({ method }) => method === 'bots.share.prepare')?.params
+    ).toMatchObject({
+      skills: ['deploy', 'electron'],
+      outsideSkills: [{ name: 'electron', key: 'devex-electron' }]
+    })
+  )
+  expect(electron.getAttribute('aria-checked')).toBe('true')
 })
 
 it('lists a skill with a symlink as not shared, and the Skills row still opens to it', async () => {
