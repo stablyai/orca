@@ -93,6 +93,13 @@ export function StatusBarUsageArea({
   const hiddenProviders = rosterProviders.filter((p) => usageLayout.collapsed.includes(p.provider))
   const showUnitLabel = shownProviders.some((p) => usageChipShowsPercentage(p, usageMode, t))
   const usageLabel = t('auto.components.status.bar.UsageRosterPanel.title', 'Usage')
+  // Why: announce restarts only when this menu has a Codex row that opens the restart action;
+  // a hidden Codex status item or a not-set-up placeholder leaves nothing to act on here.
+  const announcedRestartCount = rosterProviders.some(
+    (p) => p.provider === 'codex' && !isOwnerNotSetUpPlaceholder(p)
+  )
+    ? codexStaleSessionCount
+    : 0
 
   // Why: usage gives way first, but keeps enough width to stay clickable; its popover holds
   // every provider. Its form is chosen from widths measured off-layout (see useUsageRowWidths).
@@ -123,8 +130,8 @@ export function StatusBarUsageArea({
                   data-usage-trigger=""
                   className="inline-flex items-center gap-3 rounded px-1 py-0.5 hover:bg-accent/70"
                   aria-label={
-                    codexStaleSessionCount > 0
-                      ? `${usageLabel}. ${codexRestartBadgeLabel(codexStaleSessionCount, t)}`
+                    announcedRestartCount > 0
+                      ? `${usageLabel}. ${codexRestartBadgeLabel(announcedRestartCount, t)}`
                       : usageLabel
                   }
                 >
