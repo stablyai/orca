@@ -15,7 +15,7 @@ const REQUEST_FAILED = -32803
 const MAX_QUEUED_REQUESTS = 64
 // A server this far behind on answers is treated as stuck, and an agent this far behind gets no more server requests.
 const MAX_OPEN_REQUESTS = 4096
-// Servers given up on but not yet exited; a new one waits until one is gone.
+// Servers given up on but not yet exited; past this, a restart fails until one exits.
 const MAX_RETIRED = 2
 // Without a running server these only update what the next one is given at start.
 const SESSION_STATE = new Set([
@@ -56,7 +56,7 @@ export function createServerSession({
   let killTimer
   let idleExpired = false
   let generation = 0
-  // Retired server -> its SIGKILL timer, until it exits.
+  // Retired server -> its SIGKILL timer; only its exit frees the slot.
   const retired = new Map()
   // Requests by id (in arrival order) plus a queued exit; notifications never wait here.
   const queue = new Map()
@@ -140,10 +140,7 @@ export function createServerSession({
     stuck.kill()
     retired.set(
       stuck,
-      setTimer(() => {
-        retired.delete(stuck)
-        stuck.kill('SIGKILL')
-      }, SHUTDOWN_GRACE_MS)
+      setTimer(() => stuck.kill('SIGKILL'), SHUTDOWN_GRACE_MS)
     )
     onExit(null, 'SIGTERM')
   }
