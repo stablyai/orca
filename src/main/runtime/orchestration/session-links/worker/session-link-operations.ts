@@ -12,7 +12,7 @@ import type {
 } from '../../../../../shared/session-link'
 import type Database from '../../../../sqlite/sync-database'
 import type { CrewMessageFacts } from '../../crew/crew-mutation-notifications'
-import { insertMessage } from '../../db/messages/message-insert'
+import { insertMessageInto } from '../../db/messages/message-insert'
 import { getRunRaw, requireRun } from '../../db/runs/run-lookup'
 import type { OrchestrationCliCommand } from '../../workers/launch/orchestration-cli-command'
 import type { SessionLinkAppend } from '../session-link-message-store'
@@ -134,7 +134,7 @@ export class SessionLinkConnection {
         db,
         // Link messages are also inspect-only mail, written in the link's own transaction.
         insertMessage: (message) => {
-          const row = insertMessage.call(runs, message)
+          const row = insertMessageInto(runs, message)
           const { type, delivery_contract, from_handle, to_handle } = row
           this.mail.push({ type, delivery_contract, from_handle, to_handle })
           return row

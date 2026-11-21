@@ -218,14 +218,9 @@ async function admitBotRequestMail(
   }
   const blockedReceipt = (blocked: Exclude<BotRequestAdmission, { kind: 'sent' }>) => {
     const earlier = db.getMessageById(blocked.messageId)
-    return {
-      sent: false,
-      receipt: {
-        ...(earlier ? { message: exposeMessage(earlier) } : {}),
-        duplicate: true,
-        next: `${target.name} already has this request, so no second message was sent.`
-      }
-    }
+    const message = earlier ? { message: exposeMessage(earlier) } : {}
+    const next = `${target.name} already has this request, so no second message was sent.`
+    return { sent: false, receipt: { ...message, duplicate: true, next } }
   }
   const messageId = args.messageId ?? generateId('msg')
   // Checked before a conversation is made for it; the store checks again as it stores.
