@@ -15,6 +15,7 @@ import {
 } from './antigravity-brain-metadata'
 import {
   applyAntigravityLeadModel,
+  antigravityRootTranscriptPath,
   antigravityTranscriptFilePath,
   readAntigravityChildTranscriptTail,
   type AntigravityLeadModelFence
@@ -209,8 +210,7 @@ export async function readAntigravityTranscriptPoll(
   }
   const readsModel = canReadLeadModel(pane) && pane.rootStop !== 'idle'
   const rootId = pane.rootConversationId
-  const rootPath =
-    rootId && (pane.rootTranscriptPath ?? antigravityTranscriptFilePath(brain, rootId))
+  const rootPath = antigravityRootTranscriptPath(pane)
   if (
     rootId &&
     rootPath &&

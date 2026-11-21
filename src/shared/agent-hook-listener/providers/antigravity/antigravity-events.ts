@@ -182,6 +182,7 @@ export function normalizeAntigravityEvent(
       toolCallId,
       toolName,
       toolInputSource,
+      transcriptPath,
       completedBookkeepingOnly
     )
     if (disposition === 'stale') {

@@ -127,6 +127,16 @@ export function antigravityTranscriptFilePath(
   return join(dirname(rootBrainDir), childId, '.system_generated', 'logs', 'transcript.jsonl')
 }
 
+export function antigravityRootTranscriptPath(pane: AntigravityPaneChildState): string | undefined {
+  if (pane.rootConversationId && pane.rootBrainDir) {
+    return (
+      pane.rootTranscriptPath ??
+      antigravityTranscriptFilePath(pane.rootBrainDir, pane.rootConversationId)
+    )
+  }
+  return undefined
+}
+
 export async function readAntigravityChildTranscriptTail(
   rootBrainDir: string,
   childId: string,

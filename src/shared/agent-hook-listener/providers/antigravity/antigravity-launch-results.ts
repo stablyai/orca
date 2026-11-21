@@ -1,7 +1,11 @@
 import { isRecord } from '../../../agent-status/child-work/agent-status-child-work-value-guards'
 import { parseAgentHookJson } from '../../request-body'
 
-export type AntigravityLaunchResult = { tool: 'invoke_subagent' | 'swarm'; children: string[] }
+export type AntigravityLaunchResult = {
+  tool: 'invoke_subagent' | 'swarm'
+  children: string[]
+  applied?: true
+}
 
 const INVOKE_PREFIX = 'Created the following subagent:\n'
 const INVOKE_FOOTER =

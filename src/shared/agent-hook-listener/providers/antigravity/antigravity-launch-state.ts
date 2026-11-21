@@ -1,5 +1,6 @@
 import type { AntigravityLaunchResult } from './antigravity-launch-results'
 import { isRecord } from '../../../agent-status/child-work/agent-status-child-work-value-guards'
+import { antigravityRootTranscriptPath } from './antigravity-child-transcript'
 import {
   antigravityHasPendingLaunch,
   recordAntigravityHelpersDrain,
@@ -43,6 +44,19 @@ function retainUnpairedLaunch(
   pane.settledLaunches.set(step, launch)
 }
 
+function matchesLaunchResult(
+  pane: AntigravityPaneChildState,
+  launch: AntigravityLaunch,
+  result: AntigravityLaunchResult | null | undefined
+): result is AntigravityLaunchResult {
+  return (
+    !!result &&
+    launch.toolName === result.tool &&
+    (launch.swarmSize === undefined || result.children.length === launch.swarmSize) &&
+    !result.children.includes(pane.rootConversationId ?? '')
+  )
+}
+
 export function trackAntigravityLaunch(
   pane: AntigravityPaneChildState,
   eventName: 'PreToolUse' | 'PostToolUse',
@@ -50,6 +64,7 @@ export function trackAntigravityLaunch(
   callId: string | undefined,
   toolName: string,
   args: unknown,
+  transcriptPath: string | undefined,
   completedBookkeepingOnly = false
 ): 'current' | 'stale' | 'hold' {
   const phase = eventName === 'PreToolUse' ? PRE_TOOL_USE : POST_TOOL_USE
@@ -100,7 +115,25 @@ export function trackAntigravityLaunch(
       ? { callId, toolName, swarmSize, phases: phase }
       : null
 
-  if (older && prior === undefined && (!launch || pane.pendingOlderLaunchStep !== undefined)) {
+  let cachedSuccessPending = false
+  if (older && launch && transcriptPath && transcriptPath === antigravityRootTranscriptPath(pane)) {
+    const result = pane.brainCache.transcripts.get(transcriptPath)?.launchResults?.get(key)
+    if (matchesLaunchResult(pane, launch, result)) {
+      if (result.children.length === 0 || result.applied) {
+        pane.launchStepsByCall.set(launch.callId, key)
+        retainUnpairedLaunch(pane, key, launch)
+        return 'stale'
+      }
+      // A known success stays keyed until the poll registers its children.
+      cachedSuccessPending = true
+    }
+  }
+  if (
+    older &&
+    prior === undefined &&
+    !cachedSuccessPending &&
+    (!launch || pane.pendingOlderLaunchStep !== undefined)
+  ) {
     // Further uncorrelatable old phases share the root's unknown-launch hold.
     pane.pendingLaunches.set(undefined, null)
   } else {
@@ -113,7 +146,7 @@ export function trackAntigravityLaunch(
     ) {
       pane.launchStepsByCall.set(callId, key)
     }
-    if (older && launch) {
+    if (older && launch && !cachedSuccessPending) {
       pane.pendingOlderLaunchStep = key
     }
   }
@@ -136,13 +169,7 @@ export function applyAntigravityLaunchResults(
   let settled = false
   for (const [step, result] of results) {
     const launch = pane.pendingLaunches.get(step)
-    if (
-      !launch ||
-      !result ||
-      launch.toolName !== result.tool ||
-      (launch.swarmSize !== undefined && result.children.length !== launch.swarmSize) ||
-      result.children.includes(pane.rootConversationId ?? '')
-    ) {
+    if (!launch || !matchesLaunchResult(pane, launch, result)) {
       continue
     }
     for (const id of result.children) {
@@ -158,6 +185,9 @@ export function applyAntigravityLaunchResults(
           pane.children.set(id, { id, startedAt: now, revision: 0, state: 'working' })
         }
       }
+    }
+    if (result.children.length > 0) {
+      result.applied = true
     }
     pane.pendingLaunches.delete(step)
     if (pane.pendingOlderLaunchStep === step) {

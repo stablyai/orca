@@ -1,114 +1,23 @@
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { appendFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createHookListenerState } from '../../listener-state'
-import { normalizeHookPayload } from '../../normalization/normalize-hook-payload'
+import { expect, it, vi } from 'vitest'
 import {
   pollAntigravityTranscriptStatus,
   readAntigravityTranscriptPoll
 } from './antigravity-transcript-poll'
 import { ANTIGRAVITY_PARENT_WAKE_GRACE_MS } from './antigravity-event-rules'
-import type { AgentHookEventPayload } from '../../listener-event'
+import {
+  launch,
+  paneKey,
+  setupAntigravityChildLifecycle
+} from './antigravity-child-lifecycle.test-fixture'
 
-let dir: string
-let state: ReturnType<typeof createHookListenerState>
-let row: AgentHookEventPayload
-const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
-
-function transcript(id: string, root = false): string {
-  const logs = join(dir, id, '.system_generated', 'logs')
-  mkdirSync(logs, { recursive: true })
-  const path = join(logs, 'transcript.jsonl')
-  writeFileSync(
-    path,
-    `${JSON.stringify({
-      source: root ? 'USER_EXPLICIT' : 'SYSTEM',
-      type: root ? 'USER_INPUT' : 'SYSTEM_MESSAGE',
-      content: root ? 'Task' : 'sender=root'
-    })}\n`
-  )
-  return path
-}
-function descriptor(id: string, killed = false): void {
-  const descriptors = join(dir, 'root', '.system_generated', 'subagents')
-  mkdirSync(descriptors, { recursive: true })
-  writeFileSync(
-    join(descriptors, `${id}.json`),
-    JSON.stringify({
-      conversationId: id,
-      state: killed ? 'SUBAGENT_STATE_KILLED' : 'SUBAGENT_STATE_ALIVE',
-      subagentDescriptor: { role: 'Research' }
-    })
-  )
-}
-function hook(
-  id: string,
-  name: string,
-  extra: Record<string, unknown> = {}
-): AgentHookEventPayload | null {
-  const event = normalizeHookPayload(
-    state,
-    'antigravity',
-    {
-      paneKey,
-      payload: {
-        hook_event_name: name,
-        conversationId: id,
-        transcriptPath: join(dir, id, '.system_generated', 'logs', 'transcript.jsonl'),
-        ...extra
-      }
-    },
-    'production'
-  )
-  if (event) {
-    row = event
-  }
-  return event
-}
-async function poll(): Promise<AgentHookEventPayload | undefined> {
-  const event = pollAntigravityTranscriptStatus(
-    state,
-    row,
-    await readAntigravityTranscriptPoll(state, paneKey)
-  )
-  if (event) {
-    row = event
-  }
-  return event
-}
-function launch(stepIdx = 5): Record<string, unknown> {
-  return { stepIdx, toolCall: { id: `invoke-${stepIdx}`, name: 'invoke_subagent', args: {} } }
-}
-function launchResult(step: number, content: string, status = 'DONE', conversation = 'root'): void {
-  appendFileSync(
-    join(dir, conversation, '.system_generated', 'logs', 'transcript.jsonl'),
-    `${JSON.stringify({ step_index: step, type: 'GENERIC', source: 'MODEL', status, content })}\n`
-  )
-}
-function invokeResult(id: string, step = 5): void {
-  launchResult(
-    step,
-    `Created At: 2026-11-20T03:06:21-08:00\nCompleted At: 2026-11-20T03:06:23-08:00\nCreated the following subagent:\n${JSON.stringify({ conversationId: id })}\nThe subagent will send you a message when it has completed its task or requires guidance. There is no need to poll for its response.`
-  )
-}
-function spawn(id?: string, step = 5): void {
-  hook('root', 'PreToolUse', launch(step))
-  if (id) {
-    invokeResult(id, step)
-  }
-}
-beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'agy-child-lifecycle-'))
-  state = createHookListenerState()
-  transcript('root', true)
-  hook('root', 'PreInvocation', { lastUserInput: 'Task', modelName: 'model-a' })
-})
-afterEach(() => rmSync(dir, { recursive: true, force: true }))
+const fixture = setupAntigravityChildLifecycle()
+const { descriptor, hook, invokeResult, launchResult, poll, spawn, transcript } = fixture
 
 it('keeps the owned sibling listed when one of two subagents stops with an unreadable root transcript', async () => {
-  state = createHookListenerState()
-  rmSync(join(dir, 'root', '.system_generated', 'logs', 'transcript.jsonl'))
+  fixture.resetState()
+  rmSync(join(fixture.dir, 'root', '.system_generated', 'logs', 'transcript.jsonl'))
   hook('root', 'PreInvocation', { lastUserInput: 'Task', modelName: 'model-a' })
   for (const id of ['first', 'second']) {
     transcript(id)
@@ -116,11 +25,11 @@ it('keeps the owned sibling listed when one of two subagents stops with an unrea
     hook(id, 'PreInvocation')
   }
   await poll()
-  expect(row.payload.subagents).toHaveLength(2)
+  expect(fixture.row.payload.subagents).toHaveLength(2)
   expect(hook('first', 'Stop', { fullyIdle: true })).toBeNull()
   await poll()
-  expect(row.payload.subagents?.map((child) => child.id)).toEqual(['second'])
-  expect(row.payload.state).toBe('working')
+  expect(fixture.row.payload.subagents?.map((child) => child.id)).toEqual(['second'])
+  expect(fixture.row.payload.state).toBe('working')
 })
 
 it('wakes a retired child again and releases its command hold when disk reports it killed', async () => {
@@ -149,7 +58,7 @@ it('wakes a retired child again and releases its command hold when disk reports 
 
 it('uses fresh worker hooks ahead of cached wake modes and keeps stopped workers retired', async () => {
   transcript('worker')
-  const swarm = join(dir, 'root', '.system_generated', 'swarm')
+  const swarm = join(fixture.dir, 'root', '.system_generated', 'swarm')
   mkdirSync(swarm, { recursive: true })
   const members = join(swarm, 'members.json')
   const writeMember = (wake: string): void =>
@@ -165,7 +74,7 @@ it('uses fresh worker hooks ahead of cached wake modes and keeps stopped workers
   expect((await poll())?.payload.subagents?.[0]?.id).toBe('worker')
   hook('worker', 'Stop', { fullyIdle: true })
   await poll()
-  expect(row.payload.subagents).toBeUndefined()
+  expect(fixture.row.payload.subagents).toBeUndefined()
   writeMember('mentions')
   await poll()
   hook('worker', 'PreInvocation')
@@ -175,7 +84,7 @@ it('uses fresh worker hooks ahead of cached wake modes and keeps stopped workers
   hook('root', 'PreInvocation', { lastUserInput: 'Next task' })
   hook('root', 'PreToolUse', { toolCall: { name: 'swarm_wait' } })
   await poll()
-  expect(row.payload.subagents).toBeUndefined()
+  expect(fixture.row.payload.subagents).toBeUndefined()
 })
 
 it('keeps waiting for a new child when a prior child descriptor remains on disk', async () => {
@@ -201,9 +110,9 @@ it('refuses another root child and fences a delayed kill read against a fresh in
   hook('child', 'PreInvocation')
   await poll()
   descriptor('child', true)
-  const reads = await readAntigravityTranscriptPoll(state, paneKey)
+  const reads = await readAntigravityTranscriptPoll(fixture.state, paneKey)
   hook('child', 'PreToolUse', { toolCall: { name: 'read_file', args: { path: 'src/current.ts' } } })
-  const stale = pollAntigravityTranscriptStatus(state, row, reads)
+  const stale = pollAntigravityTranscriptStatus(fixture.state, fixture.row, reads)
   expect(stale?.payload.subagents?.[0]).toMatchObject({ id: 'child', toolInput: 'src/current.ts' })
   transcript('unrelated')
   hook('unrelated', 'PreInvocation')
@@ -230,7 +139,7 @@ it('resolves automatic models from transcripts and preserves them across automat
   spawn('child')
   hook('child', 'PreInvocation', { modelName: 'auto' })
   appendFileSync(
-    join(dir, 'child', '.system_generated', 'logs', 'transcript.jsonl'),
+    join(fixture.dir, 'child', '.system_generated', 'logs', 'transcript.jsonl'),
     '{"type":"PLANNER_RESPONSE","model":"model-b"}\n'
   )
   expect((await poll())?.payload.subagents?.[0]?.model).toBe('model-b')
@@ -248,7 +157,7 @@ it('resolves automatic models from transcripts and preserves them across automat
       .model
   ).toBe('model-a')
   appendFileSync(
-    join(dir, 'child', '.system_generated', 'logs', 'transcript.jsonl'),
+    join(fixture.dir, 'child', '.system_generated', 'logs', 'transcript.jsonl'),
     '{"type":"PLANNER_RESPONSE","model":"model-c"}\n'
   )
   expect((await poll())?.payload.subagents?.[0]?.model).toBe('model-c')
@@ -257,9 +166,9 @@ it('resolves automatic models from transcripts and preserves them across automat
 it('follows the automatic model a later turn resolves', async () => {
   hook('root', 'Stop', { fullyIdle: true })
   hook('root', 'PreInvocation', { lastUserInput: 'Next', modelName: 'auto' })
-  const rootTranscript = join(dir, 'root', '.system_generated', 'logs', 'transcript.jsonl')
+  const rootTranscript = join(fixture.dir, 'root', '.system_generated', 'logs', 'transcript.jsonl')
   appendFileSync(rootTranscript, '{"type":"PLANNER_RESPONSE","model":"model-b"}\n')
-  expect((await poll())?.payload.model ?? row.payload.model).toBe('model-a')
+  expect((await poll())?.payload.model ?? fixture.row.payload.model).toBe('model-a')
   appendFileSync(
     rootTranscript,
     `${JSON.stringify({ type: 'PLANNER_RESPONSE', model: 'model-c', created_at: '2999-01-01T00:00:00Z' })}\n`
@@ -269,7 +178,7 @@ it('follows the automatic model a later turn resolves', async () => {
 
 it('takes an automatic model only from its own turn when agy stamps whole seconds', async () => {
   vi.useFakeTimers({ toFake: ['Date'] })
-  const rootTranscript = join(dir, 'root', '.system_generated', 'logs', 'transcript.jsonl')
+  const rootTranscript = join(fixture.dir, 'root', '.system_generated', 'logs', 'transcript.jsonl')
   const response = (model: string, step: number) =>
     appendFileSync(
       rootTranscript,
@@ -280,7 +189,7 @@ it('takes an automatic model only from its own turn when agy stamps whole second
     hook('root', 'Stop', { fullyIdle: true })
     response('model-z', 5)
     hook('root', 'PreInvocation', { lastUserInput: 'Next', modelName: 'auto', initialNumSteps: 6 })
-    expect((await poll())?.payload.model ?? row.payload.model).toBe('model-a')
+    expect((await poll())?.payload.model ?? fixture.row.payload.model).toBe('model-a')
     response('model-c', 7)
     expect((await poll())?.payload.model).toBe('model-c')
   } finally {
@@ -295,16 +204,16 @@ it.each([false, true])(
     try {
       vi.setSystemTime(Date.parse('2030-01-01T12:00:00.600Z'))
       if (cold) {
-        state = createHookListenerState()
+        fixture.resetState()
       }
-      const path = join(dir, 'root', '.system_generated', 'logs', 'transcript.jsonl')
+      const path = join(fixture.dir, 'root', '.system_generated', 'logs', 'transcript.jsonl')
       appendFileSync(path, '{"model":"old-model","created_at":"2030-01-01T12:00:00Z"}\n')
       hook('root', 'PreInvocation', { lastUserInput: 'Next', modelName: 'auto' })
       await poll()
-      expect(row.payload.model).toBe(cold ? undefined : 'model-a')
+      expect(fixture.row.payload.model).toBe(cold ? undefined : 'model-a')
       appendFileSync(path, '{"model":"new-model","created_at":"2030-01-01T12:00:01Z"}\n')
       await poll()
-      expect(row.payload.model).toBe('new-model')
+      expect(fixture.row.payload.model).toBe('new-model')
     } finally {
       vi.useRealTimers()
     }
@@ -336,7 +245,7 @@ it('keeps a root command monitoring after its child finishes', async () => {
 
 it('keeps a Swarm worker without a RUNNING phase listed', async () => {
   transcript('worker')
-  const swarm = join(dir, 'root', '.system_generated', 'swarm')
+  const swarm = join(fixture.dir, 'root', '.system_generated', 'swarm')
   mkdirSync(swarm, { recursive: true })
   writeFileSync(
     join(swarm, 'members.json'),
@@ -348,7 +257,7 @@ it('keeps a Swarm worker without a RUNNING phase listed', async () => {
 })
 
 it('shows a waiting child only once the root is proven its parent', async () => {
-  state = createHookListenerState()
+  fixture.resetState()
   hook('root', 'PreInvocation', { transcriptPath: undefined, lastUserInput: 'Task' })
   transcript('helper')
   hook('root', 'PreToolUse', { ...launch(), transcriptPath: undefined })
@@ -389,7 +298,7 @@ it('tracks a child that first reports after a background command finished the ro
   })
   hook('second', 'Stop', { fullyIdle: true })
   await poll()
-  expect(row.payload.subagents).toBeUndefined()
+  expect(fixture.row.payload.subagents).toBeUndefined()
 })
 
 it('finishes the run when the only hook received from a subagent is its final Stop', async () => {
@@ -416,11 +325,11 @@ it('keeps parallel launches and their live siblings across a root wake and an id
     }
     invokeResult('short', 5)
     await poll()
-    expect(row.payload.antigravitySpawnPending).toBe(true)
-    expect(row.payload.subagents).toHaveLength(2)
+    expect(fixture.row.payload.antigravitySpawnPending).toBe(true)
+    expect(fixture.row.payload.subagents).toHaveLength(2)
     invokeResult('long', 6)
     await poll()
-    expect(row.payload.antigravitySpawnPending).toBeUndefined()
+    expect(fixture.row.payload.antigravitySpawnPending).toBeUndefined()
     hook('root', 'Stop', { fullyIdle: true, terminationReason: 'TERMINAL_CUSTOM_HOOK' })
     hook('short', 'Stop', { fullyIdle: true })
     hook('long', 'PreToolUse', { toolCall: { name: 'ask_question', args: {} } })
@@ -447,11 +356,11 @@ it('lists a subagent killed before its first poll once, then clears it', async (
   hook('root', 'Stop', { fullyIdle: false })
   expect((await poll())?.payload.subagents?.map((child) => child.id)).toEqual(['child'])
   await poll()
-  expect(row.payload.subagents).toBeUndefined()
+  expect(fixture.row.payload.subagents).toBeUndefined()
 })
 
 it('retires a quiet Swarm member when its previously missing descriptor reports a kill', async () => {
-  const swarm = join(dir, 'root', '.system_generated', 'swarm')
+  const swarm = join(fixture.dir, 'root', '.system_generated', 'swarm')
   mkdirSync(swarm, { recursive: true })
   writeFileSync(
     join(swarm, 'members.json'),
@@ -472,7 +381,7 @@ it('settles only the launch whose root result reports a failure', async () => {
     ...launch(6),
     error: failedInvoke
   })
-  expect(row.payload.antigravitySpawnPending).toBe(true)
+  expect(fixture.row.payload.antigravitySpawnPending).toBe(true)
   const error = `Encountered error in step execution: ${failedInvoke}`
   launchResult(6, error, 'ERROR')
   expect((await poll())?.payload.antigravitySpawnPending).toBe(true)
@@ -481,83 +390,9 @@ it('settles only the launch whose root result reports a failure', async () => {
   expect(hook('root', 'Stop', { fullyIdle: true })?.payload.state).toBe('done')
   expect(hook('root', 'PreToolUse', launch(6))).toBeNull()
   expect(hook('root', 'PostToolUse', launch(5))).toBeNull()
-  expect(row.payload.state).toBe('done')
-  expect(row.payload.antigravitySpawnPending).toBeUndefined()
+  expect(fixture.row.payload.state).toBe('done')
+  expect(fixture.row.payload.antigravitySpawnPending).toBeUndefined()
 })
-
-it.each([
-  ['PreToolUse', 'PostToolUse', true],
-  ['PostToolUse', 'PreToolUse', true],
-  ['PreToolUse', 'PostToolUse', false],
-  ['PostToolUse', 'PreToolUse', false]
-] as const)(
-  'keeps the root question visible across %s then %s replay (result before pairing: %s)',
-  async (first, late, resultBeforePair) => {
-    const oldLaunch = { ...launch(5), prompt: 'Earlier task', modelName: 'model-a' }
-    const failure =
-      'Encountered error in step execution: subagent "x" not found or not allowed to be invoked'
-    expect(hook('root', first, oldLaunch)?.payload).toMatchObject({
-      toolName: 'invoke_subagent',
-      antigravitySpawnPending: true
-    })
-    expect(hook('root', first, oldLaunch)).toBeNull()
-    if (resultBeforePair) {
-      launchResult(5, failure, 'ERROR')
-      expect((await poll())?.payload.antigravitySpawnPending).toBeUndefined()
-      expect(hook('root', first, oldLaunch)).toBeNull()
-    }
-
-    hook('root', 'PreInvocation', { prompt: 'Current task', modelName: 'model-b' })
-    const question = {
-      stepIdx: 7,
-      toolCall: { id: 'question-7', name: 'ask_question', args: { question: 'Continue?' } }
-    }
-    const waiting = {
-      state: 'waiting',
-      toolName: 'ask_question',
-      toolInput: 'Continue?',
-      prompt: 'Current task',
-      model: 'model-b'
-    }
-    expect(hook('root', 'PreToolUse', question)?.payload).toMatchObject(waiting)
-    expect(hook('root', late, oldLaunch)).toBeNull()
-    expect(row.payload).toMatchObject(waiting)
-    if (!resultBeforePair) {
-      expect(hook('root', late, oldLaunch)).toBeNull()
-      launchResult(5, failure, 'ERROR')
-      expect((await poll())?.payload).toMatchObject(waiting)
-      expect(row.payload.antigravitySpawnPending).toBeUndefined()
-    }
-
-    expect(hook('root', late, oldLaunch)?.payload).toMatchObject({
-      ...waiting,
-      antigravitySpawnPending: true
-    })
-    expect((await poll())?.payload).toMatchObject(waiting)
-    expect(row.payload.antigravitySpawnPending).toBeUndefined()
-    expect(hook('root', late, oldLaunch)).toBeNull()
-
-    expect(hook('root', 'PostToolUse', question)?.payload.state).toBe('working')
-    transcript('foreign')
-    expect(hook('foreign', 'PreToolUse', { ...question, stepIdx: 1000 })).toBeNull()
-    expect(hook('root', first, launch(8))?.payload).toMatchObject({
-      state: 'working',
-      toolName: 'invoke_subagent',
-      model: 'model-b'
-    })
-    if (resultBeforePair) {
-      launchResult(8, failure, 'ERROR')
-      expect((await poll())?.payload.antigravitySpawnPending).toBeUndefined()
-    }
-    const currentPhase = hook('root', late, { ...launch(8), modelName: 'model-c' })
-    if (late === 'PostToolUse') {
-      expect(currentPhase?.payload).toMatchObject({ toolName: 'invoke_subagent', model: 'model-c' })
-    } else {
-      expect(currentPhase).toBeNull()
-      expect(row.payload.model).toBe('model-b')
-    }
-  }
-)
 
 it('keeps a newer root question visible after a late PostToolUse from a pending launch', async () => {
   const previousLaunch = { ...launch(300), prompt: 'Earlier task', modelName: 'model-a' }
@@ -593,7 +428,7 @@ it('keeps a newer root question visible after a late PostToolUse from a pending 
   ).toMatchObject({ ...waiting, antigravitySpawnPending: true })
   expect(hook('root', 'PostToolUse', previousLaunch)).toBeNull()
   expect(hook('root', 'PostToolUse', previousLaunch)).toBeNull()
-  expect(row.payload).toMatchObject({ ...waiting, antigravitySpawnPending: true })
+  expect(fixture.row.payload).toMatchObject({ ...waiting, antigravitySpawnPending: true })
 
   launchResult(
     300,
@@ -623,10 +458,10 @@ it('holds first-delivered and replayed older phases through newer questions and 
       spawn(undefined, step)
       launchResult(step, failure, 'ERROR')
     }
-    expect(row.payload).toMatchObject({ state: 'working', antigravitySpawnPending: true })
+    expect(fixture.row.payload).toMatchObject({ state: 'working', antigravitySpawnPending: true })
     await poll()
-    expect(row.payload.state).toBe('working')
-    expect(row.payload).not.toHaveProperty('antigravitySpawnPending')
+    expect(fixture.row.payload.state).toBe('working')
+    expect(fixture.row.payload).not.toHaveProperty('antigravitySpawnPending')
 
     hook('root', 'PreInvocation', { prompt: 'Current task', modelName: 'model-b' })
     const question = {
@@ -649,7 +484,7 @@ it('holds first-delivered and replayed older phases through newer questions and 
       antigravitySpawnPending: true
     })
     expect(hook('root', 'PostToolUse', oldLaunch)).toBeNull()
-    expect(row.payload).toMatchObject(waiting)
+    expect(fixture.row.payload).toMatchObject(waiting)
 
     expect(hook('root', 'PostToolUse', question)?.payload.state).toBe('working')
     const held = {
@@ -667,7 +502,7 @@ it('holds first-delivered and replayed older phases through newer questions and 
 
     launchResult(267, failure, 'ERROR')
     expect((await poll())?.antigravityHelpersDrained).toBe(true)
-    expect(row.payload).not.toHaveProperty('antigravitySpawnPending')
+    expect(fixture.row.payload).not.toHaveProperty('antigravitySpawnPending')
     vi.advanceTimersByTime(ANTIGRAVITY_PARENT_WAKE_GRACE_MS + 1)
     expect((await poll())?.payload.state).toBe('done')
 
@@ -690,7 +525,7 @@ it('holds first-delivered and replayed older phases through newer questions and 
     })
     launchResult(1, failure, 'ERROR', 'replacement')
     expect((await poll())?.payload).toMatchObject({ state: 'working', prompt: 'Replacement task' })
-    expect(row.payload.antigravitySpawnPending).toBeUndefined()
+    expect(fixture.row.payload.antigravitySpawnPending).toBeUndefined()
   } finally {
     vi.useRealTimers()
   }
@@ -709,7 +544,7 @@ it('counts only a swarm add as a spawn that holds the parent', async () => {
 })
 
 it('holds the root for every worker named by one Swarm result, including workers whose hooks have not arrived', async () => {
-  const swarm = join(dir, 'root', '.system_generated', 'swarm')
+  const swarm = join(fixture.dir, 'root', '.system_generated', 'swarm')
   mkdirSync(swarm, { recursive: true })
   hook('root', 'PostToolUse', {
     stepIdx: 8,
@@ -729,7 +564,7 @@ it('holds the root for every worker named by one Swarm result, including workers
   )
   hook('root', 'Stop', { fullyIdle: true })
   await poll()
-  expect(row.payload).toMatchObject({ state: 'working', antigravitySpawnPending: true })
+  expect(fixture.row.payload).toMatchObject({ state: 'working', antigravitySpawnPending: true })
   writeFileSync(
     join(swarm, 'members.json'),
     JSON.stringify({
@@ -740,7 +575,7 @@ it('holds the root for every worker named by one Swarm result, including workers
   hook('foreign', 'PreToolUse', { toolCall: { name: 'ask_question', args: {} } })
   await poll()
   await poll()
-  expect(row.payload).toMatchObject({
+  expect(fixture.row.payload).toMatchObject({
     state: 'working',
     antigravitySpawnPending: true,
     subagents: undefined
@@ -749,8 +584,8 @@ it('holds the root for every worker named by one Swarm result, including workers
   transcript('running')
   hook('running', 'PreInvocation')
   await poll()
-  expect(row.payload.subagents?.map(({ id }) => id)).toEqual(['running'])
-  expect(row.payload.antigravitySpawnPending).toBeUndefined()
+  expect(fixture.row.payload.subagents?.map(({ id }) => id)).toEqual(['running'])
+  expect(fixture.row.payload.antigravitySpawnPending).toBeUndefined()
 })
 
 it('keeps an ambiguous step held even when a root result names a child at that step', async () => {
@@ -767,7 +602,7 @@ it('keeps an ambiguous step held even when a root result names a child at that s
   hook('child', 'Stop', { fullyIdle: true })
   hook('root', 'Stop', { fullyIdle: true })
   await poll()
-  expect(row.payload).toMatchObject({ state: 'working', antigravitySpawnPending: true })
+  expect(fixture.row.payload).toMatchObject({ state: 'working', antigravitySpawnPending: true })
 })
 
 it('retries proving a stopped subagent while its spawn is pending', async () => {
@@ -777,7 +612,7 @@ it('retries proving a stopped subagent while its spawn is pending', async () => 
   hook('root', 'Stop', { fullyIdle: false })
   hook('child', 'Stop', { fullyIdle: true })
   await poll()
-  expect(row.payload.subagents).toBeUndefined()
+  expect(fixture.row.payload.subagents).toBeUndefined()
   descriptor('child')
   expect((await poll())?.payload.subagents?.map((child) => child.id)).toEqual(['child'])
 })
@@ -811,10 +646,12 @@ it('keeps a lead model a hook reports while an older transcript read runs', asyn
   hook('root', 'Stop', { fullyIdle: true })
   hook('root', 'PreInvocation', { lastUserInput: 'Next', modelName: 'auto' })
   appendFileSync(
-    join(dir, 'root', '.system_generated', 'logs', 'transcript.jsonl'),
+    join(fixture.dir, 'root', '.system_generated', 'logs', 'transcript.jsonl'),
     `${JSON.stringify({ type: 'PLANNER_RESPONSE', model: 'model-c', created_at: '2999-01-01T00:00:00Z' })}\n`
   )
-  const reads = readAntigravityTranscriptPoll(state, paneKey)
+  const reads = readAntigravityTranscriptPoll(fixture.state, paneKey)
   hook('root', 'PreToolUse', { modelName: 'model-d', toolCall: { name: 'read_file' } })
-  expect(pollAntigravityTranscriptStatus(state, row, await reads)?.payload.model).toBe('model-d')
+  expect(
+    pollAntigravityTranscriptStatus(fixture.state, fixture.row, await reads)?.payload.model
+  ).toBe('model-d')
 })

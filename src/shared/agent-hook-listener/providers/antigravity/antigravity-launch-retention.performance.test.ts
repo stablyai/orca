@@ -7,7 +7,7 @@ import { getOrCreateAntigravityPaneState, verifyAntigravityChild } from './antig
 
 const failedInvoke: AntigravityLaunchResult = { tool: 'invoke_subagent', children: [] }
 
-function rootLaunchFixture() {
+function rootLaunchFixture(transcriptPath?: string) {
   const state = createHookListenerState()
   const pane = getOrCreateAntigravityPaneState(state, 'pane')
   const hook = (
@@ -22,7 +22,12 @@ function rootLaunchFixture() {
       phase,
       'Task',
       'pane',
-      { conversationId: 'root', stepIdx: step, toolCall: { id: callId, name, args } },
+      {
+        conversationId: 'root',
+        transcriptPath,
+        stepIdx: step,
+        toolCall: { id: callId, name, args }
+      },
       'root'
     )
   return { pane, hook }
@@ -86,6 +91,51 @@ it.each([1_000, 10_000])(
     expect(pane.currentLaunch?.callId).toBe('active')
   }
 )
+
+// PR #45054: a full burst of known replays must not accumulate holds or launch history.
+it('bounds retained identities during a burst of 256 cached launch replays', () => {
+  const path = '/brain/root/.system_generated/logs/transcript.jsonl'
+  const { pane, hook } = rootLaunchFixture(path)
+  const results = new Map<number, AntigravityLaunchResult>()
+  for (let step = 0; step < 256; step++) {
+    hook('PreToolUse', step)
+    results.set(step, failedInvoke)
+  }
+  applyAntigravityLaunchResults(pane, results, 1)
+  results.clear()
+  for (let step = 256; step < 512; step++) {
+    hook('PreToolUse', step)
+    hook('PostToolUse', step)
+    results.set(step, failedInvoke)
+  }
+  applyAntigravityLaunchResults(pane, results, 1)
+  pane.brainCache.transcripts.set(path, {
+    cursor: { filePath: path, offset: 0, carry: '' },
+    launchResults: results
+  })
+
+  for (let step = 256; step < 512; step++) {
+    hook(step % 2 === 0 ? 'PreToolUse' : 'PostToolUse', step)
+  }
+  expect(pane.pendingLaunches.size).toBe(0)
+  expect(pane.settledLaunches.size).toBe(256)
+  expect(pane.launchStepsByCall.size).toBe(256)
+  expect(pane.launchStepsByCall.has('invoke-255')).toBe(false)
+  for (let step = 256; step < 512; step++) {
+    hook(step % 2 === 0 ? 'PostToolUse' : 'PreToolUse', step)
+  }
+  expect(pane.pendingLaunches.size).toBe(0)
+  expect(pane.settledLaunches.size).toBe(0)
+  expect(pane.launchStepsByCall.size).toBe(0)
+
+  hook('PreToolUse', 512, 'active')
+  hook('PostToolUse', 511, 'active')
+  expect([...pane.pendingLaunches]).toEqual([
+    [512, null],
+    [undefined, null]
+  ])
+  expect(pane.settledLaunches.size).toBe(0)
+})
 
 it('retains unpaired results and keeps ambiguous launches held independently of verified children', () => {
   const { pane, hook } = rootLaunchFixture()
