@@ -7,10 +7,13 @@ const host = vi.hoisted(() => ({
 }))
 // Nothing on PATH unless a case puts it there: only Orca's own copies can make an agent installed.
 vi.mock('./agent-command-detection', () => ({
-  detectAgentCommandLocationsOnHost: async () => ({
-    found: new Set([...host.onPath, ...host.outsidePath.keys()]),
-    outsidePath: new Map(host.outsidePath)
-  })
+  detectAgentCommandsOnHost: async (
+    _commands: readonly string[],
+    options: { outsidePath?: Map<string, string> }
+  ) => {
+    host.outsidePath.forEach((path, command) => options.outsidePath?.set(command, path))
+    return new Set([...host.onPath, ...host.outsidePath.keys()])
+  }
 }))
 vi.mock('../ipc/preflight/preflight-runtime-target', () => ({
   getPreflightWslTarget: () => (host.wsl ? { distro: 'Ubuntu' } : null)

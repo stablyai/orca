@@ -12,24 +12,21 @@ import { hasPathSeparatorToken } from '../../shared/agent-launch/installation/ma
 
 export async function detectAgentCommandsOnHost(
   commands: readonly string[],
-  options: { connectionId?: string | null; context?: PreflightRuntimeContext } = {}
+  options: {
+    connectionId?: string | null
+    context?: PreflightRuntimeContext
+    /** Filled with the full path of each command found only outside PATH (in an installer's
+     *  folder), which a terminal can't run by name. */
+    outsidePath?: Map<string, string>
+  } = {}
 ): Promise<Set<string>> {
-  return (await detectAgentCommandLocationsOnHost(commands, options)).found
-}
-
-/** The commands found, and the full path of each found only outside PATH (in an installer's
- *  folder), which a terminal can't run by name. */
-export async function detectAgentCommandLocationsOnHost(
-  commands: readonly string[],
-  options: { connectionId?: string | null; context?: PreflightRuntimeContext } = {}
-): Promise<{ found: Set<string>; outsidePath: ReadonlyMap<string, string> }> {
   if (options.connectionId) {
     throw new SshHostNotServedError(options.connectionId)
   }
   const context = options.context
   const wslTarget = getPreflightWslTarget(context)
   if (wslTarget) {
-    return { found: await detectWslCommandsOnPath(wslTarget, commands), outsidePath: new Map() }
+    return detectWslCommandsOnPath(wslTarget, commands)
   }
   // Bounded directory scans avoid repeated probes for missing commands (#34636).
   const onPathCommands = await findCommandsOnLocalPath(commands, {
@@ -50,5 +47,6 @@ export async function detectAgentCommandLocationsOnHost(
   const foundCommands = new Set(
     commands.filter((cmd) => onPathCommands.has(cmd) || installDirCommands.has(cmd))
   )
-  return { found: foundCommands, outsidePath: installDirCommands }
+  installDirCommands.forEach((path, command) => options.outsidePath?.set(command, path))
+  return foundCommands
 }

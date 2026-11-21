@@ -13,7 +13,7 @@ import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
 } from '../ipc/preflight/preflight-runtime-target'
-import { detectAgentCommandLocationsOnHost } from './agent-command-detection'
+import { detectAgentCommandsOnHost } from './agent-command-detection'
 import { normalizeDisabledTuiAgents } from '../../shared/agent-launch/catalog/tui-agent-selection'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { TuiAgentDetectionRuntime } from '../../shared/agent-launch/catalog/tui-agent-config-types'
@@ -126,15 +126,16 @@ async function detectAgentsWithManagedCopies(
       ...[...overrides.values()].map((probe) => probe.command)
     ])
   ]
-  const { found, outsidePath: foundOutsidePath } = await detectAgentCommandLocationsOnHost(
-    probeCommands,
-    { context }
-  )
+  const foundOutsidePath = new Map<string, string>()
+  const found = await detectAgentCommandsOnHost(probeCommands, {
+    context,
+    outsidePath: foundOutsidePath
+  })
   const detected = resolveDetectedTuiAgentIds(commands, found, runtime)
   // A terminal can't run by name a CLI found only in its installer's folder, so launches name its path.
   const outsidePath: ManagedAgentCommands = {}
   for (const id of runtime === 'wsl' ? [] : detected.filter(isTuiAgent)) {
-    const [program] = getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[id], runtime).split(' ')
+    const [program] = getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[id], process.platform).split(' ')
     const path = foundOutsidePath.get(program)
     if (path && !options?.agentCmdOverrides?.[id]?.trim()) {
       outsidePath[id] = path
