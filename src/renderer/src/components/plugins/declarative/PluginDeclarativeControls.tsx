@@ -74,6 +74,7 @@ export function PluginDeclarativeInput({
     send: sendValue(emit)
   })
   const submit = props.onSubmit?.$callback
+  const autoFocus = props.autoFocus ?? props.type === 'search'
   return (
     <LabelledField id={id} label={props.label} hidden={props.labelHidden}>
       <Input
@@ -84,6 +85,7 @@ export function PluginDeclarativeInput({
         placeholder={props.placeholder}
         maxLength={props.maxLength}
         disabled={props.disabled}
+        autoFocus={autoFocus}
         aria-invalid={props.invalid || undefined}
         aria-label={props.labelHidden ? props.label : undefined}
         onChange={(event) => change(event.target.value)}

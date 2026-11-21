@@ -138,6 +138,8 @@ declare module 'orca' {
     placeholder?: string
     type?: 'text' | 'search' | 'password'
     maxLength?: number
+    /** Whether the input receives focus when the panel is opened or mounts. Defaults to `true` for `type: 'search'`. */
+    autoFocus?: boolean
     invalid?: boolean
     disabled?: boolean
     onChange?: (value: string) => void
