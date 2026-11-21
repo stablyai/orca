@@ -29,15 +29,25 @@ export function SpinnerFrame({
 }
 
 // Reduced motion uses an hourglass rather than a stuck spinner. Hide it only when motion is allowed; hidden plus motion-reduce:block left it hidden.
-export function LoadingSpinner({ className }: { className?: string }): React.JSX.Element {
+export function LoadingSpinner({
+  className,
+  showWhileHidden = false
+}: {
+  className?: string
+  /** Show progress even when the surrounding control has visibility: hidden. */
+  showWhileHidden?: boolean
+}): React.JSX.Element {
   // Without a caller size the svg keeps its parent's svg sizing (e.g. Button's [&_svg]) and the span wraps it.
   const sized = className?.split(/\s+/).some((name) => /(^|:)size-/.test(name)) ?? false
   return (
     <>
-      <SpinnerFrame className={cn('motion-reduce:hidden', className)}>
+      <SpinnerFrame className={cn('motion-reduce:hidden', className, showWhileHidden && 'visible')}>
         <Loader2 className={sized ? 'block size-full' : 'block'} />
       </SpinnerFrame>
-      <Hourglass aria-hidden="true" className={cn('motion-safe:hidden', className)} />
+      <Hourglass
+        aria-hidden="true"
+        className={cn('motion-safe:hidden', className, showWhileHidden && 'visible')}
+      />
     </>
   )
 }

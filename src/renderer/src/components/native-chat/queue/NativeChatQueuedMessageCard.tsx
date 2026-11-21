@@ -1,9 +1,9 @@
+import { NativeChatQueuedMessageExpandToggle } from '@/components/native-chat/queue/NativeChatQueuedMessageExpandToggle'
 import { QueuedMessageImageCount } from '@/components/native-chat/queue/NativeChatQueuedMessageImageCount'
 import type { QueuedMessageDragPresentation } from '@/components/native-chat/queue/NativeChatQueuedMessageRows'
 import { useId, useState } from 'react'
 import {
   AlertCircle,
-  ChevronDown,
   CornerDownRight,
   ListEnd,
   MoreHorizontal,
@@ -168,6 +168,7 @@ export function NativeChatQueuedMessageCard({
   const attention = queuedMessageCardNeedsAttention(card)
   const sendNow = queuedMessageCardSendNow(card, agentWorking, t)
   const busy = pending !== null
+  const actionPending = pending === 'send' || pending === 'delete'
   const isMac = isMacPlatform()
   // Allow inspecting clipped text before acting; another agent may have authored the card.
   const [expanded, setExpanded] = useState(false)
@@ -178,6 +179,22 @@ export function NativeChatQueuedMessageCard({
   ) : card.typedByOther ? (
     <NativeChatTypedByQueuedLine typist={card.typedByOther} />
   ) : null
+  const captionLine = caption ? (
+    <p
+      className={
+        returned ? 'truncate text-xs text-destructive' : 'truncate text-xs text-muted-foreground'
+      }
+    >
+      {attention && drag?.grip ? (
+        <AlertCircle
+          className="mr-1 inline size-3.5 align-text-bottom text-destructive"
+          aria-hidden
+        />
+      ) : null}
+      {caption}
+    </p>
+  ) : null
+  const hasExpandedMetadata = expanded && (sender !== null || captionLine !== null)
   if (editor) {
     return (
       // The editor fills the row, so a drop anywhere on the card reaches it.
@@ -198,7 +215,7 @@ export function NativeChatQueuedMessageCard({
       data-queued-message-id={card.messageId}
       data-queued-message-state={card.state}
       className={cn(
-        'group/queued relative px-2.5 py-1.5',
+        'group/queued relative grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-1 py-1 pr-1 pl-2.5 hover:bg-accent/50 dark:hover:bg-accent/35',
         // Lit while the chat's composer shows Steer queued: the card that press would send.
         showsSteerShortcut &&
           '[[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:bg-accent'
@@ -213,188 +230,167 @@ export function NativeChatQueuedMessageCard({
           )}
         />
       ) : null}
-      <div className="flex items-center gap-1">
-        <span className="relative flex size-3.5 shrink-0 items-center justify-center">
-          {attention && !drag?.grip ? (
-            <AlertCircle className="size-3.5 text-destructive" aria-hidden />
-          ) : (
-            <ListEnd
-              className={cn(
-                'size-3.5 text-muted-foreground',
-                drag?.grip &&
-                  'group-hover/queued:opacity-0 group-focus-within/queued:opacity-0 [@media(hover:none)]:opacity-0'
-              )}
-              aria-hidden
-            />
-          )}
-          {drag?.grip}
-        </span>
-        <div className="min-w-0 flex-1">
+      {hasExpandedMetadata ? (
+        <div className="col-start-2">
           {sender}
-          {expanded ? null : (
-            <p ref={measureLine} className="truncate text-sm" title={line}>
-              {line}
-            </p>
-          )}
-          {caption ? (
-            <p
-              className={
-                returned
-                  ? 'truncate text-xs text-destructive'
-                  : 'truncate text-xs text-muted-foreground'
-              }
-            >
-              {attention && drag?.grip ? (
-                <AlertCircle
-                  className="mr-1 inline size-3.5 align-text-bottom text-destructive"
-                  aria-hidden
-                />
-              ) : null}
-              {caption}
-            </p>
-          ) : null}
+          {captionLine}
         </div>
-        {card.images ? <QueuedMessageImageCount images={card.images} /> : null}
-        {expanded || clipped ? (
-          <QueuedMessageExpandToggle
-            expanded={expanded}
-            controls={expanded ? textId : undefined}
-            onToggle={() => setExpanded(!expanded)}
+      ) : null}
+      <span className="relative col-start-1 flex h-7 w-3.5 items-center justify-center">
+        {attention && !drag?.grip ? (
+          <AlertCircle className="size-3.5 text-destructive" aria-hidden />
+        ) : (
+          <ListEnd
+            className={cn(
+              'size-3.5 text-muted-foreground',
+              drag?.grip &&
+                'group-hover/queued:opacity-0 group-focus-within/queued:opacity-0 [@media(hover:none)]:opacity-0'
+            )}
+            aria-hidden
           />
-        ) : null}
-        {/* Nothing acts on a send still on its way: the host holds no card for it yet. */}
-        {card.hold === 'sending' ? null : (
-          <>
-            {/* A command never steers: its Send shows only while the agent is idle. */}
-            {card.waitsForAgent ? null : (
+        )}
+        {drag?.grip}
+      </span>
+      {/* Match the chevron gutter in both states and pad the expanded text viewport for focus rings. */}
+      <div
+        className={cn(
+          'col-start-2 -mr-1 -mb-1 min-h-9 min-w-0 py-1 pr-1 [scrollbar-gutter:stable] [--queue-text-padding-top:max(var(--spacing),calc(var(--spacing)_*_6.5_-_1lh))]',
+          !hasExpandedMetadata && '-mt-1',
+          expanded ? 'scrollbar-sleek max-h-62 overflow-y-auto' : 'scrollbar-sleek overflow-hidden'
+        )}
+      >
+        {/* End the float before line two so fractional pixel rounding can't make that line wrap early. */}
+        <div className="float-right mb-[calc(var(--queue-text-padding-top)_+_1lh_-_var(--spacing)_*_7_-_1px)] ml-1 flex h-7 items-center text-sm">
+          {card.images ? <QueuedMessageImageCount images={card.images} /> : null}
+          {/* Nothing acts on a send still on its way: the host holds no card for it yet. */}
+          {card.hold === 'sending' ? null : (
+            <span
+              className={cn(
+                'flex items-center can-hover:pointer-events-none group-hover/queued:pointer-events-auto group-focus-within/queued:pointer-events-auto has-[[data-state=open]]:pointer-events-auto',
+                // Keep visibility out of the buttons' transitions so only the pending indicator can show.
+                actionPending
+                  ? '[&>button[data-variant]]:transition-colors can-hover:group-[&:not(:hover,:focus-within)]/queued:not-has-[[data-state=open]]:[&>button[data-variant]]:invisible'
+                  : 'can-hover:opacity-0 group-hover/queued:opacity-100 group-focus-within/queued:opacity-100 has-[[data-state=open]]:opacity-100'
+              )}
+            >
+              {/* A command never steers: its Send shows only while the agent is idle. */}
+              {card.waitsForAgent ? null : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant={showsSteerShortcut ? 'queued-head-steer' : 'ghost'}
+                      size="xs"
+                      onClick={onSteer}
+                      disabled={steerHeld || busy}
+                    >
+                      <NativeChatPendingIcon
+                        pending={pending === 'send'}
+                        className="size-3"
+                        showWhileHidden
+                      >
+                        {sendNow.steers ? (
+                          <CornerDownRight className="size-3" />
+                        ) : (
+                          <Send className="size-3" />
+                        )}
+                      </NativeChatPendingIcon>
+                      {sendNow.label}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" sideOffset={4}>
+                    <span className="flex items-center gap-2">
+                      <span>{sendNow.hint}</span>
+                      {showsSteerShortcut ? (
+                        <ShortcutKeyCombo
+                          keys={isMac ? ['⌘', '⇧', '⏎'] : ['Ctrl', 'Shift', 'Enter']}
+                        />
+                      ) : null}
+                    </span>
+                  </TooltipContent>
+                </Tooltip>
+              )}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     type="button"
-                    variant={showsSteerShortcut ? 'queued-head-steer' : 'ghost'}
-                    size="xs"
-                    onClick={onSteer}
-                    disabled={steerHeld || busy}
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={t('components.native-chat.queuedMessages.delete', 'Delete')}
+                    disabled={busy}
+                    onClick={onDelete}
                   >
-                    <NativeChatPendingIcon pending={pending === 'send'} className="size-3">
-                      {sendNow.steers ? (
-                        <CornerDownRight className="size-3" />
-                      ) : (
-                        <Send className="size-3" />
-                      )}
+                    <NativeChatPendingIcon
+                      pending={pending === 'delete'}
+                      className="size-3.5"
+                      showWhileHidden
+                    >
+                      <Trash2 className="size-3.5" />
                     </NativeChatPendingIcon>
-                    {sendNow.label}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={4}>
-                  <span className="flex items-center gap-2">
-                    <span>{sendNow.hint}</span>
-                    {showsSteerShortcut ? (
-                      <ShortcutKeyCombo
-                        keys={isMac ? ['⌘', '⇧', '⏎'] : ['Ctrl', 'Shift', 'Enter']}
-                      />
-                    ) : null}
-                  </span>
+                  {t('components.native-chat.queuedMessages.delete', 'Delete')}
                 </TooltipContent>
               </Tooltip>
-            )}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={t('components.native-chat.queuedMessages.delete', 'Delete')}
-                  disabled={busy}
-                  onClick={onDelete}
-                >
-                  <NativeChatPendingIcon pending={pending === 'delete'} className="size-3.5">
-                    <Trash2 className="size-3.5" />
-                  </NativeChatPendingIcon>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {t('components.native-chat.queuedMessages.delete', 'Delete')}
-              </TooltipContent>
-            </Tooltip>
-            {/* The host refuses these edits: a command would become a message, a run the owner's words. */}
-            {!card.notEditable && onEdit ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label={t(
-                      'components.native-chat.queuedMessages.moreActions',
-                      'More actions'
-                    )}
-                    disabled={busy}
-                  >
-                    <MoreHorizontal className="size-3.5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem disabled={editDisabled} onSelect={onEdit}>
-                    <Pencil />
-                    {t('components.native-chat.queuedMessages.editMessage', 'Edit message')}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
-          </>
+              {/* The host refuses these edits: a command would become a message, a run the owner's words. */}
+              {!card.notEditable && onEdit ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label={t(
+                        'components.native-chat.queuedMessages.moreActions',
+                        'More actions'
+                      )}
+                      disabled={busy}
+                    >
+                      <MoreHorizontal className="size-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem disabled={editDisabled} onSelect={onEdit}>
+                      <Pencil />
+                      {t('components.native-chat.queuedMessages.editMessage', 'Edit message')}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+            </span>
+          )}
+          {/* Holds the header chevron's column even when there is nothing more to show. */}
+          {expanded || clipped ? (
+            <NativeChatQueuedMessageExpandToggle
+              expanded={expanded}
+              controls={expanded ? textId : undefined}
+              onToggle={() => setExpanded(!expanded)}
+            />
+          ) : (
+            <span aria-hidden className="size-6 shrink-0" />
+          )}
+        </div>
+        {expanded ? null : sender}
+        {expanded ? (
+          <p
+            id={textId}
+            className="pt-(--queue-text-padding-top) pb-1 text-sm whitespace-pre-wrap wrap-anywhere"
+            style={nativeChatTextHasUnkernedRun(line) ? NATIVE_CHAT_UNKERNED_CSS : undefined}
+          >
+            {line}
+          </p>
+        ) : (
+          <p
+            ref={measureLine}
+            className="truncate pt-(--queue-text-padding-top) pb-1 text-sm"
+            title={line}
+          >
+            {line}
+          </p>
         )}
+        {expanded ? null : captionLine}
       </div>
-      {expanded ? (
-        <p
-          id={textId}
-          className="scrollbar-sleek mt-1 max-h-60 overflow-y-auto whitespace-pre-wrap break-words pl-5.5 text-sm"
-          style={nativeChatTextHasUnkernedRun(line) ? NATIVE_CHAT_UNKERNED_CSS : undefined}
-        >
-          {line}
-        </p>
-      ) : null}
     </li>
-  )
-}
-
-function QueuedMessageExpandToggle({
-  expanded,
-  controls,
-  onToggle
-}: {
-  expanded: boolean
-  /** The opened text element; absent while folded, when no such element exists. */
-  controls: string | undefined
-  onToggle: () => void
-}): React.JSX.Element {
-  const t = useTranslate()
-  const label = expanded
-    ? t('components.native-chat.queuedMessages.showLess', 'Show less')
-    : t('components.native-chat.queuedMessages.showFullMessage', 'Show full message')
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          aria-label={label}
-          aria-expanded={expanded}
-          aria-controls={controls}
-          onClick={onToggle}
-        >
-          <ChevronDown
-            className={cn(
-              'size-3.5 transition-transform motion-reduce:transition-none',
-              expanded && 'rotate-180'
-            )}
-          />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="top" sideOffset={4}>
-        {label}
-      </TooltipContent>
-    </Tooltip>
   )
 }

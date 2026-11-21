@@ -8,12 +8,15 @@ const PENDING_SPINNER_DELAY_MS = 200
 export function NativeChatPendingIcon({
   pending,
   className,
-  children
+  children,
+  showWhileHidden = false
 }: {
   pending: boolean
   /** The icon's size classes, given to the spinner too. */
   className: string
   children: ReactNode
+  /** Keep progress visible when the disabled control is hidden until hover. */
+  showWhileHidden?: boolean
 }): React.JSX.Element {
   const [showSpinner, setShowSpinner] = useState(false)
   useEffect(() => {
@@ -24,5 +27,9 @@ export function NativeChatPendingIcon({
     const timer = setTimeout(() => setShowSpinner(true), PENDING_SPINNER_DELAY_MS)
     return () => clearTimeout(timer)
   }, [pending])
-  return showSpinner ? <LoadingSpinner className={className} /> : <>{children}</>
+  return showSpinner ? (
+    <LoadingSpinner className={className} showWhileHidden={showWhileHidden} />
+  ) : (
+    <>{children}</>
+  )
 }
