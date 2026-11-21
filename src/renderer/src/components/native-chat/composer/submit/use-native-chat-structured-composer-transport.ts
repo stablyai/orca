@@ -85,11 +85,12 @@ export function nativeChatForkCommand(
 export function useNativeChatStructuredComposerTransport(args: {
   props: Pick<
     NativeChatStructuredViewProps,
-    'agent' | 'sessionId' | 'tabId' | 'target' | 'isVisible'
+    'agent' | 'sessionId' | 'tabId' | 'target' | 'isVisible' | 'auxiliaryOwnerWorktreeId'
   >
   controller: ReturnType<typeof useStructuredAgentSession>
   /** The session's fork, run by `/fork` and `/btw`. */
   forks: NativeChatPaneForks
+  auxiliarySideChat?: NativeChatStructuredComposerTransport['sideChat']
   /** Sends now, restarts a failed start with the message, or refuses while the chat starts. */
   sendThroughLaunch: (
     text: string,
@@ -129,12 +130,14 @@ export function useNativeChatStructuredComposerTransport(args: {
     (props.target.kind === 'local' || remoteManagesMcp)
   const mcpTray = useNativeChatMcpTray(props.sessionId, props.isVisible)
   const { fork, sideChat } = forks
+  const commandSideChat = args.auxiliarySideChat ?? (props.agent === 'omp' ? undefined : sideChat)
+  const isAuxiliary = props.auxiliaryOwnerWorktreeId !== undefined
   // Turned off while one shows: the read restarts without asking, and this hides what it held.
   const showsPromptSuggestions = useAppStore((state) =>
     nativeChatShowsPromptSuggestions(state.settings)
   )
   return useMemo((): NativeChatStructuredComposerTransport => {
-    const threadGoal = controller.threadGoal
+    const threadGoal = isAuxiliary ? undefined : controller.threadGoal
     const mcpPanel = managesMcp ? mcpTray : undefined
     // A held host takes no turn; pausing or clearing a goal starts none.
     const changeThreadGoal = threadGoal?.hostChanges
@@ -159,7 +162,7 @@ export function useNativeChatStructuredComposerTransport(args: {
       mcpPanel,
       fork: nativeChatForkCommand({ fork, sideChat }, controller.isWorking, props.agent),
       capturePresentation: controller.capturePresentation,
-      ...(sideChat ? { sideChat } : {}),
+      ...(commandSideChat ? { sideChat: commandSideChat } : {}),
       send: (text, attachments, ...request) => {
         if (sendBlockedReason !== null) {
           return false
@@ -248,6 +251,8 @@ export function useNativeChatStructuredComposerTransport(args: {
     mcpTray,
     fork,
     sideChat,
+    commandSideChat,
+    isAuxiliary,
     worktreeId,
     onError,
     onSubmitted,

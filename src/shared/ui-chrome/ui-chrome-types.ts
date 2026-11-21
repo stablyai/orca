@@ -111,7 +111,7 @@ export type RightSidebarTab =
   | StaticRightSidebarTab
   // Plugin IDs encode their dynamic panel namespace without opening the static tab union.
   | `plugin:${string}`
-export type ActiveRightSidebarTab = Exclude<RightSidebarTab, 'search'>
+export type ActiveRightSidebarTab = Exclude<RightSidebarTab, 'search'> | 'side-chat'
 export type RightSidebarExplorerView = 'files' | 'search'
 export type ActivityBarPosition = 'top' | 'side'
 

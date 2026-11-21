@@ -74,11 +74,16 @@ export const PERSISTED_UI_WRITE_BASELINE_FIELDS = Object.keys(
 
 /** Pick the writer-owned fields off a hydrated mirror (a structural superset). */
 export function capturePersistedUIWriteBaseline(
-  mirror: PersistedUIWriteBaseline
+  mirror: Omit<PersistedUIWriteBaseline, 'rightSidebarTab'> & {
+    rightSidebarTab: PersistedUIWriteBaseline['rightSidebarTab'] | 'side-chat'
+  }
 ): PersistedUIWriteBaseline {
   const captured = {} as Record<string, unknown>
   for (const field of PERSISTED_UI_WRITE_BASELINE_FIELDS) {
-    captured[field] = mirror[field]
+    captured[field] =
+      field === 'rightSidebarTab' && mirror.rightSidebarTab === 'side-chat'
+        ? 'explorer'
+        : mirror[field]
   }
   return captured as PersistedUIWriteBaseline
 }

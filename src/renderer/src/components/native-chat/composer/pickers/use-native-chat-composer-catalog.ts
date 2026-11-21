@@ -10,6 +10,7 @@ import { structuredSessionSlashCommands } from '../../../../../../shared/agent-s
 import { withNativeChatResumeCommand } from '@/components/native-chat/composer/pickers/use-native-chat-resume-command'
 import { withNativeChatSideChatRows } from '@/components/native-chat/composer/pickers/use-native-chat-side-chat-command'
 import type { NativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/native-chat-structured-composer-transport'
+import { nativeChatProviderOwnsSideCommand } from '../../../../../../shared/native-chat/input/commands/native-chat-side-chat-command'
 
 export type NativeChatComposerCatalog = {
   agentCommands: readonly SlashCommandSuggestion[]
@@ -32,6 +33,7 @@ export function useNativeChatComposerCatalog(
   const fork = structuredTransport?.fork !== undefined
   const sideChat = structuredTransport?.sideChat !== undefined
   const sideChatNotReady = structuredTransport?.sideChat?.notReadyReason ?? null
+  const auxiliary = structuredTransport?.sideChat?.auxiliary === true
   const agentCommands = useMemo(() => {
     if (!structured) {
       return getVerifiedNativeChatCommands(agent)
@@ -48,10 +50,17 @@ export function useNativeChatComposerCatalog(
       accountUsage,
       fork
     )
-    return sideChat ? withNativeChatSideChatRows(commands, sideChatNotReady) : commands
+    return sideChat
+      ? withNativeChatSideChatRows(
+          commands,
+          sideChatNotReady,
+          auxiliary ? (name) => nativeChatProviderOwnsSideCommand(reported, name) : undefined
+        )
+      : commands
   }, [
     accountUsage,
     agent,
+    auxiliary,
     fork,
     sideChat,
     sideChatNotReady,

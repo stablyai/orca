@@ -1,4 +1,4 @@
-// `/side` and its alias `/btw`: ask a side question in a fork beside the chat, shared by desktop and phone.
+// `/side` and its alias `/btw` in structured chats.
 
 import type { SlashCommandSuggestion } from './native-chat-slash-commands'
 
@@ -11,22 +11,34 @@ export function isNativeChatSideChatCommand(
 }
 
 /** `/side [question]` or `/btw [question]` as the whole message; null for anything else. */
-export function parseNativeChatSideChatDraft(draft: string): { question: string } | null {
-  const match = /^\/(?:side|btw)(?:\s+([\s\S]*))?$/i.exec(draft.trim())
-  return match ? { question: match[1]?.trim() ?? '' } : null
+export function parseNativeChatSideChatDraft(
+  draft: string
+): { name: string; question: string } | null {
+  const match = /^\/(side|btw)(?:\s+([\s\S]*))?$/i.exec(draft.trim())
+  const name = match?.[1]?.toLowerCase()
+  return name ? { name, question: match?.[2]?.trim() ?? '' } : null
 }
 
-/** Orca's rows replace the agent's own `side` and `btw`; while unavailable they say why. */
+export function nativeChatProviderOwnsSideCommand(
+  commands: readonly { name: string; kind: string }[] | undefined,
+  name: string
+): boolean {
+  return commands?.some((command) => command.kind === 'command' && command.name === name) ?? false
+}
+
+/** Auxiliary chats defer to reported provider commands with the same name. */
 export function withNativeChatSideChatCommands(
   commands: readonly SlashCommandSuggestion[],
-  copy: { side: string; btw: string; argumentHint: string; unavailableReason: string | null }
+  copy: { side: string; btw: string; argumentHint: string; unavailableReason: string | null },
+  providerOwns?: (name: string) => boolean
 ): SlashCommandSuggestion[] {
-  const rows = NATIVE_CHAT_SIDE_CHAT_COMMANDS.map((name): SlashCommandSuggestion => ({
-    name,
-    description: copy.unavailableReason ?? copy[name],
-    argumentHint: copy.argumentHint,
-    orcaOwned: true
-  }))
-  // Ahead of the agent's own, as Orca's built-ins are, so a long catalog never pushes them out.
-  return [...rows, ...commands.filter(({ name }) => !isNativeChatSideChatCommand(name))]
+  const rows = NATIVE_CHAT_SIDE_CHAT_COMMANDS.filter((name) => !providerOwns?.(name)).map(
+    (name): SlashCommandSuggestion => ({
+      name,
+      description: copy.unavailableReason ?? copy[name],
+      argumentHint: copy.argumentHint,
+      orcaOwned: true
+    })
+  )
+  return [...rows, ...commands.filter(({ name }) => !rows.some((row) => row.name === name))]
 }

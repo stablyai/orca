@@ -24,6 +24,7 @@ import { NativeChatNoticeRow } from '../notices/NativeChatNoticeRow'
 import { NativeChatBotCreatedRow, NativeChatTookOverRow } from '../../NativeChatBotCreatedRow'
 import { nativeChatNoticeBlock } from '../../../../../../shared/native-chat/transcript/notices/native-chat-notice'
 import { nativeChatMessageRowBlocks } from './native-chat-message-row-words'
+import { nativeChatSentPromptReferences } from '../../../../../../shared/native-chat/transcript/messages/native-chat-sent-prompt-references'
 import { ProviderFrameRow } from '../diagnostics/NativeChatProviderDetails'
 import type { NativeChatDiffReveal } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
@@ -133,7 +134,12 @@ export const MessageRow = memo(function MessageRow(
   const { scrollToTop, returnToView } = useNativeChatRowNavigation(rowRef, onScrollMessageToTop)
 
   // Return after all hooks to preserve hook order when content disappears.
-  if (run === undefined && !rowHasContent(content) && !isNativeChatOrcaCard(message)) {
+  if (
+    run === undefined &&
+    !rowHasContent(content) &&
+    !isNativeChatOrcaCard(message) &&
+    nativeChatSentPromptReferences(message).length === 0
+  ) {
     return null
   }
 
@@ -274,7 +280,11 @@ export const MessageRow = memo(function MessageRow(
 
   if (message.agentStart && message.from) {
     return (
-      <div ref={rowRef} data-native-chat-message-id={message.id}>
+      <div
+        ref={rowRef}
+        data-native-chat-message-id={message.id}
+        data-native-chat-selection-row={message.id}
+      >
         <NativeChatAgentMessageCard
           message={message}
           from={message.from}

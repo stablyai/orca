@@ -56,7 +56,7 @@ export function projectStructuredAiVaultSessions(
     if (!ownership) {
       return [session]
     }
-    if (!opensChat(ownership.provider)) {
+    if (ownership.auxiliary || !opensChat(ownership.provider)) {
       return []
     }
     return [{ ...session, ...ownedRow(session.agent, ownership) }]
@@ -84,7 +84,7 @@ export function projectStructuredAiVaultSearchResponse(
       if (!ownership) {
         return [hit]
       }
-      if (!opensChat(ownership.provider)) {
+      if (ownership.auxiliary || !opensChat(ownership.provider)) {
         return []
       }
       const { resumeCommand: _resumeCommand, ...owned } = hit
@@ -217,7 +217,9 @@ function resumeOwnerships(
   if (owners.size === 0) {
     return []
   }
-  const owned = listOwnership().filter((ownership) => owners.has(ownership.provider))
+  const owned = listOwnership().filter(
+    (ownership) => !ownership.auxiliary && owners.has(ownership.provider)
+  )
   const fileName = args.filePath.split(/[\\/]/).at(-1) ?? ''
   return [
     ...(args.sessionId

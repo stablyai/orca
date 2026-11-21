@@ -19685,6 +19685,27 @@
     }
   },
   "components": {
+    "rightSidebar": {
+      "sideChat": {
+        "title": "辅助对话",
+        "tabTitle": "辅助对话 {{number}}",
+        "close": "关闭辅助对话 {{number}}",
+        "new": "新建辅助对话",
+        "empty": "就当前内容提问，不打断主对话。",
+        "openChat": "打开 OMP 对话后即可新建辅助对话。",
+        "agentUnsupported": "辅助对话仅在 OMP 对话中可用。",
+        "notActive": "请先激活此对话，再打开辅助对话。",
+        "narrow": "请加宽窗口以使用辅助对话。",
+        "viewUnsupported": "请在工作区中使用辅助对话。",
+        "hostOlder": "请更新此主机上的 Orca 以使用辅助对话。",
+        "childAsleep": "此辅助对话已休眠，请新建一个。",
+        "childUnverified": "此辅助对话不可用，请新建一个。",
+        "childWaiting": "请先处理辅助对话中的待确认请求，再添加选区。",
+        "childUnavailable": "此辅助对话已关闭或不可用。",
+        "createFailed": "无法打开辅助对话，请重试。",
+        "referenceLimit": "最多添加 8 条引用，每条不超过 8,000 个字符，合计不超过 16,000 个字符。"
+      }
+    },
     "native-chat": {
       "install": {
         "checking": "正在检查 {{agent}} 是否已在此主机上就绪…",
@@ -19934,6 +19955,7 @@
         "attachFailedBecause": "无法附加 {{files}}，{{reason}}",
         "uploadingFile": "正在上传 {{name}}…",
         "removeAttachment": "移除附件",
+        "removeSelection": "移除选中的内容",
         "pastedImageLabel": "粘贴的图片",
         "pastedTextLabel": "粘贴的文本",
         "pasteNotSavedLabel": "粘贴未保存",
@@ -20473,6 +20495,10 @@
       },
       "dismissDeliveryNotice": "关闭",
       "addSelectionToChat": "添加到聊天",
+      "askSelectionInSideChat": "在辅助对话中提问",
+      "auxiliaryChat": {
+        "referenceBlocked": "请先返回主对话的输入框，再添加选中的内容。"
+      },
       "messageNotSent": "消息未发送",
       "messageSending": "正在发送…",
       "userMessage": {
@@ -20885,7 +20911,7 @@
         "hidden": "Orca 将不再显示 CI 结果行"
       },
       "sideChat": {
-        "description": "在此聊天旁的分支中顺便提个问题",
+        "description": "在独立对话中提问",
         "argumentHint": "<问题>",
         "notReady": "支线聊天尚未就绪，请稍后重试",
         "replyRunning": "此回复完成后可用",

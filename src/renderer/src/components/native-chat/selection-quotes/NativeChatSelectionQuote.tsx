@@ -5,7 +5,11 @@ import {
   formatNativeChatQuote,
   readNativeChatQuotableSelection
 } from '../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
-import { readNativeChatTranscriptSelection } from './native-chat-transcript-selection'
+import type { NativeChatAuxiliaryChat } from '../pane/actions/native-chat-context-menu-target'
+import {
+  readNativeChatTranscriptRowSelection,
+  readNativeChatTranscriptSelection
+} from './native-chat-transcript-selection'
 import { SelectionAddToChatPopover } from './SelectionAddToChatPopover'
 
 function copyTranscriptSelectionOnSelect(root: HTMLElement): void {
@@ -22,11 +26,13 @@ function copyTranscriptSelectionOnSelect(root: HTMLElement): void {
 export function NativeChatSelectionQuote({
   rootRef,
   composerRef,
-  enabled
+  enabled,
+  auxiliaryChat
 }: {
   rootRef: RefObject<HTMLElement | null>
   composerRef: RefObject<NativeChatComposerHandle | null>
   enabled: boolean
+  auxiliaryChat?: NativeChatAuxiliaryChat
 }): React.JSX.Element {
   return (
     <SelectionAddToChatPopover
@@ -35,8 +41,14 @@ export function NativeChatSelectionQuote({
       readQuotable={(root) =>
         composerRef.current?.acceptsText() ? readNativeChatQuotableSelection(root) : null
       }
+      readAuxiliary={(root) =>
+        auxiliaryChat?.referenceBlockedReason === null && composerRef.current?.acceptsText()
+          ? readNativeChatTranscriptRowSelection(root)
+          : null
+      }
       onSelectionSettled={copyTranscriptSelectionOnSelect}
       onAdd={(text) => composerRef.current?.appendText(formatNativeChatQuote(text))}
+      onAuxiliary={(reference) => auxiliaryChat?.addReference(reference)}
     />
   )
 }

@@ -24,6 +24,7 @@ const PluginPanel = lazy(() => import('./plugin-panels/PluginPanel'))
 const BotActivityPanel = lazy(() => import('../bots/BotActivityPanel'))
 const BotConnectorsPanel = lazy(() => import('../bots/BotConnectorsPanel'))
 const BotChatsPanel = lazy(() => import('../bots/BotChatsPanel'))
+const SideChatPanel = lazy(() => import('./side-chat/SideChatPanel'))
 
 type RightSidebarPanelContentProps = {
   effectiveTab: ActiveRightSidebarTab
@@ -67,6 +68,9 @@ export function RightSidebarPanelContent({
             focusSearch={focusVaultSearch}
             onFocusSearchHandled={onVaultSearchFocusHandled}
           />
+        )}
+        {effectiveTab === 'side-chat' && (
+          <SideChatPanel isVisible={rightSidebarOpen && effectiveTab === 'side-chat'} />
         )}
         {effectiveTab === 'workspaces' && <FolderWorkspaceWorktreesPanel />}
         {effectiveTab === 'pr-checks' && (

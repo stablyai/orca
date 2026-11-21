@@ -41,6 +41,9 @@ export async function rewindStructuredAgentSession(
   params: AgentSessionRewindParams
 ): Promise<AgentSessionMutationResult<AgentSessionRewindResult>> {
   const { sessionId, clientOperationId } = params.envelope
+  if (context.deps.store.getRecord(sessionId)?.auxiliaryChat) {
+    return rewindRefusal('unsupported')
+  }
   const {
     readChildWork,
     childWorkOpen,

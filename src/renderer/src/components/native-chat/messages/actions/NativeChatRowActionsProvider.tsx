@@ -18,12 +18,12 @@ import type { NativeChatPaneForks } from '@/components/native-chat/messages/acti
  *  "Forked from" divider opens. */
 export function NativeChatRowActionsProvider({
   pane,
-  chat,
+  rewind,
   forks,
   children
 }: {
   pane: Pick<NativeChatStructuredViewProps, 'tabId' | 'agent' | 'target'>
-  chat: { rewind: { surface: NativeChatRewindSurface | undefined } }
+  rewind: NativeChatRewindSurface | undefined
   /** The session's fork, shared with its `/fork` and `/btw` commands. */
   forks: NativeChatPaneForks
   children: React.ReactNode
@@ -52,7 +52,7 @@ export function NativeChatRowActionsProvider({
     [agent, target, worktreeId, sourceOpenable]
   )
   return (
-    <NativeChatRewindContext.Provider value={chat.rewind.surface}>
+    <NativeChatRewindContext.Provider value={rewind}>
       <NativeChatForkContext.Provider value={forks.fork}>
         <NativeChatSideChatForkPointContext.Provider value={forks.sideChat?.reportForkPoint}>
           <NativeChatForkedFromContext.Provider value={openSource}>

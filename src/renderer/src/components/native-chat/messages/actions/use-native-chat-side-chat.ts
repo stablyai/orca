@@ -17,8 +17,10 @@ export type NativeChatSideChat = {
   /** The newest finished response a fork can copy through now; a running reply never is one. */
   finishedForkItemId: string | null
   /** Starts one; the reason when it can't start now, else whether it started (with a question:
-   *  whether the question went out). */
-  open: (question: string) => Promise<{ refused: string } | { started: boolean }>
+   *  whether the question went out) and the chat it opened. */
+  open: (
+    question: string
+  ) => Promise<{ refused: string } | { started: boolean; sessionId?: string }>
   /** The transcript's newest response that offers Fork, as drawn. */
   reportForkPoint: (point: NativeChatSideChatForkPoint) => void
 }
@@ -41,7 +43,15 @@ export function useNativeChatSideChat(
         : null
     const start = (): { refused: string } | { throughItemId: string } => {
       // Another fork from this chat is still opening.
-      if (fork.support.kind === 'unknown' || fork.pendingItemId !== null) {
+      if (fork.pendingItemId !== null) {
+        return {
+          refused: t(
+            'components.native-chat.sideChat.notReady',
+            'Side chats are not ready yet. Try again in a moment.'
+          )
+        }
+      }
+      if (fork.support.kind === 'unknown') {
         return {
           refused: t(
             'components.native-chat.sideChat.notReady',
@@ -64,7 +74,10 @@ export function useNativeChatSideChat(
           return next
         }
         const outcome = await fork.request(next.throughItemId, question ? { question } : {})
-        return { started: question ? outcome?.question === 'sent' : outcome?.chat !== undefined }
+        return {
+          started: question ? outcome?.question === 'sent' : outcome?.chat !== undefined,
+          ...(outcome?.chat ? { sessionId: outcome.chat.sessionId } : {})
+        }
       }
     }
   }, [fork, point, t])

@@ -61,10 +61,12 @@ function readInitialTriggerPosition(): FloatingTerminalTriggerPositionState {
 
 export function FloatingTerminalToggleButton({
   open,
-  onToggle
+  onToggle,
+  rightBoundary = null
 }: {
   open: boolean
   onToggle: () => void
+  rightBoundary?: number | null
 }): React.JSX.Element {
   const t = useTranslate()
   // Memoized: subscribe so a language change still repaints its labels.
@@ -86,8 +88,14 @@ export function FloatingTerminalToggleButton({
   const [position, setPosition] = useState(initialPositionState.current.position)
   const keepClear = useFloatingTerminalTriggerKeepClearRects()
   const [dragging, setDragging] = useState(false)
-  // A drag follows the pointer; once dropped, the button shows, and saves, clear of the comment box.
-  const shown = dragging ? position : keepFloatingTerminalTriggerClear(position, keepClear)
+  // Reserve the side chat's controls without overwriting the saved launcher location.
+  const boundedPosition =
+    rightBoundary === null
+      ? position
+      : clampFloatingTerminalTriggerPosition(position, rightBoundary)
+  const shown = dragging
+    ? boundedPosition
+    : keepFloatingTerminalTriggerClear(boundedPosition, keepClear)
   const dragRef = useRef<{
     pointerId: number
     startX: number
@@ -99,11 +107,11 @@ export function FloatingTerminalToggleButton({
   const stagedPositionRef = useRef<FloatingTerminalTriggerPosition | null>(null)
   const suppressClickRef = useRef(false)
 
-  const previewPosition = useCallback((nextPosition: FloatingTerminalTriggerPosition): void => {
-    const clamped = clampFloatingTerminalTriggerPosition(nextPosition)
+  const previewPosition = (nextPosition: FloatingTerminalTriggerPosition): void => {
+    const clamped = clampFloatingTerminalTriggerPosition(nextPosition, rightBoundary ?? undefined)
     stagedPositionRef.current = clamped
     setPosition(clamped)
-  }, [])
+  }
 
   const commitPosition = useCallback((nextPosition: FloatingTerminalTriggerPosition): void => {
     stagedPositionRef.current = null

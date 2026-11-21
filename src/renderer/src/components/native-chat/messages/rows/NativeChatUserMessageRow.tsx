@@ -30,6 +30,8 @@ import { NativeChatConnectorNoAccessNote } from '../../NativeChatConnectorNoAcce
 import { NativeChatDetailsDisclosure } from '../diagnostics/NativeChatProviderDetails'
 import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAttachments'
 import type { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
+import { NativeChatSentReferenceChips } from '../../selection-quotes/NativeChatAuxiliaryReferenceChips'
+import { nativeChatSentPromptReferences } from '../../../../../../shared/native-chat/transcript/messages/native-chat-sent-prompt-references'
 
 const USER_META_REVEAL =
   'transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100'
@@ -106,11 +108,13 @@ export function NativeChatUserMessageRow({
   if (folded) {
     return <div ref={rowRef} hidden />
   }
+  const sentReferences = nativeChatSentPromptReferences(message)
   return (
     <div
       ref={rowRef}
       // Read by the context menu: only rows showing the hover copy or rewind offer them there.
       data-native-chat-message-id={markdown ? message.id : undefined}
+      data-native-chat-selection-row={message.id}
       data-native-chat-rewind-item={rewind && !sending ? message.id : undefined}
       data-native-chat-slack-posted={slackPost?.state === 'posted' ? message.id : undefined}
       className={cn('group relative flex flex-col gap-0.5', from ? 'items-start' : 'items-end')}
@@ -137,6 +141,7 @@ export function NativeChatUserMessageRow({
         />
       ) : (
         <NativeChatUserBubble>
+          <NativeChatSentReferenceChips references={sentReferences} />
           {markdown ? (
             <>
               <NativeChatImageAttachments

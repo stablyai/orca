@@ -13,6 +13,7 @@ import {
 import { remarkUnknownHtmlAsText } from '../../comment-markdown/comment-markdown-unknown-html-as-text'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import { deriveNativeChatRowContent } from '../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
+import { withoutSentNativeChatPromptReferences } from '../../../../../shared/native-chat/transcript/messages/native-chat-sent-prompt-references'
 import { commentMarkdownRemarkPlugins } from '../../comment-markdown/comment-markdown-remark-plugins'
 import { remarkChatMath } from '../../comment-markdown/chat-markdown-math'
 import { remarkNativeChatFileDestinations } from './native-chat-markdown-file-destinations'
@@ -35,7 +36,11 @@ function sourceReader(visuals: boolean) {
     if (cached) {
       return cached
     }
-    const root = parser.runSync(parser.parse(deriveNativeChatRowContent(message.blocks).markdown))
+    const root = parser.runSync(
+      parser.parse(
+        deriveNativeChatRowContent(withoutSentNativeChatPromptReferences(message)).markdown
+      )
+    )
     const images: string[] = []
     function collect(node: Root | RootContent): void {
       if (

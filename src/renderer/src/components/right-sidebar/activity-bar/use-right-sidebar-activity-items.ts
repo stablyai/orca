@@ -6,6 +6,7 @@ import {
   GitBranch,
   House,
   ListChecks,
+  MessageSquarePlus,
   MessagesSquare,
   Workflow
 } from 'lucide-react'
@@ -172,6 +173,12 @@ export function useRightSidebarActivityItems({
         id: 'vault',
         icon: AgentSessionHistoryIcon,
         title: t('auto.components.right.sidebar.index.aiVaultSessionHistory', 'Agents'),
+        shortcut: ''
+      },
+      {
+        id: 'side-chat',
+        icon: MessageSquarePlus,
+        title: t('components.rightSidebar.sideChat.title', 'Side chat'),
         shortcut: ''
       },
       {

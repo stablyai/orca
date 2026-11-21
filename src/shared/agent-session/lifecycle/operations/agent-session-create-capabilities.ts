@@ -13,6 +13,9 @@ export const AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY =
 // Create is strict: this capability lets the host own the first message from creation.
 export const AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY =
   'agentSession.create.message.v1' as const
+// Strict method: hosts advertising this accept an unlisted child chat derived from one parent chat.
+export const AGENT_SESSION_CREATE_AUXILIARY_RUNTIME_CAPABILITY =
+  'agentSession.create.auxiliary.v1' as const
 
 // Send is strict: advertise options before sending model/effort choices for the new turn and chat record.
 export const AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY =
@@ -50,6 +53,7 @@ export const AGENT_SESSION_CREATE_RUNTIME_CAPABILITIES = [
   AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CREATE_AUXILIARY_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_OPTIONS_MODE_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY,

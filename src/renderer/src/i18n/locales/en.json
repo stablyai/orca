@@ -20715,6 +20715,27 @@
     }
   },
   "components": {
+    "rightSidebar": {
+      "sideChat": {
+        "title": "Auxiliary chats",
+        "tabTitle": "Auxiliary chat {{number}}",
+        "close": "Close auxiliary chat {{number}}",
+        "new": "New auxiliary chat",
+        "empty": "Ask about this conversation without interrupting it.",
+        "openChat": "Open an OMP chat to start an auxiliary chat.",
+        "agentUnsupported": "Auxiliary chats are available in OMP chats.",
+        "notActive": "Bring this chat into focus before starting an auxiliary chat.",
+        "narrow": "Auxiliary chats need a wider window.",
+        "viewUnsupported": "Auxiliary chats are available in the workspace.",
+        "hostOlder": "Update Orca on this host to use auxiliary chats.",
+        "childAsleep": "That auxiliary chat is asleep. Start a new one.",
+        "childUnverified": "That auxiliary chat isn't available. Start a new one.",
+        "childWaiting": "Answer the pending request in the auxiliary chat before adding a selection.",
+        "childUnavailable": "That auxiliary chat is no longer available.",
+        "createFailed": "Couldn't start an auxiliary chat. Try again.",
+        "referenceLimit": "Selections are limited to 8 references, 8,000 characters each and 16,000 characters total."
+      }
+    },
     "onboarding": {
       "flow": {
         "stepTooltip": {
@@ -21158,6 +21179,7 @@
         "noMembers": "No matching bots",
         "filesLoadFailed": "Couldn't load files",
         "attach": "Attach file",
+        "removeSelection": "Remove selection",
         "startDictation": "Start dictation",
         "stopDictation": "Stop dictation",
         "noSkills": "No matching skills",
@@ -21747,6 +21769,10 @@
       "dismissDeliveryNotice": "Dismiss",
       "editDeliveryNotice": "Edit",
       "addSelectionToChat": "Add to chat",
+      "askSelectionInSideChat": "Ask in auxiliary chat",
+      "auxiliaryChat": {
+        "referenceBlocked": "Return to this chat’s composer before adding a selection."
+      },
       "messageNotSent": "Message not sent",
       "messageSending": "Sending…",
       "userMessage": {
@@ -22316,7 +22342,7 @@
       "splitRight": "Split Right",
       "splitDown": "Split Down",
       "sideChat": {
-        "description": "Ask a side question in a fork beside this chat",
+        "description": "Ask a question in a separate chat",
         "argumentHint": "<question>",
         "notReady": "Side chats are not ready yet. Try again in a moment.",
         "replyRunning": "Available when this reply finishes.",

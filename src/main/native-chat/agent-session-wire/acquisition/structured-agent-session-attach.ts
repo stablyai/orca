@@ -63,6 +63,10 @@ export type AgentSessionAttachParams = {
   /** Exclude tab placement from conversation identity/fingerprints. */
   surfaceTabId?: string
   launchArgs?: string[]
+  /** Host-derived provider conversation to resume without importing it (auxiliary children only). */
+  seedProviderHandle?: AgentSessionProviderHandle
+  /** Present only for an unlisted child derived from its parent. */
+  auxiliary?: AgentSessionRecord['auxiliaryChat']
   /** Omit only for create intent; fingerprint the client wire form before adapter proof. */
   providerHandle?: AgentSessionWireProviderHandle
   /** Host-only adoption seeds resume/import. Ordinary ensure handles must not imply adoption. */
@@ -198,6 +202,14 @@ function adoptedProviderHandleLink(
   }
 }
 
+/** A host-derived child conversation begins exactly like an adoption, but imports nothing. */
+export function seededProviderHandleLink(
+  handle: AgentSessionProviderHandle,
+  observedAt: number
+): AgentSessionProviderHandleLink {
+  return adoptedProviderHandleLink(handle, observedAt)
+}
+
 export function reserveRequestFor(input: {
   sessionId: string
   params: AgentSessionAttachParams
@@ -225,7 +237,12 @@ export function reserveRequestFor(input: {
           // New records begin at fence 1, matching the owner probe’s required head fence.
           adoptedHandleLink: adoptedProviderHandleLink(params.adopt.providerHandle, input.now)
         }
-      : {}),
+      : params.seedProviderHandle
+        ? {
+            adoptedHandleLink: seededProviderHandleLink(params.seedProviderHandle, input.now)
+          }
+        : {}),
+    ...(params.auxiliary ? { auxiliaryChat: params.auxiliary } : {}),
     conversationName: params.adopt?.conversationName,
     expectedFence: params.envelope.expectedRuntimeFence,
     spawnToken: authority.spawnToken,

@@ -45,6 +45,7 @@ import { STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS } from './catalog/structu
 import {
   AttachParams,
   ConversationCommandParams,
+  CreateAuxiliaryParams,
   CreateParams,
   CreateSupportParams,
   HistoryParams,
@@ -62,6 +63,7 @@ import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-ses
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { refusingStructuredAgentSessionCreatesClosedFirst } from './creation/structured-agent-session-close-before-create'
+import { handleStructuredAgentSessionCreateAuxiliary } from './creation/structured-agent-session-create-auxiliary'
 import * as queuedImages from './attachments/structured-agent-session-queued-image-capability'
 import { projectReceiptDeviceHistory } from './subscriptions/structured-agent-session-receipt-devices'
 
@@ -96,6 +98,17 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     handler: ORCA_LAYOUT_OWNER_IS_MAIN
       ? refusingStructuredAgentSessionCreatesClosedFirst(handleStructuredAgentSessionCreate)
       : handleStructuredAgentSessionCreate
+  }),
+  defineMethod({
+    name: 'agentSession.createAuxiliary',
+    requires: ['accounts'],
+    permission: 'workspace',
+    params: CreateAuxiliaryParams,
+    handler: ORCA_LAYOUT_OWNER_IS_MAIN
+      ? refusingStructuredAgentSessionCreatesClosedFirst(
+          handleStructuredAgentSessionCreateAuxiliary
+        )
+      : handleStructuredAgentSessionCreateAuxiliary
   }),
   defineMethod({
     name: 'agentSession.ensure',

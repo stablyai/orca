@@ -40,8 +40,10 @@ import type { NativeChatComposerHandle } from '../../composer/native-chat-compos
 import { AgentSessionContinuationMenuItem } from '@/components/agent-session-continuation/AgentSessionContinuationMenuItem'
 import { AgentSessionContextCopyMenuItem } from '@/components/terminal-pane/clipboard/AgentSessionContextCopyMenuItem'
 import {
+  hasNativeChatContextTarget,
   noNativeChatContextMenuTarget,
   readNativeChatContextMenuTarget,
+  type NativeChatAuxiliaryChat,
   type NativeChatContextMenuTarget,
   type NativeChatLinkContextResolver
 } from './native-chat-context-menu-target'
@@ -88,6 +90,8 @@ export type NativeChatContextMenuTargetArgs = {
   /** A function resolves per link, for a transcript whose rows come from several workspaces. */
   fileLinkContext?: NativeChatFileLinkContext | null | NativeChatLinkContextResolver
   rewind?: NativeChatRewindSurface
+  /** Absent where the chat has no auxiliary chat to take a selected row into. */
+  auxiliaryChat?: NativeChatAuxiliaryChat
   onFind?: (returnFocusTo: Element | null) => void
 }
 
@@ -152,6 +156,7 @@ export function useNativeChatContextMenu({
   messageListRef,
   fileLinkContext = null,
   rewind,
+  auxiliaryChat,
   onFind
 }: UseNativeChatContextMenuArgs): {
   onContextMenuCapture: MouseEventHandler<HTMLElement>
@@ -176,7 +181,7 @@ export function useNativeChatContextMenu({
     image !== undefined ||
     hasSelection ||
     state.canPaste ||
-    Boolean(target.quoteText ?? target.link ?? target.codeText ?? target.messageText) ||
+    hasNativeChatContextTarget(target) ||
     (target.rewindItemId !== null && rewind !== undefined) ||
     target.slackPostedItemId !== null
   const hasSessionItems = onFind !== undefined || onHandOff !== undefined || showTerminalPaneActions
@@ -250,6 +255,7 @@ export function useNativeChatContextMenu({
           rootRef={rootRef}
           composerRef={composerRef}
           enabled={enabled && !(state.open && hasItems)}
+          auxiliaryChat={auxiliaryChat}
         />
         <DropdownMenuTrigger asChild>
           <button
@@ -300,6 +306,15 @@ export function useNativeChatContextMenu({
               flushSync(() => setState((prev) => ({ ...prev, open: false })))
               composerRef.current?.appendText(formatNativeChatQuote(text))
             }}
+            onAskInAuxiliaryChat={
+              auxiliaryChat
+                ? (reference) => {
+                    flushSync(() => setState((prev) => ({ ...prev, open: false })))
+                    auxiliaryChat.addReference(reference)
+                  }
+                : undefined
+            }
+            auxiliaryChatBlockedReason={auxiliaryChat?.referenceBlockedReason}
             rewind={rewind}
           />
           {state.canPaste ? (
@@ -406,8 +421,5 @@ function getNativeChatSelectedText(root: HTMLElement | null): string {
 }
 
 function nodeBelongsToRoot(node: Node | null, root: HTMLElement): boolean {
-  if (!node) {
-    return false
-  }
-  return root.contains(node)
+  return node !== null && root.contains(node)
 }

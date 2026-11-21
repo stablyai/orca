@@ -207,6 +207,8 @@ export type AgentSessionStatusSummary = {
   usageLimitContinue?: AgentSessionUsageLimitContinue
   rewindBlockedReason?: AgentSessionRewindReason
   sessionId: string
+  /** Present only for an unlisted auxiliary child; ordinary status lists and rows must not show it. */
+  auxiliaryParentSessionId?: string
   workspaceId: string
   agent: AgentSessionRecord['provider']
   /** Null until the journal holds a persisted user or assistant message. */
