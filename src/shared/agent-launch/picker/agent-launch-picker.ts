@@ -54,6 +54,13 @@ export type AgentPickerEntry = {
   /** Chooses a setup to keep (a bot's), not a launch: these permissions in the card with
    *  the inherited one as a choice, or none where the permission is set beside the picker. */
   keptSetup?: { permissions?: readonly AgentChatPermissionMode[]; inheritLabel?: string }
+  /** A saved copy of `agent`: launches run with the copy's own setup. */
+  copy?: { id: string; name: string }
+}
+
+/** Tells a copy's entry apart from its base agent's, which share `agent`. */
+export function agentPickerEntryKey(entry: Pick<AgentPickerEntry, 'agent' | 'copy'>): string {
+  return entry.copy?.id ?? entry.agent
 }
 export type AgentPickerDraft = {
   agent: TuiAgent
