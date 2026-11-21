@@ -17,6 +17,8 @@ const HEALTH_TIMEOUT_MS = 5000
 // outage and kept (terminating can't interrupt that call) until it answers, errors or exits.
 const STUCK_MS = 60_000
 const RESTART_BASE_MS = 1000
+// A worker that never answered holds no checkpoint, so close stops waiting for its thread after this.
+const UNANSWERED_CLOSE_MS = 2000
 // Also how long a restarted worker must stay up before its backoff starts over.
 const RESTART_MAX_MS = 60_000
 
@@ -55,6 +57,7 @@ type Attached = {
   stuck: boolean
   /** An idle worker silent for one deadline may just be descheduled; a second makes it dead. */
   silent: boolean
+  answered: boolean
 }
 
 /** Starts, watches and restarts the checkpoint thread; at most one ever runs. */
@@ -132,6 +135,7 @@ export class JournalCheckpointWorkerSupervisor<Message> {
       busySince: undefined,
       stuck: false,
       silent: false,
+      answered: false,
       exited: new Promise((resolve) => {
         worker.on('exit', () => {
           resolve()
@@ -147,6 +151,7 @@ export class JournalCheckpointWorkerSupervisor<Message> {
         attached.busySince = undefined
         attached.silent = false
         attached.stuck = false
+        attached.answered = true
         this.host.receive(message)
       }
     })
@@ -241,8 +246,17 @@ export class JournalCheckpointWorkerSupervisor<Message> {
   private async retire(): Promise<void> {
     const attached = this.current
     if (attached) {
-      await attached.worker.terminate()
-      await attached.exited
+      const exited = attached.worker.terminate().then(() => attached.exited)
+      if (attached.answered) {
+        await exited
+      } else {
+        // One stuck opening SQLite on a hung disk would otherwise hold up quit; it dies with the process.
+        exited.catch(() => undefined)
+        await Promise.race([
+          exited,
+          new Promise((resolve) => setTimeout(resolve, UNANSWERED_CLOSE_MS).unref())
+        ])
+      }
       this.current = undefined
     }
     await this.retiring
