@@ -2,8 +2,8 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { createMobileChatAttachmentReader } from './mobile-chat-attachment-read'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { useMemo, useState, useEffect, useCallback } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
+import { Platform, Pressable, Text, View } from 'react-native'
 import { AttachmentTextScrollView } from './AttachmentTextScrollView'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useWorkspaceRouteHandoff } from '../../navigation/workspace-route-handoff'
@@ -36,25 +36,42 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
   )
 }
 
+// The browser build has no file system to copy into, so saving is a native-app action.
+const CAN_SAVE_ATTACHMENTS = Platform.OS !== 'web'
+
 function useChatAttachmentShare(read: AttachmentTextRead, path: string) {
   const t = useMobileTranslation()
   const [progress, setProgress] = useState<number | null>(null)
   const [error, setError] = useState('')
+  const active = useRef<AbortController | null>(null)
+  // Leaving the preview, or switching files, stops a download so it cannot open a share sheet afterwards.
+  useEffect(() => () => active.current?.abort(), [read, path])
   const share = async () => {
     setError('')
     setProgress(0)
+    const controller = new AbortController()
+    active.current = controller
     try {
-      await Sharing.shareAsync(
-        await downloadMobileChatAttachment(read, { path, onProgress: setProgress })
-      )
+      const uri = await downloadMobileChatAttachment(read, {
+        path,
+        onProgress: setProgress,
+        signal: controller.signal
+      })
+      if (!controller.signal.aborted) {
+        await Sharing.shareAsync(uri)
+      }
     } catch (cause) {
-      setError(
-        cause instanceof Error && cause.message
-          ? cause.message
-          : t('chat.textAttachmentPreview.shareFailed', 'Unable to open this file. Try again.')
-      )
+      if (!controller.signal.aborted) {
+        setError(
+          cause instanceof Error && cause.message
+            ? cause.message
+            : t('chat.textAttachmentPreview.shareFailed', 'Unable to open this file. Try again.')
+        )
+      }
     } finally {
-      setProgress(null)
+      if (!controller.signal.aborted) {
+        setProgress(null)
+      }
     }
   }
   return { share, progress, error }
@@ -112,9 +129,12 @@ function MobileBinaryAttachmentInfo({ params }: { params: MobileFilePreviewRoute
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ disabled: progress !== null }}
-          disabled={progress !== null || !client}
+          disabled={progress !== null || !client || !CAN_SAVE_ATTACHMENTS}
           onPress={() => void share()}
-          style={[styles.backButton, (progress !== null || !client) && styles.saveButtonDisabled]}
+          style={[
+            styles.backButton,
+            (progress !== null || !client || !CAN_SAVE_ATTACHMENTS) && styles.saveButtonDisabled
+          ]}
         >
           <Text style={styles.meta}>
             {progress === null
@@ -124,6 +144,14 @@ function MobileBinaryAttachmentInfo({ params }: { params: MobileFilePreviewRoute
                 })}
           </Text>
         </Pressable>
+        {CAN_SAVE_ATTACHMENTS ? null : (
+          <Text style={styles.meta}>
+            {t(
+              'chat.textAttachmentPreview.saveNativeOnly',
+              'Saving files is not available in this view yet.'
+            )}
+          </Text>
+        )}
         {error ? (
           <Text accessibilityRole="alert" style={styles.errorText}>
             {error}
@@ -223,7 +251,7 @@ function MobileChatTextAttachmentPreview({ params }: { params: MobileFilePreview
             : t('chat.textAttachmentPreview.downloading', 'Downloading {{percent}}%', {
                 percent: Math.min(100, Math.floor(progress * 100))
               }),
-          progress !== null,
+          progress !== null || !CAN_SAVE_ATTACHMENTS,
           () => void share()
         )}
         {action(t('common.retry', 'Retry'), busy, retry)}

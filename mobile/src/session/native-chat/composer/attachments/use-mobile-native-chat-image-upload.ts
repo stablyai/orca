@@ -231,7 +231,12 @@ export function useMobileNativeChatImageUpload(args: {
                 !destination.active ||
                 readMobileNativeChatDraftInputs(destination.scope).uploads?.[uploadId] === undefined
             })
-            uploaded.push({ path, previewUri: path })
+            // The clipboard route cannot stop mid-transfer, so a chip removed meanwhile must not reappear.
+            if (
+              readMobileNativeChatDraftInputs(destination.scope).uploads?.[uploadId] !== undefined
+            ) {
+              uploaded.push({ path, previewUri: path })
+            }
           } catch (error) {
             // A removed chip skips just that file; any other failure stops the batch.
             if (!(error instanceof MobileUploadCancelledError)) {

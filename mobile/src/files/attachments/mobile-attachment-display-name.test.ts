@@ -7,6 +7,9 @@ describe('shortAttachmentDisplayName', () => {
     expect(
       shortAttachmentDisplayName('/store/x/ScreenRecording_11-17-2026 19-45-47_1.mp4', 30)
     ).toBe('ScreenRecording_11-1…-47_1.mp4')
+    expect(shortAttachmentDisplayName('/store/x/QuarterlyRevenueForecast2026.numbers', 22)).toBe(
+      'Quarterly…2026.numbers'
+    )
   })
 
   it('gives no caption for a generated name or an inline image address', () => {

@@ -36,6 +36,30 @@ describe('a terminal chat file send and its local echo', () => {
     expect(landed).toEqual([{ pendingId: 'echo-1', messageId: 'row-1', images: [first, second] }])
   })
 
+  it('does not land a textless echo on a row that carries different uploaded files', () => {
+    const other: NativeChatMessage = {
+      id: 'row-2',
+      role: 'user',
+      blocks: [{ type: 'text', text: second }],
+      timestamp: 2,
+      source: 'transcript'
+    }
+    const landed = findLandedImagePreviewEchoes(
+      [other],
+      [
+        {
+          id: 'echo-1',
+          text: '',
+          sentAt: 1,
+          afterMessageId: null,
+          matchingOccurrence: 1,
+          images: [first]
+        }
+      ]
+    )
+    expect(landed).toEqual([])
+  })
+
   it('does not add a second chip for a file the row text already names', () => {
     const { folded } = buildMobileNativeChatTransientData({
       folded: [sent],

@@ -39,4 +39,16 @@ describe('uploaded file references in a sent message', () => {
     ])
     expect(nativeChatTextWithoutUploadedFiles(text)).toBe('Multi file upload test')
   })
+
+  it('keeps the drive letter of a Windows upload path', () => {
+    const store = 'C:/Users/u/AppData/Roaming/orca/agent-session-attachments'
+    const id = '0b3f5c2a-1d4e-4a6b-9c8d-7e6f5a4b3c2d'
+    expect(nativeChatUploadedFilePaths(`${store}/${id}/movie.mp4 watch this`)).toEqual([
+      `${store}/${id}/movie.mp4`
+    ])
+    const quoted = `@"C:\\Users\\u\\AppData\\Roaming\\orca\\agent-session-attachments\\${id}\\my notes.txt"`
+    expect(nativeChatUploadedFilePaths(quoted)).toEqual([
+      `C:\\Users\\u\\AppData\\Roaming\\orca\\agent-session-attachments\\${id}\\my notes.txt`
+    ])
+  })
 })

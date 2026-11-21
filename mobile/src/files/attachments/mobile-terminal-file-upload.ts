@@ -11,9 +11,12 @@ import { uploadMobileAgentSessionAttachment } from './mobile-agent-session-attac
 type TerminalFileUploadClient = MobileClipboardImageRpcSender &
   Parameters<typeof uploadMobileAgentSessionAttachment>[0]
 
-async function joinedBase64(file: PickedMobileFile): Promise<string> {
+async function joinedBase64(file: PickedMobileFile, shouldCancel?: () => boolean): Promise<string> {
   let base64 = ''
   for await (const chunk of file.chunks()) {
+    if (shouldCancel?.()) {
+      throw new MobileUploadCancelledError()
+    }
     base64 += chunk
   }
   return base64
@@ -23,12 +26,20 @@ async function joinedBase64(file: PickedMobileFile): Promise<string> {
 async function uploadThroughClipboardRpc(
   client: MobileClipboardImageRpcSender,
   file: PickedMobileFile,
-  connectionId: string | null
+  connectionId: string | null,
+  shouldCancel?: () => boolean
 ): Promise<string> {
   if (file.byteLength > MOBILE_PICKED_FILE_MAX_BYTES) {
     throw new MobileFileTooLargeError(file.name, MOBILE_PICKED_FILE_MAX_BYTES)
   }
-  return saveMobileClipboardImageAsTempFile(client, await joinedBase64(file), {
+  if (shouldCancel?.()) {
+    throw new MobileUploadCancelledError()
+  }
+  const base64 = await joinedBase64(file, shouldCancel)
+  if (shouldCancel?.()) {
+    throw new MobileUploadCancelledError()
+  }
+  return saveMobileClipboardImageAsTempFile(client, base64, {
     connectionId,
     ...(file.generatedName ? {} : { fileName: file.name })
   })
@@ -47,7 +58,12 @@ export async function uploadMobileTerminalFile(
   try {
     if (options.connectionId !== null) {
       // The file must exist on the remote machine the terminal runs on, not on this host.
-      return await uploadThroughClipboardRpc(client, file, options.connectionId)
+      return await uploadThroughClipboardRpc(
+        client,
+        file,
+        options.connectionId,
+        options.shouldCancel
+      )
     }
     const stored = await uploadMobileAgentSessionAttachment(client, {
       name: file.name,
@@ -66,6 +82,6 @@ export async function uploadMobileTerminalFile(
       throw error
     }
     // A host that predates streamed terminal uploads refuses the request; small files still go the old way.
-    return uploadThroughClipboardRpc(client, file, null)
+    return uploadThroughClipboardRpc(client, file, null, options.shouldCancel)
   }
 }

@@ -45,7 +45,22 @@ export async function pickMobileGallery(
   }
   const images: PickedMobileImage[] = []
   const videos: PickedMobileFile[] = []
-  for (const asset of result.assets) {
+  try {
+    await collectGalleryAssets(result.assets, createFile, images, videos)
+  } catch (error) {
+    videos.forEach((video) => video.dispose?.())
+    throw error
+  }
+  return { images, videos }
+}
+
+async function collectGalleryAssets(
+  assets: readonly ImagePicker.ImagePickerAsset[],
+  createFile: (uri: string) => FsFile,
+  images: PickedMobileImage[],
+  videos: PickedMobileFile[]
+): Promise<void> {
+  for (const asset of assets) {
     if (!asset.uri) {
       continue
     }
@@ -76,5 +91,4 @@ export async function pickMobileGallery(
       }
     })
   }
-  return { images, videos }
 }

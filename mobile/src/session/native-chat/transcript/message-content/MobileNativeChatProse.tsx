@@ -157,7 +157,9 @@ const IMAGE_EXTENSIONS: ReadonlySet<string> = new Set(
 
 function isNonImageFileRef(ref: string | undefined): ref is string {
   const extension = ref ? mobileAttachmentExtension(ref) : null
-  return extension !== null && !IMAGE_EXTENSIONS.has(extension) && !/^data:/i.test(ref ?? '')
+  return (
+    extension !== null && !IMAGE_EXTENSIONS.has(extension) && !/^(?:data|https?):/i.test(ref ?? '')
+  )
 }
 
 // Host paths cannot load on the phone; the chat's host reads them, and a refused read stays a placeholder.
