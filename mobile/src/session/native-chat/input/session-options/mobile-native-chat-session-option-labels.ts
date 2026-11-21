@@ -118,15 +118,18 @@ function reportedPermissionLabel(descriptor: SessionOptionDescriptor): string | 
       : null
 }
 
+/** The product whose settings an Own choice follows; one call site keeps the phone bundle small. */
+function settingsAgent(descriptor: SessionOptionDescriptor): string {
+  return agentPermissionSettingsSourceName(
+    descriptor.kind.type === 'select' ? descriptor.kind.settingsAgent : undefined
+  )
+}
+
 function mobileAgentSettingsLabel(descriptor: SessionOptionDescriptor): string {
   return translate(
     'components.native-chat.composer.permissionAgentSettings',
     '{{agent}} settings',
-    {
-      agent: agentPermissionSettingsSourceName(
-        descriptor.kind.type === 'select' ? descriptor.kind.settingsAgent : undefined
-      )
-    }
+    { agent: settingsAgent(descriptor) }
   )
 }
 
@@ -144,7 +147,7 @@ export function mobilePermissionSettingsHint(
   if (!hint) {
     return undefined
   }
-  const agent = agentPermissionSettingsSourceName(descriptor.kind.settingsAgent)
+  const agent = settingsAgent(descriptor)
   return hint === 'unnamed-report'
     ? translate(
         'components.native-chat.composer.permissionAgentSettingsUnnamedHint',
@@ -167,12 +170,7 @@ export function mobileReportedPermissionAccessibleValue(
     ? translate(
         'components.native-chat.composer.permissionFromAgentSettings',
         '{{mode}}, from {{agent}} settings',
-        {
-          mode,
-          agent: agentPermissionSettingsSourceName(
-            descriptor.kind.type === 'select' ? descriptor.kind.settingsAgent : undefined
-          )
-        }
+        { mode, agent: settingsAgent(descriptor) }
       )
     : undefined
 }
