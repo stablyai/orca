@@ -35,7 +35,7 @@ export async function removeFolderWorkspace(
     throw new Error('Cannot delete the project root workspace. Remove the folder project instead.')
   }
   // Archive failure must refuse before watcher, PTY or metadata teardown (#19334).
-  const archiveHookOverride = await gateFolderWorkspaceRemovalOnArchiveHook({
+  const { override: archiveHookOverride } = await gateFolderWorkspaceRemovalOnArchiveHook({
     repo,
     worktreeId: args.worktreeId,
     displayName:

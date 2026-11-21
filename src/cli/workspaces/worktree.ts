@@ -10,6 +10,13 @@ import type {
 import type { CommandHandler } from '../dispatch/dispatch'
 import { printHookWarning, printPreservedBranchWarning } from './worktree-removal-warnings'
 import { requestWorktreeRemoval } from './worktree-removal-request'
+import {
+  archiveHookReport,
+  formatArchiveHookLine,
+  getArchiveHookChoice,
+  printRemovalHookWarnings,
+  resolveArchiveHookRequest
+} from './worktree-archive-hook-choice'
 import { removeIfFolderWorkspace, setIfFolderWorkspace } from './folder-workspace-mutations'
 import { formatWorktreeList, formatWorktreeShow } from './workspace-format'
 import { printResult } from '../output/command-result-output'
@@ -251,6 +258,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatWorktreeShow)
   },
   'worktree rm': async ({ flags, client, cwd, json }) => {
+    const archiveChoice = getArchiveHookChoice(flags)
     await refuseCurrentForRemoval(flags, cwd, client)
     const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
     if (await removeIfFolderWorkspace(client, flags, worktree, json)) {
@@ -266,30 +274,35 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         'Orca cannot tell which host owns this workspace. Refresh projects and try again.'
       )
     }
-    if (flags.get('allow-failed-archive-hook') === true && flags.get('run-hooks') !== true) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        '--allow-failed-archive-hook waives a FAILED archive hook, but without --run-hooks no hook runs at all. Pass --run-hooks too, or drop the waiver.'
-      )
-    }
-    const result = await requestWorktreeRemoval(client, {
-      worktree,
+    const archive = await resolveArchiveHookRequest(client, archiveChoice, async () => ({
+      worktreeId: resolved.result.worktree.id,
+      hostId
+    }))
+    const removal = await requestWorktreeRemoval(client, {
+      // The approval covers this checkout; a selector could match another one by now.
+      worktree: `id:${resolved.result.worktree.id}`,
       hostId,
       force: flags.get('force') === true,
       deleteBranch: flags.get('delete-branch') === true,
-      runHooks: flags.get('run-hooks') === true,
+      runHooks: archive.runHooks,
+      ...(archive.approvedArchiveHash ? { approvedArchiveHash: archive.approvedArchiveHash } : {}),
       // Archive failure waivers protect user data separately from --force's PTY-stop waiver.
       allowFailedArchiveHook: flags.get('allow-failed-archive-hook') === true
     })
-    printHookWarning(result.result, json)
+    const archiveHook = archiveHookReport(archive, removal.result)
+    const result = { ...removal, result: { ...removal.result, archiveHook } }
+    printRemovalHookWarnings(result.result, archiveHook, json)
     printPreservedBranchWarning(result.result, json)
     printResult(result, json, (value) =>
       // Hosts that predate waiting answer on acceptance.
-      value.removing
-        ? 'removed: false\nOrca is still deleting the checkout in the background.'
-        : value.removed === true
-          ? 'removed: true'
-          : 'Removal is not confirmed.'
+      [
+        value.removing
+          ? 'removed: false\nOrca is still deleting the checkout in the background.'
+          : value.removed === true
+            ? 'removed: true'
+            : 'Removal is not confirmed.',
+        formatArchiveHookLine(value.archiveHook)
+      ].join('\n')
     )
   }
 }

@@ -1,3 +1,7 @@
+import type {
+  ArchiveHookApproval,
+  ArchiveHookApprovalRequest
+} from '../../../../shared/worktree/removal/archive-hook-decision'
 import type { BotChangeScope } from '../../../../shared/bots/bot-change-scope'
 import type { WorkspaceMetadataSet } from '../../../../shared/worktree/metadata/workspace-metadata-set'
 import type { WorkspaceCleanupRunFinishedEvent } from '../../../../shared/workspace-cleanup/workspace-cleanup-run'
@@ -180,6 +184,8 @@ export type RuntimeNotifier = {
   resumeSleepingAgents?(worktreeId: string): void
   /** The window applies a client's Agents-list change with its own actions and answers with the verdicts it leaves. */
   applyAgentPaneActivity?(change: AgentPaneActivityChange): Promise<AgentListPublication>
+  /** What the window's Delete would do with a workspace's archive hook, without prompting. */
+  requestArchiveHookApproval?(request: ArchiveHookApprovalRequest): Promise<ArchiveHookApproval>
   terminalFitOverrideChanged(
     ptyId: string,
     mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit',

@@ -16,6 +16,7 @@ import {
   type IssueCommandReadResult
 } from '@/runtime/repo-hooks/runtime-hooks-client'
 import {
+  approvalWithoutPrompt,
   confirmScriptContent,
   isDesktopHookRepoTrusted,
   SKIP,
@@ -185,73 +186,23 @@ export async function ensureHooksApproved(
       return SKIP
     }
     const state = typeof stateOrGetter === 'function' ? stateOrGetter() : stateOrGetter
-    if (isDesktopHookRepoTrusted(state, repoId, context)) {
-      return RUN_ANY
+    const subject = await readHookTrustSubject(
+      state,
+      repoId,
+      scriptKind,
+      hostId,
+      runtimeOwnerEnvironmentId,
+      createSource,
+      context
+    )
+    if (subject.kind !== 'script') {
+      return subject.kind === 'run' ? RUN_ANY : SKIP
     }
-
-    let scriptContent = ''
-    try {
-      if (scriptKind === 'issueCommand') {
-        // Repo-provided commands need trust; untracked user overrides do not. Pass hostId to disambiguate same-ID repos, as checkRuntimeHooks does.
-        // A launch is a user act: it may start the repo's stopped WSL distro.
-        const result = await readRuntimeIssueCommand(
-          hookRepoOwnerHostId(state, repoId, hostId, runtimeOwnerEnvironmentId),
-          repoId,
-          { wakeWslDistro: true }
-        )
-        if (isUserOwnedIssueCommand(result)) {
-          return RUN_ANY
-        }
-        if (result.status === 'error') {
-          return SKIP
-        }
-        if (result.source === 'none') {
-          return RUN_ANY
-        }
-        scriptContent = getIssueCommandTrustContent(result)
-      } else {
-        const repo = findHookRepo(state, repoId, hostId)
-        const localScript = repo?.hookSettings?.scripts?.[scriptKind]?.trim()
-        const sourcePolicy = resolveHookCommandSourcePolicy(
-          repo?.hookSettings?.commandSourcePolicy,
-          {
-            hasLocalScript: Boolean(localScript)
-          }
-        )
-        if (sourcePolicy === 'local-only') {
-          return RUN_ANY
-        }
-        const group = state.projectGroups.find(
-          (entry) => projectGroupHookTrustKey(entry) === repoId
-        )
-        const result = group
-          ? await checkRuntimeGroupHooks(getRepoExecutionHostId(group), group.id)
-          : await checkRuntimeHooks(
-              hookRepoOwnerHostId(state, repoId, hostId, runtimeOwnerEnvironmentId),
-              repoId,
-              scriptKind === 'setup' && createSource ? { createSource } : {}
-            )
-        if (result.status === 'error') {
-          return SKIP
-        }
-        const yamlHooks = (result.hooks as OrcaHooks | null) ?? null
-        scriptContent =
-          scriptKind === 'setup'
-            ? getSetupTrustContent(yamlHooks)
-            : scriptKind === 'vmRecipe'
-              ? getVmRecipeTrustContent(yamlHooks)
-              : (yamlHooks?.scripts?.[scriptKind] ?? '').trim()
-      }
-    } catch {
-      // Fail closed: if we cannot inspect the script, we cannot trust it.
-      return SKIP
-    }
-
     return confirmScriptContent(
       state,
       repoId,
       scriptKind,
-      scriptContent,
+      subject.scriptContent,
       hostId,
       isCancelled,
       signal,
@@ -259,4 +210,116 @@ export async function ensureHooksApproved(
       context
     )
   })
+}
+
+/** The answer ensureHooksApproved gives without prompting; `needs-approval` is where it would ask. */
+export type HookDecisionWithoutPrompt =
+  | { kind: 'run'; approvedContentHash?: string }
+  | { kind: 'needs-approval' }
+  | { kind: 'unreadable' }
+
+export async function decideHooksWithoutPrompt(
+  state: AppState,
+  repoId: string,
+  scriptKind: OrcaHookTrustKind,
+  hostId?: ExecutionHostId,
+  runtimeOwnerEnvironmentId?: string | null
+): Promise<HookDecisionWithoutPrompt> {
+  const subject = await readHookTrustSubject(
+    state,
+    repoId,
+    scriptKind,
+    hostId,
+    runtimeOwnerEnvironmentId
+  )
+  if (subject.kind === 'unreadable') {
+    return subject
+  }
+  if (subject.kind === 'run') {
+    // Trust covers any script; otherwise pin "nothing needed approval" so the host refuses a script added since.
+    return isDesktopHookRepoTrusted(state, repoId, 'workspace')
+      ? { kind: 'run' }
+      : { kind: 'run', approvedContentHash: await hashOrcaHookScript('') }
+  }
+  const { approval } = await approvalWithoutPrompt(state, repoId, scriptKind, subject.scriptContent)
+  return approval
+    ? {
+        kind: 'run',
+        ...(approval.approvedContentHash
+          ? { approvedContentHash: approval.approvedContentHash }
+          : {})
+      }
+    : { kind: 'needs-approval' }
+}
+
+type HookTrustSubject =
+  | { kind: 'run' }
+  | { kind: 'unreadable' }
+  | { kind: 'script'; scriptContent: string }
+
+async function readHookTrustSubject(
+  state: AppState,
+  repoId: string,
+  scriptKind: OrcaHookTrustKind,
+  hostId: ExecutionHostId | undefined,
+  runtimeOwnerEnvironmentId: string | null | undefined,
+  createSource?: SetupHooksCreateSource,
+  context: HookTrustContext = 'workspace'
+): Promise<HookTrustSubject> {
+  if (isDesktopHookRepoTrusted(state, repoId, context)) {
+    return { kind: 'run' }
+  }
+  try {
+    if (scriptKind === 'issueCommand') {
+      // Repo-provided commands need trust; untracked user overrides do not. Pass hostId to disambiguate same-ID repos, as checkRuntimeHooks does.
+      // A launch is a user act: it may start the repo's stopped WSL distro.
+      const result = await readRuntimeIssueCommand(
+        hookRepoOwnerHostId(state, repoId, hostId, runtimeOwnerEnvironmentId),
+        repoId,
+        { wakeWslDistro: true }
+      )
+      if (isUserOwnedIssueCommand(result)) {
+        return { kind: 'run' }
+      }
+      if (result.status === 'error') {
+        return { kind: 'unreadable' }
+      }
+      if (result.source === 'none') {
+        return { kind: 'run' }
+      }
+      return { kind: 'script', scriptContent: getIssueCommandTrustContent(result) }
+    }
+    const repo = findHookRepo(state, repoId, hostId)
+    const localScript = repo?.hookSettings?.scripts?.[scriptKind]?.trim()
+    const sourcePolicy = resolveHookCommandSourcePolicy(repo?.hookSettings?.commandSourcePolicy, {
+      hasLocalScript: Boolean(localScript)
+    })
+    if (sourcePolicy === 'local-only') {
+      return { kind: 'run' }
+    }
+    const group = state.projectGroups.find((entry) => projectGroupHookTrustKey(entry) === repoId)
+    const result = group
+      ? await checkRuntimeGroupHooks(getRepoExecutionHostId(group), group.id)
+      : await checkRuntimeHooks(
+          hookRepoOwnerHostId(state, repoId, hostId, runtimeOwnerEnvironmentId),
+          repoId,
+          scriptKind === 'setup' && createSource ? { createSource } : {}
+        )
+    if (result.status === 'error') {
+      return { kind: 'unreadable' }
+    }
+    const yamlHooks = (result.hooks as OrcaHooks | null) ?? null
+    return {
+      kind: 'script',
+      scriptContent:
+        scriptKind === 'setup'
+          ? getSetupTrustContent(yamlHooks)
+          : scriptKind === 'vmRecipe'
+            ? getVmRecipeTrustContent(yamlHooks)
+            : (yamlHooks?.scripts?.[scriptKind] ?? '').trim()
+    }
+  } catch {
+    // Fail closed: if we cannot inspect the script, we cannot trust it.
+    return { kind: 'unreadable' }
+  }
 }

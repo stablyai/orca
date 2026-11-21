@@ -15,6 +15,7 @@ import type { RuntimeProjectGroupDependencies } from './runtime-project-group-co
 
 export type FolderWorkspaceDeleteOptions = FolderWorkspaceMutationOptions & {
   runHooks?: boolean
+  approvedArchiveHash?: string
   allowFailedArchiveHook?: boolean
   /** Bot homes are torn down by the bot's own delete, which checks for unsaved drafts only before it starts. */
   discardUnsavedDrafts?: boolean
@@ -46,7 +47,11 @@ export async function deleteFolderWorkspaceRow(
   deps: RuntimeProjectGroupDependencies,
   folderWorkspaceId: string,
   options: FolderWorkspaceDeleteOptions
-): Promise<{ deleted: boolean; archiveHookOverride?: ArchiveHookOverride }> {
+): Promise<{
+  deleted: boolean
+  archiveHookRan?: boolean | null
+  archiveHookOverride?: ArchiveHookOverride
+}> {
   const store = deps.getStore()
   if (!store?.removeFolderWorkspace) {
     throw new Error('runtime_unavailable')
@@ -76,6 +81,7 @@ export async function deleteFolderWorkspaceRow(
     | undefined
   let cleanupState: void | Promise<void> = undefined
   let archiveHookOverride: ArchiveHookOverride | undefined
+  let archiveHookRan: boolean | null = false
   try {
     if (workspace) {
       const worktreeId = folderWorkspaceKey(folderWorkspaceId)
@@ -84,15 +90,18 @@ export async function deleteFolderWorkspaceRow(
         .find((entry) => entry.id === workspace.projectGroupId)
       const owner = group && projectGroupHookOwner(group)
       if (owner) {
-        archiveHookOverride = await gateFolderWorkspaceRemovalOnArchiveHook({
+        const gated = await gateFolderWorkspaceRemovalOnArchiveHook({
           repo: owner,
           worktreeId,
           displayName: workspace.name,
           workspacePath: workspace.folderPath,
           runArchive: options.runHooks === true,
           allowFailure: options.allowFailedArchiveHook === true,
+          approvedArchiveHash: options.approvedArchiveHash,
           runtimeTarget: () => undefined
         })
+        archiveHookOverride = gated.override
+        archiveHookRan = gated.ran
       }
       // Mixed-host groups have no single PTY target; skip the sweep so forgetting still succeeds.
       let connectionId: string | null | undefined
@@ -133,7 +142,7 @@ export async function deleteFolderWorkspaceRow(
       }
     }
     await cleanupState
-    return { deleted, ...(archiveHookOverride ? { archiveHookOverride } : {}) }
+    return { deleted, archiveHookRan, ...(archiveHookOverride ? { archiveHookOverride } : {}) }
   } finally {
     await gate?.finish(false)
   }

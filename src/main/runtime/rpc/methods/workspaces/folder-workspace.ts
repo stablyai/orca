@@ -51,6 +51,7 @@ export const FOLDER_WORKSPACE_METHODS = [
       runtime.deleteFolderWorkspace(params.folderWorkspaceId, {
         requireUniqueId: params.requireUniqueId,
         runHooks: params.runHooks,
+        approvedArchiveHash: params.approvedArchiveHash,
         allowFailedArchiveHook: params.allowFailedArchiveHook
       })
   }),

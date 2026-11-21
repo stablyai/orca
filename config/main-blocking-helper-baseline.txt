@@ -1307,7 +1307,7 @@
 2 src/main/runtime/workspaces/creation/workspace-creation.ts
 1 src/main/runtime/workspaces/lineage/runtime-worktree-lineage-controller.ts
 1 src/main/runtime/workspaces/removal/runtime-interrupted-local-worktree-removal.ts
-4 src/main/runtime/workspaces/removal/runtime-registered-local-worktree-removal.ts
+3 src/main/runtime/workspaces/removal/runtime-registered-local-worktree-removal.ts
 2 src/main/runtime/workspaces/removal/runtime-unregistered-worktree-removal.ts
 2 src/main/runtime/workspaces/removal/workspace-registration-removal.ts
 2 src/main/runtime/workspaces/removal/workspace-removal.ts
@@ -1484,7 +1484,7 @@
 1 src/main/workspaces/execution-host/local-project-runtime-pty-options.ts
 1 src/main/workspaces/execution-host/local-project-runtime-resolution.ts
 4 src/main/workspaces/execution-host/project-runtime-git-router.ts
-2 src/main/workspaces/removal/folder-workspace-archive-hook.ts
+1 src/main/workspaces/removal/folder-workspace-archive-hook.ts
 2 src/main/workspaces/removal/local-orphaned-worktree-cleanup.ts
 3 src/main/workspaces/removal/local-worktree-filesystem.ts
 1 src/main/workspaces/removal/local-worktree-removal-recovery.ts

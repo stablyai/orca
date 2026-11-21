@@ -15,7 +15,6 @@ import {
   loadHooks
 } from '../../workspace-hooks/hooks'
 import { getEffectiveSetupRunPolicy } from '../../workspace-hooks/effective-hook-config'
-import { resolveHookCommandSourcePolicy } from '../../../shared/workspace-setup/hooks/hook-command-source-policy'
 import {
   getSetupConfig,
   getSetupTrustContent
@@ -26,6 +25,7 @@ import { inspectSetupScriptImportCandidates } from '../../../shared/workspace-se
 import { joinWorktreeRelativePath } from '../files/paths/runtime-relative-paths'
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { hashOrcaHookTrustContent } from '../../workspace-hooks/created-worktree-setup-trust'
+import { archiveTrust } from '../../workspace-hooks/archive-hook-trust-content'
 import type { SetupHooksCreateSource } from '../../../shared/worktree/setup-hooks-create-source'
 
 type RuntimeRepositoryHooksCommandsDeps<TRepo extends WorkspaceHookOwner> = {
@@ -153,16 +153,4 @@ export class RuntimeRepositoryHooksCommands<TRepo extends WorkspaceHookOwner = R
 
 function hookTrust(scriptContent: string): { contentHash: string; scriptContent: string } {
   return { contentHash: hashOrcaHookTrustContent(scriptContent), scriptContent }
-}
-
-function archiveTrust(
-  repo: WorkspaceHookOwner,
-  sharedHooks: OrcaHooks | null
-): { contentHash: string; scriptContent: string } | null {
-  const localArchive = repo.hookSettings?.scripts.archive?.trim()
-  const policy = resolveHookCommandSourcePolicy(repo.hookSettings?.commandSourcePolicy, {
-    hasLocalScript: Boolean(localArchive)
-  })
-  const sharedArchive = sharedHooks?.scripts.archive?.trim()
-  return policy === 'local-only' || !sharedArchive ? null : hookTrust(sharedArchive)
 }

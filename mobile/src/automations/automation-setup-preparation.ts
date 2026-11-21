@@ -1,5 +1,8 @@
 import { EMPTY_ORCA_HOOK_CONTENT_HASH } from '../../../src/shared/hashing/orca-hook-content-hash'
-import { isOrcaHookRepoTrusted } from '../../../src/shared/workspace-setup/hooks/orca-hook-trust-entries'
+import {
+  isOrcaHookRepoTrusted,
+  isOrcaHookTrusted
+} from '../../../src/shared/workspace-setup/hooks/orca-hook-trust-entries'
 import {
   parseExecutionHostId,
   type ExecutionHostId
@@ -14,7 +17,6 @@ import {
 import type { OrcaHookTrustPrompt } from '../components/hook-trust/OrcaHookTrustDrawer'
 import { newTabRepoListRead } from '../session/agent-launch/mobile-runtime-repo-operations'
 import {
-  isOrcaHookTrusted,
   normalizeSetupHookTrust,
   readRepoHooksSetupCommand,
   usesVersionedOrcaHookTrust,

@@ -27,19 +27,6 @@ export function usesVersionedOrcaHookTrust(
   return !repos || isOrcaHookRepoIdOnSeveralHosts(repos, repoId)
 }
 
-export function isOrcaHookTrusted(
-  trust: PersistedTrustedOrcaHooks,
-  repos: readonly { id: string }[] | null,
-  repoId: string,
-  kind: OrcaHookTrustKind,
-  contentHash: string
-): boolean {
-  return (
-    (repos !== null && isOrcaHookRepoTrusted(trust, repos, repoId)) ||
-    isOrcaHookContentApproved(trust, repoId, kind, contentHash)
-  )
-}
-
 export function wasOrcaHookPreviouslyApproved(
   trust: PersistedTrustedOrcaHooks,
   repoId: string,

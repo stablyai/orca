@@ -75,13 +75,7 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
     worktreeSelector: string,
     options: RemoveManagedWorktreeOptions = {}
   ): Promise<RemoveWorktreeResult & { warning?: string }> {
-    const {
-      force = false,
-      runHooks = false,
-      allowUnverifiedPtyStop = false,
-      allowFailedArchiveHook = false,
-      hostId
-    } = options
+    const { force = false, allowUnverifiedPtyStop = false, hostId } = options
     const store = this.requireStore()
     const cleanupHostId = parseExecutionHostId(hostId)?.id
     const removalTarget = await this.resolveWorktreeRemovalTarget(worktreeSelector, cleanupHostId)
@@ -144,7 +138,7 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
           cleanupHostId,
           removalHostId,
           repo,
-          archive: { runHooks, allowFailedArchiveHook }
+          archive: options
         })
         if (orphanOrFolderResult) {
           return orphanOrFolderResult
@@ -256,8 +250,7 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
           localOptions: localWorktreeGitOptions,
           hasLocalOptions: Object.keys(localWorktreeGitOptions).length > 0,
           force,
-          runHooks,
-          allowFailedArchiveHook,
+          archiveHook: options,
           allowUnverifiedPtyStop,
           deleteBranch,
           requestedDeleteBranch: options.deleteBranch,
