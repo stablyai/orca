@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { makeTestBot } from '../../../../main/bots/bot.test-fixture'
+import type { Bot } from '../../../../shared/bot-types'
 
 const { toastError, deleteBot } = vi.hoisted(() => ({
   toastError: vi.fn(),
@@ -28,13 +28,21 @@ vi.mock('@/components/sidebar/workspace-actions/deletion/folder-workspace-delete
 
 import { useDeleteBot } from './use-delete-bot'
 
+const bot = {
+  id: 'bot-1',
+  name: 'Reviewer',
+  hostId: 'local',
+  folder: 'reviewer',
+  folderWorkspaceId: 'w1'
+} as Bot
+
 describe('useDeleteBot', () => {
   it("shows the host's unsaved-drafts refusal rather than the generic error", async () => {
     deleteBot.mockRejectedValueOnce(
       new Error('Unsaved editor changes. Save or close them in Orca, then delete again.')
     )
 
-    expect(await useDeleteBot(makeTestBot())()).toBe(false)
+    expect(await useDeleteBot(bot)()).toBe(false)
     expect(toastError).toHaveBeenCalledWith(
       'Its folder has unsaved editor changes. Save or close them, then delete again.'
     )
