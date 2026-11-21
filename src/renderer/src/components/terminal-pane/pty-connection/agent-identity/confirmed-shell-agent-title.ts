@@ -16,8 +16,7 @@ export function clearStaleAgentTabTitleOnConfirmedShell(session: ConnectPanePtyS
   if (neutralTitle === null) {
     return
   }
-  session.deps.setRuntimePaneTitle(session.deps.tabId, session.pane.id, neutralTitle)
-  if (session.manager.getActivePane()?.id === session.pane.id) {
-    session.deps.updateTabTitle(session.deps.tabId, neutralTitle)
-  }
+  session.deps.setRuntimePaneTitle(session.deps.tabId, session.pane.id, neutralTitle, {
+    alsoTabTitle: session.manager.getActivePane()?.id === session.pane.id
+  })
 }

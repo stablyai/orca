@@ -140,7 +140,7 @@ describe('consuming checks', () => {
       vi.spyOn(state.db, 'getOrCreateMailboxDelivery').mockImplementationOnce((params) => {
         const claim = select(params)
         // Whole-delivery settlement hides D before either notified check can finalize it.
-        state.db.markAsRead([original.id])
+        state.db.markAsRead([original.id], { kind: 'orca' })
         insert(box, 'arrived after the claim')
         return claim
       })

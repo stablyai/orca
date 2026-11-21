@@ -21,6 +21,8 @@ import {
   type JournalLegacyCompare
 } from './database/journal-legacy-compare'
 import { readForgottenJournalChats } from './journal-forgotten-chats'
+import { readDeletedChats } from './journal-deleted-chats'
+import type { DeletedChat } from '../chat-deletion/deleted-chats'
 import { readJournalConnectorReplies } from './connector-replies/journal-connector-replies'
 import type { JournalConnectorReplyRow } from '../../../shared/agent-session/journal/journal-connector-reply'
 
@@ -49,6 +51,7 @@ export type JournalSqlDatabaseRead =
   | { kind: 'attachment-sweeps'; after: string | null }
   | { kind: 'legacy-compares'; after: string | null }
   | { kind: 'forgotten-chats'; after: string | null }
+  | { kind: 'deleted-chats' }
   | { kind: 'connector-replies'; sessionId?: string }
 
 export type JournalSqlDatabaseReadResult =
@@ -65,6 +68,7 @@ export type JournalSqlDatabaseReadResult =
     }
   | { kind: 'attachment-sweeps'; uploadIds: string[] }
   | { kind: 'forgotten-chats'; sessionIds: string[] }
+  | { kind: 'deleted-chats'; chats: DeletedChat[] }
   | { kind: 'connector-replies'; rows: JournalConnectorReplyRow[] }
 
 /** Profile metadata has no chat projection prerequisite; all reads still share one WAL snapshot. */
@@ -194,5 +198,7 @@ function read(
     }
     case 'forgotten-chats':
       return { kind: 'forgotten-chats', sessionIds: readForgottenJournalChats(db, operation.after) }
+    case 'deleted-chats':
+      return { kind: 'deleted-chats', chats: readDeletedChats(db) }
   }
 }
