@@ -48,7 +48,8 @@ export class AcpStructuredOptions {
   ) {}
 
   private forkSupport: AgentSessionOptionsResult['forkSupport'] = 'unknown'
-  private configOptions: SessionConfigOption[] = []
+  /** As the agent last reported them; replace through `adoptConfigOptions`. */
+  configOptions: SessionConfigOption[] = []
   private models: SessionModelState | null = null
   private commands: AgentSessionSlashCommand[] | undefined
   private reportedCommands: readonly AvailableCommand[] | undefined

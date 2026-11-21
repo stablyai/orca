@@ -86,32 +86,118 @@ export function attributedActivityTabContext(entry: AgentStatusEntry): ActivityT
   return context
 }
 
+function activityTabHostsOf(tabs: readonly Tab[]): Map<string, ExecutionHostId | null> | null {
+  let byTabId: Map<string, ExecutionHostId | null> | null = null
+  for (const tab of tabs) {
+    if (
+      (tab.contentType !== 'terminal' && tab.contentType !== 'agent-session') ||
+      !tab.executionHostId
+    ) {
+      continue
+    }
+    byTabId ??= new Map()
+    const contextTabId = tab.contentType === 'terminal' ? tab.entityId : tab.id
+    const existing = byTabId.get(contextTabId)
+    byTabId.set(
+      contextTabId,
+      existing === undefined || existing === tab.executionHostId ? tab.executionHostId : null
+    )
+  }
+  return byTabId
+}
+
 export function buildActivityTabHostIndex(
   unifiedTabsByWorktree?: Record<string, Tab[]>
 ): ActivityTabHostIndex {
   const index: ActivityTabHostIndex = new Map()
   for (const [worktreeId, tabs] of Object.entries(unifiedTabsByWorktree ?? {})) {
-    for (const tab of tabs) {
-      if (
-        (tab.contentType !== 'terminal' && tab.contentType !== 'agent-session') ||
-        !tab.executionHostId
-      ) {
-        continue
-      }
-      let byTabId = index.get(worktreeId)
-      if (!byTabId) {
-        byTabId = new Map()
-        index.set(worktreeId, byTabId)
-      }
-      const contextTabId = tab.contentType === 'terminal' ? tab.entityId : tab.id
-      const existing = byTabId.get(contextTabId)
-      byTabId.set(
-        contextTabId,
-        existing === undefined || existing === tab.executionHostId ? tab.executionHostId : null
-      )
+    const byTabId = activityTabHostsOf(tabs)
+    if (byTabId) {
+      index.set(worktreeId, byTabId)
     }
   }
   return index
+}
+
+export type TabBucketChange<T extends TerminalTab | Tab> = {
+  worktreeId: string
+  before: readonly T[]
+  after: readonly T[]
+}
+
+/**
+ * Whether a replaced bucket kept every tab's id and kind in place with no id repeated, so each
+ * id's winning occurrence and owner stay where they were.
+ */
+export function keepsActivityTabIdentities<T extends TerminalTab | Tab>({
+  before,
+  after
+}: TabBucketChange<T>): boolean {
+  return (
+    before.length === after.length &&
+    new Set(after.map((tab) => tab.id)).size === after.length &&
+    before.every(
+      (tab, index) =>
+        tab.id === after[index].id &&
+        ('contentType' in tab ? tab.contentType : null) ===
+          ('contentType' in after[index] ? after[index].contentType : null)
+    )
+  )
+}
+
+/**
+ * Patches the indexes in place for buckets that kept their tab identities. Returns false, having
+ * changed nothing, when a context's owner can't be proven from the replaced buckets alone.
+ */
+export function patchActivityTabIndexes(
+  context: Map<string, ActivityTabContext>,
+  hosts: ActivityTabHostIndex,
+  terminalChanges: readonly TabBucketChange<TerminalTab>[],
+  unifiedChanges: readonly TabBucketChange<Tab>[],
+  names: StructuredChatTabNames
+): boolean {
+  const updates: [string, ActivityTabContext][] = []
+  for (const { worktreeId, before, after } of terminalChanges) {
+    after.forEach((tab, index) => {
+      // A later bucket may hold the same id and win; only the entry this bucket placed moves.
+      const entry = context.get(tab.id)
+      if (
+        tab !== before[index] &&
+        entry?.worktreeId === worktreeId &&
+        entry.tab === before[index]
+      ) {
+        updates.push([tab.id, { worktreeId, tab }])
+      }
+    })
+  }
+  for (const { worktreeId, before, after } of unifiedChanges) {
+    for (const [index, tab] of after.entries()) {
+      const prior = before[index]
+      if (tab.contentType !== 'agent-session' || tab === prior) {
+        continue
+      }
+      const entry = context.get(tab.id)
+      if (!entry || entry.worktreeId !== worktreeId) {
+        continue
+      }
+      if (entry.tab !== terminalTabFromAgentSessionTab(prior, names)) {
+        return false
+      }
+      updates.push([tab.id, { worktreeId, tab: terminalTabFromAgentSessionTab(tab, names) }])
+    }
+  }
+  for (const [tabId, entry] of updates) {
+    context.set(tabId, entry)
+  }
+  for (const { worktreeId, after } of unifiedChanges) {
+    const byTabId = activityTabHostsOf(after)
+    if (byTabId) {
+      hosts.set(worktreeId, byTabId)
+    } else {
+      hosts.delete(worktreeId)
+    }
+  }
+  return true
 }
 
 export function resolveActivityExecutionHostId(

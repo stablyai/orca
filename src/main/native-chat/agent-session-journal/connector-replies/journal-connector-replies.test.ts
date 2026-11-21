@@ -14,7 +14,8 @@ import {
   recutJournalConnectorReplies,
   releaseJournalConnectorClaim,
   repointJournalConnectorClaim,
-  sentJournalConnectorReplies
+  sentJournalConnectorReplies,
+  withdrawJournalConnectorReplies
 } from './journal-connector-replies'
 import { ensureJournalConnectorRepliesSchema } from './journal-connector-replies-schema'
 
@@ -324,4 +325,28 @@ it('claims a cut’s still-open rows its claim names, and moves a queued claim t
     ['d2', 'turn-1', 'send-1'],
     ['d3', undefined, undefined]
   ])
+})
+
+it('gives a withdrawn queued continuation’s rows back to their cut', async () => {
+  const f = fixture()
+  await f.send('first', stamped('review', { deliveryId: 'd1' }))
+  claimJournalConnectorReplies(f.db, { sessionId: 'chat-test', epoch: 'epoch' }, 'card-1', {
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text: 'Continue.' }],
+    connectorClaim: {
+      cutTurnId: 'turn-1',
+      cutKind: 'usage_limit',
+      origin: [{ account: 'account-a', conversation: SLACK, deliveryId: 'd1' }]
+    }
+  })
+  withdrawJournalConnectorReplies(f.db, { sessionId: 'chat-test', epoch: 'epoch' }, ['card-1'], 10)
+  expect(
+    readJournalConnectorReplies(f.db).map((row) => [
+      row.deliveryId,
+      row.cut?.turnId,
+      row.claimMessageId,
+      row.fill?.outcome
+    ])
+  ).toEqual([['d1', 'turn-1', undefined, undefined]])
 })

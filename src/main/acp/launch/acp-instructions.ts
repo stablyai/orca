@@ -120,6 +120,11 @@ export const deliverKiroInstructions: AcpInstructionsDelivery = async ({ text })
   sessionMeta: { kiro: { steering: [{ name: 'orca', inclusion: 'always', content: text }] } }
 })
 
+// Droid rebuilds its system prompt at every start from the file each launch passes.
+export const deliverDroidInstructions: AcpInstructionsDelivery = async ({ file }) => ({
+  args: ['--append-system-prompt-file', await file()]
+})
+
 // Cursor reads its folder's rules once, when a session opens, and keeps them across reopens.
 export const deliverCursorInstructions: AcpInstructionsDelivery = async ({ text }) => ({
   aroundNewSession: (cwd) => placeCursorOpeningRule(cwd, text)
@@ -153,6 +158,13 @@ export const deliverGooseInstructions: AcpInstructionsDelivery = async ({ text, 
 export const deliverGeminiInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
   await writeFolderContextFile(cwd, 'GEMINI.md', 'Gemini', text)
   return { env: { GEMINI_CLI_TRUST_WORKSPACE: 'true' } }
+}
+
+// Qwen rebuilds its system prompt from the folder's QWEN.md at every start, reopens included
+// (checked live on 0.28.0), so every launch rewrites it with the current text.
+export const deliverQwenCodeInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+  await writeFolderContextFile(cwd, 'QWEN.md', 'Qwen Code', text)
+  return {}
 }
 
 // Copilot rebuilds them at every start from its instruction sources, so each launch passes the folder.
