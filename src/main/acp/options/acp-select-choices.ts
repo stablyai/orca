@@ -10,20 +10,29 @@ import { isAgentSessionInteractionMode } from '../../../shared/agent-session/opt
 
 type SelectOption = Extract<SessionConfigOption, { type: 'select' }>
 
-export function acpSelectChoices(option: SelectOption): SessionConfigSelectOption[] {
-  const choices: SessionConfigSelectOption[] = []
+/** A grouped select lists choices per provider; keeping the group name is what tells two of them apart. */
+export function acpSelectChoiceGroups(
+  option: SelectOption
+): { choice: SessionConfigSelectOption; group: string | null }[] {
+  const grouped: { choice: SessionConfigSelectOption; group: string | null }[] = []
   for (const entry of option.options) {
     const group = SessionConfigSelectGroupSchema.safeParse(entry)
     if (group.success) {
-      choices.push(...group.data.options)
+      for (const choice of group.data.options) {
+        grouped.push({ choice, group: group.data.name })
+      }
       continue
     }
     const choice = SessionConfigSelectOptionSchema.safeParse(entry)
     if (choice.success) {
-      choices.push(choice.data)
+      grouped.push({ choice: choice.data, group: null })
     }
   }
-  return choices
+  return grouped
+}
+
+export function acpSelectChoices(option: SelectOption): SessionConfigSelectOption[] {
+  return acpSelectChoiceGroups(option).map(({ choice }) => choice)
 }
 
 /** The model select's choices, or the legacy model list when the agent offers no select. */
@@ -31,17 +40,27 @@ export function acpListedModels(
   modelOption: SelectOption | null,
   models: SessionModelState | null
 ): { id: string; label: string; description?: string }[] {
-  return modelOption
-    ? acpSelectChoices(modelOption).map((choice) => ({
-        id: choice.value,
-        label: choice.name,
-        ...(choice.description ? { description: choice.description } : {})
-      }))
-    : (models?.availableModels.map((model) => ({
+  if (!modelOption) {
+    return (
+      models?.availableModels.map((model) => ({
         id: model.modelId,
         label: model.name,
         ...(model.description ? { description: model.description } : {})
-      })) ?? [])
+      })) ?? []
+    )
+  }
+  const grouped = acpSelectChoiceGroups(modelOption)
+  const labelCounts = new Map<string, number>()
+  for (const { choice } of grouped) {
+    labelCounts.set(choice.name, (labelCounts.get(choice.name) ?? 0) + 1)
+  }
+  return grouped.map(({ choice, group }) => ({
+    id: choice.value,
+    // Providers offer the same model under one name, so the provider joins the label only where the name repeats.
+    label:
+      group && (labelCounts.get(choice.name) ?? 0) > 1 ? `${choice.name} (${group})` : choice.name,
+    ...(choice.description ? { description: choice.description } : {})
+  }))
 }
 
 /** The options with a mode the agent reported apart from them; null when it lists no mode select. */
