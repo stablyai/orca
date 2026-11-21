@@ -1,4 +1,5 @@
-import { readdir, readFile, readlink, stat } from 'node:fs/promises'
+import { readdir, readFile, readlink, realpath, stat } from 'node:fs/promises'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { join } from 'node:path'
 
 /** A HEAD whose branch the files cannot tell: reftable leaves this placeholder, and odd symlinks map to it. */
@@ -88,5 +89,15 @@ function rethrowUnlessMissing(error: unknown): void {
   const code = errorCode(error)
   if (code !== 'ENOENT' && code !== 'ENOTDIR') {
     throw error
+  }
+}
+
+/** Same file system entry after resolving symlinks; false when either is missing. */
+export async function isSamePath(left: string, right: string): Promise<boolean> {
+  try {
+    const [a, b] = await Promise.all([realpath(left), realpath(right)])
+    return normalizeRuntimePathForComparison(a) === normalizeRuntimePathForComparison(b)
+  } catch {
+    return false
   }
 }

@@ -312,20 +312,23 @@ describe('local base refresh reads worktree ownership from git dirs with real Gi
     }
   )
 
-  it('moves the main a bare repo names from one of its linked worktrees', async () => {
-    const { repoPath, lockPath, remoteOid } = await createBehindRepo()
-    await rm(lockPath, { force: true })
-    const barePath = join(repoPath, '..', 'bare.git')
-    execFileSync('git', ['clone', '--quiet', '--bare', repoPath, barePath])
-    git(barePath, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
-    git(barePath, ['update-ref', 'refs/remotes/origin/main', remoteOid])
-    const linkedPath = join(repoPath, '..', 'bare-linked')
-    git(barePath, ['worktree', 'add', '--quiet', linkedPath, 'develop'])
-    const lists = spyOnWorktreeLists()
+  it.each(['bare.git', 'bare/.git'])(
+    'moves the main a bare repo at %s names from one of its linked worktrees',
+    async (bareDir) => {
+      const { repoPath, lockPath, remoteOid } = await createBehindRepo()
+      await rm(lockPath, { force: true })
+      const barePath = join(repoPath, '..', bareDir)
+      execFileSync('git', ['clone', '--quiet', '--bare', repoPath, barePath])
+      git(barePath, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
+      git(barePath, ['update-ref', 'refs/remotes/origin/main', remoteOid])
+      const linkedPath = join(repoPath, '..', 'bare-linked')
+      git(barePath, ['worktree', 'add', '--quiet', linkedPath, 'develop'])
+      const lists = spyOnWorktreeLists()
 
-    await expect(refresh(linkedPath)).resolves.toMatchObject({ status: 'updated' })
+      await expect(refresh(linkedPath)).resolves.toMatchObject({ status: 'updated' })
 
-    expect(git(barePath, ['rev-parse', 'main'])).toBe(remoteOid)
-    expect(lists()).toBe(0)
-  })
+      expect(git(barePath, ['rev-parse', 'main'])).toBe(remoteOid)
+      expect(lists()).toBe(0)
+    }
+  )
 })
