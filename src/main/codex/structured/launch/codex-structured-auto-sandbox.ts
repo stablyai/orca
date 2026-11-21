@@ -19,7 +19,7 @@ const requirements = z.object({ requirements: z.record(z.string(), z.unknown()).
 /** Only the legacy path with observable inputs is projected; managed/backend compilation stays Codex's. */
 export async function readCodexAutoSandbox(
   connection: Pick<CodexAppServerConnection, 'request'>,
-  input: { cwd: string; visualsFolder?: string },
+  input: { cwd: string; storageFolders?: readonly string[] },
   platform: NodeJS.Platform = process.platform
 ): Promise<CodexSandboxPolicy | undefined> {
   // Windows backend availability and managed selection are not exposed by config/read.
@@ -41,10 +41,7 @@ export async function readCodexAutoSandbox(
     return {
       type: 'workspaceWrite',
       writableRoots: [
-        ...new Set([
-          ...(workspace?.writable_roots ?? []),
-          ...(input.visualsFolder ? [input.visualsFolder] : [])
-        ])
+        ...new Set([...(workspace?.writable_roots ?? []), ...(input.storageFolders ?? [])])
       ],
       networkAccess: workspace?.network_access ?? false,
       excludeTmpdirEnvVar: workspace?.exclude_tmpdir_env_var ?? false,

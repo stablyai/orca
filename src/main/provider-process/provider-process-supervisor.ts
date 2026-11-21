@@ -316,7 +316,7 @@ export function createProviderSpawnSpec(
         ]
       : launch.args,
     command: launch.command,
-    env: resolveProviderChildEnv(launch, baseEnv),
+    env: resolveProviderChildEnv(launch, baseEnv, platform),
     cwd: launch.cwd ?? process.cwd(),
     detached: supervised,
     supervised,

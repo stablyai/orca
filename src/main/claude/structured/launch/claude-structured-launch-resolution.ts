@@ -204,10 +204,7 @@ export function claudeStructuredLaunchPart(
     const discovery = claudeDiscoveryOptions({
       configuredArgs: launchArgs,
       ...(deps.attachmentDirectory ? { attachmentDirectory: deps.attachmentDirectory } : {}),
-      visuals: visuals && {
-        pluginDir: visuals.pluginDir,
-        scratchDirectory: visuals.visuals.folder
-      },
+      visuals: visuals && { pluginDir: visuals.pluginDir, launch: visuals.visuals },
       linkedRoot: linked.root
     })
     const permission = claudeStructuredPermissionOptions(basis.permissionMode ?? 'ask')

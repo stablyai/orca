@@ -2,9 +2,8 @@ import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../../../shared/agent-ses
 import { ORCA_AGENT_SESSION_CALLER_ENV_KEYS } from '../../../ipc/pty/host-env/spawn-env-keys'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../../../runtime/agent-session/environment/structured-session-child-env'
 import {
-  LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
-  NATIVE_CHAT_SCRATCH_DIR_ENV,
   withNativeChatVisualsEnv,
+  nativeChatVisualsInheritedEnvToDelete,
   type NativeChatVisualsLaunch
 } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import type { ProviderProcessLaunch } from '../../../provider-process/provider-process-launch'
@@ -51,9 +50,7 @@ export function withPiVisualsEnv(
 ): { env: Record<string, string>; inheritedEnvToDelete: readonly string[] } {
   return {
     env: withNativeChatVisualsEnv(env, visuals),
-    inheritedEnvToDelete: visuals
-      ? [LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV]
-      : [NATIVE_CHAT_SCRATCH_DIR_ENV, LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV]
+    inheritedEnvToDelete: nativeChatVisualsInheritedEnvToDelete(visuals)
   }
 }
 

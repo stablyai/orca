@@ -15,8 +15,14 @@ import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionLogger } from '../agent-session-wire/host/structured-agent-session-logger'
-import { nativeChatScratchFolderFor, nativeChatScratchRootFor } from './native-chat-scratch-folder'
 import {
+  nativeChatScratchFolderFor,
+  nativeChatScratchFolderName,
+  nativeChatScratchRootFor
+} from './native-chat-scratch-folder'
+import { prepareChatTemporaryFolder } from './native-chat-temporary-storage'
+import {
+  sweepNativeChatTemporaryFolders,
   sweepNativeChatVisualsFolders,
   type NativeChatVisualsSweepDeps
 } from './native-chat-visuals-sweep'
@@ -123,5 +129,27 @@ describe('the visuals folder sweep', () => {
     symlinkSync(elsewhere, nativeChatScratchRootFor(state), 'junction')
     await sweepNativeChatVisualsFolders(deps(state, []))
     expect(existsSync(join(elsewhere, 'a'.repeat(32)))).toBe(true)
+  })
+
+  it("removes the temporary data of a chat that is gone and keeps a retained chat's", async () => {
+    const state = stateDirectory()
+    const kept = await prepareChatTemporaryFolder(state, nativeChatScratchFolderName('chat-kept'))
+    const gone = await prepareChatTemporaryFolder(state, nativeChatScratchFolderName('chat-gone'))
+    writeFileSync(join(kept, 'build.bin'), 'in use')
+    writeFileSync(join(gone, 'build.bin'), 'left behind')
+
+    expect(await sweepNativeChatTemporaryFolders(deps(state, ['chat-kept']))).toEqual({
+      removed: 1,
+      failed: 0
+    })
+    expect(readFileSync(join(kept, 'build.bin'), 'utf8')).toBe('in use')
+    expect(existsSync(gone)).toBe(false)
+
+    const unknown = await prepareChatTemporaryFolder(state, nativeChatScratchFolderName('chat-x'))
+    expect(await sweepNativeChatTemporaryFolders(deps(state, null))).toEqual({
+      removed: 0,
+      failed: 0
+    })
+    expect(existsSync(unknown)).toBe(true)
   })
 })
