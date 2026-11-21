@@ -19,6 +19,9 @@ const POSIX_PREFIX = `/bin/sh -c ${quoteStartupArg(
 const POWERSHELL_PREFIX =
   `& { $orcaKitty = $env:${ORCA_IMAGE_PROTOCOL_ENV} -ceq '${ORCA_IMAGE_PROTOCOL_VALUE}' -and -not (Test-Path Env:KITTY_WINDOW_ID); ` +
   `if ($orcaKitty) { $env:KITTY_WINDOW_ID = '${CODEX_KITTY_WINDOW_ID}' }; try { `
+// A quoted path is an expression unless `&` calls it. `{&` marks an operator this wrapper inserted.
+// A command that already starts with `& ` keeps the space after `{`, so unwrap can return it unchanged.
+const POWERSHELL_CALL_PREFIX = `${POWERSHELL_PREFIX.slice(0, -1)}& `
 const POWERSHELL_SUFFIX = ' } finally { if ($orcaKitty) { Remove-Item Env:KITTY_WINDOW_ID } } }'
 
 /** Bare Codex uses the interactive shell function. Scope the hint for literal targets that bypass it. */
@@ -53,7 +56,11 @@ export function withCodexStartupImageCommand(command: string, shell: AgentStartu
     if (executable.toLowerCase() === 'codex' || parsed.tokens.includes('--%')) {
       return command
     }
-    return `${POWERSHELL_PREFIX}${command}${POWERSHELL_SUFFIX}`
+    const executableText = command.slice(parsed.spans[index].start, parsed.spans[index].end)
+    const needsCallOperator =
+      !hasCallOperator && (executableText.startsWith('"') || executableText.startsWith("'"))
+    const prefix = needsCallOperator ? POWERSHELL_CALL_PREFIX : POWERSHELL_PREFIX
+    return `${prefix}${command}${POWERSHELL_SUFFIX}`
   }
   if (index === 0 && executable === 'codex') {
     return command
@@ -67,6 +74,9 @@ export function unwrapCodexStartupImageCommand(command: string): string {
   const trimmed = command.trimStart()
   if (trimmed.startsWith(POSIX_PREFIX)) {
     return trimmed.slice(POSIX_PREFIX.length)
+  }
+  if (command.startsWith(POWERSHELL_CALL_PREFIX) && command.endsWith(POWERSHELL_SUFFIX)) {
+    return command.slice(POWERSHELL_CALL_PREFIX.length, -POWERSHELL_SUFFIX.length)
   }
   if (command.startsWith(POWERSHELL_PREFIX) && command.endsWith(POWERSHELL_SUFFIX)) {
     return command.slice(POWERSHELL_PREFIX.length, -POWERSHELL_SUFFIX.length)
