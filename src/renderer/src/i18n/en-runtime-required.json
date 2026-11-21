@@ -2143,6 +2143,10 @@
         "paused": "{{bot}} is paused."
       },
       "composer": {
+        "botCount_one": "{{count}} bot",
+        "botCount_other": "{{count}} bots",
+        "fileCount_one": "{{count}} file",
+        "fileCount_other": "{{count}} files",
         "placeholder": "Ask anything, @ to mention files, / for commands"
       },
       "composerErrors": {
