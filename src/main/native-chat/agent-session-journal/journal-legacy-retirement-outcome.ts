@@ -200,6 +200,8 @@ export class LegacyJournalRetirementReporter {
       this.logged.add(signature)
       logLegacyJournalRetirement(event)
     }
+    // Whatever it says, this observation supersedes a refused older one.
+    this.unsent = null
     if (this.news(outcome, progress)) {
       await this.deliver(event, signature)
     }

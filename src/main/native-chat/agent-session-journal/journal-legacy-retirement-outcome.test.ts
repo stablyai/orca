@@ -12,6 +12,7 @@ import { legacyDestinationMain } from './journal-legacy-retirement-files'
 import { journalDomainDatabasePath } from './database/journal-host-database'
 import { initializeJournalDomainDatabase } from './database/journal-domain-database'
 import {
+  LegacyJournalRetirementReporter,
   legacyProofFailureOutcome,
   setLegacyJournalRetirementHost,
   type LegacyJournalRetirementEvent
@@ -347,4 +348,39 @@ it('reports copies as partial when a quit lost a copy converted before its count
   continued.readers.importState = importState
   await continued.launch('1.0.1', true, undefined, undefined, false).run()
   expect(events.at(-1)).toMatchObject({ outcome: 'proof_complete', completeness: 'partial' })
+})
+
+it('never sends a refused report once a later one returned to what was already sent', async () => {
+  const sent: string[] = []
+  let accepts = true
+  setLegacyJournalRetirementHost({
+    report: async (event) => {
+      if (accepts) {
+        sent.push(`${event.outcome}/${event.error}`)
+      }
+      return accepts
+    },
+    accepting: () => accepts
+  })
+  cleanup.push(() => setLegacyJournalRetirementHost(undefined))
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  let saved: string | null = null
+  const writer = {
+    maintain: async ({ value }: { value: string }) => {
+      saved = value
+      return true
+    }
+  }
+  const first = new LegacyJournalRetirementReporter(writer, '1.0.1', false)
+  first.saved(null)
+  await first.report({ outcome: 'proof_complete' })
+  // A later launch: a passing storage error while reports are refused, then the saved proof again.
+  const later = new LegacyJournalRetirementReporter(writer, '1.0.1', false)
+  later.saved(saved)
+  accepts = false
+  await later.report({ outcome: 'proving', error: 'storage' })
+  await later.report({ outcome: 'proof_complete' })
+  accepts = true
+  await later.resendUnsent()
+  expect(sent).toEqual(['proof_complete/none'])
 })
