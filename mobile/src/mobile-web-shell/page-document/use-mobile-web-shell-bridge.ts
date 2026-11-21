@@ -10,6 +10,7 @@ import type {
   MobileWebShellBridgeMessagePayload,
   OrcaMobileWebShellViewHandle
 } from '../../../modules/orca-mobile-web-shell/src/index'
+import { subscribeMirroredKey } from '../../storage/mirrored-storage-keys'
 import { useHostClient } from '../../transport/connection/host-client-hooks'
 import { createBridgeDiagnosticReporter } from '../diagnostics/bridge-diagnostic-log'
 import { bridgeDiagnosticLine } from '../diagnostics/shell-bridge-log-lines'
@@ -29,7 +30,7 @@ import type { BridgeNativeVerb } from '../bridge/native-capabilities/bridge-nati
 import type { BridgeErrorCapture } from '../bridge/protocol/bridge-error-capture'
 import type { MobileWebShellSessionState } from '../session/mobile-web-shell-session-contract'
 import type { PageHostSnapshot } from '../host-gates/use-page-host-snapshot'
-import type { PageStorageForInit } from '../page-storage/page-storage-keys'
+import { pageStorageKeysForRoute, type PageStorageForInit } from '../page-storage/page-storage-keys'
 import { createPageFramesWithoutHost } from './page-frames-without-host'
 
 class BridgeViewGoneError extends Error {
@@ -140,6 +141,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
   // Read identity lazily without rebuilding a live host just to refresh a string.
   const clientIdRef = useRef(clientId)
   const clientRef = useRef(client)
+  const writingFromPageRef = useRef(false)
   const [framesWithoutHost] = useState(createPageFramesWithoutHost)
   // Update refs on every commit before host construction; native frames may arrive before passive effects.
   useLayoutEffect(() => {
@@ -191,7 +193,16 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
           recordShellLifecycleLine(latest.hostId, line)
         }
       }),
-      ...latestBridgeCallbacks(argsRef)
+      ...latestBridgeCallbacks(argsRef),
+      // Page writes must not echo through the mirrored-key subscription as a fresh publish.
+      onStorageWrite: (key, value) => {
+        writingFromPageRef.current = true
+        try {
+          argsRef.current.onStorageWrite(key, value)
+        } finally {
+          writingFromPageRef.current = false
+        }
+      },
     })
     hostRef.current = { sessionId, host }
     // Reset host-owned drop totals on rebuild so a new lower count cannot look like frames being recovered.
@@ -204,6 +215,26 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       host.dispose()
     }
   }, [buildId, client, framesWithoutHost, sessionId, snapshot])
+
+  useEffect(() => {
+    const keys = pageStorageKeysForRoute(args.hostId, args.route.pathname)
+    const unsubscribes = keys.map((key) =>
+      subscribeMirroredKey(key, () => {
+        if (writingFromPageRef.current) {
+          return
+        }
+        const mounted = hostRef.current
+        if (mounted !== null && mounted.sessionId === sessionId) {
+          mounted.host.publishStorage()
+        }
+      })
+    )
+    return () => {
+      for (const unsubscribe of unsubscribes) {
+        unsubscribe()
+      }
+    }
+  }, [args.hostId, args.route.pathname, buildId, client, sessionId, snapshot])
 
   useEffect(() => {
     const mounted = hostRef.current
