@@ -51,7 +51,8 @@ const SPECS = {
   kilo: acpLaunchSpecFor('kilo')!,
   'mimo-code': acpLaunchSpecFor('mimo-code')!,
   gemini: acpLaunchSpecFor('gemini')!,
-  'qwen-code': acpLaunchSpecFor('qwen-code')!
+  'qwen-code': acpLaunchSpecFor('qwen-code')!,
+  dsh: acpLaunchSpecFor('dsh')!
 }
 
 const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome']> = {
@@ -68,7 +69,8 @@ const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome'
   kilo: { variable: 'XDG_DATA_HOME', path: '/home/user/.local/share' },
   'mimo-code': { variable: 'XDG_DATA_HOME', path: '/home/user/.local/share' },
   gemini: { variable: 'GEMINI_CLI_HOME', path: '/home/user' },
-  'qwen-code': { variable: 'QWEN_HOME', path: '/home/user/.qwen' }
+  'qwen-code': { variable: 'QWEN_HOME', path: '/home/user/.qwen' },
+  dsh: { variable: 'DSH_HOME', path: '/home/user/.dsh' }
 }
 
 const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
@@ -348,6 +350,32 @@ describe('ACP launch: standing instructions', () => {
       }
     }
   )
+
+  it("writes them into DSH's own AGENTS.md, keeping the text the user already had there", async () => {
+    const home = await mkdtemp(join(tmpdir(), 'acp-instructions-dsh-'))
+    try {
+      const agentsPath = join(home, 'AGENTS.md')
+      await writeFile(agentsPath, 'Workspace instructions')
+      const resolved = await launch('dsh', { instructions: PREAMBLE, workspacePath: home })
+      expect(resolved.args).toEqual(['--profile', 'acp'])
+      expect(resolved.args).toEqual((await launch('dsh', { workspacePath: home })).args)
+
+      const written = await readFile(agentsPath, 'utf8')
+      expect(written).toMatch(/^Workspace instructions/)
+      expect(written).toContain(`<!-- orca:begin -->\n${PREAMBLE}\n<!-- orca:end -->`)
+
+      await launch('dsh', {
+        instructions: 'The replacement set of standing instructions.',
+        workspacePath: home
+      })
+      const rewritten = await readFile(agentsPath, 'utf8')
+      expect(rewritten).toContain('Workspace instructions')
+      expect(rewritten).not.toContain(PREAMBLE)
+      expect(rewritten.match(/<!-- orca:begin -->/g)).toHaveLength(1)
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
+  })
 
   it("writes them to Kimi's .kimi-code/AGENTS.md in the folder it runs in, beside the folder's own", async () => {
     const home = await mkdtemp(join(tmpdir(), 'acp-instructions-kimi-'))

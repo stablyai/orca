@@ -186,6 +186,13 @@ export const deliverCopilotInstructions: AcpInstructionsDelivery = async ({
   return { env: { COPILOT_CUSTOM_INSTRUCTIONS_DIRS: inherited ? `${inherited},${dir}` : dir } }
 }
 
+// DSH builds its system prompt from the folder's AGENTS.md files, so it needs no ACP channel for
+// them; only DSH's own marker block is replaced, and the file stays for later launches.
+export const deliverDshInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+  await writeFolderContextFile(cwd, 'AGENTS.md', 'DeepSeek Harness', text)
+  return {}
+}
+
 const cleared = new Map<string, Promise<void>>()
 
 /** Stdio children never outlive the host, and one host holds a profile, so the folder is cleared
