@@ -131,6 +131,7 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     refreshActiveGitStatusAfterMutation,
     refreshBranchCompareRef,
     refreshGitHistoryRef,
+    statusHead: foundation.activeGitStatusHead,
     worktreePath
   })
 
