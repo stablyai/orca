@@ -11746,7 +11746,11 @@
             "86a08aa60c": "Gitea integration",
             "cd74b2f587": "GitLab integration",
             "d905b3ecee": "Linear integration",
-            "b3efe7ab71": "Azure DevOps integration"
+            "b3efe7ab71": "Azure DevOps integration",
+            "bitbucketServerTitle": "Bitbucket Data Center integration",
+            "bitbucketServerDescription": "Bitbucket Data Center and Server authentication with a personal access token or environment variables.",
+            "bitbucketServerKeywordDataCenter": "data center",
+            "bitbucketServerKeywordServer": "server"
           }
         },
         "jira": {
@@ -13757,6 +13761,37 @@
               "statusLoadFailed": "Could not check for a saved Bitbucket credential.",
               "replaceCredentials": "Manage credentials",
               "credentialName": "Your Bitbucket credential"
+            }
+          },
+          "server": {
+            "credentials": {
+              "dialog": {
+                "connectFailed": "Connection failed",
+                "title": "Connect Bitbucket Data Center",
+                "description": "Use a personal access token from your Bitbucket Data Center or Server to browse pull requests and build statuses. Orca verifies it before saving.",
+                "baseUrl": "Server URL",
+                "baseUrlPlaceholder": "https://bitbucket.example.com",
+                "accessToken": "Personal access token",
+                "tokenHint": "Create the token under your Bitbucket profile > Manage account > Personal access tokens, with repository write access so Orca can create pull requests.",
+                "storageNote": "Stored on this machine with encrypted storage when the OS keychain is available, never on a remote runtime. ORCA_BITBUCKET_SERVER_BASE_URL and ORCA_BITBUCKET_SERVER_TOKEN, when both are set, take precedence over what you save here.",
+                "cancel": "Cancel",
+                "verifying": "Verifying...",
+                "connect": "Connect"
+              }
+            },
+            "integration": {
+              "card": {
+                "disconnectFailed": "Could not remove the saved Bitbucket Server credential.",
+                "name": "Bitbucket Data Center",
+                "description": "Pull requests and build statuses for Bitbucket Data Center and Server.",
+                "edit": "Edit credentials",
+                "connect": "Connect",
+                "credentialName": "Your Bitbucket Server token",
+                "accountUnknown": "Bitbucket Data Center",
+                "disconnect": "Disconnect",
+                "statusLoadFailed": "Could not check for a saved Bitbucket Server credential.",
+                "envManaged": "Configured via ORCA_BITBUCKET_SERVER_BASE_URL and ORCA_BITBUCKET_SERVER_TOKEN. Unset them to manage this credential in Orca."
+              }
             }
           }
         },

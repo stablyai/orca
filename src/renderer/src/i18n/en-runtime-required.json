@@ -865,8 +865,6 @@
                 "cards": {
                   "statusAuthFailed": "Auth failed",
                   "statusConfigured": "Configured",
-                  "statusConnected": "Connected",
-                  "statusNotConfigured": "Not configured",
                   "statusOptionalSetup": "Optional setup",
                   "statusUnavailable": "Unavailable"
                 }

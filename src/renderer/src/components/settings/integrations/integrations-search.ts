@@ -11,6 +11,7 @@ export const INTEGRATION_SETTING_TARGET_IDS = {
   github: 'integrations-github',
   gitlab: 'integrations-gitlab',
   bitbucket: 'integrations-bitbucket',
+  bitbucketServer: 'integrations-bitbucket-server',
   azuredevops: 'integrations-azure-devops',
   gitea: 'integrations-gitea',
   jira: JIRA_INTEGRATION_SECTION_ID,
@@ -105,6 +106,39 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword(
         'auto.components.settings.integrations.search.20540996ef',
         'credentials'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.af5ae87847',
+        'access token'
+      )
+    ]
+  },
+  {
+    targetSectionId: INTEGRATION_SETTING_TARGET_IDS.bitbucketServer,
+    title: translate(
+      'auto.components.settings.integrations.search.bitbucketServerTitle',
+      'Bitbucket Data Center integration'
+    ),
+    description: translate(
+      'auto.components.settings.integrations.search.bitbucketServerDescription',
+      'Bitbucket Data Center and Server authentication with a personal access token or environment variables.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.50d20817f7',
+        'bitbucket'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.bitbucketServerKeywordDataCenter',
+        'data center'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.bitbucketServerKeywordServer',
+        'server'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.8c568d761c',
+        'pull request'
       ),
       ...translateSearchKeyword(
         'auto.components.settings.integrations.search.af5ae87847',
