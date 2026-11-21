@@ -3,7 +3,7 @@ import type { RemoteForegroundEvidence } from '../../../shared/terminal/pty/fore
 import type { Session } from '../sessions/session'
 import { readForegroundGroupMembers } from './terminal-host-foreground-group-identity'
 
-/** Full-capture identity may be reused only while the PTY's foreground group, its leader and the agent are unchanged. */
+/** Full-capture identity may be reused only while the PTY's foreground group and its anchored live members are unchanged. */
 type SteadyStateAnchor = {
   agentName: string
   foregroundGroup: number
@@ -58,7 +58,7 @@ export async function rememberSteadyStateAnchor(
   })
 }
 
-/** The anchored agent while tcgetpgrp and per-pid reads of the group leader and agent still match the full capture. */
+/** The anchored agent while tcgetpgrp and per-pid reads of the anchored members (agent, plus a live leader) still match. */
 export async function readAnchoredForeground(session: Session): Promise<string | null> {
   const anchor = anchors.get(session)
   if (

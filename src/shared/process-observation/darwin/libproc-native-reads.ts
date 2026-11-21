@@ -21,8 +21,6 @@ let outstandingReads = 0
 // Workers queued behind a saturated libuv pool would otherwise pile up one per poll.
 const MAX_OUTSTANDING_READS = 8
 const slotWaiters = new Set<() => void>()
-// Woken waiters resume a microtask later; until then their slots are spoken for.
-let wokenUnclaimed = 0
 // A pool pinned at the cap past a caller's whole deadline is stalled: hand callers back to ps for a while.
 const STALLED_POOL_COOL_DOWN_MS = 30_000
 let unhealthyUntil = Number.NEGATIVE_INFINITY
@@ -82,7 +80,10 @@ function submitRead(addon: LibprocAddon, query: LibprocQuery, key: string): Nati
     if (sharedReads.get(key) === read) {
       sharedReads.delete(key)
     }
-    wakeSlotWaiters()
+    for (const waiter of slotWaiters) {
+      waiter()
+    }
+    slotWaiters.clear()
   }
   pending.then(
     () => {
@@ -95,19 +96,6 @@ function submitRead(addon: LibprocAddon, query: LibprocQuery, key: string): Nati
     }
   )
   return read
-}
-
-// Wake only as many waiters as there are free slots, oldest first; waking all made a queue of N re-queue O(N²) times.
-function wakeSlotWaiters(): void {
-  let free = MAX_OUTSTANDING_READS - outstandingReads - wokenUnclaimed
-  for (const waiter of slotWaiters) {
-    if (free-- <= 0) {
-      return
-    }
-    slotWaiters.delete(waiter)
-    wokenUnclaimed += 1
-    waiter()
-  }
 }
 
 function waitForSlot(deadline: number): Promise<boolean> {
@@ -141,9 +129,7 @@ export async function readFreshNativeTable(
     let read: NativeRead
     if (shared && (!shared.submitted || shared.sequence >= registeredSequence)) {
       read = shared
-      // A woken waiter that joins a shared read leaves its slot free for the next one.
-      wakeSlotWaiters()
-    } else if (outstandingReads + wokenUnclaimed < MAX_OUTSTANDING_READS) {
+    } else if (outstandingReads < MAX_OUTSTANDING_READS) {
       read = submitRead(addon, query, key)
     } else if (poolStalled) {
       // Cool-down over but the stalled reads still hold the cap: no caller should wait its timeout to learn that.
@@ -151,9 +137,7 @@ export async function readFreshNativeTable(
       return 'stalled'
     } else {
       // Queue behind the cap (a startup-restore burst) instead of bursting ps.
-      if (await waitForSlot(deadline)) {
-        wokenUnclaimed -= 1
-      } else {
+      if (!(await waitForSlot(deadline))) {
         if (outstandingReads >= MAX_OUTSTANDING_READS) {
           poolStalled = true
           unhealthyUntil = monotonicNow() + STALLED_POOL_COOL_DOWN_MS
@@ -178,7 +162,6 @@ export async function readFreshNativeTable(
 export function resetNativeReadsForTests(): void {
   sharedReads.clear()
   slotWaiters.clear()
-  wokenUnclaimed = 0
   outstandingReads = 0
   poolStalled = false
   consecutiveRejections = 0
