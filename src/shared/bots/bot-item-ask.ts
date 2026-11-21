@@ -60,6 +60,55 @@ export const BotItemAskSchema = z.object({
 
 export type BotItemAsk = z.infer<typeof BotItemAskSchema>
 
+// "(Recommended)" or "[recommended]" an agent wrote at the end of an option, with the space before it.
+const RECOMMENDED_SUFFIX = /\s*[([]\s*recommended\s*[)\]]\s*$/i
+
+/** The ask as stored: `recommended` is the one mark of the recommended option, so a "(Recommended)"
+ *  an agent also wrote into a label leaves the label, and marks that option when --recommended didn't
+ *  and it is the only one. Several marked with no flag, or a label it would empty or make a
+ *  sibling's twin, keep their words. */
+export function normalizeBotItemAsk(ask: BotItemAsk): BotItemAsk {
+  return {
+    ...ask,
+    questions: ask.questions.map((question) => {
+      const marked: number[] = []
+      const labels = question.options.map((option, index) => {
+        const label = option.label.replace(RECOMMENDED_SUFFIX, '')
+        if (label === option.label) {
+          return option.label
+        }
+        marked.push(index)
+        // Marked all the same, but a label with no other words keeps them.
+        return label || option.label
+      })
+      // Several marked and no flag: the words are the only hint of which, so they stay.
+      const recommended = question.recommended ?? (marked.length === 1 ? marked[0] : undefined)
+      if (marked.length === 0 || recommended === undefined) {
+        return question
+      }
+      // A cleaned label that would be a sibling's twin keeps its words; the rest are still cleaned.
+      // Putting words back can make a new twin, so repeat until none collide; each pass restores at
+      // least one label, so it ends.
+      let collided = true
+      while (collided) {
+        collided = false
+        labels.forEach((label, index) => {
+          const written = question.options[index]!.label
+          if (label !== written && labels.indexOf(label) !== labels.lastIndexOf(label)) {
+            labels[index] = written
+            collided = true
+          }
+        })
+      }
+      return {
+        ...question,
+        options: question.options.map((option, index) => ({ ...option, label: labels[index]! })),
+        recommended
+      }
+    })
+  }
+}
+
 /** A question's first line with words, as plain words, for a one-line row, so a question the agent wrote in
  *  Markdown reads cleanly there. */
 export function botItemQuestionLine(text: string): string {
