@@ -1,3 +1,5 @@
+import { recordSessionScanIssue } from '../parsing/session-scan-issues'
+import { errorMessage } from '../../../shared/errors/error-message'
 import { delimiter } from 'node:path'
 import type {
   AiVaultAgent,
@@ -62,20 +64,32 @@ function agentDiscoveries(
   ) {
     return rootDirs.map(async (rootDir) => ({ agent, rootDir, files: [] }))
   }
-  const discover = (rootDir: string): Promise<SessionFileDiscovery> =>
-    discoverFiles({
+  if (rootDirs.length === 0) {
+    return []
+  }
+  const predicate = source.createFilePredicate?.() ?? Promise.resolve(source.filePredicate)
+  const discover = async (rootDir: string): Promise<SessionFileDiscovery> => {
+    let filePredicate: ((filePath: string) => boolean) | undefined
+    try {
+      filePredicate = await predicate
+    } catch (error) {
+      recordSessionScanIssue(issues, { agent, path: rootDir, message: errorMessage(error) })
+      return { agent, rootDir, files: [] }
+    }
+    return discoverFiles({
       rootDir,
       limit,
       agent,
       issues,
       extensions: [...source.extensions],
-      filePredicate: source.filePredicate,
+      filePredicate,
       contentDependencyPath: source.contentDependencyPath,
       directoryPredicate: source.directoryPredicate,
       keepScopeFiles: scopeWalksAgentFiles(agent, options.scopePaths),
       statCache: options.statCache,
       signal: options.signal
     })
+  }
   return source.mergeRootDiscoveries
     ? [mergedDiscovery(agent, rootDirs, limit, discover)]
     : rootDirs.map(discover)

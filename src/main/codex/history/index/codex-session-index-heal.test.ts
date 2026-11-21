@@ -12,7 +12,10 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { CodexAppServerInvocation } from '../../app-server/codex-app-server-session'
 import { createCodexSessionBackfillAuditWriter } from '../backfill/codex-session-backfill-audit'
-import { CODEX_SESSION_INDEX_HEAL_VERSION } from './codex-session-index-heal-state'
+import {
+  CODEX_SESSION_INDEX_HEAL_VERSION,
+  collectPendingHealThreads
+} from './codex-session-index-heal-state'
 import { runCodexSessionIndexHeal } from './codex-session-index-heal'
 import type { CodexSessionIndexHealPaths } from './codex-session-index-heal-state'
 
@@ -82,6 +85,7 @@ process.stdin.on('end', () => process.exit(0))
 let tempRoots: string[] = []
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   for (const root of tempRoots) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -110,6 +114,7 @@ function createHealRig(options: {
   readLog: () => { serverStarts: number; threadIds: string[]; maxInFlight: number }
 } {
   const root = mkdtempSync(join(tmpdir(), 'orca-codex-heal-'))
+  vi.stubEnv('ORCA_USER_DATA_PATH', join(root, 'orca'))
   tempRoots.push(root)
   const systemSessionsRoot = join(root, 'real-home', 'sessions')
   const stateDir = join(root, 'state')
@@ -192,7 +197,7 @@ function readLedgerOutcomes(paths: CodexSessionIndexHealPaths): Record<string, s
 }
 
 describe('runCodexSessionIndexHeal', () => {
-  it('reads every backfilled session recent-first and completes with a marker', async () => {
+  it('reads every backfilled session with default concurrency and completes with a marker', async () => {
     const rig = createHealRig({
       auditedThreads: [
         { stamp: '2026-07-01T10-00-00', id: threadId('1') },
@@ -201,6 +206,11 @@ describe('runCodexSessionIndexHeal', () => {
       ]
     })
 
+    expect((await collectPendingHealThreads(rig.paths)).map((thread) => thread.threadId)).toEqual([
+      threadId('3'),
+      threadId('2'),
+      threadId('1')
+    ])
     const summary = await runCodexSessionIndexHeal(rig.paths, {
       buildInvocation: rig.buildInvocation,
       interBatchDelayMs: 0
@@ -213,7 +223,12 @@ describe('runCodexSessionIndexHeal', () => {
       missingThreads: 0,
       failedThreads: 0
     })
-    expect(rig.readLog().threadIds).toEqual([threadId('3'), threadId('2'), threadId('1')])
+    expect(rig.readLog().threadIds.toSorted()).toEqual([
+      threadId('1'),
+      threadId('2'),
+      threadId('3')
+    ])
+    expect(rig.readLog().maxInFlight).toBe(2)
     expect(readLedgerOutcomes(rig.paths)).toEqual({
       [threadId('1')]: 'healed',
       [threadId('2')]: 'healed',
