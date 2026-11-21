@@ -157,7 +157,7 @@ export function createCodexStructuredItemStreams(
 
   const live = new StructuredAgentSessionLiveTextRows(
     deps.sink,
-    (key) => (isText(key) ? coalescer.snapshot(key)?.text : undefined),
+    (key, maxLength) => (isText(key) ? coalescer.textWithin(key, maxLength) : undefined),
     (key, text) => codexRunningStreamBody(states.get(key)?.item, text)
   )
 

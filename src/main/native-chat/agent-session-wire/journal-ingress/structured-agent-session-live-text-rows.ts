@@ -13,6 +13,14 @@ import { CHAT_LIVE_TEXT_SUBSCRIBER_BYTES } from '../../retention/subscriber-live
  *  rows past it update on their saves alone. */
 const LIVE_TEXT_STREAM_MAX_CHARS = CHAT_LIVE_TEXT_SUBSCRIBER_BYTES / 8
 
+/** Rows this class shows below the save rule: whole each window they would resend the reply, so
+ *  only a reader that takes appends gets them; any other waits for the saves, as before. */
+const appendOnlyRows = new WeakSet<AgentJournalRenderItem>()
+
+export function isAppendOnlyLiveRow(item: AgentJournalRenderItem): boolean {
+  return appendOnlyRows.has(item)
+}
+
 type Placement = { epoch: string; row: Omit<AgentJournalRenderItem, 'body'> }
 
 /** Streamed rows shown with their newest text at the placement their last save committed, so
@@ -31,7 +39,8 @@ export class StructuredAgentSessionLiveTextRows {
       StructuredAgentSessionEventSink,
       'bindLiveText' | 'publishLiveText'
     >,
-    private readonly text: (key: string) => string | undefined,
+    /** The row's text, or undefined when it is longer than `maxLength` (read without copying it). */
+    private readonly text: (key: string, maxLength: number) => string | undefined,
     private readonly body: (key: string, text: string) => AgentJournalItemBody | null
   ) {
     // Translators own lifecycle flushes; a write barrier must not force saves of streaming rows.
@@ -70,8 +79,8 @@ export class StructuredAgentSessionLiveTextRows {
     const items: AgentJournalRenderItem[] = []
     let budget = LIVE_TEXT_STREAM_MAX_CHARS
     for (const [key, placement] of this.placements) {
-      const text = placement?.epoch === epoch ? this.text(key) : undefined
-      if (!placement || text === undefined || text.length > budget) {
+      const text = placement?.epoch === epoch ? this.text(key, budget) : undefined
+      if (!placement || text === undefined) {
         continue
       }
       budget -= text.length
@@ -83,6 +92,7 @@ export class StructuredAgentSessionLiveTextRows {
       const body = this.body(key, text)
       if (body) {
         const item = { ...placement.row, body }
+        appendOnlyRows.add(item)
         this.shown.set(key, { placement, length: text.length, item })
         items.push(item)
       }

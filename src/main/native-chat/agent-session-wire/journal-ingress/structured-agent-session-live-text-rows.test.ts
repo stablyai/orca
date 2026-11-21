@@ -15,7 +15,10 @@ it('offers no reply too long for a viewer to hold twice, so its stream is never 
         return () => {}
       }
     },
-    (key) => texts.get(key),
+    (key, maxLength) => {
+      const text = texts.get(key)
+      return text !== undefined && text.length <= maxLength ? text : undefined
+    },
     (_key, text) => ({ kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] })
   )
   for (const key of texts.keys()) {

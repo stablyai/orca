@@ -125,7 +125,7 @@ export function createClaudeStreamedTextCheckpoints(
 
   const live = new StructuredAgentSessionLiveTextRows(
     deps.sink,
-    (key) => coalescer.snapshot(key)?.text,
+    coalescer.textWithin,
     (_key, text) => deps.liveBody(text)
   )
 

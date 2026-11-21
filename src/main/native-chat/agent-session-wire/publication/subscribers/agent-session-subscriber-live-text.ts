@@ -4,6 +4,7 @@ import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../age
 import type { Subscriber } from './agent-session-subscribe-input'
 import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
+import { isAppendOnlyLiveRow } from '../../journal-ingress/structured-agent-session-live-text-rows'
 import {
   markBoundedBatchFits,
   subscriberHistoryReader
@@ -251,6 +252,9 @@ export async function publishSubscriberLiveText(
     const fresh: AgentJournalRenderItem[] = []
     let freshBytes = 0
     for (const source of items) {
+      if (!subscriber.holdsTextBase && isAppendOnlyLiveRow(source)) {
+        continue
+      }
       const prior = sent?.get(source.itemId)
       // Sent whole once, the row becomes the reader's base; one the reader still can't append to
       // would go whole every window, so its save carries it.

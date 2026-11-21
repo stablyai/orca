@@ -7,6 +7,7 @@ import type { Subscriber } from '../agent-session-subscribe-input'
 import type { SubscriberDeliveryPort } from '../agent-session-subscriber-catch-up'
 import { publishSubscriberLiveText } from '../agent-session-subscriber-live-text'
 import type * as WireForm from '../../history/agent-session-item-wire-form'
+import { StructuredAgentSessionLiveTextRows } from '../../../journal-ingress/structured-agent-session-live-text-rows'
 
 const wireForms = vi.hoisted(() => ({ calls: 0 }))
 vi.mock('../../history/agent-session-item-wire-form', async (importOriginal) => {
@@ -89,6 +90,39 @@ describe('a live reply that only grows', () => {
     await publish('a'.repeat(1024))
     await publish(`${'a'.repeat(1024)} more`)
     expect(events).toHaveLength(1)
+  })
+
+  it('leaves a streamed reply to its saves for a reader that cannot take appends', async () => {
+    let read: ((epoch: string) => readonly AgentJournalRenderItem[]) | undefined
+    const rows = new StructuredAgentSessionLiveTextRows(
+      {
+        bindLiveText: (source) => {
+          read = source.read
+          return () => {}
+        }
+      },
+      () => 'a'.repeat(1024),
+      (_key, text) => reply(text).body
+    )
+    rows.committed('reply')(reply(''), 'e')
+    const events: AgentSessionSubscribeEvent[] = []
+    const port = {
+      hooks: {},
+      emit: async (_subscriber: Subscriber, event: AgentSessionSubscribeEvent) => {
+        events.push(event)
+      }
+    } as unknown as SubscriberDeliveryPort
+    const olderPhone = { id: 'phone', sessionId: 's', cursor, boundedFrames: true }
+    await publishSubscriberLiveText(port, {
+      sessionId: 's',
+      journal,
+      fence: 1,
+      items: read?.('e') ?? [],
+      subscribers: [olderPhone as unknown as Subscriber],
+      hostNow: 0
+    })
+    expect(read?.('e')).toHaveLength(1)
+    expect(events).toEqual([])
   })
 
   it('reaches an append reader as only its new text', async () => {

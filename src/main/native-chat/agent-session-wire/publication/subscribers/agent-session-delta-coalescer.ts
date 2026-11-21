@@ -50,6 +50,8 @@ export type AgentSessionDeltaCoalescer = {
   forget: (key: string) => void
   dispose: () => void
   snapshot: (key: string) => AgentSessionDeltaSnapshot | null
+  /** The retained text, or undefined past `maxLength`; a longer text is never joined. */
+  textWithin: (key: string, maxLength: number) => string | undefined
   dirty: () => { key: string; snapshot: AgentSessionDeltaSnapshot }[]
   /** External writes satisfy the current snapshot until more text arrives. */
   markFlushed: (key: string) => void
@@ -255,6 +257,10 @@ export function createAgentSessionDeltaCoalescer(
       streams.clear()
       evictable.clear()
       totalRetainedBytes = 0
+    },
+    textWithin: (key, maxLength) => {
+      const stream = streams.get(key)
+      return stream && stream.textLength <= maxLength ? joined(stream) : undefined
     },
     snapshot: (key) => {
       const stream = streams.get(key)
