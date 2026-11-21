@@ -250,7 +250,8 @@ function buildWslMarkerLastScript(
     'LC_ALL=C rm -f -- "$orca_target/.git"; ' +
     "else case \"$orca_after\" in *': No such file or directory'|*': Not a directory') ;; *) printf '%s\\n' \"$orca_after\" >&2; exit 1 ;; esac; fi; " +
     'else ' +
-    'LC_ALL=C find "$orca_target" -mindepth 1 -maxdepth 1 ! -iname .git -exec rm -rf -- {} + && ' +
+    'if LC_ALL=C stat -c \'%F\' -- "$orca_target/.git" >/dev/null 2>&1; then exit 4; fi && ' +
+    'LC_ALL=C find "$orca_target" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} + && ' +
     'if orca_after=$(LC_ALL=C stat -c \'%F\' -- "$orca_target/.git" 2>&1); then exit 4; ' +
     "else case \"$orca_after\" in *': No such file or directory'|*': Not a directory') ;; *) printf '%s\\n' \"$orca_after\" >&2; exit 1 ;; esac; fi; " +
     'fi && ' +

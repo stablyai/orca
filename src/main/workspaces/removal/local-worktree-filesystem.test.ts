@@ -400,5 +400,26 @@ describe.skipIf(process.platform === 'win32')(
 
       expect(existsSync(checkoutPath)).toBe(false)
     })
+
+    it('cleans up an unrelated uppercase .GIT sibling on case-sensitive filesystems when .git is already absent', async () => {
+      const checkoutPath = join(scratchDir, 'case-check')
+      mkdirSync(checkoutPath)
+      writeFileSync(join(checkoutPath, '.GIT'), 'untracked\n')
+      if (existsSync(join(checkoutPath, '.git'))) {
+        // Case-folding volumes resolve .git to .GIT; Linux CI exercises the distinct-entry path.
+        return
+      }
+      wireGuestShell()
+
+      await withPlatform('win32', async () => {
+        await expect(
+          removeLocalWorktreePath(checkoutPath, { wslDistro: 'Ubuntu' }, undefined, {
+            markerLast: true
+          })
+        ).resolves.toBeUndefined()
+      })
+
+      expect(existsSync(checkoutPath)).toBe(false)
+    })
   }
 )

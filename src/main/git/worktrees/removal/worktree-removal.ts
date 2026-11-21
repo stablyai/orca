@@ -4,7 +4,7 @@ import { pruneGitWorktrees } from './worktree-prune-guard'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal/removal'
 import { windowsLongPathGitArgs } from '../../../../shared/git/compatibility/windows-long-path-git-args'
-import { removeHostTree } from '../../../filesystem/host-tree-removal'
+import { removeUnregisteredHostCheckout } from '../../../filesystem/host-tree-removal'
 import { withSpan } from '../../../observability/tracer'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
@@ -252,5 +252,7 @@ async function removeCheckoutLeftByGit(
     throw error
   }
   console.warn(`[git] worktree remove left files at "${worktreePath}"; deleting them`)
-  await removeHostTree(worktreePath, { signal: options.checkoutDeleteSignal })
+  await removeUnregisteredHostCheckout(worktreePath, options.checkoutDeleteSignal, {
+    forbidAnyMarker: true
+  })
 }

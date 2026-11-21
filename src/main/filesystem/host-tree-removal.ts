@@ -228,7 +228,7 @@ export async function removeUnregisteredHostCheckout(
           throw differentCheckoutAtPathError(targetPath)
         }
         if (!swept) {
-          const names = (await readdir(root)).filter((name) => name.toLowerCase() !== '.git')
+          const names = await namesExceptCheckoutMarker(root)
           await deleteHostChildren(root, names)
           swept = true
           if (await hasAnyCheckoutMarkerEntry(markerPath)) {

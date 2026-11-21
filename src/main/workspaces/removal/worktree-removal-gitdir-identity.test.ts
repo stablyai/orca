@@ -6,7 +6,11 @@ import {
   assertCheckoutNotReplaced,
   assertLeftoverIsRecordedCheckout
 } from './worktree-removal-leftover'
-import { readCheckoutMarkerIdentity } from './worktree-removal-gitdir-identity'
+import {
+  captureAcceptedCheckoutGuard,
+  proveOrphanedCheckoutGuard,
+  readCheckoutMarkerIdentity
+} from './worktree-removal-gitdir-identity'
 
 let worktreePath: string
 
@@ -73,4 +77,35 @@ it('refuses a standalone repository whose .git is a directory instead of treatin
   await expect(assertCheckoutNotReplaced({ worktreePath, gitdir })).rejects.toThrow(
     'A different checkout is now at'
   )
+})
+
+it('fails closed at acceptance when .git is an unrecognized file or directory instead of disabling the guard', async () => {
+  await writeFile(join(worktreePath, '.git'), '')
+  await expect(captureAcceptedCheckoutGuard(worktreePath)).rejects.toThrow(
+    'A different checkout is now at'
+  )
+
+  await rm(join(worktreePath, '.git'))
+  await mkdir(join(worktreePath, '.git'))
+  await expect(captureAcceptedCheckoutGuard(worktreePath)).rejects.toThrow(
+    'A different checkout is now at'
+  )
+})
+
+it('binds orphan ownership proof to the initial marker and forbids new markers if it vanishes mid-proof', async () => {
+  await acceptCheckout('feature')
+
+  await expect(
+    proveOrphanedCheckoutGuard(worktreePath, {}, async () => {
+      await writeFile(join(worktreePath, '.git'), 'gitdir: /repo/.git/worktrees/replaced\n')
+      return true
+    })
+  ).rejects.toThrow('A different checkout is now at')
+
+  await acceptCheckout('feature-2')
+  const vanishedGuard = await proveOrphanedCheckoutGuard(worktreePath, {}, async () => {
+    await rm(join(worktreePath, '.git'))
+    return true
+  })
+  expect(vanishedGuard).toEqual({ markerLast: true, forbidAnyMarker: true })
 })

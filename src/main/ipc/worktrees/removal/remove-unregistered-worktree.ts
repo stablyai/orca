@@ -21,6 +21,10 @@ import {
   removeLocalWorktreePath,
   toLocalWorktreeRuntimePaths
 } from '../../../workspaces/removal/local-worktree-filesystem'
+import {
+  proveOrphanedCheckoutGuard,
+  type ProvenOrphanCheckoutGuard
+} from '../../../workspaces/removal/worktree-removal-gitdir-identity'
 import { cleanupUnusedWorktreePushTargetRemote, notifyWorktreesChanged } from '../worktree-remote'
 import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
@@ -46,26 +50,24 @@ export async function removeUnregisteredWorktree(
 ): Promise<RemoveWorktreeResult> {
   const { mainWindow, store, runtime } = context
   const removalHome = resolveWorktreeRemovalHomeForHost(removalHostId)
-  let canCleanOrphanedDirectory = false
+  let orphanGuard: ProvenOrphanCheckoutGuard | null = null
   if (
     canCleanupUnregisteredOrcaWorktreeDirectory({
       meta: removedMeta
     })
   ) {
-    const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
+    const access = getLocalWorktreePathAccess(localWorktreeGitOptions, worktreePath)
     if (!isDangerousWorktreeRemovalPath(worktreePath, repo.path, removalHome)) {
       const [runtimeWorktree, runtimeRepo] = await toLocalWorktreeRuntimePaths(
         [worktreePath, repo.path],
         localWorktreeGitOptions
       )
-      canCleanOrphanedDirectory = await canSafelyRemoveOrphanedWorktreeDirectory(
-        runtimeWorktree,
-        runtimeRepo,
-        removalHome,
-        access
+      orphanGuard = await proveOrphanedCheckoutGuard(worktreePath, localWorktreeGitOptions, () =>
+        canSafelyRemoveOrphanedWorktreeDirectory(runtimeWorktree, runtimeRepo, removalHome, access)
       )
     }
   }
+  const canCleanOrphanedDirectory = orphanGuard !== null
   const native = usesNativeWindowsRemoval(worktreePath, localWorktreeGitOptions)
   if (canCleanOrphanedDirectory || (native && removedMeta)) {
     assertWorktreeDoesNotContainRegisteredWorktree(worktreePath, registeredWorktrees)
@@ -82,10 +84,16 @@ export async function removeUnregisteredWorktree(
       await (usesNativeWindowsRemoval(worktreePath, localWorktreeGitOptions)
         ? removeWorktree(repo.path, worktreePath, args.force ?? false, {
             ...localWorktreeGitOptions,
+            ...orphanGuard,
             deleteBranch: false,
             knownRemovedWorktree: null
           })
-        : removeLocalWorktreePath(worktreePath, localWorktreeGitOptions))
+        : removeLocalWorktreePath(
+            worktreePath,
+            localWorktreeGitOptions,
+            undefined,
+            orphanGuard ?? { markerLast: true }
+          ))
       removalCompleted = true
     } finally {
       await removalGate.finish(removalCompleted)

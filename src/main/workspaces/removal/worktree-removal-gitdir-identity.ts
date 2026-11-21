@@ -19,6 +19,12 @@ export type AcceptedCheckoutGuard = {
   verify: () => Promise<void>
 }
 
+export type ProvenOrphanCheckoutGuard = {
+  markerLast: true
+  expectedMarker?: string
+  forbidAnyMarker?: boolean
+}
+
 function isAbsentMarkerError(error: unknown): boolean {
   const code = getErrorCode(error)
   return code === 'ENOENT' || code === 'ENOTDIR'
@@ -77,6 +83,9 @@ export async function captureAcceptedCheckoutGuard(
   options: LocalWorktreeFilesystemOptions = {}
 ): Promise<AcceptedCheckoutGuard> {
   const initial = await readCheckoutMarkerState(worktreePath, options)
+  if (initial.kind === 'other') {
+    throw differentCheckoutAtPathError(worktreePath)
+  }
   const gitdir = initial.kind === 'file' ? initial.identity : undefined
   const forbidAnyMarker = initial.kind === 'absent'
   return {
@@ -86,9 +95,6 @@ export async function captureAcceptedCheckoutGuard(
       ...(forbidAnyMarker ? { forbidAnyMarker: true } : {})
     },
     verify: async () => {
-      if (initial.kind === 'other') {
-        return
-      }
       const current = await readCheckoutMarkerState(worktreePath, options)
       if (current.kind === 'absent') {
         return
@@ -98,6 +104,29 @@ export async function captureAcceptedCheckoutGuard(
       }
     }
   }
+}
+
+/** Bind orphan ownership proof to the exact `.git` marker read before and after proof so teardown races cannot swap in another checkout. */
+export async function proveOrphanedCheckoutGuard(
+  worktreePath: string,
+  options: LocalWorktreeFilesystemOptions,
+  prove: () => Promise<boolean>
+): Promise<ProvenOrphanCheckoutGuard | null> {
+  const before = await readCheckoutMarkerState(worktreePath, options)
+  if (before.kind === 'other') {
+    return null
+  }
+  if (!(await prove())) {
+    return null
+  }
+  const after = await readCheckoutMarkerState(worktreePath, options)
+  if (after.kind === 'absent') {
+    return { markerLast: true, forbidAnyMarker: true }
+  }
+  if (before.kind !== 'file' || after.kind !== 'file' || after.identity !== before.identity) {
+    throw differentCheckoutAtPathError(worktreePath)
+  }
+  return { markerLast: true, expectedMarker: before.identity }
 }
 
 /** A checkout folder still on disk whose `.git` link is gone. */

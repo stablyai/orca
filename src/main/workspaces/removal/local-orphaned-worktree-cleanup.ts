@@ -5,7 +5,7 @@ import {
   removeLocalWorktreePath,
   toLocalWorktreeRuntimePaths
 } from './local-worktree-filesystem'
-import { readCheckoutMarkerIdentity } from './worktree-removal-gitdir-identity'
+import { proveOrphanedCheckoutGuard } from './worktree-removal-gitdir-identity'
 import {
   canSafelyRemoveOrphanedWorktreeDirectory,
   isWorktreePathMissing,
@@ -28,21 +28,19 @@ export async function cleanupLocalOrphanedWorktreeDirectory(
     options,
     signal
   )
-  const safe = await canSafelyRemoveOrphanedWorktreeDirectory(
-    runtimePath,
-    runtimeRepoPath,
-    CLIENT_REMOVAL_HOME,
-    access
+  const guard = await proveOrphanedCheckoutGuard(path, options, () =>
+    canSafelyRemoveOrphanedWorktreeDirectory(
+      runtimePath,
+      runtimeRepoPath,
+      CLIENT_REMOVAL_HOME,
+      access
+    )
   )
   throwIfSignalAborted(signal)
-  if (safe) {
-    const expectedMarker = await readCheckoutMarkerIdentity(path, options)
+  if (guard) {
     await closeWatchers(path)
     throwIfSignalAborted(signal)
-    await removeLocalWorktreePath(path, options, signal, {
-      markerLast: true,
-      ...(expectedMarker !== undefined ? { expectedMarker } : {})
-    }).catch((error: unknown) => {
+    await removeLocalWorktreePath(path, options, signal, guard).catch((error: unknown) => {
       throwIfSignalAborted(signal)
       if (error instanceof CheckoutIdentityRefusal) {
         throw error
