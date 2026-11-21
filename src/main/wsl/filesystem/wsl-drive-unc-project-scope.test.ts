@@ -21,8 +21,14 @@ function folder(folderPath: string, connectionId: string | null = null): FolderW
     executionHostId: connectionId ? null : 'local',
     linkedTask: null,
     comment: '',
-    isArchived: false
-  } as FolderWorkspace
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0,
+    createdAt: 0,
+    updatedAt: 0
+  }
 }
 
 describe('collectWslDriveUncScope', () => {
