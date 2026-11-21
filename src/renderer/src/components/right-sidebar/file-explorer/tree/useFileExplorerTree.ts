@@ -227,6 +227,8 @@ export function useFileExplorerTree(
         // A watcher read superseded the restore's root; the stale-refresh effect rechecks these.
         if (options?.restoredSnapshot && sessionCurrent && !rootReadFailedRef.current) {
           recheckedDirs.forEach((dirPath) => staleDirsRef.current.add(dirPath))
+          // A new cache identity re-runs the stale-refresh effect even if the watcher read already committed.
+          setDirCache((prev) => ({ ...prev }))
         }
         // Callers handle root failure and supersession differently; neither verified the expanded dirs.
         return rootReadFailedRef.current ? 'root-unreadable' : 'superseded'
