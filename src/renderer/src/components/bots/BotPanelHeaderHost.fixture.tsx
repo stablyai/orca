@@ -52,7 +52,8 @@ const noPicture: Parameters<typeof BotPanelHeader>[0]['picture'] = {
   undo: () => {},
   color: null,
   pickColor: () => {},
-  beginIntake: () => () => {}
+  beginIntake: () => () => {},
+  uploads: () => 0
 }
 
 type Row = {

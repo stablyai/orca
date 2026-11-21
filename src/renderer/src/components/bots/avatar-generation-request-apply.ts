@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { botRefKey, type BotRef } from '@/lib/bot-hosts'
 import { botHostHas } from '@/lib/bot-host-status'
-import { readHostBots, uploadBotAvatar } from '@/lib/bot-catalog'
+import { uploadBotAvatar } from '@/lib/bot-catalog'
 import type { Bot } from '../../../../shared/bot-types'
 import { BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import type {
@@ -39,7 +39,7 @@ export type Owner =
 
 /** The bot revision an upload requires: the one at Generate, or, while picture saves begun earlier are
  *  still in flight, the one they are acknowledged at. */
-export type Anchor = { revision: number; waiting: boolean; acked: number; failed: boolean }
+export type Anchor = { revision: number; waiting: boolean; acked: number }
 
 export type Request = {
   id: string
@@ -67,17 +67,12 @@ export function canCheckRevision(ref: BotRef): boolean {
   return botHostHas(ref.hostId, BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY)
 }
 
-export function catalogRevision(ref: BotRef): number {
-  return readHostBots(ref.hostId).find((bot) => bot.id === ref.id)?.avatarRevision ?? 0
-}
-
 export function anchorAt(bot: Bot): Anchor {
   // A legacy bot has no revision yet: 0, sent explicitly, so its first automatic upload is still checked.
   return {
     revision: bot.avatarRevision ?? 0,
     waiting: botPictureOpsOpen(botRefKey(bot)),
-    acked: 0,
-    failed: false
+    acked: 0
   }
 }
 
@@ -101,7 +96,7 @@ export function tryApply(request: Request, finish: (request: Request) => void): 
     }
     return
   }
-  const anchor = request.anchor ?? { revision: 0, waiting: false, acked: 0, failed: false }
+  const anchor = request.anchor ?? { revision: 0, waiting: false, acked: 0 }
   if (anchor.waiting) {
     return
   }

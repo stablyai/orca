@@ -142,7 +142,20 @@ export const newGenerateApplied = defineFixture({
   interact: async (frame) => {
     await generateInNewBot(frame, 'a friendly orange fox astronaut')
     await submitGenerate()
+    const trigger = document.querySelector<HTMLElement>(
+      '[role="dialog"] button[aria-label="Change picture"]'
+    )
+    const before = trigger?.querySelector('img')?.src
     await toggleNewPicture()
-    await settle(1500)
+    // The picture lands about a second later and is cropped first: wait until the badge's spinner has
+    // gone and the picture shown is a new one, rather than a fixed time.
+    for (let tries = 0; tries < 50; tries += 1) {
+      const shown = trigger?.querySelector('img')?.src
+      if (!trigger?.querySelector('.loading-spinner') && shown && shown !== before) {
+        break
+      }
+      await settle(100)
+    }
+    await settle(300)
   }
 })

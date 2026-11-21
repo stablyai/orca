@@ -1,5 +1,6 @@
 // A bot's picture, edited where it shows: a click opens the picture picker in a popover. A picture being
 // generated keeps going with the popover closed, the avatar veiled with a spinner, and lands on its own.
+import { useRef, useState } from 'react'
 import { useBotHostHas } from '@/lib/bot-host-status'
 import { BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import { Pencil } from 'lucide-react'
@@ -14,6 +15,7 @@ import { BOT_EDIT_HINT } from './bot-edit-hint'
 import { BOT_PICTURE_DROP_OUTLINE, BotPicturePicker } from './BotPicturePicker'
 import { useGenerateFace } from './AvatarGenerateFace'
 import { useBotPictureGenerating } from './avatar-generation-requests'
+import { failedForToast } from './avatar-generation-request-apply'
 
 export function BotPictureButton({
   bot,
@@ -32,18 +34,32 @@ export function BotPictureButton({
   const t = useTranslate()
   const colors = useBotHostHas(bot.hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY)
   const generating = useBotPictureGenerating(bot)
+  const [open, setOpen] = useState(false)
+  // Uploads counted when the last run was asked for: a picture taken in since keeps the slot.
+  const uploadsAtGenerate = useRef(0)
   // Above the popover, so a run outlives it. The picture made is uploaded by the request store, behind
   // the host's revision check; here it only takes its place in the slot.
   const face = useGenerateFace(
-    () => true,
+    () => picture.uploads() === uploadsAtGenerate.current,
     picture.custom?.src
       ? { src: picture.custom.src, description: picture.custom.description }
       : null,
-    undefined,
-    { owner: () => ({ kind: 'bot', bot }), background: true }
+    () => {
+      uploadsAtGenerate.current = picture.uploads()
+    },
+    {
+      owner: () => ({ kind: 'bot', bot }),
+      background: true,
+      // With the picker closed its error can't be seen, so a toast says it; reopened, the picker shows it.
+      onFailed: () => {
+        if (!open) {
+          failedForToast(bot.name)
+        }
+      }
+    }
   )
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <Tooltip open={generating ? undefined : false}>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>

@@ -219,10 +219,13 @@ export class BotController {
         assertBotNameFree(store.getBots(), updates.name, botId)
       }
       const updated: Bot = { ...applyBotUpdates(bot, updates), updatedAt: Date.now() }
-      // Any picture or color choice counts, even one that sets the same value again.
+      // Any picture or color choice counts, even one that sets the same value again. Every other edit
+      // keeps the highest revision seen, so rewriting bot.json from a record that lost it can't lower it.
+      const revision = await this.avatarRevision(bot, botHomeFolder(bot, this.deps.botsRoot()))
       if (updates.avatar !== undefined || updates.avatarColor !== undefined) {
-        const home = botHomeFolder(bot, this.deps.botsRoot())
-        updated.avatarRevision = (await this.avatarRevision(bot, home)) + 1
+        updated.avatarRevision = revision + 1
+      } else if (revision > 0) {
+        updated.avatarRevision = revision
       }
       const next = stampBotLinkOwners(bot, updated, () => this.deps.accountUserId?.() ?? null)
       await writeBotHome(this.deps.filesystem, botHomeFolder(next, this.deps.botsRoot()), next)

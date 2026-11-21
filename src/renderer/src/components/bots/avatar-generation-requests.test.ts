@@ -173,7 +173,8 @@ describe('avatar generation requests', () => {
     })
   })
 
-  it("takes the catalog's revision when a save begun before Generate failed", async () => {
+  it('keeps the revision at Generate when a save begun before it failed, past a newer write elsewhere', async () => {
+    // Another window set a picture (revision 7) while this window's own save was failing.
     mocks.readHostBots.mockReturnValue([bot({ avatarRevision: 7 })])
     const op = beginBotPictureOp(BOT_KEY)
     const land = nextRun()
@@ -185,7 +186,7 @@ describe('avatar generation requests', () => {
     await flush()
 
     expect(mocks.uploadBotAvatar).toHaveBeenCalledWith(expect.anything(), 'CROPPED', {
-      expectedAvatarRevision: 7
+      expectedAvatarRevision: 2
     })
   })
 
@@ -290,12 +291,14 @@ describe('avatar generation requests', () => {
     expect(mocks.uploadBotAvatar).not.toHaveBeenCalled()
   })
 
-  it('ends the run at Create when a newer choice was made, or the host cannot check', () => {
+  it('ends the run at Create when a newer choice was made, or the host cannot check, and says so to its face', () => {
     nextRun()
     const chose = startFor({ kind: 'draft', key: 'draft-1' })
     noteBotPictureChoice('draft-1')
     expect(handOffAvatarRequest(chose.id, { hostId: 'local', name: 'Scout' })).toBeNull()
     expect(mocks.cancel).toHaveBeenCalledWith({ requestId: chose.id })
+    // A Create that then fails leaves the dialog open: its Generate face must not stay running.
+    expect(chose.host.ended).toHaveBeenCalled()
     expect(mocks.toastError).not.toHaveBeenCalled()
 
     mocks.botHostHas.mockReturnValue(false)
@@ -303,6 +306,7 @@ describe('avatar generation requests', () => {
     const old = startFor({ kind: 'draft', key: 'draft-2' })
     expect(handOffAvatarRequest(old.id, { hostId: 'local', name: 'Scout' })).toBeNull()
     expect(mocks.cancel).toHaveBeenCalledWith({ requestId: old.id })
+    expect(old.host.ended).toHaveBeenCalled()
     expect(mocks.toastError).toHaveBeenCalledWith("Couldn't generate a picture for Scout.")
   })
 

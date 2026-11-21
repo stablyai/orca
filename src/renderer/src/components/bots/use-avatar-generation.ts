@@ -38,6 +38,10 @@ function rememberAgent(agent: AvatarImageAgent): void {
 
 let draftCount = 0
 
+export type AvatarGenerationOptions = { owner?: () => AvatarRequestOwner; onFailed?: () => void }
+/** A Generate face's: `background` when its host keeps it above the picker's popover. */
+export type GenerateFaceOptions = AvatarGenerationOptions & { background?: boolean }
+
 /** A name for a bot not yet made, for its picture choices in the ledger (`noteBotPictureChoice`). */
 export function newAvatarDraftKey(): string {
   draftCount += 1
@@ -46,11 +50,12 @@ export function newAvatarDraftKey(): string {
 
 /** `onStart` runs once a run is accepted (after the description is checked), before the agent is asked.
  *  `onResult`'s `apply` says whether the host should place the picture itself (see AvatarRequestHost).
- *  `owner` is read as each run starts; absent, the picture is for a bot not yet made. */
+ *  `owner` is read as each run starts; absent, the picture is for a bot not yet made. `onFailed` runs
+ *  as a run of this host's fails, after its error is set. */
 export function useAvatarGeneration(
   onResult: (result: GeneratedAvatar, apply: boolean) => void,
   onStart?: () => void,
-  owner?: () => AvatarRequestOwner
+  { owner, onFailed }: AvatarGenerationOptions = {}
 ): {
   agents: readonly AvatarImageAgentStatus[]
   /** null while no capable agent was found. */
@@ -79,9 +84,9 @@ export function useAvatarGeneration(
   const [result, setResult] = useState<GeneratedAvatar | null>(null)
   const current = useRef<string | null>(null)
   // A result can land after the face moved; the host decides then whether it applies.
-  const latest = useRef({ onResult, onStart, owner })
+  const latest = useRef({ onResult, onStart, owner, onFailed })
   useEffect(() => {
-    latest.current = { onResult, onStart, owner }
+    latest.current = { onResult, onStart, owner, onFailed }
   })
   // This host's own picture choices, for a bot not yet made.
   const [draftKey] = useState(newAvatarDraftKey)
@@ -131,6 +136,7 @@ export function useAvatarGeneration(
         if (ours()) {
           current.current = null
           setRun({ kind: 'error', failure, agent: failedAgent })
+          latest.current.onFailed?.()
         }
       },
       ended: () => {

@@ -121,7 +121,7 @@ describe('BotController', () => {
       expect((await bots.setAvatarImage(bot.id, squarePng(512, 1))).avatarRevision).toBe(3)
     })
 
-    it("keeps the revision in the home's bot.json, so a profile that lost its last save still refuses", async () => {
+    it("keeps the revision in the home's bot.json, so a profile that lost its last save still refuses, renamed or not", async () => {
       const bot = await bots.create({ name: 'Reviewer' })
       const saved = await bots.setAvatarImage(bot.id, squarePng(512))
       expect(
@@ -129,6 +129,8 @@ describe('BotController', () => {
       ).toBe(1)
       // The profile's debounced write never happened: the record is back where it was.
       store.saveBot({ ...saved, avatarRevision: undefined })
+      // A rename rewrites bot.json from that record, and keeps the revision.
+      await bots.update(bot.id, { name: 'Reviewer Two' })
 
       await expect(bots.setAvatarImage(bot.id, squarePng(512, 1), 0)).rejects.toThrow(
         'bot_avatar_changed'

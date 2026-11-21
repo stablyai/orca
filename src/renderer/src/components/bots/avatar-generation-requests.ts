@@ -20,7 +20,6 @@ import { subscribeBotPictureEvents, type BotPictureEvent } from './bot-picture-o
 import {
   anchorAt,
   canCheckRevision,
-  catalogRevision,
   failedForToast,
   tryApply as tryApplyWith,
   type AvatarRequestHost,
@@ -58,6 +57,8 @@ function finish(request: Request): void {
 
 function cancelRun(request: Request): void {
   finish(request)
+  // The face showing it goes back to rest; a cancel the face asked for has already let go of it.
+  request.host?.ended()
   void avatarGenerationApi()
     ?.cancel({ requestId: request.id })
     .catch(() => {})
@@ -116,15 +117,10 @@ function onPictureEvent(event: BotPictureEvent): void {
       tryApply(request)
     } else if (anchor?.waiting && event.kind === 'ack') {
       anchor.acked = Math.max(anchor.acked, event.revision)
-    } else if (anchor?.waiting && event.kind === 'failed') {
-      anchor.failed = true
     } else if (anchor?.waiting && event.kind === 'idle' && request.owner.kind === 'bot') {
-      // A save that failed has no revision to wait for; the catalog's, after it settles, stands in.
-      anchor.revision = Math.max(
-        anchor.revision,
-        anchor.acked,
-        anchor.failed ? catalogRevision(request.owner.ref) : 0
-      )
+      // Only a save's own acknowledged revision moves the anchor. One that failed has none, so the
+      // anchor stays: the catalog may already hold a newer choice from elsewhere, which must still win.
+      anchor.revision = Math.max(anchor.revision, anchor.acked)
       anchor.waiting = false
       tryApply(request)
     }
@@ -265,8 +261,7 @@ export function handOffAvatarRequest(
       request.anchor = {
         revision: bot.avatarRevision ?? 0,
         waiting: false,
-        acked: 0,
-        failed: false
+        acked: 0
       }
       notify()
       if (request.status === 'failed') {

@@ -50,6 +50,9 @@ export function useBotPictureSetting(
   /** A picture starts being taken in (a paste, drop or file): a choice from now. The returned call
    *  runs once it is read, whichever way. */
   beginIntake: () => () => void
+  /** How many pictures were uploaded so far (taken in, or a generated one picked), for telling
+   *  whether one came after a moment. */
+  uploads: () => number
 } {
   const t = useTranslate()
   const [kept, setKeptState] = useState(() => keptFrom(bot.avatar, 0, -1))
@@ -178,8 +181,10 @@ export function useBotPictureSetting(
     png: Promise<string | null>
   } | null>(null)
 
+  const uploads = useRef(0)
   const upload = (png: string, after: number): void => {
     nextChoice()
+    uploads.current += 1
     const previous = live.kept
     const replacesUpload = isUploadAvatar(previous?.avatar ?? null)
     const shownPng = live.src?.startsWith(PNG_DATA_URL_PREFIX)
@@ -317,6 +322,7 @@ export function useBotPictureSetting(
     beginIntake: () => {
       noteBotPictureChoice(key)
       return beginBotPictureOp(key).end
-    }
+    },
+    uploads: () => uploads.current
   }
 }

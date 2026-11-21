@@ -20,8 +20,8 @@ import { MAX_AVATAR_DESCRIPTION_CHARS } from '../../../../shared/avatar-generati
 import { BOT_EDIT_HINT } from './bot-edit-hint'
 import { FieldNoteLine, sameNote, type FieldNote } from './AvatarGenerateFieldNote'
 import { BotPictureRowFold } from './BotPictureRowFold'
-import { useAvatarGeneration, type GeneratedAvatar } from './use-avatar-generation'
-import type { AvatarRequestOwner } from './avatar-generation-requests'
+import { useAvatarGeneration } from './use-avatar-generation'
+import type { GeneratedAvatar, GenerateFaceOptions } from './use-avatar-generation'
 
 const TILE = 'size-28 rounded-xl'
 
@@ -35,15 +35,14 @@ export type SlotPicture = { src: string; description: string }
  * its checks), so a picture taken earlier and still being read can't replace it.
  *
  * A host above the popover (New bot, Import, a bot's picture button) keeps the face, so a run goes on
- * with the popover closed: `background`. `owner` says who the picture is for (see useAvatarGeneration).
+ * with the popover closed: `background`. Its other options: see useAvatarGeneration.
  */
 export function useGenerateFace(
-  /** False when a picture taken in since it was asked for keeps the slot. `apply`: see
-   *  AvatarRequestHost. */
+  /** False when a picture taken in since keeps the slot. `apply`: see AvatarRequestHost. */
   onResult: (result: GeneratedAvatar, apply: boolean) => boolean,
   applied: SlotPicture | null,
   onStart?: () => void,
-  { owner, background = false }: { owner?: () => AvatarRequestOwner; background?: boolean } = {}
+  options: GenerateFaceOptions = {}
 ) {
   // A picture taken in after the last one made (an upload, an undo) wins the slot back.
   const [superseded, setSuperseded] = useState(false)
@@ -52,7 +51,7 @@ export function useGenerateFace(
       setSuperseded(!onResult(made, apply))
     },
     onStart,
-    owner
+    options
   )
   const made = generation.result && !superseded ? generation.result : null
   const picture: SlotPicture | null = made
@@ -71,7 +70,7 @@ export function useGenerateFace(
   return {
     ...generation,
     /** The run goes on with the picker closed. */
-    background,
+    background: options.background ?? false,
     /** The picture just made, unless another was taken in since. */
     made,
     picture,
