@@ -10,18 +10,15 @@ import { BOT_MASCOT_URLS } from './bot-mascots'
 export function BotAvatar({
   bot,
   className,
-  style,
-  backoff = false
+  style
 }: {
   bot: Pick<Bot, 'id' | 'name' | 'avatar' | 'avatarColor'> & BotOnHost
   className?: string
   style?: React.CSSProperties
-  /** See useBotAvatarSrc. */
-  backoff?: boolean
 }): React.JSX.Element {
   return (
     <BotAvatarTile
-      src={useBotAvatarSrc(bot, backoff)}
+      src={useBotAvatarSrc(bot)}
       fallback={botFallback(bot)}
       className={className}
       style={style}
