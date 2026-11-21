@@ -11,11 +11,7 @@ import type { AutomationRun } from '../../shared/automations/history/automation-
 import type { Bot } from '../../shared/bot-types'
 import { botOfHomeWorkspace } from '../../shared/bots/bot-homes'
 import type { BotChatOrigin, BotChatTreeChat } from '../../shared/bots/bot-chat-tree'
-import {
-  HOME_CHAT_TITLE,
-  type BotChatFacts,
-  type BotChatTreeDispatch
-} from '../../shared/bots/bot-chat-tree-model'
+import { HOME_CHAT_TITLE, type BotChatFacts } from '../../shared/bots/bot-chat-tree-model'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import { isOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
@@ -26,6 +22,10 @@ import {
 } from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
 import { structuredSessionMailReach } from '../runtime/orchestration/mailbox/routing/structured-session-mail-address'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
+import {
+  readSessionParties,
+  type SessionPartyReader
+} from '../runtime/orchestration/addressing/session-party-reader'
 import { botChatRecordEmpty, botChatRecordRow } from '../runtime/rpc/methods/bots-chats'
 import { automationRuns, type BotActivityHost } from './bot-activity-host'
 import { isBotBackgroundRun, type BotBackgroundRuns } from './bot-background-run-records'
@@ -84,22 +84,6 @@ export function botChatInputsKey(inputs: BotChatInputs): string {
   ])
 }
 
-/** What of a record its chat row shows; a commit that leaves this as it was (a lease renewal, say)
- *  changes no chat. */
-export function botChatRecordShown(record: AgentSessionConversationView): string {
-  return JSON.stringify([
-    record.location.workspaceId,
-    record.conversationName ?? null,
-    record.conversationNameSource ?? null,
-    record.conversationCommand ?? null,
-    record.lastTurn ?? null,
-    record.provider,
-    record.providerHandleChain.length > 0,
-    // An unturned chat lists by when its record last changed.
-    record.lastTurn ? null : record.updatedAt
-  ])
-}
-
 /** A chat as its records say it, before live status, tabs and read state. */
 // `liveSessionId`: the lineage's live session, when a /clear moved the chat past its own.
 export type BotChatBaseChat = Pick<
@@ -136,7 +120,8 @@ export function botChatBaseChat(
   store: AgentSessionRecordReader,
   bot: Pick<Bot, 'folderWorkspaceId'>,
   record: AgentSessionConversationView,
-  build: Pick<BotChatBaseBuild, 'rootOf' | 'homeRoot' | 'originBySessionId'>
+  build: Pick<BotChatBaseBuild, 'rootOf' | 'homeRoot' | 'originBySessionId'>,
+  parties: SessionPartyReader = ctx.db
 ): BotChatBaseChat | null {
   if (
     !botOfHomeWorkspace([bot], record.location.workspaceId) ||
@@ -151,7 +136,7 @@ export function botChatBaseChat(
   const live = lineageLiveSession(store, row.id)
   // Only a chat that truly ended is closed: one on another host or behind an unverifiable /clear is not.
   const root = store.getRecord(row.id)
-  const closed = root ? structuredSessionMailReach(store, root, ctx.db).kind === 'ended' : false
+  const closed = root ? structuredSessionMailReach(store, root, parties).kind === 'ended' : false
   const origin = row.home ? { origin: 'home' as const } : build.originBySessionId.get(row.id)
   const preview = row.lastSaid ?? row.lastAsked
   return {
@@ -217,8 +202,12 @@ export function buildBotChatBase(
   const sessionOfChat = new Map<string, string>()
   const partial = { rootOf, homeRoot, originBySessionId }
   if (store) {
+    const parties = readSessionParties(
+      ctx.db,
+      homeRecords.flatMap((record) => [record.sessionId, rootOf(record.sessionId)])
+    )
     for (const record of homeRecords) {
-      const chat = botChatBaseChat(ctx, store, inputs.bot, record, partial)
+      const chat = botChatBaseChat(ctx, store, inputs.bot, record, partial, parties)
       if (chat) {
         chats.set(chat.chatId, chat)
         sessionOfChat.set(chat.chatId, record.sessionId)
@@ -338,6 +327,3 @@ export function comparableBotChatBase(build: BotChatBaseBuild): string {
     dispatches: build.placement.dispatches().toSorted((a, b) => (a.id < b.id ? -1 : 1))
   })
 }
-
-/** Every session id the base was read from, and the lineage root each lists under. */
-export type BotChatBaseDispatches = readonly BotChatTreeDispatch[]
