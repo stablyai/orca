@@ -82,7 +82,7 @@ export function getPiSubagentSnapshotSourceLines(): string[] {
 // Pi replaces registrations/buses and reloads modules; globalThis retains run state. OMP/Prime retain their bus.
 export function getPiSubagentRosterSetupSourceLines(kind: PiAgentKind): string[] {
   return [
-    '  const piEventBus = (pi as { events?: { __orcaPiSubagents?: SubagentRoster; __orcaPiSubagentsHeard?: boolean; __orcaPiRunnerExitsHeard?: boolean; on?: (name: string, handler: (event: unknown) => void) => void } }).events',
+    '  const piEventBus = (pi as { events?: { __orcaPiSubagents?: SubagentRoster; __orcaPiSubagentsHeard?: boolean; __orcaPiRunnerExitsHeard?: boolean; __orcaPiProcessesHeard?: boolean; on?: (name: string, handler: (event: unknown) => void) => void } }).events',
     kind === 'pi'
       ? '  const runStateHome: { __orcaPiSubagents?: SubagentRoster } | undefined = isOmpRuntime() ? piEventBus : (globalThis as { __orcaPiSubagents?: SubagentRoster })'
       : '  const runStateHome: { __orcaPiSubagents?: SubagentRoster } | undefined = piEventBus',
@@ -119,6 +119,18 @@ export function getPiSubagentRosterSetupSourceLines(kind: PiAgentKind): string[]
     '  if (ownsPaneRoster && piEventBus?.on && !piEventBus.__orcaPiRunnerExitsHeard && !busRoster?.runnerExitListener) {',
     '    piEventBus.__orcaPiRunnerExitsHeard = true',
     "    piEventBus.on('subagent:process-terminal', (event: unknown) => lifecycleState.onRunnerExit?.(event))",
+    '  }',
+    // pi-processes background jobs keep the pane working until they exit, like async subagents.
+    '  if (ownsPaneRoster && piEventBus?.on && !piEventBus.__orcaPiProcessesHeard) {',
+    '    piEventBus.__orcaPiProcessesHeard = true',
+    '    const processEvent = (event: unknown): Record<string, unknown> | undefined => {',
+    "      const info = event && typeof event === 'object' ? (event as { id?: unknown; name?: unknown; command?: unknown; success?: unknown }) : undefined",
+    "      if (typeof info?.id !== 'string' || !info.id) return undefined",
+    "      const label = typeof info.name === 'string' && info.name.trim() ? info.name : info.command",
+    "      return { id: 'pi-process:' + info.id, agent: 'process', description: label, success: info.success !== false }",
+    '    }',
+    "    piEventBus.on('processes:started', (event: unknown) => lifecycleState.onEvent?.(processEvent(event), 'started'))",
+    "    piEventBus.on('processes:ended', (event: unknown) => lifecycleState.onEvent?.(processEvent(event), 'completed'))",
     '  }'
   ]
 }
