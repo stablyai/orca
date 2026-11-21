@@ -144,10 +144,12 @@ export function BotItemRowsWindow({
         ? element.getBoundingClientRect()
         : null
     if (box && rect) {
-      contentTop.current = rect.top + box.scrolled
+      contentTop.current = rect.top - box.top + box.scrolled
     }
     const top =
-      box && element && contentTop.current !== null ? contentTop.current - box.scrolled : null
+      box && element && contentTop.current !== null
+        ? box.top + contentTop.current - box.scrolled
+        : null
     let next: Range = { start: 0, end: Math.min(count, FIRST_ROWS) }
     if (box && top !== null) {
       const from = box.top - top - OVERSCAN_PX
