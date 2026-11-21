@@ -15112,11 +15112,11 @@
                   "statusSyncFirst": "请先同步",
                   "statusUnsupported": "不支持",
                   "rebaseOntoNamedBase": "变基到 {{base}}",
-                  "rebaseCommitOrStashFirst": "请先提交或暂存更改",
+                  "rebaseCommitOrStashFirst": "请先提交或储藏（stash）更改",
                   "continueRebase": "继续变基",
                   "titleContinueRebase": "继续已暂停的变基",
                   "rebaseFromNamedBase": "从 {{baseRef}} 变基",
-                  "rebaseDirtyHint": "尝试变基；git 可能要求先提交或暂存本地更改",
+                  "rebaseDirtyHint": "尝试变基；git 可能要求先提交或储藏（stash）本地更改",
                   "statusStashFirst": "请先存入 stash"
                 }
               },
