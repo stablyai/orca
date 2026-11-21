@@ -1,4 +1,3 @@
-import type { ConnectorFailure } from '../../shared/connectors/connector-cloud-contract'
 // The reply outbox's sender (design item 125 §3): filled, unsent rows go to the cloud as reply events
 // under a hello that lists replies.outbox, else through /replies (the kill switch); a row is marked
 // sent only once the cloud accepted it.
@@ -6,7 +5,8 @@ import { createHash } from 'node:crypto'
 import {
   CONNECTOR_CLIENT_LIMITS,
   cloudConversation,
-  type ConnectorEvent
+  type ConnectorEvent,
+  type ConnectorFailure
 } from '../../shared/connectors/connector-cloud-contract'
 import type {
   JournalConnectorReplyCut,
