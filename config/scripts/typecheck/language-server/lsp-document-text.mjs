@@ -1,20 +1,32 @@
 // LSP positions count UTF-16 code units, which is what JavaScript string offsets count; lines end in \n, \r\n or \r.
 const LINE_BREAK = /\r\n|\r|\n/g
 
-// One pass over the text before the position; building the edited string is linear in the document anyway.
-function offsetAt(text, { line, character }) {
+// Both ends of a range in one pass over the text up to the end's line.
+function rangeOffsets(text, range) {
   LINE_BREAK.lastIndex = 0
+  let line = 0
   let lineStart = 0
-  for (let current = 0; current < line; current++) {
-    const match = LINE_BREAK.exec(text)
-    if (match === null) {
+  let lastLine = false
+  const offsetOf = ({ line: target, character }) => {
+    while (line < target && !lastLine) {
+      if (LINE_BREAK.exec(text) === null) {
+        lastLine = true
+      } else {
+        lineStart = LINE_BREAK.lastIndex
+        line++
+      }
+    }
+    if (line < target) {
       return text.length
     }
-    lineStart = LINE_BREAK.lastIndex
+    const resume = LINE_BREAK.lastIndex
+    const lineBreak = LINE_BREAK.exec(text)
+    LINE_BREAK.lastIndex = resume
+    const lineEnd = lineBreak === null ? text.length : lineBreak.index
+    return lineStart + Math.min(character, lineEnd - lineStart)
   }
-  const end = LINE_BREAK.exec(text)
-  const lineEnd = end === null ? text.length : end.index
-  return lineStart + Math.min(character, lineEnd - lineStart)
+  const start = offsetOf(range.start)
+  return [start, Math.max(start, offsetOf(range.end))]
 }
 
 export function applyContentChanges(text, changes = []) {
@@ -23,8 +35,7 @@ export function applyContentChanges(text, changes = []) {
       text = change.text
       continue
     }
-    const start = offsetAt(text, change.range.start)
-    const end = offsetAt(text, change.range.end)
+    const [start, end] = rangeOffsets(text, change.range)
     text = text.slice(0, start) + change.text + text.slice(end)
   }
   return text
