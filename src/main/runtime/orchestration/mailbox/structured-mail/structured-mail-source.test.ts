@@ -5,7 +5,11 @@ import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { expect, it } from 'vitest'
 import { readAgentMessageSource } from '../../../../../shared/agent-session/journal/agent-session-message-source'
-import { structuredMailMessage, structuredMailSource } from './structured-mail-source'
+import {
+  structuredMailMessage,
+  structuredMailSource,
+  type MailSourceMessage
+} from './structured-mail-source'
 import { settleStructuredMailAttempt } from './structured-mail-custody'
 import { AgentSessionAttachmentStore } from '../../../../native-chat/agent-session-attachments/agent-session-attachment-store'
 import { setAgentSessionAttachmentStore } from '../../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
@@ -55,7 +59,7 @@ it("calls a federated worker of the Run its worker, and an unrelated chat's Run 
   }
 })
 
-it("sends Orca's notice for a local worker the thread's turn started back to the thread", () => {
+it("sends a local worker's results the thread's turn started back to the thread, and keeps its asks in Orca", () => {
   const db = new OrchestrationDb(':memory:')
   try {
     const run = db.createRun({
@@ -72,8 +76,9 @@ it("sends Orca's notice for a local worker the thread's turn started back to the
       })
     const started = assign('term_coord')
     const foreign = assign('term_other')
-    // A failed start's or lost worker's notice is mailed from the dispatch itself.
-    const notice = (dispatchId: string) =>
+    // Orca mails as the dispatch itself: a failed start or lost worker (escalation), its question,
+    // its setup status.
+    const mail = (dispatchId: string, type: MailSourceMessage['type']) =>
       structuredMailSource({
         db,
         mailboxHandle: `run:${run.id}`,
@@ -81,17 +86,22 @@ it("sends Orca's notice for a local worker the thread's turn started back to the
         senderSnapshot: () => ({ name: 'Worker', agent: null }),
         batch: [
           {
-            id: `m-${dispatchId}`,
+            id: `m-${dispatchId}-${type}`,
             from_handle: `dispatch:${dispatchId}`,
             run_id: run.id,
-            type: 'status',
+            type,
             payload: null,
             created_at: '2026-01-01T00:00:00.000Z'
           }
         ]
       }).senders[0]
-    expect(notice(started.id)).toMatchObject({ relation: 'worker', toConversation: true })
-    expect(notice(foreign.id)).not.toHaveProperty('toConversation')
+    expect(mail(started.id, 'escalation')).toMatchObject({
+      relation: 'worker',
+      toConversation: true
+    })
+    expect(mail(started.id, 'question')).not.toHaveProperty('toConversation')
+    expect(mail(started.id, 'status')).not.toHaveProperty('toConversation')
+    expect(mail(foreign.id, 'escalation')).not.toHaveProperty('toConversation')
   } finally {
     db.close()
   }
