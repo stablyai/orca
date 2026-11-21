@@ -2,6 +2,7 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import {
+  WSL_MOVE_HOST_NOT_WSL_LAUNCHED_DETAIL,
   WSL_MOVE_MAPPED_DRIVE_UNVERIFIABLE_DETAIL,
   type WslMoveBlockerKind,
   type WslMoveProgressStep,
@@ -105,6 +106,13 @@ export function wslMoveRefusalMessage(
             { distro }
           )
     case 'wsl_move_host_update_required':
+      if (refusal.detail === WSL_MOVE_HOST_NOT_WSL_LAUNCHED_DETAIL) {
+        return t(
+          'wslMove.refusal.hostNotWslLaunched',
+          "The Orca server in {{distro}} was not started as a WSL host (an SSH host for this distro usually started it), so it can't take these projects. Updating won't help. Disconnect that SSH host, finish any work in {{distro}}'s terminals, run wsl --terminate {{distro}} in Windows, then try again. Orca then starts the server as a WSL host.",
+          { distro }
+        )
+      }
       return t(
         'wslMove.refusal.hostUpdateRequired',
         'The {{distro}} host runs an older version of Orca. Update it in Settings, then try again.',

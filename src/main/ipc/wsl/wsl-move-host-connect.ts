@@ -52,3 +52,15 @@ export async function connectWslMoveHostService(
   }
   return true
 }
+
+/**
+ * Whether the connected server waits on an update from this desktop. A ready one that does not
+ * runs this build (or a newer one), so a missing WSL capability means another launch, not age.
+ */
+export function wslMoveHostUpdatePending(
+  service: Pick<WslHostService, 'getStatuses'>,
+  environmentId: string
+): { updatePending?: boolean } {
+  const status = service.getStatuses().find((entry) => entry.environmentId === environmentId)
+  return status?.state === 'ready' ? { updatePending: !!status.deferredUpdate } : {}
+}

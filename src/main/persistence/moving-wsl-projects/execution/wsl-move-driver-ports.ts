@@ -43,6 +43,11 @@ export type WslMoveHost = {
   /** The distro's registry id, which binds the move to this exact distro; absent when unknown. */
   distroGuid?: string
   capabilities: readonly string[]
+  /**
+   * False when the server waits on no update from this desktop, so a missing WSL capability means
+   * it was not started as a WSL host (an SSH host started it), not that it is old. Absent: unknown.
+   */
+  updatePending?: boolean
   /** Read after the connect re-saved the deployment link; absent when no Orca profile is active. */
   browserLoginsNotCarried?: WslMoveBrowserCookieFreshPartitionReason
   catalog: OrcadMigrationDestinationCatalog
