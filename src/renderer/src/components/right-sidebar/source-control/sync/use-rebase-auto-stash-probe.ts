@@ -43,7 +43,10 @@ export function useRebaseAutoStashProbe({
           operationStore.setState({ rebaseAutoStash: autoStash })
         }
       } catch {
-        // Unknown stays blocked, which matches Git's default refusal.
+        // Unknown stays blocked, which matches Git's default refusal; an earlier answer may be stale.
+        if (!cancelled) {
+          operationStore.setState({ rebaseAutoStash: null })
+        }
       }
     })()
     return () => {
