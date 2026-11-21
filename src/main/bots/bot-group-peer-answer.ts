@@ -2,15 +2,17 @@ import { liveGroupOperation } from './bot-group-peer-requests'
 import type { BotGroupRuntime } from './bot-group-runtime'
 
 /** A member's answer to a peer's request goes to the asker as mail; the room shows it on the turn
- *  that sent it, after any answer that turn already sent. True once it is saved there. */
+ *  that sent it, after any answer that turn already sent. True once it is saved there; never once
+ *  `expired` is aborted, when the asker has already been told the room doesn't show it. */
 export async function noteGroupPeerAnswer(
   groups: BotGroupRuntime,
   sessionId: string,
-  text: string
+  text: string,
+  expired?: AbortSignal
 ): Promise<boolean> {
   const operationId = text.trim() ? await liveGroupOperation(groups, sessionId) : null
   const message = operationId ? groups.store.operationMessage(operationId) : null
-  if (!message) {
+  if (!message || expired?.aborted) {
     return false
   }
   groups.store.update({

@@ -160,7 +160,8 @@ export class BotGroupRuntime {
     messages: T[]
   ) => narrowGroupMailBatch(this, sessionId, messages)
   captureWorkerOperation = (sessionId: string) => liveGroupOperation(this, sessionId)
-  noteAnswer = (sessionId: string, text: string) => noteGroupPeerAnswer(this, sessionId, text)
+  noteAnswer = (sessionId: string, text: string, expired?: AbortSignal) =>
+    noteGroupPeerAnswer(this, sessionId, text, expired)
   recordWorker = (operation: Promise<string | null>, dispatchId: string) =>
     recordGroupWorker(this, operation, dispatchId)
 }

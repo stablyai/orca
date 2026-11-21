@@ -101,8 +101,9 @@ export async function showGroupAnswer(
   ) {
     return false
   }
+  // Past the bound the asker is told to pass the answer on, so a save still pending must not land.
   const noted = runtimeBotGroups(runtime)
-    .noteAnswer(callerSessionId, body)
+    .noteAnswer(callerSessionId, body, AbortSignal.timeout(GROUP_ANSWER_NOTE_TIMEOUT_MS))
     .catch((error: unknown) => {
       console.warn('[bot-groups] could not show an answer in the room', error)
       return false
