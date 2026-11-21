@@ -13,18 +13,46 @@ import type {
 } from '../workspace-attribution/resource-usage-merge-types'
 import { MetricPair, ROW_TRAILING_GUTTER_CLS, Sparkline } from './resource-usage-metrics'
 import { isResourceSessionActivationKey } from '../session-actions/resource-session-navigation'
+import { ChatRows } from './resource-usage-chat-row'
+import { firstRuntimePaneTitle } from '../workspace-attribution/resource-session-labels'
+import { useAppStore } from '@/store/index'
 
-export function SessionRow({
-  session,
-  worktreeId,
-  onNavigate,
-  onKill
-}: {
+type SessionRowProps = {
   session: UnifiedSessionRow
   worktreeId: string
   onNavigate: (tabId: string, paneKey: string | null) => void
   onKill: (session: UnifiedSessionRow) => void
-}): React.JSX.Element {
+}
+
+export function SessionRow(props: SessionRowProps): React.JSX.Element {
+  return props.session.liveTitleTabId ? (
+    <LiveTitledSessionRow {...props} tabId={props.session.liveTitleTabId} />
+  ) : (
+    <SessionRowView {...props} />
+  )
+}
+
+/** Only rows named by a live pane title watch titles, so a title change re-renders just its row. */
+function LiveTitledSessionRow({
+  tabId,
+  ...props
+}: SessionRowProps & { tabId: string }): React.JSX.Element {
+  // Select the tab's title map, not a derived string, so unrelated store writes do no scan.
+  const liveTitle = firstRuntimePaneTitle(useAppStore((s) => s.runtimePaneTitlesByTabId[tabId]))
+  return (
+    <SessionRowView
+      {...props}
+      session={liveTitle ? { ...props.session, label: liveTitle } : props.session}
+    />
+  )
+}
+
+function SessionRowView({
+  session,
+  worktreeId,
+  onNavigate,
+  onKill
+}: SessionRowProps): React.JSX.Element {
   const t = useTranslate()
   const clickable = session.tabId !== null && session.bound
   const handleClick = (): void => {
@@ -113,7 +141,8 @@ export function WorktreeRow({
   onNavigate,
   onDelete,
   onKillSession,
-  navigateToTab
+  navigateToTab,
+  onOpenChat
 }: {
   worktree: UnifiedWorktreeRow
   storeRecord: Worktree | null
@@ -124,9 +153,13 @@ export function WorktreeRow({
   onDelete: () => void
   onKillSession: (session: UnifiedSessionRow) => void
   navigateToTab: (tabId: string, paneKey: string | null) => void
+  onOpenChat: (worktreeId: string, agentSessionId: string, runtimeHostId?: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const hasResources = worktree.sessions.length > 0 || worktree.browsers.length > 0
+  const hasResources =
+    worktree.sessions.length > 0 ||
+    (worktree.chats?.length ?? 0) > 0 ||
+    worktree.browsers.length > 0
   // Why: synthetic buckets (orphan/unattributed) have no sidebar target to reveal; real and SSH-resolved worktrees stay navigable.
   const isSynthetic =
     worktree.worktreeId === ORPHAN_WORKTREE_ID || worktree.repoId === UNATTRIBUTED_REPO_ID
@@ -250,6 +283,15 @@ export function WorktreeRow({
         </div>
       </div>
 
+      {!isCollapsed && worktree.chats && (
+        <ChatRows
+          chats={worktree.chats}
+          worktreeId={worktree.worktreeId}
+          runtimeHostId={worktree.runtimeHostId}
+          unplaced={worktree.unplaced}
+          onOpenChat={onOpenChat}
+        />
+      )}
       {!isCollapsed &&
         worktree.sessions.map((session) => (
           <SessionRow

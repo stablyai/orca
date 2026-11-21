@@ -1,13 +1,15 @@
 import { basename } from 'node:path'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
-import type { SessionMemory } from '../../shared/diagnostics/process-stats-types'
+import type { ChatAgentMemory, SessionMemory } from '../../shared/diagnostics/process-stats-types'
 import type { Store } from '../persistence/loading-store/store'
+import type { ProjectGroup } from '../../shared/project/groups/project-group-types'
 import { parseWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { folderWorkspaceRepoId } from '../../shared/folder-workspaces/folder-workspace-worktree'
 
 export type MemorySnapshotStore = Pick<Store, 'getRepo' | 'getWorktreeMeta'> &
   Partial<Pick<Store, 'getFolderWorkspace'>> & {
-    getProjectGroups?: () => Pick<ReturnType<Store['getProjectGroups']>[number], 'id' | 'name'>[]
+    getProjectGroup?: (id: string) => Pick<ProjectGroup, 'id' | 'name'> | undefined
+    getProjectGroups?: () => Pick<ProjectGroup, 'id' | 'name'>[]
   }
 
 const APP_HISTORY_KEY = '__app__'
@@ -64,12 +66,25 @@ export type WorktreeMemoryBucket = {
   memory: number
   privateMemory: number
   sessions: SessionMemory[]
+  /** Created with the first chat, so a terminal-only workspace sends no empty list. */
+  chats?: ChatAgentMemory[]
 }
 
 /** Project-group names read once per snapshot, not once per folder bucket. */
 export type ProjectGroupNameLookup = (projectGroupId: string) => string | undefined
 
 export function createProjectGroupNameLookup(store: MemorySnapshotStore): ProjectGroupNameLookup {
+  const { getProjectGroup } = store
+  if (getProjectGroup) {
+    // Keyed, so a sample with one folder workspace never copies and sorts every group.
+    const names = new Map<string, string | undefined>()
+    return (projectGroupId) => {
+      if (!names.has(projectGroupId)) {
+        names.set(projectGroupId, getProjectGroup.call(store, projectGroupId)?.name)
+      }
+      return names.get(projectGroupId)
+    }
+  }
   let names: Map<string, string | undefined> | null = null
   return (projectGroupId) => {
     // SAFETY: Missing optional capabilities keep the original direct-call failure.
@@ -78,10 +93,24 @@ export function createProjectGroupNameLookup(store: MemorySnapshotStore): Projec
   }
 }
 
+/** Repo display names read once per repo per snapshot; the store's repo lookup scans the catalog. */
+export type RepoNameLookup = (repoId: string) => string | undefined
+
+export function createRepoNameLookup(store: MemorySnapshotStore): RepoNameLookup {
+  const names = new Map<string, string | undefined>()
+  return (repoId) => {
+    if (!names.has(repoId)) {
+      names.set(repoId, store.getRepo(repoId)?.displayName?.trim() || undefined)
+    }
+    return names.get(repoId)
+  }
+}
+
 export function resolveWorktreeMemoryNames(
   worktreeId: string,
   store: MemorySnapshotStore,
-  projectGroupName: ProjectGroupNameLookup = createProjectGroupNameLookup(store)
+  projectGroupName: ProjectGroupNameLookup = createProjectGroupNameLookup(store),
+  repoName: RepoNameLookup = createRepoNameLookup(store)
 ): {
   worktreeName: string
   repoId: string
@@ -104,12 +133,11 @@ export function resolveWorktreeMemoryNames(
   const worktreePath = parsed?.worktreePath ?? ''
   const fallbackName = worktreePath ? basename(worktreePath) : worktreeId
   const meta = store.getWorktreeMeta(worktreeId)
-  const repo = store.getRepo(repoId)
 
   return {
     worktreeName: meta?.displayName?.trim() || fallbackName,
     repoId,
-    repoName: repo?.displayName?.trim() || repoId || 'Unknown Repo'
+    repoName: repoName(repoId) || repoId || 'Unknown Repo'
   }
 }
 

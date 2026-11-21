@@ -8,6 +8,7 @@ import {
 } from '../../shared/concurrency/abort-signal-reason'
 import { mapSettledWithConcurrency } from '../../shared/concurrency/map-with-concurrency'
 import { parsePtySessionId } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { isFolderRepo } from '../../shared/repository/repo-kind'
 import type { Repo } from '../../shared/repository/repo-types'
 import { splitWorktreeId, worktreeIdentityKey } from '../../shared/worktree/id'
@@ -186,7 +187,8 @@ async function hydrateLocalPtyRegistry(
       ptyId: info.sessionId,
       worktreeId,
       sessionId: info.sessionId,
-      paneKey: null,
+      // Keeps hydrated rows labeled by their tab and classified as agents before their pane mounts.
+      paneKey: info.paneKey && parsePaneKey(info.paneKey) ? info.paneKey : null,
       pid:
         typeof info.pid === 'number' && Number.isFinite(info.pid) && info.pid > 0 ? info.pid : null
     })

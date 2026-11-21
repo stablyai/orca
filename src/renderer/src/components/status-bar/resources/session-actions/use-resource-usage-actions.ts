@@ -26,7 +26,7 @@ import {
   type ResourceSessionBindingInputs,
   selectUnboundDaemonSessions
 } from '../workspace-attribution/resource-session-bindings'
-import { navigateResourceSessionToTab } from './resource-session-navigation'
+import { navigateResourceSessionToTab, openResourceChat } from './resource-session-navigation'
 import { requiresKillConfirmation } from './resource-session-kill-confirmation'
 import { resolveResourceManagerWorktreeTarget } from './resource-manager-worktree-target'
 
@@ -134,6 +134,14 @@ export function useResourceUsageActions({
       })
     },
     [tabsByWorktree, setActiveView, navigateToWorktree]
+  )
+
+  // The opener activates whatever it opens (a group member opens its room), so nothing is activated first.
+  const openChat = useCallback(
+    (worktreeId: string, agentSessionId: string, runtimeHostId?: string): void => {
+      openResourceChat(worktreeId, agentSessionId, runtimeHostId)
+    },
+    []
   )
 
   const deleteWorktree = useCallback(
@@ -263,6 +271,7 @@ export function useResourceUsageActions({
     toggleWorktree,
     navigateToWorktree,
     navigateToTab,
+    openChat,
     deleteWorktree,
     handleOpenWorkspaceCleanup,
     handleKillSession,

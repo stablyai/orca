@@ -11,8 +11,9 @@ import { listRegisteredPtys } from './pty-registry'
 import { collectHostMemory } from './host-memory'
 import { getLocalDaemonPid } from './local-daemon-pid'
 import { enumerateHostProcesses } from './host-process-index'
-import { claimPtyProcessTrees } from './pty-process-trees'
-import type { ProcIndex } from './process-index'
+import { claimProcessTree, claimPtyProcessTrees } from './pty-process-trees'
+import { listAgentProcessRoots, readAgentProcessChat } from './agent-process-registry'
+import type { ProcIndex, ProcRow } from './process-index'
 import {
   createEmptyWorktreeMemoryBucket,
   pushAppMemoryHistory,
@@ -20,6 +21,7 @@ import {
   readAppMemoryHistory,
   readMemoryHistory,
   createProjectGroupNameLookup,
+  createRepoNameLookup,
   resolveWorktreeMemoryNames,
   sweepStaleMemoryHistory,
   type MemorySnapshotStore,
@@ -120,11 +122,44 @@ function bucketElectronMetrics(processIndex: ProcIndex): AppBucketsRaw {
   }
 }
 
+type RowTotals = { cpu: number; memory: number; privateMemory: number }
+
+function sumRows(rows: readonly ProcRow[]): RowTotals {
+  const totals = { cpu: 0, memory: 0, privateMemory: 0 }
+  for (const row of rows) {
+    totals.cpu += row.cpu
+    totals.memory += row.memory
+    totals.privateMemory += clampMemoryMetric(row.privateMemory)
+  }
+  return totals
+}
+
+function usageOf(totals: RowTotals, hasPrivateMemory: boolean): UsageValues {
+  return {
+    cpu: clampMemoryMetric(totals.cpu),
+    memory: clampMemoryMetric(totals.memory),
+    ...optionalCommitField(hasPrivateMemory, totals.privateMemory)
+  }
+}
+
+function addUsage(target: RowTotals, usage: UsageValues): void {
+  target.cpu += usage.cpu
+  target.memory += usage.memory
+  target.privateMemory += clampMemoryMetric(usage.privateMemory)
+}
+
 async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
   const projectGroupName = createProjectGroupNameLookup(store)
+  const repoName = createRepoNameLookup(store)
   const [processIndex, host] = await Promise.all([enumerateHostProcesses(), collectHostMemory()])
+  const { hasPrivateMemory } = processIndex
   const appBuckets = bucketElectronMetrics(processIndex)
-  const ptyTrees = claimPtyProcessTrees(processIndex, listRegisteredPtys())
+  const claimed = new Set<number>()
+  const ptyTrees = claimPtyProcessTrees(processIndex, listRegisteredPtys(), claimed)
+  const agentTrees = listAgentProcessRoots().map((root) => ({
+    ...root,
+    rows: claimProcessTree(processIndex, root.pid, claimed)
+  }))
 
   const orphan = createEmptyWorktreeMemoryBucket(
     ORPHAN_WORKTREE_ID,
@@ -133,49 +168,53 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
     'Other'
   )
   const worktreeBuckets = new Map<string, WorktreeMemoryBucket>()
-
-  for (const { pty, rows } of ptyTrees) {
-    let sessionCpu = 0
-    let sessionMemory = 0
-    let sessionPrivateMemory = 0
-    for (const row of rows) {
-      sessionCpu += row.cpu
-      sessionMemory += row.memory
-      sessionPrivateMemory += clampMemoryMetric(row.privateMemory)
+  const bucketFor = (worktreeId: string): WorktreeMemoryBucket => {
+    const existing = worktreeBuckets.get(worktreeId)
+    if (existing) {
+      return existing
     }
+    const names = resolveWorktreeMemoryNames(worktreeId, store, projectGroupName, repoName)
+    const bucket = createEmptyWorktreeMemoryBucket(
+      worktreeId,
+      names.worktreeName,
+      names.repoId,
+      names.repoName
+    )
+    worktreeBuckets.set(worktreeId, bucket)
+    return bucket
+  }
 
+  const terminals: RowTotals = { cpu: 0, memory: 0, privateMemory: 0 }
+  for (const { pty, rows } of ptyTrees) {
     const session: SessionMemory = {
       sessionId: pty.sessionId ?? pty.ptyId,
       paneKey: pty.paneKey,
       pid: pty.pid ?? 0,
-      cpu: clampMemoryMetric(sessionCpu),
-      memory: clampMemoryMetric(sessionMemory),
-      ...optionalCommitField(processIndex.hasPrivateMemory, sessionPrivateMemory)
+      ...usageOf(sumRows(rows), hasPrivateMemory)
     }
-
-    let bucket: WorktreeMemoryBucket
-    if (pty.worktreeId) {
-      const existing = worktreeBuckets.get(pty.worktreeId)
-      if (existing) {
-        bucket = existing
-      } else {
-        const names = resolveWorktreeMemoryNames(pty.worktreeId, store, projectGroupName)
-        bucket = createEmptyWorktreeMemoryBucket(
-          pty.worktreeId,
-          names.worktreeName,
-          names.repoId,
-          names.repoName
-        )
-        worktreeBuckets.set(pty.worktreeId, bucket)
-      }
-    } else {
-      bucket = orphan
-    }
-
-    bucket.cpu += session.cpu
-    bucket.memory += session.memory
-    bucket.privateMemory += clampMemoryMetric(session.privateMemory)
+    const bucket = pty.worktreeId ? bucketFor(pty.worktreeId) : orphan
+    addUsage(bucket, session)
+    addUsage(terminals, session)
     bucket.sessions.push(session)
+  }
+
+  const agents: RowTotals = { cpu: 0, memory: 0, privateMemory: 0 }
+  for (const { agentSessionId, rows } of agentTrees) {
+    const usage = usageOf(sumRows(rows), hasPrivateMemory)
+    addUsage(agents, usage)
+    const chat = agentSessionId === null ? null : readAgentProcessChat(agentSessionId)
+    if (agentSessionId !== null && chat) {
+      const bucket = bucketFor(chat.worktreeId)
+      addUsage(bucket, usage)
+      const { cpu, memory } = usage
+      ;(bucket.chats ??= []).push({
+        agentSessionId,
+        agent: chat.agent,
+        name: chat.name,
+        cpu,
+        memory
+      })
+    }
   }
 
   const bucketList: WorktreeMemoryBucket[] = [...worktreeBuckets.values()]
@@ -193,30 +232,23 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
 
   const worktrees: WorktreeMemory[] = bucketList.map(({ privateMemory, ...b }) => ({
     ...b,
-    ...optionalCommitField(processIndex.hasPrivateMemory, privateMemory),
+    ...optionalCommitField(hasPrivateMemory, privateMemory),
     history: readMemoryHistory(b.worktreeId)
   }))
-
-  let sessionCpuTotal = 0
-  let sessionMemoryTotal = 0
-  let sessionPrivateTotal = 0
-  for (const wt of worktrees) {
-    sessionCpuTotal += wt.cpu
-    sessionMemoryTotal += wt.memory
-    sessionPrivateTotal += clampMemoryMetric(wt.privateMemory)
-  }
+  const agentProcesses = usageOf(agents, hasPrivateMemory)
 
   return {
     app: { ...appBuckets, history: readAppMemoryHistory() },
     worktrees,
+    agentProcesses,
     host,
     processMemoryMetric: processIndex.memoryMetric,
     ...snapshotCommitFields(
-      processIndex.hasPrivateMemory,
-      clampMemoryMetric(appBuckets.privateMemory) + sessionPrivateTotal
+      hasPrivateMemory,
+      clampMemoryMetric(appBuckets.privateMemory) + agents.privateMemory + terminals.privateMemory
     ),
-    totalCpu: appBuckets.cpu + sessionCpuTotal,
-    totalMemory: appBuckets.memory + sessionMemoryTotal,
+    totalCpu: appBuckets.cpu + agentProcesses.cpu + terminals.cpu,
+    totalMemory: appBuckets.memory + agentProcesses.memory + terminals.memory,
     collectedAt: now
   }
 }

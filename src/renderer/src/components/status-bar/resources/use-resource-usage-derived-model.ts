@@ -7,6 +7,11 @@ import {
   parseExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
 import { mergeSnapshotAndSessions } from './workspace-attribution/merge-snapshot-and-sessions'
+import {
+  resolveResourceFolderWorkspace,
+  resolveResourceWorkspaceHost,
+  stampedRuntimeHostId
+} from './workspace-attribution/resource-workspace-host'
 import type { RuntimeHostResourceSample } from './workspace-attribution/resource-usage-merge-types'
 import type { PtyListedSession as DaemonSession } from '../../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 
@@ -23,7 +28,11 @@ import {
   getResourceMemoryMetricCopy
 } from './popover/resource-memory-metric-copy'
 import { formatMemory } from './popover/resource-usage-metrics'
-import { readAgentPaneKeys, splitSnapshotByOwner } from './popover/resource-owner-split'
+import {
+  readAgentPaneKeys,
+  sharedAgentProcessUsage,
+  splitSnapshotByOwner
+} from './popover/resource-owner-split'
 import {
   findAmbiguousWorktreeIds,
   findDuplicateIds
@@ -36,7 +45,6 @@ export function useResourceUsageDerivedModel({
   runtimeHostResources,
   sessions,
   resourceSessionBindings,
-  runtimePaneTitlesByTabId,
   repos,
   allWorktrees,
   projectGroups,
@@ -53,7 +61,6 @@ export function useResourceUsageDerivedModel({
   runtimeHostResources: readonly RuntimeHostResourceSample[]
   sessions: readonly DaemonSession[]
   resourceSessionBindings: ResourceSessionBindingInputs
-  runtimePaneTitlesByTabId: AppState['runtimePaneTitlesByTabId']
   repos: AppState['repos']
   allWorktrees: Worktree[]
   projectGroups: AppState['projectGroups']
@@ -121,7 +128,6 @@ export function useResourceUsageDerivedModel({
             {
               // Share all binding inputs with bulk selection so deferred SSH sessions also require single-row kill confirmation.
               ...resourceSessionBindings,
-              runtimePaneTitlesByTabId,
               repoDisplayNameById,
               repoConnectionIdById,
               repoRuntimeHostIdById,
@@ -138,7 +144,6 @@ export function useResourceUsageDerivedModel({
       resourceSnapshot,
       sessions,
       resourceSessionBindings,
-      runtimePaneTitlesByTabId,
       repoDisplayNameById,
       repoConnectionIdById,
       repoRuntimeHostIdById,
@@ -159,6 +164,35 @@ export function useResourceUsageDerivedModel({
         : null,
     [open, resourceSnapshot, sessions]
   )
+
+  // Once per shown sample or host placement change; title and binding churn never rewalk it.
+  const sharedAgentUsage = useMemo(() => {
+    if (!open || !resourceSnapshot) {
+      return null
+    }
+    const hostCtx = {
+      worktreeById,
+      ambiguousWorktreeIds,
+      repoConnectionIdById,
+      repoRuntimeHostIdById
+    }
+    // The merge leaves out local samples for workspaces a paired machine hosts; so does this sum.
+    return sharedAgentProcessUsage(resourceSnapshot, (worktree) => {
+      const repoId =
+        resolveResourceFolderWorkspace(hostCtx, worktree.worktreeId)?.repoId ?? worktree.repoId
+      return (
+        !resolveResourceWorkspaceHost(hostCtx, worktree.worktreeId, repoId).runtimeHostId &&
+        !stampedRuntimeHostId(hostCtx, worktree.worktreeId)
+      )
+    })
+  }, [
+    open,
+    resourceSnapshot,
+    worktreeById,
+    ambiguousWorktreeIds,
+    repoConnectionIdById,
+    repoRuntimeHostIdById
+  ])
 
   // Why: orphan detection needs daemon inventory; keep it open-only so the closed badge never triggers a background global session scan.
   const orphanCount = useMemo(() => {
@@ -213,6 +247,7 @@ export function useResourceUsageDerivedModel({
   return {
     unifiedRepos,
     ownerSplit,
+    sharedAgentUsage,
     orphanCount,
     triggerSessionCount,
     memoryMetricCopy,

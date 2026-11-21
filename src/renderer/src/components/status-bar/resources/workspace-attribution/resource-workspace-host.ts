@@ -1,11 +1,19 @@
-import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import {
+  canonicalExecutionHostId,
+  parseExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { MergeContext } from './resource-usage-merge-types'
 
 /** Folder catalog row for host/name attribution; a duplicated id cannot choose a host, so it yields nothing. */
+type WorkspaceHostContext = Pick<
+  MergeContext,
+  'worktreeById' | 'ambiguousWorktreeIds' | 'repoConnectionIdById' | 'repoRuntimeHostIdById'
+>
+
 export function resolveResourceFolderWorkspace(
-  ctx: MergeContext,
+  ctx: Pick<MergeContext, 'worktreeById' | 'ambiguousWorktreeIds'>,
   worktreeId: string
 ): Worktree | undefined {
   if (
@@ -18,7 +26,7 @@ export function resolveResourceFolderWorkspace(
 }
 
 export function resolveResourceWorkspaceHost(
-  ctx: MergeContext,
+  ctx: WorkspaceHostContext,
   worktreeId: string,
   repoId: string
 ): { isRemote: boolean; runtimeHostId: string | null } {
@@ -33,4 +41,16 @@ export function resolveResourceWorkspaceHost(
         : null
       : (ctx.repoRuntimeHostIdById.get(repoId) ?? null)
   }
+}
+
+/** The paired host a worktree's own record names, which outranks where its repo is tracked. */
+export function stampedRuntimeHostId(
+  ctx: Pick<MergeContext, 'worktreeById' | 'ambiguousWorktreeIds'>,
+  worktreeId: string
+): string | null {
+  if (ctx.ambiguousWorktreeIds?.has(worktreeId)) {
+    return null
+  }
+  const hostId = canonicalExecutionHostId(ctx.worktreeById?.get(worktreeId)?.hostId)
+  return hostId?.startsWith('runtime:') ? hostId : null
 }

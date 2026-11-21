@@ -62,7 +62,8 @@ export function ResourceTree({
   navigateToWorktree,
   navigateToTab,
   onDelete,
-  onKillSession
+  onKillSession,
+  onOpenChat
 }: {
   repos: UnifiedProjectGroup[]
   sortOption: SortOption
@@ -75,6 +76,7 @@ export function ResourceTree({
   navigateToTab: (tabId: string, paneKey: string | null) => void
   onDelete: (worktreeId: string) => void
   onKillSession: (session: UnifiedSessionRow) => void
+  onOpenChat: (worktreeId: string, agentSessionId: string, runtimeHostId?: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const worktreeById = useWorktreeMap()
@@ -101,6 +103,7 @@ export function ResourceTree({
         onDelete={() => onDelete(wt.worktreeId)}
         onKillSession={onKillSession}
         navigateToTab={navigateToTab}
+        onOpenChat={onOpenChat}
       />
     )
   }

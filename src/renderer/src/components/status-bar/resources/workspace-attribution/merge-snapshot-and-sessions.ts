@@ -4,6 +4,7 @@ import type {
   MemorySnapshot,
   WorktreeMemory
 } from '../../../../../../shared/diagnostics/process-stats-types'
+import { canonicalExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { parsePtySessionId } from '../../../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type {
@@ -16,9 +17,11 @@ import type { PtyListedSession as DaemonSession } from '../../../../../../shared
 import { buildResourceSessionBindingIndex } from './resource-session-bindings'
 import {
   resolveResourceFolderWorkspace,
-  resolveResourceWorkspaceHost
+  resolveResourceWorkspaceHost,
+  stampedRuntimeHostId
 } from './resource-workspace-host'
 import {
+  daemonSessionLiveTitleTabId,
   deriveWorktreeNameFromWorktreeId,
   resolveDaemonSessionLabel,
   resolveSnapshotSessionLabel
@@ -27,6 +30,7 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
 export const UNATTRIBUTED_REPO_ID = '__unattributed__'
+const NO_RUNTIME_PANE_TITLES = { runtimePaneTitlesByTabId: {} }
 function getUnattributedRepoName(t: Translate = translate): string {
   return t('auto.components.status.bar.mergeSnapshotAndSessions.unattributed', 'Unattributed')
 }
@@ -86,6 +90,8 @@ export function mergeSnapshotAndSessions(
       worktreeName: string
       hostLabel?: string
       readOnly?: true
+      runtimeHostId?: string
+      unplaced?: true
     }
   ): void {
     const repo = ensureRepo(row.repoId, row.repoName)
@@ -98,7 +104,7 @@ export function mergeSnapshotAndSessions(
         incarnationId: daemonSession?.incarnationId,
         paneKey: s.paneKey,
         pid: s.pid,
-        label: resolveSnapshotSessionLabel(s, row.worktreeId, index),
+        label: resolveSnapshotSessionLabel(s, row.worktreeId, index, tabId),
         bound: ctx.workspaceSessionReady && boundPtyIds.has(s.sessionId),
         agentOwnership: daemonSession?.agentOwnership ?? 'unknown',
         tabId,
@@ -119,7 +125,10 @@ export function mergeSnapshotAndSessions(
       hasLocalSamples: true,
       isRemote: row.isRemote,
       ...(row.hostLabel ? { hostLabel: row.hostLabel } : {}),
+      runtimeHostId: row.runtimeHostId,
+      unplaced: row.unplaced,
       sessions,
+      chats: wt.chats,
       browsers: []
     })
   }
@@ -131,7 +140,7 @@ export function mergeSnapshotAndSessions(
       const repoId = worktree?.repoId ?? wt.repoId
       const { isRemote, runtimeHostId } = resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId)
       // Reject local samples for runtime-hosted workspaces to prevent cross-host attribution.
-      if (runtimeHostId) {
+      if (runtimeHostId || stampedRuntimeHostId(ctx, wt.worktreeId)) {
         continue
       }
       ingestSampledWorktree(wt, {
@@ -148,8 +157,12 @@ export function mergeSnapshotAndSessions(
     for (const wt of host.worktrees) {
       const worktree = resolveResourceFolderWorkspace(ctx, wt.worktreeId)
       const repoId = worktree?.repoId ?? wt.repoId
-      const owned =
-        resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId).runtimeHostId === host.hostId
+      // A worktree stamped with a paired host belongs to that host alone, wherever its repo is tracked.
+      const ambiguous = ctx.ambiguousWorktreeIds?.has(wt.worktreeId) ?? false
+      const recordHostId = stampedRuntimeHostId(ctx, wt.worktreeId)
+      const owned = recordHostId
+        ? recordHostId === canonicalExecutionHostId(host.hostId)
+        : resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId).runtimeHostId === host.hostId
       // Keep foreign/unplaced server load host-qualified so same-ID workspaces elsewhere cannot absorb it.
       ingestSampledWorktree(wt, {
         worktreeId: owned ? wt.worktreeId : `${host.hostId}|${wt.worktreeId}`,
@@ -158,7 +171,10 @@ export function mergeSnapshotAndSessions(
         repoName: (owned && ctx.repoDisplayNameById.get(repoId)) || wt.repoName,
         isRemote: true,
         hostLabel: host.hostLabel,
-        readOnly: true
+        readOnly: true,
+        runtimeHostId: host.hostId,
+        // A repo placed on this host isn't enough: an unlisted or duplicated worktree can't be selected.
+        unplaced: owned && !ambiguous && ctx.worktreeById?.has(wt.worktreeId) ? undefined : true
       })
     }
   }
@@ -196,7 +212,7 @@ export function mergeSnapshotAndSessions(
       finalWorktreeId,
       finalRepoId
     )
-    if (runtimeHostId) {
+    if (runtimeHostId || stampedRuntimeHostId(ctx, finalWorktreeId)) {
       continue
     }
 
@@ -225,7 +241,8 @@ export function mergeSnapshotAndSessions(
       incarnationId: session.incarnationId,
       paneKey: null,
       pid: 0,
-      label: resolveDaemonSessionLabel(session, worktreeId, tabId, ctx, index),
+      label: resolveDaemonSessionLabel(session, worktreeId, tabId, NO_RUNTIME_PANE_TITLES, index),
+      liveTitleTabId: daemonSessionLiveTitleTabId(worktreeId, tabId, index),
       bound: ctx.workspaceSessionReady && boundPtyIds.has(session.id),
       agentOwnership: session.agentOwnership,
       tabId,
