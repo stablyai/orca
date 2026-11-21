@@ -275,6 +275,38 @@ describe.each(['compact', 'full'] as const)('a %s agent row in a workspace card'
     expect(openMenuOn(root).items[2]).toBe('Mark Unread')
   })
 
+  it.each(['diff-notes', 'browser-annotations'] as const)(
+    'runs its own action, never a send, while %s pick a target',
+    (source) => {
+      const worktree = seed(mode)
+      const send = vi.fn(async () => true)
+      act(() => {
+        useAppStore.getState().openAgentSendPopoverTargetMode({
+          id: `picker:${source}`,
+          worktreeId: worktree.id,
+          source,
+          prompt: 'Review these notes',
+          label: 'Notes',
+          launchSource: 'notes_send'
+        })
+        useAppStore.setState({ sendPromptToSidebarAgentTarget: send })
+      })
+      const container = renderCard(worktree)
+      const { root } = agentRows(container)
+      const status = root.getAttribute('data-agent-send-target')
+      expect(status).toMatch(/^(eligible|disabled)$/)
+      openMenuOn(root)
+      choose('Open')
+      expect(activate).toHaveBeenCalledTimes(1)
+      expect(send).not.toHaveBeenCalled()
+      // A direct click on the row is still the pick.
+      act(() => {
+        fireEvent.click(root)
+      })
+      expect(send).toHaveBeenCalledTimes(status === 'eligible' ? 1 : 0)
+    }
+  )
+
   it('closes when its agent goes away', () => {
     const container = renderCard(seed(mode))
     openMenuOn(agentRows(container).child)

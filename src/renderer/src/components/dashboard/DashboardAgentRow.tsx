@@ -46,6 +46,7 @@ import { translate } from '@/i18n/i18n'
 import {
   WorkspaceAgentRowMenu,
   activateAgentRow,
+  isEventInsideRowElement,
   useWorkspaceAgentRowMenu
 } from '../sidebar/workspace-card/activity/agent-row-menu/WorkspaceAgentRowMenu'
 import { WORKSPACE_AGENT_ROW_ATTR } from '@/components/sidebar/workspace-actions/context-menu/workspace-agent-row-marker'
@@ -154,8 +155,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   )
   const agentMenu = useWorkspaceAgentRowMenu()
   const handleSendTargetClickCapture = useCallback(
-    (e: React.MouseEvent) => {
-      if (!sendTargetStatus) {
+    (e: React.MouseEvent<HTMLElement>) => {
+      // A click in the row's Agent menu is not a pick of this row as the send target.
+      if (!sendTargetStatus || !isEventInsideRowElement(e)) {
         return
       }
       const target = e.target

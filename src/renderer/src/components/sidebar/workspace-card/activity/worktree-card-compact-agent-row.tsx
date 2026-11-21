@@ -29,6 +29,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
   WorkspaceAgentRowMenu,
   activateAgentRow,
+  isEventInsideRowElement,
   useWorkspaceAgentRowMenu
 } from './agent-row-menu/WorkspaceAgentRowMenu'
 import { WORKSPACE_AGENT_ROW_ATTR } from '../../workspace-actions/context-menu/workspace-agent-row-marker'
@@ -149,6 +150,8 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const dotState = dotStateOverride ?? getAgentDotState(agent)
   const { name: conversationName, forked } = useAgentRowConversationNaming(agent)
   const primary = getCompactAgentPrimary(agent, conversationName)
+  // Copy Title copies a real title only, never the state label shown in its place.
+  const copyableTitle = conversationName ?? getAgentRowPrimaryText(agent.entry)
   const forkNamed = forked && conversationName !== null
   const isLineageChild = agent.lineage?.depth === 1
   // Hold assistant text per positive turn clock; commit in an effect so discarded renders cannot cache messages.
@@ -186,8 +189,9 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   )
   const agentMenu = useWorkspaceAgentRowMenu()
   const handleSendTargetClickCapture = useCallback(
-    (e: React.MouseEvent) => {
-      if (!sendTargetStatus) {
+    (e: React.MouseEvent<HTMLElement>) => {
+      // A click in the row's Agent menu is not a pick of this row as the send target.
+      if (!sendTargetStatus || !isEventInsideRowElement(e)) {
         return
       }
       const target = e.target
@@ -338,7 +342,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       <WorkspaceAgentRowMenu
         handle={agentMenu}
         agent={agent}
-        title={primary}
+        title={copyableTitle}
         unread={isUnvisited}
         viewing={highlighted}
         onActivate={onActivate}

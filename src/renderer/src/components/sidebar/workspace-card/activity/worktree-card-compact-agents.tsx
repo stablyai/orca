@@ -1,6 +1,6 @@
 import type { AgentGroupSummary } from '@/store/slices/agent-status/projection/agent-row-display-model'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
-import React, { useCallback, useRef } from 'react'
+import React, { useCallback, useContext, useRef } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
 import { IconStack } from '@/components/IconStack'
@@ -18,6 +18,7 @@ import {
   summarizeAgents
 } from './worktree-card-agent-summary'
 import { useTranslate } from '@/i18n/use-translate'
+import { AgentRowsShownContext } from './agent-row-menu/agent-rows-shown-context'
 
 import './worktree-card-compact-agent-row'
 
@@ -54,6 +55,7 @@ export function CompactAgentExpansion({
     hasRenderedChildrenRef.current = true
   }
   const shouldRenderChildren = expanded || hasRenderedChildrenRef.current
+  const rowsShown = useContext(AgentRowsShownContext) && expanded
 
   return (
     <div
@@ -73,7 +75,7 @@ export function CompactAgentExpansion({
               contentClassName
             )}
           >
-            {children}
+            <AgentRowsShownContext value={rowsShown}>{children}</AgentRowsShownContext>
           </div>
         )}
       </div>
