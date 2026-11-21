@@ -1,4 +1,5 @@
 import process from 'node:process'
+import ts from 'typescript-api'
 import { pathToFileURL } from 'node:url'
 import { readTrackedSources, runCountRatchet } from '../../ratchet-baseline/ratchet-baseline.mjs'
 
@@ -12,16 +13,48 @@ export function isScannedPath(rel) {
   return !/\.(?:test|spec)\.[cm]?tsx?$/.test(rel)
 }
 
+// Comment text only: a directive-looking string, template or regex literal is not one.
+function commentTexts(sourceText) {
+  const ast = ts.createSourceFile(
+    'file.tsx',
+    sourceText,
+    ts.ScriptTarget.Latest,
+    false,
+    ts.ScriptKind.TSX
+  )
+  const seen = new Set()
+  const texts = []
+  const collect = (ranges) => {
+    for (const { pos, end } of ranges ?? []) {
+      if (!seen.has(pos)) {
+        seen.add(pos)
+        texts.push(sourceText.slice(pos, end))
+      }
+    }
+  }
+  const visit = (node) => {
+    collect(ts.getLeadingCommentRanges(sourceText, node.getFullStart()))
+    collect(ts.getTrailingCommentRanges(sourceText, node.end))
+    for (const child of node.getChildren(ast)) {
+      visit(child)
+    }
+  }
+  visit(ast)
+  return texts
+}
+
 // A directive is justified when ` -- <reason>` follows the rule list.
 export function countUnjustifiedDisables(sourceText) {
   let count = 0
-  for (const [, rest] of sourceText.matchAll(DISABLE_DIRECTIVE)) {
-    const reason = rest
-      .split('*/')[0]
-      .split(/\s--\s/)[1]
-      ?.trim()
-    if (!reason) {
-      count += 1
+  for (const comment of commentTexts(sourceText)) {
+    for (const [, rest] of comment.matchAll(DISABLE_DIRECTIVE)) {
+      const reason = rest
+        .split('*/')[0]
+        .split(/\s--\s/)[1]
+        ?.trim()
+      if (!reason) {
+        count += 1
+      }
     }
   }
   return count
