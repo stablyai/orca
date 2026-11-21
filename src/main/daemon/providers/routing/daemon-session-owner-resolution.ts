@@ -155,11 +155,12 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
       throw new TerminalSessionOwnerUnverifiedError('inventory deadline')
     }
     const inventory = await pending
-    if (inventory.epoch !== this.epoch) {
-      throw new TerminalSessionOwnerUnverifiedError('stale inventory')
-    }
+    // A provider failure outranks staleness, so callers that re-read stale listings don't repeat it.
     if (inventory.failure) {
       throw inventory.failure.error
+    }
+    if (inventory.epoch !== this.epoch) {
+      throw new TerminalSessionOwnerUnverifiedError('stale inventory')
     }
     return selectListedDaemonProcesses(inventory, this.routes, this.routeIncarnations, opts)
   }

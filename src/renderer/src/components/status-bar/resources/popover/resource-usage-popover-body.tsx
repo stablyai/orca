@@ -44,8 +44,7 @@ export function renderResourceUsagePopoverBody(
     appCollapsed,
     setAppCollapsed,
     daemonUnreachable,
-    runtimeHostNotices,
-    runtimePaneTitlesByTabId
+    runtimeHostNotices
   }: {
     setPopoverBodyNode: (node: HTMLDivElement | null) => void
     unifiedRepos: UnifiedProjectGroup[]
@@ -68,7 +67,6 @@ export function renderResourceUsagePopoverBody(
     setAppCollapsed: Dispatch<SetStateAction<boolean>>
     daemonUnreachable: boolean
     runtimeHostNotices: readonly RuntimeHostResourceNotice[]
-    runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   },
   t: Translate = translate
 ): React.JSX.Element {
@@ -145,7 +143,6 @@ export function renderResourceUsagePopoverBody(
             onDelete={deleteWorktree}
             onKillSession={handleKillSession}
             onOpenChat={openChat}
-            runtimePaneTitlesByTabId={runtimePaneTitlesByTabId}
           />
         )}
         {runtimeHostNotices.map((notice) => (

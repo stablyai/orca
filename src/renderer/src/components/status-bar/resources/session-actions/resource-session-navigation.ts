@@ -48,7 +48,7 @@ export function navigateResourceSessionToTab(
 export function openResourceChat(
   worktreeId: string,
   agentSessionId: string,
-  /** The paired host that sampled the row; a same-id local checkout never takes the open. */
+  /** The paired host that sampled the row; without one, this machine sampled it. A same-id twin never takes the open. */
   runtimeHostId?: string
 ): void {
   const host = parseExecutionHostId(runtimeHostId)
@@ -58,7 +58,7 @@ export function openResourceChat(
     undefined,
     host?.kind === 'runtime'
       ? { kind: 'environment', environmentId: host.environmentId }
-      : undefined
+      : { kind: 'local' }
   ).catch((error: unknown) => {
     if (!(error instanceof BotGroupRoomUnavailableError && error.userNotified)) {
       toast.error(error instanceof Error ? error.message : String(error))

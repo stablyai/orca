@@ -73,7 +73,7 @@ describe('the memory snapshot sent over RPC', () => {
     expect(reply.app.history).toHaveLength(20)
   })
 
-  it("falls back to the terminals' own rows and totals before it would outgrow them", () => {
+  it("falls back to the terminals' own rows, totals, pane keys and history before it would outgrow them", () => {
     // Chat detail alone pushes this host past the limit even with no history.
     const terminals = Array.from({ length: 4_000 }, (_, i) => ({
       ...row(i, 300, [123_456_789], true),
@@ -98,9 +98,11 @@ describe('the memory snapshot sent over RPC', () => {
 
     expect(Buffer.byteLength(JSON.stringify(reply))).toBeLessThan(MIB4)
     expect(reply.worktrees).toHaveLength(4_000)
-    expect(reply.worktrees[0]).toMatchObject({ cpu: 0.1, memory: 100, history: [] })
+    expect(reply.worktrees[0]).toMatchObject({ cpu: 0.1, memory: 100, history: [123_456_789] })
     expect(reply.worktrees[0]?.chats).toBeUndefined()
-    expect(reply.worktrees[0]?.sessions[0]?.paneKey).toBeNull()
+    expect(reply.worktrees[0]?.sessions[0]?.paneKey).toBe(
+      'tab-0:leaf-0123456789abcdef0123456789abcdef'
+    )
     expect(reply.agentProcesses).toBeUndefined()
     expect(reply.totalMemory).toBe(1_000 + 4_000 * 100)
   })

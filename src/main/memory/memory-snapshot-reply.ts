@@ -4,7 +4,10 @@ import type {
   SessionMemory,
   WorktreeMemory
 } from '../../shared/diagnostics/process-stats-types'
-import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../shared/remote-runtime/rpc/remote-rpc-content-budget'
+import {
+  jsonStringContentBytes,
+  REMOTE_RPC_MAX_CONTENT_BYTES
+} from '../../shared/remote-runtime/rpc/remote-rpc-content-budget'
 import { clampMemoryMetric, optionalCommitField } from './memory-snapshot-values'
 
 // Paired clients draw a short sparkline, so a large host's reply drops older points first.
@@ -18,26 +21,51 @@ const CHAT_OVERHEAD_BYTES = 160
 // The longest JSON number (`-1.2345678901234567e-308`) and its comma.
 const HISTORY_POINT_BYTES = 25
 
-/** An upper bound on a JSON string's serialized size, without encoding it; each surrogate unit counts as an escape. */
+/** A JSON string's serialized size. */
 function jsonStringBytes(value: string | null | undefined): number {
-  if (!value) {
-    return 4
+  return value ? 2 + jsonStringContentBytes(value) : 4
+}
+
+/** Exact `JSON.stringify` size of plain data, built from no string; past `limit` it stops and returns Infinity. */
+function jsonBytes(value: unknown, limit: number): number {
+  let bytes = 0
+  const visit = (node: unknown, inArray: boolean): boolean => {
+    if (bytes > limit) {
+      return false
+    }
+    if (typeof node === 'string') {
+      bytes += 2 + jsonStringContentBytes(node)
+    } else if (typeof node === 'number') {
+      bytes += Number.isFinite(node) ? String(node).length : 4
+    } else if (typeof node === 'boolean') {
+      bytes += node ? 4 : 5
+    } else if (Array.isArray(node)) {
+      bytes += 2 + Math.max(0, node.length - 1)
+      for (const item of node) {
+        if (!visit(item, true)) {
+          return false
+        }
+      }
+    } else if (node !== null && typeof node === 'object') {
+      let fields = 0
+      bytes += 2
+      for (const key in node) {
+        const item: unknown = Object.hasOwn(node, key) ? Reflect.get(node, key) : undefined
+        if (item === undefined || typeof item === 'function' || typeof item === 'symbol') {
+          continue
+        }
+        bytes += (fields++ ? 1 : 0) + 3 + jsonStringContentBytes(key)
+        if (!visit(item, false)) {
+          return false
+        }
+      }
+    } else {
+      // null, and undefined or functions inside an array, all serialize as null.
+      bytes += inArray || node === null ? 4 : 0
+    }
+    return bytes <= limit
   }
-  let bytes = 2
-  for (let i = 0; i < value.length; i++) {
-    const code = value.charCodeAt(i)
-    bytes +=
-      code === 34 || code === 92
-        ? 2
-        : code < 32 || (code >= 0xd800 && code <= 0xdfff)
-          ? 6
-          : code < 128
-            ? 1
-            : code < 2048
-              ? 2
-              : 3
-  }
-  return bytes
+  return visit(value, false) ? bytes : Number.POSITIVE_INFINITY
 }
 
 function sessionBytes(session: SessionMemory): number {
@@ -76,7 +104,7 @@ function isChatOnly(worktree: WorktreeMemory): boolean {
   return worktree.sessions.length === 0 && (worktree.chats?.length ?? 0) > 0
 }
 
-/** The reply terminals alone produce: the shape and totals the host sent before chats were sampled. */
+/** The reply terminals alone produce: the rows and totals the host sent before chats were sampled. */
 function terminalOnlyReply(snapshot: MemorySnapshot): MemorySnapshot {
   const { agentProcesses: _agentProcesses, ...base } = snapshot
   const committed = snapshot.processCommitMetric !== undefined
@@ -102,13 +130,11 @@ function terminalOnlyReply(snapshot: MemorySnapshot): MemorySnapshot {
         cpu: rowCpu,
         memory: rowMemory,
         ...optionalCommitField(committed, rowPrivate),
-        sessions: sessions.map((session) => ({ ...session, paneKey: null })),
-        history: []
+        sessions
       }
     })
   return {
     ...base,
-    app: { ...snapshot.app, history: [] },
     worktrees,
     ...(committed
       ? {
@@ -119,6 +145,17 @@ function terminalOnlyReply(snapshot: MemorySnapshot): MemorySnapshot {
       : {}),
     totalCpu: snapshot.app.cpu + cpu,
     totalMemory: snapshot.app.memory + memory
+  }
+}
+
+/** Restored terminals' pane keys are new in replies, so the smallest reply leaves every key out. */
+function withoutPaneKeys(snapshot: MemorySnapshot): MemorySnapshot {
+  return {
+    ...snapshot,
+    worktrees: snapshot.worktrees.map((worktree) => ({
+      ...worktree,
+      sessions: worktree.sessions.map((session) => ({ ...session, paneKey: null }))
+    }))
   }
 }
 
@@ -152,11 +189,32 @@ function allHistoryJsonBytes(snapshot: MemorySnapshot, points: number): number {
   return bytes
 }
 
+/** The first history length (full, 20 points, none) whose reply fits, given that reply's full size. */
+function fittingHistory(
+  snapshot: MemorySnapshot,
+  fullBytes: number,
+  budgetBytes: number
+): MemorySnapshot | null {
+  if (fullBytes <= budgetBytes) {
+    return snapshot
+  }
+  if (!Number.isFinite(fullBytes)) {
+    return null
+  }
+  const withoutHistory = fullBytes - allHistoryJsonBytes(snapshot, Number.POSITIVE_INFINITY)
+  for (const points of [MEMORY_REPLY_HISTORY_POINTS, 0]) {
+    if (withoutHistory + allHistoryJsonBytes(snapshot, points) <= budgetBytes) {
+      return withHistory(snapshot, points)
+    }
+  }
+  return null
+}
+
 /**
  * The snapshot as sent to a paired client, within `budgetBytes` of reply content. Near the limit it
  * drops older history, then all history, then everything chat sampling adds (chat lists, chat-only
- * rows, pane keys, the agent total and chats' share of the totals), so a host never sends more than
- * its terminals alone would.
+ * rows, the agent total and chats' share of the totals), trying history again, and last pane keys
+ * with history, so a host never sends more than its terminals alone would.
  */
 export function toMemorySnapshotReply(
   snapshot: MemorySnapshot,
@@ -166,20 +224,17 @@ export function toMemorySnapshotReply(
   for (const worktree of snapshot.worktrees) {
     estimate += rowBytes(worktree) + worktree.history.length * HISTORY_POINT_BYTES
   }
-  // The estimate is an upper bound, so most hosts never serialize here.
+  // The estimate is an upper bound, so most hosts are never measured.
   if (estimate <= budgetBytes - ESTIMATE_RESERVE_BYTES) {
     return snapshot
   }
-  // One measurement; each shorter-history tier's size then follows exactly from its history arrays.
-  const fullBytes = Buffer.byteLength(JSON.stringify(snapshot), 'utf8')
-  if (fullBytes <= budgetBytes) {
-    return snapshot
+  // A measurement past the budget stops early, so no host pays to size more than it may send.
+  const measureLimit = budgetBytes + allHistoryJsonBytes(snapshot, Number.POSITIVE_INFINITY)
+  const full = fittingHistory(snapshot, jsonBytes(snapshot, measureLimit), budgetBytes)
+  if (full) {
+    return full
   }
-  const withoutHistory = fullBytes - allHistoryJsonBytes(snapshot, Number.POSITIVE_INFINITY)
-  for (const points of [MEMORY_REPLY_HISTORY_POINTS, 0]) {
-    if (withoutHistory + allHistoryJsonBytes(snapshot, points) <= budgetBytes) {
-      return withHistory(snapshot, points)
-    }
-  }
-  return terminalOnlyReply(snapshot)
+  const terminals = terminalOnlyReply(snapshot)
+  const withKeys = fittingHistory(terminals, jsonBytes(terminals, measureLimit), budgetBytes)
+  return withKeys ?? withHistory(withoutPaneKeys(terminals), 0)
 }
