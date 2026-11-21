@@ -12961,12 +12961,12 @@
           "notificationPlaygroundDescription": "Dev-only triggers for checking toast layout, recovery actions, and long-copy wrapping.",
           "devOnly": "Dev only",
           "orcaCloud": "Orca Cloud",
-          "orcaCloudDescription": "Dev-only preview of first-party cloud sign-in. Hidden in production; in dev it also appears in the sidebar account switcher once ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID are set.",
+          "orcaCloudDescription": "Dev-only preview of first-party cloud sign-in. Hidden in production; in dev it also appears in the sidebar account switcher once ORCA_CLOUD_API_URL, ORCA_CLOUD_CLIENT_ID and ORCA_RELAY_URL are set.",
           "orcaCloudStatus": "Status",
           "orcaCloudSignOut": "Sign out",
           "orcaCloudConnect": "Connect profile",
           "orcaCloudRefresh": "Refresh status",
-          "orcaCloudNotConfigured": "Set ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID to preview Orca Cloud sign-in in this dev build.",
+          "orcaCloudNotConfigured": "Set ORCA_CLOUD_API_URL, ORCA_CLOUD_CLIENT_ID and ORCA_RELAY_URL to preview Orca Cloud sign-in in this dev build.",
           "deleteAnywayClicked": "Delete Anyway clicked"
         },
         "EphemeralVmRecipeRow": {
