@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/context-menu'
 import { useAppStore } from '@/store/index'
 import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
+import { getOpenFileExecutionHostId } from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { getRelativePathInsideRoot } from '@/lib/path'
 import type { OpenFile } from '../../../store/slices/editor/types/open-file'
@@ -102,7 +103,8 @@ export function EditorFileTabContextMenu({
     })
   )
   const revealBlocked = isRevealOrEditorOpenBlocked(revealOwner)
-  const worktreePath = useWorktreeById(file.worktreeId)?.path ?? null
+  const worktreePath =
+    useWorktreeById(file.worktreeId, getOpenFileExecutionHostId(file))?.path ?? null
   const canRevealInOrcaExplorer =
     Boolean(getRelativePathInsideRoot(file.filePath, worktreePath)) &&
     (file.mode === 'edit' || file.mode === 'markdown-preview') &&
