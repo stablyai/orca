@@ -126,6 +126,23 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       )
     ]
   },
+  reasoningExpanded: {
+    targetSectionId: 'chat-reasoning-expanded',
+    title: translate(
+      'components.settings.nativeChat.reasoningExpandedTitle',
+      'Show reasoning expanded'
+    ),
+    description: translate(
+      'components.settings.nativeChat.reasoningExpandedCopy',
+      'Reasoning blocks start open, while the agent works and after. Clicking one still collapses it.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'components.settings.nativeChat.reasoningExpandedSearchThinking',
+        'thinking'
+      )
+    ]
+  },
   composerSpellcheck: {
     targetSectionId: 'chat-composer-spellcheck',
     title: translate(

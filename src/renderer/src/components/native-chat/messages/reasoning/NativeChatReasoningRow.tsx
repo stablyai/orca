@@ -13,6 +13,7 @@ import {
 } from './NativeChatReasoningDisclosure'
 import { NativeChatToolRunIcon } from '../../tools/lines/NativeChatToolIcon'
 import { useNativeChatDisclosure } from '../disclosure/native-chat-disclosure-store'
+import { useAppStore } from '@/store'
 
 function translatedHeadline(
   headline: NativeChatReasoningHeadline,
@@ -41,7 +42,10 @@ export function NativeChatReasoningRow({
   const t = useTranslate()
   // Keyed like the live line, so a block opened while it streamed lands open, and windowing keeps it.
   const disclosureKey = nativeChatReasoningDisclosureKey(message.id)
-  const disclosure = useNativeChatDisclosure(disclosureKey, false)
+  const expandedByDefault = useAppStore(
+    (state) => state.settings?.nativeChatReasoningExpanded === true
+  )
+  const disclosure = useNativeChatDisclosure(disclosureKey, expandedByDefault)
   if (!markdown.trim()) {
     return null
   }

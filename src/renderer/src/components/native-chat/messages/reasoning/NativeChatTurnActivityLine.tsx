@@ -13,6 +13,7 @@ import {
   NativeChatReasoningChevron
 } from './NativeChatReasoningDisclosure'
 import { useNativeChatDisclosure } from '../disclosure/native-chat-disclosure-store'
+import { useAppStore } from '@/store'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 
 // Literal keys with literal fallbacks: a dynamic key registers no catalog reference.
@@ -44,7 +45,10 @@ export function NativeChatTurnActivityLine({
   const disclosureKey = reasoning
     ? nativeChatReasoningDisclosureKey(reasoning.message.id)
     : undefined
-  const disclosure = useNativeChatDisclosure(disclosureKey, false)
+  const expandedByDefault = useAppStore(
+    (state) => state.settings?.nativeChatReasoningExpanded === true
+  )
+  const disclosure = useNativeChatDisclosure(disclosureKey, expandedByDefault)
   const open = reasoning !== null && disclosure.open
   const labelId = useId()
 

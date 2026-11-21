@@ -29,6 +29,8 @@ export type NativeChatGlobalSettings = {
   nativeChatProviders?: NativeChatProviderChoices
   /** Own sends bring the latest into view; off keeps a reader who scrolled up in place. Absent means on. */
   nativeChatScrollToLatestOnSend?: boolean
+  /** Reasoning blocks start open; absent means collapsed. */
+  nativeChatReasoningExpanded?: boolean
   /** The changed-files card under each turn that edited files. Absent means on. */
   nativeChatTurnDiffSummary?: boolean
   /** Lines saying how CI went on a pull request the chat opened or pushed to. Absent means on. */

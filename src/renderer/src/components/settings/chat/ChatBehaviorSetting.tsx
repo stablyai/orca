@@ -65,6 +65,7 @@ export function ChatBehaviorSetting({
     entries.scrollToLatestOnSend,
     entries.markNewMessages,
     entries.linkPreviews,
+    entries.reasoningExpanded,
     entries.composerSpellcheck,
     entries.promptSuggestions,
     entries.shellEnvironment
@@ -77,6 +78,7 @@ export function ChatBehaviorSetting({
   const scrollToLatestOnSend = nativeChatScrollsToLatestOnSend(settings)
   const markNewMessages = nativeChatMarksNewMessages(settings)
   const linkPreviewsEnabled = settings.nativeChatLinkPreviews !== false
+  const reasoningExpanded = settings.nativeChatReasoningExpanded === true
   const composerSpellcheckEnabled = settings.nativeChatComposerSpellcheck !== false
   const promptSuggestions = nativeChatShowsPromptSuggestions(settings)
   return (
@@ -193,6 +195,20 @@ export function ChatBehaviorSetting({
             'Toggle link previews'
           )}
           onChange={() => updateSettings({ nativeChatLinkPreviews: !linkPreviewsEnabled })}
+        />
+      </SearchableSetting>
+      <SearchableSetting
+        {...entries.reasoningExpanded}
+        id={entries.reasoningExpanded.targetSectionId}
+        forceVisible={forceVisible}
+        className="max-w-none"
+      >
+        <SettingsSwitchRow
+          label={entries.reasoningExpanded.title}
+          description={entries.reasoningExpanded.description}
+          checked={reasoningExpanded}
+          ariaLabel={entries.reasoningExpanded.title}
+          onChange={() => updateSettings({ nativeChatReasoningExpanded: !reasoningExpanded })}
         />
       </SearchableSetting>
       <SearchableSetting
