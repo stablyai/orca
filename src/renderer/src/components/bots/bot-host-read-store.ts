@@ -107,9 +107,15 @@ export function createBotHostRead<T>(
     entry.more = []
     let landed: T | null = null
     const live = (): boolean => current === entry.latest && entries.get(key) === entry
+    const show = (shown: T): void => {
+      if (live() && shown !== entry.value) {
+        entry.value = shown
+        entry.listeners.forEach((listener) => listener())
+      }
+    }
     try {
       const value = options
-        ? await options.load(entry.bot, previous, ask, live)
+        ? await options.load(entry.bot, previous, ask, show, live)
         : reuseEqualJson(
             previous,
             pick(await callBotRpc<never>(entry.bot, method, { botId: entry.bot.id }))

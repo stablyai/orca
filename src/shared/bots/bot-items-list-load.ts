@@ -5,6 +5,8 @@ import { BOT_ITEM_LIMITS, type BotItem } from './bot-items'
 import type { BotItemsListRead } from './bot-item-schema'
 import {
   appendBotItemsClosedPage,
+  botItemCursorPlace,
+  botItemReaches,
   botItemsClosedDepth,
   botItemsClosedLoaded,
   mergeNamedBotItems
@@ -18,6 +20,9 @@ export type BotItemsListCall = (params: Record<string, unknown>) => Promise<BotI
 export type BotItemsListAsk = { whole: boolean; parts: readonly string[]; more: boolean }
 
 export type BotItemsListLoadOptions = {
+  /** A value to show while the read goes on: a whole read's fresh first page, with the rows loaded
+   *  before it below that page kept until theirs land (or dropped, if a page below fails). */
+  show?: (value: BotItemsListRead) => void
   /** False once nothing will show the value, so no further call is made for it. */
   live?: () => boolean
   /** A whole read pages down the loaded depth every time, not only once its first page moves (the
@@ -31,7 +36,7 @@ export async function loadBotItemsList(
   ask: BotItemsListAsk,
   options: BotItemsListLoadOptions = {}
 ): Promise<BotItemsListRead> {
-  const { live = () => true } = options
+  const { show, live = () => true } = options
   const page = BOT_ITEM_LIMITS.listPage
   const parts = previous ? namedParts(ask.parts, previous) : []
   if (!ask.whole && previous && parts.length > 0) {
@@ -41,9 +46,13 @@ export async function loadBotItemsList(
       return live() ? loadBotItemsList(call, previous, { ...ask, whole: true }, options) : previous
     }
     const merged = mergeNamedBotItems(previous, named, parts)
-    return ask.more && live()
-      ? loadBotItemsList(call, merged, { whole: false, parts: [], more: true }, options)
-      : merged
+    if (!ask.more || !live()) {
+      return merged
+    }
+    // A failed page fails only Show more: the named items stand.
+    return loadBotItemsList(call, merged, { whole: false, parts: [], more: true }, options).catch(
+      () => merged
+    )
   }
   if (ask.whole || !previous) {
     // The depth loaded so far, a page more when asked, a page per call: no answer is larger than one
@@ -57,6 +66,9 @@ export async function loadBotItemsList(
       return more && live()
         ? loadBotItemsList(call, previous, { whole: false, parts: [], more: true }, options)
         : previous
+    }
+    if (show && previous && first.nextClosedCursor && botItemsClosedLoaded(first) < want) {
+      show(reuseEqualJson(previous, withLoadedBelow(first, previous)))
     }
     // The pages below, gathered and joined to the first page once.
     const below: BotItem[] = []
@@ -130,6 +142,20 @@ function namedParts(parts: readonly string[], previous: BotItemsListRead): strin
     }
   }
   return [...uids]
+}
+
+/** `first` with `previous`'s Closed rows below its end, to show until the rest of the depth lands. */
+function withLoadedBelow(first: BotItemsListRead, previous: BotItemsListRead): BotItemsListRead {
+  const end = botItemCursorPlace(first.nextClosedCursor)
+  const held = new Set(first.items.map((item) => item.uid))
+  const below = previous.items.filter(
+    (item) => isClosedRow(item) && !held.has(item.uid) && end !== null && !botItemReaches(item, end)
+  )
+  return {
+    ...first,
+    items: [...first.items, ...below],
+    ...(previous.nextClosedCursor ? { nextClosedCursor: previous.nextClosedCursor } : {})
+  }
 }
 
 function isClosedRow(item: { status: string }): boolean {

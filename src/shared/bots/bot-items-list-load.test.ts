@@ -180,6 +180,32 @@ describe('loadBotItemsList', () => {
     expect(read.nextClosedCursor).toBeDefined()
   })
 
+  it('shows a fresh first page before the pages below it land, and keeps named items if Show more fails', async () => {
+    const items = seeded()
+    const inner = host(items)
+    let read = await loadBotItemsList(inner, null, WHOLE)
+    read = await loadBotItemsList(inner, read, MORE)
+    Object.assign(items[0]!, { status: 'needs_you', version: 2 })
+    const shown: BotItemsListRead[] = []
+    let pending: (() => void) | null = null
+    const held: BotItemsListCall = (params) =>
+      params.closedCursor
+        ? new Promise((resolve) => (pending = () => resolve(inner(params))))
+        : inner(params)
+    const whole = loadBotItemsList(held, read, WHOLE, { show: (value) => shown.push(value) })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(shown[0]?.items.find((item) => item.uid === 'i1')?.status).toBe('needs_you')
+    expect(shown[0]?.items.filter(closed)).toHaveLength(100)
+    pending!()
+    read = await whole
+    // A named update with Show more: a failed page keeps the update.
+    Object.assign(items[1]!, { status: 'needs_you', version: 2 })
+    const failing: BotItemsListCall = (params) =>
+      params.closedCursor ? Promise.reject(new Error('offline')) : inner(params)
+    read = await loadBotItemsList(failing, read, { whole: false, parts: ['i2'], more: true })
+    expect(read.items.find((item) => item.uid === 'i2')?.status).toBe('needs_you')
+  })
+
   it('stops paging down the depth once nothing shows the list', async () => {
     const older = host(seeded(), true)
     let read = await loadBotItemsList(older, null, WHOLE)
