@@ -10,6 +10,7 @@ import { stripPiProcessOwnerEnv } from '../../pty/shell-startup/pi-process-owner
 import { dropIncoherentCondaActivationEnv } from '../../pty/shell-startup/conda-activation-env'
 import { stripLegacyTerminalShimEnv } from '../../pty/shell-startup/legacy-terminal-shim-dir'
 import { removeInheritedNoColor } from '../../pty/shell-startup/terminal-color-env'
+import { removeInheritedFigtermSessionEnv } from '../../pty/shell-startup/figterm-session-env'
 import { stampInheritedTmuxEnv } from '../../pty/shell-startup/inherited-tmux-env'
 import { resolvePathEnvKey } from '../../pty/environment/windows-path-segment-merge'
 import { dropInheritedOrcaHistFile } from '../../pty/history/worktree-history-file-path'
@@ -210,6 +211,7 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
   removeAppImageRuntimeEnv(env)
   removeChromiumDisabledSessionBus(env)
   removeInheritedNoColor(env)
+  removeInheritedFigtermSessionEnv(env, opts.env)
   // Mirror pane identity only after stripping, so aliases cannot retain removed ownership.
   applyScrubSafeAgentEnvAliases(env)
   env.LANG ??= 'en_US.UTF-8'

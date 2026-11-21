@@ -6,6 +6,7 @@ import { removeChromiumDisabledSessionBus } from '../../pty/shell-startup/chromi
 import { stripInheritedBuildModeEnv } from '../../pty/shell-startup/build-mode-env'
 import { stripPiProcessOwnerEnv } from '../../pty/shell-startup/pi-process-owner-env'
 import { removeInheritedNoColor } from '../../pty/shell-startup/terminal-color-env'
+import { removeInheritedFigtermSessionEnv } from '../../pty/shell-startup/figterm-session-env'
 import { stampInheritedTmuxEnv } from '../../pty/shell-startup/inherited-tmux-env'
 import { isWindowsGitBashShellPath } from '../../pty/shell-startup/git-bash'
 import { applyScrubSafeAgentEnvAliases } from '../../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
@@ -76,6 +77,7 @@ export function buildInheritedLocalPtyEnvironment(
   removeAppImageRuntimeEnv(spawnEnv)
   removeChromiumDisabledSessionBus(spawnEnv)
   removeInheritedNoColor(spawnEnv)
+  removeInheritedFigtermSessionEnv(spawnEnv, explicitEnv)
   stripInheritedAgentSessionEnv(spawnEnv, { launchEnv: explicitEnv, envToDelete })
   for (const key of envToDelete) {
     delete spawnEnv[key]
