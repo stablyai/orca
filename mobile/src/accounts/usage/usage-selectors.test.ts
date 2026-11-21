@@ -39,13 +39,13 @@ function snapshot(activeAccountId: string | null): AccountsSnapshot {
 
 describe('getSystemDefaultProviderUsage', () => {
   it("shows the host's System default reading while a saved Claude account is selected", () => {
-    expect(getSystemDefaultProviderUsage(snapshot('saved'), 'claude', 'saved')?.session).toEqual(
-      expect.objectContaining({ usedPercent: 37 })
-    )
+    expect(
+      getSystemDefaultProviderUsage(snapshot('saved'), 'claude', 'saved').limits?.session
+    ).toEqual(expect.objectContaining({ usedPercent: 37 }))
   })
 
   it('shows the live reading while System default is selected', () => {
-    expect(getSystemDefaultProviderUsage(snapshot(null), 'claude', null)?.session).toEqual(
+    expect(getSystemDefaultProviderUsage(snapshot(null), 'claude', null).limits?.session).toEqual(
       expect.objectContaining({ usedPercent: 80 })
     )
   })

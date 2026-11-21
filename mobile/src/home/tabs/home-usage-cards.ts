@@ -65,16 +65,16 @@ export function selectHomeUsageCards(
   const activeId = activeAccountId(snapshot, provider)
   const activeLimits = getActiveProviderRateLimits(snapshot, provider)
   const cards: HomeUsageCard[] = []
-  const systemDefaultLimits = getSystemDefaultProviderUsage(snapshot, provider, activeId)
-  if (activeId === null || hasActiveProviderUsage(systemDefaultLimits)) {
+  const systemDefault = getSystemDefaultProviderUsage(snapshot, provider, activeId)
+  if (activeId === null || hasActiveProviderUsage(systemDefault.limits)) {
     cards.push({
       accountId: null,
       email: null,
       subtitle: null,
       active: activeId === null,
-      limits: systemDefaultLimits,
-      fetching: systemDefaultLimits?.status === 'fetching',
-      metered: hasActiveProviderUsage(systemDefaultLimits)
+      limits: systemDefault.limits,
+      fetching: systemDefault.isFetching,
+      metered: hasActiveProviderUsage(systemDefault.limits)
     })
   }
   for (const account of managedAccounts(snapshot, provider)) {

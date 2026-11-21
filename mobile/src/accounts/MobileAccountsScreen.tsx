@@ -214,8 +214,13 @@ export function MobileAccountsScreen() {
             title={t('accounts.screen.default', 'System default')}
             subtitle={t('accounts.screen.agentLogin', "Use the agent's own login")}
             detail={
-              hasActiveProviderUsage(systemDefaultUsage) ? (
-                <ProviderUsageWindows limits={systemDefaultUsage} now={now} showEmptyWindows />
+              hasActiveProviderUsage(systemDefaultUsage.limits) ? (
+                <ProviderUsageWindows
+                  limits={systemDefaultUsage.limits}
+                  now={now}
+                  isFetching={systemDefaultUsage.isFetching}
+                  showEmptyWindows
+                />
               ) : undefined
             }
             accessory={busyAccountId === `${provider}:default` ? spinner : undefined}
