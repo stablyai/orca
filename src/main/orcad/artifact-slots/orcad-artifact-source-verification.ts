@@ -30,13 +30,9 @@ export async function verifiedArtifactIdentity(
   sources: ArtifactSource[],
   expected: Map<string, ExpectedSha256>,
   record: OrcadArtifactVerificationRecord | null,
-  nowMs: number,
-  /** Avoid stat calls when records are disabled. */
-  sign = true
+  nowMs: number
 ): Promise<ArtifactIdentity> {
-  const signatures = sign
-    ? await Promise.all(sources.map((source) => fileSignature(source.path, nowMs)))
-    : sources.map(() => null)
+  const signatures = await Promise.all(sources.map((source) => fileSignature(source.path, nowMs)))
   const reusable =
     record !== null &&
     record.sources.length === sources.length &&
@@ -170,7 +166,8 @@ export async function rememberVerification(
   targetRoot: string,
   previous: OrcadArtifactVerificationRecord | null,
   identity: ArtifactIdentity,
-  slot: RecordedSlot | null
+  slot: RecordedSlot | null,
+  write: typeof writeOrcadArtifactVerificationRecord = writeOrcadArtifactVerificationRecord
 ): Promise<void> {
   if (!identity.signed) {
     return
@@ -184,7 +181,7 @@ export async function rememberVerification(
   if (previous && JSON.stringify(previous) === JSON.stringify(next)) {
     return
   }
-  await writeOrcadArtifactVerificationRecord(targetRoot, next)
+  await write(targetRoot, next)
 }
 
 export async function isCompleteArtifact(
