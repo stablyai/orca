@@ -142,8 +142,9 @@ it.each([null])('omits own policy on fresh input after opening %s', async (resum
       admitFreshInput: async (enqueue) => enqueue(mode, false)
     })
   try {
+    // A writable workspace edits without asking, so it is not reported as Orca's read-only Ask.
     expect((await adapter.readOptions({ sessionId: 'session-1', fence: 7 })).current).toMatchObject(
-      { reportedPermissionMode: 'ask' }
+      { reportedPermissionMode: null }
     )
     for (const [index, choice] of ['own', 'full-access'].entries()) {
       mode = choice === 'own' ? 'own' : 'full-access'
@@ -164,7 +165,7 @@ it.each([null])('omits own policy on fresh input after opening %s', async (resum
       expect(params.clientUserMessageId).toBe(`original-${index}`)
       expect(
         (await adapter.readOptions({ sessionId: 'session-1', fence: 7 })).current
-      ).toMatchObject({ reportedPermissionMode: index === 0 ? 'ask' : 'full-access' })
+      ).toMatchObject({ reportedPermissionMode: index === 0 ? null : 'full-access' })
       connection.handlers.onNotification?.('turn/completed', {
         threadId: THREAD_ID,
         turn: { id: `own-${index}`, status: 'completed' }
