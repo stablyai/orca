@@ -234,7 +234,6 @@ export function useResourceUsageStatusController() {
   const actions = useResourceUsageActions({
     setCollapsedRepos,
     setCollapsedWorktrees,
-    tabsByWorktree,
     setOpen,
     setActiveView,
     openModal,

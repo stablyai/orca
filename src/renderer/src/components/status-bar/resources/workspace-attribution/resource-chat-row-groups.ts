@@ -19,13 +19,10 @@ export type SampleChatRows = {
 }
 
 /** Lives while the panel is open; samples are keyed by owner (this machine or a paired host). */
-export type ResourceMergeCache = {
-  bySample: Map<string, SampleChatRows>
-  combinedByRepo: Map<string, { parts: ChatRowGroup[]; group: UnifiedProjectGroup }>
-}
+export type ResourceMergeCache = { bySample: Map<string, SampleChatRows> }
 
 export function createResourceMergeCache(): ResourceMergeCache {
-  return { bySample: new Map(), combinedByRepo: new Map() }
+  return { bySample: new Map() }
 }
 
 export function isChatOnlySample(wt: WorktreeMemory): boolean {

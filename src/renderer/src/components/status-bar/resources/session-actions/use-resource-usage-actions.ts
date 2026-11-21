@@ -33,7 +33,6 @@ import { resolveResourceManagerWorktreeTarget } from './resource-manager-worktre
 export function useResourceUsageActions({
   setCollapsedRepos,
   setCollapsedWorktrees,
-  tabsByWorktree,
   setOpen,
   setActiveView,
   openModal,
@@ -54,7 +53,6 @@ export function useResourceUsageActions({
 }: {
   setCollapsedRepos: Dispatch<SetStateAction<Set<string>>>
   setCollapsedWorktrees: Dispatch<SetStateAction<Set<string>>>
-  tabsByWorktree: AppState['tabsByWorktree']
   setOpen: Dispatch<SetStateAction<boolean>>
   setActiveView: AppState['setActiveView']
   openModal: AppState['openModal']
@@ -127,13 +125,14 @@ export function useResourceUsageActions({
   const navigateToTab = useCallback(
     (tabId: string, paneKey: string | null) => {
       navigateResourceSessionToTab(tabId, paneKey, {
-        tabsByWorktree,
+        // Read at click time, so a tab title change doesn't replace this callback and redraw every row.
+        tabsByWorktree: useAppStore.getState().tabsByWorktree,
         setActiveView,
         activateAndRevealWorktree: navigateToWorktree,
         activateTabAndFocusPane
       })
     },
-    [tabsByWorktree, setActiveView, navigateToWorktree]
+    [setActiveView, navigateToWorktree]
   )
 
   // The opener activates whatever it opens (a group member opens its room), so nothing is activated first.

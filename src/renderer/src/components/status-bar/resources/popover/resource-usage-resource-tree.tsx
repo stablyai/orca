@@ -27,6 +27,11 @@ function compareMetricDesc(a: Metric, b: Metric): number {
   return b - a
 }
 
+// Locale order can call distinct ids equal; code units never do.
+function compareCodeUnits(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0
+}
+
 function sortWorktrees(list: UnifiedWorktreeRow[], sort: SortOption): UnifiedWorktreeRow[] {
   const copy = [...list]
   if (sort === 'memory') {
@@ -37,7 +42,7 @@ function sortWorktrees(list: UnifiedWorktreeRow[], sort: SortOption): UnifiedWor
     // Ties keep a fixed order, whichever source a workspace's row came from.
     copy.sort(
       (a, b) =>
-        a.worktreeName.localeCompare(b.worktreeName) || a.worktreeId.localeCompare(b.worktreeId)
+        a.worktreeName.localeCompare(b.worktreeName) || compareCodeUnits(a.worktreeId, b.worktreeId)
     )
   }
   return copy
@@ -50,7 +55,9 @@ function sortProjectGroups(groups: UnifiedProjectGroup[], sort: SortOption): Uni
   } else if (sort === 'cpu') {
     copy.sort((a, b) => compareMetricDesc(a.cpu, b.cpu))
   } else {
-    copy.sort((a, b) => a.repoName.localeCompare(b.repoName) || a.repoId.localeCompare(b.repoId))
+    copy.sort(
+      (a, b) => a.repoName.localeCompare(b.repoName) || compareCodeUnits(a.repoId, b.repoId)
+    )
   }
   return copy
 }
@@ -111,11 +118,11 @@ export function ResourceTree({
         key={wt.worktreeId}
         worktree={wt}
         storeRecord={storeRecord}
-        activeWorktreeId={activeWorktreeId}
+        isActive={wt.worktreeId === activeWorktreeId}
         isCollapsed={collapsedWorktrees.has(wt.worktreeId)}
-        onToggle={() => toggleWorktree(wt.worktreeId)}
-        onNavigate={() => navigateToWorktree(wt.worktreeId)}
-        onDelete={() => onDelete(wt.worktreeId)}
+        onToggle={toggleWorktree}
+        onNavigate={navigateToWorktree}
+        onDelete={onDelete}
         onKillSession={onKillSession}
         navigateToTab={navigateToTab}
         onOpenChat={onOpenChat}

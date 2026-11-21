@@ -1,6 +1,6 @@
 /** Builds one merge's project groups; groups and rows shared with the cache are copied before they change. */
 
-import type { ChatRowGroup, ResourceMergeCache } from './resource-chat-row-groups'
+import type { ChatRowGroup } from './resource-chat-row-groups'
 import type { UnifiedProjectGroup, UnifiedWorktreeRow } from './resource-usage-merge-types'
 
 type RepoState = {
@@ -11,9 +11,6 @@ type RepoState = {
   layers: { offset: number; rowIndexById: ReadonlyMap<string, number> }[]
   // Row positions of rows added one at a time.
   ownIndex: Map<string, number>
-  parts: ChatRowGroup[]
-  // Anything other than whole chat groups was added or changed.
-  dirty: boolean
 }
 
 function addTotals(group: UnifiedProjectGroup, cpu: number | null, memory: number | null): void {
@@ -37,15 +34,12 @@ export class ProjectGroupAssembly {
         group,
         shared: true,
         layers: [{ offset: 0, rowIndexById }],
-        ownIndex: new Map(),
-        parts: [part],
-        dirty: false
+        ownIndex: new Map()
       })
       return
     }
     const target = this.own(state)
     state.layers.push({ offset: target.worktrees.length, rowIndexById })
-    state.parts.push(part)
     for (const row of group.worktrees) {
       target.worktrees.push(row)
     }
@@ -69,14 +63,11 @@ export class ProjectGroupAssembly {
         },
         shared: false,
         layers: [],
-        ownIndex: new Map(),
-        parts: [],
-        dirty: true
+        ownIndex: new Map()
       }
       this.repos.set(row.repoId, state)
     }
     const target = this.own(state)
-    state.dirty = true
     if (!state.ownIndex.has(row.worktreeId)) {
       state.ownIndex.set(row.worktreeId, target.worktrees.length)
     }
@@ -94,7 +85,6 @@ export class ProjectGroupAssembly {
       return undefined
     }
     const target = this.own(state)
-    state.dirty = true
     const row = target.worktrees[position]
     if (this.ownRows.has(row)) {
       return row
@@ -106,29 +96,9 @@ export class ProjectGroupAssembly {
     return copy
   }
 
-  /** The merged groups; a project made only of the same unchanged chat groups keeps its last object. */
-  finish(cache: ResourceMergeCache | undefined): UnifiedProjectGroup[] {
-    const combined = new Map<string, { parts: ChatRowGroup[]; group: UnifiedProjectGroup }>()
-    const groups: UnifiedProjectGroup[] = []
-    for (const [repoId, state] of this.repos) {
-      let group = state.group
-      if (!state.dirty && state.parts.length > 1) {
-        const prior = cache?.combinedByRepo.get(repoId)
-        if (
-          prior &&
-          prior.parts.length === state.parts.length &&
-          prior.parts.every((part, i) => part === state.parts[i])
-        ) {
-          group = prior.group
-        }
-        combined.set(repoId, { parts: state.parts, group })
-      }
-      groups.push(group)
-    }
-    if (cache) {
-      cache.combinedByRepo = combined
-    }
-    return groups
+  /** The merged groups; a project holding one unchanged chat group keeps that group's object. */
+  finish(): UnifiedProjectGroup[] {
+    return [...this.repos.values()].map((state) => state.group)
   }
 
   private own(state: RepoState): UnifiedProjectGroup {

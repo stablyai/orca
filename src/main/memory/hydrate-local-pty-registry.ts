@@ -189,6 +189,7 @@ async function hydrateLocalPtyRegistry(
       sessionId: info.sessionId,
       // Keeps hydrated rows labeled by their tab and classified as agents before their pane mounts.
       paneKey: info.paneKey && parsePaneKey(info.paneKey) ? info.paneKey : null,
+      restored: true,
       pid:
         typeof info.pid === 'number' && Number.isFinite(info.pid) && info.pid > 0 ? info.pid : null
     })

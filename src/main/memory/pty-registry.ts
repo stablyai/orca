@@ -7,6 +7,8 @@ export type PtyRegistration = {
   paneKey: string | null
   // Capture at spawn to avoid IPC lookups; unavailable PIDs retain zero-attribution rows.
   pid: number | null
+  /** Registered by startup restore, before any pane mounted. */
+  restored?: true
 }
 
 const registry = new Map<string, PtyRegistration>()

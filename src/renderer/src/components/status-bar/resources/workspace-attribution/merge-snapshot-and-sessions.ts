@@ -229,5 +229,5 @@ export function mergeSnapshotAndSessions(
     row.browsers = browsers
   }
 
-  return groups.finish(cache)
+  return groups.finish()
 }

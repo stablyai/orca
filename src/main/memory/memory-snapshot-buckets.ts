@@ -29,16 +29,16 @@ export function pushMemoryHistorySample(key: string, memoryBytes: number, now: n
     ring = { samples: [], touchedAt: now }
     historyByKey.set(key, ring)
   }
-  // Whole bytes within the safe-integer range keep each point at most 16 digits in a paired reply.
-  ring.samples.push(
-    Number.isFinite(memoryBytes)
-      ? Math.min(Number.MAX_SAFE_INTEGER, Math.round(Math.max(0, memoryBytes)))
-      : memoryBytes
-  )
+  ring.samples.push(memoryBytes)
   if (ring.samples.length > HISTORY_CAPACITY) {
     ring.samples.shift()
   }
   ring.touchedAt = now
+}
+
+/** A workspace's history including its chats; the plain key keeps the terminal-only series. */
+export function chatInclusiveHistoryKey(worktreeId: string): string {
+  return `${worktreeId}\u0000chats`
 }
 
 export function readMemoryHistory(key: string): number[] {

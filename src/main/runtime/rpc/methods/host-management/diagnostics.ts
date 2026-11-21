@@ -1,18 +1,17 @@
 import { defineMethod } from '../../core'
-import { toMemorySnapshotReply } from '../../../../memory/memory-snapshot-reply'
-import { remoteRpcContentBudget } from '../../../../../shared/remote-runtime/rpc/remote-rpc-content-budget'
+import { toPairedMemoryReply } from '../../../../memory/memory-snapshot-paired-reply'
 
 export const DIAGNOSTICS_METHODS = [
   defineMethod({
     name: 'diagnostics.memory',
     permission: 'workspace',
     params: null,
-    handler: async (_params, { runtime, caller, requestId }) => {
+    handler: async (_params, { runtime, caller }) => {
       const snapshot = await runtime.getMemorySnapshot()
-      // Only remote connections cap reply size; this machine's own callers get everything.
+      // Paired machines get terminals only, as before; chat detail stays on this machine for now.
       return caller?.kind === 'local-cli' || caller?.kind === 'desktop'
         ? snapshot
-        : toMemorySnapshotReply(snapshot, remoteRpcContentBudget(requestId ?? ''))
+        : toPairedMemoryReply(snapshot)
     }
   })
 ]

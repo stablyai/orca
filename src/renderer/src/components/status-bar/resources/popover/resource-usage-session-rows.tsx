@@ -132,10 +132,11 @@ function BrowserRow({ browser }: { browser: BrowserWorkspace }): React.JSX.Eleme
   )
 }
 
-export function WorktreeRow({
+/** Memoized: an unchanged workspace row skips redrawing when another workspace or machine updates. */
+export const WorktreeRow = React.memo(function WorktreeRow({
   worktree,
   storeRecord,
-  activeWorktreeId,
+  isActive,
   isCollapsed,
   onToggle,
   onNavigate,
@@ -146,11 +147,11 @@ export function WorktreeRow({
 }: {
   worktree: UnifiedWorktreeRow
   storeRecord: Worktree | null
-  activeWorktreeId: string | null
+  isActive: boolean
   isCollapsed: boolean
-  onToggle: () => void
-  onNavigate: () => void
-  onDelete: () => void
+  onToggle: (worktreeId: string) => void
+  onNavigate: (worktreeId: string) => void
+  onDelete: (worktreeId: string) => void
   onKillSession: (session: UnifiedSessionRow) => void
   navigateToTab: (tabId: string, paneKey: string | null) => void
   onOpenChat: (worktreeId: string, agentSessionId: string, runtimeHostId?: string) => void
@@ -165,8 +166,7 @@ export function WorktreeRow({
     worktree.worktreeId === ORPHAN_WORKTREE_ID || worktree.repoId === UNATTRIBUTED_REPO_ID
   const isNavigable = !isSynthetic
   // Why: Delete needs a sidebar worktree record; hidden for synthetic/SSH-only rows and the active worktree, but the row stays navigable.
-  const showWorktreeActions =
-    !isSynthetic && storeRecord !== null && worktree.worktreeId !== activeWorktreeId
+  const showWorktreeActions = !isSynthetic && storeRecord !== null && !isActive
   const isMainWorktree = storeRecord?.isMainWorktree ?? false
   const rowLabel = storeRecord?.displayName?.trim() || worktree.worktreeName
 
@@ -176,7 +176,7 @@ export function WorktreeRow({
         {hasResources ? (
           <button
             type="button"
-            onClick={onToggle}
+            onClick={() => onToggle(worktree.worktreeId)}
             className="pl-2 py-2 pr-0.5 shrink-0"
             aria-label={
               isCollapsed
@@ -204,7 +204,7 @@ export function WorktreeRow({
         )}
         <button
           type="button"
-          onClick={onNavigate}
+          onClick={() => onNavigate(worktree.worktreeId)}
           aria-label={t(
             'auto.components.status.bar.ResourceUsageStatusSegment.d659d71d2d',
             'Resume workspace {{value0}}',
@@ -242,7 +242,7 @@ export function WorktreeRow({
                   <TooltipTrigger asChild>
                     <button
                       type="button"
-                      onClick={onDelete}
+                      onClick={() => onDelete(worktree.worktreeId)}
                       disabled={isMainWorktree}
                       aria-label={t(
                         'auto.components.status.bar.ResourceUsageStatusSegment.16bc3c998a',
@@ -306,4 +306,4 @@ export function WorktreeRow({
         worktree.browsers.map((browser) => <BrowserRow key={browser.id} browser={browser} />)}
     </div>
   )
-}
+})

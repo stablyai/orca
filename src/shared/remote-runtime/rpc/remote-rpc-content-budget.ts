@@ -25,8 +25,7 @@ export function remoteRpcContentBudget(requestId: string): number {
   return Math.max(0, REMOTE_RPC_MAX_CONTENT_BYTES - requestIdBytes)
 }
 
-/** Bytes a string adds inside its JSON quotes. */
-export function jsonStringContentBytes(value: string): number {
+function jsonStringContentBytes(value: string): number {
   let bytes = 0
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)

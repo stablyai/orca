@@ -18,12 +18,14 @@ import {
   readAgentProcessChat
 } from './agent-process-registry'
 import type { ProcIndex, ProcRow } from './process-index'
+import { recordPairedReplyParts } from './memory-snapshot-paired-reply'
 import {
   createEmptyWorktreeMemoryBucket,
   pushAppMemoryHistory,
   pushMemoryHistorySample,
   readAppMemoryHistory,
   readMemoryHistory,
+  chatInclusiveHistoryKey,
   createProjectGroupNameLookup,
   createRepoNameLookup,
   resolveWorktreeMemoryNames,
@@ -190,12 +192,16 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   }
 
   const terminals: RowTotals = { cpu: 0, memory: 0, privateMemory: 0 }
+  const restoredSessionIds = new Set<string>()
   for (const { pty, rows } of ptyTrees) {
     const session: SessionMemory = {
       sessionId: pty.sessionId ?? pty.ptyId,
       paneKey: pty.paneKey,
       pid: pty.pid ?? 0,
       ...usageOf(sumRows(rows), hasPrivateMemory)
+    }
+    if (pty.restored) {
+      restoredSessionIds.add(session.sessionId)
     }
     const bucket = pty.worktreeId ? bucketFor(pty.worktreeId) : orphan
     addUsage(bucket, session)
@@ -204,12 +210,18 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   }
 
   const agents: RowTotals = { cpu: 0, memory: 0, privateMemory: 0 }
+  // Terminal-only usage of workspaces that also have chats, as paired clients have always seen it.
+  const terminalUsage = new Map<string, RowTotals>()
   for (const { agentSessionId, rows } of agentTrees) {
     const usage = usageOf(sumRows(rows), hasPrivateMemory)
     addUsage(agents, usage)
     const chat = agentSessionId === null ? null : readAgentProcessChat(agentSessionId)
     if (agentSessionId !== null && chat) {
       const bucket = bucketFor(chat.worktreeId)
+      if (bucket.sessions.length > 0 && !terminalUsage.has(bucket.worktreeId)) {
+        const { cpu, memory, privateMemory } = bucket
+        terminalUsage.set(bucket.worktreeId, { cpu, memory, privateMemory })
+      }
       addUsage(bucket, usage)
       const { cpu, memory } = usage
       ;(bucket.chats ??= []).push({
@@ -231,18 +243,24 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   const now = Date.now()
   pushAppMemoryHistory(appBuckets.memory, now)
   for (const bucket of bucketList) {
-    pushMemoryHistorySample(bucket.worktreeId, bucket.memory, now)
+    if (bucket.sessions.length > 0) {
+      const terminal = terminalUsage.get(bucket.worktreeId) ?? bucket
+      pushMemoryHistorySample(bucket.worktreeId, terminal.memory, now)
+    }
+    if (bucket.chats) {
+      pushMemoryHistorySample(chatInclusiveHistoryKey(bucket.worktreeId), bucket.memory, now)
+    }
   }
   sweepStaleMemoryHistory(now)
 
   const worktrees: WorktreeMemory[] = bucketList.map(({ privateMemory, ...b }) => ({
     ...b,
     ...optionalCommitField(hasPrivateMemory, privateMemory),
-    history: readMemoryHistory(b.worktreeId)
+    history: readMemoryHistory(b.chats ? chatInclusiveHistoryKey(b.worktreeId) : b.worktreeId)
   }))
   const agentProcesses = usageOf(agents, hasPrivateMemory)
 
-  return {
+  const snapshot: MemorySnapshot = {
     app: { ...appBuckets, history: readAppMemoryHistory() },
     worktrees,
     agentProcesses,
@@ -256,4 +274,25 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
     totalMemory: appBuckets.memory + agentProcesses.memory + terminals.memory,
     collectedAt: now
   }
+  recordPairedReplyParts(snapshot, {
+    terminalRows: new Map(
+      [...terminalUsage].map(([worktreeId, usage]) => [
+        worktreeId,
+        {
+          ...usageOf(usage, hasPrivateMemory),
+          history: readMemoryHistory(worktreeId)
+        }
+      ])
+    ),
+    restoredSessionIds,
+    totals: {
+      ...snapshotCommitFields(
+        hasPrivateMemory,
+        clampMemoryMetric(appBuckets.privateMemory) + terminals.privateMemory
+      ),
+      totalCpu: appBuckets.cpu + terminals.cpu,
+      totalMemory: appBuckets.memory + terminals.memory
+    }
+  })
+  return snapshot
 }
