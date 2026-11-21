@@ -194,6 +194,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
             const exposeToLegacy = lifecycle.legacyDetectContextKey === contextKey
             if (exposeToLegacy) {
               lifecycle.legacyDetectContextKey = null
+              lifecycle.detectedContextKey = contextKey
             }
             set((state) => ({
               ...(exposeToLegacy ? { detectedAgentIds: [], isDetectingAgents: false } : {}),

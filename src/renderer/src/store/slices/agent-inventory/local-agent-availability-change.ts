@@ -79,6 +79,13 @@ export function applyLocalAgentAvailabilityChange(
   const usable = (contextKey: string): TuiAgent[] | null =>
     readUsableInventory(cached, lifecycle, contextKey)
   const reconcile = (contextKey: string): TuiAgent[] | null => {
+    // A failed or refused probe stays dropped until it is probed again.
+    if (
+      lifecycle.failedDetectContextKeys.has(contextKey) ||
+      lifecycle.refusedContextKeys.has(contextKey)
+    ) {
+      return null
+    }
     const complete = usable(completeLocalAgentInventoryKey(contextKey))
     const fromComplete = complete && filterEnabledTuiAgents(complete, disabled)
     if (cached[contextKey] == null) {
@@ -92,7 +99,7 @@ export function applyLocalAgentAvailabilityChange(
     if (!fromComplete) {
       return haveSameIds(kept, current) ? current : kept
     }
-    // Keep the complete inventory's order, as a probe would return it.
+    // Order by the complete inventory, so a re-enabled agent returns to its place.
     const ids = [
       ...fromComplete.filter((id) => kept.includes(id) || reEnabled.has(id)),
       ...kept.filter((id) => !fromComplete.includes(id))

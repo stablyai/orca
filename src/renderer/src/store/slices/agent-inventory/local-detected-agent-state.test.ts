@@ -79,6 +79,19 @@ describe('local detected agent context lifecycle', () => {
     expect(refreshAgents).not.toHaveBeenCalled()
   })
 
+  it('re-probes a failed inventory after an agent is toggled', async () => {
+    const store = createTestStore([])
+    detectAgents.mockRejectedValueOnce(new Error('probe failed'))
+    await store.getState().ensureDetectedAgents()
+    expect(store.getState().detectedAgentIds).toEqual([])
+    const settings = store.getState().settings!
+
+    store.setState({ settings: { ...settings, disabledTuiAgents: ['kiro'] } })
+    expect(store.getState().detectedAgentIds).toBeNull()
+    detectAgents.mockResolvedValueOnce(['claude'])
+    await expect(store.getState().ensureDetectedAgents()).resolves.toEqual(['claude'])
+  })
+
   it('re-detects re-enabled agents and prevents pre-change requests from restoring caches', async () => {
     const store = createTestStore([])
     let finishOld: (ids: string[]) => void = () => {}
