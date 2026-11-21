@@ -190,7 +190,7 @@ export function NativeChatAgentMessageCard({
 }
 
 /** An earlier message about the same Dispatch, under the newer row it merged into: its time (and
- *  its lead when it differs, as "Started"), then its words. */
+ *  its lead when it differs, as "Started", with the items its start was for), then its words. */
 function MergedAgentMessage({
   message,
   newerLead
@@ -204,8 +204,16 @@ function MergedAgentMessage({
   const text = agentMessageTranscriptText(message.blocks, from, message.shortened)
   return (
     <>
-      <p className="flex items-center gap-1 text-xs text-chat-foreground-faint">
+      <p className="flex min-w-0 items-center gap-1 text-xs text-chat-foreground-faint">
         {words && words !== newerLead ? <span>{words}</span> : null}
+        {message.agentStartItems?.length ? (
+          <>
+            <span>{t('components.native-chat.agentMessage.row.forItems', 'for')}</span>
+            {message.agentStartItems.map((item) => (
+              <ItemChip key={item.uid} item={item} />
+            ))}
+          </>
+        ) : null}
         <NativeChatMessageTimestamp timestamp={message.timestamp} />
       </p>
       {text.trim() ? (

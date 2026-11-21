@@ -147,6 +147,13 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
                     {earlierWords && earlierWords !== words ? (
                       <Text style={styles.mergedWords}>{earlierWords}</Text>
                     ) : null}
+                    {earlier.agentStartItems?.length ? (
+                      <Text style={styles.mergedWords}>
+                        {`${t('chat.agentMessage.row.forItems', 'for')} ${earlier.agentStartItems
+                          .map((item) => item.title)
+                          .join(', ')}`}
+                      </Text>
+                    ) : null}
                     <MobileNativeChatMessageTime
                       timestamp={earlier.timestamp}
                       fontScale={fontScale}
