@@ -155,8 +155,9 @@ function scheduleRemovalCheck(guest: Electron.WebContents): void {
  */
 export function trackBrowserPopupUserAgentDemand(contents: Electron.WebContents): void {
   const { id, session } = contents
-  // Popups run no guest preload to report a removed iframe; while one has a site iframe, its
-  // tracked frames (only those) are rechecked now and then.
+  // Electron 43 reports frame creation but not removal, and route popups run no guest preload to
+  // report an iframe's unload. So only while a popup has a site iframe, its tracked frames (only
+  // those, not the frame tree) are rechecked every 2 s; the timer stops once demand is gone.
   let recheck: NodeJS.Timeout | null = null
   const watchPopupSiteFrames = (): void => {
     if (recheck || getBrowserGuestFrameUserAgentDemand(id).size === 0) {
