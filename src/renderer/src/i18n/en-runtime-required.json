@@ -2813,6 +2813,12 @@
     "unhide": "Show All",
     "zoom": "Zoom"
   },
+  "orcaFork": {
+    "bots": {
+      "unreadChats_one": "{{count}} unread chat",
+      "unreadChats_other": "{{count}} unread chats"
+    }
+  },
   "pet": {
     "defaultLabels": {
       "bundle": "Pet bundle",
