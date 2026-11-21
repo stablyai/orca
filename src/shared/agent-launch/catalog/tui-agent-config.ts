@@ -81,6 +81,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Cobra’s -- stops subcommands and flags from consuming prompt text such as help/config/-….
     argvPromptSeparator: '--'
   },
+  san: { detectCmd: 'san', promptInjectionMode: 'argv', argvPromptSeparator: '--' },
   opencode: {
     detectCmd: 'opencode',
     promptInjectionMode: 'flag-prompt',
@@ -355,8 +356,7 @@ export function getTuiAgentLaunchCommand(
   platform: NodeJS.Platform,
   opts?: { isRemote?: boolean }
 ): string {
-  if (platform === 'linux' && skipsLinuxOrcaCliRename(opts?.isRemote)) {
-    return config.launchCmd
-  }
-  return config.launchCmdByPlatform?.[platform] ?? config.launchCmd
+  return platform === 'linux' && skipsLinuxOrcaCliRename(opts?.isRemote)
+    ? config.launchCmd
+    : (config.launchCmdByPlatform?.[platform] ?? config.launchCmd)
 }

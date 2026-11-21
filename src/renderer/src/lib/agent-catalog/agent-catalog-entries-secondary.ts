@@ -153,6 +153,12 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
       label: translate('auto.lib.agent.catalog.jcode_label', 'Jcode'),
       cmd: 'jcode',
       homepageUrl: 'https://github.com/1jehuang/jcode'
+    },
+    {
+      id: 'san',
+      label: translate('auto.lib.agent.catalog.san_label', 'San'),
+      cmd: 'san',
+      homepageUrl: 'https://genai-io.github.io/san/getting-started.html'
     }
   ]
 }

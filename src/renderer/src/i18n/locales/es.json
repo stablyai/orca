@@ -1014,6 +1014,7 @@
           "zcode_label": "ZCode",
           "codebuddy_label": "CodeBuddy",
           "jcode_label": "Jcode",
+          "san_label": "San",
           "freebuff_label": "Freebuff",
           "dsh_label": "DeepSeek Harness",
           "qoder_label": "Qoder CLI",
