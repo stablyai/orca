@@ -740,6 +740,19 @@ describe('no positional "answered together" across a restart', () => {
     await p.publish()
     expect(p.outcomes().d1).toEqual({ outcome: 'unattributed', head: 'd1' })
   })
+
+  it('leaves a send still queued for handover owed when an unrelated turn ends', async () => {
+    vi.setSystemTime(NOW - 60_000)
+    const p = start({ continuationsSettled: Promise.resolve() })
+    admit(p.db, 'm1', asked('d1'))
+    admit(p.db, 'other', unrelated)
+    p.show(
+      [p.message('m1'), ...p.turn('item:t1', 'other', 'completed', 'Unrelated answer.')],
+      [submissionOf('m1', { dispatchState: 'pending', submittedAt: NOW, handoverRecorded: true })]
+    )
+    await p.recovery.boot()
+    expect(p.outcomes()).toEqual({ d1: { outcome: null } })
+  })
 })
 
 function stampOf(deliveryId: string): AgentJournalConnectorDelivery {
