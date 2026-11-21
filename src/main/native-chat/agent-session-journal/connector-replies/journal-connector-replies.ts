@@ -245,8 +245,12 @@ export function withdrawJournalConnectorReplies(
   const withdraw = db.prepare(`UPDATE journal_connector_replies
     SET outcome='withdrawn',answer_delivery_id=delivery_id,failure_json=NULL,filled_at=?
     WHERE session_id=? AND epoch=? AND message_id=? AND outcome IS NULL`)
+  // A withdrawn queued continuation never runs: the rows it claimed are their cut's again.
+  const release = db.prepare(`UPDATE journal_connector_replies SET claim_message_id=NULL
+    WHERE session_id=? AND epoch=? AND claim_message_id=? AND outcome IS NULL`)
   for (const messageId of messageIds) {
     withdraw.run(now, target.sessionId, target.epoch, messageId)
+    release.run(target.sessionId, target.epoch, messageId)
   }
 }
 

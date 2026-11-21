@@ -34,8 +34,11 @@ import {
 } from './use-bot-item-question-steps'
 
 /** The asking comment's question, ruled off across the card's full width, its words still on the body's
- *  edge: bleeds past the body's `pl-7` and the card's `px-2`, then pads back. */
-const QUESTION_RULE = '-ml-9 -mr-2 mt-2.5 border-t border-border pl-9 pr-2 pt-2.5'
+ *  edge: bleeds past the body's `pl-7` and the card's `px-2`, then pads back. It stops a pixel short of
+ *  each side, at the card's hairline, so the two translucent strokes never overlap into a brighter dot;
+ *  the spacing part scales with the card's padding at any root font size. */
+const QUESTION_RULE =
+  '-ml-[calc(var(--spacing)*9-1px)] -mr-[calc(var(--spacing)*2-1px)] mt-2.5 border-t border-border pl-[calc(var(--spacing)*9-1px)] pr-[calc(var(--spacing)*2-1px)] pt-2.5'
 
 function NeedsYouTag(): React.JSX.Element {
   const t = useTranslate()
@@ -124,7 +127,9 @@ export function BotItemCommentCard({
           time: fullTime ?? ''
         })}
         className={cn(
-          'rounded-[10px] bg-foreground/[0.035] px-2 pt-1.5 outline-none focus:ring-2 focus:ring-ring/50 dark:bg-foreground/[0.045]',
+          // A hairline (an inset ring, so its size and padding hold) and, in dark, the muted surface: a
+          // tint alone lost the card's edge on the page.
+          'rounded-[10px] bg-foreground/[0.035] px-2 pt-1.5 inset-ring inset-ring-border outline-none focus:ring-2 focus:ring-ring/50 dark:bg-muted',
           // A question's chips end the card: more room under them.
           shape.decisions.length > 0 ? 'pb-4' : 'pb-2'
         )}

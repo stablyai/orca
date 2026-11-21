@@ -18,6 +18,8 @@ export type BotItemPendingComment = {
   requestId: string | null
   /** The question a quick reply answers: the host refuses it once the agent has asked another. */
   questionId: string | null
+  /** Answers no question the agent waits on: the comment box named none. */
+  plain: boolean
   failed: boolean
   /** Failed after it went out, with no request id to dedupe a Retry by: it may be on the host, so it
    *  offers only Discard until the read shows it. */
@@ -93,14 +95,22 @@ export type BotItemPendingCommentDelivery = {
   requestIds: boolean
   /** The host binds a quick reply to its question. */
   questionIds: boolean
+  /** The host takes a comment that answers no question while the agent waits on one. */
+  plain: boolean
 }
 
 export type BotItemPendingComments = {
   /** Sent comments the item's read doesn't show yet, oldest first. */
   shown: readonly BotItemPendingComment[]
   /** `after`: the id of the item's newest event as the view shows it; `questionId`: the ask a quick
-   *  reply answers. */
-  send: (text: string, paths: readonly string[], after: string | null, questionId?: string) => void
+   *  reply answers; `plain`: it answers no question. */
+  send: (
+    text: string,
+    paths: readonly string[],
+    after: string | null,
+    questionId?: string,
+    plain?: boolean
+  ) => void
   retry: (id: string) => void
   discard: (id: string) => void
 }
@@ -226,7 +236,7 @@ export function createBotItemPendingCommentsHook({
 
     return {
       shown: done.size > 0 ? entries.filter((entry) => !done.has(entry.event.id)) : entries,
-      send: (text, paths, after, questionId) => {
+      send: (text, paths, after, questionId, plain = false) => {
         const entry: BotItemPendingComment = {
           event: {
             id: nextPendingId(),
@@ -247,6 +257,7 @@ export function createBotItemPendingCommentsHook({
           eventId: null,
           requestId: delivery.requestIds ? createNonSecureContextUuid() : null,
           questionId: questionId && delivery.questionIds ? questionId : null,
+          plain: plain && delivery.plain,
           failed: false
         }
         write(key, (prev) => [...prev, entry])
