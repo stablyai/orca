@@ -20,6 +20,7 @@ import { getLiveDiffSectionRenderLimit } from './diff-section-live-render-limit'
 import { useDiffSectionFallbackCleanup } from './useDiffSectionFallbackCleanup'
 import { submitDiffSectionComment } from './diff-section-comment-submit'
 import type { DiffSectionItemProps } from './diff-section-item-props'
+import { installDiffImportPathNavigation } from '../../monaco/monaco-import-path-navigation'
 import { useDiffSectionModelLifecycle } from './use-diff-section-model-lifecycle'
 import { hasLayoutBox } from '@/lib/list-interaction/virtualized-hidden-row-measurement'
 import { DiffSectionSaveConflictBar } from './DiffSectionSaveConflictBar'
@@ -219,6 +220,7 @@ export function DiffSectionItem({
     }
 
     setModifiedEditor(modified)
+    installDiffImportPathNavigation(editor, { filePath: section.path, worktreeId })
     // Monaco disposes inner editors on unmount; clear state so decorators and drafts cannot retain a disposed instance.
     modified.onDidDispose(() => {
       contentSizeSub.dispose()
