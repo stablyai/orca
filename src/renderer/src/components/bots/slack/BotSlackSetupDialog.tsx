@@ -14,9 +14,9 @@ import { signedOutHere } from '../bot-host-copy'
 import { BOT_SLACK_DESKTOP_ERRORS } from '../../../../../shared/connector-bot-slack-contract'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { botSlackErrorMessage } from './bot-slack-copy'
-import { ConnectorTryIt } from '../ConnectorTryIt'
 import { readBotSlack, slackTeamState } from '@/lib/bot-slack-state'
 import { BotSlackPostAs } from './BotSlackPostAs'
+import { SlackTryItPreview } from './SlackTryItPreview'
 import {
   ConnectorSetupHeader,
   ConnectorWorkspacePicker,
@@ -324,9 +324,11 @@ function BotSlackSetupFlow({
         // Post as stays: this install's link applies the pick at once, later it needs Slack's approval.
         return (
           <div className="space-y-4">
-            <ConnectorTryIt
-              heading={t('bots.slack.setup.tryIt', 'Try it in any channel or direct message')}
-              ways={[{ key: 'mention', shown: `@${bot.name}` }]}
+            <SlackTryItPreview
+              bot={bot}
+              asker={
+                installedState?.state === 'installed' ? installedState.installerName : undefined
+              }
             />
             {installedState?.state === 'installed' ? (
               <BotSlackPostAs bot={bot} slack={installedState} setupState={step.setupState} />

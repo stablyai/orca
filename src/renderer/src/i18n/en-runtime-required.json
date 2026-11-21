@@ -1710,6 +1710,11 @@
     "slack": {
       "postAs": {
         "line": "When you reply to a Slack thread from Orca, it posts as <picker>{{name}}</picker>"
+      },
+      "setup": {
+        "preview": {
+          "ask": "<mention/> summarize this thread"
+        }
       }
     },
     "upNext": {
