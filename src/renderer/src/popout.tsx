@@ -20,6 +20,7 @@ import { setReactCommitCascadeRendererSurface } from './diagnostics/react-commit
 import { installOsFileDropCancellationGuard } from './lib/files/drop/os-file-drop-cancellation-guard'
 import { installBodyOverlayAttributes } from './lib/overlay-interaction/body-overlay-attributes'
 import { useReduceVisualEffects } from './hooks/theme/use-reduce-visual-effects'
+import { disableTaskPageLinkActions } from './lib/work-items/github/github-link-task-target'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
@@ -29,6 +30,8 @@ import.meta.hot?.dispose(disposeBodyOverlayAttributes)
 recordRendererCrashBreadcrumb('popout_bootstrap_started', { dev: import.meta.env.DEV })
 installRendererCrashDiagnostics('dashboard-popout')
 setReactCommitCascadeRendererSurface('dashboard-popout')
+// The pop-out has no Tasks page, so its link menus never offer to open a PR or issue there.
+disableTaskPageLinkActions()
 
 function applyPopoutFonts(settings: GlobalSettings | null): void {
   document.documentElement.style.setProperty(
