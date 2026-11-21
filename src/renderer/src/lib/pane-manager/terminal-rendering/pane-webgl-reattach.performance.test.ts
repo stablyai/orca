@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPaneInternal } from '../pane-manager-types'
+import type * as ReattachModule from './pane-webgl-reattach'
 
 // Guards #43465: an atlas rebuild recreates at most one WebGL context per frame, so many panes can't stall one task.
 const attaches = { count: 0 }
@@ -49,13 +50,15 @@ function fakePane(): { pane: ManagedPaneInternal; raw: RawPane } {
   return { pane, raw }
 }
 
+let reattachModule: typeof ReattachModule
+
 describe('atlas-rebuild reattachment', () => {
   beforeEach(async () => {
     vi.useFakeTimers()
     vi.stubGlobal('requestAnimationFrame', (callback: () => void) => setTimeout(callback, 16))
     attaches.count = 0
     vi.resetModules()
-    await import('./pane-webgl-reattach')
+    reattachModule = await import('./pane-webgl-reattach')
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -91,9 +94,12 @@ describe('atlas-rebuild reattachment', () => {
     expect(framed.raw.webglAddon).toBeNull()
     await vi.advanceTimersByTimeAsync(16 * 5)
     expect(framed.raw.webglAddon).toBeNull()
+    // Grid fits stay off while it waits on the DOM renderer.
+    expect(reattachModule.isPaneAwaitingAtlasRebuildReattach(framed.pane)).toBe(true)
     framedModes.synchronizedOutputMode = false
     await vi.advanceTimersByTimeAsync(16)
     expect(framed.raw.webglAddon).toBeTruthy()
+    expect(reattachModule.isPaneAwaitingAtlasRebuildReattach(framed.pane)).toBe(false)
   })
 
   it('skips a pane that closed or got its renderer back before its frame', async () => {
