@@ -67,11 +67,17 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-/** Reads the host's sign-in again; an older Orca without `orcaAccount.status` reads as unknown. */
-export function refreshBotHostOrcaAccount(hostId: ExecutionHostId): Promise<void> {
+/**
+ * Reads the host's sign-in again; an older Orca without `orcaAccount.status` reads as unknown.
+ * `fresh`: a read still out may predate what the caller waits on, so it reads again once that lands.
+ */
+export function refreshBotHostOrcaAccount(
+  hostId: ExecutionHostId,
+  { fresh = false }: { fresh?: boolean } = {}
+): Promise<void> {
   const entry = entryOf(hostId)
   if (entry.reading) {
-    return entry.reading
+    return fresh ? entry.reading.then(() => refreshBotHostOrcaAccount(hostId)) : entry.reading
   }
   // A read sent before the host came back answers for a host that may have changed: dropped.
   const generation = botHostGeneration(hostId)
@@ -162,7 +168,7 @@ export async function readBotHostOnOwnAccount(hostId: ExecutionHostId): Promise<
   if (hostId === LOCAL_EXECUTION_HOST_ID) {
     return true
   }
-  await refreshBotHostOrcaAccount(hostId)
+  await refreshBotHostOrcaAccount(hostId, { fresh: true })
   return runsAsOwnAccount(
     hostId,
     hosts.get(hostId)?.status ?? null,
@@ -225,7 +231,10 @@ async function follow(
     if (flow.phase === 'signedIn') {
       entry.flowId = null
       setSignIn(hostId, IDLE)
-      await Promise.all([refreshBotHostOrcaAccount(hostId), refreshBotHost(hostId)])
+      await Promise.all([
+        refreshBotHostOrcaAccount(hostId, { fresh: true }),
+        refreshBotHost(hostId)
+      ])
       return
     }
     if (flow.phase === 'failed' || flow.phase === 'cancelled') {
