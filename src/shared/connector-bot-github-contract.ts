@@ -20,13 +20,34 @@ const GitHubUser = z.object({
   login: GitHubLogin
 })
 
-// GET `${github}/state`: the GitHub user this Orca account is linked as, and the Orca app's
-// installations that user can see. A bot turned on for GitHub answers in each installation.
+/** One GitHub user the Orca account is linked as; each counts as the owner. */
+const GitHubLinkedAccount = GitHubUser.extend({
+  /** The ids of the installations this user can see. */
+  installations: z.array(GitHubId),
+  /** Who takes this user's requests when a comment names none; null when unset. */
+  defaultBotId: z.string().nullable()
+})
+export type ConnectorGitHubLinkedAccount = z.infer<typeof GitHubLinkedAccount>
+
+// GET `${github}/state`: the GitHub users this Orca account is linked as, and the Orca app's
+// installations they can see.
 export const ConnectorGitHubState = z.object({
   /** GitHub's install page for the Orca app, signed for this account. */
   installUrl: z.string().url(),
-  /** Null until the owner connects GitHub from Orca. */
+  /** The first linked user; null until the owner connects GitHub from Orca. */
   account: GitHubUser.nullable(),
+  /** Every linked user, oldest first; missing from an older cloud, which links one (`account`).
+   *  Read entry by entry: an entry this build can't read is left out, never the whole list, since a
+   *  present list is what scopes Unlink to one user. */
+  accounts: z
+    .unknown()
+    .transform((value): ConnectorGitHubLinkedAccount[] =>
+      (Array.isArray(value) ? value : []).flatMap((entry) => {
+        const parsed = GitHubLinkedAccount.safeParse(entry)
+        return parsed.success ? [parsed.data] : []
+      })
+    )
+    .optional(),
   installations: z.array(
     z.object({
       installationId: GitHubId,
@@ -36,7 +57,7 @@ export const ConnectorGitHubState = z.object({
       repositories: z.array(z.object({ fullName: z.string().min(1) })).nullable()
     })
   ),
-  /** The bot that takes the owner's requests when a comment names none; null when unset. */
+  /** The first linked user's default (see `accounts`). */
   defaultBotId: z.string().nullable()
 })
 export type ConnectorGitHubState = z.infer<typeof ConnectorGitHubState>
@@ -52,6 +73,33 @@ export type ConnectorGitHubUsersResponse = z.infer<typeof ConnectorGitHubUsersRe
 
 /** The desktop's own code for a cloud with GitHub off (every GitHub route answers 404). */
 export const BOT_GITHUB_OFF = 'github_off'
+
+/** Every linked GitHub user, as rows; an older cloud's one `account` (or the first, when no entry
+ *  of `accounts` could be read) is the only one. */
+export function gitHubLinkedAccounts(state: ConnectorGitHubState): ConnectorGitHubLinkedAccount[] {
+  if (state.accounts && state.accounts.length > 0) {
+    return state.accounts
+  }
+  return state.account
+    ? [
+        {
+          ...state.account,
+          installations: state.installations.map((entry) => entry.installationId),
+          defaultBotId: state.defaultBotId
+        }
+      ]
+    : []
+}
+
+/** The linked user an installation's row names: the first linked one that sees it. */
+export function gitHubLoginFor(state: ConnectorGitHubState, installationId: string): string | null {
+  const accounts = gitHubLinkedAccounts(state)
+  return (
+    accounts.find((entry) => entry.installations.includes(installationId))?.login ??
+    state.account?.login ??
+    null
+  )
+}
 
 /** Linked, with an installation: a bot turned on for GitHub answers there. */
 export function gitHubOn(state: ConnectorGitHubState): boolean {

@@ -100,7 +100,7 @@ function placeFlag(flag: BotShareFlag, candidate: FlagSource): BotShareFlagSpot 
       part: `skill:${skill[1]}`,
       where: `${skill[1]} › ${skill[2]}`,
       file: skill[2],
-      homePath: `${own.homePath}/${skill[2]}`
+      homePath: own.homePath === null ? null : `${own.homePath}/${skill[2]}`
     }
   }
   return { flag, part: null, where: flag.where, file: flag.where, homePath: null }

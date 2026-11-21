@@ -1,8 +1,9 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { makeTestBot } from '../bot.test-fixture'
 import { useBotToolCredentialsRoot } from '../bot-tool-credentials'
 import { BotShareCandidates } from './bot-package-export'
@@ -209,7 +210,8 @@ function appSession(
   home: string,
   name: string,
   account = { signedIn: true },
-  picks?: BotSharePicksStore
+  picks?: BotSharePicksStore,
+  repos?: Repo[]
 ) {
   return new BotShareService({
     client: new BotShareClient({
@@ -220,7 +222,7 @@ function appSession(
           : { status: 'reconnect-required' }
     }),
     candidates: new BotShareCandidates(join(root, name)),
-    readShareable: (entry) => readBotShareable({ bot: entry, home, automations: [] }),
+    readShareable: (entry) => readBotShareable({ bot: entry, home, automations: [], repos }),
     picks
   })
 }
@@ -396,6 +398,63 @@ describe('sharing a bot by link', () => {
     })
     expect(published.value.version.packageDigest).toBe(again.candidate.botDigest)
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'restores an outside skill on Update link only when it was ticked from that folder',
+    async () => {
+      const cloud = fakeCloud()
+      const home = join(root, 'home')
+      const project = join(root, 'team-skills')
+      await writeHome(home, '# Release notes\n')
+      const skill = async (folder: string, name: string) => {
+        await mkdir(folder, { recursive: true })
+        await writeFile(join(folder, 'SKILL.md'), `---\nname: ${name}\ndescription: ${name}\n---\n`)
+      }
+      await skill(join(project, '.agents/skills/deploy'), 'deploy')
+      await skill(join(root, 'devex/electron'), 'electron')
+      await symlink(join(root, 'devex/electron'), join(project, '.agents/skills/electron'))
+      const linked = { ...bot, skillProjects: ['team-skills'] }
+      const repos: Repo[] = [
+        {
+          id: 'team-skills',
+          path: project,
+          displayName: 'team-skills',
+          badgeColor: '#000',
+          addedAt: 0
+        }
+      ]
+      const picks = new BotSharePicksStore(join(root, 'bot-share-picks.json'))
+      const session = (name: string) =>
+        appSession(cloud, home, name, { signedIn: true }, picks, repos)
+      const names = (summary: { bot: { skills: { name: string }[] } }) =>
+        summary.bot.skills.map((entry) => entry.name)
+
+      // Opened with defaults, then the owner ticks the outside skill and publishes.
+      const service = session('run-1')
+      const opened = (await service.prepare(linked, {})).candidate
+      expect(names(opened)).toEqual(['deploy'])
+      const key = opened.available.skills.find((entry) => entry.name === 'electron')?.optInKey ?? ''
+      const selection = {
+        skills: ['deploy', 'electron'],
+        outsideSkills: [{ name: 'electron', key }]
+      }
+      const { candidate } = await service.prepare(linked, selection)
+      expect(names(candidate)).toEqual(['deploy', 'electron'])
+      expect((await service.publish(linked, candidate.candidateId, '')).status).toBe('ok')
+
+      const again = await session('run-2').prepare(linked, {}, { last: true })
+      expect(again.last).toEqual({ selection, setupNote: '' })
+      expect(names(again.candidate)).toEqual(['deploy', 'electron'])
+
+      // Linked in from another folder since: the owner ticks it again.
+      await rm(join(project, '.agents/skills/electron'))
+      await skill(join(root, 'other/electron'), 'electron')
+      await symlink(join(root, 'other/electron'), join(project, '.agents/skills/electron'))
+      const moved = await session('run-3').prepare(linked, {}, { last: true })
+      expect(moved.last?.selection).toEqual({ skills: ['deploy', 'electron'], outsideSkills: [] })
+      expect(names(moved.candidate)).toEqual(['deploy'])
+    }
+  )
 
   it("reads the pinned version only for the asked bot's link, on any computer", async () => {
     const cloud = fakeCloud()
