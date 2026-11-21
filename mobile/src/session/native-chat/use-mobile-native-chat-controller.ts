@@ -50,7 +50,6 @@ export function useMobileNativeChatController(args: {
     deviceTokenRef,
     nativeChatInputLeaseReady,
     connState,
-    agentSessionHostSupport = null,
     onSendError,
     onSendResolved
   } = args
@@ -81,7 +80,7 @@ export function useMobileNativeChatController(args: {
     resolution: activeChatResolution,
     sourceIdentity,
     enabled: showNativeChat,
-    hostSupport: agentSessionHostSupport,
+    hostSupport: args.agentSessionHostSupport ?? null,
     appendComposerTextRef,
     onActionResolved: onSendResolved
   })
@@ -167,21 +166,20 @@ export function useMobileNativeChatController(args: {
     stop: handleNativeChatStop
   })
   const activeTurn = activeChatStructured ? structuredNativeChat : terminalTurn
-  const workingEpoch = terminalTurn.workingEpoch
   const placedChatPending = useMemo(
     () =>
       chatPending.map((entry) => ({
         ...entry,
-        pendingSend: nativeChatPendingSendPlacement(entry, workingEpoch)
+        pendingSend: nativeChatPendingSendPlacement(entry, terminalTurn.workingEpoch)
       })),
-    [chatPending, workingEpoch]
+    [chatPending, terminalTurn.workingEpoch]
   )
   const captureTerminalSendOrigin = useCallback(
     (text: string, sentAt?: number) => {
       const origin = captureSendOrigin(text, sentAt)
-      return origin ? { ...origin, queuedDuringWorkingEpoch: workingEpoch } : null
+      return origin ? { ...origin, queuedDuringWorkingEpoch: terminalTurn.workingEpoch } : null
     },
-    [captureSendOrigin, workingEpoch]
+    [captureSendOrigin, terminalTurn.workingEpoch]
   )
 
   const workspaceCatalog = useMobileNativeChatWorkspaceCatalog(args, activeChatAgent)
@@ -219,7 +217,7 @@ export function useMobileNativeChatController(args: {
     onSendError
   })
 
-  const { nativeChatSessionOptions, recordCommand: recordNativeChatSessionOptionCommand } =
+  const { nativeChatSessionOptions, recordCommand, nativeChatContextUsage } =
     useMobileNativeChatSessionOptionController({
       client,
       activeChatStructured,
@@ -230,8 +228,10 @@ export function useMobileNativeChatController(args: {
       isTabChatView,
       isWorking: activeTurn.isWorking,
       reportedModel: activeSessionTab?.agentStatus?.model ?? null,
+      messages: nativeChatSession.messages,
       modelSwitchCommand: activeSessionTab?.agentStatus?.modelSwitchCommand,
       structured: {
+        contextUsage: structuredNativeChat.contextUsage,
         optionPickerRequest: structuredNativeChat.optionPickerRequest,
         optionSurface: structuredNativeChat.optionSurface,
         conversationCommands: structuredNativeChat.conversationCommands,
@@ -247,9 +247,9 @@ export function useMobileNativeChatController(args: {
       worktreeId
     })
   useLayoutEffect(() => {
-    recordSessionOptionCommandRef.current = recordNativeChatSessionOptionCommand
+    recordSessionOptionCommandRef.current = recordCommand
     appendComposerTextRef.current = appendComposerText
-  }, [appendComposerText, recordNativeChatSessionOptionCommand])
+  }, [appendComposerText, recordCommand])
 
   return {
     reportQueuedEditError: onSendError,
@@ -273,7 +273,7 @@ export function useMobileNativeChatController(args: {
     nativeChatStructured: activeChatStructured,
     nativeChatVisualSource: activeChatStructured ? structuredNativeChat.visualSource : null,
     nativeChatItemSource:
-      activeChatStructured && agentSessionHostSupport?.itemDetail === true
+      activeChatStructured && args.agentSessionHostSupport?.itemDetail === true
         ? structuredNativeChat.visualSource
         : null,
     nativeChatShowsCiResultLines: showsCiResultLines,
@@ -295,7 +295,7 @@ export function useMobileNativeChatController(args: {
     handleNativeChatStop: activeChatStructured ? structuredNativeChat.cancel : terminalTurn.stop,
     nativeChatQueued: structuredNativeChat.queued,
     nativeChatBackgroundTasks: activeChatStructured ? structuredNativeChat.backgroundTasks : null,
-    nativeChatContextUsage: activeChatStructured ? structuredNativeChat.contextUsage : null,
+    nativeChatContextUsage,
     nativeChatInterruptedContinue: activeChatStructured
       ? structuredNativeChat.interruptedContinue
       : null,

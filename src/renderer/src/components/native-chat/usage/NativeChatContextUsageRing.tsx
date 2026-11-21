@@ -100,11 +100,14 @@ export function NativeChatContextUsageRing({
 }): React.JSX.Element {
   const t = useTranslate()
   const { filled, critical, used, window } = contextUsageRingReadout(usage)
-  const label = t(
-    'components.native-chat.contextUsage.label',
-    'Context {{used}} of {{window}} tokens, {{percent}}% used',
-    { used, window, percent: String(usage.percentage) }
-  )
+  const label = window
+    ? t(
+        'components.native-chat.contextUsage.label',
+        'Context {{used}} of {{window}} tokens, {{percent}}% used',
+        { used, window, percent: String(usage.percentage) }
+      )
+    : `${t('components.native-chat.contextUsage.title', 'Context')}: ${used}`
+  const tokenReadout = window ? `${used}/${window}` : used
   const { open, setOpen, setOpenAfterHover } = useContextCardOpen()
   const rows = keyContextUsageRows(usage.rows)
   const counted = rows.filter(({ row }) => !row.deferred)
@@ -131,10 +134,10 @@ export function NativeChatContextUsageRing({
             type="button"
             aria-label={label}
             aria-expanded={open}
-            data-native-chat-context-usage={usage.percentage}
+            data-native-chat-context-usage={usage.percentage ?? 'unknown'}
             data-native-chat-context-usage-estimated={usage.estimated ? 'true' : undefined}
             className={cn(
-              'flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:size-11',
+              'flex h-7 items-center justify-center gap-1 rounded-md px-1.5 text-muted-foreground outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:h-11 pointer-coarse:px-2',
               critical && 'text-destructive'
             )}
             // A read-only readout: clicking it must not pull focus out of the composer.
@@ -173,6 +176,7 @@ export function NativeChatContextUsageRing({
                 strokeDashoffset={RING_CIRCUMFERENCE * (1 - filled / 100)}
               />
             </svg>
+            <span className="text-3xs tabular-nums">{tokenReadout}</span>
           </button>
         </PopoverTrigger>
         <PopoverContent
@@ -190,11 +194,9 @@ export function NativeChatContextUsageRing({
               <span className="font-medium text-foreground">
                 {t('components.native-chat.contextUsage.title', 'Context')}
               </span>
-              <span className="tabular-nums text-muted-foreground">
-                {used}/{window}
-              </span>
+              <span className="tabular-nums text-muted-foreground">{tokenReadout}</span>
             </div>
-            <Progress value={filled} aria-label={label} className="mt-2 h-1.5" />
+            {window ? <Progress value={filled} aria-label={label} className="mt-2 h-1.5" /> : null}
             {counted.length > 0 ? <ContextUsageRowList rows={counted} className="mt-3" /> : null}
             {deferred.length > 0 ? (
               <div className="mt-3 border-t border-border pt-3">
