@@ -2,7 +2,10 @@ import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
 import { refuseClaimedWorkerTerminal } from '../../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
 import { probeWorkerOpenCodeModelLaunchSupport } from './launch/worker-opencode-model-preflight'
 import { resolveWorkerConfiguredAgentParams } from './launch/worker-configured-agent-preflight'
-import { waitForWorkerAgentReady } from '../../../../../terminal/wait/launched-agent-composer-readiness'
+import {
+  isUnprovenReadinessTimeout,
+  waitForWorkerAgentReady
+} from '../../../../../terminal/wait/launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import { agentStartupBlockedMessage } from '../../../../../terminal/wait/agent-startup-blocked-message'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
@@ -202,6 +205,7 @@ export async function startLocalWorker(args: {
     failedStage = 'agent_readiness'
     // A structured worker's setup gate and its preamble's wait share one deadline: the timeout.
     const readinessDeadline = Date.now() + (params.timeoutMs ?? 60_000)
+    const launchedAgent = external || workerChat ? null : (agent ?? null)
     // Structured readiness comes from preamble delivery, not TUI idle; only repo wait-for-setup policy gates here.
     const wait = structuredSession
       ? await awaitStructuredWorkerSetupGate({
@@ -218,6 +222,12 @@ export async function startLocalWorker(args: {
             reusesTerminal: Boolean(params.terminal),
             creation: placed.terminalCreation,
             timeoutMs: params.timeoutMs ?? 60_000
+          }).catch((error: unknown) => {
+            // A slow agent this start launched is not a failed one: the guarded brief goes in, and an unseen turn alerts once.
+            if (launchedAgent && !params.terminal && isUnprovenReadinessTimeout(error)) {
+              return null
+            }
+            throw error
           })
     if (wait) {
       persistWorkerSetupWaitOutcome({ ...setupStage, wait })
@@ -261,7 +271,7 @@ export async function startLocalWorker(args: {
       devMode: params.devMode,
       requestId: orchestrationMutation?.requestId ?? started.dispatch.id,
       agent: agent ?? null,
-      launchedAgent: external || workerChat ? null : (agent ?? null),
+      launchedAgent,
       setupReceipt,
       launchReceipt: placed.launch,
       mode,

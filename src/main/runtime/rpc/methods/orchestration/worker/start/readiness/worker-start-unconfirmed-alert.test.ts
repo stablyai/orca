@@ -41,17 +41,22 @@ describe('an unconfirmed worker start', () => {
       .getUnreadRunMailbox(h.activeRunId, 100, ['escalation'])
       .filter((message) => message.subject === SUBJECT)
 
-  async function start(): Promise<{ state: unknown; dispatchId: string }> {
+  const lostAlerts = () =>
+    h.db
+      .getUnreadRunMailbox(h.activeRunId, 100, ['escalation'])
+      .filter((message) => message.subject === 'Worker lost without reporting')
+
+  async function start(agent = 'codex'): Promise<{ state: unknown; dispatchId: string }> {
     const task = h.db.createTask({ spec: 'unconfirmed start', runId: h.activeRunId })
     const receipt: unknown = await h.call('orchestration.workerStart', {
       task: task.id,
       from: 'term_coord',
-      agent: 'codex'
+      agent
     })
-    const dispatchId = getActiveDispatchForTask(h.db, task.id)?.id
-    if (!receipt || typeof receipt !== 'object' || !('state' in receipt) || !dispatchId) {
-      throw new Error('worker-start returned no Dispatch')
+    if (!receipt || typeof receipt !== 'object' || !('state' in receipt)) {
+      throw new Error('worker-start returned no receipt')
     }
+    const dispatchId = 'dispatchId' in receipt ? String(receipt.dispatchId) : ''
     return { state: receipt.state, dispatchId }
   }
 
@@ -66,6 +71,75 @@ describe('an unconfirmed worker start', () => {
       typedPrompt(['input_accepted'])
     )
   }
+
+  function readinessRunsOut(): void {
+    vi.spyOn(h.runtime, 'waitForTerminal').mockRejectedValue(new Error('timeout'))
+    vi.spyOn(h.runtime, 'waitForFreshWorkerComposer').mockRejectedValue(new Error('timeout'))
+  }
+
+  const markWorking = (dispatchId: string): void => {
+    observeWorker(
+      h.db,
+      { kind: 'local', dispatch: h.db.getDispatchContextById(dispatchId)! },
+      { presence: 'working' },
+      { getDb: () => h.db, isWaitingForMail: () => false, notify: () => {} }
+    )
+  }
+
+  it('still hands a slow agent its brief when readiness runs out, and settles when it starts', async () => {
+    h.setup()
+    readinessRunsOut()
+    typedButNeverStarted()
+    const { state, dispatchId } = await start('claude')
+    await vi.waitFor(() => expect(alerts()).toHaveLength(1))
+
+    expect(state).toBe('outcome_unknown')
+    expect(h.runtime.sendTerminalAgentPrompt).toHaveBeenCalledTimes(1)
+    markWorking(dispatchId)
+    expect(h.db.getWorkerDispatch(dispatchId)?.state).toBe('ready')
+    expect(h.db.getDispatchContextById(dispatchId)?.status).toBe('dispatched')
+    await h.runtime.reportUnconfirmedWorkerStart(dispatchId)
+    expect(alerts()).toHaveLength(1)
+    expect(lostAlerts()).toHaveLength(0)
+  })
+
+  it('alerts exactly once when a slow agent never starts', async () => {
+    h.setup()
+    readinessRunsOut()
+    typedButNeverStarted()
+    const { dispatchId } = await start('claude')
+    await vi.waitFor(() => expect(alerts()).toHaveLength(1))
+    await h.runtime.reportUnconfirmedWorkerStart(dispatchId)
+
+    expect(h.db.getWorkerDispatch(dispatchId)?.state).toBe('start_unknown')
+    expect(alerts()).toHaveLength(1)
+    expect(lostAlerts()).toHaveLength(0)
+  })
+
+  it('still fails the start when the launched agent exited before it was ready', async () => {
+    h.setup()
+    readinessRunsOut()
+    vi.spyOn(h.runtime, 'createTerminal').mockResolvedValue({
+      handle: 'term_worker',
+      worktreeId: 'repo::worktree',
+      title: 'worker',
+      ptyId: 'pty-worker',
+      incarnationId: 'inc-1'
+    } as never)
+    vi.spyOn(h.runtime, 'getPtyLivenessVerdict').mockReturnValue({
+      status: 'exited',
+      incarnationId: 'inc-1'
+    } as never)
+    vi.spyOn(h.runtime, 'readExitedLaunchOutput').mockReturnValue('zsh: command not found: claude')
+    vi.spyOn(h.runtime, 'subscribeToTerminalData').mockReturnValue(() => {})
+    vi.spyOn(h.runtime, 'readRecentTerminalOutput').mockReturnValue('')
+    const { state, dispatchId } = await start('claude')
+
+    expect(state).toBe('failed')
+    expect(h.db.getWorkerDispatch(dispatchId)?.last_error).toContain('command not found: claude')
+    expect(h.runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+    expect(lostAlerts()).toHaveLength(1)
+  })
 
   it('tells the coordinator once, with the screen and how to submit or stop it', async () => {
     h.setup()

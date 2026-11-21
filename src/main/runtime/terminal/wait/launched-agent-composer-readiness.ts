@@ -239,6 +239,11 @@ export async function waitForWorkerAgentReady(
   }
 }
 
+/** The wait ran out with nothing proving the launch failed: no exit, startup dialog or start failure. */
+export function isUnprovenReadinessTimeout(error: unknown): boolean {
+  return error instanceof Error && error.message === 'timeout' && !readTerminalStartFailure(error)
+}
+
 function requireFreshReadiness(
   runtime: LaunchedAgentReadinessRuntime,
   handle: string,
