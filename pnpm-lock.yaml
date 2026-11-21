@@ -238,6 +238,9 @@ importers:
       i18next:
         specifier: ^26.7.2
         version: 26.7.2(typescript@7.0.2)
+      imagescript:
+        specifier: 3.20.3
+        version: 3.20.3
       jsonc-parser:
         specifier: ^3.3.1
         version: 3.3.1
@@ -6123,6 +6126,10 @@ packages:
   ignore@7.0.5:
     resolution: {integrity: sha512-Hs59xBNfUIunMFgWAbGX5cq6893IbWg4KnrjbYwX3tx0ztorVgTDA6B2sxf8ejHJ4wz8BqGUMYlnzNBer5NvGg==}
     engines: {node: '>= 4'}
+
+  imagescript@3.20.3:
+    resolution: {integrity: sha512-CtztzjiEPnaQDUR+Nk5OJT6lKsYRCGsIEdXKSmbEh/KJuBntjx/IDBRu4wuYf/2V3FRIJ9DUxCRLsf0mkJW2XQ==}
+    engines: {node: '>=22.13.0'}
 
   imurmurhash@0.1.4:
     resolution: {integrity: sha512-JmXMZ6wuvDmLiHEml9ykzqO6lwFbof0GG4IkcGaENdCRDDmMVnny7s5HsIgHCbaq0w2MyPhDqkhTUgS2LU2PHA==}
@@ -13233,6 +13240,8 @@ snapshots:
     optional: true
 
   ignore@7.0.5: {}
+
+  imagescript@3.20.3: {}
 
   imurmurhash@0.1.4:
     optional: true

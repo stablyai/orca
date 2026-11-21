@@ -8,6 +8,7 @@ export const BUNDLED_MAIN_DEPENDENCIES = new Set([
   'smol-toml',
   'yaml',
   'fflate',
+  'imagescript',
   'mime-types',
   'mime-db',
   // Linear save confirmation; bundled like orcad so packaging needs no extra node_modules.
