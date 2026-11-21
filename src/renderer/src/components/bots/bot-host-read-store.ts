@@ -157,7 +157,9 @@ export function createBotHostRead<T>(
   const request = (bot: BotRef, named?: readonly string[] | null): void => {
     const entry = entryFor(bot)
     entry.parts = addBotReadAsk(entry.parts, options ? named : null, options?.maxParts ?? 0)
-    schedule(botRefKey(bot), entry)
+    if (entry.parts) {
+      schedule(botRefKey(bot), entry)
+    }
   }
 
   const requestMore = (bot: BotRef): Promise<T | null> => {

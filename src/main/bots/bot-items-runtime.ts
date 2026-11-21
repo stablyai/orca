@@ -288,10 +288,9 @@ export class BotItemsHost {
   }
 
   /** A Dispatch row changed: a start for an item is linked, and linked items re-read. */
-  dispatchChanged(dispatchId: string | null): void {
-    if (dispatchId !== null) {
-      this.workerLinks.dispatchChanged(dispatchId)
-    }
+  /** Settles once the items linked to the Dispatch have been told of; never rejects. */
+  dispatchChanged(dispatchId: string | null): Promise<void> {
+    return dispatchId === null ? Promise.resolve() : this.workerLinks.dispatchChanged(dispatchId)
   }
 
   private async changedItems(store: BotItemsRemote, uids: readonly string[]): Promise<void> {

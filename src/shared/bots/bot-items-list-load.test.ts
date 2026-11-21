@@ -116,5 +116,9 @@ describe('loadBotItemsList', () => {
     read = await loadBotItemsList(call, read, { whole: false, parts: ['i220'], more: false })
     expect(read.items.filter(closed)).toHaveLength(100)
     expect(read.items.some((item) => item.uid === 'i220')).toBe(true)
+    // Every loaded Closed item named: its first page holds only asked ones, yet isn't all of them.
+    const loaded = read.items.filter(closed).map((item) => item.uid)
+    read = await loadBotItemsList(call, read, { whole: false, parts: loaded, more: false })
+    expect(read.items.filter(closed)).toHaveLength(100)
   })
 })

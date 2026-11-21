@@ -46,7 +46,7 @@ const itemsRead = createBotHostRead<BotItemsRead>(
   ITEMS_MIN_READ_GAP_MS,
   false,
   {
-    partsOf: (scope, botId, value) => botItemsNoticeParts(scope, botId, value?.items ?? null),
+    partsOf: (scope, botId) => botItemsNoticeParts(scope, botId),
     maxParts: BOT_ITEM_LIMITS.listPageMax,
     load: (bot, previous, ask, show) => loadBotItemsList(listCall(bot, null), previous, ask, show)
   }
@@ -203,11 +203,10 @@ export function useBotChatItems(
         start()
       })
     load(null)
-    const stop = onBotsChanged(
-      (_host, change) => load(botItemsNoticeParts(change, id, last?.items ?? null)),
-      hostId,
-      { botId: id, kinds: ITEMS_KINDS }
-    )
+    const stop = onBotsChanged((_host, change) => load(botItemsNoticeParts(change, id)), hostId, {
+      botId: id,
+      kinds: ITEMS_KINDS
+    })
     return () => {
       live = false
       stop()

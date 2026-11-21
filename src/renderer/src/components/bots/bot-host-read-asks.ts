@@ -8,7 +8,7 @@ import type { BotChangeScope } from '../../../../shared/bots/bot-change-scope'
 export type BotReadAsk = Set<string> | 'whole' | null
 
 /** One more ask joined to those waiting: its parts while every ask named some and they stay within
- *  `max`; otherwise the whole. */
+ *  `max`; otherwise the whole. An ask naming no parts changes nothing. */
 export function addBotReadAsk(
   waiting: BotReadAsk,
   named: readonly string[] | null | undefined,
@@ -16,6 +16,9 @@ export function addBotReadAsk(
 ): BotReadAsk {
   if (!named || waiting === 'whole') {
     return 'whole'
+  }
+  if (named.length === 0) {
+    return waiting
   }
   const next = waiting ?? new Set<string>()
   named.forEach((part) => next.add(part))

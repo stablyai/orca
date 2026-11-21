@@ -10,7 +10,6 @@ import {
 } from './bot-change-notices'
 import { botChangeBotIds, botChangeConcerns } from '../../shared/bots/bot-change-scope'
 import { botItemsNoticeParts } from '../../shared/bots/bot-items-notice-parts'
-import { makeTestBotItem } from '../../shared/bots/bot-item.test-fixture'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn(() => ({})) }))
@@ -130,30 +129,13 @@ describe('BotChangeNotices', () => {
     vi.advanceTimersByTime(0)
     const notice = emit.mock.calls[0]![0]
     expect(notice.itemUids).toEqual({ 'bot-a': ['i1', 'i2'] })
-    expect(botItemsNoticeParts(notice, 'bot-a', [])).toEqual(['i1', 'i2'])
-    expect(botItemsNoticeParts(notice, 'bot-b', [])).toBeNull()
-    // Its workers changed too: the items that link a worker are read with them.
-    const linked = makeTestBotItem(7, {
-      uid: 'i7',
-      links: [
-        {
-          kind: 'dispatch',
-          ref: 'ctx_1',
-          latest: null,
-          title: null,
-          state: 'working',
-          host: null,
-          startedAt: null,
-          settledAt: null,
-          report: null,
-          pr: null
-        }
-      ]
-    })
-    const unlinked = makeTestBotItem(8, { uid: 'i8' })
+    expect(botItemsNoticeParts(notice, 'bot-a')).toEqual(['i1', 'i2'])
+    expect(botItemsNoticeParts(notice, 'bot-b')).toBeNull()
+    // A workers change the host didn't name as items (an older host, a reset) reads whole.
+    expect(botItemsNoticeParts({ ...notice, kinds: ['items', 'workers'] }, 'bot-a')).toBeNull()
     expect(
-      botItemsNoticeParts({ ...notice, kinds: ['items', 'workers'] }, 'bot-a', [linked, unlinked])
-    ).toEqual(['i1', 'i2', 'i7'])
+      botItemsNoticeParts({ ...notice, kinds: ['items', 'workers'], workersNamed: true }, 'bot-a')
+    ).toEqual(['i1', 'i2'])
   })
 
   it('stays quiet on a host without bots', () => {
@@ -185,7 +167,7 @@ describe('followAgentPhasesForBots', () => {
       botOfPane,
       inGroupRoom: () => false,
       workerDispatch: (paneKey) => (paneKey === WORKER_PANE ? 'ctx_w' : null),
-      workerChanged: vi.fn(),
+      workerChanged: async () => {},
       readEveryBot: () => true
     })
     const report = (
@@ -202,17 +184,21 @@ describe('followAgentPhasesForBots', () => {
     return { notices, report, botOfPane }
   }
 
-  it('notices each phase a worker moves through, from the host status store', () => {
+  it('notices each phase a worker moves through, from the host status store', async () => {
     const { notices, report } = follow()
     report(WORKER_PANE, 'repo-1::/tmp/worker', 'working')
+    await new Promise((resolve) => setImmediate(resolve))
     const scope = { botIds: ['bot-scout'], kinds: ['status', 'workers'], workersNamed: true }
     expect(notices.changed).toHaveBeenCalledExactlyOnceWith(scope)
     // Repeating a phase is a tick, not a change.
     report(WORKER_PANE, 'repo-1::/tmp/worker', 'working')
+    await new Promise((resolve) => setImmediate(resolve))
     expect(notices.changed).toHaveBeenCalledTimes(1)
     report(WORKER_PANE, 'repo-1::/tmp/worker', 'blocked')
+    await new Promise((resolve) => setImmediate(resolve))
     expect(notices.changed).toHaveBeenCalledTimes(2)
     report(WORKER_PANE, 'repo-1::/tmp/worker', 'done')
+    await new Promise((resolve) => setImmediate(resolve))
     expect(notices.changed.mock.calls).toEqual([[scope], [scope], [scope]])
   })
 
@@ -245,7 +231,7 @@ describe('botPhaseChangeScopes', () => {
     inGroupRoom: (sessionId: string) => sessionId === 'session-room',
     workerDispatch: (paneKey: string) =>
       paneKey === 'tab-w:55555555-5555-4555-8555-555555555555' ? 'ctx_w' : null,
-    workerChanged: () => {},
+    workerChanged: async () => {},
     readEveryBot: () => false
   }
 

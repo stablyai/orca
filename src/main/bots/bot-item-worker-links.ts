@@ -28,20 +28,23 @@ export type BotItemWorkerLinksDeps = {
 
 export class BotItemWorkerLinks {
   private changedDispatches = new Set<string>()
-  private queued = false
+  private queued: Promise<void> | null = null
 
   constructor(private readonly deps: BotItemWorkerLinksDeps) {}
 
-  dispatchChanged(dispatchId: string): void {
+  /** Settles (never rejects) once the items it links have been told of, so a notice can wait for it. */
+  dispatchChanged(dispatchId: string): Promise<void> {
     this.changedDispatches.add(dispatchId)
-    if (!this.queued) {
-      this.queued = true
-      queueMicrotask(() => void this.flush().catch(this.deps.warn))
-    }
+    this.queued ??= new Promise((resolve) =>
+      queueMicrotask(() => {
+        this.queued = null
+        void this.flush().catch(this.deps.warn).finally(resolve)
+      })
+    )
+    return this.queued
   }
 
   private async flush(): Promise<void> {
-    this.queued = false
     const ids = [...this.changedDispatches]
     this.changedDispatches = new Set()
     const store = this.deps.store()

@@ -29,9 +29,9 @@ export async function loadBotItemsList(
   if (!ask.whole && previous && ask.parts.length > 0) {
     const asked = new Set(ask.parts)
     const named = await call({ uids: ask.parts })
-    // An answer holding items it wasn't asked for is a host before `uids` answering whole: what it
-    // left out isn't gone, so the list is read whole.
-    if (named.items.some((item) => !asked.has(item.uid))) {
+    // A Closed cursor or an item not asked for is a host before `uids` answering whole: what it left
+    // out isn't gone, so the list is read whole.
+    if (named.nextClosedCursor || named.items.some((item) => !asked.has(item.uid))) {
       return loadBotItemsList(call, previous, { ...ask, whole: true }, show)
     }
     const merged = mergeNamedBotItems(previous, named, ask.parts)
