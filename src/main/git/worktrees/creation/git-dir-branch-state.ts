@@ -69,13 +69,12 @@ export async function readGitDirState(
         readOptional(join(gitDir, 'rebase-merge', 'update-refs')),
         readOptional(join(gitDir, 'BISECT_START'))
       ])
-      const failed = reads.find((read): read is PromiseRejectedResult => read.status === 'rejected')
-      if (failed) {
-        throw failed.reason
-      }
-      const [head, rebaseMerge, rebaseApply, updateRefs, bisectStart] = reads.map(
-        (read) => (read as PromiseFulfilledResult<string>).value
-      )
+      const [head, rebaseMerge, rebaseApply, updateRefs, bisectStart] = reads.map((read) => {
+        if (read.status === 'rejected') {
+          throw read.reason
+        }
+        return read.value
+      })
       heads.set(gitDir, normalizeHead(head))
       for (const line of [rebaseMerge, rebaseApply, updateRefs].flatMap((text) =>
         text.split('\n')
