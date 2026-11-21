@@ -7,9 +7,12 @@ import { usePromptCacheCountdownNow } from './prompt-cache-countdown-clock'
 import {
   getMostUrgentPromptCacheStartedAt,
   getPromptCacheCountdownForPane,
+  getStructuredPromptCacheStartedAt,
   type PromptCacheCountdownSelection
 } from './prompt-cache-timer-selection'
 import { useTranslate } from '@/i18n/use-translate'
+import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
+import { selectLiveAgentStatusEntriesForWorktree } from './worktree-agent-row-selectors'
 
 /** Resolve the soonest-expiring Claude cache once for both row visibility and countdown rendering. */
 export function usePromptCacheCountdownStartedAt(worktreeId: string, active = true): number | null {
@@ -23,11 +26,21 @@ export function usePromptCacheCountdownStartedAt(worktreeId: string, active = tr
       if (!enabled || ttlMs <= 0) {
         return [enabled, ttlMs, null] as const
       }
-      return [
-        enabled,
-        ttlMs,
-        getMostUrgentPromptCacheStartedAt(s.tabsByWorktree[worktreeId], s.cacheTimerByKey)
-      ] as const
+      let startedAt = getMostUrgentPromptCacheStartedAt(
+        s.tabsByWorktree[worktreeId],
+        s.cacheTimerByKey
+      )
+      const structuredTabs = getStructuredAgentSessionTabsByPaneKey(s.unifiedTabsByWorktree)
+      for (const entry of selectLiveAgentStatusEntriesForWorktree(s, worktreeId)) {
+        if (!structuredTabs.has(entry.paneKey)) {
+          continue
+        }
+        const candidate = getStructuredPromptCacheStartedAt(entry)
+        if (candidate !== null && (startedAt === null || candidate < startedAt)) {
+          startedAt = candidate
+        }
+      }
+      return [enabled, ttlMs, startedAt] as const
     })
   )
   return enabled && ttlMs > 0 && startedAt != null ? startedAt : null
@@ -42,11 +55,12 @@ export function usePromptCacheCountdownForPane(
       if (!active || !(s.settings?.promptCacheTimerEnabled ?? false)) {
         return null
       }
-      return getPromptCacheCountdownForPane(
-        paneKey,
-        s.cacheTimerByKey,
-        s.settings?.promptCacheTtlMs ?? 0
-      )
+      const ttlMs = s.settings?.promptCacheTtlMs ?? 0
+      if (getStructuredAgentSessionTabsByPaneKey(s.unifiedTabsByWorktree).has(paneKey)) {
+        const startedAt = getStructuredPromptCacheStartedAt(s.agentStatusByPaneKey[paneKey])
+        return startedAt !== null && ttlMs > 0 ? { startedAt, ttlMs } : null
+      }
+      return getPromptCacheCountdownForPane(paneKey, s.cacheTimerByKey, ttlMs)
     })
   )
 }
