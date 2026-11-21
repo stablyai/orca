@@ -28,6 +28,7 @@ import {
   rememberNativeChatReplySource,
   resetNativeChatReplySourcesForTests
 } from '../reply/native-chat-reply-sources'
+import { nativeChatReplyRevealId } from '../reply/native-chat-reply-original'
 
 vi.mock('@/components/native-chat/telemetry/native-chat-telemetry', () => ({
   emitNativeChatMessageSent: vi.fn()
@@ -401,6 +402,42 @@ describe('remembering which message a reply answered', () => {
     expect(nativeChatReplySourceOf(withNativeChatReplyContext('Why blue?', target, 'Codex'))).toBe(
       'm-7'
     )
+  })
+
+  it('a structured reply ending in a space or newline keeps its exact original among duplicates', async () => {
+    localStorage.clear()
+    resetNativeChatReplySourcesForTests()
+    // Two answers with the same words: only the recorded id tells them apart.
+    const second = { ...target, id: 'reply-dup', messageId: 'm-second' }
+    setNativeChatReplyTarget(scope, second)
+    const { send } = fixture(true)
+    await act(async () => {
+      await send('Which one? \n')
+    })
+    // The message stores its words without trailing whitespace; Rewind and Edit read them so.
+    const stored = withNativeChatReplyContext('Which one? \n', second, 'Codex').trimEnd()
+    const rebuilt = nativeChatReplyTargetFromSentText(stored).target!
+    expect(rebuilt.messageId).toBe('m-second')
+    const duplicates = ['m-first', 'm-second'].map((id) => ({
+      id,
+      role: 'assistant' as const,
+      blocks: [{ type: 'text' as const, text: target.excerpt }]
+    }))
+    expect(
+      nativeChatReplyRevealId(
+        rebuilt,
+        () => true,
+        () => duplicates
+      )
+    ).toBe('m-second')
+    // With that original gone, it stays unavailable rather than taking the other duplicate.
+    expect(
+      nativeChatReplyRevealId(
+        rebuilt,
+        () => false,
+        () => duplicates.slice(0, 1)
+      )
+    ).toBeNull()
   })
 
   it('a refused structured send records nothing', async () => {

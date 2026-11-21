@@ -16,7 +16,10 @@ import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { MAX_SKILL_REFS } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-message-params'
-import { SkillRefLimitError } from '../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import {
+  SkillRefLimitError,
+  structuredAgentSessionStoredText
+} from '../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   promptHasInteractionModeSkill,
   promptSkillRefs
@@ -259,7 +262,8 @@ export function useNativeChatStructuredComposerSend({
           // Only accepted text is remembered: it quotes the reply captured at send, even if a newer
           // one was picked meanwhile.
           if (reply) {
-            rememberNativeChatReplySource(text, reply.messageId)
+            // Keyed by the words the message stores, as Rewind and a queued edit read them back.
+            rememberNativeChatReplySource(structuredAgentSessionStoredText(text), reply.messageId)
           }
           return true
         })
