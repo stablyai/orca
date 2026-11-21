@@ -28,6 +28,7 @@ import type { Store } from '../persistence/loading-store/store'
 import type { RendererShutdownCheckpointService } from './renderer-shutdown-checkpoint-service'
 import { ServeReadinessPublisher } from '../server/serve-readiness'
 import { beginProfileShutdownCheckpoint } from '../persistence/profile-shutdown-checkpoint'
+import type { UsageHistoryInvoker } from '../usage/usage-provider-facade'
 
 /** The desktop application core's services; composition fills the slots, shutdown retires them. */
 export class DesktopCore {
@@ -35,6 +36,8 @@ export class DesktopCore {
   usageWorktreeHistory: UsageWorktreeHistory | null = null
   claudeUsage: AutomationUsageClient | null = null
   codexUsage: AutomationUsageClient | null = null
+  /** The usage process's history methods, for the runtime's usage-history facade. */
+  invokeUsage: UsageHistoryInvoker | null = null
   codexAccounts: CodexAccountService | null = null
   codexRuntimeHome: CodexRuntimeHomeService | null = null
   codexSessionMigration: ReturnType<typeof createCodexSessionMigrationScheduler> | null = null

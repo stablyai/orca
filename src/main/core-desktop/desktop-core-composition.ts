@@ -60,6 +60,7 @@ import { StatsCollector } from '../stats/collector'
 import { UsageWorktreeHistory } from '../usage/worktree-attribution/usage-worktree-history'
 import { feedAgentSessionStats } from '../stats/agent-session-stats-feed'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
+import type { UsageHistoryInvoker } from '../usage/usage-provider-facade'
 
 // Headless serve has no first window; timer fallback must still sweep trash.
 const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
@@ -82,6 +83,7 @@ export type DesktopCoreNative = {
   startUsageBackend(history: UsageWorktreeHistory): {
     claudeUsage: AutomationUsageClient
     codexUsage: AutomationUsageClient
+    invokeUsage: UsageHistoryInvoker
   }
   getDesktopWindowStatus(): RuntimeDesktopWindowStatus
   sendTerminalSideEffects(batch: TerminalSideEffectBatch): void
@@ -147,6 +149,7 @@ function startCoreObservers(core: DesktopCore, store: Store, deps: DesktopCoreCo
   const usage = native.startUsageBackend(usageWorktrees)
   core.claudeUsage = usage.claudeUsage
   core.codexUsage = usage.codexUsage
+  core.invokeUsage = usage.invokeUsage
 }
 
 function startBrowserAutomation(

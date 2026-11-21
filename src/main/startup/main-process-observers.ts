@@ -25,6 +25,7 @@ import type { NativeHangTelemetry } from '../hang-watchdog/previous-native-hang-
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { mainProcessState as state } from './main-process-state'
 import { runAfterFirstWindowShown } from './main-window/first-window-deferral'
+import type { UsageHistoryInvoker } from '../usage/usage-provider-facade'
 
 const TELEMETRY_CLIENT_START_FALLBACK_MS = 15_000
 
@@ -171,6 +172,7 @@ export function initializeMainProcessObservers(store: Store): void {
 export function startUsageBackend(usageWorktrees: UsageWorktreeHistory): {
   claudeUsage: AutomationUsageClient
   codexUsage: AutomationUsageClient
+  invokeUsage: UsageHistoryInvoker
 } {
   const backend = new BackendSupervisor(usageWorktrees)
   state.backend = backend
@@ -178,6 +180,7 @@ export function startUsageBackend(usageWorktrees: UsageWorktreeHistory): {
   provideHostUsageAnalytics((call) => backend.invokeUsage(BACKEND_PUBLIC_USAGE_METHOD, call))
   return {
     claudeUsage: backend.automationClient('claudeUsage'),
-    codexUsage: backend.automationClient('codexUsage')
+    codexUsage: backend.automationClient('codexUsage'),
+    invokeUsage: (method, params, purpose) => backend.invokeUsage(method, params, purpose)
   }
 }

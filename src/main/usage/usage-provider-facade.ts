@@ -5,7 +5,7 @@ import type {
 import type { UsageHistoryProvider } from '../../shared/usage-history-types'
 import type { UsageHistorySnapshot, UsageSnapshotQuery } from '../../shared/usage-history-rpc'
 
-type UsageHistoryInvoker = (
+export type UsageHistoryInvoker = (
   method: string,
   params: unknown,
   purpose?: BackendConnectionPurpose
