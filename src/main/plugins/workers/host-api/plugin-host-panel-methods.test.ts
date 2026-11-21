@@ -24,6 +24,7 @@ function services(panels: PluginPanelBridgeServices | null = null) {
 function bridge() {
   return {
     request: vi.fn(async (..._args: unknown[]) => ['todo']),
+    requestBytes: vi.fn(async (..._args: unknown[]) => new ArrayBuffer(4)),
     subscribe: vi.fn(),
     dataChanged: vi.fn()
   } satisfies PluginPanelBridgeServices
@@ -69,5 +70,26 @@ describe('plugin.request', () => {
     ).resolves.toMatchObject({
       code: 'invalid_params'
     })
+  })
+})
+
+describe('plugin.requestBytes', () => {
+  it('answers a frame of the desktop window and refuses a client that came over RPC', async () => {
+    const panels = bridge()
+    const ask = (callerWebContentsId?: number) =>
+      executePluginHostCall({
+        pluginId: 'acme.todos',
+        method: 'plugin.requestBytes',
+        params: { name: 'signal.read' },
+        surface: 'panel',
+        grantedCapabilities: [],
+        services: services(panels),
+        scope: { assertActive: () => undefined, panel, callerWebContentsId }
+      })
+    await expect(ask()).resolves.toMatchObject({ ok: false, code: 'not_permitted' })
+    // The refusal comes before the worker does any work.
+    expect(panels.requestBytes).not.toHaveBeenCalled()
+    const answer = await ask(7)
+    expect(answer).toMatchObject({ ok: true, value: { bytes: expect.any(ArrayBuffer) } })
   })
 })
