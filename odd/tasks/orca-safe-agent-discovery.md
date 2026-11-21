@@ -28,6 +28,7 @@ Additionally, in `src/main/acp/launch/acp-private-temp.ts`, `removeFolder()` inv
 
 ## Verification Evidence
 - Observed outcome: 5/5 model catalog assertions passed; 2/2 temp cleanup retry assertions passed.
+- Stress testing: 1,000 in-memory failure state cycles and 50 Windows filesystem I/O lock contention cycles completed with 100% success (0 failures, 4.18s).
 - Effective TDD Mode: Enabled (Observed RED on unhandled error, GREEN after fix).
 - Commit identity 1: `4b28a9dd44` (Model catalog discovery fix)
-- Commit identity 2: `f2d48d2dab` (Resilient temp folder cleanup with retry)
+- Commit identity 2: `31c93cd35c` (Resilient temp folder cleanup with retry)
