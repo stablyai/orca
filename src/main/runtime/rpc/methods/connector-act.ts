@@ -1,4 +1,8 @@
 import type { ConnectorCloudFeature } from '../../../../shared/connectors/connector-cloud-contract'
+import {
+  CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE,
+  CONNECTOR_CLOUD_SLACK_TOOLS_FEATURE
+} from '../../../../shared/connector-cloud-features'
 import type { ConnectorActErrorCode } from '../../../../shared/connector-action-contract'
 import { ConnectorAct } from '../../../../shared/rpc-contract/connectors/connector-params'
 import { botOfSession } from '../../../bots/bot-session-tabs'
@@ -14,6 +18,13 @@ import { defineMethod } from '../core'
 import { botTurnFor } from '../../../bots/bot-turn-for'
 import { sessionCallerOf } from '../../orchestration/addressing/orchestration-caller-identity'
 import { noteBotRequestPost } from './orchestration/messaging/bot-request-outcome'
+import { orcaSignInServer } from '../../../bots/orca-sign-in-server'
+import {
+  hostNotSignedIn,
+  orcaCloudNeedsSignIn,
+  serverSignInSteps,
+  type OrcaSignInServer
+} from '../../../../shared/bots/host-orca-sign-in'
 
 /** A refusal whose code the CLI reads and whose message a bot can act on. */
 export class ConnectorActError extends Error {
@@ -38,17 +49,27 @@ function searchedWorkspace(key: { source: string; externalId: string } | undefin
   return `slack:${workspace}:workspace`
 }
 
+/** The host signed out of Orca, for the bot to relay: a headless server names itself and how it signs in. */
+function signedOutError(host: { server: OrcaSignInServer; botName: string }): ConnectorActError {
+  const steps = serverSignInSteps(host.server, host.botName, 'bot')
+  return new ConnectorActError(
+    'connector_not_connected',
+    steps
+      ? `${hostNotSignedIn(host.server)}, so it can't reach Orca Cloud. ${steps} Then try again.`
+      : `${hostNotSignedIn(host.server)}: sign in to Orca Cloud on this computer, then try again.`
+  )
+}
+
 /** A cloud failure in words; only an answer that never came is "didn't answer". */
 export function actFailure(
   verb: string,
   ref: string | undefined,
-  failure: { status: number | null; error: string | null }
+  failure: { status: number | null; error: string | null; sessionRefused?: true },
+  host: { server: OrcaSignInServer; botName: string }
 ): ConnectorActError {
-  if (failure.status === 401 && failure.error === 'signed_out') {
-    return new ConnectorActError(
-      'connector_not_connected',
-      'Orca is signed out of Orca Cloud: sign in to Orca Cloud on this computer, then try again.'
-    )
+  // Signed out, or a sign-in the connector-token route still refused after the session refresh.
+  if (failure.sessionRefused || (failure.status === 401 && failure.error === 'signed_out')) {
+    return signedOutError(host)
   }
   if (failure.status === null || failure.status >= 500 || failure.status === 429) {
     if (verb === 'set') {
@@ -108,10 +129,15 @@ export const CONNECTOR_ACT_METHOD = defineMethod({
     }
     const cloud = runtime.getConnectorCloud()
     const features = cloud?.cloudFeatures()
+    // Signed out, or a sign-in Orca Cloud refused after its hello (features stay cached): say so, and
+    // on a headless server how it signs in, before calling a cloud that would refuse it.
+    if (cloud && orcaCloudNeedsSignIn(cloud.status())) {
+      throw signedOutError({ server: orcaSignInServer(runtime), botName: bot.name })
+    }
     if (!cloud || !features) {
       throw new ConnectorActError(
         'connector_not_connected',
-        "Orca isn't connected to Orca Cloud: sign in to Orca and connect a bot to Slack, Linear or GitHub, then try again."
+        "Orca isn't connected to Orca Cloud: sign in to Orca Cloud and connect a bot to Slack, Linear or GitHub, then try again."
       )
     }
     if (!features.has('actions' satisfies ConnectorCloudFeature)) {
@@ -142,6 +168,21 @@ export const CONNECTOR_ACT_METHOD = defineMethod({
       throw new ConnectorActError(
         'cloud_lacks_search',
         "Orca Cloud can't search yet. Find a channel by its name or link with `orca slack find`."
+      )
+    }
+    if (
+      (verb === 'pin' || verb === 'canvas' || verb === 'list' || verb === 'scheduled') &&
+      !features.has(CONNECTOR_CLOUD_SLACK_TOOLS_FEATURE)
+    ) {
+      throw new ConnectorActError(
+        'cloud_lacks_slack_tools',
+        "Orca Cloud can't do that in Slack yet; nothing was changed. Try again after Orca Cloud updates."
+      )
+    }
+    if (args.postAt && !features.has(CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE)) {
+      throw new ConnectorActError(
+        'cloud_lacks_schedule',
+        "Orca Cloud can't post later yet; nothing was scheduled. Post it now, or try again after Orca Cloud updates."
       )
     }
     if (
@@ -176,6 +217,14 @@ export const CONNECTOR_ACT_METHOD = defineMethod({
             sessionCallerOf(context.orchestrationCaller)?.sessionId
           )
         : undefined
+    // Asked again here, after the awaits above: a post for later must never go to a cloud that
+    // has stopped saying it schedules.
+    if (args.postAt && !cloud.cloudFeatures()?.has(CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE)) {
+      throw new ConnectorActError(
+        'cloud_lacks_schedule',
+        "Orca Cloud can't post later yet; nothing was scheduled. Post it now, or try again after Orca Cloud updates."
+      )
+    }
     const answer = await postConnectorAction(
       cloud,
       {
@@ -190,7 +239,10 @@ export const CONNECTOR_ACT_METHOD = defineMethod({
       signal
     )
     if (!answer.ok) {
-      throw actFailure(verb, ref, answer)
+      throw actFailure(verb, ref, answer, {
+        server: orcaSignInServer(runtime),
+        botName: bot.name
+      })
     }
     if (verb === 'post' && answer.value.ok) {
       // Before the bot's next command, so a reply right after it knows the answer is already posted.

@@ -117,6 +117,8 @@ export type ProviderCheckSummary = {
   /** Subset of failed; absent when cancellation detail is unavailable. */
   cancelled?: number
   pending: number
+  /** Subset of pending waiting on a human (e.g. workflow approval); absent when none. */
+  actionRequired?: number
   neutral: number
   /** 'pipeline' when the state is a GitLab pipeline's own verdict, so its counts are not check counts. */
   scope?: 'pipeline'

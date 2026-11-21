@@ -20,10 +20,6 @@ import {
 } from './crash-reporting-renderer-error-report'
 import { recordRendererBreadcrumbFromRenderer } from './crash-reporting-renderer-breadcrumbs'
 import {
-  profiledRendererFor,
-  profileRendererMemoryBreadcrumb
-} from '../../crash-reporting/memory/renderer-heap-allocation-profile'
-import {
   getLatestPendingReport,
   getLatestSendableReport,
   getRequestedCrashReport,
@@ -89,9 +85,6 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
       const origin =
         typeof sender?.id === 'number' ? rendererCrashBreadcrumbOrigin(sender.id) : undefined
       recordRendererBreadcrumbFromRenderer(args, origin)
-      if (sender && origin) {
-        profileRendererMemoryBreadcrumb(profiledRendererFor(sender), args, origin)
-      }
     }
   )
 

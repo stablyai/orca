@@ -3,7 +3,6 @@ import {
   NativeChatPartyWorkerApprovalStack,
   nativeChatWorkerApprovalParty
 } from './worker-approvals/NativeChatWorkerApprovals'
-import { NativeChatCrewFrame, NativeChatCrewPanel } from '../orchestration-crew/NativeChatCrewPanel'
 import { NativeChatSessionChildren } from './NativeChatSessionChildren'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import { NativeChatUsageLimitActionsProvider } from './usage/NativeChatUsageLimitActions'
@@ -92,26 +91,21 @@ export function NativeChatStructuredTranscript({
   )
 }
 
+/** The transcript area, with this chat's retained children above the conversation. */
 export function NativeChatStructuredTranscriptFrame({
   pane,
-  composerRef,
-  canMention,
   isVisible,
   children
 }: {
   pane: Omit<NativeChatStructuredViewProps, 'mode'>
-  composerRef: ComponentProps<typeof NativeChatCrewPanel>['composerRef']
-  canMention: boolean
   isVisible: boolean
   children: ReactNode
 }): React.JSX.Element {
   return (
-    <NativeChatCrewFrame
-      panel={<NativeChatCrewPanel {...pane} {...{ composerRef, canMention, isVisible }} />}
-    >
+    <div className="relative flex min-h-0 flex-1 flex-col">
       <NativeChatSessionChildren {...pane} isVisible={isVisible} />
       {children}
-    </NativeChatCrewFrame>
+    </div>
   )
 }
 

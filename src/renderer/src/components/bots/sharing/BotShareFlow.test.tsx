@@ -7,6 +7,7 @@ import type { BotOwnedShare } from '../../../../../shared/bots/bot-share-status'
 import { useAppStore } from '@/store'
 import { ORCA_SIGNED_OUT, orcaSignIn } from '../orca-sign-in.test-fixture'
 import { BotSharingPage } from '../settings-view/BotSharingPage'
+import { BotSharePrepare } from '../../../../../shared/rpc-contract/bots-share-params'
 import { BotShareFlow } from './BotShareFlow'
 
 const calls = vi.hoisted(() => {
@@ -15,6 +16,8 @@ const calls = vi.hoisted(() => {
   const expired = new Set<string>()
   const shares: BotOwnedShare[] = []
   const statusReady: { promise?: Promise<void> } = {}
+  const skills: BotShareCandidateSummary['available']['skills'] = []
+  const leftOut: BotShareCandidateSummary['leftOut'] = []
   return {
     rpc,
     last,
@@ -23,7 +26,10 @@ const calls = vi.hoisted(() => {
     statusReady,
     digest: 'digest',
     failMemory: false,
-    failStatus: false
+    failStatus: false,
+    memory: [{ topic: 'area-owners', lines: 3 }],
+    skills,
+    leftOut
   }
 })
 
@@ -69,16 +75,16 @@ function candidate(id: string): BotShareCandidateSummary {
       memory: []
     },
     files: [],
-    leftOut: [],
+    leftOut: calls.leftOut,
     notIncluded: [],
     rewritten: [],
     available: {
       soulLines: 1,
-      skills: [],
+      skills: calls.skills,
       schedules: [],
       eventSuggestions: [],
       tools: [],
-      memory: [{ topic: 'area-owners', lines: 3 }]
+      memory: calls.memory
     },
     automationIds: { schedules: [], eventSuggestions: [] },
     flags: [],
@@ -135,6 +141,9 @@ afterEach(() => {
   calls.last.value = undefined
   calls.expired.clear()
   calls.failMemory = false
+  calls.memory = [{ topic: 'area-owners', lines: 3 }]
+  calls.skills = []
+  calls.leftOut = []
   calls.failStatus = false
   calls.statusReady.promise = undefined
   calls.shares.length = 0
@@ -172,27 +181,6 @@ function ownedShare(id: string, canonical: boolean): BotOwnedShare {
   }
 }
 
-it('publishes the reviewed candidate with the note on screen and copies the new link', async () => {
-  render(<BotShareFlow bot={bot} link={null} onClose={() => {}} />)
-  fireEvent.click(await screen.findByRole('button', { name: /Setup note/ }))
-  fireEvent.change(screen.getByRole('textbox', { name: 'Setup note' }), {
-    target: { value: 'Connect GitHub before the first run.' }
-  })
-  fireEvent.click(screen.getByRole('button', { name: 'Publish link' }))
-
-  expect(await screen.findByRole('button', { name: 'Copied' })).toBeDefined()
-  expect(clipboard).toHaveBeenCalledWith('https://x/s1')
-  expect(calls.rpc.map(({ method }) => method)).toEqual([
-    'bots.share.prepare',
-    'bots.share.publish'
-  ])
-  expect(calls.rpc[1]?.params).toEqual({
-    botId: 'bot-1',
-    candidateId: 'c1',
-    setupNote: 'Connect GitHub before the first run.'
-  })
-})
-
 it('never publishes a candidate built for other picks after a rebuild fails', async () => {
   calls.failMemory = true
   render(<BotShareFlow bot={bot} link={null} onClose={() => {}} />)
@@ -203,6 +191,78 @@ it('never publishes a candidate built for other picks after a rebuild fails', as
   expect(screen.getByRole('button', { name: 'Publish link' }).hasAttribute('disabled')).toBe(true)
 })
 
+it('lists a same-named skill that is left out with the folder it is in', async () => {
+  calls.skills = [
+    {
+      name: 'changelog-style',
+      description: 'House style',
+      homePath: '.agents/skills/changelog-style'
+    }
+  ]
+  calls.leftOut = [
+    {
+      kind: 'skill',
+      name: 'changelog-style',
+      why: 'duplicate',
+      from: '.claude/skills/changelog-style'
+    }
+  ]
+  render(<BotShareFlow bot={bot} link={null} onClose={() => {}} />)
+  fireEvent.click(await screen.findByRole('button', { name: /Skills/ }))
+  expect(
+    await screen.findByText('Same name, in .claude/skills/changelog-style · not shared')
+  ).toBeDefined()
+})
+
+it('picks every memory file with Include memory, and All clears or picks them all', async () => {
+  render(<BotShareFlow bot={bot} link={null} onClose={() => {}} />)
+  fireEvent.click(await screen.findByRole('switch', { name: 'Include memory' }))
+  const all = screen.getByRole('switch', { name: 'All' })
+  const file = screen.getByRole('checkbox', { name: 'area-owners' })
+  expect(all.getAttribute('aria-checked')).toBe('true')
+  expect(file.getAttribute('aria-checked')).toBe('true')
+  expect(screen.getByText('1 of 1')).toBeDefined()
+  // The page takes focus at its title, not on Cancel.
+  expect(document.activeElement?.textContent).toContain('Memory')
+
+  fireEvent.click(all)
+  expect(all.getAttribute('aria-checked')).toBe('false')
+  expect(file.getAttribute('aria-checked')).toBe('false')
+
+  // The whole line ticks its file, once.
+  fireEvent.click(screen.getByText('area-owners', { selector: 'span' }))
+  expect(file.getAttribute('aria-checked')).toBe('true')
+  expect(all.getAttribute('aria-checked')).toBe('true')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Preview area-owners' }))
+  expect(await screen.findByRole('button', { name: 'Memory' })).toBeDefined()
+})
+
+it('caps Include memory and All when more files exist than a share can carry', async () => {
+  calls.memory = Array.from({ length: 65 }, (_, index) => ({ topic: `m${index}`, lines: 1 }))
+  const preparedMemory = () => {
+    const params = calls.rpc.findLast(({ method }) => method === 'bots.share.prepare')?.params
+    // What the runtime would accept: the real params schema, not the mock.
+    const parsed = BotSharePrepare.safeParse(params)
+    expect(parsed.success).toBe(true)
+    return parsed.data?.memory
+  }
+  render(<BotShareFlow bot={bot} link={null} onClose={() => {}} />)
+  fireEvent.click(await screen.findByRole('switch', { name: 'Include memory' }))
+  await waitFor(() => expect(preparedMemory()).toHaveLength(64))
+  const all = screen.getByRole('switch', { name: 'All' })
+  expect(all.getAttribute('aria-checked')).toBe('true')
+
+  fireEvent.click(all)
+  fireEvent.click(all)
+  await waitFor(() => expect(preparedMemory()).toHaveLength(64))
+  // Past the limit, the files left over wait until one picked file goes.
+  expect(screen.getByRole('checkbox', { name: 'm63' }).hasAttribute('disabled')).toBe(false)
+  expect(screen.getByRole('checkbox', { name: 'm64' }).hasAttribute('disabled')).toBe(true)
+  fireEvent.click(screen.getByRole('checkbox', { name: 'm0' }))
+  expect(screen.getByRole('checkbox', { name: 'm64' }).hasAttribute('disabled')).toBe(false)
+})
+
 it('leads with Done when the link already serves the bot as it is', async () => {
   render(<BotShareFlow bot={bot} link={link('digest')} onClose={() => {}} />)
 
@@ -210,18 +270,14 @@ it('leads with Done when the link already serves the bot as it is', async () => 
   expect(screen.getByRole('button', { name: 'Update link' }).hasAttribute('disabled')).toBe(true)
 })
 
-it('offers Update link once the bot changed since the link was published', async () => {
-  render(<BotShareFlow bot={bot} link={link('older')} onClose={() => {}} />)
-
-  expect(await screen.findByText(/Bot changed since/)).toBeDefined()
-  expect(screen.getByRole('button', { name: 'Update link' }).hasAttribute('disabled')).toBe(false)
-})
-
 it('updates the link from the picks and note it was last published with', async () => {
   calls.last.value = { selection: { skills: [] }, setupNote: 'Connect Slack first.' }
-  render(<BotShareFlow bot={bot} link={link('older')} onClose={() => {}} />)
+  const previousLink = link('older')
+  const onClose = () => {}
+  const view = render(<BotShareFlow bot={bot} link={previousLink} onClose={onClose} />)
   // Update link is live only once the share's last picks are read back.
   await screen.findByText(/Bot changed since/)
+  view.rerender(<BotShareFlow bot={{ ...bot }} link={previousLink} onClose={onClose} />)
   fireEvent.click(screen.getByRole('button', { name: 'Update link' }))
 
   expect(await screen.findByText('Updated just now')).toBeDefined()
@@ -246,7 +302,10 @@ it('keeps the reviewed parts and setup note through sign-in and publishes that d
     render(<BotSharingPage bot={bot} />)
     fireEvent.click(screen.getByRole('button', { name: 'Share bot…' }))
     fireEvent.click(await screen.findByRole('switch', { name: 'Include memory' }))
-    fireEvent.click(screen.getByRole('checkbox', { name: 'area-owners' }))
+    // Turning memory on picks every file; the list opens to leave some out.
+    expect(screen.getByRole('checkbox', { name: 'area-owners' }).getAttribute('aria-checked')).toBe(
+      'true'
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Release notes' }))
     fireEvent.click(await screen.findByRole('button', { name: /Setup note/ }))
     fireEvent.change(screen.getByRole('textbox', { name: 'Setup note' }), {
@@ -265,6 +324,7 @@ it('keeps the reviewed parts and setup note through sign-in and publishes that d
     ).toBe('true')
     fireEvent.click(await readyButton('Publish link'))
     expect(await screen.findByRole('button', { name: 'Copied' })).toBeDefined()
+    expect(clipboard).toHaveBeenCalledWith('https://x/s1')
     expect(calls.rpc.find(({ method }) => method === 'bots.share.publish')?.params).toEqual({
       botId: 'bot-1',
       candidateId: 'reviewed-memory',

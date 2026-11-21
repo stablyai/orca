@@ -156,7 +156,7 @@ function McpTrayStatus({ state }: McpTrayViewProps): React.JSX.Element | null {
     return loading ? (
       <span aria-busy="true">
         {SEPARATOR}
-        <LoadingSpinner className="mr-1 inline size-3 align-[-0.125em]" />
+        <LoadingSpinner className="mr-1 inline-block size-3 align-[-0.125em]" />
         {t('components.native-chat.mcp.loading', 'Loading…')}
       </span>
     ) : null

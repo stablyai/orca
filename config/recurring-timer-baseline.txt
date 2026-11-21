@@ -20,12 +20,10 @@
 1 src/main/composio/composio-upkeep.ts
 1 src/main/crash-reporting/memory/pre-gone-host-memory.ts
 1 src/main/crash-reporting/process-exits/process-gone-diagnostics.ts
-1 src/main/crash-reporting/memory/renderer-heap-allocation-profile.ts
 1 src/main/daemon/admission/host-terminal-ledger.ts
 1 src/main/daemon/admission/host-terminal-policy.ts
 1 src/main/daemon/endpoint/publication/daemon-endpoint-lifecycle.ts
 1 src/main/daemon/transport/stream/daemon-stream-backlog-probe.ts
-1 src/main/diagnostics/event-loop-delay-probe.ts
 1 src/main/diagnostics/main-thread-churn-probe.ts
 1 src/main/git/refs/maintenance/pack-refs-lock-ownership.ts
 1 src/main/hang-watchdog/main-thread-hang-watchdog-entry.ts
@@ -51,6 +49,7 @@
 1 src/main/plugins/installation/plugin-git-repository.ts
 1 src/main/plugins/development/plugin-service-housekeeping.ts
 1 src/main/rate-limits/service/service-polling.ts
+1 src/main/remote-policies/release-asset-policy-live-update.ts
 1 src/main/runtime/agent-state-rules/agent-state-rules-live-update.ts
 1 src/main/runtime/mobile-cloud-relay/desktop-relay-service.ts
 3 src/main/runtime/mobile-cloud-relay/control-channel/relay-control-liveness.ts
@@ -72,7 +71,6 @@
 1 src/main/startup/main-window/synthetic-title-runtime.ts
 1 src/main/telemetry/wsl-usage-reporter.ts
 1 src/main/webhooks/webhook-recovery-sweep.ts
-1 src/main/wsl/host-lifecycle/wsl-hosts-policy-live-update.ts
 1 src/main/wsl/orcad/wsl-orcad-connect-stop-fence.ts
 1 src/renderer/src/app-shell/storage/use-app-session-persistence.ts
 1 src/renderer/src/components/bots/google/GoogleAccountReadiness.tsx

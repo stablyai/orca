@@ -8,7 +8,8 @@ import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow } from '../../db/orchestration-records'
 import { dispatchReportMailbox } from '../reports/dispatch-report-mailbox'
-import { reportWorkerTurnStop } from '../turn-stops/worker-turn-stop-report'
+import { isDeliberateRest, sendWorkerReport } from '../turn-stops/worker-turn-stop-report'
+import { approvalReportId } from '../turn-stops/worker-presence-report'
 import {
   holdPayload,
   type TerminalWorkerApprovalHold,
@@ -53,15 +54,23 @@ export function reportHelperPrompt(
   hold: TerminalWorkerApprovalHold,
   deps: TerminalWorkerApprovalHoldsDeps
 ): boolean {
-  hold.reported = reportWorkerTurnStop(
+  const target = { kind: 'local' as const, dispatch: hold.dispatch }
+  // A worker waiting on mail is not stopped for a person: Claude shows the dialog in its terminal.
+  if (isDeliberateRest(hold.db, target, { reason: 'needs-input' }, deps)) {
+    hold.reported = false
+    return false
+  }
+  // Not a rest of the worker's: its lead keeps working, so its presence is unchanged.
+  hold.reported = sendWorkerReport(
     hold.db,
-    { kind: 'local', dispatch: hold.dispatch },
+    target,
     {
       from: hold.handle,
       reason: 'needs-input',
       lastOutput: undefined,
       approval: holdPayload(hold)
     },
+    approvalReportId(hold.dispatch.id, hold.approvalId),
     deps
   )
   return hold.reported

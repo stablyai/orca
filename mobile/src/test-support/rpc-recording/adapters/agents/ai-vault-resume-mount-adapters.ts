@@ -5,7 +5,7 @@ import { mountFixture } from '../../react-mounting/recorder-fixture-shape'
 import type { operationModuleLoader } from '../../module-mounting/operation-module-loader'
 
 const WORKTREE = 'workspace-1'
-// Use a path accepted by the legacy shared-Codex-home guard so preparation can reach the wire.
+// A legacy shared Codex home, so the host's repin reply is applied.
 const LEGACY_CODEX_HOME = '/hosts/codex-runtime-home/home'
 
 export function aiVaultResumeMountAdapters(
@@ -22,12 +22,22 @@ export function aiVaultResumeMountAdapters(
         action: (name) =>
           prepare(
             client,
-            mountFixture<Parameters<typeof prepare>[1]>({
-              agent: name === 'claude' ? 'claude' : 'codex',
-              filePath: '/sessions/rollout.jsonl',
-              codexHome: LEGACY_CODEX_HOME,
-              executionHostId: 'local'
-            })
+            mountFixture<Parameters<typeof prepare>[1]>(
+              name === 'claude'
+                ? {
+                    agent: 'claude',
+                    sessionId: 'claude-session-1',
+                    filePath: '/sessions/claude-session-1.jsonl',
+                    codexHome: null,
+                    executionHostId: 'local'
+                  }
+                : {
+                    agent: 'codex',
+                    filePath: '/sessions/rollout.jsonl',
+                    codexHome: LEGACY_CODEX_HOME,
+                    executionHostId: 'local'
+                  }
+            )
           ).then(
             (value: unknown) => {
               prepared = value

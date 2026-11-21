@@ -48,7 +48,13 @@ class InProcessWorker<TRequest> {
     if (this.controls.crashesOn(request)) {
       this.exit(1)
     } else if (!this.controls.hangsOn(request)) {
-      setImmediate(() => this.emit('message', this.handle(request)))
+      setImmediate(() => {
+        void Promise.resolve(this.handle(request)).then((response) => {
+          if (!this.exited) {
+            this.emit('message', response)
+          }
+        })
+      })
     }
   }
 

@@ -52,6 +52,7 @@ const SHARED_PACKAGE_PREFIXES = [
   'config/scripts/terminal-dependencies/serialize-addon/build-',
   'config/scripts/build-identity/build-',
   'config/scripts/native-build/linux/build-',
+  'config/scripts/native-build/posix/unpackaged-provider-exec',
   'config/scripts/native-build/windows/build-',
   'config/scripts/workspace-package-build/build-',
   'config/scripts/remote-host-build/wsl-guest/build-',
@@ -110,6 +111,7 @@ export const LINUX_PACKAGE_PREFIXES = [
 
 export const WINDOWS_PACKAGE_PREFIXES = [
   ...SHARED_PACKAGE_PREFIXES,
+  '.github/actions/prepare-windows-package-rust/',
   'native/windows-cli-launcher/',
   'native/windows-agent-hook/',
   'native/computer-use-windows/',
@@ -148,7 +150,7 @@ export function isCloudTestRunnerInput(file) {
   return CLOUD_TEST_RUNNER_INPUT.test(file)
 }
 
-// The package (windows) job's "Test Windows-specific boundaries" step runs exactly these files.
+// The package tests (windows) job's "Test Windows-specific boundaries" step runs exactly these files.
 export const WINDOWS_BOUNDARY_TESTS = [
   'config/scripts/native-build/node-addons/rebuild-native-deps-windows-process-tree.test.mjs',
   'config/scripts/native-build/node-addons/rebuild-native-deps-node-pty.test.mjs',

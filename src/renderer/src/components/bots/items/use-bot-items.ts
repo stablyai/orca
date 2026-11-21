@@ -183,14 +183,16 @@ export function commentOnBotItem(
   uid: string,
   text: string,
   images: readonly string[] = [],
-  requestId?: string
+  requestId?: string,
+  questionId?: string
 ): Promise<unknown> {
   return callBotRpc(bot, 'bots.items.owner.comment', {
     item: uid,
     text,
     // An older host refuses these fields, so a comment without them leaves them off.
     ...(images.length > 0 ? { images } : {}),
-    ...(requestId ? { requestId } : {})
+    ...(requestId ? { requestId } : {}),
+    ...(questionId ? { questionId } : {})
   })
 }
 

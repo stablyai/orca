@@ -23,6 +23,7 @@ import {
 } from './automation-project-groups'
 import { AutomationProjectHostMenu } from './AutomationProjectHostMenu'
 import { BotAvatar } from '@/components/bots/BotAvatar'
+import { AutomationBotTargetOptions } from './AutomationBotTargetOptions'
 import { botTargetLabel } from './automation-bot-target-label'
 
 type AutomationProjectComboboxProps = {
@@ -261,14 +262,26 @@ export default function AutomationProjectCombobox({
         <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
           <CommandInput
             ref={setInputNode}
-            placeholder={t(
-              'auto.components.automations.AutomationProjectCombobox.search',
-              'Search projects/folders...'
-            )}
+            placeholder={
+              bots.length > 0
+                ? t('automations.botTarget.search', 'Search bots and projects...')
+                : t(
+                    'auto.components.automations.AutomationProjectCombobox.search',
+                    'Search projects/folders...'
+                  )
+            }
             value={query}
             onValueChange={setQuery}
           />
           <CommandList>
+            {/* Bots first: a long project list would push them out of view. */}
+            <AutomationBotTargetOptions
+              bots={filteredBots}
+              selectedBotId={selectedBotId}
+              highlightedValue={commandValue}
+              onHighlight={setCommandValue}
+              onSelect={handleSelectBot}
+            />
             {recordedChoice ? (
               <button
                 type="button"
@@ -281,10 +294,12 @@ export default function AutomationProjectCombobox({
             ) : null}
             {filteredGroups.length === 0 && filteredBots.length === 0 && !recordedChoice ? (
               <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-                {t(
-                  'auto.components.automations.AutomationProjectCombobox.empty',
-                  'No projects/folders match your search.'
-                )}
+                {bots.length > 0
+                  ? t('automations.botTarget.searchEmpty', 'No bots or projects match your search.')
+                  : t(
+                      'auto.components.automations.AutomationProjectCombobox.empty',
+                      'No projects/folders match your search.'
+                    )}
               </div>
             ) : null}
             {filteredGroups.map((group) => {
@@ -356,28 +371,6 @@ export default function AutomationProjectCombobox({
                 </div>
               )
             })}
-            {filteredBots.map((bot) => (
-              <button
-                key={bot.id}
-                type="button"
-                onClick={() => handleSelectBot(bot.id)}
-                onMouseDown={(event) => event.preventDefault()}
-                onMouseEnter={() => setCommandValue(bot.id)}
-                className={cn(
-                  'flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground',
-                  commandValue === bot.id && 'bg-accent text-accent-foreground'
-                )}
-              >
-                <Check
-                  className={cn(
-                    'size-3 text-foreground',
-                    bot.id === selectedBotId ? 'opacity-100' : 'opacity-0'
-                  )}
-                />
-                <BotAvatar bot={bot} className="size-4 rounded-[4px] text-3xs" />
-                <span className="truncate">{botTargetLabel(bot.name)}</span>
-              </button>
-            ))}
           </CommandList>
           {allowAddProject ? (
             <div className="border-t border-border">

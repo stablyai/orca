@@ -18,7 +18,7 @@ import { GOOGLE_KEY_FILE_NAME } from './google-key-download-watch'
 export type GoogleSetupKeyDownloadDeps = {
   runs: () => GoogleSetupRun[]
   /** Saves the key as this host's Google app; throws why it isn't one. */
-  importKey: (text: string) => void
+  importKey: (text: string) => void | Promise<void>
   keyArrived: (botId: string) => Promise<unknown>
   keyRefused: (botId: string, reason: string) => Promise<unknown>
 }
@@ -110,7 +110,7 @@ async function takeKey(
     if ('reason' in key) {
       outcome = { ok: false, reason: key.reason }
     } else {
-      deps.importKey(key.text)
+      await deps.importKey(key.text)
       outcome = { ok: true }
     }
   } catch (error) {

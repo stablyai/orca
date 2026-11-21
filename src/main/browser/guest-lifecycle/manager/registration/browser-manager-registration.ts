@@ -105,6 +105,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.setupMouseWheelZoomForwarding(browserTabId, guest)
     this.setupTargetUrlForwarding(browserTabId, guest)
     this.flushPendingLoadFailure(browserTabId, webContentsId)
+    this.flushPendingLoadStall(browserTabId, webContentsId)
     this.flushPendingPermissionEvents(browserTabId, webContentsId)
     this.flushPendingPopupEvents(browserTabId, webContentsId)
     this.flushPendingDownloadRequests(browserTabId, webContentsId)
@@ -221,6 +222,8 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
       this.worktreeIdByTabId.set(browserPageId, worktreeId)
     }
     this.certificateTrustController?.onGuestRegistered(webContentsId, browserPageId)
+    // Saved site zoom and color scheme apply to every page of the profile, not only pane webviews.
+    this.siteDisplayController?.onGuestRegistered(guest, sessionProfileId ?? null)
     return true
   }
 
@@ -251,6 +254,8 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.cdpUserAgentOverrideStateByGuestId.clear()
     this.pendingNavigationByGuestId.clear()
     this.pendingLoadFailuresByGuestId.clear()
+    this.pendingLoadStallsByGuestId.clear()
+    this.loadStallPageIdByGuestId.clear()
     this.loadErrorsByGuestId.clear()
     this.clearedLoadErrorsByGuestId.clear()
     this.pendingPermissionEventsByGuestId.clear()

@@ -184,7 +184,7 @@ export function NativeChatMessageList({
   const latestTurnKey = turnKeys.findLast((key) => key !== undefined)
   const showTurnDiffs = useAppStore((state) => nativeChatShowsTurnDiffSummary(state.settings))
   const turns = scope.conversationTurns
-  const turnDiffs = useNativeChatTurnDiffs(showTurnDiffs ? turns : null, rowsInOrder)
+  const turnDiffs = useNativeChatTurnDiffs(showTurnDiffs && !turnBot ? turns : null, rowsInOrder)
   const openedPullRequests = useNativeChatTurnOpenedPullRequests(turns, rowsInOrder)
   // Only real tail reasoning counts as thinking; an in-flight request with no output does not.
   const thinking = useMemo(

@@ -76,6 +76,7 @@ export async function createClaudeNamingRuntime(
     beforeOpen?: (launch: ClaudeStreamJsonLaunch, connection: FakeConnection) => Promise<void>
     beforeClose?: (connection: FakeConnection) => Promise<boolean>
     beforeControl?: (connection: FakeConnection, name: string) => Promise<void>
+    onNamed?: (workspaceId: string, sessionId: string) => void
     deps?: Partial<StructuredAgentSessionRuntimeDeps>
   } = {}
 ) {
@@ -95,7 +96,7 @@ export async function createClaudeNamingRuntime(
     readJournalFirstPrompt: async () => '',
     workerTaskTitle: () => null,
     generate: async () => null,
-    onNamed: () => {},
+    onNamed: options.onNamed ?? (() => {}),
     logger
   })
   let operation = 0

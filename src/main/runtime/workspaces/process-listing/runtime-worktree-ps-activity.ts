@@ -1,3 +1,4 @@
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { RuntimeSyncedTab } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeWorktreePsSummary } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { Repo } from '../../../../shared/repository/repo-types'
@@ -211,6 +212,7 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
   getSummary: RuntimeWorktreePsSummaryLookup
 }): {
   mirroredWorktreeIdByTabId: Map<string, string>
+  savedAgentRecords: SleepingAgentSessionRecord[]
   connectedPtyEvidence: {
     tabIds: Set<string>
     paneKeys: Set<string>
@@ -229,8 +231,10 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
       sessionsByHostId.set(hostId, session)
     }
   }
+  const savedAgentRecords: SleepingAgentSessionRecord[] = []
   // Each host's session names that host's copy of a same-id workspace.
   for (const [hostId, session] of sessionsByHostId) {
+    savedAgentRecords.push(...Object.values(session.sleepingAgentSessionsByPaneKey ?? {}))
     const getSummary = (worktreeId: string) => args.getSummary(worktreeId, hostId)
     for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
       for (const tab of tabs) {
@@ -305,5 +309,5 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
       connectedPtyEvidence.terminalHandleByPaneKey.set(paneKey, handle)
     }
   }
-  return { mirroredWorktreeIdByTabId, connectedPtyEvidence }
+  return { mirroredWorktreeIdByTabId, connectedPtyEvidence, savedAgentRecords }
 }

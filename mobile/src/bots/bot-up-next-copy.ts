@@ -22,17 +22,6 @@ export function lookedText(at: number, now = Date.now()): string {
   return translate('bots.upNext.looked', 'Looked {{time}}', { time: lookedWhen(at, now) })
 }
 
-/** The Settings row's "4:12 PM · 3 suggestions", or when the first look comes. */
-export function lastLookedText(at: number | undefined, count: number, now = Date.now()): string {
-  if (at === undefined) {
-    return translate(
-      'bots.lookAround.notYet',
-      'The first look comes a few hours after your first conversation.'
-    )
-  }
-  return `${lookedWhen(at, now)} · ${translate('bots.lookAround.suggestions', '{{count}} suggestions', { count })}`
-}
-
 /** Why the host would not start a look, from its refusal code. */
 export function lookNowRefusalText(message: string): string {
   if (message.includes('look_now_running')) {

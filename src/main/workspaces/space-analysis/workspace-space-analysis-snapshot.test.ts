@@ -204,7 +204,7 @@ describe('workspace space analysis snapshot', () => {
     expect(snapshotWriteSpy).not.toHaveBeenCalled()
   })
 
-  it('does not let an analysis started before bulk removal restore pruned rows', async () => {
+  it('admits recreated rows using the original removal time, even after a delayed flush', async () => {
     const local = makeWorktreeRow()
     const remote = makeWorktreeRow({
       worktreeId: 'repo-1::/remote-feature',
@@ -212,42 +212,35 @@ describe('workspace space analysis snapshot', () => {
       isRemote: true,
       path: '/remote-feature'
     })
-    const staleAnalysis = {
-      ...makeAnalysis([local, remote]),
-      scannedAt: Date.now() - 1
-    }
-    await pruneWorkspaceSpaceAnalysisSnapshots(userDataDirHolder.dir, [
-      { worktreeId: local.worktreeId, executionHostId: 'local' },
-      { worktreeId: remote.worktreeId, executionHostId: 'ssh:ssh-1' }
-    ])
-
-    await persistWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir, staleAnalysis)
-    expect((await readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir))?.worktrees).toEqual([])
-
-    const recreated = { ...staleAnalysis, scannedAt: Date.now() + 1 }
-    await persistWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir, recreated)
-    expect((await readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir))?.worktrees).toEqual([
-      local,
-      remote
-    ])
-  })
-
-  it('keeps the original tombstone time when a removal batch flushes', async () => {
-    const row = makeWorktreeRow()
-    const target = { worktreeId: row.worktreeId, executionHostId: 'local' as const }
+    const remoteTarget = { worktreeId: remote.worktreeId, executionHostId: 'ssh:ssh-1' as const }
+    const analysis = makeAnalysis([local, remote])
     const now = vi.spyOn(Date, 'now').mockReturnValue(100)
-    registerWorkspaceSpaceAnalysisSnapshotPruneTombstones(userDataDirHolder.dir, [target])
-    now.mockReturnValue(200)
+    try {
+      await pruneWorkspaceSpaceAnalysisSnapshots(userDataDirHolder.dir, [
+        { worktreeId: local.worktreeId, executionHostId: 'local' }
+      ])
+      registerWorkspaceSpaceAnalysisSnapshotPruneTombstones(userDataDirHolder.dir, [remoteTarget])
+      now.mockReturnValue(200)
+      await finalizeWorkspaceSpaceAnalysisSnapshotPrunes(userDataDirHolder.dir, [remoteTarget])
 
-    await finalizeWorkspaceSpaceAnalysisSnapshotPrunes(userDataDirHolder.dir, [target])
-    await persistWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir, {
-      ...makeAnalysis([row]),
-      scannedAt: 150
-    })
+      await persistWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir, {
+        ...analysis,
+        scannedAt: 99
+      })
+      expect((await readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir))?.worktrees).toEqual(
+        []
+      )
 
-    expect((await readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir))?.worktrees).toEqual([
-      { ...row, topLevelItems: [] }
-    ])
-    now.mockRestore()
+      await persistWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir, {
+        ...analysis,
+        scannedAt: 150
+      })
+      expect((await readWorkspaceSpaceAnalysisSnapshot(userDataDirHolder.dir))?.worktrees).toEqual([
+        local,
+        remote
+      ])
+    } finally {
+      now.mockRestore()
+    }
   })
 })

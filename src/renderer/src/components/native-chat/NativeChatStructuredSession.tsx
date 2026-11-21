@@ -1,4 +1,8 @@
 import { useStructuredNativeChatSubagents } from './subagents/use-structured-native-chat-subagents'
+import {
+  NativeChatCrewContext,
+  useNativeChatCrewSource
+} from '../orchestration-crew/use-native-chat-crew'
 import { NativeChatPaneFileDropScope } from './attachments/intake/NativeChatPaneFileDropSurface'
 import { useNativeChatHandOff } from './pane/actions/use-native-chat-hand-off'
 import { useNativeChatStructuredPaneNotices } from '@/components/native-chat/messages/notices/use-native-chat-structured-pane-notices'
@@ -49,6 +53,7 @@ import { NativeChatSurface, NativeChatSurfaceFindBar } from './NativeChatSurface
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import { useNativeChatInterruptedContinuation } from './usage/NativeChatInterruptedContinue'
 import { NativeChatPromptSlotNotices } from './composer/controls/NativeChatComposerNotices'
+import { NativeChatAntigravityAuthProvider } from './antigravity-auth/native-chat-antigravity-auth'
 import {
   NativeChatInstallSlot,
   useNativeChatInstallSlot
@@ -190,6 +195,13 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const installLayout = viewState.kind === 'empty' ? 'hero' : 'strip'
   const install = useNativeChatInstallSlot(props, agentLabel, installLayout)
   const canMention = composerShown && install.unavailableHint === undefined
+  const crew = useNativeChatCrewSource({
+    target: props.target,
+    sessionId: props.sessionId,
+    isVisible: parentShown,
+    composerRef,
+    canMention: canMention && childNavigator.child === null
+  })
   const cancelPrompt = () => cancelStructuredPrompt(controller, prompt)
   const surface = useNativeChatSurface({
     tabId: props.tabId,
@@ -251,10 +263,13 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     composerError,
     install,
     hostSendGate,
-    hostNotice: botServerDown ? null : hostNotice
+    hostNotice: botServerDown ? null : hostNotice,
+    kickoffSignIn: bot.signInOwed
   })
   return (
+    <NativeChatAntigravityAuthProvider target={install.antigravityAuth}>
     <NativeChatSlackMirrorContext.Provider value={slackMirror}>
+      <NativeChatCrewContext.Provider value={crew}>
       <NativeChatChildNavigationContext.Provider value={childNavigator.navigation}>
         <NativeChatSurface surface={surface} working={controller.isWorking}>
           {nativeChatPaneHeader(props, ownerWorktreeId, surface.appearance.colorScheme, handOff)}
@@ -264,12 +279,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             inert={childNavigator.child !== null}
             className={childNavigator.child ? 'hidden' : 'flex min-h-0 flex-1 flex-col'}
           >
-            <NativeChatStructuredTranscriptFrame
-              pane={props}
-              composerRef={composerRef}
-              canMention={canMention && childNavigator.child === null}
-              isVisible={parentShown}
-            >
+            <NativeChatStructuredTranscriptFrame pane={props} isVisible={parentShown}>
               <NativeChatContextClearFade
                 clearing={controller.contextClear.clearing && viewState.kind !== 'error'}
                 overlay={<NativeChatSurfaceFindBar surface={surface} isVisible={props.isVisible} />}
@@ -356,7 +366,11 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                 ) : null}
 
                 {composerShown && (
-                  <NativeChatInstallSlot install={install} agentLabel={agentLabel} />
+                  <NativeChatInstallSlot
+                    install={install}
+                    agentLabel={agentLabel}
+                    inCard={viewState.kind === 'ready' && bot.setupFailed}
+                  />
                 )}
                 {subagents.statusBar}
                 {composerShown ? (
@@ -395,6 +409,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
           {handOff.dialog}
         </NativeChatSurface>
       </NativeChatChildNavigationContext.Provider>
+      </NativeChatCrewContext.Provider>
     </NativeChatSlackMirrorContext.Provider>
+    </NativeChatAntigravityAuthProvider>
   )
 }

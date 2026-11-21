@@ -28,7 +28,7 @@ export function OpenPlainSshTerminalButton({
         variant="outline"
         onClick={() => showPlainSshPanel(targetId, targetLabel)}
       >
-        {t('auto.components.plainSshTerminal.open', 'Open plain SSH terminal')}
+        {t('auto.components.plainSshTerminal.open', 'Plain SSH terminal')}
       </Button>
       <span className="text-xs text-muted-foreground">
         {t(

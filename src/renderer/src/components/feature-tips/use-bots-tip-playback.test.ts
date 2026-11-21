@@ -36,26 +36,14 @@ describe('the announcement pages', () => {
     vi.useRealTimers()
   })
 
-  it('moves on 2 s after each page ends and loops from the last page to the first', async () => {
-    const { result } = renderHook(() => useBotsTipPlayback(true))
-    // Page ends: 11.7 s and 13 s; each holds 2 s.
-    await play(13.5)
-    expect(result.current.page).toBe(0)
-    await play(0.4)
-    expect(result.current.page).toBe(1)
-    await play(15)
-    expect(result.current.page).toBe(0)
-    expect(result.current.t).toBeLessThan(1)
-  })
-
   it('starts a chosen page from its beginning and keeps cycling from there', async () => {
     const { result } = renderHook(() => useBotsTipPlayback(true))
     await play(5)
-    act(() => result.current.goTo(1))
-    expect(result.current.page).toBe(1)
+    act(() => result.current.goTo(2))
+    expect(result.current.page).toBe(2)
     expect(result.current.t).toBe(0)
     await play(14.9)
-    expect(result.current.page).toBe(1)
+    expect(result.current.page).toBe(2)
     await play(0.2)
     expect(result.current.page).toBe(0)
   })
@@ -63,11 +51,10 @@ describe('the announcement pages', () => {
   it('shows each page finished and stays put under reduced motion', async () => {
     motion.reduced = true
     const { result } = renderHook(() => useBotsTipPlayback(true))
-    expect(result.current.pageTimes).toEqual([11.7, 13])
     await play(60)
     expect(result.current.page).toBe(0)
     act(() => result.current.goTo(1))
     expect(result.current.page).toBe(1)
-    expect(result.current.t).toBe(13)
+    expect(result.current.t).toBe(16.2)
   })
 })
