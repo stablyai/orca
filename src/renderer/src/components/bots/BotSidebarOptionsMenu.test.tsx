@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, beforeAll, expect, it, vi } from 'vitest'
-import zh from '@/i18n/locales/zh.json'
+import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
 import { i18n } from '@/i18n/i18n'
 import { TranslationScopeProvider } from '@/i18n/translation-scope-provider'
 import { BotSidebarOptionsMenu } from './BotSidebarOptionsMenu'
@@ -28,8 +27,19 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuSeparator: () => null
 }))
 
+// A sentinel catalog stands in for the real one, so only the switch is under test, not its copy.
 beforeAll(() => {
-  i18n.addResourceBundle('zh', 'translation', zh)
+  i18n.addResourceBundle(
+    'zh',
+    'translation',
+    { bots: { options: { sortManual: 'switched manual', sortSmart: 'switched smart' } } },
+    false,
+    true
+  )
+})
+
+afterAll(() => {
+  i18n.removeResourceBundle('zh', 'translation')
 })
 
 afterEach(async () => {
@@ -51,7 +61,7 @@ it('the sort choices follow a language switch without remounting', async () => {
     await i18n.changeLanguage('zh')
   })
 
-  expect(screen.getByText('手动')).toBeTruthy()
-  expect(screen.getByText('智能体活动')).toBeTruthy()
+  expect(screen.getByText('switched manual')).toBeTruthy()
+  expect(screen.getByText('switched smart')).toBeTruthy()
   expect(screen.queryByText('Manual')).toBeNull()
 })
