@@ -2,6 +2,7 @@ import type { Editor } from '@tiptap/core'
 import { NodeSelection, TextSelection } from '@tiptap/pm/state'
 import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
 import { revealMarkdownNavigationDetails } from '../../markdown/navigation/markdown-navigation-details'
+import { flushPendingProseMirrorSelection } from '../review/rich-markdown-selection-flush'
 import { scrollRichMarkdownElementIntoView } from '../viewport/rich-markdown-viewport'
 import { normalizeFootnoteIdentifier } from './rich-markdown-footnote-source'
 
@@ -80,6 +81,38 @@ export function scrollToFootnoteReference(root: HTMLElement | null, identifier: 
   return target ? scrollAndHighlightTarget(target) : false
 }
 
+function getSelectedFootnoteReferenceIdentifier(editor: Editor): string | null {
+  let selection = editor.state?.selection
+  if (!selection) {
+    return null
+  }
+  if (
+    selection.empty &&
+    typeof window !== 'undefined' &&
+    window.getSelection()?.isCollapsed === false
+  ) {
+    // Rapid Shift+Arrow selection over an inline atom can precede ProseMirror's DOM observer sync.
+    flushPendingProseMirrorSelection(editor)
+    selection = editor.state?.selection
+    if (!selection) {
+      return null
+    }
+  }
+  if (
+    selection instanceof NodeSelection &&
+    selection.node.type.name === 'richMarkdownFootnoteReference'
+  ) {
+    return String(selection.node.attrs.identifier ?? '') || null
+  }
+  if (selection.to - selection.from === 1) {
+    const selectedNode = editor.state.doc.nodeAt(selection.from)
+    if (selectedNode?.type.name === 'richMarkdownFootnoteReference') {
+      return String(selectedNode.attrs.identifier ?? '') || null
+    }
+  }
+  return null
+}
+
 export function jumpToSelectedFootnoteDefinition(
   editor: Editor | null,
   root: HTMLElement | null
@@ -87,14 +120,7 @@ export function jumpToSelectedFootnoteDefinition(
   if (!editor) {
     return false
   }
-  const selection = editor.state?.selection
-  if (
-    !(selection instanceof NodeSelection) ||
-    selection.node.type.name !== 'richMarkdownFootnoteReference'
-  ) {
-    return false
-  }
-  const identifier = String(selection.node.attrs.identifier ?? '')
+  const identifier = getSelectedFootnoteReferenceIdentifier(editor)
   if (!identifier) {
     return false
   }

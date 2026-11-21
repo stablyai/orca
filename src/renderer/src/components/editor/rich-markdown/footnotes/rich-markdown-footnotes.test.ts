@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { Editor } from '@tiptap/core'
-import { NodeSelection } from '@tiptap/pm/state'
+import { NodeSelection, TextSelection } from '@tiptap/pm/state'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getMarkdownRichModeUnsupportedReason } from '../../markdown/render-mode/markdown-rich-mode'
 import { createRichMarkdownHtmlSuperscriptLinkContext } from '../citations/rich-markdown-html-superscript-link-context'
@@ -359,6 +359,16 @@ describe('rich Markdown GFM footnotes', () => {
       expect(handleKeyDown(editor.view, enterEvent)).toBe(true)
       expect(enterEvent.defaultPrevented).toBe(true)
       expect(defScrollSpy).toHaveBeenCalledTimes(2)
+      expect(collectFootnoteNodes(editor).refs).toEqual(['1'])
+
+      // Shift+Arrow range selection spanning only the inline reference also jumps on Enter.
+      editor.view.dispatch(
+        editor.state.tr.setSelection(TextSelection.create(editor.state.doc, refPos, refPos + 1))
+      )
+      const rangeEnterEvent = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true })
+      expect(handleKeyDown(editor.view, rangeEnterEvent)).toBe(true)
+      expect(rangeEnterEvent.defaultPrevented).toBe(true)
+      expect(defScrollSpy).toHaveBeenCalledTimes(3)
       expect(collectFootnoteNodes(editor).refs).toEqual(['1'])
 
       // Clicking the definition marker jumps back to the inline reference.
