@@ -27153,7 +27153,8 @@
     "errors": {
       "nameTaken": "Another bot already has that name.",
       "generic": "Something went wrong. Try again.",
-      "avatarInvalid": "That picture could not be used. Pick a PNG or JPG image."
+      "avatarInvalid": "That picture could not be used. Pick a PNG or JPG image.",
+      "unsavedDrafts": "Its folder has unsaved editor changes. Save or close them, then delete again."
     },
     "slack": {
       "setup": {
