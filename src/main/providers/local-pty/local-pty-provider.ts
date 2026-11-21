@@ -21,7 +21,10 @@ import {
   steadyPollJudgesByJobMembership,
   type PtyProcessInspectionOptions
 } from '../pty/process-inspection'
-import type { TerminalProcessInspection as PtyProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
+import {
+  isClientOnlyUnverifiableInspection,
+  type TerminalProcessInspection as PtyProcessInspection
+} from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { TerminalOscColorQueryReplyColors } from '../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import {
   _resetPtyOwnerHostColorsForTest,
@@ -155,7 +158,9 @@ export class LocalPtyProvider implements IPtyProvider {
     const watched =
       proc !== undefined &&
       noteLocalPtyInspection(id, ptyProcesses.get(id) === proc, proc, result.foregroundProcess)
-    return watched ? { ...result, foregroundExitWatched: true } : result
+    return watched && !isClientOnlyUnverifiableInspection(result)
+      ? { ...result, foregroundExitWatched: true }
+      : result
   }
 
   onBackgroundStreamEvent(callback: (event: PtyBackgroundStreamEvent) => void): () => void {

@@ -94,14 +94,14 @@ describe('agent completion no-evidence inspection cadence', () => {
     await vi.advanceTimersByTimeAsync(20_000)
     foregroundProcess = 'codex'
     coordinator.observeOutputActivity()
-    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(3_000)
     expect(inspectProcess).toHaveBeenCalled()
 
     // With no title/hook end signal, the prompt redraw arms reads that confirm sustained absence.
     foregroundProcess = null
     coordinator.observeOutputActivity()
     const callsAtExit = inspectProcess.mock.calls.length
-    await vi.advanceTimersByTimeAsync(3_000)
+    await vi.advanceTimersByTimeAsync(4_000)
     expect(inspectProcess.mock.calls.length).toBeGreaterThan(callsAtExit)
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
     expect(dispatchCompletion).toHaveBeenCalledWith('codex', {

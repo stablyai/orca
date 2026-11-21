@@ -28,7 +28,7 @@ describe('agent completion local exit confirmation', () => {
       shouldPollProcessCadence: () => true
     })
     coordinator.startProcessTracking()
-    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(3_000)
     return {
       coordinator,
       dispatchCompletion,
@@ -51,7 +51,7 @@ describe('agent completion local exit confirmation', () => {
       )
       tracked.setInspection('pwsh.exe', false)
       tracked.coordinator.observeOutputActivity()
-      await vi.advanceTimersByTimeAsync(3_000)
+      await vi.advanceTimersByTimeAsync(4_000)
       expect(tracked.confirmForegroundProcess).toHaveBeenCalledTimes(1)
 
       tracked.coordinator.observeForegroundAgentProcess({ agent: 'claude', processName: 'claude' })
@@ -65,7 +65,7 @@ describe('agent completion local exit confirmation', () => {
       expect(tracked.onForegroundAgentExited).not.toHaveBeenCalled()
       expect(tracked.dispatchCompletion).not.toHaveBeenCalled()
 
-      await vi.advanceTimersByTimeAsync(POLL_TIER_INTERVAL_MS.active)
+      await vi.advanceTimersByTimeAsync(POLL_TIER_INTERVAL_MS.active * 2)
       expect(tracked.onForegroundAgentExited).toHaveBeenCalledExactlyOnceWith({
         agent: 'claude',
         processName: 'claude'

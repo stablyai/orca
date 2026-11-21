@@ -24,7 +24,7 @@ describe('agent completion coordinator', () => {
 
     coordinator.startProcessTracking()
     coordinator.observeTitle('Codex working')
-    await vi.advanceTimersByTimeAsync(3_000)
+    await vi.advanceTimersByTimeAsync(4_000)
 
     // Main reports hidden output once per 5 s window; the agent exits and the prompt redraws inside it, unreported.
     coordinator.observeHiddenOutputActivity()
@@ -33,8 +33,8 @@ describe('agent completion coordinator', () => {
     await vi.advanceTimersByTimeAsync(4_000)
     expect(dispatchCompletion).not.toHaveBeenCalled()
 
-    // A second fresh read 3 s later confirms it.
-    await vi.advanceTimersByTimeAsync(3_000)
+    // The read after the notice window sees it gone, and the next fresh read confirms it.
+    await vi.advanceTimersByTimeAsync(4_500)
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
     expect(dispatchCompletion).toHaveBeenCalledWith('codex', {
       source: 'process-exit',
@@ -46,8 +46,9 @@ describe('agent completion coordinator', () => {
   it('reads nothing and arms no timer for a quiet agent or shell, and once after an output burst', async () => {
     for (const foregroundProcess of ['codex', null]) {
       // The host reports this agent's exit as an event, so nothing needs re-checking at rest.
-      const inspectProcess = vi.fn(async () => ({
-        ...processResult(foregroundProcess),
+      const inspectProcess = vi.fn(async (): Promise<RuntimeTerminalProcessInspection> => ({
+        foregroundProcess,
+        hasChildProcesses: foregroundProcess !== null,
         ...(foregroundProcess ? { foregroundExitWatched: true as const } : {})
       }))
       const coordinator = createAgentCompletionCoordinator({
@@ -107,7 +108,7 @@ describe('agent completion coordinator', () => {
       isLive: () => true
     })
     coordinator.startProcessTracking()
-    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(3_000)
 
     result = processResult('zsh', true)
     coordinator.observeOutputActivity()
@@ -165,28 +166,24 @@ describe('agent completion coordinator', () => {
     })
 
     coordinator.startProcessTracking()
-    vi.advanceTimersByTime(2_000)
-    await flushAsyncTicks()
+    await vi.advanceTimersByTimeAsync(3_000)
 
     result = processResult('zsh', true)
     coordinator.observeOutputActivity()
-    vi.advanceTimersByTime(750)
-    await flushAsyncTicks()
+    await vi.advanceTimersByTimeAsync(1_250)
 
     expect(dispatchCompletion).not.toHaveBeenCalled()
 
     result = processResult('zsh', false)
-    vi.advanceTimersByTime(750)
-    await flushAsyncTicks()
+    await vi.advanceTimersByTimeAsync(1_250)
 
     expect(dispatchCompletion).not.toHaveBeenCalled()
 
-    vi.advanceTimersByTime(750)
-    await flushAsyncTicks()
+    await vi.advanceTimersByTimeAsync(1_250)
 
     expect(dispatchCompletion).not.toHaveBeenCalled()
 
-    vi.advanceTimersByTime(1_500)
+    vi.advanceTimersByTime(2_500)
     await flushAsyncTicks()
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
@@ -227,16 +224,16 @@ describe('agent completion coordinator', () => {
     })
 
     coordinator.startProcessTracking()
-    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(3_000)
     result = processResult(null, false)
     coordinator.observeOutputActivity()
-    await vi.advanceTimersByTimeAsync(750)
+    await vi.advanceTimersByTimeAsync(1_250)
     result = unavailableResult
-    await vi.advanceTimersByTimeAsync(750)
+    await vi.advanceTimersByTimeAsync(1_250)
     result = processResult(null, false)
 
     // Unavailable evidence resets the absence candidate; the next idle observation starts a fresh settle interval.
-    await vi.advanceTimersByTimeAsync(1_500)
+    await vi.advanceTimersByTimeAsync(2_500)
     expect(dispatchCompletion).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(2_250)

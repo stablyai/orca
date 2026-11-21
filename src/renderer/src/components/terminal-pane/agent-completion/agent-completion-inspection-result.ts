@@ -213,7 +213,11 @@ export function handleAgentCompletionInspectionResult(args: {
     state.lastForegroundAgent = null
     clearAgentRunEvidence()
     // A shell with children may be starting an agent the host has not named yet (Windows resolves it later).
-    if (result.childProcessEvidence === 'children' && isShellProcess(result.foregroundProcess)) {
+    if (
+      result.childProcessEvidence === 'children' &&
+      result.foregroundProcess !== null &&
+      isShellProcess(result.foregroundProcess)
+    ) {
       requestFollowUp('unresolved')
     }
   }

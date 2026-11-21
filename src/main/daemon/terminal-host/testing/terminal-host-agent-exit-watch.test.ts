@@ -14,6 +14,10 @@ function createFakeExitWatchNative() {
   const exited = new Set<number>()
   return {
     live,
+    /** A new process that reuses an exited pid. */
+    reuse(pid: number): void {
+      exited.delete(pid)
+    },
     exit(pid: number): void {
       exited.add(pid)
       for (const [id, watch] of live) {
@@ -123,6 +127,7 @@ describe('TerminalHost foreground agent exit watch', () => {
     foreground = 'zsh'
     await host.inspectProcess('pane-1', { foregroundOnly: true })
     foreground = 'codex'
+    fake.reuse(4242)
     await host.inspectProcess('pane-1', { foregroundOnly: true })
     expect([...fake.live.values()].map((watch) => watch.pid)).toEqual([4242])
   })

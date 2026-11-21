@@ -28,11 +28,11 @@ describe('agent completion coordinator process-exit turn boundary', () => {
       isLive: () => true
     })
     ptyLane.startProcessTracking()
-    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(3_000)
     await flushAsyncTicks()
     result = processResult('zsh', false)
     ptyLane.observeOutputActivity()
-    await vi.advanceTimersByTimeAsync(3_000)
+    await vi.advanceTimersByTimeAsync(4_000)
     await flushAsyncTicks()
     expect(ptyDispatch).toHaveBeenCalledTimes(1)
     return {
@@ -60,7 +60,7 @@ describe('agent completion coordinator process-exit turn boundary', () => {
 
     // A later agent in the same pane reports its turns through hooks only.
     showForeground('opencode')
-    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(3_000)
     await flushAsyncTicks()
     const hookDispatch = vi.fn()
     const hookLane = createHookLane(hookDispatch)
