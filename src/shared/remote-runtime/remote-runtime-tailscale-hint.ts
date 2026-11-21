@@ -1,5 +1,7 @@
 /** Pure guidance shared by desktop/web presentation paths; keep copy out of error constructors consumed by CLI/logs/mobile. */
 
+import { REMOTE_RUNTIME_TLS_REJECTED_PHRASE } from './remote-runtime-connect-bound'
+
 const TAILSCALE_DOWNLOAD_URL = 'https://tailscale.com/download'
 
 // Only unreachable-runtime errors have a Tailscale remedy; preserve auth/protocol errors.
@@ -65,7 +67,11 @@ export function withRemoteRuntimeTailscaleHint(
   message: string,
   endpoint: string | null | undefined
 ): string {
-  if (!REMOTE_RUNTIME_UNREACHABLE_RE.test(message)) {
+  // A TLS rejection means the host answered, so a network remedy would mislead.
+  if (
+    !REMOTE_RUNTIME_UNREACHABLE_RE.test(message) ||
+    message.includes(REMOTE_RUNTIME_TLS_REJECTED_PHRASE)
+  ) {
     return message
   }
   // Deduplicate exact hint suffixes; the endpoint itself may contain “tailscale”.
