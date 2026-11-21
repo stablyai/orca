@@ -16,7 +16,8 @@ import { botGitHubCalls } from '@/lib/bot-connector-host-calls'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { connectAnotherAccount, useConnectorConnect } from '@/lib/connector-connect-state'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-import { refreshBotGitHub, useBotGitHub } from '@/lib/bot-github-state'
+import { awaitGitHubChange, refreshBotGitHub, useBotGitHub } from '@/lib/bot-github-state'
+import { GITHUB_INSTALL_FOLLOW } from '@/lib/bot-github-install-record'
 import { openBotHostPageOrSay } from '@/lib/bot-host-page'
 import {
   type ConnectorGitHubLinkedAccount,
@@ -138,7 +139,12 @@ function GitHubLoginRow({
         <Button
           size="sm"
           variant="outline"
-          onClick={() => openBotHostPageOrSay(hostId, installUrl, { local: 'system' })}
+          onClick={() => {
+            // The row follows GitHub until the install shows, as the setup dialog does.
+            if (openBotHostPageOrSay(hostId, installUrl, { local: 'system' }) !== 'unrouted') {
+              awaitGitHubChange(hostId, undefined, GITHUB_INSTALL_FOLLOW)
+            }
+          }}
         >
           {t('bots.github.connection.finishSetup', 'Finish setup')}
         </Button>

@@ -3,7 +3,7 @@
 import { withBotConnectorRuntime } from '../../../lib/bot-connector-host-calls.test-fixture'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import React from 'react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConfirmationDialogContext } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { awaitGitHubChange, readGitHubAwait, stopAwaitingGitHub } from '@/lib/bot-github-state'
@@ -32,8 +32,8 @@ vi.mock('@/lib/browser/navigation/app-http-link-open', async (actual) => ({
   openAppHttpLink
 }))
 
-import { botGitHubSetupStep } from './BotGitHubSetupDialog'
 import { GitHubInstallMount } from './GitHubInstallMount'
+import { botGitHubSetupStep } from './github-setup-step'
 
 const bot: Bot = {
   id: 'bot-1',
@@ -150,6 +150,9 @@ function stateWith(installations: (typeof acme | ConnectorGitHubState['installat
   return { ok: true, value: state({ account: dana, installations }) }
 }
 
+// The mount loads the surface lazily; load it once so no test waits on the first import.
+beforeAll(() => import('./GitHubInstallSurface'))
+
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.updateBot.mockResolvedValue(bot)
@@ -200,8 +203,13 @@ describe('botGitHubSetupStep', () => {
       kind: 'done',
       login: 'dana',
       installations: [acme],
-      installUrl
+      installUrl,
+      error: null
     })
+    // Adding another login that didn't finish keeps saying so.
+    expect(
+      botGitHubSetupStep(installed, { status: 'failed', error: 'expired' }, true)
+    ).toMatchObject({ kind: 'done', error: 'expired' })
   })
 })
 

@@ -5,13 +5,9 @@ import { GitHubIcon } from '@/components/icons/GitHubIcon'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
 import { useTranslate } from '@/i18n/use-translate'
+import { refreshBotGitHub, useBotGitHub, useGitHubAwait } from '@/lib/bot-github-state'
 import {
-  type BotGitHubView,
-  refreshBotGitHub,
-  useBotGitHub,
-  useGitHubAwait
-} from '@/lib/bot-github-state'
-import {
+  addGitHubAccount,
   closeGitHubInstall,
   followGitHubInstall,
   type GitHubInstallRecord,
@@ -21,11 +17,8 @@ import {
 } from '@/lib/bot-github-install-record'
 import { readBots, updateBot } from '@/lib/bot-catalog'
 import { botGitHubCalls } from '@/lib/bot-connector-host-calls'
-import {
-  cancelConnectorConnect,
-  type ConnectorConnectView,
-  useResumeAfterConnect
-} from '@/lib/connector-connect-state'
+import { cancelConnectorConnect, useResumeAfterConnect } from '@/lib/connector-connect-state'
+import { botGitHubSetupStep } from './github-setup-step'
 import { BotHostSignInButton } from '../BotHostSignInButton'
 import { useBotHostLabel } from '../use-bot-host-label'
 import type { Bot } from '../../../../../shared/bot-types'
@@ -61,55 +54,6 @@ import {
 /** Once linked and installed, the owner picks who may ask the bot on GitHub. */
 function LinkedPeople({ bot }: { bot: Bot }): React.JSX.Element {
   return <BotWhoCanAskList bot={bot} service={useGitHubWhoCanAsk(bot.hostId, true)} />
-}
-
-/** Each step follows from the cloud's state and the connect trip. */
-export type BotGitHubSetupStep =
-  | { kind: 'checking' }
-  | { kind: 'failed'; code: string }
-  | { kind: 'connect'; error: string | null }
-  | { kind: 'waiting' }
-  /** Signed in, no installation yet: `requested` when an organization owner must approve it. */
-  | { kind: 'install'; login: string; installUrl: string; requested: boolean }
-  | {
-      kind: 'turn-on'
-      login: string
-      installations: ConnectorGitHubInstallation[]
-      installUrl: string
-    }
-  | {
-      kind: 'done'
-      login: string
-      installations: ConnectorGitHubInstallation[]
-      installUrl: string
-    }
-
-/** `on`: the bot is already turned on for GitHub, so setup ends once the account is linked and installed. */
-export function botGitHubSetupStep(
-  view: BotGitHubView,
-  connect: ConnectorConnectView,
-  on: boolean
-): BotGitHubSetupStep {
-  if (connect.status === 'waiting') {
-    return { kind: 'waiting' }
-  }
-  if (view.status === 'loading') {
-    return { kind: 'checking' }
-  }
-  if (view.status !== 'ready') {
-    return { kind: 'failed', code: view.status === 'off' ? 'github_off' : view.error }
-  }
-  const { account, installations, installUrl } = view.github
-  if (!account) {
-    return { kind: 'connect', error: connect.status === 'failed' ? connect.error : null }
-  }
-  if (installations.length === 0) {
-    const requested = connect.status === 'linked' && connect.link.install === 'requested'
-    return { kind: 'install', login: account.login, installUrl, requested }
-  }
-  return on
-    ? { kind: 'done', login: account.login, installations, installUrl }
-    : { kind: 'turn-on', login: account.login, installations, installUrl }
 }
 
 const GITHUB = { id: 'github', Icon: GitHubIcon } as const
@@ -176,6 +120,8 @@ function BotGitHubSetupFlow({
     </Button>
   )
   const logins = view.status === 'ready' ? gitHubLinkedAccounts(view.github) : []
+  // Only the login shown, on a cloud that links several; an older one unlinks its one link.
+  const userId = view.status === 'ready' && view.github.accounts ? logins[0]?.userId : undefined
   const signedIn = (login: string): React.JSX.Element => (
     <SignedInAs
       who={logins.length > 1 ? logins.map((entry) => `@${entry.login}`).join(', ') : `@${login}`}
@@ -186,7 +132,10 @@ function BotGitHubSetupFlow({
               void (async () => {
                 const hostBots = readBots().filter((entry) => entry.hostId === bot.hostId)
                 if (await confirmSignOut(hostBots, { source: 'github', login })) {
-                  await signIn.anotherAccount(() => botGitHubCalls(bot.hostId).unlink(), bot)
+                  await signIn.anotherAccount(
+                    () => botGitHubCalls(bot.hostId).unlink({ userId }),
+                    bot
+                  )
                 }
               })()
       }
@@ -367,7 +316,17 @@ function BotGitHubSetupFlow({
               note={gitHubPushesAs(bot, hostName)}
             />
             {installed(step)}
+            {step.error ? (
+              <p role="alert" className="text-sm text-destructive">
+                {botGitHubErrorMessage(step.error, hostName)}
+              </p>
+            ) : null}
             <DialogFooter>
+              {step.error ? (
+                <Button variant="outline" onClick={() => addGitHubAccount(bot)}>
+                  {t('bots.github.setup.retry', 'Try again')}
+                </Button>
+              ) : null}
               <Button autoFocus onClick={onClose}>
                 {t('bots.github.setup.finish', 'Done')}
               </Button>
