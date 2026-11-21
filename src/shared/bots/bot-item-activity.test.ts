@@ -221,6 +221,38 @@ it('gives a line a plain comment took by order to the comment that later names i
   expect(entries[1]).not.toHaveProperty('onAsk')
 })
 
+it('quotes no question on a comment sent plain, while one sent without the mark still answers by order', () => {
+  const ask = {
+    questions: [
+      { prompt: 'Where should the approval card show?', options: [{ label: 'Inline' }] },
+      { prompt: 'Tell the team?', options: [{ label: 'Yes' }] }
+    ]
+  }
+  const asked = [
+    event('e2', 'commented', 200, { text: 'copy', ask }),
+    event('e3', 'status', 200, { from: 'working', to: 'needs_you' })
+  ]
+  const item = makeTestBotItem(6, {
+    status: 'needs_you',
+    question: { eventId: 'e2', text: 'copy' }
+  })
+
+  const plain = botItemActivity(item, [
+    ...asked,
+    owner('e4', 'commented', 250, { text: 'which one is the paired server?', plain: true })
+  ])
+  expect(plain).toMatchObject([{ key: 'e2', waiting: true, answers: [null, null] }, { key: 'e4' }])
+  expect(plain[1]).not.toHaveProperty('replyTo')
+
+  const unmarked = botItemActivity(item, [
+    ...asked,
+    owner('e4', 'commented', 250, { text: 'Above the composer', answers: 'e2' })
+  ])
+  expect(unmarked[1]).toMatchObject({
+    replyTo: { eventId: 'e2', text: 'Where should the approval card show?' }
+  })
+})
+
 it('reads a held answer by the question it names, with or without a question mark', () => {
   const first = { questions: [{ prompt: 'Deployment region', options: [{ label: 'EU' }] }] }
   const again = { questions: [{ prompt: 'Ship it?', options: [{ label: 'Ship' }] }] }
