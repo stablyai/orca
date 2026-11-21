@@ -17,16 +17,29 @@ export type ChatTurnEnd = {
   news: Extract<ChatNews, { kind: 'turn-ended' }>
   agent: NativeChatAgent
   emit: (event: ConversationEvent) => void
+  /** Whom the turn acts for, once its journal is read. */
+  turnFor: (turn: EndedChatTurn) => Pick<ChatTurnEnd['ended'], 'turnFor'>
   /** The turn's workers are read, so its end never reads done while they run. */
   workersChecked: () => Promise<unknown>
   /** Still the same signed-in account: false after a reset, so the end reaches no one. */
   current: () => boolean
 }
 
-/** An adopted turn's end: how it went, never what it said or the links its work opened. */
-export function endAdoptedTurn(end: ChatTurnEnd, promptsAudience: () => boolean): void {
+/** An adopted turn's end: how it went, never what it said or the links its work opened. A success
+ *  reads only whom it acts for (by index); without that read it proves nothing. `read`: the turn
+ *  already read in full. */
+export function endAdoptedTurn(
+  end: ChatTurnEnd,
+  promptsAudience: () => boolean,
+  read?: EndedChatTurn
+): void {
   const failed = end.news.outcome === 'failure'
-  void (failed ? end.news.readTurn() : Promise.resolve(null)).then(async (turn) => {
+  const reading: Promise<EndedChatTurn> = read
+    ? Promise.resolve(read)
+    : failed
+      ? end.news.readTurn()
+      : (end.news.readAttribution?.() ?? Promise.resolve({}))
+  void reading.then(async (turn) => {
     if (!end.current()) {
       return
     }
@@ -36,15 +49,20 @@ export function endAdoptedTurn(end: ChatTurnEnd, promptsAudience: () => boolean)
     }
     end.emit({
       ...end.ended,
+      ...end.turnFor(turn),
       origin: 'local',
-      ...(failed ? { failure: connectorFailure(turn?.failure, end.agent) } : {})
+      ...(failed ? { failure: connectorFailure(turn.failure, end.agent) } : {})
     })
   })
 }
 
 /** Its reply posts after the owner's words: held while their post failed, until Retry or Dismiss,
  *  across a restart too. A quiet result still ends the turn, with no words. */
-export function endMirroredTurn(end: ChatTurnEnd, mirrored: SlackMirrorTurn): void {
+export function endMirroredTurn(
+  end: ChatTurnEnd,
+  mirrored: SlackMirrorTurn,
+  link: ExternalConversationLink
+): void {
   void end.news.readTurn().then(async (read) => {
     if (!end.current()) {
       return
@@ -53,9 +71,10 @@ export function endMirroredTurn(end: ChatTurnEnd, mirrored: SlackMirrorTurn): vo
     if (!end.current()) {
       return
     }
-    const message = read.lastAssistantMessage
+    const message = botTurnReply(end, link, read, false)
     mirrored.release({
       ...end.ended,
+      ...end.turnFor(read),
       origin: 'local',
       mirror: true,
       ...(message && !isQuietBotResult(message) ? { lastAssistantMessage: message } : {}),
@@ -64,6 +83,11 @@ export function endMirroredTurn(end: ChatTurnEnd, mirrored: SlackMirrorTurn): vo
         : {})
     })
   })
+}
+
+// A turn's length by the machine's clock, when its start was seen and the clock ran forward.
+function tookOf(ended: ChatTurnEnd['ended']): { tookMs?: number } {
+  return ended.turnId !== null && ended.at > ended.turnId ? { tookMs: ended.at - ended.turnId } : {}
 }
 
 export type ChatTurnReplies = {
@@ -87,7 +111,8 @@ export async function endRepliedTurn(
   turn: EndedChatTurn,
   link: ExternalConversationLink,
   links: () => Promise<ConnectorWorkLink[]>,
-  fill: ConversationReplyFill | null | undefined
+  fill: ConversationReplyFill | null | undefined,
+  legacyReply?: string
 ): Promise<boolean> {
   // A reset meanwhile: the end reaches no one, either way.
   if (!end.current()) {
@@ -106,6 +131,7 @@ export async function endRepliedTurn(
     prose: turn.turnProse ?? '',
     bot: Boolean(link.bot),
     links: link.bot ? await links() : [],
+    ...tookOf(end.ended),
     ...failure
   }).catch((error: unknown) => {
     console.warn('[connector] could not fill reply outbox rows', error)
@@ -114,10 +140,50 @@ export async function endRepliedTurn(
   if (!end.current() || !covered.has(link.externalId)) {
     return !end.current()
   }
+  // The constant fallback uses this end's existing durable turn-event key.
+  if (legacyReply && legacyReply !== turn.lastAssistantMessage) {
+    return false
+  }
   await end.workersChecked()
   if (end.current()) {
     // The cloud keeps the thread's failure from whichever of this and the reply lands last.
-    end.emit({ ...end.ended, stateOnly: true, ...failure })
+    end.emit({ ...end.ended, ...end.turnFor(turn), stateOnly: true, ...failure })
   }
   return true
+}
+
+const COALESCED_QUIET_REPLY =
+  'I replied but the message may not have reached you. Please ask again.'
+
+/** Only count metadata can turn a quiet completion into a constant; earlier text is never read. */
+export function botTurnReply(
+  end: ChatTurnEnd,
+  link: ExternalConversationLink,
+  turn: EndedChatTurn,
+  requested: boolean
+): string | undefined {
+  const message = turn.lastAssistantMessage
+  if (!link.bot || !message || !isQuietBotResult(message)) {
+    return message
+  }
+  const providerTurnCount = end.news.mergedTurnCount ?? 1
+  if (providerTurnCount <= 1) {
+    return undefined
+  }
+  // Quiet to the thread's own message is its answer: the merged turns before it were not the reply.
+  const reason = !requested
+    ? 'not-thread-request'
+    : answersThread(link, turn)
+      ? 'thread-answered-quietly'
+      : 'coalesced-quiet'
+  const fallback = reason === 'coalesced-quiet'
+  // Text-free and id-free: only how many turns merged and what was decided.
+  console.info('[connector] merged quiet completion', { providerTurnCount, fallback, reason })
+  return fallback ? COALESCED_QUIET_REPLY : undefined
+}
+
+function answersThread(link: ExternalConversationLink, turn: EndedChatTurn): boolean {
+  const body = (turn.opener ?? turn.latestOpener)?.body
+  const from = body?.kind === 'message' ? body.connectorConversation : undefined
+  return from?.source === link.source && from.externalId === link.externalId
 }

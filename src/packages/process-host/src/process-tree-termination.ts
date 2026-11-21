@@ -78,6 +78,15 @@ function taskkillTree(
   return waitForWindowsTreeKill(startWindowsTreeKill(child, rootPid, () => killRoot(child, signal)))
 }
 
+/** One process-table read: true only when the group is gone or every member is a zombie; a failed read proves nothing. */
+export async function posixProcessGroupQuiet(processGroupId: number): Promise<boolean> {
+  if (!processGroupExists(processGroupId)) {
+    return true
+  }
+  const states = await readPosixProcessGroupStates(processGroupId)
+  return states !== null && states.every((state) => state.startsWith('Z'))
+}
+
 async function waitForPosixProcessGroupQuiescence(processGroupId: number): Promise<boolean> {
   const deadline = Date.now() + SUBPROCESS_TIMEOUT_MS
   while (true) {
@@ -97,7 +106,57 @@ async function waitForPosixProcessGroupQuiescence(processGroupId: number): Promi
   }
 }
 
+type GroupStates = Map<number, string[]>
+let runningTableRead: Promise<GroupStates | null> | undefined
+let queuedTableRead: Promise<GroupStates | null> | undefined
+
+// One parse per shared read; each waiter looks up only its own group.
+function indexGroupStates(output: string | null): GroupStates | null {
+  if (output === null) {
+    return null
+  }
+  const groups: GroupStates = new Map()
+  for (const line of output.split('\n')) {
+    const match = line.trim().match(/^(\d+)\s+(\S+)/)
+    if (match) {
+      const id = Number(match[1])
+      const states = groups.get(id)
+      if (states) {
+        states.push(match[2])
+      } else {
+        groups.set(id, [match[2]])
+      }
+    }
+  }
+  return groups
+}
+
+function startTableRead(): Promise<GroupStates | null> {
+  runningTableRead = readPosixProcessTable()
+    .then(indexGroupStates)
+    .finally(() => {
+      runningTableRead = undefined
+    })
+  return runningTableRead
+}
+
+// Concurrent group waits share a table read, but only one that starts after they ask: an earlier snapshot can miss a newer group.
+function readTableAfterNow(): Promise<GroupStates | null> {
+  if (!runningTableRead) {
+    return startTableRead()
+  }
+  queuedTableRead ??= runningTableRead.then(() => {
+    queuedTableRead = undefined
+    return startTableRead()
+  })
+  return queuedTableRead
+}
+
 function readPosixProcessGroupStates(processGroupId: number): Promise<string[] | null> {
+  return readTableAfterNow().then((groups) => (groups ? (groups.get(processGroupId) ?? []) : null))
+}
+
+function readPosixProcessTable(): Promise<string | null> {
   return new Promise((resolve) => {
     let probe: ChildProcess
     try {
@@ -113,13 +172,13 @@ function readPosixProcessGroupStates(processGroupId: number): Promise<string[] |
     let output = ''
     let truncated = false
     let settled = false
-    const finish = (states: string[] | null): void => {
+    const finish = (table: string | null): void => {
       if (settled) {
         return
       }
       settled = true
       clearTimeout(timer)
-      resolve(states)
+      resolve(table)
     }
     probe.stdout?.on('data', (chunk: Buffer | string) => {
       const text = chunk.toString()
@@ -136,11 +195,7 @@ function readPosixProcessGroupStates(processGroupId: number): Promise<string[] |
         finish(null)
         return
       }
-      const states = output.split('\n').flatMap((line) => {
-        const match = line.trim().match(/^(\d+)\s+(\S+)/)
-        return match && Number(match[1]) === processGroupId ? [match[2]] : []
-      })
-      finish(states)
+      finish(output)
     })
     const timer = setTimeout(() => {
       probe.kill()

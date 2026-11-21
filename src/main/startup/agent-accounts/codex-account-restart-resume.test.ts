@@ -12,11 +12,13 @@ vi.mock('../../codex/trust/project-trust/codex-project-trust-worker-spawn', asyn
 vi.mock('electron', () => ({ app: { getPath: () => homes.system } }))
 vi.mock('../main-process-state', () => ({
   mainProcessState: {
-    codexRuntimeHome: {
-      isHostSystemDefaultRealHomeSelected: () => false,
-      prepareAccountHistoryForPinnedHome: async () => {},
-      getHostCodexHomePathsForSessionDiscovery: () => [homes.original, homes.selected],
-      resolveSelectedHostAccountCodexHomePathForResume: () => homes.selected || null
+    core: {
+      codexRuntimeHome: {
+        isHostSystemDefaultRealHomeSelected: () => false,
+        prepareAccountHistoryForPinnedHome: async () => {},
+        getHostCodexHomePathsForSessionDiscovery: () => [homes.original, homes.selected],
+        resolveSelectedHostAccountCodexHomePathForResume: () => homes.selected || null
+      }
     },
     store: { getSettings: () => ({}) }
   }

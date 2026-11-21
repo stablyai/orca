@@ -57,8 +57,9 @@ describe('linked projects for bot skills', () => {
     const perf = writeSkill(join(base, 'devex'), 'perf')
     const project = join(base, 'orca')
     mkdirSync(join(project, '.agents', 'skills'), { recursive: true })
-    symlinkSync(electron, join(project, '.agents', 'skills', 'electron'))
-    symlinkSync(perf, join(project, '.agents', 'skills', 'perf'))
+    // A junction needs no Windows symlink privilege; POSIX ignores the type.
+    symlinkSync(electron, join(project, '.agents', 'skills', 'electron'), 'junction')
+    symlinkSync(perf, join(project, '.agents', 'skills', 'perf'), 'junction')
     // Project config Claude would import from an added project folder.
     mkdirSync(join(project, '.claude'), { recursive: true })
     writeFileSync(join(project, '.claude', 'settings.json'), '{"enabledPlugins":{"x@y":true}}')
@@ -88,38 +89,42 @@ describe('linked projects for bot skills', () => {
     expect(realpathSync(join(base, 'bot', 'skills', 'perf'))).toBe(perf)
   })
 
-  it('never takes a SKILL.md that links to another file, or text without a declared name and description', async () => {
-    const base = scratch()
-    mkdirSync(join(base, 'elsewhere'))
-    const privateFile = join(base, 'elsewhere', 'notes.txt')
-    writeFileSync(
-      privateFile,
-      '---\nname: innocent\ndescription: FAKE_PRIVATE_TOKEN=pretend\n---\nFAKE_PRIVATE_TOKEN=pretend\n'
-    )
-    const skills = join(base, 'project', '.agents', 'skills')
-    mkdirSync(join(skills, 'innocent'), { recursive: true })
-    symlinkSync(privateFile, join(skills, 'innocent', 'SKILL.md'))
-    mkdirSync(join(skills, 'plain-text'))
-    writeFileSync(join(skills, 'plain-text', 'SKILL.md'), 'FAKE_PRIVATE_TOKEN=pretend\n')
-    writeSkill(skills, 'deploy')
+  // File links need the Windows symlink privilege, which stock hosts lack.
+  it.skipIf(process.platform === 'win32')(
+    'never takes a SKILL.md that links to another file, or text without a declared name and description',
+    async () => {
+      const base = scratch()
+      mkdirSync(join(base, 'elsewhere'))
+      const privateFile = join(base, 'elsewhere', 'notes.txt')
+      writeFileSync(
+        privateFile,
+        '---\nname: innocent\ndescription: FAKE_PRIVATE_TOKEN=pretend\n---\nFAKE_PRIVATE_TOKEN=pretend\n'
+      )
+      const skills = join(base, 'project', '.agents', 'skills')
+      mkdirSync(join(skills, 'innocent'), { recursive: true })
+      symlinkSync(privateFile, join(skills, 'innocent', 'SKILL.md'))
+      mkdirSync(join(skills, 'plain-text'))
+      writeFileSync(join(skills, 'plain-text', 'SKILL.md'), 'FAKE_PRIVATE_TOKEN=pretend\n')
+      writeSkill(skills, 'deploy')
 
-    const { projects } = await linkedSkillProjects(
-      { skillProjects: ['p'] },
-      [repo('p', join(base, 'project'))],
-      join(base, 'bot')
-    )
+      const { projects } = await linkedSkillProjects(
+        { skillProjects: ['p'] },
+        [repo('p', join(base, 'project'))],
+        join(base, 'bot')
+      )
 
-    expect(projects[0]?.skills.map((skill) => skill.name)).toEqual(['deploy'])
-    expect(linkedSkillsSection(projects, projects)).not.toContain('FAKE_PRIVATE_TOKEN')
-    expect(readdirSync(join(base, 'bot', 'skills'))).toEqual(['deploy'])
-  })
+      expect(projects[0]?.skills.map((skill) => skill.name)).toEqual(['deploy'])
+      expect(linkedSkillsSection(projects, projects)).not.toContain('FAKE_PRIVATE_TOKEN')
+      expect(readdirSync(join(base, 'bot', 'skills'))).toEqual(['deploy'])
+    }
+  )
 
   it('reads a skills folder that is itself a link', async () => {
     const base = scratch()
     writeSkill(join(base, 'shared'), 'review')
     const project = join(base, 'project')
     mkdirSync(join(project, '.agents'), { recursive: true })
-    symlinkSync(join(base, 'shared'), join(project, '.agents', 'skills'))
+    symlinkSync(join(base, 'shared'), join(project, '.agents', 'skills'), 'junction')
 
     const { projects } = await linkedSkillProjects(
       { skillProjects: ['p'] },

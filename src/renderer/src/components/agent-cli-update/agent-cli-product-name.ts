@@ -31,5 +31,9 @@ export function agentCliProductName(
       return t('agentCliUpdate.cursorProduct', 'Cursor CLI')
     case 'hermes':
       return t('agentCliUpdate.hermesProduct', 'Hermes Agent')
+    case 'goose':
+      return t('agentCliUpdate.gooseProduct', 'Goose CLI')
+    case 'aug':
+      return t('agentCliUpdate.auggieProduct', 'Auggie')
   }
 }

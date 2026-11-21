@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { prepareLegacyTranscriptImport } from './journal-legacy-import'
+import { assertAdoptedTranscriptFolder } from './adopted-transcript-source'
 import { encodeClaudeProjectPath } from '../../../ai-vault/scanners/claude/claude-project-dir-encoding'
 import { grokEncodedCwdDirName } from '../../../../shared/agent-hook-listener/providers/grok/grok-session-paths'
 
@@ -210,6 +211,17 @@ it.each([
             }
           }
     )
+    // Continue in Chat UI asks this before closing the terminal; it must agree with the import.
+    const preflight = assertAdoptedTranscriptFolder({
+      agent: 'claude',
+      filePath,
+      source: { providerSessionId: 'claude-moved', workspaceCwd }
+    })
+    await (ok
+      ? expect(preflight).resolves.toBeUndefined()
+      : expect(preflight).rejects.toMatchObject({
+          refusal: { code: 'agent_session_identity_required', details: { otherFolder: true } }
+        }))
   }
 )
 

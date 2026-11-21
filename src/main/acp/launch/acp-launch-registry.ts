@@ -16,7 +16,7 @@ import { agentSessionSetupFor } from '../../../shared/agent-session/lifecycle/la
 import { loadGrokSkillRoots, loadOmpSkillRoots, loadOpenCodeSkillRoots } from './acp-skill-roots'
 import {
   deliverGrokInstructions,
-  deliverOmpInstructions,
+  deliverAppendSystemPromptInstructions,
   deliverOpenCodeInstructions
 } from './acp-instructions'
 
@@ -25,6 +25,7 @@ import { GROK_TRANSCRIPT_IMPORT } from '../../grok/grok-transcript-import'
 import { OPENCODE_SESSION_HISTORY } from '../../opencode/transcripts/opencode-session-history'
 import { OPENCODE_TRANSCRIPT_IMPORT } from '../../opencode/transcripts/opencode-transcript-import'
 import { assertOpenCodeCopyUsesLocalStore } from '../../../shared/agent-launch/startup/opencode-launch-command'
+import { readOmpMcpServers } from '../../omp/omp-mcp-servers'
 import { OMP_SESSION_HISTORY } from '../../omp/omp-session-history'
 import { OMP_TRANSCRIPT_IMPORT } from '../../omp/omp-transcript-import'
 import { ANTIGRAVITY_LAUNCH_SPEC } from '../../antigravity/antigravity-acp-launch-spec'
@@ -32,6 +33,9 @@ import { COPILOT_LAUNCH_SPEC } from '../../copilot/copilot-acp-launch-spec'
 import { KIMI_LAUNCH_SPEC } from '../../kimi/kimi-acp-launch-spec'
 import { CURSOR_LAUNCH_SPEC } from '../../cursor/cursor-acp-launch-spec'
 import { HERMES_LAUNCH_SPEC } from '../../hermes/hermes-acp-launch-spec'
+import { KIRO_LAUNCH_SPEC } from '../../kiro/kiro-acp-launch-spec'
+import { GOOSE_LAUNCH_SPEC } from '../../goose/goose-acp-launch-spec'
+import { AUGGIE_LAUNCH_SPEC } from '../../auggie/auggie-acp-launch-spec'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import { OPENCODE_MINIMUM_VERSIONS, OPENCODE2_MINIMUM_VERSIONS } from './acp-minimum-versions'
 
@@ -80,7 +84,7 @@ function openCodeLaunchSpec(
     args: () => ['acp'],
     // 1.x cannot answer ACP questions; 2.x ignores this guard and negotiates form support.
     env: { OPENCODE_CLIENT: 'acp', OPENCODE_ENABLE_QUESTION_TOOL: 'false' },
-    scrubEnvironment: scrubOpenCodeAcpEnvironment,
+    scrubEnvironment: (env, inherited) => scrubOpenCodeAcpEnvironment(env, inherited),
     dialect: OPENCODE_ACP_DIALECT,
     historyCatchUp: 'user-message-id',
     loginCommand: agentSessionSetupFor(row.agent)?.loginCommand ?? [],
@@ -148,7 +152,8 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
     sessionFolderArgs: (folder) => ['--session-dir', folder]
   },
   skillRoots: loadOmpSkillRoots,
-  instructions: deliverOmpInstructions,
+  ownMcpServers: readOmpMcpServers,
+  instructions: deliverAppendSystemPromptInstructions,
   compaction: true,
   compactionInstructions: true,
   transcriptImport: OMP_TRANSCRIPT_IMPORT,
@@ -164,7 +169,10 @@ export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
   COPILOT_LAUNCH_SPEC,
   KIMI_LAUNCH_SPEC,
   CURSOR_LAUNCH_SPEC,
-  HERMES_LAUNCH_SPEC
+  HERMES_LAUNCH_SPEC,
+  KIRO_LAUNCH_SPEC,
+  GOOSE_LAUNCH_SPEC,
+  AUGGIE_LAUNCH_SPEC
 ]
 
 export function acpLaunchSpecFor(agent: string): AcpLaunchSpec | null {

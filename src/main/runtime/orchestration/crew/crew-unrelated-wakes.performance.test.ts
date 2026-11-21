@@ -9,6 +9,7 @@ import { watchCrewRuntimeSources } from './crew-runtime-watch'
 import { fixture } from './crew-read-model.test-fixture'
 import { crewStatusRowChange } from './crew-changes'
 import { createCrewNotifiedTerminalIdentity } from '../../terminal/identity/terminal-identity-crew-notice'
+import { RuntimeOrchestrationSenderNames } from '../mailbox/senders/runtime-orchestration-sender-names'
 
 const flush = async () => {
   for (let i = 0; i < 4; i++) {
@@ -80,9 +81,20 @@ function mountedCrew() {
   }
   let transition: (change: { paneKey: string }) => void = () => {}
   let client: (event: RuntimeClientEvent) => void = () => {}
+  const senderNames = new RuntimeOrchestrationSenderNames({
+    getDb: () => f.db,
+    getHandleRecord: () => undefined,
+    getPtyAgents: () => undefined,
+    getTerminalPaneKey: f.deps.paneForHandle,
+    getWorkspaceSession: () => null,
+    getStore: () => null,
+    getAgentStatusSnapshotForPane: () => undefined,
+    getTrackedTitle: () => null
+  })
   const model = new CrewReadModel(
     () => ({
       ...f.deps,
+      name: senderNames.captureCrewInputs(),
       get statuses() {
         counts.statusReads++
         return statuses

@@ -1,7 +1,11 @@
 // A conversation's native chat (structured session): its deliveries, prompts, turns and Stop.
 import { randomUUID } from 'node:crypto'
 import { isConversationReport } from './external-conversation-turn-opener'
-import { endedTurn, type EndedChatTurn } from './external-conversation-ended-turn'
+import {
+  endedTurn,
+  endedTurnAttribution,
+  type EndedChatTurn
+} from './external-conversation-ended-turn'
 export type { EndedChatTurn } from './external-conversation-ended-turn'
 import { readAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import type { AgentJournalTurnOutcome } from '../../shared/agent-status/lifecycle/agent-turn-outcome'
@@ -76,8 +80,11 @@ export type ChatNews =
       kind: 'turn-ended'
       sessionId: string
       outcome: AgentJournalTurnOutcome
+      mergedTurnCount?: number
       /** Read in full from the journal, only for linked chats; the status row keeps a short preview. */
       readTurn: () => Promise<EndedChatTurn>
+      /** Only whom the turn acts for (its opener and the deliveries it answered), read by index. */
+      readAttribution?: () => Promise<Pick<EndedChatTurn, 'opener' | 'stamps'>>
       at: number
     }
 
@@ -101,8 +108,18 @@ export function watchChatNews(
             kind: 'turn-ended',
             sessionId,
             outcome,
+            ...(event.completion.mergedTurnCount !== undefined
+              ? { mergedTurnCount: event.completion.mergedTurnCount }
+              : {}),
             readTurn: () =>
               endedTurn(chat, sessionId, event.completion.turnId, event.completion.journalCursor),
+            readAttribution: () =>
+              endedTurnAttribution(
+                chat,
+                sessionId,
+                event.completion.turnId,
+                event.completion.journalCursor
+              ),
             at: completedAt
           })
         }
@@ -168,7 +185,12 @@ export async function deliverToChat(
   chat: ConversationChat | null,
   link: ExternalConversationLink,
   // admitted: told the moment the chat takes the message, before its turn can begin.
-  delivery: ConnectorMessage & { signal: AbortSignal; admitted?: () => void; deliveryId?: string }
+  delivery: ConnectorMessage & {
+    signal: AbortSignal
+    admitted?: () => void
+    deliveryId?: string
+    images?: readonly string[]
+  }
 ): Promise<Delivery> {
   const { asker } = delivery
   const { note } = delivery
@@ -200,7 +222,11 @@ export async function deliverToChat(
         body: {
           kind: 'message',
           role: 'user',
-          blocks: [{ type: 'text', text }],
+          // Its images ride as a person's attached ones would; the chat shows them with the message.
+          blocks: [
+            { type: 'text', text },
+            ...(delivery.images ?? []).map((path) => ({ type: 'image-ref' as const, path }))
+          ],
           // An event no one asked through is the connector's too, so the turn finds its conversation;
           // a bot's message whose asker didn't parse is someone unknown's, never the owner's.
           ...(asker || delivery.memorySource || link.bot ? { origin: 'connector' as const } : {}),

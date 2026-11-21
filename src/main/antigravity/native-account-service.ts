@@ -85,7 +85,7 @@ export class AntigravityAccountService {
         throw new Error('The native Antigravity account changed. Save the current account again.')
       }
       const identified = { ...current, identity }
-      const latest = this.store.read()
+      const latest = await this.store.read()
       if (!latest.accounts.some((entry) => this.matches(entry, identified))) {
         const timestamp = this.now()
         latest.accounts.push({
@@ -99,7 +99,7 @@ export class AntigravityAccountService {
         })
       }
       this.updateSnapshot(latest, identified)
-      this.store.write(latest)
+      await this.store.write(latest)
       return this.state({ vault: latest, current: identified })
     })
   }
@@ -120,7 +120,7 @@ export class AntigravityAccountService {
           'Antigravity account switching could not be verified; refresh before retrying.'
         )
       }
-      const latest = this.store.read()
+      const latest = await this.store.read()
       if (
         !latest.accounts.some((account) => account.id === id && this.matches(account, readback))
       ) {
@@ -128,7 +128,7 @@ export class AntigravityAccountService {
       }
       latest.selectedAccountId = id
       this.updateSnapshot(latest, readback)
-      this.store.write(latest)
+      await this.store.write(latest)
       return this.state({ vault: latest, current: readback })
     })
   }
@@ -148,7 +148,7 @@ export class AntigravityAccountService {
       if (vault.selectedAccountId === id) {
         vault.selectedAccountId = null
       }
-      this.store.write(vault)
+      await this.store.write(vault)
       return this.state({ vault, current })
     })
   }
@@ -170,7 +170,7 @@ export class AntigravityAccountService {
 
   beginUsageRead(): Promise<AntigravityUsageReadStart | null> {
     return this.serialize(async () => {
-      if (this.store.read().accounts.length === 0) {
+      if ((await this.store.read()).accounts.length === 0) {
         return null
       }
       const { vault, current } = await this.reconcile()
@@ -192,7 +192,7 @@ export class AntigravityAccountService {
       const account = vault.accounts.find((entry) => entry.id === now.accountId)
       if (account && now.accountId === login.accountId && limits.status === 'ok') {
         account.usage = withStoredAntigravityReading(account, this.target, limits)
-        this.store.write(vault)
+        await this.store.write(vault)
       }
       return {
         switched: false,
@@ -234,11 +234,11 @@ export class AntigravityAccountService {
   private async reconcile(selectedId?: string) {
     const current = await this.rewrittenLogins.identify(
       await this.backend.read(),
-      this.store.read().accounts,
+      (await this.store.read()).accounts,
       (account, login) => this.matches(account, login)
     )
     // Re-read after native I/O so a delayed read never restores an older vault.
-    const vault = this.store.read()
+    const vault = await this.store.read()
     if (selectedId !== undefined) {
       const selected = vault.accounts.find((account) => account.id === selectedId)
       if (!selected) {
@@ -248,7 +248,7 @@ export class AntigravityAccountService {
       parseCredential(selected.credentials)
     }
     if (current && this.updateSnapshot(vault, current)) {
-      this.store.write(vault)
+      await this.store.write(vault)
     }
     return { vault, current }
   }

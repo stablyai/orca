@@ -162,6 +162,7 @@ export async function removeRegisteredLocalWorktree(
         repoId,
         repoPath: repo.path,
         worktree: refreshedRegisteredWorktree,
+        gitdir: await backgroundRemoval.markerIdentity(refreshedRegisteredWorktree.path),
         deleteBranch,
         force: args.force ?? false
       },
@@ -176,8 +177,7 @@ export async function removeRegisteredLocalWorktree(
         return result
       },
       publish: () => context.runtime.publishWorktreeRemovalChange(repoId),
-      admissionFailed: () => removalGate.finish(false),
-      cleanupPushTargetRemote: cleanupPushTarget
+      admissionFailed: () => removalGate.finish(false)
     })
     await backgroundRemoval.waitForWorktreeRemovalAcceptance(args.worktreeId)
     return { removing: true }

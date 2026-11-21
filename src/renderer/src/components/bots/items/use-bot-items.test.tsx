@@ -13,11 +13,8 @@ vi.mock('@/lib/bot-hosts', async (importOriginal) => ({
   callBotRpc: (_bot: unknown, method: string, params: unknown) =>
     new Promise((resolve) => rpc.calls.push({ method, params, resolve }))
 }))
-// Two Needs you items, as the host counted them.
-vi.mock('@/lib/bot-catalog', () => ({ useListedBotItemsNeedingOwner: () => 2 }))
 
 import { emitBotsChangedWindowEvent } from '@/lib/bots-changed-window-event'
-import { useBotNeedsYouCount } from '../use-bot-now'
 import { useBotChatItems } from './use-bot-items'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reads use only these fields.
@@ -40,17 +37,6 @@ function listOf(...uids: string[]): BotItemsRead {
 afterEach(() => {
   cleanup()
   rpc.calls.length = 0
-})
-
-describe('useBotNeedsYouCount', () => {
-  it('uses the host’s count without requesting an item list on notices', async () => {
-    const view = renderHook(() => useBotNeedsYouCount(BOT, { needsYou: 1 }))
-    notice(['items'])
-    notice(['workers'])
-    await flush()
-    expect(listReads()).toHaveLength(0)
-    expect(view.result.current).toBe(3)
-  })
 })
 
 describe('useBotChatItems', () => {

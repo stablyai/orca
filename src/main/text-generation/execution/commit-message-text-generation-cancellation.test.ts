@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import type * as ChildProcess from 'node:child_process'
+import type * as CliCommandResolution from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -19,6 +20,15 @@ const { terminateWindowsProcessTreeMock } = vi.hoisted(() => ({
 vi.mock('../../pty/process-retirement/windows-process-tree-kill', () => ({
   terminateWindowsProcessTree: terminateWindowsProcessTreeMock
 }))
+
+// These cancellation fixtures use fake processes; installed host CLIs belong to the CLI-path suite.
+vi.mock(
+  '../../../shared/shell/command-resolution/node-cli-command-resolution',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof CliCommandResolution>()),
+    resolveCliCommand: (command: string) => command
+  })
+)
 
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcess>()

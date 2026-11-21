@@ -196,13 +196,6 @@ describe('Request access in Who can ask', () => {
     expect(screen.queryByText(/^Asking for access/)).toBeNull()
   })
 
-  it('names a real name only when it differs from the display name', async () => {
-    await showRequests([
-      request({ requester: { id: 'U-pat', name: 'Pat', handle: 'pat', detail: 'Pat' } })
-    ])
-    expect(await screen.findByText(/^@pat · \S/)).not.toHaveTextContent('Pat ·')
-  })
-
   it('says on the closed row how many are asking', async () => {
     await showRequests([request(), request({ requestId: `${requestId}-b` })])
     cleanup()
@@ -214,21 +207,63 @@ describe('Request access in Who can ask', () => {
     expect(await screen.findByText('2 requests')).toBeInTheDocument()
   })
 
-  it('asks before giving access; Cancel or Escape just closes, adding nobody', async () => {
+  it('asks before giving access; Escape just closes, adding nobody', async () => {
     await showRequests([request()])
     fireEvent.click(await screen.findByRole('button', { name: 'Review…' }))
-    const dialog = await screen.findByRole('dialog')
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-
-    fireEvent.click(screen.getByRole('button', { name: 'Review…' }))
     fireEvent.keyDown(await screen.findByRole('dialog'), { key: 'Escape' })
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
 
-    // Still waiting: only Decline declines, which starts the requester's cooldown.
+    // Still waiting: closing isn't an answer, since declining starts the requester's cooldown.
     expect(access.decide).not.toHaveBeenCalled()
     expect(mocks.updateBot).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Review…' })).toBeInTheDocument()
+  })
+
+  it('declines on the confirm’s Reject, which answers the request, and adds nobody', async () => {
+    await showRequests([request()])
+    fireEvent.click(await screen.findByRole('button', { name: 'Review…' }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reject' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(access.decide).toHaveBeenCalledTimes(1)
+    expect(access.decide).toHaveBeenCalledWith({ requestId, decision: 'declined' })
+    expect(mocks.updateBot).not.toHaveBeenCalled()
+  })
+
+  it('answers nothing on the held Enter or double-click that opened it; a press outside leaves it waiting', async () => {
+    await showRequests([request()])
+    fireEvent.click(await screen.findByRole('button', { name: 'Review…' }))
+    const dialog = await screen.findByRole('dialog')
+    const reject = within(dialog).getByRole('button', { name: 'Reject' })
+    await waitFor(() => expect(reject).toHaveFocus())
+    expect(fireEvent.keyDown(reject, { key: 'Enter', repeat: true })).toBe(false)
+    fireEvent.click(reject, { detail: 2 })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Give access' }), { detail: 2 })
+    expect(access.decide).not.toHaveBeenCalled()
+
+    // A press outside: Radix answers it on the click that follows.
+    fireEvent.pointerDown(document.body)
+    fireEvent.click(document.body)
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(access.decide).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Review…' })).toBeInTheDocument()
+  })
+
+  it('keeps a held Enter from rejecting the next request once one is rejected', async () => {
+    await showRequests([request()])
+    fireEvent.click(await screen.findByRole('button', { name: 'Review…' }))
+    await screen.findByText('Give Pat access to Reviewer?')
+    const lee = { ...request().requester, id: 'U-lee', name: 'Lee', handle: 'lee', detail: 'Lee' }
+    const next = request({ requestId: `${requestId}-b`, requester: lee })
+    act(() => reviewAccessRequest({ ...next, hostId: 'local' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Reject' }))
+
+    await screen.findByText('Give Lee access to Reviewer?')
+    const reject = within(screen.getByRole('dialog')).getByRole('button', { name: 'Reject' })
+    await waitFor(() => expect(reject).toHaveFocus())
+    expect(fireEvent.keyDown(reject, { key: 'Enter', repeat: true })).toBe(false)
+    expect(access.decide).toHaveBeenCalledTimes(1)
+    expect(access.decide).toHaveBeenCalledWith({ requestId, decision: 'declined' })
   })
 
   it('grants on the host on Give access, which adds the person, then rereads the bot', async () => {
@@ -257,11 +292,11 @@ describe('Request access in Who can ask', () => {
     act(() => reviewAccessRequest({ ...request(), hostId: 'local' }))
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText('Give Pat access to Reviewer?')).toBeInTheDocument()
-    // Cancel focused: Enter can't grant access by accident.
+    // Reject focused: Enter can't grant access by accident.
     await waitFor(() =>
-      expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus()
+      expect(within(dialog).getByRole('button', { name: 'Reject' })).toHaveFocus()
     )
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    fireEvent.keyDown(dialog, { key: 'Escape' })
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(access.decide).not.toHaveBeenCalled()
     expect(mocks.updateBot).not.toHaveBeenCalled()

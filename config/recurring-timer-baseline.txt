@@ -20,12 +20,10 @@
 1 src/main/composio/composio-upkeep.ts
 1 src/main/crash-reporting/memory/pre-gone-host-memory.ts
 1 src/main/crash-reporting/process-exits/process-gone-diagnostics.ts
-1 src/main/crash-reporting/memory/renderer-heap-allocation-profile.ts
 1 src/main/daemon/admission/host-terminal-ledger.ts
 1 src/main/daemon/admission/host-terminal-policy.ts
 1 src/main/daemon/endpoint/publication/daemon-endpoint-lifecycle.ts
 1 src/main/daemon/transport/stream/daemon-stream-backlog-probe.ts
-1 src/main/diagnostics/event-loop-delay-probe.ts
 1 src/main/diagnostics/main-thread-churn-probe.ts
 1 src/main/git/refs/maintenance/pack-refs-lock-ownership.ts
 1 src/main/hang-watchdog/main-thread-hang-watchdog-entry.ts

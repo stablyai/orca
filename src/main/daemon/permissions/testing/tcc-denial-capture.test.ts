@@ -65,13 +65,21 @@ beforeEach(() => {
 })
 
 describe('tcc denial capture', () => {
-  it('runs no probe or log read for a user who opted out of telemetry', async () => {
+  it('stops capture if telemetry is off before, during, or after the folder read', async () => {
     telemetryEnabledMock.mockReturnValue(false)
     const readFolder = vi.fn(FOLDER)
     expect(await prepareTccDenialCapture(HELPER, 'documents', 5_000, readFolder)).toBeNull()
     expect(readFolder).not.toHaveBeenCalled()
 
-    // Opting out while the app-side read waits stops the capture before the log is read.
+    telemetryEnabledMock.mockReturnValue(true)
+    const optOutDuringFolderRead = async () => {
+      telemetryEnabledMock.mockReturnValue(false)
+      return FOLDER()
+    }
+    expect(
+      await prepareTccDenialCapture(HELPER, 'documents', 5_000, optOutDuringFolderRead)
+    ).toBeNull()
+
     telemetryEnabledMock.mockReturnValue(true)
     const start = (await prepareTccDenialCapture(HELPER, 'documents', 5_000, FOLDER))!
     telemetryEnabledMock.mockReturnValue(false)
@@ -121,16 +129,6 @@ describe('tcc denial capture', () => {
       expect(probe).not.toHaveBeenCalled()
     }
     expect(trackMock).not.toHaveBeenCalled()
-    telemetryEnabledMock.mockReturnValue(true)
-    expect(await prepareTccDenialCapture(HELPER, 'documents', 6_000, FOLDER)).not.toBeNull()
-  })
-
-  it('stops after the folder probes when telemetry is turned off', async () => {
-    const readFolder = vi.fn(async () => {
-      telemetryEnabledMock.mockReturnValue(false)
-      return FOLDER()
-    })
-    expect(await prepareTccDenialCapture(HELPER, 'documents', 5_000, readFolder)).toBeNull()
     telemetryEnabledMock.mockReturnValue(true)
     expect(await prepareTccDenialCapture(HELPER, 'documents', 6_000, FOLDER)).not.toBeNull()
   })

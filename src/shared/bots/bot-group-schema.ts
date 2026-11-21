@@ -3,6 +3,7 @@ import { BOT_AGENTS, BotNameSchema } from '../bot-types'
 import { BotAvatarColorSchema } from './bot-avatar-color'
 import { isAdmissibleAgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-schemas'
 import type { AgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-types'
+import type { NativeChatBlock } from '../native-chat/native-chat-types'
 
 export const BotGroupReplyMode = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('bot'), botId: z.string().min(1) }),
@@ -74,9 +75,18 @@ const BotGroupTurnSchema = z.object({
   /** The finished reply, saved when the turn ended; null when it ended without one. Absent while
    *  the turn runs, and on turns saved before replies were. */
   reply: z.string().nullable().optional(),
+  /** The members its reply named, saved as their hand-offs were reserved: a replay wakes none. */
+  handedOff: z.array(z.string()).optional(),
   frozenItems: z
     .array(z.custom<AgentJournalRenderItem>(isAdmissibleAgentJournalRenderItem))
     .optional()
+})
+
+/** An image attached to a group post, committed in the host's chat-attachment store. */
+export const BotGroupMessageImageSchema = z.object({
+  path: z.string().min(1),
+  name: z.string().min(1),
+  bytes: z.number().int().nonnegative()
 })
 
 export const BotGroupMessageSchema = z.object({
@@ -90,6 +100,7 @@ export const BotGroupMessageSchema = z.object({
     z.object({ kind: z.literal('bot'), id: z.string(), name: z.string() })
   ]),
   text: z.string(),
+  images: z.array(BotGroupMessageImageSchema).optional(),
   createdAt: z.number(),
   rootRequestId: z.string().optional(),
   rootSequence: z.number().optional(),
@@ -99,6 +110,12 @@ export const BotGroupMessageSchema = z.object({
     .optional(),
   /** The member whose reply this follow-up turn reads, on the asker's own mail turn. */
   answeredBy: z.object({ id: z.string(), name: z.string() }).optional(),
+  /** On a person's post: the turns its members' `@Name` replies have woken so far. */
+  handoffs: z.number().int().nonnegative().optional(),
+  /** Woken by an `@Name` in the requester's reply; counts toward its post's hand-off limit. */
+  mentioned: z.literal(true).optional(),
+  /** The quiet line held where the post's hand-offs reached this limit; it starts no turn. */
+  pausedAfter: z.number().int().positive().optional(),
   turns: z.array(BotGroupTurnSchema)
 })
 
@@ -124,7 +141,22 @@ export type BotGroupMember = z.infer<typeof BotGroupMemberSchema>
 export type BotGroupThread = z.infer<typeof BotGroupThreadSchema>
 export type BotGroup = z.infer<typeof BotGroupSchema>
 export type BotGroupTurn = z.infer<typeof BotGroupTurnSchema>
+export type BotGroupMessageImage = z.infer<typeof BotGroupMessageImageSchema>
 export type BotGroupMessage = z.infer<typeof BotGroupMessageSchema>
 export type BotGroupLatest = z.infer<typeof BotGroupLatestSchema>
 export type BotGroupPeerScope = z.infer<typeof BotGroupPeerScopeSchema>
 export type LegacyBotGroup = z.infer<typeof LegacyBotGroupSchema>
+
+/** An owner post's transcript blocks for desktop and mobile message rows. */
+export function botGroupOwnerMessageBlocks(
+  message: Pick<BotGroupMessage, 'text' | 'images'>
+): NativeChatBlock[] {
+  return [
+    ...(message.text ? [{ type: 'text' as const, text: message.text }] : []),
+    ...(message.images?.map(({ path, name }) => ({
+      type: 'image-ref' as const,
+      path,
+      alt: name
+    })) ?? [])
+  ]
+}

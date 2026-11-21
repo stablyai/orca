@@ -9,11 +9,10 @@ import { hostScreenStyles as styles } from '../host-screen/host-screen-styles'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { MobileBotActivityTab } from './MobileBotActivityTab'
 import { MobileBotAutomationsTab } from './MobileBotAutomationsTab'
-import { MobileBotSettingsTab } from './MobileBotSettingsTab'
+import { MobileBotSettingsTab, type BotSettingsHome } from './MobileBotSettingsTab'
 import { botAgentLabel } from './mobile-bot-sheet-copy'
 import type { BotAccessRequests } from './use-bot-access-requests'
 import { useBotUpNext } from './use-bot-up-next'
-import { lookAroundSupported } from '../../../src/shared/bots/bot-look-around'
 import type { RouteBot } from './use-route-bot'
 import type { BotChatTreeActions } from './MobileBotChatTree'
 import { usePhoneBotChatTree } from './use-phone-bot-chat-tree'
@@ -39,6 +38,7 @@ export function MobileBotSheet(props: {
   treeActions: BotChatTreeActions
   online: boolean
   hostName: string
+  home: BotSettingsHome
 }) {
   const t = useMobileTranslation()
   const [tab, setTab] = useState<BotSheetTab>('activity')
@@ -122,6 +122,7 @@ export function MobileBotSheet(props: {
           client={props.client}
           bot={bot}
           rows={props.routeBot.activity?.automations ?? null}
+          waits={props.routeBot.activity?.waits}
           showToast={props.showToast}
           onNewAutomation={props.onNewAutomation}
           online={props.online}
@@ -133,10 +134,10 @@ export function MobileBotSheet(props: {
           showToast={props.showToast}
           online={props.online}
           hostName={props.hostName}
+          home={props.home}
           accessRequests={props.accessRequests}
-          lookAround={
-            lookAroundSupported(bot.agent) ? { onLookNow: upNext.lookNow, busy: upNext.busy } : null
-          }
+          onAskInChat={props.onStartSuggestion}
+          upNext={upNext}
         />
       )}
     </BottomDrawer>

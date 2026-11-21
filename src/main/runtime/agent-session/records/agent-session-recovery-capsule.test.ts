@@ -48,6 +48,43 @@ async function fileFailure(overrides: Partial<AgentSessionResumeFailureInput> = 
 }
 
 describe('durable restart offers', () => {
+  it('stores a crash offer in the shape released builds read, and reads it back as a crash', async () => {
+    await capsule.record([marker({ trigger: 'crash', teardownId: 'crash:runtime-1' })], NOW)
+
+    const stored = JSON.parse(await readFile(filePath, 'utf8'))
+    expect(stored.entries[0].marker).toMatchObject({ trigger: 'quit', cause: 'crash' })
+    expect((await capsule.list(NOW)).map((offer) => offer.trigger)).toEqual(['crash'])
+  })
+
+  it.each(['selected', 'all'] as const)(
+    'does not name as abandoned a failure being retried, dismissing %s',
+    async (which) => {
+      await capsule.record([marker()], NOW)
+      await fileFailure()
+      expect(await capsule.beginResume([SESSION], 'retry', NOW)).toHaveLength(1)
+      const dismissed =
+        which === 'all' ? await capsule.clearAll(NOW) : await capsule.dismiss([SESSION], NOW)
+      expect(dismissed.abandoned).toEqual([])
+    }
+  )
+
+  it('names a dismissed handoff the agent never confirmed as possibly still running', async () => {
+    await capsule.record([marker()], NOW)
+    await fileFailure({ outcome: 'unconfirmed' })
+    const dismissed = await capsule.dismiss([SESSION], NOW)
+    expect(dismissed.abandoned).toEqual([{ marker: expect.anything(), unconfirmed: true }])
+  })
+
+  it('names as abandoned only the offers a dismissal removed that nothing was continuing', async () => {
+    await capsule.record([marker(), marker({ sessionId: 'second' })], NOW)
+    await capsule.beginResume([SESSION], 'operation-a', NOW)
+
+    const dismissed = await capsule.dismiss('all', NOW)
+    expect(dismissed.count).toBe(2)
+    expect(dismissed.abandoned.map((offer) => offer.marker.sessionId)).toEqual(['second'])
+    expect((await capsule.dismiss('all', NOW)).abandoned).toEqual([])
+  })
+
   it('reserves only one copy of a selected session across competing owners', async () => {
     await capsule.record([marker(), marker({ sessionId: 'second' })], NOW)
     const other = new AgentSessionRecoveryCapsule(directory)
@@ -111,6 +148,20 @@ describe('durable restart offers', () => {
 
     await capsule.rollbackResume('operation-a', NOW)
     expect(await capsule.list(NOW)).toEqual([marker()])
+  })
+
+  it('keeps dismissed the newer teardown a dismissed reservation held, when it is read again', async () => {
+    const newer = marker({
+      teardownId: 'teardown-new',
+      recordedAt: NOW + 1,
+      work: { kind: 'turn', id: 'turn-new' }
+    })
+    await capsule.record([marker()], NOW)
+    await capsule.beginResume([SESSION], 'operation-a', NOW)
+    await capsule.record([newer], NOW + 1)
+    await capsule.dismiss([SESSION], NOW + 2)
+    await capsule.record([newer], NOW + 3)
+    expect(await capsule.list(NOW + 3)).toEqual([])
   })
 
   it('keeps a newer same-session teardown behind an active reservation', async () => {

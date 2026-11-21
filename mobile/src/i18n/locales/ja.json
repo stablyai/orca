@@ -112,7 +112,7 @@
       "pasteCodePlaceholder": "orca://pair?code=... またはコードを貼り付け",
       "pasteCodeTitle": "ペアリングコードを貼り付け",
       "pasteInstead": "代わりにコードを貼り付け",
-      "pastePairingCode": "またはペアリングコードを貼り付け",
+      "pastePairingCode": "ペアリングコードを貼り付け",
       "scanCodeStep": "QR コードをスキャン",
       "title": "デスクトップのペアリング",
       "tryAgain": "再試行",
@@ -146,7 +146,7 @@
       "installTitle": "新しいアプリをダウンロード",
       "installDescription": "確認が表示されたら、ブラウザにアプリのインストールを許可してください。",
       "download": "ダウンロード",
-      "keepThisVersion": "このバージョンを使い続ける",
+      "keepThisVersion": "このバージョンを使う",
       "keepThisVersionNote": "セキュリティ修正は届かなくなります。1 週間後にもう一度お知らせします。"
     },
     "pairTitle": "コンピュータとペアリング",
@@ -324,7 +324,7 @@
       "triedSearchWeb": "ウェブ検索を試行"
     },
     "nativeChatUserMessageFold": {
-      "loadFailed": "メッセージ全体を表示（読み込み失敗、タップして再試行）",
+      "loadFailed": "メッセージ全文を再取得",
       "showFullMessage": "メッセージ全体を表示",
       "showLess": "折りたたむ"
     },
@@ -390,8 +390,7 @@
       "submitSelectedOptions": "選択した項目を送信"
     },
     "queuedMessages": {
-      "clearAll": "すべてクリア",
-      "deleteAll": "キュー内のすべてのメッセージを削除",
+      "deleteAll": "すべて削除",
       "editMessage": "メッセージを編集",
       "pausedState": "一時停止中",
       "queuedState": "キュー待ち",
@@ -785,7 +784,7 @@
       "manageShortcuts": "ショートカットを管理",
       "manageShortcutsHint": "ショートカットキーの表示・非表示・並べ替え",
       "modifiers": "修飾キー",
-      "moreKeys": "その他のキー：Tab、矢印キー、F1–F12…",
+      "moreKeys": "その他のキー",
       "navigation": "ナビゲーション",
       "pickKey": "キーを選択",
       "pressEnter": "Enter を押す",
@@ -1215,7 +1214,7 @@
       "privacyHint": "ホスト名、エンドポイント、バージョン、接続状態、イベントを含む、機密情報を伏せてサイズを制限したレポートを送信します。ターミナルの内容や認証情報は含まれません。",
       "reconnecting": "再接続中",
       "retrySending": "送信を再試行",
-      "sendDiagnostics": "診断情報を Orca に送信",
+      "sendDiagnostics": "診断情報を送信",
       "sending": "送信中…",
       "sent": "診断情報を送信しました",
       "stateWithAttempt": "{{state}} · 試行 {{attempts}} 回目",
@@ -1946,7 +1945,7 @@
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} はオープンな PR にリンクされていません。",
       "currentBranchNotLinked": "現在のブランチはオープンな PR にリンクされていません。",
-      "linkExistingPullRequest": "既存の PR をリンク",
+      "linkExistingPullRequest": "PR をリンク",
       "linkedPrUnavailable": "リンク済みの PR #{{number}} は利用できません",
       "refreshOrCreate": "更新して再確認するか、このブランチの新しい PR を作成してください。"
     },
@@ -2019,6 +2018,9 @@
       "sendFailed": "再開コマンドの送信に失敗しました。"
     },
     "aiVaultResumePreparation": {
+      "openInChat": "この {{agent}} の会話はチャットで開かれています。開くにはセッション履歴を更新してください。",
+      "ownershipUnknown": "Orca はこの {{agent}} の会話の所有者を確認できませんでした。セッション履歴を更新して、再試行してください。",
+      "preparationRefused": "Orca はこの {{agent}} の会話を準備できませんでした。続けるには新しいチャットを開始してください。",
       "prepareFailed": "この旧形式の Codex セッションを準備できませんでした。再開を再試行してください。"
     },
     "backgroundTask": {
@@ -2127,6 +2129,7 @@
     "failure": {
       "accountSwitchInProgress": "このホストで {{agent}} のセットアップを変更中です。完了してからもう一度お試しください。",
       "agentCommandNotRunnable": "[設定] → [Agent] にある {{agent}} の [コマンド] には、Orca が見つけられるプログラムのパスまたは名前を、引数や変数なしで指定する必要があります。変更するか、[リセット] してください。",
+      "agentCommandFailed": "設定 → Agent にある {{agent}} の「コマンド」で {{agent}} を起動できませんでした: {{detail}}。コマンドを変更するかリセットしてください。",
       "agentCommandNotSignedIn": "このチャットを実行しているコンピューターで `{{loginCommand}}` を使って {{agent}} にサインインしてください。",
       "agentNotSignedIn": "{{agent}} にサインインしてください。",
       "agentStarting": "Agent はまだ起動中です。",
@@ -2324,8 +2327,8 @@
       "scrollToLatest": "最新の内容にスクロール"
     },
     "nativeChatFullContent": {
-      "loadMessageFailed": "メッセージ全体を表示（読み込み失敗、タップして再試行）",
-      "loadOutputFailed": "出力をすべて表示（読み込み失敗、タップして再試行）",
+      "loadMessageFailed": "メッセージ全文を再取得",
+      "loadOutputFailed": "出力全文を再取得",
       "partialMessage": "このメッセージの一部を表示しています。",
       "partialOutput": "{{total}} のうち {{shown}} を表示しています。",
       "showFullMessage": "メッセージ全体を表示",
@@ -2341,8 +2344,8 @@
       "notFoundTitle": "この会話はまだ見つかりません"
     },
     "nativeChatToggleAction": {
-      "switchToChatView": "チャット表示に切り替え",
-      "switchToTerminalView": "ターミナル表示に切り替え"
+      "switchToChatView": "チャットに切り替え",
+      "switchToTerminalView": "ターミナルに切り替え"
     },
     "newTabAgentHostLaunch": {
       "notesNotSent": "Agent は起動しましたが、メモは送信されませんでした。",
@@ -3855,7 +3858,7 @@
       "issueSource": "Issue ソース",
       "keySecurityHint": "キーはホスト OS のキーチェーンで暗号化され、ローカルに保存されます。",
       "linearConnectSubtitle": "ワークスペースの Issue を閲覧するには、個人用 API キーを貼り付けてください。",
-      "linearSettingsLink": "Linear の設定 / セキュリティ / 新規 API キー",
+      "linearSettingsLink": "Linearの設定を開く",
       "linearTeam": "Linear チーム",
       "linearTeamSubtitle": "選択した Linear チームに Issue を作成します。",
       "newIssueTitle": "{{providerLabel}} の新規 Issue",
@@ -3929,7 +3932,7 @@
       "runSetupAndCreate": "セットアップを実行して作成",
       "setupSubtitle": "{{name}} でこのワークスペースを作成する前に、セットアップの実行有無を選択してください。",
       "setupTitle": "セットアップスクリプトを実行しますか?",
-      "skipSetupAndCreate": "セットアップをスキップして作成",
+      "skipSetupAndCreate": "セットアップなしで作成",
       "trustFailed": "セットアップスクリプトの信頼設定に失敗しました。"
     },
     "worktreeCreateRetry": {

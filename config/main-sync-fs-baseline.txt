@@ -22,15 +22,11 @@
 2 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn.ts
 8 src/main/amp/hook-service.ts
 2 src/main/amp/managed-plugin-install-status.ts
-1 src/main/antigravity/antigravity-host-acp.ts
-1 src/main/antigravity/native-account-launch.ts
-5 src/main/antigravity/native-account-store.ts
 2 src/main/antigravity/native-credential-backend.ts
-7 src/main/antigravity/native-file-credentials.ts
+3 src/main/antigravity/native-file-credentials.ts
 3 src/main/artifacts/artifact-create-intent-store.ts
 2 src/main/artifacts/artifact-share-record-store.ts
 1 src/main/automations/external-managers/external-manager-discovery.ts
-7 src/main/bitbucket/credential-store.ts
 2 src/main/bots/bot-access-request-watch.ts
 1 src/main/bots/bot-look-around-store.ts
 3 src/main/bots/bot-tool-credentials.ts
@@ -126,7 +122,7 @@
 6 src/main/codex-accounts/managed-homes/codex-managed-home-path.ts
 1 src/main/codex-accounts/managed-homes/guest-codex-account-homes.ts
 6 src/main/codex-accounts/managed-homes/host-codex-managed-home-ownership.ts
-7 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-core.ts
+8 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-core.ts # +1 stat only before deleting a mirror login on a system logout, so an unreadable auth.json is not taken for one (#45264)
 5 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-provenance.ts
 23 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-sync.ts
 2 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-wsl-core.ts
@@ -143,10 +139,10 @@
 5 src/main/codex/configuration/homes/codex-windows-sandbox-read-grant.ts
 1 src/main/codex/configuration/settings/codex-config-path-reference-rewrite.ts
 1 src/main/codex/configuration/settings/config-settings-baseline.ts
-5 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts
+4 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts
 3 src/main/codex/configuration/settings/config-settings-promotion.ts
 1 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
-6 src/main/codex/configuration/toml/config-toml-atomic-write.ts
+7 src/main/codex/configuration/toml/config-toml-atomic-write.ts # compare-before-publish re-read of config.toml so a save made after Orca read it is never overwritten (moved here from the worker-only trust transaction)
 4 src/main/codex/history/backfill/codex-session-backfill-marker.ts
 17 src/main/codex/history/bridges/codex-session-bridge.ts
 5 src/main/codex/history/index/codex-session-index-heal-state.ts
@@ -172,12 +168,6 @@
 1 src/main/connector-cloud/connector-turn-outbox-file.ts
 1 src/main/copilot/hook-service.ts
 4 src/main/crash-reporting/capture/appimage-crashpad-handler-exit.ts
-2 src/main/credentials/credential-file-protection.ts
-6 src/main/credentials/encrypted-api-key-file-store.ts
-10 src/main/credentials/integration-credential-file.ts
-1 src/main/credentials/integration-state-file-cache.ts
-1 src/main/credentials/integration-token-file-cache.ts
-2 src/main/credentials/saved-credential-readability.ts
 2 src/main/daemon/admission/automatic-work-run-marker-store.ts
 5 src/main/daemon/admission/host-terminal-ledger.ts
 1 src/main/daemon/admission/legacy-restore-records.ts
@@ -244,11 +234,11 @@
 7 src/main/emulator/serve-sim-execution.ts
 17 src/main/emulator/serve-sim-runtime-materializer.ts
 12 src/main/external-editors/external-editor-launch.ts
-14 src/main/filesystem/atomic-file-publication.ts
+13 src/main/filesystem/atomic-file-publication.ts
 9 src/main/filesystem/durable-file-write.ts
 3 src/main/filesystem/file-content-observation.ts # Existing reads/existence checks relocated from observed callers; no new synchronous I/O.
 2 src/main/filesystem/local-file-io/filesystem-path-containment.ts
-3 src/main/filesystem/rolling-file-backup.ts # +1 Windows-only chmod inside the existing sync backup copy: clears the read-only attribute so a later rename over the backup cannot fail (STA-16113)
+2 src/main/filesystem/rolling-file-backup.ts # +1 Windows-only chmod inside the existing sync backup copy: clears the read-only attribute so a later rename over the backup cannot fail (STA-16113)
 2 src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry-path.ts
 1 src/main/foreign-sqlite-readers/foreign-sqlite-reader-spawn.ts
 5 src/main/git/repositories/discovery/repo-detection.ts
@@ -256,7 +246,6 @@
 1 src/main/git/source-control/ignores/huge-folder-ignore.ts
 3 src/main/git/worktrees/catalog/worktree-git-path.ts
 1 src/main/github/client/check/check-job-log-cache-retention-child.mjs
-6 src/main/google/google-credential-store.ts
 1 src/main/google/google-pdf-text-client.ts
 3 src/main/google/google-setup-runs.ts
 2 src/main/google/google-trigger-state.ts
@@ -283,25 +272,19 @@
 3 src/main/ipc/filesystem/watcher-process/parcel-watcher-entry-path.ts
 1 src/main/ipc/filesystem/watcher-process/root-paths/watcher-event-root-path-rewrite.ts
 1 src/main/ipc/filesystem/watcher-process/supervision/parcel-watcher-supervisor-subscribe.ts
-1 src/main/ipc/keyboard/macos-keyboard-layout-snapshot.ts
 1 src/main/ipc/notifications/notification-authorization-status.ts
 1 src/main/ipc/pty/host-env/spawn-pane-env.ts
 1 src/main/ipc/ssh/ssh-connect-flow.ts
 1 src/main/ipc/worktrees/floating-workspace-directory.ts
 2 src/main/ipc/worktrees/worktree-remote.ts
 7 src/main/jcode/hook-service.ts
-8 src/main/jira/site-credential-store.ts
 7 src/main/keybindings/keybinding-file-parser.ts
 1 src/main/keybindings/keybinding-file.ts
 13 src/main/kimi/hook-service.ts
 3 src/main/kiro/hook-service.ts
 1 src/main/kiro/standalone-hooks.ts
 3 src/main/lib/hidden-probe-cwd.ts
-4 src/main/linear/accounts/linear-credential-paths.ts
 3 src/main/linear/accounts/linear-legacy-viewer-store.ts
-1 src/main/linear/accounts/linear-login-store.ts
-1 src/main/linear/accounts/linear-token-store.ts
-3 src/main/linear/accounts/linear-workspace-registry.ts
 1 src/main/macos-permissions/macos-tcc-prompt-notice.ts
 3 src/main/managed-data-accounts/credential-capture.ts
 18 src/main/managed-data-accounts/profile-removal.ts
@@ -310,7 +293,6 @@
 1 src/main/managed-server/install/orcad-deployment-target.ts
 2 src/main/managed-server/install/remote-versioned-install.ts
 13 src/main/mimo/hook-service.ts
-6 src/main/minimax/minimax-cookie-store.ts
 1 src/main/muse/hook-config-json.ts
 4 src/main/muse/hook-service.ts
 2 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
@@ -439,7 +421,7 @@
 1 src/main/providers/shell-launch/macos/login-session-pty-probe.ts
 3 src/main/providers/shell-launch/macos/tcc-login-shell.ts
 3 src/main/providers/shell-launch/windows/powershell-executable.ts
-2 src/main/providers/shell-launch/windows/windows-interactive-login-spawn.ts
+1 src/main/providers/shell-launch/windows/windows-interactive-login-spawn.ts
 2 src/main/providers/working-directory/validation.ts
 4 src/main/pty/history/fish-history-session.ts
 4 src/main/pty/history/terminal-history-deletion.ts
@@ -492,7 +474,6 @@
 1 src/main/server/serve-pairing-output.ts
 2 src/main/speech/model-cache-path.ts
 7 src/main/speech/model-manager.ts
-10 src/main/speech/openai-api-key-store.ts
 1 src/main/speech/speech-model-download-cleanup.ts
 1 src/main/speech/speech-model-download-transport.ts
 1 src/main/speech/speech-model-files.ts
@@ -566,7 +547,6 @@
 1 src/main/wsl/host-lifecycle/wsl-host-early-wake.ts
 1 src/main/wsl/host-lifecycle/wsl-orphan-holder-release.ts
 1 src/main/zcode/hook-config-json.ts
-12 src/main/zcode/zcode-plan-api-key-store.ts
 6 src/shared/agent-hook-listener/claude-session-continuation.ts
 9 src/shared/agent-hook-listener/providers/codex/codex-rollout-jsonl-cursor.ts
 1 src/shared/agent-hook-listener/providers/codex/codex-subagent-roster.ts
@@ -588,7 +568,7 @@
 6 src/shared/file-content/node-bounded-file-reader.ts
 5 src/shared/file-content/node-file-content-equality.ts
 6 src/shared/file-content/node-source-copy-content-equality.ts
-2 src/shared/file-write/windows-retry-file-operations.ts
+3 src/shared/file-write/windows-retry-file-operations.ts # removeFileWithWindowsRetry: the rmSync moved here from rolling-file-backup.ts, which dropped one
 1 src/shared/file-write/windows-transient-lock-removal.ts
 1 src/shared/plugins/declarative/testing/orca-testing.ts
 1 src/shared/remote-runtime/e2ee/node/remote-runtime-e2ee-v2-host-latch.ts

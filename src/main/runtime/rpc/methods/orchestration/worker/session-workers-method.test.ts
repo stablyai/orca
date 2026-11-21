@@ -6,6 +6,7 @@ import type { AgentStatusIpcPayload } from '../../../../../../shared/agent-statu
 import { structuredAgentSessionStatusPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
 import { readConnectorWorkerActivity } from './connector-worker-activity'
 import {
+  readDispatchWorkers,
   sessionWorkerActivity,
   sessionWorkerState,
   workerResultSummary
@@ -207,6 +208,170 @@ describe('a worker on a paired server', () => {
       host: 'remote',
       hostEnvironmentId: 'env-win'
     })
+  })
+})
+
+describe('a terminal its host cannot find', () => {
+  // The harness's worker publishes no status row, so its host reads it unverifiable / missing_status.
+  async function goneWorker(): Promise<string> {
+    const { dispatchId } = await h.startWorker()
+    createdByChat(dispatchId)
+    vi.spyOn(h.runtime, 'refreshAuthoritativeTerminalInventory').mockResolvedValue(() => true)
+    vi.spyOn(h.runtime, 'getTerminalHandleForPaneKey').mockReturnValue(null)
+    vi.spyOn(h.runtime, 'resolveTerminalHandleByProcessIncarnation').mockReturnValue(null)
+    vi.spyOn(h.runtime, 'resolveTerminalIdentity').mockImplementation((handle) => ({
+      handle,
+      live: false
+    }))
+    return dispatchId
+  }
+
+  it('reads as stopped, the way a worker that exited without reporting does', async () => {
+    const dispatchId = await goneWorker()
+    expect((await sessionWorkers())[0]).toMatchObject({
+      dispatchId,
+      state: 'stopped',
+      liveness: 'unverifiable',
+      settledAt: null
+    })
+    // Shown only: the Dispatch stays open for its coordinator.
+    expect(h.db.getWorkerDispatch(dispatchId)?.state).not.toMatch(/stopped|abandoned/)
+  })
+
+  it('stays unconfirmed for a read that is not only shown (the bot and its connectors)', async () => {
+    const dispatchId = await goneWorker()
+    expect((await readDispatchWorkers(h.runtime, [dispatchId]))[0]).toMatchObject({
+      state: 'unverifiable'
+    })
+  })
+
+  it('stays unconfirmed while its pane still holds a terminal', async () => {
+    await goneWorker()
+    vi.spyOn(h.runtime, 'getTerminalHandleForPaneKey').mockReturnValue('term_reissued')
+    expect((await sessionWorkers())[0]!.state).toBe('unverifiable')
+  })
+
+  it('stays unconfirmed when its process answers under a reminted handle', async () => {
+    await goneWorker()
+    vi.spyOn(h.runtime, 'resolveTerminalHandleByProcessIncarnation').mockReturnValue(
+      'term_reminted'
+    )
+    vi.spyOn(h.runtime, 'resolveTerminalIdentity').mockImplementation((handle) => ({
+      handle,
+      live: handle === 'term_reminted'
+    }))
+    expect((await sessionWorkers())[0]!.state).toBe('unverifiable')
+  })
+
+  it('stays unconfirmed while the graph is unsettled or reloads, or when a read cannot tell', async () => {
+    await goneWorker()
+    const census = vi.spyOn(h.runtime, 'refreshAuthoritativeTerminalInventory')
+    census.mockResolvedValue(null)
+    expect((await sessionWorkers())[0]!.state).toBe('unverifiable')
+
+    census.mockResolvedValue(() => false)
+    expect((await sessionWorkers())[0]!.state).toBe('unverifiable')
+
+    census.mockResolvedValue(() => true)
+    vi.spyOn(h.runtime, 'resolveTerminalIdentity').mockImplementation(() => {
+      throw new Error('graph_not_ready')
+    })
+    expect((await sessionWorkers())[0]!.state).toBe('unverifiable')
+  })
+
+  // Each worker runs in its own terminal, pane and process, as the harness's one worker does.
+  async function goneWorkers(count: number): Promise<string[]> {
+    const ids: string[] = []
+    for (let index = 0; index < count; index++) {
+      const handle = `term_gone_${index}`
+      const paneKey = `tab_gone_${index}:cccccccc-cccc-4ccc-8ccc-cccccccccc0${index}`
+      const incarnation = `runtime_test:${handle}:1`
+      const own = <A extends unknown[], R>(
+        spy: { getMockImplementation: () => ((...args: A) => R) | undefined },
+        mine: R
+      ) => {
+        const prior = spy.getMockImplementation()
+        return (...args: A): R => (args[0] === handle ? mine : prior!(...args))
+      }
+      const paneSpy = vi.spyOn(h.runtime, 'getTerminalPaneKey')
+      paneSpy.mockImplementation(own(paneSpy, paneKey))
+      const incarnationSpy = vi.spyOn(h.runtime, 'getTerminalProcessIncarnation')
+      incarnationSpy.mockImplementation(own(incarnationSpy, incarnation))
+      const authoritySpy = vi.spyOn(h.runtime, 'getOrchestrationDispatchAuthority')
+      const harnessAuthority = authoritySpy.getMockImplementation()!('term_worker')!
+      authoritySpy.mockImplementation(
+        own(authoritySpy, {
+          ...harnessAuthority,
+          terminalHandle: handle,
+          paneKey,
+          processIncarnation: incarnation
+        })
+      )
+      vi.spyOn(h.runtime, 'createTerminal').mockResolvedValueOnce({
+        handle,
+        worktreeId: 'repo::worktree',
+        title: 'worker'
+      })
+      vi.spyOn(h.runtime, 'waitForTerminal').mockResolvedValueOnce({
+        handle,
+        condition: 'tui-idle',
+        satisfied: true,
+        status: 'running',
+        exitCode: null
+      })
+      vi.spyOn(h.runtime, 'sendTerminalAgentPrompt').mockResolvedValueOnce({
+        handle,
+        accepted: true,
+        bytesWritten: 1
+      })
+      ids.push(await goneWorker())
+    }
+    return ids
+  }
+
+  it('shows each worker whose terminal ended as stopped', async () => {
+    const ids = await goneWorkers(3)
+    const workers = await sessionWorkers()
+    expect(workers.map((worker) => worker.dispatchId).sort()).toEqual([...ids].sort())
+    expect(workers.every((worker) => worker.state === 'stopped')).toBe(true)
+  })
+
+  it('still checks each worker on its own against the shared census', async () => {
+    const ids = await goneWorkers(3)
+    const held = h.db.listWorkerTerminalResources({ dispatchIds: [ids[1]!] })[0]!.paneKey
+    vi.spyOn(h.runtime, 'getTerminalHandleForPaneKey').mockImplementation((paneKey) =>
+      paneKey === held ? 'term_reissued' : null
+    )
+    const states = new Map((await sessionWorkers()).map((w) => [w.dispatchId, w.state]))
+    expect(ids.map((id) => states.get(id))).toEqual(['stopped', 'unverifiable', 'stopped'])
+  })
+
+  it('keeps every worker unconfirmed when the one census cannot vouch for its hosts', async () => {
+    await goneWorkers(3)
+    const census = vi.spyOn(h.runtime, 'refreshAuthoritativeTerminalInventory')
+    census.mockResolvedValue(null)
+    const workers = await sessionWorkers()
+    expect(workers.map((worker) => worker.state)).toEqual([
+      'unverifiable',
+      'unverifiable',
+      'unverifiable'
+    ])
+
+    census.mockRejectedValue(new Error('controller_unavailable'))
+    expect((await sessionWorkers()).every((worker) => worker.state === 'unverifiable')).toBe(true)
+  })
+
+  it('leaves a coordinator-only worker read unverifiable', async () => {
+    const ids = await goneWorkers(2)
+    const workers = await readDispatchWorkers(h.runtime, ids)
+    expect(workers.every((worker) => worker.state === 'unverifiable')).toBe(true)
+  })
+
+  it('leaves a settled worker as it settled', async () => {
+    const dispatchId = await goneWorker()
+    const [worker] = await sessionWorkers()
+    h.settle(worker!.taskId, dispatchId, 'succeeded')
+    expect((await sessionWorkers())[0]).toMatchObject({ state: 'completed' })
   })
 })
 

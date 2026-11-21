@@ -46,6 +46,26 @@ export abstract class RuntimeSessionTabsInventoryPublication extends OrcaRuntime
     })
   }
 
+  protected abstract performMobileSessionPtyRecordsRefresh(
+    targetWorktreeId: string | null
+  ): Promise<PtyControllerInventory | null>
+
+  /** The receipt stays current only while the same controller and published graph own the census. */
+  async refreshAuthoritativeTerminalInventory(): Promise<(() => boolean) | null> {
+    const epoch = this.getAuthoritativeSessionTabsInventoryEpoch()
+    if (epoch === null || !this.ptyController) {
+      return null
+    }
+    const generation = this.ptyControllerGeneration
+    const inventory = await this.performMobileSessionPtyRecordsRefresh(null)
+    if (!this.isCompleteSessionTabsPtyCensus(inventory)) {
+      return null
+    }
+    return () =>
+      this.ptyControllerGeneration === generation &&
+      this.getAuthoritativeSessionTabsInventoryEpoch() === epoch
+  }
+
   protected getAuthoritativeSessionTabsInventoryEpoch(): number | null {
     return this.graphStatus === 'ready' &&
       this.sessionTabsInventoryPublicationEpoch === this.rendererGraphEpoch

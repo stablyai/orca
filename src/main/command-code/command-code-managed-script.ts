@@ -1,5 +1,6 @@
 import { posixCurlCommand } from '../agent-hooks/installation/scripts/hook-post-command'
 import { ORCA_AGENT_HOOKS_DISABLED_ENV } from '../../shared/agent-hook-listener/transport/agent-hook-suppression-env'
+import { buildPosixScrubSafeEnvRestoreLines } from '../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import { buildWindowsAgentHookPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
 import {
   buildPosixHookPayloadCapture,
@@ -43,6 +44,8 @@ export function buildCommandCodeManagedScript(
 
   return [
     '#!/bin/sh',
+    // Command Code strips TOKEN-named variables from hook env; pane identity survives.
+    ...buildPosixScrubSafeEnvRestoreLines(),
     ...buildPosixHookPayloadCapture(),
     `if [ "\${${ORCA_AGENT_HOOKS_DISABLED_ENV}:-}" = 1 ]; then exit 0; fi`,
     ...buildPosixHookSpoolLines('command-code'),
@@ -68,22 +71,9 @@ export function buildCommandCodeManagedScript(
     '  done',
     '  return 1',
     '}',
-    '__orca_fill_from_ancestor() {',
-    '  __orca_name="$1"',
-    '  case "$__orca_name" in',
-    '    ORCA_AGENT_HOOK_ENDPOINT) [ -z "${ORCA_AGENT_HOOK_ENDPOINT:-}" ] || return 0 ;;',
-    '    ORCA_AGENT_HOOK_PORT) [ -z "${ORCA_AGENT_HOOK_PORT:-}" ] || return 0 ;;',
-    '    ORCA_AGENT_HOOK_TOKEN) [ -z "${ORCA_AGENT_HOOK_TOKEN:-}" ] || return 0 ;;',
-    '    ORCA_AGENT_HOOK_ENV) [ -z "${ORCA_AGENT_HOOK_ENV:-}" ] || return 0 ;;',
-    '    ORCA_AGENT_HOOK_VERSION) [ -z "${ORCA_AGENT_HOOK_VERSION:-}" ] || return 0 ;;',
-    '    ORCA_PANE_KEY) [ -z "${ORCA_PANE_KEY:-}" ] || return 0 ;;',
-    '    ORCA_TAB_ID) [ -z "${ORCA_TAB_ID:-}" ] || return 0 ;;',
-    '    ORCA_WORKTREE_ID) [ -z "${ORCA_WORKTREE_ID:-}" ] || return 0 ;;',
-    '    ORCA_AGENT_LAUNCH_TOKEN) [ -z "${ORCA_AGENT_LAUNCH_TOKEN:-}" ] || return 0 ;;',
-    '    *) return 0 ;;',
-    '  esac',
-    '  __orca_value=$(__orca_read_ancestor_var "$__orca_name") || return 0',
-    '  [ -n "$__orca_value" ] && export "$__orca_name=$__orca_value"',
+    '__orca_fill_token_from_ancestor() {',
+    '  __orca_value=$(__orca_read_ancestor_var ORCA_AGENT_HOOK_TOKEN) || return 0',
+    '  [ -n "$__orca_value" ] && export "ORCA_AGENT_HOOK_TOKEN=$__orca_value"',
     '}',
     '__orca_endpoint_value() {',
     '  __orca_endpoint_name="$1"',
@@ -104,10 +94,6 @@ export function buildCommandCodeManagedScript(
     '    [ -n "$__orca_endpoint_value" ] && export "$__orca_endpoint_name=$__orca_endpoint_value"',
     '  done',
     '}',
-    '# Recover pane/hook metadata from the parent TUI after Command Code sanitizes hook env.',
-    'for __orca_name in ORCA_AGENT_HOOK_ENDPOINT ORCA_AGENT_HOOK_PORT ORCA_AGENT_HOOK_TOKEN ORCA_AGENT_HOOK_ENV ORCA_AGENT_HOOK_VERSION ORCA_PANE_KEY ORCA_TAB_ID ORCA_WORKTREE_ID ORCA_AGENT_LAUNCH_TOKEN; do',
-    '  __orca_fill_from_ancestor "$__orca_name"',
-    'done',
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  __orca_fill_from_endpoint_file "$ORCA_AGENT_HOOK_ENDPOINT"',
     'fi',
@@ -129,6 +115,10 @@ export function buildCommandCodeManagedScript(
     '      break',
     '    fi',
     '  done',
+    'fi',
+    // Last resort for hosts without an endpoint file: read only the token from the parent TUI.
+    'if [ -z "$ORCA_AGENT_HOOK_TOKEN" ] && [ -n "$ORCA_PANE_KEY" ] && [ -n "$ORCA_AGENT_HOOK_PORT" ]; then',
+    '  __orca_fill_token_from_ancestor',
     'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
     '  spool_hook_event',

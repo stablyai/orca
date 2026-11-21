@@ -31,9 +31,9 @@ export function ordinaryPageRpc(
       throw new Error('unexpected_host_volunteer')
     },
     getRuntimeBrowserPageRegistry: () => h.pages,
-    getAvailableAuthoritativeWindow: () => null,
+    getAvailableAuthoritativeWindowId: () => null,
     getOffscreenBrowserBackend: () => null,
-    getAuthoritativeWindow: () => {
+    getAuthoritativeWindowId: () => {
       throw new Error('unexpected_host_window')
     },
     notifyHeadlessBrowserSessionTabsChanged: (id) =>

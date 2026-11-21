@@ -41,58 +41,49 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
 }
 
 describe('folder workspace path status', () => {
-  it.each([false, true])(
-    'reports canonical owner ambiguity through the persisted folder status route (%s)',
-    async (reverse) => {
-      const root = await mkdtemp(join(tmpdir(), 'orca-pr31617-folder-owner-'))
-      const workspace: FolderWorkspace = {
-        id: 'saved',
-        projectGroupId: 'group-1',
-        name: 'Saved',
-        folderPath: root,
-        linkedTask: null,
-        comment: '',
-        isArchived: false,
-        isUnread: false,
-        isPinned: false,
-        sortOrder: 0,
-        lastActivityAt: 0,
-        createdAt: 0,
-        updatedAt: 0
-      }
-      const repos = [
-        makeRepo({ id: 'local', path: join(root, 'local') }),
-        makeRepo({ id: 'ssh', path: join(root, 'ssh'), executionHostId: 'ssh:prod' })
-      ]
-      let folders = [workspace]
-      const store = {
-        getRepos: () => (reverse ? [...repos].toReversed() : repos),
-        getProjectGroups: () => [makeGroup({ parentPath: root })],
-        getFolderWorkspaces: () => folders
-      }
-      try {
-        await expect(
-          getFolderWorkspacePathStatus(store, {
-            scope: 'folder-workspace',
-            folderWorkspaceId: 'saved'
-          })
-        ).resolves.toEqual({
-          path: root,
-          exists: false,
-          reason: 'ambiguous-connection'
-        })
-        folders = []
-        await expect(
-          getFolderWorkspacePathStatus(store, {
-            scope: 'folder-workspace',
-            folderWorkspaceId: 'saved'
-          })
-        ).rejects.toThrow('folder_workspace_path_scope_not_found')
-      } finally {
-        await rm(root, { recursive: true, force: true })
-      }
+  it('reports persisted folder ambiguity in either repo order, then rejects a missing scope', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-pr31617-folder-owner-'))
+    const workspace: FolderWorkspace = {
+      id: 'saved',
+      projectGroupId: 'group-1',
+      name: 'Saved',
+      folderPath: root,
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      createdAt: 0,
+      updatedAt: 0
     }
-  )
+    let repos = [
+      makeRepo({ id: 'local', path: join(root, 'local') }),
+      makeRepo({ id: 'ssh', path: join(root, 'ssh'), executionHostId: 'ssh:prod' })
+    ]
+    let folders = [workspace]
+    const store = {
+      getRepos: () => repos,
+      getProjectGroups: () => [makeGroup({ parentPath: root })],
+      getFolderWorkspaces: () => folders
+    }
+    const status = () =>
+      getFolderWorkspacePathStatus(store, {
+        scope: 'folder-workspace',
+        folderWorkspaceId: 'saved'
+      })
+    try {
+      const ambiguity = { path: root, exists: false, reason: 'ambiguous-connection' }
+      await expect(status()).resolves.toEqual(ambiguity)
+      repos = repos.toReversed()
+      await expect(status()).resolves.toEqual(ambiguity)
+      folders = []
+      await expect(status()).rejects.toThrow('folder_workspace_path_scope_not_found')
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
 
   it('reports existing local directories and local files', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-folder-status-'))

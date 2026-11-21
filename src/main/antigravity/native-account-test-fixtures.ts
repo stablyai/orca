@@ -46,8 +46,8 @@ export function harness(initial: string | null = credential('a')) {
   let native = initial
   let vault: AntigravityAccountVault = { accounts: [], selectedAccountId: null }
   const store: AntigravityAccountStore = {
-    read: vi.fn(() => structuredClone(vault)),
-    write: vi.fn((next) => {
+    read: vi.fn(async () => structuredClone(vault)),
+    write: vi.fn(async (next) => {
       vault = structuredClone(next)
     })
   }

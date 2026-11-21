@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { BotLaunchTools } from './bot-launch-tools'
+import { claudeStreamJsonExitError } from '../claude/sdk-transport/claude-stream-json-exit-error'
 import type { BotToolsCli } from './bot-tools-host'
 
 const mocks = vi.hoisted(() => ({ open: vi.fn() }))
@@ -77,4 +78,25 @@ it('shares an in-flight Claude check, closes only that bot on stop, and can star
   cancelBotToolHealthChecks(otherBot.botId)
   await expect(independent).rejects.toMatchObject({ name: 'AbortError' })
   expect(other.close).toHaveBeenCalled()
+})
+
+it('marks every tool off with the reason when managed settings refuse them', async () => {
+  const refusal = claudeStreamJsonExitError(
+    "Error: --mcp-config is disabled by your organization's managed settings (disableSideloadFlags). Plugins, custom agents, and MCP servers can only be loaded from sources your administrator has approved.",
+    { code: 1, signal: null, processless: false }
+  )
+  mocks.open.mockResolvedValueOnce({
+    close: vi.fn(async () => true),
+    mcpServerStatus: () => Promise.reject(refusal)
+  })
+
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the check reads only `servers`.
+  const problems = await claudeBotToolProblems(cli, tools as BotLaunchTools)
+
+  expect(Object.fromEntries(problems)).toEqual({
+    vercel: {
+      kind: 'failed',
+      detail: "Off: your organization's Claude Code managed settings refuse MCP servers."
+    }
+  })
 })

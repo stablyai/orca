@@ -8,6 +8,7 @@ import {
   BOT_WORKSPACE_LINE_LOGO,
   botWorkspaceLineAgent
 } from '../../../src/shared/bots/bot-sidebar-workspaces'
+import { chatFoldSummary } from '../../../src/shared/bots/bot-chat-tree'
 import { botSidebarWorkerPagingLabel } from '../../../src/shared/bots/bot-sidebar-tree'
 import { structuredAgentSessionStatusPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-tab'
 import type { WorktreeStatus } from '../../../src/shared/worktree/row-display/worktree-status-rollup'
@@ -64,7 +65,7 @@ function ChatRowComponent({
   const label = useMobileBotChatLabel(chat, title)
   const text =
     trailing?.kind === 'summary'
-      ? trailing.text
+      ? chatFoldSummary(t, trailing.counts)
       : trailing?.kind === 'time'
         ? formatTimeAgo(trailing.at, now)
         : null

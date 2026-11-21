@@ -89,10 +89,21 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
     skillSourceOwner: 'copilot',
     readsProjectSkillFoldersOf: ['claude']
   },
+  // Auggie, built on Pi, expands only `/skill:<name>` and reports no skills; it reads `.claude` too.
+  aug: {
+    skillPrefix: '/',
+    skillSourceOwner: 'aug',
+    skillNamePrefix: 'skill:',
+    readsSkillFoldersOf: ['claude']
+  },
   // Hermes' ACP sends an unregistered `/word` to the model as text, so a picked skill would not load.
   hermes: null,
   // Both report their user and project skills as `skill:<name>`, at rest too.
   kimi: null,
+  // Kiro's ACP pushes its own slash commands for each session.
+  kiro: null,
+  // Goose reports its skills as commands, at rest too.
+  goose: null,
   omp: null
 }
 
