@@ -29538,5 +29538,13 @@
       "previous": "Previous month",
       "next": "Next month"
     }
+  },
+  "orcaFork": {
+    "bots": {
+      "unreadChats_one": "{{count}} unread chat",
+      "unreadChats_other": "{{count}} unread chats",
+      "photoChanged": "Photo changed",
+      "changePhoto": "Change photo…"
+    }
   }
 }

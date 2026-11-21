@@ -22,6 +22,7 @@ import type { BotChatTree } from './use-bot-chat-tree'
 import { openBotSession } from './bot-session-open'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { useBotsRevealRequest } from './bots-sidebar-reveal-context'
+import { ForkBotChatTitle, forkChatRowHasPreview } from '../orca-fork/sidebar/ForkBotChatTitle'
 
 /** The bot's open chat tabs in the panel's order, each with the workspaces its workers have, nested by indent. */
 export function BotSidebarChats({
@@ -180,7 +181,9 @@ function BotSidebarChat({
         tabIndex={0}
         aria-expanded={foldable ? open : undefined}
         className={cn(
-          'group/bot-chat flex h-6 min-w-0 cursor-pointer items-center gap-1.5 rounded-md pr-0.5 pl-1 text-xs text-muted-foreground outline-none hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-ring/50',
+          // orca-fork: a row with a preview grows to its two lines
+          forkChatRowHasPreview(chat.preview) ? 'min-h-6 py-0.5' : 'h-6',
+          'group/bot-chat flex min-w-0 cursor-pointer items-center gap-1.5 rounded-md pr-0.5 pl-1 text-xs text-muted-foreground outline-none hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-ring/50',
           active && 'bg-sidebar-accent'
         )}
         onClick={pressRow}
@@ -192,14 +195,8 @@ function BotSidebarChat({
         }}
       >
         <BotChatStatusSlot chat={chat} />
-        <span
-          className={cn(
-            'min-w-0 flex-1 truncate text-foreground',
-            (chat.unread || active) && 'font-semibold'
-          )}
-        >
-          {title}
-        </span>
+        {/* orca-fork: the chat's last message under its title */}
+        <ForkBotChatTitle title={title} preview={chat.preview} bold={chat.unread || active} />
         <BotChatRowEnd
           text={trailing}
           fold={foldable ? { open, name: title, onToggle: () => toggle(open) } : null}

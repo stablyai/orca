@@ -24876,5 +24876,14 @@
     "dontSend": "Não enviar",
     "sending": "Enviando…",
     "sendReport": "Enviar relatório"
+  },
+  "orcaFork": {
+    "bots": {
+      "unreadChats_one": "{{count}} conversa não lida",
+      "unreadChats_other": "{{count}} conversas não lidas",
+      "unreadChats_many": "{{count}} conversas não lidas",
+      "photoChanged": "Foto alterada",
+      "changePhoto": "Trocar foto…"
+    }
   }
 }

@@ -36,6 +36,8 @@ import {
   useBotRowLine
 } from './BotRowActivityLine'
 import { BotSidebarRow } from './BotSidebarRow'
+import { ForkBotUnreadChatCount } from '../orca-fork/sidebar/ForkBotUnreadChatCount'
+import { ForkChangePhotoMenuItem } from '../orca-fork/sidebar/ForkChangePhotoMenuItem'
 import { BotHoverNeedsYou, revealBotHome } from './BotHoverNeedsYou'
 import { usageLimitStopTip } from './BotUsageLimitMark'
 import { BotUpNextCount } from './BotUpNextCount'
@@ -143,17 +145,20 @@ export function BotRow({
             now={now}
             disconnected={offline}
             leading={hostPill}
+            // orca-fork: unread chats count beside Up next
             trailing={
-              upNextNew > 0 && !offline ? (
-                <BotUpNextCount
-                  count={upNextNew}
-                  onReveal={() => {
-                    if (openBotFromSidebar(bot, onOpen)) {
-                      revealBotUpNext(bot.id)
-                    }
-                  }}
-                />
-              ) : null
+              <ForkBotUnreadChatCount bot={bot} offline={offline}>
+                {upNextNew > 0 && !offline ? (
+                  <BotUpNextCount
+                    count={upNextNew}
+                    onReveal={() => {
+                      if (openBotFromSidebar(bot, onOpen)) {
+                        revealBotUpNext(bot.id)
+                      }
+                    }}
+                  />
+                ) : null}
+              </ForkBotUnreadChatCount>
             }
           />
         ) : null
@@ -183,6 +188,8 @@ export function BotRow({
             <Settings className="size-3.5" />
             {t('bots.row.settings', 'Bot settings…')}
           </ContextMenuItem>
+          {/* orca-fork: change the bot's photo from its row */}
+          <ForkChangePhotoMenuItem bot={bot} disabled={offline} />
           <ContextMenuItem
             disabled={offline}
             onSelect={() => run(updateBot(bot, { paused: !bot.paused }))}
