@@ -4722,6 +4722,7 @@ const ORCHESTRATION_MARKDOWN = [
   "| Task DAGs, several Runs                                                   | `references/coordinator-loop.md`     |",
   "| Another project or machine, child worktrees, SSH, WSL, a connected server | `references/placement-and-remote.md` |",
   "| Group messages                                                            | `references/messaging-and-gates.md`  |",
+  "| A non-CLI agent app (chat or desktop)                                     | `references/non-cli-agents.md`       |",
   "| A failed or unknown worker; retry, stop, reset                            | `references/recovery-and-cleanup.md` |",
   "| Several independent workers at once                                       | `references/parallel-start.md`       |",
   "| Custom argv or terminal layout                                            | `references/low-level-topology.md`   |",
@@ -4785,6 +4786,39 @@ const ORCHESTRATION_MESSAGING_AND_GATES_REFERENCE_MARKDOWN = [
   "To reach an agent on a paired server, use `send --on <server>`; a reply to mail",
   "from another server needs no flag. See",
   "[Placement and remote execution](placement-and-remote.md).",
+  "",
+].join('\n')
+
+// oxfmt-ignore
+const ORCHESTRATION_NON_CLI_AGENTS_REFERENCE_MARKDOWN = [
+  "# Non-CLI agent apps",
+  "",
+  "Orca launches supervised workers through its supported agent integrations.",
+  "Bots are Orca chat personas. A standalone chat or desktop agent app cannot",
+  "register itself as a worker or bot.",
+  "",
+  "## One-way delegation",
+  "",
+  "An external agent with shell access to the orca CLI can hand work to a bot on",
+  "this computer:",
+  "",
+  "```text",
+  "ORCA orchestration send --to bot:<name> --type handoff --subject \"<job>\" --body \"<what to do>\"",
+  "ORCA orchestration send --to bot:<name> --type status --subject \"<news>\" --body \"<information>\"",
+  "```",
+  "",
+  "`ORCA bot list` names the bots. A bare CLI caller sends as the owner: the bot",
+  "takes a `handoff` as its owner's own job and works it; the result lands in the",
+  "bot's chat, or the connected service the job names. `status` is information;",
+  "nothing comes back.",
+  "",
+  "Answers do not return to the external app. A reply routes to the sender's Orca",
+  "mailbox (a terminal handle, session address, or dispatch), which a non-Orca app",
+  "does not have. Read a handoff's result where the bot posts it; do not wait for",
+  "mail that cannot arrive, and do not send `question` expecting an answer back.",
+  "",
+  "Peer participation for non-CLI apps, with registration and a public reply",
+  "channel, is proposed in stablyai/orca#45310.",
   "",
 ].join('\n')
 
@@ -5199,6 +5233,6 @@ export const BUNDLED_SKILL_GUIDES = [
     description: "Run work in separate Orca worker agents and get their results back. Use when the user invokes /orchestration, asks for Orca workers or supervision (monitor, task DAGs, ask/reply, decision gates), or asks to split, parallelize or fan out code changes across agents, worktrees or branches; use Orca workers for those. Also use when the work needs a different agent (such as Codex from Claude) or its own Orca workspace: \"Have Codex (or Claude) review this and report back\" means an Orca worker of that agent. Also use when you are a dispatched worker (a prompt with Task and Dispatch IDs: ask, worker_done). Unless the user asks for Orca workers or a named agent, searches, reads and research in your workspace stay with your own subagents, even in parallel. Use `orca-cli` to hand work off with nothing expected back (\"hand off\", \"handover\", \"give this to another agent\", \"another worktree\"), and for terminal control, shell commands, worktree management, and reading or waiting on terminals.",
     markdown: ORCHESTRATION_MARKDOWN,
     aliases: [],
-    references: [{ name: "coordinator-loop", markdown: ORCHESTRATION_COORDINATOR_LOOP_REFERENCE_MARKDOWN }, { name: "low-level-topology", markdown: ORCHESTRATION_LOW_LEVEL_TOPOLOGY_REFERENCE_MARKDOWN }, { name: "messaging-and-gates", markdown: ORCHESTRATION_MESSAGING_AND_GATES_REFERENCE_MARKDOWN }, { name: "parallel-start", markdown: ORCHESTRATION_PARALLEL_START_REFERENCE_MARKDOWN }, { name: "placement-and-remote", markdown: ORCHESTRATION_PLACEMENT_AND_REMOTE_REFERENCE_MARKDOWN }, { name: "recovery-and-cleanup", markdown: ORCHESTRATION_RECOVERY_AND_CLEANUP_REFERENCE_MARKDOWN }]
+    references: [{ name: "coordinator-loop", markdown: ORCHESTRATION_COORDINATOR_LOOP_REFERENCE_MARKDOWN }, { name: "low-level-topology", markdown: ORCHESTRATION_LOW_LEVEL_TOPOLOGY_REFERENCE_MARKDOWN }, { name: "messaging-and-gates", markdown: ORCHESTRATION_MESSAGING_AND_GATES_REFERENCE_MARKDOWN }, { name: "non-cli-agents", markdown: ORCHESTRATION_NON_CLI_AGENTS_REFERENCE_MARKDOWN }, { name: "parallel-start", markdown: ORCHESTRATION_PARALLEL_START_REFERENCE_MARKDOWN }, { name: "placement-and-remote", markdown: ORCHESTRATION_PLACEMENT_AND_REMOTE_REFERENCE_MARKDOWN }, { name: "recovery-and-cleanup", markdown: ORCHESTRATION_RECOVERY_AND_CLEANUP_REFERENCE_MARKDOWN }]
   }
 ] as const satisfies readonly BundledSkillGuide[]
