@@ -287,7 +287,14 @@ export default function BrowserTab({
             {toggleAudioMutedLabel}
           </ContextMenuItem>
         ) : null}
-        <CopyTabIdMenuItem menuKind="context" unifiedTabId={dragData.unifiedTabId} />
+        <CopyTabIdMenuItem
+          menuKind="context"
+          reference={{
+            unifiedTabId: dragData.unifiedTabId,
+            kind: 'browser',
+            browserPageId: tab.activePageId
+          }}
+        />
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
           <X className="size-3.5" />

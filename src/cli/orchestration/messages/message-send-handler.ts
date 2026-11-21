@@ -26,6 +26,7 @@ import {
   resolveOrchestrationTerminalHandle,
   throwNoActiveSenderTerminal
 } from '../identity/terminal-identity'
+import { resolveRecipientReference } from '../../tab-reference/copied-tab-reference'
 
 const WORKER_DONE_UNAVAILABLE_RETRY_MS = 120_000
 
@@ -84,7 +85,13 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
     const { flags, client, cwd, json } = ctx
     await refuseAgentServerRoute('send', ctx)
     await requirePeerMailCarrier(ctx)
-    const to = getOptionalStringFlag(flags, 'to')
+    const toFlag = getOptionalStringFlag(flags, 'to')
+    // With --on the recipient lives on that server, so this Orca's tabs cannot name it.
+    const to = toFlag
+      ? await resolveRecipientReference(client, toFlag, {
+          remote: Boolean(getOptionalStringFlag(flags, 'on'))
+        })
+      : toFlag
     const type = getOptionalStringFlag(flags, 'type')
     if (to) {
       rejectLifecycleGroupRecipient(type, to)

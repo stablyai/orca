@@ -5,6 +5,8 @@ import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote
 /** A browser tab as the tab bar shows it, whether or not its page has loaded. */
 export type BrowserTabBarEntry = {
   browserPageId: string
+  /** The workspace tab showing the page; inventory-only pages have none. */
+  unifiedTabId?: string
   worktreeId: string
   active?: boolean
   title: string
@@ -48,6 +50,7 @@ export function readBrowserTabBar(
       listed.add(tab.browserPageId)
       result.push({
         browserPageId: tab.browserPageId,
+        unifiedTabId: tab.id,
         active: tab.id === snapshot.activeTabId,
         worktreeId: snapshot.worktree,
         title: saved?.title ?? tab.title,
@@ -94,11 +97,13 @@ export function mergeBrowserTabListing(input: {
     }
     listed.add(entry.browserPageId)
     const live = liveById.get(entry.browserPageId)
+    const unifiedTabId = entry.unifiedTabId ? { unifiedTabId: entry.unifiedTabId } : {}
     fromBar.push(
       live
-        ? { ...live, loaded: true }
+        ? { ...live, ...unifiedTabId, loaded: true }
         : {
             browserPageId: entry.browserPageId,
+            ...unifiedTabId,
             index: 0,
             url: entry.url,
             title: entry.title,
@@ -118,7 +123,12 @@ export function mergeBrowserTabListing(input: {
   const unlisted = serverTabs
     .filter((tab) => !listed.has(tab.browserPageId))
     .map((tab) => ({ ...tab, loaded: true }))
-  const clients = input.clientTabs.map((tab) => ({ ...tab, loaded: true }))
+  // A client row wins over the tab-bar entry for the same page but keeps the workspace tab id it lacks.
+  const barTabIds = new Map(input.tabBar.map((entry) => [entry.browserPageId, entry.unifiedTabId]))
+  const clients = input.clientTabs.map((tab) => {
+    const unifiedTabId = barTabIds.get(tab.browserPageId)
+    return { ...tab, ...(unifiedTabId ? { unifiedTabId } : {}), loaded: true }
+  })
   const tabs = [...fromBar, ...unlisted, ...clients]
   const fallbackId = (
     serverTabs[0] ??

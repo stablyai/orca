@@ -24,6 +24,7 @@ import {
   resolvePackagedWindowsCompatibilityCommand
 } from '../recovery/runtime-compatibility'
 import { resolveOrchestrationTerminalHandle } from '../identity/terminal-identity'
+import { resolveRecipientReference } from '../../tab-reference/copied-tab-reference'
 
 async function runtimeLacksAskAtOnce(client: RuntimeClient): Promise<boolean> {
   const status = await client.call<RuntimeStatus>('status.get')
@@ -77,7 +78,7 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
       flags,
       'orchestration.ask',
       {
-        to: getOptionalStringFlag(flags, 'to'),
+        to: await optionalRecipient(client, getOptionalStringFlag(flags, 'to')),
         run: getOptionalStringFlag(flags, 'run'),
         question,
         resume,
@@ -190,4 +191,8 @@ async function finishLegacyAsk(
       compatibilityQuestionAck: JSON.stringify(answerAck)
     })
   }
+}
+
+async function optionalRecipient(client: RuntimeClient, to: string | undefined) {
+  return to ? resolveRecipientReference(client, to) : to
 }
