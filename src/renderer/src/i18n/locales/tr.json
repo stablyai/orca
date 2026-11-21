@@ -5637,7 +5637,7 @@
           "updateAction_one": "{{count}} beceriyi güncelle"
         },
         "SkillUpdateRow": {
-          "replaceWithOrca": "Orca'nın kopyasıyla değiştir (yedek saklanır)"
+          "replaceWithOrca": "Bu sürümün kopyasıyla değiştir (yedek saklanır)"
         },
         "SkillFreshnessStatusPill": {
           "updateAvailable": "Güncelleme mevcut",
