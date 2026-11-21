@@ -19,7 +19,7 @@ import { useBackClaim } from '../../navigation/use-back-claim'
 import { openExternalLink } from '../../platform/external-links/external-link'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { accessRequestLine } from '../bot-access-request-copy'
+import { accessRequestGrant, accessRequestLine } from '../bot-access-request-copy'
 import type { PhoneBot } from '../host-bots-operations'
 import { MobileBotAccessDecisionContent } from '../MobileBotAccessDecision'
 import { optionStyles } from '../mobile-bot-option-styles'
@@ -92,7 +92,7 @@ export function MobileBotSlackPage(props: {
     const access = props.access
     return (
       <MobileBotAccessDecisionContent
-        request={granting}
+        grant={accessRequestGrant(granting)}
         bot={props.accessBot}
         onGrant={() => void access.decide(granting, 'granted')}
         onClose={() => setGranting(null)}
