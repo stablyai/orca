@@ -11,7 +11,10 @@ import {
   createAntigravityWorkspaceResolver,
   readLocalAntigravityHistory
 } from './scanners/antigravity/session-scanner-antigravity-history'
-import { sessionCandidatesFromDiscoveries } from './discovery/session-scanner-candidates'
+import {
+  discoveryFileCandidates,
+  sessionCandidatesFromDiscoveries
+} from './discovery/session-scanner-candidates'
 import { parseSessionCandidates } from './parsing/session-scanner-candidate-parse'
 import { createSessionParseStats } from './parse-cache/session-scanner-parse-cache'
 import { recordSessionScanIssue } from './parsing/session-scan-issues'
@@ -111,6 +114,25 @@ async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<Ai
           ? recentSessions.filter((session) => aiVaultSessionInScope(inScope, session))
           : recentSessions.slice(0, limit)
 
+        const selectedSessions =
+          options.selectedSessionId &&
+          !cappedSessions.some((session) => session.id === options.selectedSessionId)
+            ? await parseSessionCandidates({
+                candidates: discoveries
+                  .flatMap((discovery) =>
+                    discoveryFileCandidates(discovery, discovery.selectedFiles ?? [], options)
+                  )
+                  .slice(0, 1),
+                limit: 1,
+                platform,
+                executionHostId,
+                issues,
+                parseStats,
+                signal: options.signal,
+                antigravityWorkspaceResolver,
+                admitSession: (session) => session.id === options.selectedSessionId
+              })
+            : []
         const scopeSessions = await scanInScopeSessions({
           inventory,
           discoveries,
@@ -146,7 +168,7 @@ async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<Ai
 
         return {
           sessions: withAntigravityArtifactPaths(
-            mergeSessions(cappedSessions, scopeSessions),
+            mergeSessions(cappedSessions, [...scopeSessions, ...selectedSessions]),
             discoveries
           ),
           issues: issues.map((issue) => ({ executionHostId, ...issue })),

@@ -1,9 +1,11 @@
 import { admitStructuredAgentSession } from '@/lib/agent-session/structured-agent-session-busy'
 import { useAppStore } from '@/store/index'
+import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { readBotGroups } from '@/lib/bot-group-catalog-snapshot'
 import { botGroupRoomOfRow } from '@/lib/bot-group-room-history'
 import {
   activateAiVaultStructuredSession,
+  structuredSessionOpenFeedback,
   openDesktopStructuredSession
 } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { insertUnifiedTabAfterAnchor } from '@/lib/workspace/tabs/unified-tab-anchor-insertion'
@@ -23,6 +25,7 @@ import type {
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { adoptsCliConversations } from '../../../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import type { CliConversationRowAgent } from '../../../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { structuredLaunchConversationOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import { resumeAiVaultSessionInNewChat } from './ai-vault-session-resume-in-chat-launch'
 import type { ConfirmationDialogContextValue } from '@/components/dismiss/confirmation/confirmation-dialog-context'
@@ -75,20 +78,31 @@ export function resumeAiVaultSessionHere(args: {
   if (!here.agent || !aiVaultHistoryAgents(here.agent).includes(session.agent)) {
     return false
   }
+  const target = session.executionHostId
+    ? structuredAgentSessionTargetForHost(session.executionHostId)
+    : undefined
   let replace: () => Promise<void>
   if (structured) {
     if (structured.workspaceId !== here.workspaceId) {
       return false
     }
-    replace = () => revealInPlaceOf(here, structured)
+    if (target === null) {
+      structuredSessionOpenFeedback.hostCannotOpen()
+      return Promise.resolve()
+    }
+    replace = () => revealInPlaceOf(here, structured, target)
   } else if (
     actions.resumeInNewChatWorkspaceId &&
     adoptsCliConversations(session.agent) &&
     // Session cwd ties between same-folder workspaces resolve to either.
     worktreeIdsShareCheckout(actions.resumeInNewChatWorkspaceId, here.workspaceId)
   ) {
+    if (target === null) {
+      structuredSessionOpenFeedback.hostCannotOpen()
+      return Promise.resolve()
+    }
     const rowAgent = session.agent
-    replace = () => resumeInPlaceOf(here, session, rowAgent)
+    replace = () => resumeInPlaceOf(here, session, rowAgent, target)
   } else {
     return false
   }
@@ -137,7 +151,8 @@ export function resumeAiVaultSessionHere(args: {
 function resumeInPlaceOf(
   here: AiVaultReplacement,
   session: AiVaultSession,
-  rowAgent: CliConversationRowAgent
+  rowAgent: CliConversationRowAgent,
+  target: RuntimeClientTarget | undefined
 ): Promise<void> {
   const focus = captureNativeChatComposerFocusIntent()
   let openedTabId: string | null = null
@@ -175,8 +190,8 @@ function resumeInPlaceOf(
             owner.workspaceId !== here.workspaceId ||
             findChatTabWhere(owner.workspaceId, (tab) => tab.entityId === owner.sessionId)
           ownerShown = elsewhere
-            ? activateAiVaultStructuredSession({ structuredSession: owner })
-            : revealInPlaceOf(here, owner)
+            ? activateAiVaultStructuredSession({ structuredSession: owner }, undefined, target)
+            : revealInPlaceOf(here, owner, target)
         }
         if (
           settlement?.kind === 'structured' &&
@@ -199,25 +214,27 @@ function resumeInPlaceOf(
 /** Reopens a closed chat in place of this one, which closes only once the reopened tab exists. */
 function revealInPlaceOf(
   here: AiVaultReplacement,
-  structured: NonNullable<AiVaultSession['structuredSession']>
+  structured: NonNullable<AiVaultSession['structuredSession']>,
+  target: RuntimeClientTarget | undefined
 ): Promise<void> {
-  return openDesktopStructuredSession({ kind: 'history', structuredSession: structured }).then(
-    (result) => {
-      if (result.kind !== 'opened' || !here.current()) {
-        return
-      }
-      // Reported reopen success may lack a tab; replace this chat only when the reopened tab exists.
-      const reopened = findChatTabWhere(
-        result.target.worktreeId,
-        (tab) => tab.id === result.tab.id && tab.entityId === result.target.sessionId
-      )
-      if (reopened) {
-        // Reveal appends to the group; take this chat's slot as a new chat does (a no-op across splits).
-        insertUnifiedTabAfterAnchor(result.target.worktreeId, reopened.id, here.tabId)
-        closeReplacedChat(here)
-      }
+  return openDesktopStructuredSession(
+    { kind: 'history', structuredSession: structured },
+    target
+  ).then((result) => {
+    if (result.kind !== 'opened' || !here.current()) {
+      return
     }
-  )
+    // Reported reopen success may lack a tab; replace this chat only when the reopened tab exists.
+    const reopened = findChatTabWhere(
+      result.target.worktreeId,
+      (tab) => tab.id === result.tab.id && tab.entityId === result.target.sessionId
+    )
+    if (reopened) {
+      // Reveal appends to the group; take this chat's slot as a new chat does (a no-op across splits).
+      insertUnifiedTabAfterAnchor(result.target.worktreeId, reopened.id, here.tabId)
+      closeReplacedChat(here)
+    }
+  })
 }
 
 function findChatTabWhere(workspaceId: string, matches: (tab: Tab) => boolean): Tab | undefined {

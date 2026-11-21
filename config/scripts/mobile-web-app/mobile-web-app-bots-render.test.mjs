@@ -191,7 +191,8 @@ afterAll(async () => {
 async function openHostList(capabilities, botsEnabled, extraWorkers, scene) {
   const page = await browser.newPage({
     viewport: scene?.viewport ?? { width: 390, height: 844 },
-    colorScheme: scene?.theme ?? 'light'
+    colorScheme: scene?.theme ?? 'light',
+    locale: 'en-US'
   })
   await page.addInitScript(installShellDouble, {
     version: bridgeVersion,
@@ -225,6 +226,9 @@ async function openHostList(capabilities, botsEnabled, extraWorkers, scene) {
     timeout: 30_000,
     polling: 250
   })
+  // The host opens on its conversations; the workspace list that draws the bots is an advanced view.
+  await page.getByRole('button', { name: 'More options', exact: true }).click()
+  await page.getByText('Advanced: workspaces', { exact: true }).click()
   await page.waitForFunction(() => document.body.innerText.includes('main-checkout'), {
     timeout: 30_000,
     polling: 250

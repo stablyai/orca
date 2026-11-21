@@ -431,7 +431,8 @@
       "hideDetails": "Hide details",
       "showDetails": "Show details",
       "loading": "Loading agent sessions…",
-      "showAllAgents": "Show all agents"
+      "showAllAgents": "Show all agents",
+      "conversationUnavailable": "This conversation's history is unavailable on this host."
     },
     "resumeTarget": {
       "runtimeUnavailable": "Resume from history is not available in runtime-hosted workspaces.",
