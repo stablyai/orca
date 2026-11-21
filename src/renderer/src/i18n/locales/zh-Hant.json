@@ -7121,7 +7121,6 @@
           "stopped": "已停止",
           "unverifiable": "未知",
           "title": "新增 WSL 發行版",
-          "description": "Orca 在發行版內執行其伺服器，因此 git、檔案和終端機都在 Linux 中原生執行。此發行版中透過 \\\\wsl.localhost 開啟的專案會在其終端機閒置時自動移到此主機；位於 Windows 磁碟機 (/mnt/…) 上的專案會留在此電腦。你可以從側邊欄將已移動的專案移回。",
           "distro": "發行版",
           "loading": "正在查詢 WSL 發行版…",
           "placeholder": "選擇發行版",

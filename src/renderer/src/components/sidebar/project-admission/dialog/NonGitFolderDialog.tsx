@@ -57,6 +57,10 @@ async function addSshFolderProject(args: {
   }
 }
 
+function isFolderAddSettledCallback(value: unknown): value is (repo: Repo | null) => void {
+  return typeof value === 'function'
+}
+
 const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
   const t = useTranslate()
   useUiLanguageRevision()
@@ -72,6 +76,10 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
   const runtimeEnvironmentId =
     typeof modalData.runtimeEnvironmentId === 'string' ? modalData.runtimeEnvironmentId : ''
   const displayName = typeof modalData.displayName === 'string' ? modalData.displayName.trim() : ''
+  // A local add that waits on this confirmation learns which folder, if any, it added.
+  const onFolderAddSettled = isFolderAddSettledCallback(modalData.onFolderAddSettled)
+    ? modalData.onFolderAddSettled
+    : null
   const runtimeEnvironmentName =
     runtimeEnvironmentId &&
     (runtimeEnvironments.find((environment) => environment.id === runtimeEnvironmentId)?.name ||
@@ -139,18 +147,27 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
       void addNonGitFolder(folderPath, {
         runtimeEnvironmentId: runtimeEnvironmentId || null,
         ...(displayName ? { displayName } : {})
-      })
+      }).then((repo) => onFolderAddSettled?.(repo))
     }
     closeModal()
-  }, [addNonGitFolder, closeModal, displayName, folderPath, connectionId, runtimeEnvironmentId])
+  }, [
+    addNonGitFolder,
+    closeModal,
+    displayName,
+    folderPath,
+    connectionId,
+    runtimeEnvironmentId,
+    onFolderAddSettled
+  ])
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
       if (!open) {
+        onFolderAddSettled?.(null)
         closeModal()
       }
     },
-    [closeModal]
+    [closeModal, onFolderAddSettled]
   )
 
   return (

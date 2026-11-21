@@ -10,6 +10,7 @@ import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/te
 import type { WorktreeFetchOptions } from '@/store/slices/worktrees/listing/worktree-fetch-options'
 import type { RepoSlice } from '@/store/repos/repo-state'
 import type { AppState } from '@/store/types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { ShowNestedRepoReviewArgs } from '../nested-import/useAddRepoNestedReviewState'
 import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
@@ -167,8 +168,10 @@ export function useAddRepoLocalFolderFlow({
         }
         if (scan?.selectedPathKind === 'non_git_folder') {
           closeModal()
-          openModal('confirm-non-git-folder', { folderPath: path })
-          return { status: 'paused' }
+          const folderAdded = new Promise<Repo | null>((onFolderAddSettled) => {
+            openModal('confirm-non-git-folder', { folderPath: path, onFolderAddSettled })
+          })
+          return { status: 'paused', folderAdded }
         }
         setAddProjectBusyLabel(addRepoBusyLabels.openingProject())
         const repo = await addRepoPath(path, undefined, {

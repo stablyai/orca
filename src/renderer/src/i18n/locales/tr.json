@@ -7374,7 +7374,6 @@
           "stopped": "Durduruldu",
           "unverifiable": "Bilinmiyor",
           "title": "WSL dağıtımı ekle",
-          "description": "Orca sunucusunu dağıtım içinde çalıştırır; böylece git, dosyalar ve terminaller doğrudan Linux'ta çalışır. Bu dağıtımda \\\\wsl.localhost üzerinden açtığınız projeler, terminalleri boşta kaldığında otomatik olarak bu ana bilgisayara taşınır; Windows sürücüsündeki (/mnt/…) projeler bu bilgisayarda kalır. Taşınan bir projeyi kenar çubuğundan geri getirebilirsiniz.",
           "distro": "Dağıtım",
           "loading": "WSL dağıtımları aranıyor…",
           "placeholder": "Dağıtım seçin",

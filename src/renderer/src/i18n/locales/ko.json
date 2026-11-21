@@ -6639,7 +6639,6 @@
           "stopped": "중지됨",
           "unverifiable": "알 수 없음",
           "title": "WSL 배포판 추가",
-          "description": "Orca는 배포판 안에서 서버를 실행하므로 git, 파일, 터미널이 Linux에서 네이티브로 실행됩니다. 이 배포판에서 \\\\wsl.localhost를 통해 연 프로젝트는 터미널이 유휴 상태가 되면 자동으로 이 호스트로 옮겨지며, Windows 드라이브(/mnt/…)에 있는 프로젝트는 이 컴퓨터에 남습니다. 옮겨진 프로젝트는 사이드바에서 다시 가져올 수 있습니다.",
           "distro": "배포판",
           "loading": "WSL 배포판 찾는 중…",
           "placeholder": "배포판 선택",
