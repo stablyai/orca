@@ -33,6 +33,8 @@ type Entry = {
   /** Raised per request; a reply older than the last one applied is dropped. */
   asked: number
   applied: number
+  /** Raised when the last card leaves; a read from an earlier showing is dropped. */
+  showing: number
 }
 
 // Every kind and button this build words; a Record so a new one on the type fails the typecheck here.
@@ -127,9 +129,13 @@ function read(key: string): void {
     return
   }
   const ticket = ++entry.asked
+  const showing = entry.showing
   void googleSetupRead
     .request(entry.client, { botId: entry.botId })
     .then((response) => {
+      if (entry.showing !== showing) {
+        return
+      }
       entry.replied = true
       apply(key, entry, ticket, googleSetupRead.interpret(response))
     })
@@ -167,7 +173,8 @@ function attach(key: string, client: RpcClient, botId: string): () => void {
       stop: null,
       known: new Set(),
       asked: 0,
-      applied: 0
+      applied: 0,
+      showing: 0
     }
     entries.set(key, entry)
   }
@@ -181,6 +188,9 @@ function attach(key: string, client: RpcClient, botId: string): () => void {
       attached.stop?.()
       attached.stop = null
       attached.client = null
+      // The next showing may read through another client; it waits for that client's own reply.
+      attached.replied = false
+      attached.showing += 1
     }
   }
 }
