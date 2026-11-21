@@ -262,7 +262,9 @@
       "copyMessage": "메시지 복사",
       "forkFromResponse": "이 응답에서 분기",
       "scrollMessageToTop": "이 메시지를 맨 위로 스크롤",
-      "forkFromResponseHint": "이 턴의 끝까지 전체 응답이 포함된 새 채팅"
+      "forkFromResponseHint": "이 턴의 끝까지 전체 응답이 포함된 새 채팅",
+      "readAloud": "소리 내어 읽기",
+      "stopReadingAloud": "소리 내어 읽기 중지"
     },
     "messageActionsSheet": {
       "clipboardRejected": "클립보드에서 텍스트를 거부했습니다.",

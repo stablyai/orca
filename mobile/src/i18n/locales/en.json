@@ -3374,7 +3374,9 @@
       "copyMessage": "Copy message",
       "forkFromResponse": "Fork from this response",
       "scrollMessageToTop": "Scroll this message to top",
-      "forkFromResponseHint": "A new chat with this whole response, up to the end of its turn"
+      "forkFromResponseHint": "A new chat with this whole response, up to the end of its turn",
+      "readAloud": "Read aloud",
+      "stopReadingAloud": "Stop reading aloud"
     },
     "messageActionsSheet": {
       "copyMessage": "Copy message",

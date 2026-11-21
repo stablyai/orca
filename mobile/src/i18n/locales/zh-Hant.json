@@ -262,7 +262,9 @@
       "copyMessage": "複製訊息",
       "forkFromResponse": "從此回覆建立分支",
       "scrollMessageToTop": "將此訊息捲動到頂端",
-      "forkFromResponseHint": "新聊天將包含此回合結束前的完整回覆"
+      "forkFromResponseHint": "新聊天將包含此回合結束前的完整回覆",
+      "readAloud": "朗讀",
+      "stopReadingAloud": "停止朗讀"
     },
     "messageActionsSheet": {
       "clipboardRejected": "無法將文字複製到剪貼簿。",

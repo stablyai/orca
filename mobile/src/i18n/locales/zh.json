@@ -283,7 +283,9 @@
       "copyMessage": "复制消息",
       "forkFromResponse": "从此回复创建分支",
       "scrollMessageToTop": "将此消息滚动到顶部",
-      "forkFromResponseHint": "新聊天将包含本轮结束前的完整回复"
+      "forkFromResponseHint": "新聊天将包含本轮结束前的完整回复",
+      "readAloud": "朗读",
+      "stopReadingAloud": "停止朗读"
     },
     "messageActionsSheet": {
       "clipboardRejected": "剪贴板拒绝接收该文本",

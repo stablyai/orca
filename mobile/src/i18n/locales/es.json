@@ -266,7 +266,9 @@
       "copyMessage": "Copiar mensaje",
       "forkFromResponse": "Crear una rama desde esta respuesta",
       "scrollMessageToTop": "Desplazar este mensaje hacia arriba",
-      "forkFromResponseHint": "Un chat nuevo con esta respuesta completa, hasta el final de su turno"
+      "forkFromResponseHint": "Un chat nuevo con esta respuesta completa, hasta el final de su turno",
+      "readAloud": "Leer en voz alta",
+      "stopReadingAloud": "Dejar de leer en voz alta"
     },
     "messageActionsSheet": {
       "clipboardRejected": "El portapapeles rechazó el texto.",

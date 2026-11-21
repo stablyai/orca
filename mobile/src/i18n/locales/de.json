@@ -262,7 +262,9 @@
       "copyMessage": "Nachricht kopieren",
       "forkFromResponse": "Ab dieser Antwort abzweigen",
       "scrollMessageToTop": "Diese Nachricht ganz nach oben scrollen",
-      "forkFromResponseHint": "Ein neuer Chat mit dieser vollständigen Antwort bis zum Ende des Durchgangs"
+      "forkFromResponseHint": "Ein neuer Chat mit dieser vollständigen Antwort bis zum Ende des Durchgangs",
+      "readAloud": "Vorlesen",
+      "stopReadingAloud": "Vorlesen beenden"
     },
     "messageActionsSheet": {
       "clipboardRejected": "Die Zwischenablage hat den Text abgewiesen.",

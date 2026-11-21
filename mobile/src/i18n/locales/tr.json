@@ -262,7 +262,9 @@
       "copyMessage": "Mesajı kopyala",
       "forkFromResponse": "Bu yanıttan çatalla",
       "scrollMessageToTop": "Bu mesajı yukarı kaydır",
-      "forkFromResponseHint": "Bu yanıtın tamamını turun sonuna kadar içeren yeni bir sohbet"
+      "forkFromResponseHint": "Bu yanıtın tamamını turun sonuna kadar içeren yeni bir sohbet",
+      "readAloud": "Sesli oku",
+      "stopReadingAloud": "Sesli okumayı durdur"
     },
     "messageActionsSheet": {
       "clipboardRejected": "Metin panoya kopyalanamadı.",

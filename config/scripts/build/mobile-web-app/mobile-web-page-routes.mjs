@@ -108,6 +108,8 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'externalNavigation',
       'native.media.name',
       'native.pdf.view',
+      // Without native.voice.act a reply offers no Read aloud.
+      'native.voice.act',
       'native.image.act',
       'native.speech.act',
       'native.a11y.announce',

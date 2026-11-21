@@ -262,7 +262,9 @@
       "copyMessage": "メッセージをコピーする",
       "forkFromResponse": "この応答から分岐",
       "scrollMessageToTop": "このメッセージを一番上までスクロールします",
-      "forkFromResponseHint": "このターンの終わりまでの応答全体を含む新しいチャット"
+      "forkFromResponseHint": "このターンの終わりまでの応答全体を含む新しいチャット",
+      "readAloud": "読み上げ",
+      "stopReadingAloud": "読み上げを停止"
     },
     "messageActionsSheet": {
       "clipboardRejected": "クリップボードがテキストを受け付けませんでした。",
