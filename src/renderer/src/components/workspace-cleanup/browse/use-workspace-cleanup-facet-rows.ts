@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { selectStatusByRevision } from '@/store/slices/agent-status/status-ownership/agent-status-revisions'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import { getLiveAgentStatusByWorktreeId } from '@/lib/workspace/activity/worktree-activity-state'
@@ -91,6 +92,7 @@ export function useWorkspaceCleanupFacetRows({
   facetPanelOpen?: boolean
 }): WorkspaceCleanupFacetRows {
   const languageRevision = useUiLanguageRevision()
+  const selectActivity = useMemo(() => selectStatusByRevision('activityDetailsRevision'), [])
   const sources = useAppStore(
     useShallow((s) => ({
       worktreesByRepo: selectWorktreesByRepo(s),
@@ -100,7 +102,7 @@ export function useWorkspaceCleanupFacetRows({
       // Statuses are a top-level UI-slice field, not part of GlobalSettings.
       workspaceStatuses: s.workspaceStatuses,
       lastVisitedAtByWorktreeId: s.lastVisitedAtByWorktreeId,
-      agentStatusByPaneKey: s.agentStatusByPaneKey,
+      agentStatusByPaneKey: selectActivity(s),
       tabsByWorktree: s.tabsByWorktree,
       dismissals: s.workspaceCleanupDismissals,
       spaceWorktrees: s.workspaceSpaceAnalysis?.worktrees ?? null,

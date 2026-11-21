@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
+import { selectStatusByRevision } from '@/store/slices/agent-status/status-ownership/agent-status-revisions'
 import { useRepoById } from '@/store/repos/use-repository-catalog'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { useContextWorkspaceStatuses } from '../../workspace-status/presentation/use-workspace-board-statuses'
@@ -117,9 +118,14 @@ export function useWorktreeContextMenuModel({
   const showsUnread = useAppStore((s) =>
     menuOpen ? selectWorkspaceShowsUnread(s, worktree) : worktree.isUnread
   )
-  const agentStatusByPaneKey = useAppStore((s) =>
-    selectMenuScopedMap(menuOpen, s.agentStatusByPaneKey, EMPTY_AGENT_STATUS_BY_PANE_KEY)
+  const selectActivity = useMemo(
+    () =>
+      menuOpen
+        ? selectStatusByRevision('activityDetailsRevision')
+        : () => EMPTY_AGENT_STATUS_BY_PANE_KEY,
+    [menuOpen]
   )
+  const agentStatusByPaneKey = useAppStore(selectActivity)
   const structuredChatSleptAtByPaneKey = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.structuredChatSleptAtByPaneKey, EMPTY_STRUCTURED_CHAT_SLEPT_AT)
   )

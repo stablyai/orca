@@ -10,6 +10,7 @@ import type { AgentHookEventPayload } from '../../listener-event'
 import type { HookListenerState } from '../../listener-state'
 import type { JsonlCursor, JsonlFileFingerprint } from '../codex/codex-rollout-jsonl-format'
 import type { AntigravityTranscriptOrigin } from './antigravity-hook-identity'
+import { decodeAntigravityStepIndex } from './antigravity-step-index'
 
 export type AntigravityTranscriptModel = { model: string; at: number; step?: number }
 
@@ -19,7 +20,12 @@ export type AntigravityRootModel = {
   conversationId: string
   cursor: JsonlCursor
   fingerprint?: JsonlFileFingerprint
-  tailPreview?: { fingerprint: JsonlFileFingerprint; model?: AntigravityTranscriptModel }
+  // The two cursors retain at most 256 KiB of unfinished JSONL apiece.
+  tailPreview?: {
+    cursor: JsonlCursor
+    fingerprint?: JsonlFileFingerprint
+    model?: AntigravityTranscriptModel
+  }
   transcriptModel?: AntigravityTranscriptModel
   observedAt: number
   leadModel?: string
@@ -90,8 +96,7 @@ export function observeAntigravityRootModel(
     model.explicitModel = undefined
     model.fence = {
       since: observedAt,
-      fromStep:
-        typeof hookPayload.initialNumSteps === 'number' ? hookPayload.initialNumSteps : undefined
+      fromStep: decodeAntigravityStepIndex(hookPayload.initialNumSteps)
     }
   }
   return model

@@ -14,6 +14,7 @@ import {
   type AntigravityRootModel,
   type AntigravityTranscriptModel
 } from './antigravity-root-model'
+import { decodeAntigravityStepIndex } from './antigravity-step-index'
 
 export type AntigravityTranscriptPollReads = {
   root: AntigravityRootModel
@@ -30,7 +31,7 @@ function latestTranscriptModel(records: JsonRecord[]): AntigravityTranscriptMode
       return {
         model,
         at: typeof record.created_at === 'string' ? Date.parse(record.created_at) : Number.NaN,
-        step: typeof record.step_index === 'number' ? record.step_index : undefined
+        step: decodeAntigravityStepIndex(record.step_index)
       }
     }
   }
@@ -66,8 +67,9 @@ export async function readAntigravityTranscriptPoll(
     if (records === 'stale') {
       return undefined
     }
-    if (read.from < read.offset) {
+    if (read.reset || read.from < read.offset) {
       root.transcriptModel = undefined
+      root.tailPreview = undefined
     }
     root.fingerprint = read.fingerprint
     if (!records) {
@@ -76,26 +78,32 @@ export async function readAntigravityTranscriptPoll(
     root.transcriptModel = latestTranscriptModel(records) ?? root.transcriptModel
     if (read.hasMore) {
       const fingerprint = read.fingerprint
-      let preview = root.tailPreview
-      if (!preview || !sameJsonlFingerprint(preview.fingerprint, fingerprint)) {
-        root.tailPreview = undefined
-        // A model near the end can be shown before the forward cursor catches up.
-        const tail = { filePath: root.cursor.filePath, offset: 0, carry: '' }
-        const bytes = await readJsonlCursorBytes(tail, batch, 'tail', {})
+      const preview = (root.tailPreview ??= {
+        cursor: { filePath: root.cursor.filePath, offset: 0, carry: '' }
+      })
+      if (!preview.fingerprint || !sameJsonlFingerprint(preview.fingerprint, fingerprint)) {
+        // Preview the tail once, then follow appends while the historical cursor catches up.
+        const bytes = await readJsonlCursorBytes(preview.cursor, batch, 'tail', {
+          previous: preview.fingerprint,
+          expected: fingerprint
+        })
         if (!wanted()) {
           return undefined
         }
-        const tailRecords =
-          bytes &&
-          bytes !== 'deferred' &&
-          bytes.fingerprint &&
-          sameJsonlFingerprint(fingerprint, bytes.fingerprint) &&
-          applyJsonlCursorBytes(tail, bytes)
-        preview =
-          tailRecords && tailRecords !== 'stale'
-            ? { fingerprint, model: latestTranscriptModel(tailRecords) }
-            : undefined
-        root.tailPreview = preview
+        if (!bytes || bytes === 'deferred' || !bytes.fingerprint) {
+          return { root, fence, nextPoll: 'backlog' }
+        }
+        const tailRecords = applyJsonlCursorBytes(preview.cursor, bytes)
+        if (!tailRecords || tailRecords === 'stale' || bytes.hasMore) {
+          // A short or failed read must not publish a partial preview or cache it as complete.
+          root.tailPreview = undefined
+          return { root, fence, nextPoll: 'backlog' }
+        }
+        if (bytes.reset || bytes.start !== bytes.from) {
+          preview.model = undefined
+        }
+        preview.model = latestTranscriptModel(tailRecords) ?? preview.model
+        preview.fingerprint = bytes.fingerprint
       }
       return { root, fence, model: preview?.model, nextPoll: 'backlog' }
     }

@@ -1,5 +1,6 @@
 import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
 import { extractAntigravityUserRequest } from '../../../shared/agent-hook-listener/transcript-lines'
+import { decodeAntigravityStepIndex } from '../../../shared/agent-hook-listener/providers/antigravity/antigravity-step-index'
 import { extractString } from '../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../ai-vault/parsing/session-json-object'
 import { timestampMs } from '../../ai-vault/parsing/session-record-time'
@@ -15,8 +16,9 @@ export function decodeAntigravityTranscriptLine(
     return null
   }
   // Some agy builds write the step index as a string.
-  const step = typeof record.step_index === 'number' ? String(record.step_index) : record.step_index
-  if (typeof step !== 'string' || !/^\d+$/.test(step)) {
+  const step = record.step_index
+  const index = decodeAntigravityStepIndex(step)
+  if (index === undefined) {
     return null
   }
   const source = extractString(record.source)
@@ -24,7 +26,7 @@ export function decodeAntigravityTranscriptLine(
   const content = typeof record.content === 'string' ? record.content : ''
   const parsedTime = timestampMs(record.created_at)
   const timestamp = Number.isFinite(parsedTime) ? parsedTime : null
-  const recordId = `step:${step}`
+  const recordId = `step:${typeof step === 'string' ? step : index}`
   if (
     (source === 'USER_EXPLICIT' || source === 'USER') &&
     (type === 'USER_INPUT' || type === 'REQUEST')

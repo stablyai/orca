@@ -126,6 +126,18 @@ it.each([100, 1000])(
     entries.mockRestore()
 
     const row = rows[0]!
+    expect(publish([row])).toEqual(['applied'])
+    expect(store.getState().agentStatusByPaneKey.get(row.paneKey)?.model).toBe('resolved-model')
+    expect(
+      publish([
+        {
+          ...row,
+          providerSession: { key: 'conversation_id', id: 'replacement-session' }
+        }
+      ])
+    ).toEqual(['applied'])
+    expect(store.getState().agentStatusByPaneKey.get(row.paneKey)?.model).toBeUndefined()
+
     await vi.advanceTimersByTimeAsync(1)
     expect(
       publish([

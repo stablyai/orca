@@ -24,7 +24,8 @@ export abstract class AgentHookServerStatusRowMutation extends AgentHookServerSt
     if (!this.writeLegacyStatusRow(next)) {
       return undefined
     }
-    this.commitStatusRowMutation(original, next)
+    // The catalog and transition subscribers do not consume model metadata.
+    this.commitStatusRowMutation(original, next, false)
     this.scheduleStatusPersist()
     this.publishAgentStatusMetadata(next)
     return next

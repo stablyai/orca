@@ -51,7 +51,11 @@ function makeBoundedClient(highWaterMark: number): BoundedClient {
 }
 
 /** Fills the producer queue so the next publish is rejected for backpressure, not for frame size. */
-function saturateProducerQueue(dispatcher: RelayDispatcher, client: BoundedClient): void {
+function saturateProducerQueue(
+  dispatcher: RelayDispatcher,
+  client: BoundedClient,
+  clientId?: number
+): void {
   client.blocked = true
   // Shrinking chunks close the headroom a rejected 8 KB frame leaves behind, so even a small
   // hook envelope is refused.
@@ -59,7 +63,10 @@ function saturateProducerQueue(dispatcher: RelayDispatcher, client: BoundedClien
     const data = 'x'.repeat(size)
     let filled = false
     for (let attempt = 0; attempt < 5_000 && !filled; attempt++) {
-      filled = !dispatcher.tryNotifyPtyData({ id: 'pty-1', data })
+      const params = { id: 'pty-1', data }
+      filled = !(clientId === undefined
+        ? dispatcher.tryNotifyPtyData(params)
+        : dispatcher.tryNotifyPtyDataToClient(clientId, params, () => {}))
     }
     if (!filled) {
       throw new Error('producer queue never filled')
@@ -355,6 +362,81 @@ describe('publishAgentHookEnvelope redelivery', () => {
       dispatcher.dispose()
     }
   })
+
+  it.each(['retry', 'replace'] as const)(
+    'keeps both clients current when different frames are rejected (%s)',
+    (recovery) => {
+      const a = makeBoundedClient(16384)
+      const b = makeBoundedClient(16384)
+      const dispatcher = new RelayDispatcher(a.write, a.options)
+      try {
+        const [aId] = dispatcher.activeClientIds()
+        const bId = dispatcher.attachClient(b.write, b.options)
+        const hook: AgentHookRelayEnvelope = {
+          ...makeEnvelope({ lastAssistantMessage: 20_000 }),
+          source: 'antigravity',
+          hookEventName: 'PreInvocation',
+          providerSession: { key: 'conversation_id', id: 'root' }
+        }
+        hook.payload.agentType = 'antigravity'
+        saturateProducerQueue(dispatcher, b, bId)
+        publishAgentHookEnvelope(dispatcher, hook)
+        expect(decodeEnvelopes(a)).toHaveLength(1)
+        expect(decodeEnvelopes(b)).toHaveLength(0)
+        saturateProducerQueue(dispatcher, a, aId!)
+        publishAgentHookEnvelope(dispatcher, {
+          ...hook,
+          modelOnly: true,
+          hookEventName: undefined,
+          payload: { ...hook.payload, model: 'resolved' }
+        })
+        publishAgentHookEnvelope(dispatcher, {
+          ...hook,
+          modelOnly: true,
+          providerSession: { key: 'conversation_id', id: 'foreign' },
+          payload: { ...hook.payload, model: 'foreign-model' }
+        })
+        if (recovery === 'replace') {
+          publishAgentHookEnvelope(dispatcher, {
+            ...hook,
+            providerSession: { key: 'conversation_id', id: 'successor' },
+            payload: {
+              state: 'working',
+              prompt: 'New task',
+              agentType: 'antigravity',
+              model: 'new-model'
+            }
+          })
+        }
+        for (const client of [a, b]) {
+          client.blocked = false
+          client.drain()
+        }
+        vi.advanceTimersByTime(1000)
+        const deliveredA = decodeEnvelopes(a)
+        const deliveredB = decodeEnvelopes(b)
+        expect(deliveredA).toHaveLength(2)
+        expect(deliveredB).toHaveLength(1)
+        expect(deliveredA[1]).toEqual(deliveredB[0])
+        expect(deliveredB[0]).toMatchObject(
+          recovery === 'retry'
+            ? {
+                providerSession: { id: 'root' },
+                hookEventName: 'PreInvocation',
+                shedFields: ['lastAssistantMessage'],
+                payload: { model: 'resolved' }
+              }
+            : {
+                providerSession: { id: 'successor' },
+                payload: { prompt: 'New task', model: 'new-model' }
+              }
+        )
+        expect(deliveredB[0]?.modelOnly).toBeUndefined()
+      } finally {
+        dispatcher.dispose()
+      }
+    }
+  )
 
   it('makes one final retry when capacity returns after the timer budget is exhausted', () => {
     const primary = makeBoundedClient(16384)

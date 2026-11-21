@@ -5,6 +5,7 @@ import {
   renameSync,
   rmSync,
   truncateSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
@@ -246,7 +247,52 @@ it.each([10, 100])(
   }
 )
 
-it('refreshes a backlog tail after append and invalidates it on truncation', async () => {
+it.each([2, 20])(
+  'reads one initial tail and %s small appends during forward backlog',
+  async (count) => {
+    const entry = pane(0)
+    const mib = 1024 * 1024
+    truncateSync(entry.transcriptPath, 32 * mib)
+    appendFileSync(entry.transcriptPath, '\n{"model":"old-model","step_index":2}\n')
+    const end = 32 * mib + 38
+    await entry.send('PreInvocation', { initialNumSteps: 5 })
+
+    await vi.advanceTimersByTimeAsync(1000)
+    await Promise.all(reads.pending)
+    expect(entry.row()?.model).toBeUndefined()
+
+    const append = '{"type":"GENERIC"}\n'
+    for (let index = 0; index < count; index++) {
+      appendFileSync(entry.transcriptPath, append)
+      await vi.advanceTimersByTimeAsync(1000)
+      await Promise.all(reads.pending)
+    }
+    const record = Buffer.from('{"model":"modèle","step_index":"5"}\n')
+    appendFileSync(entry.transcriptPath, record.subarray(0, 14))
+    await vi.advanceTimersByTimeAsync(1000)
+    await Promise.all(reads.pending)
+    expect(entry.row()?.model).toBeUndefined()
+    appendFileSync(entry.transcriptPath, record.subarray(14))
+    await vi.advanceTimersByTimeAsync(1000)
+    await Promise.all(reads.pending)
+
+    const forward = reads.ranges.filter(({ at }) => at < 31 * mib)
+    const tail = reads.ranges.filter(({ at }) => at >= 31 * mib)
+    expect(forward).toEqual(
+      Array.from({ length: count + 3 }, (_, index) => ({ at: index * mib, bytes: mib }))
+    )
+    expect(tail.slice(0, 2)).toEqual([
+      { at: end - mib, bytes: mib },
+      { at: end, bytes: 19 }
+    ])
+    // The UTF-8 lead byte is read again when the rest of the character arrives.
+    expect(tail.reduce((sum, { bytes }) => sum + bytes, 0)).toBe(mib + count * 19 + 38)
+    expect(reads.transcriptStats).toBe(0)
+    expect(entry.row()?.model).toBe('modèle')
+  }
+)
+
+it('discards a backlog preview on truncation', async () => {
   const entry = pane(0)
   const mib = 1024 * 1024
   truncateSync(entry.transcriptPath, 8 * mib)
@@ -263,7 +309,7 @@ it('refreshes a backlog tail after append and invalidates it on truncation', asy
   await Promise.all(reads.pending)
   expect(reads.ranges.slice(2)).toEqual([
     { at: mib, bytes: mib },
-    { at: firstTail.at + Buffer.byteLength('{"model":"still-old","step_index":4}\n'), bytes: mib }
+    { at: firstTail.at + mib, bytes: 37 }
   ])
   expect(entry.row()?.model).toBeUndefined()
 
@@ -274,26 +320,34 @@ it('refreshes a backlog tail after append and invalidates it on truncation', asy
   expect(entry.row()?.model).toBe('current')
 })
 
-it('resets the forward offset and tail when the same path is replaced with equal-sized content', async () => {
-  const entry = pane(0)
-  const mib = 1024 * 1024
-  truncateSync(entry.transcriptPath, 8 * mib)
-  appendFileSync(entry.transcriptPath, '\n{"model":"old","step_index":2}\n')
-  await entry.send('PreInvocation', { initialNumSteps: 5 })
-  await vi.advanceTimersByTimeAsync(1000)
-  await Promise.all(reads.pending)
-  expect(entry.row()?.model).toBeUndefined()
+it.each(['replaced', 'rewritten'])(
+  'resets the forward offset and tail when an equal-size file is %s',
+  async (change) => {
+    const entry = pane(0)
+    const mib = 1024 * 1024
+    truncateSync(entry.transcriptPath, 8 * mib)
+    appendFileSync(entry.transcriptPath, '\n{"model":"old","step_index":2}\n')
+    await entry.send('PreInvocation', { initialNumSteps: 5 })
+    await vi.advanceTimersByTimeAsync(1000)
+    await Promise.all(reads.pending)
+    expect(entry.row()?.model).toBeUndefined()
 
-  const replacement = join(dir, 'replacement.jsonl')
-  writeFileSync(replacement, '')
-  truncateSync(replacement, 8 * mib)
-  appendFileSync(replacement, '\n{"model":"new","step_index":5}\n')
-  renameSync(replacement, entry.transcriptPath)
-  await vi.advanceTimersByTimeAsync(1000)
-  await Promise.all(reads.pending)
-  expect(reads.ranges.slice(2)).toEqual(reads.ranges.slice(0, 2))
-  expect(entry.row()?.model).toBe('new')
-})
+    const replacement =
+      change === 'replaced' ? join(dir, 'replacement.jsonl') : entry.transcriptPath
+    writeFileSync(replacement, '')
+    truncateSync(replacement, 8 * mib)
+    appendFileSync(replacement, '\n{"model":"new","step_index":5}\n')
+    if (change === 'replaced') {
+      renameSync(replacement, entry.transcriptPath)
+    } else {
+      utimesSync(replacement, new Date(0), new Date(0))
+    }
+    await vi.advanceTimersByTimeAsync(1000)
+    await Promise.all(reads.pending)
+    expect(reads.ranges.slice(2)).toEqual(reads.ranges.slice(0, 2))
+    expect(entry.row()?.model).toBe('new')
+  }
+)
 
 it.each(['same hook', 'newer hook', 'newer turn', 'replacement owner'] as const)(
   'allows the original terminal Done only for the same hook (%s)',
@@ -434,12 +488,14 @@ it('stops model reads at hook silence while a busy Stop leaves the row working',
 })
 
 it.each([
-  { withSteps: true, previousModel: 'first-model' },
-  { withSteps: false, previousModel: 'first-model' },
-  { withSteps: false, previousModel: undefined }
+  { index: 'number', previousModel: 'first-model' },
+  { index: 'string', previousModel: 'first-model' },
+  { index: 'invalid', previousModel: 'first-model' },
+  { index: 'missing', previousModel: 'first-model' },
+  { index: 'missing', previousModel: undefined }
 ])(
-  'uses the current turn model with step indices=$withSteps and previous model=$previousModel',
-  async ({ withSteps, previousModel }) => {
+  'uses the current turn model with $index step indices and previous model=$previousModel',
+  async ({ index, previousModel }) => {
     const entry = pane(0)
     vi.setSystemTime(Date.parse('2030-01-01T12:00:00.600Z'))
     if (previousModel) {
@@ -453,21 +509,29 @@ it.each([
           type: 'PLANNER_RESPONSE',
           model: name,
           created_at: at,
-          ...(withSteps ? { step_index: step } : {})
+          step_index:
+            index === 'number'
+              ? step
+              : index === 'string'
+                ? String(step)
+                : index === 'invalid'
+                  ? 7.25
+                  : undefined
         })}\n`
       )
-    model('old-transcript-model', '2030-01-01T12:00:00Z', 5)
-    await entry.send('PreInvocation', { initialNumSteps: withSteps ? 6 : undefined })
+    const validStep = index === 'number' || index === 'string'
+    model('old-transcript-model', validStep ? '2030-01-01T12:00:01Z' : '2030-01-01T12:00:00Z', 5)
+    await entry.send('PreInvocation', { initialNumSteps: 6 })
     await vi.advanceTimersByTimeAsync(1000)
     await Promise.all(reads.pending)
     expect(entry.row()?.model).toBe(previousModel)
-    if (!withSteps) {
+    if (!validStep) {
       model('undated-transcript-model', undefined, 6)
       await vi.advanceTimersByTimeAsync(5000)
       await Promise.all(reads.pending)
       expect(entry.row()?.model).toBe(previousModel)
     }
-    model('new-transcript-model', withSteps ? '2030-01-01T12:00:00Z' : '2030-01-01T12:00:01Z', 7)
+    model('new-transcript-model', validStep ? '2030-01-01T12:00:00Z' : '2030-01-01T12:00:01Z', 6)
     await vi.advanceTimersByTimeAsync(5000)
     await Promise.all(reads.pending)
     expect(entry.row()?.model).toBe('new-transcript-model')

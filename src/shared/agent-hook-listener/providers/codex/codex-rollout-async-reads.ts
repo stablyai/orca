@@ -80,12 +80,17 @@ async function readJsonlFirstRecordAsyncUnslotted(
   }
 }
 
+type TrackedJsonlFile = {
+  previous?: JsonlFileFingerprint
+  expected?: JsonlFileFingerprint
+}
+
 /** Reads a cursor's new bytes off the main thread without moving it; undefined when unreadable or vanished, 'deferred' when the batch should retry next time. */
 export function readJsonlCursorBytes(
   cursor: JsonlCursor,
   batch: RolloutReadBatch,
   mode: 'tail' | 'forward' = 'tail',
-  trackFile?: { previous?: JsonlFileFingerprint }
+  trackFile?: TrackedJsonlFile
 ): Promise<JsonlCursorBytes | undefined | 'deferred'> {
   return withRolloutReadSlot(
     (read) => readJsonlCursorBytesUnslotted(cursor, read, mode, trackFile),
@@ -116,7 +121,7 @@ async function readJsonlCursorBytesUnslotted(
   cursor: JsonlCursor,
   read: RolloutRead,
   mode: 'tail' | 'forward',
-  trackFile?: { previous?: JsonlFileFingerprint }
+  trackFile?: TrackedJsonlFile
 ): Promise<JsonlCursorBytes | undefined | 'deferred'> {
   if (!cursor.filePath) {
     return undefined
@@ -126,7 +131,7 @@ async function readJsonlCursorBytesUnslotted(
   let plan: (JsonlCursorBytes & { length: number }) | undefined
   try {
     const previous = trackFile?.previous
-    if (previous && snapshot.offset === previous.size) {
+    if (!trackFile?.expected && previous && snapshot.offset === previous.size) {
       const pathStats = await stat(snapshot.filePath)
       if (!read.wanted()) {
         return 'deferred'
@@ -154,6 +159,13 @@ async function readJsonlCursorBytesUnslotted(
     }
     const { size } = stats
     const fingerprint = trackFile && jsonlFingerprint(stats)
+    if (
+      trackFile?.expected &&
+      fingerprint &&
+      !sameJsonlFingerprint(trackFile.expected, fingerprint)
+    ) {
+      return 'deferred'
+    }
     const reset = Boolean(
       fingerprint &&
       previous &&
@@ -181,7 +193,7 @@ async function readJsonlCursorBytesUnslotted(
       return 'deferred'
     }
     const bytes = buffer.subarray(0, bytesRead)
-    if (mode === 'forward') {
+    if (mode === 'forward' || trackFile) {
       return {
         ...plan,
         bytes: completeUtf8Prefix(bytes),

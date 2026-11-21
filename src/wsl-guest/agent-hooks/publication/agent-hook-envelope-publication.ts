@@ -1,16 +1,18 @@
 import {
-  AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_SHED_FIELDS_KEY,
-  createShedSubagentsField,
   type AgentHookUnavailableEnvelope,
   type AgentHookRelayEnvelope
 } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
-import { fitInteractivePrompt } from '../../../shared/agent-status/contracts/agent-status-field-normalization'
+import { isSameAgentProcess } from '../../../shared/agent-status/process/agent-process-presence'
 import type { RelayDispatcher } from '../../transport/publication/dispatcher'
 
-// Shed reconstructible fields first; keep state/paneKey and preserve interactivePrompt longest so waiting panes remain answerable.
-// Mark shed rosters on the wire so clients restore cached subagents instead of permitting hibernation.
-const SHED_ORDER = ['lastAssistantMessage', 'subagents', 'interactivePrompt'] as const
+import {
+  deliverHook,
+  fitsProducerFrame,
+  logUnsendableEnvelope,
+  publishToClients,
+  type HookParams
+} from './agent-hook-envelope-fitting'
 
 // Snapshots have no ack; briefly retry queue-full rejection so stale state need not wait for reattach replay.
 const REDELIVERY_INTERVAL_MS = 250
@@ -19,7 +21,7 @@ const MAX_REDELIVERY_ATTEMPTS = 40
 const MAX_PENDING_PANES = 64
 
 type PendingEnvelope = {
-  params: Record<string, unknown>
+  params: HookParams | AgentHookUnavailableEnvelope
   clientIds: readonly number[]
   /** Zero means the timer budget is exhausted and one capacity-driven attempt remains. */
   attemptsLeft: number
@@ -32,78 +34,28 @@ type RedeliveryState = {
 
 const redeliveryByDispatcher = new WeakMap<RelayDispatcher, RedeliveryState>()
 
-function fitsProducerFrame(dispatcher: RelayDispatcher, params: Record<string, unknown>): boolean {
-  return dispatcher.producerEnvelopeBudget(AGENT_HOOK_NOTIFICATION_METHOD, params) >= 0
-}
-
-function toNotificationParams(
-  envelope: AgentHookRelayEnvelope,
-  shedFields: readonly string[]
-): Record<string, unknown> {
-  const params = envelope as unknown as Record<string, unknown>
-  return shedFields.length === 0
-    ? params
-    : { ...params, [AGENT_HOOK_SHED_FIELDS_KEY]: [...shedFields] }
-}
-
-function fitWaitingInteractivePrompt(
-  dispatcher: RelayDispatcher,
-  envelope: AgentHookRelayEnvelope,
-  shedFields: readonly string[]
-): AgentHookRelayEnvelope | null {
-  const prompt = envelope.payload.interactivePrompt
-  if (!prompt) {
-    return null
-  }
-  const fitted = fitInteractivePrompt(prompt, (interactivePrompt) =>
-    fitsProducerFrame(
-      dispatcher,
-      toNotificationParams(
-        { ...envelope, payload: { ...envelope.payload, interactivePrompt } },
-        shedFields
-      )
-    )
+function sameHookOwner(prior: AgentHookRelayEnvelope, next: AgentHookRelayEnvelope): boolean {
+  const before = prior.agentPresence
+  const after = next.agentPresence
+  return (
+    prior.source === next.source &&
+    prior.payload.agentType === next.payload.agentType &&
+    prior.worktreeId === next.worktreeId &&
+    prior.tabId === next.tabId &&
+    prior.launchToken === next.launchToken &&
+    prior.providerSession?.id === next.providerSession?.id &&
+    prior.hostTurnRevision === next.hostTurnRevision &&
+    prior.promptInteractionKey === next.promptInteractionKey &&
+    !prior.providerSessionOnly &&
+    !before?.ended &&
+    !after?.ended &&
+    before?.session === after?.session &&
+    before?.paneRoot === after?.paneRoot &&
+    (before?.process && after?.process
+      ? isSameAgentProcess(before.process, after.process)
+      : before?.process === after?.process) &&
+    prior.payload.prompt === next.payload.prompt
   )
-  return fitted === null
-    ? null
-    : { ...envelope, payload: { ...envelope.payload, interactivePrompt: fitted } }
-}
-
-/** Returns the ids of the clients that rejected the frame; a rejected client is never written to. */
-function publishToClients(
-  dispatcher: RelayDispatcher,
-  params: Record<string, unknown>,
-  clientIds: readonly number[],
-  logDrop?: boolean
-): number[] {
-  const rejected: number[] = []
-  for (const clientId of clientIds) {
-    if (
-      !dispatcher.publishProducerNotification(
-        clientId,
-        AGENT_HOOK_NOTIFICATION_METHOD,
-        params,
-        logDrop === undefined ? undefined : { logDrop }
-      )
-    ) {
-      rejected.push(clientId)
-    }
-  }
-  return rejected
-}
-
-function logUnsendableEnvelope(
-  dispatcher: RelayDispatcher,
-  params: Record<string, unknown>,
-  clientIds: readonly number[]
-): void {
-  const rejectedClientId = clientIds.find(
-    (clientId) =>
-      dispatcher.producerEnvelopeBudget(AGENT_HOOK_NOTIFICATION_METHOD, params, clientId) < 0
-  )
-  if (rejectedClientId !== undefined) {
-    publishToClients(dispatcher, params, [rejectedClientId], true)
-  }
 }
 
 // Fit one envelope to every sink by shedding optional fields; retry queue-full frames, drop frames that cannot fit.
@@ -132,91 +84,52 @@ export function publishAgentHookEnvelope(
   }
   if (envelope.modelOnly) {
     const pending = redeliveryByDispatcher.get(dispatcher)?.pending.get(envelope.paneKey)
-    if (pending && pending.params.modelOnly !== true) {
-      // Clients still waiting for the underlying hook need the full row.
-      const prior = pending.params.payload
-      if (pending.params.source === envelope.source && prior && typeof prior === 'object') {
-        const params = {
-          ...pending.params,
-          payload: { ...prior, model: envelope.payload.model }
-        }
-        if (fitsProducerFrame(dispatcher, params)) {
-          pending.params = params
-        }
+    if (pending) {
+      if (pending.params.payload === null || !sameHookOwner(pending.params, envelope)) {
+        return
       }
-      const awaitingHook = new Set(pending.clientIds)
-      publishToClients(
-        dispatcher,
-        toNotificationParams(envelope, []),
-        clientIds.filter((id) => !awaitingHook.has(id))
-      )
-      return
+      if (!pending.params.modelOnly) {
+        const { [AGENT_HOOK_SHED_FIELDS_KEY]: shedFields = [], ...prior } = pending.params
+        const fitted = deliverHook(
+          dispatcher,
+          { ...prior, payload: { ...prior.payload, model: envelope.payload.model } },
+          shedFields,
+          []
+        )?.params
+        // Clients that already got the hook can accept the narrower metadata publication.
+        const awaitingHook = new Set(pending.clientIds)
+        const targets = clientIds.filter((id) => !awaitingHook.has(id))
+        const hookDebt = clientIds.filter((id) => awaitingHook.has(id))
+        if (fitted) {
+          setPendingEnvelope(dispatcher, envelope.paneKey, fitted, hookDebt)
+        }
+        const model =
+          targets.length > 0 ? deliverHook(dispatcher, envelope, [], targets) : undefined
+        if (fitted && model?.rejected.length) {
+          setPendingEnvelope(dispatcher, envelope.paneKey, fitted, [...hookDebt, ...model.rejected])
+        }
+        return
+      }
     }
   }
-  // Measure all fan-out sinks before writing so none receive an unshed variant; a single rejecting sink writes nothing.
-  const measureBeforePublish = clientIds.length > 1
-  let candidate = envelope
-  const shedFields: string[] = []
-  let step = 0
-  for (;;) {
-    const params = toNotificationParams(candidate, shedFields)
-    while (step < SHED_ORDER.length && candidate.payload[SHED_ORDER[step]] === undefined) {
-      step += 1
-    }
-    if (!measureBeforePublish || fitsProducerFrame(dispatcher, params)) {
-      // A rejected intermediate probe is not a drop if a smaller envelope is delivered next.
-      const rejected = publishToClients(
-        dispatcher,
-        params,
-        clientIds,
-        measureBeforePublish ? undefined : step >= SHED_ORDER.length
-      )
-      if (rejected.length === 0) {
-        clearPendingEnvelope(dispatcher, envelope.paneKey)
-        return
-      }
-      // Rejection is ambiguous: an over-capacity frame must shed, a full producer queue must wait.
-      if (measureBeforePublish || fitsProducerFrame(dispatcher, params)) {
-        setPendingEnvelope(dispatcher, envelope.paneKey, params, rejected)
-        return
-      }
-    }
-    if (step >= SHED_ORDER.length) {
-      // An irreducibly oversized snapshot cannot improve by waiting and supersedes any older pending snapshot.
-      if (measureBeforePublish) {
-        logUnsendableEnvelope(dispatcher, params, clientIds)
-      }
-      clearPendingEnvelope(dispatcher, envelope.paneKey)
-      return
-    }
-    const field = SHED_ORDER[step]
-    step += 1
-    if (field === 'interactivePrompt' && candidate.payload.state === 'waiting') {
-      const fitted = fitWaitingInteractivePrompt(dispatcher, candidate, shedFields)
-      if (fitted) {
-        candidate = fitted
-        continue
-      }
-      // A waiting snapshot without an answerable card must not reach web/mobile.
-      logUnsendableEnvelope(dispatcher, params, clientIds)
-      clearPendingEnvelope(dispatcher, envelope.paneKey)
-      return
-    }
-    // Copy before shedding: the server caches this envelope for reconnect replay.
-    candidate = { ...candidate, payload: { ...candidate.payload } }
-    const shedField =
-      field === 'subagents' ? createShedSubagentsField(candidate.payload.subagents ?? []) : field
-    delete candidate.payload[field]
-    shedFields.push(shedField)
+  const delivery = deliverHook(dispatcher, envelope, [], clientIds)
+  if (!delivery?.rejected.length) {
+    clearPendingEnvelope(dispatcher, envelope.paneKey)
+  } else {
+    setPendingEnvelope(dispatcher, envelope.paneKey, delivery.params, delivery.rejected)
   }
 }
 
 function setPendingEnvelope(
   dispatcher: RelayDispatcher,
   paneKey: string,
-  params: Record<string, unknown>,
+  params: PendingEnvelope['params'],
   clientIds: readonly number[]
 ): void {
+  if (clientIds.length === 0) {
+    clearPendingEnvelope(dispatcher, paneKey)
+    return
+  }
   let state = redeliveryByDispatcher.get(dispatcher)
   if (!state) {
     state = { pending: new Map(), timer: null }

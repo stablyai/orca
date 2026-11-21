@@ -34,35 +34,63 @@ function hasLaunchedTab(state: AppState, agent: NoticeAgent, previous?: AppState
 }
 
 // Why three sources: Orca-launched tabs, hook-reported agents (SSH too), and an agent typed in a local pane.
-function hasAgentTerminal(state: AppState, agent: NoticeAgent, previous?: AppState): boolean {
-  return (
-    hasLaunchedTab(state, agent, previous) ||
-    // Why the terminal-tab check: native chat (agent-session) tabs project status entries too,
-    // but they run no CLI in a terminal, so they must not trigger terminal-only notices.
-    Array.from(state.agentStatusByPaneKey.entries()).some(
-      ([paneKey, entry]) => entry.agentType === agent && isTerminalTab(state, paneKeyTabId(paneKey))
-    ) ||
-    Object.values(state.paneForegroundAgentByPaneKey).some((entry) => entry.agent === agent)
-  )
+function hasHookAgent(
+  state: AppState,
+  agent: NoticeAgent,
+  keys: Iterable<string> = state.agentStatusByPaneKey.keys()
+): boolean {
+  for (const paneKey of keys) {
+    // Native chat also projects status entries, but runs no CLI in a terminal tab.
+    if (
+      state.agentStatusByPaneKey.get(paneKey)?.agentType === agent &&
+      isTerminalTab(state, paneKeyTabId(paneKey))
+    ) {
+      return true
+    }
+  }
+  return false
 }
 
-function didSourcesChange(state: AppState, previous: AppState): boolean {
+function hasForegroundAgent(state: AppState, agent: NoticeAgent, previous?: AppState): boolean {
+  const entries = state.paneForegroundAgentByPaneKey
+  const changes = previous
+    ? readRecordChanges(entries, previous.paneForegroundAgentByPaneKey)
+    : null
   return (
-    state.tabsByWorktree !== previous.tabsByWorktree ||
-    state.agentStatusByPaneKey !== previous.agentStatusByPaneKey ||
-    state.paneForegroundAgentByPaneKey !== previous.paneForegroundAgentByPaneKey
+    (!previous || changes !== null) &&
+    (changes?.kind === 'addressed'
+      ? [...changes.keys].some((key) => entries[key]?.agent === agent)
+      : Object.values(entries).some((entry) => entry.agent === agent))
   )
 }
 
 /** Calls `onAppear` once, as soon as a terminal running `agent` exists. Returns the unsubscribe. */
 export function whenAgentTerminalAppears(agent: NoticeAgent, onAppear: () => void): () => void {
-  if (hasAgentTerminal(useAppStore.getState(), agent)) {
+  const initial = useAppStore.getState()
+  if (
+    hasLaunchedTab(initial, agent) ||
+    hasHookAgent(initial, agent) ||
+    hasForegroundAgent(initial, agent)
+  ) {
     onAppear()
     return () => {}
   }
+  let projection = initial.agentStatusByPaneKey.projection
+  let cursor = projection.changeCursor()
   // Why a filtered subscription: a selector would rescan every tab on each store write.
   const unsubscribe = useAppStore.subscribe((state, previous) => {
-    if (didSourcesChange(state, previous) && hasAgentTerminal(state, agent, previous)) {
+    const next = state.agentStatusByPaneKey.projection
+    const keys =
+      next === projection && state.tabsByWorktree === previous.tabsByWorktree
+        ? next.changesSince(cursor)
+        : null
+    projection = next
+    cursor = next.changeCursor()
+    if (
+      hasLaunchedTab(state, agent, previous) ||
+      hasHookAgent(state, agent, keys ?? undefined) ||
+      hasForegroundAgent(state, agent, previous)
+    ) {
       unsubscribe()
       onAppear()
     }
