@@ -37,18 +37,25 @@ export function useStructuredAgentSessionSendOptions(
   }, [launch, optionStateRef, optionView, sessionId, takesSendOptions, takesSelection])
 }
 
+type ModelWriteSource = Pick<
+  ReturnType<typeof useStructuredAgentSessionOptionState>,
+  'optionPicks' | 'controller' | 'takesSelection'
+>
+
+function structuredAgentSessionModelWritePending(source: ModelWriteSource): boolean {
+  return (
+    structuredOptionPickIsPending(source.optionPicks.current, 'model') ||
+    (!source.takesSelection && source.controller.isPending('model'))
+  )
+}
+
 /** A model write on its way decides what the next message runs on, so sends wait for it. */
 export function useStructuredAgentSessionModelWritePending(
-  source: Pick<
-    ReturnType<typeof useStructuredAgentSessionOptionState>,
-    'optionPicks' | 'controller' | 'takesSelection'
-  >
+  source: ModelWriteSource
 ): () => boolean {
   const { optionPicks, controller, takesSelection } = source
   return useCallback(
-    () =>
-      structuredOptionPickIsPending(optionPicks.current, 'model') ||
-      (!takesSelection && controller.isPending('model')),
+    () => structuredAgentSessionModelWritePending({ optionPicks, controller, takesSelection }),
     [controller, optionPicks, takesSelection]
   )
 }

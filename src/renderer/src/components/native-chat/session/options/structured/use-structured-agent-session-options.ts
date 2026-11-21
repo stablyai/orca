@@ -89,11 +89,14 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     acceptsPicks && (!(args.isWorking ?? turnId !== null) || takesSendOptions || takesSelection)
   const interactionReadyRef = useRef(acceptsPicks)
   const lockSnapshotRef = useRef(
-    (snapshot: ReturnType<typeof structuredAgentSessionOptionSnapshot>) => snapshot
+    (
+      snapshot: ReturnType<typeof structuredAgentSessionOptionSnapshot>,
+      _view: typeof optionState
+    ) => snapshot
   )
   const lockSnapshot = (
     snapshot: ReturnType<typeof structuredAgentSessionOptionSnapshot>,
-    view = optionView(optionStateRef.current, launchSeedOptions, launch?.explicitOptions)
+    view: typeof optionState
   ) => {
     // Default stays choosable even where the host lists no model to pick; locks still apply.
     const choices = offersDefault
@@ -158,7 +161,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
       controller,
       record: optionStateRef.current.record,
       view,
-      snapshot: lockSnapshotRef.current(structuredAgentSessionOptionSnapshot(view)),
+      snapshot: lockSnapshotRef.current(structuredAgentSessionOptionSnapshot(view), view),
       ready: acceptsPicks && writes.current.count === 0 && interactionReadyRef.current,
       providerStarting,
       existingChat: !newLaunch || args.hasTurn === true,
@@ -203,13 +206,8 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
   const setOption = useCallback(
     async (id: string, value: string | boolean) => {
       await setStructuredOption(id, value)
-      return {
-        snapshot: lockSnapshotRef.current(
-          structuredAgentSessionShownSnapshot(
-            optionView(optionStateRef.current, launchSeedOptions, launch?.explicitOptions)
-          )
-        )
-      }
+      const view = optionView(optionStateRef.current, launchSeedOptions, launch?.explicitOptions)
+      return { snapshot: lockSnapshotRef.current(structuredAgentSessionShownSnapshot(view), view) }
     },
     [launch?.explicitOptions, launchSeedOptions, optionStateRef, optionView, setStructuredOption]
   )
