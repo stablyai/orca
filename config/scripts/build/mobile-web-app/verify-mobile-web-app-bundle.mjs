@@ -40,9 +40,8 @@ export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 384 * 1024
 // budget holds only files outfitSheetsOnDemand proves are fetched when used, and any that the document
 // names count as eager. The phone shell still downloads each on-demand file to disk once per bundle
 // update (shellDownloadedAssets), so this budget also bounds that download.
-// Eager: 11,075,895 bytes measured with the split after main's 2026-11-20 merge, rounded up to the next
-// 64 KiB; still under the single 10.75 MiB fence it replaces.
-export const MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES = 170 * 64 * 1024
+// Eager: main's own fence, 10.8125 MiB (173 x 64 KiB) since #46298 raised it on 2026-11-21.
+export const MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES = 173 * 64 * 1024
 export const MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_BYTES = 1024 * 1024
 export const MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_FILE_BYTES = 128 * 1024
 
@@ -125,18 +124,18 @@ export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./h/[hostId]/agent-history/[worktreeId].tsx', 9],
   ['./h/[hostId]/automations.tsx', 13],
   ['./h/[hostId]/edit.tsx', 14],
-  ['./h/[hostId]/files/[worktreeId].tsx', 19],
-  ['./h/[hostId]/files/preview/[worktreeId].tsx', 24],
-  ['./h/[hostId]/group/[groupId].tsx', 30],
-  ['./h/[hostId]/history/[worktreeId].tsx', 31],
-  ['./h/[hostId]/index.tsx', 39],
-  ['./h/[hostId]/new-workspace.tsx', 42],
-  ['./h/[hostId]/pr/[worktreeId].tsx', 43],
-  ['./h/[hostId]/review/[worktreeId].tsx', 52],
-  ['./h/[hostId]/session/[worktreeId].tsx', 73],
-  ['./h/[hostId]/source-control/[worktreeId].tsx', 75],
-  ['./h/[hostId]/tasks.tsx', 80],
-  ['./h/_layout.tsx', 85]
+  ['./h/[hostId]/files/[worktreeId].tsx', 18],
+  ['./h/[hostId]/files/preview/[worktreeId].tsx', 22],
+  ['./h/[hostId]/group/[groupId].tsx', 29],
+  ['./h/[hostId]/history/[worktreeId].tsx', 30],
+  ['./h/[hostId]/index.tsx', 38],
+  ['./h/[hostId]/new-workspace.tsx', 43],
+  ['./h/[hostId]/pr/[worktreeId].tsx', 44],
+  ['./h/[hostId]/review/[worktreeId].tsx', 54],
+  ['./h/[hostId]/session/[worktreeId].tsx', 77],
+  ['./h/[hostId]/source-control/[worktreeId].tsx', 79],
+  ['./h/[hostId]/tasks.tsx', 86],
+  ['./h/_layout.tsx', 90]
 ]
 
 const sweptScripts = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.map(([, scripts]) => scripts)

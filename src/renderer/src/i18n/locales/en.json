@@ -1145,6 +1145,7 @@
       "permissionWithoutAuto": "Agents without Approve for me",
       "permissionMixed": "Mixed",
       "permissionSurfaceDifference": "Terminals use the agent’s own settings; new chats use {{mode}}.",
+      "permissionModeSurfaceDifference": "Terminals use {{terminal}}; new chats use {{mode}}.",
       "permissionSameAsAll": "Same as all agents",
       "choiceChipRemove": "Remove {{flag}}",
       "choiceChipTooltip": "Added by {{choice}}. Remove it to use the default.",
@@ -22869,12 +22870,12 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Any uncommitted or untracked changes in Git workspaces will be permanently deleted.",
           "unavailable": "Changes could not be checked",
           "checking": "Checking for changes…",
           "checkingDetails": "Checking…",
           "unavailableDetails": "Details unavailable",
-          "none": "No uncommitted changes"
+          "none": "No uncommitted changes",
+          "noUnsaved": "No unsaved files"
         },
         "unsavedEdits": {
           "discarded_one": "Unsaved edits in {{count}} file will be discarded:",
@@ -22902,8 +22903,7 @@
           "morePaths_other": "and {{count}} more ignored paths",
           "listLabel": "Ignored local files that will be lost",
           "incompleteNotice": "Check stopped early; more ignored files in this worktree may also be deleted."
-        },
-        "ignoredFilesLost": "Ignored files will be lost: {{names}}"
+        }
       },
       "atRiskLocalFiles": {
         "namesWithCount": "{{names}} +{{value0}}",
@@ -25202,7 +25202,6 @@
         "withIgnored": "{{what}} and ignored files will be lost",
         "ignoredOnly": "Ignored files will be lost"
       },
-      "showChanges": "Show changes",
       "unsavedSuffix": "(unsaved)",
       "onHost": "On {{host}}",
       "forceDeletingEllipsis": "Force deleting…",
@@ -28092,6 +28091,19 @@
       "filter": "Filter bots",
       "pickTwo": "Pick 2 or more bots",
       "sameComputer": "Bots in a group must be on the same computer.",
+      "pairedComputersOnly": "Groups can add bots only from paired computers.",
+      "needsLocalBot": "This group needs at least one bot on this computer.",
+      "thisComputer": "This computer",
+      "remoteNeedsChat": "Open a chat with {{name}} once, then add it to the group.",
+      "remoteReplied": "Replied on {{computer}}",
+      "remoteNotice": "Didn't answer on {{computer}}",
+      "remoteNotSent": "Not sent to {{computer}}",
+      "remoteUnknown": "Delivery unknown",
+      "remoteStopped": "Stopped here",
+      "remoteSending": "Asking on {{computer}}…",
+      "remoteAsked": "Asked on {{computer}}",
+      "remoteMayAnswer": "May still answer on {{computer}}.",
+      "remoteShortened": "Shortened. Full answer is on {{computer}}.",
       "homeUnavailable": "The home workspace for “{{name}}” on {{host}} is unavailable.",
       "createdNotOpened": "Created “{{name}}”, but couldn’t open it.",
       "retryOpen": "Retry",

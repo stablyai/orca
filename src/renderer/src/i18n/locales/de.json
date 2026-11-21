@@ -20508,7 +20508,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Alle nicht committeten oder nicht versionierten Änderungen in Git-Arbeitsbereichen werden endgültig gelöscht.",
           "unavailable": "Änderungen konnten nicht geprüft werden",
           "checking": "Änderungen werden geprüft…",
           "checkingDetails": "Wird geprüft…",
@@ -20528,7 +20527,6 @@
           "line_one": "Nicht gespeicherte Änderungen in {{count}} Datei werden verworfen: {{files}}",
           "line_other": "Nicht gespeicherte Änderungen in {{count}} Dateien werden verworfen: {{files}}"
         },
-        "ignoredFilesLost": "Ignorierte Dateien gehen verloren: {{names}}",
         "ignoredFilesUnchecked": "Ignorierte Dateien konnten nicht vollständig geprüft werden"
       }
     },
@@ -22099,7 +22097,6 @@
         "withIgnored": "{{what}} und ignorierte Dateien gehen verloren",
         "ignoredOnly": "Ignorierte Dateien gehen verloren"
       },
-      "showChanges": "Änderungen anzeigen",
       "unsavedSuffix": "(nicht gespeichert)",
       "onHost": "Auf {{host}}",
       "forceDeletingEllipsis": "Löschen wird erzwungen…",

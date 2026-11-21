@@ -20,6 +20,29 @@ const BotGroupMemberSchema = z.object({
   stoppedThroughSequence: z.number().int().nonnegative().optional()
 })
 
+/** A bot on a paired computer in a room hosted here: it has no session here. It is asked as the
+ *  owner's own question by mail, and its answer comes back by mail. Name and look as when it joined. */
+export const BotGroupRemoteMemberSchema = z.object({
+  environmentId: z.string().min(1),
+  botId: z.string().min(1),
+  /** Its Home Chat when it joined: questions go to that chat, so a renamed or deleted bot is never
+   *  replaced by another bot of the same name. */
+  chatSessionId: z.string().min(1),
+  /** The paired computer's name when the bot joined. */
+  computer: z.string().min(1),
+  /** The room's newest post when it joined: earlier history is what it may be shown on joining. */
+  joinedAfter: z.number().int().nonnegative(),
+  name: BotNameSchema,
+  avatar: z.string().nullable(),
+  avatarColor: BotAvatarColorSchema.nullable().optional().catch(undefined),
+  agent: z.enum(BOT_AGENTS)
+})
+
+/** Bots on paired computers, as the desktop listed them for a create or edit. */
+export const BotGroupRemoteBotsSchema = z
+  .array(BotGroupRemoteMemberSchema.omit({ computer: true, joinedAfter: true }))
+  .max(31)
+
 /** Sessions of members that left a room: its history still opens there; they grant no access. */
 const FormerSessionIds = z.array(z.string().min(1)).optional()
 
@@ -51,6 +74,9 @@ export const BotGroupSchema = z.object({
   createdAt: z.number(),
   /** The original room's members; each thread holds its own sessions for the same bots. */
   members: z.array(BotGroupMemberSchema),
+  /** Bots on paired computers, asked in every room of the group. An older or unreadable list is
+   *  dropped, never the group. */
+  remoteMembers: z.array(BotGroupRemoteMemberSchema).optional().catch(undefined),
   formerSessionIds: FormerSessionIds,
   threads: z.array(BotGroupThreadSchema).optional(),
   replyMode: BotGroupReplyMode,
@@ -84,6 +110,29 @@ const BotGroupTurnSchema = z.object({
   handedOff: z.array(z.string()).optional(),
   frozenItems: z
     .array(z.custom<AgentJournalRenderItem>(isAdmissibleAgentJournalRenderItem))
+    .optional()
+})
+
+/** A post's question to one remote member, by the mail id it went with. `sending` that is not in
+ *  flight never left this computer. An answer replaces a notice, never the reverse. */
+export const BotGroupRemoteAskSchema = BotGroupRemoteMemberSchema.extend({
+  requestId: z.string().min(1),
+  /** `failed`: refused before that computer took it. `unknown`: it may have; an answer still lands. */
+  state: z.enum(['sending', 'sent', 'failed', 'unknown']),
+  error: z.string().optional(),
+  /** The room was stopped while this ask was unanswered; that computer may still answer. */
+  stopped: z.literal(true).optional(),
+  reply: z
+    .discriminatedUnion('kind', [
+      z.object({
+        kind: z.literal('answer'),
+        text: z.string(),
+        /** Shortened here; the whole answer is in this computer's mail. */
+        truncated: z.literal(true).optional()
+      }),
+      /** That computer told this one the bot won't answer. */
+      z.object({ kind: z.literal('notice') })
+    ])
     .optional()
 })
 
@@ -121,7 +170,9 @@ export const BotGroupMessageSchema = z.object({
   mentioned: z.literal(true).optional(),
   /** The quiet line held where the post's hand-offs reached this limit; it starts no turn. */
   pausedAfter: z.number().int().positive().optional(),
-  turns: z.array(BotGroupTurnSchema)
+  turns: z.array(BotGroupTurnSchema),
+  /** The post's questions to remote members; older or unreadable ones are dropped, never the post. */
+  remoteAsks: z.array(BotGroupRemoteAskSchema).optional().catch(undefined)
 })
 
 /** The human request a peer request serves, and the two member sessions it runs between. */
@@ -143,6 +194,8 @@ export const LegacyBotGroupSchema = BotGroupSchema.omit({
 
 export type BotGroupReplyMode = z.infer<typeof BotGroupReplyMode>
 export type BotGroupMember = z.infer<typeof BotGroupMemberSchema>
+export type BotGroupRemoteMember = z.infer<typeof BotGroupRemoteMemberSchema>
+export type BotGroupRemoteAsk = z.infer<typeof BotGroupRemoteAskSchema>
 export type BotGroupThread = z.infer<typeof BotGroupThreadSchema>
 export type BotGroup = z.infer<typeof BotGroupSchema>
 export type BotGroupTurn = z.infer<typeof BotGroupTurnSchema>

@@ -21196,7 +21196,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Git 工作区中任何未提交或未跟踪的更改都将被永久删除",
           "unavailable": "无法检查更改",
           "checking": "正在检查更改…",
           "checkingDetails": "检查…",
@@ -21216,7 +21215,6 @@
           "line_one": "{{count}} 个文件中未保存的编辑内容将被丢弃：{{files}}",
           "line_other": "{{count}} 个文件中未保存的编辑内容将被丢弃：{{files}}"
         },
-        "ignoredFilesLost": "Git 忽略的文件将丢失：{{names}}",
         "ignoredFilesUnchecked": "无法完整检查 Git 忽略的文件"
       },
       "atRiskLocalFiles": {
@@ -24066,7 +24064,6 @@
         "withIgnored": "{{what}}和 Git 忽略的文件将会丢失",
         "ignoredOnly": "Git 忽略的文件将会丢失"
       },
-      "showChanges": "显示更改",
       "unsavedSuffix": "（未保存）",
       "onHost": "位于 {{host}}",
       "forceDeletingEllipsis": "正在强制删除…",
