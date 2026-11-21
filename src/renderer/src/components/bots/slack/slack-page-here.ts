@@ -4,6 +4,7 @@
 // approves the app. Never a server's Orca browser, which opens in one of its bots' workspaces.
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { openSignInPageInBrowser } from '../bot-tool-sign-in-state'
 import { botSlackErrorMessage } from './bot-slack-copy'
 
 const SLACK_APPS_URL = 'https://api.slack.com/apps'
@@ -43,7 +44,7 @@ export function isSlackAuthorizeUrl(url: string): boolean {
 /** True once this computer's browser took the page; says so when it didn't. */
 async function openHere(url: string): Promise<boolean> {
   try {
-    await window.api.shell.openUrl(url)
+    await openSignInPageInBrowser(url)
     return true
   } catch {
     toast.error(

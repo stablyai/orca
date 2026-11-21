@@ -76,7 +76,12 @@ export function end(
 
 /** A sign-in page, like the connectors' setup: the default browser, where the owner's accounts are. */
 export function openBotToolSignInPage(url: string): void {
-  void window.api.shell.openUrl(url)
+  void openSignInPageInBrowser(url)
+}
+
+/** The same, for a caller that waits on it: settles once the default browser took the page. */
+export function openSignInPageInBrowser(url: string): Promise<void> {
+  return window.api.shell.openUrl(url)
 }
 
 /** Forgets every sign-in this window started. */
