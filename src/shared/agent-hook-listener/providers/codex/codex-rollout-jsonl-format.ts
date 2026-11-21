@@ -8,6 +8,7 @@ export type JsonlCursor = {
   filePath?: string
   offset: number
   carry: string
+  discardingLine?: boolean
 }
 
 export type JsonRecord = Record<string, unknown>
@@ -48,6 +49,7 @@ export type JsonlCursorBytes = {
   from: number
   start: number
   bytes: Buffer
+  hasMore?: true
   /** The open or read failed after a size was seen; a shrink still resets the cursor. */
   failed?: true
 }
@@ -56,11 +58,12 @@ const NO_BYTES = Buffer.alloc(0)
 
 export function planJsonlRead(
   cursor: JsonlCursor & { filePath: string },
-  size: number
+  size: number,
+  mode: 'tail' | 'forward' = 'tail'
 ): JsonlCursorBytes & { length: number } {
   const from = size < cursor.offset ? 0 : cursor.offset
   const length = Math.min(size - from, TRANSCRIPT_READ_MAX_BYTES)
-  const start = size - from > length ? size - length : from
+  const start = mode === 'tail' && size - from > length ? size - length : from
   const { filePath, offset, carry } = cursor
   return { filePath, offset, carry, from, start, length, bytes: NO_BYTES }
 }
@@ -109,6 +112,9 @@ export function applyJsonlCursorBytes(
     return 'stale'
   }
   const carry = read.from === read.offset ? read.carry : ''
+  if (read.from !== read.offset) {
+    cursor.discardingLine = false
+  }
   if (read.failed) {
     cursor.offset = read.from
     cursor.carry = carry
@@ -124,8 +130,15 @@ export function applyJsonlCursorBytes(
   const lines = content.split('\n')
   cursor.offset = read.start + read.bytes.length
   cursor.carry = lines.pop() ?? ''
-  if (skippedPrefix) {
+  const discarding = skippedPrefix || (read.from === read.offset && cursor.discardingLine)
+  if (discarding && lines.length) {
     lines.shift()
+  }
+  cursor.discardingLine =
+    Boolean(discarding && !content.includes('\n')) ||
+    Buffer.byteLength(cursor.carry, 'utf8') > TRANSCRIPT_LINE_MAX_BYTES
+  if (cursor.discardingLine) {
+    cursor.carry = ''
   }
   const records: JsonRecord[] = []
   for (const line of lines) {

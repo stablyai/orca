@@ -93,10 +93,13 @@ it.each(CHILD_HOOKS.map((_, index) => index))(
       server = new AgentHookServer()
       await server.start({ env: 'production', userDataPath: dir })
       for (const suffix of CHILD_HOOKS.slice(start)) {
-        const event = normalized(hook(childPath, CHILD, { lastUserInput: '', ...suffix }))
+        const event = normalized(
+          hook(childPath, CHILD, { lastUserInput: '', modelName: 'child-model', ...suffix })
+        )
         expect(event.providerSession).toBeUndefined()
         server.ingestRemote(event, 'host-1')
         expectResume(server)
+        expect(server.getStatusSnapshot()[0]?.model).toBe('gemini-3.8-flash-high')
       }
       server.stop()
       server = new AgentHookServer()

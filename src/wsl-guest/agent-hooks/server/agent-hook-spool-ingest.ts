@@ -61,7 +61,8 @@ export function ingestRelayHookSpoolRecord(
     const options: Parameters<typeof normalizeHookPayload>[4] = {
       admitOpenCodeTui: (identity) => admitRelayOpenCodeTui(host, identity),
       deferCompactOwnershipToClient: true,
-      isReplay: true
+      isReplay: true,
+      replayReceivedAt: record.receivedAt
     }
     const event = host.providerNormalization
       ? host.providerNormalization.normalize(state, record.source, body, env, options)
@@ -94,21 +95,27 @@ export function ingestRelayHookSpoolRecord(
   return pending ? pending.then(apply) : apply()
 }
 
-/** Replay the relay's spool in order; `hostOf` binds each record's host. */
+/** Replay the relay's spool in order; `hostOf` binds each record's host. Returns the latest replayed
+ *  agy body per pane so its model poll can start after binding. */
 export async function drainRelayHookSpool(
   endpointDir: string,
   state: HookListenerState,
   env: string,
   hostOf: (record: SpoolRecord) => RelayHookSpoolHost
-): Promise<void> {
+): Promise<ReadonlyMap<string, unknown>> {
   // Why: records replay in order before the listener binds; one answer allowance covers them all.
   const answerBy = hookRootAnswerDeadline()
+  const replayedAntigravity = new Map<string, unknown>()
   try {
     await drainAgentHookSpoolAsync({
       endpointDir,
       getPersistedLaunchTokenHash: () => undefined,
-      ingest: (record) =>
-        ingestRelayHookSpoolRecord(record, state, env, { ...hostOf(record), answerBy })
+      ingest: (record) => {
+        if (record.source === 'antigravity') {
+          replayedAntigravity.set(record.paneKey, buildSpoolHookBody(record))
+        }
+        return ingestRelayHookSpoolRecord(record, state, env, { ...hostOf(record), answerBy })
+      }
     })
   } catch (err) {
     // Keep the listener starting on downstream failure; the intact spool can retry next restart.
@@ -116,4 +123,5 @@ export async function drainRelayHookSpool(
       `[relay-hook-server] spool replay failed: ${err instanceof Error ? err.message : String(err)}\n`
     )
   }
+  return replayedAntigravity
 }

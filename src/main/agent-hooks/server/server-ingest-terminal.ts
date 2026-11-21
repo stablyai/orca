@@ -263,7 +263,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         ? previous.payload.mainAgent
         : undefined)
     // Terminal observations cannot establish prompt-sent telemetry.
-    this.applyNormalizedStatus(
+    const applied = this.applyNormalizedStatus(
       {
         paneKey,
         tabId,
@@ -280,5 +280,19 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       newRun,
       !preservedProviderSession
     )
+    if (applied === previous || previous?.payload.agentType !== 'antigravity' || !applied) {
+      return
+    }
+    if (
+      payload.sessionBoundary === true ||
+      applied.payload.state === 'done' ||
+      applied.payload.agentType !== 'antigravity'
+    ) {
+      this.clearTranscriptPoll(paneKey)
+      const work = this.state.antigravityChildWorkByPaneKey.get(paneKey)
+      if (work) {
+        delete work.rootModel
+      }
+    }
   }
 }

@@ -130,10 +130,10 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
   protected normalizeLocalHookPayload(
     source: AgentHookSource,
     body: unknown,
-    isReplay = false
+    replayReceivedAt?: number
   ): NormalizedLocalHook {
     const { value, skipped } = withStopTranscriptReadsSkipped(() =>
-      this.normalizeLocalHookPayloadNow(source, body, isReplay)
+      this.normalizeLocalHookPayloadNow(source, body, replayReceivedAt)
     )
     retainTmuxHookWriterTopology(value.event, body)
     const droidVerdictTranscriptPath = droidStopTranscriptPath(source, value.event, body)
@@ -143,10 +143,12 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
   private normalizeLocalHookPayloadNow(
     source: AgentHookSource,
     body: unknown,
-    isReplay: boolean
+    replayReceivedAt?: number
   ): NormalizedLocalHook {
+    const isReplay = replayReceivedAt !== undefined
     if (source !== 'claude' || typeof body !== 'object' || body === null) {
       const event = normalizeHookPayload(this.state, source, body, this.env, {
+        replayReceivedAt,
         admitOpenCodeTui: (identity) => {
           const disposition = this.getAgentStatusDisposition(identity.paneKey, {
             ...identity,
@@ -205,8 +207,8 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     aliasedBody: unknown
   ): NormalizedLocalHook['event'] {
     const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
-    if (source === 'muse' && !normalized.event) {
-      this.rearmIgnoredMuseHook(aliasedBody)
+    if ((source === 'muse' || source === 'antigravity') && !normalized.event) {
+      this.rearmIgnoredHook(source, aliasedBody)
     }
     const statusDisposition = normalized.event
       ? this.getAgentStatusDisposition(normalized.event.paneKey, {
@@ -288,7 +290,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     if (!isAgentHookSource(record.source)) {
       return
     }
-    const normalized = this.normalizeLocalHookPayload(record.source, body, true)
+    const normalized = this.normalizeLocalHookPayload(record.source, body, record.receivedAt)
     if (!normalized.event) {
       return
     }
@@ -314,10 +316,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     }
     this.recordCurrentAuthorityObservation(event)
     const enriched = this.applyReplayedHookAndReply(event, normalized, record.receivedAt)
-    // Replay defers children whose rollout path is unresolved; only the poll finds and reads them.
-    if (enriched && record.source === 'codex') {
-      this.requestReplayTranscriptPoll(body, enriched)
-    }
+    this.requestReplayTranscriptPoll(record.source, body, enriched)
     if (event.payload.state !== 'done') {
       this.withdrawReplayObservation(this.resolvePaneKeyAlias(event.paneKey))
     }

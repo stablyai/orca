@@ -72,4 +72,32 @@ describe('readJsonlCursorBytes', () => {
     // Bytes the cursor has fully consumed yield nothing, never a replay.
     expect(applyJsonlCursorBytes(cursor, early)).toEqual([])
   })
+
+  it('reads forward across a split UTF-8 code point while the default still tails', async () => {
+    const ordinary = `{"log":"${'x'.repeat(1013)}"}\n`
+    const splitLine = { a: `${'x'.repeat(1015)}🌊` }
+    const { cursor } = rollout(`${ordinary.repeat(1023)}${JSON.stringify(splitLine)}\n{"last":7}\n`)
+    const tail = { ...cursor }
+    const batch = new RolloutReadBatch()
+    try {
+      const first = await readJsonlCursorBytes(cursor, batch, 'forward')
+      if (!first || first === 'deferred') {
+        throw new Error('Expected first forward window')
+      }
+      expect(first.hasMore).toBe(true)
+      expect(applyJsonlCursorBytes(cursor, first)).toHaveLength(1023)
+      const second = await readJsonlCursorBytes(cursor, batch, 'forward')
+      if (!second || second === 'deferred') {
+        throw new Error('Expected second forward window')
+      }
+      expect(applyJsonlCursorBytes(cursor, second)).toEqual([splitLine, { last: 7 }])
+      const lastWindow = await readJsonlCursorBytes(tail, batch)
+      if (!lastWindow || lastWindow === 'deferred') {
+        throw new Error('Expected tail window')
+      }
+      expect(applyJsonlCursorBytes(tail, lastWindow)).toHaveLength(1024)
+    } finally {
+      batch.release()
+    }
+  })
 })

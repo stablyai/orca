@@ -1,3 +1,4 @@
+import type { AgentHookResultRetryScheduler } from '../results/agent-hook-result-retry-scheduler'
 import { previewHookPresence } from '../../../shared/agent-hook-listener/presence/agent-hook-presence-transition'
 import {
   hasOtherAgentProcessOwner,
@@ -31,7 +32,10 @@ type RelayHookAdmissionHost = {
   isCanonicalPane: (paneKey: string) => boolean
   isPaneSurfaceRetired: (paneKey: string) => boolean
   clearPaneState: (paneKey: string) => void
-  clearAssistantMessageRetry: (paneKey: string) => void
+  retryScheduler: Pick<
+    AgentHookResultRetryScheduler,
+    'clearAssistantMessageRetry' | 'clearTranscriptPoll'
+  >
   forward: RelayHookForward
   checkAgentPresence: (paneKey: string) => Promise<void>
 }
@@ -141,7 +145,7 @@ export function applyRelayHookEvent(
     return undefined
   }
   if (event.payload.state !== 'done' || event.payload.lastAssistantMessage) {
-    host.clearAssistantMessageRetry(event.paneKey)
+    host.retryScheduler.clearAssistantMessageRetry(event.paneKey)
   }
   // Retain PostCompact replay identity so reconnect can recheck ownership instead of resurrecting a retired pane.
   if (
@@ -150,6 +154,17 @@ export function applyRelayHookEvent(
     )
   ) {
     return undefined
+  }
+  if (
+    (preview.exited && source === 'antigravity') ||
+    (previous?.payload.agentType === 'antigravity' &&
+      (event.payload.sessionBoundary === true || event.payload.agentType !== 'antigravity'))
+  ) {
+    const work = host.state.antigravityChildWorkByPaneKey.get(event.paneKey)
+    if (work) {
+      delete work.rootModel
+    }
+    host.retryScheduler.clearTranscriptPoll(event.paneKey)
   }
   const claudeSettledRequests = retainClaudeSettledRequests(
     host.metadata.get(event.paneKey)?.claudeSettledRequests,

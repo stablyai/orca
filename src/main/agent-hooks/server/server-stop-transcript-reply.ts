@@ -17,7 +17,7 @@ import {
   ASSISTANT_MESSAGE_RETRY_MS,
   COPILOT_STOP_REPLY_RETRY_ATTEMPTS
 } from './server-constants'
-import { AgentHookServerStatusRetries } from './server-status-retries'
+import { AgentHookServerReplayTranscriptPolls } from './server-replay-transcript-polls'
 import type { EnrichedAgentHookEventPayload, NormalizedLocalHook } from './server-types'
 
 /** What one Stop's transcript reads found: the reply text it came without, a Droid turn verdict. */
@@ -78,7 +78,7 @@ const verdictRead = (transcriptPath: string): StopTranscriptRead => ({
 
 /** A Stop that came without its reply gets it from the transcript, and a Droid Stop its turn
  *  verdict, read off the event loop. */
-export abstract class AgentHookServerStopTranscriptReply extends AgentHookServerStatusRetries {
+export abstract class AgentHookServerStopTranscriptReply extends AgentHookServerReplayTranscriptPolls {
   /** One per pane with a read in flight; any later hook that changes the row ends it. */
   private readonly stopReplyClaims = new Map<string, StopReplyClaim>()
 

@@ -2,7 +2,7 @@ import { readHookAgentProcess } from '../../agent-status/process/agent-process-p
 import { isInheritedHookStatus } from '../presence/agent-hook-presence-transition'
 import { readHookProcessAdmission } from '../presence/agent-hook-owner-presence'
 import { normalizeAgentStatusPayload } from '../../agent-status/contracts/agent-status-types'
-import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
+import type { HookNormalizationOptions } from './hook-normalization-options'
 import type { AgentHookSource } from '../transport/agent-hook-relay'
 import {
   canAcceptClaudeCompactCompletion,
@@ -37,19 +37,7 @@ export function normalizeHookPayload(
   source: AgentHookSource,
   body: unknown,
   expectedEnv: string,
-  options: {
-    deferCompactOwnershipToClient?: boolean
-    previousOpenCodeMainAgent?: AgentMainAgentStatus
-    bindingStatusByPaneKey?: ReadonlyMap<string, AgentHookEventPayload>
-    /** Spool replay restates recorded evidence; it never advances turn identity. */
-    isReplay?: boolean
-    admitOpenCodeTui?: (
-      identity: Pick<
-        AgentHookEventPayload,
-        'paneKey' | 'launchToken' | 'hookEventName' | 'hasExplicitPrompt'
-      >
-    ) => boolean | 'preserve-poster'
-  } = {}
+  options: HookNormalizationOptions = {}
 ): AgentHookEventPayload | null {
   const envelope = parseHookEnvelope(state, source, body, expectedEnv)
   if (!envelope) {
@@ -68,7 +56,7 @@ export function normalizeHookPayload(
     state.claudeUnconfirmedRestoredStatusPaneKeys.delete(stampedPaneKey)
   }
   const sessions = readPaneSessionContext(state, source, envelope, eventName)
-  const { providerSession, statusAdmissionSession } = sessions
+  const { providerSession, statusAdmissionSession, antigravityOrigin } = sessions
   // Before prompt and tool caches: a helper's turn must not reset the root turn's caches either.
   const helper = routeJcodeHelperHook(state, source, envelope, options.bindingStatusByPaneKey)
   if (helper !== undefined) {
@@ -234,6 +222,8 @@ export function normalizeHookPayload(
   }
   const promptText = extractedPrompt.text
   const dispatched = normalizeProviderEvent({
+    antigravityOrigin,
+    replayReceivedAt: options.replayReceivedAt,
     state,
     source,
     eventName: turnOrder.eventName,

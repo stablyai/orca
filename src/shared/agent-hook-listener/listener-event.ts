@@ -1,3 +1,4 @@
+import type { AntigravityRootModel } from './providers/antigravity/antigravity-root-model'
 import type { AgentProcessPresence } from '../agent-status/process/agent-process-presence'
 import type {
   ParsedAgentStatusPayload,
@@ -104,6 +105,7 @@ export type ToolSnapshot = {
 
 /** Work agy runs beside the parent turn; see HookListenerState.antigravityChildWorkByPaneKey. */
 export type AntigravityChildWork = {
+  rootModel?: AntigravityRootModel
   subagentParent?: string
   commands?: Set<string>
   /** Subagent conversations whose latest hook was not a fully idle Stop. */

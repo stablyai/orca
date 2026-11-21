@@ -1,6 +1,14 @@
+import { sameAgentStatusSessionOwner } from '../agent-status/identity/agent-status-terminal-owner'
+import { isSameAgentProcess } from '../agent-status/process/agent-process-presence'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../agent-status/contracts/agent-status-freshness'
 import type { AgentHookSource } from './transport/agent-hook-relay'
 import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
+import type { AgentTranscriptPollScheduler } from './transcripts/agent-transcript-poll-scheduler'
+import {
+  antigravityModelPollOwner,
+  antigravityModelReadEndsAt
+} from './providers/antigravity/antigravity-root-model'
 import { hasCodexTranscriptSubagents } from './providers/codex/codex-state'
 import { hasMuseSessionLog } from './providers/muse/muse-events'
 import { hasPendingCodexSubagentIdentity } from './providers/codex/codex-subagent-roster'
@@ -19,6 +27,9 @@ export function shouldPollHookTranscript(
         Boolean(state.codexSubagentTranscriptByPaneKey.get(event.paneKey)?.parent.filePath))
     )
   }
+  if (source === 'antigravity') {
+    return Boolean(antigravityModelPollOwner(state, event))
+  }
   if (source === 'muse') {
     // Muse question waits/answers exist only in the session log.
     return event.payload.state !== 'done' && hasMuseSessionLog(state, event.paneKey)
@@ -34,6 +45,31 @@ const MUSE_QUIET_POLL_MAX_MS = 5_000
 /** Log growth, a status change, or any hook for the session restores the 1s cadence. */
 export function nextMusePollDelay(previousMs?: number, quiet = false): number {
   return quiet ? Math.min((previousMs ?? MUSE_POLL_MS) * 2, MUSE_QUIET_POLL_MAX_MS) : MUSE_POLL_MS
+}
+
+export function nextHookTranscriptPollDelay(
+  state: HookListenerState,
+  { source, delayMs: previousMs }: { source: AgentHookSource; delayMs?: number },
+  paneKey: string,
+  quiet: boolean,
+  nextPoll?: 'backlog'
+): number | undefined {
+  if (source === 'muse') {
+    return nextMusePollDelay(previousMs, quiet)
+  }
+  if (source === 'antigravity') {
+    const root = state.antigravityChildWorkByPaneKey.get(paneKey)?.rootModel
+    if (root) {
+      const backoff = quiet && nextPoll !== 'backlog'
+      return Math.min(
+        backoff
+          ? Math.min((previousMs ?? MUSE_POLL_MS) * 2, AGENT_STATUS_STALE_AFTER_MS)
+          : MUSE_POLL_MS,
+        Math.max(1, antigravityModelReadEndsAt(root) - Date.now())
+      )
+    }
+  }
+  return undefined
 }
 
 export function museLogOffset(state: HookListenerState, paneKey: string): number | undefined {
@@ -72,6 +108,48 @@ export function hookTranscriptWatchPath(
     : undefined
 }
 
+export function scheduleHookTranscriptPoll<
+  T extends { source: AgentHookSource; original: AgentHookEventPayload; delayMs?: number }
+>(scheduler: AgentTranscriptPollScheduler<T>, state: HookListenerState, poll: T): void {
+  const { source, original } = poll
+  // Nested CLIs inherit pane keys; an unrelated provider must leave the existing poll alone.
+  if (source !== 'codex' && source !== 'muse' && source !== 'antigravity') {
+    return
+  }
+  const { paneKey } = original
+  if (!shouldPollHookTranscript(state, source, original)) {
+    scheduler.clear(paneKey)
+    return
+  }
+  if (source === 'antigravity') {
+    const previous = scheduler.peek(paneKey)?.original
+    const process = original.agentPresence?.process
+    const priorProcess = previous?.agentPresence?.process
+    if (
+      previous &&
+      (!sameAgentStatusSessionOwner(previous, original) ||
+        (previous.launchToken &&
+          original.launchToken &&
+          previous.launchToken !== original.launchToken) ||
+        (priorProcess && process && !isSameAgentProcess(priorProcess, process)))
+    ) {
+      scheduler.clear(paneKey)
+    }
+  }
+  const delayMs = source === 'codex' ? undefined : (poll.delayMs ?? nextMusePollDelay())
+  const owner =
+    source === 'antigravity'
+      ? state.antigravityChildWorkByPaneKey.get(paneKey)?.rootModel
+      : undefined
+  scheduler.schedule(
+    paneKey,
+    { ...poll, delayMs },
+    hookTranscriptWatchPath(state, source, paneKey),
+    delayMs,
+    owner ?? source
+  )
+}
+
 export function transcriptPollUpdate<T extends AgentHookEventPayload>(
   source: AgentHookSource,
   original: T,
@@ -88,6 +166,17 @@ export function transcriptPollUpdate<T extends AgentHookEventPayload>(
     return changed
       ? { ...polled, hasExplicitPrompt: undefined, hookEventName: undefined }
       : undefined
+  }
+  if (source === 'antigravity') {
+    return polled.payload.model === original.payload.model
+      ? undefined
+      : {
+          ...polled,
+          hasExplicitPrompt: undefined,
+          hookEventName: undefined,
+          opensTurn: undefined,
+          nativeTurnKey: undefined
+        }
   }
   const subagentsChanged =
     JSON.stringify(polled.payload.subagents) !== JSON.stringify(original.payload.subagents)
@@ -107,4 +196,46 @@ export function transcriptPollUpdate<T extends AgentHookEventPayload>(
     hasExplicitPrompt: undefined,
     hookEventName: replayedStop ? 'Stop' : undefined
   }
+}
+
+export function antigravityHookPollRow(
+  state: HookListenerState,
+  body: unknown
+): AgentHookEventPayload | undefined {
+  const paneKey =
+    typeof body === 'object' &&
+    body !== null &&
+    'paneKey' in body &&
+    typeof body.paneKey === 'string'
+      ? body.paneKey.trim()
+      : undefined
+  const row = paneKey ? state.lastStatusByPaneKey.get(paneKey) : undefined
+  return row && antigravityModelPollOwner(state, row) ? row : undefined
+}
+
+export function ignoredHookTranscriptPoll<
+  T extends { source: AgentHookSource; body: unknown; original: AgentHookEventPayload }
+>(
+  state: HookListenerState,
+  source: AgentHookSource,
+  body: unknown,
+  env: string,
+  peek: (paneKey: string) => T | undefined
+): { source: AgentHookSource; body: unknown; original: AgentHookEventPayload } | T | undefined {
+  if (source === 'antigravity') {
+    const original = antigravityHookPollRow(state, body)
+    if (!original) {
+      return undefined
+    }
+    const current = peek(original.paneKey)
+    return current?.source === source && current.original === original
+      ? current
+      : { source, body, original }
+  }
+  const paneKey = museHookPollPane(state, body, env)
+  const poll = paneKey ? peek(paneKey) : undefined
+  return poll?.source === 'muse' &&
+    state.lastStatusByPaneKey.get(poll.original.paneKey) === poll.original
+    ? poll
+    : undefined
 }
