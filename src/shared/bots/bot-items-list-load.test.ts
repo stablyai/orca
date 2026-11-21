@@ -6,9 +6,11 @@ import { MORE, WHOLE, closed, host, seeded } from './bot-items-list-load.test-fi
 
 async function drain(call: BotItemsListCall, read: BotItemsListRead): Promise<BotItemsListRead> {
   let value = read
-  while (value.nextClosedCursor) {
+  // A page budget: a cursor that never ends fails the test instead of looping.
+  for (let pages = 0; value.nextClosedCursor && pages < 20; pages += 1) {
     value = await loadBotItemsList(call, value, MORE)
   }
+  expect(value.nextClosedCursor).toBeUndefined()
   return value
 }
 

@@ -1,4 +1,5 @@
-// Work contracts for the Items list loader: calls per read, as a host counts them.
+// Work contracts for the Items list loader (#45990: each item change re-read the whole list and every
+// loaded Closed page): calls per read, as a host counts them.
 import { describe, expect, it } from 'vitest'
 import { loadBotItemsList, type BotItemsListCall } from './bot-items-list-load'
 import { BOT_ITEMS_WORKER_LINKED } from './bot-items-notice-parts'
@@ -30,6 +31,18 @@ describe('loadBotItemsList work', () => {
       // A page below the first asks for Closed rows alone, never the open list again.
       expect(pages.length).toBeGreaterThan(0)
       expect(pages.every((closedOnly) => closedOnly === true)).toBe(true)
+      // A whole read paging all 150 loaded rows asks a page per call below the first.
+      if (!older) {
+        const forced: unknown[] = []
+        const paged: BotItemsListCall = (params) => {
+          if (params.closedCursor) {
+            forced.push(params.closedLimit)
+          }
+          return call(params)
+        }
+        await loadBotItemsList(paged, read, WHOLE, { pageUnmoved: true })
+        expect(forced).toEqual([50, 50])
+      }
     }
     // Unchanged, its first page is all a whole read asks of a host, older or not.
     for (const older of [false, true]) {
