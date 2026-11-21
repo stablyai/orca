@@ -210,8 +210,9 @@ export class BotTidyUpRunner {
       // The ten minutes run from here, through the reply; the apply after is local and is never
       // cut off midway, though a sleep in it still makes the run missed.
       watch = watchBackgroundRun(this.deps.power, sessionId)
+      // A failed name read never fails the run: then only the word "owner" counts.
       const exempt = pilot
-        ? salvageCandidateTest((await this.deps.ownerNames?.()) ?? [])
+        ? salvageCandidateTest((await this.deps.ownerNames?.().catch(() => [])) ?? [])
         : undefined
       const format = tidyUpFormat({ memory, files, chats, today, pilot, exempt })
       start = startWithinLimit(

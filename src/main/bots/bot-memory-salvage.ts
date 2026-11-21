@@ -39,7 +39,8 @@ const VERBS = [
   'declin(?:e|es|ed)',
   'agree(?:s|d)?',
   'confirm(?:s|ed)?',
-  'rul(?:e|es|ed)',
+  // Not bare "rule": "no owner rule yet" only mentions one.
+  'rul(?:es|ed)',
   'want(?:s|ed)?',
   'said|says',
   'told|tells?',
@@ -58,13 +59,16 @@ const word = (pattern: string): string => `(?<![${EDGE}])(?:${pattern})(?![${EDG
  *   within 20 characters ("Dana picked", "owner decided to");
  * - a decision verb, then "by" or "from" the owner ("approved by Dana", "go-ahead from owner"),
  *   or "per" the owner;
- * - the owner's words after a colon ("Dana: CSV first"), "Dana's call" or "owner's decision", or an
- *   owner rule stated ("owner rule: ...").
+ * - the owner's words after a colon ("Dana: CSV first", "owner: 'CSV first'"), "Dana's call" or
+ *   "owner's decision", or an owner rule stated ("owner rule: ...").
  * "decided" with no owner named is anyone's, so never enough; "code owner" is a role.
  */
 export function salvageCandidateTest(ownerNames: readonly string[]): (text: string) => boolean {
-  const names = ['owner', ...ownerNames.map((name) => name.trim()).filter(Boolean)]
-  const who = `(?<!code )${word(names.map(escaped).join('|'))}`
+  // Either apostrophe in a name matches both ("O'Brien", "O\u2019Brien").
+  const named = ownerNames
+    .map((name) => escaped(name.trim()).replace(/['\u2019]/g, "['\u2019]"))
+    .filter(Boolean)
+  const who = `(?<!code )${word(['owner', ...named].join('|'))}`
   const verb = word(VERBS.join('|'))
   // The words between stay in one clause: no stop, semicolon, comma, colon or "|", so "asked Dana,
   // reviewer picked" is the reviewer's.
@@ -76,8 +80,10 @@ export function salvageCandidateTest(ownerNames: readonly string[]): (text: stri
       'iu'
     ),
     new RegExp(`${word('per')}\\s+(?:the\\s+)?${who}`, 'iu'),
-    // The owner's own words after a colon, quoted or not ("Dana: CSV first").
-    new RegExp(`${who}\\s*:\\s*\\S`, 'iu'),
+    // The owner's own words after a colon: quoted ("owner: 'CSV first'"), or unquoted after a
+    // name ("Dana: CSV first"). An unquoted "owner:" labels whose work it is ("owner: ctx_ab12").
+    new RegExp(`${who}\\s*:\\s*["'\\u2018\\u201c]`, 'iu'),
+    ...(named.length > 0 ? [new RegExp(`${word(named.join('|'))}\\s*:\\s*\\S`, 'iu')] : []),
     // "Dana's call", "owner's decision".
     new RegExp(`${who}['\\u2019]s\\s+(?:call|decision|pick|choice|rule|preference)`, 'iu'),
     // A rule stated, not one merely mentioned ("no owner rule yet").

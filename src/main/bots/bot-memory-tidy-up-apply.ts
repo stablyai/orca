@@ -71,7 +71,7 @@ export async function applyTidyUpOps(
   if (failed && !run.migration) {
     return { error: failed, alerted: false }
   }
-  const opsFailed = failed && `${TIDY_UP_FAILURES.movedOnly} (${checked?.skipped[0] ?? failed})`
+  const opsFailed = failed && `${TIDY_UP_FAILURES.movedOnly} (${realSkips[0] ?? failed})`
   const plan = joinedPlans(run.migration, failed ? null : (checked?.plan ?? null))
   const applied = await applyTidyUpPlan(deps, run, plan, run.migration)
   return 'error' in applied

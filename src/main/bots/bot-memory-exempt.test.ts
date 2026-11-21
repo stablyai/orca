@@ -54,13 +54,16 @@ describe('a status line that reads as the owner deciding', () => {
       pilot: true,
       exempt: isDecision
     })
-    expect(format.prompt).toContain('CSV first')
+    expect(format.prompt).toContain("CSV first' after round C2  [keep: your owner's decision]")
     const ref = memorySnapshot(MEMORY)[0].ref
     const reply = JSON.stringify([{ op: 'retire', line: ref, reason: 'stale' }])
-    await format.apply(
+    // Skipping that op is the guard working, so the run doesn't count as failed.
+    const applied = await format.apply(
       { memory: createBotMemoryRecord(fs, history), fs },
       { botId: 'b1', folder: '/h', reply }
     )
+    expect(applied).not.toHaveProperty('error')
+    expect(applied).not.toHaveProperty('opsFailed')
     expect(files.get('/h/MEMORY.md')).toContain(DECISION)
     expect(files.get('/h/MEMORY.md')).not.toContain('ctx_ab12cd34')
     expect(files.get('/h/memory/journal/2026-11.md')).toContain(STATUS)
@@ -74,7 +77,18 @@ describe('the decision check, widened so a miss is rare', () => {
     '- 2026-11-03 got the go-ahead from the owner for #5904',
     '- 2026-11-03 Dana rejected the toast redesign (#5906)',
     '- 2026-11-03 owner said no auto-merge on #5908',
-    '- 2026-11-03 Dana signed off on the onboarding copy, #5910'
+    '- 2026-11-03 Dana signed off on the onboarding copy, #5910',
+    '- 2026-11-03 Dana picks the list layout for #5912',
+    '- 2026-11-03 owner decides the menu order on #5914',
+    '- 2026-11-03 Dana chooses tabs over a list, #5916',
+    '- 2026-11-03 Dana approves the copy on #5918',
+    '- 2026-11-03 Dana confirmed the Tuesday release',
+    "- 2026-11-03 Dana OK'd the new icon on #5920",
+    '- 2026-11-03 Dana will go with CSV first',
+    "- 2026-11-03 #5922 merged; Dana's call: CSV first",
+    '- 2026-11-03 Dana\u2019s decision is tabs, #5924',
+    '- 2026-11-03 Dana: CSV first, then JSON',
+    "- 2026-11-03 owner: 'no auto-merge' on #5926"
   ])('keeps %s', (line) => {
     expect(isDecision(line)).toBe(true)
   })
@@ -83,8 +97,26 @@ describe('the decision check, widened so a miss is rare', () => {
     '- 2026-11-03 CI approved the build for #5900',
     '- 2026-11-03 code owner approved #5900',
     '- 2026-11-03 reviewer rejected #5902 at round C2',
-    '- 2026-11-03 asked Dana. The reviewer picked #5900'
+    '- 2026-11-03 asked Dana. The reviewer picked #5900',
+    '- 2026-11-03 #5900 approved by code owner',
+    '- 2026-11-03 tabs per code owner, #5902',
+    '- 2026-11-03 #5904 owner: worker ctx_ab12cd34',
+    '- 2026-11-03 no owner rule yet for #5906 merges'
   ])('moves %s', (line) => {
     expect(isDecision(line)).toBe(false)
+  })
+
+  it('counts only the word "owner" when no owner name was found', () => {
+    const nameless = salvageCandidateTest([])
+    expect(nameless('- 2026-11-03 Dana picked tabs for #5900')).toBe(false)
+    expect(nameless('- 2026-11-03 Dana: CSV first')).toBe(false)
+    expect(nameless('- 2026-11-03 owner picked tabs for #5900')).toBe(true)
+  })
+
+  it("reads a name with either apostrophe as the owner's", () => {
+    const test = salvageCandidateTest(["O'Brien"])
+    expect(test("- 2026-11-03 O'Brien picked tabs for #5900")).toBe(true)
+    expect(test('- 2026-11-03 O\u2019Brien\u2019s call: tabs')).toBe(true)
+    expect(test("- 2026-11-03 O'Brien's call: tabs")).toBe(true)
   })
 })

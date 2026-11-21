@@ -76,6 +76,9 @@ const OpSchema = z.discriminatedUnion('op', [
 ])
 type Op = z.infer<typeof OpSchema>
 
+/** Why an op on a line that reads as the owner deciding is skipped: a skip that isn't a failure. */
+export const TIDY_UP_KEEP_SKIP = "names a line that reads as your owner's decision, which stays"
+
 const keyOf = (line: string): string => botMemoryLineKey({ line, after: null }) ?? line.trim()
 
 /**
@@ -84,9 +87,6 @@ const keyOf = (line: string): string => botMemoryLineKey({ line, after: null }) 
  * edits those. A line with a negation or modal is never rewritten, only moved or left. No op adds
  * a line: new lines come from the owner and the bot's own turns. Lines leave with every copy.
  */
-/** Why an op on a line that reads as the owner deciding is skipped: a skip that isn't a failure. */
-export const TIDY_UP_KEEP_SKIP = "names a line that reads as your owner's decision, which stays"
-
 export function checkTidyUpOps(
   memory: string,
   ops: readonly unknown[],
