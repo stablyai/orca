@@ -38,8 +38,12 @@ export async function completedGroupReplies(
     if (reply) {
       replies.set(turn.operationId, reply)
     }
-    // An answer to a member's request went by mail; the room history carries it too.
-    const text = botGroupTurnReplyText(reply, turn.answer)
+    // An answer to a member's request went by mail; the room history carries it too. Read as it
+    // stands now: one may have been saved during the reads above.
+    const answer = groups.store
+      .operationMessage(turn.operationId)
+      ?.turns.find((candidate) => candidate.operationId === turn.operationId)?.answer
+    const text = botGroupTurnReplyText(reply, answer ?? turn.answer)
     if (text) {
       completed.set(turn.operationId, text)
     }

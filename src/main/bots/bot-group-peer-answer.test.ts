@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { expect, it, vi } from 'vitest'
 import { fixture, groupNativeMocks, journal } from './bot-group-native-runtime.test-fixture'
 
-const live = vi.hoisted(() => ({ turnItemId: null as string | null }))
+const live = vi.hoisted((): { turnItemId: string | null } => ({ turnItemId: null }))
 vi.mock('../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => ({
     currentWork: async () => ({

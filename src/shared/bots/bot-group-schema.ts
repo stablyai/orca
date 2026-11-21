@@ -150,8 +150,21 @@ export type BotGroupLatest = z.infer<typeof BotGroupLatestSchema>
 export type BotGroupPeerScope = z.infer<typeof BotGroupPeerScopeSchema>
 export type LegacyBotGroup = z.infer<typeof LegacyBotGroupSchema>
 
-/** Whether a turn's own words already say its answer to a member's request. */
-const holdsAnswer = (words: string, answer: string) => words.includes(answer.trim())
+const WORD_CHARACTER = /[\p{L}\p{N}]/u
+
+/** Whether a turn's own words already say its answer to a member's request, as whole words: an
+ *  answer of `42` is not said by `142 files`. */
+function holdsAnswer(words: string, answer: string): boolean {
+  const said = answer.trim()
+  for (let at = words.indexOf(said); at !== -1; at = words.indexOf(said, at + 1)) {
+    const before = words[at - 1] ?? ''
+    const after = words[at + said.length] ?? ''
+    if (!WORD_CHARACTER.test(before) && !WORD_CHARACTER.test(after)) {
+      return true
+    }
+  }
+  return false
+}
 
 /** A turn's reply as room history: its answer to a member's request added unless the reply
  *  already says it, and a quiet reply's marker dropped. Null when neither has words. */
