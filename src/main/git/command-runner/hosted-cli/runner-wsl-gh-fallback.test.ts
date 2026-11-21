@@ -102,8 +102,10 @@ const win32Resolver = new NativeExecutableResolver('win32')
 
 describe('ghExecFileAsync WSL fallback', () => {
   const originalPlatform = process.platform
+  const originalSystemRoot = process.env.SystemRoot
 
   beforeEach(() => {
+    process.env.SystemRoot = 'C:\\Windows'
     spawnMock.mockReset()
     getDefaultWslDistroMock.mockReset()
     getDefaultWslDistroMock.mockReturnValue(null)
@@ -126,6 +128,11 @@ describe('ghExecFileAsync WSL fallback', () => {
       configurable: true,
       value: originalPlatform
     })
+    if (originalSystemRoot === undefined) {
+      delete process.env.SystemRoot
+    } else {
+      process.env.SystemRoot = originalSystemRoot
+    }
     // Last, so a blocked launch still leaves the platform and breaker restored.
     expect(blockedLaunches.splice(0)).toEqual([])
   })
@@ -203,13 +210,18 @@ describe('ghExecFileAsync WSL fallback', () => {
     })
 
     expect(spawnMock).toHaveBeenCalledTimes(3)
-    expect(spawnMock.mock.calls.map(([binary]) => binary)).toEqual(['gh', 'wsl.exe', 'gh'])
+    // WSL resolves through windowsSystem32Binary, never a bare PATH lookup.
+    expect(spawnMock.mock.calls.map(([binary]) => binary)).toEqual([
+      'gh',
+      'C:\\Windows\\System32\\wsl.exe',
+      'gh'
+    ])
   })
 
   it('checks a blocked native scope before repeating a WSL-to-native fallback', async () => {
     spawnMock.mockImplementation(
       fakeSpawnDispatch((program) =>
-        program === 'wsl.exe'
+        program === 'C:\\Windows\\System32\\wsl.exe'
           ? { stderr: WSL_GH_MISSING, code: 1 }
           : { stderr: PRIMARY_RATE_LIMIT_STDERR, code: 1 }
       )
@@ -226,7 +238,12 @@ describe('ghExecFileAsync WSL fallback', () => {
     ).rejects.toMatchObject({ ghRateLimitBlocked: true })
 
     expect(spawnMock).toHaveBeenCalledTimes(3)
-    expect(spawnMock.mock.calls.map(([binary]) => binary)).toEqual(['wsl.exe', 'gh', 'wsl.exe'])
+    // WSL resolves through windowsSystem32Binary, never a bare PATH lookup.
+    expect(spawnMock.mock.calls.map(([binary]) => binary)).toEqual([
+      'C:\\Windows\\System32\\wsl.exe',
+      'gh',
+      'C:\\Windows\\System32\\wsl.exe'
+    ])
   })
 
   it('does not retry non-idempotent glab transient failures', async () => {

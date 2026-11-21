@@ -1,4 +1,5 @@
 import { runProcess } from '@orca/process-host'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 import { resolveWslInteropSpawnCwd } from './wsl-interop-spawn-directory'
 
@@ -18,7 +19,13 @@ export function wslExeProcessSpec(
   env?: NodeJS.ProcessEnv
 ): ProcessSpec {
   // Deleted inherited worktree cwd also produces ENOENT, which must not mean WSL is absent.
-  return { program: 'wsl.exe', args, env, timeoutMs, cwd: resolveWslInteropSpawnCwd() }
+  return {
+    program: windowsSystem32Binary('wsl.exe'),
+    args,
+    env,
+    timeoutMs,
+    cwd: resolveWslInteropSpawnCwd()
+  }
 }
 
 export function wslExeFailure(result: ProcessResult): string | null {

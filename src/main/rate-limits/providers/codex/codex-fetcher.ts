@@ -42,6 +42,7 @@ import {
   getHiddenProbeWslCwdSetupCommands,
   resolveHiddenProbeCwd
 } from '../../../lib/hidden-probe-cwd'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 import { resolveWslInteropSpawnCwd } from '../../../wsl/execution/wsl-interop-spawn-directory'
 
@@ -74,7 +75,7 @@ function buildWslCodexCommand(
     loginShellCommand
   ].join('\n')
   return {
-    command: 'wsl.exe',
+    command: windowsSystem32Binary('wsl.exe'),
     args: buildWslExecArgs(wslInfo.distro, ['sh', '-c', command])
   }
 }

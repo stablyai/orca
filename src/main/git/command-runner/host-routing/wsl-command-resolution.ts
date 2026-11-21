@@ -1,3 +1,4 @@
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import { getDefaultWslDistro } from '../../../wsl/discovery/distro-catalog'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
@@ -185,7 +186,7 @@ export function resolveCommand(
         ]
     return withWslProcessGroupTermination(
       {
-        binary: 'wsl.exe',
+        binary: windowsSystem32Binary('wsl.exe'),
         args: ['-d', wsl.distro, '--exec', ...guestArgv],
         cwd: resolveWslInteropSpawnCwd(),
         wsl,
@@ -201,7 +202,7 @@ export function resolveCommand(
       const captured = buildWslCapturedLoginShellCommand(shellCmd)
       return withWslProcessGroupTermination(
         {
-          binary: 'wsl.exe',
+          binary: windowsSystem32Binary('wsl.exe'),
           args: buildWslExecArgs(wsl.distro, ['sh', '-lc', captured.command]),
           cwd: resolveWslInteropSpawnCwd(),
           wsl,
@@ -213,7 +214,7 @@ export function resolveCommand(
     }
     return withWslProcessGroupTermination(
       {
-        binary: 'wsl.exe',
+        binary: windowsSystem32Binary('wsl.exe'),
         args: buildWslExecArgs(wsl.distro, ['sh', '-lc', buildWslLoginShellCommand(shellCmd)]),
         cwd: resolveWslInteropSpawnCwd(),
         wsl,
@@ -225,7 +226,7 @@ export function resolveCommand(
 
   return withWslProcessGroupTermination(
     {
-      binary: 'wsl.exe',
+      binary: windowsSystem32Binary('wsl.exe'),
       args: buildWslExecArgs(wsl.distro, ['bash', '-c', shellCmd]),
       // Use a stable Win32 spawn cwd; inheriting Orca's deletable UNC cwd can break CreateProcessW.
       cwd: resolveWslInteropSpawnCwd(),

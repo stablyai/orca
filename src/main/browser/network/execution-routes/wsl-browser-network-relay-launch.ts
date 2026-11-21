@@ -1,4 +1,5 @@
 import { spawnProcess } from '@orca/process-host'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { relayBundleCandidates } from '../../../wsl/execution/relay-bundle-paths'
@@ -132,8 +133,9 @@ async function startWslBrowserNetworkRelay(
   signal: AbortSignal
 ): Promise<{ child?: WslBrowserNetworkRelayChild; code?: number | null }> {
   const command = `exec sh "${guestRelayDir(version)}/launch.sh"`
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spawnProcess pipes all three streams, so the child stdio the type widens is never null.
   const child = spawnProcess({
-    program: 'wsl.exe',
+    program: windowsSystem32Binary('wsl.exe'),
     args: ['-d', distro, '--exec', 'sh', '-c', command],
     env: { ...process.env, WSL_UTF8: '1' }
   }) as WslBrowserNetworkRelayChild
@@ -171,8 +173,9 @@ function installWslBrowserNetworkRelay(
   bundle: WslBrowserNetworkRelayBundle,
   signal: AbortSignal
 ): Promise<boolean> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spawnProcess pipes all three streams, so the child stdio the type widens is never null.
   const child = spawnProcess({
-    program: 'wsl.exe',
+    program: windowsSystem32Binary('wsl.exe'),
     args: ['-d', distro, '--exec', 'sh', '-s'],
     env: { ...process.env, WSL_UTF8: '1' }
   }) as WslBrowserNetworkRelayChild
