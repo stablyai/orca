@@ -19699,6 +19699,7 @@
           "selectionVanishedCount_other": "선택한 워크스페이스 {{count}}개가 더 이상 존재하지 않습니다.",
           "selectionWithheldCount_other": "선택한 워크스페이스 {{count}}개가 현재 필터에 의해 숨겨져 선택 해제되었습니다.",
           "selectAllSafetyChecked_other": "안전성 검사를 마친 워크스페이스 {{count}}개 모두 선택",
+          "clearSelection": "선택 해제",
           "lastActive": "마지막 활동: {{value0}}"
         },
         "scan": {

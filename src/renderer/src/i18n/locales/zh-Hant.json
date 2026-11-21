@@ -20140,6 +20140,7 @@
           "selectionVanishedCount_other": "所選的 {{count}} 個工作區已不存在。",
           "selectionWithheldCount_other": "所選的 {{count}} 個工作區已被目前的篩選條件隱藏，因此已取消選取。",
           "selectAllSafetyChecked_other": "選取全部 {{count}} 個已通過安全檢查的工作區",
+          "clearSelection": "清除選取",
           "lastActive": "上次活動時間：{{value0}}"
         },
         "scan": {

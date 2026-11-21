@@ -21138,6 +21138,7 @@
           "selectAllSafetyChecked_few": "Выбрать все {{count}} рабочих пространства, прошедших проверку безопасности",
           "selectAllSafetyChecked_many": "Выбрать все {{count}} рабочих пространств, прошедших проверку безопасности",
           "selectAllSafetyChecked_other": "Выбрать все рабочие пространства, прошедшие проверку безопасности ({{count}})",
+          "clearSelection": "Сбросить выбор",
           "lastActive": "Последняя активность: {{value0}}"
         },
         "scan": {
