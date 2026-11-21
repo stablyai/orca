@@ -246,15 +246,28 @@ export function createRichMarkdownFootnoteDefinition() {
         const contentDOM = document.createElement('div')
         contentDOM.className = 'rich-markdown-footnote-def-content'
 
+        const actions = document.createElement('div')
+        actions.className = 'rich-markdown-footnote-def-actions'
+        actions.setAttribute('contenteditable', 'false')
+
+        const backref = document.createElement('button')
+        backref.type = 'button'
+        backref.className = 'rich-markdown-footnote-def-backref'
+        backref.textContent = '\u21a9'
+        actions.appendChild(backref)
+
         dom.appendChild(marker)
         dom.appendChild(contentDOM)
+        dom.appendChild(actions)
 
         let currentIdentifier = String(node.attrs.identifier ?? '')
         const sync = (identifier: string): void => {
           currentIdentifier = identifier
           dom.setAttribute(FOOTNOTE_DEF_ATTR, identifier)
           dom.setAttribute(FOOTNOTE_DEF_KEY_ATTR, normalizeFootnoteIdentifier(identifier))
-          button.textContent = `[^${identifier}]`
+          button.textContent = `${identifier}.`
+          button.setAttribute('aria-label', `[^${identifier}]`)
+          backref.setAttribute('aria-label', `[^${identifier}]`)
         }
         sync(currentIdentifier)
 
@@ -265,6 +278,7 @@ export function createRichMarkdownFootnoteDefinition() {
           scrollToFootnoteReference(editorRoot, currentIdentifier)
         }
         button.addEventListener('click', handleJumpBack)
+        backref.addEventListener('click', handleJumpBack)
 
         return {
           dom,
@@ -277,7 +291,8 @@ export function createRichMarkdownFootnoteDefinition() {
             return true
           },
           stopEvent: (event) =>
-            event.target instanceof window.Node && marker.contains(event.target),
+            event.target instanceof window.Node &&
+            (marker.contains(event.target) || actions.contains(event.target)),
           ignoreMutation: (mutation) => {
             if (mutation.type === 'selection') {
               return false
@@ -286,6 +301,7 @@ export function createRichMarkdownFootnoteDefinition() {
           },
           destroy: () => {
             button.removeEventListener('click', handleJumpBack)
+            backref.removeEventListener('click', handleJumpBack)
           }
         }
       }
