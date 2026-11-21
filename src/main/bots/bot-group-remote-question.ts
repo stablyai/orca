@@ -6,9 +6,9 @@ import {
   type BotGroupRemoteAsk,
   type BotGroupRemoteMember
 } from '../../shared/bots/bot-group'
-import { AGENT_SESSION_ATTACHMENTS_DIR_NAME } from '../../shared/agent-session/agent-session-attachments'
 import { replaceImageReferences } from '../../shared/native-chat/attachments/native-chat-image-reference'
 import { generateId } from '../runtime/orchestration/db/generated-id'
+import { maskStorePaths } from './bot-group-store-path-mask'
 
 // What a remote group member is asked, fixed when the post is stored.
 
@@ -89,17 +89,12 @@ export function remoteVisibleHistory(
   )
 }
 
-// The whole path, from its root, even when a folder name has spaces ("/Users/Alice Smith/…"); a
-// path written without its root is masked from its first character.
-const STORE_PATH = new RegExp(
-  `(?:(?<=^|[\\s"'(\\[])(?:~|[A-Za-z]:)?(?:[\\\\/][^\\n"\\\\/]*)+?[\\\\/]|[^\\s"]*)` +
-    `${AGENT_SESSION_ATTACHMENTS_DIR_NAME}[\\\\/]+[0-9a-f-]{36}[^\\s"]*`,
-  'gi'
-)
-
 /** This computer's image and attachment-store paths mean nothing elsewhere and reveal its files. */
 function maskLocalReferences(words: string): string {
-  return replaceImageReferences(words, () => '[image]').replace(STORE_PATH, '[image]')
+  return maskStorePaths(
+    replaceImageReferences(words, () => '[image]'),
+    '[image]'
+  )
 }
 
 export function remoteQuestionSummary(message: Pick<BotGroupMessage, 'text'>): string {
