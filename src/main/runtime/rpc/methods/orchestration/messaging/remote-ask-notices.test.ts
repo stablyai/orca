@@ -20,6 +20,7 @@ const UNREACHABLE = Object.assign(new Error('offline'), { code: 'remote_runtime_
 
 describe("a paired worker's question its coordinator here stopped on", () => {
   let db: OrchestrationDb
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these paths read only the stubbed members.
   const runtime = {} as unknown as OrcaRuntimeService
 
   beforeEach(() => {

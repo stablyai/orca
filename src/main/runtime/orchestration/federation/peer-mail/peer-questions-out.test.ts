@@ -12,6 +12,7 @@ const REMOVED = "Build Box was removed from this Orca's paired servers."
 describe('questions asked of an agent on a paired computer', () => {
   let db: OrchestrationDb
   let notified: string[]
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these paths read only the stubbed members.
   const runtime = {
     getLiveTerminalPaneKey: () => null,
     getTerminalHandleForPaneKey: () => null,
