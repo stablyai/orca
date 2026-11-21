@@ -56,6 +56,8 @@ type Scene = {
   handOffPending?: boolean
   /** The longest bot, computer and account names, to check they end in an ellipsis. */
   long?: boolean
+  /** setUpApp answers with this link instead of Slack's own page. */
+  authorizeUrl?: string
 }
 
 const LONG_EMAIL = 'alexandra.konstantinopoulou-whitfield@engineering.example.com'
@@ -106,7 +108,7 @@ function stub(scene: Scene): void {
         case 'bots.slack.setUpApp':
           return ok({
             appId: 'A1',
-            authorizeUrl: AUTHORIZE,
+            authorizeUrl: scene.authorizeUrl ?? AUTHORIZE,
             expiresAt: Date.now() + (scene.expiresInMs ?? 30 * 60_000)
           })
         case 'bots.slack.handOff':
@@ -247,6 +249,15 @@ export const waitingCopied = scene(
     await whenShown('Approve in Slack', 'Copy link')
     await whenShown('Link copied')
   }
+)
+
+// The server's link isn't Slack's own page: refused before Approve or Copy link exist.
+export const notSlackLink = scene(
+  {
+    server: { state: 'created', teamId: 'T1', appId: 'A1' },
+    authorizeUrl: 'https://approve.example.test/oauth/v2/authorize'
+  },
+  () => whenShown('Try again')
 )
 
 export const expired = scene(
