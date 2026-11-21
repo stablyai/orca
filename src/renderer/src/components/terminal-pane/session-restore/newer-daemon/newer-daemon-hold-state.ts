@@ -189,15 +189,14 @@ export function showServerHeldPanes(
 /** Starts one held pane again where its host's newer build can't be stopped from here. */
 export async function retryHeldPane(paneKey: string): Promise<void> {
   flushPendingHolds()
-  const release = newerDaemonHoldStore.getState().panes[paneKey]?.release
-  if (!release) {
+  const pane = newerDaemonHoldStore.getState().panes[paneKey]
+  if (!pane?.release || pane.phase === 'reopening') {
     return
   }
-  newerDaemonHoldStore.setState(({ panes }) => {
-    const { [paneKey]: _retried, ...rest } = panes
-    return { panes: rest }
-  })
-  await release().catch(() => undefined)
+  // Why the pane stays shown: its release forgets it once the retry settles, so a refusal never flickers.
+  updatePanes([paneKey], { phase: 'reopening' })
+  await pane.release().catch(() => updatePanes([paneKey], { phase: 'held' }))
+  flushPendingHolds()
 }
 
 /** Stops the newer build holding this pane, then lets each of that host's held panes start. */

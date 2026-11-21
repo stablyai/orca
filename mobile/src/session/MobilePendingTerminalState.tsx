@@ -19,7 +19,7 @@ export function MobilePendingTerminalState({
   const message = held
     ? t(
         'session.activeContent.terminalHeldByNewerVersion',
-        'This terminal may still be running in a newer version of Orca on your computer. Reopen it there or update Orca there, then try again.'
+        'This terminal may still be running in a newer version of Orca on your computer. If Orca is open there, reopen it from that window; otherwise update Orca there. Then try again.'
       )
     : parked
       ? t('session.activeContent.terminalTakingLonger', 'Terminal is taking longer than expected')

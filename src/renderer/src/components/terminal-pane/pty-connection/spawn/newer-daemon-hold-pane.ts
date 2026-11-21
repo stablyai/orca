@@ -36,15 +36,16 @@ export function holdForNewerDaemon(
       resumable: Boolean(session.buildColdRestoreAgentResumeStartup()),
       release: async () => {
         held = false
-        forget()
         if (!isCurrent()) {
+          forget()
           return { reopened: false, agentResumed: false }
         }
         terminal.options.disableStdin = false
         if (paintedScreen) {
           session.writeReplayData(CLEAR_HELD_SCREEN)
         }
-        return reconnect()
+        // Forgotten after the attempt, so a pane retried in place keeps its banner until it settles.
+        return reconnect().finally(forget)
       }
     },
     host

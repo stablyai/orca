@@ -48,12 +48,10 @@ describe('a spawn while a newer daemon may still run saved sessions', () => {
     )
   })
 
-  it('still starts a new terminal and attaches a saved id whose owner answers', async () => {
-    const owner = resolver({ kind: 'owner', provider: current })
+  it('still starts a new terminal and an attach-only view', () => {
     const ownerAnswers = refusal({ kind: 'owner', provider: current })
     expect(ownerAnswers({ sessionId: SAVED, isNewSession: true })).toBeUndefined()
     expect(ownerAnswers({ sessionId: SAVED, attachOnly: true })).toBeUndefined()
-    await expect(routeSpawnOrHold({ sessionId: SAVED }, dispatch(owner))).resolves.toBe(current)
   })
 
   it('reattaches a session the current daemon runs even when its inventory answer is unknown', async () => {

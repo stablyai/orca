@@ -34,7 +34,7 @@ export function NewerDaemonHoldBanner({
       )
     : t(
         'terminal.newerDaemonBanner.reopenOnHost',
-        "It may still be running in a newer version of Orca on the computer you're connected to. Reopen it there or update Orca there, then try again."
+        "It may still be running in a newer version of Orca on the computer you're connected to. If Orca is open there, reopen it from that window; otherwise update Orca there. Then try again."
       )
   const resumeNote =
     hold.resumable && hold.canReopen
@@ -60,9 +60,13 @@ export function NewerDaemonHoldBanner({
             type="button"
             variant="outline"
             size="xs"
+            disabled={reopening}
             onClick={() => void retryHeldPane(paneKey)}
           >
-            {t('terminal.newerDaemonBanner.tryAgain', 'Try again')}
+            {reopening ? <LoadingSpinner className="size-3" /> : null}
+            {reopening
+              ? t('terminal.newerDaemonBanner.retrying', 'Retrying…')
+              : t('terminal.newerDaemonBanner.tryAgain', 'Try again')}
           </Button>
         ) : (
           <Button

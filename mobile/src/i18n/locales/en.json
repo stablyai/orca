@@ -2304,7 +2304,7 @@
       "terminalTakingLonger": "Terminal is taking longer than expected",
       "loadingTerminal": "Loading terminal",
       "retryLoadingTerminal": "Retry loading terminal",
-      "terminalHeldByNewerVersion": "This terminal may still be running in a newer version of Orca on your computer. Reopen it there or update Orca there, then try again."
+      "terminalHeldByNewerVersion": "This terminal may still be running in a newer version of Orca on your computer. If Orca is open there, reopen it from that window; otherwise update Orca there. Then try again."
     },
     "commandDock": {
       "liveInputLabel": "Live terminal input",
