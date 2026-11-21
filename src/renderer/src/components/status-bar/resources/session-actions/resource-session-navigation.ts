@@ -44,8 +44,8 @@ export function navigateResourceSessionToTab(
 
 /** Opens a chat row the way a history click does: a background chat is revealed, a group member opens its room. */
 export function openResourceChat(worktreeId: string, agentSessionId: string): void {
+  // Openers toast their own outcomes; only a thrown message, such as a missing group room, reaches here.
   void activateAiVaultStructuredSession({
     structuredSession: { workspaceId: worktreeId, sessionId: agentSessionId }
-    // Openers toast their own outcomes; only a thrown message, such as a missing group room, reaches here.
   }).catch((error: unknown) => toast.error(error instanceof Error ? error.message : String(error)))
 }
