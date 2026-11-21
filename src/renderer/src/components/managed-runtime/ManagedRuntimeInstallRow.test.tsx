@@ -50,8 +50,14 @@ function spoken(element: HTMLElement): string {
   return copy.textContent ?? ''
 }
 
-/** The status text a sighted user sees, which is also its hover title. */
+/** The status text a sighted user sees. */
 function shown(element: HTMLElement): string | null {
+  const text = element.querySelector('[title]')
+  return text?.querySelector('[aria-hidden="true"]')?.textContent ?? text?.textContent ?? null
+}
+
+/** The hover title, which carries the full spoken status. */
+function title(element: HTMLElement): string | null {
   return element.querySelector('[title]')?.getAttribute('title') ?? null
 }
 
@@ -71,27 +77,13 @@ describe('ManagedRuntimeInstallRow status', () => {
     })
     expect(shown(line)).not.toContain('Antigravity')
     expect(spoken(line)).toContain('Antigravity')
+    expect(title(line)).toContain('Antigravity')
   })
 
   it("shows short copy but announces the agent when the host's own copy runs", () => {
     const line = status({ ...base, source: 'external' })
     expect(shown(line)).not.toContain('Antigravity')
     expect(spoken(line)).toContain('Antigravity')
-  })
-
-  it('announces the visible text when it already reads on its own', () => {
-    const line = status({
-      ...base,
-      operation: {
-        id: 'op-1',
-        kind: 'install',
-        phase: 'extracting',
-        downloadedBytes: 98_000_000,
-        totalBytes: 98_000_000
-      }
-    })
-    const text = shown(line)
-    expect(text).not.toBeNull()
-    expect(spoken(line).startsWith(text ?? '')).toBe(true)
+    expect(title(line)).toContain('Antigravity')
   })
 })

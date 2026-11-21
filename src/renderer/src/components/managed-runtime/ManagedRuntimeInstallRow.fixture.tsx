@@ -96,7 +96,7 @@ export const failed = row({
     phase: 'failed',
     downloadedBytes: 0,
     totalBytes: null,
-    error: "Couldn't reach the download server. Check your connection and try again."
+    error: "Couldn't reach the download server. Check your connection."
   }
 })
 
@@ -109,7 +109,7 @@ export const externalInstallFailed = row({
     phase: 'failed',
     downloadedBytes: 0,
     totalBytes: null,
-    error: "Couldn't reach the download server. Check your connection and try again."
+    error: "Couldn't reach the download server. Check your connection."
   }
 })
 export const downloadingUnknownSize = row({

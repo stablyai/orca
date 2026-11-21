@@ -142,6 +142,10 @@ describe('managedRuntimeInstallView while installing', () => {
     expect(view.status).not.toContain('Antigravity')
     expect(view.spokenStatus).toContain('Antigravity')
   })
+
+  it('has no separate spoken status while unpacking, whose copy names no agent either way', () => {
+    expect(viewOf(installing('extracting')).spokenStatus).toBeNull()
+  })
 })
 
 describe('managedRuntimeInstallView reasons', () => {

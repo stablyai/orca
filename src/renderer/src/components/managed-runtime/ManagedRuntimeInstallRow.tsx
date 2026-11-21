@@ -65,9 +65,9 @@ export function ManagedRuntimeInstallRow(props: {
     chosen.kind === 'cancel'
       ? cancelManagedRuntimeInstall(subject, chosen.operationId)
       : installManagedRuntime(subject)
-  // Status truncates to one line, and each part keeps its dot. A line with an error, a reason, a
-  // note or a download bar wraps instead: an error or reason is read whole, "Not installed"
-  // shouldn't truncate, and the bar moves under the download count with Cancel rather than squeezing it.
+  // Status truncates to one line. A line with an error, a reason, a note or a download bar wraps
+  // instead: an error or reason is read whole, "Not installed" shouldn't truncate, and the bar
+  // moves under the download count with Cancel rather than squeezing it.
   const wraps = Boolean(alert || view.reason || view.note || view.progress !== null)
   const parts: {
     key: string
@@ -81,15 +81,18 @@ export function ManagedRuntimeInstallRow(props: {
     const status = said(view.status, !trailing)
     // The row sits under its agent, so short copy leaves the name out; a screen reader still hears it.
     const spoken = view.spokenStatus === null ? null : said(view.spokenStatus, !trailing)
+    // A status like "Installed by Orca · 1.5.0" splits into parts, so it wraps at its dot like the rest.
+    const [first, ...rest] = spoken === null ? status.split(' · ') : [status]
+    const truncate = cn('min-w-0', !wraps && 'truncate')
     parts.push({
       key: 'status',
       fixed: false,
       node: (
         <span className="flex min-w-0 items-center gap-1.5">
           {view.busy ? <LoadingSpinner className="size-3" /> : null}
-          <span className={cn('min-w-0', !wraps && 'truncate')} title={status}>
+          <span className={truncate} title={spoken ?? status}>
             {spoken === null ? (
-              status
+              first
             ) : (
               <>
                 <span aria-hidden="true">{status}</span>
@@ -100,6 +103,13 @@ export function ManagedRuntimeInstallRow(props: {
         </span>
       )
     })
+    rest.forEach((segment, index) =>
+      parts.push({
+        key: `status-${index}`,
+        fixed: false,
+        node: <span className={truncate}>{segment}</span>
+      })
+    )
   }
   if (view.progress !== null) {
     parts.push({
@@ -123,9 +133,12 @@ export function ManagedRuntimeInstallRow(props: {
     parts.push({
       key: 'alert',
       fixed: false,
+      // An error takes its own line, so the action after it starts the next one.
+      className: 'basis-full',
       node: (
+        // Read whole with its full stop, since nothing follows it on its line.
         <span role="alert" className="min-w-0 break-words text-destructive">
-          {said(alert, !(action || view.note))}
+          {alert}
         </span>
       )
     })
@@ -134,8 +147,8 @@ export function ManagedRuntimeInstallRow(props: {
     parts.push({
       key: 'action',
       fixed: true,
-      // After an error the action gets a line of its own, so it never starts one with a stray dot.
-      ...(alert ? { dot: false, className: 'basis-full' } : {}),
+      // After the bar, Cancel needs no dot.
+      ...(view.progress !== null ? { dot: false as const } : {}),
       node: (
         <ManagedRuntimeLinkButton
           disabled={action.kind === 'cancel' ? pending !== null : held}
@@ -149,29 +162,36 @@ export function ManagedRuntimeInstallRow(props: {
   if (view.note) {
     parts.push({ key: 'note', fixed: true, node: view.note })
   }
+  // Each part draws its "·" in a left gutter. The parts sit one gutter to the left of the clipped
+  // line, so whichever part starts a line loses its dot: no line starts or ends with one.
   const line = (
     <div
       role="status"
       aria-live="polite"
-      className={cn(
-        'flex min-h-4 items-center gap-x-1 text-xs text-muted-foreground tabular-nums',
-        wraps && 'flex-wrap',
-        view.progress !== null && 'gap-y-1'
-      )}
+      className="min-h-4 overflow-x-clip text-xs text-muted-foreground tabular-nums [overflow-clip-margin:3px]"
     >
-      {parts.map(({ key, node, fixed, dot, className }, index) => (
-        <span
-          key={key}
-          className={cn(
-            'flex items-center gap-x-1',
-            fixed ? 'shrink-0 whitespace-nowrap' : 'min-w-0',
-            className
-          )}
-        >
-          {index === 0 || dot === false ? null : <span>·</span>}
-          {node}
-        </span>
-      ))}
+      <div
+        className={cn(
+          '-ml-3 flex items-center',
+          wraps && 'flex-wrap',
+          view.progress !== null && 'gap-y-1'
+        )}
+      >
+        {parts.map(({ key, node, fixed, dot, className }) => (
+          <span
+            key={key}
+            className={cn(
+              'relative flex items-center pl-3',
+              dot !== false &&
+                "before:absolute before:inset-y-0 before:left-0 before:w-3 before:text-center before:content-['·']",
+              fixed ? 'shrink-0 whitespace-nowrap' : 'min-w-0',
+              className
+            )}
+          >
+            {node}
+          </span>
+        ))}
+      </div>
     </div>
   )
   const menu = view.menuAction
