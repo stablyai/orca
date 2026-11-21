@@ -302,6 +302,8 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
   const fileCount = files.length - listed
   const grouped = room?.withFiles === true && bots + room.unavailable.length > 0
   const botsHeaded = grouped || agentCount > 0 || recent > 0
+  // Paused bots are listed in the Bots group too, so they keep its heading when no other bot matches.
+  const pausedListed = grouped && (room?.unavailable.length ?? 0) > 0
   const headed = grouped || agentCount > 0
   const option = (path: string, index: number) => {
     const member = room ? memberOf(path) : undefined
@@ -362,7 +364,7 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
       {recent > 0 ? <PickerGroupHeading kind="recent" /> : null}
       <div className="flex flex-col gap-0.5" onPointerLeave={() => setHovered(null)}>
         {files.slice(0, recent).map(option)}
-        {botsHeaded && bots > recent ? <PickerGroupHeading kind="bots" /> : null}
+        {botsHeaded && (bots > recent || pausedListed) ? <PickerGroupHeading kind="bots" /> : null}
         {files.slice(recent, bots).map((path, index) => option(path, index + recent))}
       </div>
       {grouped ? <NativeChatUnavailableMentions room={room} /> : null}

@@ -26,6 +26,12 @@ const OTHER_BOTS = {
 }
 
 const NO_BOT_MATCH = { ...OTHER_BOTS, unavailable: [], query: 'notes' }
+// `@notes` matches only the paused bot's name, beside a matching file.
+const PAUSED_ONLY = {
+  ...OTHER_BOTS,
+  mentions: [OTHER_BOTS.mentions[1]],
+  query: 'notes'
+}
 // `@current` matches only what Docs is for.
 const PURPOSE_MATCH = {
   ...OTHER_BOTS,
@@ -130,6 +136,22 @@ describe('NativeChatMentionMenu', () => {
     expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['notes.md'])
     fireEvent.pointerDown(screen.getByRole('option', { name: 'notes.md' }))
     expect(onChoose).toHaveBeenCalledWith('notes.md')
+  })
+
+  it('keeps the Bots heading over a paused bot when it is the only bot listed', () => {
+    render(
+      <NativeChatRoomContext.Provider value={PAUSED_ONLY}>
+        <NativeChatMentionMenu
+          mention={{ ...NO_ROWS, files: ['notes.md'] }}
+          activeIndex={0}
+          listboxId="bots"
+          onChoose={vi.fn()}
+        />
+      </NativeChatRoomContext.Provider>
+    )
+    expect(screen.getByText('Bots')).toBeTruthy()
+    expect(screen.getByRole('option', { name: /Release notes/ })).toBeTruthy()
+    expect(screen.getByText('Files')).toBeTruthy()
   })
 
   it('keeps "For:" before a highlighted purpose match, so it reads apart from the name', () => {
