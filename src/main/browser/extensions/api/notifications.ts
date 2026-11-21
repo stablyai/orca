@@ -19,6 +19,7 @@ import {
   type BrowserExtensionCaller
 } from '../api-runtime/browser-extension-namespace-registry'
 import { noteBrowserExtensionUserGesture } from '../permissions/browser-extension-user-gesture'
+import { noteBrowserExtensionNeedsCleanStart } from '../profile-sessions/browser-extension-idle-kept-state'
 
 const optionsSchema = z
   .object({
@@ -51,9 +52,14 @@ function shownFor(caller: BrowserExtensionCaller): Map<string, Shown> {
     byExtension = new Map()
     shownBySession.set(caller.session, byExtension)
     const owned = byExtension
+    const profileId = caller.browserProfileId
     caller.session.extensions.on('extension-unloaded', (_event, extension) => {
       const shown = owned.get(extension.id)
       owned.delete(extension.id)
+      // Why: the notifications close with no event, so only a clean start shows them again.
+      if (shown && shown.size > 0) {
+        noteBrowserExtensionNeedsCleanStart(profileId, extension.id)
+      }
       for (const entry of shown?.values() ?? []) {
         detach(entry)
       }

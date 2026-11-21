@@ -1515,6 +1515,10 @@
       "confirmMaySkipApprovals": "May act without asking first",
       "confirmNoApprovals": "Acts without asking first",
       "confirmWarning": "They’ll act as you on {{computer}}.",
+      "controlBrief": "They can act as you here.",
+      "controlBriefIfAdded": "Anyone you add can act as you here.",
+      "controlBriefIfAddedOnHost": "Anyone you add can act as you on {{computer}}.",
+      "controlBriefOnHost": "They can act as you on {{computer}}.",
       "controlMany": "They can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
       "controlNone": "Anyone you add can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
       "controlOne": "{{person}} can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
@@ -1644,6 +1648,20 @@
         "confirm_other": "Cancel {{count}} stale items?"
       }
     },
+    "new": {
+      "parts": {
+        "automations_one": "{{count}} automation",
+        "automations_other": "{{count}} automations",
+        "needsApps_one": "Needs {{count}} app",
+        "needsApps_other": "Needs {{count}} apps",
+        "schedules_one": "{{count}} schedule",
+        "schedules_other": "{{count}} schedules",
+        "skillsKept_one": "{{kept}}/{{count}} skill",
+        "skillsKept_other": "{{kept}}/{{count}} skills",
+        "skills_one": "{{count}} skill",
+        "skills_other": "{{count}} skills"
+      }
+    },
     "options": {
       "activeFilters_one": "Bot options ({{count}} filter active)",
       "activeFilters_other": "Bot options ({{count}} filters active)"
@@ -1682,9 +1700,11 @@
       "showMore_one": "Show {{count}} more bot",
       "showMore_other": "Show {{count}} more bots"
     },
-    "settingsPage": {
-      "memoryFiles_one": "MEMORY.md and {{count}} topic file",
-      "memoryFiles_other": "MEMORY.md and {{count}} topic files"
+    "settingsView": {
+      "memoryFiles_one": "{{count}} file",
+      "memoryFiles_other": "{{count}} files",
+      "youAndOthers_one": "You and {{count}} other",
+      "youAndOthers_other": "You and {{count}} others"
     },
     "slack": {
       "postAs": {
@@ -2269,6 +2289,10 @@
         "usageLimitWindowWeekly": "weekly",
         "usageLimitWindowWeeklyModel": "weekly model",
         "writeFailed": "Orca couldn't hand this message to the agent, so it was not sent."
+      },
+      "goal": {
+        "checks_one": "{{count}} check",
+        "checks_other": "{{count}} checks"
       },
       "goalControl": {
         "noGoal": "Codex has no goal to change in this chat. Set one with /goal followed by the objective.",

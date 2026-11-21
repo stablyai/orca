@@ -1,7 +1,9 @@
+import { NativeChatGoalCheckNotice } from './NativeChatGoalCheckNotice'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { nativeChatNoticeLookRow, toneClass } from './NativeChatNoticeLookRows'
 import type { NativeChatTextBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import { nativeChatNoticeLook } from '../../../../../../shared/native-chat/transcript/notices/native-chat-notice'
+import { NATIVE_CHAT_GOAL_CHECK_SUMMARY } from '../../../../../../shared/native-chat/transcript/turns/native-chat-thread-goal-rows'
 import { NativeChatUsageLimitRow } from '../../usage/NativeChatUsageLimitRow'
 import { agentSessionGoalControlWords } from '../../session/goals/agent-session-goal-control-words'
 import { useTranslation } from 'react-i18next'
@@ -14,7 +16,7 @@ import { NativeChatInterruptedContinueButton } from '../../usage/NativeChatInter
 import { nativeChatOrcaStopRowText } from '../../../../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-words'
 import { sayNativeChatOrcaStopTranslated } from './native-chat-orca-stop-words-text'
 import { agentSessionRestartNoteText } from './agent-session-restart-note-text'
-import { ProviderFrameRow } from '../diagnostics/NativeChatProviderDetails'
+import * as Details from '../diagnostics/NativeChatProviderDetails'
 import { NativeChatSetupButton } from '../../host-access/NativeChatSetupButton'
 import {
   isNativeChatFailureRowResolved,
@@ -49,6 +51,10 @@ export function NativeChatNoticeRow({
   const t = useTranslate()
   useTranslation()
   const orcaStopView = useNativeChatOrcaStopView()
+
+  if (block.presentation === NATIVE_CHAT_GOAL_CHECK_SUMMARY) {
+    return <NativeChatGoalCheckNotice text={block.text} />
+  }
 
   if (block.presentation === PULL_REQUEST_EVENT_PRESENTATION) {
     return (
@@ -157,7 +163,7 @@ export function NativeChatNoticeRow({
           : null
   const details =
     block.providerFrame || detail ? (
-      <ProviderFrameRow
+      <Details.ProviderFrameRow
         block={block}
         detail={detail}
         summary={t('components.native-chat.notices.details', 'Details')}
@@ -199,7 +205,7 @@ export function NativeChatNoticeRow({
         fallback={row}
         details={
           block.providerFrame || signInDetail ? (
-            <ProviderFrameRow
+            <Details.ProviderFrameRow
               block={block}
               detail={signInDetail}
               summary={t('components.native-chat.notices.details', 'Details')}

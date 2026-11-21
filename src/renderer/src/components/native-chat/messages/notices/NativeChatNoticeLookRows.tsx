@@ -1,10 +1,7 @@
 import { BotTidyUpLine } from '@/components/bots/BotTidyUpLine'
 import { nativeChatBotCard } from '../../native-chat-bot-cards'
-import {
-  CLAUDE_MODEL_FALLBACK_COPY,
-  claudeModelFallbackLabels
-} from '../../../../../../shared/native-chat/transcript/notices/claude-model-fallback'
-import { ArrowLeftRight, Notebook } from 'lucide-react'
+import * as Fallback from '../../../../../../shared/native-chat/transcript/notices/claude-model-fallback'
+import { Notebook } from 'lucide-react'
 import { NativeChatForkedFromRow } from './NativeChatForkedFromRow'
 import { NativeChatAutoReviewDenialRow } from './NativeChatAutoReviewDenialRow'
 import { NativeChatEventRow } from '../events/NativeChatEventRow'
@@ -29,7 +26,7 @@ import {
   type BotContextChange
 } from '../../../../../../shared/bots/bot-context-note'
 import { NativeChatDividerRow } from '../../NativeChatDividerRow'
-import { NativeChatDetailsDisclosure } from '../diagnostics/NativeChatProviderDetails'
+import * as Details from '../diagnostics/NativeChatProviderDetails'
 
 const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string> = {
   'history-repaired': () =>
@@ -135,28 +132,13 @@ export function nativeChatNoticeLookRow({
       </p>
     )
   }
-  if (look.kind === 'model-switch') {
-    return (
-      <p className="flex min-w-0 items-center justify-center gap-1.5 select-text text-xs text-chat-foreground-faint">
-        <ArrowLeftRight className="size-3.5 shrink-0" aria-hidden="true" />
-        {/* Not time-critical: announce politely, once, without stealing the reader's place. */}
-        <span role="status" aria-live="polite" className="whitespace-normal">
-          {t(
-            'components.native-chat.notices.modelSwitched',
-            'Model switched: {{from}} → {{to}}',
-            look
-          )}
-        </span>
-      </p>
-    )
-  }
   if (look.kind === 'model-fallback') {
     return (
       <p className="min-w-0 max-w-full select-text text-sm text-chat-foreground-faint [overflow-wrap:anywhere]">
         {t(
           'components.native-chat.notices.modelFallback',
-          CLAUDE_MODEL_FALLBACK_COPY,
-          claudeModelFallbackLabels(look)
+          Fallback.CLAUDE_MODEL_FALLBACK_COPY,
+          Fallback.claudeModelFallbackLabels(look)
         )}
       </p>
     )
@@ -213,7 +195,7 @@ export function nativeChatNoticeLookRow({
             )
     const payload = block.providerFrame?.payload
     return (
-      <NativeChatDetailsDisclosure summary={summary} bodyClassName={toneClass(look.tone)}>
+      <Details.NativeChatDetailsDisclosure summary={summary} bodyClassName={toneClass(look.tone)}>
         {block.text}
         {payload ? '\n\n' : ''}
         {payload?.truncated
@@ -224,7 +206,7 @@ export function nativeChatNoticeLookRow({
             )}\n`
           : ''}
         {payload?.head}
-      </NativeChatDetailsDisclosure>
+      </Details.NativeChatDetailsDisclosure>
     )
   }
   return null

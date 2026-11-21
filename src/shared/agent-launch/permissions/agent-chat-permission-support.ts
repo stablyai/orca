@@ -44,6 +44,7 @@ export const NATIVE_CHAT_AGENTS = [
   'copilot',
   'cursor',
   'kimi',
+  'kiro',
   'pi',
   'antigravity',
   'hermes'
@@ -65,6 +66,7 @@ const AGENT_CHAT_PERMISSION_MODES_BY_AGENT: Record<
   copilot: ACP_CHAT_PERMISSION_MODES,
   cursor: ACP_CHAT_PERMISSION_MODES,
   kimi: KIMI_CHAT_PERMISSION_MODES,
+  kiro: ACP_CHAT_PERMISSION_MODES,
   // Pi asks no approvals, so its chats run with every tool it has, as its terminal does.
   pi: null,
   antigravity: EDIT_ACCEPTING_CHAT_PERMISSION_MODES,

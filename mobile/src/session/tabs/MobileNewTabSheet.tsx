@@ -29,6 +29,13 @@ import {
 
 const AGENT_GRID_COLUMNS = 3
 
+/** A bot's home: a new Home Chat, then a side chat with the bot on each agent, in place of the agents. */
+export type MobileNewTabBotActions = {
+  homeChat: ActionSheetAction
+  sideChatsTitle: string
+  sideChats: ActionSheetAction[]
+}
+
 type Props = {
   visible: boolean
   workspaceName: string
@@ -37,8 +44,7 @@ type Props = {
   surfaceChoice: NewTabAgentSurfaceChoice | null
   /** Loading, none, other-server or error; shown instead of the agent grid. */
   agentStatusRow: ActionSheetAction | null
-  /** Rows that lead the agents, such as a bot's own new chat. */
-  leadingAgentActions: ActionSheetAction[]
+  bot: MobileNewTabBotActions | null
   canCreateBrowser: boolean
   /** The profile a new browser tab opens in; null hides the row (one profile, or an older host). */
   browserProfileLabel: string | null
@@ -78,7 +84,7 @@ export function MobileNewTabSheet({
   agentOptions,
   surfaceChoice,
   agentStatusRow,
-  leadingAgentActions,
+  bot,
   canCreateBrowser,
   browserProfileLabel,
   canCreateMarkdownNote,
@@ -102,7 +108,7 @@ export function MobileNewTabSheet({
     onClose()
     action()
   }
-  const showAgentGrid = agentStatusRow === null && agentOptions.length > 0
+  const showAgentGrid = bot === null && agentStatusRow === null && agentOptions.length > 0
   // Short last rows keep empty slots so every tile stays a third of the row wide.
   const agentRows: { options: MobileNewTabAgentOption[]; emptySlots: string[] }[] = []
   for (let start = 0; start < agentOptions.length; start += AGENT_GRID_COLUMNS) {
@@ -130,11 +136,25 @@ export function MobileNewTabSheet({
         {...(workspaceName ? { subtitle: workspaceName } : {})}
         onClose={onClose}
       />
-      {showAgentGrid || agentStatusRow || leadingAgentActions.length > 0 ? (
+      {bot ? (
+        <>
+          {/* The Home Chat's confirm opens once this sheet has gone. */}
+          <ActionSheetContent
+            actions={[{ ...bot.homeChat, onPress: () => closeThen(bot.homeChat.onPress) }]}
+          />
+          <SectionHeader title={bot.sideChatsTitle} />
+          <ActionSheetContent
+            actions={bot.sideChats.map((action) => ({
+              ...action,
+              onPress: () => closeAndRun(action.onPress)
+            }))}
+          />
+        </>
+      ) : null}
+      {bot === null && (showAgentGrid || agentStatusRow) ? (
         <SectionHeader title={t('session.sheets.agents', 'Agents')} first />
       ) : null}
-      {leadingAgentActions.length > 0 ? <ActionSheetContent actions={leadingAgentActions} /> : null}
-      {agentStatusRow ? <ActionSheetContent actions={[agentStatusRow]} /> : null}
+      {bot === null && agentStatusRow ? <ActionSheetContent actions={[agentStatusRow]} /> : null}
       {showAgentGrid && surfaceChoice ? (
         <MobileSegmentedControl
           segments={[
@@ -186,7 +206,8 @@ export function MobileNewTabSheet({
           ))}
         </View>
       ) : null}
-      <ListGroup separatorInset={LIST_LEADING_INSET} style={styles.actions}>
+      {bot ? <SectionHeader title={t('session.sheets.more', 'More')} /> : null}
+      <ListGroup separatorInset={LIST_LEADING_INSET} style={bot ? undefined : styles.actions}>
         {terminalShells.length > 0 ? (
           terminalShells.map((shell) => (
             <ListRow

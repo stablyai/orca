@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { Translate } from '@/i18n/use-translate'
 import { normalizeToolInput } from '../../../../../shared/native-chat/tools/native-chat-tool-summary'
+import { approvalRecordTool } from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-tool'
 import type { AgentJournalApprovalItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   ORCHESTRATION_APPROVAL_CALLER_PREFIX,
@@ -22,11 +23,6 @@ export type NativeChatApprovalRecordLine = {
   reason?: { label: string; text: string }
   at: number | null
   opensWorker?: true
-}
-
-/** The tool's own name when the provider gave one; otherwise the prompt's title as it read. */
-export function approvalRecordTool(toolName: string | undefined, title: string): string {
-  return toolName?.trim() || title
 }
 
 // A tool call's input as the agent wrote it: its shell command, when it has one.

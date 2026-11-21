@@ -80,7 +80,7 @@ export function BotItemRow({
       role="listitem"
       data-bot-item={item.number}
       className={cn(
-        'group/item relative flex min-w-0 items-start gap-2 rounded-sm px-2 py-1 hover:bg-accent has-[:focus-visible]:bg-accent has-[[aria-expanded=true]]:bg-accent',
+        'group/item relative flex min-w-0 items-start gap-2 rounded-sm px-2 py-1 hover:bg-accent has-[:focus-visible]:bg-accent has-[[aria-expanded=true]]:bg-accent has-[[data-state=open]]:bg-accent',
         selected && 'bg-accent'
       )}
     >

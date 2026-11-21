@@ -19,9 +19,11 @@ import type { ManagedDataAccountsState } from '../../../shared/agent-accounts/ma
 import { restoreManagedDataAccountEnvironment } from '../../../shared/agent-launch/environment/managed-data-account-environment'
 import { openCodeAcpAccountBinding } from '../../opencode/accounts/opencode-structured-account-home'
 import { createAcpStructuredLaunchResolver } from '../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
+import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import { acpLaunchSpecFor } from './acp-launch-registry'
-import { deliverCopilotInstructions } from './acp-instructions'
+import { deliverCopilotInstructions, deliverOpenCodeInstructions } from './acp-instructions'
+import { acpReleaseWithChild } from './acp-structured-launch-preparation'
 
 const PREAMBLE = 'You are Zorblax, a bot that runs in Orca.'
 
@@ -42,7 +44,9 @@ const SPECS = {
   antigravity: acpLaunchSpecFor('antigravity')!,
   cursor: acpLaunchSpecFor('cursor')!,
   hermes: acpLaunchSpecFor('hermes')!,
-  copilot: acpLaunchSpecFor('copilot')!
+  copilot: acpLaunchSpecFor('copilot')!,
+  kimi: acpLaunchSpecFor('kimi')!,
+  kiro: acpLaunchSpecFor('kiro')!
 }
 
 const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome']> = {
@@ -52,14 +56,18 @@ const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome'
   antigravity: { variable: 'GEMINI_HOME', path: '/home/user/orca-data/antigravity-chat' },
   cursor: { variable: 'CURSOR_CONFIG_DIR', path: '/home/user/.cursor' },
   hermes: { variable: 'HERMES_HOME', path: '/home/user/.hermes' },
-  copilot: { variable: 'COPILOT_HOME', path: '/home/user/.copilot' }
+  copilot: { variable: 'COPILOT_HOME', path: '/home/user/.copilot' },
+  kimi: { variable: 'KIMI_CODE_HOME', path: '/home/user/.kimi-code' },
+  kiro: { variable: 'KIRO_HOME', path: '/home/user/.kiro' }
 }
 
 const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
   omp: '17.2.9',
   cursor: '2026.11.19-f005e9d',
   hermes: '0.23.3',
-  copilot: '1.0.114'
+  copilot: '1.0.114',
+  kimi: '2.7.2',
+  kiro: '3.1.0'
 }
 
 let dataDirectory = ''
@@ -124,6 +132,14 @@ describe('ACP launch: standing instructions', () => {
     })
   })
 
+  it('gives Kiro them as an always-included steering document on its new session', async () => {
+    const resolved = await launch('kiro', { instructions: PREAMBLE })
+    expect(resolved.sessionMeta).toEqual({
+      kiro: { steering: [{ name: 'orca', inclusion: 'always', content: PREAMBLE }] }
+    })
+    expect(resolved.sessionMetaOnReopen).toBeUndefined()
+  })
+
   it("adds them to OpenCode's inline instructions after the user's own, keeping their settings", async () => {
     const mine = JSON.stringify({ model: 'x/y', instructions: ['/home/user/mine.md'] })
     const resolved = await launch('opencode', {
@@ -168,6 +184,30 @@ describe('ACP launch: standing instructions', () => {
     expect(resolved.env.OPENCODE_CONFIG_CONTENT).toBe(mine)
     // The user's own folder is left as it was.
     expect(await readFile(join(source, 'AGENTS.md'), 'utf8')).toBe('Mine.\n')
+  })
+
+  it("keeps a lowercase-named global agents.md of the user's out of the generated file's write path", async () => {
+    const source = join(dataDirectory, 'opencode-lowercase-agents')
+    await mkdir(source, { recursive: true })
+    await writeFile(join(source, 'agents.md'), 'Mine.\n')
+    const resolved = await launch('opencode', {
+      instructions: PREAMBLE,
+      version: '2.0.14',
+      launchEnv: { OPENCODE_CONFIG_DIR: source }
+    })
+    const configDir = resolved.env.OPENCODE_CONFIG_DIR ?? ''
+    expect(await readFile(join(source, 'agents.md'), 'utf8')).toBe('Mine.\n')
+    const foldsCase = await readFile(join(source, 'AGENTS.md'), 'utf8').then(
+      () => true,
+      () => false
+    )
+    expect(await readFile(join(configDir, 'AGENTS.md'), 'utf8')).toBe(
+      `${foldsCase ? 'Mine.\n\n' : ''}${PREAMBLE}\n`
+    )
+    expect((await lstat(join(configDir, 'AGENTS.md'))).isSymbolicLink()).toBe(false)
+    expect((await readdir(configDir)).sort()).toEqual(
+      foldsCase ? ['AGENTS.md'] : ['AGENTS.md', 'agents.md']
+    )
   })
 
   it('writes only the preamble when the explicitly configured OpenCode folder is missing', async () => {
@@ -252,6 +292,19 @@ describe('ACP launch: standing instructions', () => {
     }
   })
 
+  it("writes them to Kimi's .kimi-code/AGENTS.md in the folder it runs in, beside the folder's own", async () => {
+    const home = await mkdtemp(join(tmpdir(), 'acp-instructions-kimi-'))
+    try {
+      await writeFile(join(home, 'AGENTS.md'), 'Workspace instructions')
+      await launch('kimi', { instructions: PREAMBLE, workspacePath: home })
+      const written = await readFile(join(home, '.kimi-code', 'AGENTS.md'), 'utf8')
+      expect(written.slice(written.indexOf('\n\n') + 2)).toBe(`${PREAMBLE}\n`)
+      expect(await readFile(join(home, 'AGENTS.md'), 'utf8')).toBe('Workspace instructions')
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
+  })
+
   it("gives Copilot them as an always-applied instructions file in a folder of the chat's own", async () => {
     const resolved = await launch('copilot', { instructions: PREAMBLE })
     const dir = resolved.env.COPILOT_CUSTOM_INSTRUCTIONS_DIRS ?? ''
@@ -285,6 +338,52 @@ describe('ACP launch: standing instructions', () => {
       version: null
     })
     expect(delivered).toBeNull()
+  })
+
+  it("removes an OpenCode 2.x launch's config folder on release, leaving the user's files", async () => {
+    const source = join(dataDirectory, 'opencode-release-source')
+    const folder = join(dataDirectory, 'opencode-release-folder')
+    await mkdir(source, { recursive: true })
+    await mkdir(folder, { recursive: true })
+    await writeFile(join(source, 'opencode.json'), '{}')
+    await mkdir(join(source, 'agents'))
+    await writeFile(join(source, 'agents', 'reviewer.md'), 'Review.')
+    const delivered = await deliverOpenCodeInstructions({
+      text: PREAMBLE,
+      env: { OPENCODE_CONFIG_DIR: source },
+      cwd: '/unused',
+      file: async () => '/unused',
+      folder: async () => '/unused',
+      emptyFolder: async () => folder,
+      version: '2.0.14'
+    })
+    expect(await readdir(folder)).toContain('AGENTS.md')
+    await delivered?.release?.()
+    expect(await readdir(dataDirectory)).not.toContain('opencode-release-folder')
+    expect(await readFile(join(source, 'opencode.json'), 'utf8')).toBe('{}')
+    expect(await readFile(join(source, 'agents', 'reviewer.md'), 'utf8')).toBe('Review.')
+  })
+
+  it('releases a launch when its child exits, or at once when the connection throws', async () => {
+    let released = 0
+    const release = async () => {
+      released += 1
+    }
+    let exited: Parameters<AcpStructuredConnection['onExit']>[0] = () => {}
+    const connection = {
+      onExit: (callback: Parameters<AcpStructuredConnection['onExit']>[0]): void => {
+        exited = callback
+      }
+    }
+    acpReleaseWithChild(() => connection, release)()
+    expect(released).toBe(0)
+    exited({ code: 0, signal: null, processless: false })
+    expect(released).toBe(1)
+    const failing = acpReleaseWithChild(() => {
+      throw new Error('spawn failed')
+    }, release)
+    expect(failing).toThrow('spawn failed')
+    expect(released).toBe(2)
   })
 
   it('refuses to start an agent that has no way to take them', async () => {

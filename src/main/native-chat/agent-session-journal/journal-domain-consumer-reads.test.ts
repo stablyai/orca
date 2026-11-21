@@ -688,7 +688,8 @@ it('creates the ended-turn counts once when another process opens the journal at
     DROP TRIGGER journal_ended_turns_update_old; DROP TRIGGER journal_ended_turns_update_new`)
   const first = new Database(filename)
   const second = new Database(filename)
-  cleanup.push(() => (first.close(), second.close()))
+  // These close before the fixture's own cleanup deletes its directory.
+  cleanup.unshift(() => (first.close(), second.close()))
   createEndedTurnCounts(first)
   await f.run({
     kind: 'item',

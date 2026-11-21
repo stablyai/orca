@@ -272,6 +272,7 @@ async function admitBotRequestMail(
       priority: params.priority,
       threadId: params.threadId,
       payload,
+      orcaAuthored: 'bot-request' as const,
       senderPaneKey: args.senderPaneKey,
       runId: recipient.runId,
       answerSenderSnapshot: args.senderSnapshot

@@ -1,0 +1,8 @@
+{
+  "capturedAt": "2026-11-20T17:58:00Z",
+  "platform": "darwin",
+  "command": ["opencode", "--standalone"],
+  "cols": 120,
+  "rows": 40,
+  "note": "opencode v2.3.2 (GitHub release opencode-darwin-arm64) on macOS arm64 in tmux (pipe-pane raw output), isolated HOME/XDG dirs, OPENCODE_DISABLE_AUTOUPDATE=1, no ORCA_* vars, and one OpenAI-compatible provider at a closed localhost port. opencode-2-3-2-boot.txt runs from OpenCode's first byte to its ready composer with the agent/model row; opencode-2-3-2-paste-held.txt is the frame painted for an 83-line bracketed paste (Line N: implement the requested brief item number N.), collapsed to [Pasted ~83 lines]; opencode-2-3-2-submitted.txt is the first frame after Enter submitted it (the session view with an empty composer)."
+}
