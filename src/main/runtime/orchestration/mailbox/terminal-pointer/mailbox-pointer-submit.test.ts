@@ -9,6 +9,7 @@ import '../../db/messages/mailbox-routing-page'
 import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { OrchestrationMailboxPointerState } from './mailbox-pointer-state'
+import { OrchestrationMailboxOwner } from '../routing/mailbox-owner'
 import { submitOrchestrationMailboxPointer } from './mailbox-pointer-submit'
 import {
   settledWriteStub,
@@ -119,6 +120,144 @@ describe('orchestration mailbox pointer submit', () => {
       pointer_pty_id: null,
       pointer_process_incarnation: null
     })
+    db.close()
+  })
+
+  it('submits a staged pointer while its live PTY is cold parked', async () => {
+    const ptyId = 'pty-parked'
+    const mailboxHandle = 'run:run-1'
+    const terminal = {
+      ptyId,
+      handle: 'term-parked',
+      paneKeys: ['tab-1:leaf-1'],
+      lastAgentStatus: 'idle' as const,
+      lastAgentStatusObservedLive: true
+    }
+    const state = new OrchestrationMailboxPointerState()
+    const flight = state.beginFlight(ptyId)
+    state.setWatermark(mailboxHandle, 1, ptyId)
+    const writePty = vi.fn(settledWriteStub())
+    const db = new OrchestrationDb(':memory:')
+    vi.spyOn(db, 'areUnreadMessages').mockReturnValue(true)
+    const markMailboxPointerEnterAttempted = vi
+      .spyOn(db, 'markMailboxPointerEnterAttempted')
+      .mockReturnValue(true)
+    vi.spyOn(db, 'settleMailboxPointerEnter').mockReturnValue(undefined)
+    const mailboxOwner = new OrchestrationMailboxOwner({
+      getDb: () => null,
+      getTerminal: () => null,
+      getTerminalProcessIncarnation: () => null,
+      onRoutedMessageTypes: () => {},
+      onForeignMailboxRouted: () => {}
+    })
+    const resolveMailbox = vi.spyOn(mailboxOwner, 'resolve').mockReturnValue(mailboxHandle)
+    const settle = vi.fn(() => {
+      state.settleFlight(ptyId, flight)
+    })
+    const target = {
+      terminal,
+      processIncarnation: 'inc-parked'
+    }
+
+    submitOrchestrationMailboxPointer(
+      {
+        mailboxOwner,
+        state,
+        getDb: () => db,
+        resolveSubmitTarget: () => target,
+        isLeafPtyProvenAbsent: async () => false,
+        isPtyAwaitingUserInput: () => false,
+        writePty,
+        settle,
+        redrive: vi.fn()
+      },
+      {
+        mailboxHandle,
+        messages: [{ id: 'msg-1', type: 'status' }],
+        newestSequence: 1,
+        ptyId,
+        flight,
+        expectedTarget: target
+      }
+    )
+
+    await vi.waitFor(() => expect(settle).toHaveBeenCalledOnce())
+    expect(writePty).toHaveBeenCalledOnce()
+    expect(writePty).toHaveBeenCalledWith(ptyId, '\r')
+    expect(resolveMailbox).toHaveBeenCalledWith(terminal, mailboxHandle)
+    expect(markMailboxPointerEnterAttempted.mock.invocationCallOrder[0]).toBeLessThan(
+      writePty.mock.invocationCallOrder[0]!
+    )
+  })
+
+  it('presses no Enter when the person typed after the pointer was written', async () => {
+    const db = new OrchestrationDb(':memory:')
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'run:run-1',
+      subject: 'mid-typing'
+    })
+    const ptyId = 'pty-typing'
+    const mailboxHandle = 'run:run-1'
+    const terminal = {
+      ptyId,
+      handle: 'term-typing',
+      paneKeys: ['tab-1:leaf-1'],
+      lastAgentStatus: 'idle' as const,
+      lastAgentStatusObservedLive: true
+    }
+    const target = { terminal, processIncarnation: 'inc-typing' }
+    const reservation = { ptyId, processIncarnation: target.processIncarnation }
+    const state = new OrchestrationMailboxPointerState()
+    const flight = state.beginFlight(ptyId)
+    state.setWatermark(mailboxHandle, 1, ptyId)
+    expect(db.stageMailboxPointerEnter([message.id], reservation)).toBe(true)
+    expect(db.markMailboxPointerWriteAttempted([message.id], reservation)).toBe(true)
+    flight.pointerWriteStartedAt = 1_000
+    const writePty = vi.fn(settledWriteStub())
+    const redrive = vi.fn()
+    const settle = vi.fn(() => state.settleFlight(ptyId, flight))
+    const mailboxOwner = new OrchestrationMailboxOwner({
+      getDb: () => db,
+      getTerminal: () => null,
+      getTerminalProcessIncarnation: () => null,
+      onRoutedMessageTypes: () => {},
+      onForeignMailboxRouted: () => {}
+    })
+    vi.spyOn(mailboxOwner, 'resolve').mockReturnValue(mailboxHandle)
+
+    submitOrchestrationMailboxPointer(
+      {
+        mailboxOwner,
+        state,
+        getDb: () => db,
+        resolveSubmitTarget: () => target,
+        isLeafPtyProvenAbsent: async () => false,
+        isPtyAwaitingUserInput: () => false,
+        readLastDrivingInputAt: () => 1_200,
+        writePty,
+        settle,
+        redrive
+      },
+      {
+        mailboxHandle,
+        messages: [{ id: message.id, type: 'status' }],
+        newestSequence: 1,
+        ptyId,
+        flight,
+        expectedTarget: target
+      }
+    )
+
+    await vi.waitFor(() => expect(settle).toHaveBeenCalledOnce())
+    expect(writePty).not.toHaveBeenCalled()
+    expect(db.getMessageById(message.id)).toMatchObject({
+      delivered_at: null,
+      pointer_enter_pending: 0,
+      pointer_pty_id: null
+    })
+    expect(redrive).toHaveBeenCalledWith(mailboxHandle, true)
     db.close()
   })
 

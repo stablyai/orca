@@ -20,10 +20,13 @@ import {
 import { openCodeComposerHoldsDraft } from '../../../../shared/terminal/input/opencode-composer'
 import { piComposerHoldsDraft } from '../../../../shared/terminal/input/pi-composer'
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox/routing/mailbox-owner'
+import { claudeTerminalPromptChannel } from '../../claude-terminal-prompt-channel'
 import type { MailboxDeliveryHold } from '../../orchestration/mailbox/delivery-hold/mailbox-delivery-hold'
 import { receiptMailboxOwnershipHold } from '../../orchestration/mailbox/delivery-hold/receipt-mailbox-ownership'
 
 const DIALOG_HOLD_RECHECK_MS = 2000
+/** A person typing a few seconds ago may be mid-word in a composer the draft reader can't see (#14832). */
+const TYPING_PAUSE_HOLD_MS = 5000
 const CORROBORATED_HOLDS: ReadonlySet<MailboxDeliveryHold['kind']> = new Set([
   'prompt',
   'draft',
@@ -118,11 +121,14 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     const outputAt = this.readOutputClockAt(ptyId)
     const quietRemainingMs =
       outputAt === null ? 0 : TUI_IDLE_QUIESCENCE_MS - (Date.now() - outputAt)
-    // A dialog or draft lifts only when the user acts, so poll it slowly rather than at 20 Hz.
+    // A typing pause ends on its own; a dialog or draft lifts only when the user acts, so poll it slowly.
+    const typingRemainingMs = this.typingHoldRemainingMs(ptyId)
     const delay =
-      this.ptyDeliveryHold(ptyId) !== null || quietRemainingMs <= 0
-        ? DIALOG_HOLD_RECHECK_MS
-        : quietRemainingMs + 50
+      typingRemainingMs > 0
+        ? typingRemainingMs + 50
+        : this.ptyDeliveryHold(ptyId) !== null || quietRemainingMs <= 0
+          ? DIALOG_HOLD_RECHECK_MS
+          : quietRemainingMs + 50
     const timer = setTimeout(() => {
       this.deliveryRecheckTimersByPtyId.delete(ptyId)
       // Delivery rechecks settlement first; the agent may have become busy again.
@@ -205,6 +211,13 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     if (this.isPtyAwaitingUserInput(ptyId)) {
       return 'prompt'
     }
+    // Mail sent through the agent's own prompt channel is never typed, so no draft is at risk.
+    if (claudeTerminalPromptChannel(this.getOrchestrationMailboxTerminal(ptyId))) {
+      return null
+    }
+    if (this.typingHoldRemainingMs(ptyId) > 0) {
+      return 'draft'
+    }
     const facts = this.terminalRunFacts
     const state = this.readWholeScreenModel(ptyId)
     const draft = !!state && this.hasComposerDraft(ptyId, state.emulator.getCursorLineContext())
@@ -237,6 +250,18 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       return piComposerHoldsDraft(context)
     }
     return !!readTerminalComposerTypedText(context)
+  }
+
+  /** How much longer delivery waits for the person's typing pause; 0 when it may go now. */
+  private typingHoldRemainingMs(ptyId: string): number {
+    const lastInputAt = this.terminalRunFacts.readLastDrivingInputAt(ptyId)
+    if (
+      lastInputAt === null ||
+      claudeTerminalPromptChannel(this.getOrchestrationMailboxTerminal(ptyId))
+    ) {
+      return 0
+    }
+    return Math.max(0, TYPING_PAUSE_HOLD_MS - (Date.now() - lastInputAt))
   }
 
   protected getAdoptedPtyExplicitIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null {
