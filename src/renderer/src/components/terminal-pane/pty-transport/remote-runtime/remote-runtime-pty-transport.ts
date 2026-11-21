@@ -1,4 +1,5 @@
 import type { TerminalOutputCadence } from '../../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
+import { NEWER_DAEMON_HOLD_ERROR } from '../../../../../../shared/terminal/daemon/newer-daemon-hold'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { webTerminalPlacementParentTabId } from '@/runtime/hosted-terminals/placement/web-session-terminal-placement'
 import { pairedAgentLaunchInputs } from '@/lib/agent-session/launch/routing/paired-agent-launch-inputs'
@@ -732,6 +733,11 @@ export function createRemoteRuntimePtyTransport(
   }
 
   function surfaceErrorMessage(message: string): void {
+    // A newer-version hold answers this attempt, so each retry's pane must hear it again.
+    if (message.includes(NEWER_DAEMON_HOLD_ERROR)) {
+      storedCallbacks.onError?.(message)
+      return
+    }
     if (surfacedErrorMessages.has(message)) {
       return
     }
@@ -970,7 +976,11 @@ export function createRemoteRuntimePtyTransport(
               ).snapshot
             : await activateHostSessionSurface(hostTabId, worktree, 'user', requestRemainingMs)
       } catch (error) {
-        if (request === 'list') {
+        // A newer-version hold is the host's answer, not an unknown outcome to poll past.
+        if (
+          request === 'list' ||
+          (error instanceof Error && error.message.includes(NEWER_DAEMON_HOLD_ERROR))
+        ) {
           throw error
         }
         // Activation failure proves no absence, including old-method errors; ambiguous activation may already have spawned and cannot be repeated blindly.

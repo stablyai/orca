@@ -108,6 +108,15 @@ export type PtySpawnOptions = {
   signal?: AbortSignal
 }
 
+/** What the newer-daemon hold reads from a spawn request. */
+export type PtyHeldSpawnRequest = Pick<
+  PtySpawnOptions,
+  'sessionId' | 'isNewSession' | 'attachOnly'
+> & {
+  /** The caller already searched every compatible daemon for the id and found no owner. */
+  ownerSearched?: boolean
+}
+
 type PtyProbeOptions = { signal?: AbortSignal }
 
 export type IPtyProvider = {
@@ -123,6 +132,8 @@ export type IPtyProvider = {
   /** Re-probes a degraded durable host before main commits to fallback spawn semantics. */
   recoverFreshSpawnRouting?: () => Promise<boolean>
   spawn(opts: PtySpawnOptions): Promise<PtySpawnResult>
+  /** Rejects a saved session a newer daemon may still own, before main prepares its spawn; undefined when no hold applies. */
+  refuseHeldSpawn?: (opts: PtyHeldSpawnRequest) => Promise<void> | undefined
   /** Process-owner cleanup for history stored outside the workspace tree. */
   deleteWorktreeHistory?: (worktreeId: string) => Promise<void>
   /** Whether this spawn target can append the Git guard after its final env merge. */

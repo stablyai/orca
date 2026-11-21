@@ -5,6 +5,7 @@ import { triggerSelection } from '../../platform/haptics/haptics'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import { isCachedActiveDocumentRetap } from '../../files/session-documents/mobile-session-active-document-retap'
 import { activateMobileSessionTab } from './mobile-session-tab-activation'
+import { noteTerminalTabActivation } from './newer-version-held-terminal-tabs'
 import { activatedAtWorkspaceRoot } from '../../terminal/session/mobile-session-terminal-reply-schema'
 import type { MobileSessionTab } from './mobile-session-tabs'
 import type { MobileSessionKeyboardStateModel } from '../../terminal/session/input-controls/use-mobile-session-keyboard-state'
@@ -35,12 +36,13 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
     showToast
   } = scope
   const reportActivation = useCallback(
-    (response: RpcResponse) => {
+    (response: RpcResponse, tabId: string) => {
+      noteTerminalTabActivation(worktreeId, tabId, response)
       if (response.ok && activatedAtWorkspaceRoot(response.result)) {
         showToast(STARTUP_CWD_FALLBACK_SENTENCE, 1800)
       }
     },
-    [showToast]
+    [showToast, worktreeId]
   )
   // Why: unsubscribe restores old dims (clears phone-fit banner); resubscribe phone-fits the new one.
   const switchTab = useCallback(
@@ -85,7 +87,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
             navigation: 'caller',
             intent: 'user'
           })
-            .then(reportActivation)
+            .then((response) => reportActivation(response, matchingTab.id))
             .catch(() => {})
         }
       }
@@ -140,7 +142,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
             navigation: 'caller',
             intent: 'user'
           })
-            .then(reportActivation)
+            .then((response) => reportActivation(response, tab.id))
             .catch(() => {})
         }
         return
@@ -167,7 +169,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
           navigation: 'caller',
           intent: 'user'
         })
-          .then(reportActivation)
+          .then((response) => reportActivation(response, tab.id))
           .catch(() => {})
       }
       if (tab.type === 'browser') {

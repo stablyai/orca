@@ -2,7 +2,7 @@ import { createServer, type Socket } from 'node:net'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DaemonPtyAdapter } from '../../adapter/daemon-pty-adapter'
 import { DaemonPtyRouter } from '../daemon-pty-router'
 import { TerminalSessionOwnerUnverifiedError } from '../../../protocol/daemon-errors'
@@ -11,10 +11,18 @@ import {
   startDaemonAdapterHarness
 } from '../../adapter/testing/daemon-pty-adapter-test-harness'
 import { getDaemonSocketPath } from '../../../launch/daemon-spawner'
+import type * as NewerProtocolHoldModule from '../daemon-newer-protocol-hold'
+
+const newerDaemon = vi.hoisted(() => ({ holding: false }))
+vi.mock('../daemon-newer-protocol-hold', async (importOriginal) => ({
+  ...(await importOriginal<typeof NewerProtocolHoldModule>()),
+  isHoldingForNewerProtocolDaemon: () => newerDaemon.holding
+}))
 
 const cleanups: (() => Promise<void> | void)[] = []
 
 afterEach(async () => {
+  newerDaemon.holding = false
   for (const cleanup of cleanups.splice(0).toReversed()) {
     await cleanup()
   }
@@ -86,5 +94,29 @@ describe('DaemonPtyRouter reattach beside an unanswering older daemon', () => {
     await expect(
       router.spawn({ cols: 80, rows: 24, sessionId: 'wt@@unproven', attachOnly: true })
     ).rejects.toBeInstanceOf(TerminalSessionOwnerUnverifiedError)
+  }, 30_000)
+
+  it('lets the early newer-daemon gate pass a session the current daemon still runs', async () => {
+    const current = await startDaemonAdapterHarness(() => createMockSubprocess())
+    cleanups.push(async () => {
+      await current.server.shutdown()
+      rmSync(current.dir, { recursive: true, force: true })
+    })
+    await current.adapter.spawn({ cols: 80, rows: 24, sessionId: 'wt@@pane-1', isNewSession: true })
+    await current.adapter.disconnectOnly()
+
+    const unanswering = await startUnansweringDaemon()
+    const router = new DaemonPtyRouter({
+      current: new DaemonPtyAdapter({
+        socketPath: current.socketPath,
+        tokenPath: current.tokenPath
+      }),
+      legacy: [new DaemonPtyAdapter({ ...unanswering, protocolVersion: 47 })]
+    })
+    cleanups.push(() => router.disconnectOnly())
+    newerDaemon.holding = true
+
+    // Spawn dispatch reattaches it through the current daemon, so the gate before it must agree.
+    await expect(router.refuseHeldSpawn({ sessionId: 'wt@@pane-1' })).resolves.toBeUndefined()
   }, 30_000)
 })

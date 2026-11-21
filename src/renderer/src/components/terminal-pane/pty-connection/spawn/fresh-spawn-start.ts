@@ -1,5 +1,5 @@
 import { applyTerminalLaunchResult } from '../startup/terminal-launch-result-policy'
-import { armPaneOwnerRetry, isPaneOwnerRefusal } from '../host-ownership/pane-owner-recovery'
+import { awaitSpawnRefusal, freshSpawnRefusal, noteFreshSpawnError } from './fresh-spawn-refusal'
 import type { SpawnDeferralReason } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useAppStore } from '@/store/index'
@@ -79,11 +79,10 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     session.transportConnectInFlightSince = Date.now()
     session.pendingSpawnDeferral = null
     const visibleAtSpawn = session.deps.isVisibleRef.current === true
-    let ownerRefused = false
+    let refusal: ReturnType<typeof freshSpawnRefusal> = null
     const outputCallbacks = session.captureTransportOutputCallbacks(
       (message: string) => {
-        ownerRefused ||= isPaneOwnerRefusal(message)
-        session.reportError(message)
+        refusal = noteFreshSpawnError(session, message) ?? refusal
       },
       toProcessExitStartup(coldRestoreOverride ?? effectiveStartup),
       coldRestoreOverride ?? effectiveStartup
@@ -264,7 +263,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       })
       .catch(async (error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
-        if (!ownerRefused && isPaneOwnerRefusal(message)) {
+        if (!refusal && freshSpawnRefusal(session, message)) {
           outputCallbacks.callbacks.onError(message)
         }
         releaseDeferredCwdFence(session)
@@ -299,10 +298,9 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
         ) {
           return
         }
-        if (ownerRefused) {
+        if (refusal) {
           const retry = () => session.startFreshSpawn(startupOverride, options)
-          armPaneOwnerRetry(session, outputCallbacks.generation, retry, startupOverride)
-          session.settlePaneAttachAttempt?.('failed')
+          awaitSpawnRefusal(session, refusal, outputCallbacks.generation, retry, startupOverride)
           return
         }
         if (session.deferredSpawn) {

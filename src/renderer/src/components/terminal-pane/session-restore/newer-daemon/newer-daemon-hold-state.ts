@@ -54,38 +54,97 @@ export function dismissHeldPaneBanner(paneKey: string): void {
   updatePanes([paneKey], { dismissed: true })
 }
 
+// Why batched: a restore burst holds many panes, and each write re-renders every shown banner's count.
+const HOLD_REGISTRATION_BATCH_MS = 16
+const pendingHolds = new Map<string, HeldPane>()
+let pendingHoldsFlush: ReturnType<typeof setTimeout> | null = null
+
+function flushPendingHolds(): void {
+  if (pendingHoldsFlush !== null) {
+    clearTimeout(pendingHoldsFlush)
+    pendingHoldsFlush = null
+  }
+  if (pendingHolds.size === 0) {
+    return
+  }
+  const added = Object.fromEntries(pendingHolds)
+  pendingHolds.clear()
+  newerDaemonHoldStore.setState(({ panes }) => ({ panes: { ...panes, ...added } }))
+}
+
+/** The hold host of a pane a paired server refused; it has no Reopen unless that server's frames give one. */
+export function serverHoldHost(environmentId: string): string {
+  return `server:${environmentId}`
+}
+
 /** Registers a held pane; the returned teardown forgets it if it unmounts while held. */
 export function holdPaneForNewerDaemon(
   paneKey: string,
-  pane: { resumable: boolean; release: () => Promise<HeldPaneReopenOutcome> }
+  pane: { resumable: boolean; release?: () => Promise<HeldPaneReopenOutcome> },
+  host: string = LOCAL_HOLD_HOST
 ): () => void {
-  newerDaemonHoldStore.setState(({ panes }) => ({
-    panes: {
-      ...panes,
-      [paneKey]: { ...pane, host: LOCAL_HOLD_HOST, phase: 'held', dismissed: false }
+  const held: HeldPane = { ...pane, host, phase: 'held', dismissed: false }
+  if (newerDaemonHoldStore.getState().panes[paneKey]) {
+    // A pane held again in place swaps its banner in one write, so it never blinks out.
+    pendingHolds.delete(paneKey)
+    newerDaemonHoldStore.setState(({ panes }) => ({ panes: { ...panes, [paneKey]: held } }))
+  } else {
+    pendingHolds.set(paneKey, held)
+    pendingHoldsFlush ??= setTimeout(flushPendingHolds, HOLD_REGISTRATION_BATCH_MS)
+  }
+  return () => {
+    const pending = pendingHolds.get(paneKey)
+    if (pending?.host === host && pending.release === pane.release) {
+      pendingHolds.delete(paneKey)
+      return
     }
-  }))
-  return () =>
+    const shown = newerDaemonHoldStore.getState().panes[paneKey]
+    // A stale teardown (its pane already released or re-held) must not publish a write.
+    if (shown?.host !== host || shown.release !== pane.release) {
+      return
+    }
     newerDaemonHoldStore.setState(({ panes }) => {
-      if (panes[paneKey]?.release !== pane.release) {
-        return {}
-      }
       const { [paneKey]: _forgotten, ...rest } = panes
       return { panes: rest }
     })
+  }
+}
+
+// Keyed by the panes record itself, so a replaced record and its pane callbacks are never kept alive.
+const heldCountsByPanes = new WeakMap<Record<string, HeldPane>, Map<string, number>>()
+
+/** Held panes per host, counted once per store write rather than once per banner. */
+function heldCountOnHost(panes: Record<string, HeldPane>, host: string): number {
+  let byHost = heldCountsByPanes.get(panes)
+  if (!byHost) {
+    byHost = new Map<string, number>()
+    for (const held of Object.values(panes)) {
+      byHost.set(held.host, (byHost.get(held.host) ?? 0) + 1)
+    }
+    heldCountsByPanes.set(panes, byHost)
+  }
+  return byHost.get(host) ?? 0
 }
 
 /** This pane's banner state, null when not held or dismissed; heldCount is every pane one Reopen releases. */
-export function useNewerDaemonHold(
-  paneKey: string
-): { resumable: boolean; phase: NewerDaemonHoldPhase; heldCount: number } | null {
+export function useNewerDaemonHold(paneKey: string): {
+  resumable: boolean
+  phase: NewerDaemonHoldPhase
+  heldCount: number
+  canReopen: boolean
+} | null {
   const pane = useStore(newerDaemonHoldStore, (state) => state.panes[paneKey])
-  const heldCount = useStore(
-    newerDaemonHoldStore,
-    (state) => Object.values(state.panes).filter((held) => held.host === pane?.host).length
+  // Why gated: a Retry-only banner shows no count, so it must not re-render as other panes are held.
+  const heldCount = useStore(newerDaemonHoldStore, (state) =>
+    pane && hostReopens.has(pane.host) ? heldCountOnHost(state.panes, pane.host) : 0
   )
   return pane && !pane.dismissed
-    ? { resumable: pane.resumable, phase: pane.phase, heldCount }
+    ? {
+        resumable: pane.resumable,
+        phase: pane.phase,
+        heldCount,
+        canReopen: hostReopens.has(pane.host)
+      }
     : null
 }
 
@@ -118,7 +177,7 @@ export function showServerHeldPanes(
   paneKeys: readonly string[],
   reopen: () => Promise<boolean>
 ): void {
-  const host = `server:${environmentId}`
+  const host = serverHoldHost(environmentId)
   if (paneKeys.length === 0) {
     hostReopens.delete(host)
   } else {
@@ -139,8 +198,22 @@ export function showServerHeldPanes(
   })
 }
 
+/** Starts one held pane again where its host's newer build can't be stopped from here. */
+export async function retryHeldPane(paneKey: string): Promise<void> {
+  flushPendingHolds()
+  const pane = newerDaemonHoldStore.getState().panes[paneKey]
+  if (!pane?.release || pane.phase === 'reopening') {
+    return
+  }
+  // Why the pane stays shown: its release forgets it once the retry settles, so a refusal never flickers.
+  updatePanes([paneKey], { phase: 'reopening' })
+  await pane.release().catch(() => updatePanes([paneKey], { phase: 'held' }))
+  flushPendingHolds()
+}
+
 /** Stops the newer build holding this pane, then lets each of that host's held panes start. */
 export async function reopenHeldTerminals(paneKey: string): Promise<void> {
+  flushPendingHolds()
   const { panes } = newerDaemonHoldStore.getState()
   // Never fall back to this machine’s service when a server-owned pane disappears.
   const host = panes[paneKey]?.host
@@ -159,6 +232,8 @@ export async function reopenHeldTerminals(paneKey: string): Promise<void> {
     updatePanes(attemptKeys, { phase: 'failed' })
     return
   }
+  // A pane refused while the stop ran is still batched; it is released with the rest.
+  flushPendingHolds()
   // A server's panes stay Reopening until its frames stop holding them.
   if (host !== LOCAL_HOLD_HOST) {
     return

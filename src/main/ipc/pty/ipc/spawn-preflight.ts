@@ -16,6 +16,14 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
   const args = ctx.args
   // Establish local daemon identity before yielding so early output can be hidden; SSH execution is rejected here.
   ctx.provider = getProvider(getConnectionExecutionHostId(args.connectionId))
+  // Refuse a saved id a newer daemon may still run before anything is prepared under it.
+  const held = ctx.provider.refuseHeldSpawn?.({
+    sessionId: args.sessionId,
+    attachOnly: args.attachOnlyView === true
+  })
+  if (held) {
+    await held
+  }
   ctx.isDaemonHostSpawn =
     !(ctx.provider instanceof LocalPtyProvider) && !routesFreshSpawnsToLocalProvider(ctx.provider)
   ctx.ownsNewIncarnation = args.sessionId === undefined && ctx.isDaemonHostSpawn

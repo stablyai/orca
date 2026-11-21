@@ -111,8 +111,7 @@ function connectDeferredSessionReattach(
         paneNotLive = true
         return
       }
-      // Why local only: a paired host refuses for its own daemon, which this window cannot stop.
-      if (!session.runtimeEnvironmentId && message.includes(NEWER_DAEMON_HOLD_ERROR)) {
+      if (message.includes(NEWER_DAEMON_HOLD_ERROR)) {
         heldByNewerDaemon = true
         return
       }
@@ -189,7 +188,7 @@ function connectDeferredSessionReattach(
             connectDeferredSessionReattach(session, deferredReattachSessionId, { userAct: true })
           )
         } else if (isCurrentReattach()) {
-          holdForNewerDaemon(session, deferredReattachSessionId, () =>
+          holdForNewerDaemon(session, deferredReattachSessionId, Boolean(resumeStartup), () =>
             connectDeferredSessionReattach(session, deferredReattachSessionId)
           )
         }

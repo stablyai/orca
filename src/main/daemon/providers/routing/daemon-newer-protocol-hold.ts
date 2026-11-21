@@ -8,12 +8,20 @@ import {
   listDaemonPidFileProtocols
 } from '../../launch/daemon-generation-liveness'
 import { getDaemonHistoryDir, getDaemonRuntimeDir } from '../../launch/daemon-launch-paths'
-import { getDaemonSocketPath, getDaemonTokenPath } from '../../launch/daemon-spawner'
+import {
+  getDaemonPidPath,
+  getDaemonSocketPath,
+  getDaemonTokenPath
+} from '../../launch/daemon-spawner'
+import { readFileSync } from 'node:fs'
+import { parseDaemonPidFile } from '../../endpoint/identity/daemon-pid-file-parse'
+import { inspectProcessLiveness } from '../../endpoint/identity/daemon-process-inspection'
 import { killStaleDaemon } from '../../launch/daemon-stale-kill'
 import { HistoryReader } from '../../history/restoration/history-reader'
 import { PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
 
 let heldProtocols: readonly number[] = []
+let heldDaemonPids = new Map<number, number>()
 let reopenInFlight: Promise<NewerDaemonReopenResult> | null = null
 
 /** Holds restores for every live or unverifiable newer daemon in this profile's runtime dir. */
@@ -25,9 +33,45 @@ export async function discoverNewerProtocolHolds(runtimeDir: string): Promise<vo
     versions.map((version) => classifyDaemonGeneration(runtimeDir, version))
   )
   heldProtocols = versions.filter((_, index) => verdicts[index] !== 'exited')
+  heldDaemonPids = new Map(
+    heldProtocols.flatMap((version) => {
+      const pid = readHeldDaemonPid(runtimeDir, version)
+      return pid === null ? [] : [[version, pid] as const]
+    })
+  )
+}
+
+// Only a pid read while the daemon was held can later prove its exit; a missing file proves nothing then.
+function readHeldDaemonPid(runtimeDir: string, version: number): number | null {
+  try {
+    const parsed = parseDaemonPidFile(readFileSync(getDaemonPidPath(runtimeDir, version), 'utf8'))
+    return parsed && Number.isInteger(parsed.pid) && parsed.pid > 0 ? parsed.pid : null
+  } catch {
+    return null
+  }
 }
 
 export function isHoldingForNewerProtocolDaemon(): boolean {
+  return heldProtocols.length > 0
+}
+
+function heldDaemonProcessGone(version: number): boolean {
+  const pid = heldDaemonPids.get(version)
+  return pid === undefined || inspectProcessLiveness(pid).status === 'exited'
+}
+
+/** Whether the hold still stands: a held daemon whose recorded process is gone has exited since startup. */
+export function recheckNewerProtocolHold(): boolean {
+  // A stop in progress removes its pid file before its terminals end; Reopen decides those exits itself.
+  if (heldProtocols.length === 0 || reopenInFlight) {
+    return heldProtocols.length > 0
+  }
+  const exited = heldProtocols.filter(
+    (version) => heldDaemonPids.has(version) && heldDaemonProcessGone(version)
+  )
+  if (exited.length > 0) {
+    heldProtocols = heldProtocols.filter((version) => !exited.includes(version))
+  }
   return heldProtocols.length > 0
 }
 
@@ -50,7 +94,8 @@ async function stopNewerProtocolDaemon(
 ): Promise<boolean> {
   const verdict = await classifyDaemonGeneration(runtimeDir, protocolVersion)
   if (verdict !== 'live') {
-    return verdict === 'exited'
+    // A stopping daemon unlinks its pid file before its terminals end; its remembered process must be gone too.
+    return verdict === 'exited' && heldDaemonProcessGone(protocolVersion)
   }
   const outcome = await killStaleDaemon(
     runtimeDir,
@@ -60,7 +105,8 @@ async function stopNewerProtocolDaemon(
   )
   return (
     !outcome.liveOwnerSurvived &&
-    (await classifyDaemonGeneration(runtimeDir, protocolVersion)) === 'exited'
+    (await classifyDaemonGeneration(runtimeDir, protocolVersion)) === 'exited' &&
+    heldDaemonProcessGone(protocolVersion)
   )
 }
 

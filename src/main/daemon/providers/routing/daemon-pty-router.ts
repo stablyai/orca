@@ -21,8 +21,7 @@ import type {
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
 import type { DaemonIdleRetirementResult } from '../adapter/daemon-pty-runtime-state'
 import { DaemonRouterRetirement } from './daemon-router-retirement'
-import { routeSpawnOrHold } from './daemon-router-newer-daemon-hold'
-import { findLegacySessionOwner } from './daemon-router-legacy-owner'
+import { DaemonRouterHeldSpawnGate } from './daemon-router-newer-daemon-hold'
 import { retireExitedLegacyAdapter, type ExitedLegacyVerdict } from './daemon-router-exited-legacy'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
@@ -82,11 +81,8 @@ export class DaemonPtyRouter implements IPtyProvider {
       if (opts.attachOnly && opts.sessionId) {
         return await this.ownerResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
       }
-      const adapter =
-        (opts.sessionId ? this.sessionAdapters.get(opts.sessionId) : undefined) ??
-        (await findLegacySessionOwner(opts, this.current, this.legacy, this.legacyExitProof))
-      const target = await routeSpawnOrHold(opts, adapter, this.current, this.ownerResolver)
-      const result = await target.spawn(opts)
+      const { target, spawn } = await this.heldSpawns.target(opts)
+      const result = await spawn()
       if (!result.exitedBeforeSpawnReply) {
         this.ownerResolver.recordRoute(result.id, target, result.incarnationId)
       }
@@ -95,6 +91,13 @@ export class DaemonPtyRouter implements IPtyProvider {
       this.retirement.spawnInFlight--
     }
   }
+
+  private readonly heldSpawns = new DaemonRouterHeldSpawnGate(() => {
+    const { sessionAdapters, current, legacy, legacyExitProof: exitProof, ownerResolver } = this
+    return { sessionAdapters, current, legacy, exitProof, ownerResolver }
+  })
+
+  refuseHeldSpawn = this.heldSpawns.refuse
 
   requestIdleRetirement(): Promise<DaemonIdleRetirementResult> {
     return this.retirement.requestIdleRetirement()
@@ -142,10 +145,9 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   hasPty(id: string): boolean {
     const routed = this.sessionAdapters.get(id)
-    if (routed) {
-      return routed.hasPty(id)
-    }
-    return this.current.hasPty(id) || this.legacy.some((adapter) => adapter.hasPty(id))
+    return routed
+      ? routed.hasPty(id)
+      : this.current.hasPty(id) || this.legacy.some((adapter) => adapter.hasPty(id))
   }
 
   getPtyAvailability(id: string): boolean | null {

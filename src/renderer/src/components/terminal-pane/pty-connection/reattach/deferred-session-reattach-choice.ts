@@ -1,4 +1,6 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { NEWER_DAEMON_HOLD_ERROR } from '../../../../../../shared/terminal/daemon/newer-daemon-hold'
+import { holdForNewerDaemon } from '../spawn/newer-daemon-hold-pane'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useAppStore } from '@/store/index'
 import { isWebTerminalSurfaceTabId } from '../../../../../../shared/workspace-layout/terminal-surface-id'
@@ -121,13 +123,26 @@ export function runDeferredSessionReattachChoice(session: ConnectPanePtySession)
     try {
       session.clearPaneMode2031State()
       session.clearHiddenOutputRestoreState()
-      const outputCallbacks = session.captureTransportOutputCallbacks(session.reportError, null)
-      session.transport.attach({
-        existingPtyId: attachPtyId,
-        cols: session.cols,
-        rows: session.rows,
-        callbacks: outputCallbacks.callbacks
-      })
+      const attachDetached = (): void => {
+        const outputCallbacks = session.captureTransportOutputCallbacks((message: string) => {
+          // A host holding this pane for its newer Orca shows the hold, and Try again re-attaches.
+          if (message.includes(NEWER_DAEMON_HOLD_ERROR)) {
+            holdForNewerDaemon(session, null, false, async () => {
+              attachDetached()
+              return { reopened: true, agentResumed: false }
+            })
+            return
+          }
+          session.reportError(message)
+        }, null)
+        session.transport.attach({
+          existingPtyId: attachPtyId,
+          cols: session.cols,
+          rows: session.rows,
+          callbacks: outputCallbacks.callbacks
+        })
+      }
+      attachDetached()
       const attachedPtyId = session.transport.getPtyId() ?? attachPtyId
       session.bindActivePanePty(attachedPtyId, {
         updateTabPtyId: 'if-missing',
