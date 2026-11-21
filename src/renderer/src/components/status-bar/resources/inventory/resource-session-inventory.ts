@@ -65,70 +65,84 @@ function sameListedSession(before: DaemonSession, after: DaemonSession): boolean
   )
 }
 
+type ListedIncarnation = {
+  listing: number
+  firstIdentity: string
+  identities: Set<string>
+}
+
+export type ListedIncarnations = Map<string, ListedIncarnation>
+
 export function reconcileResourceSessionListing(
   sessions: readonly DaemonSession[],
   previous: ReadonlyMap<string, DaemonSession>,
+  incarnations: ListedIncarnations,
+  listing: number,
   tombstones: ReadonlySet<string>,
   { compareExisting, trackRemovals }: { compareExisting: boolean; trackRemovals: boolean }
 ) {
   const deduped = new Map<string, DaemonSession>()
-  const identitiesByIncarnation = new Map<string, Set<string>>()
-  const previousEntries = previous.entries()
-  let nextPrevious = previousEntries.next()
-  let unchanged = compareExisting && sessions.length === previous.size
+  const previousAliases = new Map<string, ReadonlySet<string>>()
   let pendingRefresh = false
   let retained = 0
+  let observedIncarnations = 0
   for (const session of sessions) {
     const identity = ptySessionIdentity(session)
     const incarnation = ptySessionIdentity({
       id: session.id,
       incarnationId: session.incarnationId
     })
-    const priorSize = deduped.size
-    deduped.set(identity, session)
-    if (deduped.size === priorSize) {
-      unchanged = false
-    } else if (trackRemovals || unchanged) {
-      if (!nextPrevious.done && nextPrevious.value[0] === identity) {
-        retained += 1
-        unchanged &&= sameListedSession(nextPrevious.value[1], session)
-        nextPrevious = previousEntries.next()
-      } else {
-        unchanged = false
-        // An append needs no lookup once the previous order has been consumed.
-        if (trackRemovals && !nextPrevious.done && previous.has(identity)) {
+    let entry = incarnations.get(incarnation)
+    if (entry?.listing !== listing) {
+      observedIncarnations += 1
+      if (trackRemovals && entry) {
+        if (entry.firstIdentity === identity || entry.identities.has(identity)) {
           retained += 1
         }
+        if (entry.identities.size > 1 || entry.firstIdentity !== identity) {
+          previousAliases.set(incarnation, entry.identities)
+        }
       }
+      entry = { listing, firstIdentity: identity, identities: new Set() }
+      incarnations.set(incarnation, entry)
+    } else if (
+      trackRemovals &&
+      !entry.identities.has(identity) &&
+      previousAliases.get(incarnation)?.has(identity)
+    ) {
+      retained += 1
     }
-    const identities = identitiesByIncarnation.get(incarnation) ?? new Set<string>()
-    identities.add(identity)
-    identitiesByIncarnation.set(incarnation, identities)
+    entry.identities.add(identity)
+    deduped.set(identity, session)
   }
-  for (const [incarnation, identities] of identitiesByIncarnation) {
-    if (!tombstones.has(incarnation)) {
+  for (const incarnation of tombstones) {
+    const entry = incarnations.get(incarnation)
+    if (entry?.listing !== listing) {
       continue
     }
-    if (identities.size > 1) {
+    if (entry.identities.size > 1) {
       pendingRefresh = true
       continue
     }
-    for (const identity of identities) {
-      deduped.delete(identity)
-      if (trackRemovals && previous.has(identity)) {
-        retained -= 1
+    deduped.delete(entry.firstIdentity)
+    incarnations.delete(incarnation)
+    observedIncarnations -= 1
+    if (trackRemovals && previous.has(entry.firstIdentity)) {
+      retained -= 1
+    }
+  }
+  // The existing incarnation lookup tracks membership as rows arrive, so additions need no old-map walk.
+  if (observedIncarnations < incarnations.size) {
+    for (const [incarnation, entry] of incarnations) {
+      if (entry.listing !== listing) {
+        incarnations.delete(incarnation)
       }
     }
-    identitiesByIncarnation.delete(incarnation)
   }
-  if (
-    compareExisting &&
-    !unchanged &&
-    sessions.length !== deduped.size &&
-    deduped.size === previous.size
-  ) {
+  let unchanged = false
+  if (compareExisting && deduped.size === previous.size) {
     const old = previous.values()
     unchanged = deduped.values().every((session) => sameListedSession(old.next().value!, session))
   }
-  return { deduped, identitiesByIncarnation, unchanged, retained, pendingRefresh }
+  return { deduped, unchanged, retained, pendingRefresh }
 }

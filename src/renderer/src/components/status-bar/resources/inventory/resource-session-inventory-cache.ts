@@ -7,6 +7,7 @@ import { isResourceViewInactive } from '../../../../../../shared/diagnostics/res
 import { isProvenProcessExit } from '../../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import {
   type DaemonSessionInventory,
+  type ListedIncarnations,
   EMPTY_DAEMON_SESSION_INVENTORY,
   inventoryFromSessions,
   reconcileResourceSessionListing
@@ -31,7 +32,8 @@ export class ResourceSessionInventoryCache {
   private listeners = new Set<() => void>()
   private removalListeners = new Map<(identity: string) => void, () => boolean>()
   private known = new Map<string, PtyListedSession>()
-  private identitiesByIncarnation = new Map<string, Set<string>>()
+  private readonly identitiesByIncarnation: ListedIncarnations = new Map()
+  private listing = 0
   // Suppression belongs only to the current listing, never to later authoritative results.
   private tombstones = new Set<string>()
   private epoch = 0
@@ -160,11 +162,14 @@ export class ResourceSessionInventoryCache {
         const trackRemovals =
           previous.size > 0 &&
           this.removalListeners.values().some((hasTrackedIdentities) => hasTrackedIdentities())
-        const { deduped, identitiesByIncarnation, unchanged, retained, pendingRefresh } =
-          reconcileResourceSessionListing(sessions, previous, this.tombstones, {
-            compareExisting: !this.inventoryChanged,
-            trackRemovals
-          })
+        const { deduped, unchanged, retained, pendingRefresh } = reconcileResourceSessionListing(
+          sessions,
+          previous,
+          this.identitiesByIncarnation,
+          ++this.listing,
+          this.tombstones,
+          { compareExisting: !this.inventoryChanged, trackRemovals }
+        )
         this.pendingRefresh ||= pendingRefresh
         const patch = {
           sessionsError: false,
@@ -175,7 +180,6 @@ export class ResourceSessionInventoryCache {
           return
         }
         this.known = deduped
-        this.identitiesByIncarnation = identitiesByIncarnation
         // A title change or addition never needs to walk the old identities.
         if (trackRemovals && retained < previous.size) {
           for (const identity of previous.keys()) {
@@ -223,7 +227,7 @@ export class ResourceSessionInventoryCache {
     if (event.ptySourceDisowned || !isProvenProcessExit(event.code)) {
       return
     }
-    const identities = this.identitiesByIncarnation.get(ptySessionIdentity(event))
+    const identities = this.identitiesByIncarnation.get(ptySessionIdentity(event))?.identities
     if (
       !event.incarnationId &&
       (this.localOnly ||
@@ -248,7 +252,7 @@ export class ResourceSessionInventoryCache {
 
   private removeIdentity(id: string, incarnationId?: string): boolean {
     const incarnation = ptySessionIdentity({ id, incarnationId })
-    const identities = this.identitiesByIncarnation.get(incarnation)
+    const identities = this.identitiesByIncarnation.get(incarnation)?.identities
     if (identities && identities.size > 1) {
       this.invalidate()
       return false
