@@ -17,4 +17,16 @@ describe('agent process registry', () => {
     releaseNew()
     expect(listAgentProcessRoots()).toEqual([])
   })
+
+  it('never shows the old chat on a reused pid, even after the new run ends first', () => {
+    const releaseOld = registerAgentProcess(4343)
+    noteAgentProcessChat(4343, 'old-chat')
+    const releaseNew = registerAgentProcess(4343)
+
+    expect(listAgentProcessRoots()).toEqual([{ pid: 4343, agentSessionId: null }])
+    releaseNew()
+    expect(listAgentProcessRoots()).toEqual([])
+    releaseOld()
+    expect(listAgentProcessRoots()).toEqual([])
+  })
 })
