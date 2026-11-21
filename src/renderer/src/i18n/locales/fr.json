@@ -20176,7 +20176,6 @@
         "copyFailed": "Échec de la copie",
         "copyIdentity": "Copier {{value0}}",
         "detachedCommit": "Commit {{head}} (pas une branche)",
-        "folder": "Dossier",
         "mainCheckout": "Copie principale",
         "turnWorking": "L’agent de ce chat est en cours d’exécution. Changez de branche une fois son tour terminé.",
         "worktree": "Worktree"

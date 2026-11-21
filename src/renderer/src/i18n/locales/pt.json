@@ -21595,7 +21595,6 @@
         "copyFailed": "Falha ao copiar",
         "copyIdentity": "Copiar {{value0}}",
         "detachedCommit": "Commit {{head}} (não é uma branch)",
-        "folder": "Pasta",
         "mainCheckout": "Checkout principal",
         "turnWorking": "O agente deste chat está trabalhando. Troque de branch quando o turno dele terminar.",
         "worktree": "Worktree"

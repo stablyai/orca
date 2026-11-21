@@ -20284,7 +20284,6 @@
         "copyFailed": "Kopyalanamadı",
         "copyIdentity": "{{value0}} kopyala",
         "detachedCommit": "Commit {{head}} (dal değil)",
-        "folder": "Klasör",
         "mainCheckout": "Ana çalışma kopyası",
         "turnWorking": "Bu sohbetin ajanı çalışıyor. Dalı, sırası bittikten sonra değiştirin.",
         "worktree": "Worktree"
