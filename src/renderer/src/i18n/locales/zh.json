@@ -778,42 +778,9 @@
       "invalidArchive": "文件存在，但 Orca 找不到有效的设置或归档脚本"
     },
     "uninstall": {
-      "searchDescription": "移除智能体钩子、orca 命令、orca serve 服务器和 SSH 主机上的钩子",
-      "closesTerminals": "打开的终端将会关闭",
-      "rows": {
-        "hooksIn": "{{targets}}的钩子",
-        "service": "<cmd>orca serve</cmd> 服务器",
-        "terminalDaemon": "终端后台进程",
-        "cliCommand": "PATH 中的 <cmd>{{name}}</cmd> 命令行工具",
-        "hookScripts": "钩子脚本"
-      },
-      "hookTargets": {
-        "agents_other": "{{count}} 个智能体",
-        "sshHosts_other": "{{count}} 个 SSH 主机"
-      },
-      "path": {
-        "codexAccount": "Orca 管理的 Codex 账户",
-        "appData": "Orca 应用数据"
-      },
-      "host": {
-        "notConnected": "未连接",
-        "notConnectedRetry": "未连接。请连接此主机，然后点击“重试”",
-        "connected": "已连接"
-      },
-      "summary": {
-        "hooksIn": "{{targets}}的钩子",
-        "service": "<cmd>orca serve</cmd> 服务器",
-        "terminalDaemon": "终端后台进程",
-        "cliCommand": "<cmd>{{name}}</cmd> 命令行工具",
-        "hookScripts": "钩子脚本",
-        "nothing": "应用之外没有需要移除的内容",
-        "loading": "正在检查 Orca 安装了哪些内容…",
-        "done": "已移除，删除应用即可完成卸载",
-        "problems_other": "删除应用前，还有 {{count}} 项需要你处理",
-        "stillInUse": "部分 Orca 文件仍在使用中，暂时保留"
-      },
       "groupTitle": "卸载",
       "title": "卸载 Orca",
+      "searchDescription": "移除智能体钩子、orca 命令、orca serve 服务器和 SSH 主机上的钩子",
       "keywords": {
         "uninstall": "卸载",
         "remove": "移除",
@@ -837,10 +804,43 @@
       "tryAgain": "重试",
       "keeps": "项目、工作树和 Orca 设置会保留",
       "keepsShared": "{{name}} 也已安装，因此与它共用的钩子也会保留",
+      "closesTerminals": "打开的终端将会关闭",
       "removing": "正在移除…",
       "button": "卸载",
       "uninstalling": "正在卸载…",
+      "rows": {
+        "hooksIn": "{{targets}}的钩子",
+        "cliCommand": "PATH 中的 <cmd>{{name}}</cmd> 命令行工具",
+        "service": "<cmd>orca serve</cmd> 服务器",
+        "hookScripts": "钩子脚本",
+        "terminalDaemon": "终端后台进程"
+      },
       "retry": "重试",
+      "hookTargets": {
+        "agents_other": "{{count}} 个智能体",
+        "sshHosts_other": "{{count}} 个 SSH 主机"
+      },
+      "path": {
+        "codexAccount": "Orca 管理的 Codex 账户",
+        "appData": "Orca 应用数据"
+      },
+      "host": {
+        "connected": "已连接",
+        "notConnected": "未连接",
+        "notConnectedRetry": "未连接。请连接此主机，然后点击“重试”"
+      },
+      "summary": {
+        "hooksIn": "{{targets}}的钩子",
+        "cliCommand": "<cmd>{{name}}</cmd> 命令行工具",
+        "service": "<cmd>orca serve</cmd> 服务器",
+        "terminalDaemon": "终端后台进程",
+        "hookScripts": "钩子脚本",
+        "nothing": "应用之外没有需要移除的内容",
+        "loading": "正在检查 Orca 安装了哪些内容…",
+        "done": "已移除，删除应用即可完成卸载",
+        "problems_other": "删除应用前，还有 {{count}} 项需要你处理",
+        "stillInUse": "部分 Orca 文件仍在使用中，暂时保留"
+      },
       "status": {
         "running": "正在移除",
         "done": "完成",
@@ -1293,8 +1293,8 @@
         "own": "{{bot}} 自己的技能",
         "ownNone": "还没有自己的技能",
         "ownShort": "自有技能",
-        "notLoaded": "没有智能体加载它",
-        "showMore": "再显示 {{count}} 个"
+        "showMore": "再显示 {{count}} 个",
+        "notLoaded": "没有智能体加载它"
       },
       "askNewHomeChat": "开始新的主聊天前询问",
       "askNewHomeChatDescription": "在“新的主聊天”替换机器人当前的对话之前进行确认",
@@ -20689,9 +20689,9 @@
         "blocked": "目标受阻",
         "limited": "目标受限",
         "attachmentsUnsupported": "在设定目标之前删除附件",
-        "set": "目标已设定",
         "checks_other": "{{count}} 次检查",
-        "last-check": "上次目标检查"
+        "last-check": "上次目标检查",
+        "set": "目标已设定"
       },
       "fileLinks": {
         "notFound": "未找到文件：{{value0}}",
@@ -21169,26 +21169,6 @@
         "via": "{{name}}（通过 {{bot}}）",
         "you": "你"
       },
-      "automationSaved": {
-        "resultsInRuns": "结果留在每次运行中",
-        "paused": "已暂停",
-        "webhookHint": "将你的服务指向此 URL",
-        "gettingUrl": "正在获取 URL…",
-        "editDraft": "修改“{{name}}”，让它 ",
-        "resultsInEachRun": "在每次运行中",
-        "resultsChat": "聊天",
-        "noRuns": "尚无运行",
-        "recentRuns": "最近运行",
-        "when": "运行时机",
-        "results": "结果",
-        "agent": "智能体",
-        "runNow": "立即运行",
-        "loading": "加载中",
-        "deleted": "此自动化已被删除",
-        "loadFailed": "无法读取此自动化",
-        "openFullPage": "打开页面",
-        "onAgent": "由 {{name}} 运行"
-      },
       "creationChatNotOpened": "你的工作树已就绪，但聊天未能打开，请重试以打开聊天并带上你的消息",
       "usage": {
         "description": "显示此聊天所用 Codex 账户的用量",
@@ -21516,6 +21496,26 @@
         "agyHint": "此聊天在此主机上运行 Antigravity CLI，其他登录方式仅适用于新聊天",
         "confirmSignIn": "使用 Google 登录？"
       },
+      "automationSaved": {
+        "resultsInRuns": "结果留在每次运行中",
+        "paused": "已暂停",
+        "webhookHint": "将你的服务指向此 URL",
+        "gettingUrl": "正在获取 URL…",
+        "editDraft": "修改“{{name}}”，让它 ",
+        "resultsInEachRun": "在每次运行中",
+        "resultsChat": "聊天",
+        "noRuns": "尚无运行",
+        "recentRuns": "最近运行",
+        "when": "运行时机",
+        "results": "结果",
+        "agent": "智能体",
+        "runNow": "立即运行",
+        "loading": "加载中",
+        "deleted": "此自动化已被删除",
+        "loadFailed": "无法读取此自动化",
+        "openFullPage": "打开页面",
+        "onAgent": "由 {{name}} 运行"
+      },
       "botContext": {
         "soul": "已应用更新后的灵魂",
         "memory": "记忆已在此聊天之外编辑"
@@ -21529,11 +21529,11 @@
         "connectService": "连接 {{service}}",
         "connected": "已连接",
         "connectedIn": "已在 {{places}} 中连接",
+        "pausedStatus": "已暂停",
         "addOrg": "添加组织",
         "addWorkspace": "添加工作区",
         "githubAsYou": "它也可以通过你的 gh 登录，以你的身份在 GitHub 上工作",
-        "linearAsYou": "它也可以通过你自己在 Orca 中的 Linear 登录，以你的身份在 Linear 中工作",
-        "pausedStatus": "已暂停"
+        "linearAsYou": "它也可以通过你自己在 Orca 中的 Linear 登录，以你的身份在 Linear 中工作"
       },
       "toolAdded": {
         "removed": "已移除",
@@ -22616,16 +22616,16 @@
           "sectionDescription": "{{host}} 为其智能体和终端发出的通知"
         }
       },
-      "hostScope": {
-        "updateHostToChange": "请更新 {{host}} 上的 Orca 以在那里更改此设置",
-        "updateFailed": "无法更新 {{host}} 上的设置"
-      },
       "orcaAccount": {
         "server": {
           "sectionDescription": "{{host}} 运行时所用的 Orca 账户，用于其机器人的 Slack、GitHub、Linear 和 Webhook",
           "unread": "无法读取 {{host}} 的 Orca 账户。请更新或重新连接 {{host}}",
           "signInThere": "在 {{host}} 上运行 `orca auth login` 以登录"
         }
+      },
+      "hostScope": {
+        "updateHostToChange": "请更新 {{host}} 上的 Orca 以在那里更改此设置",
+        "updateFailed": "无法更新 {{host}} 上的设置"
       },
       "git": {
         "branchPrefixHostGitUsername": "{{host}} 上的 Git 用户名"
@@ -23410,6 +23410,13 @@
       "keptTitle": "已启用新卡片",
       "keptBody": "可在这里的“卡片样式”中更改。"
     },
+    "botsSplit": {
+      "resize": "调整机器人和项目区域的大小"
+    },
+    "projectsSection": {
+      "collapse": "折叠 {{title}}",
+      "expand": "展开 {{title}}"
+    },
     "worktreeCardsUpdateNotice": {
       "newLabel": "新功能",
       "title": "工作树卡片",
@@ -23605,13 +23612,6 @@
       "detailsRow": "详情行",
       "workspaceUnread": "此工作区中有未读内容",
       "unreadTab": "未读标签页"
-    },
-    "botsSplit": {
-      "resize": "调整机器人和项目区域的大小"
-    },
-    "projectsSection": {
-      "collapse": "折叠 {{title}}",
-      "expand": "展开 {{title}}"
     }
   },
   "editor": {
@@ -24307,131 +24307,6 @@
     "copy": "复制",
     "delete": "删除"
   },
-  "terminal": {
-    "recentImages": {
-      "pasted": "粘贴的图片",
-      "open": "打开预览",
-      "copyPath": "复制路径",
-      "setting": "粘贴和拖放的图片预览",
-      "settingDescription": "粘贴或拖放本地图片后，在窗格标题栏中显示最近的图片"
-    },
-    "sessionSaveFailure": {
-      "title": "无法保存终端会话",
-      "capacity": "保存该终端的设备报告存储空间已满或超出存储配额，该设备上有可用空间，然后重试",
-      "unknown": "Orca 无法保存最终状态，再试一次，如果这种情况持续存在，请与支持人员共享 Orca 日志，以便我们找出原因"
-    },
-    "codexTerminalServerIsolationNotice": {
-      "title": "Orca 现在无需共享服务器即可运行 Codex",
-      "description": "这使得代理状态更加可靠，您可以在“设置”中将其重新打开",
-      "openSettings": "打开设置"
-    },
-    "codexSharedSettingsNotice": {
-      "title": "Orca 中的 Codex 现在使用 ~/.codex",
-      "description": "Codex 可能会再次要求信任文件夹或批准命令，重新添加您仅在 Orca 中添加的所有 MCP 服务器",
-      "dismiss": "关闭"
-    },
-    "codexSharedServerBanner": {
-      "title": "此 Codex 与您的其他 Codex 选项卡共享服务器",
-      "body": "会话可能会意外结束，并且代理状态可能会错误",
-      "openedBeforeUpdateBody": "这个终端是在 Orca 开始为每个 Codex 提供自己的服务器之前打开的",
-      "oldTerminalDialogTitle": "为什么此 Codex 共享服务器",
-      "oldTerminalDialogRisk": "共享服务器的 Codex 会话可能会一起结束，并且代理状态可能会错误",
-      "oldTerminalDialogCause": "较旧的终端仍然共享 Codex 服务器，打开一个新终端以在单独的服务器上运行 Codex",
-      "fix": "使固定",
-      "copied": "已复制",
-      "turningOff": "正在关闭…",
-      "stopServer": "停止服务器",
-      "stopping": "停止…",
-      "cancel": "取消",
-      "copyCommand": "复制命令",
-      "howToUndo": "如何撤销",
-      "undoRun": "要重新开启共享，请运行：",
-      "turnOffSharing": "关闭共享",
-      "dialogQuestion": "让每个 Codex 标签页使用自己的服务器？",
-      "stopSummary": "停止正在运行的服务器，并关闭所有使用它的 Codex 会话。",
-      "dialogSummary": "关闭 Codex 服务器共享，在 Orca 之外也会生效。",
-      "alsoStop": "同时停止正在运行的服务器（会关闭所有使用它的 Codex 会话，包括 Orca 之外的）",
-      "couldNotTurnOff": "无法关闭共享。",
-      "stopFailedAfterOff": "共享已关闭，但服务器未停止。",
-      "turnOffAndStop": "Turn off and stop server"
-    },
-    "paneMove": {
-      "failed": "无法将窗格移动到新选项卡"
-    },
-    "paneTopBanner": {
-      "openNewTerminal": "打开新终端",
-      "learnMore": "了解更多",
-      "dontShowAgain": "不再显示",
-      "dismiss": "关闭"
-    },
-    "claudeOldTerminalBanner": {
-      "title": "此终端是在 Orca 的 Claude 账户更新之前打开的，因此这里的 claude 使用系统默认的登录信息",
-      "dialogTitle": "为何这里的 claude 不使用所选账户",
-      "dialogDescription": "Orca 现在将每个 Claude 账户保存在各自的文件夹中，新终端中的 claude 会遵循您选择的账户",
-      "dialogCause": "在此更新之前打开的终端不会如此，因此这里的 claude 使用系统默认的登录信息登录，请打开新终端以使用所选账户"
-    },
-    "newerDaemonBanner": {
-      "failedTitle": "无法重新打开此终端",
-      "title": "此终端是在较新版本的 Orca 中打开的",
-      "resumableBody": "在此重新打开以继续工作，您的代理会话将会恢复",
-      "reopening": "正在重新打开…",
-      "tryAgain": "重试",
-      "reopenTerminal_one": "重新打开终端",
-      "reopenTerminal_other": "重新打开 {{count}} 个终端",
-      "reopened_one": "已重新打开 {{count}} 个终端",
-      "reopened_other": "已重新打开 {{count}} 个终端",
-      "resumed_one": "已恢复 {{count}} 个智能体会话",
-      "resumed_other": "已恢复 {{count}} 个智能体会话",
-      "reopenTerminal": "重新打开 {{count}} 个终端",
-      "reopened": "已重新打开 {{count}} 个终端",
-      "resumed": "已恢复 {{count}} 个智能体会话"
-    },
-    "severedDaemonBanner": {
-      "unknownCount": "其正在运行的终端",
-      "unverifiable": "Orca 无法验证终端服务进程，因此未停止任何内容",
-      "alreadyReplaced": "终端服务已被替换，未停止任何内容",
-      "restarted": "终端服务已重新启动",
-      "failed": "重新启动失败",
-      "title": "终端服务在缺少其程序文件的情况下运行",
-      "body": "此计算机上的终端服务是从一个已不再挂载的 AppImage 启动的，它仍在运行 {{sessions}}，但随时可能崩溃，在您重新启动它之前，Orca 退出时新终端不会被保留",
-      "restart": "重新启动终端守护进程",
-      "dismiss": "关闭",
-      "confirmTitle": "重新启动终端守护进程？",
-      "confirmBody": "重新启动会结束 {{sessions}} 中运行的所有进程，支持恢复的代理之后可以恢复，shell 和其他作业则不能，必须重新启动，请在代理空闲时执行此操作",
-      "cancel": "取消",
-      "confirm": "重启并结束进程",
-      "count_other": "{{count}} 个正在运行的终端",
-      "count_one": "{{count}} 个运行中的终端",
-      "count": "{{count}} 个正在运行的终端"
-    },
-    "restartedInputNotSent": "终端在您输入时重新启动，部分输入可能未送达，请先查看新的 shell，再重新输入",
-    "typingBeforeStartNotSent": "终端启动期间输入的部分按键未发送",
-    "stalledDaemonBanner": {
-      "body": "此电脑上的后台工作已停滞，输入和新终端可能无法工作，重启终端服务会结束其正在运行的终端和命令",
-      "review": "查看重启选项",
-      "title": "终端服务可能需要重启"
-    },
-    "claudeDiffPanelNotice": {
-      "gotIt": "知道了",
-      "title": "Claude Code 在较宽的终端中会在聊天旁打开自己的差异面板，那个面板属于 Claude，而不是 Orca",
-      "body": "要隐藏它，请在 Claude Code 中输入 /diff，Claude 会在之后的会话中记住这一选择"
-    },
-    "windowsFontWeight": {
-      "title": "Windows 上的终端文字现在更细了",
-      "okay": "好的",
-      "lighterText": "更细的终端文字"
-    },
-    "claudeThemeSyncOffer": {
-      "title": "让 Claude Code 匹配你的 Orca 主题？",
-      "description": "此计算机上的 Claude Code 将使用你的终端配色并跟随主题变化（包括在 Orca 之外），你可以在设置中更改此项",
-      "accept": "匹配主题",
-      "accepted": "Claude Code 主题同步已开启",
-      "acceptedDescription": "此计算机上新的 Claude Code 会话将使用你的 Orca 主题",
-      "decline": "不用了",
-      "failed": "无法开启 Claude Code 主题同步",
-      "failedDescription": "请在设置中开启"
-    }
-  },
   "fileExplorer": {
     "root": {
       "label": "文件浏览器根目录",
@@ -24612,13 +24487,13 @@
       "terminalDescriptionChats": "使用 agy 自己保存的账户。切换会应用于新的 agy 会话和 Antigravity 聊天",
       "terminalDescriptionNoChats": "使用 agy 自己保存的账户。切换会应用于新的 agy 会话，但不会应用于 Antigravity 聊天",
       "addAccountHelp": "要添加账户，请在 agy 中运行 /logout 并重新登录，然后在这里点击“保存”",
-      "apiKeyGet": "获取 API 密钥",
       "googleSignIn": "Google 账户登录",
       "googleSignInAgy": "agy 自带的登录",
       "googleSignInAgyOption": "通过运行 agy 登录",
       "googleSignInOrca": "Orca 内置登录",
       "googleSignInOrcaOption": "在此通过浏览器登录，无需 agy",
-      "googleSignInUpdateFailed": "无法更改 Antigravity 使用 Google 登录的方式"
+      "googleSignInUpdateFailed": "无法更改 Antigravity 使用 Google 登录的方式",
+      "apiKeyGet": "获取 API 密钥"
     },
     "claude": {
       "added": "已添加账户，选择它即可将其用于您下次启动的 Claude",
@@ -24725,6 +24600,131 @@
   },
   "osDocumentOpen": {
     "failed": "无法打开文件"
+  },
+  "terminal": {
+    "recentImages": {
+      "pasted": "粘贴的图片",
+      "open": "打开预览",
+      "copyPath": "复制路径",
+      "setting": "粘贴和拖放的图片预览",
+      "settingDescription": "粘贴或拖放本地图片后，在窗格标题栏中显示最近的图片"
+    },
+    "sessionSaveFailure": {
+      "title": "无法保存终端会话",
+      "capacity": "保存该终端的设备报告存储空间已满或超出存储配额，该设备上有可用空间，然后重试",
+      "unknown": "Orca 无法保存最终状态，再试一次，如果这种情况持续存在，请与支持人员共享 Orca 日志，以便我们找出原因"
+    },
+    "codexTerminalServerIsolationNotice": {
+      "title": "Orca 现在无需共享服务器即可运行 Codex",
+      "description": "这使得代理状态更加可靠，您可以在“设置”中将其重新打开",
+      "openSettings": "打开设置"
+    },
+    "codexSharedSettingsNotice": {
+      "title": "Orca 中的 Codex 现在使用 ~/.codex",
+      "description": "Codex 可能会再次要求信任文件夹或批准命令，重新添加您仅在 Orca 中添加的所有 MCP 服务器",
+      "dismiss": "关闭"
+    },
+    "codexSharedServerBanner": {
+      "title": "此 Codex 与您的其他 Codex 选项卡共享服务器",
+      "body": "会话可能会意外结束，并且代理状态可能会错误",
+      "openedBeforeUpdateBody": "这个终端是在 Orca 开始为每个 Codex 提供自己的服务器之前打开的",
+      "oldTerminalDialogTitle": "为什么此 Codex 共享服务器",
+      "oldTerminalDialogRisk": "共享服务器的 Codex 会话可能会一起结束，并且代理状态可能会错误",
+      "oldTerminalDialogCause": "较旧的终端仍然共享 Codex 服务器，打开一个新终端以在单独的服务器上运行 Codex",
+      "fix": "使固定",
+      "copied": "已复制",
+      "turningOff": "正在关闭…",
+      "stopServer": "停止服务器",
+      "stopping": "停止…",
+      "cancel": "取消",
+      "copyCommand": "复制命令",
+      "howToUndo": "如何撤销",
+      "undoRun": "要重新开启共享，请运行：",
+      "turnOffSharing": "关闭共享",
+      "dialogQuestion": "让每个 Codex 标签页使用自己的服务器？",
+      "stopSummary": "停止正在运行的服务器，并关闭所有使用它的 Codex 会话。",
+      "dialogSummary": "关闭 Codex 服务器共享，在 Orca 之外也会生效。",
+      "alsoStop": "同时停止正在运行的服务器（会关闭所有使用它的 Codex 会话，包括 Orca 之外的）",
+      "couldNotTurnOff": "无法关闭共享。",
+      "stopFailedAfterOff": "共享已关闭，但服务器未停止。",
+      "turnOffAndStop": "Turn off and stop server"
+    },
+    "paneMove": {
+      "failed": "无法将窗格移动到新选项卡"
+    },
+    "paneTopBanner": {
+      "openNewTerminal": "打开新终端",
+      "learnMore": "了解更多",
+      "dontShowAgain": "不再显示",
+      "dismiss": "关闭"
+    },
+    "claudeOldTerminalBanner": {
+      "title": "此终端是在 Orca 的 Claude 账户更新之前打开的，因此这里的 claude 使用系统默认的登录信息",
+      "dialogTitle": "为何这里的 claude 不使用所选账户",
+      "dialogDescription": "Orca 现在将每个 Claude 账户保存在各自的文件夹中，新终端中的 claude 会遵循您选择的账户",
+      "dialogCause": "在此更新之前打开的终端不会如此，因此这里的 claude 使用系统默认的登录信息登录，请打开新终端以使用所选账户"
+    },
+    "newerDaemonBanner": {
+      "failedTitle": "无法重新打开此终端",
+      "title": "此终端是在较新版本的 Orca 中打开的",
+      "resumableBody": "在此重新打开以继续工作，您的代理会话将会恢复",
+      "reopening": "正在重新打开…",
+      "tryAgain": "重试",
+      "reopenTerminal_one": "重新打开终端",
+      "reopenTerminal_other": "重新打开 {{count}} 个终端",
+      "reopened_one": "已重新打开 {{count}} 个终端",
+      "reopened_other": "已重新打开 {{count}} 个终端",
+      "resumed_one": "已恢复 {{count}} 个智能体会话",
+      "resumed_other": "已恢复 {{count}} 个智能体会话",
+      "reopenTerminal": "重新打开 {{count}} 个终端",
+      "reopened": "已重新打开 {{count}} 个终端",
+      "resumed": "已恢复 {{count}} 个智能体会话"
+    },
+    "severedDaemonBanner": {
+      "unknownCount": "其正在运行的终端",
+      "unverifiable": "Orca 无法验证终端服务进程，因此未停止任何内容",
+      "alreadyReplaced": "终端服务已被替换，未停止任何内容",
+      "restarted": "终端服务已重新启动",
+      "failed": "重新启动失败",
+      "title": "终端服务在缺少其程序文件的情况下运行",
+      "body": "此计算机上的终端服务是从一个已不再挂载的 AppImage 启动的，它仍在运行 {{sessions}}，但随时可能崩溃，在您重新启动它之前，Orca 退出时新终端不会被保留",
+      "restart": "重新启动终端守护进程",
+      "dismiss": "关闭",
+      "confirmTitle": "重新启动终端守护进程？",
+      "confirmBody": "重新启动会结束 {{sessions}} 中运行的所有进程，支持恢复的代理之后可以恢复，shell 和其他作业则不能，必须重新启动，请在代理空闲时执行此操作",
+      "cancel": "取消",
+      "confirm": "重启并结束进程",
+      "count_other": "{{count}} 个正在运行的终端",
+      "count_one": "{{count}} 个运行中的终端",
+      "count": "{{count}} 个正在运行的终端"
+    },
+    "restartedInputNotSent": "终端在您输入时重新启动，部分输入可能未送达，请先查看新的 shell，再重新输入",
+    "typingBeforeStartNotSent": "终端启动期间输入的部分按键未发送",
+    "stalledDaemonBanner": {
+      "body": "此电脑上的后台工作已停滞，输入和新终端可能无法工作，重启终端服务会结束其正在运行的终端和命令",
+      "review": "查看重启选项",
+      "title": "终端服务可能需要重启"
+    },
+    "claudeDiffPanelNotice": {
+      "gotIt": "知道了",
+      "title": "Claude Code 在较宽的终端中会在聊天旁打开自己的差异面板，那个面板属于 Claude，而不是 Orca",
+      "body": "要隐藏它，请在 Claude Code 中输入 /diff，Claude 会在之后的会话中记住这一选择"
+    },
+    "windowsFontWeight": {
+      "title": "Windows 上的终端文字现在更细了",
+      "okay": "好的",
+      "lighterText": "更细的终端文字"
+    },
+    "claudeThemeSyncOffer": {
+      "title": "让 Claude Code 匹配你的 Orca 主题？",
+      "description": "此计算机上的 Claude Code 将使用你的终端配色并跟随主题变化（包括在 Orca 之外），你可以在设置中更改此项",
+      "accept": "匹配主题",
+      "accepted": "Claude Code 主题同步已开启",
+      "acceptedDescription": "此计算机上新的 Claude Code 会话将使用你的 Orca 主题",
+      "decline": "不用了",
+      "failed": "无法开启 Claude Code 主题同步",
+      "failedDescription": "请在设置中开启"
+    }
   },
   "fileSearch": {
     "failed": "搜索失败，再试一次",
@@ -26142,6 +26142,7 @@
   },
   "automations": {
     "runFailures": {
+      "botProviderErrorNotSaved": "机器人的这一轮失败了，但此次运行没有保存提供商返回的错误。原始聊天中可能有更多详情",
       "noDispatchHost": "没有可用于启动自动化的 Orca 窗口",
       "unevaluableSchedule": "Orca 无法评估此自动化，已跳过此次执行",
       "noRunnableHost": "此自动化没有可运行的主机",
@@ -26183,8 +26184,7 @@
         "signIn": "智能体正在等待你登录",
         "prompt": "智能体停在了一个需要你回答的提示处"
       },
-      "agentInterrupted": "智能体在完成此次运行前被中断",
-      "botProviderErrorNotSaved": "机器人的这一轮失败了，但此次运行没有保存提供商返回的错误。原始聊天中可能有更多详情"
+      "agentInterrupted": "智能体在完成此次运行前被中断"
     },
     "extraAgentArgs": {
       "errors": {
@@ -26235,6 +26235,8 @@
       "deletedBot": "已删除的机器人",
       "fieldLabel": "机器人或项目",
       "fieldPlaceholder": "选择机器人或项目",
+      "search": "搜索机器人和项目…",
+      "searchEmpty": "没有与搜索匹配的机器人或项目",
       "resultsToLinear": "Linear 议题",
       "resultsToLinearNeedsLinear": "Linear 议题（请先连接 Linear）",
       "linearIssuePlaceholder": "议题编号（例如 ENG-123）或 Linear 链接",
@@ -26249,9 +26251,7 @@
       "agent": "智能体",
       "agentInChat": "此聊天的智能体",
       "agentInChatHelp": "在聊天中的运行会沿用该聊天的智能体",
-      "agentSameAsBot": "与 {{name}} 相同",
-      "search": "搜索机器人和项目…",
-      "searchEmpty": "没有与搜索匹配的机器人或项目"
+      "agentSameAsBot": "与 {{name}} 相同"
     },
     "botEvents": {
       "label": "事件",
@@ -26918,18 +26918,18 @@
       "uploadPasteOrDrop": "或上传、粘贴、拖放你自己的图片",
       "pasteHint": "按 {{shortcut}} 粘贴图片",
       "changePicture": "更换头像",
-      "identityWatches": "关注{{what}}",
-      "identityReports": "汇报：{{what}}",
       "parts": {
         "olderHost": "{{host}} 需要更新 Orca 才能添加技能和计划",
         "skillsKept_other": "{{kept}}/{{count}} 个技能",
+        "skills_other": "{{count}} 个技能",
+        "automations_other": "{{count}} 个自动化",
         "schedules_other": "{{count}} 个计划",
         "needsApp": "需要 {{app}}",
         "needsApps_other": "需要 {{count}} 个应用",
-        "setUpInFirstChat": "在首次聊天中设置",
-        "skills_other": "{{count}} 个技能",
-        "automations_other": "{{count}} 个自动化"
-      }
+        "setUpInFirstChat": "在首次聊天中设置"
+      },
+      "identityWatches": "关注{{what}}",
+      "identityReports": "汇报：{{what}}"
     },
     "googleSetup": {
       "otherAccount": "切换账号",
@@ -26999,6 +26999,8 @@
       "takeOver": "接下来交给机器人",
       "ownerStep": "第 {{step}} 步，共 3 步",
       "keyMissed": "已下载密钥，但 Orca 没有获取到？",
+      "pickHostKey": "选择要导入的密钥文件：",
+      "pickKeyHere": "在这台电脑上选择文件",
       "action": {
         "makeNewKey": "新建密钥",
         "importKey": "导入密钥文件",
@@ -27029,9 +27031,7 @@
         "checkFailed": "Orca 无法检查 {{services}}"
       },
       "notNow": "暂不",
-      "importSetupFile": "导入配置文件",
-      "pickHostKey": "选择要导入的密钥文件：",
-      "pickKeyHere": "在这台电脑上选择文件"
+      "importSetupFile": "导入配置文件"
     },
     "apps": {
       "paste": {
@@ -27447,12 +27447,12 @@
         "pickCustom": "自定义时间"
       },
       "ask": {
-        "recommended": "推荐",
-        "typeAnswer": "输入你的回答",
         "next": "下一个问题",
         "notSentYet": "尚未发送",
         "previous": "上一个问题",
+        "recommended": "推荐",
         "step": "第 {{n}} 个，共 {{total}} 个",
+        "typeAnswer": "输入你的回答",
         "replaced": "智能体提出了新问题。请先阅读，再回复"
       }
     },
@@ -28269,6 +28269,7 @@
       },
       "thisComputer": "此电脑",
       "pageUnrouted": "无法连接到 {{host}}，因此无法在其浏览器中打开此页面。请重新连接 {{host}}，然后重试",
+      "botWorkspaceUnavailable": "此智能体的工作区目前在这里不可用，因此无法在其中打开该页面",
       "signIn": {
         "waitingFirst": "请在 Orca 中 {{host}} 的浏览器里，登录 {{host}} 应使用的 Orca 账户。请确认页面显示 {{code}}",
         "waiting": "请在 Orca 中 {{host}} 的浏览器里批准。请确认页面显示 {{code}}",
@@ -28296,8 +28297,7 @@
         "linksBelong": "{{name}} 的连接器属于 {{email}}",
         "signedOutFirst": "{{host}} 未登录 Orca，因此 {{name}} 暂时无法使用 Slack、Linear 或 GitHub",
         "linksBelongElsewhere": "{{name}} 的连接器属于另一个 Orca 账户"
-      },
-      "botWorkspaceUnavailable": "此智能体的工作区目前在这里不可用，因此无法在其中打开该页面"
+      }
     },
     "settingsPage": {
       "paused": "已暂停",
@@ -28336,6 +28336,7 @@
       "needsYou": "· 需要你处理",
       "stopCouldNotBeConfirmed": "无法确认是否已停止",
       "useEachBotSNativeSessionForCommands": "请在各个机器人自己的会话中使用命令",
+      "attachmentsHostTooOld": "{{host}} 需要更新才能在群组聊天中附加文件",
       "loadEarlierMessages": "加载更早的消息",
       "loadingGroup": "正在加载群组…",
       "manageMembers": "管理成员",
@@ -28362,6 +28363,7 @@
       "peerAsked": "{{from}} 向 {{to}} 提问",
       "peerTold": "{{from}} 通知了 {{to}}",
       "peerFollowedUp": "{{bot}} 跟进了",
+      "handoffsPaused": "已在 {{count}} 次移交后暂停。回复即可继续",
       "peerReplyRead": "{{reader}} 已读 {{peer}} 的回复",
       "deleteTitle": "要删除 {{name}} 吗？",
       "deleteDescription": "其中的机器人不会被删除",
@@ -28378,6 +28380,19 @@
       "filter": "筛选机器人",
       "pickTwo": "请至少选择 2 个机器人",
       "sameComputer": "群组中的机器人必须位于同一台电脑上",
+      "pairedComputersOnly": "群组只能添加来自已配对电脑的机器人",
+      "needsLocalBot": "此群组至少需要一个位于这台电脑上的机器人",
+      "thisComputer": "这台电脑",
+      "remoteNeedsChat": "请先与 {{name}} 打开一次聊天，然后再将它添加到群组",
+      "remoteReplied": "已在 {{computer}} 上回复",
+      "remoteNotice": "未在 {{computer}} 上回答",
+      "remoteNotSent": "未发送到 {{computer}}",
+      "remoteUnknown": "送达状态未知",
+      "remoteStopped": "已在此处停止",
+      "remoteSending": "正在 {{computer}} 上提问…",
+      "remoteAsked": "已在 {{computer}} 上提问",
+      "remoteMayAnswer": "可能仍会在 {{computer}} 上回答",
+      "remoteShortened": "已缩短。完整回答在 {{computer}} 上",
       "homeUnavailable": "{{host}} 上“{{name}}”的主工作区不可用",
       "createdNotOpened": "已创建“{{name}}”，但无法打开",
       "retryOpen": "重试",
@@ -28417,22 +28432,7 @@
         "members": "成员",
         "membersCount": "成员 {{count}}",
         "noMembers": "此群组中没有机器人"
-      },
-      "attachmentsHostTooOld": "{{host}} 需要更新才能在群组聊天中附加文件",
-      "handoffsPaused": "已在 {{count}} 次移交后暂停。回复即可继续",
-      "pairedComputersOnly": "群组只能添加来自已配对电脑的机器人",
-      "needsLocalBot": "此群组至少需要一个位于这台电脑上的机器人",
-      "thisComputer": "这台电脑",
-      "remoteNeedsChat": "请先与 {{name}} 打开一次聊天，然后再将它添加到群组",
-      "remoteReplied": "已在 {{computer}} 上回复",
-      "remoteNotice": "未在 {{computer}} 上回答",
-      "remoteNotSent": "未发送到 {{computer}}",
-      "remoteUnknown": "送达状态未知",
-      "remoteStopped": "已在此处停止",
-      "remoteSending": "正在 {{computer}} 上提问…",
-      "remoteAsked": "已在 {{computer}} 上提问",
-      "remoteMayAnswer": "可能仍会在 {{computer}} 上回答",
-      "remoteShortened": "已缩短。完整回答在 {{computer}} 上"
+      }
     },
     "settingsView": {
       "pathCopied": "路径已复制",
@@ -29536,9 +29536,9 @@
   },
   "tabBar": {
     "createRow": {
-      "hiddenHint": "已隐藏的项仍可通过搜索或各自的快捷键打开",
       "label": "新建标签页操作，按左右方向键选择，最后一项用于自定义这一行",
       "shownLabel": "显示在 + 菜单中",
+      "hiddenHint": "已隐藏的项仍可通过搜索或各自的快捷键打开",
       "reset": "重置顺序",
       "allShortcuts": "所有键盘快捷键…",
       "hiddenLabel": "已隐藏",
@@ -29551,66 +29551,6 @@
       "turnOn": "已关闭，显示它即可重新开启",
       "moreOptions": "更多选项"
     }
-  },
-  "agentCliUpdate": {
-    "updating": "正在更新…",
-    "tryAgain": "重试",
-    "update": "更新",
-    "modelRequiresClaude": "需要 Claude Code CLI {{version}} 或更高版本",
-    "modelRequiresCodex": "需要 Codex CLI {{version}} 或更高版本",
-    "modelRequires": "需要 {{product}} {{version}} 或更高版本",
-    "commandCopied": "命令已复制",
-    "commandNotCopied": "无法复制命令",
-    "copyCommand": "复制",
-    "manualHint": "在终端中运行：",
-    "noOutput": "该命令没有任何输出",
-    "heading_other": "有 {{count}} 个 CLI 更新可用",
-    "updateAll": "全部更新",
-    "thisComputer": "此电脑",
-    "statusUpdating": "正在更新 CLI",
-    "statusUpdatingTooltip": "智能体 CLI 正在更新",
-    "statusFailed": "CLI 更新失败",
-    "statusFailedTooltip": "打开以查看出错原因",
-    "statusCount_other": "{{count}} 个 CLI 更新",
-    "statusTooltip": "智能体 CLI 有新版本可用",
-    "failedButton": "更新失败",
-    "failedChip": "更新失败",
-    "failedChipLabel": "更新失败：查看错误",
-    "failedChipTooltip": "更新失败，点击查看详情",
-    "failedTitle": "无法更新 {{product}}",
-    "failedDescription": "Orca 在 <strong>{{host}}</strong> 上运行了 <code>{{command}}</code>，以将你的 {{product}} 从 <strong>{{installedVersion}}</strong> 更新到 <strong>{{latestVersion}}</strong>，但运行失败",
-    "failedDescriptionNoCommand": "Orca 无法更新你在 <strong>{{host}}</strong> 上的 {{product}}"
-  },
-  "backgroundWorkerPaused": {
-    "title": "部分后台任务因反复崩溃已暂停",
-    "description": "在你重试之前，Claude 聊天恢复将保持关闭。复制、回溯和空间扫描会在你再次启动时恢复",
-    "retry": "重试"
-  },
-  "perfNotices": {
-    "hiddenTabs": {
-      "title": "节省非活动标签页占用的内存",
-      "description_other": "你有 {{count}} 个标签页已超过 {{hours}} 小时未查看。开启“内存节省”即可释放它们占用的内存",
-      "descriptionOneHour_other": "你有 {{count}} 个标签页已超过一小时未查看。开启“内存节省”即可释放它们占用的内存",
-      "turnOnMemorySaver": "开启内存节省"
-    },
-    "disk": {
-      "title": "磁盘空间即将用尽",
-      "description": "在“设置 > 工作区清理”中查找你不再需要的工作区",
-      "reviewOld": "查看旧工作区"
-    },
-    "dontShowAgain": "不再显示"
-  },
-  "ui": {
-    "monthCalendar": {
-      "previous": "上个月",
-      "next": "下个月"
-    }
-  },
-  "appRail": {
-    "navigationLabel": "应用导航",
-    "toolsLabel": "应用工具",
-    "workspaces": "工作区",
-    "more": "更多"
   },
   "emulatorPane": {
     "tabIntro": {
@@ -29675,5 +29615,65 @@
     "suggestionUse": "使用",
     "browseOnline": "浏览",
     "browseOnlineLabel": "在 orca.dev 上浏览社区翻译（在浏览器中打开）"
+  },
+  "agentCliUpdate": {
+    "updating": "正在更新…",
+    "tryAgain": "重试",
+    "update": "更新",
+    "modelRequiresClaude": "需要 Claude Code CLI {{version}} 或更高版本",
+    "modelRequiresCodex": "需要 Codex CLI {{version}} 或更高版本",
+    "modelRequires": "需要 {{product}} {{version}} 或更高版本",
+    "commandCopied": "命令已复制",
+    "commandNotCopied": "无法复制命令",
+    "copyCommand": "复制",
+    "manualHint": "在终端中运行：",
+    "noOutput": "该命令没有任何输出",
+    "heading_other": "有 {{count}} 个 CLI 更新可用",
+    "updateAll": "全部更新",
+    "thisComputer": "此电脑",
+    "statusUpdating": "正在更新 CLI",
+    "statusUpdatingTooltip": "智能体 CLI 正在更新",
+    "statusFailed": "CLI 更新失败",
+    "statusFailedTooltip": "打开以查看出错原因",
+    "statusCount_other": "{{count}} 个 CLI 更新",
+    "statusTooltip": "智能体 CLI 有新版本可用",
+    "failedButton": "更新失败",
+    "failedChip": "更新失败",
+    "failedChipLabel": "更新失败：查看错误",
+    "failedChipTooltip": "更新失败，点击查看详情",
+    "failedTitle": "无法更新 {{product}}",
+    "failedDescription": "Orca 在 <strong>{{host}}</strong> 上运行了 <code>{{command}}</code>，以将你的 {{product}} 从 <strong>{{installedVersion}}</strong> 更新到 <strong>{{latestVersion}}</strong>，但运行失败",
+    "failedDescriptionNoCommand": "Orca 无法更新你在 <strong>{{host}}</strong> 上的 {{product}}"
+  },
+  "backgroundWorkerPaused": {
+    "title": "部分后台任务因反复崩溃已暂停",
+    "description": "在你重试之前，Claude 聊天恢复将保持关闭。复制、回溯和空间扫描会在你再次启动时恢复",
+    "retry": "重试"
+  },
+  "perfNotices": {
+    "hiddenTabs": {
+      "title": "节省非活动标签页占用的内存",
+      "description_other": "你有 {{count}} 个标签页已超过 {{hours}} 小时未查看。开启“内存节省”即可释放它们占用的内存",
+      "descriptionOneHour_other": "你有 {{count}} 个标签页已超过一小时未查看。开启“内存节省”即可释放它们占用的内存",
+      "turnOnMemorySaver": "开启内存节省"
+    },
+    "disk": {
+      "title": "磁盘空间即将用尽",
+      "description": "在“设置 > 工作区清理”中查找你不再需要的工作区",
+      "reviewOld": "查看旧工作区"
+    },
+    "dontShowAgain": "不再显示"
+  },
+  "ui": {
+    "monthCalendar": {
+      "previous": "上个月",
+      "next": "下个月"
+    }
+  },
+  "appRail": {
+    "navigationLabel": "应用导航",
+    "toolsLabel": "应用工具",
+    "workspaces": "工作区",
+    "more": "更多"
   }
 }
