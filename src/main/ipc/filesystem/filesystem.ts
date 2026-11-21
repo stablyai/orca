@@ -19,6 +19,7 @@ import { registerFilesystemGitRemoteHandlers } from './git-remote/filesystem-git
 import { registerFilesystemGitDiffHandlers } from './source-control/filesystem-git-diff-handlers'
 import { registerFilesystemGitIndexHandlers } from './source-control/filesystem-git-index-handlers'
 import { registerFilesystemGitUrlHandlers } from './source-control/filesystem-git-url-handlers'
+import { registerFilesystemHostBrowseHandlers } from './filesystem-host-browse-handlers'
 
 export function registerFilesystemHandlers(
   store: Store,
@@ -44,5 +45,6 @@ export function registerFilesystemHandlers(
   registerFilesystemGitDiffHandlers(context)
   registerFilesystemGitIndexHandlers(context)
   registerFilesystemGitUrlHandlers(context)
+  registerFilesystemHostBrowseHandlers()
   registerLocalLogTailHandlers(store)
 }
