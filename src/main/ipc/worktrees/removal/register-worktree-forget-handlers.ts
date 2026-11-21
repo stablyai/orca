@@ -13,6 +13,7 @@ import {
 
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
+import { projectRootWorkspaceRemovalError } from '../../../../shared/worktree/removal/removal'
 import { getLocalPtyProvider } from '../../pty/provider/registry'
 import { clearProviderPtyState } from '../../pty/provider/state-cleanup'
 import { killAllProcessesForWorktree } from '../../../runtime/workspaces/removal/worktree-teardown'
@@ -90,9 +91,7 @@ export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): voi
               .filter((candidate) => getRepoExecutionHostId(candidate) === args.hostId)
           : store.getRepos()
         if (repo ? isFolderRootOf(repo) : fallbackRepos.some(isFolderRootOf)) {
-          throw new Error(
-            'Cannot delete the project root workspace. Remove the folder project instead.'
-          )
+          throw projectRootWorkspaceRemovalError()
         }
 
         const ownerHostId = resolveWorktreeRemovalOwnerHostId(

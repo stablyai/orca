@@ -137,7 +137,9 @@ describe('OrcaRuntimeService', () => {
     })
     await expect(
       runtime.removeManagedWorktree('id:folder-repo::/workspace/folder')
-    ).rejects.toThrow('Cannot delete the project root workspace')
+    ).rejects.toThrow(
+      /Cannot delete the project root workspace[\s\S]*orca project setup-delete --setup <setup-id>[\s\S]*orca project setups/
+    )
     deletedWorktreeId = result.worktree.id
     await expect(runtime.removeManagedWorktree(`id:${result.worktree.id}`)).resolves.toEqual({})
     expect(localProvider.shutdown).toHaveBeenCalledWith(

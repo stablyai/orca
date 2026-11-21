@@ -20,6 +20,7 @@ import {
 } from '../../../workspaces/removal/folder-workspace-archive-hook'
 import { invalidateAuthorizedRootsCache } from '../../../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
+import { projectRootWorkspaceRemovalError } from '../../../../shared/worktree/removal/removal'
 import { getRuntimeFolderWorkspaceRootId } from '../catalog/runtime-folder-workspace'
 import { killAllProcessesForWorktree } from './worktree-teardown'
 import { teardownFolderWorkspacePtys } from './folder-workspace-pty-teardown'
@@ -119,7 +120,7 @@ export async function removeOrphanOrFolderWorktree({
     return undefined
   }
   if (removalTarget.id === getRuntimeFolderWorkspaceRootId(repo)) {
-    throw new Error('Cannot delete the project root workspace. Remove the folder project instead.')
+    throw projectRootWorkspaceRemovalError()
   }
   // Archive failure must refuse before watcher, PTY or metadata teardown (#19334).
   const archiveHookOverride = await gateFolderWorkspaceRemovalOnArchiveHook({
