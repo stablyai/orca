@@ -5,100 +5,146 @@ import type {
   WorktreeMemory
 } from '../../shared/diagnostics/process-stats-types'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../shared/remote-runtime/remote-runtime-memory-limits'
+import { clampMemoryMetric, optionalCommitField } from './memory-snapshot-values'
 
-// Paired clients draw a short sparkline; full 60-point histories on every workspace can push a
-// large host's reply past the RPC size limit, which a client shows as the host being unreachable.
+// Paired clients draw a short sparkline, so a large host's reply drops older points first.
 export const MEMORY_REPLY_HISTORY_POINTS = 20
 // Room under the limit for the app section, host totals and the envelope.
 const MEMORY_REPLY_BUDGET_BYTES = REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES - 256 * 1024
-// Generous per-object and per-number costs (keys, quotes, punctuation and a 17-digit number).
+// Upper bounds for keys, punctuation and numbers around each object's strings.
 const ROW_OVERHEAD_BYTES = 200
 const SESSION_OVERHEAD_BYTES = 160
 const CHAT_OVERHEAD_BYTES = 160
-const NUMBER_BYTES = 24
+const HISTORY_POINT_BYTES = 17
 
-// Measured as serialized, so escaped quotes and control characters count.
-function textBytes(value: string | null | undefined): number {
-  return value ? Buffer.byteLength(JSON.stringify(value), 'utf8') : 0
+/** Serialized size of a JSON string, counted without encoding it; a surrogate pair counts 6. */
+function jsonStringBytes(value: string | null | undefined): number {
+  if (!value) {
+    return 4
+  }
+  let bytes = 2
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i)
+    bytes += code === 34 || code === 92 ? 2 : code < 32 ? 6 : code < 128 ? 1 : code < 2048 ? 2 : 3
+  }
+  return bytes
 }
 
 function sessionBytes(session: SessionMemory): number {
-  return SESSION_OVERHEAD_BYTES + textBytes(session.sessionId)
+  return (
+    SESSION_OVERHEAD_BYTES + jsonStringBytes(session.sessionId) + jsonStringBytes(session.paneKey)
+  )
 }
 
 function chatBytes(chat: ChatAgentMemory): number {
   return (
     CHAT_OVERHEAD_BYTES +
-    textBytes(chat.agentSessionId) +
-    textBytes(chat.agent) +
-    textBytes(chat.name)
+    jsonStringBytes(chat.agentSessionId) +
+    jsonStringBytes(chat.agent) +
+    jsonStringBytes(chat.name)
   )
 }
 
 function rowBytes(worktree: WorktreeMemory): number {
-  return (
+  let bytes =
     ROW_OVERHEAD_BYTES +
-    textBytes(worktree.worktreeId) +
-    textBytes(worktree.worktreeName) +
-    textBytes(worktree.repoId) +
-    textBytes(worktree.repoName)
-  )
+    jsonStringBytes(worktree.worktreeId) +
+    jsonStringBytes(worktree.worktreeName) +
+    jsonStringBytes(worktree.repoId) +
+    jsonStringBytes(worktree.repoName)
+  for (const session of worktree.sessions) {
+    bytes += sessionBytes(session)
+  }
+  for (const chat of worktree.chats ?? []) {
+    bytes += chatBytes(chat)
+  }
+  return bytes
 }
 
-/** A workspace sampled only for its chats; main's terminal-only reply never had these rows. */
+/** A workspace sampled only for its chats; a terminal-only reply never had these rows. */
 function isChatOnly(worktree: WorktreeMemory): boolean {
   return worktree.sessions.length === 0 && (worktree.chats?.length ?? 0) > 0
 }
 
-/**
- * The snapshot as sent over RPC: every row with its totals, and at most 20 history points each.
- * Near the size limit it sheds, in order, history, chat lists, chat-only rows, then pane keys with
- * the agent total, so what this view adds never pushes a host past the payload it sent before;
- * terminal rows, sessions and totals always stay.
- */
-export function toMemorySnapshotReply(snapshot: MemorySnapshot): MemorySnapshot {
-  let core = 0
-  let paneKeys = 0
-  let chatOnlyRows = 0
-  let chats = 0
-  let histories = 0
-  for (const worktree of snapshot.worktrees) {
-    let bytes = rowBytes(worktree)
-    for (const session of worktree.sessions) {
-      bytes += sessionBytes(session)
-      paneKeys += textBytes(session.paneKey)
-    }
-    if (isChatOnly(worktree)) {
-      chatOnlyRows += bytes
-    } else {
-      core += bytes
-    }
-    histories += Math.min(worktree.history.length, MEMORY_REPLY_HISTORY_POINTS) * NUMBER_BYTES
-    for (const chat of worktree.chats ?? []) {
-      chats += chatBytes(chat)
-    }
-  }
-  const budget = MEMORY_REPLY_BUDGET_BYTES
-  const keepPaneKeys = core + paneKeys <= budget
-  const keepChatOnlyRows = keepPaneKeys && core + paneKeys + chatOnlyRows <= budget
-  const keepChats = keepChatOnlyRows && core + paneKeys + chatOnlyRows + chats <= budget
-  const keepHistory = keepChats && core + paneKeys + chatOnlyRows + chats + histories <= budget
-  const worktrees = keepChatOnlyRows
-    ? snapshot.worktrees
-    : snapshot.worktrees.filter((worktree) => !isChatOnly(worktree))
-  const { agentProcesses, ...base } = snapshot
+/** The reply terminals alone produce: the shape and totals the host sent before chats were sampled. */
+function terminalOnlyReply(snapshot: MemorySnapshot): MemorySnapshot {
+  const { agentProcesses: _agentProcesses, ...base } = snapshot
+  const committed = snapshot.processCommitMetric !== undefined
+  let cpu = 0
+  let memory = 0
+  let privateMemory = 0
+  const worktrees = snapshot.worktrees
+    .filter((worktree) => !isChatOnly(worktree))
+    .map(({ chats: _chats, sessions, ...worktree }): WorktreeMemory => {
+      let rowCpu = 0
+      let rowMemory = 0
+      let rowPrivate = 0
+      for (const session of sessions) {
+        rowCpu += session.cpu
+        rowMemory += session.memory
+        rowPrivate += clampMemoryMetric(session.privateMemory)
+      }
+      cpu += rowCpu
+      memory += rowMemory
+      privateMemory += committed ? clampMemoryMetric(rowPrivate) : 0
+      return {
+        ...worktree,
+        cpu: rowCpu,
+        memory: rowMemory,
+        ...optionalCommitField(committed, rowPrivate),
+        sessions: sessions.map((session) => ({ ...session, paneKey: null })),
+        history: []
+      }
+    })
   return {
     ...base,
-    // The last thing shed, so the smallest reply is exactly the shape main sent.
-    ...(keepPaneKeys && agentProcesses ? { agentProcesses } : {}),
-    app: { ...snapshot.app, history: snapshot.app.history.slice(-MEMORY_REPLY_HISTORY_POINTS) },
-    worktrees: worktrees.map(({ chats: rowChats, history, sessions, ...worktree }) => ({
+    app: { ...snapshot.app, history: [] },
+    worktrees,
+    ...(committed
+      ? {
+          totalPrivateMemory: clampMemoryMetric(
+            clampMemoryMetric(snapshot.app.privateMemory) + privateMemory
+          )
+        }
+      : {}),
+    totalCpu: snapshot.app.cpu + cpu,
+    totalMemory: snapshot.app.memory + memory
+  }
+}
+
+function withHistory(snapshot: MemorySnapshot, points: number): MemorySnapshot {
+  return {
+    ...snapshot,
+    app: { ...snapshot.app, history: points ? snapshot.app.history.slice(-points) : [] },
+    worktrees: snapshot.worktrees.map((worktree) => ({
       ...worktree,
-      sessions: keepPaneKeys
-        ? sessions
-        : sessions.map((session) => ({ ...session, paneKey: null })),
-      history: keepHistory ? history.slice(-MEMORY_REPLY_HISTORY_POINTS) : [],
-      ...(keepChats && rowChats ? { chats: rowChats } : {})
+      history: points ? worktree.history.slice(-points) : []
     }))
   }
+}
+
+/**
+ * The snapshot as sent over RPC. Near the size limit it drops older history, then all history,
+ * then everything chat sampling adds (chat lists, chat-only rows, pane keys, the agent total and
+ * chats' share of the totals), so a host never sends more than its terminals alone would.
+ */
+export function toMemorySnapshotReply(snapshot: MemorySnapshot): MemorySnapshot {
+  let rows = 0
+  let fullHistory = snapshot.app.history.length * HISTORY_POINT_BYTES
+  let shortHistory = Math.min(snapshot.app.history.length, MEMORY_REPLY_HISTORY_POINTS)
+  for (const worktree of snapshot.worktrees) {
+    rows += rowBytes(worktree)
+    fullHistory += worktree.history.length * HISTORY_POINT_BYTES
+    shortHistory += Math.min(worktree.history.length, MEMORY_REPLY_HISTORY_POINTS)
+  }
+  if (rows + fullHistory <= MEMORY_REPLY_BUDGET_BYTES) {
+    return snapshot
+  }
+  if (rows + shortHistory * HISTORY_POINT_BYTES <= MEMORY_REPLY_BUDGET_BYTES) {
+    return withHistory(snapshot, MEMORY_REPLY_HISTORY_POINTS)
+  }
+  if (rows <= MEMORY_REPLY_BUDGET_BYTES) {
+    return withHistory(snapshot, 0)
+  }
+  return terminalOnlyReply(snapshot)
 }

@@ -122,7 +122,13 @@ export function collectSubtree(
     }
     const kids = index.childrenOf.get(pid)
     if (kids) {
+      const parentStart = index.byPid.get(pid)?.startTicks
       for (const kid of kids) {
+        const kidStart = index.byPid.get(kid)?.startTicks
+        // Created before its parent: the parent PID was reused, so this is an unrelated process.
+        if (parentStart !== undefined && kidStart !== undefined && kidStart < parentStart) {
+          continue
+        }
         queue.push(kid)
       }
     }

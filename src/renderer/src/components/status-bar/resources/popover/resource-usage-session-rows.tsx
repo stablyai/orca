@@ -14,19 +14,26 @@ import type {
 import { MetricPair, ROW_TRAILING_GUTTER_CLS, Sparkline } from './resource-usage-metrics'
 import { isResourceSessionActivationKey } from '../session-actions/resource-session-navigation'
 import { ChatRow } from './resource-usage-chat-row'
+import { firstRuntimePaneTitle } from '../workspace-attribution/resource-session-labels'
 
 export function SessionRow({
-  session,
+  session: sampled,
   worktreeId,
   onNavigate,
-  onKill
+  onKill,
+  runtimePaneTitlesByTabId
 }: {
   session: UnifiedSessionRow
   worktreeId: string
   onNavigate: (tabId: string, paneKey: string | null) => void
   onKill: (session: UnifiedSessionRow) => void
+  runtimePaneTitlesByTabId: Record<string, Record<number, string>>
 }): React.JSX.Element {
   const t = useTranslate()
+  const liveTitle = sampled.liveTitleTabId
+    ? firstRuntimePaneTitle(runtimePaneTitlesByTabId[sampled.liveTitleTabId])
+    : undefined
+  const session = liveTitle ? { ...sampled, label: liveTitle } : sampled
   const clickable = session.tabId !== null && session.bound
   const handleClick = (): void => {
     if (clickable && session.tabId) {
@@ -115,7 +122,8 @@ export function WorktreeRow({
   onDelete,
   onKillSession,
   navigateToTab,
-  onOpenChat
+  onOpenChat,
+  runtimePaneTitlesByTabId
 }: {
   worktree: UnifiedWorktreeRow
   storeRecord: Worktree | null
@@ -127,6 +135,7 @@ export function WorktreeRow({
   onKillSession: (session: UnifiedSessionRow) => void
   navigateToTab: (tabId: string, paneKey: string | null) => void
   onOpenChat: (worktreeId: string, agentSessionId: string, runtimeHostId?: string) => void
+  runtimePaneTitlesByTabId: Record<string, Record<number, string>>
 }): React.JSX.Element {
   const t = useTranslate()
   const hasResources =
@@ -277,6 +286,7 @@ export function WorktreeRow({
             worktreeId={worktree.worktreeId}
             onNavigate={navigateToTab}
             onKill={onKillSession}
+            runtimePaneTitlesByTabId={runtimePaneTitlesByTabId}
           />
         ))}
       {!isCollapsed &&

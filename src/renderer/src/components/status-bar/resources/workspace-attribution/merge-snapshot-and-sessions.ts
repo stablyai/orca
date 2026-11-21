@@ -4,6 +4,7 @@ import type {
   MemorySnapshot,
   WorktreeMemory
 } from '../../../../../../shared/diagnostics/process-stats-types'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { parsePtySessionId } from '../../../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type {
@@ -19,6 +20,7 @@ import {
   resolveResourceWorkspaceHost
 } from './resource-workspace-host'
 import {
+  daemonSessionLiveTitleTabId,
   deriveWorktreeNameFromWorktreeId,
   resolveDaemonSessionLabel,
   resolveSnapshotSessionLabel
@@ -27,6 +29,7 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
 export const UNATTRIBUTED_REPO_ID = '__unattributed__'
+const NO_RUNTIME_PANE_TITLES = { runtimePaneTitlesByTabId: {} }
 function getUnattributedRepoName(t: Translate = translate): string {
   return t('auto.components.status.bar.mergeSnapshotAndSessions.unattributed', 'Unattributed')
 }
@@ -153,7 +156,12 @@ export function mergeSnapshotAndSessions(
     for (const wt of host.worktrees) {
       const worktree = resolveResourceFolderWorkspace(ctx, wt.worktreeId)
       const repoId = worktree?.repoId ?? wt.repoId
+      // A worktree stamped with this host is placed here even when its repo is tracked elsewhere.
+      const recordHost = ctx.ambiguousWorktreeIds?.has(wt.worktreeId)
+        ? null
+        : parseExecutionHostId(ctx.worktreeById?.get(wt.worktreeId)?.hostId)
       const owned =
+        (recordHost?.kind === 'runtime' && recordHost.id === host.hostId) ||
         resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId).runtimeHostId === host.hostId
       // Keep foreign/unplaced server load host-qualified so same-ID workspaces elsewhere cannot absorb it.
       ingestSampledWorktree(wt, {
@@ -233,7 +241,8 @@ export function mergeSnapshotAndSessions(
       incarnationId: session.incarnationId,
       paneKey: null,
       pid: 0,
-      label: resolveDaemonSessionLabel(session, worktreeId, tabId, ctx, index),
+      label: resolveDaemonSessionLabel(session, worktreeId, tabId, NO_RUNTIME_PANE_TITLES, index),
+      liveTitleTabId: daemonSessionLiveTitleTabId(worktreeId, tabId, index),
       bound: ctx.workspaceSessionReady && boundPtyIds.has(session.id),
       agentOwnership: session.agentOwnership,
       tabId,

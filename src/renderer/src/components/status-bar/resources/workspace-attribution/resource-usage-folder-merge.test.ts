@@ -28,7 +28,6 @@ function context(overrides: Partial<MergeContext> = {}): MergeContext {
   return {
     tabsByWorktree: {},
     ptyIdsByTabId: {},
-    runtimePaneTitlesByTabId: {},
     workspaceSessionReady: true,
     repoDisplayNameById: new Map([[workspace.repoId, 'Documentation']]),
     repoConnectionIdById: new Map(),
@@ -118,5 +117,37 @@ describe('folder Resource Manager rows', () => {
       chats: [{ agentSessionId: 'chat-2', agent: 'codex', name: null, cpu: 1, memory: 256 }],
       unplaced: true
     })
+  })
+
+  it('opens chats in a worktree this window placed on a paired machine whose repo is local', () => {
+    const chat = { agentSessionId: 'chat-3', agent: 'claude', name: null, cpu: 1, memory: 256 }
+    const worktree = {
+      id: 'repo-1::/remote',
+      repoId: 'repo-1',
+      displayName: 'Remote',
+      hostId: 'runtime:paired'
+    } as Worktree
+    const repos = mergeSnapshotAndSessions(
+      null,
+      [],
+      context({
+        worktreeById: new Map([[worktree.id, worktree]]),
+        runtimeHostResources: [
+          {
+            hostId: 'runtime:paired',
+            hostLabel: 'Studio',
+            worktrees: [{ ...oldRow, worktreeId: worktree.id, repoId: 'repo-1', chats: [chat] }]
+          }
+        ]
+      })
+    )
+
+    expect(repos.flatMap((repo) => repo.worktrees)).toEqual([
+      expect.objectContaining({
+        worktreeId: 'repo-1::/remote',
+        runtimeHostId: 'runtime:paired',
+        unplaced: undefined
+      })
+    ])
   })
 })

@@ -44,7 +44,6 @@ export function useResourceUsageDerivedModel({
   runtimeHostResources,
   sessions,
   resourceSessionBindings,
-  runtimePaneTitlesByTabId,
   repos,
   allWorktrees,
   projectGroups,
@@ -61,7 +60,6 @@ export function useResourceUsageDerivedModel({
   runtimeHostResources: readonly RuntimeHostResourceSample[]
   sessions: readonly DaemonSession[]
   resourceSessionBindings: ResourceSessionBindingInputs
-  runtimePaneTitlesByTabId: AppState['runtimePaneTitlesByTabId']
   repos: AppState['repos']
   allWorktrees: Worktree[]
   projectGroups: AppState['projectGroups']
@@ -129,7 +127,6 @@ export function useResourceUsageDerivedModel({
             {
               // Share all binding inputs with bulk selection so deferred SSH sessions also require single-row kill confirmation.
               ...resourceSessionBindings,
-              runtimePaneTitlesByTabId,
               repoDisplayNameById,
               repoConnectionIdById,
               repoRuntimeHostIdById,
@@ -146,7 +143,6 @@ export function useResourceUsageDerivedModel({
       resourceSnapshot,
       sessions,
       resourceSessionBindings,
-      runtimePaneTitlesByTabId,
       repoDisplayNameById,
       repoConnectionIdById,
       repoRuntimeHostIdById,
