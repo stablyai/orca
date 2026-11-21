@@ -27,6 +27,7 @@ import {
 import type { BotChatTreeActions } from '../bots/MobileBotChatTree'
 import { openBotItemWorker } from '../bots/items/bot-item-worker-open'
 import type { BotChatTreeWorker } from '../../../src/shared/bots/bot-chat-tree'
+import { useOpenMobileAutomations } from '../automations/use-open-mobile-automations'
 
 // The desktop's "New automation" drafts this into the bot's chat, where automations are made.
 const NEW_AUTOMATION_DRAFT = 'Set up an automation that '
@@ -57,6 +58,7 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
   const t = useMobileTranslation()
   const executionHost = useWorkspaceExecutionHost()
   const openMobileSession = useOpenMobileSession()
+  const openMobileAutomations = useOpenMobileAutomations()
   // An item's comment box dictates with this screen's one dictation, as its chat composers do.
   const dictationLive = useMobileDictationLive(dictation, controller.cancelDictation, hostId ?? '')
   const { dictationEnabled, dictationMode, handleDictationToggle } = controller
@@ -174,6 +176,17 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
         )
       }
     : null
+  const viewRuns = hostId
+    ? (automationId: string) => {
+        closeSheets()
+        openMobileAutomations(hostId, {
+          automation: automationId,
+          ...(executionHost && executionHost !== LOCAL_EXECUTION_HOST_ID
+            ? { server: executionHost }
+            : {})
+        })
+      }
+    : null
   const hostName =
     (server ? server.name : controller.hostName) || t('bots.items.thisComputer', 'The computer')
   if (itemsOnPhone && hostId) {
@@ -226,6 +239,8 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
               onStartSuggestion={startSuggestion}
               onNewAutomation={newAutomation}
               home={home}
+              onAskInChat={startSuggestion}
+              onViewRuns={viewRuns}
             />
           </BotItemCommentMicContext.Provider>
         </MobileNativeChatDictationPreviewContext.Provider>
@@ -247,6 +262,8 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
       onStartSuggestion={startSuggestion}
       onNewAutomation={newAutomation}
       home={home}
+      onAskInChat={startSuggestion}
+      onViewRuns={viewRuns}
     />
   )
 }

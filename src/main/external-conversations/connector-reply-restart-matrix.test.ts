@@ -2,6 +2,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type {
+  AgentJournalConnectorClaim,
+  AgentJournalConnectorDelivery
+} from '../../shared/agent-session/journal/agent-journal-bot-message-fields'
 import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalMessageItem,
@@ -25,12 +29,14 @@ import { applyJournalDomainSubmission } from '../native-chat/agent-session-journ
 import Database from '../sqlite/sync-database'
 import type { ConnectorReplyCutJournal } from '../connector-cloud/connector-reply-outbox'
 import { conversationReplyFill } from './external-conversation-reply-fill'
+import { usageLimitReplyPause } from './external-conversation-reply-pause'
 import { ConnectorReplyRecovery } from './external-conversation-reply-recovery'
 
 // Phase 1 restart matrix, desktop side: a real journal file reopened on every "restart", the real
 // admission writer, recovery and fill, a fake clock. Each case asserts the rows' durable outcome.
 
 const NOW = 1_800_000_000_000
+const LIMIT = { category: 'usage_limit' as const, usageLimit: { resetsAt: NOW + 3_600_000 } }
 const SLACK = { source: 'slack', externalId: 'slack:T1:C1:1.2' }
 const target = { sessionId: 'chat-1', epoch: 'e' }
 const facts = {
@@ -44,17 +50,27 @@ const facts = {
 }
 
 let dir = ''
+// Windows refuses to delete a directory whose SQLite file a connection still holds.
+const openedDatabases: Database[] = []
 beforeEach(() => {
   vi.useFakeTimers()
   dir = mkdtempSync(join(tmpdir(), 'orca-reply-matrix-'))
 })
 afterEach(() => {
   vi.useRealTimers()
+  for (const db of openedDatabases.splice(0)) {
+    try {
+      db.close()
+    } catch {
+      // Already closed by the case itself.
+    }
+  }
   rmSync(dir, { recursive: true, force: true })
 })
 
 function openJournal() {
   const db = new Database(join(dir, 'journal.db'))
+  openedDatabases.push(db)
   migrateJournalDomainSchema(db)
   ensureAgentSessionAttachmentClaimTables(db)
   db.prepare(
@@ -69,7 +85,7 @@ function openJournal() {
     fillOutcomes: async (fills) => fillJournalConnectorReplies(db, fills, NOW) > 0,
     sent: async (keys) => sentJournalConnectorReplies(db, keys, NOW),
     cut: async (rows) => cutJournalConnectorReplies(db, rows) > 0,
-    recut: async (claim, cut) => recutJournalConnectorReplies(db, claim, cut) > 0,
+    recut: async (claim, cut, failure) => recutJournalConnectorReplies(db, claim, cut, failure) > 0,
     releaseClaim: async (claim) => releaseJournalConnectorClaim(db, claim) > 0
   }
   return { db, journal }
@@ -118,7 +134,12 @@ const asked = (deliveryId: string, carried?: string[]): AgentJournalMessageItem 
 })
 
 /** One process: the journal reopened, its recovery over the items the test says the chat holds. */
-function start(options: { continuationsSettled?: Promise<unknown> } = {}) {
+function start(
+  options: {
+    continuationsSettled?: Promise<unknown>
+    usageLimitDisposition?: (sessionId: string, turnItemId: string) => Promise<string>
+  } = {}
+) {
   const { db, journal } = openJournal()
   let items: AgentJournalRenderItem[] = []
   let submissions: AgentJournalSubmission[] = []
@@ -140,7 +161,8 @@ function start(options: { continuationsSettled?: Promise<unknown> } = {}) {
   }
   const fill = conversationReplyFill(
     () => journal,
-    () => {}
+    () => {},
+    usageLimitReplyPause(() => journal, options.usageLimitDisposition ?? (async () => 'ended'))
   )
   const recovery = new ConnectorReplyRecovery({
     journal: () => journal,
@@ -159,7 +181,8 @@ function start(options: { continuationsSettled?: Promise<unknown> } = {}) {
   const turn = (
     key: string,
     openerId: string,
-    state: AgentJournalTurnLifecycleState,
+    // `failed`: completed with a failure, as a usage limit ends a turn.
+    ended: AgentJournalTurnLifecycleState | 'failed',
     prose?: string
   ): AgentJournalRenderItem[] => {
     const opener = message(openerId)
@@ -189,8 +212,9 @@ function start(options: { continuationsSettled?: Promise<unknown> } = {}) {
         body: {
           kind: 'turn',
           turnId: `provider-${key}`,
-          state,
-          ...(state === 'completed' ? { outcome: 'success' as const } : {}),
+          state: ended === 'failed' ? ('completed' as const) : ended,
+          ...(ended === 'completed' ? { outcome: 'success' as const } : {}),
+          ...(ended === 'failed' ? { outcome: 'failure' as const } : {}),
           userItemId: opener.itemId
         }
       }
@@ -216,7 +240,31 @@ function start(options: { continuationsSettled?: Promise<unknown> } = {}) {
     observers.forEach((observer) => observer())
     await vi.advanceTimersByTimeAsync(2_000)
   }
-  return { db, journal, recovery, message, turn, show, outcomes, publish, items: () => items }
+  // A live end of a turn the usage limit stopped, as the turn-end watch fills it.
+  const limited = (turnItemId: string, openerId: string, stamps: AgentJournalConnectorDelivery[]) =>
+    fill({
+      sessionId: 'chat-1',
+      turnItemId,
+      stamps,
+      openerItemId: agentJournalSubmissionKey(openerId),
+      outcome: 'failure',
+      prose: '',
+      bot: false,
+      links: [],
+      failure: LIMIT
+    })
+  return {
+    db,
+    journal,
+    recovery,
+    message,
+    turn,
+    show,
+    outcomes,
+    publish,
+    limited,
+    items: () => items
+  }
 }
 
 describe('a restart cut, continued at launch', () => {
@@ -404,6 +452,94 @@ describe('a restart cut, continued at launch', () => {
   })
 })
 
+describe('a usage-limit pause', () => {
+  const continueBody = (claim: AgentJournalConnectorClaim): AgentJournalMessageItem => ({
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text: 'Continue.' }],
+    connectorClaim: claim
+  })
+
+  it('pauses the request while its continue is pending, and the continue answers it', async () => {
+    const p = start({
+      continuationsSettled: Promise.resolve(),
+      usageLimitDisposition: async () => 'pending'
+    })
+    admit(p.db, 'm1', asked('d1'))
+    p.show([p.message('m1'), ...p.turn('item:t1', 'm1', 'failed')])
+    const ended = await p.limited('item:t1', 'm1', [stampOf('d1')])
+    expect(ended.paused).toBe(true)
+    await p.recovery.boot()
+    expect(p.outcomes()).toEqual({ d1: { outcome: null } })
+    const claim = await p.recovery.claimFor('chat-1', { turnId: 'item:t1', kind: 'usage_limit' })
+    expect(claim?.origin.map((stamp) => stamp.deliveryId)).toEqual(['d1'])
+    admit(p.db, 'c1', continueBody(claim!))
+    p.show([...p.items(), p.message('c1'), ...p.turn('item:t2', 'c1', 'completed', 'Back on it.')])
+    await p.recovery.boot()
+    expect(p.outcomes()).toEqual({ d1: { outcome: 'answered', prose: 'Back on it.', head: 'd1' } })
+  })
+
+  it('fails the request with the limit it hit once no continue will come', async () => {
+    let disposition = 'pending'
+    const p = start({
+      continuationsSettled: Promise.resolve(),
+      usageLimitDisposition: async () => disposition
+    })
+    admit(p.db, 'm1', asked('d1'))
+    p.show([p.message('m1'), ...p.turn('item:t1', 'm1', 'failed')])
+    await p.limited('item:t1', 'm1', [stampOf('d1')])
+    await p.recovery.boot()
+    expect(p.outcomes()).toEqual({ d1: { outcome: null } })
+    // The person cancelled the automatic continue: no journal change, only the chat's status.
+    disposition = 'ended'
+    p.recovery.statusChanged('chat-1')
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(p.outcomes()).toEqual({
+      d1: { outcome: 'failed', head: 'd1', category: 'usage_limit' }
+    })
+  })
+
+  it('fails the request when the continue’s send went unconfirmed and it never claimed (U4)', async () => {
+    const p = start({
+      continuationsSettled: Promise.resolve(),
+      usageLimitDisposition: async () => 'ambiguous'
+    })
+    admit(p.db, 'm1', asked('d1'))
+    p.show([p.message('m1'), ...p.turn('item:t1', 'm1', 'failed')])
+    await p.journal.cut({
+      keys: [{ account: 'account-a', deliveryId: 'd1' }],
+      cut: { turnId: 'item:t1', kind: 'usage_limit' },
+      failure: LIMIT
+    })
+    await p.recovery.boot()
+    expect(p.outcomes()).toEqual({
+      d1: { outcome: 'failed', head: 'd1', category: 'usage_limit' }
+    })
+  })
+
+  it('cuts a restart continuation’s claim again when its own turn hits the limit (A12)', async () => {
+    const p = start({
+      continuationsSettled: Promise.resolve(),
+      usageLimitDisposition: async () => 'pending'
+    })
+    admit(p.db, 'm1', asked('d1'))
+    p.show([p.message('m1'), ...p.turn('item:t1', 'm1', 'interrupted')])
+    const restart = await p.recovery.claimFor('chat-1', {
+      turnId: 'provider-item:t1',
+      kind: 'restart'
+    })
+    admit(p.db, 'c1', continueBody(restart!))
+    p.show([...p.items(), p.message('c1'), ...p.turn('item:t2', 'c1', 'failed')])
+    await p.limited('item:t2', 'c1', restart!.origin)
+    const resume = await p.recovery.claimFor('chat-1', { turnId: 'item:t2', kind: 'usage_limit' })
+    expect(resume).toMatchObject({ cutKind: 'usage_limit', origin: [{ deliveryId: 'd1' }] })
+    admit(p.db, 'c2', continueBody(resume!))
+    p.show([...p.items(), p.message('c2'), ...p.turn('item:t3', 'c2', 'completed', 'Resumed.')])
+    await p.recovery.boot()
+    expect(p.outcomes()).toEqual({ d1: { outcome: 'answered', prose: 'Resumed.', head: 'd1' } })
+  })
+})
+
 describe('no positional "answered together"', () => {
   it('tells an unconfirmed end for a delivered send no turn proves it took, never unattributed', async () => {
     const p = start({ continuationsSettled: Promise.resolve() })
@@ -420,6 +556,10 @@ describe('no positional "answered together"', () => {
     })
   })
 })
+
+function stampOf(deliveryId: string): AgentJournalConnectorDelivery {
+  return { account: 'account-a', conversation: SLACK, deliveryId }
+}
 
 function submissionOf(
   messageId: string,

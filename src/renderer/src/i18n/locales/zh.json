@@ -20754,7 +20754,6 @@
         "copyFailed": "复制失败",
         "copyIdentity": "复制 {{value0}}",
         "detachedCommit": "提交 {{head}}（非分支）",
-        "folder": "文件夹",
         "mainCheckout": "主工作副本",
         "turnWorking": "此聊天的智能体正在工作。请在其回合结束后再切换分支。",
         "worktree": "工作树"
@@ -20865,7 +20864,8 @@
           "failed": "失败",
           "failedReason": "失败：{{error}}",
           "disabled": "已禁用",
-          "needsAuthAfterSend": "需要登录，发送一条消息即可在这里登录"
+          "needsAuthAfterSend": "需要登录，发送一条消息即可在这里登录",
+          "notStarted": "尚未启动"
         },
         "signIn": {
           "action": "登录",
@@ -21198,7 +21198,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Git 工作区中任何未提交或未跟踪的更改都将被永久删除",
           "unavailable": "无法检查更改",
           "checking": "正在检查更改…",
           "checkingDetails": "检查…",
@@ -21218,7 +21217,6 @@
           "line_one": "{{count}} 个文件中未保存的编辑内容将被丢弃：{{files}}",
           "line_other": "{{count}} 个文件中未保存的编辑内容将被丢弃：{{files}}"
         },
-        "ignoredFilesLost": "Git 忽略的文件将丢失：{{names}}",
         "ignoredFilesUnchecked": "无法完整检查 Git 忽略的文件"
       },
       "atRiskLocalFiles": {
@@ -21808,7 +21806,8 @@
           "notRemovable": "主工作区或文件夹项目",
           "projectOff": "此项目已关闭清理",
           "rulesOff": "未开启任何规则",
-          "withDetail": "{{cause}} · {{detail}}"
+          "withDetail": "{{cause}} · {{detail}}",
+          "folderWorkspaceSibling": "此工作区中的另一个仓库仍在使用中"
         },
         "trigger": {
           "startup": "启动时",
@@ -24067,7 +24066,6 @@
         "withIgnored": "{{what}}和 Git 忽略的文件将会丢失",
         "ignoredOnly": "Git 忽略的文件将会丢失"
       },
-      "showChanges": "显示更改",
       "unsavedSuffix": "（未保存）",
       "onHost": "位于 {{host}}",
       "forceDeletingEllipsis": "正在强制删除…",
@@ -24799,7 +24797,9 @@
       "1524825c2c": "切换工作区看板",
       "d286d1ab85": "清除窗格标题",
       "tabNewBrowserSplitRight": "在右侧拆分窗格中新建浏览器标签页",
-      "5468defe61": "折叠/展开所有项目"
+      "5468defe61": "折叠/展开所有项目",
+      "botItemPrevious": "上一个条目",
+      "botItemNext": "下一个条目"
     },
     "group": {
       "global": "全局",
@@ -26992,6 +26992,12 @@
       "stopped": "已停止分享 {{name}}",
       "webhookNotShared": "Webhook · 未分享",
       "commandNotShared": "命令 · 未分享",
+      "fileLinkNotShared": "含符号链接或硬链接 · 未分享",
+      "outsideSkill": "来自 {{project}} 外",
+      "outsideSkillWith": "来自 {{project}} 外 · {{description}}",
+      "tooLargeNotShared": "过大 · 未分享",
+      "unreadableNotShared": "无法读取 · 未分享",
+      "overLimitNotShared": "超出技能数量上限 · 未分享",
       "notShared": "未分享",
       "setupNote": "设置备注",
       "skills": "技能",
@@ -28138,8 +28144,6 @@
         "checking": "正在检查 Slack…",
         "retry": "重试",
         "settingUp": "正在设置你的 Slack 应用…",
-        "reconnect": "Slack 已不再接受此工作区的令牌。粘贴新令牌以重新连接。",
-        "reconnectSubmit": "重新连接 Slack 工作区",
         "create": "创建 Slack 应用",
         "waiting": "正在等待 Slack…",
         "waitingDetail": "请在 Slack 中完成安装。如果你的工作区需要管理员批准新应用，{{name}} 会在获批后加入。如果管理员拒绝，点击“重新安装”会复用同一个应用。",
@@ -28223,7 +28227,6 @@
       "handOff": {
         "confirmMac": "这台 Mac 上的 Orca 会使用 {{email}} 的令牌创建 Slack 应用。{{host}} 只会获得此机器人的应用。",
         "confirm": "这台电脑上的 Orca 会使用 {{email}} 的令牌创建 Slack 应用。{{host}} 只会获得此机器人的应用。",
-        "reconnect": "Slack 已不再接受 {{email}} 为此工作区保存的令牌。粘贴新令牌以重新连接。",
         "offerMac": "这台 Mac 上的 Orca 已登录 {{email}}，此账号已有 {{workspace}} 的令牌。",
         "offer": "这台电脑上的 Orca 已登录 {{email}}，此账号已有 {{workspace}} 的令牌。",
         "use": "使用此令牌 →"

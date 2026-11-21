@@ -1,3 +1,4 @@
+import type { ConnectorFailure } from '../../../../shared/connectors/connector-cloud-contract'
 import type Database from '../../../sqlite/sync-database'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -129,7 +130,7 @@ export function fillJournalConnectorReplies(
         row.answerDeliveryId,
         row.turnItemId ?? null,
         row.prose ?? null,
-        row.failure === undefined ? null : JSON.stringify(row.failure),
+        failureJson(row.failure),
         row.links?.length ? JSON.stringify(row.links) : null,
         row.tookMs ?? null,
         now,
@@ -142,6 +143,9 @@ export function fillJournalConnectorReplies(
   return filled
 }
 
+const failureJson = (failure: ConnectorFailure | undefined) =>
+  failure === undefined ? null : JSON.stringify(failure)
+
 /** Open rows a cut now owes a continuation; a usage-limit cut keeps its failure for its close. */
 export function cutJournalConnectorReplies(
   db: Database.Database,
@@ -153,30 +157,26 @@ export function cutJournalConnectorReplies(
   let changed = 0
   for (const key of keys) {
     changed += Number(
-      mark.run(
-        cut.turnId,
-        cut.kind,
-        failure === undefined ? null : JSON.stringify(failure),
-        key.account,
-        key.deliveryId
-      ).changes
+      mark.run(cut.turnId, cut.kind, failureJson(failure), key.account, key.deliveryId).changes
     )
   }
   return changed
 }
 
 /** A continuation's own turn was cut, and a continuation of that cut is owed: the rows it claimed
- *  are that cut's now, claim cleared. A usage-limit snapshot a restart cut found stays. */
+ *  are that cut's now, claim cleared. A usage-limit cut's own failure replaces the snapshot; a
+ *  restart cut keeps the one it found. */
 export function recutJournalConnectorReplies(
   db: Database.Database,
   claimMessageId: string,
-  cut: JournalConnectorReplyCut
+  cut: JournalConnectorReplyCut,
+  failure?: ConnectorFailure
 ): number {
   return Number(
     db
-      .prepare(`UPDATE journal_connector_replies SET cut_turn_id=?,cut_kind=?,claim_message_id=NULL
-        WHERE claim_message_id=? AND outcome IS NULL`)
-      .run(cut.turnId, cut.kind, claimMessageId).changes
+      .prepare(`UPDATE journal_connector_replies SET cut_turn_id=?,cut_kind=?,claim_message_id=NULL,
+        failure_json=COALESCE(?,failure_json) WHERE claim_message_id=? AND outcome IS NULL`)
+      .run(cut.turnId, cut.kind, failureJson(failure), claimMessageId).changes
   )
 }
 

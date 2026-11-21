@@ -52,6 +52,12 @@ vi.mock('../../../bots/bot-session-tabs', () => ({
   botOfSession: (bots: { list: () => Bot[] }, sessionId: string) =>
     bots.list().find((bot) => bot.id === chats.homes.get(sessionId)) ?? null
 }))
+// The bot delete signs out the bot's tools under the real agent home; a refusal must stop first.
+const forgetDeletedBotTools = vi.hoisted(() => vi.fn())
+vi.mock('./bots-tools', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  forgetDeletedBotTools
+}))
 
 function request(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
@@ -454,6 +460,33 @@ describe('bots.activity', () => {
     expect(await dispatcher.dispatch(request('bots.activity', { botId: 'missing' }))).toMatchObject(
       { ok: false, error: { message: expect.stringContaining('bot_not_found') } }
     )
+  })
+})
+
+describe('bots.delete', () => {
+  it("refuses before anything goes when the bot's home holds an unsaved editor draft", async () => {
+    const bot = makeTestBot({ id: 'b1', folderWorkspaceId: 'home-1' })
+    const draft = { filePath: '/bots/b1/SOUL.md', dirtyDraftContent: 'unsaved' }
+    const store = {
+      getFolderWorkspaces: () => [{ id: 'home-1' }],
+      getWorkspaceSessionHostIds: () => ['local'],
+      getWorkspaceSession: () => ({ openFilesByWorktree: { 'folder:home-1': [draft] } })
+    }
+    const bots = { list: () => [bot], delete: vi.fn(async () => ({ deleted: true })) }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a refused delete reads only runtime.bots and the store's folder rows and session, which the stub provides.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      requireStore: () => store,
+      bots
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: BOT_METHODS })
+
+    expect(await dispatcher.dispatch(request('bots.delete', { botId: 'b1' }))).toMatchObject({
+      ok: false,
+      error: { message: 'Unsaved editor changes. Save or close them in Orca, then delete again.' }
+    })
+    expect(forgetDeletedBotTools).not.toHaveBeenCalled()
+    expect(bots.delete).not.toHaveBeenCalled()
   })
 })
 

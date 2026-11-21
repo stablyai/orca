@@ -1,4 +1,5 @@
 import type { BotSessionHooks } from '../bots/bot-turn-ended'
+import { UNSET_BOT_SESSION_HOOKS } from '../bots/bot-session-hooks-unset'
 import { sessionRepliesInSlack } from '../external-conversations/external-conversation-links'
 import { join } from 'node:path'
 import type { Worktree } from '../../shared/worktree/types'
@@ -15,7 +16,8 @@ import {
   lookAroundFileIo,
   lookAroundStoreFile
 } from '../bots/bot-look-around-store'
-import { botHomeFolder, botsRootFolder, localBotHomeFilesystem } from '../bots/bot-home'
+import { botsRootFolder, localBotHomeFilesystem } from '../bots/bot-home'
+import { journaledItemsNotice } from '../bots/bot-memory-journal-runtime'
 import { BotSharePicksStore } from '../bots/sharing/bot-share-picks-store'
 import { BotShareCandidates } from '../bots/sharing/bot-package-export'
 import type { BotShareClient } from '../bots/sharing/bot-share-client'
@@ -150,8 +152,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
       readShareable: (bot) =>
         readBotShareable({
           bot,
-          home: botHomeFolder(bot),
-          automations: this.store?.listAutomations?.() ?? []
+          automations: this.store?.listAutomations?.() ?? [],
+          repos: this.listRepos()
         })
     })
     return this.botShareService
@@ -163,15 +165,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     operation
   ) => operation()
 
-  private botSessionHooks: BotSessionHooks = {
-    turnEnded: () => {},
-    requestFailed: () => {},
-    groupRoomOf: () => null,
-    recentChats: async () => null,
-    unansweredQuestionNote: async () => null,
-    chatsOf: async () => [],
-    sendItemMail: async () => false
-  }
+  private botSessionHooks: BotSessionHooks = UNSET_BOT_SESSION_HOOKS
 
   /** Set by the runtime: a bot turn ended (bot-request-outcome.ts); a member session's group room;
    *  a bot's other chats lately; an owner item change's mail. */
@@ -183,6 +177,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   set botSessions(hooks: BotSessionHooks) {
     this.botSessionHooks = hooks
     this.botItems.startRecovery()
+    this.botJournal.catchUp()
   }
 
   /** Each bot's looks and Up next, on this host. */
@@ -200,8 +195,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     return this.agentOrchestrationProjection.buildByPaneKey()
   }
 
-  /** The paired servers' bots as an `@` pick of one last read them. */
-  private readonly pairedBotRosters = pairedBotRosterCache(this)
+  /** The paired servers' rosters as last read, for an `@` pick and a send that misses here. */
+  readonly pairedBotRosters = pairedBotRosterCache(this)
 
   /** What the work record reads: orchestration, worktrees and the conversation store. */
   private readonly botWorkRuntime: BotWorkRuntime & BotHomeLineage = {
@@ -221,12 +216,17 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** Which worker each bot conversation's code work went to. */
   readonly botWork = runtimeBotWork(this.botWorkRuntime)
 
+  private readonly botJournal = journaledItemsNotice(this, (scope) =>
+    this.botChangeNotices.changed(scope)
+  )
+
   /** What each bot is doing for its owner and needs from them, on this host. */
   readonly botItems = runtimeBotItems({
     workRuntime: this.botWorkRuntime,
     bots: () => this.bots.list(),
     store: () => this.store,
-    notify: (scope) => this.botChangeNotices.changed(scope),
+    // Closed items also go to each bot's memory/journal/.
+    notify: (scope) => this.botJournal(scope),
     sendMail: (mail) => this.botSessions.sendItemMail(mail)
   })
 
@@ -278,7 +278,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
           this.botSessions.recentChats(botId, sessionId, message),
         unansweredQuestionNote: (sessionId) => this.botSessions.unansweredQuestionNote(sessionId),
         botChats: (bot, sessionId) => this.botSessions.chatsOf(bot, sessionId),
-        pairedBotRosters: this.pairedBotRosters,
+        pairedBotRosters: this.pairedBotRosters.read,
         scrubToolSecrets: (bot) => this.scrubBotToolSecrets(bot)
       }),
       assertQueuedMessageAllowed: (sessionId: string, messageId: string) =>
