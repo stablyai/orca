@@ -197,6 +197,8 @@ function PanZoomImageCanvas({
   const panZoom = usePanZoomViewport({
     content,
     fitPadding: 96,
+    actualSizeClickZoom: 2,
+    zoomedDragPans: true,
     onClickOutsideContent: closeOnBackdrop ? onClose : undefined
   })
   useViewerZoomCommands(panZoom, 'popup')

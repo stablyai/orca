@@ -53,13 +53,28 @@ function press(from: Point, to = from, via: Point[] = []): void {
   fireEvent.pointerUp(canvas, { button: 0, pointerId: 1, clientX: to.x, clientY: to.y })
 }
 
-it('stays open for a click on the image and for a drag that ends beside it', () => {
+it('zooms in on a click on the image and back to fit on a second; a drag only pans', () => {
   render(<Viewer />)
+  const width = (): string | undefined =>
+    screen.getByRole('dialog').querySelector('img')?.style.width
+  expect(width()).toBe('400px')
   press({ x: 500, y: 400 })
+  expect(width()).toBe('800px')
+  const position = (): string | undefined =>
+    screen.getByRole('dialog').querySelector('img')?.style.transform
+  expect(position()).toBe('translate(100px, 100px)')
+  press({ x: 500, y: 400 }, { x: 600, y: 450 }, [{ x: 600, y: 450 }])
+  expect(width()).toBe('800px')
+  expect(position()).toBe('translate(200px, 150px)')
+  press({ x: 600, y: 450 })
+  expect(width()).toBe('400px')
   expect(screen.queryByRole('dialog')).not.toBeNull()
+})
+
+it('stays open for a drag that ends beside the image or comes back to its start', () => {
+  render(<Viewer />)
   press({ x: 500, y: 400 }, { x: 50, y: 50 })
   expect(screen.queryByRole('dialog')).not.toBeNull()
-  // A drag beside the image that comes back to where it began is still a drag.
   press({ x: 50, y: 50 }, { x: 50, y: 50 }, [{ x: 150, y: 150 }])
   expect(screen.queryByRole('dialog')).not.toBeNull()
 })

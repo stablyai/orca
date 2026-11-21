@@ -61,6 +61,8 @@ export function usePanZoomViewport({
   upscale = false,
   contain = false,
   fitPadding,
+  actualSizeClickZoom,
+  zoomedDragPans = false,
   onClickOutsideContent
 }: {
   content: PanZoomSize | null
@@ -70,6 +72,10 @@ export function usePanZoomViewport({
   contain?: boolean
   /** Margin kept around fitted content, in pixels. */
   fitPadding?: number
+  /** Zoom (relative to the fit) a click reaches when the fit already shows actual size. */
+  actualSizeClickZoom?: number
+  /** Once zoomed in, a plain drag pans; at the fit it still does nothing. */
+  zoomedDragPans?: boolean
   /** A click (not a drag) beside the content runs this instead of toggling zoom. */
   onClickOutsideContent?: () => void
 }): PanZoomViewport {
@@ -188,6 +194,12 @@ export function usePanZoomViewport({
   // Like Chromium's image view: a click flips between the fit and actual size at the cursor.
   const atFit = !view || Math.abs(view.zoom - 1) < FIT_ZOOM_EPSILON
   const fitIsActualSize = !geometry || Math.abs(geometry.fitScale - 1) < FIT_ZOOM_EPSILON
+  // Where a click from the fit zooms to; none when the fit is actual size and no step is set.
+  const clickZoom = !geometry
+    ? undefined
+    : fitIsActualSize
+      ? actualSizeClickZoom
+      : 1 / geometry.fitScale
   const toggleZoomAt = useCallback(
     (anchor: PanZoomPoint) => {
       if (!geometry) {
@@ -197,7 +209,7 @@ export function usePanZoomViewport({
         fit()
         return
       }
-      if (fitIsActualSize) {
+      if (!clickZoom) {
         return
       }
       // From the current view: an uncontained fit may already be panned.
@@ -205,12 +217,12 @@ export function usePanZoomViewport({
         zoomViewAt({
           ...geometry,
           view: current ? settleView(current, geometry) : getFittedPanZoomView(geometry.content),
-          nextZoom: 1 / geometry.fitScale,
+          nextZoom: clickZoom,
           anchor
         })
       )
     },
-    [atFit, fit, fitIsActualSize, geometry]
+    [atFit, clickZoom, fit, geometry]
   )
 
   const endDrag = useCallback(() => {
@@ -229,7 +241,11 @@ export function usePanZoomViewport({
         event.currentTarget.setPointerCapture(event.pointerId)
         const point = { x: event.clientX, y: event.clientY }
         // Touch and pen have no Alt key, so they keep dragging to pan.
-        const pan = event.altKey || event.pointerType === 'touch' || event.pointerType === 'pen'
+        const pan =
+          event.altKey ||
+          event.pointerType === 'touch' ||
+          event.pointerType === 'pen' ||
+          (zoomedDragPans && !atFit)
         const { pointerId, altKey: alt } = event
         gestureRef.current = { pointerId, start: point, last: point, pan, alt, moved: false }
         setDragging(pan)
@@ -287,7 +303,7 @@ export function usePanZoomViewport({
       onPointerCancel: (event) => ownGesture(event) && endDrag(),
       onLostPointerCapture: (event) => ownGesture(event) && endDrag()
     }),
-    [endDrag, geometry, offset, onClickOutsideContent, scale, toggleZoomAt]
+    [atFit, endDrag, geometry, offset, onClickOutsideContent, scale, toggleZoomAt, zoomedDragPans]
   )
 
   let cursor: PanZoomCursor | null = null
@@ -295,9 +311,9 @@ export function usePanZoomViewport({
     cursor = 'grabbing'
   } else if (altHeld) {
     cursor = 'grab'
-  } else if (geometry && view && (!atFit || !fitIsActualSize)) {
-    // Zoom is relative to the fit, so a click's target is 1/fitScale from the fit and 1 otherwise.
-    const targetZoom = atFit ? 1 / geometry.fitScale : 1
+  } else if (geometry && view && (!atFit || clickZoom)) {
+    // Zoom is relative to the fit, so a click's target is clickZoom from the fit and 1 otherwise.
+    const targetZoom = atFit ? (clickZoom ?? 1) : 1
     cursor = targetZoom > view.zoom ? 'zoom-in' : 'zoom-out'
   }
 
