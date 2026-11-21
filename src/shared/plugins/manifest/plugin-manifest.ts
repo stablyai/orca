@@ -21,6 +21,7 @@ import {
   validatePluginManifestV2Rules
 } from './plugin-manifest-v2-rules'
 import { upgradePluginManifestV1Names } from './plugin-manifest-v1-names'
+import { withDrawablePluginPanelIcons } from './plugin-panel-icon-fallback'
 import { formatPluginSchemaIssues } from './plugin-schema-issues'
 import { pluginApiMajorSchema } from '../workers/plugin-host-api-major'
 import {
@@ -257,13 +258,18 @@ export function qualifiedPluginKey(manifest: { publisher: string; id: string }):
 }
 
 export type PluginManifestParseResult =
-  | { ok: true; manifest: PluginManifest }
-  | { ok: false; error: string }
+  /** `warnings`: advice that did not stop the load, such as a panel icon shown as `puzzle`. */
+  { ok: true; manifest: PluginManifest; warnings?: string[] } | { ok: false; error: string }
 
 function parseWith(schema: typeof pluginManifestSchema, raw: unknown): PluginManifestParseResult {
-  const parsed = schema.safeParse(raw)
+  const drawable = withDrawablePluginPanelIcons(raw)
+  const parsed = schema.safeParse(drawable.raw)
   if (parsed.success) {
-    return { ok: true, manifest: parsed.data }
+    return {
+      ok: true,
+      manifest: parsed.data,
+      ...(drawable.warnings.length > 0 ? { warnings: drawable.warnings } : {})
+    }
   }
   return { ok: false, error: formatPluginSchemaIssues(parsed.error.issues, raw) }
 }

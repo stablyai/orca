@@ -5,10 +5,16 @@ import { PLUGIN_ENUM_SINCE_KEY } from '../manifest/plugin-engine-floor-keys'
 import {
   pluginPathFieldDoc,
   pluginFieldDoc,
+  PLUGIN_PANEL_PATH_ICON_SINCE,
   PLUGIN_PANEL_UI_SINCE,
   PLUGIN_SCHEMA_SINCE_V1,
   PLUGIN_SOURCE_MODULES_SINCE
 } from '../manifest/plugin-schema-field-docs'
+import {
+  PLUGIN_PANEL_PATH_ICON_DEFAULT_VIEW_BOX,
+  PLUGIN_PANEL_PATH_ICON_MAX_LENGTH,
+  pluginPanelPathIconSchema
+} from './plugin-panel-path-icon'
 
 export const PLUGIN_PANEL_LIMIT = 64
 
@@ -97,6 +103,12 @@ export const PLUGIN_PANEL_UI_KINDS = ['html', 'components'] as const
 export type PluginPanelUi = (typeof PLUGIN_PANEL_UI_KINDS)[number]
 const COMPONENTS_PANEL_ENTRY = /\.(?:m?js|tsx?|mts|jsx)$/i
 
+/** A built-in icon name, or (format 2) one inline SVG path drawn in the theme color. */
+export const pluginPanelIconSchema = z.union([
+  z.enum(PLUGIN_PANEL_ICONS),
+  pluginPanelPathIconSchema
+])
+
 export const pluginPanelContributionSchema = z
   .object({
     id: pluginIdSchema.meta(
@@ -111,17 +123,14 @@ export const pluginPanelContributionSchema = z
         'Dashboard'
       ])
     ),
-    icon: z
-      .enum(PLUGIN_PANEL_ICONS)
-      .optional()
-      .meta({
-        ...pluginFieldDoc(
-          'Icon shown in the right-sidebar activity bar. Defaults to `plug`.',
-          PLUGIN_SCHEMA_SINCE_V1,
-          ['database']
-        ),
-        [PLUGIN_ENUM_SINCE_KEY]: PLUGIN_PANEL_ICON_SINCE
-      }),
+    icon: pluginPanelIconSchema.optional().meta({
+      ...pluginFieldDoc(
+        `Icon shown in the right-sidebar activity bar. Defaults to \`puzzle\`. Either a built-in name, or (manifest format 2, needs \`engines.orca\` \`>=${PLUGIN_PANEL_PATH_ICON_SINCE}\`) an object with inline SVG path data that Orca draws in the theme color: \`path\` (required; up to ${PLUGIN_PANEL_PATH_ICON_MAX_LENGTH} characters of path commands and numbers, starting with \`M\`), \`viewBox\` (\`"0 0 W H"\`, W and H from 1 to 1024; default \`"${PLUGIN_PANEL_PATH_ICON_DEFAULT_VIEW_BOX}"\`) and \`mode\` (\`stroke\`, the default, draws a 2-unit outline with round caps and joins like Lucide; \`fill\` fills the shape). Unknown keys are refused. SVG files are not supported. An invalid path icon shows \`puzzle\` and a warning. For a Lucide icon made of several elements, convert each \`<circle>\`, \`<rect>\` or \`<line>\` to path commands and join all of them into one \`path\`. Example: \`{ "path": "M4 4h16v16H4z", "mode": "stroke" }\`.`,
+        PLUGIN_SCHEMA_SINCE_V1,
+        ['database']
+      ),
+      [PLUGIN_ENUM_SINCE_KEY]: PLUGIN_PANEL_ICON_SINCE
+    }),
     entry: pluginRelativePathSchema.meta(
       pluginPathFieldDoc(
         `What the panel runs: an HTML page for \`ui: "html"\`, a \`.js\`/\`.mjs\` module for \`ui: "components"\`. Either may instead be a \`.ts\`/\`.tsx\`/\`.mts\`/\`.jsx\` file, which Orca transpiles when it loads (needs \`engines.orca\` \`>=${PLUGIN_SOURCE_MODULES_SINCE}\`; an \`html\` panel then gets a generated page around it). It is trusted code: install panels you trust.`,
