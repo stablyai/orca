@@ -7,6 +7,7 @@ import {
 import { installBrowserWindowPrompt } from './browser/window-controls/browser-window-prompt-installation'
 import { installNativeChatVisualGuestTheme } from './native-chat/native-chat-visual-guest-theme'
 import { installBrowserGuestEditProtection } from './browser/edit-protection/browser-guest-edit-protection'
+import { isHeaderRewriteSiteHost } from '../shared/browser/identity/browser-site-hosts'
 import { BROWSER_GUEST_SUBFRAME_UNLOADED_CHANNEL } from '../shared/browser/identity/browser-subframe-unload'
 import { installBrowserGuestFormPostReport } from './browser/edit-protection/browser-guest-form-post-report'
 import { installBrowserGuestPageVisibilityReport } from './browser/visibility/browser-guest-page-visibility-report'
@@ -34,10 +35,13 @@ if (process.isMainFrame) {
   })
 }
 // Electron reports no frame removal; a site iframe's demand for header rewrites ends with it.
+// Only those sites' documents report, so ordinary iframes send main nothing.
 if (!process.isMainFrame) {
-  window.addEventListener('pagehide', () =>
-    ipcRenderer.send(BROWSER_GUEST_SUBFRAME_UNLOADED_CHANNEL)
-  )
+  window.addEventListener('pagehide', () => {
+    if (isHeaderRewriteSiteHost(location.hostname.toLowerCase())) {
+      ipcRenderer.send(BROWSER_GUEST_SUBFRAME_UNLOADED_CHANNEL)
+    }
+  })
 }
 installBrowserGuestFormPostReport({
   send: (channel, payload) => ipcRenderer.send(channel, payload)
