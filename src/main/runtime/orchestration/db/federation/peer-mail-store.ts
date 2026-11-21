@@ -59,19 +59,19 @@ export function getPeerMailConversation(
   this: OrchestrationDb,
   conversationId: string
 ): PeerMailConversationRow | undefined {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT over this table returns exactly its row shape.
   return this.db
-    .prepare('SELECT * FROM peer_mail_conversations WHERE conversation_id = ?')
-    .get(conversationId) as PeerMailConversationRow | undefined
+    .prepare<PeerMailConversationRow>(
+      'SELECT * FROM peer_mail_conversations WHERE conversation_id = ?'
+    )
+    .get(conversationId)
 }
 
 export function listHomePeerMailEnvironments(this: OrchestrationDb): string[] {
-  const statement = this.db.prepare(
+  const statement = this.db.prepare<{ environment_id: string }>(
     `SELECT DISTINCT environment_id FROM peer_mail_conversations
      WHERE role = 'home' AND environment_id IS NOT NULL`
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT over this table returns exactly these columns.
-  const rows = statement.all() as { environment_id: string }[]
+  const rows = statement.all()
   return rows.map((row) => row.environment_id)
 }
 
@@ -80,15 +80,14 @@ export function listPeerConversationIdsWithPendingReplies(
   this: OrchestrationDb,
   peerFingerprint: string
 ): string[] {
-  const statement = this.db.prepare(
+  const statement = this.db.prepare<{ conversation_id: string }>(
     `SELECT DISTINCT c.conversation_id FROM federation_relay_items i
      JOIN peer_mail_conversations c ON c.conversation_id = i.dispatch_id
      WHERE i.direction = 'to_home' AND i.acked_at IS NULL
        AND c.role = 'peer' AND c.peer_fingerprint = ?
      ORDER BY c.conversation_id`
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT over this table returns exactly these columns.
-  const rows = statement.all(peerFingerprint) as { conversation_id: string }[]
+  const rows = statement.all(peerFingerprint)
   return rows.map((row) => row.conversation_id)
 }
 
@@ -96,10 +95,9 @@ export function getPeerMailMessage(
   this: OrchestrationDb,
   messageId: string
 ): PeerMailMessageRow | undefined {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT over this table returns exactly its row shape.
-  return this.db.prepare('SELECT * FROM peer_mail_messages WHERE message_id = ?').get(messageId) as
-    | PeerMailMessageRow
-    | undefined
+  return this.db
+    .prepare<PeerMailMessageRow>('SELECT * FROM peer_mail_messages WHERE message_id = ?')
+    .get(messageId)
 }
 
 export function isPeerMailSenderLabel(this: OrchestrationDb, label: string): boolean {

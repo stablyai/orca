@@ -39,6 +39,7 @@ export const LINT_STEPS = [
   'check:max-lines-ratchet',
   'check:mobile-shared-dependency-versions',
   'check:ts-nocheck-ratchet',
+  'check:unjustified-lint-disable-ratchet',
   'check:workspace-record-read-ratchet',
   'check:tab-map-seam-ratchet',
   'check:agent-status-map-ratchet',

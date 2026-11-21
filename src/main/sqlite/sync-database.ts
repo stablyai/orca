@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import type { backup, BackupOptions, DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { hasNodeSqliteReaderApi } from './node-sqlite-reader-api'
 import { NodeSqliteStatement } from './node-sqlite-statement'
-import type { SqliteStatement } from './sqlite-statement'
+import type { SqliteRow, SqliteStatement } from './sqlite-statement'
 
 type SqlitePath = ConstructorParameters<typeof DatabaseSync>[0]
 
@@ -95,7 +95,13 @@ class SyncDatabase {
     this.db.function(name, callback)
   }
 
-  prepare(sql: string): SqliteStatement {
+  /** `Row` names the columns the caller's own SELECT projects; nothing here checks it. */
+  prepare<Row extends SqliteRow = SqliteRow>(sql: string): SqliteStatement<Row> {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Row only re-labels the rows this statement already returns.
+    return this.prepareStatement(sql) as unknown as SqliteStatement<Row>
+  }
+
+  private prepareStatement(sql: string): SqliteStatement {
     const cached = this.statementCache.get(sql)
     if (cached) {
       this.statementCache.delete(sql)

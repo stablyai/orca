@@ -60,10 +60,9 @@ export function getRemoteDispatch(
   db: OrchestrationDb,
   dispatchId: string
 ): RemoteDispatchRow | undefined {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns exactly its row shape.
-  return db.db.prepare('SELECT * FROM remote_dispatches WHERE dispatch_id = ?').get(dispatchId) as
-    | RemoteDispatchRow
-    | undefined
+  return db.db
+    .prepare<RemoteDispatchRow>('SELECT * FROM remote_dispatches WHERE dispatch_id = ?')
+    .get(dispatchId)
 }
 
 type RemoteDispatchListRow = RemoteDispatchRow & {
@@ -80,14 +79,15 @@ export function listRemoteDispatches(
   const select = `SELECT record.*, link.state AS link_state, link.server_name AS server_name
     FROM remote_dispatches record
     LEFT JOIN remote_run_links link ON link.conversation_id = record.conversation_id`
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the record's columns plus the joined link's state and name.
-  return (
-    scope.runId === undefined
-      ? db.db.prepare(`${select} ORDER BY record.rowid DESC LIMIT ?`).all(scope.limit)
-      : db.db
-          .prepare(`${select} WHERE record.run_id = ? ORDER BY record.rowid DESC LIMIT ?`)
-          .all(scope.runId, scope.limit)
-  ) as RemoteDispatchListRow[]
+  return scope.runId === undefined
+    ? db.db
+        .prepare<RemoteDispatchListRow>(`${select} ORDER BY record.rowid DESC LIMIT ?`)
+        .all(scope.limit)
+    : db.db
+        .prepare<RemoteDispatchListRow>(
+          `${select} WHERE record.run_id = ? ORDER BY record.rowid DESC LIMIT ?`
+        )
+        .all(scope.runId, scope.limit)
 }
 
 export function countRemoteDispatches(db: OrchestrationDb, runId: string | undefined): number {
@@ -183,10 +183,11 @@ function oweStopInTransaction(
   if (!record) {
     return undefined
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT over this table returns exactly these columns.
   const known = db.db
-    .prepare('SELECT stop_count FROM remote_stop_intents WHERE dispatch_id = ? AND intent_key = ?')
-    .get(dispatchId, intentKey) as { stop_count: number } | undefined
+    .prepare<{ stop_count: number }>(
+      'SELECT stop_count FROM remote_stop_intents WHERE dispatch_id = ? AND intent_key = ?'
+    )
+    .get(dispatchId, intentKey)
   if (known) {
     return { record, stopCount: known.stop_count }
   }
@@ -221,9 +222,8 @@ export function listOwedRemoteStops(
   environmentId: string,
   now: number
 ): RemoteDispatchRow[] {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns exactly its row shape.
   return db.db
-    .prepare(
+    .prepare<RemoteDispatchRow>(
       `SELECT record.* FROM remote_dispatches record
        JOIN remote_run_links link
          ON link.conversation_id = record.conversation_id AND link.state = 'open'
@@ -231,7 +231,7 @@ export function listOwedRemoteStops(
          AND (record.stop_retry_at IS NULL OR record.stop_retry_at <= ?)
        ORDER BY record.rowid`
     )
-    .all(environmentId, now) as RemoteDispatchRow[]
+    .all(environmentId, now)
 }
 
 /** The server no longer has the Dispatch at all; whatever stop was owed for it can never be proven. */
@@ -303,8 +303,7 @@ export function getRemoteOwnedQuestion(
   db: OrchestrationDb,
   messageId: string
 ): RemoteOwnedQuestionRow | undefined {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns exactly its row shape.
   return db.db
-    .prepare('SELECT * FROM remote_owned_questions WHERE message_id = ?')
-    .get(messageId) as RemoteOwnedQuestionRow | undefined
+    .prepare<RemoteOwnedQuestionRow>('SELECT * FROM remote_owned_questions WHERE message_id = ?')
+    .get(messageId)
 }
