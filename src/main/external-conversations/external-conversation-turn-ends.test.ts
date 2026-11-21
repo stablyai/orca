@@ -45,7 +45,7 @@ it("keeps a failed turn's reason on its state-only end, which the cloud stores f
     },
     link,
     async () => [],
-    async () => new Set([link.externalId])
+    async () => ({ covered: new Set([link.externalId]), paused: false })
   )
   expect(told).toBe(true)
   expect(emit).toHaveBeenCalledWith(
@@ -61,7 +61,10 @@ it("keeps a failed turn's reason on its state-only end, which the cloud stores f
 })
 
 it('fills an answered turn with how long it ran, by its own start and end', async () => {
-  const fill = vi.fn<ConversationReplyFill>(async () => new Set(['slack:T1:C1:1.2']))
+  const fill = vi.fn<ConversationReplyFill>(async () => ({
+    covered: new Set(['slack:T1:C1:1.2']),
+    paused: false
+  }))
   const end: ChatTurnEnd = {
     ended: {
       kind: 'turn-ended',
@@ -153,7 +156,10 @@ it('ends a Slack turn its stamps name state-only even when its rows are already 
     return { told, emitted: emit.mock.calls.map(([event]) => event.stateOnly === true) }
   }
   // Recovery already filled, sent and deleted its rows: the fill covers nothing.
-  expect(await run('slack', async () => new Set())).toEqual({ told: true, emitted: [true] })
+  expect(await run('slack', async () => ({ covered: new Set<string>(), paused: false }))).toEqual({
+    told: true,
+    emitted: [true]
+  })
   // The fill failed: recovery drains the rows; the thread still never gets a full end.
   expect(
     await run('slack', async () => {
@@ -161,5 +167,8 @@ it('ends a Slack turn its stamps name state-only even when its rows are already 
     })
   ).toEqual({ told: true, emitted: [true] })
   // Sources outside the outbox keep their full end.
-  expect(await run('github', async () => new Set())).toEqual({ told: false, emitted: [] })
+  expect(await run('github', async () => ({ covered: new Set<string>(), paused: false }))).toEqual({
+    told: false,
+    emitted: []
+  })
 })

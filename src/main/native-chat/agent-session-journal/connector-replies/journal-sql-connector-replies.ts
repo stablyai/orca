@@ -1,3 +1,4 @@
+import type { ConnectorFailure } from '../../../../shared/connectors/connector-cloud-contract'
 import type {
   JournalConnectorReplyCut,
   JournalConnectorReplyCutRows,
@@ -46,8 +47,12 @@ export class JournalSqlConnectorReplies {
   }
 
   /** The continuation's own turn was cut and is owed again: its claimed rows become that cut's. */
-  async recut(claimMessageId: string, cut: JournalConnectorReplyCut): Promise<boolean> {
-    return await this.maintain({ kind: 'connector-replies-recut', claimMessageId, cut })
+  async recut(
+    claimMessageId: string,
+    cut: JournalConnectorReplyCut,
+    failure?: ConnectorFailure
+  ): Promise<boolean> {
+    return await this.maintain({ kind: 'connector-replies-recut', claimMessageId, cut, failure })
   }
 
   /** The claiming message never became the continuation: its rows are their cut's again. */

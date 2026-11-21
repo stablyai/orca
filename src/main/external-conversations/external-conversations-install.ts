@@ -22,6 +22,7 @@ import {
   conversationReplyFill,
   type ConversationReplyFill
 } from './external-conversation-reply-fill'
+import { usageLimitReplyPause } from './external-conversation-reply-pause'
 import { ConnectorReplyRecovery } from './external-conversation-reply-recovery'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { canonicalOrcaSessionId } from '../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id'
@@ -182,7 +183,13 @@ function connectorReplyOutbox(
 ): { fill: ConversationReplyFill; admitted: (sessionId: string) => void } {
   const journal = () => getStructuredAgentSessionHost()?.deps.store.connectorReplies() ?? null
   const filled = () => runtime.getConnectorCloud?.()?.repliesFilled()
-  const fill = conversationReplyFill(journal, filled)
+  const usageLimitDisposition = async (sessionId: string, turnItemId: string) =>
+    getStructuredAgentSessionHost()?.usageLimitContinue.disposition(sessionId, turnItemId)
+  const fill = conversationReplyFill(
+    journal,
+    filled,
+    usageLimitReplyPause(journal, usageLimitDisposition)
+  )
   const recovery = new ConnectorReplyRecovery({
     journal,
     chat: getStructuredAgentSessionHost,
@@ -194,6 +201,7 @@ function connectorReplyOutbox(
       [...allLinks(store)].find(({ link }) => link.sessionId === sessionId)?.link.agent ?? '',
     fillTurn: fill,
     filled,
+    usageLimitDisposition,
     // This start's own continuations of restart cuts claim first; whatever they left closes then.
     ...(runtime.structuredAgentSessionLaunchContinuation
       ? { continuationsSettled: runtime.structuredAgentSessionLaunchContinuation.continued }
@@ -215,9 +223,9 @@ function connectorReplyOutbox(
   boot()
   return {
     fill: async (turn) => {
-      const covered = await fill(turn)
+      const filledTurn = await fill(turn)
       recovery.turnEnded(turn.sessionId)
-      return covered
+      return filledTurn
     },
     admitted: (sessionId) => recovery.admitted(sessionId)
   }

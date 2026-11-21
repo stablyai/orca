@@ -119,7 +119,7 @@ export async function endRepliedTurn(
   }
   const failure =
     end.news.outcome === 'failure' ? { failure: connectorFailure(turn.failure, end.agent) } : {}
-  const covered = await fill({
+  const { covered, paused } = await fill({
     sessionId: end.news.sessionId,
     turnItemId: turn.turnItemId,
     stamps: turn.stamps,
@@ -132,7 +132,7 @@ export async function endRepliedTurn(
     ...failure
   }).catch((error: unknown) => {
     console.warn('[connector] could not fill reply outbox rows', error)
-    return new Set<string>()
+    return { covered: new Set<string>(), paused: false }
   })
   // A turn whose stamps name this conversation answers it through the outbox only, even when its
   // rows were already sent and gone or the fill failed (recovery drains what is left): never also as
@@ -151,7 +151,15 @@ export async function endRepliedTurn(
   await end.workersChecked()
   if (end.current()) {
     // The cloud keeps the thread's failure from whichever of this and the reply lands last.
-    end.emit({ ...end.ended, ...end.turnFor(turn), stateOnly: true, ...failure })
+    // Paused with a known reset: the thread says when it picks the work up again (Phase 1 §4).
+    const resumes = paused && failure.failure?.usageLimit?.resetsAt !== undefined
+    end.emit({
+      ...end.ended,
+      ...end.turnFor(turn),
+      stateOnly: true,
+      ...failure,
+      ...(resumes ? { resumes: true as const } : {})
+    })
   }
   return true
 }

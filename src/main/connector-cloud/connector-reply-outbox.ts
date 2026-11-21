@@ -1,3 +1,4 @@
+import type { ConnectorFailure } from '../../shared/connectors/connector-cloud-contract'
 // The reply outbox's sender (design item 125 §3): filled, unsent rows go to the cloud as reply events
 // under a hello that lists replies.outbox, else through /replies (the kill switch); a row is marked
 // sent only once the cloud accepted it.
@@ -27,7 +28,11 @@ export type ConnectorReplyJournal = {
 /** The rows' cut and claim writes (Phase 1): what restart and usage-limit recovery change. */
 export type ConnectorReplyCutJournal = ConnectorReplyJournal & {
   cut(rows: JournalConnectorReplyCutRows): Promise<boolean>
-  recut(claimMessageId: string, cut: JournalConnectorReplyCut): Promise<boolean>
+  recut(
+    claimMessageId: string,
+    cut: JournalConnectorReplyCut,
+    failure?: ConnectorFailure
+  ): Promise<boolean>
   releaseClaim(claimMessageId: string): Promise<boolean>
 }
 

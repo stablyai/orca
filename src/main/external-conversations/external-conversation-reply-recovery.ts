@@ -1,8 +1,4 @@
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSnapshot,
-  AgentJournalSubmission
-} from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalSqlReads } from '../native-chat/agent-session-journal/journal-sql-reads'
 import type {
   AgentJournalConnectorClaim,
@@ -12,13 +8,7 @@ import type {
   JournalConnectorReplyCut,
   JournalConnectorReplyRow
 } from '../../shared/agent-session/journal/journal-connector-reply'
-import { connectorReplyTurnStamps } from '../../shared/agent-session/journal/journal-connector-reply-turn'
-import {
-  readAgentJournalTurn,
-  readAgentJournalTurnOutcome
-} from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
-import { structuredAgentSessionTurnAssistantMessage } from '../../shared/agent-session/requests/structured-agent-session-latest-request'
-import { structuredAgentSessionTurnFailure } from '../../shared/agent-session/requests/structured-agent-session-turn-failure'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { readAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import type { ConnectorFailure } from '../../shared/connectors/connector-cloud-contract'
 import { connectorFailure } from './external-conversation-failure'
@@ -27,7 +17,7 @@ import type {
   ConnectorReplyJournal
 } from '../connector-cloud/connector-reply-outbox'
 import type { ConversationReplyFill } from './external-conversation-reply-fill'
-import { readEndedChatTurnOpener } from './external-conversation-turn-opener'
+import { fillRecoveredTurn } from './external-conversation-reply-turn-fill'
 import {
   claimCut,
   expectOf,
@@ -44,6 +34,7 @@ import {
 const OPEN_AT_ONCE = 2
 // A watched chat's journal moves with every streamed token; it is settled once it pauses.
 const SETTLE_AFTER_MS = 2_000
+const PAUSE_RECHECK_MS = 60_000
 
 export type ReplyRecoveryChat = {
   conversation(sessionId: string): Promise<unknown>
@@ -76,6 +67,8 @@ export class ConnectorReplyRecovery {
       fillTurn: ConversationReplyFill
       /** Rows were filled: wake the sender. */
       filled: () => void
+      /** Whether a usage-limit cut's requests still wait for its automatic continue. */
+      usageLimitDisposition?: (sessionId: string, turnItemId: string) => Promise<string | undefined>
       /** Settles once this start continued what the last run cut, or left it to a person. */
       continuationsSettled?: Promise<unknown>
     }
@@ -187,7 +180,7 @@ export class ConnectorReplyRecovery {
     const unresolved: AgentJournalConnectorDelivery[] = []
     const cut: AgentJournalConnectorDelivery[] = []
     for (const turn of turns) {
-      const verdict = await this.fillTurn(chat, sessionId, snapshot, turn)
+      const verdict = await fillRecoveredTurn(chat, sessionId, snapshot, turn, this.deps)
       ;(verdict.kind === 'cut' ? cut : unresolved).push(...verdict.stamps)
     }
     const idle = !turns.some((turn) => readAgentJournalTurn(turn.body)?.state === 'running')
@@ -196,17 +189,27 @@ export class ConnectorReplyRecovery {
       ...turns.filter((turn) => turnVerdictOf(turn) !== null).map((turn) => turn.sequence)
     )
     const settled = this.continuationsSettled
+    const left = (await journal.read(sessionId)).filter((row) => !row.fill)
+    const endedCuts = new Set<string>()
+    const paused = left.flatMap((row) =>
+      row.cut?.kind === 'usage_limit' && row.claimMessageId === undefined ? [row.cut.turnId] : []
+    )
+    for (const turnItemId of new Set(paused)) {
+      if ((await this.deps.usageLimitDisposition?.(sessionId, turnItemId)) === 'ended') {
+        endedCuts.add(turnItemId)
+      }
+    }
     const evidence = (row: Unfilled) =>
       rowVerdict(row, {
         view,
         cut,
         unresolved,
         settled,
+        endedCuts,
         idle,
         lastEnded,
         rejectionOf: (submission) => this.rejectionOf(sessionId, submission)
       })
-    const left = (await journal.read(sessionId)).filter((row) => !row.fill)
     const fills = left.flatMap((row) => {
       const verdict = evidence(row)
       return verdict ? [{ row, verdict }] : []
@@ -221,8 +224,13 @@ export class ConnectorReplyRecovery {
         ...(verdict.failure ? { failure: verdict.failure } : {})
       }))
     )
-    if ((await journal.read(sessionId)).some((row) => !row.fill)) {
+    const owed = (await journal.read(sessionId)).filter((row) => !row.fill)
+    if (owed.length > 0) {
       this.watch(chat, sessionId)
+      // A cancel, the setting or the chat's closing ends a pause without moving the journal.
+      if (owed.some((row) => row.cut?.kind === 'usage_limit')) {
+        this.later(sessionId, PAUSE_RECHECK_MS)
+      }
     } else {
       this.unwatch(sessionId)
     }
@@ -253,54 +261,6 @@ export class ConnectorReplyRecovery {
     return failure ? { failure } : {}
   }
 
-  /** Fills the rows a turn with a verdict answered; returns those one without a verdict claims
-   *  (unresolved), or a cut turn's (cut). */
-  private async fillTurn(
-    chat: ReplyRecoveryChat,
-    sessionId: string,
-    snapshot: AgentJournalSnapshot,
-    turn: AgentJournalRenderItem
-  ): Promise<{ kind: 'unresolved' | 'cut'; stamps: AgentJournalConnectorDelivery[] }> {
-    const outcome = readAgentJournalTurnOutcome(readAgentJournalTurn(turn.body))
-    const items = snapshot.items.filter((item) => item.sequence <= turn.sequence)
-    const opener = await readEndedChatTurnOpener(
-      () => chat.journalReads(sessionId),
-      items,
-      turn.itemId
-    )
-    const stamps = connectorReplyTurnStamps(snapshot, opener, turn.itemId)
-    if (!outcome) {
-      // Running or unverifiable: its requests stay unfilled and watched (O3). Cut by a restart or
-      // an exit: owed to a continuation until this start's continuations settled.
-      const verdict = turnVerdictOf(turn)
-      return {
-        kind: verdict === 'interruption' || verdict === 'unconfirmed' ? 'cut' : 'unresolved',
-        stamps
-      }
-    }
-    if (stamps.length > 0) {
-      await this.deps.fillTurn({
-        sessionId,
-        turnItemId: turn.itemId,
-        stamps,
-        ...(opener ? { openerItemId: opener.itemId } : {}),
-        outcome,
-        prose: structuredAgentSessionTurnAssistantMessage(snapshot.items, turn.itemId),
-        bot: this.deps.isBot(sessionId),
-        links: [],
-        ...(outcome === 'failure'
-          ? {
-              failure: connectorFailure(
-                structuredAgentSessionTurnFailure(snapshot.items, turn.itemId),
-                this.deps.agentOf(sessionId)
-              )
-            }
-          : {})
-      })
-    }
-    return { kind: 'unresolved', stamps: [] }
-  }
-
   private async fillEach(
     journal: ConnectorReplyJournal,
     rows: readonly Unfilled[],
@@ -326,12 +286,12 @@ export class ConnectorReplyRecovery {
     }
   }
 
-  private later(sessionId: string): void {
+  private later(sessionId: string, after = SETTLE_AFTER_MS): void {
     clearTimeout(this.timers.get(sessionId))
     const timer = setTimeout(() => {
       this.timers.delete(sessionId)
       void this.settle(sessionId)
-    }, SETTLE_AFTER_MS)
+    }, after)
     timer.unref?.()
     this.timers.set(sessionId, timer)
   }
