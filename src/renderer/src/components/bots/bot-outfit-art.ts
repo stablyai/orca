@@ -34,16 +34,27 @@ type OutfitFile<T> = {
 }
 
 const READ_RETRIES = 3
-const READ_RETRY_MS = 5000
+const FIRST_RETRY_MS = 250
 
+async function fetchJson<T>(url: string): Promise<T> {
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`${url}: ${String(response.status)}`)
+  }
+  const value: T = await response.json()
+  return value
+}
+
+// Fetched as plain files, not imported as modules: the browser keeps a failed module import for the page's
+// life, so a read that failed once could never be tried again and the outfit stayed blank.
 export function outfitFiles<T>(
-  readers: Record<string, () => Promise<T>>,
+  urls: Record<string, string>,
   pathOf: (outfit: BotAvatarOutfit) => string
 ): (outfit: BotAvatarOutfit) => OutfitFile<T> | null {
   const files = new Map<BotAvatarOutfit, OutfitFile<T>>()
   return (outfit) => {
-    const read = readers[pathOf(outfit)]
-    if (!read) {
+    const url = urls[pathOf(outfit)]
+    if (!url) {
       return null
     }
     const known = files.get(outfit)
@@ -53,24 +64,27 @@ export function outfitFiles<T>(
     let failures = 0
     const load = (): void => {
       file.reading = true
-      read().then(
+      fetchJson<T>(url).then(
         (value) => {
           file.value = value
           for (const waiting of file.listeners) {
             waiting()
           }
         },
-        // A failed read is tried again while pictures still wait on it, a few times, and by the next
+        // A failed read is tried again soon while pictures still wait on it, a few times, and by the next
         // picture that wears the outfit.
         () => {
           file.reading = false
           failures += 1
           if (failures <= READ_RETRIES) {
-            setTimeout(() => {
-              if (file.listeners.size > 0 && file.value === undefined && !file.reading) {
-                load()
-              }
-            }, READ_RETRY_MS)
+            setTimeout(
+              () => {
+                if (file.listeners.size > 0 && file.value === undefined && !file.reading) {
+                  load()
+                }
+              },
+              FIRST_RETRY_MS * 2 ** (failures - 1)
+            )
           }
         }
       )
@@ -92,15 +106,19 @@ export function outfitFiles<T>(
   }
 }
 
-const layerFile = outfitFiles(
-  import.meta.glob<BotOutfitLayers>('../../../../shared/bot-mascots/outfits/*.json', {
-    import: 'default'
+const layerFile = outfitFiles<BotOutfitLayers>(
+  import.meta.glob<string>('../../../../shared/bot-mascots/outfits/*.json', {
+    query: '?url',
+    import: 'default',
+    eager: true
   }),
   (outfit) => `../../../../shared/bot-mascots/outfits/${outfit}.json`
 )
-const largeArtFile = outfitFiles(
-  import.meta.glob<BotOutfitLargeArt>('../../../../shared/bot-mascots/outfits/large/*.json', {
-    import: 'default'
+const largeArtFile = outfitFiles<BotOutfitLargeArt>(
+  import.meta.glob<string>('../../../../shared/bot-mascots/outfits/large/*.json', {
+    query: '?url',
+    import: 'default',
+    eager: true
   }),
   (outfit) => `../../../../shared/bot-mascots/outfits/large/${outfit}.json`
 )
