@@ -3,6 +3,7 @@ import { makeTestBotItem } from './bot-item.test-fixture'
 import type { BotItem } from './bot-items'
 import type { BotItemsListRead } from './bot-item-schema'
 import { loadBotItemsList, type BotItemsListCall } from './bot-items-list-load'
+import { BOT_ITEMS_WORKER_LINKED } from './bot-items-notice-parts'
 
 const closed = (item: BotItem) => item.status === 'done' || item.status === 'canceled'
 const order = (a: BotItem, b: BotItem) => b.lastActivityAt - a.lastActivityAt || b.number - a.number
@@ -10,7 +11,10 @@ const order = (a: BotItem, b: BotItem) => b.lastActivityAt - a.lastActivityAt ||
 /** A host's list call over these items, as `bots.items.owner.list` pages them; `older` ignores the
  *  params a host before them doesn't know (it answers every open item and one Closed page). */
 function host(items: BotItem[], older = false): BotItemsListCall {
-  return async (params) => structuredClone(answer(items, older, params))
+  return async (params) => {
+    const read = structuredClone(answer(items, older, params))
+    return older ? read : { ...read, items: read.items.map((item) => ({ ...item, summary: true })) }
+  }
 }
 
 function answer(
@@ -121,13 +125,19 @@ describe('loadBotItemsList', () => {
   it('reads the loaded depth again on a whole read, page by page from an older host', async () => {
     const items = seeded()
     for (const older of [false, true]) {
-      const call = host(items, older)
+      const limits: unknown[] = []
+      const call: BotItemsListCall = (params) => {
+        limits.push(params.closedLimit)
+        return host(items, older)(params)
+      }
       let read = await loadBotItemsList(call, null, WHOLE)
       read = await loadBotItemsList(call, read, MORE)
       read = await loadBotItemsList(call, read, MORE)
       read = await loadBotItemsList(call, read, WHOLE)
       expect(read.items.filter(closed)).toHaveLength(150)
       expect(read.items.filter((item) => !closed(item))).toHaveLength(100)
+      // A page per call: no answer larger than one page read alone.
+      expect(limits.every((limit) => limit === undefined || (limit as number) <= 50)).toBe(true)
     }
     // Unchanged, an older host's first page is all a whole read asks of it.
     const older = host(items, true)
@@ -163,6 +173,46 @@ describe('loadBotItemsList', () => {
     }
     await loadBotItemsList(counted, read, WHOLE, { live: () => calls === 0 })
     expect(calls).toBe(1)
+  })
+
+  it('reads the loaded items that link a worker for a worker change, all of them past a page', async () => {
+    const items = seeded()
+    const link = {
+      kind: 'dispatch' as const,
+      ref: 'ctx_1',
+      latest: null,
+      title: null,
+      state: 'working' as const,
+      host: null,
+      startedAt: null,
+      settledAt: null,
+      report: null,
+      pr: null
+    }
+    for (const item of items.slice(0, 3)) {
+      item.links = [link]
+    }
+    const asked: unknown[] = []
+    const inner = host(items)
+    const call: BotItemsListCall = (params) => {
+      asked.push(params.uids ?? 'whole')
+      return inner(params)
+    }
+    let read = await loadBotItemsList(call, null, WHOLE)
+    items[1]!.links = [{ ...link, state: 'done' }]
+    asked.length = 0
+    const worker = { whole: false, parts: [BOT_ITEMS_WORKER_LINKED], more: false }
+    read = await loadBotItemsList(call, read, worker)
+    expect(asked).toEqual([['i3', 'i2', 'i1']])
+    expect(read.items.find((item) => item.uid === 'i2')?.links[0]?.state).toBe('done')
+    // More than one read takes: the list reads whole.
+    for (const item of [...items.slice(0, 100), items[299]!]) {
+      item.links = [link]
+    }
+    read = await loadBotItemsList(call, null, WHOLE)
+    asked.length = 0
+    await loadBotItemsList(call, read, worker)
+    expect(asked[0]).toBe('whole')
   })
 
   it('keeps loaded Closed items when an older host answers a named read whole', async () => {

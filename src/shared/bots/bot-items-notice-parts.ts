@@ -6,9 +6,14 @@ import {
   type BotChangeScope
 } from './bot-change-scope'
 
-/** Those the notice names for the bot (a named change of its workers: the items they link, or none).
- *  Null when the list must read whole: the notice names nothing, its items or workers change names
- *  no items (an older host, a reset), or a kind this build doesn't know changed. */
+/** A part standing for every loaded item that links a worker, named when the read starts (a page
+ *  landed since the notice included). */
+export const BOT_ITEMS_WORKER_LINKED = '\u0000worker-linked'
+
+/** Those the notice names for the bot; a change of its workers names the items that link one
+ *  (`BOT_ITEMS_WORKER_LINKED`). Null when the list must read whole: an items change names no items,
+ *  a workers change comes from a host that can't read by uid, the notice names no kinds, or a kind
+ *  this build doesn't know changed. */
 export function botItemsNoticeParts(
   scope: BotChangeScope | undefined,
   botId: string
@@ -23,10 +28,19 @@ export function botItemsNoticeParts(
   const concerns = (kind: BotChangeKind) =>
     scope.kinds?.includes(kind) === true &&
     botChangeConcerns({ ...scope, kinds: [kind] }, { botId, kinds: [kind] })
-  if (concerns('workers') && !scope.workersNamed) {
-    return null
+  const parts: string[] = []
+  if (concerns('workers')) {
+    if (!scope.namesItems) {
+      return null
+    }
+    parts.push(BOT_ITEMS_WORKER_LINKED)
   }
-  // A named workers change lists the items it touched, or none.
-  const named = scope.itemUids?.[botId]
-  return concerns('items') ? (named ?? null) : (named ?? [])
+  if (concerns('items')) {
+    const named = scope.itemUids?.[botId]
+    if (!named) {
+      return null
+    }
+    parts.push(...named)
+  }
+  return parts
 }

@@ -12,6 +12,7 @@ import {
   mergeNamedBotItems
 } from './bot-item-merge'
 import { reuseEqualJson } from '../reuse-equal-json'
+import { BOT_ITEMS_WORKER_LINKED } from './bot-items-notice-parts'
 
 /** One `bots.items.owner.list` call with these params (the bot, its chats and `summary` added). */
 export type BotItemsListCall = (params: Record<string, unknown>) => Promise<BotItemsListRead>
@@ -37,30 +38,32 @@ export async function loadBotItemsList(
 ): Promise<BotItemsListRead> {
   const { show, live = () => true } = options
   const page = BOT_ITEM_LIMITS.listPage
-  if (!ask.whole && previous && ask.parts.length > 0) {
-    const asked = new Set(ask.parts)
-    const named = await call({ uids: ask.parts })
+  const parts = previous ? namedParts(ask.parts, previous) : null
+  if (!ask.whole && previous && !parts) {
+    return loadBotItemsList(call, previous, { ...ask, whole: true }, options)
+  }
+  if (!ask.whole && previous && parts && parts.length > 0) {
+    const asked = new Set(parts)
+    const named = await call({ uids: parts })
     // A Closed cursor or an item not asked for is a host before `uids` answering whole: what it left
     // out isn't gone, so the list is read whole.
     if (named.nextClosedCursor || named.items.some((item) => !asked.has(item.uid))) {
       return live() ? loadBotItemsList(call, previous, { ...ask, whole: true }, options) : previous
     }
-    const merged = mergeNamedBotItems(previous, named, ask.parts)
+    const merged = mergeNamedBotItems(previous, named, parts)
     return ask.more && live()
       ? loadBotItemsList(call, merged, { whole: false, parts: [], more: true }, options)
       : merged
   }
   if (ask.whole || !previous) {
-    // The depth loaded so far, a page more when asked: in one read, or page by page from a host
-    // before `closedLimit` (it answers one page).
+    // The depth loaded so far, a page more when asked, a page per call: no answer is larger than one
+    // page read alone (a paired connection caps an answer's size).
     const more = ask.more && previous?.nextClosedCursor ? page : 0
     const want = (previous ? botItemsClosedDepth(previous) : page) + more
-    const limit = Math.min(want, BOT_ITEM_LIMITS.closedLoadMax)
-    let value = await call({ closedLimit: limit })
-    // Fewer than asked with more left: a host before `closedLimit` answered one page. When that page
-    // is as loaded, the pages below it are read again only once it moves (as before): the next page
-    // is all that more asks.
-    const older = Boolean(value.nextClosedCursor) && botItemsClosedLoaded(value) < limit
+    let value = await call({})
+    // Full rows: a host before `summary`. When its first page is as loaded, the pages below it are
+    // read again only once it moves (as before): the next page is all that more asks.
+    const older = value.items.length > 0 && !value.items.some((item) => item.summary)
     if (previous && older && !options.pageUnmoved && sameFirstPage(previous, value)) {
       return more && live()
         ? loadBotItemsList(call, previous, { whole: false, parts: [], more: true }, options)
@@ -76,7 +79,7 @@ export async function loadBotItemsList(
         await call({
           closedCursor: value.nextClosedCursor,
           closedOnly: true,
-          closedLimit: Math.min(rest, BOT_ITEM_LIMITS.closedLoadMax)
+          closedLimit: Math.min(rest, page)
         })
       )
     }
@@ -90,6 +93,20 @@ export async function loadBotItemsList(
     )
   }
   return value
+}
+
+/** The uids the parts name, the worker-linked part as the loaded items that link a worker now; null
+ *  when more than one read takes. */
+function namedParts(parts: readonly string[], previous: BotItemsListRead): string[] | null {
+  const uids = new Set(parts.filter((part) => part !== BOT_ITEMS_WORKER_LINKED))
+  if (parts.includes(BOT_ITEMS_WORKER_LINKED)) {
+    for (const item of previous.items) {
+      if (item.links.some((link) => link.kind === 'dispatch')) {
+        uids.add(item.uid)
+      }
+    }
+  }
+  return uids.size > BOT_ITEM_LIMITS.listPageMax ? null : [...uids]
 }
 
 /** `first` with `previous`'s Closed rows below its end, to show until the rest of the depth lands. */

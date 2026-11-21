@@ -85,9 +85,7 @@ export class BotItemsHost {
       starter: (dispatchId) => dispatchStarter(db(), dispatchId, deps.chatRoot),
       linksOf: async (item) => (await this.views([item]))[0]?.links,
       sendOwedMail: () => this.sendOwedMail(),
-      changed: (items, workers) => this.changed(items, workers),
-      // Which items it touched is unknown: every bot's lists read whole.
-      unnamed: () => this.deps.notify({ kinds: ['items'] }),
+      changed: (store, uids) => this.changedItems(store, uids),
       warn
     })
   }
@@ -172,9 +170,9 @@ export class BotItemsHost {
     return { id, kind: source.kind, title: this.deps.chatTitle(id) ?? source.title, ...gone }
   }
 
-  /** These items changed (`workers`: only the workers they link): their bots' lists re-read just them. */
-  changed(items: readonly Pick<BotItemRecord, 'uid' | 'ownerBotId'>[], workers = false): void {
-    const scope = botItemsChangeScope(items, workers)
+  /** These items changed: their bots' lists re-read just them. */
+  changed(items: readonly Pick<BotItemRecord, 'uid' | 'ownerBotId'>[]): void {
+    const scope = botItemsChangeScope(items)
     if (scope) {
       this.deps.notify(scope)
     }
@@ -290,9 +288,18 @@ export class BotItemsHost {
   }
 
   /** A Dispatch row changed: a start for an item is linked, and linked items re-read. */
-  /** Settles once the items linked to the Dispatch have been told of; never rejects. */
-  dispatchChanged(dispatchId: string | null): Promise<void> {
-    return dispatchId === null ? Promise.resolve() : this.workerLinks.dispatchChanged(dispatchId)
+  dispatchChanged(dispatchId: string | null): void {
+    if (dispatchId !== null) {
+      this.workerLinks.dispatchChanged(dispatchId)
+    }
+  }
+
+  private async changedItems(store: BotItemsRemote, uids: readonly string[]): Promise<void> {
+    if (uids.length === 0) {
+      return
+    }
+    const rows = await store.viewRows([...new Set(uids)])
+    this.changed(rows.items)
   }
 }
 

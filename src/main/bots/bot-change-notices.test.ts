@@ -9,7 +9,10 @@ import {
   followWorktreeLifecycleForBots
 } from './bot-change-notices'
 import { botChangeBotIds, botChangeConcerns } from '../../shared/bots/bot-change-scope'
-import { botItemsNoticeParts } from '../../shared/bots/bot-items-notice-parts'
+import {
+  BOT_ITEMS_WORKER_LINKED,
+  botItemsNoticeParts
+} from '../../shared/bots/bot-items-notice-parts'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn(() => ({})) }))
@@ -54,7 +57,8 @@ describe('BotChangeNotices', () => {
     const mixed = emit.mock.lastCall?.[0]
     expect(mixed).toEqual({
       kinds: ['workers', 'automations'],
-      kindBots: { workers: ['bot-a'] }
+      kindBots: { workers: ['bot-a'] },
+      namesItems: true
     })
     expect(botChangeConcerns(mixed, { botId: 'bot-b', kinds: ['workers'] })).toBe(false)
     expect(botChangeConcerns(mixed, { botId: 'bot-a', kinds: ['workers'] })).toBe(true)
@@ -131,37 +135,12 @@ describe('BotChangeNotices', () => {
     expect(notice.itemUids).toEqual({ 'bot-a': ['i1', 'i2'] })
     expect(botItemsNoticeParts(notice, 'bot-a')).toEqual(['i1', 'i2'])
     expect(botItemsNoticeParts(notice, 'bot-b')).toBeNull()
-    // A workers change the host didn't name as items (an older host, a reset) reads whole.
-    expect(botItemsNoticeParts({ ...notice, kinds: ['items', 'workers'] }, 'bot-a')).toBeNull()
-    expect(
-      botItemsNoticeParts({ ...notice, kinds: ['items', 'workers'], workersNamed: true }, 'bot-a')
-    ).toEqual(['i1', 'i2'])
-  })
-
-  it("names the items a worker change touched without an items change, so Home doesn't re-read", () => {
-    const emit = vi.fn()
-    const notices = new BotChangeNotices({ emit, hasBots: () => true })
-    notices.changed({ botIds: ['bot-a'], kinds: ['status', 'workers'], workersNamed: true })
-    notices.changed({
-      botIds: ['bot-a'],
-      kinds: ['workers'],
-      itemUids: { 'bot-a': ['i1'] },
-      workersNamed: true
-    })
-    vi.advanceTimersByTime(0)
-    const notice = emit.mock.calls[0]![0]
-    expect(notice.kinds).toEqual(['status', 'workers'])
-    expect(botItemsNoticeParts(notice, 'bot-a')).toEqual(['i1'])
-    // Too many to name: the list reads whole.
-    const many = Array.from({ length: 101 }, (_, index) => `i${index}`)
-    notices.changed({
-      botIds: ['bot-a'],
-      kinds: ['workers'],
-      itemUids: { 'bot-a': many },
-      workersNamed: true
-    })
+    // A workers change reads the items that link a worker; from an older host, the whole list.
+    notices.changed({ botIds: ['bot-a'], kinds: ['workers'] })
     vi.advanceTimersByTime(500)
-    expect(botItemsNoticeParts(emit.mock.calls[1]![0], 'bot-a')).toBeNull()
+    const workers = emit.mock.calls[1]![0]
+    expect(botItemsNoticeParts(workers, 'bot-a')).toEqual([BOT_ITEMS_WORKER_LINKED])
+    expect(botItemsNoticeParts({ ...workers, namesItems: undefined }, 'bot-a')).toBeNull()
   })
 
   it('stays quiet on a host without bots', () => {
@@ -192,8 +171,7 @@ describe('followAgentPhasesForBots', () => {
       botOfWorkspace: (worktreeId) => (worktreeId === 'folder:fw-scout' ? 'bot-scout' : null),
       botOfPane,
       inGroupRoom: () => false,
-      workerDispatch: (paneKey) => (paneKey === WORKER_PANE ? 'ctx_w' : null),
-      workerChanged: async () => {},
+      workerPane: (paneKey) => paneKey === WORKER_PANE,
       readEveryBot: () => true
     })
     const report = (
@@ -210,21 +188,17 @@ describe('followAgentPhasesForBots', () => {
     return { notices, report, botOfPane }
   }
 
-  it('notices each phase a worker moves through, from the host status store', async () => {
+  it('notices each phase a worker moves through, from the host status store', () => {
     const { notices, report } = follow()
     report(WORKER_PANE, 'repo-1::/tmp/worker', 'working')
-    await new Promise((resolve) => setImmediate(resolve))
-    const scope = { botIds: ['bot-scout'], kinds: ['status', 'workers'], workersNamed: true }
+    const scope = { botIds: ['bot-scout'], kinds: ['status', 'workers'] }
     expect(notices.changed).toHaveBeenCalledExactlyOnceWith(scope)
     // Repeating a phase is a tick, not a change.
     report(WORKER_PANE, 'repo-1::/tmp/worker', 'working')
-    await new Promise((resolve) => setImmediate(resolve))
     expect(notices.changed).toHaveBeenCalledTimes(1)
     report(WORKER_PANE, 'repo-1::/tmp/worker', 'blocked')
-    await new Promise((resolve) => setImmediate(resolve))
     expect(notices.changed).toHaveBeenCalledTimes(2)
     report(WORKER_PANE, 'repo-1::/tmp/worker', 'done')
-    await new Promise((resolve) => setImmediate(resolve))
     expect(notices.changed.mock.calls).toEqual([[scope], [scope], [scope]])
   })
 
@@ -255,9 +229,7 @@ describe('botPhaseChangeScopes', () => {
     botOfWorkspace: () => null,
     botOfPane: (paneKey: string) => (paneKey === chat ? 'bot-a' : null),
     inGroupRoom: (sessionId: string) => sessionId === 'session-room',
-    workerDispatch: (paneKey: string) =>
-      paneKey === 'tab-w:55555555-5555-4555-8555-555555555555' ? 'ctx_w' : null,
-    workerChanged: async () => {},
+    workerPane: (paneKey: string) => paneKey === 'tab-w:55555555-5555-4555-8555-555555555555',
     readEveryBot: () => false
   }
 
@@ -292,7 +264,7 @@ describe('botPhaseChangeScopes', () => {
           }
         }
       )
-    ).toEqual([{ botIds: ['bot-b'], kinds: ['status', 'workers'], workersNamed: true }])
+    ).toEqual([{ botIds: ['bot-b'], kinds: ['status', 'workers'] }])
   })
 
   it("tells every bot of a worker pane it can't place when some bot's chats can't be read", () => {
@@ -305,7 +277,7 @@ describe('botPhaseChangeScopes', () => {
         },
         facts
       )
-    ).toEqual([{ kinds: ['status', 'workers'], workersNamed: true }])
+    ).toEqual([{ kinds: ['status', 'workers'] }])
   })
 
   it("tells the groups of a member's phase in a group room", () => {

@@ -72,8 +72,6 @@ function fakeHost(
   const parents = new Map<string, string>()
   const results = new Map<string, string>()
   const starts = new Map<string, { origin: string; creator: string }>()
-  /** A reused terminal's Dispatch, and those that held the terminal before it. */
-  const terminals = new Map<string, { origin: string; prior: string[] }>()
   const notified: BotChangeScope[] = []
   const db = {
     getDispatchContextById: (id: string) => ({
@@ -81,18 +79,7 @@ function fakeHost(
       origin_ref: starts.get(id)?.origin ?? null,
       creator_orca_session_id: starts.get(id)?.creator ?? null
     }),
-    getTask: (id: string) => (results.has(id) ? { result: results.get(id) } : undefined),
-    getWorkerTerminalResourceByOwner: (id: string) => {
-      const terminal = terminals.get(id)
-      return terminal
-        ? {
-            owner_dispatch_id: id,
-            origin_dispatch_id: terminal.origin,
-            prior_owner_dispatch_ids: JSON.stringify(terminal.prior)
-          }
-        : undefined
-    },
-    getWorkerTerminalResourceFormerlyOwnedBy: () => undefined
+    getTask: (id: string) => (results.has(id) ? { result: results.get(id) } : undefined)
   }
   const client = new BotsDbWorkerClient(inProcessBotsDbWorker().factory)
   const deps = {
@@ -110,7 +97,7 @@ function fakeHost(
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host reads only these fields of the work runtime and database.
   const host = new BotItemsHost(deps as unknown as BotItemsHostDeps)
-  return { host, parents, results, starts, terminals, notified }
+  return { host, parents, results, starts, notified }
 }
 
 let host: BotItemsHost | null = null
@@ -256,21 +243,7 @@ describe('bot items host', () => {
     await heartbeats(host, 'ctx_2', 1)
 
     expect(fake.notified).toEqual([
-      { botIds: ['bot-a'], kinds: ['workers'], itemUids: { 'bot-a': [uid] }, workersNamed: true }
-    ])
-  })
-
-  it('re-reads an item linked to a worker whose terminal a later Dispatch reused', async () => {
-    const fake = fakeHost()
-    host = fake.host
-    const store = host.store()
-    const links = [{ kind: 'dispatch' as const, ref: 'ctx_1' }]
-    const { uid } = await store.add(item({ status: 'working', links }), owner)
-    fake.terminals.set('ctx_3', { origin: 'ctx_1', prior: ['ctx_1', 'ctx_2'] })
-    await heartbeats(host, 'ctx_3', 1)
-
-    expect(fake.notified).toEqual([
-      { botIds: ['bot-a'], kinds: ['workers'], itemUids: { 'bot-a': [uid] }, workersNamed: true }
+      { botIds: ['bot-a'], kinds: ['items'], itemUids: { 'bot-a': [uid] } }
     ])
   })
 
@@ -288,7 +261,7 @@ describe('bot items host', () => {
     await heartbeats(host, 'ctx_1', 1)
 
     expect(fake.notified).toEqual([
-      { botIds: ['bot-a'], kinds: ['workers'], itemUids: { 'bot-a': [uid] }, workersNamed: true }
+      { botIds: ['bot-a'], kinds: ['items'], itemUids: { 'bot-a': [uid] } }
     ])
   })
 })

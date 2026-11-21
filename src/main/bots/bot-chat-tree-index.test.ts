@@ -231,29 +231,21 @@ describe('BotChatTreeIndex', () => {
     const r = await rig()
     r.dispatch('ctx-1', 'chat-bot-a-1', 'worker-session-1')
     await r.settle()
-    expect(r.notices.splice(0)).toEqual([
-      { botIds: ['bot-a'], kinds: ['workers'], workersNamed: true }
-    ])
+    expect(r.notices.splice(0)).toEqual([{ botIds: ['bot-a'], kinds: ['workers'] }])
     // A worker's own worker belongs to the chat its first ancestor credits.
     r.dispatch('ctx-2', 'worker-session-1', null)
     await r.settle()
-    expect(r.notices.splice(0)).toEqual([
-      { botIds: ['bot-a'], kinds: ['workers'], workersNamed: true }
-    ])
+    expect(r.notices.splice(0)).toEqual([{ botIds: ['bot-a'], kinds: ['workers'] }])
     r.db.db.prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = 'ctx-1'").run()
     await r.settle()
-    expect(r.notices.splice(0)).toEqual([
-      { botIds: ['bot-a'], kinds: ['workers'], workersNamed: true }
-    ])
+    expect(r.notices.splice(0)).toEqual([{ botIds: ['bot-a'], kinds: ['workers'] }])
     expect(r.dispatches(botA)).toEqual(['ctx-1@chat-bot-a-1:settled', 'ctx-2@chat-bot-a-1:running'])
     expect(r.dispatches(botB)).toEqual([])
     // A worker another bot's chat started is none of this bot's.
     r.dispatch('ctx-3', 'chat-bot-b-1', null)
     r.dispatch('ctx-4', 'chat-elsewhere', null)
     await r.settle()
-    expect(r.notices.splice(0)).toEqual([
-      { botIds: ['bot-b'], kinds: ['workers'], workersNamed: true }
-    ])
+    expect(r.notices.splice(0)).toEqual([{ botIds: ['bot-b'], kinds: ['workers'] }])
     r.expectSameAsFullBuild()
   })
 
@@ -266,9 +258,7 @@ describe('BotChatTreeIndex', () => {
     r.db.workerStatusListener = listener
     r.db.db.prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = 'ctx-1'").run()
     await r.settle()
-    expect(r.notices.splice(0)).toEqual([
-      { botIds: ['bot-b'], kinds: ['workers'], workersNamed: true }
-    ])
+    expect(r.notices.splice(0)).toEqual([{ botIds: ['bot-b'], kinds: ['workers'] }])
     // Every bot is now read: a settle no bot owns tells nobody.
     r.dispatch('ctx-2', 'chat-elsewhere', null)
     await r.settle()

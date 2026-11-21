@@ -5,7 +5,7 @@
 // continues; a linked worker's change makes its item re-read. A change no item links reads one
 // Dispatch row and calls no bots DB worker.
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
-import { dispatchItemUid, lineageAncestors, workerContinues } from './bot-item-dispatch-facts'
+import { dispatchItemUid, lineageAncestors } from './bot-item-dispatch-facts'
 import type { BotItemLinkView } from '../../shared/bots/bot-items'
 import { noteBotItemWrite } from './bot-item-chat-notes'
 import type { BotItemsRemote } from './bot-items-ops'
@@ -21,37 +21,27 @@ export type BotItemWorkerLinksDeps = {
   /** An item's links as the wire shows them, which name a write's new links. */
   linksOf: (item: BotItemRecord) => Promise<readonly BotItemLinkView[] | undefined>
   sendOwedMail: () => Promise<void>
-  /** These items changed (`workers`: only the workers they link); their bots' panels re-read. */
-  changed: (items: readonly Pick<BotItemRecord, 'uid' | 'ownerBotId'>[], workers: boolean) => void
-  /** A change whose items couldn't be told of: readers can't know which changed. */
-  unnamed: () => void
+  /** These items changed; their bots' panels re-read. */
+  changed: (store: BotItemsRemote, uids: readonly string[]) => Promise<void>
   warn: (error: unknown) => void
 }
 
 export class BotItemWorkerLinks {
   private changedDispatches = new Set<string>()
-  private queued: Promise<void> | null = null
+  private queued = false
 
   constructor(private readonly deps: BotItemWorkerLinksDeps) {}
 
-  /** Settles (never rejects) once the items it links have been told of, so a notice can wait for it. */
-  dispatchChanged(dispatchId: string): Promise<void> {
+  dispatchChanged(dispatchId: string): void {
     this.changedDispatches.add(dispatchId)
-    this.queued ??= new Promise((resolve) =>
-      queueMicrotask(() => {
-        this.queued = null
-        void this.flush()
-          .catch((error: unknown) => {
-            this.deps.warn(error)
-            this.deps.unnamed()
-          })
-          .finally(resolve)
-      })
-    )
-    return this.queued
+    if (!this.queued) {
+      this.queued = true
+      queueMicrotask(() => void this.flush().catch(this.deps.warn))
+    }
   }
 
   private async flush(): Promise<void> {
+    this.queued = false
     const ids = [...this.changedDispatches]
     this.changedDispatches = new Set()
     const store = this.deps.store()
@@ -80,23 +70,9 @@ export class BotItemWorkerLinks {
     const refs =
       linkedRefs.size === 0
         ? []
-        : [...new Set(ids.flatMap((id) => workerContinues(db, id, lineageOf)))].filter((ref) =>
-            linkedRefs.has(ref)
-          )
+        : [...new Set(ids.flatMap(lineageOf))].filter((ref) => linkedRefs.has(ref))
     const linked = refs.length > 0 ? await store.remote.linksTo('dispatch', refs) : []
-    await this.tell(store.remote, touched, false)
-    const linkedUids = linked.map((link) => link.itemUid).filter((uid) => !touched.includes(uid))
-    await this.tell(store.remote, linkedUids, true)
-  }
-
-  private async tell(
-    store: BotItemsRemote,
-    uids: readonly string[],
-    workers: boolean
-  ): Promise<void> {
-    if (uids.length > 0) {
-      this.deps.changed((await store.viewRows([...new Set(uids)])).items, workers)
-    }
+    await this.deps.changed(store.remote, [...touched, ...linked.map((link) => link.itemUid)])
   }
 
   private async link(

@@ -248,10 +248,10 @@ export class BotChatTreeIndex {
     }
     // A Dispatch no kept bot places may be a never-read bot's.
     const owners = unplaced.length > 0 ? this.ownersOf(unplaced, true) : []
-    // A written Dispatch's items are named in a workers notice of their own (`BotItemsHost`).
-    const bots = owners === null ? null : [...new Set([...botIds, ...owners])]
-    if (bots === null || bots.length > 0) {
-      this.tell({ ...(bots ? { botIds: bots } : {}), kinds: ['workers'], workersNamed: true })
+    if (owners === null) {
+      this.tell({ kinds: ['workers'] })
+    } else if (botIds.size > 0 || owners.length > 0) {
+      this.tell({ botIds: [...new Set([...botIds, ...owners])], kinds: ['workers'] })
     }
   }
 

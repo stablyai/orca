@@ -39,19 +39,17 @@ export type BotChangeScope = {
   kinds?: readonly BotChangeKind[]
   kindBots?: Readonly<Partial<Record<BotChangeKind, readonly string[]>>>
   needsYou?: BotNeedsYouCounts
-  /** An `items` change's items (and those a named `workers` change touched), by bot: a bot listed
-   *  here had only these change, so its list reads just them. A bot left out of an `items` change
-   *  (and an older host's notice) re-reads whole. */
+  /** An `items` change's items, by bot: a bot listed here had only these change, so its list reads
+   *  just them. A bot left out (and an older host's notice) re-reads whole. */
   itemUids?: Readonly<Record<string, readonly string[]>>
-  /** Every `workers` change it covers names in `itemUids` the items it touched (or goes with a notice
-   *  that does), so item lists read just those. Absent: an older host, or a change it can't name. */
-  workersNamed?: true
+  /** The host reads a list's items by uid, so a `workers` change can read just the loaded items that
+   *  link a worker. Absent: an older host, whose lists read whole. */
+  namesItems?: true
 }
 
-/** The notice of these changed items (`workers`: only the workers they link), by bot; null for none. */
+/** The notice of these changed items, by bot; null for none. */
 export function botItemsChangeScope(
-  items: readonly { uid: string; ownerBotId: string }[],
-  workers: boolean
+  items: readonly { uid: string; ownerBotId: string }[]
 ): BotChangeScope | null {
   const itemUids: Record<string, string[]> = {}
   for (const { uid, ownerBotId } of items) {
@@ -61,9 +59,7 @@ export function botItemsChangeScope(
   if (botIds.length === 0) {
     return null
   }
-  return workers
-    ? { botIds, kinds: ['workers'], itemUids, workersNamed: true }
-    : { botIds, kinds: ['items'], itemUids }
+  return { botIds, kinds: ['items'], itemUids }
 }
 
 /** What a reader re-reads for: its bot (absent for a host-wide reader) and the kinds it shows. */
@@ -143,12 +139,10 @@ const ANY_KIND = '*'
 export type PendingBotChanges = {
   kinds: Map<BotChangeKind | typeof ANY_KIND, Set<string> | null>
   itemUids: Map<string, Set<string> | null>
-  /** Whether every `workers` change held so far was named (`workersNamed`); null: none held. */
-  workersNamed: boolean | null
 }
 
 export function pendingBotChanges(): PendingBotChanges {
-  return { kinds: new Map(), itemUids: new Map(), workersNamed: null }
+  return { kinds: new Map(), itemUids: new Map() }
 }
 
 /** The most items a notice names for one bot; more re-read the bot's list whole. */
@@ -167,31 +161,19 @@ export function addBotChange(pending: PendingBotChanges, scope: BotChangeScope):
       scope.botIds.forEach((id) => bots.add(id))
     }
   }
-  if (kinds.includes('workers') || kinds.includes(ANY_KIND)) {
-    pending.workersNamed = (pending.workersNamed ?? true) && scope.workersNamed === true
-  }
-  const items = kinds.includes('items')
-  if (!scope.botIds || (!items && !scope.itemUids)) {
+  if (!kinds.includes('items') || !scope.botIds) {
     return
   }
   for (const botId of scope.botIds) {
     const named = scope.itemUids?.[botId]
     const uids = pending.itemUids.get(botId)
     if (!named || uids === null) {
-      if (items) {
-        pending.itemUids.set(botId, null)
-      }
+      pending.itemUids.set(botId, null)
       continue
     }
     const next = uids ?? new Set<string>()
     named.forEach((uid) => next.add(uid))
-    if (next.size > BOT_CHANGE_ITEM_UIDS_MAX) {
-      // Too many to name: its lists read whole, a workers change's too.
-      pending.itemUids.set(botId, null)
-      pending.workersNamed = false
-    } else {
-      pending.itemUids.set(botId, next)
-    }
+    pending.itemUids.set(botId, next.size > BOT_CHANGE_ITEM_UIDS_MAX ? null : next)
   }
 }
 
@@ -222,7 +204,7 @@ export function botChangeNotice(pending: PendingBotChanges): BotChangeScope {
     kinds,
     ...(sameBots || scoped.length === 0 ? {} : { kindBots: Object.fromEntries(scoped) }),
     ...(named.length > 0 ? { itemUids: Object.fromEntries(named) } : {}),
-    ...(pending.workersNamed ? { workersNamed: true as const } : {})
+    ...(pending.kinds.has('workers') ? { namesItems: true as const } : {})
   }
 }
 
@@ -242,7 +224,7 @@ export function readBotChangeScope(event: unknown): BotChangeScope | undefined {
   const kindBots = 'kindBots' in event ? readStringLists(event.kindBots) : undefined
   const needsYou = 'needsYou' in event ? readBotNeedsYouCounts(event.needsYou) : undefined
   const itemUids = 'itemUids' in event ? readStringLists(event.itemUids) : undefined
-  const workersNamed = 'workersNamed' in event && event.workersNamed === true
+  const namesItems = 'namesItems' in event && event.namesItems === true
   return botIds || kinds
     ? {
         ...(botIds ? { botIds } : {}),
@@ -250,7 +232,7 @@ export function readBotChangeScope(event: unknown): BotChangeScope | undefined {
         ...(kindBots ? { kindBots } : {}),
         ...(needsYou ? { needsYou } : {}),
         ...(itemUids ? { itemUids } : {}),
-        ...(workersNamed ? { workersNamed: true as const } : {})
+        ...(namesItems ? { namesItems: true as const } : {})
       }
     : undefined
 }

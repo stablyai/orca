@@ -102,10 +102,8 @@ export type BotPaneFacts = {
   botOfPane: (paneKey: string) => string | null
   /** Whether the pane is a member's in a bot group room. */
   inGroupRoom: (sessionId: string) => boolean
-  /** The Dispatch whose worker a pane is; null for a pane that is no worker. */
-  workerDispatch: (paneKey: string) => string | null
-  /** A worker's phase changed: a workers notice names its items, sent before it settles. */
-  workerChanged: (dispatchId: string) => Promise<void>
+  /** A Dispatch's worker pane. */
+  workerPane: (paneKey: string) => boolean
   /** Reads the chats of bots never read yet; false when one can't be read, so a worker pane may be an
    *  unread bot's. */
   readEveryBot: () => boolean
@@ -116,14 +114,13 @@ export type BotPaneFacts = {
  *  A worker's phase is its worker's state too, so readers of workers (items) re-read for it. */
 export function botPhaseChangeScopes(
   change: AgentPhaseChange,
-  facts: BotPaneFacts,
-  dispatchId = facts.workerDispatch(change.paneKey)
+  facts: BotPaneFacts
 ): BotChangeScope[] {
   const scopes: BotChangeScope[] = []
   const worktreeId = change.workspace?.worktreeId
   const find = (): string | null =>
     (worktreeId ? facts.botOfWorkspace(worktreeId) : null) ?? facts.botOfPane(change.paneKey)
-  const worker = dispatchId !== null
+  const worker = facts.workerPane(change.paneKey)
   const kinds: BotChangeKind[] = worker ? ['status', 'workers'] : ['status']
   // A worker no read bot claims may be a never-read bot's: read those once, then look again.
   let botId = find()
@@ -132,13 +129,11 @@ export function botPhaseChangeScopes(
     everyBotRead = facts.readEveryBot()
     botId = everyBotRead ? find() : null
   }
-  // A worker's items are named in a workers notice of their own (`workerChanged`).
-  const named = worker ? { workersNamed: true as const } : {}
   if (botId) {
-    scopes.push({ botIds: [botId], kinds, ...named })
+    scopes.push({ botIds: [botId], kinds })
   } else if (!everyBotRead) {
     // It may be an unread bot's worker: every bot's readers hear of it.
-    scopes.push({ kinds, ...named })
+    scopes.push({ kinds })
   }
   const tabId = parsePaneKey(change.paneKey)?.tabId
   const sessionId = tabId ? structuredAgentSessionIdOfTab(tabId) : null
@@ -146,37 +141,6 @@ export function botPhaseChangeScopes(
     scopes.push({ kinds: ['groups'] })
   }
   return scopes
-}
-
-/** The most a worker notice waits for its items' notice, to go out with it. */
-const ITEMS_NAMED_WAIT_MS = 250
-
-/** `tell` once the items a worker change touched were told of, or after a short wait at most (they
- *  then go out on their own). */
-function afterItemsNamed(named: Promise<unknown>, tell: () => void): void {
-  let told = false
-  const once = (): void => {
-    if (!told) {
-      told = true
-      clearTimeout(timer)
-      tell()
-    }
-  }
-  const timer = setTimeout(once, ITEMS_NAMED_WAIT_MS)
-  void named.then(once)
-}
-
-/** These bots' workers changed (every bot's, with null), their items named in a workers notice of
- *  their own: sent after it, so the two go out as one. */
-export function workersChangedAfterItems(
-  notices: Pick<BotChangeNotices, 'changed'>,
-  botIds: readonly string[] | null,
-  itemsTold: Promise<unknown>
-): void {
-  if (botIds?.length !== 0) {
-    const scope = { ...(botIds ? { botIds } : {}), workersNamed: true as const }
-    afterItemsNamed(itemsTold, () => notices.changed({ ...scope, kinds: ['workers'] }))
-  }
 }
 
 /** A phase change (working, needs you, done) of a pane a bot or group shows; per-tick observations are
@@ -188,14 +152,8 @@ export function followAgentPhasesForBots(
 ): () => void {
   return transitions.subscribe((change) => {
     if (change.kind !== 'observed' && facts.hasBots()) {
-      const dispatchId = facts.workerDispatch(change.paneKey)
-      const scopes = botPhaseChangeScopes(change, facts, dispatchId)
-      const tell = (): void => scopes.forEach((scope) => notices.changed(scope))
-      // After its items' notice, so the two go out as one.
-      if (dispatchId !== null) {
-        afterItemsNamed(facts.workerChanged(dispatchId), tell)
-      } else {
-        tell()
+      for (const scope of botPhaseChangeScopes(change, facts)) {
+        notices.changed(scope)
       }
     }
   })
