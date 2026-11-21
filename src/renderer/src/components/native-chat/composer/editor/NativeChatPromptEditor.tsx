@@ -277,11 +277,9 @@ function NativePromptEditor({
                 to: promptTextOffset(doc, editor.state.selection.to)
               }
               adopted.current = readNativeChatDraftSnapshot(scopeKey, value)
-              const stored = adopted.current?.document
-              if (stored || !value) {
-                editor.commands.setContent(openingPromptContent(stored, '', imageChips), {
-                  emitUpdate: false
-                })
+              const opening = openingPromptContent(adopted.current?.document, '', imageChips)
+              if (adopted.current?.document || !value) {
+                editor.commands.setContent(opening, { emitUpdate: false })
                 applyPosition(previousRange)
                 return
               }
