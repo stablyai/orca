@@ -5,16 +5,31 @@ import { DEVIN_LAUNCH_SPEC } from './devin-acp-launch-spec'
 // The mode select `session/new` reports on Devin 3000.14.30821.
 const MODES = ['accept-edits', 'smart', 'ask', 'plan', 'bypass']
 
-it('launches `devin acp` and drops a mode or model an earlier launch inherited', () => {
-  expect(DEVIN_LAUNCH_SPEC.args({ fullAccess: false, pluginDirs: [] })).toEqual(['acp'])
+it('launches `devin acp` in-process and drops what an earlier launch inherited', () => {
+  // A daemon would own the session and outlive Orca, keeping the first chat's account environment.
+  expect(DEVIN_LAUNCH_SPEC.args({ fullAccess: false, pluginDirs: [] })).toEqual([
+    'acp',
+    '--process-model',
+    'in-process'
+  ])
   const env: Record<string, string> = {
     PATH: '/usr/bin',
     DEVIN_PERMISSION_MODE: 'bypass',
-    DEVIN_MODEL: 'gpt-6-astra-medium'
+    DEVIN_MODEL: 'gpt-6-astra-medium',
+    DEVIN_REFUSAL_FALLBACK: 'opus',
+    DEVIN_SESSIONS_DIR: '/elsewhere',
+    DEVIN_SANDBOX: '1',
+    DEVIN_API_URL: 'https://elsewhere.invalid',
+    WINDSURF_API_KEY: 'sk-elsewhere'
   }
   expect(DEVIN_LAUNCH_SPEC.scrubEnvironment!(env, {})).toEqual([
     'DEVIN_PERMISSION_MODE',
-    'DEVIN_MODEL'
+    'DEVIN_MODEL',
+    'DEVIN_REFUSAL_FALLBACK',
+    'DEVIN_SESSIONS_DIR',
+    'DEVIN_SANDBOX',
+    'DEVIN_API_URL',
+    'WINDSURF_API_KEY'
   ])
   expect(env).toEqual({ PATH: '/usr/bin' })
 })
@@ -42,7 +57,9 @@ it('lists the account catalog in a session it deletes', () => {
     kind: 'session',
     listingNamesConfiguredModel: false
   })
-  expect(DEVIN_LAUNCH_SPEC.account.pin).toEqual({ accountHomeVariable: 'XDG_DATA_HOME' })
+  expect(DEVIN_LAUNCH_SPEC.account.pin).toEqual({
+    accountHomeVariable: process.platform === 'win32' ? 'APPDATA' : 'XDG_DATA_HOME'
+  })
 })
 
 it('reads `--continue` and `--resume` as the same session store its transcripts name', () => {
@@ -53,9 +70,17 @@ it('reads `--continue` and `--resume` as the same session store its transcripts 
   expect(parse(['--resume', 'blushing-entrance'])).toEqual({ target: 'blushing-entrance' })
   expect(parse(['-r', 'blushing-entrance'])).toEqual({ target: 'blushing-entrance' })
   expect(parse(['--', 'fix the build'])).toBeNull()
-  // History's Devin rows are named by session id, so a prefix resumes the same conversation.
+  // History's Devin rows are named by session id, and `devin rm` refuses an ambiguous prefix, so
+  // only the row's whole id resumes it.
   const matches = DEVIN_LAUNCH_SPEC.sessionHistory.resumeTargetMatches!
-  expect(matches('blush', 'blushing-entrance')).toBe(true)
   expect(matches('blushing-entrance', 'blushing-entrance')).toBe(true)
+  expect(matches('BLUSHING-ENTRANCE', 'blushing-entrance')).toBe(true)
+  expect(
+    matches(
+      '/home/user/.local/share/devin/cli/transcripts/blushing-entrance.json',
+      'blushing-entrance'
+    )
+  ).toBe(true)
+  expect(matches('blush', 'blushing-entrance')).toBe(false)
   expect(matches('ajar-arrow', 'blushing-entrance')).toBe(false)
 })
