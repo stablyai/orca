@@ -84,6 +84,7 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
   const view = useMobileAgentMessageView(sender)
   const { shown, more } = agentMessageSendersShown(from)
   const words = lead(agentMessageHeading(from, message), t)
+  const items = message.agentStartItems ?? []
   const merged = message.mergedEvents ?? []
   const canCopy = agentMessageCanCopy(text)
   // Mail from several senders opens each from its details.
@@ -99,7 +100,11 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
       icon={<SenderMark agentType={view.agentType} />}
       // The live state never marks a row failed: a restarted worker would un-fail it.
       badge={view.dot === 'working' ? 'running' : null}
-      label={`${words} ${sender ? senderName : unnamed}${more > 0 ? ` +${more}` : ''}`}
+      label={`${words} ${sender ? senderName : unnamed}${more > 0 ? ` +${more}` : ''}${
+        items.length > 0
+          ? ` ${t('chat.agentMessage.row.forItems', 'for')} ${items.map((item) => item.title).join(', ')}`
+          : ''
+      }`}
       action={
         sender && !several ? <OpenSender from={from} sender={sender} unnamed={unnamed} /> : null
       }
@@ -142,6 +147,13 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
                     {earlierWords && earlierWords !== words ? (
                       <Text style={styles.mergedWords}>{earlierWords}</Text>
                     ) : null}
+                    {earlier.agentStartItems?.length ? (
+                      <Text style={styles.mergedWords}>
+                        {`${t('chat.agentMessage.row.forItems', 'for')} ${earlier.agentStartItems
+                          .map((item) => item.title)
+                          .join(', ')}`}
+                      </Text>
+                    ) : null}
                     <MobileNativeChatMessageTime
                       timestamp={earlier.timestamp}
                       fontScale={fontScale}
@@ -180,6 +192,14 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
             </Fragment>
           ))}
       {more > 0 ? ` +${more}` : null}
+      {items.length > 0 ? (
+        <>
+          {` ${t('chat.agentMessage.row.forItems', 'for')} `}
+          <MobileNativeChatEventName>
+            {items.map((item) => item.title).join(', ')}
+          </MobileNativeChatEventName>
+        </>
+      ) : null}
     </MobileNativeChatEventRow>
   )
 })

@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import { GET_PAGE_STATE } from '../../../browser/guest-lifecycle/manager/registration/browser-page-state-form-data.test-fixture'
 import { afterEach, vi } from 'vitest'
 import { RuntimeBrowserCommands } from './browser-commands'
 import { runWithActiveRpcCaller } from '../../rpc/callers/active-call'
@@ -41,7 +42,8 @@ vi.mock('../../../browser/sessions/profiles/browser-session-registry', () => ({
 vi.mock(
   '../../../browser/guest-lifecycle/manager/registration/browser-guest-discard-protection',
   () => ({
-    readBrowserGuestDiscardProtection: () => ({ protection: 'discardable' })
+    readBrowserGuestDiscardProtection: () => ({ protection: 'discardable' }),
+    noteBrowserGuestFormData: () => {}
   })
 )
 vi.mock('../../../browser/guest-lifecycle/browser-main-window-readiness', () => ({
@@ -89,8 +91,11 @@ export async function attach(pageId: string, rendererId = 99) {
     debugger: { isAttached: () => false },
     loadURL: async () => {},
     navigationHistory: {
-      getAllEntries: () => [{ url: 'https://example.test/', title: 'Page' }],
-      getActiveIndex: () => 0
+      getAllEntries: () => [
+        { url: 'https://example.test/', title: 'Page', pageState: GET_PAGE_STATE }
+      ],
+      getActiveIndex: () => 0,
+      getEntryAtIndex: () => ({ pageState: GET_PAGE_STATE })
     },
     close: () => {
       destroyed = true
@@ -133,7 +138,7 @@ export function rig() {
     goto: async () => {
       navigationStarted()
       await pendingNavigation
-      return { url: 'https://example.test/', title: 'Page' }
+      return { url: 'https://example.test/', title: 'Page', pageState: GET_PAGE_STATE }
     }
   }
   const offscreen = {

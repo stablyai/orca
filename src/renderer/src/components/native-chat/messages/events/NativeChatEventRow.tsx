@@ -1,4 +1,4 @@
-import { useContext, useId, useLayoutEffect, useRef, useState, type Ref } from 'react'
+import { Children, useContext, useId, useLayoutEffect, useRef, useState, type Ref } from 'react'
 import { ChevronRight, X } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -120,6 +120,29 @@ function EventDetails({
   )
 }
 
+/** The row's words as pieces of its one line: a bare text run becomes its own piece, which cuts
+ *  short with an ellipsis and shows whole on hover (a flex row can't shrink bare text). */
+function rowParts(children: React.ReactNode): React.ReactNode[] {
+  const seen = new Map<string, number>()
+  return Children.toArray(children).flatMap((child): React.ReactNode[] => {
+    if (typeof child !== 'string' && typeof child !== 'number') {
+      return [child]
+    }
+    const text = String(child).trim()
+    if (!text) {
+      return []
+    }
+    // Keyed by its words, so a row whose parts change keeps each text piece its own.
+    const repeat = seen.get(text) ?? 0
+    seen.set(text, repeat + 1)
+    return [
+      <span key={`text:${text}:${repeat}`} className="min-w-0 truncate" title={text}>
+        {text}
+      </span>
+    ]
+  })
+}
+
 /**
  * One status line in the transcript: icon · text, then on hover or keyboard focus its action, a chevron
  * and the time. With details the whole row is the button that opens them; links, chips and the action
@@ -192,6 +215,8 @@ export function NativeChatEventRow({
             aria-expanded={shown}
             aria-controls={shown ? detailsId : undefined}
             aria-label={[label, state, time].filter(Boolean).join(', ') || undefined}
+            // The words take no pointer, so a name cut short shows whole here.
+            title={label}
             className="absolute -inset-x-1 -inset-y-0.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => {
               if (openProp === undefined) {
@@ -210,16 +235,18 @@ export function NativeChatEventRow({
         >
           <NativeChatEventIcon badge={badge}>{icon}</NativeChatEventIcon>
         </span>
+        {/* Always one line: its parts sit side by side and the ones that can shrink (chips, names)
+            cut short with an ellipsis; clipping only sideways keeps chip focus rings whole. */}
         <span
           className={cn(
-            'relative min-w-0 line-clamp-2',
+            'relative flex min-w-0 items-center gap-x-1 overflow-x-clip whitespace-nowrap [&>*]:min-w-0 [&>*]:overflow-x-clip [&>*]:text-ellipsis',
             toggles &&
               'pointer-events-none [&_a]:pointer-events-auto [&_button]:pointer-events-auto'
           )}
         >
           {/* A row with no button says its state in its own text. */}
           {state && !toggles ? <span className="sr-only">{state}, </span> : null}
-          {children}
+          {rowParts(children)}
         </span>
         {/* With a pointer the controls lie over the row's end and take no width until shown; touch keeps them in line.
             Over a row button, clicks on the chevron and time fall through to it; only the action takes them. */}

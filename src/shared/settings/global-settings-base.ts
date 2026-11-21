@@ -41,6 +41,15 @@ type DesktopWindowSettings = {
   linuxTilingWindowMode?: boolean
 }
 
+type NativeChatUsageLimitSettings = {
+  /** On by default: when a chat stops on a usage limit with a known reset time, send it "Continue
+   *  where you left off." once the limit resets, unless that chat was told not to. */
+  nativeChatAutoContinueAfterUsageLimit?: boolean
+  /** One-shot guard for the default-on rollout: a saved false from the old default turns on once;
+   *  a later explicit false sticks. */
+  nativeChatAutoContinueAfterUsageLimitDefaultedOn?: boolean
+}
+
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = AntigravityChatAuthSettings &
   EmulatorOpeningSettings &
@@ -48,6 +57,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   ClaudeAgentViewSettings &
   NativeChatGlobalSettings &
   NativeChatIdleStopSettings &
+  NativeChatUsageLimitSettings &
   WorktreeDeletionPreferences &
   WorktreeCardDisplaySettings &
   ClaudeAccountSwitchSettings &

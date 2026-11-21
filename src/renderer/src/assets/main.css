@@ -260,6 +260,8 @@
   --chat-composer-border-mix: 11%;
   --chat-selection-mix: 30%;
   --chat-content-max-width: 46rem;
+  /* Why: unitless so each markdown surface multiplies it by its own font size; zoom keeps characters per line. */
+  --markdown-reading-measure-em: 60;
   --card: #fff;
   --card-foreground: #0a0a0a;
   /* Why: another product's logo is drawn for a white backdrop in both themes. */

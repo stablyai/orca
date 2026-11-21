@@ -19,7 +19,8 @@ import {
 } from '../../../../../shared/bots/bot-item-answer-lines'
 import {
   botItemWaitingAsk,
-  botItemWaitingLine
+  botItemWaitingLine,
+  type BotItemWaitingLine
 } from '../../../../../shared/bots/bot-item-question-answers'
 import type { BotItemPendingComment } from '../../../../../shared/bots/bot-item-pending-comments'
 import { useNativeChatDraft } from '../../native-chat/drafts/use-native-chat-draft'
@@ -91,7 +92,7 @@ export function useBotItemQuestionSteps(
    *  (its × closed), the comment answers nothing. */
   fromBox: (text: string, paths: readonly string[], replyingTo: string | null) => void
   /** What the comment box replies to: with several questions, the line the step is on. */
-  waitingLine: { id: string; line: string; replies: boolean } | null
+  waitingLine: BotItemWaitingLine | null
 } {
   // As cheap as the box's own waiting-line read, on each render.
   const asked = botItemWaitingAsk(item, events)
@@ -168,6 +169,7 @@ export function useBotItemQuestionSteps(
     waitingLine: stepLine
       ? {
           id: `${askId}:${steps.current}`,
+          eventId: askId,
           line: botItemQuestionLine(stepLine.question),
           replies: stepLine.replies.length > 0
         }
