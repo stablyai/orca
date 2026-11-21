@@ -52,23 +52,26 @@ function countStatements(db: OrchestrationDb): { count: number } {
 }
 
 // Guards the title-write path: every working/permission title edge released pointers with a sync UPDATE,
-// thousands per minute with no mail at all.
+// thousands per minute with no mail at all. Now each PTY runs it once per session, never per frame.
 describe('mailbox pointer release gate', () => {
-  it.each([13, 130])('runs no SQL for %i terminals with no staged pointer', (terminals) => {
-    const db = open()
-    stagePointer(db, 'pty_other', 'term_other')
-    const statements = countStatements(db)
-    for (let frame = 0; frame < 20; frame++) {
-      for (let i = 0; i < terminals; i++) {
-        db.releasePendingMailboxPointerForPty(`pty_${i}`)
+  it.each([13, 130])(
+    'runs one release per terminal, not per frame, for %i terminals',
+    (terminals) => {
+      const db = open()
+      const statements = countStatements(db)
+      for (let frame = 0; frame < 20; frame++) {
+        for (let i = 0; i < terminals; i++) {
+          db.releasePendingMailboxPointerForPty(`pty_${i}`)
+        }
       }
+      expect(statements.count).toBe(terminals)
     }
-    expect(statements.count).toBe(0)
-  })
+  )
 
-  it('releases a pointer staged before a restart, then stops querying', () => {
+  it('releases a pointer staged before a restart on the first working edge', () => {
     const path = databasePath()
     const first = new OrchestrationDb(path)
+    first.releasePendingMailboxPointerForPty('pty_kept')
     const id = stagePointer(first, 'pty_kept', 'term_kept')
     first.close()
 
@@ -77,37 +80,32 @@ describe('mailbox pointer release gate', () => {
       pointer_enter_pending: MAILBOX_POINTER_RESERVED,
       pointer_pty_id: 'pty_kept'
     })
-    const statements = countStatements(restarted)
     restarted.releasePendingMailboxPointerForPty('pty_kept')
     expect(restarted.getMessageById(id)).toMatchObject({
       pointer_enter_pending: 0,
       pointer_pty_id: null,
       delivered_at: null
     })
-    const afterRelease = statements.count
-    restarted.releasePendingMailboxPointerForPty('pty_kept')
-    expect(statements.count).toBe(afterRelease)
   })
 
-  it('releases a pointer staged on a PTY that is reused after release', () => {
+  it('releases a pointer staged on an already-released PTY id', () => {
     const db = open()
-    stagePointer(db, 'pty_reused', 'term_a')
     db.releasePendingMailboxPointerForPty('pty_reused')
-    const second = stagePointer(db, 'pty_reused', 'term_b')
+    const id = stagePointer(db, 'pty_reused', 'term_b')
     db.releasePendingMailboxPointerForPty('pty_reused')
-    expect(db.getMessageById(second)).toMatchObject({
-      pointer_enter_pending: 0,
-      pointer_pty_id: null
-    })
+    expect(db.getMessageById(id)).toMatchObject({ pointer_enter_pending: 0, pointer_pty_id: null })
   })
 
-  it('drops a PTY whose pointer another writer cleared once the next pointer is staged', () => {
+  it('releases an Enter-attempted pointer left on an id that cold restore reuses after exit', () => {
     const db = open()
-    const read = stagePointer(db, 'pty_settled', 'term_a')
-    db.markAsRead([read])
-    stagePointer(db, 'pty_next', 'term_b')
-    const statements = countStatements(db)
-    db.releasePendingMailboxPointerForPty('pty_settled')
-    expect(statements.count).toBe(0)
+    db.releasePendingMailboxPointerForPty('pty_restored')
+    const id = stagePointer(db, 'pty_restored', 'term_c')
+    const target = { ptyId: 'pty_restored', processIncarnation: 'p1' }
+    expect(db.markMailboxPointerWriteAttempted([id], target)).toBe(true)
+    expect(db.markMailboxPointerEnterAttempted([id], target)).toBe(true)
+    db.forgetReleasedPointerPty('pty_restored')
+    db.releasePendingMailboxPointerForPty('pty_restored')
+    expect(db.getMessageById(id)).toMatchObject({ pointer_enter_pending: 0, pointer_pty_id: null })
+    expect(db.getMessageById(id)?.delivered_at).not.toBeNull()
   })
 })

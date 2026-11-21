@@ -63,30 +63,12 @@ export function getMailboxesWithPointerWork(
   return found
 }
 
-/** PTYs that may hold a staged pointer; a superset of disk, so title edges skip the release write for the rest. */
-export function readPendingPointerPtyIds(db: OrchestrationDb['db']): Set<string> {
-  return new Set(
-    db
-      .prepare(
-        `SELECT DISTINCT pointer_pty_id FROM messages
-         WHERE pointer_enter_pending > 0 AND pointer_pty_id IS NOT NULL`
-      )
-      .all()
-      .map((row) => String(row.pointer_pty_id))
-  )
-}
-
 export function stageMailboxPointerEnter(
   this: OrchestrationDb,
   ids: string[],
   target: MailboxPointerReservationTarget
 ): boolean {
-  // Staging is rare, so resync here: PTYs whose pointers were cleared by any other writer drop out.
-  this.pendingPointerPtyIds.clear()
-  for (const ptyId of readPendingPointerPtyIds(this.db)) {
-    this.pendingPointerPtyIds.add(ptyId)
-  }
-  this.pendingPointerPtyIds.add(target.ptyId)
+  this.releasedPointerPtyIds.delete(target.ptyId)
   return (
     mutatePointerMessages(
       this,
@@ -202,7 +184,8 @@ export function releaseMailboxPointerEnter(
 }
 
 export function releasePendingMailboxPointerForPty(this: OrchestrationDb, ptyId: string): void {
-  if (!this.pendingPointerPtyIds.has(ptyId)) {
+  // Only staging writes a PTY's pointer and staging evicts it, so a released PTY has none left.
+  if (this.releasedPointerPtyIds.has(ptyId)) {
     return
   }
   this.db
@@ -218,7 +201,12 @@ export function releasePendingMailboxPointerForPty(this: OrchestrationDb, ptyId:
        WHERE pointer_enter_pending > 0 AND pointer_pty_id = ?`
     )
     .run(MAILBOX_POINTER_RESERVED, ptyId)
-  this.pendingPointerPtyIds.delete(ptyId)
+  this.releasedPointerPtyIds.add(ptyId)
+}
+
+/** An exited PTY leaves the released set; a reused id then runs one release on its first working edge. */
+export function forgetReleasedPointerPty(this: OrchestrationDb, ptyId: string): void {
+  this.releasedPointerPtyIds.delete(ptyId)
 }
 
 function mutatePointerMessages(
@@ -264,6 +252,7 @@ export type MailboxPointerEnterStateMethods = {
   settleMailboxPointerEnter: typeof settleMailboxPointerEnter
   releaseMailboxPointerEnter: typeof releaseMailboxPointerEnter
   releasePendingMailboxPointerForPty: typeof releasePendingMailboxPointerForPty
+  forgetReleasedPointerPty: typeof forgetReleasedPointerPty
 }
 
 export function attachMailboxPointerEnterState(ctor: { prototype: object }): void {
@@ -276,6 +265,7 @@ export function attachMailboxPointerEnterState(ctor: { prototype: object }): voi
     markMailboxPointerEnterAttempted,
     settleMailboxPointerEnter,
     releaseMailboxPointerEnter,
-    releasePendingMailboxPointerForPty
+    releasePendingMailboxPointerForPty,
+    forgetReleasedPointerPty
   })
 }
