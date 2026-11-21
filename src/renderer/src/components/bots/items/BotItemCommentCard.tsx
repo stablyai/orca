@@ -35,8 +35,10 @@ import {
 
 /** The asking comment's question, ruled off across the card's full width, its words still on the body's
  *  edge: bleeds past the body's `pl-7` and the card's `px-2`, then pads back. It stops a pixel short of
- *  each side, at the card's hairline, so the two translucent strokes never overlap into a brighter dot. */
-const QUESTION_RULE = '-ml-[35px] -mr-[7px] mt-2.5 border-t border-border pl-[35px] pr-[7px] pt-2.5'
+ *  each side, at the card's hairline, so the two translucent strokes never overlap into a brighter dot;
+ *  the spacing part scales with the card's padding at any root font size. */
+const QUESTION_RULE =
+  '-ml-[calc(var(--spacing)*9-1px)] -mr-[calc(var(--spacing)*2-1px)] mt-2.5 border-t border-border pl-[calc(var(--spacing)*9-1px)] pr-[calc(var(--spacing)*2-1px)] pt-2.5'
 
 function NeedsYouTag(): React.JSX.Element {
   const t = useTranslate()
