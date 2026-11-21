@@ -242,6 +242,10 @@ export async function startLocalWorker(args: {
       reusesTerminal: Boolean(params.terminal),
       creation: placed.terminalCreation
     }
+    if (!structuredSession && !workerChat) {
+      // A reused slept agent resumes in place first; readiness and authority are its woken process's.
+      await runtime.wakeSleptAgentHandle(terminalHandle, { timeoutMs })
+    }
     // Fixed now: the hand-over may run later, from the background wait.
     const placement = placed
     const handle = terminalHandle

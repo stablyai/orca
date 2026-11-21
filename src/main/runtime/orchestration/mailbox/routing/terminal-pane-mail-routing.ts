@@ -2,7 +2,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layou
 import type { TerminalIdentityReadContext } from '../../../terminal/query/terminal-identity-read-context'
 import { ptyRecordForPaneKey } from '../../../terminal/query/pty-pane-record'
 import type { RuntimeTerminalAgentPresenceOptions } from '../../../terminal/query/runtime-terminal-agent-presence'
-import { RuntimeSleptMailboxWakes } from './slept-mailbox-runtime'
+import { RuntimeSleptAgentWakes } from './slept-agent-wake-runtime'
 import type { RuntimePtyWorktreeRecord } from '../../../terminal/records/runtime-terminal-state-records'
 import {
   isTerminalLeafId,
@@ -33,7 +33,7 @@ import { resolveTerminalIdentityFromProbes } from '../../../terminal/identity/te
 import { observeChatWorkerWorking } from '../../workers/turn-stops/chat-worker-turn-stops'
 import { ChatWorkerModelWait } from '../../workers/turn-stops/chat-worker-model-wait'
 
-export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends RuntimeSleptMailboxWakes {
+export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends RuntimeSleptAgentWakes {
   protected terminalIdentitySources = () => ({
     handles: this.handles,
     sshTerminals: this.orchestrationCompatibilitySshTerminals,
@@ -130,7 +130,11 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends RuntimeSlept
     handle: string,
     options?: RuntimeTerminalAgentPresenceOptions
   ): Promise<boolean> {
-    return this.terminalAgentPresence.isRunning(handle, options)
+    // A slept agent is an idle one to every caller: input wakes it in place.
+    return (
+      this.sleptAgentPaneForHandle(handle) !== null ||
+      this.terminalAgentPresence.isRunning(handle, options)
+    )
   }
 
   async isTerminalRunningSettledPromptAgent(handle: string): Promise<boolean> {

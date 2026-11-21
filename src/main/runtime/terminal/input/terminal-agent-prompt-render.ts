@@ -20,6 +20,16 @@ const CLAUDE_AGENT_PROMPT_RENDER_MARKER = '\x1b[?25h'
 type AgentPromptRenderWaitEnd = NonNullable<RuntimeTerminalPromptSubmit['renderWait']>
 
 export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithSubmitTerminalAgentPrompt {
+  /** A wait on an Agent-slept pane, answered as for an idle agent; null when the handle isn't slept. */
+  protected abstract waitForSleptAgent(
+    handle: string,
+    options?: {
+      condition?: RuntimeTerminalWaitCondition
+      timeoutMs?: number
+      signal?: AbortSignal
+    }
+  ): Promise<RuntimeTerminalWait> | null
+
   protected createAgentPromptRenderGate(
     ptyId: string,
     pasteIngestMs: number,
@@ -198,6 +208,11 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
       acceptsMidTurnInput?: boolean
     }
   ): Promise<RuntimeTerminalWait> {
+    // A slept agent waits as an idle one rather than waking for a read.
+    const slept = this.waitForSleptAgent(handle, options)
+    if (slept) {
+      return slept
+    }
     // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
     const starting = ORCA_LAYOUT_OWNER_IS_MAIN
       ? this.startRestoredHandlePane(handle, options ?? {})
@@ -217,6 +232,22 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
         }
       })
     }
-    return this.terminalWait.wait(handle, options)
+    const condition = options?.condition ?? 'exit'
+    const timeoutMs = options?.timeoutMs
+    const deadline = timeoutMs && timeoutMs > 0 ? Date.now() + timeoutMs : null
+    const settled = this.terminalWait.wait(handle, options)
+    // Why: Agent Sleep's stop ends the process, not the agent; the handle waits on as a slept agent.
+    return condition !== 'exit'
+      ? settled
+      : settled.then(
+          (result) =>
+            (result.status === 'exited' &&
+              this.waitForSleptAgent(handle, {
+                condition,
+                signal: options?.signal,
+                ...(deadline === null ? {} : { timeoutMs: Math.max(1, deadline - Date.now()) })
+              })) ||
+            result
+        )
   }
 }
