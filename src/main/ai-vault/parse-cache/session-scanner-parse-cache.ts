@@ -114,12 +114,12 @@ export async function parseAgentSessionFileCached(
   stats?: SessionParseStats,
   requireRead?: SessionParseReadRequirement,
   signal?: AbortSignal,
-  indexing = false
+  indexSnapshot?: (session: AiVaultSession) => Promise<AiVaultSession | null>
 ): Promise<AiVaultSession | null> {
   // Serialize lookup/read/store because overlapping parses share a resume point and message channel.
   return inSessionParseFileLane(
     candidate.file.path,
-    () => parseCachedInLane(candidate, platform, stats, requireRead, signal, indexing),
+    () => parseCachedInLane(candidate, platform, stats, requireRead, signal, indexSnapshot),
     signal
   )
 }
@@ -159,7 +159,7 @@ async function parseCachedInLane(
   stats?: SessionParseStats,
   requireRead?: SessionParseReadRequirement,
   signal?: AbortSignal,
-  indexing = false
+  indexSnapshot?: (session: AiVaultSession) => Promise<AiVaultSession | null>
 ): Promise<AiVaultSession | null> {
   const { file } = candidate
   const key = sessionParseCacheKey(candidate.agent, file.path)
@@ -203,7 +203,8 @@ async function parseCachedInLane(
     session: AiVaultSession | null
   ): Promise<AiVaultSession | null> => {
     enriched = await enrichSessionFromSidecar(candidate, session, platform, signal)
-    return enriched.session
+    // Consumer-only metadata must not become part of the stat-keyed list cache.
+    return enriched.session && indexSnapshot ? indexSnapshot(enriched.session) : enriched.session
   }
   const stateFactory = resumableStateFactoryFor(candidate)
   if (stateFactory) {
@@ -215,7 +216,7 @@ async function parseCachedInLane(
       stats,
       signal,
       sessionForConsumers,
-      indexing
+      indexing: !!indexSnapshot
     })
     storeSessionParseCacheEntry(key, {
       agent: candidate.agent,
@@ -238,7 +239,7 @@ async function parseCachedInLane(
     stats,
     signal,
     sessionForConsumers,
-    indexing,
+    indexing: !!indexSnapshot,
     onSkippedRecords: (records) => {
       skippedRecords = mergeSkippedTranscriptRecords([], records)
     }

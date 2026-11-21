@@ -56,7 +56,11 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
 
   beginRead(start: TranscriptReadStart): TranscriptReadConsumer | null {
     const { candidate } = start
-    if (this.store.acceptingReads === false) {
+    // Only index discovery arbitrates Antigravity siblings and supplies their workspace metadata.
+    if (
+      this.store.acceptingReads === false ||
+      (candidate.agent === 'antigravity' && !start.indexing)
+    ) {
       return null
     }
     // A fully covered self-contained transcript has nothing new to publish, even under another agent’s fold.

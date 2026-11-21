@@ -1,11 +1,13 @@
 import '../worker/session-search-worker.test-fixture'
 import 'node:fs'
-import { appendFile, rm, stat, utimes } from 'node:fs/promises'
+import { appendFile, mkdir, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { resetSessionParseCacheForTests } from '../../ai-vault/parse-cache/session-parse-cache-store'
 import { resetTranscriptConsumersForTests } from '../../ai-vault/transcripts/session-transcript-consumers'
 import type SyncDatabase from '../../sqlite/sync-database'
+import { writeAntigravityTranscript } from '../../ai-vault/scanner-fixtures/session-scanner-test-fixtures'
+import { SessionSearchEngine } from '../query/session-search-engine'
 import { SessionSearchIndexer } from './session-search-indexer'
 import '../storage/session-search-schema'
 import {
@@ -79,6 +81,92 @@ async function nextCycle(): Promise<void> {
   clock.advance(INTERVAL_MS)
   await indexer?.settled()
 }
+
+it.each(['append', 'rewrite'] as const)(
+  'selects one readable Antigravity sibling after a full transcript %s and respects workspace scope',
+  async (change) => {
+    const brain = join(harness.root, '.gemini', 'antigravity-cli', 'brain')
+    const records = (word: string) => [
+      {
+        source: 'USER_EXPLICIT',
+        type: 'USER_INPUT',
+        created_at: '2026-10-02T01:00:00Z',
+        content: `<USER_REQUEST>commonneedle ${word}</USER_REQUEST>`
+      }
+    ]
+    const compact = await writeAntigravityTranscript(brain, 'alpha', records('fallbackneedle'))
+    const full = join(dirname(compact), 'transcript_full.jsonl')
+    await writeFile(full, '{}\n')
+    const other = await writeAntigravityTranscript(brain, 'beta', records('otherneedle'))
+    const cache = join(dirname(brain), 'cache')
+    await mkdir(cache, { recursive: true })
+    await writeFile(
+      join(cache, 'last_conversations.json'),
+      JSON.stringify({ '/repo/a': 'alpha', '/repo/ab': 'beta' })
+    )
+    const active = newIndexer({
+      roots: { ...harness.roots, antigravityBrainDir: brain, antigravityAppHome: harness.root }
+    })
+    await active.start()
+    const paths = (query: string, cwd?: string) =>
+      harness.write((db) =>
+        new SessionSearchEngine(db)
+          .search({ query, filters: cwd ? { scopePaths: [cwd] } : {} })
+          .hits.map((hit) => hit.filePath)
+          .sort()
+      )
+    expect(paths('commonneedle', '/repo/a')).toEqual([compact])
+    expect(paths('commonneedle')).toEqual([compact, other].sort())
+    const update = change === 'append' ? appendFile : writeFile
+    await update(full, `${JSON.stringify(records('preferredneedle')[0])}\n`)
+    await active.reconcile({ full: true })
+    if (change === 'rewrite') {
+      // A mismatched prefix is marked due before the next sweep replaces it.
+      await active.reconcile({ full: true })
+    }
+    expect(paths('commonneedle', '/repo/a')).toEqual([full])
+    expect(paths('fallbackneedle')).toEqual([])
+    expect(paths('preferredneedle', '/repo/ab')).toEqual([])
+    expect(paths('commonneedle', '/repo/ab')).toEqual([other])
+    expect(errors).toEqual([])
+  }
+)
+
+it('finds an unchanged Antigravity transcript in its workspace when metadata arrives later', async () => {
+  const brain = join(harness.root, '.gemini', 'antigravity-cli', 'brain')
+  await writeAntigravityTranscript(brain, 'late-workspace', [
+    {
+      source: 'USER_EXPLICIT',
+      type: 'USER_INPUT',
+      created_at: '2026-10-02T01:00:00Z',
+      content: '<USER_REQUEST>lateworkspaceneedle</USER_REQUEST>'
+    }
+  ])
+  const workspace = join(harness.root, 'worktree')
+  const search = (scopePaths?: string[]) =>
+    harness.read((db) =>
+      new SessionSearchEngine(db)
+        .search({ query: 'lateworkspaceneedle', filters: { scopePaths } })
+        .hits.map((hit) => hit.sessionId)
+    )
+  const active = newIndexer({
+    roots: { ...harness.roots, antigravityBrainDir: brain, antigravityAppHome: harness.root }
+  })
+  await active.start()
+  expect(search()).toEqual(['late-workspace'])
+  expect(search([workspace])).toEqual([])
+
+  const cache = join(dirname(brain), 'cache')
+  await mkdir(cache, { recursive: true })
+  await writeFile(
+    join(cache, 'last_conversations.json'),
+    JSON.stringify({ [workspace]: 'late-workspace' })
+  )
+  await active.reconcile({ full: true })
+  expect(search([workspace])).toEqual(['late-workspace'])
+  expect(search()).toEqual(['late-workspace'])
+  expect(errors).toEqual([])
+})
 
 /** Two transcripts untouched for days in one directory, so cycles reuse their indexed stats. */
 async function writeQuietTranscripts(): Promise<string> {
