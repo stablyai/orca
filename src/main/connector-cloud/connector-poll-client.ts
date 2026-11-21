@@ -28,7 +28,7 @@ import {
   type ConnectorBotPostBody,
   type ConnectorReplyBody
 } from './connector-replies'
-import { connectorPollRetryMs, obeyConnectorPollControl } from './connector-poll-control'
+import * as pollControl from './connector-poll-control'
 import { ConnectorOutboxSender } from './connector-outbox'
 import { ConnectorEventRequests } from './connector-event-requests'
 import { ConnectorClientSnapshots, type ConnectorClientHello } from './connector-snapshot-trace'
@@ -63,6 +63,7 @@ export class ConnectorPollClient {
   // Hellos go one at a time, so a late answer never replaces a newer revision.
   private saying: Promise<ConnectorFailure | null> = Promise.resolve(null)
   private failures = 0
+  private readonly respread = new pollControl.ConnectorRehelloSpread()
   // When the last answered poll went out; failed ones don't count.
   private heardAt: number | null = null
   private warnedTrimmed = false
@@ -136,6 +137,8 @@ export class ConnectorPollClient {
     const say = (): Promise<ConnectorFailure | null> =>
       this.helloRev !== null ? this.helloIfOwed() : Promise.resolve(null)
     this.saying = this.saying.then(say, say)
+    // Waiting out a 409's spread with no hello: the next cycle says it now.
+    this.respread.cut()
   }
 
   /** Posts an agent's reply to its conversation's thread while this client runs. */
@@ -242,11 +245,18 @@ export class ConnectorPollClient {
       return null
     }
     if (!polled.ok) {
+      // A hello in flight (sayChanged) may already replace this one: let it land before deciding.
+      await this.saying.catch(() => null)
       // A lost answer (null) may have carried this hello's one list of unsettled deliveries; a new hello
       // lists them again. A 409 asks for one. A 5xx rolled back, so it keeps the hello. Either way only
       // if one said meanwhile did not already replace it.
       if (this.helloRev === helloRev && (polled.status === 409 || polled.status === null)) {
-        this.helloRev = this.snapshots.drop(polled.status === 409 ? 'poll-409' : 'poll-failed')
+        this.helloRev = this.snapshots.drop(pollControl.connectorPollDropReason(polled))
+        // A 409 that dropped this hello waits a random spread first: a deploy may have asked many
+        // hosts at once. The first hello, and one a newer hello already answered, go at once.
+        if (polled.status === 409) {
+          return this.respread.wait(this.random, this.stopped.signal)
+        }
       }
       return polled.status === 409 ? null : (connectorStop(polled) ?? this.backoff(polled))
     }
@@ -264,7 +274,7 @@ export class ConnectorPollClient {
     const msLeft = (expiresAt: number): number =>
       expiresAt - response.serverNow - (performance.now() - answeredAt)
     this.deliveries.deliverAll(response.deliveries, msLeft, outbox)
-    return obeyConnectorPollControl(response.control, this.random, this.stopped.signal)
+    return pollControl.obeyConnectorPollControl(response.control, this.random, this.stopped.signal)
   }
 
   private sayHello(): Promise<ConnectorFailure | null> {
@@ -323,13 +333,8 @@ export class ConnectorPollClient {
     this.eventRequests.watch()
   }
 
-  private async backoff(failure: ConnectorFailure): Promise<null> {
-    await delayUnlessAborted(
-      connectorPollRetryMs(this.failures++, failure, this.random),
-      this.stopped.signal
-    )
-    return null
-  }
+  private readonly backoff = (failure: ConnectorFailure): Promise<null> =>
+    pollControl.waitPollRetry(this.failures++, failure, this.random, this.stopped.signal)
 
   private async post(
     path: string,

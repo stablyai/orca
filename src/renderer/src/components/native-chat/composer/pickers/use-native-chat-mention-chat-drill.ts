@@ -95,7 +95,7 @@ export function useNativeChatMentionChatDrill({
         setDrill({ ...parentAt, botId, backWith: undefined })
         return
       }
-      const query = draft.slice(0, caret).match(/@(\S*)$/)?.[1] ?? ''
+      const query = draft.slice(0, caret).match(/@([^@\n]*)$/)?.[1] ?? ''
       setDrill({
         botId,
         from: caret - query.length - 1,

@@ -20,6 +20,11 @@ export type TerminalOutputBeforeWrite = (data: string) => void
 type TerminalBacklogRecoveryRequest = () => boolean
 export type TerminalOutputParsedCallback = () => void
 type ForegroundRefreshSyncResolver = () => boolean
+type TerminalBacklogReplaced = (
+  chunks: readonly { data: string }[],
+  startIndex: number,
+  firstDrop: boolean
+) => void
 
 export type WriteTerminalOutputOptions = {
   foreground: boolean
@@ -27,9 +32,8 @@ export type WriteTerminalOutputOptions = {
   onParsed?: TerminalOutputParsedCallback
   /** Fire delivery ACK once on parse OR discard; duplicate calls are safe, omission permanently shrinks main’s in-flight window. */
   ackCredit?: () => void
-  onBackgroundBacklogDropped?: () => void
   /** Every backlog replacement: queued bytes vanished behind the warning, leaving a gap in the pane's stream. */
-  onBacklogReplaced?: () => void
+  onBacklogReplaced?: TerminalBacklogReplaced
   latencySensitive?: boolean
   forceForegroundRefresh?: boolean
   followupForegroundRefresh?: boolean
@@ -70,8 +74,7 @@ export type QueueEntry = {
   chunks: QueueChunk[]
   chunkIndex: number
   queuedChars: number
-  onBackgroundBacklogDropped?: () => void
-  onBacklogReplaced?: () => void
+  onBacklogReplaced?: TerminalBacklogReplaced
   backgroundBacklogDropped: boolean
   highPriority: boolean
   foregroundHold: boolean

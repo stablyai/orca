@@ -168,7 +168,7 @@ export function WslHostsSection({
             size="sm"
             onClick={openWslHostsExperimentalSetting}
           >
-            {t('auto.components.settings.wslHosts.turnOn', 'Turn on in Experimental')}
+            {t('auto.components.settings.wslHosts.turnOn', 'Open Experimental')}
           </Button>
         )}
       </div>

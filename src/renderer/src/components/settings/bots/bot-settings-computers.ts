@@ -3,6 +3,7 @@
 // once, since Slack, Linear and GitHub belong to an account rather than a computer.
 import { useSyncExternalStore } from 'react'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store'
 import {
   readBotHostIds,
@@ -47,7 +48,7 @@ export type BotSettingsAccount = {
 export function useBotSettingsComputers(): BotSettingsComputer[] {
   const listed = useSyncExternalStore(subscribeToBotChanges, readBotHostIds)
   const tooOld = useSyncExternalStore(subscribeToBotChanges, readUpdateNeededBotHosts)
-  const runtimeStatusByEnvironmentId = useAppStore((state) => state.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const names = useAppStore((state) =>
     [...listed, ...tooOld]
       .map((hostId) => selectExecutionHostDisplayLabel(state, hostId))
@@ -63,9 +64,7 @@ export function useBotSettingsComputers(): BotSettingsComputer[] {
             local: false,
             state:
               index >= listed.length ||
-              !botHostHas(hostId, BOTS_CONNECTORS_RUNTIME_CAPABILITY, {
-                runtimeStatusByEnvironmentId
-              })
+              !botHostHas(hostId, BOTS_CONNECTORS_RUNTIME_CAPABILITY, runtimeStatusByEnvironmentId)
                 ? 'update-needed'
                 : readBotHostState(hostId) === 'offline'
                   ? 'offline'

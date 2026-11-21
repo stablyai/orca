@@ -51,7 +51,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
     }
   })
 
-  it('applies only title facts from replay batches — no attention replay', () => {
+  it('replays titles without attention and ignores titles already covered by live output', () => {
     const { callbacks, events } = createCallbackRecorder()
     registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks })
 
@@ -65,13 +65,6 @@ describe('registerTerminalSideEffectFactConsumer', () => {
         { replay: true, seq: 10 }
       )
     )
-
-    expect(events).toEqual([['title', '✳ Claude', '✳ Claude']])
-  })
-
-  it('drops a replay title not newer than the last applied live title', () => {
-    const { callbacks, events } = createCallbackRecorder()
-    registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks })
 
     _dispatchTerminalSideEffectBatchForTest(
       batch([{ kind: 'title', normalizedTitle: 'live', rawTitle: 'live' }], { seq: 20 })
@@ -90,6 +83,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
     )
 
     expect(events).toEqual([
+      ['title', '✳ Claude', '✳ Claude'],
       ['title', 'live', 'live'],
       ['title', 'newer', 'newer']
     ])

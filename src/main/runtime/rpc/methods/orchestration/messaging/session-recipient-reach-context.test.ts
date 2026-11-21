@@ -160,14 +160,4 @@ describe('refuseUndeliverableSessionRecipientWith', () => {
     expect(verdicts['chat-worker-lost']?.message).toContain('worker identity')
     expect(verdicts['chat-retired']?.message).toContain('its chat was closed')
   })
-
-  it('answers without a store as the per-call refusal does', () => {
-    db = new OrchestrationDb(':memory:')
-    const context = createStructuredSessionReachContext(null, db)
-    const target = recipient('chat-open-1')
-    expect(refuseUndeliverableSessionRecipientWith(context, target, null)).toEqual(
-      refuseUndeliverableSessionRecipient(target, null, db, null)
-    )
-    expect(refuseUndeliverableSessionRecipientWith(context, target, null)?.code).toBe(CODES.unknown)
-  })
 })

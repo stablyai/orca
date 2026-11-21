@@ -131,22 +131,6 @@ describe('remote runtime pane whose host retired its surface (#38151)', () => {
     resetRemoteRuntimeTransport()
   })
 
-  it('ends a pane opened after its session already exited, with the exit code', async () => {
-    answerAsHostThatRetired({ retired: 'terminal-ended', show: EXITED_127 })
-    const { transport, onPtyExit, onPtySpawn } = await createHostMirror()
-
-    await transport.connect({ url: '', callbacks: {} })
-
-    await vi.waitFor(() =>
-      expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-ended', 127)
-    )
-    expect(onPtySpawn).toHaveBeenCalledWith('remote:env-1@@terminal-ended')
-    expect(onPtyExit).toHaveBeenCalledOnce()
-    expect(runtimeSubscribe).not.toHaveBeenCalled()
-    expect(transport.getRecoveryState?.().phase).toBe('ended')
-    transport.destroy?.()
-  })
-
   it('ends the pane with the exit code when its stream ends on the exit', async () => {
     const { transport, onPtyExit } = await createHostMirror()
     await transport.connect({ url: '', callbacks: {} })
@@ -196,7 +180,7 @@ describe('remote runtime pane whose host retired its surface (#38151)', () => {
       }
       return answer?.(args)
     })
-    const { transport, onPtyExit, onHostReboundExitedPty } = await createHostMirror()
+    const { transport, onPtyExit, onPtySpawn, onHostReboundExitedPty } = await createHostMirror()
 
     void transport.connect({ url: '', callbacks: {} })
     await vi.waitFor(() =>
@@ -205,6 +189,9 @@ describe('remote runtime pane whose host retired its surface (#38151)', () => {
     await publishHostSurface(null, 4)
     exitRead.resolve()
     await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledOnce())
+    expect(onPtySpawn).toHaveBeenCalledWith('remote:env-1@@terminal-ended')
+    expect(runtimeSubscribe).not.toHaveBeenCalled()
+    expect(transport.getRecoveryState?.().phase).toBe('ended')
     await publishHostSurface('terminal-restarted', 5)
 
     await vi.waitFor(() =>

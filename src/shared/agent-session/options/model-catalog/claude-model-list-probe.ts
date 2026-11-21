@@ -1,6 +1,6 @@
 import { claudeBackgroundArgs } from '../../../text-generation/launch/claude-background-run-isolation'
 import { assertJsonTextStructureWithinLimits } from '../../../json-stream/json-text-structure-limit'
-import { labelFromModelId } from './model-id-label'
+import { labelFromModelId, withoutClaudeVendor } from './model-id-label'
 
 // claude models starts chat; list_models over --print stream-json reads the picker without an API turn. Older CLIs return error with exit 0; keep seed models.
 export const CLAUDE_MODEL_LIST_STDIN = `${JSON.stringify({
@@ -27,9 +27,9 @@ export function buildClaudeModelListArgs(
 
 export const CLAUDE_MODEL_LIST_ARGS = buildClaudeModelListArgs()
 
-/** A listed row keyed by the model it runs is named by that id, without its release date. */
+/** A listed row keyed by the model it runs is named by that id, without its vendor or release date, like the CLI's own names (`Fable 5.1`). */
 export function claudeListedModelLabel(modelId: string): string {
-  return labelFromModelId(modelId.replace(/-\d{8}(?=$|\[)/, ''))
+  return withoutClaudeVendor(labelFromModelId(modelId.replace(/-\d{8}(?=$|\[)/, '')))
 }
 
 export type ClaudeListedModel = {

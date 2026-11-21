@@ -1,6 +1,7 @@
 // Resolve tab conversations through Session History so both surfaces share switch eligibility.
 
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 
 import {
@@ -43,7 +44,7 @@ import { getAiVaultResumeWorkspaceExecutionHostId } from '@/lib/agent-session/re
 import '../../right-sidebar/ai-vault/scanning/ai-vault-session-refresh'
 import { claimAiVaultForcedRescan } from '../../right-sidebar/ai-vault/scanning/ai-vault-forced-rescan-budget'
 import { structuredAgentSessionLaunchFeasible } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
-import { resolveHostCapabilities } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { hostCapabilitiesFrom } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import {
   selectFolderWorkspaces,
@@ -84,6 +85,7 @@ export type PaneResumeInNewChatOffer = 'available' | 'host-update-required' | nu
 /** The pane's known identity and launch route, without a History request. */
 export function resolvePaneResumeInNewChatOffer(
   state: AppState,
+  statuses: RuntimeStatuses,
   pane: { worktreeId: string; paneKey: string }
 ): PaneResumeInNewChatOffer {
   const conversation = resolvePaneLastAgentConversation(state, pane, adoptsCliConversations)
@@ -114,7 +116,7 @@ export function resolvePaneResumeInNewChatOffer(
     return 'available'
   }
   // Older hosts' create schemas reject resumeFrom; unverified capabilities offer nothing yet.
-  const capabilities = resolveHostCapabilities(state, conversation.executionHostId)
+  const capabilities = hostCapabilitiesFrom(statuses, conversation.executionHostId)
   if (!capabilities) {
     return null
   }
@@ -125,9 +127,10 @@ export function resolvePaneResumeInNewChatOffer(
 
 export function canPaneOfferResumeInNewChat(
   state: AppState,
+  statuses: RuntimeStatuses,
   pane: { worktreeId: string; paneKey: string }
 ): boolean {
-  return resolvePaneResumeInNewChatOffer(state, pane) !== null
+  return resolvePaneResumeInNewChatOffer(state, statuses, pane) !== null
 }
 
 /** A native chat tab's session and the provider recorded when it was created. */

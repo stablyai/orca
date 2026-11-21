@@ -16,7 +16,8 @@ import type {
 } from '../../../../../shared/automations/automation-definition'
 import type { Bot } from '../../../../../shared/bot-types'
 import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS, Field } from '../automation-page-parts'
-import { botResultsPlace, withBotResultsPlace } from './automation-bot-results-to'
+import { botResultsPlace } from '../../../../../shared/automation-bot-target'
+import { withBotResultsPlace } from './automation-bot-results-to'
 import { botTargetChatTitle } from './automation-bot-runs-in-chat'
 
 type ResultsToChoice = 'chat' | 'thread' | 'channel' | 'linear' | 'none'

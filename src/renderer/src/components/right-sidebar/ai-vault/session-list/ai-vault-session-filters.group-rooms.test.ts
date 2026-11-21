@@ -42,6 +42,17 @@ const group: BotGroup = {
   members: [
     { botId: 'a', sessionId: 'bot-group-member-a' },
     { botId: 'b', sessionId: 'bot-group-member-b' }
+  ],
+  threads: [
+    {
+      id: 'bot-group-thread-1',
+      createdAt: 2,
+      title: 'Release notes',
+      members: [
+        { botId: 'a', sessionId: 'bot-group-member-ta' },
+        { botId: 'b', sessionId: 'bot-group-member-tb' }
+      ]
+    }
   ]
 }
 
@@ -106,28 +117,43 @@ describe('group rooms in filtered Session History', () => {
     expect(result.current.filteredSessions.map((session) => session.id)).toEqual(['claude-row'])
   })
 
-  it('lists the room once when every member matches', () => {
-    const { result } = renderHook(() =>
-      useAiVaultPanelSessions(rows, 'browse', 'agent', {
-        query: '',
-        agents: ['claude', 'codex'],
-        scope: 'all',
-        sort: 'updated',
-        hideEmptySessions: false,
-        activeWorktreePaths: [],
-        roomRows: fold
-      })
-    )
-    expect(result.current.filteredSessions.map((session) => session.id)).toEqual(['codex-row'])
-  })
-
-  it("lists a room in its group's home, where the room's /resume looks, and once under All", () => {
-    const all = [...rows, sideChat]
-    expect(listed(all, 'workspace', [GROUP_HOME])).toEqual([['codex-row', GROUP_HOME]])
-    expect(listed(all, 'workspace', ['/bots/a'])).toEqual([['side-chat', '/bots/a']])
+  it("lists each room's newest member once in the group home and under All", () => {
+    const threadRows = [
+      {
+        ...rows[1],
+        id: 'thread-a',
+        modifiedAt: '2026-11-04T11:30:00.000Z',
+        structuredSession: { sessionId: 'bot-group-member-ta', workspaceId: 'fw-a' }
+      },
+      {
+        ...rows[0],
+        id: 'thread-b',
+        structuredSession: { sessionId: 'bot-group-member-tb', workspaceId: 'fw-b' }
+      }
+    ]
+    const formerMember = {
+      ...base,
+      id: 'former-member',
+      modifiedAt: '2026-11-04T09:00:00.000Z',
+      structuredSession: { sessionId: 'bot-group-member-gone', workspaceId: 'fw-a' }
+    }
+    const cli = { ...base, id: 'cli', modifiedAt: '2026-11-04T08:00:00.000Z' }
+    const all = [...rows, ...threadRows, sideChat, formerMember, cli]
+    expect(listed(all, 'workspace', [GROUP_HOME])).toEqual([
+      ['thread-a', GROUP_HOME],
+      ['codex-row', GROUP_HOME]
+    ])
+    expect(listed(all, 'workspace', ['/bots/a'])).toEqual([
+      ['side-chat', '/bots/a'],
+      ['former-member', '/bots/a'],
+      ['cli', '/bots/a']
+    ])
     expect(listed(all, 'all', [])).toEqual([
       ['side-chat', '/bots/a'],
-      ['codex-row', GROUP_HOME]
+      ['thread-a', GROUP_HOME],
+      ['codex-row', GROUP_HOME],
+      ['former-member', '/bots/a'],
+      ['cli', '/bots/a']
     ])
   })
 })

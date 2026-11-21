@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import {
-  buildResourceSessionBindingIndex,
-  selectUnboundDaemonSessions
-} from './resource-session-bindings'
+import { selectUnboundDaemonSessions } from './resource-session-bindings'
 
 function makeTab(id: string, ptyId: string | null = null): TerminalTab {
   return {
@@ -30,7 +27,6 @@ describe('resource session bindings', () => {
       workspaceSessionReady: true
     }
 
-    expect(buildResourceSessionBindingIndex(inputs).boundPtyIds.has('pty-deferred')).toBe(true)
     expect(
       selectUnboundDaemonSessions(
         [

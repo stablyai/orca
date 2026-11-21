@@ -72,13 +72,9 @@ export function clearSshRemotePtyBindingsForLeases(
     )
   }
   let changed = false
-  const sessions = new Set(
-    [
-      operations.state.workspaceSession,
-      operations.state.workspaceSessionsByHostId?.[toSshExecutionHostId(targetId)]
-    ].filter((session): session is WorkspaceSessionState => Boolean(session))
-  )
-  for (const session of sessions) {
+  const hostId = toSshExecutionHostId(targetId)
+  const clearBindings = (session: WorkspaceSessionState): WorkspaceSessionState => {
+    let next = session
     // Replace, never edit, saved entries: incremental saves compare them by identity.
     let rows: WorkspaceSessionState['tabsByWorktree'] | undefined
     for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
@@ -94,7 +90,7 @@ export function clearSshRemotePtyBindingsForLeases(
       }
     }
     if (rows) {
-      session.tabsByWorktree = rows
+      next = { ...next, tabsByWorktree: rows }
     }
     const worktreeIdByTabId = new Map<string, string>()
     for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
@@ -123,7 +119,18 @@ export function clearSshRemotePtyBindingsForLeases(
       }
     }
     if (layouts) {
-      session.terminalLayoutsByTabId = layouts
+      next = { ...next, terminalLayoutsByTabId: layouts }
+    }
+    return next
+  }
+  // Publish replacements: rollback of an in-flight session write keeps the previous objects.
+  operations.state.workspaceSession = clearBindings(operations.state.workspaceSession)
+  const partition = operations.state.workspaceSessionsByHostId?.[hostId]
+  const clearedPartition = partition && clearBindings(partition)
+  if (clearedPartition && clearedPartition !== partition) {
+    operations.state.workspaceSessionsByHostId = {
+      ...operations.state.workspaceSessionsByHostId,
+      [hostId]: clearedPartition
     }
   }
   if (changed) {

@@ -215,7 +215,7 @@ function NewBotForm(props: NewBotSheetProps) {
         {proposal ? null : (
           <ListGroup style={styles.templateGroup}>
             <ListRow
-              title={t('bots.new.fromTemplate', 'Start from a template')}
+              title={t('bots.new.fromTemplate', 'Use template')}
               navigates
               onPress={() => setPicking('template')}
             />

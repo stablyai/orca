@@ -23,6 +23,7 @@ import type { GoogleServiceChoice } from '../../../../../shared/google/google-sc
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { Bot } from '../../../../../shared/bot-types'
 import { googleReachAreas, type GoogleReachArea } from '../../../../../shared/bots/bot-access-reach'
+import { botConnectorRowKey, forgetBotConnectorPage } from '../bot-connector-page'
 
 export type GoogleHostView =
   | { status: 'loading' }
@@ -207,6 +208,9 @@ export async function disconnectGoogle(
 /** The bot toggle lives with the bot, on its host. */
 export async function setBotGoogle(bot: BotRef, on: boolean): Promise<void> {
   await callBotRpc(bot, 'google.bot.set', { botId: bot.id, on })
+  if (!on) {
+    forgetBotConnectorPage(botConnectorRowKey(bot, 'google'))
+  }
   await refreshGoogle(botTarget(bot))
 }
 

@@ -16,8 +16,10 @@ export type PhoneBotItems = {
    *  `read` the last good one, or null if none landed. */
   error: string | null
   retry: () => void
-  /** Reads the next Closed page; null when there is none. */
-  loadMoreClosed: (() => Promise<void>) | null
+  /** Reads the next Closed page, and says what it held and whether more follow; null when there is none. */
+  loadMoreClosed: (() => Promise<{ items: BotItem[]; more: boolean }>) | null
+  /** The host has no Closed page past the ones read; false while they are read again. */
+  closedEnded: boolean
 }
 
 type Shown = { key: string; read: BotItemsListRead; error: string | null }
@@ -98,7 +100,7 @@ export function usePhoneBotItems({
   const cursor = upToDate ? ownPages.cursor : depth === 0 ? (read?.nextClosedCursor ?? null) : null
   const loadMoreClosed = useCallback(async () => {
     if (!client || !read || !cursor) {
-      return
+      return { items: [], more: false }
     }
     const mine = ++generation.current
     const next = await readClosedPages(client, botId, chatId, cursor, 1)
@@ -117,6 +119,7 @@ export function usePhoneBotItems({
         }
       })
     }
+    return { items: next.items, more: next.cursor !== null }
   }, [client, read, cursor, botId, chatId, key])
 
   return {
@@ -125,7 +128,8 @@ export function usePhoneBotItems({
     items: ownPages?.items ?? [],
     error: shown?.key === key ? shown.error : failedFirst?.key === key ? failedFirst.error : null,
     retry: () => setAttempt((value) => value + 1),
-    loadMoreClosed: cursor ? loadMoreClosed : null
+    loadMoreClosed: cursor ? loadMoreClosed : null,
+    closedEnded: read !== null && cursor === null && (depth === 0 || upToDate)
   }
 }
 

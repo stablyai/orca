@@ -223,6 +223,12 @@ export const START_FAILURE_COPY = {
       "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",
       values
     ),
+  agentCommandFailed: (values) =>
+    translate(
+      'session.failure.agentCommandFailed',
+      "{{agent}}'s Command in Settings → Agents didn't start {{agent}}: {{detail}}. Change it or reset it.",
+      values
+    ),
   runtimeNotInstalled: (values) =>
     translate(
       'session.failure.runtimeNotInstalled',

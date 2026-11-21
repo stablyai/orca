@@ -1,6 +1,9 @@
 // Updates for the user's own agent CLIs, checked and run on the host they are installed on.
 
-import { AgentCliUpdateRunParams } from '../../../../../shared/rpc-contract/host-management/agent-cli-update-params'
+import {
+  AgentCliUpdateCheckParams,
+  AgentCliUpdateRunParams
+} from '../../../../../shared/rpc-contract/host-management/agent-cli-update-params'
 import {
   checkAgentCliUpdates,
   runAgentCliUpdate
@@ -11,9 +14,9 @@ export const AGENT_CLI_UPDATE_METHODS = [
   defineMethod({
     name: 'agentCliUpdate.check',
     permission: 'workspace',
-    params: null,
-    handler: async (_params, { runtime }) => ({
-      updates: await checkAgentCliUpdates(runtime.requireStore().getSettings())
+    params: AgentCliUpdateCheckParams,
+    handler: async ({ agents }, { runtime }) => ({
+      updates: await checkAgentCliUpdates(runtime.requireStore().getSettings(), agents)
     })
   }),
   defineMethod({

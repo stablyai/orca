@@ -20,13 +20,25 @@ import {
   type NativeChatMentionFiles
 } from './composer/pickers/use-native-chat-mention-files'
 import { useNativeChatMentionChatDrill } from './composer/pickers/use-native-chat-mention-chat-drill'
+import { useSpacedMemberQuery } from './composer/pickers/use-native-chat-spaced-mention'
 import { nativeChatMentionChatOptions } from './composer/pickers/NativeChatMentionChatList'
+import {
+  NativeChatCrewContext,
+  useNativeChatCrewState
+} from '../orchestration-crew/use-native-chat-crew'
+import {
+  crewAgentMentions,
+  NO_CREW_AGENT_MENTIONS
+} from '../orchestration-crew/native-chat-crew-mentions'
+import type { NativeChatMentionToken } from './composer/editor/native-chat-composer-input'
 
 const memberOf = (room: NativeChatComposerRoom | undefined, value: string) =>
   room?.mentions.find((mention) => nativeChatMentionValue(mention) === value)
 
 const NO_MATCHES: NativeChatMentionFiles = { files: [], loading: false, failed: false }
 const NO_NOTICES: readonly NativeChatComposerNotice[] = []
+const NO_VALUES: readonly string[] = []
+const NO_MEMBERS: NativeChatComposerRoom['mentions'] = []
 
 /** `@` names workspace files, or in a room its members (the owner's bots above the files in any other
  *  chat), in the file menu's shape so keys are shared; a bot's row opens its chats one level down. */
@@ -35,7 +47,7 @@ export function useNativeChatComposerMentions(
   draft: string,
   picker: {
     autocomplete: ComposerAutocomplete
-    completeMention: (path: string, token?: string, from?: number) => void
+    completeMention: (path: string, token?: NativeChatMentionToken, from?: number) => void
   },
   {
     caret: caretAt,
@@ -52,12 +64,13 @@ export function useNativeChatComposerMentions(
   const t = useTranslate()
   const caret = caretAt ?? draft.length
   const { completeMention } = picker
-  const typedQuery =
-    picker.autocomplete.mode === 'mention' ? (picker.autocomplete.query ?? null) : null
   // Other chats list the owner's bots (a bot's own chat, its other bots); a group room brings its own members.
   const botChatRoom = useContext(NativeChatBotChatRoomContext)
   const chatPicker = useContext(NativeChatBotChatPickerContext)
   const room = ownRoom ?? botChatRoom
+  const typed = picker.autocomplete.mode === 'mention' ? picker.autocomplete.query : null
+  const spaced = useSpacedMemberQuery(typed === null ? room : null, draft, caret)
+  const typedQuery = typed ?? spaced?.query ?? null
   // A group room keeps its own `@name` recipients: its members' chats are never offered there.
   const drillPicker = ownRoom ? undefined : chatPicker
   const complete = useCallback(
@@ -81,6 +94,26 @@ export function useNativeChatComposerMentions(
     ...files,
     query: room && !room.withFiles ? null : query
   })
+  // The strip's own crew subscription: rows only while `@` is open, never a read per keystroke.
+  const crew = useContext(NativeChatCrewContext)
+  const menuOpen = query !== null
+  const crewRows = useNativeChatCrewState(menuOpen ? crew : null).rows
+  const wantCrewRows = menuOpen ? crew?.wantRows : undefined
+  useEffect(() => wantCrewRows?.(), [wantCrewRows])
+  const crewHost = crew
+    ? crew.target.kind === 'local'
+      ? 'local'
+      : crew.target.environmentId
+    : null
+  const crewAgents = useMemo(
+    () =>
+      crewRows && crewHost ? crewAgentMentions(crewRows, crewHost, t) : NO_CREW_AGENT_MENTIONS,
+    [crewRows, crewHost, t]
+  )
+  const agents = useMemo(
+    () => (query !== null ? rankNativeChatRoomMembers(crewAgents.mentions, query) : NO_VALUES),
+    [crewAgents, query]
+  )
   const ranked = useMemo(
     () => (room && query !== null ? rankNativeChatRoomMembers(room.mentions, query) : null),
     [room, query]
@@ -90,17 +123,27 @@ export function useNativeChatComposerMentions(
     [ranked, room]
   )
   const mentionFiles = useMemo<NativeChatMentionFiles>(() => {
+    // The room's bots lead the list, above this chat's crew agents.
     if (!room) {
-      return workspaceFiles
+      return agents.length > 0
+        ? { ...workspaceFiles, files: [...agents, ...workspaceFiles.files] }
+        : workspaceFiles
     }
     if (room.withFiles) {
-      return { ...workspaceFiles, files: [...pickable, ...workspaceFiles.files] }
+      return { ...workspaceFiles, files: [...pickable, ...agents, ...workspaceFiles.files] }
     }
-    return query === null ? NO_MATCHES : { files: pickable, loading: false, failed: false }
-  }, [room, query, pickable, workspaceFiles])
+    return query === null
+      ? NO_MATCHES
+      : { files: [...pickable, ...agents], loading: false, failed: false }
+  }, [room, query, agents, pickable, workspaceFiles])
   const botIdOf = useCallback((value: string) => memberOf(room, value)?.id ?? null, [room])
   const chooseMention = useCallback(
     (value: string) => {
+      const agent = crewAgents.references.get(value)
+      if (agent) {
+        completeMention(value, agent, drill.parent?.from)
+        return
+      }
       const id = botIdOf(value)
       // The chat's own bot alone is this chat's bot: its row opens its other chats instead.
       if (id !== null && drillPicker && id === drillPicker.selfId) {
@@ -111,13 +154,14 @@ export function useNativeChatComposerMentions(
       const member = memberOf(room, value)
       // Back from a bot's chats, the pick replaces the `@` and the filter typed after it.
       const picked = member ? (token ?? `@${member.name}`) : undefined
-      if (drill.parent) {
-        completeMention(value, picked, drill.parent.from)
-      } else {
+      const from = drill.parent?.from ?? spaced?.from
+      if (from === undefined) {
         completeMention(value, picked)
+      } else {
+        completeMention(value, picked, from)
       }
     },
-    [botIdOf, drillPicker, drill, completeMention, room, ownRoom, botChatRoom]
+    [botIdOf, drillPicker, drill, completeMention, room, ownRoom, botChatRoom, crewAgents, spaced]
   )
 
   const chosen = useBotChatPillChecks(draft, chatPicker)
@@ -129,10 +173,19 @@ export function useNativeChatComposerMentions(
             mentions: room.mentions,
             withFiles: room.withFiles === true,
             unavailable: ranked?.filter((name) => !pickable.includes(name)) ?? [],
+            agents: crewAgents.mentions,
             ...(drillPicker ? { chats: { picker: drillPicker, drill } } : {})
           }
-        : null,
-    [room, draft, ranked, pickable, drillPicker, drill]
+        : crewAgents.mentions.length > 0
+          ? {
+              replies: null,
+              mentions: NO_MEMBERS,
+              withFiles: true,
+              unavailable: NO_VALUES,
+              agents: crewAgents.mentions
+            }
+          : null,
+    [room, draft, ranked, pickable, drillPicker, drill, crewAgents]
   )
 
   const handleKey = useCallback(
@@ -150,6 +203,12 @@ export function useNativeChatComposerMentions(
         }
         return false
       }
+      if (event.key === 'Escape' && spaced && !drill.open) {
+        event.preventDefault()
+        drill.onKey(event, null)
+        spaced.dismiss()
+        return true
+      }
       const files = mentionFiles.files
       const highlighted =
         query !== null && files.length > 0
@@ -157,7 +216,7 @@ export function useNativeChatComposerMentions(
           : null
       return drill.onKey(event, highlighted)
     },
-    [botIdOf, caret, chatPicker, chosen, drill, mentionFiles.files, query]
+    [botIdOf, caret, chatPicker, chosen, drill, mentionFiles.files, query, spaced]
   )
 
   const notice = useMemo((): NativeChatComposerNotice | null => {
@@ -181,9 +240,9 @@ export function useNativeChatComposerMentions(
   }, [chosen, t])
 
   const drilled = drill.open !== null
-  const parentFrom = drill.parent?.from ?? null
-  // A bot's chats, and the bots after going back from them, keep the `@` list open while the text
-  // after the `@` has spaces its trigger can't hold.
+  const parentFrom = drilled ? null : (drill.parent?.from ?? spaced?.from ?? null)
+  // A bot's chats, the bots after going back from them, and a bot's name typed with its spaces keep
+  // the `@` list open while the text after the `@` has spaces its trigger can't hold.
   const autocomplete = useMemo<ComposerAutocomplete>(
     () =>
       (drilled || parentFrom !== null) && picker.autocomplete.mode !== 'mention'

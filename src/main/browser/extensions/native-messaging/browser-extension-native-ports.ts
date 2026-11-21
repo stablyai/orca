@@ -1,6 +1,7 @@
 import { app, BrowserWindow, webFrameMain } from 'electron'
 import { getChromeExtensionOrigin } from '../../../../shared/browser/extensions/browser-extension-url'
 import { getHostSessionState } from '../api-runtime/browser-extension-contexts'
+import { noteBrowserExtensionNeedsCleanStart } from '../profile-sessions/browser-extension-idle-kept-state'
 import {
   BrowserExtensionApiError,
   type BrowserExtensionCaller
@@ -114,6 +115,25 @@ export function closeNativePortsWhere(matches: (port: NativePort) => boolean): v
   }
 }
 
+/** Closes a session's ports whose owner went away, in the same single pass over the ports. */
+function closeOwnerlessPorts(sess: Electron.Session, matches: (port: NativePort) => boolean): void {
+  const profileId = getHostSessionState(sess)?.browserProfileId
+  const lost = new Set<string>()
+  closeNativePortsWhere((port) => {
+    const owned = port.session === sess && matches(port)
+    if (owned) {
+      lost.add(port.extensionId)
+    }
+    return owned
+  })
+  // Why: the extension gets no disconnect event, so only a clean start (onStartup) reconnects it.
+  for (const extensionId of lost) {
+    if (profileId) {
+      noteBrowserExtensionNeedsCleanStart(profileId, extensionId)
+    }
+  }
+}
+
 function frameStillOwns(port: NativePort): boolean {
   if (port.owner.kind !== 'frame') {
     return true
@@ -133,15 +153,13 @@ function observeSession(sess: Electron.Session): void {
   observedSessions.add(sess)
   // Disable, removal, reload and profile deletion all unload the extension from the session.
   sess.extensions.on('extension-unloaded', (_event, extension) =>
-    closeNativePortsWhere((port) => port.session === sess && port.extensionId === extension.id)
+    closeOwnerlessPorts(sess, (port) => port.extensionId === extension.id)
   )
   sess.serviceWorkers.on('running-status-changed', ({ versionId, runningStatus }) => {
     if (runningStatus === 'stopped') {
-      closeNativePortsWhere(
-        (port) =>
-          port.session === sess &&
-          port.owner.kind === 'worker' &&
-          port.owner.versionId === versionId
+      closeOwnerlessPorts(
+        sess,
+        (port) => port.owner.kind === 'worker' && port.owner.versionId === versionId
       )
     }
   })

@@ -79,4 +79,30 @@ describe('a keyboard the phone closes', () => {
 
     expect(document.activeElement).toBe(field)
   })
+
+  it('keeps the field focused when a hardware keystroke closes the keyboard', () => {
+    const field = focusedField(ANDROID)
+    startBlurringOnKeyboardClose()
+    shellReports(300)
+
+    field.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', code: 'KeyA', bubbles: true }))
+    shellReports(0)
+    vi.advanceTimersByTime(5000)
+
+    expect(document.activeElement).toBe(field)
+  })
+
+  it('keeps the field focused when hardware keys the IME relays without a code arrive after it closes', () => {
+    const field = focusedField(ANDROID)
+    startBlurringOnKeyboardClose()
+    shellReports(300)
+
+    field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Unidentified', bubbles: true }))
+    shellReports(0)
+    vi.advanceTimersByTime(300)
+    field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Unidentified', bubbles: true }))
+    vi.advanceTimersByTime(5000)
+
+    expect(document.activeElement).toBe(field)
+  })
 })

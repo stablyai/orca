@@ -62,7 +62,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
     })
 
     it.each([
-      ['clears stale sleeping identity after a confirmed return to shell', false],
+      ['keeps recovery until main proves the owning agent ended', false],
       // Hibernation records resume before kill; the exposed shell is Orca’s own stop rather than an independent agent exit.
       ['keeps sleeping identity when the shell surfaces during an intentional stop', true]
     ])('%s', async (_label, stoppingOnPurpose) => {
@@ -71,6 +71,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
         '@/lib/agent-status/aggregation/worktree-agent-status'
       )
+      window.api.agentStatus.hasVerifiableAgentProcess = vi.fn(async () => false)
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
       const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
       const ptyId = 'pty-sleeping-confirmed-shell'
@@ -120,14 +121,72 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
         })
         expect(deps.onAgentExitedRef.current).not.toHaveBeenCalled()
       } else {
-        expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledExactlyOnceWith(paneKey)
-        expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+        expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'sess-1' }
+        })
         expect(deps.onAgentExitedRef.current).toHaveBeenCalledWith(LEAF_1)
       }
       expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
         agent: null,
         shellForeground: true
       })
+    })
+
+    it('keeps recovery when wake-resumed Codex stops and the shell runs another command', async () => {
+      vi.useFakeTimers()
+      const agent = 'codex'
+      const finishes = [
+        [146, 'codex'],
+        [0, 'zsh']
+      ] as const
+      const { connectPanePty } = await import('../connect-pane-pty')
+      const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
+      vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
+      window.api.agentStatus.hasVerifiableAgentProcess = vi.fn(async () => false)
+      const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
+      const transport = createMockTransport('pty-suspended-agent')
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          dataCallbackRef.current = callbacks.onData ?? null
+          return { id: 'pty-suspended-agent' }
+        }
+      )
+      transportFactoryQueue.push(transport)
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      connectPanePty(
+        ...mockPanePtyArgs(
+          createPane(1),
+          createManager(1),
+          bindPaneAgentTitleMocks(createDeps({ isVisibleRef: { current: false } }), agentTitleMocks)
+        )
+      )
+      await vi.advanceTimersByTimeAsync(20)
+      await flushAsyncTicks()
+      mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+        launchConfig: { agentArgs: '', agentEnv: {} },
+        identity: { agentType: agent }
+      }
+      mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
+        paneKey,
+        worktreeId: 'wt-1',
+        agent,
+        providerSession: { key: 'session_id', id: 'stopped-session' },
+        capturedAt: 1,
+        updatedAt: 1
+      }
+      for (const [status, foreground] of finishes) {
+        vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue(foreground)
+        vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue(foreground)
+        dataCallbackRef.current?.(`\x1b]133;C\x07\x1b]133;D;${status}\x07`)
+        await vi.advanceTimersByTimeAsync(1_000)
+        expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+          agent,
+          providerSession: { key: 'session_id', id: 'stopped-session' }
+        })
+      }
     })
 
     it('keeps sleeping identity when the foreground check still sees the agent', async () => {

@@ -92,7 +92,7 @@ export function UpdateDownloadingContent({
           onClick={(event) => openAppHttpLink(releaseNotesUrl, { event })}
         >
           {release
-            ? t('auto.components.UpdateCard.aad383aecc', 'Read the full release notes')
+            ? t('auto.components.UpdateCard.aad383aecc', 'Release notes')
             : t('auto.components.UpdateCard.44324ef542', 'Release notes')}
         </button>
       )}

@@ -166,9 +166,7 @@ export function BotItemSnoozeDialog({
             <Separator className="my-1" />
             <button type="button" className={rowClass} onClick={() => setPicking(true)}>
               <CalendarDays className="size-4 text-muted-foreground" />
-              <span className="flex-1">
-                {t('bots.items.snooze.pickCustom', 'Pick a date and time')}
-              </span>
+              <span className="flex-1">{t('bots.items.snooze.pickCustom', 'Custom time')}</span>
               <ChevronRight className="size-4 text-muted-foreground" />
             </button>
           </div>
