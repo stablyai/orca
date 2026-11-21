@@ -17,6 +17,9 @@ export type BotItemsViewport = {
   /** Notifies every listener now: the list's groups changed shape, which can move a group into view
    *  without the list changing height. */
   flush: () => void
+  /** The scroller to read and the list whose height moves the groups; null to let them go. Changing
+   *  them leaves the viewport the same object, so nothing reading it renders again for it. */
+  attach: (scroller: HTMLElement | null, list: HTMLElement | null) => void
 }
 
 function readBox(scroller: HTMLElement): BotItemsViewportBox {
@@ -61,8 +64,10 @@ function listenTo(
   }
 }
 
-function createViewport(scroller: HTMLElement | null, list: HTMLElement | null): BotItemsViewport {
+function createViewport(): BotItemsViewport {
   const listeners = new Set<() => void>()
+  let scroller: HTMLElement | null = null
+  let list: HTMLElement | null = null
   // This frame's box, shared by every group a notice reaches.
   let frameBox: BotItemsViewportBox | null = null
   let stop: (() => void) | null = null
@@ -73,18 +78,21 @@ function createViewport(scroller: HTMLElement | null, list: HTMLElement | null):
       frameBox = null
     }
   }
+  const listen = (): void => {
+    stop?.()
+    stop = scroller && listeners.size > 0 ? listenTo(scroller, list, onFrame) : null
+  }
   return {
     read: () => (scroller ? (frameBox ?? readBox(scroller)) : null),
     subscribe: (listener) => {
       listeners.add(listener)
-      if (scroller && !stop) {
-        stop = listenTo(scroller, list, onFrame)
+      if (!stop) {
+        listen()
       }
       return () => {
         listeners.delete(listener)
-        if (listeners.size === 0 && stop) {
-          stop()
-          stop = null
+        if (listeners.size === 0) {
+          listen()
         }
       }
     },
@@ -92,13 +100,18 @@ function createViewport(scroller: HTMLElement | null, list: HTMLElement | null):
       if (listeners.size > 0 && !document.hidden) {
         onFrame()
       }
+    },
+    attach: (nextScroller, nextList) => {
+      if (nextScroller !== scroller || nextList !== list) {
+        scroller = nextScroller
+        list = nextList
+        listen()
+      }
     }
   }
 }
 
-export function useBotItemsViewport(
-  scroller: HTMLElement | null,
-  list: HTMLElement | null
-): BotItemsViewport {
-  return useMemo(() => createViewport(scroller, list), [scroller, list])
+/** One per list, for its lifetime: the list attaches its scroller once both are in the page. */
+export function useBotItemsViewport(): BotItemsViewport {
+  return useMemo(createViewport, [])
 }

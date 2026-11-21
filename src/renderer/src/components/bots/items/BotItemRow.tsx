@@ -267,12 +267,9 @@ function BotItemRowView({
 }
 
 /** Memoized: an update re-renders only the rows whose item or flags changed, so its handlers take the
- *  item and stay the same across the list's renders. */
-export const BotItemRow = memo(BotItemRowView)
-
-/** The same row for a list drawn from host reads, which decode every item anew: the item compares by
- *  value, so a read re-renders only rows whose item changed. Only the rows drawn pay the comparison. */
-export const BotItemRowByValue = memo(BotItemRowView, sameRowProps)
+ *  item and stay the same across the list's renders. The item compares by value, as every host read
+ *  decodes every item anew; only the rows drawn pay the comparison. */
+export const BotItemRow = memo(BotItemRowView, sameRowProps)
 
 /** The row's hover card while it needs you: the title, one line of the bot's words, then each question
  *  line with its quick replies (read-only here; they answer on the item). */

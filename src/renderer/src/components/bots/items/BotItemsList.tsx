@@ -25,7 +25,7 @@ import { BotPanelSectionHeader } from '../BotPanelSection'
 import { useBotPanelFold, type BotPanelFoldId } from '../use-bot-panel-fold'
 import { BotNeedsYouSection, type BotNeedsYouAsks } from '../BotNeedsYouSection'
 import { botNeedsYouCount } from '../../../../../shared/bots/bot-now'
-import { BotItemRow, BotItemRowByValue, type BotItemRowAction } from './BotItemRow'
+import { BotItemRow, type BotItemRowAction } from './BotItemRow'
 import { BotItemCancelDialog } from './BotItemCancelDialog'
 import { BotItemSelectionPill } from './BotItemSelectionPill'
 import { botItemGroupName } from '../../../../../shared/bots/bot-item-status-name'
@@ -67,7 +67,6 @@ export type BotItemsListProps = {
   scroller?: React.RefObject<HTMLDivElement | null>
 }
 
-const NO_BOXES = { scroller: null, list: null }
 const NO_ASKS: BotNeedsYouAsks = { needs: [], stoppedForSignIn: [], itemOf: () => null }
 
 export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
@@ -94,19 +93,19 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
     [ordered, selected]
   )
   const snoozing = useBotItemSnoozing(botOf, () => setSelected(new Set()))
-  // The scroller and this list, read as the list mounts (before it's painted): the scroller by its mark,
-  // since its own ref is set only after this list's effects, so the panel around them needn't render again.
+  // The scroller and this list, attached as the list mounts (before it's painted): the scroller by its
+  // mark, since its own ref is set only after this list's effects. Nothing renders again for it.
   const listRef = useRef<HTMLDivElement | null>(null)
-  const [boxes, setBoxes] = useState<{ scroller: HTMLElement | null; list: HTMLElement | null }>(
-    NO_BOXES
-  )
+  const viewport = useBotItemsViewport()
   useLayoutEffect(() => {
     const list = listRef.current
-    const scroller =
-      panelScroller?.current ?? list?.closest<HTMLElement>(`[${BOT_ITEMS_SCROLLER_ATTR}]`) ?? null
-    setBoxes((was) => (was.scroller === scroller && was.list === list ? was : { scroller, list }))
-  }, [panelScroller])
-  const viewport = useBotItemsViewport(boxes.scroller, boxes.list)
+    viewport.attach(
+      panelScroller?.current ?? list?.closest<HTMLElement>(`[${BOT_ITEMS_SCROLLER_ATTR}]`) ?? null,
+      list
+    )
+    viewport.flush()
+    return () => viewport.attach(null, null)
+  }, [viewport, panelScroller])
   // A group whose size changes moves the groups below it, even with the list's height unchanged (rows
   // aging from one group into another): their windows measure again before the change is painted.
   const shape = BOT_ITEM_GROUP_IDS.map((id) => groups[id].length).join()
@@ -285,10 +284,8 @@ function BotItemGroup({
   if (count === 0 && outside === 0) {
     return null
   }
-  // A window's rows compare their item by value: each host read decodes every item anew.
-  const Row = id === 'needs_you' ? BotItemRow : BotItemRowByValue
   const row = (item: BotItem, tabbable?: boolean): React.JSX.Element => (
-    <Row
+    <BotItemRow
       key={item.uid}
       item={item}
       stale={id === 'stale'}
