@@ -8,7 +8,11 @@ describe('the memory snapshot sent over RPC', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reply reads only app and worktree histories.
     const snapshot = {
       app: { cpu: 0, memory: 0, main: {}, renderer: {}, other: {}, history },
-      worktrees: Array.from({ length: 4_000 }, (_, i) => ({ worktreeId: `w${i}`, history }))
+      worktrees: Array.from({ length: 4_000 }, (_, i) => ({
+        worktreeId: `w${i}`,
+        sessions: [],
+        history
+      }))
     } as unknown as MemorySnapshot
 
     const reply = toMemorySnapshotReply(snapshot)
@@ -130,6 +134,7 @@ describe('the memory snapshot sent over RPC', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reply reads only app and worktrees.
     const snapshot = {
       app: { cpu: 0, memory: 0, main: {}, renderer: {}, other: {}, history: [] },
+      agentProcesses: { cpu: 0, memory: 0 },
       worktrees
     } as unknown as MemorySnapshot
 
@@ -138,5 +143,6 @@ describe('the memory snapshot sent over RPC', () => {
     expect(Buffer.byteLength(JSON.stringify(reply))).toBeLessThan(4 * 1024 * 1024)
     expect(reply.worktrees).toHaveLength(4_000)
     expect(reply.worktrees[0]?.sessions[0]?.paneKey).toBeNull()
+    expect(reply.agentProcesses).toBeUndefined()
   })
 })
