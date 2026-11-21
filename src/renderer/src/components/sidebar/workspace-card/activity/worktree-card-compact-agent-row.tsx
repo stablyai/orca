@@ -273,20 +273,41 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           {model}
         </span>
       )}
+      {cacheTimer && <CacheTimer startedAt={cacheTimer.startedAt} ttlMs={cacheTimer.ttlMs} />}
       {hasChildDisclosure && !childAgentsExpanded && (
-        <span
+        // The count is the visible hint that workers exist, so it expands them instead of opening the row.
+        <button
+          type="button"
           className={cn(
-            'inline-flex shrink-0 items-center gap-0.5 text-[10px] tabular-nums',
+            'inline-flex h-5 shrink-0 items-center gap-0.5 rounded-sm px-1 text-[10px] tabular-nums',
+            'hover:bg-worktree-sidebar-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
             highlighted ? 'text-foreground/70' : 'text-muted-foreground/70'
           )}
+          aria-label={t(
+            'auto.components.dashboard.DashboardAgentChildDisclosure.showChildAgents',
+            'Show {{count}} child agents',
+            { count: childAgentCount, defaultValue_one: 'Show {{count}} child agent' }
+          )}
+          aria-expanded={false}
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            onToggleChildAgents()
+          }}
+          onMouseDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.stopPropagation()
+            }
+          }}
         >
           {collapsedChildAgentsState && (
             <AgentStateDot state={collapsedChildAgentsState} size="sm" tooltipSide="right" />
           )}
           +{childAgentCount}
-        </span>
+        </button>
       )}
-      {cacheTimer && <CacheTimer startedAt={cacheTimer.startedAt} ttlMs={cacheTimer.ttlMs} />}
       {hasChildDisclosure ? (
         <DashboardAgentChildDisclosure
           childAgentCount={childAgentCount}
