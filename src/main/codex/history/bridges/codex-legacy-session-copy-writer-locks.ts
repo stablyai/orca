@@ -1,4 +1,4 @@
-import { lstat, stat } from 'node:fs/promises'
+import { lstat, realpath, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 
@@ -41,4 +41,18 @@ export async function keepsThreadLocks(home: string): Promise<boolean> {
 /** A reverted thread's name carries its thread id and its rollout id: either can be the lock's. */
 export function threadIdsOf(relativePath: string): string[] {
   return basename(relativePath).toLowerCase().match(UUID_PATTERN) ?? []
+}
+
+/** Drops a folder that resolves to one listed before it, keeping the first in its place. */
+export async function distinctFolders(folders: readonly string[]): Promise<string[]> {
+  const seen = new Set<string>()
+  const kept: string[] = []
+  for (const folder of folders) {
+    const resolved = await realpath(folder).catch(() => folder)
+    if (!seen.has(resolved)) {
+      seen.add(resolved)
+      kept.push(folder)
+    }
+  }
+  return kept
 }

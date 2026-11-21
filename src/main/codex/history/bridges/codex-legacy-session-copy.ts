@@ -13,7 +13,12 @@ import {
 import { sourceStartsWithCopy } from './codex-legacy-session-copy-prefix'
 import { restoreMovedCopy } from './codex-legacy-session-copy-recovery'
 import { runAloneForCopy } from './codex-legacy-session-copy-turns'
-import { isCopyIdle, keepsThreadLocks, threadIdsOf } from './codex-legacy-session-copy-writer-locks'
+import {
+  distinctFolders,
+  isCopyIdle,
+  keepsThreadLocks,
+  threadIdsOf
+} from './codex-legacy-session-copy-writer-locks'
 import { legacyCopyLocks } from './codex-legacy-session-copy-lock-holder'
 import {
   linkUnlessTaken,
@@ -58,7 +63,7 @@ export function swapLegacySessionCopy(args: {
   readBudget?: LegacySessionCopyReadBudget
 }): Promise<LegacySessionCopySwap> {
   const copyPath = join(args.managedHome, 'sessions', args.relativePath)
-  return runAloneForCopy(copyPath, () => swap(args, copyPath))
+  return runAloneForCopy(copyPath, 'swap', () => swap(args, copyPath))
 }
 
 /**
@@ -70,7 +75,7 @@ export function protectLegacySessionCopy(args: {
   relativePath: string
 }): Promise<LegacySessionCopySwap> {
   const copyPath = join(args.managedHome, 'sessions', args.relativePath)
-  return runAloneForCopy(copyPath, async (): Promise<LegacySessionCopySwap> => {
+  return runAloneForCopy(copyPath, 'protect', async (): Promise<LegacySessionCopySwap> => {
     await protectLegacySessionCopyMarker(args.managedHome, args.relativePath)
     return 'none'
   })
@@ -141,10 +146,11 @@ async function swap(
   ) {
     return 'deferred'
   }
-  const locksDirs = [
+  // A home whose lock folder links to the other's would take that folder's coordination twice.
+  const locksDirs = await distinctFolders([
     join(dirname(sourceSessions), 'thread-writer-locks'),
     join(args.managedHome, 'thread-writer-locks')
-  ]
+  ])
   const threadIds = threadIdsOf(args.relativePath)
   // Before any bytes are read, and after the hold's sweep drops locks a crashed Codex left.
   if (

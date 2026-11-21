@@ -10,11 +10,12 @@ import {
   readFileSync,
   renameSync,
   rmSync,
+  symlinkSync,
   truncateSync,
   writeFileSync,
   writeSync
 } from 'node:fs'
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import type * as NodeFsPromises from 'node:fs/promises'
@@ -98,6 +99,9 @@ function asides(): string[] {
     .map((entry) => join(dirname(copyPath), entry))
 }
 
+// The held-lock tests stand in for Codex with a Perl flock holder.
+const NO_PERL = process.platform === 'win32' || spawnSync('perl', ['-e', '1']).status !== 0
+
 /** A Codex holding a thread's writer lock, as Codex does (flock); call the result to let go. */
 async function holdThreadLock(home: string, threadId: string): Promise<() => void> {
   const holder = spawn('perl', [
@@ -105,7 +109,10 @@ async function holdThreadLock(home: string, threadId: string): Promise<() => voi
     'use Fcntl qw(:flock); $| = 1; open(my $f, ">>", $ARGV[0]) or die; flock($f, LOCK_EX) or die; print "held\\n"; <STDIN>;',
     join(home, 'thread-writer-locks', `${threadId}.lock`)
   ])
-  await new Promise((resolve) => holder.stdout.once('data', resolve))
+  await new Promise((resolve, reject) => {
+    holder.stdout.once('data', resolve)
+    holder.once('error', reject)
+  })
   return () => holder.stdin.end()
 }
 
@@ -166,7 +173,7 @@ describe('legacy session copy swap', () => {
     expect(lstatSync(kept.sourcePath).ino).toBe(lstatSync(sourcePath).ino)
   })
 
-  it.skipIf(process.platform === 'win32')(
+  it.skipIf(NO_PERL)(
     'lets later copies through when an earlier copy can never be linked',
     async () => {
       const blockedRelative = join(
@@ -237,7 +244,7 @@ describe('legacy session copy swap', () => {
     expect(lstatSync(largeCopy).ino).not.toBe(lstatSync(largeSource).ino)
   })
 
-  it.skipIf(process.platform === 'win32')(
+  it.skipIf(NO_PERL)(
     'leaves a copy alone while a Codex holds its thread lock, and hides it from older builds',
     async () => {
       legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
@@ -290,7 +297,7 @@ describe('legacy session copy swap', () => {
     expect(readFileSync(copyPath, 'utf-8')).toBe(OLD_TURNS)
   })
 
-  it.skipIf(process.platform === 'win32')(
+  it.skipIf(NO_PERL)(
     'never links in a source while a Codex holds its thread in the source home',
     async () => {
       legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
@@ -476,4 +483,37 @@ describe('legacy session copy swap', () => {
     expect(readFileSync(copyPath, 'utf-8')).toBe(OLD_TURNS + NEW_TURNS)
     expect(lstatSync(copyPath).ino).toBe(lstatSync(sourcePath).ino)
   })
+
+  it('swaps for a resume that arrives while a pass protects the same copy', async () => {
+    legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
+
+    const protecting = protectLegacySessionCopy({
+      managedHome: runtimeHome(),
+      relativePath: RELATIVE_PATH
+    })
+    const swapped = swapLegacySessionCopy({
+      managedHome: runtimeHome(),
+      relativePath: RELATIVE_PATH
+    })
+
+    expect(await protecting).toBe('none')
+    expect(await swapped).toBe('swapped')
+    expect(lstatSync(copyPath).ino).toBe(lstatSync(sourcePath).ino)
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'swaps when one home links its lock folder to the other home',
+    async () => {
+      rmSync(join(runtimeHome(), 'thread-writer-locks'), { recursive: true })
+      symlinkSync(
+        join(systemHome, 'thread-writer-locks'),
+        join(runtimeHome(), 'thread-writer-locks')
+      )
+      legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
+
+      await bridgePass()
+
+      expect(lstatSync(copyPath).ino).toBe(lstatSync(sourcePath).ino)
+    }
+  )
 })
