@@ -14,6 +14,7 @@ import { registerCudaLanguage } from '../../monaco-languages/register-cuda'
 import { registerDotenvLanguage } from '../../monaco-languages/register-dotenv'
 import { registerGlimmerLanguages } from '../../monaco-languages/register-glimmer'
 import { registerGroovyLanguage } from '../../monaco-languages/register-groovy'
+import { registerJinjaLanguages } from '../../monaco-languages/register-jinja'
 import { registerJsonlLanguage } from '../../monaco-languages/register-jsonl'
 import { registerLeanLanguage } from '../../monaco-languages/register-lean'
 import { registerMarkdownLanguage } from '../../monaco-languages/register-markdown'
@@ -86,6 +87,7 @@ runMonacoSetupSteps([
   ['Zig language registration', () => registerZigLanguage(monaco)],
   ['Groovy language registration', () => registerGroovyLanguage(monaco)],
   ['CMake language registration', () => registerCMakeLanguage(monaco)],
+  ['Jinja language registration', () => registerJinjaLanguages(monaco)],
   ['JSONL language registration', () => registerJsonlLanguage(monaco)],
   ['dotenv language registration', () => registerDotenvLanguage(monaco)],
   ['Quarto language registration', () => registerQuartoLanguage(monaco)],
