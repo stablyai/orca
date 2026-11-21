@@ -1,6 +1,5 @@
 import { AgentConversationCopyError } from '../../native-chat/conversation-adoption/agent-conversation-copy-error'
-import { existsSync } from 'node:fs'
-import { rm } from 'node:fs/promises'
+import { access, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { AgentSessionRewindFork } from '../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import { retryHeavyWorkers, spawnHeavyWorker } from '../../utility-worker-host/heavy-worker-spawn'
@@ -28,6 +27,7 @@ export async function materializeClaudeConversationTranscript(input: {
   rewind?: true
   destinationDirectory?: string
   title?: string
+  rewriteCwd?: string
   signal?: AbortSignal
 }): Promise<ConversationCopy | null> {
   input.signal?.throwIfAborted()
@@ -43,12 +43,13 @@ export async function materializeClaudeConversationTranscript(input: {
     throughEntryId: input.throughEntryId,
     checkpoint: input.checkpoint,
     title: input.title,
+    ...(input.rewriteCwd ? { rewriteCwd: input.rewriteCwd } : {}),
     destinationDirectory,
     temporaryPath
   }
   // Rewind and copy are user actions; asking again is how a user retries after repeated crashes.
   retryHeavyWorkers()
-  const worker = spawnClaudeConversationWorker(workerData)
+  const worker = await spawnClaudeConversationWorker(workerData)
   let abort: () => void = () => undefined
   try {
     return await new Promise<ConversationCopy | null>((resolve, reject) => {
@@ -132,15 +133,29 @@ export async function materializeClaudeRewindTranscript(
       }
 }
 
-export function spawnClaudeConversationWorker(workerData: unknown) {
+async function firstExistingPath(paths: readonly string[]): Promise<string | undefined> {
+  for (const path of paths) {
+    if (
+      await access(path).then(
+        () => true,
+        () => false
+      )
+    ) {
+      return path
+    }
+  }
+  return undefined
+}
+
+export async function spawnClaudeConversationWorker(workerData: unknown) {
   const compiled = resolveWorkerThreadEntryPath(
     currentWorkerEntryLayout(__dirname),
     'claude-conversation-fork-worker-entry.js'
   )
-  const installed = [
+  const installed = await firstExistingPath([
     compiled,
     join(dirname(compiled), '..', 'claude-conversation-fork-worker-entry.js')
-  ].find(existsSync)
+  ])
   const entry = installed
     ? installed
     : new URL('./claude-conversation-fork-worker-entry.ts', import.meta.url)

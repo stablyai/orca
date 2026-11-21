@@ -106,6 +106,14 @@ import { AgentListParams, AgentReadParams, AgentShowParams } from './agent-conve
 import { AgentLaunch, AgentLaunchReplay } from './agent-launch/agent-launch-params'
 import { AgentLaunchSettingsMutation } from './agent-launch/agent-launch-settings-params'
 import {
+  AiVaultAppendChatForkImportParams,
+  AiVaultBeginChatForkImportParams,
+  AiVaultChatForkImportIdParams,
+  AiVaultExportChatForkParams,
+  AiVaultReadChatForkExportParams,
+  AiVaultReleaseChatForkExportParams
+} from './ai-vault/ai-vault-fork-transfer-params'
+import {
   AiVaultDeleteSessionParams,
   AiVaultListSessionsParams,
   AiVaultPrepareSessionHandoffParams,
@@ -1165,11 +1173,18 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSessionAttachment.uploadStart': AttachmentUploadStartParams,
   'agentTeams.prepareLaunch': AgentTeamsPrepareLaunch,
   'agentTeams.tmuxCompat': AgentTeamsTmuxCompat,
+  'aiVault.appendChatForkImport': AiVaultAppendChatForkImportParams,
+  'aiVault.beginChatForkImport': AiVaultBeginChatForkImportParams,
+  'aiVault.cancelChatForkImport': AiVaultChatForkImportIdParams,
+  'aiVault.commitChatForkImport': AiVaultChatForkImportIdParams,
   'aiVault.deleteSession': AiVaultDeleteSessionParams,
+  'aiVault.exportChatFork': AiVaultExportChatForkParams,
   'aiVault.listSessions': AiVaultListSessionsParams,
   'aiVault.prepareSessionHandoff': AiVaultPrepareSessionHandoffParams,
   'aiVault.prepareSessionHandoffPrompt': AiVaultPrepareSessionHandoffPromptParams,
   'aiVault.prepareSessionResume': AiVaultPrepareSessionResumeParams,
+  'aiVault.readChatForkExport': AiVaultReadChatForkExportParams,
+  'aiVault.releaseChatForkExport': AiVaultReleaseChatForkExportParams,
   'aiVault.resolveSessionTitles': AiVaultSessionTitlesParams,
   'aiVault.searchSessions': AiVaultSearchRequestSchema,
   'aiVault.searchStatus': AiVaultSearchStatusRequestSchema,

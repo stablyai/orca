@@ -37,6 +37,8 @@ type LaunchAgentSessionContinuationArgs = {
   sessionOptions?: Readonly<Record<string, string>>
   chatSessionOptions?: Readonly<Record<string, string>>
   agentArgs?: string | null
+  /** Leaves the prompt in the new session's composer for you to edit and send. */
+  keepPromptUnsent?: boolean
 }
 
 /** Detected agents, then those that open as a chat on the workspace's host without their CLI. */
@@ -108,7 +110,8 @@ export async function launchAgentSessionContinuation({
   signal,
   sessionOptions,
   chatSessionOptions,
-  agentArgs
+  agentArgs,
+  keepPromptUnsent
 }: LaunchAgentSessionContinuationArgs): Promise<boolean> {
   const label = getAgentLabel(agent)
   // Blind PTY writes do not prove prompt delivery; claiming success can hide a lost handoff (#22479).
@@ -121,7 +124,8 @@ export async function launchAgentSessionContinuation({
     ...(agentArgs !== undefined ? { agentArgs } : {}),
     ...(groupId ? { groupId } : {}),
     prompt,
-    promptDelivery: agent === 'claude' ? ('draft' as const) : ('submit-after-ready' as const),
+    promptDelivery:
+      keepPromptUnsent || agent === 'claude' ? ('draft' as const) : ('submit-after-ready' as const),
     launchSource,
     ...(initialCwd ? { initialCwd } : {}),
     onPromptDeliveryUnconfirmed: () => {

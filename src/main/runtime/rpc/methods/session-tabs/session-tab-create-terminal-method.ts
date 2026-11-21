@@ -1,4 +1,5 @@
 import { terminalCreateFeatureRequirement } from '../../startup/agent-launch-feature-requirement'
+import { chatForkImportLaunchOption } from '../../../../ai-vault/fork-transfer/chat-fork-transfer-ownership'
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import { resolveRuntimeNavigationTarget } from '../../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import { defineMethod } from '../../core'
@@ -21,6 +22,7 @@ export const SESSION_TAB_CREATE_TERMINAL_METHOD = defineMethod({
     }
     return runtime.createMobileSessionTerminal(params.worktree, {
       ...(params.sourceChatFork ? { sourceChatFork: params.sourceChatFork } : {}),
+      ...chatForkImportLaunchOption(params.sourceChatImport, context),
       terminalImageViewerSupported: terminalImageViewerSupported(context),
       afterTabId: params.afterTabId,
       targetGroupId: params.targetGroupId,

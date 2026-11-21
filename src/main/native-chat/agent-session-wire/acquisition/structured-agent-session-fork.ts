@@ -13,6 +13,7 @@ import { isAgentSessionRefusalError } from '../../../../shared/agent-session/fai
 import { requireUnownedStructuredAgentSessionAdoption } from '../../../runtime/agent-session/ownership/structured-agent-session-create-adoption'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 
+/** Copies the source chat's conversation for a fork, into the fork's own worktree when it differs. */
 export async function prepareStructuredAgentSessionFork(
   input: StructuredAgentSessionForkInput
 ): Promise<AgentSessionAttachParams> {
@@ -28,7 +29,8 @@ export async function prepareStructuredAgentSessionFork(
     providerSessionId,
     requireCurrent,
     fail,
-    throughItemId
+    throughItemId,
+    destinationCwd
   } = await admitStructuredAgentSessionFork(input)
   // The fork mark comes from the record's forkedFrom, so the name stays the source's own.
   const title = normalizeAgentSessionConversationName(
@@ -46,7 +48,8 @@ export async function prepareStructuredAgentSessionFork(
       providerHandle: sourceHead.handle
     },
     providerSessionId,
-    accountHome: record.accountHome
+    accountHome: record.accountHome,
+    ...(destinationCwd ? { destinationCwd } : {})
   }).catch((error: unknown) => {
     if (isAgentSessionRefusalError(error)) {
       return fail(error)

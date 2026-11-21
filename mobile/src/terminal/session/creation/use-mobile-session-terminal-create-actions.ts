@@ -19,6 +19,7 @@ import { useMobileTerminalCreateRouteOwner } from './use-mobile-terminal-create-
 import { launchMobileSessionQuickCommand } from '../../quick-commands/mobile-session-quick-command-launch'
 import type { TerminalQuickCommand } from '../../../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
 import {
+  chatForkRequestSource,
   requestMobileSessionTerminalCreate,
   type MobileSessionTerminalCreateOptions
 } from './mobile-session-terminal-create-request'
@@ -161,7 +162,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
         agent,
         options,
         shell: options?.shell,
-        ...(sourceFork ? { sourceChatFork: { sessionId: sourceFork.sessionId } } : {}),
+        ...(sourceFork ? { sourceChatFork: chatForkRequestSource(sourceFork) } : {}),
         viewMode:
           sourceFork || options?.terminalView ? undefined : await hostViewModeForNewAgentTab(agent)
       })

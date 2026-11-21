@@ -7,7 +7,10 @@ import type {
   StructuredAgentSessionForkSource
 } from '../../../src/shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import { AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
-import { forkMobileStructuredAgentSession } from './native-chat/agent-session/mobile-structured-agent-session-launch'
+import {
+  createMobileStructuredAgentSession,
+  forkMobileStructuredAgentSession
+} from './native-chat/agent-session/mobile-structured-agent-session-launch'
 import {
   launchedSelection,
   withLaunchReply,
@@ -49,7 +52,9 @@ export function mobileChatForkTabPlacement(
 export async function forkMobileStructuredChat(
   scope: ForkScope,
   agent: TuiAgent,
-  forkFrom: StructuredAgentSessionForkSource
+  forkFrom: StructuredAgentSessionForkSource,
+  /** Another agent's fork: a fresh chat whose first message recaps this one. */
+  recap?: string
 ): Promise<void> {
   const agentName = TUI_AGENT_DISPLAY_NAMES[agent]
   const report = (message: string): void => {
@@ -68,13 +73,22 @@ export async function forkMobileStructuredChat(
   // Arm before requesting so later user tab picks supersede the fork.
   scope.pendingSelectionRef.current = launchedSelection(lock, {}, null)
   try {
-    const result = await forkMobileStructuredAgentSession(
-      client,
-      scope.worktreeId,
-      agent,
-      forkFrom,
-      tabPlacement
-    )
+    const result = recap
+      ? await createMobileStructuredAgentSession(
+          client,
+          scope.worktreeId,
+          agent,
+          undefined,
+          tabPlacement,
+          recap
+        )
+      : await forkMobileStructuredAgentSession(
+          client,
+          scope.worktreeId,
+          agent,
+          forkFrom,
+          tabPlacement
+        )
     if (result.kind === 'created') {
       scope.pendingSelectionRef.current = withLaunchReply(scope.pendingSelectionRef.current, lock, {
         sessionId: result.sessionId
@@ -83,7 +97,12 @@ export async function forkMobileStructuredChat(
     } else if (result.kind === 'unknown') {
       report(mobileChatForkCopy.unconfirmed(agentName))
     } else {
-      report(mobileChatForkCopy.failed(agentName, result.message))
+      report(
+        mobileChatForkCopy.failed(
+          agentName,
+          result.kind === 'failed' ? result.message : mobileChatForkCopy.unsupported()
+        )
+      )
     }
   } catch {
     report(mobileChatForkCopy.unconfirmed(agentName))
@@ -113,5 +132,10 @@ const mobileChatForkCopy = {
     translate('chat.fork.failed', "{{agent}} couldn't fork this chat. {{detail}}", {
       agent,
       detail
-    })
+    }),
+  unsupported: () =>
+    translate(
+      'chat.fork.unsupported',
+      'This host runs an older Orca. Update Orca on the host, then try again.'
+    )
 }
