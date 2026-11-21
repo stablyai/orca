@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
+import { useBots } from '@/lib/bot-catalog'
 import { Input } from '../../../ui/input'
 import {
   agentCopyBase,
@@ -10,36 +11,47 @@ import {
 export function AgentCopyIdentityFields({
   copy,
   taken,
-  onChange
+  onRename,
+  onChangeId
 }: {
   copy: AgentCopy
   taken: readonly string[]
-  onChange: (identity: { name: string; id: string }) => void | Promise<void>
+  onRename: (name: string) => Promise<void>
+  onChangeId: (id: string) => Promise<void>
 }): React.JSX.Element {
   const t = useTranslate()
   const [name, setName] = useState(copy.name)
   const [id, setId] = useState(copy.id)
+  // A bot runs as its copy by id, so the id stays put while one does.
+  const boundBots = useBots()
+    .filter((bot) => bot.agentCopy === copy.id)
+    .map((bot) => bot.name)
   const idProblem =
-    agentCopyBase(id) !== copy.agent || !id.startsWith(`${copy.agent}.`)
-      ? t(
-          'settings.agents.copyIdInvalid',
-          'Use {{agent}}. followed by lowercase letters, digits and dashes.',
-          { agent: copy.agent }
-        )
-      : taken.includes(id)
-        ? t('settings.agents.copyIdTaken', 'Another copy has this ID.')
-        : null
+    id !== copy.id && boundBots.length > 0
+      ? t('settings.agents.copyIdInUse', 'Used by {{bots}}. Change what they run as first.', {
+          bots: boundBots.join(', ')
+        })
+      : agentCopyBase(id) !== copy.agent || !id.startsWith(`${copy.agent}.`)
+        ? t(
+            'settings.agents.copyIdInvalid',
+            'Use {{agent}}. followed by lowercase letters, digits and dashes.',
+            { agent: copy.agent }
+          )
+        : taken.includes(id)
+          ? t('settings.agents.copyIdTaken', 'Another copy has this ID.')
+          : null
   const commitName = (): void => {
     const trimmed = name.trim()
     if (!trimmed) {
       setName(copy.name)
     } else if (trimmed !== copy.name) {
-      void onChange({ name: trimmed, id: copy.id })
+      // A failed save keeps the draft for another try; the save itself reports the failure.
+      onRename(trimmed).catch(() => {})
     }
   }
   const commitId = (): void => {
     if (!idProblem && id !== copy.id) {
-      void onChange({ name: copy.name, id })
+      onChangeId(id).catch(() => {})
     }
   }
   return (

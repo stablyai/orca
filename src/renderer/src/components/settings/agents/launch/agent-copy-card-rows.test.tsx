@@ -32,6 +32,7 @@ function setup(local = true) {
     mutate: vi.fn(() => vi.fn(async () => {})),
     saveEnvironment: vi.fn(() => vi.fn(async () => {})),
     rename: vi.fn(async () => {}),
+    changeId: vi.fn(async () => {}),
     setChat: vi.fn(async () => {}),
     setEnabled: vi.fn(async () => {}),
     remove: vi.fn(async () => {})
@@ -84,6 +85,11 @@ describe("an agent copy's card", () => {
     expect(copies.setEnabled).toHaveBeenCalledWith('claude.haiku', false)
     expect(copies.remove).toHaveBeenCalledWith('claude.haiku')
     expect(copies.mutate).toHaveBeenCalledWith('claude.haiku')
+    row.onDuplicate?.()
+    expect(copies.duplicate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'claude' }),
+      'claude.haiku'
+    )
     void scopes[0]?.local?.updateSettings({ nativeChatProviders: { claude: true } })
     expect(copies.setChat).toHaveBeenCalledTimes(1)
   })

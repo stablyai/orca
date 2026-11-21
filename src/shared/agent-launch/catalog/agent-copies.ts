@@ -120,11 +120,19 @@ export function resolveAgentSelection(
   return copy ? { agent: copy.agent, copy } : null
 }
 
+/** The copy a launch's options name. A value that is not a copy id refuses, as a missing copy
+ *  does, so it never falls back to the base agent; only an absent key means the agent itself. */
 export function agentCopyIdFromOptions(
   options: Readonly<Record<string, unknown>> | null | undefined
 ): string | undefined {
   const value = options?.[AGENT_COPY_OPTION_ID]
-  return isAgentCopyId(value) ? value : undefined
+  if (value === undefined) {
+    return undefined
+  }
+  if (!isAgentCopyId(value)) {
+    throw new Error(`Invalid agent copy id ${JSON.stringify(value)}`)
+  }
+  return value
 }
 
 /** The copy a launch names in either of its option maps; two different copies refuse, so neither

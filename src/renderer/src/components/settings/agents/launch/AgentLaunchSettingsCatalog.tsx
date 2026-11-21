@@ -298,7 +298,9 @@ export function AgentLaunchSettingsCatalog({
         local && isDetected && agent.id === 'codex'
           ? buildCodexSessionSourceHomeControl(local.settings, local.updateSettings)
           : undefined,
-      onDuplicate: local && isDetected ? () => copies.duplicate(agent) : undefined
+      // A chat-only install copies too: a copy runs through its agent's own launch paths.
+      onDuplicate:
+        local && (isDetected || chatOnly.has(agent.id)) ? () => copies.duplicate(agent) : undefined
     })
     const rowProps = (
       agent: (typeof catalog)[number],

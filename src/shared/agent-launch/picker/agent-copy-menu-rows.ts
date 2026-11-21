@@ -5,6 +5,7 @@ import {
   type NativeChatDefaultSettings
 } from '../choices/structured-native-chat-launch-route'
 import type { NewTabAgentMenuRow } from './agent-launch-picker-rows'
+import { LOCAL_EXECUTION_HOST_ID } from '../../execution-host/execution-host'
 
 /** A copy opens on each surface its agent opens on: a chat where the agent's row offers one, a CLI
  *  wherever the agent is installed. Like its agent, it leads with a chat only when its own Chat |
@@ -21,6 +22,12 @@ export function agentCopyMenuRows(
     }
     const named = { id: copy.id, name: copy.name }
     const base = rows.filter((row) => row.agent === copy.agent)
+    // Copies are this desktop's; a paired host refuses an id it does not have.
+    if (
+      base.some((row) => row.executionHostId && row.executionHostId !== LOCAL_EXECUTION_HOST_ID)
+    ) {
+      return []
+    }
     const chat = base.some(
       (row) => row.kind === 'chat' || (row.kind === 'cli' && row.chat === true)
     )

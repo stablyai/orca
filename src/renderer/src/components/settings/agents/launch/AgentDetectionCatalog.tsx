@@ -55,9 +55,12 @@ export function AgentDetectionCatalog({
   }))
   const rows = sections.flatMap((section) => section.rows)
   const arriving = rows.filter(({ key }) => !Object.hasOwn(expandedByAgent, key))
-  if (arriving.length > 0) {
+  // A deleted copy's state must not outlive its card: a new copy may be given the same id.
+  const shown = new Set(rows.map(({ key }) => key))
+  const gone = Object.keys(expandedByAgent).filter((key) => key.includes('.') && !shown.has(key))
+  if (arriving.length > 0 || gone.length > 0) {
     setExpandedByAgent({
-      ...expandedByAgent,
+      ...Object.fromEntries(Object.entries(expandedByAgent).filter(([key]) => !gone.includes(key))),
       ...Object.fromEntries(
         arriving.map(({ key, row }) => [
           key,

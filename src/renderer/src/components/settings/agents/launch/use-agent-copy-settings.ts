@@ -30,6 +30,15 @@ export function useAgentCopySettings(local: LocalSettings | undefined) {
   const t = useTranslate()
   const tail = useRef<Promise<void> | null>(null)
   const [created, setCreated] = useState<string | null>(null)
+  // Ids renamed while edits made under the old id were still queued, so those edits follow.
+  const renamed = useRef(new Map<string, string>())
+  const current = (id: string): string => {
+    let next = id
+    for (let hops = 0; renamed.current.has(next) && hops < 64; hops++) {
+      next = renamed.current.get(next) ?? next
+    }
+    return next
+  }
   const list = local ? normalizeAgentCopies(local.settings.agentCopies) : []
   const platform = (): NodeJS.Platform => window.api.platform.get().platform
 
@@ -59,18 +68,23 @@ export function useAgentCopySettings(local: LocalSettings | undefined) {
     return operation
   }
 
-  /** Replaces copy `id` with what `change` makes of the latest saved one; null deletes it. */
+  /** Replaces copy `id` with what `change` makes of the latest saved one; null deletes it, and
+   *  undefined leaves it as it is. An edit to a copy that is gone fails visibly. */
   const update = (
     id: string,
-    change: (copy: AgentCopy, settings: GlobalSettings) => AgentCopy | null
+    change: (copy: AgentCopy, settings: GlobalSettings) => AgentCopy | null | undefined
   ): Promise<void> =>
     write((copies, settings) => {
-      const copy = copies.find((entry) => entry.id === id)
+      const target = current(id)
+      const copy = copies.find((entry) => entry.id === target)
       if (!copy) {
-        return null
+        throw new Error(`Unknown agent copy "${target}"`)
       }
       const next = change(copy, settings)
-      return copies.flatMap((entry) => (entry.id !== id ? [entry] : next ? [next] : []))
+      if (next === undefined) {
+        return null
+      }
+      return copies.flatMap((entry) => (entry.id !== target ? [entry] : next ? [next] : []))
     })
 
   /** Runs one of the agent's own edits on the copy's settings and keeps the result as the copy. */
@@ -84,8 +98,9 @@ export function useAgentCopySettings(local: LocalSettings | undefined) {
         return captureAgentCopy(copy, { ...view, ...compute(view, platform()) })
       })
 
-  /** A new copy of `agent`, or of `from` with its values; refused at the copy limit. */
-  const duplicate = (agent: { id: TuiAgent; label: string }, from?: AgentCopy): void => {
+  /** A new copy of `agent`, or of copy `fromId` with its latest saved values; refused at the
+   *  copy limit. */
+  const duplicate = (agent: { id: TuiAgent; label: string }, fromId?: string): void => {
     let made: AgentCopy | null = null
     void write((copies, settings) => {
       if (copies.length >= MAX_AGENT_COPIES) {
@@ -98,6 +113,7 @@ export function useAgentCopySettings(local: LocalSettings | undefined) {
         )
         return null
       }
+      const from = fromId ? copies.find((copy) => copy.id === current(fromId)) : undefined
       const name = t('settings.agents.copyDefaultName', '{{agent}} copy', {
         agent: from?.name ?? agent.label
       })
@@ -135,14 +151,32 @@ export function useAgentCopySettings(local: LocalSettings | undefined) {
         editAs(id)((view, hostPlatform) =>
           wholeAgentEnvironmentUpdates(view, agent, requested, hostPlatform)
         ),
-    rename: (id: string, identity: { name: string; id: string }): Promise<void> =>
-      update(id, (copy) => ({ ...copy, ...identity })),
+    rename: (id: string, name: string): Promise<void> => update(id, (copy) => ({ ...copy, name })),
+    /** Gives the copy a new id; an id another copy took in the meantime leaves it unchanged. */
+    changeId: (id: string, nextId: string): Promise<void> => {
+      let moved: string | null = null
+      const operation = update(id, (copy, settings) => {
+        if (normalizeAgentCopies(settings.agentCopies).some((other) => other.id === nextId)) {
+          toast.error(t('settings.agents.copyIdTaken', 'Another copy has this ID.'))
+          return undefined
+        }
+        moved = copy.id
+        return { ...copy, id: nextId }
+      })
+      // Registered before any later edit is queued, so that edit already follows the new id.
+      return operation.then(() => {
+        if (moved) {
+          renamed.current.set(moved, nextId)
+        }
+      })
+    },
     setChat: (id: string, chat: boolean): Promise<void> =>
       update(id, (copy) => ({ ...copy, chat })),
     setEnabled: (id: string, enabled: boolean): Promise<void> =>
       update(id, ({ disabled: _disabled, ...copy }) =>
         enabled ? copy : { ...copy, disabled: true }
       ),
-    remove: (id: string): Promise<void> => update(id, () => null)
+    remove: (id: string): Promise<void> =>
+      write((copies) => copies.filter((copy) => copy.id !== current(id)))
   }
 }

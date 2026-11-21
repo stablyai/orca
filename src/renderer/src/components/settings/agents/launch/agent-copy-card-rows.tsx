@@ -72,7 +72,7 @@ export function agentCopyCardRows(args: {
       cliUpdate: undefined,
       chatRuntime: undefined,
       sessionSourceHome: undefined,
-      onDuplicate: () => copies.duplicate(agent, copy),
+      onDuplicate: () => copies.duplicate(agent, copy.id),
       initiallyExpanded: copies.created === copy.id,
       copy: {
         baseLabel: agent.label,
@@ -82,7 +82,8 @@ export function agentCopyCardRows(args: {
             key={copy.id}
             copy={copy}
             taken={copies.list.filter((other) => other.id !== copy.id).map((other) => other.id)}
-            onChange={(identity) => copies.rename(copy.id, identity)}
+            onRename={(name) => copies.rename(copy.id, name)}
+            onChangeId={(id) => copies.changeId(copy.id, id)}
           />
         )
       }

@@ -186,4 +186,9 @@ describe('agent copies', () => {
     expect(applyAgentCopyById(settings, 'claude.gone')).toBe(settings)
     expect(applyAgentCopyById(settings, undefined)).toBe(settings)
   })
+
+  it('refuses a launch option that names no well-formed copy instead of starting the base agent', () => {
+    expect(() => launch({ agentCopy: 'Not A Copy' })).toThrow('Invalid agent copy id "Not A Copy"')
+    expect(launch()?.launchCommand).toContain('--verbose')
+  })
 })

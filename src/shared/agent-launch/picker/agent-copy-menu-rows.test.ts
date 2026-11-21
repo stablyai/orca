@@ -44,3 +44,12 @@ it("leads with a chat only when the copy's own Chat | CLI choice says chat, and 
     rows.map((row) => `${row.kind}:${row.copy?.id}${'chat' in row && row.chat ? '+chat' : ''}`)
   ).toEqual(['chat:claude.chat', 'cli:claude.chat', 'cli:claude.cli+chat'])
 })
+
+it("does not offer this desktop's copies on a paired host, which would refuse their ids", () => {
+  const rows = agentCopyMenuRows(
+    [{ kind: 'chat', agent: 'claude', executionHostId: 'runtime:paired' }],
+    [{ id: 'claude.a', name: 'A', agent: 'claude' }],
+    ['claude']
+  )
+  expect(rows).toEqual([])
+})
