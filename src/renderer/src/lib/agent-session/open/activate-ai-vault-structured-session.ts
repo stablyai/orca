@@ -7,7 +7,10 @@ import { activateAndRevealWorktree } from '../../workspace/activation/worktree-a
 import { activateWslMovedWorkspace } from '../../workspace/activation/wsl-moved-chat-activation'
 import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../../workspace/ownership/worktree-runtime-owner'
-import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import {
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { readBotGroups } from '../../bot-group-catalog-snapshot'
 import { openBotGroupRoom } from '../../bot-group-catalog'
 import { botGroupRoomOfRow } from '../../bot-group-room-history'
@@ -98,6 +101,8 @@ export function openDesktopStructuredSession(
   locate?: StructuredSessionOpenDeps['locate'],
   feedback?: StructuredSessionOpenFeedback
 ): Promise<StructuredSessionOpenResult> {
+  // Read when the open starts: the selection may move before it settles.
+  const pairedHostId = openingPairedHostId(source, host)
   return openDesktopStructuredSessionInteraction(source, {
     target: host,
     deps,
@@ -107,36 +112,53 @@ export function openDesktopStructuredSession(
         result,
         source,
         feedback ?? deps ?? structuredSessionOpenFeedback,
-        host
+        pairedHostId
       )
   })
+}
+
+/** The paired host an open targets, so its same-id workspace is selected, never a local checkout. */
+function openingPairedHostId(
+  source: StructuredSessionOpenSource,
+  host: RuntimeClientTarget | undefined
+): ExecutionHostId | null {
+  if (host) {
+    return host.kind === 'environment' ? toRuntimeExecutionHostId(host.environmentId) : null
+  }
+  const workspace =
+    source.kind === 'history'
+      ? source.structuredSession.workspaceId
+      : source.kind === 'notification'
+        ? source.worktreeId
+        : null
+  const environmentId = workspace
+    ? runtimeEnvironmentIdOrLocalUnlessTwin(useAppStore.getState(), workspace)
+    : null
+  return environmentId ? toRuntimeExecutionHostId(environmentId) : null
 }
 
 function presentDesktopStructuredSession(
   result: StructuredSessionOpenResult,
   source: StructuredSessionOpenSource,
   deps: StructuredSessionOpenFeedback,
-  host?: RuntimeClientTarget
+  pairedHostId: ExecutionHostId | null
 ): void {
   if (result.kind === 'opened') {
     const workspace = result.target.worktreeId
-    const state = useAppStore.getState()
-    const { activeWorktreeId, activeView } = state
+    const { activeWorktreeId, activeView, activeWorkspaceExecutionHostId } = useAppStore.getState()
     // Settings or another page may cover the chat's own workspace; its tab is selected but not shown.
+    // A same-id local checkout can be selected while the chat lives on a paired host.
     if (
-      (activeWorktreeId !== workspace || activeView !== 'terminal') &&
+      (activeWorktreeId !== workspace ||
+        activeView !== 'terminal' ||
+        (pairedHostId !== null && activeWorkspaceExecutionHostId !== pairedHostId)) &&
       !activateWslMovedWorkspace(workspace)
     ) {
-      // A paired host that opened the chat picks its workspace, so a same-id checkout here is never selected.
-      const environmentId = host
-        ? host.kind === 'environment'
-          ? host.environmentId
-          : null
-        : runtimeEnvironmentIdOrLocalUnlessTwin(state, workspace)
-      activateAndRevealWorktree(
-        workspace,
-        environmentId ? { executionHostId: toRuntimeExecutionHostId(environmentId) } : undefined
-      )
+      if (pairedHostId) {
+        activateAndRevealWorktree(workspace, { executionHostId: pairedHostId })
+      } else {
+        activateAndRevealWorktree(workspace)
+      }
     }
   } else if (result.kind === 'failed') {
     const agent = source.kind === 'sender' ? (source.displayName ?? '') : (source.agent ?? '')

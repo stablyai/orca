@@ -36,17 +36,23 @@ describe('a session listing a terminal change outdated', () => {
 
   it('starts the outdated count over when the panel reopens', async () => {
     const outdated = new Error('Terminal session owner could not be verified: stale inventory')
+    let rejectThird: (error: Error) => void = () => {}
     const list = vi
       .fn()
       .mockRejectedValueOnce(outdated)
       .mockRejectedValueOnce(outdated)
-      .mockRejectedValueOnce(outdated)
-      .mockImplementationOnce(() => new Promise(() => {}))
+      .mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            rejectThird = reject
+          })
+      )
     const cache = new ResourceSessionInventoryCache(list, false)
     cache.setActive(true)
-    await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(4))
+    await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(3))
     cache.setActive(false)
-    list.mockReset()
+    rejectThird(outdated)
+    await vi.waitFor(() => expect(cache.getSnapshot().loading).toBe(false))
     list
       .mockRejectedValueOnce(outdated)
       .mockRejectedValueOnce(outdated)
