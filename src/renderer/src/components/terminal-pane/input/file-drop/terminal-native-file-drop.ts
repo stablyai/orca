@@ -11,6 +11,7 @@ import {
   type captureTerminalDropTarget,
   getCurrentTerminalDropTransport
 } from './terminal-drop-target'
+import { showTerminalDropTargetGone } from './terminal-drop-target-gone'
 import {
   getTerminalTargetShellForWorktreePath,
   resolveTerminalDropTargetShell
@@ -241,6 +242,8 @@ async function pasteResolvedDropPaths(
     args.dropTarget
   )
   if (!liveTransport) {
+    // The upload finished; say where the files landed instead of returning silently.
+    showTerminalDropTargetGone(args.paths)
     return
   }
   const writeResult = await writeTerminalDropPathsToCapturedTarget({
@@ -251,6 +254,10 @@ async function pasteResolvedDropPaths(
     targetShell: args.targetShell
   })
   showTerminalDropWriteFailure(writeResult.failureReason)
+  if (writeResult.failureReason === 'target-stale') {
+    // The pane vanished mid-write; the uploaded paths that never got typed must not be silently swallowed.
+    showTerminalDropTargetGone(args.paths.slice(writeResult.pathsWritten))
+  }
   if (writeResult.sentAnyPath) {
     recordTerminalUserInputForLeaf(args.tabId, args.pane.leafId)
     if (
