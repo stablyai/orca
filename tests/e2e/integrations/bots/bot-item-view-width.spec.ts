@@ -129,15 +129,15 @@ test('an item with an open question lays out within the bot panel', async ({
   })
   await page.getByText(item.title, { exact: true }).first().click()
   const pane = page.locator('[data-bot-item-pane]')
-  await expect(pane.getByText('Answering:')).toBeVisible()
+  await expect(pane.getByText(`Replying to: ${question}`)).toBeVisible()
 
-  // The question's one-line "Answering:" row must not set the item view's width.
+  // The question's one-line reply row must not set the item view's width.
   const widths = await pane.evaluate((node) => ({
     pane: node.getBoundingClientRect().width,
     view: node.querySelector('fieldset')!.getBoundingClientRect().width
   }))
   expect(widths.view).toBeLessThanOrEqual(widths.pane)
-  const reply = await pane.getByRole('button', { name: 'Reply' }).boundingBox()
+  const reply = await pane.getByRole('button', { name: 'Hide' }).boundingBox()
   const box = await pane.boundingBox()
   expect(reply!.x + reply!.width).toBeLessThanOrEqual(box!.x + box!.width)
 })

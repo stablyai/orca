@@ -1,10 +1,10 @@
-import { execFile } from 'node:child_process'
 import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
-import { promisify } from 'node:util'
+import { runProcess } from '@orca/process-host'
+import { agentBrowserDependencyBinaryPath } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-agent-browser-name'
 import type { Page } from '@stablyai/playwright-test'
 import { test } from '../../desktop/electron-fixtures/orca-app'
 import { expect } from '@stablyai/playwright-test'
@@ -14,7 +14,6 @@ import {
   waitForActiveWorktree
 } from '../../desktop/renderer-probes/store'
 
-const execFileAsync = promisify(execFile)
 // Why: Unix-domain helper sockets can exceed platform path limits under macOS's long temp root.
 const shortTempRoot =
   process.platform === 'win32' ? os.tmpdir() : path.join(path.parse(os.tmpdir()).root, 'tmp')
@@ -145,21 +144,20 @@ async function readEmbeddedPage(
 }
 
 function agentBrowserBinary(): string {
-  const suffix = process.platform === 'win32' ? '.exe' : ''
   return path.join(
     process.cwd(),
-    'node_modules',
-    'agent-browser',
-    'bin',
-    `agent-browser-${process.platform}-${process.arch}${suffix}`
+    ...agentBrowserDependencyBinaryPath(process.platform, process.arch)
   )
 }
 
 async function stopHelperDaemon(sessionName: string): Promise<void> {
-  await execFileAsync(agentBrowserBinary(), ['--session', sessionName, 'close', '--json'], {
+  const result = await runProcess({
+    program: agentBrowserBinary(),
+    args: ['--session', sessionName, 'close', '--json'],
     env: { ...process.env, AGENT_BROWSER_SOCKET_DIR: helperSocketDir },
-    timeout: 10_000
+    timeoutMs: 10_000
   })
+  expect(result.code, result.stderr).toBe(0)
   await expect
     .poll(() => existsSync(path.join(helperSocketDir, `${sessionName}.pid`)), { timeout: 5_000 })
     .toBe(false)
