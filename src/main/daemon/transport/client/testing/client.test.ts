@@ -141,19 +141,15 @@ describe('DaemonClient', () => {
   }
 
   describe('connect', () => {
-    it('rejects a v24 daemon that omits endpoint identity', async () => {
-      await startMockDaemon({ omitHelloIdentity: true })
-      client = new DaemonClient({ socketPath, tokenPath })
-
-      await expect(client.ensureConnected()).rejects.toThrow('Invalid daemon identity')
-    })
-
-    it('allows a legacy v23 daemon to omit endpoint identity', async () => {
+    it('allows a missing endpoint identity only on the legacy protocol', async () => {
       await startMockDaemon({ omitHelloIdentity: true })
       client = new DaemonClient({ socketPath, tokenPath, protocolVersion: 23 })
-
       await expect(client.ensureConnected()).resolves.toBeUndefined()
       expect(client.getDaemonIdentity()).toBeNull()
+      client.disconnect()
+
+      client = new DaemonClient({ socketPath, tokenPath })
+      await expect(client.ensureConnected()).rejects.toThrow('Invalid daemon identity')
     })
 
     it('rejects when control and stream sockets report different daemon identities', async () => {

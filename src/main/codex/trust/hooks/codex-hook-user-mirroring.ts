@@ -1,13 +1,8 @@
-import {
-  readObservedFileSync as readFileSync,
-  observedExistsSync as existsSync
-} from '../../../filesystem/file-content-observation'
-
 import { removeManagedCommands } from '../../../agent-hooks/installation/commands/managed-hook-command-matching'
 import type { HookDefinition } from '../../../agent-hooks/installation/configuration/hook-config-schema'
 import { readHooksJsonWithRaw } from '../../../agent-hooks/installation/configuration/hooks-json-read'
 import {
-  writeLoadableHookTrustConfig,
+  editLoadableHookTrustConfig,
   type CodexEventLabel,
   type CodexTrustEntry
 } from '../toml/config-toml-trust'
@@ -194,23 +189,21 @@ export function applyMirroredRuntimeUserHookTrustStates(
   tomlPath: string,
   entries: readonly MirroredRuntimeUserHookTrustEntry[]
 ): void {
-  if (entries.length === 0 || !existsSync(tomlPath)) {
+  if (entries.length === 0) {
     return
   }
-
-  const existing = readFileSync(tomlPath, 'utf-8')
-  let updated = existing
-  for (const { entry, enabled } of entries) {
-    const headerKeyPattern = buildHookTrustHeaderKeyPattern(computeTrustKey(entry))
-    const pattern = new RegExp(
-      `(\\[hooks\\.state\\.${headerKeyPattern}\\]\\r?\\n[ \\t]*enabled[ \\t]*=[ \\t]*)(true|false)`,
-      'g'
-    )
-    updated = updated.replace(pattern, `$1${enabled}`)
-  }
-  if (updated !== existing) {
-    writeLoadableHookTrustConfig(tomlPath, existing, updated)
-  }
+  editLoadableHookTrustConfig(tomlPath, 'skip', (existing) => {
+    let updated = existing
+    for (const { entry, enabled } of entries) {
+      const headerKeyPattern = buildHookTrustHeaderKeyPattern(computeTrustKey(entry))
+      const pattern = new RegExp(
+        `(\\[hooks\\.state\\.${headerKeyPattern}\\]\\r?\\n[ \\t]*enabled[ \\t]*=[ \\t]*)(true|false)`,
+        'g'
+      )
+      updated = updated.replace(pattern, `$1${enabled}`)
+    }
+    return updated
+  })
 }
 
 function dedupeHookDefinitions(definitions: readonly HookDefinition[]): HookDefinition[] {

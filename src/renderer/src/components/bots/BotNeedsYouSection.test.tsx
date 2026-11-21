@@ -281,14 +281,14 @@ describe('Needs you', () => {
     expect(mocks.openHome).toHaveBeenCalledWith(BOT)
   })
 
-  it('sends a connector sign-in to Connectors and opens the exact runs it stopped', () => {
+  it('sends a connector sign-in to its Connectors page and opens the exact runs it stopped', () => {
     renderNeeds(
       [{ kind: 'connector', key: 'connector:linear:w1', connector: LINEAR }],
       [automationRow('a2', 'Label new Linear bugs', 'run-9')]
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Linear' }))
-    expect(mocks.manageConnectors).toHaveBeenCalledWith(BOT)
+    expect(mocks.manageConnectors).toHaveBeenCalledWith(BOT, 'linear:w1')
     fireEvent.click(screen.getByRole('button', { name: 'Open run: Label new Linear bugs' }))
     expect(mocks.openAutomation).toHaveBeenLastCalledWith('a2', 'run-9')
   })

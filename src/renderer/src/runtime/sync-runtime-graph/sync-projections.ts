@@ -38,54 +38,6 @@ export function resolveRuntimeTerminalTitle(
   return resolveTerminalTabTitle({ ...tab, title: liveTitle }, generatedTitlesEnabled, liveTitle)
 }
 
-export function buildRuntimeMobileTabsProjection(
-  tabsByWorktree: AppState['tabsByWorktree']
-): string {
-  if (graphState.cachedTabsProjection?.source === tabsByWorktree) {
-    return graphState.cachedTabsProjection.projection
-  }
-
-  const previousEntries = graphState.cachedTabsProjection?.entries
-  const entries = new Map<
-    string,
-    {
-      tabs: NonNullable<AppState['tabsByWorktree'][string]>
-      worktreeIdJson: string
-      projection: string
-    }
-  >()
-  const parts: string[] = []
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    const previous = previousEntries?.get(worktreeId)
-    const entry =
-      previous?.tabs === tabs
-        ? previous
-        : {
-            tabs,
-            worktreeIdJson: previous?.worktreeIdJson ?? JSON.stringify(worktreeId),
-            projection: JSON.stringify(
-              tabs.map((tab) => ({
-                id: tab.id,
-                title: tab.title,
-                quickCommandLabel: tab.quickCommandLabel,
-                aiVaultTitle: tab.aiVaultTitle,
-                generatedTitle: tab.generatedTitle,
-                customTitle: tab.customTitle,
-                launchAgent: tab.launchAgent
-              }))
-            )
-          }
-    entries.set(worktreeId, entry)
-    parts.push(`${entry.worktreeIdJson}:${entry.projection}`)
-  }
-  graphState.cachedTabsProjection = {
-    source: tabsByWorktree,
-    entries,
-    projection: `{${parts.join(',')}}`
-  }
-  return graphState.cachedTabsProjection.projection
-}
-
 export function buildRuntimeMobileOpenFilesProjection(openFiles: AppState['openFiles']): string {
   const cached = graphState.cachedOpenFilesProjection
   if (cached?.source === openFiles) {

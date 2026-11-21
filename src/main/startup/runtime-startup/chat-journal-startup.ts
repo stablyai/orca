@@ -41,9 +41,9 @@ export function chatJournalHostServing(): void {
   void windowFence
     .catch(() => {})
     .then(() => {
-      if (state.runtime) {
-        state.runtime.startPullRequestWatches({ admit: true })
-        reclaimManagedRuntimeReleasesAtLaunch(state.runtime)
+      if (state.core.runtime) {
+        state.core.runtime.startPullRequestWatches({ admit: true })
+        reclaimManagedRuntimeReleasesAtLaunch(state.core.runtime)
         startManagedRuntimeAutoUpdates()
       }
     })

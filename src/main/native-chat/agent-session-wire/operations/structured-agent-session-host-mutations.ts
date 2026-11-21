@@ -244,6 +244,9 @@ export async function setStructuredAgentSessionOption(
         const picked = await recordStructuredAgentSessionOptionIntent(context.deps, ctx, params, {
           readsWithoutModel: caller.readsOptionsWithoutModel !== false
         })
+        if (picked.ok && params.key === 'model' && params.value) {
+          context.deps.adapter.noteModelPick?.({ sessionId: ctx.sessionId, fence: ctx.fence })
+        }
         if (picked.ok && params.key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID) {
           applyStructuredAgentSessionPermissionPick(context, ctx)
         } else if (picked.ok) {

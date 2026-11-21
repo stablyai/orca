@@ -2,7 +2,7 @@ import type { CodexHistoryCleanupManifest } from './codex-account-history-cleanu
 
 export const MANIFEST_VERSION = 1
 
-// The cleanup deletes on these fields, so a manifest missing or mistyping any is rebuilt instead.
+// Older builds' cleanup deletes on these fields, so a manifest missing or mistyping any is rebuilt.
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
@@ -31,7 +31,7 @@ function isContentCheck(value: unknown): boolean {
   )
 }
 
-// Every field a later pass or the cleanup reads; anything else is rebuilt from disk.
+// Every field an older build's pass or cleanup reads; anything else is rebuilt from disk.
 function isLeftBehindRollout(value: unknown): boolean {
   return (
     isFileFacts(value) &&

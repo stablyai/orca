@@ -116,12 +116,13 @@ describe('linked HEAD-only watcher bursts', () => {
       )
     )
 
+    const expectedLinkedPath = linkedPath.replaceAll('\\', '/')
     await vi.waitFor(() =>
       expect(watch.sent).toContainEqual({
         channel: 'worktrees:headIdentitiesChanged',
         payload: {
           repoId: REPO_ID,
-          identities: [{ worktreePath: linkedPath, head: movedHead, branch: null }]
+          identities: [{ worktreePath: expectedLinkedPath, head: movedHead, branch: null }]
         }
       })
     )

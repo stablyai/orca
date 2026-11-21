@@ -600,6 +600,9 @@
   --notice-border: color-mix(in srgb, var(--popover-foreground) 14%, transparent);
   --notice-secondary: color-mix(in srgb, var(--foreground) 6%, var(--notice-surface));
   --notice-shadow: 0 11px 32px -6px rgb(0 0 0 / 0.2), 0 2px 6px rgb(0 0 0 / 0.08);
+  /* The bot pill's ring + lift: an approved exception to the three elevation levels, lighter than notices. */
+  --bot-home-banner-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.04), 0 1px 2px rgb(0 0 0 / 0.015), 0 4px 14px rgb(0 0 0 / 0.02);
 }
 
 .dark {
@@ -609,6 +612,8 @@
   --notice-shadow:
     0 11px 32px -6px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.22),
     inset 0 1px 0 rgb(255 255 255 / 0.06);
+  --bot-home-banner-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.06), 0 1px 2px rgb(0 0 0 / 0.075), 0 4px 14px rgb(0 0 0 / 0.075);
 }
 
 /* Why: buttons, text and inner panels paint from these; foregrounds pair with the popover the surface lifts,

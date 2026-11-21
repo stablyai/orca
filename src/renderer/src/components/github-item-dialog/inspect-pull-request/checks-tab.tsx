@@ -119,17 +119,8 @@ export function ChecksTab({
   const sorted = sortChecksBySeverity(list)
   const failedChecks = getBrokenChecks(list)
   const counts = getCheckCounts(list)
-  const overallCounts = getOverallCheckCounts(
-    list,
-    checkOwner,
-    resolvedChecksState.checkObservationOwner
-  )
-  const summaryLabel = getChecksSummaryLabel(
-    list,
-    checkOwner,
-    resolvedChecksState.checkObservationOwner,
-    t
-  )
+  const overallCounts = getOverallCheckCounts(list, checkOwner)
+  const summaryLabel = getChecksSummaryLabel(list, checkOwner, t)
   const { SummaryIcon, summaryColor } = getChecksTabSummaryPresentation(overallCounts)
   const canFixBrokenChecks = Boolean((repoId ?? item.repoId) && failedChecks.length > 0)
 

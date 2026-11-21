@@ -42,7 +42,14 @@ export function MobileBotHomeRow({
   const line = mobileBotRowLine(bot, item.agents ?? [], now)
   // A down server's bot shows only where it runs and that computer's word: its last activity isn't live.
   const down = bot.host?.word !== undefined
-  const preview = down ? '' : line ? mobileBotRowLineText(line, now) : bot.statusLine
+  const asking = !down && line?.kind === 'needYouElsewhere'
+  const lineText = line ? mobileBotRowLineText(line, now) : bot.statusLine
+  // The line names who waits on an access answer, since nothing else on the row says it.
+  const preview = down
+    ? ''
+    : asking && bot.askedForAccess
+      ? `${lineText} · ${t('bots.needs.access', '{{person}} asked for access', { person: bot.askedForAccess })}`
+      : lineText
   const age =
     !down && line?.kind === 'activity' && line.at !== null ? formatTimeAgo(line.at, now) : null
   // The desktop's mark before a thread's label, which leads an activity line.
@@ -55,6 +62,7 @@ export function MobileBotHomeRow({
       title={item.displayName}
       unread={item.unread}
       preview={preview}
+      asking={asking}
       previewLeading={
         <>
           {bot.host ? (
@@ -231,6 +239,7 @@ export function MobileBotRowView({
   title,
   unread,
   preview,
+  asking = false,
   previewLeading = null,
   age,
   active = false,
@@ -245,6 +254,8 @@ export function MobileBotRowView({
   title: string
   unread: boolean
   preview: string
+  /** The line says what waits on the owner, in the asking colour. */
+  asking?: boolean
   /** Drawn before the preview, e.g. a server bot's computer. */
   previewLeading?: React.ReactNode
   age: string | null
@@ -284,7 +295,10 @@ export function MobileBotRowView({
         </View>
         <View style={styles.activity}>
           {previewLeading}
-          <Text numberOfLines={1} style={[styles.preview, unread && styles.previewUnread]}>
+          <Text
+            numberOfLines={1}
+            style={[styles.preview, unread && styles.previewUnread, asking && styles.previewAsking]}
+          >
             {preview}
           </Text>
           {age ? <Text style={styles.age}>{age}</Text> : null}
@@ -339,6 +353,7 @@ const styles = themedStyleSheet(() => ({
   activity: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 3 },
   preview: { flex: 1, fontSize: 13, color: colors.textMuted },
   previewUnread: { color: colors.textSecondary },
+  previewAsking: { color: colors.agentQuestion },
   age: { fontSize: 11, color: colors.textMuted },
   active: { backgroundColor: colors.bgPanel },
   dimmed: { opacity: 0.6 },

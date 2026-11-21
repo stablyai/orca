@@ -35,11 +35,17 @@ vi.mock('./BotItemActivityList', () => ({
     quickReplies
   }: {
     events: BotItemEvent[]
-    quickReplies?: { send: (text: string) => void; edit: (text: string) => void }
+    quickReplies?: {
+      send: (text: string) => void
+      edit: (text: string) => void
+      steps?: { current: number; answer: (index: number, words: string) => void } | null
+    }
   }) => (
     <ol>
       {events.map((event) => (
-        <li key={event.id}>{event.id}</li>
+        <li key={event.id} data-bot-item-comment-id={event.id}>
+          {event.id}
+        </li>
       ))}
       {quickReplies ? (
         <>
@@ -49,6 +55,14 @@ vi.mock('./BotItemActivityList', () => ({
           <button type="button" onClick={() => quickReplies.edit('Go ahead')}>
             Edit quick reply
           </button>
+          {quickReplies.steps ? (
+            <button
+              type="button"
+              onClick={() => quickReplies.steps?.answer(quickReplies.steps.current, 'Yes')}
+            >
+              Answer this step
+            </button>
+          ) : null}
         </>
       ) : null}
     </ol>
@@ -175,7 +189,15 @@ it('scrolls to the end after a comment is sent', async () => {
     fireEvent.keyDown(box, { key: 'Enter' })
   })
 
-  expect(sent).toHaveBeenCalledWith(BOT, 'uid-6', 'Ship it', [], expect.any(String))
+  expect(sent).toHaveBeenCalledWith(
+    BOT,
+    'uid-6',
+    'Ship it',
+    [],
+    expect.any(String),
+    undefined,
+    false
+  )
   expect(scroller().scrollTop).toBe(CONTENT)
 })
 
@@ -198,7 +220,9 @@ it('focuses the comment box from its card and preserves focus outside it when su
     'uid-6',
     'Use the proposed flow',
     [],
-    expect.any(String)
+    expect.any(String),
+    undefined,
+    false
   )
   expect(box.contains(document.activeElement)).toBe(false)
 })
@@ -290,8 +314,83 @@ it("keeps the comment box while the question waits, and posts a quick reply as t
   expect(screen.getByRole('textbox', { name: 'Comment' })).toBeTruthy()
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Quick reply' })))
 
-  expect(sent).toHaveBeenCalledExactlyOnceWith(BOT, 'uid-6', 'Go ahead', [], expect.any(String))
+  expect(sent).toHaveBeenCalledExactlyOnceWith(
+    BOT,
+    'uid-6',
+    'Go ahead',
+    [],
+    expect.any(String),
+    undefined,
+    false
+  )
   expect(screen.getByRole('textbox', { name: 'Comment' })).toBeTruthy()
+})
+
+it('holds the answers to an ask of several questions and posts them as one comment at the last', async () => {
+  const ask = {
+    questions: [
+      { prompt: 'Ship it?', options: [{ label: 'Yes' }] },
+      { prompt: 'Tell the team?', options: [{ label: 'Yes' }] }
+    ]
+  }
+  const asker = { kind: 'bot', botId: 'bot-a', chatId: 'chat-home' } as const
+  read.current = {
+    item: makeTestBotItem(6, { status: 'needs_you', question: { eventId: 'e1', text: 'copy' } }),
+    events: [
+      { id: 'e1', kind: 'commented', actor: asker, data: { text: 'copy', ask }, at: 1 },
+      { id: 'e2', kind: 'status', actor: asker, data: { from: 'working', to: 'needs_you' }, at: 1 }
+    ],
+    eventsRead: true,
+    hasEarlier: false,
+    failed: false,
+    deleted: false,
+    loadEarlier: vi.fn(),
+    retry: vi.fn()
+  }
+  render(<BotItemView bot={BOT} uid="uid-6" />)
+
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Answer this step' })))
+  expect(sent).not.toHaveBeenCalled()
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Answer this step' })))
+
+  expect(sent).toHaveBeenCalledExactlyOnceWith(
+    BOT,
+    'uid-6',
+    'Ship it? → Yes\nTell the team? → Yes',
+    [],
+    expect.any(String),
+    'e1',
+    false
+  )
+})
+
+it('shows the question "Replying to" names with focus kept in the box, and its × hides the mark without scrolling', () => {
+  const scrolledTo: Element[] = []
+  const scrollIntoView = Element.prototype.scrollIntoView
+  Element.prototype.scrollIntoView = function (this: Element) {
+    scrolledTo.push(this)
+  }
+  try {
+    show(3, WAITING)
+    render(<BotItemView bot={BOT} uid="uid-6" />)
+    const box = screen.getByRole('textbox', { name: 'Comment' })
+    const chip = screen.getByRole('button', { name: /^Replying to: Which flow should ship\?/ })
+
+    chip.focus()
+    fireEvent.click(chip)
+
+    const question = screen.getByText('e3')
+    expect(scrolledTo).toEqual([question])
+    expect(question.hasAttribute('data-flash')).toBe(true)
+    expect(document.activeElement).toBe(box)
+
+    scrolledTo.length = 0
+    fireEvent.click(screen.getByRole('button', { name: 'Hide' }))
+    expect(screen.queryByRole('button', { name: /^Replying to:/ })).toBeNull()
+    expect(scrolledTo).toEqual([])
+  } finally {
+    Element.prototype.scrollIntoView = scrollIntoView
+  }
 })
 
 it("puts a quick reply's words in the comment box to add to, without sending", () => {

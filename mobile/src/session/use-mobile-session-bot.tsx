@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   BOTS_ITEMS_RUNTIME_CAPABILITY,
   BOTS_MOBILE_RUNTIME_CAPABILITY
@@ -6,7 +6,10 @@ import {
 import type { BotPanelOpen } from '../bots/MobileBotPanel'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { MobileBotAvatar } from '../bots/MobileBotAvatar'
-import { botSessionStart } from '../bots/bot-sheet-operations'
+import { botHomeChatReset, botSessionStart } from '../bots/bot-sheet-operations'
+import { readBotAgentChoices } from '../bots/new-bot-host-reads'
+import type { BotAgent } from '../../../src/shared/bot-types'
+import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { botStatusLine } from '../bots/host-bot-row-facts'
 import { hostBotsKey } from '../bots/host-bots-read'
 import { botAgentLabel, botStatusFromDots } from '../bots/mobile-bot-sheet-copy'
@@ -23,9 +26,15 @@ import {
   withoutUnansweredLaunch
 } from './tabs/pending-session-selection'
 import type { MobileSessionPanelRouteActionsModel } from './use-mobile-session-panel-route-actions'
+import type { MobileNewTabBotActions } from './tabs/MobileNewTabSheet'
+import type { MobileSessionItemLink } from './mobile-session-item-target'
 
-/** A bot's home route: its header facts, its sheet, and "New chat with" it from +. */
-export function useMobileSessionBot(scope: MobileSessionPanelRouteActionsModel) {
+/** A bot's home route: its header facts, its sheet, and its new chats from +; `access`, an access
+ *  request its push asked to review, opens in the bot's panel. */
+export function useMobileSessionBot(
+  scope: MobileSessionPanelRouteActionsModel,
+  access: MobileSessionItemLink['access'] = null
+) {
   const {
     hostId,
     client,
@@ -36,7 +45,7 @@ export function useMobileSessionBot(scope: MobileSessionPanelRouteActionsModel) 
     pendingSelectionRef,
     fetchSessionTabs,
     showToast,
-    setShowCreateTabDrawer
+    showCreateTabDrawer
   } = scope
   const executionHost = useWorkspaceExecutionHost()
   const botsOnPhone = useRouteCapability(BOTS_MOBILE_RUNTIME_CAPABILITY)
@@ -67,6 +76,11 @@ export function useMobileSessionBot(scope: MobileSessionPanelRouteActionsModel) 
     },
     [refreshRouteBot]
   )
+  // The panel reads the bot's requests as it opens, so the push's request needs no route read.
+  if (access && itemsOnPhone) {
+    access.reviewed()
+    setBotPanel({ access: access.requestId })
+  }
   const now = useNow(60_000, routeBot !== null)
 
   const botStatus = useMemo(() => {
@@ -91,46 +105,93 @@ export function useMobileSessionBot(scope: MobileSessionPanelRouteActionsModel) 
     return { status, line: botStatusLine(status, routeBot.bot.paused) }
   }, [routeBot, visibleTabs, now])
 
-  const startBotChat = async (botId: string) => {
-    if (!client) {
+  // The agents the host can start a side chat on, read as + opens; only the bot's own until then.
+  const [agentChoices, setAgentChoices] = useState<readonly BotAgent[] | null>(null)
+  const routeBotId = routeBot?.bot.id
+  useEffect(() => {
+    if (!showCreateTabDrawer || !client || !routeBotId) {
       return
     }
+    let live = true
+    void readBotAgentChoices(client).then((agents) => {
+      if (live) {
+        setAgentChoices(agents)
+      }
+    })
+    return () => {
+      live = false
+    }
+  }, [showCreateTabDrawer, client, routeBotId])
+  const [confirmingHomeChat, setConfirmingHomeChat] = useState(false)
+
+  // Opens the chat the host made, armed before asking so a tab picked meanwhile wins over it.
+  const openBotChat = async (ask: () => Promise<string>) => {
     const lock = `bot-chat:${Date.now().toString(36)}`
-    // Arm before asking so a tab picked meanwhile wins over the new chat.
     pendingSelectionRef.current = launchedSelection(lock, {}, null)
     try {
-      const { sessionId } = botSessionStart.interpret(
-        await botSessionStart.request(client, { botId })
-      )
+      const sessionId = await ask()
       pendingSelectionRef.current = withLaunchReply(pendingSelectionRef.current, lock, {
         sessionId
       })
       void fetchSessionTabs()
-    } catch (error) {
+    } catch {
       pendingSelectionRef.current = withoutUnansweredLaunch(pendingSelectionRef.current, lock)
       triggerError()
-      showToast(
-        error instanceof Error
-          ? error.message
-          : t('bots.chatStartFailed', 'Couldn’t start the chat'),
-        1800
+      // The host's refusals are codes, not sentences for the owner.
+      showToast(t('bots.chatStartFailed', 'Couldn’t start the chat'), 1800)
+    }
+  }
+
+  const startSideChat = (botId: string, agent: BotAgent | undefined) => {
+    if (client) {
+      void openBotChat(
+        async () =>
+          botSessionStart.interpret(
+            await botSessionStart.request(client, { botId, ...(agent ? { agent } : {}) })
+          ).sessionId
       )
     }
   }
 
-  const botNewTabActions: ActionSheetAction[] = routeBot
-    ? [
-        {
-          label: t('bots.newChatWith', 'New chat with {{name}}', { name: routeBot.bot.name }),
-          hint: botAgentLabel(routeBot.bot.agent),
+  const startNewHomeChat = (botId: string) => {
+    setConfirmingHomeChat(false)
+    if (client) {
+      void openBotChat(async () => {
+        const { sessionId } = botHomeChatReset.interpret(
+          await botHomeChatReset.request(client, { botId })
+        )
+        // The bot's Home Chat is now this one.
+        routeBot?.refresh()
+        return sessionId
+      })
+    }
+  }
+
+  const botNewTabActions: MobileNewTabBotActions | null = routeBot
+    ? {
+        homeChat: {
+          label: t('bots.newHomeChat.action', 'New Home Chat'),
+          status: t('bots.newHomeChat.hint', 'starts fresh'),
           renderIcon: () => <MobileBotAvatar avatar={routeBot.avatar} size={16} />,
-          onPress: () => {
-            setShowCreateTabDrawer(false)
-            void startBotChat(routeBot.bot.id)
-          }
-        }
-      ]
-    : []
+          onPress: () => setConfirmingHomeChat(true)
+        },
+        sideChatsTitle: t('bots.sideChatsWith', 'Side chats with {{name}}', {
+          name: routeBot.bot.name
+        }),
+        // The bot's own agent is the host's default, even one this build can't name.
+        sideChats: [
+          { agent: routeBot.bot.agent, pick: undefined },
+          ...(agentChoices ?? [])
+            .filter((agent) => agent !== routeBot.bot.agent)
+            .map((agent) => ({ agent, pick: agent }))
+        ].map(({ agent, pick }) => ({
+          id: agent,
+          label: t('bots.newAgentChat', 'New {{agent}} Chat', { agent: botAgentLabel(agent) }),
+          renderIcon: () => <MobileAgentIcon agentId={agent} size={16} />,
+          onPress: () => startSideChat(routeBot.bot.id, pick)
+        }))
+      }
+    : null
 
   const botMoreActions: ActionSheetAction[] =
     routeBot && !itemsOnPhone
@@ -156,7 +217,9 @@ export function useMobileSessionBot(scope: MobileSessionPanelRouteActionsModel) 
     setBotPanel,
     openBotPanel,
     botMoreActions,
-    // "New chat with" the bot leads the + menu's agents.
-    createTabLeadingAgentActions: botNewTabActions
+    botNewTabActions,
+    confirmingHomeChat,
+    setConfirmingHomeChat,
+    startNewHomeChat
   }
 }

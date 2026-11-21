@@ -23,7 +23,8 @@ import { BotAvatar } from '../BotAvatar'
 import { closeBotShareLink, type BotShareReceiveRequest } from './bot-share-receive-open'
 import { reviewBotShare } from './bot-share-rpc'
 import { BotShareReviewDialog } from './BotShareReviewDialog'
-import { NewBotFromShareDialog } from './NewBotFromShareDialog'
+import { NewBotDialog } from '../NewBotDialog'
+import type { NewBotShareSource } from './new-bot-from-share'
 
 type Step =
   | { kind: 'paste' }
@@ -152,6 +153,13 @@ function Stopped(): React.JSX.Element {
   )
 }
 
+/** The regular New bot dialog, made from the review. */
+function NewBotFromShare(source: NewBotShareSource): React.JSX.Element {
+  return (
+    <NewBotDialog open onOpenChange={(open) => !open && closeBotShareLink()} fromShare={source} />
+  )
+}
+
 export function BotShareReceiveFlow({
   request
 }: {
@@ -219,10 +227,9 @@ export function BotShareReceiveFlow({
       )
     case 'create':
       return (
-        <NewBotFromShareDialog
+        <NewBotFromShare
           review={step.review}
           toolIds={toolIds}
-          onToolIdsChange={setToolIds}
           onBack={() => setStep({ kind: 'review', review: step.review, updated: false })}
           onMoved={(why) =>
             setStep(
@@ -230,11 +237,14 @@ export function BotShareReceiveFlow({
                 ? { kind: 'stopped' }
                 : why === 'expired'
                   ? // Main no longer holds what was shown: show the link again, as it is now.
-                    { kind: 'loading', shareId: step.review.shareId, again: true }
+                    {
+                      kind: 'loading',
+                      shareId: step.review.shareId,
+                      again: true
+                    }
                   : { kind: 'review', review: step.review, updated: true }
             )
           }
-          onClose={closeBotShareLink}
         />
       )
   }

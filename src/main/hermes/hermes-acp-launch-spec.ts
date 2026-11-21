@@ -74,6 +74,7 @@ export const HERMES_LAUNCH_SPEC: AcpLaunchSpec = {
     reason: 'Hermes lists its models only inside a session it cannot delete'
   },
   instructions: deliverHermesInstructions,
+  instructionsInWorkspace: true,
   compaction: true,
   compactionInstructions: true,
   transcriptImport: HERMES_TRANSCRIPT_IMPORT,

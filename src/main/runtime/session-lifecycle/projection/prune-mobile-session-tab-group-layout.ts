@@ -13,7 +13,8 @@ import type {
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { mergeMobileSessionTabGroups } from './mobile-session-tab-merge'
 import { buildHeadlessMobileSessionTabGroups } from '../../terminal/surface/mobile-session-layout-projection'
-import { projectRuntimeMobileSessionTabs } from './runtime-mobile-session-projection'
+import { projectTabsWithBotHomePins } from './bot-home-pinned-projection'
+import { inlineRuntimeBrowserTabFavicons } from './browser-tab-favicon-data-urls'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import type { RuntimeAgentRowSnapshot } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
@@ -31,8 +32,7 @@ import {
   retitleStructuredConversationTabs,
   titleStructuredConversationTabs
 } from '../../session-tabs/chat/structured-conversation-tab-title'
-import { structuredChatDisplayName } from '../../../../shared/agent-session/view/structured-chat-row-name'
-import { agentSessionRecordShownName } from '../../agent-session/records/agent-session-record-shown-name'
+import { structuredConversationTabNamer } from '../../session-tabs/chat/structured-conversation-tab-namer'
 import { hostMobileTerminalTheme } from './host-mobile-terminal-theme'
 
 export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntimeWithSavedConversationTitlePublication {
@@ -88,11 +88,11 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsResult {
     snapshot = titleStructuredConversationTabs(
-      snapshot,
-      (sessionId) => this.structuredConversationTabName(snapshot.worktree, sessionId),
+      inlineRuntimeBrowserTabFavicons(this, snapshot),
+      structuredConversationTabNamer(snapshot.worktree, this.savedWorkspaceTabs(snapshot.worktree)),
       structuredConversationForked
     )
-    return projectRuntimeMobileSessionTabs(snapshot, this.getMobileSessionProjectionHost())
+    return projectTabsWithBotHomePins(this.store, snapshot, this.getMobileSessionProjectionHost())
   }
 
   refreshStructuredConversationTabTitle(workspaceId: string, sessionId: string): void {
@@ -102,13 +102,17 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     }
     // An older fork's shown name reads its source's, so the source's open forks retitle with it.
     const store = getStructuredAgentSessionHost()?.deps?.store
-    const names = new Map([[sessionId, this.structuredConversationTabName(workspaceId, sessionId)]])
+    const nameFor = structuredConversationTabNamer(
+      workspaceId,
+      this.savedWorkspaceTabs(workspaceId)
+    )
+    const names = new Map([[sessionId, nameFor(sessionId)]])
     for (const tab of snapshot.tabs) {
       if (
         tab.type === 'agent-session' &&
         store?.getConversation(tab.sessionId)?.forkedFrom?.sessionId === sessionId
       ) {
-        names.set(tab.sessionId, this.structuredConversationTabName(workspaceId, tab.sessionId))
+        names.set(tab.sessionId, nameFor(tab.sessionId))
       }
     }
     const next = retitleStructuredConversationTabs(snapshot, names, structuredConversationForked)
@@ -117,18 +121,8 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     }
   }
 
-  /** The desktop tab's rename, else the chat's saved name; null leaves the agent's default label. */
-  private structuredConversationTabName(workspaceId: string, sessionId: string): string | null {
-    const record = getStructuredAgentSessionHost()?.deps?.store?.getConversation(sessionId)
-    const customLabel = this.getWorkspaceSessionForWorktree(workspaceId)?.unifiedTabs?.[
-      workspaceId
-    ]?.find((tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId)?.customLabel
-    const store = getStructuredAgentSessionHost()?.deps?.store
-    const conversationName =
-      store && record?.location.workspaceId === workspaceId
-        ? agentSessionRecordShownName(store, record)
-        : null
-    return structuredChatDisplayName(customLabel, conversationName, '') || null
+  private savedWorkspaceTabs(workspaceId: string) {
+    return () => this.getWorkspaceSessionForWorktree(workspaceId)?.unifiedTabs?.[workspaceId]
   }
 
   protected getMobileSessionProjectionHost(): RuntimeMobileSessionProjectionHost {

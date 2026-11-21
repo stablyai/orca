@@ -64,33 +64,6 @@ describe('bulk admission and sink settlement', () => {
     }
   })
 
-  it('ignores a captured capacity retry after its frame is admitted', async () => {
-    const harness = createBulkWriteHarness()
-    try {
-      harness.fillProducerQueue()
-      const completion = harness.dispatcher.notifyBulk('git.responseChunk', {
-        streamId: 1,
-        seq: 0,
-        data: 'g'.repeat(40 * 1024)
-      })
-      await nextBulkWriteTurn()
-      const retry = harness.dispatcher.lastCapacityRetry
-      if (!retry) {
-        throw new Error('Expected a capacity-blocked retry')
-      }
-      await harness.reachBulk('git.responseChunk')
-      expect(harness.dispatcher.capacityRetryCount).toBe(0)
-      retry()
-      await harness.drain()
-      await completion
-      expect(harness.frames.filter((frame) => frame.method === 'git.responseChunk')).toEqual([
-        { method: 'git.responseChunk', seq: 0 }
-      ])
-    } finally {
-      harness.dispose()
-    }
-  })
-
   it('sends a capacity-blocked frame once and advances the client chain after its callback', async () => {
     const harness = createBulkWriteHarness()
     try {
@@ -107,7 +80,13 @@ describe('bulk admission and sink settlement', () => {
         data: 'following'
       })
       await nextBulkWriteTurn()
+      const retry = harness.dispatcher.lastCapacityRetry
+      if (!retry) {
+        throw new Error('Expected a capacity-blocked retry')
+      }
       await harness.reachBulk('git.responseChunk')
+      expect(harness.dispatcher.capacityRetryCount).toBe(0)
+      retry()
       expect(firstSettled).toBe(false)
       expect(harness.frames.some((frame) => frame.seq === 1)).toBe(false)
       await harness.releaseOne()

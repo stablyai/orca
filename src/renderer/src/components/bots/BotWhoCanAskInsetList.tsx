@@ -18,6 +18,7 @@ import { BotWhoCanAskPicker } from './BotWhoCanAskPicker'
 import { OrcaCloudSignInLine } from './orca-cloud-sign-in'
 import { refreshAccessRequests } from '@/lib/bot-access-requests'
 import { SettingsInsetGroup } from './settings-view/BotSettingsRows'
+import { useBotConnectorPaged } from './bot-connector-page'
 
 const ROW = 'flex min-h-11 w-full min-w-0 items-center gap-2.5 py-2 pr-2.5 pl-3 text-[13px]'
 
@@ -34,8 +35,10 @@ export function BotWhoCanAskInsetList({
   const list = useBotWhoCanAsk(bot, service)
   const { listed, requests, saving, save, capped, cap } = list
   const addDisabled = service.outsiders === null || capped || saving
+  // On the connector's own page the list is one of its cards.
+  const paged = useBotConnectorPaged()
   return (
-    <>
+    <div className={paged ? 'mt-3.5' : undefined}>
       <BotConnectorCaption title={t('bots.whoCanAsk.caption', 'Who can ask')} />
       {list.requestsWaitOnSignIn ? (
         <OrcaCloudSignInLine
@@ -44,7 +47,7 @@ export function BotWhoCanAskInsetList({
           onSignedIn={refreshAccessRequests}
         />
       ) : null}
-      <SettingsInsetGroup>
+      <SettingsInsetGroup className={paged ? '*:border *:border-border *:bg-card' : undefined}>
         {requests.map((request) => {
           const { id, avatarUrl } = request.requester
           const person = accessRequestPerson(request)
@@ -155,6 +158,6 @@ export function BotWhoCanAskInsetList({
           </Button>
         </div>
       ) : null}
-    </>
+    </div>
   )
 }

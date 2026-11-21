@@ -19,9 +19,11 @@ import type { ManagedDataAccountsState } from '../../../shared/agent-accounts/ma
 import { restoreManagedDataAccountEnvironment } from '../../../shared/agent-launch/environment/managed-data-account-environment'
 import { openCodeAcpAccountBinding } from '../../opencode/accounts/opencode-structured-account-home'
 import { createAcpStructuredLaunchResolver } from '../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
+import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import { acpLaunchSpecFor } from './acp-launch-registry'
-import { deliverCopilotInstructions } from './acp-instructions'
+import { deliverCopilotInstructions, deliverOpenCodeInstructions } from './acp-instructions'
+import { acpReleaseWithChild } from './acp-structured-launch-preparation'
 
 const PREAMBLE = 'You are Zorblax, a bot that runs in Orca.'
 
@@ -42,7 +44,14 @@ const SPECS = {
   antigravity: acpLaunchSpecFor('antigravity')!,
   cursor: acpLaunchSpecFor('cursor')!,
   hermes: acpLaunchSpecFor('hermes')!,
-  copilot: acpLaunchSpecFor('copilot')!
+  copilot: acpLaunchSpecFor('copilot')!,
+  kimi: acpLaunchSpecFor('kimi')!,
+  kiro: acpLaunchSpecFor('kiro')!,
+  goose: acpLaunchSpecFor('goose')!,
+  kilo: acpLaunchSpecFor('kilo')!,
+  'mimo-code': acpLaunchSpecFor('mimo-code')!,
+  gemini: acpLaunchSpecFor('gemini')!,
+  'qwen-code': acpLaunchSpecFor('qwen-code')!
 }
 
 const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome']> = {
@@ -52,14 +61,28 @@ const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome'
   antigravity: { variable: 'GEMINI_HOME', path: '/home/user/orca-data/antigravity-chat' },
   cursor: { variable: 'CURSOR_CONFIG_DIR', path: '/home/user/.cursor' },
   hermes: { variable: 'HERMES_HOME', path: '/home/user/.hermes' },
-  copilot: { variable: 'COPILOT_HOME', path: '/home/user/.copilot' }
+  copilot: { variable: 'COPILOT_HOME', path: '/home/user/.copilot' },
+  kimi: { variable: 'KIMI_CODE_HOME', path: '/home/user/.kimi-code' },
+  kiro: { variable: 'KIRO_HOME', path: '/home/user/.kiro' },
+  goose: { variable: 'GOOSE_PATH_ROOT', path: '/home/user/.config/goose' },
+  kilo: { variable: 'XDG_DATA_HOME', path: '/home/user/.local/share' },
+  'mimo-code': { variable: 'XDG_DATA_HOME', path: '/home/user/.local/share' },
+  gemini: { variable: 'GEMINI_CLI_HOME', path: '/home/user' },
+  'qwen-code': { variable: 'QWEN_HOME', path: '/home/user/.qwen' }
 }
 
 const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
   omp: '17.2.9',
   cursor: '2026.11.19-f005e9d',
   hermes: '0.23.3',
-  copilot: '1.0.114'
+  copilot: '1.0.114',
+  kimi: '2.7.2',
+  kiro: '3.1.0',
+  goose: '1.60.2',
+  kilo: '7.8.32',
+  'mimo-code': '0.1.17',
+  gemini: '0.70.0',
+  'qwen-code': '0.28.0'
 }
 
 let dataDirectory = ''
@@ -124,6 +147,14 @@ describe('ACP launch: standing instructions', () => {
     })
   })
 
+  it('gives Kiro them as an always-included steering document on its new session', async () => {
+    const resolved = await launch('kiro', { instructions: PREAMBLE })
+    expect(resolved.sessionMeta).toEqual({
+      kiro: { steering: [{ name: 'orca', inclusion: 'always', content: PREAMBLE }] }
+    })
+    expect(resolved.sessionMetaOnReopen).toBeUndefined()
+  })
+
   it("adds them to OpenCode's inline instructions after the user's own, keeping their settings", async () => {
     const mine = JSON.stringify({ model: 'x/y', instructions: ['/home/user/mine.md'] })
     const resolved = await launch('opencode', {
@@ -136,6 +167,25 @@ describe('ACP launch: standing instructions', () => {
     expect(config.instructions[0]).toBe('/home/user/mine.md')
     await expectPrivateFile(config.instructions[1])
   })
+
+  it.each([
+    ['kilo', 'KILO_CONFIG_CONTENT'],
+    ['mimo-code', 'MIMOCODE_CONFIG_CONTENT']
+  ] as const)(
+    "adds them to the OpenCode fork %s's inline instructions after the user's own",
+    async (agent, variable) => {
+      const mine = JSON.stringify({ model: 'x/y', instructions: ['/home/user/mine.md'] })
+      const resolved = await launch(agent, {
+        instructions: PREAMBLE,
+        launchEnv: { [variable]: mine }
+      })
+      const config = JSON.parse(resolved.env[variable] ?? '')
+      expect(config).toMatchObject({ model: 'x/y' })
+      expect(config.instructions[0]).toBe('/home/user/mine.md')
+      await expectPrivateFile(config.instructions[1])
+      expect(resolved.env.OPENCODE_CONFIG_CONTENT).toBeUndefined()
+    }
+  )
 
   it("gives OpenCode 2.x them after the user's own global AGENTS.md, in a config folder linking the rest of theirs", async () => {
     const xdg = join(dataDirectory, 'opencode-xdg')
@@ -168,6 +218,30 @@ describe('ACP launch: standing instructions', () => {
     expect(resolved.env.OPENCODE_CONFIG_CONTENT).toBe(mine)
     // The user's own folder is left as it was.
     expect(await readFile(join(source, 'AGENTS.md'), 'utf8')).toBe('Mine.\n')
+  })
+
+  it("keeps a lowercase-named global agents.md of the user's out of the generated file's write path", async () => {
+    const source = join(dataDirectory, 'opencode-lowercase-agents')
+    await mkdir(source, { recursive: true })
+    await writeFile(join(source, 'agents.md'), 'Mine.\n')
+    const resolved = await launch('opencode', {
+      instructions: PREAMBLE,
+      version: '2.0.14',
+      launchEnv: { OPENCODE_CONFIG_DIR: source }
+    })
+    const configDir = resolved.env.OPENCODE_CONFIG_DIR ?? ''
+    expect(await readFile(join(source, 'agents.md'), 'utf8')).toBe('Mine.\n')
+    const foldsCase = await readFile(join(source, 'AGENTS.md'), 'utf8').then(
+      () => true,
+      () => false
+    )
+    expect(await readFile(join(configDir, 'AGENTS.md'), 'utf8')).toBe(
+      `${foldsCase ? 'Mine.\n\n' : ''}${PREAMBLE}\n`
+    )
+    expect((await lstat(join(configDir, 'AGENTS.md'))).isSymbolicLink()).toBe(false)
+    expect((await readdir(configDir)).sort()).toEqual(
+      foldsCase ? ['AGENTS.md'] : ['AGENTS.md', 'agents.md']
+    )
   })
 
   it('writes only the preamble when the explicitly configured OpenCode folder is missing', async () => {
@@ -209,7 +283,10 @@ describe('ACP launch: standing instructions', () => {
     expect(resolved.cwd).toBe(workspacePath)
     const undo = await resolved.aroundNewSession?.(resolved.cwd)
     try {
-      const path = join(workspacePath, '.cursor', 'rules', 'orca-standing-instructions.mdc')
+      const rules = join(workspacePath, '.cursor', 'rules')
+      const [name] = await readdir(rules)
+      expect(name).toMatch(/^orca-standing-instructions-.+\.mdc$/)
+      const path = join(rules, name)
       const lines = (await readFile(path, 'utf8')).split('\n')
       expect(lines[0]).toBe('---')
       expect(lines).toContain('alwaysApply: true')
@@ -223,30 +300,79 @@ describe('ACP launch: standing instructions', () => {
     expect(await readdir(workspacePath)).toEqual([])
   })
 
-  it("writes them to Hermes's .hermes.md in the folder it runs in, rewriting it at each launch", async () => {
-    const home = await mkdtemp(join(tmpdir(), 'acp-instructions-hermes-'))
+  it("writes them to Goose's .goosehints in the folder it runs in", async () => {
+    const home = await mkdtemp(join(tmpdir(), 'acp-instructions-goose-'))
     try {
-      const agentsPath = join(home, 'AGENTS.md')
-      const contextPath = join(home, '.hermes.md')
-      const instructions = `---\ntitle: bot\n---\n${PREAMBLE}`
-      const priorInstructions =
-        'The previous set of standing instructions is intentionally longer than the replacement.'
-      await writeFile(agentsPath, 'Workspace instructions')
-      const first = await launch('hermes', { instructions: priorInstructions, workspacePath: home })
-      expect(first.args).toEqual((await launch('hermes', { workspacePath: home })).args)
-      expect(first.sessionMeta).toBeUndefined()
-      expect(await readFile(contextPath, 'utf8')).toContain(priorInstructions)
+      const resolved = await launch('goose', { instructions: PREAMBLE, workspacePath: home })
+      expect(resolved.args).toEqual((await launch('goose', { workspacePath: home })).args)
+      const written = await readFile(join(home, '.goosehints'), 'utf8')
+      expect(written).toBe(
+        `<!-- Orca writes this file for Goose chats in this folder; edits are replaced. -->\n\n${PREAMBLE}\n`
+      )
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
+  })
 
-      await launch('hermes', { instructions, workspacePath: home })
+  it.each([
+    ['hermes', '.hermes.md'],
+    ['qwen-code', 'QWEN.md']
+  ] as const)(
+    "writes them to %s's %s in the folder it runs in, rewriting it at each launch",
+    async (agent, contextFile) => {
+      const home = await mkdtemp(join(tmpdir(), `acp-instructions-${agent}-`))
+      try {
+        const agentsPath = join(home, 'AGENTS.md')
+        const contextPath = join(home, contextFile)
+        const instructions = `---\ntitle: bot\n---\n${PREAMBLE}`
+        const priorInstructions =
+          'The previous set of standing instructions is intentionally longer than the replacement.'
+        await writeFile(agentsPath, 'Workspace instructions')
+        const first = await launch(agent, { instructions: priorInstructions, workspacePath: home })
+        expect(first.args).toEqual((await launch(agent, { workspacePath: home })).args)
+        expect(first.sessionMeta).toBeUndefined()
+        expect(await readFile(contextPath, 'utf8')).toContain(priorInstructions)
 
-      const written = await readFile(contextPath, 'utf8')
-      expect(written).toMatch(/^<!--[^\n]+-->\n\n/)
-      expect(written.slice(written.indexOf('\n\n') + 2)).toBe(`${instructions}\n`)
-      expect(await readFile(agentsPath, 'utf8')).toBe('Workspace instructions')
-      expect((await readdir(home)).sort()).toEqual(['.hermes.md', 'AGENTS.md'])
-      if (process.platform !== 'win32') {
-        expect((await stat(contextPath)).mode & 0o777).toBe(0o600)
+        await launch(agent, { instructions, workspacePath: home })
+
+        const written = await readFile(contextPath, 'utf8')
+        expect(written).toMatch(/^<!--[^\n]+-->\n\n/)
+        expect(written.slice(written.indexOf('\n\n') + 2)).toBe(`${instructions}\n`)
+        expect(await readFile(agentsPath, 'utf8')).toBe('Workspace instructions')
+        expect((await readdir(home)).sort()).toEqual([contextFile, 'AGENTS.md'].sort())
+        if (process.platform !== 'win32') {
+          expect((await stat(contextPath)).mode & 0o777).toBe(0o600)
+        }
+      } finally {
+        await rm(home, { recursive: true, force: true })
       }
+    }
+  )
+
+  it("writes them to Kimi's .kimi-code/AGENTS.md in the folder it runs in, beside the folder's own", async () => {
+    const home = await mkdtemp(join(tmpdir(), 'acp-instructions-kimi-'))
+    try {
+      await writeFile(join(home, 'AGENTS.md'), 'Workspace instructions')
+      await launch('kimi', { instructions: PREAMBLE, workspacePath: home })
+      const written = await readFile(join(home, '.kimi-code', 'AGENTS.md'), 'utf8')
+      expect(written.slice(written.indexOf('\n\n') + 2)).toBe(`${PREAMBLE}\n`)
+      expect(await readFile(join(home, 'AGENTS.md'), 'utf8')).toBe('Workspace instructions')
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
+  })
+
+  it("writes them to Gemini's GEMINI.md in the folder it runs in, trusting it only for a launch that has them", async () => {
+    const home = await mkdtemp(join(tmpdir(), 'acp-instructions-gemini-'))
+    try {
+      const plain = await launch('gemini', { workspacePath: home })
+      expect(plain.env.GEMINI_CLI_TRUST_WORKSPACE).toBeUndefined()
+      expect(await readdir(home)).toEqual([])
+
+      const resolved = await launch('gemini', { instructions: PREAMBLE, workspacePath: home })
+      expect(resolved.env.GEMINI_CLI_TRUST_WORKSPACE).toBe('true')
+      const written = await readFile(join(home, 'GEMINI.md'), 'utf8')
+      expect(written.slice(written.indexOf('\n\n') + 2)).toBe(`${PREAMBLE}\n`)
     } finally {
       await rm(home, { recursive: true, force: true })
     }
@@ -285,6 +411,52 @@ describe('ACP launch: standing instructions', () => {
       version: null
     })
     expect(delivered).toBeNull()
+  })
+
+  it("removes an OpenCode 2.x launch's config folder on release, leaving the user's files", async () => {
+    const source = join(dataDirectory, 'opencode-release-source')
+    const folder = join(dataDirectory, 'opencode-release-folder')
+    await mkdir(source, { recursive: true })
+    await mkdir(folder, { recursive: true })
+    await writeFile(join(source, 'opencode.json'), '{}')
+    await mkdir(join(source, 'agents'))
+    await writeFile(join(source, 'agents', 'reviewer.md'), 'Review.')
+    const delivered = await deliverOpenCodeInstructions({
+      text: PREAMBLE,
+      env: { OPENCODE_CONFIG_DIR: source },
+      cwd: '/unused',
+      file: async () => '/unused',
+      folder: async () => '/unused',
+      emptyFolder: async () => folder,
+      version: '2.0.14'
+    })
+    expect(await readdir(folder)).toContain('AGENTS.md')
+    await delivered?.release?.()
+    expect(await readdir(dataDirectory)).not.toContain('opencode-release-folder')
+    expect(await readFile(join(source, 'opencode.json'), 'utf8')).toBe('{}')
+    expect(await readFile(join(source, 'agents', 'reviewer.md'), 'utf8')).toBe('Review.')
+  })
+
+  it('releases a launch when its child exits, or at once when the connection throws', async () => {
+    let released = 0
+    const release = async () => {
+      released += 1
+    }
+    let exited: Parameters<AcpStructuredConnection['onExit']>[0] = () => {}
+    const connection = {
+      onExit: (callback: Parameters<AcpStructuredConnection['onExit']>[0]): void => {
+        exited = callback
+      }
+    }
+    acpReleaseWithChild(() => connection, release)()
+    expect(released).toBe(0)
+    exited({ code: 0, signal: null, processless: false })
+    expect(released).toBe(1)
+    const failing = acpReleaseWithChild(() => {
+      throw new Error('spawn failed')
+    }, release)
+    expect(failing).toThrow('spawn failed')
+    expect(released).toBe(2)
   })
 
   it('refuses to start an agent that has no way to take them', async () => {
