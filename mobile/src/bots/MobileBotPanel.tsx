@@ -2,7 +2,7 @@
 // Tabs Items · Chats · Files, Items first; the gear pushes the bot's settings and an item opens as a page
 // with its comment box docked. Its own toast sits over the sheet, just above the home indicator, or just
 // above the comment box on an item's page. (An older host keeps MobileBotSheet.)
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ScrollView, View } from 'react-native'
 import {
   BOT_ITEM_NO_FILTER,
@@ -37,7 +37,7 @@ import type { BotAccessRequests } from './use-bot-access-requests'
 import { useBotUpNext } from './use-bot-up-next'
 import type { RouteBot } from './use-route-bot'
 import { usePhoneBotChatTree } from './use-phone-bot-chat-tree'
-import { markBotItemsOpened } from './items/bot-item-operations'
+import { useBotItemsSeenAtOpen } from './items/use-bot-items-seen-at-open'
 import { MobileBotItemPage } from './items/MobileBotItemPage'
 import { MobileBotItemSheets, type BotItemSheet } from './items/MobileBotItemSheets'
 import { MobileBotItemSelectionBar } from './items/MobileBotItemRow'
@@ -51,6 +51,7 @@ import { useBotItemMoves } from './items/use-bot-item-moves'
 import { usePhoneBotItems } from './items/use-phone-bot-items'
 import { usePhoneBotItemWalk } from './items/use-phone-bot-item-walk'
 import { openBotItemWorker } from './items/bot-item-worker-open'
+import { useBotAccessDecisionSheet } from './MobileBotAccessDecision'
 
 type PanelPage = 'settings' | `item:${string}`
 
@@ -144,7 +145,10 @@ export function MobileBotPanel(props: {
     showing: visible,
     reads: props.routeBot.reads
   })
+  const { review, sheet: accessSheet } = useBotAccessDecisionSheet(props, bot)
   const { shown: asks, count: needsYou } = usePhoneNeedsYouAsks({
+    client: visible ? props.client : null,
+    access: props.accessRequests,
     chats: tree.kind === 'tree' ? tree.chats : null,
     workers: props.routeBot.activity?.workers,
     items: (filter.chatIds === null ? items.read : allItems.read)?.items,
@@ -158,26 +162,7 @@ export function MobileBotPanel(props: {
           : props.listNeedsYou
   })
 
-  // The seen mark as the panel opened: rows changed since keep their dot while it stays open; opening
-  // moves the bot's one mark (shared with the desktop) once the first read says where it was.
-  const [seenAtOpen, setSeenAtOpen] = useState<string | null>(null)
-  const marked = useRef(false)
-  if (!visible && seenAtOpen !== null) {
-    setSeenAtOpen(null)
-  }
-  if (visible && seenAtOpen === null && items.read) {
-    setSeenAtOpen(items.read.seenEventId)
-  }
-  useEffect(() => {
-    if (!visible) {
-      marked.current = false
-      return
-    }
-    if (seenAtOpen !== null && !marked.current && props.client) {
-      marked.current = true
-      markBotItemsOpened(props.client, bot.id)
-    }
-  }, [visible, seenAtOpen, props.client, bot.id])
+  const seenAtOpen = useBotItemsSeenAtOpen(visible, items.read, props.client, bot.id)
 
   const upNext = useBotUpNext({
     client: props.client,
@@ -274,7 +259,7 @@ export function MobileBotPanel(props: {
           setSheet={setSheet}
           after={after}
           asks={asks}
-          askOpeners={{ chat: props.treeActions.openChat, worker: openWorker }}
+          askOpeners={{ chat: props.treeActions.openChat, worker: openWorker, access: review }}
           client={props.client}
           showToast={showToast}
         />
@@ -411,6 +396,7 @@ export function MobileBotPanel(props: {
         move={async (moved, to, reason) => clearOnWrite(await moves.move(moved, to, reason))}
         snooze={async (snoozed, until) => clearOnWrite(await moves.snooze(snoozed, until))}
       />
+      {accessSheet}
       <MobileBotItemsFilterSheet
         visible={filtering}
         onClose={() => setFiltering(false)}

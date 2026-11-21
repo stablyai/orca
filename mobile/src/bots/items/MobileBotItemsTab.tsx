@@ -116,6 +116,7 @@ export function MobileBotItemsTab({
   ) : null
   const asksOnly = (
     <MobileBotNeedsYouGroup
+      botName={botName}
       asks={asks}
       items={[]}
       disabled={!online}
@@ -215,6 +216,7 @@ export function MobileBotItemsTab({
       id === 'needs_you' ? (
         <MobileBotNeedsYouGroup
           key={id}
+          botName={botName}
           asks={asks}
           items={groups.needs_you}
           disabled={disabled}

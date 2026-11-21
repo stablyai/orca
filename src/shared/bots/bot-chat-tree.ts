@@ -34,6 +34,9 @@ export type BotChatTreeChat = {
   /** The thread's place or the automation's name, e.g. '#orca'. */
   originLabel?: string
   live: 'replying' | 'needs-you' | 'idle'
+  /** The session running the chat now, when a /clear moved it past `chatId`: its status is keyed
+   *  by this id. Absent from older hosts. */
+  liveSessionId?: string
   lastActiveAt: number
   /** Filled by each client from its own acks against `turnDone`; the host can't know them. */
   unread: boolean
