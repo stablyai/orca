@@ -29,7 +29,7 @@ function memoryFor(caller: RpcContext['caller']): unknown {
     runtime: { getMemorySnapshot: async () => snapshot },
     caller
   } as unknown as RpcContext
-  return DIAGNOSTICS_METHODS[0].handler(null, ctx)
+  return DIAGNOSTICS_METHODS[0].handler(undefined, ctx)
 }
 
 describe('diagnostics.memory', () => {

@@ -49,8 +49,7 @@ function jsonBytes(value: unknown, limit: number): number {
     } else if (node !== null && typeof node === 'object') {
       let fields = 0
       bytes += 2
-      for (const key in node) {
-        const item: unknown = Object.hasOwn(node, key) ? Reflect.get(node, key) : undefined
+      for (const [key, item] of Object.entries(node)) {
         if (item === undefined || typeof item === 'function' || typeof item === 'symbol') {
           continue
         }
