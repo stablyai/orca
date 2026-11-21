@@ -17,8 +17,9 @@ const SESSION_OVERHEAD_BYTES = 160
 const CHAT_OVERHEAD_BYTES = 160
 const NUMBER_BYTES = 24
 
+// Measured as serialized, so escaped quotes and control characters count.
 function textBytes(value: string | null | undefined): number {
-  return value ? Buffer.byteLength(value, 'utf8') : 0
+  return value ? Buffer.byteLength(JSON.stringify(value), 'utf8') : 0
 }
 
 function sessionBytes(session: SessionMemory): number {
@@ -44,30 +45,47 @@ function rowBytes(worktree: WorktreeMemory): number {
   )
 }
 
+/** A workspace sampled only for its chats; main's terminal-only reply never had these rows. */
+function isChatOnly(worktree: WorktreeMemory): boolean {
+  return worktree.sessions.length === 0 && (worktree.chats?.length ?? 0) > 0
+}
+
 /**
  * The snapshot as sent over RPC: every row with its totals, and at most 20 history points each.
- * Near the size limit, history and then chat detail are left out, so they never make the host unreachable.
+ * Near the size limit, history, then chat lists, then chat-only rows are left out, so what chats
+ * add never makes a host unreachable; terminal rows, sessions and totals always stay.
  */
 export function toMemorySnapshotReply(snapshot: MemorySnapshot): MemorySnapshot {
-  let rows = 0
+  let terminalRows = 0
+  let chatOnlyRows = 0
   let histories = 0
   let chats = 0
   for (const worktree of snapshot.worktrees) {
-    rows += rowBytes(worktree)
+    let bytes = rowBytes(worktree)
     for (const session of worktree.sessions) {
-      rows += sessionBytes(session)
+      bytes += sessionBytes(session)
+    }
+    if (isChatOnly(worktree)) {
+      chatOnlyRows += bytes
+    } else {
+      terminalRows += bytes
     }
     histories += Math.min(worktree.history.length, MEMORY_REPLY_HISTORY_POINTS) * NUMBER_BYTES
     for (const chat of worktree.chats ?? []) {
       chats += chatBytes(chat)
     }
   }
-  const keepHistory = rows + chats + histories <= MEMORY_REPLY_BUDGET_BYTES
-  const keepChats = rows + chats <= MEMORY_REPLY_BUDGET_BYTES
+  const budget = MEMORY_REPLY_BUDGET_BYTES
+  const keepChatOnlyRows = terminalRows + chatOnlyRows <= budget
+  const keepChats = keepChatOnlyRows && terminalRows + chatOnlyRows + chats <= budget
+  const keepHistory = keepChats && terminalRows + chatOnlyRows + chats + histories <= budget
+  const worktrees = keepChatOnlyRows
+    ? snapshot.worktrees
+    : snapshot.worktrees.filter((worktree) => !isChatOnly(worktree))
   return {
     ...snapshot,
     app: { ...snapshot.app, history: snapshot.app.history.slice(-MEMORY_REPLY_HISTORY_POINTS) },
-    worktrees: snapshot.worktrees.map(({ chats: rowChats, history, ...worktree }) => ({
+    worktrees: worktrees.map(({ chats: rowChats, history, ...worktree }) => ({
       ...worktree,
       history: keepHistory ? history.slice(-MEMORY_REPLY_HISTORY_POINTS) : [],
       ...(keepChats && rowChats ? { chats: rowChats } : {})
