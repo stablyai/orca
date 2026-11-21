@@ -12,6 +12,9 @@ const gatedSessions = new Map<
   { session: Session; release: (() => void) | null; stop: () => void }
 >()
 
+// Tabs whose pending form POST needs each hop's real method (a 303 lands on a GET page).
+const methodWatchersBySession = new Map<Session, number>()
+
 onProxySessionReadinessChanged((proxySession) => {
   const gated = gatedSessions.get(proxySession)
   if (gated) {
@@ -23,7 +26,8 @@ onProxySessionReadinessChanged((proxySession) => {
  * Any session listener makes every page request wait on main (Electron's per-request loader
  * gate), so the gate listens only while it can change an outcome: until the session's newest
  * proxy policy applies (requests fail closed rather than leave unproxied, including after a
- * failed or retired policy), and while extensions need request decisions.
+ * failed or retired policy), while extensions need request decisions, and while a tab's form POST
+ * navigation needs its request methods.
  */
 function refresh(session: Session): void {
   const gated = gatedSessions.get(session)
@@ -31,6 +35,7 @@ function refresh(session: Session): void {
     return
   }
   const needed =
+    methodWatchersBySession.has(session) ||
     getProxySessionApplicationReadiness(session) !== true ||
     (session.extensions?.getAllExtensions().length ?? 0) > 0
   if (needed && !gated.release) {
@@ -85,4 +90,24 @@ export function removeBrowserSessionRequestGate(session: Session): void {
   gatedSessions.delete(session)
   gated.stop()
   gated.release?.()
+}
+
+/** Listens until released, so request observers see each main-frame hop's method. */
+export function watchBrowserSessionRequestMethods(session: Session): () => void {
+  methodWatchersBySession.set(session, (methodWatchersBySession.get(session) ?? 0) + 1)
+  refresh(session)
+  let released = false
+  return () => {
+    if (released) {
+      return
+    }
+    released = true
+    const remaining = (methodWatchersBySession.get(session) ?? 1) - 1
+    if (remaining > 0) {
+      methodWatchersBySession.set(session, remaining)
+    } else {
+      methodWatchersBySession.delete(session)
+    }
+    refresh(session)
+  }
 }

@@ -9,6 +9,7 @@ export {
 } from './browser-guest-idle-protection'
 import { randomUUID } from 'node:crypto'
 import { observeBrowserGuestRequests } from '../../../sessions/requests/browser-session-web-request-observer'
+import { watchBrowserSessionRequestMethods } from '../../../sessions/requests/browser-session-request-gate'
 import { createFormPostNavigationTracker } from './browser-guest-form-post-navigation'
 import {
   BROWSER_GUEST_PROTECTION_CHALLENGE,
@@ -216,8 +217,14 @@ export function installBrowserGuestDiscardProtection(
   }
   // Only the current document protects; restored back/forward entries reload on demand.
   // The method comes from request observers when a session listens, else from the form the
-  // preload saw submitted for this exact navigation.
+  // preload saw submitted for this exact navigation. A navigation expected to POST keeps the
+  // session listening until a hop proves GET or it commits; an unseen method stays protected.
   let pendingMethod: string | null = null
+  let releaseMethods: (() => void) | null = null
+  const stopWatchingMethods = (): void => {
+    releaseMethods?.()
+    releaseMethods = null
+  }
   const formPost = createFormPostNavigationTracker()
   const stopRequests = observeBrowserGuestRequests(guest.id, (session, event, details) => {
     if (
@@ -226,6 +233,10 @@ export function installBrowserGuestDiscardProtection(
       session === guest.session
     ) {
       pendingMethod = details.method
+      // A redirect can't turn a GET back into a POST.
+      if (details.method === 'GET') {
+        stopWatchingMethods()
+      }
     }
   })
   const navigation = (
@@ -233,7 +244,10 @@ export function installBrowserGuestDiscardProtection(
   ): void => {
     if (details.isMainFrame && !details.isSameDocument) {
       pendingMethod = null
-      formPost.started(details.url)
+      stopWatchingMethods()
+      if (formPost.started(details.url)) {
+        releaseMethods = watchBrowserSessionRequestMethods(guest.session)
+      }
       owner.navigating = true
       invalidate()
     } else if (!details.isMainFrame) {
@@ -242,6 +256,7 @@ export function installBrowserGuestDiscardProtection(
   }
   const committed = (): void => {
     owner.currentEdited = false
+    stopWatchingMethods()
     owner.currentPost = formPost.committed(guest.getURL(), pendingMethod)
     owner.mediaGranted = false
     publish()
@@ -252,6 +267,8 @@ export function installBrowserGuestDiscardProtection(
     snapshot()
   }
   const loadStopped = (): void => {
+    // A failed, stopped or replaced navigation commits nothing.
+    stopWatchingMethods()
     const needsSnapshot = owner.navigating || owner.generation === null
     owner.navigating = false
     if (needsSnapshot) {
@@ -287,6 +304,7 @@ export function installBrowserGuestDiscardProtection(
   guest.on('did-navigate-in-page', inPageNavigation)
   return () => {
     stopRequests()
+    stopWatchingMethods()
     stopIdleProtection()
     if (owners.get(guest) === owner) {
       owners.delete(guest)

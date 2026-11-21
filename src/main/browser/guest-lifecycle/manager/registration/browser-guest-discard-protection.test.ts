@@ -8,6 +8,10 @@ import {
   setBrowserGuestSemanticVisibility
 } from './browser-guest-discard-protection'
 import { reportBrowserSessionWebRequest } from '../../../sessions/requests/browser-session-web-request-observer'
+import {
+  installBrowserSessionRequestGate,
+  removeBrowserSessionRequestGate
+} from '../../../sessions/requests/browser-session-request-gate'
 import { BROWSER_GUEST_PROTECTION_REPORT } from '../../../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
 
 it('protects only the current document, never earlier history', () => {
@@ -308,7 +312,7 @@ it('keeps a page an embedded form POSTed to the top from being discarded', () =>
   }
 })
 
-it('keeps protecting the page a form POST redirects to', () => {
+it("keeps protecting the page a form POST redirects to when the redirect's method isn't seen", () => {
   let url = 'https://example.test/login'
   const mainFrame = { frames: [], send: vi.fn<(channel: string, generation: string) => void>() }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: event fixture implements this policy's native surface.
@@ -358,6 +362,73 @@ it('keeps protecting the page a form POST redirects to', () => {
     expect(readBrowserGuestDiscardProtection(guest).reason).toBe('post')
   } finally {
     stop()
+  }
+})
+
+it('lets a form POST that redirects to a GET page be discarded, listening only until it commits', () => {
+  let url = 'https://example.test/login'
+  let listener: ((details: object, callback: (response: object) => void) => void) | null = null
+  const session = {
+    webRequest: {
+      onBeforeRequest: (next: typeof listener) => {
+        listener = next
+      }
+    }
+  } as unknown as Electron.Session
+  const mainFrame = { frames: [], send: vi.fn<(channel: string, generation: string) => void>() }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: event fixture implements this policy's native surface.
+  const guest = Object.assign(new EventEmitter(), {
+    id: 12,
+    mainFrame,
+    session,
+    getURL: () => url,
+    isDestroyed: () => false,
+    isCrashed: () => false,
+    isCurrentlyAudible: () => false
+  }) as unknown as Electron.WebContents
+  installBrowserSessionRequestGate(session)
+  const stop = installBrowserGuestDiscardProtection(guest, vi.fn())
+  const hop = (method: string): void => {
+    listener?.({ method, resourceType: 'mainFrame', webContentsId: 12, url }, () => {})
+  }
+  const settle = (): void => {
+    guest.emit('dom-ready')
+    guest.emit(
+      'ipc-message',
+      { sender: guest, senderFrame: mainFrame },
+      BROWSER_GUEST_PROTECTION_REPORT,
+      {
+        generation: mainFrame.send.mock.lastCall?.[1],
+        dirty: false,
+        pictureInPicture: false,
+        contentType: 'text/html'
+      }
+    )
+  }
+  try {
+    guest.emit('did-navigate', {}, url, 200, 'OK')
+    settle()
+    expect(listener).toBeNull()
+    guest.emit('ipc-message', { sender: guest, senderFrame: mainFrame }, BROWSER_GUEST_PROTECTION_REPORT, {
+      formPost: 'https://example.test/session'
+    })
+    guest.emit('did-start-navigation', {
+      url: 'https://example.test/session',
+      isMainFrame: true,
+      isSameDocument: false
+    })
+    expect(listener).not.toBeNull()
+    hop('POST')
+    // The 303's GET proves the landing page safe; the session stops listening right away.
+    hop('GET')
+    expect(listener).toBeNull()
+    url = 'https://example.test/dashboard'
+    guest.emit('did-navigate', {}, url, 200, 'OK')
+    settle()
+    expect(readBrowserGuestDiscardProtection(guest).protection).toBe('discardable')
+  } finally {
+    stop()
+    removeBrowserSessionRequestGate(session)
   }
 })
 

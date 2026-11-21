@@ -22,7 +22,8 @@ export function createFormPostNavigationTracker(): {
   submitted: (actionUrl: string) => void
   /** The page cancelled, intercepted or aborted the navigation of the submission to this URL. */
   cancelled: (actionUrl: string) => void
-  started: (url: string) => void
+  /** True when the navigation is expected to POST (a submission or a remembered POST result). */
+  started: (url: string) => boolean
   /** `method` is the request's own method when a request listener saw it. */
   committed: (url: string, method: string | null) => boolean
   /** The committed document was a fresh navigation; true if that drops a remembered POST mark. */
@@ -64,6 +65,7 @@ export function createFormPostNavigationTracker(): {
       fromMemory = !submission && postResultUrls.has(target)
       post = submission || fromMemory
       submitted = null
+      return post
     },
     committed: (url, method) => {
       const isPost = method !== null ? method !== 'GET' : post
