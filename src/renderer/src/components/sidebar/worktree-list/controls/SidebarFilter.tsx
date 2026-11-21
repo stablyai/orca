@@ -28,9 +28,18 @@ import {
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { FilterToggleRow } from './FilterToggleRow'
+import {
+  isProjectFilterEntrySelected,
+  withoutProjectFilterEntry,
+  withProjectFilterEntry
+} from '../../../../../../shared/sidebar-list/sections/project-filter-entries'
+import {
+  searchProjectFilterEntries,
+  useProjectFilterEntries,
+  type RepoProjectFilterEntry
+} from './use-project-filter-entries'
 import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { isUnassignedShortcutLabel } from '@/i18n/unassigned-label'
-import { searchRepos } from '@/lib/workspace/catalog/repo-search'
 import { clearSidebarFilters, selectSidebarFilterState } from './sidebar-filter-actions'
 import { useWorkspaceOptionsFilterBadge } from './workspace-options-menu-items'
 import { useTranslate } from '@/i18n/use-translate'
@@ -74,6 +83,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
   const allRepos = useAppStore((s) => s.repos)
   const repos = useMemo(() => withoutHiddenRepos(allRepos), [allRepos])
+  const entries = useProjectFilterEntries(repos)
   const addRepo = useAppStore((s) => s.addRepo)
 
   const [open, setOpen] = useState(false)
@@ -91,38 +101,43 @@ const SidebarFilter = React.memo(function SidebarFilter({
     [onMenuOpenChange]
   )
 
-  const handleToggleRepo = useCallback(
-    (repoId: string) => {
+  const handleToggleEntry = useCallback(
+    (entry: RepoProjectFilterEntry) => {
       setFilterRepoIds(
-        filterRepoIds.includes(repoId)
-          ? filterRepoIds.filter((id) => id !== repoId)
-          : [...filterRepoIds, repoId]
+        isProjectFilterEntrySelected(entry, filterRepoIds)
+          ? withoutProjectFilterEntry(filterRepoIds, entry, entries)
+          : withProjectFilterEntry(filterRepoIds, entry, entries)
       )
     },
-    [filterRepoIds, setFilterRepoIds]
+    [entries, filterRepoIds, setFilterRepoIds]
   )
 
-  const canFilterRepos = repos.length > 1
-  // Ignore removed repo IDs so they cannot inflate counts or imply an active filter.
-  const selectedRepoIdSet = useMemo(() => {
-    const set = new Set<string>()
-    for (const r of repos) {
-      if (filterRepoIds.includes(r.id)) {
-        set.add(r.id)
-      }
-    }
-    return set
-  }, [repos, filterRepoIds])
-  const selectedCount = selectedRepoIdSet.size
+  // Entries come from current repos, so removed repo IDs cannot inflate counts or imply a filter.
+  const selectedEntryKeySet = useMemo(
+    () =>
+      new Set(
+        entries
+          .filter((entry) => isProjectFilterEntrySelected(entry, filterRepoIds))
+          .map((entry) => entry.key)
+      ),
+    [entries, filterRepoIds]
+  )
+  const selectedCount = selectedEntryKeySet.size
+  // Keep the section while a filter is active, even when grouping leaves a single project.
+  const canFilterRepos = entries.length > 1 || selectedCount > 0
   const hasRepoFilter = selectedCount > 0
   const { hasAnyFilter, activeFilterCount } = useWorkspaceOptionsFilterBadge()
 
-  const filteredRepos = useMemo(() => searchRepos(repos, query), [repos, query])
+  const filteredEntries = useMemo(
+    () => searchProjectFilterEntries(entries, query),
+    [entries, query]
+  )
   const commandValue =
-    commandValueOverride && filteredRepos.some((repo) => repo.id === commandValueOverride)
+    commandValueOverride && filteredEntries.some((entry) => entry.key === commandValueOverride)
       ? commandValueOverride
-      : (filteredRepos[0]?.id ?? '')
-  const allSelected = canFilterRepos && selectedCount === repos.length
+      : (filteredEntries[0]?.key ?? '')
+  // Every checkout, not every project: a project saved for one host still hides the others.
+  const allSelected = canFilterRepos && repos.every((repo) => filterRepoIds.includes(repo.id))
 
   const clearAll = useCallback(() => {
     const store = useAppStore.getState()
@@ -294,22 +309,22 @@ const SidebarFilter = React.memo(function SidebarFilter({
                 <CommandEmpty className="py-4 text-[11px]">
                   {t('auto.components.sidebar.SidebarFilter.b9e8802e73', 'No projects match')}
                 </CommandEmpty>
-                {filteredRepos.map((r) => {
-                  const checked = selectedRepoIdSet.has(r.id)
+                {filteredEntries.map((entry) => {
+                  const checked = selectedEntryKeySet.has(entry.key)
                   return (
                     <CommandItem
-                      key={r.id}
-                      value={r.id}
-                      onSelect={() => handleToggleRepo(r.id)}
+                      key={entry.key}
+                      value={entry.key}
+                      onSelect={() => handleToggleEntry(entry)}
                       className="mx-1 my-0.5 items-center gap-2 rounded-[7px] px-2 py-1 text-[12px] leading-5 font-medium data-[selected=true]:bg-black/8 dark:data-[selected=true]:bg-white/14"
                     >
                       <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
                         <RepoBadgeLabel
-                          name={r.displayName}
-                          color={r.badgeColor}
+                          name={entry.label}
+                          color={entry.repo.badgeColor}
                           className="max-w-full"
                         />
-                        {r.connectionId && (
+                        {entry.repos.every((repo) => repo.connectionId) && (
                           <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
                             <Server className="size-2.5" />
                             {t('auto.components.sidebar.SidebarFilter.81ded53722', 'SSH')}
