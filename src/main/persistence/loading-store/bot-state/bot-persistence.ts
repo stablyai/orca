@@ -1,4 +1,9 @@
 import { splitBotsByOlderBuildSupport, type Bot } from '../../../../shared/bot-types'
+import {
+  isImmutableBotSnapshot,
+  markImmutableBotSnapshot,
+  orderBotsBySavedOrder
+} from '../../../../shared/bots/bot-lookup-index'
 import type { StoreRuntimeState } from '../store-runtime-state'
 import type { WriteSchedulingOperations } from '../profile-writing/write-scheduling'
 import { scheduleSave } from '../profile-writing/write-scheduling'
@@ -18,43 +23,28 @@ type CachedBots = {
   bots: readonly Bot[] | undefined
   botsNewerAgents: readonly Bot[] | undefined
   botOrder: readonly string[] | undefined
-  botsLength: number
-  newerLength: number
-  orderLength: number
+  botsSnapshot: readonly Bot[]
+  newerSnapshot: readonly Bot[]
+  orderSnapshot: readonly string[]
   ordered: Bot[]
 }
 
-function orderBots(all: Bot[], order: readonly string[]): Bot[] {
-  if (all.length <= 1 || order.length === 0) {
-    return all
+function snapshotOf<T>(items: readonly T[] | undefined): readonly T[] {
+  if (!items) {
+    return []
   }
-  const byId = new Map<string, Bot>()
-  for (const bot of all) {
-    byId.set(bot.id, bot)
+  return isImmutableBotSnapshot(items) ? items : [...items]
+}
+
+function sameSnapshot<T>(source: readonly T[] | undefined, snapshot: readonly T[]): boolean {
+  if (!source) {
+    return snapshot.length === 0
   }
-  if (byId.size === all.length) {
-    const ordered: Bot[] = []
-    for (const id of order) {
-      const bot = byId.get(id)
-      if (bot) {
-        ordered.push(bot)
-        byId.delete(id)
-      }
-    }
-    for (const bot of byId.values()) {
-      ordered.push(bot)
-    }
-    return ordered
+  if (isImmutableBotSnapshot(source)) {
+    return source.length === snapshot.length
   }
-  const rankById = new Map<string, number>()
-  for (let index = 0; index < order.length; index += 1) {
-    const id = order[index]
-    if (id !== undefined && !rankById.has(id)) {
-      rankById.set(id, index)
-    }
-  }
-  return all.sort(
-    (a, b) => (rankById.get(a.id) ?? order.length) - (rankById.get(b.id) ?? order.length)
+  return (
+    source.length === snapshot.length && source.every((entry, index) => entry === snapshot[index])
   )
 }
 
@@ -76,35 +66,34 @@ export class BotPersistence {
     const context = this[botPersistenceContext]
     const { state } = context.runtime
     const { bots, botsNewerAgents, botOrder } = state
-    const botsLength = bots?.length ?? 0
-    const newerLength = botsNewerAgents?.length ?? 0
-    const orderLength = botOrder?.length ?? 0
     const { cached } = context
     if (
       cached &&
       cached.bots === bots &&
       cached.botsNewerAgents === botsNewerAgents &&
       cached.botOrder === botOrder &&
-      cached.botsLength === botsLength &&
-      cached.newerLength === newerLength &&
-      cached.orderLength === orderLength
+      sameSnapshot(bots, cached.botsSnapshot) &&
+      sameSnapshot(botsNewerAgents, cached.newerSnapshot) &&
+      sameSnapshot(botOrder, cached.orderSnapshot)
     ) {
       return cached.ordered
     }
+    const newerLength = botsNewerAgents?.length ?? 0
     let ordered: Bot[]
     if (newerLength === 0 && !botOrder) {
-      ordered = bots ?? []
+      ordered = bots ? (isImmutableBotSnapshot(bots) ? bots : [...bots]) : []
     } else {
       const all = [...(bots ?? []), ...(botsNewerAgents ?? [])]
-      ordered = botOrder ? orderBots(all, botOrder) : all
+      ordered = botOrder ? orderBotsBySavedOrder(all, botOrder) : all
     }
+    markImmutableBotSnapshot(ordered)
     context.cached = {
       bots,
       botsNewerAgents,
       botOrder,
-      botsLength,
-      newerLength,
-      orderLength,
+      botsSnapshot: snapshotOf(bots),
+      newerSnapshot: snapshotOf(botsNewerAgents),
+      orderSnapshot: snapshotOf(botOrder),
       ordered
     }
     return ordered
@@ -114,19 +103,22 @@ export class BotPersistence {
     const context = this[botPersistenceContext]
     const { state } = context.runtime
     const { readable, newer } = splitBotsByOlderBuildSupport(bots)
+    markImmutableBotSnapshot(readable)
     state.bots = readable
     if (newer.length > 0) {
-      const botOrder = bots.map((bot) => bot.id)
+      const botOrder = markImmutableBotSnapshot(bots.map((bot) => bot.id))
+      const ordered = markImmutableBotSnapshot([...bots])
+      markImmutableBotSnapshot(newer)
       state.botsNewerAgents = newer
       state.botOrder = botOrder
       context.cached = {
         bots: readable,
         botsNewerAgents: newer,
         botOrder,
-        botsLength: readable.length,
-        newerLength: newer.length,
-        orderLength: botOrder.length,
-        ordered: bots
+        botsSnapshot: readable,
+        newerSnapshot: newer,
+        orderSnapshot: botOrder,
+        ordered
       }
     } else {
       delete state.botsNewerAgents
@@ -135,9 +127,9 @@ export class BotPersistence {
         bots: readable,
         botsNewerAgents: undefined,
         botOrder: undefined,
-        botsLength: readable.length,
-        newerLength: 0,
-        orderLength: 0,
+        botsSnapshot: readable,
+        newerSnapshot: [],
+        orderSnapshot: [],
         ordered: readable
       }
     }

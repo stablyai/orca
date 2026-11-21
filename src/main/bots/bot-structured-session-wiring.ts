@@ -3,25 +3,12 @@ import type { Bot } from '../../shared/bot-types'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { KnownPairedBotRoster } from './paired-bot-rosters'
 import type { StructuredAgentSessionRuntimeDeps } from '../runtime/agent-session/installation/structured-agent-session-runtime-contract'
-import { join } from 'node:path'
 import { botHomeFolder, localBotHomeFilesystem } from './bot-home'
-import { messageWords } from '../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
-import {
-  botMentionContext,
-  botMentionTokens,
-  mentionedBots,
-  mentionedServerBots,
-  type BotMentionChat
-} from '../../shared/bots/bot-mention-context'
 import type { BotChatRow } from '../../shared/bots/bot-chat-row'
-import { soulSpecialty } from '../../shared/bot-roster'
+import { createBotLookupIndex } from '../../shared/bots/bot-lookup-index'
 import type { BotLookAroundStore } from './bot-look-around-store'
 import { botSessionToolServers, currentBotToolsRevision } from './bot-tools-file'
 import { botToolsEpoch, type BotLaunchedTools } from './bot-tools-revision'
-import {
-  folderWorkspaceKey,
-  parseWorkspaceKey
-} from '../../shared/workspace/identity/workspace-scope'
 import { createBotTurnContext } from './bot-turn-context'
 import type { TurnEndedVerdict } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import type { BotChatJournal } from './bot-turn-rows'
@@ -29,6 +16,7 @@ import type { BotRecentChatsSection } from './bot-recent-chats'
 import { BOT_FIRST_RUN_RULES } from './bot-preamble'
 import { linkBotOwnSkills } from './bot-own-skills'
 import { botSessionInstructions } from './bot-session-instructions'
+import { createBotSessionMentions } from './bot-session-mentions'
 import type { BotController } from './bot-controller'
 import type { BotWorkRecord } from './bot-work-record'
 import {
@@ -41,11 +29,11 @@ import {
   NO_LINKED_SKILLS,
   type LinkedSkills
 } from '../native-chat/native-chat-skill-roots'
+import type { Repo } from '../../shared/repository/repo-types'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 
 /** The agents that reload a watched skills folder mid-chat (checked on Claude 2.1.319, Codex 0.163). */
 const LIVE_SKILLS_PROVIDERS = new Set(['claude', 'codex'])
-import type { Repo } from '../../shared/repository/repo-types'
-import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 
 /** A bot as the session host's wiring sees it. */
 export type WiredBot = Bot
@@ -94,67 +82,8 @@ export function botStructuredSessionWiring(deps: {
     | 'isBotHome'
   >
 > {
-  const bots = (): readonly Bot[] => deps.store().getBots?.() ?? []
-  let indexed: {
-    bots: readonly Bot[]
-    length: number
-    byId: ReadonlyMap<string, Bot>
-    byHome: ReadonlyMap<string, Bot>
-  } | null = null
-  const botIndex = () => {
-    const current = bots()
-    if (indexed?.bots !== current || indexed.length !== current.length) {
-      const byId = new Map<string, Bot>()
-      const byHome = new Map<string, Bot>()
-      for (const bot of current) {
-        if (!byId.has(bot.id)) {
-          byId.set(bot.id, bot)
-        }
-        const homeKey = folderWorkspaceKey(bot.folderWorkspaceId)
-        if (!byHome.has(homeKey)) {
-          byHome.set(homeKey, bot)
-        }
-      }
-      indexed = { bots: current, length: current.length, byId, byHome }
-    }
-    return indexed
-  }
-  const botOfHome = (workspaceId: string | null | undefined): Bot | null =>
-    workspaceId && parseWorkspaceKey(workspaceId)?.type === 'folder'
-      ? (botIndex().byHome.get(workspaceId) ?? null)
-      : null
-  /** The paired servers' bots a message names, as each server last listed them, so a send never
-   *  waits on another computer; one on a server this host isn't paired to, or one its server no longer
-   *  lists, adds nothing. */
-  const serverBotLines = async (words: string) => {
-    const picks = mentionedServerBots(words)
-    if (picks.length === 0 || !deps.pairedBotRosters) {
-      return []
-    }
-    const rosters = await deps
-      .pairedBotRosters(new Set(picks.map((pick) => pick.server)))
-      .catch(() => [])
-    return picks.flatMap((pick) => {
-      const roster = rosters.find((entry) => entry.environmentId === pick.server)
-      if (!roster) {
-        return []
-      }
-      // Not read yet: the pick names it as picked, and its send says if it can't go.
-      const listed = roster.bots?.find((bot) => bot.id === pick.id)
-      if (roster.bots && !listed) {
-        return []
-      }
-      return [
-        {
-          id: pick.id,
-          name: listed?.name ?? pick.name,
-          purpose: listed?.specialty ?? null,
-          server: roster.server
-        }
-      ]
-    })
-  }
-  const botById = (botId: string): Bot | undefined => botIndex().byId.get(botId)
+  const lookup = createBotLookupIndex(() => deps.store().getBots?.() ?? [])
+  const botById = (botId: string): Bot | undefined => lookup.byId(botId)
   /** Only a new bot's Chat runs first run; its automations and threads run in the same home without. */
   const inFirstRun = (botId: string, sessionId: string): boolean => {
     const bot = botById(botId)
@@ -215,10 +144,15 @@ export function botStructuredSessionWiring(deps: {
     })
   }
   const botOfRecord = (record: AgentSessionRecord): Bot | null =>
-    botOfHome(record.location.workspaceId)
+    lookup.byHome(record.location.workspaceId)
   /** The bot's linked-skills folder brought up to date; rejects when it can't be. */
   const syncLinkedSkills = (bot: Bot): Promise<LinkedSkills> =>
     linkedSkillProjects(bot, deps.store().getRepos(), botLinkedSkillsFolder(bot.id))
+  const mentions = createBotSessionMentions({
+    botById,
+    botChats: deps.botChats,
+    pairedBotRosters: deps.pairedBotRosters
+  })
   return {
     resolveSessionInstructions: (record, launchDirectory, linkedSkills) => {
       const bot = botOfRecord(record)
@@ -303,52 +237,7 @@ export function botStructuredSessionWiring(deps: {
     },
     turnContext: {
       ...turnContext,
-      // Any chat: a bot picked under `@` is named `[Bot: <name>](bot:<id>)`, one on a paired server
-      // `(bot:<id>@<server>)`, one of its chats `(bot-chat:<id>/<chat>)`; a bot's own chat may insert
-      // `@name`. Only this host's bots and its paired servers' resolve.
-      mentions: async (sessionId, message) => {
-        const words = messageWords(message)
-        const tokens = botMentionTokens(words)
-        const localBots = tokens.some((token) => !token.server)
-          ? tokens.flatMap((token) => {
-              if (token.server) {
-                return []
-              }
-              const bot = botIndex().byId.get(token.id)
-              return bot ? [bot] : []
-            })
-          : []
-        const named = localBots.length > 0 ? mentionedBots(words, localBots) : []
-        const remote = serverBotLines(words)
-        const chatsOf = new Map<string, Promise<readonly BotChatRow[] | null>>()
-        const readChats = (bot: Bot) => {
-          let read = chatsOf.get(bot.id)
-          if (!read) {
-            read = (deps.botChats?.(bot, sessionId) ?? Promise.resolve(null)).catch(() => null)
-            chatsOf.set(bot.id, read)
-          }
-          return read
-        }
-        return botMentionContext([
-          ...(await Promise.all(
-            named.map(async ({ bot, chatId }) => {
-              const [soul, chat] = await Promise.all([
-                localBotHomeFilesystem.readText(join(botHomeFolder(bot), 'SOUL.md')),
-                chatId === null
-                  ? undefined
-                  : readChats(bot).then((rows) => checkedChat(rows, chatId))
-              ])
-              return {
-                id: bot.id,
-                name: bot.name,
-                purpose: soulSpecialty(soul),
-                ...(chat ? { chat } : {})
-              }
-            })
-          )),
-          ...(await remote)
-        ])
-      },
+      mentions,
       handedOver: (sessionId, message) => {
         deps.work.handedOver(sessionId, message)
         turnContext.handedOver?.(sessionId, message)
@@ -368,22 +257,6 @@ export function botStructuredSessionWiring(deps: {
           : null,
     quietTurnEnd: (sessionId, outcome, usageLimited) =>
       deps.lookAround.lookTurnIsQuiet(sessionId, outcome, usageLimited === true),
-    isBotHome: (workspaceId) => botOfHome(workspaceId) !== null
+    isBotHome: (workspaceId) => lookup.byHome(workspaceId) !== null
   }
-}
-
-/** A picked chat as the host's own list has it: `--chat` only for one of the bot's chats that takes
- *  mail; any doubt (an unread list included) says it can't, and never falls back to the Home Chat. */
-function checkedChat(rows: readonly BotChatRow[] | null, chatId: string): BotMentionChat {
-  if (!rows) {
-    return { refused: 'unverifiable' }
-  }
-  const row = rows.find((entry) => entry.id === chatId)
-  if (!row) {
-    return { refused: 'not-its-chat' }
-  }
-  if (row.self) {
-    return { refused: 'self' }
-  }
-  return row.closed ? { refused: row.reason ?? 'unverifiable' } : { id: row.id, title: row.title }
 }

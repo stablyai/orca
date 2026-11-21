@@ -872,6 +872,16 @@ describe('BotController', () => {
         .getBots()
         .map((bot) => bot.id)
     ).toEqual([saved.id, 'last-bot'])
+    await closeTestStores()
+
+    // A saved botOrder whose newer-agent bots later become older-readable still applies before dropping.
+    writeDataFile({
+      ...cleaned,
+      botsNewerAgents: [],
+      botOrder: ['last-bot', saved.id]
+    })
+    store = createStore()
+    expect(store.getBots().map((bot) => bot.id)).toEqual(['last-bot', saved.id])
   })
 
   it('loads legacy bots with no Chat or Linear link', async () => {

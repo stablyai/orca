@@ -3,6 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getDefaultPersistedState } from '../../../../shared/orca-profiles/constants'
+import { splitBotsByOlderBuildSupport } from '../../../../shared/bot-types'
 import {
   folderWorkspaceKey,
   worktreeWorkspaceKey
@@ -12,7 +14,12 @@ import { createBotMemoryRecord } from '../../../bots/bot-memory-record'
 import { localBotHomeFilesystem } from '../../../bots/bot-home'
 import { botStructuredSessionWiring } from '../../../bots/bot-structured-session-wiring'
 import { NO_BOT_CHAT_JOURNAL } from '../../../bots/bot-turn-rows'
-import { closeTestStores, createStore, testState } from '../../persistence-test-harness'
+import {
+  closeTestStores,
+  createStore,
+  testState,
+  writeDataFile
+} from '../../persistence-test-harness'
 
 vi.mock('electron', () => ({ app: { getPath: () => testState.dir } }))
 vi.mock('../../../ssh/config/ssh-config-parser', () => ({
@@ -34,20 +41,23 @@ describe('BotPersistence and structured chat bot lookup contract (#45466)', () =
   it.each([100, 1000])(
     'skips bot-store reads for %i worktree chat reads and reuses one ordered bot list across bot homes',
     async (count) => {
-      const writer = createStore()
-      for (let index = 0; index < count; index += 1) {
-        writer.saveBot(
-          makeTestBot({
-            id: `bot-${index}`,
-            name: `Bot ${index}`,
-            folder: `bot-${index}`,
-            folderWorkspaceId: `home-${index}`,
-            agent: index % 2 === 0 ? 'claude' : 'cursor'
-          })
-        )
-      }
-      writer.flush()
-      await closeTestStores()
+      const seeded = Array.from({ length: count }, (_, index) =>
+        makeTestBot({
+          id: `bot-${index}`,
+          name: `Bot ${index}`,
+          folder: `bot-${index}`,
+          folderWorkspaceId: `home-${index}`,
+          agent: index % 2 === 0 ? 'claude' : 'cursor'
+        })
+      )
+      const { readable, newer } = splitBotsByOlderBuildSupport(seeded)
+      writeDataFile({
+        ...getDefaultPersistedState(testState.dir),
+        bots: readable,
+        botsNewerAgents: newer,
+        botOrder: seeded.map((bot) => bot.id),
+        botsPermissionDefaultMigrated: true
+      })
 
       const reloaded = createStore()
       const getBots = vi.fn(() => reloaded.getBots())
