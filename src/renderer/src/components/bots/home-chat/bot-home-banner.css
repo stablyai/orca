@@ -1,23 +1,22 @@
-/* Home's identity pill: avatar + name, always both. Header containers at most 260 CSS px wide hide it. */
+/* A bot chat’s identity pill: avatar + name, always both. Header containers at most 260 CSS px wide hide it. */
 [data-bot-home-banner] {
   position: absolute;
-  /* Center on the title bar's icon row, but never rise above the pane into the tab strip. */
-  top: max(0px, calc((var(--orca-pane-title-height) - 28px) / 2));
+  top: 8px;
   left: 50%;
   translate: -50% 0;
-  display: flex;
+  display: none;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   max-width: calc(100% - 10rem);
-  /* 1px border + 3px padding = 4px around the 20px avatar, 28px tall overall. */
-  padding: 3px 10px 3px 3px;
-  border: 1px solid var(--notice-border);
+  height: 32px;
+  padding: 0 12px 0 4px;
+  border: 0;
   border-radius: 9999px;
   background: var(--notice-surface);
   color: var(--popover-foreground);
-  box-shadow: var(--shadow-notice);
+  box-shadow: var(--bot-home-banner-shadow);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   line-height: 20px;
   cursor: pointer;
@@ -37,13 +36,32 @@
   text-overflow: ellipsis;
 }
 
-/* Hide the entire pill at a header container content width of 260 CSS px or less. */
-.pane-title-bar:has(> [data-bot-home-banner]) {
-  container-type: inline-size;
+.native-chat-appearance:has(> .pane-title-bar > [data-bot-home-banner]) {
+  container: bot-chat-pane / inline-size;
 }
 
-@container (max-width: 260px) {
+/* The title bar has 2px padding on either side of its 260px content cutoff. */
+@container bot-chat-pane (width > 264px) {
   [data-bot-home-banner] {
-    display: none;
+    display: flex;
+  }
+
+  .native-chat-transcript-inset {
+    padding-top: max(48px, calc(10 * var(--spacing)));
+  }
+
+  /* While older history can load, its row (10 spacing tall) gets its own band and sits centered
+     between the pill's bottom (40px) and the first message, touching neither. */
+  [data-native-chat-older-history] {
+    top: calc(20px + max(24px, calc(5 * var(--spacing))));
+  }
+
+  [data-native-chat-older-history] + .native-chat-transcript-inset {
+    padding-top: calc(max(48px, calc(10 * var(--spacing))) + 10 * var(--spacing));
+  }
+
+  /* Open Find below the pill (8px + 32px) instead of over its lower edge. */
+  [data-native-chat-find-bar] {
+    --native-chat-find-top-inset: 40px;
   }
 }
