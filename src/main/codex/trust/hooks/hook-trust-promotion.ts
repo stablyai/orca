@@ -30,7 +30,7 @@ import {
 import {
   CODEX_EVENT_NAME_BY_LABEL,
   createCodexHookTrustEntry,
-  getCodexUserHookMirrorSignature,
+  getCodexHookTrustSignature,
   getCodexManagedScriptFileName
 } from '../../hooks/definitions/codex-hook-identity'
 
@@ -234,7 +234,7 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath: string)
       systemHooksPath,
       systemConfig.hooks,
       eventName,
-      getCodexUserHookMirrorSignature(runtimeEntry),
+      getCodexHookTrustSignature(runtimeEntry),
       isManagedCommand,
       state.trustedHash,
       state.enabled ?? true
@@ -274,7 +274,7 @@ function collectSystemPromotionTargets(
         systemDefinition,
         systemHook
       )
-      if (!systemEntry || getCodexUserHookMirrorSignature(systemEntry) !== signature) {
+      if (!systemEntry || getCodexHookTrustSignature(systemEntry) !== signature) {
         return
       }
       promotions.push({ ...systemEntry, trustedHash, enabled })

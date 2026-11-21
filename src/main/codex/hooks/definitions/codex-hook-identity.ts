@@ -78,7 +78,7 @@ export function getCodexHookTrustSignature(entry: CodexTrustEntry): string {
   })
 }
 
-// Codex clamps some timeouts, so clamped-equal user hooks can carry different trust; keep them apart.
+// Mirroring only: the runtime copy keeps raw timeouts, and clamped-equal hooks can carry different trust.
 export function getCodexUserHookMirrorSignature(entry: CodexTrustEntry): string {
   return JSON.stringify([getCodexHookTrustSignature(entry), entry.timeoutSec ?? null])
 }
