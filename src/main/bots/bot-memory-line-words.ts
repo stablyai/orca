@@ -10,14 +10,9 @@ const STOPWORDS = new Set(
 /** Words that negate or make a line conditional, any "n't" form among them: one list for every
  *  check that refuses on negation, so they never drift apart. */
 const NEGATING =
-  /n['’]?t\b|\b(?:not|no|never|none|neither|nor|without|unless|except|avoid|stop|if|instead|cannot)\b/i
+  /\b\w+n['’]t\b|\b(?:dont|cant|isnt|wont|doesnt|didnt|wasnt|werent|arent|shouldnt|wouldnt|couldnt|havent|hasnt|hadnt|mustnt|aint|not|no|never|none|neither|nor|without|unless|except|avoid|stop|if|instead|cannot)\b/i
 /** Words that change how strongly a line holds. */
 const MODAL = /\b(?:always|must|only|should|will|would|can|could|may|might|shall)\b/i
-
-/** Whether `text` negates or makes something conditional. */
-export function hasNegation(text: string): boolean {
-  return NEGATING.test(text)
-}
 
 /** Whether `text` holds a negation, condition or modal: a line Orca never lets a model rewrite. */
 export function hasMeaningWords(text: string): boolean {

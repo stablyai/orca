@@ -2,7 +2,7 @@
 // on numbered lines after the status move. Both are applied through the memory record.
 import { applyBotMemoryChange } from '../../shared/bot-memory-lines'
 import { memorySnapshot } from './bot-memory-ops'
-import { memoryFitsOps, ownerTypedWords } from './bot-memory-ops-pilot'
+import { memoryFitsOps } from './bot-memory-ops-pilot'
 import { type TidyUpChat, type TidyUpMemoryFile, tidyUpPrompt } from './bot-memory-tidy-up'
 import { applyTidyUpDraft, applyTidyUpOps } from './bot-memory-tidy-up-apply'
 import { tidyUpOpsPrompt } from './bot-memory-tidy-up-ops-prompt'
@@ -40,7 +40,6 @@ export function tidyUpFormat(input: {
         ...run,
         memory: shown,
         today,
-        ownerWords: ownerTypedWords(chats),
         migration
       })
   }

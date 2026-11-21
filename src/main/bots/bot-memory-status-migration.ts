@@ -46,22 +46,30 @@ export function statusMigrationPlan(memory: string, today: string): TidyUpPlan |
       .filter(({ fact }) => fact.date === null || !isStatusLine(fact.text))
       .map(({ raw }) => key(raw))
   )
-  // Whole groups of copies, oldest first, until the run's share is used.
-  const status: typeof snapshot = []
+  // Whole groups of copies, oldest first, until the run's share is used. A group bigger than the
+  // share moves alone in its own run, so it drains instead of waiting forever.
   const groups = new Map<string | null, typeof snapshot>()
   for (const line of snapshot) {
     if (line.fact.date !== null && isStatusLine(line.fact.text) && !kept.has(key(line.raw))) {
-      groups.set(key(line.raw), [...(groups.get(key(line.raw)) ?? []), line])
+      const group = groups.get(key(line.raw))
+      if (group) {
+        group.push(line)
+      } else {
+        groups.set(key(line.raw), [line])
+      }
     }
   }
   const oldest = (group: typeof snapshot): string =>
-    group.map(({ fact }) => fact.date ?? '').toSorted()[0] ?? ''
+    group.reduce((min, { fact }) => ((fact.date ?? '') < min ? (fact.date ?? '') : min), '9999')
+  const status: typeof snapshot = []
   for (const group of [...groups.values()].toSorted((a, b) => oldest(a).localeCompare(oldest(b)))) {
-    // A group too big for what's left waits for a later run; smaller ones still go now.
-    if (status.length + group.length > STATUS_MIGRATION_MAX_LINES) {
+    if (status.length > 0 && status.length + group.length > STATUS_MIGRATION_MAX_LINES) {
       continue
     }
     status.push(...group)
+    if (status.length >= STATUS_MIGRATION_MAX_LINES) {
+      break
+    }
   }
   if (status.length === 0) {
     return null

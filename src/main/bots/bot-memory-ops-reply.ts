@@ -38,7 +38,8 @@ function topLevelArrays(text: string): string[] {
 /** The reply's ops: every fenced block's whole payload, else the one top-level array in the reply that
  *  parses; null when there is none or more than one (nothing from the model applies). */
 export function parseTidyUpOps(reply: string): unknown[] | null {
-  const fenced = [...reply.matchAll(/```(?:json)?\s*\n([\s\S]*?)```/g)].map((match) =>
+  // Every fence, whatever its info string ("json", "text", none), each paired with its own close.
+  const fenced = [...reply.matchAll(/^\s*```[^\n`]*\n([\s\S]*?)^\s*```/gm)].map((match) =>
     match[1].trim()
   )
   const arrays = (fenced.length > 0 ? fenced : topLevelArrays(reply)).flatMap((span) => {

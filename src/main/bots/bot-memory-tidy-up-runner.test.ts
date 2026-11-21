@@ -827,6 +827,24 @@ describe('Tidy-up on ops, for a bot in the pilot', () => {
     expect(run.runs()[0].error).toBe(TIDY_UP_FAILURES.changed)
   })
 
+  it("keeps where the first run would read from when it couldn't read its chats", async () => {
+    let fail = true
+    const run = harness({
+      memory: SHOWN,
+      readChats: async () => {
+        if (fail) {
+          fail = false
+          throw new Error('unreadable')
+        }
+        return [OWNER_CHAT]
+      }
+    })
+    await run.tick()
+    run.setNow(NIGHT + 60_000)
+    await run.tick()
+    expect(run.readFrom).toEqual([NIGHT - DAY, NIGHT - DAY])
+  })
+
   it('keeps where a failed first run read from, so the next run reads those chats too', async () => {
     const run = harness({ memory: SHOWN, reply: 'no ops' })
     run.files.set(join(HOME, TIDY_UP_OPS_PILOT_FILE), '')

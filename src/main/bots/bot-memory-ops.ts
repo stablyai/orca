@@ -8,25 +8,15 @@ import {
   botMemoryLineKey,
   parseBotMemoryFacts
 } from '../../shared/bot-memory-lines'
-import {
-  BOT_MEMORY_KIND_WORDS,
-  BOT_MEMORY_KINDS,
-  type BotMemoryKind,
-  botMemoryLineKind,
-  hasStandingWords,
-  isOwnerKind,
-  isProtectedBotMemoryLine
-} from '../../shared/bot-memory-line-kinds'
+import { botMemoryLineKind, isProtectedBotMemoryLine } from '../../shared/bot-memory-line-kinds'
 import { redactSecretLike } from '../../shared/crash-reporting/crash-report-redaction'
 import { hasMeaningWords, isDerivable } from './bot-memory-line-words'
-import { isOwnerClause } from './bot-memory-ops-pilot'
-import { TIDY_UP_ARCHIVE, TIDY_UP_MAX_NEW_FACTS } from './bot-memory-tidy-up'
+import { TIDY_UP_ARCHIVE } from './bot-memory-tidy-up'
 import { TIDY_UP_TOPIC_NAME, type TidyUpPlan } from './bot-memory-tidy-up-draft'
 
 /** Share of the snapshot's lines that may leave MEMORY.md by retire, replace or merge in one run. */
 export const TIDY_UP_OPS_MAX_LOSS = 0.25
 const MAX_LINE_CHARS = 240
-const SCOPE = /^[\w .-]{1,40}$/
 
 export type MemorySnapshotLine = {
   /** `L<n>#<hash>`: its number among the facts and a hash of its text, as the run names it. */
@@ -42,11 +32,16 @@ const hashOf = (raw: string): string =>
 
 export function memorySnapshot(memory: string): MemorySnapshotLine[] {
   const lines = memory.split(/\r?\n/)
-  const previous = (at: number): string | null =>
-    lines.slice(0, at).findLast((line) => line.trim() !== '') ?? null
+  // The non-blank line before each line, in one pass.
+  const previous: (string | null)[] = []
+  let last: string | null = null
+  for (const line of lines) {
+    previous.push(last)
+    last = line.trim() === '' ? last : line
+  }
   return parseBotMemoryFacts(memory).map((fact, index) => {
     const raw = lines[fact.line]
-    return { ref: `L${index + 1}#${hashOf(raw)}`, raw, fact, after: previous(fact.line) }
+    return { ref: `L${index + 1}#${hashOf(raw)}`, raw, fact, after: previous[fact.line] ?? null }
   })
 }
 
@@ -56,13 +51,6 @@ export function memorySnapshotText(snapshot: readonly MemorySnapshotLine[]): str
 
 const Evidence = z.string().optional()
 const OpSchema = z.discriminatedUnion('op', [
-  z.object({
-    op: z.literal('add'),
-    kind: z.enum(BOT_MEMORY_KINDS),
-    scope: z.string().optional(),
-    text: z.string(),
-    evidence: z.string().optional()
-  }),
   z.object({ op: z.literal('replace'), line: z.string(), text: z.string(), evidence: Evidence }),
   z.object({
     op: z.literal('merge'),
@@ -88,26 +76,13 @@ type Op = z.infer<typeof OpSchema>
 const squash = (text: string): string => text.replace(/\s+/g, ' ').trim()
 const keyOf = (line: string): string => botMemoryLineKey({ line, after: null }) ?? line.trim()
 
-function kindLine(date: string | null, kind: BotMemoryKind, scope: string | null, text: string) {
-  return `- ${date ? `${date} ` : ''}${BOT_MEMORY_KIND_WORDS[kind]}${scope ? ` (${scope})` : ''}: ${text}`
-}
-
-/** A kind the owner's words make standing ("always", "never", …) is a rule. */
-function checkedKind(kind: BotMemoryKind, text: string): BotMemoryKind {
-  return hasStandingWords(text) && !isOwnerKind(kind) ? 'rule' : kind
-}
-
-export type TidyUpOpsInput = {
-  /** What the owner typed in the chats the run read: each message's typed segments. */
-  ownerWords: readonly (readonly string[])[]
-  today: string
-}
+export type TidyUpOpsInput = { today: string }
 
 /**
  * What the ops do to MEMORY.md as the run read it, as a Tidy-up plan, and why each skipped op was
  * skipped. Owner rules and undated lines, and every copy of them, are never touched: the owner
- * edits those. A line with a negation or modal is never rewritten, only moved or left. A new line
- * repeats a whole clause the owner typed. Lines leave with every copy of their words.
+ * edits those. A line with a negation or modal is never rewritten, only moved or left. No op adds
+ * a line: new lines come from the owner and the bot's own turns. Lines leave with every copy.
  */
 export function checkTidyUpOps(
   memory: string,
@@ -118,7 +93,12 @@ export function checkTidyUpOps(
   const byRef = new Map(snapshot.map((line) => [line.ref, line]))
   const groups = new Map<string, MemorySnapshotLine[]>()
   for (const line of snapshot) {
-    groups.set(keyOf(line.raw), [...(groups.get(keyOf(line.raw)) ?? []), line])
+    const group = groups.get(keyOf(line.raw))
+    if (group) {
+      group.push(line)
+    } else {
+      groups.set(keyOf(line.raw), [line])
+    }
   }
   const groupOf = (line: MemorySnapshotLine): MemorySnapshotLine[] =>
     groups.get(keyOf(line.raw)) ?? [line]
@@ -166,29 +146,6 @@ export function checkTidyUpOps(
       return found.some(fixed)
         ? "names your owner's rule or an undated line, which only your owner changes"
         : found
-    }
-    if (op.op === 'add') {
-      if (plan.learned!.size >= TIDY_UP_MAX_NEW_FACTS) {
-        return 'too many new lines'
-      }
-      const text = squash(op.text).replace(/[.!?;:,]+$/, '')
-      if (text.length > MAX_LINE_CHARS || !isOwnerClause(text, input.ownerWords)) {
-        return "isn't a whole clause your owner typed"
-      }
-      const scope = op.scope?.trim() || null
-      if (scope !== null && !SCOPE.test(scope)) {
-        return 'names a scope Orca can’t write'
-      }
-      const line = kindLine(input.today, checkedKind(op.kind, text), scope, text)
-      if (redactSecretLike(line) !== line) {
-        return 'looks like a secret'
-      }
-      if (existing(line) || plan.learned!.has(keyOf(line))) {
-        return 'is already in MEMORY.md'
-      }
-      added.push({ line, at: null })
-      plan.learned!.add(keyOf(line))
-      return null
     }
     if (op.op === 'demote') {
       const topic = op.topic.trim()
@@ -290,9 +247,14 @@ export function checkTidyUpOps(
 export function lineGroups(lines: readonly string[]): Map<string, string[]> {
   const groups = new Map<string, string[]>()
   for (const line of lines) {
-    groups.set(keyOf(line), [...(groups.get(keyOf(line)) ?? []), line.trimEnd()].toSorted())
+    const group = groups.get(keyOf(line))
+    if (group) {
+      group.push(line.trimEnd())
+    } else {
+      groups.set(keyOf(line), [line.trimEnd()])
+    }
   }
-  return groups
+  return new Map([...groups].map(([key, group]) => [key, group.toSorted()]))
 }
 
 const changeLine = ({ raw, after }: MemorySnapshotLine): BotMemoryLine => ({ line: raw, after })
