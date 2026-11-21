@@ -21,6 +21,7 @@ import {
   type SystemTrayOptions
 } from '../../tray/system-tray'
 import { ensureAutoUpdaterConfigured } from '../../updater/lifecycle/main-window-updater'
+import { acceptUserForegroundRequest } from '../../window/activation/foreground-activation-policy'
 import {
   focusExistingMainWindow,
   safelyRevealWindow
@@ -73,6 +74,8 @@ export function focusExistingWindow(request: DesktopActivationRequest = {}): voi
 }
 
 export function showMainWindowFromTray(): void {
+  // A tray click is the user asking for the window, including after a background launch hid it.
+  acceptUserForegroundRequest()
   if (state.mainWindow && !state.mainWindow.isDestroyed()) {
     safelyRevealWindow(state.mainWindow)
     return

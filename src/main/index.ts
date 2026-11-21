@@ -2,6 +2,7 @@ import { app, clipboard, dialog, type BrowserWindow } from 'electron'
 import { isRoutedOrcaDeepLink } from './startup/open-routing/orca-deep-link-url'
 import { createMacAppActivationHandler } from './window/activation/macos-app-activation'
 import {
+  acceptUserForegroundRequest,
   isBackgroundLaunch,
   isOrcadSidecarLaunch
 } from './window/activation/foreground-activation-policy'
@@ -23,7 +24,7 @@ import { ensureWindowsRendererRuntimeFiles } from './startup/windows-startup/win
 import { registerMainProcessIpcHandlers } from './startup/main-process-ipc-bootstrap'
 import { initializeMainProcessReady } from './startup/main-process-ready'
 import { installMainProcessQuitHandlers } from './startup/quit/main-process-quit'
-import { shouldActivateDesktopForSecondInstance } from './startup/profile-startup/single-instance-lock'
+import { incomingDesktopLaunchAction } from './startup/profile-startup/single-instance-lock'
 import type { DeepLink } from './startup/deep-link-state'
 import { resolveOsOpenedDocuments } from './startup/open-routing/os-opened-documents'
 import {
@@ -100,21 +101,28 @@ function publishDeepLink(link: DeepLink): void {
   }
 }
 
-function requestDesktopActivation(argv: readonly string[] = []): void {
+function requestDesktopActivation(argv: readonly string[] = [], launchPayload?: unknown): void {
   state.deepLinks.capture(argv, publishDeepLink)
   state.pluginInstallLinks.capture(argv, (link) => {
     state.mainWindow?.webContents.send('ui:openPluginInstallLink', link)
   })
   state.osOpenedDocuments.capture(argv, publishOsOpenedDocuments)
-  // Duplicate serve launches must not activate a desktop on a headless server (#11935).
-  if (!shouldActivateDesktopForSecondInstance(argv)) {
-    return
-  }
+  const action = incomingDesktopLaunchAction({
+    argv,
+    launchPayload,
+    isSidecar: isOrcadSidecarLaunch()
+  })
   // The sidecar’s throwaway profile must never become the user’s window.
-  if (isOrcadSidecarLaunch()) {
+  if (action === 'handoff') {
     requestDesktopHandoff()
     return
   }
+  // Serve and a background relaunch must not raise this process. A user launch must,
+  // and the latch has to flip before activation or the reveal still sees windowless.
+  if (action !== 'present') {
+    return
+  }
+  acceptUserForegroundRequest()
   state.desktopActivationGate?.requestActivation({
     background: argvRequestsBackgroundOpen(argv)
   })
