@@ -23,6 +23,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.restoreAllMocks()
   vi.useRealTimers()
   vi.unstubAllGlobals()
   document.body.innerHTML = ''
@@ -150,4 +151,17 @@ it("records the quote's message and the chat of the transcript it is in", () => 
   expect(quoteSourceOf(inChat, range)).toMatchObject({ messageId: 'm1', chat: 'claude:s1' })
   range.selectNodeContents(alone)
   expect(quoteSourceOf(alone, range)).not.toHaveProperty('chat')
+})
+
+it('centers the quoted text, not its paragraph, in the transcript', () => {
+  const scroller = element('<p>Intro words. The quoted text. More words.</p>')
+  scroller.setAttribute('data-native-chat-quote-chat', 'claude:s1')
+  scroller.scrollBy = vi.fn()
+  // The paragraph is taller than the view; the quote is far down in it.
+  vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 100, 400, 400))
+  vi.spyOn(Range.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 1200, 80, 20))
+  showQuotedText(scroller.querySelector('p')!, 'The quoted text.', null)
+  // The quote's middle (1210) goes to the view's middle (300).
+  expect(scroller.scrollBy).toHaveBeenCalledWith({ top: 910 })
+  expect(scroller.querySelector('p')!.scrollIntoView).not.toHaveBeenCalled()
 })

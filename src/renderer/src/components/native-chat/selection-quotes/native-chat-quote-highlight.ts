@@ -97,6 +97,19 @@ export function quotedTextRange(root: HTMLElement, text: string): Range | null {
   return textRange(nodes, match.index, match.index + match[0].length)
 }
 
+/** Centers the quoted text in its transcript, also in a paragraph taller than the view. */
+function revealRange(range: Range): void {
+  const element = range.startContainer.parentElement
+  const scroller = element?.closest<HTMLElement>('[data-native-chat-quote-chat]')
+  if (!scroller) {
+    element?.scrollIntoView({ block: 'center' })
+    return
+  }
+  const view = scroller.getBoundingClientRect()
+  const quote = range.getBoundingClientRect()
+  scroller.scrollBy({ top: quote.top + quote.height / 2 - (view.top + view.height / 2) })
+}
+
 /**
  * Moves focus to the quote's source and highlights the quote there for a short time: at its saved
  * place, or where the text is found when the reply changed since.
@@ -108,7 +121,9 @@ export function showQuotedText(source: HTMLElement, text: string, place: QuotePl
     source.tabIndex = -1
   }
   source.focus({ preventScroll: true })
-  range?.startContainer.parentElement?.scrollIntoView({ block: 'center' })
+  if (range) {
+    revealRange(range)
+  }
   const highlights = globalThis.CSS?.highlights
   if (range && highlights && typeof Highlight !== 'undefined') {
     const highlight = new Highlight(range)
