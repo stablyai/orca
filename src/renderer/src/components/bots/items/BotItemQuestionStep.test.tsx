@@ -1,31 +1,69 @@
 // @vitest-environment happy-dom
 
 import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, expect, it } from 'vitest'
-import { BotItemChipWords, botItemChipTitle } from './BotItemQuestionStep'
+import { afterEach, expect, it, vi } from 'vitest'
+import type { BotItemQuestionShape } from '../../../../../shared/bots/bot-item-ask'
+import { BotItemQuestionStep } from './BotItemQuestionStep'
+import type { BotItemQuestionSteps } from './use-bot-item-question-steps'
 
 afterEach(cleanup)
 
-const reply = { label: 'I rotated it; purge the transcript', recommended: true }
+const shape: BotItemQuestionShape = {
+  body: '',
+  decisions: [
+    {
+      question: 'Is the token rotated?',
+      replies: [
+        { label: 'I rotated it; purge the transcript', recommended: true },
+        { label: 'Not yet', detail: 'Remind me tomorrow', recommended: false }
+      ]
+    },
+    {
+      question: 'Close the item?',
+      replies: [{ label: 'Close it', recommended: false }]
+    }
+  ]
+}
 
-it('names the filled chip Recommended without showing the word', () => {
+function renderLine(held: string | null): void {
+  const steps: BotItemQuestionSteps = {
+    askId: 'q1',
+    shape,
+    held: [held, null],
+    current: 0,
+    lines: [0, 1],
+    go: vi.fn(),
+    answer: vi.fn()
+  }
+  const actions = {
+    send: vi.fn(),
+    edit: vi.fn(),
+    recover: vi.fn(),
+    type: vi.fn()
+  }
   render(
-    <button type="button">
-      <BotItemChipWords reply={reply} filled />
-    </button>
+    <BotItemQuestionStep shape={shape} answered={[null, null]} steps={steps} actions={actions} />
   )
-  // The test DOM pads inline boundaries with a space; a browser reads "…transcript, Recommended".
-  const chip = screen.getByRole('button', {
-    name: /^I rotated it; purge the transcript ?, Recommended$/
-  })
-  expect(chip.querySelector('.sr-only')?.textContent).toBe(', Recommended')
-  expect(chip.querySelector('[aria-hidden="true"]')?.textContent).toBe('★')
-})
+}
 
-it('puts Recommended over the reply detail in the tooltip', () => {
-  expect(botItemChipTitle(reply, 'Recommended')).toBe('Recommended')
-  expect(botItemChipTitle({ ...reply, detail: 'Then close it' }, 'Recommended')).toBe(
-    'Recommended\nThen close it'
-  )
-  expect(botItemChipTitle({ label: 'Wait', recommended: false }, null)).toBeUndefined()
-})
+// The test DOM pads inline boundaries with a space; a browser reads "…transcript, Recommended".
+const RECOMMENDED_NAME = /^I rotated it; purge the transcript ?, Recommended$/
+
+// Open, and reopened after picking either reply: the recommended reply keeps its mark.
+it.each([null, 'I rotated it; purge the transcript', 'Not yet'])(
+  'marks the recommended reply with a star, its name and tooltip (held: %s)',
+  (held) => {
+    renderLine(held)
+    const chip = screen.getByRole('button', { name: RECOMMENDED_NAME })
+    expect(chip.querySelector('span[aria-hidden="true"]')?.textContent).toBe('★')
+    expect(chip.title).toBe('Recommended')
+    expect(chip.getAttribute('aria-pressed')).toBe(
+      String(held === 'I rotated it; purge the transcript')
+    )
+    expect(screen.queryByText('Recommended')).toBeNull()
+    const other = screen.getByRole('button', { name: /^Not yet/ })
+    expect(other.title).toBe('Remind me tomorrow')
+    expect(other.getAttribute('aria-pressed')).toBe(String(held === 'Not yet'))
+    expect(other.textContent).not.toContain('★')
+  }
+)

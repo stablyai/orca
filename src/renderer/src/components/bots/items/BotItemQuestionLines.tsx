@@ -130,7 +130,7 @@ export function BotItemQuestionLines({
                     <button
                       key={reply.label}
                       type="button"
-                      title={botItemChipTitle(reply, reply.recommended ? recommended : null)}
+                      title={botItemChipTitle(reply, recommended)}
                       className={cn(
                         BOT_ITEM_CHIP,
                         'outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
@@ -147,7 +147,7 @@ export function BotItemQuestionLines({
                         }
                       }}
                     >
-                      <BotItemChipWords reply={reply} filled={reply.recommended} />
+                      <BotItemChipWords reply={reply} />
                     </button>
                   ))}
                   {/* Muted, with a pencil: your own words are the other way to answer. */}

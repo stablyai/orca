@@ -32,45 +32,32 @@ export const BOT_ITEM_OPEN_QUESTION =
 /** The picked reply of a line reopened. */
 const CHIP_PICKED = 'flex items-center gap-1.5 border-foreground/28 bg-foreground/8 text-foreground'
 
-/** A chip's tooltip: Recommended on the filled chip, over the reply's own detail. */
+/** A chip's tooltip: Recommended on the recommended reply, over the reply's own detail. */
 export function botItemChipTitle(
   reply: BotItemQuickReply,
-  recommended: string | null
+  recommended: string
 ): string | undefined {
-  return [recommended, reply.detail].filter(Boolean).join('\n') || undefined
+  return (
+    [reply.recommended ? recommended : null, reply.detail].filter(Boolean).join('\n') || undefined
+  )
 }
 
-export function BotItemChipWords({
-  reply,
-  filled = false
-}: {
-  reply: BotItemQuickReply
-  /** The filled recommended chip: a star leads the label; Recommended is in its name and tooltip. */
-  filled?: boolean
-}): React.JSX.Element {
+/** A reply's words. The recommended one leads with a star and carries Recommended in its name, filled
+ *  or not: reopening an answered line keeps the mark on it. */
+export function BotItemChipWords({ reply }: { reply: BotItemQuickReply }): React.JSX.Element {
   const t = useTranslate()
-  const recommended = t('bots.items.ask.recommended', 'Recommended')
-  if (filled) {
-    // A text star, not an icon: no line break falls between it and the label's first word.
-    return (
-      <span className="[overflow-wrap:anywhere]">
-        <span aria-hidden className="mr-[5px] text-[11px] opacity-80">
-          ★
-        </span>
-        {reply.label}
-        <span className="sr-only">, {recommended}</span>
-      </span>
-    )
+  if (!reply.recommended) {
+    return <>{reply.label}</>
   }
+  // A text star, not an icon: no line break falls between it and the label's first word.
   return (
-    <>
+    <span className="[overflow-wrap:anywhere]">
+      <span aria-hidden className="mr-[5px] text-[11px] opacity-80">
+        ★
+      </span>
       {reply.label}
-      {reply.recommended ? (
-        <span className="ml-1.5 whitespace-nowrap text-2xs text-muted-foreground">
-          {recommended}
-        </span>
-      ) : null}
-    </>
+      <span className="sr-only">, {t('bots.items.ask.recommended', 'Recommended')}</span>
+    </span>
   )
 }
 
@@ -198,7 +185,7 @@ export function BotItemQuestionStep({
               <button
                 key={reply.label}
                 type="button"
-                title={botItemChipTitle(reply, filled ? recommended : null)}
+                title={botItemChipTitle(reply, recommended)}
                 aria-pressed={picked}
                 className={cn(
                   BOT_ITEM_CHIP,
@@ -215,7 +202,7 @@ export function BotItemQuestionStep({
               >
                 {picked ? <Check className="size-3 shrink-0" /> : null}
                 <span className="min-w-0 max-w-full">
-                  <BotItemChipWords reply={reply} filled={filled} />
+                  <BotItemChipWords reply={reply} />
                 </span>
               </button>
             )
