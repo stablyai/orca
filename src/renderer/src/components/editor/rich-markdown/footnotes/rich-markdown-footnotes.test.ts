@@ -4,6 +4,7 @@ import { Editor } from '@tiptap/core'
 import { NodeSelection, TextSelection } from '@tiptap/pm/state'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getMarkdownRichModeUnsupportedReason } from '../../markdown/render-mode/markdown-rich-mode'
+import { stripMarkdownCode } from '../../markdown/source-scanning/markdown-code-and-comment-scan'
 import { createRichMarkdownHtmlSuperscriptLinkContext } from '../citations/rich-markdown-html-superscript-link-context'
 import { createRichMarkdownKeyHandler } from '../commands/rich-markdown-key-handler'
 import type { KeyHandlerContext } from '../commands/rich-markdown-key-handler-context'
@@ -14,6 +15,7 @@ import { encodeRawMarkdownHtmlForRichEditor } from '../raw-source/raw-markdown-h
 import { createRichMarkdownExtensions } from '../schema/rich-markdown-extensions'
 import { normalizeEmptyListItems } from '../schema/rich-markdown-normalize'
 import { FOOTNOTE_DEF_ATTR, FOOTNOTE_REF_ATTR } from './rich-markdown-footnote-navigation'
+import { hasFootnoteCandidate } from './rich-markdown-footnote-eligibility'
 
 vi.mock('@/lib/keyboard/shortcut-platform', () => ({
   getShortcutPlatform: (): NodeJS.Platform => 'darwin'
@@ -220,6 +222,15 @@ describe('rich Markdown GFM footnotes', () => {
       'reference-links'
     )
 
+    const withNoSpaceRefDef = `${padding}[use][ref]\n\n[ref]:/docs\n`
+    expect(getMarkdownRichModeUnsupportedReason(withNoSpaceRefDef)).toBe('reference-links')
+
+    const withSpacedRefDef = `${padding}[use][ref]\n\n[ref]: /docs\n`
+    expect(getMarkdownRichModeUnsupportedReason(withSpacedRefDef)).toBe('reference-links')
+
+    const withMalformedLargeFootnote = `${padding}Final sentence[^big].\n\n[^big]:no-space\n`
+    expect(getMarkdownRichModeUnsupportedReason(withMalformedLargeFootnote)).toBe('footnotes')
+
     const deeplyNestedCrafted = `${'[^n]: '.repeat(24_000)}tail\n`
     expect(deeplyNestedCrafted.length).toBeGreaterThan(50_000)
     expect(getMarkdownRichModeUnsupportedReason(deeplyNestedCrafted)).toBe('reference-links')
@@ -246,6 +257,41 @@ describe('rich Markdown GFM footnotes', () => {
     expect(
       getMarkdownRichModeUnsupportedReason('- item\n\n    ```md\n    [^1]:no-space\n    ```\n')
     ).toBeNull()
+    expect(getMarkdownRichModeUnsupportedReason('- ~~~\n  code\n\n[^n]:no-space\n')).toBe(
+      'footnotes'
+    )
+    expect(getMarkdownRichModeUnsupportedReason('- ~~~\n  code\n\n  [^n]:no-space\n')).toBeNull()
+    expect(getMarkdownRichModeUnsupportedReason('> - ~~~\n>   code\n>\n> [^n]:no-space\n')).toBe(
+      'footnotes'
+    )
+    expect(getMarkdownRichModeUnsupportedReason('-     ~~~\n  [^n]:no-space\n')).toBe('footnotes')
+    expect(getMarkdownRichModeUnsupportedReason('- ~~~\n  [^n]:no-space\n')).toBeNull()
+    expect(stripMarkdownCode('-     ~~~\n  <!-- keep -->\n')).toBe('-     ~~~\n  <!-- keep -->\n')
+    expect(stripMarkdownCode('- ~~~\n  <!-- keep -->\n')).toBe('\n\n')
+    expect(
+      getMarkdownRichModeUnsupportedReason(
+        '<!-- example `demo` -->\n\nText[^1].\n\n[^1]: Valid note.\n'
+      )
+    ).toBeNull()
+    expect(
+      getMarkdownRichModeUnsupportedReason(
+        '<!-- opening `demo`\nline --> `[^fake]`\n\nText[^1].\n\n[^1]: Valid note.\n'
+      )
+    ).toBeNull()
+    expect(getMarkdownRichModeUnsupportedReason('> <!--\n\n[^n]:no-space\n\n<!-- tail -->\n')).toBe(
+      'footnotes'
+    )
+    expect(
+      getMarkdownRichModeUnsupportedReason(
+        '- <!--\n  inside list\n\n[^n]:no-space\n\n<!-- tail -->\n'
+      )
+    ).toBe('footnotes')
+    expect(hasFootnoteCandidate('> <!--\n> [^ghost]:no-space\n> -->\n')).toBe(false)
+    expect(
+      hasFootnoteCandidate(
+        stripMarkdownCode('> <!--\n\n```md\n[^n]:no-space\n```\n\n<!-- tail -->\n')
+      )
+    ).toBe(false)
     expect(
       getMarkdownRichModeUnsupportedReason(`Text.\n\n[^${'a'.repeat(257)}]: Overlong identifier\n`)
     ).toBe('footnotes')
