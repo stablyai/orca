@@ -178,6 +178,7 @@ export type RuntimeStore = {
     nativeChatProviders?: GlobalSettings['nativeChatProviders']
     antigravityChatAuth?: GlobalSettings['antigravityChatAuth']
     antigravityManagedAgyEnabled?: GlobalSettings['antigravityManagedAgyEnabled']
+    antigravityGoogleSignIn?: GlobalSettings['antigravityGoogleSignIn']
     defaultTaskSource?: GlobalSettings['defaultTaskSource']
     defaultTaskViewPreset?: GlobalSettings['defaultTaskViewPreset']
     visibleTaskProviders?: GlobalSettings['visibleTaskProviders']

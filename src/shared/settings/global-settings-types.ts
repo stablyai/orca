@@ -275,6 +275,9 @@ export type GlobalSettings = GlobalSettingsBase & {
    *  chats use the user's own signed-in agy or Orca's server, and chats already on agy run the
    *  user's own agy (same history) or, where there is none, refuse as agy not found. Absent means on. */
   antigravityManagedAgyEnabled?: boolean
+  /** How chats on the Google account method sign in: agy's own login (absent: agy when it is
+   *  here or Orca installs it), or Orca's built-in sign-in on Google's ACP server. */
+  antigravityGoogleSignIn?: 'agy' | 'orca'
   /** Browser profile new tabs in a workspace use; missing = 'shared' (the Default profile). */
   browserProfileScope?: BrowserProfileScope
   /** Profile new tabs use per browser host when no repo/workspace profile applies; missing = Default. */

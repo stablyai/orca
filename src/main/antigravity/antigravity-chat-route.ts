@@ -91,6 +91,8 @@ async function computeAntigravityChatRoute(
   // The host launch drops an API-key provider's key, so that agy can't serve chats.
   if (
     !savedChatAuthIsPersonal(input.settings.antigravityChatAuth) ||
+    // The person chose Orca's built-in Google sign-in, which runs on Orca's server.
+    input.settings.antigravityGoogleSignIn === 'orca' ||
     (await agyUsesApiKey(homePath))
   ) {
     return ON_SERVER

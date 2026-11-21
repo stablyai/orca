@@ -18,6 +18,7 @@ import { ANTIGRAVITY_ACP_HOME } from '../../shared/agent-session/lifecycle/provi
 import { ANTIGRAVITY_CHAT_HOME_FOLDER } from './antigravity-chat-home'
 import { antigravityUserHome, linkAntigravityUserSkills } from './antigravity-chat-user-skills'
 import { resolveAgentPlatformProject } from './antigravity-agent-platform-project'
+import { assertAntigravityChatCredential } from './antigravity-chat-credential'
 
 type SignInOwner = Pick<AcpAgentConnection, 'close' | 'exited'> & {
   onExit(listener: () => void): void
@@ -108,6 +109,7 @@ export const antigravityChatAccount = {
     if (!home) {
       throw new Error('GEMINI_HOME is not set')
     }
+    await assertAntigravityChatCredential(auth, env)
     if (!(await retained.stopFailed(home))) {
       throw new AntigravitySignInCloseUnprovenError()
     }

@@ -30,6 +30,9 @@ import { useAntigravityChatSignIn } from '../../../provider-accounts/use-antigra
 import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/AgentChatChoiceControls'
 import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/capabilities/structured-chat-platform-support'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { useRecheckOnce } from './use-recheck-once'
+import { AntigravityGoogleSignInChoice } from '../../../provider-accounts/AntigravityGoogleSignInChoice'
+import { AntigravityAgySignInButton } from '../../../provider-accounts/AntigravityAgySignInButton'
 import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
 import {
   AntigravityTerminalAccountRows,
@@ -50,6 +53,7 @@ function usageMatchesTarget(provenance: string, target: AntigravityAccountTarget
   return provenance.startsWith('wsl:')
 }
 
+const AGY_CHECK_SETTLE_MS = 8_000
 export function AntigravityAccountsSection({
   owner,
   target,
@@ -113,14 +117,32 @@ export function AntigravityAccountsSection({
     }
   }, [ownerKind, environmentId, runtime, wslDistro])
 
-  async function run(action: AntigravityAccountAction, accountId?: string) {
+  // The rows don't wait for a cold agy check (1.5 s); once it has had time to answer, they read
+  // it again, so "isn't signed in" and its Sign in show without Refresh.
+  const agyUnanswered =
+    chats &&
+    state !== null &&
+    state.chatUsesAgy === undefined &&
+    state.chatAgySignedOut === undefined
+  useRecheckOnce(agyUnanswered, AGY_CHECK_SETTLE_MS, () => {
+    if (pending.current) {
+      return false
+    }
+    void run('List', undefined, true)
+    return true
+  })
+
+  /** `keepShown`: a background re-read, which leaves a Usage reading or error on screen. */
+  async function run(action: AntigravityAccountAction, accountId?: string, keepShown = false) {
     if (pending.current) {
       return
     }
     pending.current = true
     setBusy(true)
-    setError(null)
-    setUsage(null)
+    if (!keepShown) {
+      setError(null)
+      setUsage(null)
+    }
     try {
       if (action === 'Usage') {
         const before = await callAntigravityAccounts(owner, target, 'List')
@@ -262,6 +284,7 @@ export function AntigravityAccountsSection({
           )
   }
 
+  const chatDescription = antigravityChatDescription(state, chatRuntime)
   const chatRows =
     chats && chatRuntime.kind === 'active' ? (
       antigravityProviderSignInShown(chatRuntime) ? (
@@ -281,8 +304,14 @@ export function AntigravityAccountsSection({
       {chatRows ? (
         <SettingsGroup
           title={logoTitle(t('accounts.antigravity.chatTitle', 'Antigravity Chat'))}
-          description={chatDescriptions[antigravityChatDescription(state, chatRuntime)]}
+          description={chatDescriptions[chatDescription]}
+          action={
+            chatDescription === 'agySignedOut' ? (
+              <AntigravityAgySignInButton owner={owner} />
+            ) : undefined
+          }
         >
+          <AntigravityGoogleSignInChoice owner={owner} />
           {chatRows}
         </SettingsGroup>
       ) : null}
