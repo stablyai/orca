@@ -89,6 +89,22 @@ export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate(
+      'auto.components.settings.terminal.search.75439bb319',
+      'Run suggested commands'
+    ),
+    description: translate(
+      'auto.components.settings.terminal.search.5ef7a04395',
+      'Underline `! command` lines an agent asks you to run; click to run them in the same terminal.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.a36b51d5f5', 'command'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.b210927f89', 'run'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.2828c60125', 'agent'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.4712ed4528', 'suggested')
+    ]
+  },
+  {
     title: translate('auto.components.settings.terminal.search.a5e5d2bca5', 'Color overrides'),
     description: translate(
       'auto.components.settings.terminal.search.3023e01415',

@@ -15,6 +15,7 @@ import {
   installFilePathLinkClickFallback
 } from './files/terminal-link-handlers'
 import { createTerminalHandleLinkProvider } from './handles/terminal-handle-links'
+import { createTerminalSuggestedCommandLinkProvider } from './commands/terminal-suggested-command-links'
 import { installTerminalLinkifierClickPriming } from './gestures/terminal-linkifier-click-priming'
 import { installTerminalLinkPointerGesture } from './gestures/terminal-link-pointer-gesture'
 import { installHttpLinkClickFallback } from './http/terminal-url-link-hit-testing'
@@ -39,6 +40,7 @@ type PaneLinkContext = {
     TerminalPaneLifecycleRefs,
     | 'linkProviderDisposablesRef'
     | 'terminalHandleLinkDisposablesRef'
+    | 'suggestedCommandLinkDisposablesRef'
     | 'linkifierClickPrimingDisposablesRef'
     | 'linkPointerGesturesRef'
     | 'fileLinkClickFallbackDisposablesRef'
@@ -96,6 +98,17 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
           managerRef.current?.getPanes().find((candidate) => candidate.id === pane.id)?.terminal ??
           null,
         getRuntimeEnvironmentId: () => linkDeps.getRuntimeEnvironmentIdForPane?.(pane.id) ?? null,
+        linkTooltip: pane.linkTooltip,
+        getLinkActionContext: () => getLinkActionContext(pane.id)
+      })
+    )
+  )
+  refs.suggestedCommandLinkDisposablesRef.current.set(
+    pane.id,
+    pane.terminal.registerLinkProvider(
+      createTerminalSuggestedCommandLinkProvider({
+        getTerminal: () =>
+          settingsRef.current?.terminalRunSuggestedCommands === false ? null : pane.terminal,
         linkTooltip: pane.linkTooltip,
         getLinkActionContext: () => getLinkActionContext(pane.id)
       })

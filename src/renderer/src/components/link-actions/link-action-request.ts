@@ -1,6 +1,6 @@
 import type { HttpLinkAction } from '@/lib/browser/navigation/http-link-destinations'
 
-export type LinkActionKind = 'url' | 'file' | 'workspace' | 'terminal' | 'task'
+export type LinkActionKind = 'url' | 'file' | 'workspace' | 'terminal' | 'task' | 'command'
 
 export type LinkAction = HttpLinkAction
 

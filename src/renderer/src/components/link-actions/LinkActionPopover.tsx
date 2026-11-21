@@ -63,7 +63,8 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const isFilePath = request?.kind === 'file'
-  const canCopyDestination = isFilePath || request?.kind === 'url'
+  const isCommand = request?.kind === 'command'
+  const canCopyDestination = isFilePath || isCommand || request?.kind === 'url'
   const copyableDestination = canCopyDestination
     ? (request?.copyValue ?? request?.destination ?? '')
     : ''
@@ -108,28 +109,37 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
   const copyLabel =
     copyStatus === 'copied'
       ? t('auto.components.terminal.pane.TerminalLinkActionPopover.copied', 'Copied')
-      : isFilePath
-        ? t(
-            'auto.components.terminal.pane.TerminalLinkActionPopover.copyFilePath',
-            'Copy file path'
-          )
-        : t('auto.components.terminal.pane.TerminalLinkActionPopover.copyLink', 'Copy link')
+      : isCommand
+        ? t('auto.components.terminal.pane.TerminalLinkActionPopover.copyCommand', 'Copy command')
+        : isFilePath
+          ? t(
+              'auto.components.terminal.pane.TerminalLinkActionPopover.copyFilePath',
+              'Copy file path'
+            )
+          : t('auto.components.terminal.pane.TerminalLinkActionPopover.copyLink', 'Copy link')
 
-  const copiedMessage = isFilePath
+  const copiedMessage = isCommand
+    ? t('auto.components.terminal.pane.TerminalLinkActionPopover.copiedCommand', 'Copied command')
+    : isFilePath
+      ? t(
+          'auto.components.terminal.pane.TerminalLinkActionPopover.copiedFilePath',
+          'Copied file path'
+        )
+      : t('auto.components.terminal.pane.TerminalLinkActionPopover.copiedLink', 'Copied link')
+  const copyFailedMessage = isCommand
     ? t(
-        'auto.components.terminal.pane.TerminalLinkActionPopover.copiedFilePath',
-        'Copied file path'
+        'auto.components.terminal.pane.TerminalLinkActionPopover.copyCommandFailed',
+        'Failed to copy command'
       )
-    : t('auto.components.terminal.pane.TerminalLinkActionPopover.copiedLink', 'Copied link')
-  const copyFailedMessage = isFilePath
-    ? t(
-        'auto.components.terminal.pane.TerminalLinkActionPopover.copyFilePathFailed',
-        'Failed to copy file path'
-      )
-    : t(
-        'auto.components.terminal.pane.TerminalLinkActionPopover.copyLinkFailed',
-        'Failed to copy link'
-      )
+    : isFilePath
+      ? t(
+          'auto.components.terminal.pane.TerminalLinkActionPopover.copyFilePathFailed',
+          'Failed to copy file path'
+        )
+      : t(
+          'auto.components.terminal.pane.TerminalLinkActionPopover.copyLinkFailed',
+          'Failed to copy link'
+        )
 
   const copyDestination = async (): Promise<void> => {
     if (copyInFlightRef.current) {
