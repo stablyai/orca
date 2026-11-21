@@ -9,7 +9,7 @@ import type { ChatAgentMemory } from '../../../../../../shared/diagnostics/proce
 import { MetricPair, ROW_TRAILING_GUTTER_CLS } from './resource-usage-metrics'
 import { isResourceSessionActivationKey } from '../session-actions/resource-session-navigation'
 
-/** A chat agent and every process it started; it stops from the chat, so the row has no kill action. */
+/** A chat agent and the processes running under it; it stops from the chat, so the row has no kill action. */
 export function ChatRow({
   chat,
   onOpen
