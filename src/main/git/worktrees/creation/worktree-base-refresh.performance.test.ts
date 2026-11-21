@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import * as gitRunner from '../../command-runner/git-exec-file'
 import {
@@ -140,6 +140,28 @@ it.each([3, 30])(
       )
     ).resolves.toEqual({ baseRef: 'origin/main', localBranch: 'main', behind: 1 })
 
+    expect(listings()).toBe(0)
+  }
+)
+
+// Windows needs symlink privileges.
+it.skipIf(process.platform === 'win32')(
+  'moves main without listing when a checked-out branch is an absolute symlink',
+  async () => {
+    const { repoPath, remoteOid } = await createRepo(3)
+    const owner = join(dirname(repoPath), 'wt-0')
+    git(owner, ['checkout', '--quiet', '-b', 'other'])
+    const target = join(dirname(repoPath), 'other-ref')
+    await writeFile(target, `${git(owner, ['rev-parse', 'HEAD'])}\n`)
+    await rm(join(repoPath, '.git', 'refs', 'heads', 'other'))
+    await symlink(target, join(repoPath, '.git', 'refs', 'heads', 'other'))
+    const listings = countWorktreeListings()
+
+    await expect(
+      refreshLocalBaseRefForWorktreeCreate(repoPath, 'origin/main', 'refs/remotes/origin/main')
+    ).resolves.toMatchObject({ status: 'updated' })
+
+    expect(git(repoPath, ['rev-parse', 'main'])).toBe(remoteOid)
     expect(listings()).toBe(0)
   }
 )

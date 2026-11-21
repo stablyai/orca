@@ -87,9 +87,10 @@ export async function resolveBranchCheckouts(
   }
   let unresolvable = false
   const settle = (gitDir: string, link: string | undefined) => {
-    const head = state.heads.get(gitDir) ?? ''
-    unresolvable ||=
-      link === undefined ? head !== '' && !COMMIT_ID.test(head) : !classify(gitDir, link)
+    const head = link ?? state.heads.get(gitDir) ?? ''
+    unresolvable ||= head.startsWith('ref: ')
+      ? !classify(gitDir, head)
+      : head !== '' && !COMMIT_ID.test(head)
   }
   if (state.linksRead) {
     // The sweep already followed symlinked HEADs; these are plain content.

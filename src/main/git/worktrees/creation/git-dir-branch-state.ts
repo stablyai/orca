@@ -68,7 +68,7 @@ export async function readGitDirState(commonDir: string): Promise<GitDirState> {
   return { heads, reserved, linksRead: NO_FOLLOW !== undefined }
 }
 
-// Git treats a symlinked HEAD or ref as a symref to the ref it links to (core.preferSymlinkRefs).
+// Git treats a symlinked HEAD or ref as a symref to the ref it links to (core.preferSymlinkRefs), and reads any other link's target content.
 export async function readRefLink(path: string): Promise<string | undefined> {
   let target: string
   try {
@@ -81,7 +81,7 @@ export async function readRefLink(path: string): Promise<string | undefined> {
     rethrowUnlessMissing(error)
     return undefined
   }
-  return target.startsWith('refs/') ? `ref: ${target}` : UNRESOLVED_HEAD
+  return target.startsWith('refs/') ? `ref: ${target}` : normalizeHead(await readOptional(path))
 }
 
 const READ_CONCURRENCY = 16

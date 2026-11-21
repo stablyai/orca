@@ -443,6 +443,25 @@ describe('local base refresh reads worktree ownership from git dirs with real Gi
     }
   )
 
+  // Windows needs symlink privileges.
+  it.skipIf(process.platform === 'win32')(
+    'leaves main alone while a checkout has it through an absolute symlink naming it',
+    async () => {
+      const { repoPath, lockPath, localOid } = await createBehindRepo()
+      await rm(lockPath, { force: true })
+      const linkedPath = join(repoPath, '..', 'absolute-alias')
+      const target = join(repoPath, '..', 'alias-ref')
+      await writeFile(target, 'ref: refs/heads/main\n')
+      await symlink(target, join(repoPath, '.git', 'refs', 'heads', 'alias'))
+      git(repoPath, ['worktree', 'add', '--quiet', linkedPath, '--detach'])
+      git(linkedPath, ['symbolic-ref', 'HEAD', 'refs/heads/alias'])
+
+      await refresh(repoPath)
+
+      expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
+    }
+  )
+
   it('moves main in a bare repo whose core.bare is unset', async () => {
     const { repoPath, lockPath, remoteOid } = await createBehindRepo()
     await rm(lockPath, { force: true })
