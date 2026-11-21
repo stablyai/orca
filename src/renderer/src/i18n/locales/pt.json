@@ -22032,7 +22032,6 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Quaisquer alterações sem commit ou não rastreadas nos espaços de trabalho Git serão excluídas permanentemente.",
           "unavailable": "Não foi possível verificar as alterações",
           "checking": "Verificando alterações…",
           "checkingDetails": "Verificando…",
@@ -22056,7 +22055,6 @@
           "line_other": "As edições não salvas em {{count}} arquivos serão descartadas: {{files}}",
           "line_many": "As edições não salvas em {{count}} arquivos serão descartadas: {{files}}"
         },
-        "ignoredFilesLost": "Os arquivos ignorados serão perdidos: {{names}}",
         "ignoredFilesUnchecked": "Não foi possível verificar completamente os arquivos ignorados"
       }
     },
@@ -23070,7 +23068,6 @@
         "withIgnored": "{{what}} e os arquivos ignorados serão perdidos",
         "ignoredOnly": "Os arquivos ignorados serão perdidos"
       },
-      "showChanges": "Mostrar alterações",
       "unsavedSuffix": "(não salvo)",
       "onHost": "Em {{host}}",
       "forceDeletingEllipsis": "Forçando exclusão…",
