@@ -48,6 +48,8 @@ export function ConnectorStatus(props: {
 export type BotConnectorActions = {
   /** More access on the connected account: GitHub repositories or organizations, or another workspace. */
   add?: { label: string; onClick: () => void } | null
+  /** Another account of the owner's on the service, e.g. a second GitHub login. */
+  addAccount?: { label: string; onClick: () => void } | null
   link?: { label: string; onClick: () => void } | null
   /** Something the connector offers but doesn't need, e.g. newer permissions. */
   update?: { label: string; onClick: () => void } | null
@@ -65,8 +67,8 @@ export function BotConnectorMenu({
   alwaysShown?: boolean
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const { add, link, update, remove } = actions
-  if (!add && !link && !update && !remove) {
+  const { add, addAccount, link, update, remove } = actions
+  if (!add && !addAccount && !link && !update && !remove) {
     return null
   }
   return (
@@ -93,6 +95,12 @@ export function BotConnectorMenu({
             {add.label}
           </DropdownMenuItem>
         ) : null}
+        {addAccount ? (
+          <DropdownMenuItem onSelect={addAccount.onClick}>
+            <Plus />
+            {addAccount.label}
+          </DropdownMenuItem>
+        ) : null}
         {link ? (
           <DropdownMenuItem onSelect={link.onClick}>
             <ExternalLink />
@@ -105,7 +113,7 @@ export function BotConnectorMenu({
             {update.label}
           </DropdownMenuItem>
         ) : null}
-        {(add || link || update) && remove ? <DropdownMenuSeparator /> : null}
+        {(add || addAccount || link || update) && remove ? <DropdownMenuSeparator /> : null}
         {remove ? (
           <DropdownMenuItem
             variant="destructive"

@@ -92,8 +92,9 @@ export function botGitHubCalls(hostId: ExecutionHostId) {
     state: () => call<ConnectorGitHubState>(hostId, 'bots.github.state'),
     users: (args: { query: string }) =>
       call<ConnectorGitHubUsersResponse>(hostId, 'bots.github.users', args),
-    unlink: () => call<undefined>(hostId, 'bots.github.unlink'),
-    setDefaultBot: (args: { botId: string | null }) =>
+    /** `userId`: one linked GitHub user; none unlinks them all, as an older host does. */
+    unlink: (args: { userId?: string } = {}) => call<undefined>(hostId, 'bots.github.unlink', args),
+    setDefaultBot: (args: { botId: string | null; userId?: string }) =>
       call<undefined>(hostId, 'bots.github.setDefaultBot', args)
   }
 }

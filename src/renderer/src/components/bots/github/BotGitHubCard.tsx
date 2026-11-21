@@ -13,10 +13,14 @@ import { useBotHostLabel } from '../use-bot-host-label'
 import { BotConnectorRow } from '../BotConnectorRow'
 import type { BotConnectorTitle } from '../bot-connector-titles'
 import { botGitHubErrorMessage, gitHubHowToAsk, gitHubInstallationLabel } from './bot-github-copy'
-import type { ConnectorGitHubInstallation } from '../../../../../shared/connector-bot-github-contract'
+import {
+  type ConnectorGitHubInstallation,
+  gitHubLoginFor
+} from '../../../../../shared/connector-bot-github-contract'
 import { connectorAddAccessLabel } from '../bot-connectors'
 import { useConnectorSetup } from '../ConnectorSetupDialogs'
-import { openGitHubInstall } from '@/lib/bot-github-install-record'
+import { addGitHubAccount, openGitHubInstall } from '@/lib/bot-github-install-record'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { useGitHubWhoCanAsk } from './use-github-who-can-ask'
 import type { BotWhoCanAskService } from '../BotWhoCanAskList'
 import { signedOutConnectorFace } from '../orca-cloud-sign-in'
@@ -133,7 +137,10 @@ export function useGitHubCard(
   installation: ConnectorGitHubInstallation | undefined
 ): { view: BotGitHubView; face: GitHubCardFace; people: BotWhoCanAskService } {
   const view = useBotGitHub(bot.hostId)
-  const login = view.status === 'ready' ? view.github.account?.login : undefined
+  const login =
+    view.status === 'ready' && installation
+      ? gitHubLoginFor(view.github, installation.installationId)
+      : null
   const hostName = useBotHostLabel(bot.hostId)
   const face =
     installation && login
@@ -230,6 +237,15 @@ export function BotGitHubCard({
       add={
         face.ready && installUrl
           ? { label: connectorAddAccessLabel('github'), onClick: () => addAccess.start('github') }
+          : null
+      }
+      addAccount={
+        // A cloud that links several logins lists them; a paired web client can't start a sign-in.
+        face.ready && view.status === 'ready' && view.github.accounts && !isPairedWebClientWindow()
+          ? {
+              label: t('bots.github.connection.addAccount', 'Add another GitHub account'),
+              onClick: () => addGitHubAccount(bot)
+            }
           : null
       }
       remove={{

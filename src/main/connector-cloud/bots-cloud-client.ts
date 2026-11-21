@@ -286,11 +286,15 @@ export function botsCloudClient(cloud: Pick<ConnectorCloud, 'call'>) {
           method: 'GET'
         })
       ),
-    unlinkGitHub: async () =>
+    /** One linked GitHub user; none unlinks the account as an older cloud does. */
+    unlinkGitHub: async (userId?: string) =>
       gitHubAnswer(
-        await cloud.call(`${CONNECTOR_PATHS.github}/link`, undefined, z.undefined(), {
-          method: 'DELETE'
-        })
+        await cloud.call(
+          `${CONNECTOR_PATHS.github}/link${userId ? `?userId=${encodeURIComponent(userId)}` : ''}`,
+          undefined,
+          z.undefined(),
+          { method: 'DELETE' }
+        )
       ),
     githubUsers: async (query: string) =>
       gitHubAnswer(
@@ -301,12 +305,15 @@ export function botsCloudClient(cloud: Pick<ConnectorCloud, 'call'>) {
           { method: 'GET' }
         )
       ),
-    /** Null clears it, so a comment naming no bot asks which one. */
-    setGitHubDefaultBot: async (botId: string | null) =>
+    /** Null clears it, so a comment naming none asks which one; `userId` picks the linked user. */
+    setGitHubDefaultBot: async (botId: string | null, userId?: string) =>
       gitHubAnswer(
-        await cloud.call(`${CONNECTOR_PATHS.github}/default-bot`, { v: 1, botId }, z.undefined(), {
-          method: 'PUT'
-        })
+        await cloud.call(
+          `${CONNECTOR_PATHS.github}/default-bot`,
+          userId ? { v: 1, botId, userId } : { v: 1, botId },
+          z.undefined(),
+          { method: 'PUT' }
+        )
       )
   }
 }

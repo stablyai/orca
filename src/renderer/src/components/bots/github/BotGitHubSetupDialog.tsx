@@ -29,7 +29,10 @@ import {
 import { BotHostSignInButton } from '../BotHostSignInButton'
 import { useBotHostLabel } from '../use-bot-host-label'
 import type { Bot } from '../../../../../shared/bot-types'
-import type { ConnectorGitHubInstallation } from '../../../../../shared/connector-bot-github-contract'
+import {
+  type ConnectorGitHubInstallation,
+  gitHubLinkedAccounts
+} from '../../../../../shared/connector-bot-github-contract'
 import { signedOutHere } from '../bot-host-copy'
 import { BOT_SLACK_DESKTOP_ERRORS } from '../../../../../shared/connector-bot-slack-contract'
 import { botErrorMessage } from '../bot-presentation'
@@ -172,16 +175,20 @@ function BotGitHubSetupFlow({
       {t('bots.github.setup.close', 'Close')}
     </Button>
   )
+  const logins = view.status === 'ready' ? gitHubLinkedAccounts(view.github) : []
   const signedIn = (login: string): React.JSX.Element => (
     <SignedInAs
-      who={`@${login}`}
-      onNotYou={() =>
-        void (async () => {
-          const hostBots = readBots().filter((entry) => entry.hostId === bot.hostId)
-          if (await confirmSignOut(hostBots, { source: 'github', login })) {
-            await signIn.anotherAccount(() => botGitHubCalls(bot.hostId).unlink(), bot)
-          }
-        })()
+      who={logins.length > 1 ? logins.map((entry) => `@${entry.login}`).join(', ') : `@${login}`}
+      onNotYou={
+        logins.length > 1
+          ? null
+          : () =>
+              void (async () => {
+                const hostBots = readBots().filter((entry) => entry.hostId === bot.hostId)
+                if (await confirmSignOut(hostBots, { source: 'github', login })) {
+                  await signIn.anotherAccount(() => botGitHubCalls(bot.hostId).unlink(), bot)
+                }
+              })()
       }
     />
   )

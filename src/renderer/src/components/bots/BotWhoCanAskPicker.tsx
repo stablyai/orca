@@ -115,11 +115,13 @@ export function BotWhoCanAskPicker({
 
   const found = search.status === 'ready' ? search.found.members : []
   const handles = new Map(found.map((person) => [person.id, person.handle]))
-  const addable = found.filter((person) => !added.has(person.id) && person.id !== service.ownerId)
+  const isOwner = (id: string): boolean =>
+    id === service.ownerId || (service.otherOwnerIds?.includes(id) ?? false)
+  const addable = found.filter((person) => !added.has(person.id) && !isOwner(person.id))
   const withAccess = listed.filter(
     (member) => matches(member.name || member.id, needle) || found.some((p) => p.id === member.id)
   )
-  const ownerShown = needle === '' || found.some((person) => person.id === service.ownerId)
+  const ownerShown = needle === '' || found.some((person) => isOwner(person.id))
   const idle = needle === '' ? service.idleHint : undefined
 
   const pickRow = (member: BotMember, handle?: string): React.JSX.Element => {
