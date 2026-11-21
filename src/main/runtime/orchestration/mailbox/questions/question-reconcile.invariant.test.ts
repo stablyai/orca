@@ -326,7 +326,7 @@ class World {
           this.take(ids, taker, false)
           this.observe(session(to))
         } else {
-          this.state[op.to] = 'running'
+          this.state[to] = 'running'
           this.take(ids, taker, true)
           this.observe(session(to))
         }
