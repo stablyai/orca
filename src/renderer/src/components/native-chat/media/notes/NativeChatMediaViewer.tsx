@@ -176,7 +176,7 @@ function ViewerBody({
       showCloseButton={false}
       onInteractOutside={onInteractOutside}
       data-native-chat-copy-image-src={copySrc}
-      surface="media"
+      surface="media-canvas"
       onOpenAutoFocus={(event) => {
         // Focus starts on the media, not on the first toolbar button, and returns to the opener.
         openerFocus.current = document.activeElement

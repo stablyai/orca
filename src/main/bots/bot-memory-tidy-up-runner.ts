@@ -25,7 +25,6 @@ import {
   turnFailed,
   watchBackgroundRun
 } from './bot-background-run'
-import type { BotHomeFilesystem } from './bot-home'
 import {
   failedLooksInARow,
   LOOK_FAILURES_TO_TURN_OFF,
@@ -45,13 +44,13 @@ import {
   type TidyUpChat,
   type TidyUpMemoryFile,
   tidyUpOwed,
-  tidyUpPrompt,
   tidyUpRunSummary,
   type TidyUpApplied,
   tidyNowRefusal,
   tidyUpState
 } from './bot-memory-tidy-up'
-import { applyTidyUpDraft } from './bot-memory-tidy-up-apply'
+import { memoryFitsOps, TIDY_UP_OPS_PILOT_FILE, type TidyUpFiles } from './bot-memory-ops-pilot'
+import { tidyUpFormat } from './bot-memory-tidy-up-format'
 import type { BotTurnWatch } from './bot-run-turn-watch'
 
 export type BotTidyUpRunnerDeps = {
@@ -63,7 +62,7 @@ export type BotTidyUpRunnerDeps = {
   /** Whether any of the bot's conversations is running a turn. */
   busy: (bot: Bot) => boolean
   memory: Pick<BotMemoryRecord, 'change' | 'history'>
-  fs: Pick<BotHomeFilesystem, 'readText' | 'writeText' | 'replaceText' | 'makeDirectory'>
+  fs: TidyUpFiles
   /** The files in the bot's memory/ folder, the archive among them, as far as the prompt reads. */
   memoryFiles: (folder: string) => Promise<TidyUpMemoryFile[]>
   homeFolder: (bot: Bot) => string
@@ -197,13 +196,17 @@ export class BotTidyUpRunner {
     let startedAt = this.deps.now()
     let chatCount = 0
     try {
-      const since = tidyUpState(this.deps.store.get(bot.id)).through
-      const chats = await this.deps
-        .newChats(bot, since ?? startedAt - TIDY_UP_FIRST_LOOKBACK_MS)
-        .catch((error: unknown) => {
-          console.warn('[bots] tidy-up could not read its chats', error)
-          return null
-        })
+      const at = tidyUpState(this.deps.store.get(bot.id))
+      const readFrom = at.through ?? at.firstFrom ?? startedAt - TIDY_UP_FIRST_LOOKBACK_MS
+      // Before any run applied, where reading starts is kept first, so a run that fails, can't
+      // read its chats, or is cut off by a restart never moves the next one's start later.
+      if (at.through === undefined && at.firstFrom === undefined) {
+        this.change(bot.id, (state) => ({ ...state, firstFrom: readFrom }))
+      }
+      const chats = await this.deps.newChats(bot, readFrom).catch((error: unknown) => {
+        console.warn('[bots] tidy-up could not read its chats', error)
+        return null
+      })
       // Unread chats are never skipped: the watermark stays, and a scheduled run tries again on a
       // later tick. Tidy now says why it stopped.
       if (chats === null) {
@@ -221,6 +224,15 @@ export class BotTidyUpRunner {
       chatCount = chats.length
       const memory = (await this.deps.fs.readText(join(folder, 'MEMORY.md'))) ?? ''
       const files = await this.deps.memoryFiles(folder)
+      // The marker counts by being there: its contents are never read.
+      const pilot = (await this.deps.fs.statFile(join(folder, TIDY_UP_OPS_PILOT_FILE))) !== null
+      // A pilot bot never falls back to the whole-file reply: it waits until its file fits.
+      if (pilot && !memoryFitsOps(memory)) {
+        this.change(bot.id, (state) => beginTidyUp(state, sessionId, startedAt))
+        begun = true
+        ended = { error: TIDY_UP_FAILURES.notListLines, alerted: false }
+        return
+      }
       // Checked again after reading, as near the start as it can be: an owner turn may have begun.
       if (!this.idle(bot)) {
         return
@@ -233,7 +245,7 @@ export class BotTidyUpRunner {
       // The ten minutes run from here, through the reply; the apply after is local and is never
       // cut off midway, though a sleep in it still makes the run missed.
       watch = watchBackgroundRun(this.deps.power, sessionId)
-      const text = tidyUpPrompt({ memory, files, chats, today })
+      const format = tidyUpFormat({ memory, files, chats, today, pilot })
       start = startWithinLimit(
         watch,
         {
@@ -242,7 +254,7 @@ export class BotTidyUpRunner {
             await gate.beforeFirstMessage()
             const send = await this.deps.sessions.startConversation(bot, {
               sessionId,
-              text,
+              text: format.prompt,
               beforeFirstMessage: gate.beforeFirstMessage,
               beforeDelivery: gate.beforeDelivery,
               title: 'Tidy-up',
@@ -260,18 +272,15 @@ export class BotTidyUpRunner {
       const outcome =
         'error' in reply
           ? reply
-          : await applyTidyUpDraft(this.deps, {
-              botId: bot.id,
-              folder,
-              memory,
-              reply: reply.text,
-              today
-            })
+          : await format.apply(this.deps, { botId: bot.id, folder, reply: reply.text })
       if ('error' in outcome) {
         ended = outcome
       } else {
         applied = outcome
-        ended = { through: startedAt }
+        // The status move applied but the ops failed: kept as a failure, its chats read again.
+        ended = outcome.opsFailed
+          ? { error: outcome.opsFailed, alerted: false }
+          : { through: startedAt }
         // Its own row, read now: a summary without it only loses its Undo link.
         historyRows = await this.deps.memory.history(bot.id).catch(() => [])
       }
@@ -295,12 +304,11 @@ export class BotTidyUpRunner {
         const summary = applied && tidyUpRunSummary(historyRows, applied, at)
         this.change(bot.id, (state) => {
           const quiet = 'error' in ended && ended.alerted && lookFailureIsQuiet(state, sessionId)
-          const next = endTidyUp(
-            state,
-            sessionId,
-            this.deps.now(),
-            quiet ? { ...ended, alerted: false } : ended
-          )
+          const ending = quiet ? { ...ended, alerted: false } : ended
+          const closed = endTidyUp(state, sessionId, this.deps.now(), ending)
+          // Once a run applied, its watermark is where reading starts.
+          const { firstFrom: _firstFrom, ...onward } = closed
+          const next = 'through' in ending ? onward : closed
           return summary ? { ...next, last: summary } : next
         })
         if (summary) {

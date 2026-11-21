@@ -11,6 +11,7 @@ const NOW = 10_000_000
 const windowWidth = vi.hoisted(() => ({ value: 430 }))
 
 vi.mock('react-native', () => ({
+  ActivityIndicator: 'ActivityIndicator',
   Dimensions: { get: () => ({ width: windowWidth.value, height: 900 }) },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
@@ -31,6 +32,7 @@ vi.mock('../../../../agents/presentation/AgentStateDot', () => ({
   AgentStateDot: 'AgentStateDot'
 }))
 vi.mock('../../../../hooks/use-now', () => ({ useNow: () => NOW }))
+vi.mock('../../../../platform/haptics/haptics', () => ({ triggerSelection: () => {} }))
 
 function view(id: string, overrides: Partial<AgentChildWorkView> = {}): AgentChildWorkView {
   return {

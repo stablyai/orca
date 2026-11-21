@@ -45,13 +45,18 @@ function DialogClose({ ...props }: React.ComponentProps<typeof DialogPrimitive.C
 
 function DialogOverlay({
   className,
+  scrim = 'default',
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
+}: React.ComponentProps<typeof DialogPrimitive.Overlay> & {
+  /** `dark` hides the app behind full-window media. */
+  scrim?: 'default' | 'dark'
+}) {
   return (
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        'fixed inset-0 z-50 bg-black/55 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
+        'fixed inset-0 z-50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
+        scrim === 'dark' ? 'bg-black/80' : 'bg-black/55',
         className
       )}
       {...props}
@@ -70,11 +75,14 @@ const dialogContentSurfaceVariants = cva('', {
       panel: 'gap-0 p-0',
       /** `panel`, opaque: content scrolling under sticky headings (`bg-popover`) must not show through. */
       'opaque-panel': 'gap-0 bg-popover p-0',
-      /** Full window on the media surround, for viewing a picture edge to edge in either theme. */
-      media:
+      /** Full window on the media surround, for notes on a picture edge to edge in either theme. */
+      'media-canvas':
         'h-dvh w-dvw max-w-none gap-0 rounded-none border-0 bg-media-canvas p-0 text-media-canvas-foreground shadow-none sm:max-w-none',
       /** Trust, consent and provenance decisions: host-owned tokens a plugin theme cannot restyle. */
-      security: SECURITY_SURFACE_CLASS
+      security: SECURITY_SURFACE_CLASS,
+      /** Media sits straight on the scrim; scaling in would make its edge controls slide. */
+      media:
+        'inset-0 h-dvh w-screen max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 bg-transparent p-0 shadow-none data-[state=closed]:[--tw-exit-scale:1]! data-[state=open]:[--tw-enter-scale:1]! sm:max-w-none dark:shadow-none'
     }
   },
   defaultVariants: { surface: 'default' }
@@ -150,7 +158,10 @@ function DialogContent({
   const { onOpenAutoFocus, onPointerDownOutside, onInteractOutside } = props
   return (
     <DialogPortal data-slot="dialog-portal">
-      <DialogOverlay className={overlayClassName} />
+      <DialogOverlay
+        className={overlayClassName}
+        scrim={surface === 'media' ? 'dark' : 'default'}
+      />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         data-size={size}

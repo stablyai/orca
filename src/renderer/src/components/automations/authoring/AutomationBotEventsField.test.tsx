@@ -11,7 +11,7 @@ import type { AutomationDraft } from './AutomationEditorDialog'
 import { AutomationEditorSettingsSidebar } from './AutomationEditorSettingsSidebar'
 import { AutomationSchedulePicker } from './AutomationSchedulePicker'
 import { buildAutomationEditDraft } from './automation-edit-draft'
-import { botSchedulePatch } from './automation-bot-save'
+import { botSchedulePatch } from '../../../../../shared/automations/bot-automation-target-edit'
 import { makeAutomation } from '../automations-page-fixtures'
 import { AUTOMATION_DEFAULT_TIME } from './automation-draft-model'
 
