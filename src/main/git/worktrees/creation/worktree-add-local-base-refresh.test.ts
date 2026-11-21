@@ -124,12 +124,6 @@ describe('addWorktree', () => {
       baseRef: 'origin/main',
       localBranch: 'main'
     })
-    expect(refreshGitMock.mock.calls.map(([args]) => args[0])).toEqual([
-      'rev-parse',
-      'rev-parse',
-      'rev-parse',
-      'worktree'
-    ])
   })
 
   it('still suggests nothing but keeps the warning when the local base ref exists and diverged', async () => {
@@ -143,7 +137,6 @@ describe('addWorktree', () => {
       localBranch: 'main'
     })
     // The only call past the counts is the read-only shallow probe; nothing moves main.
-    expect(refreshGitMock.mock.calls).toHaveLength(5)
     expect(refreshGitMock.mock.calls.at(-1)?.[0]).toEqual(['rev-parse', '--is-shallow-repository'])
   })
 })

@@ -18,8 +18,8 @@ import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import {
   isSamePath,
   readGitDirState,
-  resolveBranchCheckouts,
-  type GitDirState
+  readLinkedCheckoutDir,
+  resolveBranchCheckouts
 } from './git-dir-branch-state'
 import {
   translateWslOutputPath,
@@ -204,18 +204,16 @@ function localBaseBranchGit(
     bareRepos.set(commonDir.path, known)
     return known
   }
-  const checkoutsOf = async (
-    repoPath: string,
-    fullRef: string,
-    commonDir: { raw: string; path: string },
-    state: GitDirState
-  ) =>
-    resolveBranchCheckouts(
-      state,
-      commonDir.path,
-      fullRef,
-      (await isBareRepo(repoPath, commonDir)) ? commonDir.path : undefined
-    )
+  const bareDirOf = async (repoPath: string, commonDir: { raw: string; path: string }) =>
+    (await isBareRepo(repoPath, commonDir)) ? commonDir.path : undefined
+  const ownerPathOf = async (repoPath: string, gitDir: string, commonDir: string) => {
+    if (gitDir !== commonDir) {
+      return readLinkedCheckoutDir(gitDir, (path) =>
+        translateWslOutputPath(path, repoPath, routed(repoPath))
+      )
+    }
+    return (await isSamePath(join(repoPath, '.git'), commonDir)) ? repoPath : undefined
+  }
   return {
     exec: (args, cwd) => gitExecFileAsync(args, execOptions(cwd)),
     // HEAD files answer the common cases; listing every worktree costs seconds at thousands of them.
@@ -225,28 +223,32 @@ function localBaseBranchGit(
       if (state.reserved.has(fullRef)) {
         return { reserved: true }
       }
-      const use = await checkoutsOf(repoPath, fullRef, commonDir, state)
+      const bareDir = await bareDirOf(repoPath, commonDir)
+      const use = await resolveBranchCheckouts(state, commonDir.path, fullRef, bareDir)
       if (use.kind === 'free') {
         return { reserved: false }
       }
-      // Moving one of several checkouts would leave the others' files behind.
-      if (use.kind === 'owned' && use.gitDirs.length > 1) {
-        return { reserved: true }
+      const [onlyOwner, ...others] = use.kind === 'owned' ? use.gitDirs : []
+      const ownerPath =
+        onlyOwner && others.length === 0
+          ? await ownerPathOf(repoPath, onlyOwner, commonDir.path)
+          : undefined
+      if (ownerPath !== undefined) {
+        return { reserved: false, ownerPath }
       }
-      if (
-        use.kind === 'owned' &&
-        use.gitDirs[0] === commonDir.path &&
-        (await isSamePath(join(repoPath, '.git'), commonDir.path))
-      ) {
-        return { reserved: false, ownerPath: repoPath }
-      }
-      // A linked owner's path, or what the files cannot tell: Git's listing decides.
+      // Several owners (Git lists the primary first), or what the files cannot tell: Git's listing decides.
       const owner = (await listWorktrees(repoPath)).find((wt) => wt.branch === fullRef)
-      return { reserved: false, ...(owner ? { ownerPath: owner.path } : {}) }
+      return {
+        reserved: false,
+        ...(owner ? { ownerPath: owner.path } : {}),
+        ...(others.length > 0 ? { sharedCheckout: true as const } : {})
+      }
     },
     // The inspection just ran; the admitted file recheck below guards the gap.
     updateRefUnlessInUse: async (repoPath, fullRef, args) => {
       const commonDir = await commonDirOf(repoPath)
+      // Resolve before admission: the recheck below must not run Git while it holds the slot.
+      const bareDir = await bareDirOf(repoPath, commonDir)
       let inUse = false
       try {
         await gitExecFileAsync(args, {
@@ -256,7 +258,8 @@ function localBaseBranchGit(
             const state = await readGitDirState(commonDir.path)
             inUse =
               state.reserved.has(fullRef) ||
-              (await checkoutsOf(repoPath, fullRef, commonDir, state)).kind !== 'free'
+              (await resolveBranchCheckouts(state, commonDir.path, fullRef, bareDir)).kind !==
+                'free'
             return !inUse
           }
         })

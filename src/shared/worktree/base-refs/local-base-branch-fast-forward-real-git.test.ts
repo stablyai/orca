@@ -204,6 +204,22 @@ describe('fastForwardCheckedOutLocalBaseBranch against real Git', () => {
     expect(fixture.git(['status', '--porcelain'])).toBe('')
   })
 
+  it('leaves a main that several checkouts share alone', async () => {
+    const fixture = await createBehindRepo()
+    const { git } = realGit(fixture)
+    const shared: LocalBaseBranchGit = {
+      ...git,
+      readBranchUse: async (repoPath, fullRef) => ({
+        ...(await git.readBranchUse(repoPath, fullRef)),
+        sharedCheckout: true
+      })
+    }
+
+    await fastForwardCheckedOutLocalBaseBranch(shared, refs(fixture))
+
+    expect(fixture.git(['rev-parse', 'main'])).toBe(fixture.localOid)
+  })
+
   it('leaves a checked-out main with uncommitted edits alone', async () => {
     const fixture = await createBehindRepo()
     await writeFile(join(fixture.repoPath, 'version.txt'), 'mine\n')

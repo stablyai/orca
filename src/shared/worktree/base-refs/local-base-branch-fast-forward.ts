@@ -4,14 +4,13 @@ import { parseGitRevListAheadBehindCounts } from '../../git/refs/git-rev-list-ou
 import { isShowRefNoMatchError } from '../../git/refs/git-show-ref-no-match'
 import type { LocalBaseRefRefreshResult } from './base-ref-drift-types'
 
+type LocalBaseBranchUse = { reserved: boolean; ownerPath?: string; sharedCheckout?: true }
+
 /** Share one policy across local/WSL main and SSH relay. exec rejects nonzero exits with Git output attached. */
 export type LocalBaseBranchGit = {
   exec: (args: string[], cwd: string) => Promise<{ stdout: string }>
-  /** Whether a rebase or bisect reserves the branch (its worktree shows a detached HEAD), else the path of the worktree that has it checked out, as this host reports it. */
-  readBranchUse: (
-    repoPath: string,
-    fullRef: string
-  ) => Promise<{ reserved: boolean; ownerPath?: string }>
+  /** Whether a rebase or bisect reserves the branch (its worktree shows a detached HEAD), else the path of the worktree that has it checked out, as this host reports it; `sharedCheckout` when more than one does. */
+  readBranchUse: (repoPath: string, fullRef: string) => Promise<LocalBaseBranchUse>
   /** Runs `update-ref args` unless the branch is in use, rechecked once admitted, just before Git starts; false when skipped. */
   updateRefUnlessInUse: (repoPath: string, fullRef: string, args: string[]) => Promise<boolean>
 }
@@ -36,6 +35,8 @@ export type LocalBaseBranchInspection =
       remoteOid: string
       /** Set when a worktree has the branch checked out; only that checkout may move it. */
       ownerWorktreePath?: string
+      /** Several checkouts have it: moving one would leave the others' files behind. */
+      shared?: true
     }
   | {
       status: Exclude<LocalBaseRefRefreshStatus, 'updated'>
@@ -94,21 +95,20 @@ export async function inspectLocalBaseBranch(
       : { status: 'skipped_not_fast_forward' }
   }
 
-  let owner: { path: string } | undefined
+  let use: LocalBaseBranchUse
   try {
     // Git's in-use rule also counts a branch a rebase or bisect has reserved.
-    const use = await git.readBranchUse(repoPath, fullRef)
-    if (use.reserved) {
-      return { status: 'nothing_to_do' }
-    }
-    owner = use.ownerPath === undefined ? undefined : { path: use.ownerPath }
+    use = await git.readBranchUse(repoPath, fullRef)
   } catch {
     return { status: 'skipped_error' }
   }
-  if (owner && skipCheckedOut) {
+  const owner = use.ownerPath
+  if (use.reserved || (owner && skipCheckedOut)) {
     return { status: 'nothing_to_do' }
   }
-  const ownerPath = owner ? { ownerWorktreePath: owner.path } : {}
+  const ownerPath = owner
+    ? { ownerWorktreePath: owner, ...(use.sharedCheckout ? { shared: true as const } : {}) }
+    : {}
 
   let counts: ReturnType<typeof parseGitRevListAheadBehindCounts>
   try {
@@ -178,7 +178,7 @@ export async function fastForwardCheckedOutLocalBaseBranch(
   refs: LocalBaseBranchRefs
 ): Promise<void> {
   const inspection = await inspectLocalBaseBranch(git, refs)
-  if (inspection.status !== 'behind' || !inspection.ownerWorktreePath) {
+  if (inspection.status !== 'behind' || !inspection.ownerWorktreePath || inspection.shared) {
     return
   }
   const { ownerWorktreePath, remoteOid } = inspection
