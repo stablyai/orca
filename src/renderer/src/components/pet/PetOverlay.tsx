@@ -4,10 +4,8 @@ import { usePetUrl } from './usePetUrl'
 import type { DetectedSpriteCacheEntry } from './pet-blob-cache'
 import type { CustomPet } from '../../../../shared/pets/pet-types'
 import { useAppStore } from '../../store'
-import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import {
-  selectPetAnimationName,
+  selectPetAgentAnimation,
   type PetAnimationName,
   type PetDragAnimation
 } from './pet-agent-state'
@@ -21,19 +19,8 @@ function usePetAnimationName(
   dragAnimation: PetDragAnimation,
   hovering: boolean
 ): PetAnimationName {
-  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
-  const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
-  // Scheduler ticks expire animation evidence even without other store updates; read the boundary clock before paint.
-  const agentStatusNow = getAgentStatusEpochNow(agentStatusEpoch)
-
-  return selectPetAnimationName({
-    entries: Array.from(agentStatusByPaneKey.values()),
-    dragging,
-    dragAnimation,
-    hovering,
-    now: agentStatusNow,
-    staleAfterMs: AGENT_STATUS_STALE_AFTER_MS
-  })
+  const base = useAppStore(selectPetAgentAnimation)
+  return dragging ? (dragAnimation ?? base) : hovering ? 'jumping' : base
 }
 
 // Step backgrounds across the resolved sprite row; pixelated rendering keeps fractional-scale edges crisp.

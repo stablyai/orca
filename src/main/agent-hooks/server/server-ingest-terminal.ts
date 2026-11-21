@@ -193,6 +193,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         rows: this.state.lastStatusByPaneKey,
         paneKey,
         yieldedTo: previous?.receivedAt,
+        observation: previous?.observation,
         delayMs,
         event,
         reoffer: (retried) => this.ingestTerminalStatus(retried)
@@ -262,6 +263,14 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       (claimedAgentType === undefined || claimedAgentType === previous.payload.agentType)
         ? previous.payload.mainAgent
         : undefined)
+    const preservedModel =
+      !newRun &&
+      !payload.sessionBoundary &&
+      payload.state === 'done' &&
+      preservedProviderSession &&
+      previous?.payload.agentType === 'antigravity'
+        ? previous.payload.model
+        : undefined
     // Terminal observations cannot establish prompt-sent telemetry.
     const applied = this.applyNormalizedStatus(
       {
@@ -271,7 +280,10 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         connectionId,
         ...(preservedProviderSession ? { providerSession: preservedProviderSession } : {}),
         ...(terminalHandle ? { terminalHandle } : {}),
-        payload: preservedMainAgent ? { ...payload, mainAgent: preservedMainAgent } : payload
+        payload:
+          preservedMainAgent || (preservedModel && !payload.model)
+            ? { ...payload, mainAgent: preservedMainAgent, model: payload.model ?? preservedModel }
+            : payload
       },
       undefined,
       event.origin ?? 'osc',

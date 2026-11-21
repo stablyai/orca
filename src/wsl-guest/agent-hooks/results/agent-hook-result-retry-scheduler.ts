@@ -1,3 +1,7 @@
+import {
+  activateReplayedModelPolls,
+  type CachedPaneEnvelopeMeta
+} from '../status/agent-hook-cached-pane-status'
 import { hookBodyEnv, hookBodyVersion } from '../publication/agent-hook-envelope-build'
 import {
   withHookTranscriptPoll,
@@ -48,7 +52,8 @@ export type AgentHookResultRetryHost = {
     event: AgentHookEventPayload,
     source: AgentHookSource,
     env?: string,
-    version?: string
+    version?: string,
+    modelOnly?: boolean
   ) => AgentHookEventPayload | undefined
 }
 
@@ -72,7 +77,7 @@ export class AgentHookResultRetryScheduler {
     this.claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(host.state)
     this.transcriptPollScheduler = new AgentTranscriptPollScheduler(
       CODEX_SUBAGENT_POLL_MS,
-      (paneKey, poll, wanted) => this.runTranscriptPoll(paneKey, poll, wanted)
+      (paneKey, poll, signal) => this.runTranscriptPoll(paneKey, poll, signal)
     )
   }
 
@@ -119,12 +124,11 @@ export class AgentHookResultRetryScheduler {
     this.claudeHelperKills.schedule(row, receivedAt)
   }
 
-  /** Starts work that needs the bound listener; replayed agy panes re-arm their transcript polls. */
-  activateListening(replayedAntigravity: ReadonlyMap<string, unknown>): void {
+  activateListening(metadata: ReadonlyMap<string, CachedPaneEnvelopeMeta>): void {
     this.claudeHelperKills.activate()
-    for (const body of replayedAntigravity.values()) {
-      this.rearmIgnoredHook('antigravity', body)
-    }
+    activateReplayedModelPolls(this.host.state, metadata, (row, env, version) =>
+      this.scheduleTranscriptPoll('antigravity', undefined, row, env, version)
+    )
   }
 
   scheduleTranscriptPoll(
@@ -135,12 +139,14 @@ export class AgentHookResultRetryScheduler {
     version?: string,
     delayMs?: number
   ): void {
+    const prior = this.transcriptPollScheduler.peek(original.paneKey)
+    const sameRow = prior?.source === source && prior.original === original ? prior : undefined
     scheduleHookTranscriptPoll(this.transcriptPollScheduler, this.host.state, {
       source,
       body,
       original,
-      env,
-      version,
+      env: env ?? sameRow?.env ?? hookBodyEnv(body),
+      version: version ?? sameRow?.version ?? hookBodyVersion(body),
       delayMs
     })
   }
@@ -150,20 +156,14 @@ export class AgentHookResultRetryScheduler {
       this.transcriptPollScheduler.peek(key)
     )
     if (poll) {
-      this.scheduleTranscriptPoll(
-        poll.source,
-        poll.body,
-        poll.original,
-        hookBodyEnv(poll.body),
-        hookBodyVersion(poll.body)
-      )
+      this.scheduleTranscriptPoll(poll.source, poll.body, poll.original)
     }
   }
 
   private runTranscriptPoll(
     paneKey: string,
     poll: TranscriptPoll,
-    wanted: () => boolean
+    signal: AbortSignal
   ): void | Promise<void> {
     if (!this.ownsTranscriptPoll(paneKey, poll)) {
       return
@@ -180,8 +180,8 @@ export class AgentHookResultRetryScheduler {
         ? current
         : undefined
     }
-    const live = () => wanted() && this.generation === generation && Boolean(currentOwner())
-    return withHookTranscriptPoll(this.host.state, paneKey, poll.source, live, (reads) => {
+    const live = () => !signal.aborted && this.generation === generation && Boolean(currentOwner())
+    return withHookTranscriptPoll(this.host.state, paneKey, poll.source, live, signal, (reads) => {
       const owner = currentOwner()
       if (owner) {
         this.applyTranscriptPoll(paneKey, owner, reads)
@@ -211,7 +211,9 @@ export class AgentHookResultRetryScheduler {
     }
     const update = transcriptPollUpdate(source, original, event)
     // Why: the next tick's identity check compares against the stored row, not the update it was copied from.
-    const next = update ? this.host.applyEvent(update, source, env, version) : original
+    const next = update
+      ? this.host.applyEvent(update, source, env, version, source === 'antigravity')
+      : original
     if (next) {
       const quiet = !update && museLogOffset(this.host.state, paneKey) === logOffset
       const delayMs = nextHookTranscriptPollDelay(

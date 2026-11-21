@@ -23,6 +23,7 @@ export async function withHookTranscriptPoll(
   paneKey: string,
   source: 'codex' | 'antigravity',
   live: () => boolean,
+  signal: AbortSignal,
   consume: (reads: HookTranscriptPollReads) => void
 ): Promise<void> {
   if (!live()) {
@@ -30,8 +31,8 @@ export async function withHookTranscriptPoll(
   }
   const reads =
     source === 'codex'
-      ? { codex: await readCodexTranscriptPoll(state, paneKey, live) }
-      : { antigravity: await readAntigravityTranscriptPoll(state, paneKey, live) }
+      ? { codex: await readCodexTranscriptPoll(state, paneKey, live, signal) }
+      : { antigravity: await readAntigravityTranscriptPoll(state, paneKey, live, signal) }
   try {
     if (live()) {
       consume(reads)

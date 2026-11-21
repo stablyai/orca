@@ -1,3 +1,6 @@
+import { agentStatusEvidenceObservedAt } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
+import { agentVerdictDisplayMark } from '../../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import { resolveProgramStatusPresentation } from '../../../../../../shared/program-status/presentation'
 import { structuralValuesEqualIgnoringUndefined as equal } from '../../../../../../shared/collections/structural-value-equality'
 import { isAiVaultTitleAgent } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { AgentStatusProjection } from '../projection/agent-status-projection'
@@ -12,6 +15,8 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
   titleRevision = 0
   /** Like titleRevision, but over every agent's session identity (the saved terminal names read it). */
   sessionRevision = 0
+  orchestrationRevision = 0
+  activityRevision = 0
   private pending: Map<string, AgentStatusEntry | null> | null = null
   private operations: AgentStatusReplacement[] = []
   private moved = new Set<string>()
@@ -60,6 +65,8 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
       : new AcceptedAgentStatuses(this.rows, this.projection, this.sleepingCount)
     draft.titleRevision = this.titleRevision
     draft.sessionRevision = this.sessionRevision
+    draft.orchestrationRevision = this.orchestrationRevision
+    draft.activityRevision = this.activityRevision
     draft.pending ??= new Map()
     for (const [key, value] of replacements) {
       const prior = draft.get(key)
@@ -88,6 +95,8 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
       : new AcceptedAgentStatuses(this.rows, this.projection, this.sleepingCount)
     draft.titleRevision = this.titleRevision
     draft.sessionRevision = this.sessionRevision
+    draft.orchestrationRevision = this.orchestrationRevision
+    draft.activityRevision = this.activityRevision
     draft.pending ??= new Map()
     draft.refreshes = keys
     return draft
@@ -152,7 +161,7 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
       entry && isAiVaultTitleAgent(entry.agentType) ? sessionFact(entry) : undefined
     const changes = this.changes()
     // A moved key changes iteration order, which picks between equal-priority panes of one tab.
-    const changedBy = (read: typeof fact) =>
+    const changedBy = (read: (entry: AgentStatusEntry | undefined) => unknown) =>
       changes.some(
         (change) =>
           !equal(read(change.previous), read(change.current)) ||
@@ -160,7 +169,19 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
       )
     const titleRevision = this.titleRevision + Number(changedBy(fact))
     const sessionRevision = this.sessionRevision + Number(changedBy(sessionFact))
+    const orchestrationRevision =
+      this.orchestrationRevision +
+      Number(
+        changedBy((entry) =>
+          entry?.orchestration
+            ? [entry.paneKey, entry.connectionId, entry.worktreeId, entry.orchestration]
+            : undefined
+        )
+      )
+    const activityRevision = this.activityRevision + Number(changedBy(activityFact))
     return () => {
+      this.orchestrationRevision = orchestrationRevision
+      this.activityRevision = activityRevision
       this.titleRevision = titleRevision
       this.sessionRevision = sessionRevision
       for (const [key, value] of this.operations) {
@@ -185,6 +206,8 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
     )
     captured.titleRevision = this.titleRevision
     captured.sessionRevision = this.sessionRevision
+    captured.orchestrationRevision = this.orchestrationRevision
+    captured.activityRevision = this.activityRevision
     return captured
   }
 
@@ -231,6 +254,24 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
       callback.call(thisArg, value, key, this)
     }
   }
+}
+
+function activityFact(entry: AgentStatusEntry | undefined): readonly unknown[] | undefined {
+  if (!entry) {
+    return undefined
+  }
+  const progress = resolveProgramStatusPresentation(entry).progress
+  return [
+    entry.paneKey,
+    entry.state,
+    entry.workingMode,
+    agentVerdictDisplayMark(entry),
+    entry.restoredUnconfirmed,
+    entry.structuredHostOwned,
+    entry.structuredHostOwned ? undefined : agentStatusEvidenceObservedAt(entry),
+    progress,
+    progress === undefined ? undefined : entry.updatedAt
+  ]
 }
 
 export function acceptedAgentStatuses(

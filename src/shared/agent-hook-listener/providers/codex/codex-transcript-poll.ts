@@ -38,7 +38,8 @@ export type CodexTranscriptPollReads = {
 export async function readCodexTranscriptPoll(
   state: HookListenerState,
   paneKey: string,
-  live: () => boolean = () => true
+  live: () => boolean = () => true,
+  signal?: AbortSignal
 ): Promise<CodexTranscriptPollReads> {
   const roster = state.codexSubagentRosterByPaneKey.get(paneKey)
   const transcript = state.codexSubagentTranscriptByPaneKey.get(paneKey)
@@ -47,7 +48,8 @@ export async function readCodexTranscriptPoll(
     () =>
       live() &&
       state.codexSubagentRosterByPaneKey.get(paneKey) === roster &&
-      state.codexSubagentTranscriptByPaneKey.get(paneKey) === transcript
+      state.codexSubagentTranscriptByPaneKey.get(paneKey) === transcript,
+    signal
   )
   try {
     const transcriptReads = transcript?.parent.filePath

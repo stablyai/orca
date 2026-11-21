@@ -120,6 +120,7 @@ describe('RelayAgentHookServer', () => {
       const update = forward.mock.calls[1]![0]
       expect(update).toMatchObject({
         paneKey: PANE_KEY,
+        modelOnly: true,
         payload: { state: 'working', model: 'offline-model', prompt: 'Work' },
         providerSession: { id: 'root' }
       })

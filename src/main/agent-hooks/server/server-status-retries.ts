@@ -47,7 +47,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
 
   private readonly transcriptPollScheduler = new AgentTranscriptPollScheduler<TranscriptPoll>(
     CODEX_SUBAGENT_POLL_MS,
-    (paneKey, poll, wanted) => this.runTranscriptPoll(paneKey, poll, wanted)
+    (paneKey, poll, signal) => this.runTranscriptPoll(paneKey, poll, signal)
   )
 
   protected readonly replayTranscriptPolls = new Map<
@@ -159,7 +159,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
   private runTranscriptPoll(
     paneKey: string,
     poll: TranscriptPoll,
-    wanted: () => boolean
+    signal: AbortSignal
   ): void | Promise<void> {
     if (!this.ownsTranscriptPoll(paneKey, poll)) {
       return
@@ -182,11 +182,12 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       paneKey,
       poll.source,
       () =>
-        wanted() &&
+        !signal.aborted &&
         this.server === server &&
         this.statusHooksEnabled &&
         this.statusHookGeneration === generation &&
         Boolean(currentOwner()),
+      signal,
       (reads) => {
         const owner = currentOwner()
         if (owner) {
@@ -220,7 +221,11 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     // A poll's Stop is read from the hook body too, so a tmux host keeps its shared topology.
     retainTmuxHookWriterTopology(normalized, body)
     const update = transcriptPollUpdate(source, original, normalized)
-    const next = update ? this.applyNormalizedStatus(update) : original
+    const next = update
+      ? source === 'antigravity' && update.payload.model
+        ? this.applyAntigravityModel(original, update.payload.model)
+        : this.applyNormalizedStatus(update)
+      : original
     if (next) {
       const quiet = !update && museLogOffset(this.state, paneKey) === logOffset
       const delayMs = nextHookTranscriptPollDelay(

@@ -54,7 +54,13 @@ type RowIdentities = {
   worktrees: Map<string, string>
 }
 let rowCache: RowIdentities | undefined
-let cache: { inputs: unknown[]; contexts: Contexts } | undefined
+let cache:
+  | {
+      inputs: unknown[]
+      contexts: Contexts
+      statuses: VisibleOrchestrationState['agentStatusByPaneKey']
+    }
+  | undefined
 let builds = 0
 let aliasBuilds = 0
 let visits = 0
@@ -192,13 +198,18 @@ function terminalProvenance(state: VisibleOrchestrationState) {
 function projection(state: VisibleOrchestrationState): NonNullable<typeof cache> {
   const rows = rowIdentities(state)
   const terminals = terminalProvenance(state)
+  const statuses = state.agentStatusByPaneKey
   const inputs = [
     state.runtimeAgentOrchestrationByPaneKey,
-    state.agentStatusByPaneKey,
+    statuses?.orchestrationRevision,
     terminals,
     rows
   ]
-  if (cache && inputs.every((value, index) => value === cache?.inputs[index])) {
+  if (
+    cache &&
+    (statuses === cache.statuses || (cache.statuses && statuses?.sharesOwner(cache.statuses))) &&
+    inputs.every((value, index) => value === cache?.inputs[index])
+  ) {
     return cache
   }
   builds++
@@ -226,14 +237,12 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
   for (const [key, context] of Object.entries(state.runtimeAgentOrchestrationByPaneKey ?? EMPTY)) {
     adapt(key, context, producerByContext.get(context) ?? LOCAL_EXECUTION_HOST_ID)
   }
-  const embedded = (
-    entry: NonNullable<ReturnType<AppState['agentStatusByPaneKey']['get']>>,
-    worktreeId = entry.worktreeId
-  ) => {
+  for (const entry of statuses?.values() ?? []) {
     visits++
-    if (!entry?.orchestration) {
-      return
+    if (!entry.orchestration) {
+      continue
     }
+    const { worktreeId } = entry
     const row = canonical.get(entry.paneKey)
     const runtime = state.runtimeAgentOrchestrationByPaneKey?.[row?.key ?? entry.paneKey]
     if (
@@ -243,7 +252,7 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
       runtime.dispatchId === entry.orchestration.dispatchId
     ) {
       // Matching graph facts already carry the context's producer, independently of execution routing.
-      return
+      continue
     }
     const tabId = parseAgentStatusPaneIdentity(entry.paneKey)?.tabId
     const terminalKey = worktreeId && tabId ? aliasKey(worktreeId, tabId) : null
@@ -269,15 +278,12 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
       adapt(entry.paneKey, entry.orchestration, host)
     }
   }
-  for (const entry of Array.from(state.agentStatusByPaneKey?.values() ?? [])) {
-    embedded(entry)
-  }
   const previous = cache?.contexts
   const equal =
     previous &&
     Object.keys(previous).length === Object.keys(contexts).length &&
     Object.keys(contexts).every((key) => previous[key] === contexts[key])
-  cache = { inputs, contexts: equal ? previous : contexts }
+  cache = { inputs, statuses, contexts: equal ? previous : contexts }
   return cache
 }
 

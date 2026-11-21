@@ -95,27 +95,21 @@ export function ingestRelayHookSpoolRecord(
   return pending ? pending.then(apply) : apply()
 }
 
-/** Replay the relay's spool in order; `hostOf` binds each record's host. Returns the latest replayed
- *  agy body per pane so its model poll can start after binding. */
+/** Replay the relay's spool in order; the accepted cache owns later activation. */
 export async function drainRelayHookSpool(
   endpointDir: string,
   state: HookListenerState,
   env: string,
   hostOf: (record: SpoolRecord) => RelayHookSpoolHost
-): Promise<ReadonlyMap<string, unknown>> {
+): Promise<void> {
   // Why: records replay in order before the listener binds; one answer allowance covers them all.
   const answerBy = hookRootAnswerDeadline()
-  const replayedAntigravity = new Map<string, unknown>()
   try {
     await drainAgentHookSpoolAsync({
       endpointDir,
       getPersistedLaunchTokenHash: () => undefined,
-      ingest: (record) => {
-        if (record.source === 'antigravity') {
-          replayedAntigravity.set(record.paneKey, buildSpoolHookBody(record))
-        }
-        return ingestRelayHookSpoolRecord(record, state, env, { ...hostOf(record), answerBy })
-      }
+      ingest: (record) =>
+        ingestRelayHookSpoolRecord(record, state, env, { ...hostOf(record), answerBy })
     })
   } catch (err) {
     // Keep the listener starting on downstream failure; the intact spool can retry next restart.
@@ -123,5 +117,4 @@ export async function drainRelayHookSpool(
       `[relay-hook-server] spool replay failed: ${err instanceof Error ? err.message : String(err)}\n`
     )
   }
-  return replayedAntigravity
 }

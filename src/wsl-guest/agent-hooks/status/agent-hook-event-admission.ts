@@ -43,6 +43,7 @@ type RelayHookAdmissionHost = {
 export type RelayHookAdmissionOptions = {
   isReplay?: boolean
   checkPresence?: boolean
+  modelOnly?: boolean
   onAccepted?: (event: AgentHookEventPayload) => void
 }
 
@@ -80,6 +81,33 @@ export function applyRelayHookEvent(
     return undefined
   }
   const previous = host.state.lastStatusByPaneKey.get(incoming.paneKey)
+  if (options.modelOnly) {
+    if (
+      !previous ||
+      source !== 'antigravity' ||
+      previous.payload.agentType !== source ||
+      !incoming.payload.model ||
+      host.isPaneSurfaceRetired(incoming.paneKey)
+    ) {
+      return undefined
+    }
+    const event = {
+      ...previous,
+      payload: { ...previous.payload, model: incoming.payload.model }
+    }
+    if (
+      !cacheRelayLegacyAgentStatus(host.state, event, MAX_CACHED_PANES, (paneKey) =>
+        host.clearPaneState(paneKey)
+      )
+    ) {
+      return undefined
+    }
+    host.forward({
+      ...buildRelayHookEnvelope(incoming, source, env, version),
+      modelOnly: true
+    })
+    return host.state.lastStatusByPaneKey.get(event.paneKey)
+  }
   const evidence = readHookProcessEvidence(host.state, previous, {
     paneKey: incoming.paneKey,
     process: incoming.agentPresence?.process

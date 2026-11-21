@@ -177,3 +177,38 @@ it('derives root identity from bounded first-record provenance, independently of
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+it('applies relay model metadata only to the matching accepted owner without renewing evidence', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'agy-relay-model-'))
+  const rootPath = join(dir, 'root.jsonl')
+  writeFileSync(rootPath, jsonl(ROOT_ORIGIN))
+  const server = new AgentHookServer()
+  try {
+    const root = normalized(hook(rootPath, ROOT, { modelName: 'auto' }))
+    server.ingestRemote(root, 'ssh-a')
+    const before = server.getStatusSnapshotForPane(PANE)[0]!
+    const model = {
+      ...root,
+      hookEventName: undefined,
+      modelOnly: true,
+      payload: { ...root.payload, model: 'resolved-model' }
+    }
+    server.ingestRemote(model, 'ssh-b')
+    expect(server.getStatusSnapshotForPane(PANE)[0]?.model).toBeUndefined()
+    server.ingestRemote(model, 'ssh-a')
+    expect(server.getStatusSnapshotForPane(PANE)[0]).toEqual({
+      ...before,
+      model: 'resolved-model'
+    })
+    const next = normalized(hook(rootPath, 'replacement', { modelName: 'explicit-model' }))
+    server.ingestRemote(next, 'ssh-a')
+    server.ingestRemote(model, 'ssh-a')
+    expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({
+      model: 'explicit-model',
+      providerSession: { id: 'replacement' }
+    })
+  } finally {
+    server.stop()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

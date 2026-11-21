@@ -1,3 +1,4 @@
+import type { Stats } from 'node:fs'
 import { open, readdir, stat, type FileHandle } from 'node:fs/promises'
 import {
   boundTranscriptDirectory,
@@ -5,133 +6,18 @@ import {
   FIRST_RECORD_OPEN_FLAGS,
   parseJsonlFirstRecord,
   planJsonlRead,
+  sameJsonlFile,
+  sameJsonlFingerprint,
   TRANSCRIPT_LINE_MAX_BYTES,
   type JsonlCursor,
   type JsonlCursorBytes,
+  type JsonlFileFingerprint,
   type JsonlFirstRecord
 } from './codex-rollout-jsonl-format'
 
-// Why: an open stalled by an on-access scan holds a libuv thread (4 by default); leave one free for other file work.
-const MAX_CONCURRENT_ROLLOUT_READS = 3
-let rolloutReadsInFlight = 0
-const rolloutReadQueue: { batch: RolloutReadBatch; grant: (granted: boolean) => void }[] = []
-const MIN_ROLLOUT_QUEUE_PRUNE_LENGTH = 16
-let rolloutQueuePruneLength = MIN_ROLLOUT_QUEUE_PRUNE_LENGTH
+import { type RolloutReadBatch, withRolloutReadSlot } from './codex-rollout-read-slots'
 
-let releaseQueued = false
-
-/** One prune per turn however many owners retire, run after their teardown so their wanted checks fail. */
-export function queueAbandonedRolloutReadRelease(): void {
-  if (!releaseQueued) {
-    releaseQueued = true
-    queueMicrotask(releaseAbandonedRolloutReads)
-  }
-}
-
-/** Settles queued reads whose callers gave up; stalled slots would otherwise hold them and their polls. */
-function releaseAbandonedRolloutReads(): void {
-  releaseQueued = false
-  let kept = 0
-  for (const waiter of rolloutReadQueue) {
-    if (waiter.batch.wanted()) {
-      rolloutReadQueue[kept++] = waiter
-    } else {
-      waiter.grant(false)
-    }
-  }
-  rolloutReadQueue.length = kept
-  rolloutQueuePruneLength = Math.max(MIN_ROLLOUT_QUEUE_PRUNE_LENGTH, kept * 2)
-}
-
-// Why: buffers live until their poll or hook applies them; cap what all pending batches hold so many queued panes cannot pile up megabytes each.
-const MAX_HELD_ROLLOUT_BYTES = 16 * 1024 * 1024
-// Why: one pane stalled on a slow open must not hold the whole budget and stall every other pane.
-const MAX_BATCH_HELD_ROLLOUT_BYTES = 4 * 1024 * 1024
-let heldRolloutBytes = 0
-const batchesHoldingBytes = new Set<RolloutReadBatch>()
-
-// Why: a cleared pane's batch can wait forever on a stalled open; its bytes are as good as dropped, so they must not block other panes.
-function releaseAbandonedBatches(): void {
-  for (const batch of batchesHoldingBytes) {
-    if (!batch.wanted()) {
-      batch.release()
-    }
-  }
-}
-
-/** One poll's or hook's reads: whether they are still wanted, and the buffer bytes they hold until released. */
-export class RolloutReadBatch {
-  private held = 0
-  private released = false
-
-  constructor(private readonly isWanted: () => boolean = () => true) {}
-
-  wanted(): boolean {
-    return !this.released && this.isWanted()
-  }
-
-  /** A batch's first read always fits its own cap, and the first read anywhere always fits, so nothing starves. */
-  reserve(bytes: number): boolean {
-    if (this.released || (this.held > 0 && this.held + bytes > MAX_BATCH_HELD_ROLLOUT_BYTES)) {
-      return false
-    }
-    if (heldRolloutBytes > 0 && heldRolloutBytes + bytes > MAX_HELD_ROLLOUT_BYTES) {
-      releaseAbandonedBatches()
-      if (heldRolloutBytes > 0 && heldRolloutBytes + bytes > MAX_HELD_ROLLOUT_BYTES) {
-        return false
-      }
-    }
-    heldRolloutBytes += bytes
-    this.held += bytes
-    batchesHoldingBytes.add(this)
-    return true
-  }
-
-  /** Returns bytes a read already dropped, such as a parsed first-line buffer. */
-  unreserve(bytes: number): void {
-    const returned = Math.min(bytes, this.held)
-    heldRolloutBytes -= returned
-    this.held -= returned
-  }
-
-  /** Call once the batch is applied or dropped. */
-  release(): void {
-    heldRolloutBytes -= this.held
-    this.held = 0
-    this.released = true
-    batchesHoldingBytes.delete(this)
-  }
-}
-
-/** `wanted` is rechecked once a slot is granted, so work its caller abandoned while queued never touches the disk. */
-async function withRolloutReadSlot<T>(
-  run: () => Promise<T>,
-  batch: RolloutReadBatch,
-  unwanted: T
-): Promise<T> {
-  if (rolloutReadsInFlight < MAX_CONCURRENT_ROLLOUT_READS) {
-    rolloutReadsInFlight += 1
-  } else {
-    // Pruning only when the queue doubles keeps admission linear while abandoned waiters cannot pile up.
-    if (rolloutReadQueue.length >= rolloutQueuePruneLength) {
-      releaseAbandonedRolloutReads()
-    }
-    // A freed slot passes straight to the oldest waiter, so the count never overshoots.
-    if (!(await new Promise<boolean>((grant) => rolloutReadQueue.push({ batch, grant })))) {
-      return unwanted
-    }
-  }
-  try {
-    return batch.wanted() ? await run() : unwanted
-  } finally {
-    const next = rolloutReadQueue.shift()
-    if (next) {
-      next.grant(true)
-    } else {
-      rolloutReadsInFlight -= 1
-    }
-  }
-}
+export { RolloutReadBatch } from './codex-rollout-read-slots'
 
 export function rolloutFileSizeAsync(
   filePath: string,
@@ -182,7 +68,7 @@ async function readJsonlFirstRecordAsyncUnslotted(
     }
     const buffer = Buffer.allocUnsafe(TRANSCRIPT_LINE_MAX_BYTES)
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
-    return parseJsonlFirstRecord(buffer, bytesRead)
+    return batch.wanted() ? parseJsonlFirstRecord(buffer, bytesRead) : 'unreadable'
   } catch (error) {
     return firstRecordError(error)
   } finally {
@@ -196,10 +82,11 @@ async function readJsonlFirstRecordAsyncUnslotted(
 export function readJsonlCursorBytes(
   cursor: JsonlCursor,
   batch: RolloutReadBatch,
-  mode: 'tail' | 'forward' = 'tail'
+  mode: 'tail' | 'forward' = 'tail',
+  trackFile?: { previous?: JsonlFileFingerprint }
 ): Promise<JsonlCursorBytes | undefined | 'deferred'> {
   return withRolloutReadSlot(
-    () => readJsonlCursorBytesUnslotted(cursor, batch, mode),
+    () => readJsonlCursorBytesUnslotted(cursor, batch, mode, trackFile),
     batch,
     'deferred'
   )
@@ -218,36 +105,68 @@ function completeUtf8Prefix(buffer: Buffer): Buffer {
   return buffer
 }
 
+function jsonlFingerprint(stats: Stats): JsonlFileFingerprint {
+  const { dev, ino, birthtimeMs, size, mtimeMs, ctimeMs } = stats
+  return { dev, ino, birthtimeMs, size, mtimeMs, ctimeMs }
+}
+
 async function readJsonlCursorBytesUnslotted(
   cursor: JsonlCursor,
   batch: RolloutReadBatch,
-  mode: 'tail' | 'forward'
+  mode: 'tail' | 'forward',
+  trackFile?: { previous?: JsonlFileFingerprint }
 ): Promise<JsonlCursorBytes | undefined | 'deferred'> {
   if (!cursor.filePath) {
     return undefined
   }
   const snapshot = { ...cursor, filePath: cursor.filePath }
-  let size: number
+  let handle: FileHandle | undefined
+  let plan: (JsonlCursorBytes & { length: number }) | undefined
   try {
-    const stats = await stat(snapshot.filePath)
+    const previous = trackFile?.previous
+    if (previous && snapshot.offset === previous.size) {
+      const pathStats = await stat(snapshot.filePath)
+      if (!pathStats.isFile()) {
+        return undefined
+      }
+      if (sameJsonlFingerprint(previous, jsonlFingerprint(pathStats))) {
+        return { ...planJsonlRead(snapshot, previous.size, mode), fingerprint: previous }
+      }
+      if (!batch.wanted()) {
+        return 'deferred'
+      }
+    }
+    if (trackFile) {
+      // Bind the fingerprint and byte range to the same opened file.
+      handle = await open(snapshot.filePath, FIRST_RECORD_OPEN_FLAGS)
+      if (!batch.wanted()) {
+        return 'deferred'
+      }
+    }
+    const stats = handle ? await handle.stat() : await stat(snapshot.filePath)
     if (!stats.isFile()) {
       return undefined
     }
-    size = stats.size
-  } catch {
-    return undefined
-  }
-  const plan = planJsonlRead(snapshot, size, mode)
-  if (plan.length === 0) {
-    return plan
-  }
-  if (!batch.wanted() || !batch.reserve(plan.length)) {
-    return 'deferred'
-  }
-  let handle: FileHandle | undefined
-  try {
-    // Why: open per read, never held, so a replaced rollout is always read at its current path.
-    handle = await open(plan.filePath, 'r')
+    const { size } = stats
+    const fingerprint = trackFile && jsonlFingerprint(stats)
+    const reset = Boolean(
+      fingerprint &&
+      previous &&
+      (!sameJsonlFile(previous, fingerprint) ||
+        size < previous.size ||
+        (size === previous.size && !sameJsonlFingerprint(previous, fingerprint)))
+    )
+    plan = planJsonlRead(snapshot, size, mode, reset)
+    if (fingerprint) {
+      plan.fingerprint = fingerprint
+    }
+    if (plan.length === 0) {
+      return plan
+    }
+    if (!batch.wanted() || !batch.reserve(plan.length)) {
+      return 'deferred'
+    }
+    handle ??= await open(plan.filePath, 'r')
     if (!batch.wanted()) {
       return 'deferred'
     }
@@ -263,7 +182,7 @@ async function readJsonlCursorBytesUnslotted(
     }
     return { ...plan, bytes }
   } catch {
-    return { ...plan, failed: true }
+    return plan && { ...plan, failed: true }
   } finally {
     await handle?.close().catch(() => {})
   }

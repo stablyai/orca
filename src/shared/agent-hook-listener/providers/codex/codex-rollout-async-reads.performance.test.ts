@@ -5,14 +5,15 @@ import { AgentTranscriptPollScheduler } from '../../transcripts/agent-transcript
 
 const fs = vi.hoisted(() => {
   const stalled: (() => void)[] = []
-  return { stats: 0, stalled }
+  return { stats: 0, started: [] as string[], stalled }
 })
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>()
   return {
     ...actual,
-    stat: async () => {
+    stat: async (path: string) => {
+      fs.started.push(path)
       fs.stats++
       await new Promise<void>((resolve) => fs.stalled.push(resolve))
       return { size: 7 }
@@ -22,6 +23,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 function stallEveryReadSlot(): Promise<unknown>[] {
   fs.stats = 0
+  fs.started.length = 0
   return [0, 1, 2].map(() => rolloutFileSizeAsync('/stalled', new RolloutReadBatch()))
 }
 
@@ -44,10 +46,9 @@ it.each([100, 1000])(
   async (panes) => {
     const stalled = stallEveryReadSlot()
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
-    let live = true
     const settled: (number | null)[] = []
-    const scheduler = new AgentTranscriptPollScheduler<string>(1000, (key) =>
-      rolloutFileSizeAsync(key, new RolloutReadBatch(() => live)).then((size) => {
+    const scheduler = new AgentTranscriptPollScheduler<string>(1000, (key, _value, signal) =>
+      rolloutFileSizeAsync(key, new RolloutReadBatch(undefined, signal)).then((size) => {
         settled.push(size)
       })
     )
@@ -57,7 +58,6 @@ it.each([100, 1000])(
     await vi.advanceTimersByTimeAsync(1000)
     expect(settled).toHaveLength(0)
 
-    live = false
     scheduler.clearAll()
     await vi.advanceTimersByTimeAsync(0)
 
@@ -90,35 +90,43 @@ it.each([100, 1000])(
 )
 
 it.each([100, 1000])(
-  'prunes the queue once when %s polls retire one by one behind stalled slots',
+  'unlinks %s individually retired polls without checking survivors until a slot frees',
   async (panes) => {
     const stalled = stallEveryReadSlot()
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
-    const retired = new Set<string>()
+    const settled: string[] = []
     let checks = 0
-    const scheduler = new AgentTranscriptPollScheduler<string>(1000, async (key) => {
-      await rolloutFileSizeAsync(
+    const scheduler = new AgentTranscriptPollScheduler<string>(1000, async (key, _, signal) => {
+      const size = await rolloutFileSizeAsync(
         key,
         new RolloutReadBatch(() => {
           checks++
-          return !retired.has(key)
-        })
+          return true
+        }, signal)
       )
+      if (size === null) {
+        settled.push(key)
+      }
     })
-    for (let index = 0; index < 2 * panes; index++) {
-      scheduler.schedule(`pane-${index}`, `pane-${index}`)
+    const names = Array.from({ length: 2 * panes }, (_, index) => `pane-${index}`)
+    for (const key of names) {
+      scheduler.schedule(key, key)
     }
     await vi.advanceTimersByTimeAsync(1000)
 
     checks = 0
-    for (let index = 0; index < panes; index++) {
-      retired.add(`pane-${index}`)
-      scheduler.clear(`pane-${index}`)
+    for (let index = 0; index < names.length; index += 2) {
+      scheduler.clear(names[index]!)
+      await Promise.resolve()
     }
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(checks).toBe(2 * panes)
+    expect(checks).toBe(0)
+    expect(settled).toEqual(names.filter((_, index) => index % 2 === 0))
+    expect(fs.started).toEqual(['/stalled', '/stalled', '/stalled'])
     vi.useRealTimers()
     await drain(stalled)
+    expect(fs.started.slice(3)).toEqual(names.filter((_, index) => index % 2 === 1))
+    scheduler.clearAll()
   }
 )

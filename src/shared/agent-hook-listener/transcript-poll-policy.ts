@@ -143,7 +143,7 @@ export function scheduleHookTranscriptPoll<
       : undefined
   scheduler.schedule(
     paneKey,
-    { ...poll, delayMs },
+    { ...poll, ...(source === 'antigravity' ? { body: undefined } : {}), delayMs },
     hookTranscriptWatchPath(state, source, paneKey),
     delayMs,
     owner ?? source

@@ -326,6 +326,36 @@ describe('publishAgentHookEnvelope redelivery', () => {
     }
   })
 
+  it('keeps a pending hook snapshot when its model resolves before delivery', () => {
+    const primary = makeBoundedClient(16384)
+    const dispatcher = new RelayDispatcher(primary.write, primary.options)
+    try {
+      saturateProducerQueue(dispatcher, primary)
+      const hook: AgentHookRelayEnvelope = {
+        ...makeEnvelope({}),
+        source: 'antigravity',
+        hookEventName: 'PreInvocation',
+        payload: { state: 'working', prompt: 'Task', agentType: 'antigravity' }
+      }
+      publishAgentHookEnvelope(dispatcher, hook)
+      publishAgentHookEnvelope(dispatcher, {
+        ...hook,
+        modelOnly: true,
+        hookEventName: undefined,
+        payload: { ...hook.payload, model: 'resolved-model' }
+      })
+      expect(decodeEnvelopes(primary)).toEqual([])
+      primary.blocked = false
+      primary.drain()
+      vi.advanceTimersByTime(1_000)
+      expect(decodeEnvelopes(primary)).toEqual([
+        { ...hook, payload: { ...hook.payload, model: 'resolved-model' } }
+      ])
+    } finally {
+      dispatcher.dispose()
+    }
+  })
+
   it('makes one final retry when capacity returns after the timer budget is exhausted', () => {
     const primary = makeBoundedClient(16384)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)

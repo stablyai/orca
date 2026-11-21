@@ -28,9 +28,9 @@ export type PrefetchedRolloutReads = {
 
 let prefetched: PrefetchedRolloutReads | undefined
 
-export function createPrefetchedRolloutReads(): PrefetchedRolloutReads {
+export function createPrefetchedRolloutReads(signal?: AbortSignal): PrefetchedRolloutReads {
   const reads: PrefetchedRolloutReads = {
-    batch: new RolloutReadBatch(() => !reads.closed),
+    batch: new RolloutReadBatch(() => !reads.closed, signal),
     cursors: [],
     firstRecords: new Map(),
     sizes: new Map()

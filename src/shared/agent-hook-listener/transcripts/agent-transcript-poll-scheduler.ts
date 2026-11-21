@@ -4,8 +4,10 @@ import {
   type TranscriptNativeWatcher
 } from './transcript-native-watcher'
 import { isWslUncPath } from '../../file-access/wsl-paths'
-import { queueAbandonedRolloutReadRelease } from '../providers/codex/codex-rollout-async-reads'
-import type { AntigravityRootModel } from '../providers/antigravity/antigravity-root-model'
+import {
+  antigravityModelReadEndsAt,
+  type AntigravityRootModel
+} from '../providers/antigravity/antigravity-root-model'
 import type { AgentHookSource } from '../transport/agent-hook-relay'
 
 const ROOT_RECONCILIATION_MS = 5_000
@@ -16,6 +18,9 @@ type TranscriptWakeup<T> = {
   value: T
   filePath?: string
   owner?: TranscriptPollOwner
+  fence?: AntigravityRootModel['fence']
+  expiresAt?: number
+  controller: AbortController
   watcher?: TranscriptNativeWatcher
   watcherBound: boolean
   nextBindAt: number
@@ -31,39 +36,56 @@ type TranscriptWakeup<T> = {
 export class AgentTranscriptPollScheduler<T> {
   private readonly entries = new Map<string, TranscriptWakeup<T>>()
   private readonly inFlight = new Map<string, TranscriptWakeup<T>>()
-  private readonly deadlines: CodexSubagentPollScheduler<TranscriptWakeup<T>>
+  private readonly deadlines: CodexSubagentPollScheduler<{
+    key: string
+    entry: TranscriptWakeup<T>
+    expires?: true
+  }>
 
   constructor(
     private readonly delayMs: number,
-    private readonly onDue: (key: string, value: T, wanted: () => boolean) => void | Promise<void>
+    private readonly onDue: (key: string, value: T, signal: AbortSignal) => void | Promise<void>
   ) {
-    this.deadlines = new CodexSubagentPollScheduler(delayMs, (key, entry) => {
-      if (this.entries.get(key) !== entry) {
-        return
-      }
-      entry.scheduled = false
-      entry.eventPending = false
-      if (this.inFlight.has(key)) {
-        entry.dueWhileInFlight = true
-        return
-      }
-      entry.initialCheck = false
-      let pending: void | Promise<void> = undefined
-      try {
-        pending = this.onDue(key, entry.value, () => this.entries.get(key) === entry)
-      } finally {
-        if (pending) {
-          this.inFlight.set(key, entry)
-          void pending
-            .catch((error: unknown) => {
-              console.error('[agent-hooks] transcript poll failed:', error)
-            })
-            .finally(() => this.settle(key, entry))
-        } else if (this.entries.get(key) === entry && !entry.scheduled) {
-          this.clear(key)
+    this.deadlines = new CodexSubagentPollScheduler(
+      delayMs,
+      (_address, { key, entry, expires }) => {
+        if (this.entries.get(key) !== entry) {
+          return
+        }
+        if (entry.expiresAt !== undefined && (expires || Date.now() >= entry.expiresAt)) {
+          if (Date.now() >= entry.expiresAt) {
+            this.clear(key)
+          } else {
+            this.scheduleExpiry(key, entry, entry.expiresAt)
+          }
+          return
+        }
+        entry.scheduled = false
+        entry.eventPending = false
+        if (this.inFlight.has(key)) {
+          entry.dueWhileInFlight = true
+          return
+        }
+        entry.initialCheck = false
+        let pending: void | Promise<void> = undefined
+        try {
+          pending = this.onDue(key, entry.value, entry.controller.signal)
+        } finally {
+          if (pending) {
+            if (this.entries.get(key) === entry) {
+              this.inFlight.set(key, entry)
+            }
+            void pending
+              .catch((error: unknown) => {
+                console.error('[agent-hooks] transcript poll failed:', error)
+              })
+              .finally(() => this.settle(key, entry))
+          } else if (this.entries.get(key) === entry && !entry.scheduled) {
+            this.clear(key)
+          }
         }
       }
-    })
+    )
   }
 
   private settle(key: string, entry: TranscriptWakeup<T>): void {
@@ -77,7 +99,7 @@ export class AgentTranscriptPollScheduler<T> {
       current.dueWhileInFlight = false
       current.scheduled = true
       current.delayMs = this.delayMs
-      this.deadlines.schedule(key, current, this.delayMs)
+      this.schedulePoll(key, current, this.delayMs)
       return
     }
     if (current === entry && !entry.scheduled) {
@@ -94,7 +116,9 @@ export class AgentTranscriptPollScheduler<T> {
     owner?: TranscriptPollOwner
   ): void {
     let entry = this.entries.get(key)
-    if (entry && (entry.filePath !== filePath || entry.owner !== owner)) {
+    const model = typeof owner === 'object' ? owner : undefined
+    const fence = model?.fence
+    if (entry && (entry.filePath !== filePath || entry.owner !== owner || entry.fence !== fence)) {
       this.clear(key)
       entry = undefined
     }
@@ -103,6 +127,8 @@ export class AgentTranscriptPollScheduler<T> {
         value,
         filePath,
         owner,
+        fence,
+        controller: new AbortController(),
         watcherBound: false,
         nextBindAt: 0,
         scheduled: false,
@@ -128,7 +154,7 @@ export class AgentTranscriptPollScheduler<T> {
           watchedEntry.eventPending = true
           watchedEntry.scheduled = true
           watchedEntry.delayMs = this.delayMs
-          this.deadlines.schedule(key, watchedEntry, this.delayMs)
+          this.schedulePoll(key, watchedEntry, this.delayMs)
         }
         entry.watcher = createTranscriptNativeWatcher(
           filePath,
@@ -143,6 +169,13 @@ export class AgentTranscriptPollScheduler<T> {
       }
     }
     entry.value = value
+    if (model) {
+      const expiresAt = antigravityModelReadEndsAt(model)
+      if (entry.expiresAt !== expiresAt) {
+        entry.expiresAt = expiresAt
+        this.scheduleExpiry(key, entry, expiresAt)
+      }
+    }
     // The pending callback reads this entry's latest hook, so repeated hooks need neither a new watch nor a new timer.
     if (entry.scheduled && !(delayMs !== undefined && delayMs < entry.delayMs)) {
       return
@@ -156,7 +189,19 @@ export class AgentTranscriptPollScheduler<T> {
       delayMs ?? (entry.watcherBound && !entry.initialCheck ? ROOT_RECONCILIATION_MS : this.delayMs)
     entry.scheduled = true
     entry.delayMs = delay
-    this.deadlines.schedule(key, entry, delay)
+    this.schedulePoll(key, entry, delay)
+  }
+
+  private schedulePoll(key: string, entry: TranscriptWakeup<T>, delay: number): void {
+    this.deadlines.schedule(`poll:${key}`, { key, entry }, delay)
+  }
+
+  private scheduleExpiry(key: string, entry: TranscriptWakeup<T>, expiresAt: number): void {
+    this.deadlines.schedule(
+      `expiry:${key}`,
+      { key, entry, expires: true },
+      Math.max(0, expiresAt - Date.now())
+    )
   }
 
   peek(key: string): T | undefined {
@@ -170,20 +215,18 @@ export class AgentTranscriptPollScheduler<T> {
     }
     this.entries.delete(key)
     // A read that never settles must not stall the pane's next poll forever.
-    if (this.inFlight.delete(key)) {
-      queueAbandonedRolloutReadRelease()
-    }
-    this.deadlines.clear(key)
+    this.inFlight.delete(key)
+    entry.controller.abort()
+    this.deadlines.clear(`poll:${key}`)
+    this.deadlines.clear(`expiry:${key}`)
     entry.watcher?.dispose()
   }
 
   clearAll(): void {
-    if (this.inFlight.size > 0) {
-      queueAbandonedRolloutReadRelease()
-    }
     this.inFlight.clear()
     this.deadlines.clearAll()
     for (const entry of this.entries.values()) {
+      entry.controller.abort()
       entry.watcher?.dispose()
     }
     this.entries.clear()

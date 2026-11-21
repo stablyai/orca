@@ -1,7 +1,11 @@
 import type { AgentHookEventPayload } from '../../listener-event'
 import type { HookListenerState } from '../../listener-state'
 import { readJsonlCursorBytes, RolloutReadBatch } from '../codex/codex-rollout-async-reads'
-import { applyJsonlCursorBytes, type JsonRecord } from '../codex/codex-rollout-jsonl-format'
+import {
+  applyJsonlCursorBytes,
+  sameJsonlFingerprint,
+  type JsonRecord
+} from '../codex/codex-rollout-jsonl-format'
 import {
   antigravityModelPollOwner,
   antigravityModelReadEndsAt,
@@ -36,7 +40,8 @@ function latestTranscriptModel(records: JsonRecord[]): AntigravityTranscriptMode
 export async function readAntigravityTranscriptPoll(
   state: HookListenerState,
   paneKey: string,
-  live: () => boolean
+  live: () => boolean,
+  signal?: AbortSignal
 ): Promise<AntigravityTranscriptPollReads | undefined> {
   const row = state.lastStatusByPaneKey.get(paneKey)
   const root = row && antigravityModelPollOwner(state, row)
@@ -49,10 +54,12 @@ export async function readAntigravityTranscriptPoll(
     state.antigravityChildWorkByPaneKey.get(paneKey)?.rootModel === root &&
     root.fence === fence &&
     Date.now() < antigravityModelReadEndsAt(root)
-  const batch = new RolloutReadBatch(wanted)
+  const batch = new RolloutReadBatch(wanted, signal)
   try {
-    const read = await readJsonlCursorBytes(root.cursor, batch, 'forward')
-    if (!wanted() || !read || read === 'deferred') {
+    const read = await readJsonlCursorBytes(root.cursor, batch, 'forward', {
+      previous: root.fingerprint
+    })
+    if (!wanted() || !read || read === 'deferred' || !read.fingerprint) {
       return undefined
     }
     const records = applyJsonlCursorBytes(root.cursor, read)
@@ -62,23 +69,37 @@ export async function readAntigravityTranscriptPoll(
     if (read.from < read.offset) {
       root.transcriptModel = undefined
     }
+    root.fingerprint = read.fingerprint
     if (!records) {
       return undefined
     }
     root.transcriptModel = latestTranscriptModel(records) ?? root.transcriptModel
     if (read.hasMore) {
-      // A model near the end of a resumed transcript can be shown before the forward cursor catches up.
-      const tail = { filePath: root.cursor.filePath, offset: 0, carry: '' }
-      const bytes = await readJsonlCursorBytes(tail, batch)
-      const tailRecords = wanted() && bytes !== 'deferred' && applyJsonlCursorBytes(tail, bytes)
-      return {
-        root,
-        fence,
-        model:
-          tailRecords && tailRecords !== 'stale' ? latestTranscriptModel(tailRecords) : undefined,
-        nextPoll: 'backlog'
+      const fingerprint = read.fingerprint
+      let preview = root.tailPreview
+      if (!preview || !sameJsonlFingerprint(preview.fingerprint, fingerprint)) {
+        root.tailPreview = undefined
+        // A model near the end can be shown before the forward cursor catches up.
+        const tail = { filePath: root.cursor.filePath, offset: 0, carry: '' }
+        const bytes = await readJsonlCursorBytes(tail, batch, 'tail', {})
+        if (!wanted()) {
+          return undefined
+        }
+        const tailRecords =
+          bytes &&
+          bytes !== 'deferred' &&
+          bytes.fingerprint &&
+          sameJsonlFingerprint(fingerprint, bytes.fingerprint) &&
+          applyJsonlCursorBytes(tail, bytes)
+        preview =
+          tailRecords && tailRecords !== 'stale'
+            ? { fingerprint, model: latestTranscriptModel(tailRecords) }
+            : undefined
+        root.tailPreview = preview
       }
+      return { root, fence, model: preview?.model, nextPoll: 'backlog' }
     }
+    root.tailPreview = undefined
     return { root, fence, model: root.transcriptModel }
   } finally {
     batch.release()

@@ -8,7 +8,7 @@ import {
 import { readFirstString } from '../../interactive-tool'
 import type { AgentHookEventPayload } from '../../listener-event'
 import type { HookListenerState } from '../../listener-state'
-import type { JsonlCursor } from '../codex/codex-rollout-jsonl-format'
+import type { JsonlCursor, JsonlFileFingerprint } from '../codex/codex-rollout-jsonl-format'
 import type { AntigravityTranscriptOrigin } from './antigravity-hook-identity'
 
 export type AntigravityTranscriptModel = { model: string; at: number; step?: number }
@@ -18,6 +18,8 @@ export type AntigravityLeadModelFence = { since: number; fromStep?: number }
 export type AntigravityRootModel = {
   conversationId: string
   cursor: JsonlCursor
+  fingerprint?: JsonlFileFingerprint
+  tailPreview?: { fingerprint: JsonlFileFingerprint; model?: AntigravityTranscriptModel }
   transcriptModel?: AntigravityTranscriptModel
   observedAt: number
   leadModel?: string
@@ -73,6 +75,8 @@ export function observeAntigravityRootModel(
           conversationId,
           cursor: { filePath, offset: 0, carry: '' },
           transcriptModel: undefined,
+          fingerprint: undefined,
+          tailPreview: undefined,
           observedAt
         }
   model.observedAt = Math.max(model.observedAt, observedAt)

@@ -130,6 +130,29 @@ export function publishAgentHookEnvelope(
     }
     return
   }
+  if (envelope.modelOnly) {
+    const pending = redeliveryByDispatcher.get(dispatcher)?.pending.get(envelope.paneKey)
+    if (pending && pending.params.modelOnly !== true) {
+      // Clients still waiting for the underlying hook need the full row.
+      const prior = pending.params.payload
+      if (pending.params.source === envelope.source && prior && typeof prior === 'object') {
+        const params = {
+          ...pending.params,
+          payload: { ...prior, model: envelope.payload.model }
+        }
+        if (fitsProducerFrame(dispatcher, params)) {
+          pending.params = params
+        }
+      }
+      const awaitingHook = new Set(pending.clientIds)
+      publishToClients(
+        dispatcher,
+        toNotificationParams(envelope, []),
+        clientIds.filter((id) => !awaitingHook.has(id))
+      )
+      return
+    }
+  }
   // Measure all fan-out sinks before writing so none receive an unshed variant; a single rejecting sink writes nothing.
   const measureBeforePublish = clientIds.length > 1
   let candidate = envelope

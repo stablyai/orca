@@ -51,6 +51,7 @@ export type RemoteAgentStatusEnvelope = {
   advertisedAgentStatusCapabilities?: readonly string[]
   statusUnavailable?: unknown
   evidenceAgeMs?: unknown
+  modelOnly?: unknown
   payload: unknown
 }
 

@@ -40,6 +40,25 @@ export function firstRecordError(error: unknown): JsonlFirstRecord {
     : 'unreadable'
 }
 
+export type JsonlFileFingerprint = {
+  dev: number
+  ino: number
+  birthtimeMs: number
+  size: number
+  mtimeMs: number
+  ctimeMs: number
+}
+
+export function sameJsonlFile(a: JsonlFileFingerprint, b: JsonlFileFingerprint): boolean {
+  return a.dev === b.dev && a.ino === b.ino && a.birthtimeMs === b.birthtimeMs
+}
+
+export function sameJsonlFingerprint(a: JsonlFileFingerprint, b: JsonlFileFingerprint): boolean {
+  return (
+    sameJsonlFile(a, b) && a.size === b.size && a.mtimeMs === b.mtimeMs && a.ctimeMs === b.ctimeMs
+  )
+}
+
 /** New bytes read against a cursor position; applying them to a cursor that has since moved is refused. */
 export type JsonlCursorBytes = {
   filePath: string
@@ -50,6 +69,7 @@ export type JsonlCursorBytes = {
   start: number
   bytes: Buffer
   hasMore?: true
+  fingerprint?: JsonlFileFingerprint
   /** The open or read failed after a size was seen; a shrink still resets the cursor. */
   failed?: true
 }
@@ -59,9 +79,10 @@ const NO_BYTES = Buffer.alloc(0)
 export function planJsonlRead(
   cursor: JsonlCursor & { filePath: string },
   size: number,
-  mode: 'tail' | 'forward' = 'tail'
+  mode: 'tail' | 'forward' = 'tail',
+  reset = false
 ): JsonlCursorBytes & { length: number } {
-  const from = size < cursor.offset ? 0 : cursor.offset
+  const from = reset || size < cursor.offset ? 0 : cursor.offset
   const length = Math.min(size - from, TRANSCRIPT_READ_MAX_BYTES)
   const start = mode === 'tail' && size - from > length ? size - length : from
   const { filePath, offset, carry } = cursor
