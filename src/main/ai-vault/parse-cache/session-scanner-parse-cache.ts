@@ -17,6 +17,7 @@ import { createCursorSessionResumeState } from '../scanners/cursor/session-scann
 import { countSubagentTranscripts } from '../scanners/claude/session-scanner-subagent-transcripts'
 import { countOmpSubagentTranscripts } from '../scanners/omp/session-scanner-omp-subagent-transcripts'
 import { countPiSubagentTranscripts } from '../scanners/pi/session-scanner-pi-subagent-transcripts'
+import { refreshReusedPiSubagentCount } from './session-scanner-pi-subagent-reuse'
 import type { ResumableSessionParseState, SessionFileCandidate } from '../session-scanner-types'
 import { refreshCachedCodexTitle } from '../scanners/codex/session-scanner-codex-cached-title'
 import {
@@ -269,8 +270,9 @@ async function reuseCachedSession(
     stats.reused++
   }
   let session = entry.session
-  // Zero-turn parents may never change again; Pi keeps its children beside the parent file, outside that signature.
-  if (session && (session.messageCount === 0 || session.agent === 'pi')) {
+  let piSubagentDirs = entry.piSubagentDirs
+  // Zero-turn parents may never change again; recount late subagent transcripts outside the cached file signature.
+  if (session && session.messageCount === 0) {
     const subagentTranscriptCount =
       session.agent === 'claude'
         ? await countSubagentTranscripts(candidate.file.path, signal)
@@ -285,12 +287,22 @@ async function reuseCachedSession(
     ) {
       session = { ...session, subagentTranscriptCount }
     }
+  } else if (session?.agent === 'pi') {
+    // Pi children sit beside the parent file; their own directory mtimes decide whether to walk again.
+    const refreshed = await refreshReusedPiSubagentCount(
+      candidate.file.path,
+      session,
+      piSubagentDirs,
+      signal
+    )
+    session = refreshed.session
+    piSubagentDirs = refreshed.piSubagentDirs
   }
   // Index titles can change independently of the transcript signature.
   if (session && candidate.agent === 'codex') {
     session = await waitForAiVaultScan(refreshCachedCodexTitle(candidate, session), signal)
   }
   throwIfAiVaultScanCancelled(signal)
-  storeSessionParseCacheEntry(key, { ...entry, session })
+  storeSessionParseCacheEntry(key, { ...entry, session, piSubagentDirs })
   return session
 }

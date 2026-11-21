@@ -4,6 +4,7 @@ import type {
   AiVaultSession
 } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ResumableSessionParseState } from '../session-scanner-types'
+import type { PiSubagentDirStamp } from '../scanners/pi/session-scanner-pi-subagent-transcripts'
 import type { SessionSidecarObservation } from './session-sidecar-stat'
 import type { TranscriptMessageChannel } from '../transcripts/session-transcript-channel'
 import type { SkippedTranscriptRecord } from '../transcripts/session-transcript-record-budget'
@@ -39,6 +40,8 @@ export type SessionParseCacheEntry = {
   resume: SessionParseResumePoint | null
   // Diagnostics outlive the heavy parser state, including across restarts.
   skippedRecords?: SkippedTranscriptRecord[]
+  // Runtime-only: the Pi child directories the last walk stamped, so reuse can skip the walk.
+  piSubagentDirs?: PiSubagentDirStamp[]
   // Parser identity is runtime-only; persisted sessions carry their agent.
   agent?: AiVaultAgent
 }
@@ -46,7 +49,7 @@ export type SessionParseCacheEntry = {
 // Omit parser state and duplicate fold results; sibling changes after restart pay one reparse.
 export type PersistedSessionParseCacheEntry = Omit<
   SessionParseCacheEntry,
-  'resume' | 'foldSession' | 'agent'
+  'resume' | 'foldSession' | 'agent' | 'piSubagentDirs'
 >
 
 // Null proves this transcript version belongs to no scoped path.
