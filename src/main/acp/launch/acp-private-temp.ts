@@ -15,7 +15,12 @@ const wipes = new Map<string, Promise<void>>()
 const SOCKET_UNDER_RUN_FOLDER = `/run-XXXXXX/${'x'.repeat(56)}`
 
 function removeFolder(path: string, logger?: StructuredAgentSessionLogger): Promise<void> {
-  return rm(path, { recursive: true, force: true }).catch((error: unknown) =>
+  return rm(path, {
+    recursive: true,
+    force: true,
+    maxRetries: process.platform === 'win32' ? 5 : 1,
+    retryDelay: 100
+  }).catch((error: unknown) =>
     logger?.warn('ACP agent temp folder not removed', { scope: 'acp-temp', path, error })
   )
 }
