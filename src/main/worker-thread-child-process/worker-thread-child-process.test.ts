@@ -392,7 +392,11 @@ describe.runIf(process.platform === 'linux')(
   'WorkerThreadChildProcessHost in another process',
   () => {
     it("ends a lost barrier child's whole group, including a process that cleared its environment", async () => {
-      const { host, loseLauncher } = hostLosingItsLauncher(openSpawnRecords())
+      const records = openSpawnRecords()
+      // This test process shares its command line with vitest's other workers: none is its fork.
+      const { host, loseLauncher } = hostLosingItsLauncher(
+        records && { ...records, launcherCmdline: 'no such launcher' }
+      )
       const writer = ['/bin/sleep', '3017']
       const child = host.spawn({
         program: '/bin/sh',

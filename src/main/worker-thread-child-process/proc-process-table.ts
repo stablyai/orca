@@ -4,22 +4,27 @@ import { processGroupExists } from '@orca/process-host/process-tree-termination'
 
 // Main's descriptors and threadpool serve everything else it does; a scan must not exhaust them.
 const MAX_CONCURRENT_READS = 16
-// /proc reports start times in USER_HZ ticks, 100 on every Linux Orca runs on; the margin covers rounding.
-const TICKS_PER_SECOND = 100
-const START_MARGIN_TICKS = 2 * TICKS_PER_SECOND
 
-export type ProcStat = { state: string; pgid: number; sid: number; startTicks: number }
+export type ProcStat = {
+  state: string
+  ppid: number
+  pgid: number
+  sid: number
+  startTicks: number
+}
 
 /** /proc/<pid>/stat; unlike environ or cmdline, reading it never waits on the process's memory lock. */
 export function parseProcStat(text: string): ProcStat | null {
   // Fields after the command name, which may itself contain spaces and parentheses.
   const fields = text.slice(text.lastIndexOf(')') + 2).split(' ')
-  const [pgid, sid, startTicks] = [Number(fields[2]), Number(fields[3]), Number(fields[19])]
+  const [ppid, pgid, sid] = [Number(fields[1]), Number(fields[2]), Number(fields[3])]
+  const startTicks = Number(fields[19])
   return fields[0] &&
+    Number.isInteger(ppid) &&
     Number.isInteger(pgid) &&
     Number.isInteger(sid) &&
     Number.isInteger(startTicks)
-    ? { state: fields[0], pgid, sid, startTicks }
+    ? { state: fields[0], ppid, pgid, sid, startTicks }
     : null
 }
 
@@ -81,44 +86,66 @@ export async function groupHasLiveMember(groupId: number): Promise<boolean | nul
   return live
 }
 
-/** The start time /proc would give a process started at `at` (performance.now()), less a margin. */
-export async function ticksAt(at: number): Promise<number> {
-  try {
-    const uptimeSeconds = Number((await readFile('/proc/uptime', 'latin1')).split(' ')[0])
-    return (
-      Math.floor((uptimeSeconds - (performance.now() - at) / 1000) * TICKS_PER_SECOND) -
-      START_MARGIN_TICKS
-    )
-  } catch {
-    return 0
+export type KeyedProcess = ProcStat & { pid: number; key: string }
+
+const SLOW_READ_MS = 1_000
+// Reads that can wait on a memory lock hold one of main's 4 libuv threadpool threads each until
+// they return; this many at most, counting abandoned slow ones, leaves the rest for main.
+const MAX_OUTSTANDING_SLOW_READS = 2
+
+/**
+ * Reads /proc/<pid>/<file> where the read can wait on the process's memory lock. A read is never
+ * issued twice for one pid nor past the outstanding cap, and one still running after a second is
+ * left to finish on its own; each of those answers 'unproven' instead.
+ */
+function createGuardedReader() {
+  const outstanding = new Set<number>()
+  return async (pid: number, file: string): Promise<string | 'unproven' | 'none'> => {
+    if (outstanding.has(pid) || outstanding.size >= MAX_OUTSTANDING_SLOW_READS) {
+      return 'unproven'
+    }
+    outstanding.add(pid)
+    const read = readFile(`/proc/${pid}/${file}`, 'latin1').finally(() => outstanding.delete(pid))
+    read.catch(() => undefined)
+    try {
+      const result = await Promise.race([
+        read,
+        new Promise<'unproven'>((resolve) =>
+          setTimeout(() => resolve('unproven'), SLOW_READ_MS).unref?.()
+        )
+      ])
+      return result === 'unproven' ? 'unproven' : result
+    } catch (error) {
+      return readFailureProvesNothing(error) ? 'unproven' : 'none'
+    }
   }
 }
 
-export type KeyedProcess = ProcStat & { pid: number; key: string }
-
-const SLOW = Symbol('slow')
-const SLOW_READ_MS = 1_000
-
-function slowAfter(ms: number): Promise<typeof SLOW> {
-  return new Promise((resolve) => setTimeout(() => resolve(SLOW), ms).unref?.())
-}
-
 /**
- * Live processes whose environment carries `keyEnv`=one of `keys`. Reading a process's
- * environment can wait on its memory lock, so only this user's processes started since
- * `sinceTicks` are read, and a read still pending from an earlier scan is never issued again:
- * that scan just stays unproven.
+ * Live processes of this user started since `sinceTicks` whose environment carries `keyEnv`=one
+ * of `keys`, and (`forks`) the launcher's children that haven't exec'd yet: they still show its
+ * command line, which is unique (Chromium gives each utility process its own trace id).
  */
-export function createKeyScan(keyEnv: string, keys: ReadonlySet<string>, sinceTicks: number) {
+export function createKeyScan(
+  keyEnv: string,
+  keys: ReadonlySet<string>,
+  sinceTicks: number,
+  launcher: { pid: number; cmdline: string } | null
+) {
   const uid = process.getuid?.()
-  const pending = new Set<number>()
-  return async (): Promise<{ found: KeyedProcess[]; complete: boolean }> => {
+  const read = createGuardedReader()
+  return async (): Promise<{
+    found: KeyedProcess[]
+    forks: KeyedProcess[]
+    complete: boolean
+  }> => {
     const found: KeyedProcess[] = []
+    const forks: KeyedProcess[] = []
     const pids = await procPids()
     if (!pids) {
-      return { found, complete: false }
+      return { found, forks, complete: false }
     }
-    let complete = pending.size === 0
+    let complete = true
     await inBatches(pids, async (pid) => {
       try {
         if ((await stat(`/proc/${pid}`)).uid !== uid) {
@@ -136,32 +163,37 @@ export function createKeyScan(keyEnv: string, keys: ReadonlySet<string>, sinceTi
       if (procStat === 'gone' || procStat.state === 'Z' || procStat.startTicks < sinceTicks) {
         return
       }
-      if (pending.has(pid)) {
+      const environ = await read(pid, 'environ')
+      if (environ === 'unproven') {
         complete = false
         return
       }
-      pending.add(pid)
-      const read = readFile(`/proc/${pid}/environ`, 'latin1').finally(() => pending.delete(pid))
-      let environ: string | typeof SLOW
-      try {
-        environ = await Promise.race([read, slowAfter(SLOW_READ_MS)])
-      } catch (error) {
-        complete &&= !readFailureProvesNothing(error)
-        return
-      }
-      if (environ === SLOW) {
-        // Left to finish on its own; this scan stays unproven, and other children's proofs go on.
-        read.catch(() => undefined)
-        complete = false
-        return
-      }
-      const variable = environ.split('\0').find((entry) => entry.startsWith(`${keyEnv}=`))
+      const variable =
+        environ === 'none'
+          ? undefined
+          : environ.split('\0').find((entry) => entry.startsWith(`${keyEnv}=`))
       const key = variable?.slice(keyEnv.length + 1)
       if (key && keys.has(key)) {
         found.push({ ...procStat, pid, key })
+        return
+      }
+      if (
+        key ||
+        environ === 'none' ||
+        !launcher ||
+        pid === launcher.pid ||
+        procStat.ppid === process.pid
+      ) {
+        return
+      }
+      const cmdline = await read(pid, 'cmdline')
+      if (cmdline === 'unproven') {
+        complete = false
+      } else if (cmdline === launcher.cmdline) {
+        forks.push({ ...procStat, pid, key: '' })
       }
     })
-    return { found, complete }
+    return { found, forks, complete }
   }
 }
 

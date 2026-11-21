@@ -12,7 +12,7 @@ import {
   WorkerThreadChildProcess
 } from '../../../worker-thread-child-process/worker-thread-child-process'
 
-type CaptureOptions = {
+export type CaptureOptions = {
   cwd?: string | URL
   env?: NodeJS.ProcessEnv
   encoding?: string | null
@@ -70,6 +70,20 @@ export function spawnWithoutMainFds(
     stdio: ['pipe', 'pipe', 'pipe'],
     closeInheritedFds: true
   })
+}
+
+/** Main's error text per platform; a Windows overflow ends the whole tree, or a hook holding the pipe blocks close. */
+export function withMainErrorText<O extends CaptureOptions>(
+  options: O,
+  command: string,
+  args: readonly string[],
+  stop: (error: Error) => void
+): O {
+  return {
+    ...options,
+    ...(process.platform !== 'darwin' ? { errorCommand: [command, ...args].join(' ') } : {}),
+    ...(process.platform === 'win32' ? { onOverflow: stop } : {})
+  }
 }
 
 /** A second, passive stderr listener: execFile still captures every byte. */

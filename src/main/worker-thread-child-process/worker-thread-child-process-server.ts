@@ -68,6 +68,12 @@ export function serveWorkerThreadChildProcesses(
   ): void => {
     const key = spec.env?.[SPAWN_KEY_ENV]
     const recordKey = key && records?.reserve(key) ? key : undefined
+    if (key && records && !recordKey) {
+      // Main reads a missing record as "never started", so a child it can't record never starts.
+      const error = { message: `Could not record the child before starting ${spec.program}` }
+      port.postMessage({ type: 'spawn-error', id, error })
+      return
+    }
     let child: ChildProcessWithoutNullStreams
     try {
       child = spawnProcess(
@@ -287,5 +293,14 @@ export function serveWorkerThreadChildProcesses(
     }
   }
   port.on('message', handle)
-  port.postMessage({ type: 'ready', ...(records ? { spawnRecordDir: records.dir } : {}) })
+  port.postMessage({
+    type: 'ready',
+    ...(records
+      ? {
+          spawnRecordDir: records.dir,
+          launcherCmdline: records.launcherCmdline,
+          launcherStartTicks: records.launcherStartTicks
+        }
+      : {})
+  })
 }

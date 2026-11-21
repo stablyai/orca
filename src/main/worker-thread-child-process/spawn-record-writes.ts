@@ -15,6 +15,10 @@ import { parseProcStat } from './proc-process-table'
  */
 export type SpawnRecords = {
   dir: string
+  /** This process's command line: a child shows it until its exec (see endLostSpawns). */
+  launcherCmdline: string
+  /** This process's start time: every child it spawns started after it. */
+  launcherStartTicks: number
   /** Before the spawn: an empty record says a child may exist from here on. */
   reserve(key: string): boolean
   /** False when no record could be written; main then falls back to the child's key. */
@@ -30,8 +34,21 @@ export function openSpawnRecords(): SpawnRecords | null {
   if (!dir || uid === undefined || !ensurePrivateDirectory(dir, uid)) {
     return null
   }
+  let launcherCmdline: string
+  let launcherStartTicks: number | undefined
+  try {
+    launcherCmdline = readFileSync('/proc/self/cmdline', 'latin1')
+    launcherStartTicks = parseProcStat(readFileSync('/proc/self/stat', 'latin1'))?.startTicks
+  } catch {
+    return null
+  }
+  if (launcherStartTicks === undefined) {
+    return null
+  }
   return {
     dir,
+    launcherCmdline,
+    launcherStartTicks,
     reserve(key) {
       try {
         if (!SPAWN_KEY_PATTERN.test(key)) {

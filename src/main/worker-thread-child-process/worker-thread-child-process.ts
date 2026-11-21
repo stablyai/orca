@@ -4,7 +4,12 @@ import type { Worker } from 'node:worker_threads'
 import { assertWslNotLatchedAbsent } from '@orca/process-host/wsl-not-installed-latch'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { LazyWorkerThreadHost } from '../worker-threads/lazy-worker-thread-host'
-import { endLostSpawns, type LostSpawn, SPAWN_KEY_ENV } from './lost-spawn-processes'
+import {
+  endLostSpawns,
+  type LostLauncher,
+  type LostSpawn,
+  SPAWN_KEY_ENV
+} from './lost-spawn-processes'
 import {
   PROCESS_LAUNCHER_LOST_CODE,
   WORKER_CHILD_ABANDONED_CODE,
@@ -51,6 +56,8 @@ export class WorkerThreadChildProcessHost {
   private readonly spawnKeys: Map<number, Omit<LostSpawn, 'pid'>> | null
   /** Where the current worker records its children's pids, from its 'ready'. */
   private spawnRecordDir: string | null = null
+  /** The launcher process, whose not-yet-exec'd children show its command line. */
+  private launcher: LostLauncher | null = null
 
   constructor(factory: WorkerThreadFactory, options: { tagSpawns?: boolean } = {}) {
     this.spawnKeys = options.tagSpawns ? new Map() : null
@@ -105,6 +112,7 @@ export class WorkerThreadChildProcessHost {
         void rm(this.spawnRecordDir, { recursive: true, force: true }).catch(() => undefined)
       }
       this.spawnRecordDir = null
+      this.launcher = null
       this.ready?.settle(false)
       const ready = Promise.withResolvers<boolean>()
       this.ready = { promise: ready.promise, settle: ready.resolve }
@@ -152,6 +160,17 @@ export class WorkerThreadChildProcessHost {
     this.workerAnswered = true
     if (event.type === 'ready') {
       this.spawnRecordDir = event.spawnRecordDir ?? null
+      const launcherPid = Number(/(\d+)-\d+$/.exec(event.spawnRecordDir ?? '')?.[1])
+      this.launcher =
+        event.launcherCmdline &&
+        event.launcherStartTicks !== undefined &&
+        Number.isInteger(launcherPid)
+          ? {
+              pid: launcherPid,
+              cmdline: event.launcherCmdline,
+              startTicks: event.launcherStartTicks
+            }
+          : null
       this.ready?.settle(true)
       // Every launch that started this worker may have been cancelled while it loaded.
       if (this.children.size === 0) {
@@ -190,8 +209,7 @@ export class WorkerThreadChildProcessHost {
       key,
       recorded: false,
       ownsGroup: spec.terminationBarrier === true,
-      argv: [spec.program, ...(spec.args ?? [])],
-      spawnedAt: performance.now()
+      argv: [spec.program, ...(spec.args ?? [])]
     })
     return { ...spec, env: { ...(spec.env ?? process.env), [SPAWN_KEY_ENV]: key } }
   }
@@ -212,7 +230,9 @@ export class WorkerThreadChildProcessHost {
    */
   private endLost(abandoned: readonly WorkerThreadChildProcess[], message: string): void {
     const recordDir = this.spawnRecordDir
+    const launcher = this.launcher
     this.spawnRecordDir = null
+    this.launcher = null
     const lost = new Map<WorkerThreadChildProcess, LostSpawn>()
     for (const child of abandoned) {
       const entry = this.spawnKeys?.get(child.id)
@@ -229,7 +249,7 @@ export class WorkerThreadChildProcessHost {
     for (const child of abandoned.filter((candidate) => !lost.has(candidate))) {
       this.deliverLost(child, child.pid, child.pid !== undefined, message)
     }
-    void endLostSpawns([...lost.values()], recordDir, (key, pid, started) => {
+    void endLostSpawns([...lost.values()], recordDir, launcher, (key, pid, started) => {
       const child = byKey.get(key)
       if (child) {
         this.deliverLost(child, child.pid ?? pid, started, message)

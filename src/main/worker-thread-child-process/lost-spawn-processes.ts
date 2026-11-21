@@ -7,8 +7,7 @@ import {
   groupHasLiveMember,
   type KeyedProcess,
   readProcStat,
-  runsArgv,
-  ticksAt
+  runsArgv
 } from './proc-process-table'
 
 /** Every child the isolated spawner starts carries its own value; its descendants inherit it. */
@@ -19,6 +18,9 @@ export const SPAWN_RECORDS_DIR_NAME = 'orca-spawns'
 const FIRST_CHECK_MS = 50
 const MAX_CHECK_MS = 30_000
 
+/** The lost launcher process, from its 'ready'. */
+export type LostLauncher = { pid: number; cmdline: string; startTicks: number }
+
 export type LostSpawn = {
   key: string
   /** The pid main heard, if any. */
@@ -28,8 +30,6 @@ export type LostSpawn = {
   /** Started as its own process group and session (a termination barrier): the group must end. */
   ownsGroup: boolean
   argv: readonly string[]
-  /** performance.now() at the spawn. */
-  spawnedAt: number
 }
 
 type KeyProof = { kind: 'key'; seen: boolean; quietScans: number }
@@ -78,6 +78,11 @@ function proofFor(spawn: LostSpawn, record: RecordRead, recordDir: string | null
     return { kind: 'group', groupId: spawn.pid }
   }
   return { kind: 'key', seen: false, quietScans: 0 }
+}
+
+async function mainStartTicks(): Promise<number> {
+  const own = await readProcStat(process.pid)
+  return own && own !== 'gone' ? own.startTicks : 0
 }
 
 function kill(target: number): void {
@@ -160,12 +165,13 @@ async function provenEnded(proof: Proof): Promise<boolean> {
  * not yet reported. Each child is ended the way a local stop would end it, from the launcher's
  * record of it: a barrier child's group until no live member is left, any other child's root
  * matched by pid and start time so a reused pid is never hit. A child without a record is found
- * by its key. `onEnded` hears each child as soon as it alone is proven ended, so one that can't
+ * by its key, or, before its exec, as a fork still running the launcher's own command line. `onEnded` hears each child as soon as it alone is proven ended, so one that can't
  * be ended (stuck in the kernel) holds only its own caller, as it would today.
  */
 export async function endLostSpawns(
   spawns: readonly LostSpawn[],
   recordDir: string | null,
+  launcher: LostLauncher | null,
   onEnded: (key: string, pid: number | undefined, started: boolean) => void
 ): Promise<void> {
   const open = new Map<string, { spawn: LostSpawn; record: RecordRead; proof?: Proof }>()
@@ -190,11 +196,25 @@ export async function endLostSpawns(
       scan ??= createKeyScan(
         SPAWN_KEY_ENV,
         new Set(spawns.map((spawn) => spawn.key)),
-        await ticksAt(Math.min(...spawns.map((spawn) => spawn.spawnedAt)))
+        // Its children started after it; with no launcher (in main), after main. Both clock-free.
+        launcher?.startTicks ?? (await mainStartTicks()),
+        launcher
       )
-      const { found, complete } = await scan()
+      const { found, forks, complete } = await scan()
+      // A fork not yet exec'd may become any of these children, so none is quiet while one lives.
+      for (const fork of forks) {
+        const now = await readProcStat(fork.pid)
+        if (now !== null && now !== 'gone' && now.startTicks === fork.startTicks) {
+          kill(fork.pid)
+        }
+      }
       for (const { entry, proof } of byKey) {
-        entry.proof = await advanceKeyProof(entry.spawn, proof, found, complete)
+        entry.proof = await advanceKeyProof(
+          entry.spawn,
+          proof,
+          found,
+          complete && forks.length === 0
+        )
       }
     }
     let progressed = false
