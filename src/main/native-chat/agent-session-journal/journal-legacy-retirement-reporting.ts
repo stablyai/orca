@@ -1,4 +1,4 @@
-import { track } from '../../telemetry/client'
+import { isTelemetryEnabled, track } from '../../telemetry/client'
 import { legacyJournalRetirementSchema } from '../../../shared/telemetry/schemas/telemetry-legacy-journal-retirement-schema'
 import { setLegacyJournalRetirementHost } from './journal-legacy-retirement-outcome'
 
@@ -6,6 +6,7 @@ import { setLegacyJournalRetirementHost } from './journal-legacy-retirement-outc
 export function installLegacyJournalRetirementReporting(): void {
   setLegacyJournalRetirementHost({
     report: async (event) =>
-      track('legacy_journal_retirement', legacyJournalRetirementSchema.parse(event))
+      track('legacy_journal_retirement', legacyJournalRetirementSchema.parse(event)),
+    accepting: isTelemetryEnabled
   })
 }

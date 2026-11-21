@@ -153,21 +153,29 @@ it('rechecks a finished proof when a deletion that failed is tried again in the 
   expect(String(retried.errors.at(-1))).toContain('could not be kept')
 })
 
-it('sends an outcome the usage client dropped again on a later launch, then never again', async () => {
+it('sends an outcome the usage client dropped once it takes reports, then never again', async () => {
   const sent: string[] = []
   let accepts = false
   setLegacyJournalRetirementHost({
     report: async (event) => {
       sent.push(event.outcome)
       return accepts
-    }
+    },
+    accepting: () => accepts
   })
   cleanup.push(() => setLegacyJournalRetirementHost(undefined))
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   const held = await profile()
-  await held.launch('1.0.1', true, undefined, undefined, false).run()
+  const launch = held.launch('1.0.1', true, undefined, undefined, false)
+  await launch.run()
+  // Not taking reports yet: a later maintenance tick doesn't send it again.
+  await launch.run()
+  expect(sent).toEqual(['proof_complete'])
+  // Consent given later in the same launch: the next tick sends it, once.
   accepts = true
-  await held.launch('1.0.1', true, undefined, undefined, false).run()
+  await launch.run()
+  expect(sent).toEqual(['proof_complete', 'proof_complete'])
+  await launch.run()
   await held.launch('1.0.1', true, undefined, undefined, false).run()
   expect(sent).toEqual(['proof_complete', 'proof_complete'])
 })

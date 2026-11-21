@@ -17,6 +17,8 @@ export type LegacyJournalRetirementEvent = z.infer<typeof legacyJournalRetiremen
  */
 type Host = {
   report: (event: LegacyJournalRetirementEvent) => Promise<unknown>
+  /** Whether a report would be taken now; a cheap check before resending one that wasn't. */
+  accepting?: () => boolean
 }
 let host: Host | undefined
 
@@ -139,6 +141,8 @@ function durationBucket(
 export class LegacyJournalRetirementReporter {
   private last: string | null | undefined
   private readonly logged = new Set<string>()
+  /** The latest report the usage client didn't take, sent again once it would. */
+  private unsent: { event: LegacyJournalRetirementEvent; signature: string } | null = null
 
   constructor(
     private readonly writer: {
@@ -196,14 +200,30 @@ export class LegacyJournalRetirementReporter {
       this.logged.add(signature)
       logLegacyJournalRetirement(event)
     }
-    // Marked reported only once the usage client took it, so a dropped event is sent again later.
-    if (this.news(outcome, progress) && (await sendLegacyJournalRetirement(event))) {
-      this.last = signature
-      // A failed note only means the next launch sends it again; it never fails the cleanup.
-      await this.writer
-        .maintain({ kind: 'legacy-retirement-reported', value: signature })
-        .catch(() => {})
+    if (this.news(outcome, progress)) {
+      await this.deliver(event, signature)
     }
+  }
+
+  /** A report the usage client refused (no consent yet, say) goes once it would take it. */
+  async resendUnsent(): Promise<void> {
+    if (this.unsent && host?.accepting?.() === true) {
+      await this.deliver(this.unsent.event, this.unsent.signature)
+    }
+  }
+
+  // Marked reported only once the usage client took it, so a dropped event is sent again later.
+  private async deliver(event: LegacyJournalRetirementEvent, signature: string): Promise<void> {
+    if (!(await sendLegacyJournalRetirement(event))) {
+      this.unsent = { event, signature }
+      return
+    }
+    this.unsent = null
+    this.last = signature
+    // A failed note only means the next launch sends it again; it never fails the cleanup.
+    await this.writer
+      .maintain({ kind: 'legacy-retirement-reported', value: signature })
+      .catch(() => {})
   }
 
   /** A different outcome than last reported, or the same one further along. */

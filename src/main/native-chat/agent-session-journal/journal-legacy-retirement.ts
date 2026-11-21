@@ -139,6 +139,10 @@ export class JournalLegacyRetirement {
   }
 
   private async attempt(): Promise<void> {
+    if (this.done && !this.stopped.signal.aborted) {
+      // Rides the maintenance tick: a report the usage client refused goes once it would take it.
+      return this.reporter.resendUnsent()
+    }
     if (this.done || this.stopped.signal.aborted || performance.now() < this.retryAt) {
       return
     }
