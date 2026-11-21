@@ -38,6 +38,7 @@ function chatsWithOpener(
         : { activeTurnOpener: undefined }
   }
   return {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: chatTurnFacts reads only publishedWork.
     current: () => chat as unknown as ReturnType<ConversationChatHost['current']>,
     ensure: async () => null,
     onChanged: () => () => {}
