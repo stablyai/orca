@@ -97,6 +97,7 @@ export type AccountsPaneSectionModel = {
   claudeAction: ProviderAccountAction
   visibleClaudeAccounts: ClaudeRateLimitAccountsState['accounts']
   systemClaudeActive: boolean
+  systemClaudeNeedsSignIn: boolean
   setRemoveClaudeTarget: Dispatch<SetStateAction<RemoveAccountTarget | null>>
   setRenameTarget: Dispatch<SetStateAction<RenameAccountTarget | null>>
   renameAccount: (target: RenameAccountTarget, displayName: string) => Promise<void>

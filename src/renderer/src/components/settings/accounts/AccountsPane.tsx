@@ -34,6 +34,7 @@ import { getRemoteAccountsPaneScope } from '../../provider-accounts/provider-acc
 import { ProviderHostScopeControl } from '../../provider-accounts/ProviderHostScopeControl'
 import { SettingsSectionStack } from '../section-layout/SettingsSectionStack'
 import { matchesSettingsSearch } from '../search/settings-search'
+import { getClaudeSystemDefaultSignInWarning } from './claude/claude-account-auth-warning'
 import { getCodexAccountAuthWarning } from './codex/codex-account-auth-warning'
 import { getCodexConfigSyncWarning } from './codex/codex-config-sync-warning'
 import {
@@ -86,6 +87,8 @@ export function AccountsPane({
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const claudeRateLimits = useAppStore((s) => s.rateLimits.claude)
+  const claudeRateLimitTarget = useAppStore((s) => s.rateLimits.claudeTarget)
   const codexRateLimits = useAppStore((s) => s.rateLimits.codex)
   const codexRateLimitTarget = useAppStore((s) => s.rateLimits.codexTarget)
   const miniMaxRateLimits = useAppStore((s) => s.rateLimits.minimax)
@@ -147,6 +150,7 @@ export function AccountsPane({
   const [codexAction, setCodexAction] = useState<ProviderAccountAction>('idle')
   const [ownerClaudeAccounts, setClaudeAccounts] =
     useState<ClaudeRateLimitAccountsState>(emptyClaudeAccountsState)
+  const [claudeAccountsLoaded, setClaudeAccountsLoaded] = useState(false)
   const [claudeAction, setClaudeAction] = useState<ProviderAccountAction>('idle')
   // A remote host's usage comes only from its own stream; this desktop's polls describe other logins.
   const [ownerUsage, setOwnerUsage] = useState<{
@@ -233,6 +237,18 @@ export function AccountsPane({
   const codexConfigSyncWarning = getCodexConfigSyncWarning(codexConfigSync)
   const systemCodexMissingSignIn = activeCodexAuthWarning === 'missing-sign-in'
   const systemCodexNeedsSignIn = activeCodexAccountId === null && Boolean(activeCodexAuthWarning)
+  const activeClaudeAccountId = getProviderAccountActiveIdForView(claudeAccounts, accountRuntime)
+  // Desktop rate-limit polls cannot describe remote-owned Claude auth warnings.
+  const activeClaudeAuthWarning = claudeAccountsLoaded
+    ? getClaudeSystemDefaultSignInWarning({
+        limits: isRemoteAccountScope ? null : claudeRateLimits,
+        target: claudeRateLimitTarget,
+        runtime: accountRuntime,
+        activeAccountId: activeClaudeAccountId
+      })
+    : null
+  const systemClaudeNeedsSignIn =
+    activeClaudeAccountId === null && Boolean(activeClaudeAuthWarning)
   const accountRuntimeUnavailable =
     accountRuntime.runtime === 'wsl' && !wslAvailable && !wslCapabilitiesLoading
 
@@ -266,6 +282,7 @@ export function AccountsPane({
         }
         if (!snapshot.failedProviders?.includes('claude')) {
           setClaudeAccounts(snapshot.claude)
+          setClaudeAccountsLoaded(true)
         }
         if (scopeEnvironmentId) {
           setOwnerUsage({ environmentId: scopeEnvironmentId, rateLimits: snapshot.rateLimits })
@@ -332,6 +349,7 @@ export function AccountsPane({
     claudeAction,
     visibleClaudeAccounts,
     systemClaudeActive,
+    systemClaudeNeedsSignIn,
     setRemoveClaudeTarget,
     setRenameTarget,
     renameAccount,
