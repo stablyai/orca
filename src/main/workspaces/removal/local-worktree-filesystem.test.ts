@@ -428,6 +428,9 @@ describe.skipIf(process.platform === 'win32')(
       mkdirSync(checkoutPath)
       writeFileSync(join(checkoutPath, '.git'), 'gitdir: /repo/.git/worktrees/accepted\n')
       linkSync(join(checkoutPath, '.git'), join(checkoutPath, 'marker-copy'))
+      if (!existsSync(join(checkoutPath, '.GIT'))) {
+        linkSync(join(checkoutPath, '.git'), join(checkoutPath, '.GIT'))
+      }
       const uncPath = `\\\\wsl.localhost\\Ubuntu${checkoutPath.replaceAll('/', '\\')}`
       const aborted = new AbortController()
       const reason = new Error('cancelled before guest delete')

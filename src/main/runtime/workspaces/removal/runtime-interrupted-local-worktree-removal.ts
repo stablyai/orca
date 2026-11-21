@@ -274,6 +274,7 @@ async function finishInterruptedLocalWorktreeRemoval(
       ) {
         await removeLocalWorktreePath(record.worktreePath, localOptions, args.stopSignal, {
           markerLast: true,
+          requireMarker: true,
           ...markerOpts
         })
       }

@@ -80,7 +80,7 @@ export function buildWslMarkerLastScript(
     `${PARSE_ORCA_GITDIR_LINE} &&`,
     `if [ -z "$orca_gitdir" ]${expectedClause}; then exit 4; fi &&`,
     'orca_saved_gitdir=$orca_gitdir &&',
-    `orca_find_status=0; LC_ALL=C find -P . -mindepth 1 -maxdepth 1 \\( ! -iname .git -o ! -samefile ./.git \\) -exec sh -c ${VERIFY_MARKER_BATCH_AND_RM} sh "$orca_target" "$orca_root_meta" "$orca_marker_id" "$orca_saved_gitdir" {} + || orca_find_status=$?;`,
+    `orca_find_status=0; if [ -n "$(LC_ALL=C find -P . -mindepth 1 -maxdepth 1 -name .git -print)" ]; then LC_ALL=C find -P . -mindepth 1 -maxdepth 1 ! -name .git -exec sh -c ${VERIFY_MARKER_BATCH_AND_RM} sh "$orca_target" "$orca_root_meta" "$orca_marker_id" "$orca_saved_gitdir" {} + || orca_find_status=$?; else LC_ALL=C find -P . -mindepth 1 -maxdepth 1 \\( ! -iname .git -o ! -samefile ./.git \\) -exec sh -c ${VERIFY_MARKER_BATCH_AND_RM} sh "$orca_target" "$orca_root_meta" "$orca_marker_id" "$orca_saved_gitdir" {} + || orca_find_status=$?; fi;`,
     'orca_cur_root=$(LC_ALL=C stat -c \'%F#%d:%i\' -- "$orca_target") || exit $? &&',
     'case "$orca_cur_root" in \'directory#\'*) ;; *) echo "Refusing to delete non-directory worktree path" >&2; exit 3 ;; esac &&',
     'if [ "$orca_cur_root" != "$orca_root_meta" ]; then exit 4; fi &&',

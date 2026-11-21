@@ -281,6 +281,7 @@ async function assertRemainingMarkerBelongsToRepoWorktree(
   if (after.kind === 'absent') {
     return {
       forbidAnyMarker: true,
+      requireMarker: true,
       ...(expectedRoot ? { expectedRoot } : {})
     }
   }

@@ -202,6 +202,7 @@ export async function proveOrphanedCheckoutGuard(
     return {
       markerLast: true,
       forbidAnyMarker: true,
+      ...(before.kind === 'file' ? { requireMarker: true } : {}),
       ...(expectedRoot ? { expectedRoot } : {})
     }
   }
