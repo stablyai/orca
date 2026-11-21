@@ -67,6 +67,8 @@ describe('signing the computer in to Orca from the phone', () => {
     'http://login.onorca.dev/device',
     'https://login.onorca.dev.evil.example/device',
     'https://login.onorca.dev:8443/device',
+    'https://login.onorca.dev@evil.example/device',
+    ' https://login.onorca.dev/device',
     'tel:+15550100',
     'orca://pair?code=x'
   ])('never opens %s, and ends the sign-in', async (url) => {

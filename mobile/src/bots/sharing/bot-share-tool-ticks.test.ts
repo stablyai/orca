@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { keptToolTicks } from './bot-share-tool-ticks'
 
-const review = (shareId: string, tools: { id: string; name: string; url: string }[]) => ({
+const review = (
+  shareId: string,
+  tools: { id: string; name: string; url: string; [key: string]: unknown }[]
+) => ({
   shareId,
   bot: { tools }
 })
@@ -18,6 +21,19 @@ describe('tool ticks when a link is read again', () => {
   it('drops a tick whose id now names another address', () => {
     const moved = { ...sentry, url: 'https://attacker.example/mcp' }
     expect(keptToolTicks(review('s', [sentry]), review('s', [moved]), ['t1'])).toEqual([])
+  })
+
+  it('drops a tick whose tool now asks for other headers, whatever the key order', () => {
+    const before = { ...sentry, headerNames: ['Authorization'] }
+    const reordered = {
+      headerNames: ['Authorization'],
+      url: sentry.url,
+      name: sentry.name,
+      id: 't1'
+    }
+    const more = { ...before, headerNames: ['Authorization', 'X-Org'] }
+    expect(keptToolTicks(review('s', [before]), review('s', [reordered]), ['t1'])).toEqual(['t1'])
+    expect(keptToolTicks(review('s', [before]), review('s', [more]), ['t1'])).toEqual([])
   })
 
   it('drops a tick whose id now names another tool', () => {
