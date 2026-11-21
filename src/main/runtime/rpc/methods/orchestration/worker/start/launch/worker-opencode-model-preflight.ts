@@ -3,17 +3,23 @@ import {
   resolveWorkerConfiguredAgentParams
 } from './worker-configured-agent-preflight'
 import type { prepareFederationAttachmentWorkerStart } from './worker-start-validation'
+import { agentCopyBase } from '../../../../../../../../shared/agent-launch/catalog/agent-copies'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 
 export async function probeWorkerOpenCodeModelLaunchSupport(
-  runtime: OrcaRuntimeService,
+  runtime: Pick<
+    OrcaRuntimeService,
+    'resolveOrchestrationAgentLauncher' | 'probeOrchestrationOpenCodeModelLaunchSupport'
+  >,
   params: { agent?: string; model?: string },
   target: { worktree?: string }
 ): Promise<boolean> {
+  // A copy launches its base agent, so an OpenCode copy takes the same model probe.
+  const agent = params.agent && (agentCopyBase(params.agent) ?? params.agent)
   return Boolean(
     params.model &&
-    params.agent &&
-    runtime.resolveOrchestrationAgentLauncher(params.agent) === 'opencode' &&
+    agent &&
+    runtime.resolveOrchestrationAgentLauncher(agent) === 'opencode' &&
     (await runtime.probeOrchestrationOpenCodeModelLaunchSupport({ ...target, model: params.model }))
   )
 }
