@@ -5,7 +5,14 @@ import { BOT_SLACK_METHODS, nextSlackApps } from './bots-slack'
 
 const mocks = vi.hoisted(() => {
   const account: string | null = 'acct-1'
-  return { list: vi.fn(), call: vi.fn(), update: vi.fn(), held: new Array<string>(), account }
+  return {
+    features: new Set<string>(),
+    list: vi.fn(),
+    call: vi.fn(),
+    update: vi.fn(),
+    held: new Array<string>(),
+    account
+  }
 })
 
 // The bot an update function is given, with one Slack workspace.
@@ -26,6 +33,7 @@ function invoke(name: string, params: unknown): Promise<unknown> {
       bots: { list: mocks.list, update: mocks.update },
       getConnectorCloud: () => ({
         call: mocks.call,
+        cloudFeatures: () => mocks.features,
         signedInAccount: () => mocks.account,
         withConnection: async <T>(run: () => Promise<T>): Promise<T> => {
           mocks.held.push('held')
@@ -54,6 +62,7 @@ beforeEach(() => {
   mocks.update.mockReset().mockResolvedValue({})
   mocks.held.length = 0
   mocks.account = 'acct-1'
+  mocks.features.clear()
 })
 
 describe('bots.slack', () => {
@@ -300,6 +309,30 @@ describe('bots.slack', () => {
       ok: true,
       value: undefined
     })
+  })
+
+  it('uses the advertised workspace DELETE directly when the service can scope it', async () => {
+    mocks.features.add('slack.teams')
+    mocks.call.mockResolvedValueOnce({ ok: true, value: undefined })
+    expect(await invoke('bots.slack.remove', { botId: 'bot-1', teamId: 'T1' })).toEqual({
+      ok: true,
+      value: undefined
+    })
+    expect(mocks.call.mock.calls.map((call) => call[3]?.method)).toEqual(['DELETE'])
+    expect(editedFrom(inT1)).toEqual({ slackApps: [] })
+  })
+
+  it('reports a preserved replacement instead of claiming the saved connection was removed', async () => {
+    mocks.features.add('slack.teams')
+    mocks.call.mockResolvedValueOnce({ ok: true, value: undefined })
+    mocks.update.mockImplementationOnce(async (_id, edit) =>
+      edit({ slack: { appId: 'A-new', teamId: 'T1' } })
+    )
+    expect(await invoke('bots.slack.remove', { botId: 'bot-1', teamId: 'T1' })).toEqual({
+      ok: false,
+      error: 'cloud_error'
+    })
+    expect(editedFrom({ slack: { appId: 'A-new', teamId: 'T1' } })).toBeNull()
   })
 
   it('takes nothing that is not a configuration refresh token', () => {
