@@ -5,6 +5,7 @@ import { acquire, release } from './request-queue'
 import { apiBasePath, jiraRequest, type JiraClientForSite } from './authenticated-request'
 import { clearToken, getClients, isAuthError } from './client'
 import { agileFieldIdList, getAgileFieldIds } from './jira-agile-fields'
+import { readLatestIssueEditor } from './jira-issue-changelog'
 import {
   ISSUE_DETAIL_FIELDS,
   ISSUE_SUMMARY_FIELDS,
@@ -28,6 +29,20 @@ import {
 
 const ISSUE_SUMMARY_TIMEOUT_MS = 30_000
 
+async function issueWithEditor(
+  entry: JiraClientForSite,
+  issue: JiraRecord,
+  mapped: JiraIssue
+): Promise<JiraIssue> {
+  try {
+    const updatedBy = await readLatestIssueEditor(entry, issue)
+    return updatedBy ? { ...mapped, updatedBy } : mapped
+  } catch (error) {
+    console.warn('[jira] changelog editor read failed:', error)
+    return mapped
+  }
+}
+
 export async function getIssue(
   key: string,
   siteId?: JiraSiteSelection | null,
@@ -47,7 +62,7 @@ export async function getIssue(
       held = true
       const params = new URLSearchParams({
         fields: [...ISSUE_DETAIL_FIELDS, ...agileFieldIdList(agileFields)].join(','),
-        expand: 'renderedFields'
+        expand: 'renderedFields,changelog'
       })
       issue = await jiraRequest<JiraRecord>(
         entry,
@@ -86,10 +101,10 @@ export async function getIssue(
       if (prepared) {
         flushMediaResolutionWarn(entry, prepared)
       }
-      return mapped
+      return await issueWithEditor(entry, issue, mapped)
     } catch (error) {
       console.warn('[jira] getIssue media load failed:', error)
-      return mapJiraIssue(entry.site, issue, undefined, agileFields)
+      return issueWithEditor(entry, issue, mapJiraIssue(entry.site, issue, undefined, agileFields))
     }
   }
   return null

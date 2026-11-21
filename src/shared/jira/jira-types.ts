@@ -118,6 +118,8 @@ export type JiraIssue = {
   labels: string[]
   assignee?: JiraUser
   reporter?: JiraUser
+  // Last changelog author. Absent when Jira did not return a complete history page.
+  updatedBy?: JiraUser
   priority?: JiraPriority
   /** Parent issue (epic for stories, parent story for subtasks). */
   parent?: { key: string; title: string; issueTypeName?: string }
