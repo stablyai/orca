@@ -1,8 +1,10 @@
 // New bot's picture: one tile with a pencil, the name beside it; a click opens the picker in a popover. An image pasted
 // or dropped anywhere in the dialog is taken too, into the dialog's one intake, which the popover's
-// picker shares: a decode outlives the popover, and the newest picture wins across both.
+// picker shares: a decode outlives the popover, and the newest picture wins across both. The dialog's
+// Generate face is shared the same way: a run goes on with the popover closed, a spinner in the badge.
 import React, { useEffect, useRef, useState } from 'react'
 import { CircleAlert, Pencil } from 'lucide-react'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -11,6 +13,7 @@ import { BotPictureVeil, useIntakeErrorMessage } from './BotPictureIntakeLine'
 import { BOT_PICTURE_DROP_OUTLINE, BotPicturePicker } from './BotPicturePicker'
 import { useBotAvatarIntakeHost, type BotAvatarIntake } from './use-bot-avatar-intake'
 import type { NewBotPicture } from './use-new-bot-picture'
+import type { GenerateFace } from './AvatarGenerateFace'
 
 /** The unified form dialog's padding (`p-5`). */
 const DIALOG_PADDING_PX = 20
@@ -18,11 +21,17 @@ const DIALOG_PADDING_PX = 20
 export function NewBotPictureButton({
   picture,
   intake,
+  generate,
+  disabled = false,
   children
 }: {
   picture: NewBotPicture
   /** The dialog's intake, which places a picture with `picture.placeUpload`. */
   intake: BotAvatarIntake
+  /** The dialog's Generate face, which places a picture with `picture.onUpload`. */
+  generate?: GenerateFace
+  /** While Create runs: the picture it took stays as it is. */
+  disabled?: boolean
   /** The name field, on the picture's row and centred on it. */
   children: React.ReactNode
 }): React.JSX.Element {
@@ -31,6 +40,8 @@ export function NewBotPictureButton({
   const rootRef = useRef<HTMLDivElement>(null)
   useBotAvatarIntakeHost(rootRef, intake)
   const { line } = intake
+  const [open, setOpen] = useState(false)
+  const running = generate?.run.kind === 'running'
   // The popover stays inside the dialog's padding, so a narrow dialog narrows it rather than its edge.
   const [dialog, setDialog] = useState<HTMLElement | null>(null)
   useEffect(() => {
@@ -38,12 +49,21 @@ export function NewBotPictureButton({
   }, [])
   return (
     <div ref={rootRef} className="flex items-center gap-3">
-      <Popover onOpenChange={(open) => open && line.kind === 'error' && intake.dismiss()}>
+      <Popover
+        open={open && !disabled}
+        onOpenChange={(next) => {
+          setOpen(next)
+          if (next && line.kind === 'error') {
+            intake.dismiss()
+          }
+        }}
+      >
         <PopoverTrigger asChild>
           <button
             type="button"
+            disabled={disabled}
             aria-label={t('bots.new.changePicture', 'Change picture')}
-            className="group/picture relative size-16 shrink-0 cursor-pointer rounded-[18px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="group/picture relative size-16 shrink-0 cursor-pointer rounded-[18px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-default"
           >
             <BotAvatarTile
               src={picture.src}
@@ -59,7 +79,8 @@ export function NewBotPictureButton({
               aria-hidden
               className="absolute -right-1.5 -bottom-1.5 flex size-[22px] items-center justify-center rounded-full border border-border bg-popover text-muted-foreground shadow-[0_0_0_2px_var(--dialog-surface)] transition-colors group-hover/picture:text-foreground group-aria-expanded/picture:text-foreground"
             >
-              <Pencil className="size-3" />
+              {/* A picture still being made, picker open or closed; it lands on its own. */}
+              {running ? <LoadingSpinner className="size-3" /> : <Pencil className="size-3" />}
             </span>
           </button>
         </PopoverTrigger>
@@ -80,6 +101,7 @@ export function NewBotPictureButton({
               onColorChange={picture.onColorChange}
               uploadLink
               intake={intake}
+              generate={generate}
             />
           </div>
         </PopoverContent>

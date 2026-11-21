@@ -21,6 +21,7 @@ import { BOT_EDIT_HINT } from './bot-edit-hint'
 import { FieldNoteLine, sameNote, type FieldNote } from './AvatarGenerateFieldNote'
 import { BotPictureRowFold } from './BotPictureRowFold'
 import { useAvatarGeneration, type GeneratedAvatar } from './use-avatar-generation'
+import type { AvatarRequestOwner } from './avatar-generation-requests'
 
 const TILE = 'size-28 rounded-xl'
 
@@ -32,18 +33,27 @@ export type SlotPicture = { src: string; description: string }
  * user's own picture (generated earlier, uploaded, pasted or dropped); it holds the slot unless a
  * newer picture was just made. `onStart` runs as a picture is asked for (once the description passes
  * its checks), so a picture taken earlier and still being read can't replace it.
+ *
+ * A host above the popover (New bot, Import, a bot's picture button) keeps the face, so a run goes on
+ * with the popover closed: `background`. `owner` says who the picture is for (see useAvatarGeneration).
  */
 export function useGenerateFace(
-  /** False when a picture taken in since it was asked for keeps the slot. */
-  onResult: (result: GeneratedAvatar) => boolean,
+  /** False when a picture taken in since it was asked for keeps the slot. `apply`: see
+   *  AvatarRequestHost. */
+  onResult: (result: GeneratedAvatar, apply: boolean) => boolean,
   applied: SlotPicture | null,
-  onStart?: () => void
+  onStart?: () => void,
+  { owner, background = false }: { owner?: () => AvatarRequestOwner; background?: boolean } = {}
 ) {
   // A picture taken in after the last one made (an upload, an undo) wins the slot back.
   const [superseded, setSuperseded] = useState(false)
-  const generation = useAvatarGeneration((made) => {
-    setSuperseded(!onResult(made))
-  }, onStart)
+  const generation = useAvatarGeneration(
+    (made, apply) => {
+      setSuperseded(!onResult(made, apply))
+    },
+    onStart,
+    owner
+  )
   const made = generation.result && !superseded ? generation.result : null
   const picture: SlotPicture | null = made
     ? { src: `data:image/png;base64,${made.png}`, description: made.description }
@@ -60,6 +70,8 @@ export function useGenerateFace(
   const folded = picture !== null && !editing && generation.run.kind === 'idle'
   return {
     ...generation,
+    /** The run goes on with the picker closed. */
+    background,
     /** The picture just made, unless another was taken in since. */
     made,
     picture,
@@ -82,6 +94,13 @@ export function useGenerateFace(
     generate: () => {
       setEditing(false)
       generation.generate(description)
+    },
+    /** As if just mounted: a run still going is released, and the description cleared. */
+    reset: () => {
+      generation.reset()
+      setSuperseded(false)
+      setDescription('')
+      setEditing(false)
     }
   }
 }
@@ -162,6 +181,17 @@ export function GenerateFaceTile({ face }: { face: GenerateFace }): React.JSX.El
           </span>
           <span className={AT_REST}>{t('bots.avatar.generate.generating', 'Generating…')}</span>
           <span className={ON_HOVER}>{t('bots.avatar.generate.cancel', 'Cancel')}</span>
+          {face.background ? (
+            // Closing the picker doesn't stop the run; the picture lands on its own.
+            <span
+              className={cn(
+                '-mt-1 text-[11px] leading-4 whitespace-nowrap text-muted-foreground',
+                AT_REST
+              )}
+            >
+              {t('bots.avatar.generate.closeAnytime', 'Close anytime')}
+            </span>
+          ) : null}
         </PromptTile>
       </button>
     )

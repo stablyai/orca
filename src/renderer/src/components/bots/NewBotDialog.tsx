@@ -29,6 +29,7 @@ import { openCreatedBot } from './bot-create-open'
 import { NewBotPictureButton } from './NewBotPictureButton'
 import { useNewBotPicture } from './use-new-bot-picture'
 import { useBotAvatarIntakeState } from './use-bot-avatar-intake'
+import { draftPictureTake, useNewBotGenerateFace } from './use-new-bot-generate-face'
 import { useBotAgentMenu } from './use-bot-agent-choices'
 import { useBotCreateHost } from './bot-create-hosts'
 import {
@@ -140,8 +141,15 @@ export function NewBotDialog({
     fromShare ? sharedMascot(fromShare.review) : proposal?.mascot,
     fromShare && sharedPicturePng(fromShare.review)
   )
-  // Pasted, dropped and uploaded pictures, from the dialog and the picture popover alike.
-  const intake = useBotAvatarIntakeState({ onPicture: picture.placeUpload, undoable: false })
+  // Pasted, dropped and uploaded pictures, from the dialog and the picture popover alike; none while
+  // Create runs, which has taken the picture.
+  const intake = useBotAvatarIntakeState({
+    onPicture: picture.placeUpload,
+    undoable: false,
+    onTake: draftPictureTake(picture.choiceKey),
+    disabled: creating
+  })
+  const face = useNewBotGenerateFace(picture, intake)
   const prefilledIdentity = templateIdentity(proposal)
   // An edited template identity becomes the bot's purpose, so it keeps the purpose's limit.
   const identityTooLong =
@@ -172,6 +180,8 @@ export function NewBotDialog({
     agentSetup.reset()
     picture.reset()
     intake.dismiss()
+    // A run handed to the bot made goes on; any other ends here.
+    face.reset()
     hostChoice.reset()
     onOpenChange(false, made)
   }
@@ -192,6 +202,8 @@ export function NewBotDialog({
       return
     }
     setCreating(true)
+    // The picture is taken now; a run still going, unless a newer choice was made, follows the bot.
+    const handOff = face.handOff({ hostId, name: trimmedName })
     let bot: Bot
     try {
       if (fromShare) {
@@ -203,6 +215,7 @@ export function NewBotDialog({
           picture
         )
         if (!shared) {
+          handOff?.failed()
           setCreating(false)
           return
         }
@@ -230,10 +243,12 @@ export function NewBotDialog({
         bot = await picture.saveUpload(bot)
       }
     } catch (error) {
+      handOff?.failed()
       setCreating(false)
       toast.error(fromShare ? botShareErrorMessage(error) : botErrorMessage(error))
       return
     }
+    handOff?.created(bot)
     // Closes once the bot exists, as a new workspace's composer does; its page opens next and shows
     // its agent starting.
     createdBot.current = true
@@ -333,7 +348,12 @@ export function NewBotDialog({
               />
             ) : null}
             <div className="space-y-3 pt-1">
-              <NewBotPictureButton picture={picture} intake={intake}>
+              <NewBotPictureButton
+                picture={picture}
+                intake={intake}
+                generate={face}
+                disabled={creating}
+              >
                 <ImeInput
                   ref={nameRef}
                   className={BARE_HEADING_CLASS}

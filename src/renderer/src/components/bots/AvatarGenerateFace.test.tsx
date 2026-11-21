@@ -88,7 +88,7 @@ describe('Generate face', () => {
     expect(generate).toHaveBeenCalledWith(
       expect.objectContaining({ description: 'a fox astronaut', agent: 'codex' })
     )
-    expect(onResult).toHaveBeenCalledWith({ png: 'CROPPED', description: 'a fox astronaut' })
+    expect(onResult).toHaveBeenCalledWith({ png: 'CROPPED', description: 'a fox astronaut' }, true)
     expect(screen.getByRole('button', { name: 'a fox astronaut' })).toBeTruthy()
   })
 

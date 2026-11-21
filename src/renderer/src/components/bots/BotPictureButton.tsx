@@ -1,8 +1,10 @@
-// A bot's picture, edited where it shows: a click opens the picture picker in a popover.
+// A bot's picture, edited where it shows: a click opens the picture picker in a popover. A picture being
+// generated keeps going with the popover closed, the avatar veiled with a spinner, and lands on its own.
 import { useBotHostHas } from '@/lib/bot-host-status'
 import { BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import { Pencil } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { Bot } from '../../../../shared/bot-types'
@@ -10,6 +12,8 @@ import type { useBotPictureSetting } from '../settings/bots/use-bot-picture-sett
 import { BotAvatar } from './BotAvatar'
 import { BOT_EDIT_HINT } from './bot-edit-hint'
 import { BOT_PICTURE_DROP_OUTLINE, BotPicturePicker } from './BotPicturePicker'
+import { useGenerateFace } from './AvatarGenerateFace'
+import { useBotPictureGenerating } from './avatar-generation-requests'
 
 export function BotPictureButton({
   bot,
@@ -27,30 +31,51 @@ export function BotPictureButton({
 }): React.JSX.Element {
   const t = useTranslate()
   const colors = useBotHostHas(bot.hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY)
+  const generating = useBotPictureGenerating(bot)
+  // Above the popover, so a run outlives it. The picture made is uploaded by the request store, behind
+  // the host's revision check; here it only takes its place in the slot.
+  const face = useGenerateFace(
+    () => true,
+    picture.custom?.src
+      ? { src: picture.custom.src, description: picture.custom.description }
+      : null,
+    undefined,
+    { owner: () => ({ kind: 'bot', bot }), background: true }
+  )
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            'group/edit relative shrink-0 cursor-pointer rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default',
-            className
-          )}
-          aria-label={t('settings.bots.editPicture', 'Edit bot picture')}
-        >
-          <BotAvatar bot={bot} className={avatarClassName} />
-          <span
-            aria-hidden
-            className={cn(
-              'pointer-events-none absolute inset-0 flex items-center justify-center rounded-[inherit] bg-black/55 text-white',
-              BOT_EDIT_HINT
-            )}
-          >
-            <Pencil className="size-1/2 max-h-4 max-w-4" />
-          </span>
-          {children}
-        </button>
-      </PopoverTrigger>
+      <Tooltip open={generating ? undefined : false}>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className={cn(
+                'group/edit relative shrink-0 cursor-pointer rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default',
+                className
+              )}
+              aria-label={t('settings.bots.editPicture', 'Edit bot picture')}
+            >
+              <BotAvatar bot={bot} className={avatarClassName} />
+              {/* While a picture is being made the avatar's own veil and spinner stay instead. */}
+              {generating ? null : (
+                <span
+                  aria-hidden
+                  className={cn(
+                    'pointer-events-none absolute inset-0 flex items-center justify-center rounded-[inherit] bg-black/55 text-white',
+                    BOT_EDIT_HINT
+                  )}
+                >
+                  <Pencil className="size-1/2 max-h-4 max-w-4" />
+                </span>
+              )}
+              {children}
+            </button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={4}>
+          {t('bots.avatar.generate.generating', 'Generating…')}
+        </TooltipContent>
+      </Tooltip>
       <PopoverContent className="w-80">
         {/* The whole popover takes a dropped picture, so all of it is outlined while one is dragged; the top
             padding matches the gap beside the preview. */}
@@ -63,6 +88,8 @@ export function BotPictureButton({
             onUndo={picture.undo}
             color={picture.color}
             onColorChange={colors ? picture.pickColor : undefined}
+            generate={face}
+            onIntakeStart={picture.beginIntake}
           />
           {bot.slack ? (
             <p className="text-center text-xs text-muted-foreground">

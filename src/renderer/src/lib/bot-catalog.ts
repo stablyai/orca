@@ -292,10 +292,19 @@ export async function takeOverWorkspace(
 }
 
 /** A square 512 px PNG (base64) becomes the bot's picture, kept in its home. */
-export async function uploadBotAvatar(target: BotRef, png: string): Promise<Bot> {
+/** `expectedAvatarRevision`: refused (bot_avatar_changed) if another picture or color write landed since;
+ *  send it only to a host with bots.avatar-revision.v1. */
+export async function uploadBotAvatar(
+  target: BotRef,
+  png: string,
+  options: { expectedAvatarRevision?: number } = {}
+): Promise<Bot> {
   const { bot } = await callBotRpc<{ bot: Bot }>(target, 'bots.avatar.upload', {
     botId: target.id,
-    png
+    png,
+    ...(options.expectedAvatarRevision !== undefined
+      ? { expectedAvatarRevision: options.expectedAvatarRevision }
+      : {})
   })
   await refreshBotHost(target.hostId)
   return stampBotHost(target.hostId, bot)

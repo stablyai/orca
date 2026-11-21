@@ -770,6 +770,74 @@ describe('NewBotDialog Generate and an upload', () => {
     )
   })
 
+  async function generateThenClose(): Promise<ReturnType<typeof renderDialog>> {
+    stubGeneration()
+    mocks.createBot.mockResolvedValue(created)
+    mocks.uploadBotAvatar.mockResolvedValue({ ...created, avatar: 'upload:abc', avatarRevision: 1 })
+    const dialog = renderDialog()
+    dialog.openPicker()
+    fireEvent.click(await screen.findByRole('button', { name: 'Previous picture' }))
+    const box = await screen.findByRole('textbox', { name: 'Picture description' })
+    fireEvent.change(box, { target: { value: 'a fox' } })
+    fireEvent.keyDown(box, { key: 'Enter' })
+    expect(await screen.findByText('Close anytime')).toBeTruthy()
+    // The trigger closes the popover again; the run goes on.
+    fireEvent.click(screen.getByRole('button', { name: 'Change picture' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('textbox', { name: 'Picture description' })).toBeNull()
+    )
+    return dialog
+  }
+
+  it('keeps generating with the picker closed, and the picture made becomes the one shown', async () => {
+    const { picture, openPicker } = await generateThenClose()
+    const cancel = vi.spyOn(window.api.avatarGeneration, 'cancel')
+
+    finishGenerate()
+
+    await waitFor(() => expect(picture()).toBe(`data:image/png;base64,${GENERATED}`))
+    expect(cancel).not.toHaveBeenCalled()
+    openPicker()
+    expect(await screen.findByRole('button', { name: 'Edit description' })).toBeTruthy()
+  })
+
+  it('reopens on the run still going', async () => {
+    const { openPicker } = await generateThenClose()
+    openPicker()
+    expect(await screen.findByRole('button', { name: 'Cancel generating' })).toBeTruthy()
+  })
+
+  it('uploads a picture that lands after Create to the bot made, behind its revision', async () => {
+    const { submit } = await generateThenClose()
+    await submit()
+    expect(mocks.createBot.mock.calls[0]?.[1].avatar).toMatch(/^mascot:/)
+    expect(mocks.uploadBotAvatar).not.toHaveBeenCalled()
+
+    finishGenerate()
+
+    await waitFor(() =>
+      expect(mocks.uploadBotAvatar).toHaveBeenCalledWith(
+        { hostId: 'local', id: 'bot-1' },
+        GENERATED,
+        { expectedAvatarRevision: 0 }
+      )
+    )
+    expect(mocks.uploadBotAvatar).toHaveBeenCalledTimes(1)
+  })
+
+  it('drops a picture still being made for a mascot picked after Generate, at Create', async () => {
+    const { openPicker, submit } = await generateThenClose()
+    const cancel = vi.spyOn(window.api.avatarGeneration, 'cancel')
+    openPicker()
+    fireEvent.click(await screen.findByRole('button', { name: 'Next picture' }))
+    await submit()
+    finishGenerate()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(cancel).toHaveBeenCalled()
+    expect(mocks.uploadBotAvatar).not.toHaveBeenCalled()
+  })
+
   it.each([
     ['the upload finishes first', ['upload', 'generate']],
     ['the upload finishes last', ['generate', 'upload']]
