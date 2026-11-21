@@ -9,6 +9,9 @@ import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 // Clears the saved screen the hold painted so the restore below paints it once.
 const CLEAR_HELD_SCREEN = '\x1b[0m\x1b[2J\x1b[3J\x1b[H'
 
+// The newest hold per pane session; an older hold's settling attempt must not re-enable input.
+const latestHolds = new WeakMap<ConnectPanePtySession, object>()
+
 /** Hold a refused restore read-only while a newer daemon may own the session; release reconnects. */
 export function holdForNewerDaemon(
   session: ConnectPanePtySession,
@@ -26,6 +29,8 @@ export function holdForNewerDaemon(
     session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport
   let held = true
   let paintedScreen = false
+  const hold = {}
+  latestHolds.set(session, hold)
   // Why: nothing backs this pane, so keystrokes have nowhere to go.
   terminal.options.disableStdin = true
   const { runtimeEnvironmentId } = session
@@ -41,12 +46,16 @@ export function holdForNewerDaemon(
           dropTeardown()
           return { reopened: false, agentResumed: false }
         }
-        terminal.options.disableStdin = false
         if (paintedScreen) {
           session.writeReplayData(CLEAR_HELD_SCREEN)
         }
-        // Forgotten after the attempt, so a pane retried in place keeps its banner until it settles.
-        return reconnect().finally(dropTeardown)
+        // Input and the banner wait for the attempt; a refusal re-holds the pane before it settles.
+        return reconnect().finally(() => {
+          if (latestHolds.get(session) === hold) {
+            terminal.options.disableStdin = false
+          }
+          dropTeardown()
+        })
       }
     },
     host

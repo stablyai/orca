@@ -81,8 +81,8 @@ export class DaemonPtyRouter implements IPtyProvider {
       if (opts.attachOnly && opts.sessionId) {
         return await this.ownerResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
       }
-      const target = await this.heldSpawns.target(opts)
-      const result = await target.spawn(opts)
+      const { target, spawnOpts } = await this.heldSpawns.target(opts)
+      const result = await target.spawn(spawnOpts)
       if (!result.exitedBeforeSpawnReply) {
         this.ownerResolver.recordRoute(result.id, target, result.incarnationId)
       }

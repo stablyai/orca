@@ -1,15 +1,20 @@
-import { useSyncExternalStore } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 import { NEWER_DAEMON_HOLD_ERROR } from '../../../../src/shared/terminal/daemon/newer-daemon-hold'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 
 // Only the shown pending tab needs the notice, so one slot is kept; any later answer for it clears it.
 let heldTabKey: string | null = null
+// The pending tab on screen; a late reply for a tab the user already left is ignored.
+let shownTabKey: string | null = null
 const listeners = new Set<() => void>()
 
 const tabKey = (worktreeId: string, tabId: string): string => `${worktreeId}\u0000${tabId}`
 
 function setHeld(worktreeId: string, tabId: string, held: boolean): void {
   const key = tabKey(worktreeId, tabId)
+  if (held && key !== shownTabKey) {
+    return
+  }
   const next = held ? key : heldTabKey === key ? null : heldTabKey
   if (next === heldTabKey) {
     return
@@ -44,8 +49,14 @@ export function useTerminalTabHeldByNewerVersion(
   worktreeId: string,
   tabId: string | undefined
 ): boolean {
-  return useSyncExternalStore(
-    subscribe,
-    () => tabId !== undefined && heldTabKey === tabKey(worktreeId, tabId)
-  )
+  const key = tabId === undefined ? null : tabKey(worktreeId, tabId)
+  useEffect(() => {
+    shownTabKey = key
+    return () => {
+      if (shownTabKey === key) {
+        shownTabKey = null
+      }
+    }
+  }, [key])
+  return useSyncExternalStore(subscribe, () => key !== null && heldTabKey === key)
 }

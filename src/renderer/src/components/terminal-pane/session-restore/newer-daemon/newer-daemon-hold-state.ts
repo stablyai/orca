@@ -83,8 +83,15 @@ export function holdPaneForNewerDaemon(
   pane: { resumable: boolean; release?: () => Promise<HeldPaneReopenOutcome> },
   host: string = LOCAL_HOLD_HOST
 ): () => void {
-  pendingHolds.set(paneKey, { ...pane, host, phase: 'held', dismissed: false })
-  pendingHoldsFlush ??= setTimeout(flushPendingHolds, HOLD_REGISTRATION_BATCH_MS)
+  const held: HeldPane = { ...pane, host, phase: 'held', dismissed: false }
+  if (newerDaemonHoldStore.getState().panes[paneKey]) {
+    // A pane held again in place swaps its banner in one write, so it never blinks out.
+    pendingHolds.delete(paneKey)
+    newerDaemonHoldStore.setState(({ panes }) => ({ panes: { ...panes, [paneKey]: held } }))
+  } else {
+    pendingHolds.set(paneKey, held)
+    pendingHoldsFlush ??= setTimeout(flushPendingHolds, HOLD_REGISTRATION_BATCH_MS)
+  }
   return () => {
     const pending = pendingHolds.get(paneKey)
     if (pending?.host === host && pending.release === pane.release) {
@@ -103,18 +110,20 @@ export function holdPaneForNewerDaemon(
   }
 }
 
-let heldCountsCache: { panes: Record<string, HeldPane>; byHost: Map<string, number> } | null = null
+// Keyed by the panes record itself, so a replaced record and its pane callbacks are never kept alive.
+const heldCountsByPanes = new WeakMap<Record<string, HeldPane>, Map<string, number>>()
 
 /** Held panes per host, counted once per store write rather than once per banner. */
-function heldCountOnHost(panes: Record<string, HeldPane>, host: string | undefined): number {
-  if (heldCountsCache?.panes !== panes) {
-    const byHost = new Map<string, number>()
+function heldCountOnHost(panes: Record<string, HeldPane>, host: string): number {
+  let byHost = heldCountsByPanes.get(panes)
+  if (!byHost) {
+    byHost = new Map<string, number>()
     for (const held of Object.values(panes)) {
       byHost.set(held.host, (byHost.get(held.host) ?? 0) + 1)
     }
-    heldCountsCache = { panes, byHost }
+    heldCountsByPanes.set(panes, byHost)
   }
-  return host === undefined ? 0 : (heldCountsCache.byHost.get(host) ?? 0)
+  return byHost.get(host) ?? 0
 }
 
 /** This pane's banner state, null when not held or dismissed; heldCount is every pane one Reopen releases. */
@@ -125,8 +134,9 @@ export function useNewerDaemonHold(paneKey: string): {
   canReopen: boolean
 } | null {
   const pane = useStore(newerDaemonHoldStore, (state) => state.panes[paneKey])
+  // Why gated: a Retry-only banner shows no count, so it must not re-render as other panes are held.
   const heldCount = useStore(newerDaemonHoldStore, (state) =>
-    heldCountOnHost(state.panes, pane?.host)
+    pane && hostReopens.has(pane.host) ? heldCountOnHost(state.panes, pane.host) : 0
   )
   return pane && !pane.dismissed
     ? {

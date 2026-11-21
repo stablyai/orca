@@ -49,6 +49,8 @@ export async function attemptStablePaneAttach(
     })
   } catch (error) {
     if (error instanceof TerminalSessionOwnerUnverifiedError) {
+      // While a newer daemon is held, the owner nobody here can vouch for may be its; say so instead.
+      await provider.refuseHeldSpawn?.({ sessionId: owner.ptyId, ownerSearched: true })
       throw new Error('terminal_pane_owner_unverified')
     }
     // Preserve endpoint-loss meaning before paired RPC strips socket code/syscall.
@@ -68,7 +70,8 @@ export async function attemptStablePaneAttach(
       throw new Error(PANE_NOT_LIVE_ERROR)
     }
     // A newer daemon may still run this id; keep its binding rather than retire it for a fresh start.
-    const held = provider.refuseHeldSpawn?.({ sessionId: owner.ptyId })
+    // The attach above already searched every compatible daemon and found it absent.
+    const held = provider.refuseHeldSpawn?.({ sessionId: owner.ptyId, ownerSearched: true })
     if (held) {
       await held
     }

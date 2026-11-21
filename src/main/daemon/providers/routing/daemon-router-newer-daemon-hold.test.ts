@@ -7,11 +7,11 @@ import type {
 
 vi.mock('./daemon-newer-protocol-hold', () => ({
   isHoldingForNewerProtocolDaemon: () => true,
-  recheckNewerProtocolHold: async () => true
+  recheckNewerProtocolHold: () => true
 }))
 
 const { LegacyDaemonExitProof } = await import('./daemon-legacy-exit-proof')
-const { heldSpawnRefusal, resolveHeldOwner, routeSpawnOrHold } =
+const { DaemonRouterHeldSpawnGate, heldSpawnRefusal, resolveHeldOwner } =
   await import('./daemon-router-newer-daemon-hold')
 
 const SAVED = 'repo1::/tmp/feature@@d3a0a65b'
@@ -19,9 +19,19 @@ const SAVED = 'repo1::/tmp/feature@@d3a0a65b'
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hold only probes whether the current daemon runs the saved id.
 const current = { probePtyLiveness: async () => false } as unknown as DaemonPtyAdapter
 
-function dispatch(ownerResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>) {
+function gate(
+  ownerResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>,
+  currentDaemon: DaemonPtyAdapter = current
+) {
   const exitProof = new LegacyDaemonExitProof()
-  return { sessionAdapters: new Map(), current, legacy: [], exitProof, ownerResolver }
+  const sessionAdapters = new Map<string, DaemonPtyAdapter>()
+  return new DaemonRouterHeldSpawnGate(() => ({
+    sessionAdapters,
+    current: currentDaemon,
+    legacy: [],
+    exitProof,
+    ownerResolver
+  }))
 }
 
 function refusal(resolution: DaemonSessionOwnerResolution<DaemonPtyAdapter>) {
@@ -44,9 +54,9 @@ function resolver(
 
 describe('a spawn while a newer daemon may still run saved sessions', () => {
   it('holds a saved id with no history instead of starting a second shell for it', async () => {
-    await expect(
-      routeSpawnOrHold({ sessionId: SAVED }, dispatch(resolver({ kind: 'absent' })))
-    ).rejects.toThrow('terminal_held_by_newer_daemon')
+    await expect(gate(resolver({ kind: 'absent' })).target({ sessionId: SAVED })).rejects.toThrow(
+      'terminal_held_by_newer_daemon'
+    )
     await expect(refusal({ kind: 'absent' })({ sessionId: SAVED })).rejects.toThrow(
       'terminal_held_by_newer_daemon'
     )
@@ -58,10 +68,11 @@ describe('a spawn while a newer daemon may still run saved sessions', () => {
     expect(ownerAnswers({ sessionId: SAVED, attachOnly: true })).toBeUndefined()
   })
 
-  it('reattaches a session the current daemon runs even when its inventory answer is unknown', async () => {
+  it('attaches, never starts, a session the current daemon runs even when its inventory is unknown', async () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hold only probes the current daemon.
     const running = { probePtyLiveness: async () => true } as unknown as DaemonPtyAdapter
-    const router = { ...dispatch(resolver({ kind: 'unknown' })), current: running }
-    await expect(routeSpawnOrHold({ sessionId: SAVED }, router)).resolves.toBe(running)
+    await expect(
+      gate(resolver({ kind: 'unknown' }), running).target({ sessionId: SAVED })
+    ).resolves.toEqual({ target: running, spawnOpts: { sessionId: SAVED, attachOnly: true } })
   })
 })

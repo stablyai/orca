@@ -1,4 +1,5 @@
 import type { TerminalOutputCadence } from '../../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
+import { NEWER_DAEMON_HOLD_ERROR } from '../../../../../../shared/terminal/daemon/newer-daemon-hold'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { webTerminalPlacementParentTabId } from '@/runtime/hosted-terminals/placement/web-session-terminal-placement'
 import { pairedAgentLaunchInputs } from '@/lib/agent-session/launch/routing/paired-agent-launch-inputs'
@@ -732,6 +733,11 @@ export function createRemoteRuntimePtyTransport(
   }
 
   function surfaceErrorMessage(message: string): void {
+    // A newer-version hold answers this attempt, so each retry's pane must hear it again.
+    if (message.includes(NEWER_DAEMON_HOLD_ERROR)) {
+      storedCallbacks.onError?.(message)
+      return
+    }
     if (surfacedErrorMessages.has(message)) {
       return
     }

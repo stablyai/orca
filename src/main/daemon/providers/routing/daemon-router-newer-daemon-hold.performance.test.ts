@@ -4,7 +4,7 @@ import type { DaemonSessionOwnerResolver } from './daemon-session-owner-resoluti
 
 vi.mock('./daemon-newer-protocol-hold', () => ({
   isHoldingForNewerProtocolDaemon: () => true,
-  recheckNewerProtocolHold: async () => true
+  recheckNewerProtocolHold: () => true
 }))
 
 const { LegacyDaemonExitProof } = await import('./daemon-legacy-exit-proof')
@@ -25,10 +25,8 @@ describe('a restore burst under a newer-daemon hold', () => {
       }
     } as unknown as DaemonPtyAdapter
     const sessionAdapters = new Map<string, DaemonPtyAdapter>()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a proven owner is only recorded as a route.
-    const ownerResolver = {
-      recordRoute: (id: string, adapter: DaemonPtyAdapter) => sessionAdapters.set(id, adapter)
-    } as unknown as DaemonSessionOwnerResolver<DaemonPtyAdapter>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every probe answers, so no inventory is read.
+    const ownerResolver = {} as DaemonSessionOwnerResolver<DaemonPtyAdapter>
     const exitProof = new LegacyDaemonExitProof()
     const gate = new DaemonRouterHeldSpawnGate(() => ({
       sessionAdapters,
@@ -40,7 +38,7 @@ describe('a restore burst under a newer-daemon hold', () => {
     const panes = Array.from({ length: N }, (_, i) => ({ sessionId: `wt@@pane-${i}` }))
     await Promise.all(panes.map((opts) => gate.refuse(opts)))
     for (const opts of panes) {
-      await expect(gate.target(opts)).resolves.toBe(current)
+      await expect(gate.target(opts)).resolves.toMatchObject({ target: current })
     }
     expect(probes).toBe(N)
   })

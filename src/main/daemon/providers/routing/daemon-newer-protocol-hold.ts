@@ -8,12 +8,20 @@ import {
   listDaemonPidFileProtocols
 } from '../../launch/daemon-generation-liveness'
 import { getDaemonHistoryDir, getDaemonRuntimeDir } from '../../launch/daemon-launch-paths'
-import { getDaemonSocketPath, getDaemonTokenPath } from '../../launch/daemon-spawner'
+import {
+  getDaemonPidPath,
+  getDaemonSocketPath,
+  getDaemonTokenPath
+} from '../../launch/daemon-spawner'
+import { readFileSync } from 'node:fs'
+import { parseDaemonPidFile } from '../../endpoint/identity/daemon-pid-file-parse'
+import { inspectProcessLiveness } from '../../endpoint/identity/daemon-process-inspection'
 import { killStaleDaemon } from '../../launch/daemon-stale-kill'
 import { HistoryReader } from '../../history/restoration/history-reader'
 import { PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
 
 let heldProtocols: readonly number[] = []
+let heldDaemonPids = new Map<number, number>()
 let reopenInFlight: Promise<NewerDaemonReopenResult> | null = null
 
 /** Holds restores for every live or unverifiable newer daemon in this profile's runtime dir. */
@@ -25,38 +33,42 @@ export async function discoverNewerProtocolHolds(runtimeDir: string): Promise<vo
     versions.map((version) => classifyDaemonGeneration(runtimeDir, version))
   )
   heldProtocols = versions.filter((_, index) => verdicts[index] !== 'exited')
-  holdRecheck = null
+  heldDaemonPids = new Map(
+    heldProtocols.flatMap((version) => {
+      const pid = readHeldDaemonPid(runtimeDir, version)
+      return pid === null ? [] : [[version, pid] as const]
+    })
+  )
+}
+
+// Only a pid read while the daemon was held can later prove its exit; a missing file proves nothing then.
+function readHeldDaemonPid(runtimeDir: string, version: number): number | null {
+  try {
+    const parsed = parseDaemonPidFile(readFileSync(getDaemonPidPath(runtimeDir, version), 'utf8'))
+    return parsed && Number.isInteger(parsed.pid) && parsed.pid > 0 ? parsed.pid : null
+  } catch {
+    return null
+  }
 }
 
 export function isHoldingForNewerProtocolDaemon(): boolean {
   return heldProtocols.length > 0
 }
 
-// A restore burst shares one re-read; a held daemon that exits later is noticed within this window.
-const HOLD_RECHECK_MS = 5_000
-let holdRecheck: { at: number; stillHolding: Promise<boolean> } | null = null
-
-/** Whether the hold still stands, re-reading held daemons that may have exited since startup. */
-export function recheckNewerProtocolHold(runtimeDir = getDaemonRuntimeDir()): Promise<boolean> {
-  if (heldProtocols.length === 0) {
-    return Promise.resolve(false)
+/** Whether the hold still stands: a held daemon whose recorded process is gone has exited since startup. */
+export function recheckNewerProtocolHold(): boolean {
+  // A stop in progress removes its pid file before its terminals end; Reopen decides those exits itself.
+  if (heldProtocols.length === 0 || reopenInFlight) {
+    return heldProtocols.length > 0
   }
-  if (holdRecheck && Date.now() - holdRecheck.at < HOLD_RECHECK_MS) {
-    return holdRecheck.stillHolding
+  const exited = heldProtocols.filter((version) => {
+    const pid = heldDaemonPids.get(version)
+    return pid !== undefined && inspectProcessLiveness(pid).status === 'exited'
+  })
+  if (exited.length > 0) {
+    heldProtocols = heldProtocols.filter((version) => !exited.includes(version))
   }
-  const versions = heldProtocols
-  const stillHolding = Promise.all(
-    versions.map((version) => classifyDaemonGeneration(runtimeDir, version))
-  ).then(
-    (verdicts) => {
-      const exited = new Set(versions.filter((_, index) => verdicts[index] === 'exited'))
-      heldProtocols = heldProtocols.filter((version) => !exited.has(version))
-      return heldProtocols.length > 0
-    },
-    () => true
-  )
-  holdRecheck = { at: Date.now(), stillHolding }
-  return stillHolding
+  return heldProtocols.length > 0
 }
 
 /** Read the held session's saved screen without spawning. */

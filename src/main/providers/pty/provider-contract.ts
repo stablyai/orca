@@ -109,7 +109,13 @@ export type PtySpawnOptions = {
 }
 
 /** What the newer-daemon hold reads from a spawn request. */
-export type PtyHeldSpawnRequest = Pick<PtySpawnOptions, 'sessionId' | 'isNewSession' | 'attachOnly'>
+export type PtyHeldSpawnRequest = Pick<
+  PtySpawnOptions,
+  'sessionId' | 'isNewSession' | 'attachOnly'
+> & {
+  /** The caller already searched every compatible daemon for the id and found no owner. */
+  ownerSearched?: boolean
+}
 
 type PtyProbeOptions = { signal?: AbortSignal }
 
