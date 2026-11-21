@@ -5,6 +5,7 @@ import { AgentStateDot, type AgentDotState } from '@/components/agent/status/Age
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import { Button } from '@/components/ui/button'
 import { ActivityRowButton } from './ActivityRowButton'
+import { useBotRowCardPlacement } from './use-bot-row-card-placement'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { useNow } from '@/lib/window-activity/use-now'
 import { useTranslate } from '@/i18n/use-translate'
@@ -95,15 +96,16 @@ export function WorkerActivityRow(props: WorkerActivityRowProps): React.JSX.Elem
     props.workspaceId ? selectOrchestrationWorkerWorkspaceLabel(state, props.workspaceId) : null
   )
   const look = worker ? sessionWorkerLook(worker) : null
+  const placement = useBotRowCardPlacement()
   return (
-    <HoverCard openDelay={400} closeDelay={100}>
+    <HoverCard openDelay={400} closeDelay={100} {...placement.root}>
       <div
         className={cn(
-          'group/worker flex w-full min-w-0 items-start gap-1 rounded-sm hover:bg-accent',
+          'group/worker flex w-full min-w-0 items-start gap-1 rounded-sm hover:bg-accent has-[[data-state=open]]:bg-accent',
           props.nested && 'relative'
         )}
       >
-        <HoverCardTrigger asChild>
+        <HoverCardTrigger asChild {...placement.trigger}>
           <ActivityRowButton
             disabled={!props.onOpen}
             onClick={props.onOpen}
@@ -164,7 +166,7 @@ export function WorkerActivityRow(props: WorkerActivityRowProps): React.JSX.Elem
           </span>
         ) : null}
       </div>
-      <HoverCardContent side="left" align="start" variant="workspace-details">
+      <HoverCardContent {...placement.content} variant="workspace-details">
         <WorkerActivityDetails
           agent={worker?.agent ?? props.agent}
           summary={worker?.summary ?? props.summary}

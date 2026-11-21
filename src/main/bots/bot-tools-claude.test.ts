@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { toClaudeTrustKey } from '../claude/configuration/claude-folder-trust-file'
 import {
   claudeMirrorArgs,
   claudeMirrorChanges,
@@ -26,11 +27,12 @@ describe("a Claude Code bot's tools", () => {
     const configDir = mkdtempSync(join(tmpdir(), 'bot-tools-claude-'))
     dirs.push(configDir)
     const signIn = join(configDir, 'bot-tool-sign-in', 'bot-1')
+    const signInKey = toClaudeTrustKey(signIn, process.platform === 'win32' ? 'win32' : 'posix')
     writeFileSync(
       join(configDir, '.claude.json'),
       JSON.stringify({
         mcpServers: { github: { command: 'gh-mcp' } },
-        projects: { [signIn]: { mcpServers: { notion: { type: 'http', url: notion.url } } } }
+        projects: { [signInKey]: { mcpServers: { notion: { type: 'http', url: notion.url } } } }
       })
     )
     writeFileSync(

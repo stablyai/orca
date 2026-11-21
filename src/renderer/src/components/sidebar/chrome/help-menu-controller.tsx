@@ -26,7 +26,7 @@ import {
   getUpdateCheckClickOptions,
   getUpdateCheckHint
 } from '@/app-shell/updates/update-check-click-options'
-import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { openHelpLink } from './help-link-open'
 
 // Keep feedback off the boot graph; menu warming and selection share the same lazy module entry.
 const loadSidebarFeedbackDialog = (): Promise<typeof SidebarFeedbackDialogModule> =>
@@ -67,7 +67,7 @@ function ExternalMenuItem({
   icon: React.ReactNode
 }): React.JSX.Element {
   return (
-    <DropdownMenuItem onSelect={() => openAppHttpLink(url)}>
+    <DropdownMenuItem onSelect={() => openHelpLink(url)}>
       {icon}
       {label}
       <ExternalLink className="ml-auto size-3 text-muted-foreground" />
@@ -217,12 +217,12 @@ export function useHelpMenuController(milestones: SetupMilestones | null): HelpM
           url={GITHUB_URL}
           icon={<Github className="size-3.5" />}
         />
-        <DropdownMenuItem onSelect={() => openAppHttpLink(DISCORD_URL)}>
+        <DropdownMenuItem onSelect={() => openHelpLink(DISCORD_URL)}>
           <DiscordIcon className="size-3.5" />
           {t('auto.components.sidebar.SidebarSettingsHelpMenu.eb9884e55b', 'Discord')}
           <ExternalLink className="ml-auto size-3 text-muted-foreground" />
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => openAppHttpLink(X_URL)}>
+        <DropdownMenuItem onSelect={() => openHelpLink(X_URL)}>
           <XIcon />
           {t('auto.components.sidebar.SidebarSettingsHelpMenu.c4f8e1b72a', 'X')}
           <ExternalLink className="ml-auto size-3 text-muted-foreground" />

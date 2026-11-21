@@ -57,6 +57,12 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     loginCommand: ['hermes', 'model'],
     installCommand: 'curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash'
   },
+  {
+    agent: 'kiro',
+    loginCommand: ['kiro-cli', 'login'],
+    remoteLoginCommand: ['kiro-cli', 'login', '--use-device-flow'],
+    installCommand: 'curl -fsSL https://cli.kiro.dev/install | bash'
+  },
   // An `agy` login signs in only chats on agy (`system`); chats on Orca's server keep their own.
   {
     agent: 'antigravity',

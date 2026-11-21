@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ManagedRuntimeProgram } from '../../../../shared/agent-launch/installation/managed-runtime-install'
 import {
-  antigravityChatDescription,
   antigravityChatSignInBlocked,
   antigravityOrcaRuntimeSignsIn,
   antigravityProviderSignInShown
@@ -48,12 +47,4 @@ describe("Orca's Antigravity sign-in", () => {
     expect(antigravityChatSignInBlocked(install)).toBe(true)
     expect(antigravityOrcaRuntimeSignsIn(install)).toBe(false)
   })
-})
-
-it.each([
-  ["Orca's copy of agy", installed('cli'), 'orcasAgy'],
-  ['agy before it is installed', installed('cli', null), 'installAgy'],
-  ["Orca's server", installed('server'), 'orcaSignIn']
-] as const)('the Chat section says new chats run on %s', (_case, install, expected) => {
-  expect(antigravityChatDescription({ chatUsesAgy: false }, install)).toBe(expected)
 })

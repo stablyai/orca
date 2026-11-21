@@ -192,6 +192,14 @@
     "upNext": {
       "showMore_one": "Show {{count}} more",
       "showMore_other": "Show {{count}} more"
+    },
+    "webhooks": {
+      "hookCount_one": "{{count}} hook",
+      "hookCount_other": "{{count}} hooks",
+      "rotate": {
+        "stopCancels_one": "For a leaked key. {{count}} waiting call it let in is cancelled.",
+        "stopCancels_other": "For a leaked key. {{count}} waiting calls it let in are cancelled."
+      }
     }
   },
   "chat": {
@@ -343,6 +351,10 @@
     "turnStatus": {
       "seconds_one": "{{count}}s",
       "seconds_other": "{{count}}s"
+    },
+    "goal": {
+      "checks_one": "{{count}} check",
+      "checks_other": "{{count}} checks"
     }
   },
   "components": {

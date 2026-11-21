@@ -47,28 +47,6 @@ describe('guardPaneFocusForAgentInput', () => {
     vi.useRealTimers()
   })
 
-  it('ignores a ready reply from another renderer', async () => {
-    vi.useFakeTimers()
-    const { renderer } = fakeRenderer(7, false)
-    let settled: 'pending' | 'ready' | 'refused' = 'pending'
-
-    void guardPaneFocusForAgentInput(renderer, 'page-1').then(
-      () => {
-        settled = 'ready'
-      },
-      () => {
-        settled = 'refused'
-      }
-    )
-    const [listener] = ipcListeners.get(AGENT_INPUT_FOCUS_GUARD_READY_CHANNEL) ?? []
-    const { calls } = vi.mocked(renderer.send).mock
-    listener({ sender: { id: 8 } }, { token: calls[0][1].token })
-    await Promise.resolve()
-
-    expect(settled).toBe('pending')
-    await vi.advanceTimersByTimeAsync(2000)
-    expect(settled).toBe('refused')
-  })
   it('lets the input through when a busy pane answers a second late', async () => {
     vi.useFakeTimers()
     const { sent, renderer } = fakeRenderer(7, false)
@@ -81,7 +59,7 @@ describe('guardPaneFocusForAgentInput', () => {
     await expect(guarded).resolves.toBeTypeOf('function')
     expect(sent.map(({ data }) => data.active)).toEqual([true])
   })
-  it('names the timeout phase when the pane never answers', async () => {
+  it('times out and closes the guard when only a different renderer answers', async () => {
     vi.useFakeTimers()
     const { sent, renderer } = fakeRenderer(7, false)
 
@@ -90,6 +68,8 @@ describe('guardPaneFocusForAgentInput', () => {
       code: 'browser_focus_guard_unavailable',
       data: { phase: 'no_pane_answer' }
     })
+    const [listener] = ipcListeners.get(AGENT_INPUT_FOCUS_GUARD_READY_CHANNEL) ?? []
+    listener({ sender: { id: 8 } }, { token: sent[0].data.token })
     await vi.advanceTimersByTimeAsync(2000)
 
     await refusal

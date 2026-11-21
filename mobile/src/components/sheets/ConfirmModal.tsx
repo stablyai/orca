@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { View, Text, Pressable } from 'react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors, spacing, radii, typography } from '../../theme/mobile-theme'
@@ -6,14 +7,20 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { BottomDrawer } from '../bottom-drawer/BottomDrawer'
 
 type ContentProps = {
+  /** Above a centred title, e.g. a security confirm's shield tile. */
+  media?: ReactNode
   title: string
   message?: string
+  /** Under the message, e.g. what a security confirm grants, one row each. */
+  details?: ReactNode
   confirmLabel?: string
   /** `null` drops the Cancel button, for a notice that only needs acknowledging. */
   cancelLabel?: string | null
   destructive?: boolean
   /** Optional for a notice, whose one button only dismisses. */
   onConfirm?: () => void
+  /** The Cancel button's own answer, e.g. Decline; closing any other way calls only `onCancel`. */
+  onCancelPress?: () => void
   onCancel: () => void
 }
 
@@ -28,12 +35,15 @@ export function ConfirmModal({ visible, ...content }: Props) {
 }
 
 export function ConfirmContent({
+  media,
   title,
   message,
+  details,
   confirmLabel,
   cancelLabel,
   destructive = false,
   onConfirm,
+  onCancelPress,
   onCancel
 }: ContentProps) {
   const t = useMobileTranslation()
@@ -41,14 +51,21 @@ export function ConfirmContent({
   return (
     <>
       <View style={styles.content}>
-        <Text style={styles.title}>{title}</Text>
-        {message ? <Text style={styles.message}>{message}</Text> : null}
+        {media ? <View style={styles.media}>{media}</View> : null}
+        <Text style={[styles.title, media ? styles.centred : null]}>{title}</Text>
+        {message ? (
+          <Text style={[styles.message, media ? styles.centred : null]}>{message}</Text>
+        ) : null}
+        {details}
       </View>
       <View style={styles.buttons}>
         {cancelLabel === null ? null : (
           <Pressable
             style={({ pressed }) => [styles.button, styles.cancelButton, pressed && styles.pressed]}
-            onPress={onCancel}
+            onPress={() => {
+              onCancelPress?.()
+              onCancel()
+            }}
           >
             <Text style={styles.cancelText}>{cancelLabel ?? t('common.cancel', 'Cancel')}</Text>
           </Pressable>
@@ -77,6 +94,8 @@ const styles = themedStyleSheet(() => ({
   content: {
     paddingBottom: spacing.lg
   },
+  media: { alignItems: 'center', marginBottom: spacing.md },
+  centred: { textAlign: 'center' },
   title: {
     fontSize: 16,
     fontWeight: '700',

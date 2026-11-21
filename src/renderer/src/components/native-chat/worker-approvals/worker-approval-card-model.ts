@@ -4,9 +4,9 @@ import type {
   WorkerApprovalPayload
 } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 import type { Translate } from '@/i18n/use-translate'
+import { approvalRecordTool } from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-tool'
 import {
   approvalRecordDetail,
-  approvalRecordTool,
   type NativeChatApprovalRecordLine
 } from '../prompts/native-chat-approval-record'
 

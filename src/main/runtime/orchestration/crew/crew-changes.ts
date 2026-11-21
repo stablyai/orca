@@ -208,6 +208,27 @@ export class CrewRelevance {
 /** A terminal record write: every renderer graph publish, title and layout sync makes several. */
 export const TERMINAL_IDENTITY_CHANGE: CrewInvalidation = new Set(['identity'])
 
+/** Only bindings a row can show: an unrelated pane's row appearing or leaving rebuilds nothing. */
+export function crewShownBindings(
+  rows: CrewReadDependencies['statuses'],
+  relevance: CrewRelevance | undefined
+): Map<string, CrewReadDependencies['statuses'][number]['binding']> {
+  const shown = new Map<string, CrewReadDependencies['statuses'][number]['binding']>()
+  for (const row of rows) {
+    const { binding } = row
+    if (
+      !relevance ||
+      relevance.panes.has(row.activity.paneKey) ||
+      (binding.kind !== 'unresolved' && relevance.handles.has(binding.terminalHandle)) ||
+      (binding.kind === 'worker' && relevance.dispatches.has(binding.dispatchId)) ||
+      relevance.hasPane(row.activity.paneKey)
+    ) {
+      shown.set(row.activity.paneKey, binding)
+    }
+  }
+  return shown
+}
+
 /** What a crew's panes and handles resolve to now; equal before and after a write that moved none. */
 export function crewIdentityFingerprint(
   relevance: Pick<CrewRelevance, 'panes' | 'handles'>,
@@ -251,17 +272,27 @@ const RELEVANCE_SETS = [
 
 /** Invalidation is synchronous; the existing stream scheduler reads only after the commit. */
 export class CrewChanges {
-  private readonly listeners = new Set<(facets: CrewInvalidation) => void>()
+  /** Each listener, with whether it is idle: kept for a later read, with nobody reading now. */
+  private readonly listeners = new Map<(facets: CrewInvalidation) => void, () => boolean>()
 
-  subscribe = (listener: (facets: CrewInvalidation) => void): (() => void) => {
-    this.listeners.add(listener)
+  subscribe = (listener: (facets: CrewInvalidation) => void): (() => void) =>
+    this.subscribeWithIdle(listener, () => false)
+
+  subscribeWithIdle = (
+    listener: (facets: CrewInvalidation) => void,
+    idle: () => boolean
+  ): (() => void) => {
+    this.listeners.set(listener, idle)
     return () => this.listeners.delete(listener)
   }
 
   hasListeners = (): boolean => this.listeners.size > 0
 
+  /** Some listener reads now: worth comparing before notifying, rather than notifying broadly. */
+  hasActiveListeners = (): boolean => [...this.listeners.values()].some((idle) => !idle())
+
   notify = (facets: CrewInvalidation = new Set(['topology'])): void => {
-    for (const listener of this.listeners) {
+    for (const listener of this.listeners.keys()) {
       listener(facets)
     }
   }

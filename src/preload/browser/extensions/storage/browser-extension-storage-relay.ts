@@ -113,6 +113,14 @@ export function installBrowserExtensionStorageRelay(
       hasListeners: () => registered.size > 0
     }
   }
+  // Main restarts an idle profile's extension clean when it used the session area; once per run is enough.
+  let reportedSessionUse = false
+  const noteSessionUse = (): void => {
+    if (!reportedSessionUse) {
+      reportedSessionUse = true
+      void bridge.call(relayNamespace, 'report', ['session', {}])
+    }
+  }
   const publish = (areaName: string, changes: StorageChanges): void => {
     if (Object.keys(changes).length === 0) {
       return
@@ -140,6 +148,14 @@ export function installBrowserExtensionStorageRelay(
     if (!isCallable(get)) {
       return
     }
+    const setAccessLevel = area.setAccessLevel
+    // Why: content scripts may then write the area without the relay seeing it.
+    if (areaName === 'session' && isCallable(setAccessLevel)) {
+      define(area, 'setAccessLevel', (...input: unknown[]) => {
+        noteSessionUse()
+        return setAccessLevel.call(area, ...input)
+      })
+    }
     for (const [method, keysOf] of Object.entries(writeKeys)) {
       const native = area[method]
       if (!isCallable(native)) {
@@ -155,6 +171,10 @@ export function installBrowserExtensionStorageRelay(
         const keys = keysOf(args)
         if (keys === undefined) {
           return native.call(area, ...input)
+        }
+        // Why before the write: a report sent after it could miss an unload already underway.
+        if (areaName === 'session') {
+          noteSessionUse()
         }
         // Why all three now: Chromium runs an area's calls in order, so the reads bracket exactly
         // this write, and the write copies its arguments at call time as Chrome's does.

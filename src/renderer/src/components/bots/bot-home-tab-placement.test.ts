@@ -14,6 +14,7 @@ import {
   resetWebSessionTabsSyncTestState
 } from '../../runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import { installBotHomeTabPlacement } from './bot-home-tab-placement'
+import { pairedHostStatuses } from '@/lib/bot-host-capability.test-fixture'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '../../runtime/native-chat/local-sessions/local-structured-session-owner'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -99,6 +100,48 @@ beforeEach(() => {
 })
 
 afterEach(() => uninstall())
+
+/** A paired server's page listing a sign-in page before Home. */
+function pairedPageThenHome() {
+  return makeSnapshot(
+    [
+      {
+        type: 'browser',
+        id: 'host-page',
+        title: 'Sign in',
+        browserWorkspaceId: 'page-workspace',
+        browserPageId: 'page-1',
+        url: 'https://example.com/',
+        loading: false,
+        canGoBack: false,
+        canGoForward: false,
+        isActive: true
+      },
+      {
+        type: 'agent-session',
+        id: 'agent-session:home',
+        sessionId: 'home',
+        agent: 'claude',
+        title: 'Home',
+        isActive: false
+      }
+    ],
+    {
+      worktree: WT,
+      activeGroupId: 'host-group',
+      activeTabId: 'host-page',
+      activeTabType: 'browser',
+      tabGroups: [
+        {
+          id: 'host-group',
+          activeTabId: 'host-page',
+          tabOrder: ['host-page', 'agent-session:home']
+        }
+      ],
+      tabGroupLayout: { type: 'leaf', groupId: 'host-group' }
+    }
+  )
+}
 
 describe('bot Home tab placement', () => {
   it('keeps Home first when a chat is dragged before it', () => {
@@ -217,44 +260,7 @@ describe('bot Home tab placement', () => {
 
   it('preserves main ordering for a paired host without adding a Home pin', () => {
     bots.hostId = `runtime:${ENV}`
-    const snapshot = makeSnapshot(
-      [
-        {
-          type: 'browser',
-          id: 'host-page',
-          title: 'Sign in',
-          browserWorkspaceId: 'page-workspace',
-          browserPageId: 'page-1',
-          url: 'https://example.com/',
-          loading: false,
-          canGoBack: false,
-          canGoForward: false,
-          isActive: true
-        },
-        {
-          type: 'agent-session',
-          id: 'agent-session:home',
-          sessionId: 'home',
-          agent: 'claude',
-          title: 'Home',
-          isActive: false
-        }
-      ],
-      {
-        worktree: WT,
-        activeGroupId: 'host-group',
-        activeTabId: 'host-page',
-        activeTabType: 'browser',
-        tabGroups: [
-          {
-            id: 'host-group',
-            activeTabId: 'host-page',
-            tabOrder: ['host-page', 'agent-session:home']
-          }
-        ],
-        tabGroupLayout: { type: 'leaf', groupId: 'host-group' }
-      }
-    )
+    const snapshot = pairedPageThenHome()
     store.setState((state) => applyWebSessionTabsSnapshot(state, snapshot, ENV, NOW))
     const tabs = store.getState().unifiedTabsByWorktree[WT] ?? []
     const home = tabs.find((tab) => tab.entityId === 'home')!.id
@@ -266,6 +272,18 @@ describe('bot Home tab placement', () => {
     )
     expect(strips()).toEqual([[home, page]])
     expect(pinnedIds()).toEqual([])
+  })
+
+  it("leaves a paired server's order to that server once it keeps the Home rule", () => {
+    bots.hostId = `runtime:${ENV}`
+    store.setState({
+      runtimeStatusByEnvironmentId: pairedHostStatuses({ [ENV]: ['bots.home-pin.v1'] })
+    })
+    store.setState((state) => applyWebSessionTabsSnapshot(state, pairedPageThenHome(), ENV, NOW))
+    const tabs = store.getState().unifiedTabsByWorktree[WT] ?? []
+    const home = tabs.find((tab) => tab.entityId === 'home')!.id
+    const page = tabs.find((tab) => tab.contentType === 'browser')!.id
+    expect(strips()).toEqual([[page, home]])
   })
 
   it('unpins a side chat pinned before only Home could be, once the session restores, wherever it comes from', () => {

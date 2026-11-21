@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { AGENT_PLUGIN_SCHEMA_V1 } from '../../../shared/skills/packages/skill-bundle-manifest'
+import { createNativeSkillAlias } from '../filesystem/skill-native-alias'
 import { createSkillBundleArchive } from './skill-bundle-creation'
 import { extractSkillBundleArchive } from './skill-bundle-extraction'
 import '../package-archive/skill-package-tar'
@@ -93,6 +94,26 @@ describe('skill bundle creation and extraction', () => {
       'notes.txt',
       'references/refs.md',
       'references/refs/image.webp'
+    ])
+  })
+
+  it('bundles a skill reached through a native provider alias', async () => {
+    const root = await temporaryDirectory()
+    const canonical = await createSkill(join(root, 'canonical'), 'alpha-skill', 'Alpha')
+    const alias = join(root, 'provider', 'skills', 'alpha-skill')
+    await createNativeSkillAlias(canonical, alias)
+
+    const created = await createSkillBundleArchive({
+      sources: [{ sourceDirectory: alias }],
+      archivePath: join(root, 'bundle.tar.gz'),
+      packageId: 'package_1',
+      versionId: 'version_1',
+      bundleName: 'team-skills'
+    })
+
+    expect(created.manifest.skills[0]?.files.map((file) => file.path)).toEqual([
+      'SKILL.md',
+      'notes.txt'
     ])
   })
 

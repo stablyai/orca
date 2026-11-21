@@ -2,6 +2,7 @@ import type { MessagePriority, MessageType } from '../db/orchestration-records'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationError } from '../orchestration-error'
+import { callerMailProvenance } from '../db/messages/message-orca-provenance'
 import { pairedServerSendRefusal } from '../paired-server-follow-up-refusal'
 import { encodeFederatedControlMessage } from '../legacy-remote/federation-control-message'
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
@@ -63,6 +64,8 @@ export function sendFederatedControlMail(args: {
     )
   }
   revalidateLegacyCoordinator?.()
+  // Refused here, not on the paired Orca's import, where a refusal would stall its relay.
+  const callerPayload = callerMailProvenance({ from, payload: params.payload })
   const relay = db.enqueueFederationRelay({
     dispatchId,
     direction: 'to_worker',
@@ -74,7 +77,7 @@ export function sendFederatedControlMail(args: {
       type: (params.type ?? 'status') as MessageType,
       priority: (params.priority ?? 'normal') as MessagePriority,
       threadId: params.threadId ?? null,
-      payload: params.payload ?? null
+      payload: callerPayload ?? null
     })
   })
   const receipt = withSendWarnings({

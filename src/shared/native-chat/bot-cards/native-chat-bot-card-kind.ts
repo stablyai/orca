@@ -125,11 +125,11 @@ export function nativeChatBotDirectiveCardOf(line: string): NativeChatDirectiveB
 export const NATIVE_CHAT_BOT_CARD_ON_PHONE = {
   memoryUpdated: 'phoneCard',
   connectorOffer: 'phoneCard',
-  importPlan: 'phoneFallback',
-  importDone: 'phoneFallback',
+  importPlan: 'phoneCard',
+  importDone: 'phoneCard',
   botRequest: 'phoneCard',
-  googleSetup: 'phoneFallback',
-  composioSetup: 'phoneFallback',
+  googleSetup: 'phoneCard',
+  composioSetup: 'phoneCard',
   createOffer: 'phoneCard',
   toolAdded: 'phoneCard',
   webhook: 'phoneCard'

@@ -62,7 +62,7 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
             }
           }
           // A stamp already covering every known turn changes no reader; re-stamping costs a persisted UI write per click.
-          // Refresh it once a day anyway so hydration's 7-day expiry can't drop a stamp the user keeps renewing.
+          // Refresh it once a day anyway so hydration's newest-entries cap can't drop a stamp the user keeps renewing.
           if (
             s.acknowledgedAgentsByPaneKey[key] !== undefined &&
             prev >= known &&

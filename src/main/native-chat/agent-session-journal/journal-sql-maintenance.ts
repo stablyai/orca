@@ -1,3 +1,4 @@
+import { prepareJournalLegacyClaimsInsert } from './database/journal-legacy-claims'
 import { createHash } from 'node:crypto'
 import type { LegacyDestinationIdentity } from './journal-legacy-retirement-files'
 import type { LegacyClaim } from './journal-legacy-content-proof'
@@ -127,8 +128,7 @@ export function applyJournalSqlMaintenance(
     }
     case 'legacy-claims-absorb': {
       // Keeps the uploads an original claimed for chats this store keeps before it retires.
-      const insert = db.prepare(`INSERT INTO agent_session_attachment_claims(upload_id,session_id,
-        claimed_at) VALUES(?,?,?) ON CONFLICT DO NOTHING`)
+      const insert = prepareJournalLegacyClaimsInsert(db)
       for (const claim of operation.claims) {
         insert.run(claim.uploadId, claim.sessionId, claim.claimedAt)
       }

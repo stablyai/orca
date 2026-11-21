@@ -7,6 +7,7 @@ import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/r
 import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import { normalizeBotSidebarView } from '../../../src/shared/bots/bot-sidebar-view'
 import { CONNECTOR_SOURCES } from '../../../src/shared/connectors/external-conversation-link'
+import { CONNECTOR_CLOUD_STATUSES } from '../../../src/shared/bots/connector-cloud-status'
 
 // The phone's one bot shape, for the list, links and sheet. `agent` and `permissionMode` follow
 // public agent lists that grow with each release, so a host's new one never drops a bot.
@@ -78,7 +79,9 @@ export const botsListRead = bindDeferredRpcOperation(
           // Each bot's Needs you items that aren't stale; hosts before items on phones send none.
           needsYou: z.unknown().optional(),
           // When those counts next change (an item goes stale or a snoozed one comes back).
-          needsYouStaleInMs: z.number().optional().catch(undefined)
+          needsYouStaleInMs: z.number().optional().catch(undefined),
+          // The host's Orca Cloud link; absent from an older host, and a newer value reads as absent.
+          connectorStatus: z.enum(CONNECTOR_CLOUD_STATUSES).optional().catch(undefined)
         })
         // Off, the host's own sidebar lists its bot homes as ordinary folders, so the phone does too.
         .transform((listing) => ({
@@ -88,6 +91,7 @@ export const botsListRead = bindDeferredRpcOperation(
           view: normalizeBotSidebarView(listing.botSidebarView),
           waits: botWaitsSchema.catch({}).parse(listing.waits ?? {}),
           needsYou: botNeedsYouSchema.catch({}).parse(listing.needsYou ?? {}),
+          connectorStatus: listing.connectorStatus,
           ...(listing.needsYouStaleInMs !== undefined
             ? { needsYouChangeInMs: listing.needsYouStaleInMs }
             : {})

@@ -122,6 +122,7 @@ export function BotAgentLaunchPicker({
   model,
   choices,
   value,
+  worktreeId,
   withPermission = true,
   showChatDefaultHint = true,
   disabled,
@@ -133,6 +134,8 @@ export function BotAgentLaunchPicker({
   /** The agents the host has. */
   choices: readonly BotAgent[]
   value: BotAgentSetup
+  /** The bot's folder workspace, where agents such as OMP list their models; none before the bot exists. */
+  worktreeId?: string
   /** False where the bot's permission has its own control beside the picker. */
   withPermission?: boolean
   showChatDefaultHint?: boolean
@@ -145,7 +148,7 @@ export function BotAgentLaunchPicker({
   const [menuOpen, setMenuOpen] = useState(false)
   const [catalogAgent, setCatalogAgent] = useState<AgentPickerEntry['agent']>()
   const observed = useAgentLaunchPickerInventory(
-    undefined,
+    worktreeId,
     model,
     menuOpen,
     catalogAgent ?? value.agent
