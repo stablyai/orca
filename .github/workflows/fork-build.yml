@@ -159,6 +159,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
+          pattern: orca-{macos,server-linux}-arm64
           path: artifacts
           merge-multiple: true
       - name: Publish the release
@@ -169,7 +170,7 @@ jobs:
           VERSION: ${{ needs.resolve.outputs.version }}
         run: |
           cd artifacts
-          sha256sum -- * > SHA256SUMS
+          sha256sum -- *.zip *.dmg *.tar.gz > SHA256SUMS
           cat > notes.md <<EOF
           Custom Orca build of upstream v$VERSION plus the fork's changes (commit $SHA).
 
@@ -180,4 +181,4 @@ jobs:
           EOF
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$SHA" \
             --title "Orca $VERSION (fork build ${{ github.run_number }})" --notes-file notes.md --latest \
-            -- $(ls | grep -v notes.md)
+            -- *.zip *.dmg *.tar.gz SHA256SUMS
