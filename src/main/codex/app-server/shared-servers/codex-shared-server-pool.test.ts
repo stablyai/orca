@@ -375,6 +375,21 @@ describe('shared Codex app-servers', () => {
     expect(order).toEqual(['thread/unsubscribe', 'thread/resume'])
   })
 
+  it('refuses a second chat resuming a thread another chat on the server has open', async () => {
+    const { servers, pool } = fakeCodex()
+    const a = chat()
+    const connA = await pool.open(launch(), a.handlers, { sessionId: 'a', skillRoots: [] })
+    const connB = await pool.open(launch(), chat().handlers, { sessionId: 'b', skillRoots: [] })
+    const threadA = await startThread(connA)
+    await expect(connB.request('thread/resume', { threadId: threadA })).rejects.toMatchObject({
+      method: 'thread/resume',
+      code: -32600,
+      message: expect.stringContaining(`thread ${threadA} already has an active writer`)
+    })
+    servers[0]!.handlers.onNotification?.('item/agentMessage/delta', { threadId: threadA })
+    expect(a.notifications.map((n) => n.method)).toContain('item/agentMessage/delta')
+  })
+
   it('starts a fresh server once the current one can no longer take requests', async () => {
     const { servers, pool } = fakeCodex()
     await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })

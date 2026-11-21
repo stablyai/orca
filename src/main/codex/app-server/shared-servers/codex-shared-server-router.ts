@@ -30,6 +30,11 @@ export class CodexSharedServerRouter {
     return this.owners.has(threadId)
   }
 
+  heldByOther(threadId: string, lease: CodexSharedServerLease): boolean {
+    const owner = this.owners.get(threadId)
+    return owner !== undefined && owner !== lease
+  }
+
   claim(threadId: string, lease: CodexSharedServerLease): void {
     const previous = this.owners.get(threadId)
     if (previous && previous !== lease) {

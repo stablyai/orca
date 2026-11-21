@@ -1,3 +1,4 @@
+import { CodexAppServerRequestError } from '../codex-app-server-request-error'
 import { CodexAppServerTimeoutError } from '../codex-app-server-session'
 import { DEFAULT_CODEX_REQUEST_TIMEOUT_MS } from '../codex-app-server-connection'
 import {
@@ -25,6 +26,7 @@ export type CodexLeaseRequestOwner = {
   /** Rejects every caller still waiting when the lease ends. */
   readonly outstanding: Set<(error: Error) => void>
   claim: (threadId: string) => void
+  heldByOther: (threadId: string) => boolean
   abandon: (threadId: string) => void
 }
 
@@ -59,6 +61,16 @@ export async function sendCodexLeaseRequest(
     await host.threadReleased(resumed)
     if (!owner.open) {
       throw new Error(`codex app-server connection is closed (${method})`)
+    }
+    // Separate servers refuse a second writer this way; one server would hand the thread over.
+    if (owner.heldByOther(resumed)) {
+      const detail = `thread ${resumed} already has an active writer`
+      throw new CodexAppServerRequestError(
+        method,
+        -32600,
+        `codex app-server ${method} failed: ${detail}`,
+        detail
+      )
     }
     owner.claim(resumed)
   }

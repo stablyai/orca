@@ -112,6 +112,9 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     this.router.claim(threadId, lease)
   }
 
+  heldByOther = (threadId: string, lease: CodexSharedServerLease): boolean =>
+    this.router.heldByOther(threadId, lease)
+
   trackTurnStart(threadId: string, request: Promise<unknown>): void {
     this.turns.trackStart(threadId, request)
   }
@@ -289,9 +292,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   private async stopIfAlone(lease: CodexSharedServerLease): Promise<void> {
     this.draining = true
     if ([...this.leases].some((other) => other !== lease) || !this.physical) {
-      console.warn(
-        `[codex-shared-server] pid ${this.pid ?? '?'}: a stopped chat's work outlived its cleanup`
-      )
+      console.warn(`[codex-shared-server] pid ${this.pid ?? '?'}: chat work outlived cleanup`)
       return
     }
     await this.physical.close()

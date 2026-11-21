@@ -25,6 +25,8 @@ export type CodexSharedLeaseHost = {
   readonly closed: boolean
   readonly connection: CodexAppServerConnection
   claim: (threadId: string, lease: CodexSharedServerLease) => void
+  /** Another chat on this server has the thread open. */
+  heldByOther: (threadId: string, lease: CodexSharedServerLease) => boolean
   /** A thread that opened after its chat left: nobody will use it, so the server lets it go.
    *  Resolves whether Codex confirmed it. */
   abandon: (threadId: string, lease: CodexSharedServerLease) => Promise<boolean>
@@ -111,6 +113,10 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
 
   claim(threadId: string): void {
     this.host.claim(threadId, this)
+  }
+
+  heldByOther(threadId: string): boolean {
+    return this.host.heldByOther(threadId, this)
   }
 
   abandon(threadId: string): void {
