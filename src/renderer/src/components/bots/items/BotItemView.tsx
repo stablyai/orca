@@ -43,6 +43,7 @@ import { useBotItemView, type BotItemViewRead } from './use-bot-item-view'
 import { useBotItemPendingComments } from './use-bot-item-pending-comments'
 import { BotItemsReadFailed } from './BotItemsReadFailed'
 import { BotItemNavRow } from './BotItemStepper'
+import { BotItemLoading } from './BotItemLoading'
 
 const NO_FOLDERS: never[] = []
 
@@ -89,6 +90,7 @@ export function BotItemView({
       <BotItemUnread takeFocus={takeFocus} failed={view.failed} deleted={deleted} nav={nav}>
         {notice}
         {view.failed ? <BotItemsReadFailed onRetry={view.retry} /> : null}
+        {!view.failed && !deleted ? <BotItemLoading /> : null}
       </BotItemUnread>
     )
   }

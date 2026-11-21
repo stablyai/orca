@@ -29419,7 +29419,8 @@
         "firstItem": "First item",
         "lastItem": "Last item",
         "deleted": "This item was deleted.",
-        "moreLinks": "{{count}} more links"
+        "moreLinks": "{{count}} more links",
+        "loading": "Loading item…"
       },
       "loading": "Loading items…",
       "readFailed": "Couldn't read items.",
