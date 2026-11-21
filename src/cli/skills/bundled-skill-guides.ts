@@ -271,7 +271,7 @@ const ORCA_CLI_MARKDOWN = [
   "ORCA worktree create --name <task-name> --parent-worktree active --agent codex --prompt \"<task brief>\" --json",
   "```",
   "",
-  "From outside the parent workspace, pass its exact selector from `worktree show` or `worktree ps`. If the child belongs to another project, also pass its `--repo` or `--project`. Verify the saved parent with `worktree show --worktree <child-selector> --json`.",
+  "From outside the parent workspace, pass its `address.worktree` from `worktree show` or `worktree ps` to `--parent-worktree`. If the parent is in another environment, also pass its `address.environment` to `--parent-environment`. If the child belongs to another project, pass its `--repo` or `--project`. Verify the saved parent with `worktree show --worktree <child-selector> --json`.",
   "",
   "For an independent handoff that should appear at the top level, use `--no-parent`:",
   "",
