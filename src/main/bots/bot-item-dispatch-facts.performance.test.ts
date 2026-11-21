@@ -29,11 +29,10 @@ function reusedTerminal(holders: number) {
   return { db, last: ids.at(-1)!, reads }
 }
 
-it('reads a reused terminal once, however many Dispatches held it', () => {
+it('reads a reused terminal once and walks no holder before it, however many held it', () => {
   for (const holders of [11, 101]) {
     const { db, last, reads } = reusedTerminal(holders)
     expect(workerContinues(db, last)).toHaveLength(holders)
-    expect(reads.terminal).toBe(1)
-    expect(reads.dispatch).toBeLessThanOrEqual(2 * holders)
+    expect(reads).toEqual({ dispatch: 1, terminal: 1 })
   }
 })

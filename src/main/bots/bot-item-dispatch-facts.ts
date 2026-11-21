@@ -26,32 +26,23 @@ export function lineageAncestors(db: OrchestrationDb, dispatchId: string): strin
   return seen
 }
 
-/** Every Dispatch a worker continues: its follow-up chain, and the Dispatches that held its terminal
- *  before it (`worker-start --terminal`), with theirs. An item linking any of them shows this worker. */
+/** Every Dispatch a worker continues: its follow-up chain, and those that held a terminal it holds
+ *  (`worker-start --terminal`). An item linking any of them shows this worker. A few reads per call,
+ *  however long the terminal's history. */
 export function workerContinues(
   db: OrchestrationDb,
   dispatchId: string,
   lineageOf: (id: string) => readonly string[] = (id) => lineageAncestors(db, id)
 ): string[] {
-  const ids = new Set(lineageOf(dispatchId))
-  // Each terminal is read once: the Dispatches that held it are known from it.
-  const held = new Set<string>()
-  for (const id of ids) {
-    if (held.has(id)) {
-      continue
-    }
+  const lineage = lineageOf(dispatchId)
+  const ids = new Set(lineage)
+  for (const id of lineage) {
     const resource =
       db.getWorkerTerminalResourceByOwner(id) ?? db.getWorkerTerminalResourceFormerlyOwnedBy(id)
     if (resource) {
-      const holders = [
-        resource.owner_dispatch_id,
-        resource.origin_dispatch_id,
-        ...priorOwners(resource)
-      ]
-      holders.forEach((holder) => held.add(holder))
-      for (const holder of holders) {
-        lineageOf(holder).forEach((earlier) => ids.add(earlier))
-      }
+      ids.add(resource.owner_dispatch_id)
+      ids.add(resource.origin_dispatch_id)
+      priorOwners(resource).forEach((holder) => ids.add(holder))
     }
   }
   return [...ids]
