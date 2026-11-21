@@ -103,11 +103,12 @@ export function useAgentCopySettings(local: LocalSettings | undefined) {
       })
       const source = from ? applyAgentCopy(settings, from) : settings
       made = createAgentCopy(agent.id, name, { ...source, agentCopies: copies })
+      // Set before the save lands, so the new card arrives open.
+      setCreated(made.id)
       return [...copies, made]
     }).then(() => {
       const copy: AgentCopy | null = made
       if (copy) {
-        setCreated(copy.id)
         toast.success(
           t('settings.agents.copyCreated', 'Saved {{name}} as {{id}}.', {
             name: copy.name,
