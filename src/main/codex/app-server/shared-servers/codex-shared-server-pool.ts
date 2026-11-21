@@ -1,6 +1,6 @@
-import type {
-  CodexAppServerLaunch,
-  spawnCodexAppServerConnection
+import {
+  spawnCodexAppServerConnection,
+  type CodexAppServerLaunch
 } from '../codex-app-server-connection'
 import type {
   CodexAppServerConnection,
@@ -13,6 +13,10 @@ import {
 } from './codex-shared-server-lease'
 import { CodexSharedServer } from './codex-shared-server'
 import type { CodexSharedServerProcessSweep } from './codex-shared-server-chat-workload'
+import {
+  CodexSharedServerUncontainedError,
+  CodexSharedServerWindowsJob
+} from './codex-shared-server-windows-job'
 import {
   CodexSharedServerMemoryCeiling,
   type CodexSharedServerToolUsage
@@ -53,7 +57,10 @@ export class CodexSharedServerPool {
 
   constructor(
     private readonly connect?: typeof spawnCodexAppServerConnection,
-    private readonly sweep?: CodexSharedServerProcessSweep
+    private readonly sweep?: CodexSharedServerProcessSweep,
+    /** Windows: each server's job; null when one can't be made. Undefined elsewhere. */
+    private readonly createWindowsJob: () => CodexSharedServerWindowsJob | null | undefined = () =>
+      process.platform === 'win32' ? CodexSharedServerWindowsJob.create() : undefined
   ) {}
 
   async open(
@@ -106,11 +113,18 @@ export class CodexSharedServerPool {
   }
 
   private startServer(spec: CodexSharedServer['spec']): CodexSharedServer {
+    const windowsJob = this.createWindowsJob()
+    if (windowsJob === null) {
+      throw new CodexSharedServerUncontainedError()
+    }
+    const connect = this.connect ?? spawnCodexAppServerConnection
     const server = new CodexSharedServer(
       spec,
       (ended) => this.onServerFreed(ended),
-      this.connect,
-      this.sweep
+      // The job takes the launcher the moment it spawns.
+      windowsJob ? (launch, handlers) => connect(launch, handlers, windowsJob.spawn) : connect,
+      this.sweep,
+      windowsJob
     )
     server.ready.catch(() => this.remove(server))
     const group = this.servers.get(spec.key) ?? []

@@ -9,6 +9,10 @@ import { CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES } from './codex-shared-server-leas
 import { codexOpenedThreadId } from './codex-shared-server-frames'
 import { codexConnectionOpener } from '../../structured/acquisition/codex-structured-connection-opener'
 import { spawnCodexAppServerConnection } from '../codex-app-server-connection'
+import {
+  CodexSharedServerUncontainedError,
+  CodexSharedServerWindowsJob
+} from './codex-shared-server-windows-job'
 
 type FakeServer = {
   pid: number
@@ -30,7 +34,11 @@ function fakeCodex(
   closeTree: 'exited' | 'unverifiable' = 'exited',
   /** Whether thread/backgroundTerminals/terminate actually stops the command. */
   terminateWorks = true,
-  codex: { listUnsupported?: boolean; unsubscribeFails?: boolean } = {}
+  codex: {
+    listUnsupported?: boolean
+    unsubscribeFails?: boolean
+    windowsJob?: () => CodexSharedServerWindowsJob
+  } = {}
 ) {
   const servers: FakeServer[] = []
   let nextThread = 1
@@ -140,8 +148,31 @@ function fakeCodex(
   return {
     servers,
     sweep,
-    pool: new CodexSharedServerPool(connect, async () => !sweep.leftovers)
+    pool: new CodexSharedServerPool(
+      connect,
+      async () => !sweep.leftovers,
+      codex.windowsJob ?? (() => undefined)
+    )
   }
+}
+
+/** A Windows job over the fake server's tree: cmd.exe (the fake's pid) -> node -> codex.exe. */
+function fakeWindowsJob(holdsCodex = true) {
+  const terminated: unknown[] = []
+  const job = CodexSharedServerWindowsJob.create(
+    {
+      createKillOnCloseJob: () => ({ id: 'job' }),
+      assignProcessToJob: () => true,
+      isProcessInJob: (_job, pid) => holdsCodex || pid !== 7000,
+      terminateJob: (handle) => terminated.push(handle) > 0
+    },
+    async () => [
+      { pid: 5000, ppid: 1, name: 'cmd.exe' },
+      { pid: 6000, ppid: 5000, name: 'node.exe' },
+      { pid: 7000, ppid: 6000, name: 'codex.exe' }
+    ]
+  )!
+  return { job, terminated }
 }
 
 function chat() {
@@ -463,14 +494,14 @@ describe('shared Codex app-servers', () => {
     expect(connB.closed).toBe(false)
   })
 
-  it('never shares a server for a custom Codex command, or on Windows', () => {
+  it('never shares a server for a custom Codex command, or on Windows without the job exports', () => {
     const opener = codexConnectionOpener({ sharedServers: () => true }, 's', {
       customCommand: true
     })
     expect(opener).toBe(spawnCodexAppServerConnection)
-    expect(codexConnectionOpener({ sharedServers: () => true }, 's', {}, 'win32')).toBe(
-      spawnCodexAppServerConnection
-    )
+    expect(
+      codexConnectionOpener({ sharedServers: () => true }, 's', {}, 'win32', () => false)
+    ).toBe(spawnCodexAppServerConnection)
   })
 
   it('does not count a server exit during Stop as the turn ending', async () => {
@@ -637,5 +668,40 @@ describe('shared Codex app-servers', () => {
       turn: { id: 'late' }
     })
     expect(a.notifications.map((n) => n.method)).not.toContain('turn/started')
+  })
+
+  describe('on Windows', () => {
+    it("confirms a chat's Stop from Codex's own re-list, with no process check", async () => {
+      const { job } = fakeWindowsJob()
+      const { servers, pool, sweep } = fakeCodex('ends', 'exited', true, { windowsJob: () => job })
+      const connA = await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
+      const threadA = await startThread(connA)
+      servers[0]!.terminals.set(threadA, new Set(['p1']))
+      // A process check would see the server's other work; Windows doesn't run one.
+      sweep.leftovers = true
+      await connA.close()
+      expect(connA.processTreeUnproven).toBe(false)
+    })
+
+    it('ends everything in the job when the server closes', async () => {
+      vi.useFakeTimers()
+      const { job, terminated } = fakeWindowsJob()
+      const { pool } = fakeCodex('ends', 'exited', true, { windowsJob: () => job })
+      const connA = await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
+      await connA.close()
+      expect(terminated).toEqual([])
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(terminated).toEqual([{ id: 'job' }])
+    })
+
+    it("closes a server whose job doesn't hold native Codex, so its chat takes its own", async () => {
+      const { job, terminated } = fakeWindowsJob(false)
+      const { servers, pool } = fakeCodex('ends', 'exited', true, { windowsJob: () => job })
+      await expect(
+        pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
+      ).rejects.toBeInstanceOf(CodexSharedServerUncontainedError)
+      await vi.waitFor(() => expect(terminated).toEqual([{ id: 'job' }]))
+      expect(servers[0]!.requests.map((r) => r.method)).toEqual(['initialize'])
+    })
   })
 })

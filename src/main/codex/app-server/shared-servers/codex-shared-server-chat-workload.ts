@@ -20,12 +20,18 @@ export async function stopCodexSharedChatWorkload(input: {
   leaseId: string
   serverPid: number | undefined
   timeoutMs: number
-  /** Stops and checks this lease's processes under the server; true only when none is left. */
-  sweep?: CodexSharedServerProcessSweep
+  /** Stops and checks this lease's processes under the server; true only when none is left.
+   *  null on Windows: no process can be tied to a chat, so only what Codex tracks is judged. */
+  sweep?: CodexSharedServerProcessSweep | null | undefined
 }): Promise<boolean> {
   const terminalsGone = await stopListedTerminals(input)
   if (input.serverPid === undefined) {
     return false
+  }
+  if (input.sweep === null) {
+    // Stop means Codex stopped everything it tracks: the turn, and a re-list showing none of the
+    // chat's terminals left. What a finished command left running ends with the server's job.
+    return terminalsGone === true
   }
   // Codex's own list misses a command that detached from it, and older Codex can't list at all.
   const leftovers = await (input.sweep ?? stopTaggedProcesses)(input.serverPid, input.leaseId)

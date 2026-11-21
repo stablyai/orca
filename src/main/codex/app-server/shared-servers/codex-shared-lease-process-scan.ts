@@ -20,7 +20,7 @@ export type CodexLeaseProcessScan = {
 }
 
 /** null when the processes can't be read at all, or on a platform with no way to read a process's
- *  environment (Windows, where the pool isn't used). */
+ *  environment (Windows, where a shared chat's Stop judges only what Codex tracks). */
 export async function scanCodexLeaseProcesses(
   envName: string,
   serverPid: number,
@@ -227,7 +227,7 @@ async function processGroups(): Promise<Map<number, number> | null> {
 }
 
 /** The server's launcher chain down to the native Codex process; null when Codex isn't found. */
-function serverChain(index: ProcIndex, serverPid: number): Set<number> | null {
+export function serverChain(index: ProcIndex, serverPid: number): Set<number> | null {
   const parents = new Map<number, number>()
   const queue = [serverPid]
   while (queue.length > 0) {

@@ -442,7 +442,7 @@ export function writeFakeWindowsProcessTree(projectDir) {
   mkdirSync(processTreeDir, { recursive: true })
   writeFileSync(
     join(processTreeDir, 'index.js'),
-    `module.exports = { supportedProcessDataFlags: ${CREATION_TIME_FLAG}, getProcessCreationTime: () => undefined }\n`
+    `module.exports = { supportedProcessDataFlags: ${CREATION_TIME_FLAG}, getProcessCreationTime: () => undefined, createKillOnCloseJob: () => null }\n`
   )
 }
 

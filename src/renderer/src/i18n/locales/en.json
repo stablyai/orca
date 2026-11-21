@@ -9228,6 +9228,7 @@
             "title": "Shared Codex servers",
             "description": "Codex chats share a few app-servers, up to 20 chats each, instead of starting one per chat.",
             "copy": "Codex chats share a few app-servers, up to 20 chats each, instead of starting one per chat. Uses less memory and starts new chats faster. If a shared server crashes, all of its chats reconnect. Applies to chats started after you change it.",
+            "windowsStop": "On Windows, Stop means Codex stopped everything it tracks for that chat. A process a finished command left running ends when its shared server closes.",
             "toggleLabel": "Toggle shared Codex servers"
           }
         },

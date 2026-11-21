@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import type { WindowsJobObjectApi } from './windows-job-object'
 import { createRequire } from 'node:module'
 import { createProcessTableSnapshotReader } from '../../shared/process-observation/tables/process-table-snapshot-reader'
 import { ORCAD_WINDOWS_PROCESS_TREE_FILENAME } from '../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
@@ -34,7 +35,7 @@ type NativeProcessInfo = {
 /** node-addon-api's default OnError hands the callback an Error (e.g. bad_alloc) instead of rows. */
 type NativeProcessSnapshot = NativeProcessInfo[] | Error | undefined
 
-type WindowsProcessTreeModule = {
+type WindowsProcessTreeModule = Partial<WindowsJobObjectApi> & {
   ProcessDataFlag: {
     None: number
     CommandLine: number
@@ -96,6 +97,8 @@ let cimScan: () => Promise<WindowsProcessRow[]> = readWindowsProcessRowsWithCim
 /** Present the bare addon through the same shape as the npm package. */
 function adaptAddon(addon: WindowsProcessTreeAddon): WindowsProcessTreeModule {
   return {
+    // The addon's other exports (its job functions) stay reachable through the adapter.
+    ...addon,
     ProcessDataFlag: PROCESS_DATA_FLAG,
     supportedProcessDataFlags: addon.supportedProcessDataFlags,
     getProcessCreationTime: addon.getProcessCreationTime,
@@ -352,6 +355,9 @@ export function readWindowsProcessCreationTime(pid: number): number | null {
     return null
   }
 }
+
+/** The loaded addon (npm package or relay addon), for its exports beyond the process table. */
+export const windowsProcessTreeAddon = (): Partial<WindowsJobObjectApi> | null => moduleLoader()
 
 function resetSnapshotReaders(): void {
   identityReader.reset()
