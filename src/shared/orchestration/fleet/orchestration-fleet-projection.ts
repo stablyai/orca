@@ -68,7 +68,7 @@ export type FleetLiveness =
         | 'host_indeterminate'
         /** The saved environment now identifies a different Orca server. */
         | 'peer_changed'
-        /** The Dispatch settled with no worker row, so no process was ever supervised. */
+        /** No supervised process: no worker row, or a start failed before a terminal existed. */
         | 'unsupervised_settled'
       observedAt?: number
       /** What the host could not verify, when it said. */

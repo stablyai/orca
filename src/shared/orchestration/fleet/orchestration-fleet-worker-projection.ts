@@ -23,6 +23,7 @@ type FleetLivenessSubject = {
   workerState?: string | null
   dispatchStatus?: string | null
   terminationReason?: FleetDurableWorker['terminationReason']
+  agentTerminalHandle?: string | null
   resource: { releaseState?: string | null; hostScope: string | null } | null
 }
 
@@ -84,6 +85,15 @@ export function projectLiveness(
   }
   // Settled unsupervised dispatches have no process to miss, but absence still cannot certify exit.
   if (!evidence && isUnsupervisedSettledDispatch(worker)) {
+    return { verdict: 'unverifiable', reason: 'unsupervised_settled' }
+  }
+  // A start that failed before any terminal was attached has no process to wait on either.
+  if (
+    !evidence &&
+    worker.workerState === 'failed' &&
+    worker.resource == null &&
+    !worker.agentTerminalHandle
+  ) {
     return { verdict: 'unverifiable', reason: 'unsupervised_settled' }
   }
   if (!evidence) {
