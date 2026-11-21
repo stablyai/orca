@@ -156,6 +156,7 @@ export function useResourcePtyActions(inventory: ReturnType<typeof useResourceSe
         return
       }
       const targets: TerminationTarget[] = []
+      const idleCheckSinceMs = guard === 'idle' ? Date.now() : undefined
       const identities = new Set<string>()
       for (const row of rows) {
         if (
@@ -174,7 +175,7 @@ export function useResourcePtyActions(inventory: ReturnType<typeof useResourceSe
             expectedIncarnationId: row.session.incarnationId,
             requireNoAgentOwner: guard === 'agent' || row.session.agentOwnership === 'absent',
             requireUnattached: row.binding === 'unbound',
-            ...(guard === 'idle' ? { requireIdle: true } : {})
+            ...(idleCheckSinceMs === undefined ? {} : { requireIdle: true, idleCheckSinceMs })
           }
         })
       }

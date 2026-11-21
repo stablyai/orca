@@ -27,6 +27,7 @@ export function createProcessTableSnapshotReader<T = string>(
   const ttlMs = deps.ttlMs ?? PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
   let cached: Snapshot<T> | null = null
   let inFlight: Promise<T> | null = null
+  let inFlightCapturedAtMs = 0
   let sequence = 0
   let freshQueued: { promise: Promise<T>; startSequence: number | null } | null = null
 
@@ -34,8 +35,10 @@ export function createProcessTableSnapshotReader<T = string>(
     // Stamp evidence age at capture start (or its oldest input), TTL at completion: slow captures must remain old
     // yet still coalesce instead of spawning one whole-machine ps per caller on loaded hosts.
     let capturedAtMs = deps.now()
+    inFlightCapturedAtMs = capturedAtMs
     const promise = deps.runPs(fresh, (atMs) => {
       capturedAtMs = Math.min(capturedAtMs, atMs)
+      inFlightCapturedAtMs = capturedAtMs
     })
     inFlight = promise
     try {
@@ -62,30 +65,33 @@ export function createProcessTableSnapshotReader<T = string>(
     return runSnapshot()
   }
 
-  async function readSnapshotWithAge(
-    requireKnownCapture: boolean
-  ): Promise<{ value: T; capturedAgeMs: number }> {
-    const value = await getSnapshot()
-    if (cached?.value !== value && requireKnownCapture) {
-      return { value, capturedAgeMs: Number.POSITIVE_INFINITY }
-    }
-    const capturedAtMs = cached?.value === value ? cached.capturedAtMs : deps.now()
-    // Whole milliseconds, rounded older: the wire requires integers and an input's clock conversion is fractional.
-    return { value, capturedAgeMs: Math.max(0, Math.ceil(deps.now() - capturedAtMs)) }
-  }
-
   async function getSnapshotWithAge(
     afterMs?: number
   ): Promise<{ value: T; capturedAgeMs: number }> {
-    let snapshot = await readSnapshotWithAge(afterMs !== undefined)
-    if (afterMs !== undefined && deps.now() - snapshot.capturedAgeMs < afterMs) {
-      await getFreshSnapshot()
-      snapshot = await readSnapshotWithAge(true)
-      if (deps.now() - snapshot.capturedAgeMs < afterMs) {
-        throw new ProcessTableCaptureError('capture_before_request')
-      }
+    const value = await (afterMs === undefined ? getSnapshot() : captureAfter(afterMs))
+    const capturedAtMs = cached?.value === value ? cached.capturedAtMs : undefined
+    if (afterMs !== undefined && (capturedAtMs === undefined || capturedAtMs < afterMs)) {
+      throw new ProcessTableCaptureError('capture_before_request')
     }
-    return snapshot
+    // Round toward older evidence for sub-millisecond capture inputs.
+    return {
+      value,
+      capturedAgeMs: Math.max(0, Math.ceil(deps.now() - (capturedAtMs ?? deps.now())))
+    }
+  }
+
+  async function captureAfter(afterMs: number): Promise<T> {
+    if (cached && cached.capturedAtMs >= afterMs && deps.now() - cached.completedAtMs < ttlMs) {
+      return cached.value
+    }
+    if (inFlight && inFlightCapturedAtMs >= afterMs) {
+      return inFlight
+    }
+    // A stale capture can't authorize cleanup. Do not queue a new capture behind it after callers leave.
+    if (inFlight || freshQueued) {
+      throw new ProcessTableCaptureError('capture_before_request')
+    }
+    return runSnapshot(true)
   }
 
   function getFreshSnapshot(): Promise<T> {

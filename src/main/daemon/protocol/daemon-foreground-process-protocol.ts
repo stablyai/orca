@@ -1,3 +1,4 @@
+import type { PtyProcessInspectionOptions } from '../../providers/pty/process-inspection'
 export type GetForegroundProcessRequest = {
   id: string
   type: 'getForegroundProcess'
@@ -28,7 +29,6 @@ export type InspectProcessRequest = Omit<GetForegroundProcessRequest, 'type'> & 
     ignoreDetached?: boolean
   }
 }
-import type { PtyProcessInspectionOptions } from '../../providers/pty/process-inspection'
 
 export function inspectProcessOptions(
   payload: InspectProcessRequest['payload']

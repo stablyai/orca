@@ -1,3 +1,5 @@
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { waitForPromiseWithSignal } from '../../../../../../shared/concurrency/abort-signal-reason'
 import { PrioritySemaphore } from '../../../../../../shared/concurrency/priority-semaphore'
 import type { PtyRunningWorkObservation } from '../../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
@@ -10,6 +12,7 @@ const inspectionSlots = new PrioritySemaphore(MAX_CONCURRENT_INSPECTIONS)
 async function inspectRunningWork(
   row: ResourcePtyRow,
   runningWorkSinceMs: number,
+  runningWorkCheckId: string,
   signal: AbortSignal
 ): Promise<PtyRunningWorkObservation> {
   const { id, incarnationId } = row.session
@@ -24,7 +27,8 @@ async function inspectRunningWork(
       }
       const inspection = await window.api.pty.inspectProcess(id, {
         expectedIncarnationId: incarnationId,
-        runningWorkSinceMs
+        runningWorkSinceMs,
+        runningWorkCheckId
       })
       return inspection.runningWork ?? 'unverifiable'
     } finally {
@@ -40,10 +44,13 @@ export async function checkResourcePtysRunningWork(
   cancellation: AbortSignal
 ): Promise<ReadonlyMap<string, PtyRunningWorkObservation>> {
   const runningWorkSinceMs = Date.now()
+  const runningWorkCheckId = createBrowserUuid()
   const signal = AbortSignal.any([
     cancellation,
     AbortSignal.timeout(WORKSPACE_END_CHECK_TIMEOUT_MS)
   ])
+  const cancel = () => window.api.pty.cancelRunningWorkCheck(runningWorkCheckId)
+  signal.addEventListener('abort', cancel, { once: true })
   const observed = new Map<string, PtyRunningWorkObservation>()
   const pending = rows.values()
   const inspect = async (): Promise<void> => {
@@ -53,7 +60,7 @@ export async function checkResourcePtysRunningWork(
         return
       }
       const row = next.value
-      const work = await inspectRunningWork(row, runningWorkSinceMs, signal)
+      const work = await inspectRunningWork(row, runningWorkSinceMs, runningWorkCheckId, signal)
       if (!signal.aborted) {
         observed.set(row.identity, work)
       }
@@ -63,9 +70,9 @@ export async function checkResourcePtysRunningWork(
     Array.from({ length: Math.min(rows.length, MAX_CONCURRENT_INSPECTIONS) }, inspect)
   )
   await waitForPromiseWithSignal(scan, signal).catch(() => undefined)
+  signal.removeEventListener('abort', cancel)
   return observed
 }
-import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 
 export function useResourcePtyWorkspaceCheck(
   active: boolean,

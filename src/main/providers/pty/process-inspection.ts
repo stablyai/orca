@@ -21,6 +21,7 @@ export type PtyProcessInspectionOptions = {
   scanChildProcesses?: boolean
   /** Workspace cleanup requests a process capture from after the user clicked. */
   runningWorkSinceMs?: number
+  signal?: AbortSignal
   /** Adoption only: ignore members outside both shell ancestry and console; close still reaches the whole job. */
   ignoreDetached?: boolean
   /** Name-only cadence polls may use cheap captures and omit evidence; evidence consumers must never set this. */

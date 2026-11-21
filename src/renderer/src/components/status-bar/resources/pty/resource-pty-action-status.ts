@@ -34,6 +34,14 @@ export class ResourcePtyActionStatus implements ResourcePtyEndingSource {
     return () => this.listeners.delete(listener)
   }
 
+  subscribeSelection = (onChange: () => void): (() => void) =>
+    this.subscribe((_identities, started) => {
+      // Enqueue prunes selection. Completing a row only makes it selectable again.
+      if (started) {
+        onChange()
+      }
+    })
+
   subscribeRow(identity: string, listener: () => void): () => void {
     const listeners = this.rowListeners.get(identity) ?? new Set()
     listeners.add(listener)
@@ -81,7 +89,9 @@ export class ResourcePtyActionStatus implements ResourcePtyEndingSource {
   }
 
   private publish(identities: readonly string[], ending: boolean): void {
-    this.selectionCheck = (identity) => this.isSelectable(identity)
+    if (ending) {
+      this.selectionCheck = (identity) => this.isSelectable(identity)
+    }
     for (const listener of this.listeners) {
       listener(identities, ending)
     }

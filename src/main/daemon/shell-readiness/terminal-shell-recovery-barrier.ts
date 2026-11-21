@@ -37,6 +37,7 @@ export class TerminalShellRecoveryBarrier {
   private idleWaiters: (() => void)[] = []
   private readonly cleanExit: TerminalShellCleanExitConfirmation
   private disposed = false
+  lastInputAtMs = 0
 
   constructor(opts: TerminalShellRecoveryBarrierOptions) {
     this.confirmShellForeground = opts.confirmShellForeground
@@ -71,6 +72,17 @@ export class TerminalShellRecoveryBarrier {
 
   getOwner(): TerminalOwner | undefined {
     return this.scanner.owner
+  }
+
+  get commandActivity(): TerminalShellLifecycleScanner['commandActivity'] {
+    return this.pending ? 'unknown' : this.scanner.commandActivity
+  }
+
+  forgetIdlePromptOnInput(): void {
+    this.lastInputAtMs = Date.now()
+    if (this.scanner.isIdleAtPrompt) {
+      this.scanner.forgetIdlePrompt()
+    }
   }
 
   /** Return a local ground without broadcasting; relay credit and snapshot dedup drop zero-raw resets. */

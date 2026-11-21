@@ -280,7 +280,8 @@ export function inspectTerminalHostSession(
     nextObservationEpoch
   })
   const incarnationId = options?.expectedIncarnationId
-  if (options?.runningWorkSinceMs === undefined || !incarnationId) {
+  const runningWorkSinceMs = options?.runningWorkSinceMs
+  if (runningWorkSinceMs === undefined || !incarnationId) {
     return inspection
   }
   return inspection.then((result) => ({
@@ -289,7 +290,8 @@ export function inspectTerminalHostSession(
       result,
       incarnationId,
       session?.isAlive === true && sessions.get(sessionId) === session,
-      owners ? () => owners.listForPty(sessionId).length > 0 : undefined
+      owners ? () => owners.listForPty(sessionId).length > 0 : undefined,
+      session?.getCommandActivity(runningWorkSinceMs) ?? 'unknown'
     )
   }))
 }

@@ -14,6 +14,25 @@ import {
 const COOLDOWN_MS = 100
 const EXIT_PUBLICATION_MS = 50
 
+function sameListedSession(before: PtyListedSession, after: PtyListedSession): boolean {
+  return (
+    before === after ||
+    (before.id === after.id &&
+      before.incarnationId === after.incarnationId &&
+      before.inventorySourceId === after.inventorySourceId &&
+      before.routed === after.routed &&
+      before.fencedTermination === after.fencedTermination &&
+      before.rootProcessId === after.rootProcessId &&
+      before.foregroundProcess === after.foregroundProcess &&
+      before.cwd === after.cwd &&
+      before.title === after.title &&
+      before.worktreeId === after.worktreeId &&
+      before.paneKey === after.paneKey &&
+      before.agentOwnership === after.agentOwnership &&
+      before.exiting === after.exiting)
+  )
+}
+
 /** One request survives view epochs, but only its dispatching epoch may publish it. */
 export class ResourceSessionInventoryCache {
   private state: {
@@ -172,12 +191,22 @@ export class ResourceSessionInventoryCache {
           }
           identitiesByIncarnation.delete(incarnation)
         }
-        this.known = deduped
-        this.identitiesByIncarnation = identitiesByIncarnation
-        this.publishInventory({
+        const patch = {
           sessionsError: false,
           observedAt: Date.now()
-        })
+        }
+        if (!this.inventoryChanged && deduped.size === this.known.size) {
+          const previous = this.known.values()
+          if (
+            deduped.values().every((session) => sameListedSession(previous.next().value!, session))
+          ) {
+            this.publish(patch)
+            return
+          }
+        }
+        this.known = deduped
+        this.identitiesByIncarnation = identitiesByIncarnation
+        this.publishInventory(patch)
       })
       .catch((error: unknown) => {
         if (this.active && epoch === this.epoch && !isResourceViewInactive(error)) {

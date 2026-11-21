@@ -22,6 +22,7 @@ export function daemonFencedKillPayload(
     requireNoAgentOwner,
     requireUnattached,
     requireIdle,
+    idleCheckSinceMs,
     expectedIncarnationId
   } = request
   return {
@@ -30,6 +31,6 @@ export function daemonFencedKillPayload(
     requireNoAgentOwner,
     requireUnattached,
     expectedIncarnationId,
-    ...(requireIdle ? { requireIdle } : {})
+    ...(requireIdle ? { requireIdle, idleCheckSinceMs } : {})
   }
 }

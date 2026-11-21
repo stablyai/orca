@@ -8,7 +8,8 @@ export function observedRunningWork(
   inspection: HostProcessInspection,
   incarnationId: string,
   stillCurrent: boolean,
-  hasAgentOwner: (() => boolean) | undefined
+  hasAgentOwner: (() => boolean) | undefined,
+  commandActivity: 'running' | 'idle' | 'unknown' | 'input_since_capture'
 ): PtyRunningWorkObservation {
   const evidence = inspection.foregroundProcessEvidence
   if (evidence?.ptyIncarnationId !== incarnationId) {
@@ -23,13 +24,16 @@ export function observedRunningWork(
   const foreground = inspection.foregroundProcess?.trim()
   if (
     hasAgentOwner() ||
+    commandActivity === 'running' ||
     inspection.childProcessEvidence === 'children' ||
     (foreground && !isShellProcess(foreground))
   ) {
     return 'running'
   }
   return inspection.childProcessEvidence === 'no-children' &&
-    (evidence.verdict === 'live' || evidence.reason === 'windows_ssh_foreground_unavailable')
+    commandActivity !== 'input_since_capture' &&
+    (evidence.verdict === 'live' ||
+      (evidence.reason === 'windows_ssh_foreground_unavailable' && commandActivity === 'idle'))
     ? 'idle'
     : 'unverifiable'
 }

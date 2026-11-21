@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act, cleanup, renderHook } from '@testing-library/react'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import type { ResourcePtyGroup, ResourcePtyRow } from './resource-pty-view-model'
 import { ResourcePtyActionStatus } from './resource-pty-action-status'
 import {
@@ -40,6 +40,8 @@ it.each([300, 3_000])('updates a group with %i PTYs without revisiting its rows'
   }))
   const groups: ResourcePtyGroup[] = [{ kind: 'workspace', key: 'workspace', name: null, rows }]
   const ending = new ResourcePtyActionStatus()
+  const selectionUpdate = vi.fn()
+  const stopSelectionUpdates = ending.subscribeSelection(selectionUpdate)
   const { result, rerender } = renderHook(() => {
     const endability = useResourcePtyEndableGroups(groups, ending)
     return useResourcePtyGroupCanEnd(endability, 'workspace')
@@ -58,4 +60,6 @@ it.each([300, 3_000])('updates a group with %i PTYs without revisiting its rows'
   })
   expect(result.current).toBe(true)
   expect(eligibilityReads).toBe(0)
+  expect(selectionUpdate).toHaveBeenCalledTimes(1)
+  stopSelectionUpdates()
 })

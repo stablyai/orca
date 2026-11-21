@@ -39,7 +39,7 @@ export class Session extends SessionProcessInspection {
   private readonly shellReady: SessionShellReadyBarrier
   private readonly termination: SessionTerminationController
   readonly startupIngress: PtyStartupIngress
-  private readonly recoveryBarrier: TerminalShellRecoveryBarrier
+  protected readonly recoveryBarrier: TerminalShellRecoveryBarrier
   private readonly focusReport = new SessionFocusReport()
 
   constructor(opts: SessionOptions) {
@@ -139,6 +139,7 @@ export class Session extends SessionProcessInspection {
   write(data: string): void {
     // Human input must reach rc-file readers while automatic startup commands wait for readiness.
     if (this.isAlive && !this._disposed && !this.startupIngress.answerLiveQueryReply(data)) {
+      this.recoveryBarrier.forgetIdlePromptOnInput()
       this.focusReport.observeInput(data, this.recoveryBarrier.focusReportingArming)
       this.shellReady.observeTypedInput(data)
       this.subprocess.write(data)
@@ -247,10 +248,6 @@ export class Session extends SessionProcessInspection {
 
   getCwd(): string | null {
     return this.output.getCwd()
-  }
-
-  confirmShellForeground(): Promise<boolean> {
-    return this.recoveryBarrier.confirmOwnerSettled()
   }
 
   async settleShellOwnershipConfirmation(): Promise<void> {

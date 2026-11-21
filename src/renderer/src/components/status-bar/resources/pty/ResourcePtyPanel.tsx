@@ -132,7 +132,7 @@ export function ResourcePtyPanel({
     return selectable
   }, [items, sessionsError])
   const canSelectKey = useSyncExternalStore(
-    active ? status.subscribe : subscribeInactive,
+    active ? status.subscribeSelection : subscribeInactive,
     status.getSelectionCheck
   )
   const findRow = useMemo(() => {

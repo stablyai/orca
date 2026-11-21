@@ -2,6 +2,7 @@ import type { DaemonLaunchNoteChange } from '../../protocol/daemon-launch-note-p
 import {
   PTY_FOREGROUND_OBSERVATION_PROTOCOL_VERSION,
   COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
+  IDLE_FENCED_TERMINATION_PROTOCOL_VERSION,
   GET_FOREGROUND_PROCESS_PROTOCOL_VERSION
 } from '../../protocol/daemon-protocol-version'
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
@@ -25,7 +26,11 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
   }
 
   async hasChildProcesses(id: string): Promise<boolean> {
-    if (this.protocolVersion < GET_FOREGROUND_PROCESS_PROTOCOL_VERSION) {
+    if (
+      this.protocolVersion < GET_FOREGROUND_PROCESS_PROTOCOL_VERSION ||
+      (options?.runningWorkSinceMs !== undefined &&
+        this.protocolVersion < IDLE_FENCED_TERMINATION_PROTOCOL_VERSION)
+    ) {
       return true
     }
     return this.hasChildProcessesFromForeground(await this.getForegroundProcess(id))
@@ -68,7 +73,8 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
         ...(options?.jobMembershipOnly === true ? { jobMembershipOnly: true } : {}),
         ...(options?.ignoreDetached === true ? { ignoreDetached: true } : {})
       },
-      options?.runningWorkSinceMs === undefined ? undefined : 1_500
+      options?.runningWorkSinceMs === undefined ? undefined : 1_500,
+      options?.signal
     )
   }
 

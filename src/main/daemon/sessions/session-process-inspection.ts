@@ -2,6 +2,7 @@ import type { ChildProcessVerdictRead, SubprocessHandle } from './session-subpro
 import type { TerminalForegroundSample } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import { SessionLaunchNote } from './session-launch-note'
 import { SessionRepaintNudge } from './session-repaint-nudge'
+import type { TerminalShellRecoveryBarrier } from '../shell-readiness/terminal-shell-recovery-barrier'
 
 export abstract class SessionProcessInspection {
   /** Main's launch note for this process; Session feeds it the output that can retire it. */
@@ -11,6 +12,7 @@ export abstract class SessionProcessInspection {
   readonly shellIsRootChild: boolean
 
   protected readonly repaintNudge = new SessionRepaintNudge()
+  protected abstract readonly recoveryBarrier: TerminalShellRecoveryBarrier
   /** PTY output chunks seen, so idle-shell proofs can tell whether the pane printed since. */
   protected _outputChunks = 0
 
@@ -47,6 +49,19 @@ export abstract class SessionProcessInspection {
 
   get outputChunks(): number {
     return this._outputChunks
+  }
+
+  confirmShellForeground(): Promise<boolean> {
+    return this.recoveryBarrier.confirmOwnerSettled()
+  }
+
+  getCommandActivity(
+    afterMs: number
+  ): TerminalShellRecoveryBarrier['commandActivity'] | 'input_since_capture' {
+    const phase = this.recoveryBarrier.commandActivity
+    return phase !== 'running' && this.recoveryBarrier.lastInputAtMs >= afterMs
+      ? 'input_since_capture'
+      : phase
   }
 
   /** The PTY's foreground process group (tcgetpgrp); undefined where the master cannot say. */

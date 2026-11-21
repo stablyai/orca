@@ -130,6 +130,7 @@ export type KillRequest = {
     requireNoAgentOwner?: boolean
     requireUnattached?: boolean
     requireIdle?: true
+    idleCheckSinceMs?: number
   }
 }
 

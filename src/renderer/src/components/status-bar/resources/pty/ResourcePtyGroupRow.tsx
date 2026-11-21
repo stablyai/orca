@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { createContext, memo, useContext } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -13,13 +13,20 @@ import {
 
 const STRIP_LIMIT = 6
 
+export const ResourcePtyLabelContext = createContext((row: ResourcePtyRow) => row.label)
+
+function ResourcePtyTooltipLabel({ row }: { row: ResourcePtyRow }) {
+  const label = useContext(ResourcePtyLabelContext)(row)
+  const process = row.session.foregroundProcess?.trim()
+  return process ? `${label} · ${process}` : label
+}
+
 export const ResourcePtyGroupRow = memo(function ResourcePtyGroupRow({
   group,
   open,
   allowEndAll,
   endableGroups,
   checking,
-  labelForRow,
   onToggle,
   onEndAll
 }: {
@@ -28,7 +35,6 @@ export const ResourcePtyGroupRow = memo(function ResourcePtyGroupRow({
   allowEndAll: boolean
   endableGroups: ReturnType<typeof useResourcePtyEndableGroups>
   checking: boolean
-  labelForRow: (row: ResourcePtyRow) => string
   onToggle: (key: string) => void
   onEndAll: (group: ResourcePtyGroup, source: Element) => void
 }) {
@@ -66,22 +72,18 @@ export const ResourcePtyGroupRow = memo(function ResourcePtyGroupRow({
           })}
         </span>
         <span aria-hidden className="ml-auto flex shrink-0 items-center gap-1">
-          {group.rows.slice(0, STRIP_LIMIT).map((row) => {
-            const title = labelForRow(row)
-            const process = row.session.foregroundProcess?.trim()
-            return (
-              <Tooltip key={row.identity}>
-                <TooltipTrigger asChild>
-                  <span className="inline-flex size-3.5 items-center justify-center">
-                    <ResourcePtyProcessIcon process={row.session.foregroundProcess} />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top" sideOffset={4}>
-                  {process ? `${title} · ${process}` : title}
-                </TooltipContent>
-              </Tooltip>
-            )
-          })}
+          {group.rows.slice(0, STRIP_LIMIT).map((row) => (
+            <Tooltip key={row.identity}>
+              <TooltipTrigger asChild>
+                <span className="inline-flex size-3.5 items-center justify-center">
+                  <ResourcePtyProcessIcon process={row.session.foregroundProcess} />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                <ResourcePtyTooltipLabel row={row} />
+              </TooltipContent>
+            </Tooltip>
+          ))}
           {hidden > 0 && (
             <span className="text-2xs text-muted-foreground tabular-nums">+{hidden}</span>
           )}

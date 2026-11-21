@@ -4,6 +4,7 @@ export type PtyFencedTerminationRequest = {
   requireNoAgentOwner: boolean
   requireUnattached: boolean
   requireIdle?: true
+  idleCheckSinceMs?: number
   switchCondition?: {
     token: string
     remainingMs: number

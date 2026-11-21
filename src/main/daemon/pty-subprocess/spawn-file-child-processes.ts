@@ -110,7 +110,21 @@ export async function inspectSpawnFileWindowsChildProcesses(
       ignoreDetached ? () => readWindowsConsoleAttachedProcessIds(shellPid) : undefined,
       jobMembershipOnly
     )
-    return alone ? 'no-children' : 'children'
+    if (!alone) {
+      return 'children'
+    }
+    if (afterMs !== undefined) {
+      // A child can join the job while the identity table is being captured.
+      const current = readWindowsPtyJobProcessIds(proc)
+      if (
+        !current ||
+        current.size !== members.size ||
+        [...members].some((pid) => !current.has(pid))
+      ) {
+        return 'unverifiable'
+      }
+    }
+    return 'no-children'
   } catch {
     return 'unverifiable'
   }

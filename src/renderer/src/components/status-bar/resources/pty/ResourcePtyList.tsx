@@ -1,7 +1,7 @@
 import type React from 'react'
 import { VirtualizedList } from '@/components/ui/virtualized-list'
 import type { ResourcePtyGroup, ResourcePtyRow as PtyRow } from './resource-pty-view-model'
-import { ResourcePtyGroupRow } from './ResourcePtyGroupRow'
+import { ResourcePtyGroupRow, ResourcePtyLabelContext } from './ResourcePtyGroupRow'
 import { ResourcePtyRow } from './ResourcePtyRow'
 import type { ResourcePtyActionStatus } from './resource-pty-action-status'
 import type { useResourcePtyEndableGroups } from './use-resource-pty-endable-groups'
@@ -46,42 +46,45 @@ export function ResourcePtyList({
   onNavigate: (tabId: string, paneKey: string | null) => void
 }) {
   return (
-    <VirtualizedList
-      rows={items}
-      getRowKey={itemKey}
-      scrollElement={scrollElement}
-      estimateRowHeightPx={26}
-      announceListPosition
-      renderRow={(item) =>
-        item.kind === 'group' ? (
-          <ResourcePtyGroupRow
-            key={item.key}
-            group={item.group}
-            open={item.open}
-            allowEndAll={!unverifiable && (checkingGroup === null || item.group.kind === 'unbound')}
-            endableGroups={endableGroups}
-            checking={checkingGroup === item.key}
-            labelForRow={labelForRow}
-            onToggle={onToggleGroup}
-            onEndAll={onEndAll}
-          />
-        ) : (
-          <ResourcePtyRow
-            key={item.key}
-            row={item.row}
-            title={labelForRow(item.row)}
-            showWorkspace={item.showWorkspace}
-            observedAt={observedAt}
-            unverifiable={unverifiable}
-            status={status}
-            selected={selected.has(item.row.identity)}
-            detailsOpen={openDetails.has(item.row.identity)}
-            onActivate={onActivate}
-            onEnd={onEnd}
-            onNavigate={onNavigate}
-          />
-        )
-      }
-    />
+    <ResourcePtyLabelContext value={labelForRow}>
+      <VirtualizedList
+        rows={items}
+        getRowKey={itemKey}
+        scrollElement={scrollElement}
+        estimateRowHeightPx={26}
+        announceListPosition
+        renderRow={(item) =>
+          item.kind === 'group' ? (
+            <ResourcePtyGroupRow
+              key={item.key}
+              group={item.group}
+              open={item.open}
+              allowEndAll={
+                !unverifiable && (checkingGroup === null || item.group.kind === 'unbound')
+              }
+              endableGroups={endableGroups}
+              checking={checkingGroup === item.key}
+              onToggle={onToggleGroup}
+              onEndAll={onEndAll}
+            />
+          ) : (
+            <ResourcePtyRow
+              key={item.key}
+              row={item.row}
+              title={labelForRow(item.row)}
+              showWorkspace={item.showWorkspace}
+              observedAt={observedAt}
+              unverifiable={unverifiable}
+              status={status}
+              selected={selected.has(item.row.identity)}
+              detailsOpen={openDetails.has(item.row.identity)}
+              onActivate={onActivate}
+              onEnd={onEnd}
+              onNavigate={onNavigate}
+            />
+          )
+        }
+      />
+    </ResourcePtyLabelContext>
   )
 }

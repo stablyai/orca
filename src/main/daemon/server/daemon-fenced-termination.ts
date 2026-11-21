@@ -7,6 +7,7 @@ import type {
 import type { TerminalHost } from '../terminal-host/terminal-host'
 import type { DaemonPtySpawnPreparations } from './daemon-pty-spawn-preparations'
 import type { DaemonSessionAttachments } from './daemon-session-attachments'
+import { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } from '../../../shared/process-observation/tables/process-table-snapshot'
 
 type FencedOwner<T extends IPtyProvider> = DaemonSessionOwnerResolution<T> | { kind: 'replaced' }
 
@@ -37,6 +38,7 @@ export async function handleDaemonFencedTermination(
     requireNoAgentOwner?: boolean
     requireUnattached?: boolean
     requireIdle?: true
+    idleCheckSinceMs?: number
   },
   deps: {
     host: TerminalHost
@@ -49,9 +51,13 @@ export async function handleDaemonFencedTermination(
   }
   if (payload.requireIdle) {
     try {
+      const now = Date.now()
+      const boundary = Number.isSafeInteger(payload.idleCheckSinceMs)
+        ? payload.idleCheckSinceMs!
+        : now
       const inspection = await deps.host.inspectProcess(payload.sessionId, {
         expectedIncarnationId: payload.expectedIncarnationId,
-        runningWorkSinceMs: Date.now()
+        runningWorkSinceMs: Math.max(boundary, now - PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS)
       })
       if (inspection.runningWork !== 'idle') {
         return {
