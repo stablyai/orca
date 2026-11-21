@@ -31,6 +31,20 @@ import {
 import { nativeChatReplyRevealId } from '../reply/native-chat-reply-original'
 import { structuredAgentSessionSendBody } from '../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 
+const staging = vi.hoisted(() => ({ on: false }))
+vi.mock('../../drafts/native-chat-draft-attachment-staging', async (load) => ({
+  ...(await load<object>()),
+  hasNativeChatStagedFiles: () => staging.on,
+  // A remote host keeps staged files elsewhere: preparing rewrites their paths in the message.
+  captureNativeChatStagedInput: () => ({
+    release: () => {},
+    prepare: async <T extends { text: string }>(input: T): Promise<T> => ({
+      ...input,
+      text: input.text.replaceAll('/local/', '/host/uploads/')
+    })
+  })
+}))
+
 vi.mock('@/components/native-chat/telemetry/native-chat-telemetry', () => ({
   emitNativeChatMessageSent: vi.fn()
 }))
@@ -489,6 +503,52 @@ describe('remembering which message a reply answered', () => {
         () => [duplicate('m-first')]
       )
     ).toBeNull()
+  })
+
+  it('a remote reply with a staged file keeps its exact original among duplicates, rebuilt from the stored body', async () => {
+    localStorage.clear()
+    resetNativeChatReplySourcesForTests()
+    staging.on = true
+    try {
+      const second = { ...target, id: 'reply-remote', messageId: 'm-second' }
+      setNativeChatReplyTarget(scope, second)
+      const { transport, send } = fixture(true)
+      let prepared = ''
+      // As the send slot does: the message is prepared, then sent and accepted.
+      vi.mocked(transport.send).mockImplementation(async (text, attachments, request) => {
+        const files = attachments?.map(({ path }) => ({ path, previewUri: '' }))
+        prepared = (await request!.prepareAttachments!({ text, attachments: files }, () => true))
+          .text
+        return true
+      })
+      await act(async () => {
+        await send('[Image](orca-image:img-1) Check /local/spec.md here  ', [
+          { id: 'img-1', path: '/tmp/shot.png' }
+        ])
+      })
+      const stored = structuredAgentSessionSendBody(prepared, [
+        { path: '/tmp/shot.png', previewUri: '' }
+      ])
+        .blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+        .join('\n')
+      expect(stored).toContain('[Image #1] Check /host/uploads/spec.md here')
+      const rebuilt = nativeChatReplyTargetFromSentText(stored, scope).target!
+      expect(rebuilt.messageId).toBe('m-second')
+      const duplicate = (id: string) => ({
+        id,
+        role: 'assistant' as const,
+        blocks: [{ type: 'text' as const, text: target.excerpt }]
+      })
+      expect(
+        nativeChatReplyRevealId(
+          rebuilt,
+          (id) => id === 'm-first',
+          () => [duplicate('m-first')]
+        )
+      ).toBeNull()
+    } finally {
+      staging.on = false
+    }
   })
 
   it('a refused structured send records nothing', async () => {

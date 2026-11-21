@@ -21,7 +21,6 @@ import {
   promptHasInteractionModeSkill,
   promptSkillRefs
 } from '../editor/native-chat-prompt-document'
-import type { StructuredAgentSessionAttachmentPreparation } from '../../session/structured/delivery/structured-agent-session-send-slot'
 import { useCallback } from 'react'
 import { completeNativeChatStructuredUserAction } from './native-chat-structured-user-action'
 import {
@@ -30,10 +29,8 @@ import {
   structuredAgentSessionCommandChangesConversation
 } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import {
-  dispatchNativeChatStructuredComposerText,
-  nativeChatStructuredStoredPrompt
-} from './native-chat-structured-composer-dispatch'
+import { dispatchNativeChatStructuredComposerText } from './native-chat-structured-composer-dispatch'
+import { trackNativeChatStructuredStoredText } from './native-chat-structured-stored-text'
 import type { NativeChatComposerSendIntent } from './native-chat-composer-send-intent'
 import type { NativeChatStructuredComposerTransport } from './native-chat-structured-composer-transport'
 import type { NativeChatComposerImageAttachment } from '../../attachments/chips/native-chat-image-attachment'
@@ -228,8 +225,8 @@ export function useNativeChatStructuredComposerSend({
           restoreNativeChatReplyTarget(draftScopeKey, reply, replyTakenAt)
         }
       }
-      const prepareAttachments: StructuredAgentSessionAttachmentPreparation | undefined =
-        stagedInput ? (input) => stagedInput.prepare(input, structuredTransport) : undefined
+      const stored = trackNativeChatStructuredStoredText(stagedInput, structuredTransport)
+      const prepareAttachments = stored.prepareAttachments
       return dispatchNativeChatStructuredComposerText(
         structuredTransport,
         text,
@@ -263,10 +260,9 @@ export function useNativeChatStructuredComposerSend({
           // one was picked meanwhile.
           if (reply) {
             // Keyed by the words the message stores, as Rewind and a queued edit read them back.
-            rememberNativeChatReplySource(
-              draftScopeKey,
-              nativeChatStructuredStoredPrompt(text, attachments),
-              reply.messageId
+            void stored.storedText(text, attachments).then(
+              (words) => rememberNativeChatReplySource(draftScopeKey, words, reply.messageId),
+              () => {}
             )
           }
           return true

@@ -20,12 +20,12 @@ import {
   handBackNativeChatQueuedEdit,
   nativeChatQueuedEditDirty,
   nativeChatQueuedEditHeld,
-  nativeChatQueuedEditInput,
-  rememberNativeChatQueuedEditReplySource
+  nativeChatQueuedEditInput
 } from './native-chat-queued-edit-draft'
 import { nativeChatQueuedEditValueKey } from './native-chat-queued-edit-value'
 import { settleNativeChatQueuedEdit } from './native-chat-queued-edit-outcome'
 import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
+import { readNativeChatReplyTarget } from '../../composer/reply/native-chat-reply-target'
 import { structuredSessionOperationId } from '../../session/structured/writes/structured-agent-session-operation-id'
 import { startQueuedEditLease } from './structured-agent-session-queued-edit-lease'
 import {
@@ -243,7 +243,8 @@ export function useStructuredAgentSessionQueuedEdit(args: StructuredQueuedEditAr
       fingerprint: agentSessionSendBodyFingerprint(sessionId, edited.body),
       body: edited.body,
       draft: structuredClone(readNativeChatComposerDraft(edit.scopeKey)),
-      key: nativeChatQueuedEditValueKey(edit.scopeKey)
+      key: nativeChatQueuedEditValueKey(edit.scopeKey),
+      replySource: readNativeChatReplyTarget(edit.scopeKey)?.messageId || undefined
     }
     edit.attempt = attempt
     render(edit)
@@ -252,15 +253,6 @@ export function useStructuredAgentSessionQueuedEdit(args: StructuredQueuedEditAr
       'agentSession.queuedMessageUpdate',
       { messageId: edit.messageId, expectedBodyFingerprint: attempt.expected, ...input }
     )
-    // Only an accepted update is the text that will be sent; typing and refused saves record nothing.
-    if (result.kind === 'done' && result.value.status === 'updated') {
-      // Keyed by the text the queued message now stores (trimmed when images are supported), as
-      // reopening it reads that text back.
-      rememberNativeChatQueuedEditReplySource(
-        edit,
-        queuedMessageEditableText(edited.body) ?? input.text
-      )
-    }
     settle(edit, attempt, result)
   }, [close, imagesCapable, render, sessionId, settle, write, transport.skillsCapable])
 

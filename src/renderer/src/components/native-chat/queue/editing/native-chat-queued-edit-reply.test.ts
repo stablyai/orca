@@ -22,6 +22,7 @@ import {
 } from '../../drafts/native-chat-composer-draft-store'
 import { clearNativeChatComposerDraftsForTests } from '../../drafts/native-chat-draft-reset'
 import {
+  NATIVE_CHAT_REPLY_SOURCE_AMBIGUOUS,
   rememberNativeChatReplySource,
   resetNativeChatReplySourcesForTests
 } from '../../composer/reply/native-chat-reply-sources'
@@ -153,4 +154,37 @@ it('a rewound reply to A into a box answering B with the same words keeps A, and
   rememberNativeChatReplySource('agent-session:again', SENT, 'm-a')
   returnMessageToComposer('agent-session:again', 'rewound', [{ type: 'text', text: SENT }])
   expect(readNativeChatComposerDraft('agent-session:again').text).toBe('Why blue?')
+})
+
+it('a hand-back whose original is unknown or ambiguous counts as the reply already in the box', () => {
+  for (const [scope, known] of [
+    ['agent-session:unknown', ''],
+    ['agent-session:ambiguous', NATIVE_CHAT_REPLY_SOURCE_AMBIGUOUS]
+  ] as const) {
+    setNativeChatReplyTarget(scope, {
+      id: 'b',
+      messageId: 'm-b',
+      author: 'agent',
+      excerpt: 'Updated the cards.',
+      agentLabel: 'Claude'
+    })
+    if (known) {
+      rememberNativeChatReplySource(scope, SENT, 'm-x')
+      rememberNativeChatReplySource(scope, SENT, 'm-y')
+    }
+    // Queued Edit: the same words with no exact original are taken as that reply.
+    const edit = createNativeChatQueuedEditDraft(queued(), scope)
+    expect(readNativeChatReplyTarget(edit.scopeKey)?.messageId).toBe(known)
+    updateNativeChatComposerDraft(
+      edit.scopeKey,
+      { text: 'Why blue, really?', document: promptTextContent('Why blue, really?') },
+      'immediate'
+    )
+    handBackNativeChatQueuedEdit(edit)
+    expect(readNativeChatComposerDraft(scope).text).toBe('Why blue, really?')
+    expect(readNativeChatReplyTarget(scope)?.messageId).toBe('m-b')
+    // Rewind: the same.
+    returnMessageToComposer(scope, `rewound-${known}`, [{ type: 'text', text: SENT }])
+    expect(readNativeChatReplyTarget(scope)?.messageId).toBe('m-b')
+  }
 })

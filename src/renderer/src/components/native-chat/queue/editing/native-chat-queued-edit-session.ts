@@ -63,6 +63,8 @@ export type NativeChatQueuedEditAttempt = {
   body: AgentJournalMessageItem
   draft: NativeChatComposerDraft
   key: string
+  /** The message this save's reply answers, recorded for its words once the save is proven. */
+  replySource?: string
 }
 export function nativeChatQueuedEditSaving(edit: NativeChatQueuedEditSession): boolean {
   return edit.attempt?.phase === 'pending'

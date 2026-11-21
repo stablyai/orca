@@ -16,13 +16,18 @@ export const NATIVE_CHAT_REPLY_SOURCE_AMBIGUOUS = 'orca:ambiguous-reply-source'
 const AMBIGUOUS = NATIVE_CHAT_REPLY_SOURCE_AMBIGUOUS
 let loaded = false
 
-/** A compact key for sent text: its length and a 32-bit FNV-1a hash. */
+/** A compact key for sent text: its length and two independent 32-bit hashes (FNV-1a and a
+ *  multiply-rotate mix), so two different texts of the same length don't share a key in practice. */
 function keyOf(text: string): string {
-  let hash = 0x811c9dc5
+  let fnv = 0x811c9dc5
+  let mix = 0x9747b28c
   for (let index = 0; index < text.length; index += 1) {
-    hash = Math.imul(hash ^ text.charCodeAt(index), 0x01000193)
+    const code = text.charCodeAt(index)
+    fnv = Math.imul(fnv ^ code, 0x01000193)
+    mix = Math.imul(mix ^ code, 0x5bd1e995)
+    mix = (mix << 13) | (mix >>> 19)
   }
-  return `${text.length}:${(hash >>> 0).toString(36)}`
+  return `${text.length}:${(fnv >>> 0).toString(36)}:${(mix >>> 0).toString(36)}`
 }
 
 function load(): void {

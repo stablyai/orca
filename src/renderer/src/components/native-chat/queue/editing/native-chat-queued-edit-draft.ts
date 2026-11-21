@@ -6,7 +6,6 @@ import {
   setNativeChatReplyTarget
 } from '../../composer/reply/native-chat-reply-target'
 import { withNativeChatReplyContext } from '../../composer/reply/native-chat-reply-quote'
-import { rememberNativeChatReplySource } from '../../composer/reply/native-chat-reply-sources'
 import { nativeChatQuotedPromptDocument } from './native-chat-queued-edit-quote'
 import type { AgentJournalMessageItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { withoutImageReference } from '../../../../../../shared/native-chat/attachments/native-chat-image-reference'
@@ -126,17 +125,6 @@ export function nativeChatQueuedEditInput(
     ...(skillsCapable
       ? { skills: pickedSkillsInText(text, promptSkillRefs(draft.document), ['$', '/']) }
       : {})
-  }
-}
-
-/** A saved edit replaced the queued message with `text`: it answers the same original. */
-export function rememberNativeChatQueuedEditReplySource(
-  edit: NativeChatQueuedEditDraft,
-  text: string
-): void {
-  const reply = readNativeChatReplyTarget(edit.scopeKey)
-  if (reply) {
-    rememberNativeChatReplySource(edit.destination, text, reply.messageId)
   }
 }
 

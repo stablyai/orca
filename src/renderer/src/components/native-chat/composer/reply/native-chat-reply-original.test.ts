@@ -8,6 +8,8 @@ import { nativeChatReplyExcerpt, withNativeChatReplyContext } from './native-cha
 import type * as Quote from './native-chat-reply-quote'
 import {
   NATIVE_CHAT_REPLY_SOURCE_AMBIGUOUS,
+  nativeChatReplySourceOf,
+  NATIVE_CHAT_REPLY_SOURCES_MAX,
   rememberNativeChatReplySource,
   resetNativeChatReplySourcesForTests
 } from './native-chat-reply-sources'
@@ -190,4 +192,65 @@ it('drops records from before replies were kept per chat, rather than trusting t
   const sent = withNativeChatReplyContext('Why?', { author: 'agent', excerpt: 'Done.' }, 'x')
   expect(nativeChatReplyTargetFromSentText(sent, 'chat-a').target?.messageId).toBe('')
   expect(localStorage.getItem('orca.nativeChat.replySources.v1')).toBeNull()
+})
+
+it('two different texts of the same length that share a 32-bit hash keep their own originals', () => {
+  // These two collide under a single 32-bit FNV-1a hash of the same length.
+  rememberNativeChatReplySource('chat-a', 'Reply number 0412789', 'm-1')
+  rememberNativeChatReplySource('chat-a', 'Reply number 0649192', 'm-2')
+  expect(nativeChatReplySourceOf('chat-a', 'Reply number 0412789')).toBe('m-1')
+  expect(nativeChatReplySourceOf('chat-a', 'Reply number 0649192')).toBe('m-2')
+  // The same text answering two messages is still ambiguous.
+  rememberNativeChatReplySource('chat-a', 'Reply number 0412789', 'm-3')
+  expect(nativeChatReplySourceOf('chat-a', 'Reply number 0412789')).toBe(
+    NATIVE_CHAT_REPLY_SOURCE_AMBIGUOUS
+  )
+})
+
+it('the oldest record goes once the cap is passed, and its reply falls back to words', () => {
+  const sent = (n: number) =>
+    withNativeChatReplyContext(`Question ${n}`, { author: 'agent', excerpt: 'Done.' }, 'x')
+  for (let n = 0; n <= NATIVE_CHAT_REPLY_SOURCES_MAX; n += 1) {
+    rememberNativeChatReplySource('chat-a', sent(n), `m-${n}`)
+  }
+  expect(nativeChatReplyTargetFromSentText(sent(0), 'chat-a').target?.messageId).toBe('')
+  expect(nativeChatReplyTargetFromSentText(sent(1), 'chat-a').target?.messageId).toBe('m-1')
+})
+
+it('a record from before replies were kept per chat is never used, even for the exact text', () => {
+  const sent = withNativeChatReplyContext('Why?', { author: 'agent', excerpt: 'Done.' }, 'x')
+  // The old key: the text's length and its 32-bit FNV-1a hash, with no chat.
+  let hash = 0x811c9dc5
+  for (let index = 0; index < sent.length; index += 1) {
+    hash = Math.imul(hash ^ sent.charCodeAt(index), 0x01000193)
+  }
+  const legacyKey = `${sent.length}:${(hash >>> 0).toString(36)}`
+  localStorage.setItem('orca.nativeChat.replySources.v1', JSON.stringify([[legacyKey, 'm-old']]))
+  resetNativeChatReplySourcesForTests()
+  expect(nativeChatReplyTargetFromSentText(sent, 'chat-a').target?.messageId).toBe('')
+})
+
+it('matches a rebuilt reply only to a message by its own author', () => {
+  const agent = message('m-agent', 'assistant', [text('Ship it.')])
+  const user = message('m-user', 'user', [text('Ship it.')])
+  expect(nativeChatReplyOriginalId([agent], { author: 'user', excerpt: 'Ship it.' })).toBeNull()
+  expect(nativeChatReplyOriginalId([agent, user], { author: 'user', excerpt: 'Ship it.' })).toBe(
+    'm-user'
+  )
+})
+
+it('an ambiguous reply names no message, so the strip shows it unavailable even when words match', () => {
+  const loaded = [message('m-x', 'assistant', [text('Done.')])]
+  const target = {
+    messageId: NATIVE_CHAT_REPLY_SOURCE_AMBIGUOUS,
+    author: 'agent' as const,
+    excerpt: 'Done.'
+  }
+  expect(
+    nativeChatReplyRevealId(
+      target,
+      (id) => id === 'm-x',
+      () => loaded
+    )
+  ).toBeNull()
 })

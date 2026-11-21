@@ -5,7 +5,11 @@ import type {
   NativeChatQueuedEditSession,
   NativeChatQueuedEditAttempt
 } from './native-chat-queued-edit-session'
-import { queuedEditStanding } from '../../../../../../shared/native-chat/input/queued-messages/queued-message-edit'
+import {
+  queuedEditStanding,
+  queuedMessageEditableText
+} from '../../../../../../shared/native-chat/input/queued-messages/queued-message-edit'
+import { rememberNativeChatReplySource } from '../../composer/reply/native-chat-reply-sources'
 import { nativeChatQueuedEditValueKey } from './native-chat-queued-edit-value'
 
 type Outcome = 'close' | 'rebase' | 'gone' | 'changed' | 'refused' | 'stay'
@@ -62,6 +66,14 @@ export function settleNativeChatQueuedEdit(
     if (edit.uncertain && attempt.fingerprint === edit.baseFingerprint) {
       attempt.phase = 'unknown'
       return lost ?? (edit.pendingClose || standing === 'sent' ? 'gone' : 'stay')
+    }
+    // Proven: the card now holds this save's body, so its reply's original is known for those words.
+    if (attempt.replySource) {
+      rememberNativeChatReplySource(
+        edit.destination,
+        queuedMessageEditableText(attempt.body) ?? '',
+        attempt.replySource
+      )
     }
     const equal = nativeChatQueuedEditValueKey(edit.scopeKey) === attempt.key
     rebaseNativeChatQueuedEdit(edit, attempt)
