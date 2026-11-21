@@ -20184,12 +20184,12 @@
           "none": "无",
           "off": "关闭",
           "fast": "快速",
-          "minimal": "最小",
-          "low": "低",
-          "medium": "中",
-          "high": "高",
-          "xhigh": "极高",
-          "max": "最大",
+          "minimal": "Minimal",
+          "low": "Low",
+          "medium": "Medium",
+          "high": "High",
+          "xhigh": "Extra high",
+          "max": "Max",
           "ultra": "极致",
           "standard": "标准",
           "ultracode": "Ultracode"
@@ -20240,9 +20240,9 @@
         "tooManySkills": "消息未发送给 {{agent}}，请将所选技能文件减少到最多 {{limit}} 个，然后重试",
         "commandAttachmentsUnsupported": "使用聊天会话命令前，请先移除附件",
         "optionValueShort": {
-          "minimal": "最小",
-          "medium": "中",
-          "xhigh": "极高"
+          "minimal": "Min",
+          "medium": "Med",
+          "xhigh": "XHigh"
         },
         "sessionAttachmentsFailed": "{{agent}} 聊天无法打开，请在聊天中点击重试，然后重新附加文件",
         "sessionAttachmentsStarting": "{{agent}} 聊天仍在打开中，请等待其打开后再重新附加文件",
@@ -23929,12 +23929,12 @@
     },
     "thinking": {
       "off": "关闭",
-      "minimal": "最低",
-      "low": "低的",
-      "medium": "中等的",
-      "high": "高的",
-      "max": "最高",
-      "xhigh": "极高"
+      "minimal": "Minimal",
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "max": "Max",
+      "xhigh": "Extra High"
     },
     "variables": {
       "basePrompt": "Orca 为此操作内置的提示词，包含 Orca 能安全收集的上下文",
