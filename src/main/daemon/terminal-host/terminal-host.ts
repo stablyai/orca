@@ -1,7 +1,10 @@
 import type { DaemonLaunchNoteChange } from '../protocol/daemon-launch-note-protocol'
 import { terminalSessionExitCode } from './terminal-host-returned-process'
 import { runTerminalCreation, type PendingTerminalCreation } from './terminal-creation-work'
-import { beginTerminalHostFencedTermination } from './terminal-host-fenced-termination'
+import {
+  beginTerminalHostFencedTermination,
+  type FencedPosixIdleEvidence
+} from './terminal-host-fenced-termination'
 import type { PtyFencedTerminationRequest } from '../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { Session } from '../sessions/session'
 import type { PtyProcessInspectionOptions } from '../../providers/pty/process-inspection'
@@ -14,7 +17,7 @@ import { recordTerminalHostSessionExit } from './terminal-host-session-exit'
 import { disposeTerminalHostSessions, killLiveSessionGroupsSync } from './terminal-host-disposal'
 import { getAliveTerminalHostSession } from './terminal-host-session-access'
 import { writeSessionInput } from '../sessions/session-input-path'
-import { TerminalSessionTeardown } from './terminal-session-teardown'
+import { TerminalSessionTeardown, type TerminalKillOptions } from './terminal-session-teardown'
 import { ClaimedAgentPtyOwnerRegistry } from '../../../shared/agent-session/lifecycle/leases/claimed-agent-pty-owner'
 import {
   createOrAttachClaimedAgentSession,
@@ -169,25 +172,20 @@ export class TerminalHost {
     this.sessions.get(sessionId)?.resumeProducer(source)
   }
 
-  kill(sessionId: string, opts: { immediate?: boolean } = {}): Promise<void> {
-    const pending = this.sessionTeardown.get(sessionId)
-    if (pending) {
-      return Promise.resolve(
-        opts.immediate ? this.sessionTeardown.requestImmediate(sessionId) : pending
-      )
-    }
-    const session = getAliveTerminalHostSession(this.sessions, sessionId)
-    const killed = this.sessionTeardown.killSession(sessionId, session, opts.immediate === true)
-    this.killedTombstones.record(sessionId)
-    return Promise.resolve(killed)
+  kill(sessionId: string, opts: TerminalKillOptions = {}): Promise<void> {
+    return this.sessionTeardown.kill(sessionId, opts, this.killedTombstones)
   }
 
-  beginFencedTermination(request: PtyFencedTerminationRequest) {
+  beginFencedTermination(
+    request: PtyFencedTerminationRequest,
+    idleEvidence?: FencedPosixIdleEvidence
+  ) {
     return beginTerminalHostFencedTermination(request, {
       sessions: this.sessions,
       pendingCreations: this.pendingCreations,
       owners: this.agentSessionOwners,
-      kill: (id, options) => this.kill(id, options)
+      kill: (id, options) => this.kill(id, options),
+      idleEvidence
     })
   }
 

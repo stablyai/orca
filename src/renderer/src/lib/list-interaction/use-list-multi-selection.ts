@@ -45,6 +45,8 @@ export function useListMultiSelection<T>({
   canSelectKey?: (key: string) => boolean
   additiveRange?: boolean
 }): ListMultiSelection<T> {
+  'use no memo' // The compiler skips memoization for this render-time selection reset.
+
   // Reuse equal ordered-ID arrays so gesture callbacks stay stable and row memoization survives epoch bumps.
   const entryByKey = useMemo(() => {
     const entries = new Map<string, { item: T; index: number }>()

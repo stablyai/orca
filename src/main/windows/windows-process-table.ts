@@ -298,10 +298,11 @@ const identityProjections = new WeakMap<readonly WindowsProcessRow[], WindowsPro
 /** Without a binding, project identity from the shared CIM scan and strip command lines to preserve the row contract. */
 async function readIdentityRows(
   fresh: boolean,
-  afterMs?: number
+  afterMs?: number,
+  signal?: AbortSignal
 ): Promise<WindowsProcessIdentityRow[]> {
   if (moduleLoader() === null) {
-    const rows = await readProcessSnapshot(detailedReader, fresh, afterMs)
+    const rows = await readProcessSnapshot(detailedReader, fresh, afterMs, signal)
     let identity = identityProjections.get(rows)
     if (!identity) {
       identity = rows.map(toIdentityRow)
@@ -309,7 +310,7 @@ async function readIdentityRows(
     }
     return identity
   }
-  return readProcessSnapshot(identityReader, fresh, afterMs)
+  return readProcessSnapshot(identityReader, fresh, afterMs, signal)
 }
 
 /** Cached command-line snapshot, refreshed on the shared TTL. */
@@ -319,15 +320,14 @@ export const readWindowsProcessTable = detailedReader.getSnapshot
 export const readWindowsProcessTableFresh = detailedReader.getFreshSnapshot
 
 /** Cached identity; prefer it when no command line is needed. */
-export function readWindowsProcessIdentityTable(): Promise<WindowsProcessIdentityRow[]> {
-  return readIdentityRows(false)
-}
+export const readWindowsProcessIdentityTable = () => readIdentityRows(false)
 
 /** The identity snapshot, from a scan that starts after this call. */
 export function readWindowsProcessIdentityTableFresh(
-  afterMs?: number
+  afterMs?: number,
+  signal?: AbortSignal
 ): Promise<WindowsProcessIdentityRow[]> {
-  return readIdentityRows(true, afterMs)
+  return readIdentityRows(true, afterMs, signal)
 }
 
 /** Whether the native table can be read at all on this host. */

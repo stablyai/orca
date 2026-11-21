@@ -164,11 +164,14 @@ export function createProcessTableSnapshotReader<T = string>(
 export function readProcessSnapshot<T>(
   reader: ReturnType<typeof createProcessTableSnapshotReader<T>>,
   fresh: boolean,
-  afterMs?: number
+  afterMs?: number,
+  signal?: AbortSignal
 ): Promise<T> {
-  return afterMs !== undefined
-    ? reader.getSnapshotWithAge(afterMs, AbortSignal.timeout(1_200)).then(({ value }) => value)
-    : fresh
-      ? reader.getFreshSnapshot()
-      : reader.getSnapshot()
+  if (afterMs === undefined) {
+    return fresh ? reader.getFreshSnapshot() : reader.getSnapshot()
+  }
+  const budget = AbortSignal.timeout(1_200)
+  return reader
+    .getSnapshotWithAge(afterMs, signal ? AbortSignal.any([budget, signal]) : budget)
+    .then(({ value }) => value)
 }

@@ -1,3 +1,4 @@
+import type { PosixIdlePtyGuard } from '../../pty/process-retirement/idle-pty-teardown-refusal'
 import { createSessionInitialOutput } from './session-initial-output'
 import { isValidPtySize } from '../protocol/daemon-pty-size'
 import type { SessionOutputPlane, AttachedClient } from './session-output-plane'
@@ -195,9 +196,11 @@ export class Session extends SessionProcessInspection {
     this.termination.scheduleForceDisposeFallback()
   }
 
-  async forceKillAndWaitForExit(timeoutMs?: number): Promise<void> {
-    await this.termination.forceKillAndWaitForExit(timeoutMs)
+  forceKillAndWaitForExit(timeoutMs?: number, idleGuard?: PosixIdlePtyGuard): Promise<void> {
+    return this.termination.forceKillAndWaitForExit(timeoutMs, idleGuard)
   }
+
+  cancelTermination = (): void => this.termination.clearTerminating()
 
   signal(sig: string): void {
     this.termination.signal(sig)

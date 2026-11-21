@@ -84,7 +84,8 @@ export async function inspectSpawnFileWindowsChildProcesses(
   /** Adoption only: may fork the console-list helper to set aside detached daemons. */
   ignoreDetached = false,
   jobMembershipOnly = false,
-  afterMs?: number
+  afterMs?: number,
+  signal?: AbortSignal
 ): Promise<PtyChildProcessVerdict> {
   try {
     const members = readWindowsPtyJobProcessIds(proc)
@@ -98,7 +99,7 @@ export async function inspectSpawnFileWindowsChildProcesses(
       members,
       async () => {
         const rows = await (fresh || afterMs !== undefined
-          ? readWindowsProcessIdentityTableFresh(afterMs)
+          ? readWindowsProcessIdentityTableFresh(afterMs, signal)
           : readWindowsProcessIdentityTable())
         // Panes polling one shared snapshot share its index instead of each rescanning the table.
         const byPid = getProcessTableIndex(rows).byPid
@@ -126,6 +127,7 @@ export async function inspectSpawnFileWindowsChildProcesses(
     }
     return 'no-children'
   } catch {
+    signal?.throwIfAborted()
     return 'unverifiable'
   }
 }

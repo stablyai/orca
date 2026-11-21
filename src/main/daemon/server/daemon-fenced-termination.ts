@@ -7,7 +7,6 @@ import type {
 import type { TerminalHost } from '../terminal-host/terminal-host'
 import type { DaemonPtySpawnPreparations } from './daemon-pty-spawn-preparations'
 import type { DaemonSessionAttachments } from './daemon-session-attachments'
-import { recheckPosixTerminalIdle } from '../terminal-host/terminal-host-running-work'
 
 type FencedOwner<T extends IPtyProvider> = DaemonSessionOwnerResolution<T> | { kind: 'replaced' }
 
@@ -50,6 +49,7 @@ export async function handleDaemonFencedTermination(
     return { outcome: 'refused', reason: 'unsupported' }
   }
   const idleGuardStartedAt = payload.requireIdle ? Date.now() : undefined
+  let idleShellPids: ReadonlySet<number> | undefined
   if (idleGuardStartedAt !== undefined) {
     try {
       const boundary = Number.isSafeInteger(payload.idleCheckSinceMs)
@@ -59,21 +59,28 @@ export async function handleDaemonFencedTermination(
         expectedIncarnationId: payload.expectedIncarnationId,
         runningWorkSinceMs: boundary
       })
-      const runningWork =
-        inspection.runningWork === 'idle' && process.platform !== 'win32'
-          ? await recheckPosixTerminalIdle(inspection)
-          : inspection.runningWork
+      const runningWork = inspection.runningWork
       if (runningWork !== 'idle') {
         return {
           outcome: 'refused',
           reason: runningWork === 'running' ? 'running_work' : 'unverifiable'
         }
       }
+      const evidence = inspection.foregroundProcessEvidence
+      if (evidence?.verdict === 'exited') {
+        return { outcome: 'already_exited' }
+      }
+      if (process.platform !== 'win32') {
+        if (evidence?.verdict !== 'live' || evidence.fence.platform !== 'posix') {
+          return { outcome: 'refused', reason: 'unverifiable' }
+        }
+        idleShellPids = new Set([evidence.fence.shellPid, evidence.fence.foregroundPgid])
+      }
     } catch {
       return { outcome: 'refused', reason: 'unverifiable' }
     }
   }
-  const termination = deps.host.beginFencedTermination({
+  const request: PtyFencedTerminationRequest = {
     id: payload.sessionId,
     expectedIncarnationId: payload.expectedIncarnationId,
     requireNoAgentOwner: payload.requireIdle === true || payload.requireNoAgentOwner === true,
@@ -81,11 +88,22 @@ export async function handleDaemonFencedTermination(
     ...(idleGuardStartedAt === undefined
       ? {}
       : { requireIdle: true, idleCheckSinceMs: idleGuardStartedAt })
-  })
+  }
+  const clearPendingInput = (): void => {
+    deps.preparations.cancel(payload.sessionId)
+    deps.attachments.clearInput(payload.sessionId)
+  }
+  const termination = idleShellPids
+    ? deps.host.beginFencedTermination(request, {
+        shellPids: idleShellPids,
+        onCommitting: clearPendingInput
+      })
+    : deps.host.beginFencedTermination(request)
   if (!termination.accepted) {
     return termination.result
   }
-  deps.preparations.cancel(payload.sessionId)
-  deps.attachments.clearInput(payload.sessionId)
+  if (!idleShellPids) {
+    clearPendingInput()
+  }
   return termination.completion
 }

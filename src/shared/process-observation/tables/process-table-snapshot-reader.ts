@@ -200,13 +200,19 @@ export function peekStrictProcessTableSnapshot(): Promise<ProcessTableRow[]> | n
   return processTableReader.peekSnapshot()?.then((capture) => capture.strict()) ?? null
 }
 
-export async function getStrictProcessTableSnapshotWithAge(afterMs?: number): Promise<{
+export async function getStrictProcessTableSnapshotWithAge(
+  afterMs?: number,
+  signal?: AbortSignal
+): Promise<{
   rows: ProcessTableRow[]
   capturedAgeMs: number
 }> {
   const budget =
     afterMs === undefined ? undefined : AbortSignal.timeout(PROCESS_TABLE_EVIDENCE_BUDGET_MS)
-  const snapshot = await withEvidenceBudget(processTableReader.getSnapshotWithAge(afterMs, budget))
+  const captureSignal = budget && signal ? AbortSignal.any([budget, signal]) : (budget ?? signal)
+  const snapshot = await withEvidenceBudget(
+    processTableReader.getSnapshotWithAge(afterMs, captureSignal)
+  )
   return { rows: snapshot.value.strict(), capturedAgeMs: snapshot.capturedAgeMs }
 }
 

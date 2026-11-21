@@ -1,3 +1,4 @@
+import type { PosixIdlePtyGuard } from '../../pty/process-retirement/idle-pty-teardown-refusal'
 import type { PtyForegroundGroupReader } from '../../../shared/terminal/pty/ingress/pty-startup-ingress-contract'
 import type { TerminalForegroundSample } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import type { PtyChildProcessVerdict } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
@@ -17,7 +18,8 @@ export type SubprocessHandle = {
     fresh?: boolean,
     ignoreDetached?: boolean,
     jobMembershipOnly?: boolean,
-    afterMs?: number
+    afterMs?: number,
+    signal?: AbortSignal
   ): ChildProcessVerdictRead
   /** cachedOnly must neither query the process nor schedule inspection. */
   getForegroundProcess(options?: { rawFallback?: boolean; cachedOnly?: boolean }): string | null
@@ -48,7 +50,7 @@ export type SubprocessHandle = {
   clear?(): void
   kill(): void
   /** Settles once signals are sent; a rejection means the kernel refused them. */
-  forceKill(): void | Promise<void>
+  forceKill(idleGuard?: PosixIdlePtyGuard): void | Promise<void>
   /** Cover detached descendants via the PTY job; unavailable requires fallback and never proves death. */
   terminateOwnedTree(): JobTerminationOutcome
   signal(sig: string): void

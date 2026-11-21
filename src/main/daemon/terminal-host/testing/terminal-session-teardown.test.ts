@@ -107,4 +107,30 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
     await expect(result).rejects.toThrow('EPERM')
     expect(session.scheduleForceDisposeFallback).not.toHaveBeenCalled()
   })
+
+  it('releases a guarded teardown when its existing ancestry scan finds detached work', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    const session = createPlainShellSession({ cancelTermination: vi.fn() })
+    const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
+    const snapshot: DescendantSnapshot = {
+      root: { pid: 4242, startedAt: 'root' },
+      rootPgid: 4242,
+      descendants: [{ pid: 4243, ppid: 4242, pgid: 4243, startedAt: 'worker' }],
+      capturedAtMs: Date.now()
+    }
+    killWithDescendantSweepMock.mockImplementationOnce(
+      async (
+        _pid: number,
+        _killRoot: () => void,
+        deps: { verifySnapshot?: (value: DescendantSnapshot) => void }
+      ) => deps.verifySnapshot?.(snapshot)
+    )
+    const guarded = teardown.killSession('s1', session, true, {
+      shellPids: new Set([4242]),
+      verifyIdle: () => {}
+    })
+    await expect(guarded).rejects.toMatchObject({ reason: 'running_work' })
+    expect(session.cancelTermination).toHaveBeenCalledOnce()
+    expect(session.forceKillAndWaitForExit).not.toHaveBeenCalled()
+  })
 })

@@ -1,5 +1,6 @@
 import type { Socket } from 'node:net'
 import { encodeNdjson } from '../../../../shared/json-stream/main-process-ndjson-framer'
+import { NOTIFY_PREFIX } from '../../protocol/daemon-rpc-contract'
 import {
   DAEMON_UNAVAILABLE_RECONNECT_MESSAGE,
   DaemonConnectionLostError,
@@ -87,6 +88,22 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
       clearTimers()
       reject(error)
     }
+    const cancelInspection = (): void => {
+      if (!sent || !opts.signal || type !== 'inspectProcess' || opts.socket.destroyed) {
+        return
+      }
+      try {
+        opts.socket.write(
+          encodeNdjson({
+            id: `${NOTIFY_PREFIX}${opts.id}`,
+            type: 'cancelProcessInspection',
+            payload: { requestId: opts.id }
+          })
+        )
+      } catch {
+        // A lost cancel cannot keep the local request pending.
+      }
+    }
     // Allow a published create reply to arrive, but bound attach-only waits that may never get a response.
     const awaitLateResponseThenReject = (error: Error): void => {
       if (settled || cancelUnmatchedGrace) {
@@ -136,11 +153,13 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
       if (typeof createSessionId === 'string') {
         cancelCreate(error)
       } else {
+        cancelInspection()
         rejectAndDrop(error)
       }
     })
     const onAbort = (): void => {
       removeAbortListener()
+      cancelInspection()
       cancelCreate(new Error('client_disconnected'))
     }
 

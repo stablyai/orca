@@ -143,7 +143,8 @@ export function createDaemonPtySubprocessHandle(args: {
             fresh?: boolean,
             ignoreDetached?: boolean,
             jobMembershipOnly?: boolean,
-            afterMs?: number
+            afterMs?: number,
+            signal?: AbortSignal
           ) =>
             inspectSpawnFileWindowsChildProcesses(
               proc,
@@ -151,7 +152,8 @@ export function createDaemonPtySubprocessHandle(args: {
               fresh,
               ignoreDetached,
               jobMembershipOnly,
-              afterMs
+              afterMs,
+              signal
             )
         }
       : {}),
@@ -222,9 +224,9 @@ export function createDaemonPtySubprocessHandle(args: {
       }
     },
     terminateOwnedTree: () => terminatePtyJob(proc),
-    forceKill: () => {
+    forceKill: (idleGuard) => {
       if (!dead) {
-        return physical.forceKill()
+        return physical.forceKill(idleGuard)
       }
     },
     signal: (sig) => {

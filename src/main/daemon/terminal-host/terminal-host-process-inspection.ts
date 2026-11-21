@@ -1,4 +1,3 @@
-import { pruneRetiredPtyIncarnations } from '../../../shared/terminal/pty/lifecycle/retired-pty-incarnations'
 import { getInspectableTerminalHostSession } from './terminal-host-session-access'
 import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
@@ -42,6 +41,7 @@ export async function inspectTerminalHostProcess(args: {
   expectedIncarnationId?: string
   foregroundOnly?: boolean
   runningWorkSinceMs?: number
+  signal?: AbortSignal
   /** The caller is a self-correcting poll that only reads the process name, never evidence. */
   steadyState?: boolean
   /** A steady poll from a pane tracking no agent; Windows skips the Store-shell table read. */
@@ -52,6 +52,7 @@ export async function inspectTerminalHostProcess(args: {
   nextObservationEpoch: () => number
   onTier?: (tier: TerminalHostInspectionTier) => void
 }): Promise<TerminalHostProcessInspection> {
+  args.signal?.throwIfAborted()
   const { sessionId, session, expectedIncarnationId, retiredIncarnation } = args
   if (!session || !session.isAlive) {
     if (
@@ -152,14 +153,18 @@ export async function inspectTerminalHostProcess(args: {
             args.steadyState !== true,
             args.ignoreDetached === true,
             steadyPollJudgesByJobMembership(args, foregroundProcess),
-            args.runningWorkSinceMs
+            args.runningWorkSinceMs,
+            args.signal
           )
     // Windows cannot provide this POSIX evidence; avoid spawning an MSYS ps.exe console.
     evidence = unverifiableEvidence(args, session, 'windows_ssh_foreground_unavailable')
   } else {
     try {
       const outputChunks = session.outputChunks
-      const snapshot = await getStrictProcessTableSnapshotWithAge(args.runningWorkSinceMs)
+      const snapshot = await getStrictProcessTableSnapshotWithAge(
+        args.runningWorkSinceMs,
+        args.signal
+      )
       if (process.platform === 'darwin' && !session.processNameIsSpawnFile) {
         rememberIdleShellProof(session, snapshot.rows, snapshot.capturedAgeMs, outputChunks)
       }
@@ -188,8 +193,11 @@ export async function inspectTerminalHostProcess(args: {
         },
         snapshot.rows
       )
-      await rememberSteadyStateAnchor(session, evidence, snapshot.rows)
+      if (!args.signal?.aborted) {
+        await rememberSteadyStateAnchor(session, evidence, snapshot.rows)
+      }
     } catch {
+      args.signal?.throwIfAborted()
       evidence = unverifiableEvidence(args, session, 'process_table_unreadable')
       clearSteadyStateAnchor(session)
     }
@@ -265,7 +273,6 @@ export function inspectTerminalHostSession(
   nextObservationEpoch: () => number,
   owners?: ClaimedAgentPtyOwnerRegistry
 ): Promise<TerminalHostProcessInspection> {
-  pruneRetiredPtyIncarnations(retired)
   const session = getInspectableTerminalHostSession(
     sessions,
     retired,

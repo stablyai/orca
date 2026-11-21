@@ -1,4 +1,3 @@
-import { inspectProcessOptions } from '../protocol/daemon-foreground-process-protocol'
 import { parseDaemonLaunchNoteChange } from '../protocol/daemon-launch-note-protocol'
 import { handleDaemonTerminalKill } from './daemon-terminal-kill'
 import { handleDaemonFencedTermination } from './daemon-fenced-termination'
@@ -18,6 +17,7 @@ import type { TerminalHistorySeedTransferRegistry } from '../history/seed-transf
 import type { TerminalHost } from '../terminal-host/terminal-host'
 import { SessionNotFoundError } from '../protocol/daemon-errors'
 import type { DaemonRequest } from '../protocol/daemon-rpc-contract'
+import { DaemonProcessInspections } from './daemon-process-inspections'
 
 type DaemonRequestRouterOptions = {
   host: TerminalHost
@@ -35,9 +35,11 @@ type DaemonRequestRouterOptions = {
 
 export class DaemonRequestRouter {
   private readonly health: DaemonHealthRequests
+  private readonly processInspections: DaemonProcessInspections
 
   constructor(private readonly options: DaemonRequestRouterOptions) {
     this.health = new DaemonHealthRequests(options.ptySpawnHealthCheck, options.log)
+    this.processInspections = new DaemonProcessInspections(options.host)
   }
 
   async route(clientId: string, request: DaemonRequest): Promise<unknown> {
@@ -129,12 +131,11 @@ export class DaemonRequestRouter {
         return {
           foregroundProcess: this.options.host.getForegroundProcess(request.payload.sessionId)
         }
-      case 'inspectProcess': {
-        const options = inspectProcessOptions(request.payload)
-        return Object.keys(options).length > 0
-          ? this.options.host.inspectProcess(request.payload.sessionId, options)
-          : this.options.host.inspectProcess(request.payload.sessionId)
-      }
+      case 'inspectProcess':
+        return this.processInspections.inspect(client?.controlSocket, request)
+      case 'cancelProcessInspection':
+        this.processInspections.cancel(client?.controlSocket, request.payload.requestId)
+        return {}
       case 'confirmForegroundProcess':
         return {
           foregroundProcess: await this.options.host.confirmForegroundProcess(

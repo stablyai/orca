@@ -11,6 +11,7 @@ import { TerminalHost } from '../../terminal-host/terminal-host'
 import { handleDaemonFencedTermination } from '../daemon-fenced-termination'
 import { FENCED_TERMINATION_PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
 import { TerminalSessionOwnerUnverifiedError } from '../../protocol/daemon-errors'
+import { createProcessTableSnapshotReader } from '../../../../shared/process-observation/tables/process-snapshot-cache'
 
 let harness: Awaited<ReturnType<typeof startDaemonAdapterHarness>> | undefined
 afterEach(async () => {
@@ -96,6 +97,39 @@ describe('fenced daemon kill protocol', () => {
     })
     expect(handle.forceKill).not.toHaveBeenCalled()
     await expect(harness.adapter.killFenced(request)).resolves.toEqual({ outcome: 'ended' })
+  })
+
+  it('drops an abandoned process inspection before it can start a new capture', async () => {
+    harness = await startDaemonAdapterHarness(() => createMockSubprocess())
+    const prior = Promise.withResolvers<string>()
+    const capture = vi.fn().mockReturnValueOnce(prior.promise).mockResolvedValue('new')
+    const reader = createProcessTableSnapshotReader({ runPs: capture, now: () => 100 })
+    const previous = reader.getSnapshot()
+    const admitted = Promise.withResolvers<void>()
+    const finished = Promise.withResolvers<void>()
+    vi.spyOn(harness.server.host, 'inspectProcess').mockImplementation(async (_id, options) => {
+      admitted.resolve()
+      try {
+        await reader.getSnapshotWithAge(101, options?.signal)
+        return { foregroundProcess: null, hasChildProcesses: true }
+      } finally {
+        finished.resolve()
+      }
+    })
+    const abort = new AbortController()
+    const inspection = harness.adapter.inspectProcess('pty', {
+      expectedIncarnationId: 'incarnation',
+      runningWorkSinceMs: 101,
+      signal: abort.signal
+    })
+    await admitted.promise
+    abort.abort()
+    await expect(inspection).rejects.toThrow('client_disconnected')
+    await harness.adapter.listProcesses()
+    prior.resolve('old')
+    await previous
+    await finished.promise
+    expect(capture).toHaveBeenCalledOnce()
   })
 
   it('checks a newly spawned owner after a replaced request populated the inventory cache', async () => {

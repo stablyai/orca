@@ -30,6 +30,12 @@ export type InspectProcessRequest = Omit<GetForegroundProcessRequest, 'type'> & 
   }
 }
 
+export type CancelProcessInspectionRequest = {
+  id: string
+  type: 'cancelProcessInspection'
+  payload: { requestId: string }
+}
+
 export function inspectProcessOptions(
   payload: InspectProcessRequest['payload']
 ): PtyProcessInspectionOptions {
