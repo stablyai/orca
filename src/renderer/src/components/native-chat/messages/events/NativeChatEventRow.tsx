@@ -192,6 +192,8 @@ export function NativeChatEventRow({
             aria-expanded={shown}
             aria-controls={shown ? detailsId : undefined}
             aria-label={[label, state, time].filter(Boolean).join(', ') || undefined}
+            // The words take no pointer, so a name cut short shows whole here.
+            title={label}
             className="absolute -inset-x-1 -inset-y-0.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => {
               if (openProp === undefined) {

@@ -116,29 +116,33 @@ function joinWorkerLinksToStarts(
       }
       return start < index
     }
-    const joined = ids.map((id) =>
-      starts.find((start) => out[start]!.agentStartDispatchId === id && nearby(start))
-    )
-    if (joined.some((start) => start === undefined)) {
+    const joined = ids.map((id) => ({
+      id,
+      start: starts.find((start) => out[start]!.agentStartDispatchId === id && nearby(start))
+    }))
+    if (joined.some(({ start }) => start === undefined)) {
       return
     }
-    const items = linkedItems(message.botItemNote!)
-    for (const start of new Set(joined as number[])) {
-      const row = out[start]!
+    for (const { id, start } of joined) {
+      const row = out[start!]!
+      const items = linkedItems(message.botItemNote!, `${DISPATCH_REF}${id}`)
       const kept = (row.agentStartItems ?? []).filter(
         (item) => !items.some((linked) => linked.uid === item.uid)
       )
-      out[start] = { ...row, agentStartItems: [...kept, ...items] }
+      out[start!] = { ...row, agentStartItems: [...kept, ...items] }
     }
     out[index] = hidden(message)
   })
 }
 
-/** Each item a note names once, as of its last entry. */
-function linkedItems(note: BotItemNoteView): BotItemNoteItem[] {
+/** Each item a note links to `ref` once, as of its last entry. */
+function linkedItems(note: BotItemNoteView, ref: string): BotItemNoteItem[] {
   const items = new Map<string, BotItemNoteItem>()
-  for (const { uid, number, title, status } of note.entries) {
-    items.set(uid, { uid, number, title, status })
+  for (const entry of note.entries) {
+    if (entry.event === 'linked' && entry.refs.includes(ref)) {
+      const { uid, number, title, status } = entry
+      items.set(uid, { uid, number, title, status })
+    }
   }
   return [...items.values()]
 }

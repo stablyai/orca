@@ -205,6 +205,23 @@ describe('the Linked row of a worker the chat started', () => {
     ).toEqual(['t1', 's1 for P0', 's2 for P0'])
   })
 
+  it('gives each worker only the items linked to it', () => {
+    const both = link('l', 'bot', 'dispatch:d1')
+    both.botItemNote!.entries.push({
+      uid: 'p1',
+      number: 2,
+      title: 'P1',
+      status: 'working',
+      event: 'linked',
+      refs: ['dispatch:d2']
+    })
+    expect(
+      drawn([prompt('t1'), started('s1', 'd1', 5), started('s2', 'd2', 6), both], {
+        turnKeys: ['t1', 't1', 't1', 't1']
+      })
+    ).toEqual(['t1', 's1 for P0', 's2 for P1'])
+  })
+
   it('keeps links by others, links to anything else, and links read before the Started row', () => {
     // The agent's notes in one turn fold into one row, so each kept link sits in its own turn.
     const turnKeys = ['t0', 't0', 't1', 't1', 't1', 't1', 't1', 't2', 't2']
