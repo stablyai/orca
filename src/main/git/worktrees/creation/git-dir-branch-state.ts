@@ -32,21 +32,16 @@ export async function readGitDirState(commonDir: string): Promise<GitDirState> {
   }
   const heads = new Map<string, string>()
   const reserved = new Set<string>()
-  // A failed scan is discarded, so it must not start follow-up reads.
-  let failed = false
   await Promise.all(
     gitDirs.map(async (gitDir) => {
       const [head, rebaseMerge, rebaseApply, updateRefs, bisectStart] = await Promise.all([
-        readHead(gitDir, () => failed),
+        readOptional(join(gitDir, 'HEAD')),
         readOptional(join(gitDir, 'rebase-merge', 'head-name')),
         readOptional(join(gitDir, 'rebase-apply', 'head-name')),
         readOptional(join(gitDir, 'rebase-merge', 'update-refs')),
         readOptional(join(gitDir, 'BISECT_START'))
-      ]).catch((error: unknown) => {
-        failed = true
-        throw error
-      })
-      heads.set(gitDir, head)
+      ])
+      heads.set(gitDir, normalizeHead(head))
       for (const line of [rebaseMerge, rebaseApply, updateRefs].flatMap((text) =>
         text.split('\n')
       )) {
@@ -60,29 +55,57 @@ export async function readGitDirState(commonDir: string): Promise<GitDirState> {
       }
     })
   )
+  // Only once the sweep succeeded: a HEAD without a `ref:` line may be a symlink naming a ref.
+  const unnamed = [...heads]
+    .filter(([, head]) => !head.startsWith('ref: '))
+    .map(([gitDir]) => gitDir)
+  await forEachBounded(unnamed, async (gitDir) => {
+    const link = await readRefLink(join(gitDir, 'HEAD'))
+    if (link !== undefined) {
+      heads.set(gitDir, link)
+    }
+  })
   return { heads, reserved }
 }
 
-// Git accepts a symlinked HEAD: read its content, else name the ref it links to.
-async function readHead(gitDir: string, stopped: () => boolean): Promise<string> {
-  const path = join(gitDir, 'HEAD')
-  const content = normalizeHead(await readOptional(path))
-  // Only a HEAD without a `ref:` line can be a symlink that names a branch.
-  if (content.startsWith('ref: ') || stopped()) {
-    return content
-  }
+// Git treats a symlinked HEAD or ref as a symref to the ref it links to (core.preferSymlinkRefs).
+async function readRefLink(path: string): Promise<string | undefined> {
   let target: string
   try {
     target = await readlink(path)
   } catch (error) {
     const code = errorCode(error)
     if (code === 'EINVAL' || code === 'UNKNOWN') {
-      return content
+      return undefined
     }
     rethrowUnlessMissing(error)
-    return ''
+    return undefined
   }
   return target.startsWith('refs/') ? `ref: ${target}` : UNRESOLVED_HEAD
+}
+
+const READ_CONCURRENCY = 16
+
+/** Runs at most `READ_CONCURRENCY` at once and starts nothing after a failure. */
+async function forEachBounded<T>(
+  items: readonly T[],
+  run: (item: T) => Promise<void>
+): Promise<void> {
+  let next = 0
+  let failed = false
+  await Promise.all(
+    Array.from({ length: Math.min(READ_CONCURRENCY, items.length) }, async () => {
+      while (next < items.length && !failed) {
+        const item = items[next++]
+        try {
+          await run(item)
+        } catch (error) {
+          failed = true
+          throw error
+        }
+      }
+    })
+  )
 }
 
 // Git reads `ref:` followed by any whitespace; spell it one way.
@@ -141,7 +164,6 @@ export type BranchCheckouts =
   | { kind: 'unknown' }
 
 const MAX_SYMREF_HOPS = 5
-const LOOSE_REF_READ_CONCURRENCY = 16
 
 /** Git's in-use rule from files; `bareCommonDir`'s own HEAD checks nothing out. Reservations are separate. */
 export async function resolveBranchCheckouts(
@@ -172,7 +194,8 @@ export async function resolveBranchCheckouts(
       continue
     }
     const ref = head.slice('ref: '.length)
-    if (!head.startsWith('ref: ') || head === UNRESOLVED_HEAD || !ref.startsWith('refs/')) {
+    // Per-worktree refs (refs/worktree/, refs/bisect/) live outside the common dir: leave them to Git.
+    if (!head.startsWith('ref: ') || head === UNRESOLVED_HEAD || !ref.startsWith('refs/heads/')) {
       return { kind: 'unknown' }
     }
     if (foldRef(ref) === target) {
@@ -205,32 +228,20 @@ export async function resolveBranchCheckouts(
     }
     unknown = true
   }
-  // Bounded, and a failure stops new reads.
-  let next = 0
-  await Promise.all(
-    Array.from({ length: Math.min(LOOSE_REF_READ_CONCURRENCY, branches.length) }, async () => {
-      while (next < branches.length && !unknown) {
-        const branch = branches[next++]
-        try {
-          await resolve(branch)
-        } catch (error) {
-          unknown = true
-          throw error
-        }
-      }
-    })
-  )
+  await forEachBounded(branches, resolve).catch((error: unknown) => {
+    unknown = true
+    throw error
+  })
   if (unknown) {
     return { kind: 'unknown' }
   }
   return owners.length > 0 ? { kind: 'owned', gitDirs: owners } : { kind: 'free' }
 }
 
-// A symlinked loose ref (core.preferSymlinkRefs) is a symref the content cannot show: leave it to Git.
 async function readLooseRefFile(path: string): Promise<string> {
   try {
     if ((await lstat(path)).isSymbolicLink()) {
-      return UNRESOLVED_HEAD
+      return (await readRefLink(path)) ?? UNRESOLVED_HEAD
     }
   } catch (error) {
     rethrowUnlessMissing(error)

@@ -1,4 +1,4 @@
-import { isAbsolute, join } from 'node:path'
+import { basename, dirname, isAbsolute, join } from 'node:path'
 import type {
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion
@@ -212,7 +212,11 @@ function localBaseBranchGit(
         translateWslOutputPath(path, repoPath, routed(repoPath))
       )
     }
-    return (await isSamePath(join(repoPath, '.git'), commonDir)) ? repoPath : undefined
+    if (await isSamePath(join(repoPath, '.git'), commonDir)) {
+      return repoPath
+    }
+    // From a linked repo path: the primary checkout holds the common dir as its `.git`.
+    return basename(commonDir) === '.git' ? dirname(commonDir) : undefined
   }
   return {
     exec: (args, cwd) => gitExecFileAsync(args, execOptions(cwd)),
