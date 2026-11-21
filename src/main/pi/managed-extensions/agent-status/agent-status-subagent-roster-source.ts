@@ -123,7 +123,7 @@ export function getPiSubagentRosterSetupSourceLines(kind: PiAgentKind): string[]
   ]
 }
 
-export function getPiSubagentRosterEventSourceLines(): string[] {
+export function getPiSubagentRosterEventSourceLines(kind: PiAgentKind): string[] {
   return [
     // Runner exit can precede self-reported completion by ~150ms; allow that path and its wake turn first.
     '  const RUNNER_EXIT_GRACE_MS = 2000',
@@ -180,6 +180,7 @@ export function getPiSubagentRosterEventSourceLines(): string[] {
     '    if (!id) return',
     '    if (isOmpRuntime() && !lifecycleState.ownsPane) return',
     "    if (status === 'started') {",
+    ...(kind === 'pi' ? ['      forgetUserTurnOnNewChild(id)'] : []),
     '      lifecycleState.active.add(id)',
     // Use labels/step keys because pi-subagents redacts task prompts; keys and OMP's named ids distinguish same-agent siblings.
     "      if (!subagentDetails.has(id)) subagentDetails.set(id, { agentType: readLabel(record.agent), description: readLabel(record.description) ?? readLabel(record.workflowKey) ?? (isOmpRuntime() ? id : undefined), startedAt: Date.now(), workflow: record.mode === 'workflow', parent: readLabel(record.parentWorkflowRunId), registration })",
