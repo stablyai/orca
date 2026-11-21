@@ -18,6 +18,7 @@ import { markOnboardingProjectAdded } from '@/components/onboarding/onboarding-p
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { reportNonGitFolderAdd } from './non-git-folder-confirmation'
 import { upsertAddedRepoWithProjectHostSetup } from '../completion/add-repo-store-upsert'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
 import { addRuntimeSshRepo } from '@/runtime/hosts/ssh/runtime-ssh-target-management'
@@ -57,10 +58,6 @@ async function addSshFolderProject(args: {
   }
 }
 
-function isFolderAddSettledCallback(value: unknown): value is (repo: Repo | null) => void {
-  return typeof value === 'function'
-}
-
 const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
   const t = useTranslate()
   useUiLanguageRevision()
@@ -76,10 +73,6 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
   const runtimeEnvironmentId =
     typeof modalData.runtimeEnvironmentId === 'string' ? modalData.runtimeEnvironmentId : ''
   const displayName = typeof modalData.displayName === 'string' ? modalData.displayName.trim() : ''
-  // A local add that waits on this confirmation learns which folder, if any, it added.
-  const onFolderAddSettled = isFolderAddSettledCallback(modalData.onFolderAddSettled)
-    ? modalData.onFolderAddSettled
-    : null
   const runtimeEnvironmentName =
     runtimeEnvironmentId &&
     (runtimeEnvironments.find((environment) => environment.id === runtimeEnvironmentId)?.name ||
@@ -144,10 +137,14 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
         }
       })()
     } else if (folderPath) {
-      void addNonGitFolder(folderPath, {
-        runtimeEnvironmentId: runtimeEnvironmentId || null,
-        ...(displayName ? { displayName } : {})
-      }).then((repo) => onFolderAddSettled?.(repo))
+      // Reported before closeModal, whose eviction would otherwise settle the waiting add as none.
+      reportNonGitFolderAdd(
+        modalData,
+        addNonGitFolder(folderPath, {
+          runtimeEnvironmentId: runtimeEnvironmentId || null,
+          ...(displayName ? { displayName } : {})
+        })
+      )
     }
     closeModal()
   }, [
@@ -157,17 +154,16 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
     folderPath,
     connectionId,
     runtimeEnvironmentId,
-    onFolderAddSettled
+    modalData
   ])
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
       if (!open) {
-        onFolderAddSettled?.(null)
         closeModal()
       }
     },
-    [closeModal, onFolderAddSettled]
+    [closeModal]
   )
 
   return (
