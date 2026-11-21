@@ -115,8 +115,18 @@ export function applyLocalAgentAvailabilityChange(
       continue
     }
     const ids = reconcile(contextKey)
-    // A running complete refresh owns this key and re-filters on resolve, so keep its probe.
-    if (lifecycle.refreshPromises.has(completeLocalAgentInventoryKey(contextKey))) {
+    const completeRefreshing = lifecycle.refreshPromises.has(
+      completeLocalAgentInventoryKey(contextKey)
+    )
+    const ownDetect = lifecycle.detectPromises.has(contextKey)
+    const ownProbe = ownDetect || (!completeRefreshing && lifecycle.refreshPromises.has(contextKey))
+    // Running probes drop disabled agents when they publish, but skipped any agent re-enabled since.
+    // A list rebuilt from the complete inventory replaces a first detect, which could still fail.
+    const fillsMissingList = ownDetect && cached[contextKey] == null && ids !== null
+    const probeStillValid =
+      !fillsMissingList &&
+      (completeRefreshing ? !(ownDetect && reEnabled.size > 0) : ownProbe && reEnabled.size === 0)
+    if (probeStillValid) {
       if (ids && ids !== cached[contextKey]) {
         next[contextKey] = ids
       } else if (!ids && cached[contextKey] != null) {
@@ -124,12 +134,7 @@ export function applyLocalAgentAvailabilityChange(
       }
       continue
     }
-    // A probe sent with the old disabled list would overwrite the reconciled list.
-    if (
-      !ids ||
-      lifecycle.detectPromises.has(contextKey) ||
-      lifecycle.refreshPromises.has(contextKey)
-    ) {
+    if (!ids || ownProbe) {
       evict.add(contextKey)
     }
     if (ids && (ids !== cached[contextKey] || evict.has(contextKey))) {

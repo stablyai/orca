@@ -112,9 +112,8 @@ export function refreshLocalAgentInventory(
     .refreshAgents({ ...refreshArgs, ...options })
     .then((result) => {
       const typed = result.agents.filter(isTuiAgent)
-      const published = includeDisabled
-        ? filterEnabledTuiAgents(typed, get().settings?.disabledTuiAgents)
-        : typed
+      // Also drops agents disabled while an enabled-only refresh ran.
+      const published = filterEnabledTuiAgents(typed, get().settings?.disabledTuiAgents)
       if (
         requestGeneration === lifecycle.localDetectionGeneration &&
         lifecycle.refreshPromises.get(contextKey) === pending
@@ -153,7 +152,7 @@ export function refreshLocalAgentInventory(
           )
         }))
       }
-      return typed
+      return includeDisabled ? typed : published
     })
     .catch((error: unknown) => {
       const fallback = get().localDetectedAgentIdsByContext[contextKey] ?? []

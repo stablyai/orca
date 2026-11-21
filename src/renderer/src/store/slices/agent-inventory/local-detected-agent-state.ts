@@ -1,4 +1,7 @@
-import { haveSameDisabledTuiAgents } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
+import {
+  filterEnabledTuiAgents,
+  haveSameDisabledTuiAgents
+} from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
@@ -156,6 +159,10 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
         .detectAgents(wake ? { ...detectArgs, wakeWslDistro: true } : detectArgs)
         .then((ids) => {
           const typed = ids.filter(isTuiAgent)
+          // An agent disabled while this probe ran must not be published.
+          const published = includeDisabled
+            ? typed
+            : filterEnabledTuiAgents(typed, get().settings?.disabledTuiAgents)
           if (
             requestGeneration === lifecycle.localDetectionGeneration &&
             lifecycle.detectPromises.get(contextKey) === pending
@@ -168,13 +175,13 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
               lifecycle.detectedContextKey = contextKey
             }
             set((state) => ({
-              ...(exposeToLegacy ? { detectedAgentIds: typed, isDetectingAgents: false } : {}),
+              ...(exposeToLegacy ? { detectedAgentIds: published, isDetectingAgents: false } : {}),
               localDetectedAgentIdsByContext: {
                 ...state.localDetectedAgentIdsByContext,
                 ...(includeDisabled
                   ? {}
                   : mergeEnabledProbeIntoCompleteInventory(state, lifecycle, contextKey, typed)),
-                [contextKey]: typed
+                [contextKey]: published
               },
               isDetectingLocalAgentsByContext: contextEviction.removeLocalAgentContextEntry(
                 state.isDetectingLocalAgentsByContext,
@@ -182,7 +189,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
               )
             }))
           }
-          return typed
+          return published
         })
         .catch((error: unknown): TuiAgent[] => {
           if (

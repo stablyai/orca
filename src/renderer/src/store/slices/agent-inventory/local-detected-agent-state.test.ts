@@ -79,6 +79,27 @@ describe('local detected agent context lifecycle', () => {
     expect(refreshAgents).not.toHaveBeenCalled()
   })
 
+  it('keeps a refresh running through a disable and publishes its filtered result', async () => {
+    const store = createTestStore([])
+    detectAgents.mockResolvedValueOnce(['claude', 'kiro'])
+    await store.getState().ensureDetectedAgents()
+    let finish: (agents: string[]) => void = () => {}
+    refreshAgents.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = (agents) =>
+          resolve({ agents, pathSource: 'process_env', pathFailureReason: 'none' })
+      })
+    )
+    const refresh = store.getState().refreshDetectedAgents()
+    const settings = store.getState().settings!
+
+    store.setState({ settings: { ...settings, disabledTuiAgents: ['kiro'] } })
+    expect(store.getState().detectedAgentIds).toEqual(['claude'])
+    finish(['claude', 'codex', 'kiro'])
+    await refresh
+    expect(store.getState().detectedAgentIds).toEqual(['claude', 'codex'])
+  })
+
   it('re-probes a failed inventory after an agent is toggled', async () => {
     const store = createTestStore([])
     detectAgents.mockRejectedValueOnce(new Error('probe failed'))
@@ -103,13 +124,22 @@ describe('local detected agent context lifecycle', () => {
     const stale = store.getState().ensureDetectedAgents()
     const settings = store.getState().settings!
     store.setState({ settings: { ...settings, disabledTuiAgents: ['kiro'] } })
-    detectAgents.mockResolvedValueOnce(['claude'])
-    await store.getState().ensureDetectedAgents()
-    finishOld(['kiro'])
+    finishOld(['claude', 'kiro'])
     await stale
     expect(store.getState().detectedAgentIds).toEqual(['claude'])
+
+    let finishSkipped: (agents: string[]) => void = () => {}
+    refreshAgents.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishSkipped = (agents) =>
+          resolve({ agents, pathSource: 'process_env', pathFailureReason: 'none' })
+      })
+    )
+    const skipped = store.getState().refreshDetectedAgents()
     store.setState({ settings: { ...settings, disabledTuiAgents: [] } })
     expect(store.getState().detectedAgentIds).toBeNull()
+    finishSkipped(['claude'])
+    await skipped
     detectAgents.mockResolvedValueOnce(['claude', 'kiro'])
     await expect(store.getState().ensureDetectedAgents()).resolves.toEqual(['claude', 'kiro'])
   })
