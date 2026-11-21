@@ -251,12 +251,12 @@ export function NativeChatQueuedMessageCard({
         )}
         {drag?.grip}
       </span>
-      {/* Reserve the same gutter in both states so the chevron stays aligned when expanded text scrolls. */}
+      {/* Match the chevron gutter in both states and pad the expanded text viewport for focus rings. */}
       <div
         className={cn(
           'col-start-2 -mr-1 -mb-1 min-h-9 min-w-0 py-1 pr-1 [scrollbar-gutter:stable] [--queue-text-padding-top:max(var(--spacing),calc(var(--spacing)_*_6.5_-_1lh))]',
           !hasExpandedMetadata && '-mt-1',
-          expanded ? 'scrollbar-sleek max-h-64 overflow-y-auto' : 'scrollbar-sleek overflow-hidden'
+          expanded ? 'scrollbar-sleek max-h-62 overflow-y-auto' : 'scrollbar-sleek overflow-hidden'
         )}
       >
         {/* The 6-unit buttons end 6.5 units down. Keep line two below them even at small text sizes. */}
@@ -269,7 +269,7 @@ export function NativeChatQueuedMessageCard({
                 'flex items-center can-hover:pointer-events-none group-hover/queued:pointer-events-auto group-focus-within/queued:pointer-events-auto has-[[data-state=open]]:pointer-events-auto',
                 // A shortcut can start a send without bringing focus or the pointer into the row.
                 actionPending
-                  ? 'can-hover:invisible group-hover/queued:visible group-focus-within/queued:visible has-[[data-state=open]]:visible'
+                  ? 'can-hover:group-[&:not(:hover,:focus-within)]/queued:not-has-[[data-state=open]]:invisible'
                   : 'can-hover:opacity-0 group-hover/queued:opacity-100 group-focus-within/queued:opacity-100 has-[[data-state=open]]:opacity-100'
               )}
             >
