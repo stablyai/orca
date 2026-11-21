@@ -54,6 +54,9 @@ function refusalText(reason: OrcaChatDeleteRefusal): string {
   if (reason === 'group') {
     return orcaChatGroupDeleteReason()
   }
+  if (reason === 'home') {
+    return translate('chats.delete.home', "A managed agent's Home Chat can't be deleted")
+  }
   return reason === 'workers'
     ? translate('chats.delete.workerOwed', 'An orchestration still waits on this chat')
     : translate('chats.delete.failed', "Couldn't delete the chat")
@@ -141,7 +144,8 @@ export function useDeleteOrcaChat(): (target: OrcaChatDeleteTarget) => Promise<b
             ? { expectedEnvironmentPairingRevision: pairingRevision }
             : {}
         )
-        if (result.outcome === 'deleted') {
+        // Not found: another delete got there first, so the chat is gone all the same.
+        if (result.outcome === 'deleted' || result.reason === 'not-found') {
           return true
         }
         toast.error(refusalText(result.reason))

@@ -5,7 +5,7 @@ import { ownerOnly } from '../../bots-caller-gates'
 import { requireStructuredCapability } from '../creation/structured-agent-session-gate'
 
 export const STRUCTURED_AGENT_SESSION_DELETE_METHOD = defineMethod({
-  // Deletes the chat for good: its record, journal, tab and agent transcript, on this host.
+  // Deletes the chat for good on this host: its records, journal and tabs; the agent's transcript stays.
   name: 'agentSession.delete',
   permission: 'workspace',
   params: OptionsParams,

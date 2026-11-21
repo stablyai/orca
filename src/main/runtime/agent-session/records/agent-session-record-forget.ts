@@ -52,8 +52,9 @@ export function forgetIdleAgentSessionRecord(
  *  conversations it held, which Orca then never lists or adopts again. */
 export type AgentSessionChatForget = Readonly<DeletedChat>
 
-/** Deletes every record of the chat and its tabs, or none: each must be at rest, and a /clear
- *  continuation outside the set keeps the chat it came from. */
+/** Deletes every record of the chat and its tabs, or none: each lease must be released, and a /clear
+ *  continuation outside the set keeps the chat it came from. A saved open turn doesn't refuse: a
+ *  quit mid-turn leaves one for good, and the caller's lanes already prove nothing runs. */
 export function forgetAgentSessionChat(
   state: AgentSessionStoreState,
   forget: AgentSessionChatForget,
@@ -66,7 +67,6 @@ export function forgetAgentSessionChat(
     if (
       !record ||
       !agentSessionLeaseIsReleased(record.lease) ||
-      record.lastTurn?.state === 'open' ||
       (successor !== null &&
         !ids.has(successor) &&
         (state.records.has(successor) || state.unreadableRecords.has(successor)))

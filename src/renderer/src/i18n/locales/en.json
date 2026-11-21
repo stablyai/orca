@@ -29719,7 +29719,8 @@
       "descriptionHost": "It's deleted permanently from {{host}}. This can't be undone.",
       "action": "Delete",
       "groupRoom": "A group room's chat can't be deleted",
-      "workerOwed": "An orchestration still waits on this chat"
+      "workerOwed": "An orchestration still waits on this chat",
+      "home": "A managed agent's Home Chat can't be deleted"
     }
   }
 }

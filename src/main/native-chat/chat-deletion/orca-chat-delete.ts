@@ -153,7 +153,6 @@ export async function deleteOrcaChat(
     for (const record of chat.records) {
       // Mail it never read goes unanswered, and its senders hear so.
       await dropUnreadBotRequests(runtime, bot.id, 'chat-deleted', record.sessionId)
-      await runtime.botWork.forget(record.sessionId).catch(() => false)
     }
   }
   return { outcome: 'deleted' }

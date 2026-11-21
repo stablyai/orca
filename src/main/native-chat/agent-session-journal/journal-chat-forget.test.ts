@@ -109,11 +109,11 @@ it('refuses part of a lineage whose /clear successor would stay, changing nothin
   expect(tombstones(db)).toEqual({ kind: 'deleted-chats', chats: [] })
 })
 
-it('refuses the lineage when one session is not at rest, changing nothing', () => {
+it('deletes a chat whose turn a quit cut off, its saved turn still open', () => {
   const db = journal({ lastTurn: { state: 'open', at: 1, prompt: 'hi' } })
 
-  expect(forget(db, ['root-chat', 'next-chat'])).toBe(false)
+  expect(forget(db, ['root-chat', 'next-chat'])).toBe(true)
 
-  expect(records(db)).toEqual(['next-chat', 'root-chat'])
-  expect(tombstones(db)).toEqual({ kind: 'deleted-chats', chats: [] })
+  expect(records(db)).toEqual([])
+  expect(tombstones(db)).toEqual({ kind: 'deleted-chats', chats: [CHAT] })
 })

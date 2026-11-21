@@ -93,8 +93,7 @@ import { deleteOrcaChat } from './orca-chat-delete'
 
 const runtime = {
   ensureStructuredAgentSessionHost: async () => undefined,
-  bots: { list: () => [] },
-  botWork: { forget: async () => true }
+  bots: { list: () => [] }
 }
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every runtime member the delete reads.
 const deleteChat = (id: string) => deleteOrcaChat(runtime as never, id)
