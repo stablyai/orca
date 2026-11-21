@@ -33,11 +33,16 @@ export function describeWslProcessFailure(result: {
 }
 
 export const WSL_DIAGNOSTIC_LIMIT = 300
-// A line with no space or punctuation could be guest output (base64, single words); wsl.exe's text has them.
-const GUEST_OUTPUT_LINE = /^[A-Za-z0-9+/=]+$/
 const WSL_ERROR_CODE = /\bWsl\/[A-Za-z0-9_/]+/
+// Any long base64 run is guest output (auth files are printed encoded), wherever it sits.
+const GUEST_BASE64_RUN = /[A-Za-z0-9+/=]{40,}/
+// wsl.exe's text opens with a word; a longer base64-alphabet token is guest bytes glued in front.
+const WSL_TEXT_OPENING = /^(?:[^\sA-Za-z0-9+/=]|[A-Za-z0-9+/=]{1,16}(?:\s|$|[^A-Za-z0-9+/=]))/
 
-/** wsl.exe's own error (capped), only for exit -1 with no guest output: proof the guest never ran. */
+/**
+ * wsl.exe's own error code, only for exit -1 whose stdout is wsl.exe's text alone: evidence the
+ * guest never ran. Returns just the code, so no stdout text can reach a message or log.
+ */
 export function readWslExeFailureBeforeGuest(result: {
   code: number | null
   stdout: string
@@ -48,12 +53,8 @@ export function readWslExeFailureBeforeGuest(result: {
     return null
   }
   const diagnostic = readWslHostDiagnostic(result.stdout)
-  const lines = diagnostic.split(/\r?\n/).filter((line) => line.trim())
-  if (
-    !WSL_ERROR_CODE.test(diagnostic) ||
-    lines.some((line) => GUEST_OUTPUT_LINE.test(line.trim()))
-  ) {
+  if (GUEST_BASE64_RUN.test(diagnostic) || !WSL_TEXT_OPENING.test(diagnostic)) {
     return null
   }
-  return diagnostic.slice(0, WSL_DIAGNOSTIC_LIMIT)
+  return WSL_ERROR_CODE.exec(diagnostic)?.[0] ?? null
 }

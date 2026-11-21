@@ -301,7 +301,7 @@ function describeDrainStepFailure(
   step: string,
   result: { code: number | null; stdout: string; stderr: string; timedOut: boolean }
 ): string {
-  // Raw stdout never: inspect and recover print the auth files there.
+  // Never stdout text: inspect and recover print the auth files there; only a wsl.exe error code.
   const detail =
     result.stderr.trim().slice(0, WSL_DIAGNOSTIC_LIMIT) || readWslExeFailureBeforeGuest(result)
   return `Legacy WSL auth drain ${step} failed (${result.timedOut ? 'timeout' : `exit ${result.code}`})${detail ? `: ${detail}` : ''}`

@@ -65,4 +65,19 @@ describe('startLegacyWslRuntimeAuthDrain', () => {
     await expect(drained).rejects.toThrow('Legacy WSL auth drain inspect failed (exit 4294967295)')
     await expect(drained).rejects.not.toThrow(authBase64)
   })
+
+  it('blocks a launch when wsl.exe appended its error to auth the guest was printing', async () => {
+    const authBase64 = 'eyJ0b2tlbnMiOnsicmVmcmVzaF90b2tlbiI6InNlY3JldCJ9fQ=='
+    runWslProcess.mockResolvedValue(
+      inspectResult({
+        code: 4294967295,
+        stdout: `${authBase64}Catastrophic failure\r\nError code: Wsl/Service/E_UNEXPECTED\r\n`
+      })
+    )
+
+    const drained = startLegacyWslRuntimeAuthDrain(drainOptions('Arch'), { throwOnFailure: true })
+
+    await expect(drained).rejects.toThrow('Legacy WSL auth drain inspect failed (exit 4294967295)')
+    await expect(drained).rejects.not.toThrow(authBase64.slice(0, 8))
+  })
 })
