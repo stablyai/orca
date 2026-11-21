@@ -19,6 +19,7 @@ import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { AgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store'
 import { setAgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { BOT_ITEMS_METHODS } from './bots-items'
+import { BotItemsListReadSchema } from '../../../../shared/bots/bot-item-schema'
 import { checkedWorkerOrigin } from './bots-items-worker-origin'
 
 const paths = vi.hoisted(() => ({ userData: '' }))
@@ -332,16 +333,7 @@ describe('bot items over RPC', () => {
       if (!answer.ok) {
         throw new Error('list failed')
       }
-      return answer.result as {
-        items: {
-          number: number
-          description: string | null
-          doneMeans: string | null
-          summary?: true
-          uid: string
-        }[]
-        counts: Record<string, number>
-      }
+      return BotItemsListReadSchema.parse(answer.result)
     }
 
     const whole = await list({})

@@ -5,6 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
 import { mergeNamedBotItems } from '../../../../../shared/bots/bot-item-merge'
+import type { BotItemsListRead } from '../../../../../shared/bots/bot-item-schema'
 
 const host = vi.hoisted((): { closed: string[] } => ({ closed: [] }))
 
@@ -64,7 +65,7 @@ it('keeps every closed item reachable when a refresh moves the first page’s en
 
 it('takes a named read’s copies into loaded pages, a deleted item dropped, without reading them again', async () => {
   host.closed = Array.from({ length: 100 }, (_, index) => `c${index + 1}`)
-  const first = listRead()
+  const first: BotItemsListRead = listRead()
   const view = renderHook(({ read }) => useBotItemsClosedPages(BOT, read, null), {
     initialProps: { read: first }
   })
@@ -83,7 +84,7 @@ it('takes a named read’s copies into loaded pages, a deleted item dropped, wit
 
 it('keeps every item a bulk close names when the first page has no room for them', async () => {
   host.closed = Array.from({ length: 100 }, (_, index) => `c${index + 1}`)
-  const first = listRead()
+  const first: BotItemsListRead = listRead()
   const view = renderHook(({ read }) => useBotItemsClosedPages(BOT, read, null), {
     initialProps: { read: first }
   })

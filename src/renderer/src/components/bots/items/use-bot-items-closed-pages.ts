@@ -113,7 +113,9 @@ export function useBotItemsClosedPages(
   }
   const generation = useRef(0)
   const latest = useRef(read)
-  latest.current = read
+  useEffect(() => {
+    latest.current = read
+  }, [read])
 
   const depth = pages?.depth ?? 0
   const current = pages !== null && pages.base === read
