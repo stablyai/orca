@@ -228,15 +228,59 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     openDialog()
 
     const use = await screen.findByRole('button', { name: 'Use it' })
-    expect(screen.queryByLabelText('Configuration refresh token')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: /Paste a token instead/ }))
-    expect(screen.getByLabelText('Configuration refresh token')).toBeTruthy()
+    // A stray Enter must not spend this desktop's token.
+    expect(document.activeElement).not.toBe(use)
+    const field = screen.getByLabelText('Configuration refresh token')
+    expect(field.closest('[hidden]')).not.toBeNull()
+    const disclosure = screen.getByRole('button', { name: /Paste a token instead/ })
+    fireEvent.click(disclosure)
+    expect(field.closest('[hidden]')).toBeNull()
+    expect(document.activeElement).toBe(field)
+    // A token typed before closing it is still there on reopening.
+    fireEvent.change(field, { target: { value: 'xoxe-typed' } })
+    fireEvent.click(disclosure)
+    fireEvent.click(disclosure)
+    expect(screen.getByLabelText('Configuration refresh token')).toHaveProperty(
+      'value',
+      'xoxe-typed'
+    )
 
     fireEvent.click(use)
     await screen.findByRole('button', { name: 'Approve in Slack' })
     expect(mocks.hosts[SERVER].handOff).toHaveBeenCalledWith({ botId: 'bot-1', teamId: 'T1' })
     expect(redeem).toHaveBeenCalledWith({ code: 'one-time' })
     expect(mocks.hosts[SERVER].saveGrant).not.toHaveBeenCalled()
+  })
+
+  it('saves a token pasted beside the offer on the server, and a refused one comes back open with focus on the field', async () => {
+    serverState({ state: 'grant_expired', teamId: 'T1' })
+    mocks.hosts[SERVER].saveGrant.mockResolvedValue({ ok: false, error: 'invalid_grant' })
+    openDialog()
+
+    fireEvent.click(await screen.findByRole('button', { name: /Paste a token instead/ }))
+    fireEvent.change(screen.getByLabelText('Configuration refresh token'), {
+      target: { value: 'xoxe-1-new' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }))
+
+    await waitFor(() =>
+      expect(mocks.hosts[SERVER].saveGrant).toHaveBeenCalledWith({ refreshToken: 'xoxe-1-new' })
+    )
+    expect(mocks.hosts.local.saveGrant).not.toHaveBeenCalled()
+    const field = await screen.findByLabelText('Configuration refresh token')
+    await waitFor(() => expect(document.activeElement).toBe(field))
+    expect(field.closest('[hidden]')).toBeNull()
+    expect(field.getAttribute('aria-invalid')).toBe('true')
+  })
+
+  it('focuses the token field when there is no token to offer', async () => {
+    mocks.bots = []
+    serverState({ state: 'grant_expired', teamId: 'T1' })
+    openDialog()
+
+    const field = await screen.findByLabelText('Configuration refresh token')
+    expect(document.activeElement).toBe(field)
+    expect(screen.queryByRole('button', { name: 'Use it' })).toBeNull()
   })
 
   it('offers no hand-off when the server is signed in to this desktop’s own account', async () => {

@@ -1,11 +1,11 @@
 // @protected-copy: drawn inside the security-surface setup dialog
 // The expired-token step: this desktop's own working token first when it has one, else a short paste.
-import React, { useState } from 'react'
+import React, { useId, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { Trans } from 'react-i18next'
 import { ChevronRight, Info } from 'lucide-react'
 import { isMac } from '@/app-shell/chrome/app-window-chrome'
 import { Button } from '@/components/ui/button'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { DialogFooter } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { i18n } from '@/i18n/i18n'
@@ -16,6 +16,7 @@ import type { Bot } from '../../../../../shared/bot-types'
 import { BotHowToAsk } from '../BotHowToAsk'
 import { SlackConfigTokenForm } from './SlackConfigTokenForm'
 import type { SlackHandOffOffer } from './use-slack-hand-off-offer'
+import { useSnugEllipsis } from './use-snug-ellipsis'
 
 /** This desktop's own Orca account, offered for the one workspace whose token lapsed on the host. */
 export type SlackReconnectOffer = { email: string; teamId: string }
@@ -33,7 +34,13 @@ export function slackReconnectOffer(
 /** The header's "for <bot> on <computer>" on one line, as the body: long names end in an ellipsis. */
 export function SlackOneLineIntro({ text }: { text: string }): React.JSX.Element {
   return (
-    <span className="block truncate">
+    <span
+      className="block truncate"
+      // The full line on hover once it is cut short; read from what shows, since `text` is escaped.
+      onPointerEnter={(event) => {
+        event.currentTarget.title = event.currentTarget.textContent ?? ''
+      }}
+    >
       <BotHowToAsk text={text} />
     </span>
   )
@@ -90,7 +97,13 @@ export function SlackReconnectStep({
             { host: hostName }
           )
         : t('bots.slack.reconnect.why', 'Slack stopped accepting this workspace’s saved token.')
-  const form = (compactProps: { onCancel?: () => void; inlineSubmit?: boolean }) => (
+  const pasteRef = useRef<HTMLDivElement>(null)
+  const pasteId = useId()
+  const form = (compactProps: {
+    onCancel?: () => void
+    inlineSubmit?: boolean
+    autoFocusField?: boolean
+  }) => (
     <SlackConfigTokenForm
       compact
       // This desktop's own token is made with this computer's Slack login.
@@ -108,6 +121,7 @@ export function SlackReconnectStep({
       <div className="space-y-4">
         <LineWithWhy
           label={t('bots.slack.reconnect.about', 'About Slack tokens')}
+          truncating={hostName}
           why={[
             why,
             t(
@@ -134,27 +148,42 @@ export function SlackReconnectStep({
             components={{
               host: (
                 // The name gives way first, so the rest of the line stays whole.
-                <span className="min-w-0 truncate" title={hostName} />
+                <span className="min-w-0 truncate" title={hostName} data-snug-ellipsis="" />
               )
             }}
           />
         </LineWithWhy>
-        <Collapsible open={pasting} onOpenChange={setPasting}>
-          <CollapsibleTrigger asChild>
-            <Button type="button" variant="link-muted" size="inline">
-              {t('bots.slack.reconnect.pasteInstead', 'Paste a token instead')}
-              <ChevronRight className={cn('transition-transform', pasting && 'rotate-90')} />
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div className="pt-3">{form({ inlineSubmit: true })}</div>
-          </CollapsibleContent>
-        </Collapsible>
+        <div>
+          <Button
+            type="button"
+            variant="link-muted"
+            size="inline"
+            aria-expanded={pasting}
+            aria-controls={pasteId}
+            onClick={() => {
+              const open = !pasting
+              // Opening it is asking to paste: the field takes focus once it shows.
+              flushSync(() => setPasting(open))
+              if (open) {
+                pasteRef.current?.querySelector('input')?.focus()
+              }
+            }}
+          >
+            {t('bots.slack.reconnect.pasteInstead', 'Paste a token instead')}
+            <ChevronRight className={cn('transition-transform', pasting && 'rotate-90')} />
+          </Button>
+          {/* Hidden, not unmounted, while closed: a token typed before closing it is still there. */}
+          <div id={pasteId} ref={pasteRef} hidden={!pasting} className="pt-3">
+            {/* A refused paste comes back open, with focus on the field and its error. */}
+            {form({ inlineSubmit: true, autoFocusField: error !== null })}
+          </div>
+        </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onCancel}>
             {t('bots.slack.setup.cancel', 'Cancel')}
           </Button>
-          <Button type="button" autoFocus onClick={() => onUse(offer.teamId)}>
+          {/* Not focused first: a stray Enter would spend this computer's token. */}
+          <Button type="button" onClick={() => onUse(offer.teamId)}>
             {t('bots.slack.reconnect.use', 'Use it')}
           </Button>
         </DialogFooter>
@@ -175,7 +204,7 @@ export function SlackReconnectStep({
             : t('bots.slack.reconnect.mine', 'This computer’s token expired. Paste a new one.')
           : t('bots.slack.reconnect.paste', 'Paste a new token to reconnect.')}
       </LineWithWhy>
-      {form({ onCancel })}
+      {form({ onCancel, autoFocusField: true })}
     </div>
   )
 }
@@ -184,18 +213,30 @@ export function SlackReconnectStep({
 function LineWithWhy({
   label,
   why,
+  truncating = null,
   children
 }: {
   label: string
   why: (string | null)[]
+  /** The name in the line that ends in an ellipsis when long; the next words sit right after it. */
+  truncating?: string | null
   children: React.ReactNode
 }): React.JSX.Element {
+  const rowRef = useRef<HTMLDivElement>(null)
+  useSnugEllipsis(rowRef, truncating)
   return (
-    <div className="flex min-w-0 items-center gap-1">
+    // The ⓘ stays compact so a short computer name still fits whole at the narrowest width.
+    <div ref={rowRef} className="flex min-w-0 items-center gap-0.5">
       <p className="flex min-w-0 overflow-hidden text-sm whitespace-pre">{children}</p>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button type="button" variant="link-muted" size="icon-xs" aria-label={label}>
+          <Button
+            type="button"
+            variant="link-muted"
+            size="icon-xs"
+            className="size-5"
+            aria-label={label}
+          >
             <Info className="size-3.5" aria-hidden />
           </Button>
         </TooltipTrigger>

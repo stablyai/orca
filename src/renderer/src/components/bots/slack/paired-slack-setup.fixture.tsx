@@ -61,7 +61,7 @@ type Scene = {
 const LONG_EMAIL = 'alexandra.konstantinopoulou-whitfield@engineering.example.com'
 const longBot = stampBotHost('runtime:m4', {
   ...base,
-  name: 'Eng - Reviewer - Official - Weekend Release Train Watcher'
+  name: 'Quarterly Planning Assistant for the Northwest Regional Team'
 })
 
 // The web preload's namespace, kept apart from the methods a scene answers.
@@ -166,7 +166,7 @@ async function whenShown(text: string, click?: string): Promise<void> {
 
 const longStore = {
   ...store,
-  runtimeEnvironments: [{ ...m4, name: 'm4-air-build-server-in-the-upstairs-closet' }],
+  runtimeEnvironments: [{ ...m4, name: 'studio-mac-mini-build-machine-second-floor' }],
   orcaProfileAuthStatus: {
     ...store.orcaProfileAuthStatus,
     cloud: { ...store.orcaProfileAuthStatus.cloud, email: LONG_EMAIL }

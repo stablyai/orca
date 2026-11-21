@@ -39,7 +39,8 @@ export function SlackConfigTokenForm({
   aside,
   compact = false,
   onCancel,
-  inlineSubmit = false
+  inlineSubmit = false,
+  autoFocusField = false
 }: {
   hostId: ExecutionHostId
   submitLabel: string
@@ -54,6 +55,8 @@ export function SlackConfigTokenForm({
   onCancel?: () => void
   /** Another of the dialog's buttons is its main action: a quiet submit beside the field. */
   inlineSubmit?: boolean
+  /** The field takes focus when it appears: pasting is what is left to do. */
+  autoFocusField?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const inputId = useId()
@@ -125,8 +128,7 @@ export function SlackConfigTokenForm({
   const field = (
     <Input
       id={inputId}
-      // Pasting is all that is left to do here, so the field takes focus.
-      autoFocus={compact && onCancel !== undefined}
+      autoFocus={autoFocusField}
       type="password"
       placeholder={compact ? `${SLACK_CONFIG_REFRESH_TOKEN_PREFIX}…` : undefined}
       autoComplete="off"
