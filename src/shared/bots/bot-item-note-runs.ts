@@ -1,5 +1,5 @@
 // How a chat draws item changes: the item mail the bot reads stays hidden (its note shows the change),
-// the bot's note that only links workers to items joins those workers' Started rows next to it,
+// the agent's note that only links workers to items joins those workers' Started rows next to it,
 // the owner's quick changes to one item, with nothing shown between them, fold into the first, and the
 // bot's notes in one turn, with only tool work between them, fold into the first (its row stays put
 // while a live turn adds to it, and shows the latest note's time).
