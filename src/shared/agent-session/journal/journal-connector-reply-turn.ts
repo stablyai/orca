@@ -69,11 +69,17 @@ export function connectorReplyTurnStamps(
   turnItemId: string
 ): ConnectorReplyStamp[] {
   const stamps: ConnectorReplyStamp[] = []
-  const seen = new Set<string>()
+  const seen = new Map<string, ConnectorReplyStamp>()
+  // Copies, never the journal's own objects; the same delivery seen again keeps any owner proof.
   const addStamp = (stamp: ConnectorReplyStamp | undefined) => {
-    if (stamp && !seen.has(`${stamp.account}\0${stamp.deliveryId}`)) {
-      seen.add(`${stamp.account}\0${stamp.deliveryId}`)
-      stamps.push(stamp)
+    const key = stamp && `${stamp.account}\0${stamp.deliveryId}`
+    const known = key === undefined ? undefined : seen.get(key)
+    if (stamp && key !== undefined && !known) {
+      const copy = { ...stamp }
+      seen.set(key, copy)
+      stamps.push(copy)
+    } else if (known && stamp?.ownerAsked) {
+      known.ownerAsked = true
     }
   }
   const add = (item: AgentJournalRenderItem | null | undefined) => {

@@ -292,6 +292,21 @@ it('says whether the outbox may still post the answer, so the legacy end never p
       'I replied but…'
     )
   ).toBe('unsafe')
+  // Unless its rows answer there with words: nothing was dropped, so no stand-in goes out.
+  expect(
+    await endRepliedTurn(
+      dm.end,
+      dm.turn,
+      dm.link,
+      none,
+      async () => ({
+        covered: new Set([dm.link.externalId]),
+        paused: false,
+        answered: new Set([dm.link.externalId])
+      }),
+      'I replied but…'
+    )
+  ).toBe('told')
   // Outside the outbox: a fill covering another conversation leaves only the legacy end; one that
   // threw leaves rows recovery may post.
   const issue = replied('github', 'github:o/r#1')

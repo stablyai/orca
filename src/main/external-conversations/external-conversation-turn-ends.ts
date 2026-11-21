@@ -134,7 +134,7 @@ export async function endRepliedTurn(
   }
   const failure = turnFailure(end, turn)
   let threw = false
-  const { covered, resumesAt } = await fill({
+  const { covered, resumesAt, answered } = await fill({
     sessionId: end.news.sessionId,
     turnItemId: turn.turnItemId,
     stamps: turn.stamps,
@@ -162,7 +162,8 @@ export async function endRepliedTurn(
     return threw ? 'unsafe' : 'not-covered'
   }
   // The constant fallback uses this end's existing durable turn-event key; the rows keep the words.
-  if (legacyReply && legacyReply !== turn.lastAssistantMessage) {
+  // Rows that answer here with words dropped nothing, so they need no stand-in.
+  if (legacyReply && legacyReply !== turn.lastAssistantMessage && !answered?.has(link.externalId)) {
     return 'unsafe'
   }
   await end.workersChecked()

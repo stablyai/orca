@@ -191,7 +191,11 @@ function connectorReplyOutbox(
     usageLimitReplyPause(journal, usageLimitDisposition, async (sessionId) => {
       const shown = await getStructuredAgentSessionHost()?.readUsageLimitContinue(sessionId)
       return shown?.state === 'scheduled' ? (shown.continueAt ?? shown.resetsAt) : undefined
-    })
+    }),
+    async (sessionId, messageId) => {
+      const reads = await getStructuredAgentSessionHost()?.journalReads(sessionId)
+      return (await reads?.submissionBody(messageId))?.asker?.role === 'owner'
+    }
   )
   const recovery = new ConnectorReplyRecovery({
     journal,

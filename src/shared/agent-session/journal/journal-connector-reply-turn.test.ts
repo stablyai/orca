@@ -123,4 +123,19 @@ describe('the deliveries a turn answered', () => {
       ['owner-1', true]
     ])
   })
+
+  it('keeps the owner’s mark on a delivery a claim names too, and never writes into the journal', () => {
+    const asked = dm('owner-1', 'owner')
+    const delivery = asked.body.kind === 'message' ? asked.body.connectorDelivery! : null
+    const continued = message('continue', {
+      connectorClaim: { cutTurnId: 'turn-0', cutKind: 'usage_limit', origin: [delivery!] }
+    })
+    const stamps = connectorReplyTurnStamps(
+      { items: [asked, continued], submissions: [steered('owner-1')] },
+      continued,
+      'turn-1'
+    )
+    expect(stamps).toEqual([expect.objectContaining({ deliveryId: 'owner-1', ownerAsked: true })])
+    expect(delivery).not.toHaveProperty('ownerAsked')
+  })
 })

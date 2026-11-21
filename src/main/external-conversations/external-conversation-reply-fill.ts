@@ -32,8 +32,19 @@ export type EndedTurnReplies = {
 }
 
 /** What a fill did: the conversations its rows cover, and whether a usage-limit pause cut them
- *  for an automatic continue instead (Phase 1 §1.5), with when it is due, if the app shows a time. */
-export type FilledTurn = { covered: ReadonlySet<string>; paused: boolean; resumesAt?: number }
+ *  for an automatic continue instead (Phase 1 §1.5), with when it is due, if the app shows a time.
+ *  `answered`: those its rows answer with words, so nothing there needs a stand-in reply. */
+export type FilledTurn = {
+  covered: ReadonlySet<string>
+  paused: boolean
+  resumesAt?: number
+  answered?: ReadonlySet<string>
+}
+
+/** Whether the bot's owner sent the message that admitted a row (its journal body's asker): the
+ *  owner proof of a row a continuation claimed, whose own stamps carry none, across a pause or a
+ *  restart alike. */
+export type AskedByOwner = (sessionId: string, messageId: string) => Promise<boolean>
 
 /** Fills an ended turn's outbox rows (design item 125 §3), the first fill winning. */
 export type ConversationReplyFill = (turn: EndedTurnReplies) => Promise<FilledTurn>
@@ -54,7 +65,8 @@ const keyOf = (account: string, deliveryId: string): string => `${account}\0${de
 export function conversationReplyFill(
   journal: () => ConnectorReplyJournal | null,
   filled: () => void,
-  pause?: UsageLimitPause
+  pause?: UsageLimitPause,
+  askedByOwner?: AskedByOwner
 ): ConversationReplyFill {
   return async (turn) => {
     const store = journal()
@@ -106,7 +118,20 @@ export function conversationReplyFill(
     if (paused) {
       return { covered, paused: true, ...paused }
     }
+    // The owner's DM rows the stamps don't mark (a continuation's claim names no asker): their
+    // admitting message says who sent them.
+    for (const row of own) {
+      const key = keyOf(row.account, row.deliveryId)
+      if (
+        isSlackDirectMessage(row.conversation) &&
+        !ownerAsked.has(key) &&
+        (await askedByOwner?.(turn.sessionId, row.messageId).catch(() => false))
+      ) {
+        ownerAsked.add(key)
+      }
+    }
     const fills: JournalConnectorReplyFill[] = []
+    const answered = new Set<string>()
     for (const row of own) {
       // Decided per request: the marker can't silence an answer to its owner's own DM (recovery
       // fills here too); a member's DM, or a thread, keeps today's silence.
@@ -118,6 +143,9 @@ export function conversationReplyFill(
           isSlackDirectMessage(row.conversation) &&
           ownerAsked.has(keyOf(row.account, row.deliveryId))
       })
+      if (outcome === 'answered') {
+        answered.add(row.conversation.externalId)
+      }
       const conversation = JSON.stringify([row.account, row.conversation])
       const answerDeliveryId = answers.get(conversation) ?? row.deliveryId
       fills.push({
@@ -136,6 +164,6 @@ export function conversationReplyFill(
     if (await store.fillOutcomes(fills)) {
       filled()
     }
-    return { covered, paused: false }
+    return { covered, paused: false, answered }
   }
 }
