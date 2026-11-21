@@ -189,6 +189,10 @@
       "needYou_one": "{{count}} needs you",
       "needYou_other": "{{count}} need you"
     },
+    "settings": {
+      "requests_one": "{{count}} request",
+      "requests_other": "{{count}} requests"
+    },
     "upNext": {
       "showMore_one": "Show {{count}} more",
       "showMore_other": "Show {{count}} more"
@@ -260,6 +264,10 @@
         "starts": "Webhook · starts “{{automation}}”",
         "title": "Webhook"
       }
+    },
+    "goal": {
+      "checks_one": "{{count}} check",
+      "checks_other": "{{count}} checks"
     },
     "mcp": {
       "status": {
@@ -351,10 +359,6 @@
     "turnStatus": {
       "seconds_one": "{{count}}s",
       "seconds_other": "{{count}}s"
-    },
-    "goal": {
-      "checks_one": "{{count}} check",
-      "checks_other": "{{count}} checks"
     }
   },
   "components": {

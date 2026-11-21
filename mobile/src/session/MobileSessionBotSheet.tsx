@@ -16,6 +16,8 @@ import {
 } from '../../../src/shared/native-chat/attachments/native-chat-text-attachment-references'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
+import { useRouteHandoff } from '../navigation/route-handoff'
+import { hostStackHostRoute } from '../navigation/host-stack-navigation'
 import { WorkspaceServerContext } from '../worktree/execution-hosts/workspace-server-context'
 import { useBotAccessRequests } from '../bots/use-bot-access-requests'
 import type { MobileSessionController } from './use-mobile-session-controller'
@@ -55,6 +57,7 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
   } = controller
   const server = useContext(WorkspaceServerContext)
   const router = useWorkspaceRouteHandoff()
+  const hostRouter = useRouteHandoff()
   const t = useMobileTranslation()
   const executionHost = useWorkspaceExecutionHost()
   const openMobileSession = useOpenMobileSession()
@@ -146,6 +149,14 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
     setShowBotSheet(false)
     setBotPanel(null)
   }
+  // Its home workspace went with it, so the host's list is next, as after any removed workspace.
+  const leaveDeletedBot = () => {
+    closeSheets()
+    if (hostId) {
+      hostRouter.replace(hostStackHostRoute(hostId))
+    }
+  }
+  const home = { folderPath: controller.worktreePath, onDeleted: leaveDeletedBot }
   const startSuggestion = homeTab
     ? (ask: string) => {
         closeSheets()
@@ -247,6 +258,7 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
               }}
               onStartSuggestion={startSuggestion}
               onNewAutomation={newAutomation}
+              home={home}
             />
           </BotItemCommentMicContext.Provider>
         </MobileNativeChatDictationPreviewContext.Provider>
@@ -267,6 +279,7 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
       accessRequests={accessRequests}
       onStartSuggestion={startSuggestion}
       onNewAutomation={newAutomation}
+      home={home}
     />
   )
 }

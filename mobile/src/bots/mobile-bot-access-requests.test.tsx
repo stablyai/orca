@@ -29,6 +29,8 @@ vi.mock('../components/controls/MobileSwitch', () => ({ MobileSwitch: () => null
 vi.mock('../components/bottom-drawer/BottomDrawer', () => ({ BottomDrawer: () => null }))
 
 vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
+vi.mock('../platform/media-picking/media-picker', () => ({ useMediaPicker: () => ({}) }))
+vi.mock('./MobileBotAvatar', () => ({ MobileBotAvatar: () => null }))
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0 })
 }))
@@ -107,8 +109,9 @@ function tabContent(access: BotAccessRequests | null, options: TabOptions = {}) 
       showToast: () => {},
       online: true,
       hostName: 'Studio Mac',
+      home: { folderPath: '/Users/me/.orca/bots/scout', onDeleted: () => {} },
       accessRequests: access,
-      lookAround: null
+      upNext: { lookNow: () => {}, busy: false }
     })
   )
 }
@@ -116,7 +119,18 @@ function renderTab(access: BotAccessRequests | null, options: TabOptions = {}) {
   act(() => {
     tree = create(tabContent(access, options))
   })
+  openWhoCanAsk(tree!.root)
   return tree!
+}
+// Requests and people are on Settings' Who can ask page, as on the desktop.
+function openWhoCanAsk(root: ReactTestInstance) {
+  const row = root.find(
+    (node) =>
+      typeof node.props.accessibilityLabel === 'string' &&
+      node.props.accessibilityLabel.startsWith('Who can ask, ') &&
+      typeof node.props.onPress === 'function'
+  )
+  act(() => row.props.onPress())
 }
 function updateTab(access: BotAccessRequests, direct: RpcClient): ReactTestInstance {
   act(() => tree!.update(tabContent(access, { client: direct })))
@@ -292,11 +306,13 @@ describe('who can ask in the bot sheet', () => {
           showToast,
           online: true,
           hostName: 'Studio Mac',
+          home: { folderPath: '/Users/me/.orca/bots/scout', onDeleted: () => {} },
           accessRequests: null,
-          lookAround: null
+          upNext: { lookNow: () => {}, busy: false }
         })
       )
     })
+    openWhoCanAsk(tree!.root)
     press(tree!.root, 'Keep only me')
     await act(async () => press(tree!.root, 'Keep only me'))
     expect(showToast).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('Sam, Bea'), 2400)
