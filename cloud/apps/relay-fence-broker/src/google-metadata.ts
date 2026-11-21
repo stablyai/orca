@@ -5,7 +5,10 @@ async function metadataText(path: string, fetcher: typeof fetch): Promise<string
   const response = await fetcher(`${METADATA_ROOT}/${path}`, {
     headers: { 'Metadata-Flavor': 'Google' }
   })
-  if (!response.ok) throw new Error(`metadata request failed: ${response.status}`)
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined)
+    throw new Error(`metadata request failed: ${response.status}`)
+  }
   return await response.text()
 }
 
