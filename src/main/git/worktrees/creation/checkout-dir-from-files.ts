@@ -1,6 +1,7 @@
 import { realpath } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join } from 'node:path'
 import { isSamePath, readOptional } from './git-dir-branch-state'
+import { checkedIo } from './file-check-deadline'
 
 // Git caps a gitfile at 1 MiB.
 const MAX_GITFILE_BYTES = 1 << 20
@@ -47,7 +48,9 @@ async function readVerifiedCheckoutDir(
     return undefined
   }
   // Git 2.48+ may write it relative to the git dir, resolved through any symlink.
-  const dotGit = isAbsolute(named) ? toHostPath(named) : join(await realpath(gitDir), named)
+  const dotGit = isAbsolute(named)
+    ? toHostPath(named)
+    : join(await checkedIo(() => realpath(gitDir)), named)
   const pointed = await readGitfileTarget(dotGit, toHostPath)
   return pointed && (await isSamePath(pointed, gitDir)) ? dirname(dotGit) : undefined
 }

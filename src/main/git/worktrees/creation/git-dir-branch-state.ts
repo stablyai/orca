@@ -6,6 +6,7 @@ import { normalizeRuntimePathForComparison } from '../../../../shared/file-acces
 import { join } from 'node:path'
 import { normalizeHead, trimGitSpace } from './git-ref-text'
 import { forEachBounded } from './bounded-reads'
+import { checkedIo, throwIfCheckExpired } from './file-check-deadline'
 
 /** A HEAD whose branch the files cannot tell: reftable leaves this placeholder, and odd symlinks map to it. */
 export const UNRESOLVED_HEAD = 'ref: refs/heads/.invalid'
@@ -27,14 +28,16 @@ export async function readGitDirState(
 ): Promise<GitDirState> {
   throwIfStopped(stop)
   // Fail closed: an unreadable common dir must not look like "nothing in use".
-  if (!(await stat(commonDir)).isDirectory()) {
+  if (!(await checkedIo(() => stat(commonDir))).isDirectory()) {
     throw new Error(`${commonDir} is not a Git directory`)
   }
   throwIfStopped(stop)
   const gitDirs = [commonDir]
   try {
     const linked: string[] = []
-    const entries = await readdir(join(commonDir, 'worktrees'), { withFileTypes: true })
+    const entries = await checkedIo(() =>
+      readdir(join(commonDir, 'worktrees'), { withFileTypes: true })
+    )
     throwIfStopped(stop)
     for (const entry of entries) {
       const gitDir = join(commonDir, 'worktrees', entry.name)
@@ -108,7 +111,7 @@ export function throwIfStopped(stop: () => boolean): void {
 export async function readRefLink(path: string): Promise<string | undefined> {
   let target: string
   try {
-    target = await readlink(path)
+    target = await checkedIo(() => readlink(path))
   } catch (error) {
     const code = errorCode(error)
     if (code === 'EINVAL' || code === 'UNKNOWN') {
@@ -139,9 +142,12 @@ async function readBoundedFile(
   maxBytes?: number,
   extraFlags = 0
 ): Promise<string | null | undefined> {
+  throwIfCheckExpired()
   const handle = await open(path, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0) | extraFlags)
   try {
+    throwIfCheckExpired()
     const info = await handle.stat()
+    throwIfCheckExpired()
     if (info.isDirectory()) {
       return null
     }
@@ -157,6 +163,7 @@ async function readBoundedFile(
     for (;;) {
       const chunk = Buffer.allocUnsafe(chunkSize)
       const { bytesRead } = await handle.read(chunk, 0, chunkSize, null)
+      throwIfCheckExpired()
       total += bytesRead
       if (total > limit) {
         return undefined
@@ -220,7 +227,7 @@ export function rethrowUnlessMissing(error: unknown): void {
 
 async function isDirectory(path: string): Promise<boolean> {
   try {
-    return (await stat(path)).isDirectory()
+    return (await checkedIo(() => stat(path))).isDirectory()
   } catch (error) {
     rethrowUnlessMissing(error)
     return false
@@ -231,6 +238,7 @@ async function isDirectory(path: string): Promise<boolean> {
 export async function isSamePath(left: string, right: string): Promise<boolean> {
   // Both settle before answering, so no lookup outlives the check that started it.
   const [a, b] = await Promise.allSettled([realpath(left), realpath(right)])
+  throwIfCheckExpired()
   return (
     a.status === 'fulfilled' &&
     b.status === 'fulfilled' &&
@@ -263,7 +271,7 @@ export async function readRefFile(path: string): Promise<string> {
 
 async function readRefFileByLstat(path: string): Promise<string> {
   try {
-    const entry = await lstat(path)
+    const entry = await checkedIo(() => lstat(path))
     if (entry.isSymbolicLink()) {
       return (await readRefLink(path)) ?? UNRESOLVED_HEAD
     }

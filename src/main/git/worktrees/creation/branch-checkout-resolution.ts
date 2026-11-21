@@ -11,6 +11,7 @@ import {
 } from './git-dir-branch-state'
 import { COMMIT_ID } from './git-ref-text'
 import { forEachBounded } from './bounded-reads'
+import { checkedIo } from './file-check-deadline'
 
 export type BranchCheckouts =
   | { kind: 'free' }
@@ -237,7 +238,7 @@ function unlessUnreadable(error: unknown): string {
 
 async function pathExists(path: string): Promise<boolean> {
   try {
-    await stat(path)
+    await checkedIo(() => stat(path))
     return true
   } catch (error) {
     rethrowUnlessMissing(error)

@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { checkWithDeadline } from './file-check-deadline'
+import { checkedIo, checkWithDeadline } from './file-check-deadline'
 
 afterEach(() => vi.useRealTimers())
 
@@ -36,4 +36,22 @@ it('keeps a repo stalled until every expired check on it has settled', async () 
   await expect(checkWithDeadline('repo', 1_000, true, () => Promise.resolve(false))).resolves.toBe(
     false
   )
+})
+
+it('stops an expired check at its next file operation instead of continuing late', async () => {
+  vi.useFakeTimers()
+  let releaseRead!: (value: string) => void
+  const lateWork = vi.fn()
+  const answer = checkWithDeadline('late', 1_000, 'fallback', async () => {
+    await checkedIo(() => new Promise<string>((resolve) => (releaseRead = resolve)))
+    lateWork()
+    return 'answer'
+  })
+  await vi.advanceTimersByTimeAsync(1_000)
+  await expect(answer).resolves.toBe('fallback')
+
+  releaseRead('late result')
+  await vi.advanceTimersByTimeAsync(0)
+
+  expect(lateWork).not.toHaveBeenCalled()
 })

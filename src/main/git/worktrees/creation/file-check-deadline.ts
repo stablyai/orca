@@ -1,3 +1,23 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
+
+// The expiry signal of the check whose work is running, so every file read in it can tell it was abandoned.
+const activeCheck = new AsyncLocalStorage<AbortSignal>()
+
+/** Throws once the check this runs under has expired, so late work stops at the next read. */
+export function throwIfCheckExpired(): void {
+  if (activeCheck.getStore()?.aborted) {
+    throw new Error('Branch check abandoned')
+  }
+}
+
+/** Runs one file operation for a check: nothing starts once the check expired, and a late result goes no further. */
+export async function checkedIo<T>(io: () => Promise<T>): Promise<T> {
+  throwIfCheckExpired()
+  const result = await io()
+  throwIfCheckExpired()
+  return result
+}
+
 // Per key, how many checks outlived their deadline and have not settled yet.
 const stalledKeys = new Map<string, number>()
 
@@ -23,7 +43,9 @@ export async function checkWithDeadline<T>(
   }
   // Aborted at expiry: queued Git aborts, and reads check it before starting.
   const expiry = new AbortController()
-  const running = check(() => expiry.signal.aborted, expiry.signal)
+  const running = activeCheck.run(expiry.signal, () =>
+    check(() => expiry.signal.aborted, expiry.signal)
+  )
   const expired = Symbol('expired')
   let timer: ReturnType<typeof setTimeout> | undefined
   const answer = await Promise.race([
