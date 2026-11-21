@@ -7,6 +7,8 @@ export type BotItemsViewport = {
   /** The scroller's visible box in client coordinates; null before a scroller is attached. */
   read: () => { top: number; bottom: number } | null
   subscribe: (listener: () => void) => () => void
+  /** Scrolls by `delta` to keep what's at the top of the view there; at the very top it lets rows flow. */
+  keep: (delta: number) => void
 }
 
 export function useBotItemsViewport(
@@ -26,6 +28,11 @@ export function useBotItemsViewport(
       subscribe: (listener) => {
         listeners.current.add(listener)
         return () => listeners.current.delete(listener)
+      },
+      keep: (delta) => {
+        if (scroller && delta !== 0 && scroller.scrollTop > 0) {
+          scroller.scrollTop += delta
+        }
       }
     }),
     [scroller]

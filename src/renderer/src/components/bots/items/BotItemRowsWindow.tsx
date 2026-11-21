@@ -14,6 +14,8 @@ export const BOT_ITEM_PLACED_ROW_PX = 46
 const OVERSCAN_PX = 300
 /** Rows drawn while the panel's scroller isn't known yet. */
 const FIRST_ROWS = 40
+/** A group this short draws every row and keeps each in the Tab order, as a plain list would. */
+const ALL_ROWS = 50
 
 type Geometry = {
   total: number
@@ -59,12 +61,20 @@ function mixedGeometry(tall: readonly boolean[]): Geometry {
 
 type Range = { start: number; end: number }
 
-/** `uid`'s index among the rows: looked up once per rows, never per scroll. */
-function useIndexOf(items: readonly BotItem[], uid: string | null): number {
-  return useMemo(
-    () => (uid === null ? -1 : items.findIndex((item) => item.uid === uid)),
-    [items, uid]
-  )
+/** A row by its uid and where it was: found there at once unless the rows have moved since. */
+type RowPick = { uid: string; at: number }
+
+function indexOfPick(items: readonly BotItem[], pick: RowPick | null): number {
+  if (pick === null) {
+    return -1
+  }
+  return items[pick.at]?.uid === pick.uid
+    ? pick.at
+    : items.findIndex((item) => item.uid === pick.uid)
+}
+
+function useIndexOf(items: readonly BotItem[], pick: RowPick | null): number {
+  return useMemo(() => indexOfPick(items, pick), [items, pick])
 }
 
 export function BotItemRowsWindow({
@@ -104,15 +114,29 @@ export function BotItemRowsWindow({
         : uniformGeometry(count),
     [count, tallKey]
   )
+  const all = count <= ALL_ROWS
   const [range, setRange] = useState<Range>({ start: 0, end: Math.min(count, FIRST_ROWS) })
+  // The row at the top of the panel's view, when this group spans it: rows added or removed above it
+  // move the view with them, so what the owner is reading stays put.
+  const anchor = useRef<(RowPick & { offset: number }) | null>(null)
   const measure = useCallback(() => {
     const box = viewport.read()
     const element = container.current
+    const top = box && element ? element.getBoundingClientRect().top : null
+    anchor.current = null
+    if (box && top !== null) {
+      const viewTop = box.top - top
+      if (viewTop > 0 && viewTop < geometry.total) {
+        const at = geometry.indexAt(viewTop)
+        anchor.current = { uid: items[at]!.uid, at, offset: geometry.offset(at) }
+      }
+    }
     let next: Range
-    if (!box || !element) {
+    if (all) {
+      next = { start: 0, end: count }
+    } else if (!box || top === null) {
       next = { start: 0, end: Math.min(count, FIRST_ROWS) }
     } else {
-      const top = element.getBoundingClientRect().top
       const from = box.top - top - OVERSCAN_PX
       const to = box.bottom - top + OVERSCAN_PX
       next =
@@ -121,24 +145,37 @@ export function BotItemRowsWindow({
           : { start: geometry.indexAt(Math.max(0, from)), end: geometry.indexAt(to) + 1 }
     }
     setRange((prev) => (prev.start === next.start && prev.end === next.end ? prev : next))
-  }, [viewport, geometry, count])
+  }, [viewport, geometry, count, all, items])
+  useLayoutEffect(() => viewport.subscribe(measure), [measure, viewport])
+  // After every render: an update can move this group (another group regrouped above it) or its rows
+  // without the list changing height, which no scroll or resize would report.
   useLayoutEffect(() => {
+    const held = anchor.current
+    const at = indexOfPick(items, held)
+    if (held && at >= 0) {
+      viewport.keep(geometry.offset(at) - held.offset)
+    }
     measure()
-    return viewport.subscribe(measure)
-  }, [measure, viewport])
+  })
 
   // Focus inside a row keeps it drawn; the last row focused stays the group's Tab stop. A window losing
   // focus (Orca in the background) keeps both, so the row is there when Orca comes back.
-  const [focusedUid, setFocusedUid] = useState<string | null>(null)
+  const [focused, setFocused] = useState<RowPick | null>(null)
   // Until a row is focused, the Tab stop is the row first shown, wherever updates move it.
-  const [stopUid, setStopUid] = useState<string | null>(() => items[0]?.uid ?? null)
+  const [stop, setStop] = useState<RowPick | null>(() =>
+    items[0] ? { uid: items[0].uid, at: 0 } : null
+  )
   // The row an arrow moved to: drawn, then focused as it mounts.
-  const [targetUid, setTargetUid] = useState<string | null>(null)
-  const stopIndex = useIndexOf(items, stopUid)
+  const [target, setTarget] = useState<RowPick | null>(null)
+  const backPick = useMemo(
+    () => (backUid === null ? null : { uid: backUid, at: 0 }),
+    [backUid]
+  )
+  const stopIndex = useIndexOf(items, stop)
   const tabStop = stopIndex >= 0 ? stopIndex : 0
-  const focusedIndex = useIndexOf(items, focusedUid)
-  const targetIndex = useIndexOf(items, targetUid)
-  const backIndex = useIndexOf(items, backUid)
+  const focusedIndex = useIndexOf(items, focused)
+  const targetIndex = useIndexOf(items, target)
+  const backIndex = useIndexOf(items, backPick)
   const pinned = useMemo(
     () =>
       [tabStop, focusedIndex, targetIndex, backIndex].filter(
@@ -157,7 +194,7 @@ export function BotItemRowsWindow({
   const focusTarget = useCallback((node: HTMLElement | null) => {
     if (node) {
       node.querySelector<HTMLElement>('[data-bot-item-open]')?.focus()
-      setTargetUid(null)
+      setTarget(null)
     }
   }, [])
   const focusBack = useCallback(
@@ -175,8 +212,17 @@ export function BotItemRowsWindow({
   )
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
-    // Keys from a row's open menu reach here through its portal; the menu owns those.
-    if (!(event.target instanceof Element) || !event.currentTarget.contains(event.target)) {
+    // Keys from a row's open menu reach here through its portal, and a menu trigger opens its menu on
+    // Arrow Down: the menu owns those. Modified arrows are the system's (Cmd+Up scrolls to the top).
+    if (
+      event.defaultPrevented ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey ||
+      !(event.target instanceof Element) ||
+      !event.currentTarget.contains(event.target)
+    ) {
       return
     }
     const at = Number(
@@ -199,7 +245,7 @@ export function BotItemRowsWindow({
       return
     }
     event.preventDefault()
-    setTargetUid(items[next].uid)
+    setTarget({ uid: items[next].uid, at: next })
   }
 
   return (
@@ -220,26 +266,28 @@ export function BotItemRowsWindow({
             aria-posinset={index + 1}
             aria-setsize={count}
             data-bot-item-index={index}
-            className="absolute inset-x-0"
+            // The window keeps the reading position itself, so the browser mustn't anchor on a row.
+            className="absolute inset-x-0 [overflow-anchor:none]"
             style={{ top: geometry.offset(index), height: geometry.height(index) }}
             ref={
-              item.uid === targetUid
+              index === targetIndex
                 ? focusTarget
-                : item.uid === backUid
+                : index === backIndex
                   ? focusBack
                   : undefined
             }
             onFocus={() => {
-              setFocusedUid(item.uid)
-              setStopUid(item.uid)
+              const pick = { uid: item.uid, at: index }
+              setFocused(pick)
+              setStop(pick)
             }}
             onBlur={(event) => {
               if (document.hasFocus() && !event.currentTarget.contains(event.relatedTarget)) {
-                setFocusedUid(null)
+                setFocused(null)
               }
             }}
           >
-            {renderRow(item, index === tabStop)}
+            {renderRow(item, all || index === tabStop)}
           </div>
         )
       })}
