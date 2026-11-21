@@ -2301,7 +2301,7 @@
       "address": "地址",
       "connectionPreview": "连接到 {{endpoint}}",
       "updateStepsServiceManager": "请使用其包管理器或服务管理器进行更新",
-      "updateStepsSourceCheckout": "请在其源码检出目录中更新",
+      "updateStepsSourceCheckout": "请在其源码目录中更新",
       "updateStepsServer": "请更新服务器上的 Orca，然后重新启动",
       "orcaVersion": "Orca 版本",
       "goBack": "返回",
