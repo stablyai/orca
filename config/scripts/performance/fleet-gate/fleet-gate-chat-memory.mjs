@@ -22,6 +22,47 @@ const SAMPLE_EVERY_MS = 5_000
 // Memory falling this much as 190 chats start means a reading was wrong, not that chats are free.
 const MIN_MAIN_MB_PER_CHAT = -0.25
 
+/** Of these chats, how many the host reports idle (first turn finished) with their provider running. */
+async function idleLiveChatCount(page, sessionIds) {
+  return page.evaluate(
+    (ids) =>
+      new Promise((resolve, reject) => {
+        const wanted = new Set(ids)
+        const timer = setTimeout(() => reject(new Error('no status snapshot in 30 s')), 30_000)
+        let subscription = null
+        let settled = false
+        const finish = (count) => {
+          settled = true
+          clearTimeout(timer)
+          subscription?.unsubscribe()
+          resolve(count)
+        }
+        window.api.runtime
+          .subscribe({ method: 'agentSession.subscribeStatus', params: {} }, (response) => {
+            if (settled || !response.ok || response.result?.type !== 'snapshot') {
+              return
+            }
+            finish(
+              response.result.sessions.filter(
+                (row) =>
+                  wanted.has(row.sessionId) &&
+                  row.status === 'idle' &&
+                  row.hostExecutionOwned === true &&
+                  row.hostExecutionPhase !== 'starting'
+              ).length
+            )
+          })
+          .then((handle) => {
+            subscription = handle
+            if (settled) {
+              handle.unsubscribe()
+            }
+          }, reject)
+      }),
+    sessionIds
+  )
+}
+
 /** Chat stub processes still running: the reading only counts if every chat it started is alive. */
 function liveChatCount(launchLog) {
   const lines = fs.existsSync(launchLog) ? fs.readFileSync(launchLog, 'utf8').split('\n') : []
@@ -103,8 +144,10 @@ export async function chatMemoryOnce({
         `chat-mem: fleet loaded ${String(workspaces)} of ${String(fleet)} workspaces`
       )
     }
+    const sessionIds = []
     const step = async (count, offset) => {
       const batch = await createChatBurst(copy.page, count, offset, 'fleet gate idle turn')
+      sessionIds.push(...batch.sessionIds)
       if (batch.requested !== count || batch.refused.length > 0) {
         result.incomplete.push(
           `chat-mem: ${String(batch.requested)} of ${String(count)} chats requested, ${String(batch.refused.length)} refused`
@@ -121,9 +164,10 @@ export async function chatMemoryOnce({
       await new Promise((resolve) => setTimeout(resolve, options.chatSettleMs))
       const footprint = await sampleMainFootprintMb(copy.app, copy.page)
       const live = liveChatCount(stub.launchLog)
-      if (live < offset + count) {
+      const idle = await idleLiveChatCount(copy.page, sessionIds)
+      if (live < offset + count || idle < offset + count) {
         result.incomplete.push(
-          `chat-mem: ${String(live)} of ${String(offset + count)} chats alive at the reading`
+          `chat-mem: of ${String(offset + count)} chats, ${String(live)} alive and ${String(idle)} idle at the reading`
         )
         return null
       }
