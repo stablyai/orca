@@ -165,7 +165,10 @@ export const BOT_METHODS = [
       // A paired client reads each server itself, so only a host's own callers fan out.
       const paired =
         params.allComputers && context.pairedDeviceId === undefined
-          ? readPairedBotRosters(runtime)
+          ? readPairedBotRosters(runtime).then((rosters) => {
+              runtime.pairedBotRosters.remember(rosters, { complete: true })
+              return rosters
+            })
           : null
       const own = await Promise.all(
         (await runtime.bots.roster()).map(async (rosterEntry) => {
