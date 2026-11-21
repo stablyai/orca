@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { Copy, TextSelect, Trash2, X } from 'lucide-react-native'
+import { Copy, TextSelect, Trash2, X } from '../../../../components/icons/app-icons'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { ActionSheetContent } from '../../../../components/sheets/ActionSheetModal'
 import { BottomDrawer } from '../../../../components/bottom-drawer/BottomDrawer'

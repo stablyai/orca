@@ -1,4 +1,4 @@
-import type { LucideIcon } from 'lucide-react-native'
+import type { AppIcon } from '../components/icons/app-icons'
 import { Pressable, Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -13,7 +13,7 @@ export function MobileHomeSectionHeading(props: {
   /** Shown muted after the title. */
   count?: number
   aside?: string
-  asideIcon?: LucideIcon
+  asideIcon?: AppIcon
   /** Turns the aside into a link. */
   onAsidePress?: () => void
 }) {

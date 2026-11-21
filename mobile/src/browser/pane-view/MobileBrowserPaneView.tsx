@@ -10,7 +10,7 @@ import {
   type ViewStyle,
   type HostInstance
 } from 'react-native'
-import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
+import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw } from '../../components/icons/app-icons'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'

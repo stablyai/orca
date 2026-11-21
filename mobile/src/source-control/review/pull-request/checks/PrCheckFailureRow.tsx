@@ -8,7 +8,7 @@ import {
   RotateCw,
   Sparkles,
   SquareTerminal
-} from 'lucide-react-native'
+} from '../../../../components/icons/app-icons'
 import { colors, pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'

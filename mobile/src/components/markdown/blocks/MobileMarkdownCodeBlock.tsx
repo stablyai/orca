@@ -1,4 +1,4 @@
-import { TextWrap } from 'lucide-react-native'
+import { TextWrap } from '../../icons/app-icons'
 import { memo, useContext, useMemo } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { ChevronLeft, X } from 'lucide-react-native'
+import { ChevronLeft, X } from '../icons/app-icons'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'

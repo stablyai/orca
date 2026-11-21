@@ -2,7 +2,7 @@
 // each Slack workspace, each Linear workspace, GitHub, Google, Webhooks, then each app signed in through Composio.
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { Fragment, useCallback, useState, type ReactNode } from 'react'
-import { Blocks, Plus } from 'lucide-react-native'
+import { Blocks, Plus } from '../../components/icons/app-icons'
 import { botLinearWorkspaces, botMembersFrom, botSlackApps } from '../../../../src/shared/bot-types'
 import {
   COMPOSIO_CURATED_APPS,

@@ -3,7 +3,7 @@
 // somewhere else, or by-hand steps (copy the address, paste it in Composio, Done).
 import { useEffect, useRef, useState } from 'react'
 import { AppState } from 'react-native'
-import { Copy, ExternalLink, Webhook } from 'lucide-react-native'
+import { Copy, ExternalLink, Webhook } from '../../../../components/icons/app-icons'
 import { COMPOSIO_PAGES } from '../../../../../../src/shared/composio/composio-apps'
 import { errorMessage } from '../../../../../../src/shared/errors/error-message'
 import { startHostBotRefresh } from '../../../../bots/host-bot-refresh'

@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { Check } from '../../../../components/icons/app-icons'
 import { MobileNativeChatOptionThumbnail } from '../session-options/MobileNativeChatOptionThumbnail'
 import { colors, radii, spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
 import { ASK_CHOICE_RADIUS } from './MobileNativeChatAsk.styles'

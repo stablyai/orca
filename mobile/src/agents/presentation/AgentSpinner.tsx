@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Activity } from 'lucide-react-native'
+import { Activity } from '../../components/icons/app-icons'
 import { View } from 'react-native'
 import type { AgentWorkingMode } from '../../../../src/shared/agent-status/contracts/agent-status-types'
 import type { WorktreeStatus } from '../../../../src/shared/worktree/row-display/worktree-status-rollup'

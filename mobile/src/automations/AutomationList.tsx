@@ -1,7 +1,7 @@
 import { automationOrphanIssueText } from './automation-orphan-issue-copy'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { CalendarClock, ChevronRight } from 'lucide-react-native'
+import { CalendarClock, ChevronRight } from '../components/icons/app-icons'
 import { Pressable, Switch, Text, View } from 'react-native'
 import { formatAutomationSchedule } from './automation-schedule-label'
 import { automationNextRunLabel } from './automation-next-run-label'

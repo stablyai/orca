@@ -2,7 +2,7 @@
 // and Link a project to pick from the host's projects. Open folder stays on the desktop.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Text, View } from 'react-native'
-import { ChevronDown, ChevronUp, Folder, Plus } from 'lucide-react-native'
+import { ChevronDown, ChevronUp, Folder, Plus } from '../../components/icons/app-icons'
 import { BOT_MAX_SKILL_PROJECTS } from '../../../../src/shared/bot-types'
 import { BOT_AGENTS_LISTING_LINKED_SKILLS } from '../../../../src/shared/bots/bot-skill-projects'
 import { MobileSearchField } from '../../components/controls/MobileSearchField'

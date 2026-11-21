@@ -14,7 +14,7 @@ import {
   type Ref
 } from 'react'
 import { Text, View, type HostInstance, type TextInputInstance } from 'react-native'
-import { WifiOff } from 'lucide-react-native'
+import { WifiOff } from '../../components/icons/app-icons'
 import type { BotItem, BotItemCommentSkill } from '../../../../src/shared/bots/bot-items'
 import { folderWorkspaceKey } from '../../../../src/shared/workspace/identity/workspace-scope'
 import { SkillRefLimitError } from '../../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'

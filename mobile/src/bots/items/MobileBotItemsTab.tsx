@@ -4,7 +4,7 @@
 // Select there starts multi-select, where taps check rows and a floating bar moves them all at once.
 import { useMemo, useState, type ReactNode } from 'react'
 import { Text, View } from 'react-native'
-import { Inbox, X } from 'lucide-react-native'
+import { Inbox, X } from '../../components/icons/app-icons'
 import {
   BOT_ITEM_GROUP_IDS,
   BOT_ITEM_GROUP_ROWS,

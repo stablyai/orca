@@ -1,7 +1,7 @@
 // Settings › Tools: the bot's own tools, the ones it gets from its owner's agent, and Add a tool,
 // like the desktop's BotToolsSection, with each tool on a page of its own.
 import { useEffect, useState } from 'react'
-import { Plus, Wrench } from 'lucide-react-native'
+import { Plus, Wrench } from '../../components/icons/app-icons'
 import {
   botToolsLine,
   botToolSubtitle,

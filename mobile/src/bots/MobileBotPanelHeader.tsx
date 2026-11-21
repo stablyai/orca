@@ -1,7 +1,7 @@
 // The bot panel's head: the bot's name and "agent · computer", the filter (on Items) and the gear for
 // settings, then the tabs with Items' Needs you count; and the Items filter sheet.
 import { Text, View } from 'react-native'
-import { ListFilter, Settings } from 'lucide-react-native'
+import { ListFilter, Settings } from '../components/icons/app-icons'
 import type { BotItemFilter } from '../../../src/shared/bots/bot-item-groups'
 import { MobileSegmentedControl } from '../components/controls/MobileSegmentedControl'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'

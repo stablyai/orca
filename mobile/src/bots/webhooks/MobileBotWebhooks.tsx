@@ -1,7 +1,7 @@
 // Settings › Connectors › Webhooks: the desktop's BotWebhooksCard as pages inside the bot's settings. Hooks are
 // made and their filters changed in chat; here the owner reads, copies, pauses, rotates, signs and deletes.
 import { useEffect, useState, type ReactNode } from 'react'
-import { Webhook } from 'lucide-react-native'
+import { Webhook } from '../../components/icons/app-icons'
 import { webhookStatusFact } from '../../../../src/shared/bots/webhook-card-view'
 import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'

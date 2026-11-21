@@ -2,7 +2,7 @@
 // and the safety check's flag rows. The desktop's BotSharePartView and BotShareRows.
 import { useEffect, useState } from 'react'
 import { Text, View } from 'react-native'
-import { ShieldAlert, TriangleAlert } from 'lucide-react-native'
+import { ShieldAlert, TriangleAlert } from '../../components/icons/app-icons'
 import type { BotShareFlagSpot } from '../../../../src/shared/bots/bot-share-flag-spots'
 import { LoadingSpinner } from '../../components/feedback/LoadingSpinner'
 import { ListRow } from '../../components/list/ListGroup'

@@ -3,7 +3,7 @@
 // away or gives it asks first.
 import { useState, type ReactNode } from 'react'
 import { View } from 'react-native'
-import { UserPlus } from 'lucide-react-native'
+import { UserPlus } from '../components/icons/app-icons'
 import { BOT_MAX_MEMBERS, botMemberSource, type BotMember } from '../../../src/shared/bot-types'
 import { accessRequestPerson, newBotMembers } from '../../../src/shared/bots/bot-access-request'
 import { BOT_ACCESS_COPY, botAccessCopy } from '../../../src/shared/bots/bot-access-copy'

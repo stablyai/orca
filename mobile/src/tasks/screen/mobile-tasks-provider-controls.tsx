@@ -1,7 +1,7 @@
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
 import { translate } from '../../i18n/mobile-i18n'
 import { ScrollView } from 'react-native'
-import { SlidersHorizontal } from 'lucide-react-native'
+import { SlidersHorizontal } from '../../components/icons/app-icons'
 import { styles } from '../mobile-tasks-legacy-styles'
 import { FilterChip } from '../../components/nav-bar/FilterChip'
 import { renderMobileTasksGitHubViewControls } from './mobile-tasks-github-view-controls'

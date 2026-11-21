@@ -1,7 +1,7 @@
 import { useCallback, useState, useSyncExternalStore } from 'react'
 import { View } from 'react-native'
 import { useFocusEffect, useLocalSearchParams } from 'expo-router'
-import { ChevronLeft } from 'lucide-react-native'
+import { ChevronLeft } from '../components/icons/app-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useForceReconnect, useHostClient } from '../transport/connection/host-client-hooks'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'

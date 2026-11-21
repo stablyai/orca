@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import type { LayoutChangeEvent } from 'react-native'
-import { Bot } from 'lucide-react-native'
+import { Bot } from '../components/icons/app-icons'
 import {
   type ActivePanel,
   resolvePanelAction,

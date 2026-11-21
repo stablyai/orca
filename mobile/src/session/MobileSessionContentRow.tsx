@@ -1,5 +1,5 @@
 import { View, Text, Pressable } from 'react-native'
-import { AlertTriangle, X } from 'lucide-react-native'
+import { AlertTriangle, X } from '../components/icons/app-icons'
 import { SessionDockColumn } from './SessionDockColumn'
 import { dismissMobileSessionCreateWarningState } from './tabs/mobile-session-create-warning-state'
 import { colors, pressedStyle } from '../theme/mobile-theme'

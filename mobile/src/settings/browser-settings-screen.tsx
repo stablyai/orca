@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'expo-router'
-import { Globe } from 'lucide-react-native'
+import { Globe } from '../components/icons/app-icons'
 import { ListRow } from '../components/list/ListGroup'
 import { PickerModal, type PickerOption } from '../components/sheets/PickerModal'
 import type { Translate } from '../i18n/mobile-i18n'

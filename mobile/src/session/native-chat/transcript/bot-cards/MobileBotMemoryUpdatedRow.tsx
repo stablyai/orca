@@ -1,5 +1,5 @@
 import { Pressable, Text, View } from 'react-native'
-import { ChevronDown, ChevronRight } from 'lucide-react-native'
+import { ChevronDown, ChevronRight } from '../../../../components/icons/app-icons'
 import {
   BOT_MEMORY_UPDATED_COPY as COPY,
   botMemoryUpdatedRows,

@@ -3,7 +3,7 @@
 // owner's one-time setup in Composio, then Check again.
 import { useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, Image } from 'react-native'
-import { ExternalLink } from 'lucide-react-native'
+import { ExternalLink } from '../../../../components/icons/app-icons'
 import {
   COMPOSIO_PAGES,
   composioAppGuideUrl,

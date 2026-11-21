@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Alert, View, Text, Pressable } from 'react-native'
-import { ChevronLeft } from 'lucide-react-native'
+import { ChevronLeft } from '../../components/icons/app-icons'
 import { colors, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'

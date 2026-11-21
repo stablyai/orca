@@ -1,4 +1,10 @@
-import { Check, Columns2, LayoutGrid, Rows2, SquareTerminal } from 'lucide-react-native'
+import {
+  Check,
+  Columns2,
+  LayoutGrid,
+  Rows2,
+  SquareTerminal
+} from '../../../components/icons/app-icons'
 import { ActionSheetModal } from '../../../components/sheets/ActionSheetModal'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { TerminalSplitLayout } from '../../../storage/preferences'

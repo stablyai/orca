@@ -1,5 +1,5 @@
 import { Pressable, Text, View } from 'react-native'
-import { ChevronRight } from 'lucide-react-native'
+import { ChevronRight } from '../../../../components/icons/app-icons'
 import { colors, pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'

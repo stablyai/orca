@@ -1,6 +1,6 @@
 import { useContext, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { Timer } from 'lucide-react-native'
+import { Timer } from '../../../../components/icons/app-icons'
 import { workerApprovalTimeLeft } from '../../../../../../src/shared/orchestration/approvals/worker-approval-time-left'
 import { useNow } from '../../../../hooks/use-now'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'

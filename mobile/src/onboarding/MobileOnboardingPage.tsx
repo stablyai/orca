@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
-import { MessageSquare } from 'lucide-react-native'
+import { MessageSquare } from '../components/icons/app-icons'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileOnboardingStep } from './mobile-onboarding-plan'
 import { mobileOnboardingStyles as styles } from './mobile-onboarding-styles'

@@ -1,6 +1,6 @@
 import { useContext } from 'react'
 import { Text } from 'react-native'
-import { GitPullRequest } from 'lucide-react-native'
+import { GitPullRequest } from '../../../../components/icons/app-icons'
 import type { NativeChatTextBlock } from '../../../../../../src/shared/native-chat/native-chat-types'
 import {
   parsePullRequestEventItemId,

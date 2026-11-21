@@ -1,7 +1,7 @@
 // An item's status glyph, as the desktop draws it: Planned a dashed ring, In progress a spinner while a linked
 // worker runs (a ring otherwise), Needs you an orange dot (grey once stale), Done a check, Canceled a slashed circle.
 import { View } from 'react-native'
-import { CircleCheck, CircleSlash } from 'lucide-react-native'
+import { CircleCheck, CircleSlash } from '../../components/icons/app-icons'
 import type { BotItemStatus } from '../../../../src/shared/bots/bot-items'
 import { LoadingSpinner } from '../../components/feedback/LoadingSpinner'
 import { colors, radii } from '../../theme/mobile-theme'

@@ -2,7 +2,7 @@
 // for bots made from a link) and the review's tool ticks. Create writes the reviewed version whole.
 import { useState, type ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { Shuffle } from 'lucide-react-native'
+import { Shuffle } from '../../components/icons/app-icons'
 import { isBotMascotId, mascotAvatar, randomMascotAvatar } from '../../../../src/shared/bot-avatar'
 import { BOT_NAME_MAX_LENGTH, type BotAgent } from '../../../../src/shared/bot-types'
 import { freeBotName } from '../../../../src/shared/bots/bot-template-view'

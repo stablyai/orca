@@ -3,7 +3,7 @@
 // No Generate: it runs an image agent on the computer you look from, and a phone has none.
 import { useState, type ReactNode } from 'react'
 import { Pressable, View } from 'react-native'
-import { ImageUp } from 'lucide-react-native'
+import { ImageUp } from '../components/icons/app-icons'
 import {
   mascotAvatar,
   parseBotAvatar,

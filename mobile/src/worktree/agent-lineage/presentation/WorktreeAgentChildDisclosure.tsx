@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, ChevronRight } from 'lucide-react-native'
+import { Bell, ChevronDown, ChevronRight } from '../../../components/icons/app-icons'
 import { Pressable, Text, View } from 'react-native'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { colors, pressedStyle, spacing } from '../../../theme/mobile-theme'

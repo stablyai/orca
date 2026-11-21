@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { ScrollView, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ChevronLeft } from 'lucide-react-native'
+import { ChevronLeft } from '../components/icons/app-icons'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { ListGroup, LIST_ROW_PADDING, SectionHeader } from '../components/list/ListGroup'

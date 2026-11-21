@@ -1,7 +1,7 @@
 // A group's Items filter, as a page in its drawer: which bots, which room (or all their work), and
 // Needs you only, as the desktop's group filter offers them.
 import { ScrollView, View } from 'react-native'
-import { Layers, MessageSquare, Users } from 'lucide-react-native'
+import { Layers, MessageSquare, Users } from '../components/icons/app-icons'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import { MobileSwitch } from '../components/controls/MobileSwitch'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'

@@ -1,4 +1,4 @@
-import type { LucideIcon } from 'lucide-react-native'
+import type { AppIcon } from '../icons/app-icons'
 import type { ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
@@ -23,7 +23,7 @@ const DRAG_CLICK_WINDOW_MS = 400
 export type SwipeRowAction = {
   label: string
   accessibilityLabel: string
-  icon: LucideIcon
+  icon: AppIcon
   background: string
   foreground: string
   onPress: () => void

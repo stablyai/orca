@@ -5,7 +5,7 @@ import {
   sayAutomationRunEnglish
 } from '../../../src/shared/automations/automation-run-row-words'
 import { Pressable, Text, View } from 'react-native'
-import { ChevronRight } from 'lucide-react-native'
+import { ChevronRight } from '../components/icons/app-icons'
 import { colors, pressedStyle } from '../theme/mobile-theme'
 import type { MobileAutomationRow, MobileAutomationRun } from './automation-reply-schema'
 import { AutomationButton, AutomationChoice } from './AutomationControls'

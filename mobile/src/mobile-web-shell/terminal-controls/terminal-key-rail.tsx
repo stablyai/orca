@@ -7,7 +7,7 @@ import {
   Monitor,
   Smartphone,
   ChevronsRight
-} from 'lucide-react-native'
+} from '../../components/icons/app-icons'
 import { hasTerminalDirectionPadSpace } from '../../layout/side-rail-strip'
 import { useSideRailStrip, useSideRailDirectionPadAvailable } from '../../layout/side-rail'
 import { TERMINAL_ACCESSORY_KEY_DEFINITIONS } from '../../terminal/key-input/terminal-key-definitions'

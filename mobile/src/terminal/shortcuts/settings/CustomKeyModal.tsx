@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { View, Text, Pressable } from 'react-native'
-import { ChevronLeft } from 'lucide-react-native'
+import { ChevronLeft } from '../../../components/icons/app-icons'
 import { colors, pressedStyle } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'

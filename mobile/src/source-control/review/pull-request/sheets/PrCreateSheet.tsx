@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { ChevronsUpDown, Sparkles } from 'lucide-react-native'
+import { ChevronsUpDown, Sparkles } from '../../../../components/icons/app-icons'
 import { colors, pressedStyle, spacing } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'

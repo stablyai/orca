@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState, type Ref } from 'react'
 import { ActivityIndicator, Pressable, Text, View, type HostInstance } from 'react-native'
-import { CircleAlert, Laptop, Mic, RotateCcw, Smartphone, Square, X } from 'lucide-react-native'
+import {
+  CircleAlert,
+  Laptop,
+  Mic,
+  RotateCcw,
+  Smartphone,
+  Square,
+  X
+} from '../components/icons/app-icons'
 import type { MobileDictationMeter } from '../hooks/mobile-dictation-meter'
 import type { MobileDictationEngineShown } from '../hooks/mobile-dictation-session-state'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
-import { ChevronDown, MessageSquare } from 'lucide-react-native'
+import { ChevronDown, MessageSquare } from '../../../components/icons/app-icons'
 import {
   buildSourceControlTree,
   compactSourceControlTree,

@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ScrollView, Text, View } from 'react-native'
-import { ChevronDown, CircleCheck, CircleMinus, LoaderCircle } from 'lucide-react-native'
+import {
+  ChevronDown,
+  CircleCheck,
+  CircleMinus,
+  LoaderCircle
+} from '../../../../components/icons/app-icons'
 import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'

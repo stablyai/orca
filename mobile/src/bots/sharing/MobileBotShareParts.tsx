@@ -2,7 +2,7 @@
 // text as it goes out. The desktop's BotShareLists, BotShareFlagPages and BotSharePartView.
 import type { ReactNode } from 'react'
 import { Pressable, View } from 'react-native'
-import { Check, Eye } from 'lucide-react-native'
+import { Check, Eye } from '../../components/icons/app-icons'
 import { BOT_SHARE_MAX_PICKS } from '../../../../src/shared/rpc-contract/bots-share-params'
 import { allMemory, pickedOf, toggled } from '../../../../src/shared/bots/bot-share-pick-lists'
 import {

@@ -10,7 +10,7 @@ import {
   Plus,
   Trash2,
   Zap
-} from 'lucide-react-native'
+} from '../components/icons/app-icons'
 import { hasAutomationSchedule } from '../../../src/shared/automation-event-triggers'
 import { useNow } from '../hooks/use-now'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'

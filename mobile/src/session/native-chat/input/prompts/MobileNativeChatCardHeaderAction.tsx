@@ -1,5 +1,5 @@
 import { Keyboard, Pressable, StyleSheet, View } from 'react-native'
-import { ChevronDown, X } from 'lucide-react-native'
+import { ChevronDown, X } from '../../../../components/icons/app-icons'
 import { colors, pressedStyle } from '../../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'

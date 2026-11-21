@@ -3,7 +3,7 @@
 // install page works in any browser, so it opens in the phone's, and the host notices the install.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { View } from 'react-native'
-import { ArrowUpRight, ExternalLink } from 'lucide-react-native'
+import { ArrowUpRight, ExternalLink } from '../../components/icons/app-icons'
 import {
   BOT_GITHUB_OFF,
   type ConnectorGitHubInstallation

@@ -4,7 +4,7 @@ import { translate } from '../../i18n/mobile-i18n'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import { View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { TextField } from '../../components/composer-input/TextField'
-import { Search, AlertTriangle } from 'lucide-react-native'
+import { Search, AlertTriangle } from '../../components/icons/app-icons'
 import { colors, pressedStyle } from '../../theme/mobile-theme'
 import {
   githubProjectIdentityKey as githubProjectKey,

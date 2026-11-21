@@ -1,4 +1,4 @@
-import { QrCode } from 'lucide-react-native'
+import { QrCode } from '../components/icons/app-icons'
 import { useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import Animated from 'react-native-reanimated'

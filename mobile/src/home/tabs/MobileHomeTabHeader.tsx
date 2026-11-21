@@ -1,4 +1,4 @@
-import type { LucideIcon } from 'lucide-react-native'
+import type { AppIcon } from '../../components/icons/app-icons'
 import { useState, type ReactNode, type Ref } from 'react'
 import { Pressable, Text, View, type HostInstance } from 'react-native'
 import Animated from 'react-native-reanimated'
@@ -22,7 +22,7 @@ export function MobileHomeTabHeader(props: { title: string; trailing?: ReactNode
 export function MobileHomeTabHeaderButton(props: {
   /** The anchor a pull-down menu drops from. */
   ref?: Ref<HostInstance>
-  icon: LucideIcon
+  icon: AppIcon
   accessibilityLabel: string
   disabled?: boolean
   /** Spins the glyph while a refresh it started is in flight. */

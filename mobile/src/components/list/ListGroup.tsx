@@ -1,6 +1,6 @@
 import { Children, Fragment, isValidElement, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
-import { Check, ChevronDown, ChevronRight } from 'lucide-react-native'
+import { Check, ChevronDown, ChevronRight } from '../icons/app-icons'
 import { DisclosureChevron } from './DisclosureChevron'
 import { triggerSelection } from '../../platform/haptics/haptics'
 import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'

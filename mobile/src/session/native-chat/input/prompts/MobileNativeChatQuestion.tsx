@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { Check, CircleHelp } from 'lucide-react-native'
+import { Check, CircleHelp } from '../../../../components/icons/app-icons'
 import { MobileNativeChatCardHeaderAction } from './MobileNativeChatCardHeaderAction'
 import { MobileNativeChatQuestionText } from '../../transcript/message-content/MobileNativeChatQuestionText'
 import {

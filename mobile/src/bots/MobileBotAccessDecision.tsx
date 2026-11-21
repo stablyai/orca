@@ -3,7 +3,7 @@
 // waiting.
 import { useEffect, useState, type ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { Laptop, Mail, ShieldAlert, ShieldOff, type LucideIcon } from 'lucide-react-native'
+import { Laptop, Mail, ShieldAlert, ShieldOff, type AppIcon } from '../components/icons/app-icons'
 import type { ConnectorAccessRequest } from '../../../src/shared/connector-bot-access-contract'
 import { BOT_ACCESS_COPY, botAccessCopy } from '../../../src/shared/bots/bot-access-copy'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
@@ -27,7 +27,7 @@ import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { BotAccessRequests } from './use-bot-access-requests'
 import { MobileConnectorSourceIcon } from './MobileConnectorSourceIcon'
 
-const ROW_ICONS: Partial<Record<AccessDecisionRow['kind'], LucideIcon>> = {
+const ROW_ICONS: Partial<Record<AccessDecisionRow['kind'], AppIcon>> = {
   computer: Laptop,
   'no-approvals': ShieldOff,
   'may-skip-approvals': ShieldAlert,

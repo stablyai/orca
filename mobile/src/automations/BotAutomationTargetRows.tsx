@@ -1,6 +1,6 @@
 // Where an agent's automation runs and where its results go: the desktop sidebar's Runs in, Agent and
 // Send results to, in its order, with the options that can't work yet shown with their reason.
-import { CircleOff, Hash, MessageCircle, MessageSquare } from 'lucide-react-native'
+import { CircleOff, Hash, MessageCircle, MessageSquare } from '../components/icons/app-icons'
 import type { AgentType } from '../../../src/shared/agent-status/contracts/agent-status-types'
 import { getAgentSessionOptionLaunchCatalog } from '../../../src/shared/agent-session/options/agent-session-option-catalog'
 import type { AutomationBotTarget } from '../../../src/shared/automations/automation-definition'

@@ -1,6 +1,6 @@
 import { useRef, type ReactNode } from 'react'
 import { ActivityIndicator, View, Text } from 'react-native'
-import { Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
+import { Edit3, Trash2, type AppIcon } from '../icons/app-icons'
 import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -10,7 +10,7 @@ import { LIST_LEADING_INSET, LIST_ROW_PADDING, ListGroup, ListRow } from '../lis
 export type ActionSheetAction = {
   id?: string
   label: string
-  icon?: LucideIcon
+  icon?: AppIcon
   renderIcon?: () => ReactNode
   destructive?: boolean
   disabled?: boolean
@@ -38,7 +38,7 @@ type Props = {
   onAfterClose?: () => void
 }
 
-function iconForAction(label: string, destructive?: boolean, icon?: LucideIcon): LucideIcon {
+function iconForAction(label: string, destructive?: boolean, icon?: AppIcon): AppIcon {
   if (icon) {
     return icon
   }

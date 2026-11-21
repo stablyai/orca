@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
-import { ChevronDown, Goal, Pause, Play, Trash2 } from 'lucide-react-native'
+import { ChevronDown, Goal, Pause, Play, Trash2 } from '../../../../components/icons/app-icons'
 import {
   agentSessionThreadGoalElapsedSeconds,
   agentSessionThreadGoalOfferedStatusChange

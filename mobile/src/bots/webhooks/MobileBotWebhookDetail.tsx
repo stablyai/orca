@@ -1,7 +1,15 @@
 // One hook as a page: the desktop's HookDetail fields and Recent calls, with its action bar moved into ⋯.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { View, type HostInstance } from 'react-native'
-import { Ellipsis, KeyRound, Pause, Play, RefreshCw, Send, Trash2 } from 'lucide-react-native'
+import {
+  Ellipsis,
+  KeyRound,
+  Pause,
+  Play,
+  RefreshCw,
+  Send,
+  Trash2
+} from '../../components/icons/app-icons'
 import { webhookStatusFact } from '../../../../src/shared/bots/webhook-card-view'
 import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'

@@ -1,4 +1,4 @@
-import { Settings } from 'lucide-react-native'
+import { Settings } from '../../components/icons/app-icons'
 import { ScrollView } from 'react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useResponsiveLayout } from '../../layout/responsive-layout'

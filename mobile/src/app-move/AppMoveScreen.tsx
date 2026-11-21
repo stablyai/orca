@@ -1,5 +1,5 @@
 import * as Notifications from 'expo-notifications'
-import { ArrowLeft, CircleCheck, Download, ExternalLink } from 'lucide-react-native'
+import { ArrowLeft, CircleCheck, Download, ExternalLink } from '../components/icons/app-icons'
 import { useEffect, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'

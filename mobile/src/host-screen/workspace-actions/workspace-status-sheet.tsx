@@ -1,4 +1,4 @@
-import { Circle } from 'lucide-react-native'
+import { Circle } from '../../components/icons/app-icons'
 import type { WorkspaceStatusDefinition } from '../../../../src/shared/worktree/types'
 import { getWorkspaceStatus } from '../../../../src/shared/workspace/status/workspace-statuses'
 import { ActionSheetContent } from '../../components/sheets/ActionSheetModal'

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { ChevronDown, ChevronRight } from 'lucide-react-native'
+import { ChevronDown, ChevronRight } from '../../../../components/icons/app-icons'
 import type { PRState } from '../../../../../../src/shared/github/pull-requests/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../../../../src/shared/github/work-items/work-item-types'
 import type { GitHubPrRepoSlug } from '../../github-operations/github-pr-repo-slug'

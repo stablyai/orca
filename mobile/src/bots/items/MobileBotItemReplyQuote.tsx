@@ -1,6 +1,6 @@
 // A reply's quote of the question it answers: one muted line above its text.
 import { Text, View } from 'react-native'
-import { CornerDownRight } from 'lucide-react-native'
+import { CornerDownRight } from '../../components/icons/app-icons'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'

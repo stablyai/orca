@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, Text } from 'react-native'
-import type { LucideIcon } from 'lucide-react-native'
+import type { AppIcon } from '../../../components/icons/app-icons'
 import { colors, feedback, pressedStyle, radii, spacing } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
@@ -12,7 +12,7 @@ export function PrMiniButton({
   disabled = false,
   bright = false
 }: {
-  icon?: LucideIcon
+  icon?: AppIcon
   label: string
   onPress: () => void
   busy?: boolean

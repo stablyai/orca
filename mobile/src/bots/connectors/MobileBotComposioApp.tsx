@@ -1,6 +1,6 @@
 // One app the bot signed in to through Composio, as a page in Connectors: the desktop's BotComposioAppRow.
 import { useState } from 'react'
-import { ExternalLink } from 'lucide-react-native'
+import { ExternalLink } from '../../components/icons/app-icons'
 import { errorMessage } from '../../../../src/shared/errors/error-message'
 import { ListRow } from '../../components/list/ListGroup'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'

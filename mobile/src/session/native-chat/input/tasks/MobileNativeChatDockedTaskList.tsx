@@ -1,6 +1,6 @@
 import { memo, useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
-import { ChevronUp, ListChecks } from 'lucide-react-native'
+import { ChevronUp, ListChecks } from '../../../../components/icons/app-icons'
 import {
   nativeChatCompletedTaskCount,
   nativeChatTaskLabel,

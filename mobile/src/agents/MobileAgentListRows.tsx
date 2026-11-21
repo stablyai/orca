@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, ChevronRight, Eye, EyeOff, X } from 'lucide-react-native'
+import { Bell, ChevronDown, ChevronRight, Eye, EyeOff, X } from '../components/icons/app-icons'
 import { MobileForkMarkedName } from '../session/fork/MobileForkMarkedName'
 import { mobileForkAccessibleName } from '../session/fork/mobile-fork-marked-name'
 import { Fragment, memo, useCallback, useState } from 'react'

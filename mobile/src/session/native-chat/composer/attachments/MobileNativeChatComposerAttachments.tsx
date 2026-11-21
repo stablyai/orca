@@ -10,7 +10,7 @@ import {
   Text,
   View
 } from 'react-native'
-import { FileText, Image as ImageIcon, X } from 'lucide-react-native'
+import { FileText, Image as ImageIcon, X } from '../../../../components/icons/app-icons'
 import {
   colors,
   concentricRadius,

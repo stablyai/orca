@@ -1,7 +1,7 @@
 // Where the bot runs, read-only: its computer, the Orca account that computer runs as, and its folder.
 import { useEffect, useState, type ReactNode } from 'react'
 import { Pressable } from 'react-native'
-import { CircleUserRound, Copy, Folder, Laptop } from 'lucide-react-native'
+import { CircleUserRound, Copy, Folder, Laptop } from '../components/icons/app-icons'
 import { ListRow } from '../components/list/ListGroup'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'

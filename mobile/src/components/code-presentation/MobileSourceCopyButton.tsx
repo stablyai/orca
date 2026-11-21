@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Alert, Platform, Pressable, Text } from 'react-native'
-import { Check, Copy } from 'lucide-react-native'
+import { Check, Copy } from '../icons/app-icons'
 import { translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'

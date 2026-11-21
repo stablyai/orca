@@ -1,6 +1,6 @@
 import { useCallback, useContext, useSyncExternalStore } from 'react'
 import { Text, View } from 'react-native'
-import { ArrowLeftRight, Play } from 'lucide-react-native'
+import { ArrowLeftRight, Play } from '../../../../components/icons/app-icons'
 import { readWholeAgentSessionFailureFact } from '../../../../../../src/shared/agent-session/failures/agent-session-failure'
 import type { NativeChatTextBlock } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { colors, feedback, spacing, typography } from '../../../../theme/mobile-theme'

@@ -8,7 +8,7 @@ import {
   ListChecks,
   Plus,
   SquareChevronRight
-} from 'lucide-react-native'
+} from '../components/icons/app-icons'
 import { MobileAgentSessionHistoryIcon } from '../agent-history/MobileAgentSessionHistoryIcon'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { PullDownMenu } from '../components/nav-bar/PullDownMenu'

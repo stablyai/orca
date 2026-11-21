@@ -9,7 +9,7 @@ import {
   PanelLeftClose,
   SquareTerminal,
   UserCircle
-} from 'lucide-react-native'
+} from '../components/icons/app-icons'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { hostDiagnosticsAction, hostEditAction } from '../host-list-action-sheet-actions'
 import { NavBar, NavBarSubtitleText } from '../components/nav-bar/NavBar'

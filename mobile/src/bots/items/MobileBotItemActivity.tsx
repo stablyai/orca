@@ -13,7 +13,7 @@ import {
   Pencil,
   Play,
   Plus
-} from 'lucide-react-native'
+} from '../../components/icons/app-icons'
 import {
   botItemActivity,
   type BotItemActivityEntry

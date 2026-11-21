@@ -8,7 +8,7 @@ import {
   CircleX,
   RotateCcw,
   X
-} from 'lucide-react-native'
+} from '../../components/icons/app-icons'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
 import type { NativeChatTurnJournal } from '../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
 import {

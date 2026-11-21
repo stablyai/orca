@@ -1,4 +1,4 @@
-import { Plus } from 'lucide-react-native'
+import { Plus } from '../components/icons/app-icons'
 import { Fragment, memo, useCallback } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'

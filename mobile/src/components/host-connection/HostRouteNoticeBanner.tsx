@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { X } from 'lucide-react-native'
+import { X } from '../icons/app-icons'
 import { colors, spacing, pressedStyle } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'

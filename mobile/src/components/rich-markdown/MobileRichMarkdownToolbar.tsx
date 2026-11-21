@@ -16,7 +16,7 @@ import {
   Pilcrow,
   Quote,
   Strikethrough
-} from 'lucide-react-native'
+} from '../icons/app-icons'
 import { colors, radii, spacing } from '../../theme/mobile-theme'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'

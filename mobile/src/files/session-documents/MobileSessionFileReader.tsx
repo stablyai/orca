@@ -10,7 +10,7 @@ import {
   Platform,
   type ListRenderItem
 } from 'react-native'
-import { Copy, MessageSquare, Send } from 'lucide-react-native'
+import { Copy, MessageSquare, Send } from '../../components/icons/app-icons'
 import { MobileSyntaxSegments } from '../../components/code-presentation/MobileSyntaxSegments'
 import {
   buildPlainMobileDiffSyntaxLines,

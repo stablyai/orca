@@ -1,7 +1,12 @@
 import { useRef, useState, useSyncExternalStore } from 'react'
 import { StyleSheet, View, type HostInstance } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { ChevronLeft, ListChecks, MoreHorizontal, PanelLeftOpen } from 'lucide-react-native'
+import {
+  ChevronLeft,
+  ListChecks,
+  MoreHorizontal,
+  PanelLeftOpen
+} from '../components/icons/app-icons'
 import { MobileBotAvatar } from '../bots/MobileBotAvatar'
 import { NavBar, NavBarRefreshLine } from '../components/nav-bar/NavBar'
 import { useRefreshHint } from '../query/refresh-hint'

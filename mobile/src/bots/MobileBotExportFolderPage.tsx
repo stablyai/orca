@@ -1,7 +1,7 @@
 // Import's "Add the folder it made": the bot's computer's folders, from Downloads, where the old bot saves its copy.
 import { useEffect, useRef, useState } from 'react'
 import { ScrollView, View } from 'react-native'
-import { Folder, FolderOpen } from 'lucide-react-native'
+import { Folder, FolderOpen } from '../components/icons/app-icons'
 import { MobileLoadErrorState, MobileStateView } from '../components/feedback/MobileStateView'
 import { LIST_LEADING_INSET, ListGroup, ListRow } from '../components/list/ListGroup'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'

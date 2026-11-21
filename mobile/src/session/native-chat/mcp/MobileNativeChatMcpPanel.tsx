@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
-import { X } from 'lucide-react-native'
+import { X } from '../../../components/icons/app-icons'
 import type {
   AgentSessionMcpOperation,
   AgentSessionMcpServer,

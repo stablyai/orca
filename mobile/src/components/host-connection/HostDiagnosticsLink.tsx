@@ -1,4 +1,4 @@
-import { ChevronRight } from 'lucide-react-native'
+import { ChevronRight } from '../icons/app-icons'
 import { Pressable, Text } from 'react-native'
 import { colors, radii, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'

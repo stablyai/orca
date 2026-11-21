@@ -2,7 +2,7 @@
 // Edit and Forget (swipe left, or tap to edit); History lists every change with Undo.
 import { useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import { Text, View } from 'react-native'
-import { FileText, History, Pencil, Plus, Trash2 } from 'lucide-react-native'
+import { FileText, History, Pencil, Plus, Trash2 } from '../../components/icons/app-icons'
 import {
   BOT_MEMORY_INDEX_LINE_CAP,
   type BotMemoryFact,

@@ -1,5 +1,5 @@
 import { Text, View } from 'react-native'
-import { MessageSquareMore } from 'lucide-react-native'
+import { MessageSquareMore } from '../../../../components/icons/app-icons'
 import type { NativeChatAskRowSubject } from '../../../../../../src/shared/native-chat/input/questions/native-chat-ask-row'
 import { nativeChatAskRowCopy } from './native-chat-ask-row-copy'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'

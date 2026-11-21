@@ -14,7 +14,7 @@ import {
   Pencil,
   Sparkles,
   Trash2
-} from 'lucide-react-native'
+} from '../../../../components/icons/app-icons'
 import type { PRComment } from '../../../../../../src/shared/github/comments/comment-types'
 import {
   getPRCommentGroupRoot,

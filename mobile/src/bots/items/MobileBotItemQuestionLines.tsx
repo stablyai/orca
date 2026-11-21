@@ -2,7 +2,7 @@
 // orange dot while the item waits on it). The ask card docked under the activity answers it. Answered,
 // the lines go muted and keep only the replies picked.
 import { Text, View } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { Check } from '../../components/icons/app-icons'
 import {
   botItemPickedReplies,
   type BotItemQuestionShape

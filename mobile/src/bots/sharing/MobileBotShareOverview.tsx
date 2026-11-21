@@ -16,7 +16,7 @@ import {
   Smile,
   TriangleAlert,
   Wrench
-} from 'lucide-react-native'
+} from '../../components/icons/app-icons'
 import { allMemory, pickedOf } from '../../../../src/shared/bots/bot-share-pick-lists'
 import {
   pickedSkillNames,

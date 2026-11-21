@@ -1,7 +1,14 @@
 import { useRef } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ClipboardPaste, FileUp, ImagePlus, Monitor, Plus, Smartphone } from 'lucide-react-native'
-import type { LucideIcon } from 'lucide-react-native'
+import {
+  ClipboardPaste,
+  FileUp,
+  ImagePlus,
+  Monitor,
+  Plus,
+  Smartphone
+} from '../../../components/icons/app-icons'
+import type { AppIcon } from '../../../components/icons/app-icons'
 import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
 import { SectionHeader } from '../../../components/list/ListGroup'
 import { triggerMediumImpact } from '../../../platform/haptics/haptics'
@@ -90,7 +97,7 @@ export function TerminalMoreKeysSheet({
   const combos = sheetKeys.filter((key) => key.id.startsWith('ctrl'))
   const keys = sheetKeys.filter((key) => !key.id.startsWith('ctrl'))
 
-  const action = (label: string, Icon: LucideIcon, onPress: () => void, enabled = canSend) => (
+  const action = (label: string, Icon: AppIcon, onPress: () => void, enabled = canSend) => (
     <Pressable
       key={label}
       style={({ pressed }) => [

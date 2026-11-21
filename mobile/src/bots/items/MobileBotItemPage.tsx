@@ -3,7 +3,7 @@
 // box docked at the bottom. Back returns to the list; up and down step through it, "4 of 6".
 import { useEffect, useRef, useState } from 'react'
 import { Keyboard, Pressable, ScrollView, Text, View, type ScrollViewInstance } from 'react-native'
-import { House, MessageSquare } from 'lucide-react-native'
+import { House, MessageSquare } from '../../components/icons/app-icons'
 import { BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
 import {
   formatBotItemNumber,

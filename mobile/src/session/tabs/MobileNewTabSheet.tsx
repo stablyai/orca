@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { FileText, Globe, SquareTerminal, UserRound } from 'lucide-react-native'
+import { FileText, Globe, SquareTerminal, UserRound } from '../../components/icons/app-icons'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
 import {
   ActionSheetContent,

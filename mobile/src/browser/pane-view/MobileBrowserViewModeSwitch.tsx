@@ -1,5 +1,5 @@
 import { Pressable, View } from 'react-native'
-import { Monitor, Smartphone, type LucideIcon } from 'lucide-react-native'
+import { Monitor, Smartphone, type AppIcon } from '../../components/icons/app-icons'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors, radii } from '../../theme/mobile-theme'
@@ -13,7 +13,7 @@ type Props = {
   onChange: (mode: MobileBrowserViewMode) => void
 }
 
-function viewModes(t: Translate): { id: MobileBrowserViewMode; label: string; icon: LucideIcon }[] {
+function viewModes(t: Translate): { id: MobileBrowserViewMode; label: string; icon: AppIcon }[] {
   return [
     {
       id: 'web',
@@ -58,7 +58,7 @@ function ViewModeButton({
   onPress,
   selected
 }: {
-  Icon: LucideIcon
+  Icon: AppIcon
   disabled?: boolean
   label: string
   onPress: () => void

@@ -6,7 +6,7 @@ import {
   type StyleProp,
   type ViewStyle
 } from 'react-native'
-import { ImagePlus } from 'lucide-react-native'
+import { ImagePlus } from '../../../components/icons/app-icons'
 import { colors } from '../../../theme/mobile-theme'
 import {
   COMPOSER_CONTROL_HIT_SLOP,

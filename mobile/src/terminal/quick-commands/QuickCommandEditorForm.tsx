@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { View, Text, Pressable } from 'react-native'
-import { ChevronDown, ChevronRight } from 'lucide-react-native'
+import { ChevronDown, ChevronRight } from '../../components/icons/app-icons'
 import {
   colors,
   concentricRadius,

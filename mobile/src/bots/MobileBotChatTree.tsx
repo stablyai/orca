@@ -1,7 +1,7 @@
 // Activity's Chats on the phone: the desktop's tree, each chat with its workers one level down.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ChevronDown, CircleX } from 'lucide-react-native'
+import { ChevronDown, CircleX } from '../components/icons/app-icons'
 import { AGENT_ATTENTION_COLOR, AgentStateDot } from '../agents/presentation/AgentStateDot'
 import { DisclosureChevron } from '../components/list/DisclosureChevron'
 import { MobileSearchField } from '../components/controls/MobileSearchField'

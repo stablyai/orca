@@ -1,4 +1,4 @@
-import type { LucideIcon } from 'lucide-react-native'
+import type { AppIcon } from '../components/icons/app-icons'
 import { LIST_LEADING_INSET, ListRow } from '../components/list/ListGroup'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -7,7 +7,7 @@ import { SettingsSection } from './settings-screen-frame'
 export type MobileSettingsMenuItem = {
   id: string
   label: string
-  icon: LucideIcon
+  icon: AppIcon
   onPress: () => void
   external?: boolean
   disabled?: boolean

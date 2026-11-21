@@ -1,4 +1,4 @@
-import { CircleAlert, Inbox } from 'lucide-react-native'
+import { CircleAlert, Inbox } from '../../components/icons/app-icons'
 import { StyleSheet, View } from 'react-native'
 import {
   HostOfflineBanner,

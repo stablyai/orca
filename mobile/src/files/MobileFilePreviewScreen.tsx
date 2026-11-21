@@ -7,7 +7,7 @@ import { MobileChatAttachmentPreview } from './attachments/MobileChatAttachmentP
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Alert, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { ChevronLeft, Save } from 'lucide-react-native'
+import { ChevronLeft, Save } from '../components/icons/app-icons'
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'

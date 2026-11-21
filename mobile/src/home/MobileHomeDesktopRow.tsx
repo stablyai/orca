@@ -1,4 +1,4 @@
-import { ChevronRight, Laptop, Monitor, Server, type LucideIcon } from 'lucide-react-native'
+import { ChevronRight, Laptop, Monitor, Server, type AppIcon } from '../components/icons/app-icons'
 import { Pressable, Text, View } from 'react-native'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -18,7 +18,7 @@ import {
 } from '../worktree/catalog/home-worktree-info'
 import { homeListStyles as styles } from './home-list-styles'
 
-const MACHINE_GLYPHS: Record<'laptop' | 'desktop' | 'server', LucideIcon> = {
+const MACHINE_GLYPHS: Record<'laptop' | 'desktop' | 'server', AppIcon> = {
   laptop: Laptop,
   desktop: Monitor,
   server: Server

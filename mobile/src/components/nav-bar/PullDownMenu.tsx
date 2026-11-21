@@ -12,7 +12,7 @@ import {
   useWindowDimensions,
   type HostInstance
 } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { Check } from '../icons/app-icons'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'

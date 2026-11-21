@@ -3,7 +3,7 @@
 // after it (pick, admin install, turn on) are all here.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { View } from 'react-native'
-import { ArrowUpRight } from 'lucide-react-native'
+import { ArrowUpRight } from '../../components/icons/app-icons'
 import { botLinearWorkspaces, type BotLinearLink } from '../../../../src/shared/bot-types'
 import type { ConnectorLinearWorkspace } from '../../../../src/shared/connector-bot-linear-contract'
 import { BOT_LINEAR_OFF } from '../../../../src/shared/connector-bot-linear-contract'

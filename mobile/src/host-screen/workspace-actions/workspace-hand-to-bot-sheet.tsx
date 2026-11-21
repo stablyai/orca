@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ScrollView, Text, View } from 'react-native'
-import { Plus } from 'lucide-react-native'
+import { Plus } from '../../components/icons/app-icons'
 import { BOT_TAKE_OVER_GOAL_MAX } from '../../../../src/shared/bots/bot-take-over'
 import { sortBotsBySidebarOrder, type BotHomeOwner } from '../../../../src/shared/bots/bot-homes'
 import { MessageBox } from '../../components/composer-input/MessageBox'

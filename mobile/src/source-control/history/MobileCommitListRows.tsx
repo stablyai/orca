@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { ChevronRight } from 'lucide-react-native'
+import { ChevronRight } from '../../components/icons/app-icons'
 import { SectionHeader } from '../../components/list/ListGroup'
 import { colors, radii, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'

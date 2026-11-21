@@ -1,5 +1,5 @@
 import { View, Text, Pressable } from 'react-native'
-import { MessageSquare, Plus, X } from 'lucide-react-native'
+import { MessageSquare, Plus, X } from '../../../components/icons/app-icons'
 import { MobileSyntaxSegments } from '../../../components/code-presentation/MobileSyntaxSegments'
 import { MessageBox } from '../../../components/composer-input/MessageBox'
 import { composerInputStyles } from '../../../components/composer-input/composer-input-styles'

@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, Text, View, type HostInstance } from 'react-native'
-import { Bot, ListFilter } from 'lucide-react-native'
+import { Bot, ListFilter } from '../../../../components/icons/app-icons'
 import { colors, pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'

@@ -9,7 +9,7 @@ import {
   MessageSquare,
   Shuffle,
   WifiOff
-} from 'lucide-react-native'
+} from '../../components/icons/app-icons'
 import {
   BOT_ITEM_STATUSES,
   isOpenBotItemStatus,

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { Shuffle } from 'lucide-react-native'
+import { Shuffle } from '../components/icons/app-icons'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { BottomDrawerModalHost } from '../components/bottom-drawer/bottom-drawer-modal-host'
 import { TextField } from '../components/composer-input/TextField'

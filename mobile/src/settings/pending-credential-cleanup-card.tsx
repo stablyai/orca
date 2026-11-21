@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { useFocusEffect } from 'expo-router'
-import { KeyRound } from 'lucide-react-native'
+import { KeyRound } from '../components/icons/app-icons'
 import { LIST_ROW_PADDING } from '../components/list/ListGroup'
 import { colors, feedback, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'

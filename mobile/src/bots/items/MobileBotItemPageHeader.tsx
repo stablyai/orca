@@ -1,6 +1,6 @@
 // The item page's header, titled like the drawer's other pages (the item's number leads its own heading
 // below): Back to the list, and up and down through it with "4 of 6", as the desktop's stepper steps.
-import { ChevronDown, ChevronUp } from 'lucide-react-native'
+import { ChevronDown, ChevronUp } from '../../components/icons/app-icons'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'

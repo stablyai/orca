@@ -2,7 +2,7 @@
 // to, how it stands and its answer, read from the host as that bot's row changes.
 import { useEffect, useState } from 'react'
 import { Text } from 'react-native'
-import { ArrowUpRight } from 'lucide-react-native'
+import { ArrowUpRight } from '../../../../components/icons/app-icons'
 import {
   botRequestCardView,
   type BotRequestCardView

@@ -3,7 +3,7 @@
 // stands in for it.
 import { useEffect, useState, type ReactNode } from 'react'
 import { ActivityIndicator, Text, View } from 'react-native'
-import { ExternalLink } from 'lucide-react-native'
+import { ExternalLink } from '../../components/icons/app-icons'
 import {
   SLACK_CONFIG_REFRESH_TOKEN_PREFIX,
   slackConfigTokenKind

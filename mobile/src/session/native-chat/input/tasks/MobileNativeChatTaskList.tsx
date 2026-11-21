@@ -1,5 +1,11 @@
 import { Pressable, Text, View } from 'react-native'
-import { ChevronRight, Circle, CircleCheck, CircleDot, ListChecks } from 'lucide-react-native'
+import {
+  ChevronRight,
+  Circle,
+  CircleCheck,
+  CircleDot,
+  ListChecks
+} from '../../../../components/icons/app-icons'
 import {
   diffNativeChatTaskLists,
   nativeChatCompletedTaskCount,

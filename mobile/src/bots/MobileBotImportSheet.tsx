@@ -2,7 +2,7 @@
 // the folder an old bot exported there; the new bot's first turn brings it over. The desktop's ImportBotDialog.
 import { useState, type ReactNode } from 'react'
 import { ScrollView, Text, View } from 'react-native'
-import { ArrowRight, Plus } from 'lucide-react-native'
+import { ArrowRight, Plus } from '../components/icons/app-icons'
 import { BottomDrawer, OptionPager, useOptionPager } from '../components/bottom-drawer/BottomDrawer'
 import { useBottomDrawerModalHostBackClaim } from '../components/bottom-drawer/bottom-drawer-modal-host-scope'
 import { TextField } from '../components/composer-input/TextField'

@@ -13,7 +13,7 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Check, ChevronLeft } from 'lucide-react-native'
+import { Check, ChevronLeft } from '../../../src/components/icons/app-icons'
 import { colors, radii, spacing, typography, pressedStyle } from '../../../src/theme/mobile-theme'
 import { NavBar } from '../../../src/components/nav-bar/NavBar'
 import { NavBarButton } from '../../../src/components/nav-bar/NavBarButton'

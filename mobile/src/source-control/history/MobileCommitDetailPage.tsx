@@ -7,7 +7,7 @@ import {
   View,
   type HostInstance
 } from 'react-native'
-import { ChevronLeft, Copy, ExternalLink, MoreHorizontal } from 'lucide-react-native'
+import { ChevronLeft, Copy, ExternalLink, MoreHorizontal } from '../../components/icons/app-icons'
 import { NavBar } from '../../components/nav-bar/NavBar'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'

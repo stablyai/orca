@@ -2,7 +2,7 @@
 // people), the hand-off while a sign-in finishes on the computer, and the default bot picker.
 import { useEffect, useState, type ReactNode } from 'react'
 import { ActivityIndicator, AppState, Text, View } from 'react-native'
-import { Laptop } from 'lucide-react-native'
+import { Laptop } from '../../components/icons/app-icons'
 import type { BotMember } from '../../../../src/shared/bot-types'
 import { accessRequestPerson } from '../../../../src/shared/bots/bot-access-request'
 import { BOT_ACCESS_COPY } from '../../../../src/shared/bots/bot-access-copy'

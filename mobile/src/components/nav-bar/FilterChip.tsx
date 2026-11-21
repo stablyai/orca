@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ChevronDown } from 'lucide-react-native'
+import { ChevronDown } from '../icons/app-icons'
 import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'

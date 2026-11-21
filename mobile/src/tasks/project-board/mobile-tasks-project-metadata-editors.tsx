@@ -4,7 +4,7 @@ import { SHOW_MOBILE_PROJECT_METADATA_EDITORS } from '../task-list/mobile-tasks-
 import { projectRowType } from '../item-detail/mobile-tasks-item-mapping'
 import { View, Text, ActivityIndicator, Pressable } from 'react-native'
 import { colors, pressedStyle } from '../../theme/mobile-theme'
-import { Check } from 'lucide-react-native'
+import { Check } from '../../components/icons/app-icons'
 import { MessageBox } from '../../components/composer-input/MessageBox'
 import { TextField } from '../../components/composer-input/TextField'
 import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'

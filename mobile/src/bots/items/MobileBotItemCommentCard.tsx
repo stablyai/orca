@@ -2,7 +2,7 @@
 // its words with its images and files, a question's lines, and for a comment sent
 // from the box that didn't reach the host, Not sent · Retry · Discard.
 import { Pressable, Text, View } from 'react-native'
-import { CircleAlert } from 'lucide-react-native'
+import { CircleAlert } from '../../components/icons/app-icons'
 import type { BotItemActivityEntry } from '../../../../src/shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../src/shared/bots/bot-item-actor-name'
 import { botItemQuestionShape } from '../../../../src/shared/bots/bot-item-ask'

@@ -8,7 +8,7 @@ import type { ConnectionPresentationModel } from './screen-state/use-mobile-task
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { View, Text, Pressable } from 'react-native'
-import { AlertTriangle, GitBranch } from 'lucide-react-native'
+import { AlertTriangle, GitBranch } from '../components/icons/app-icons'
 import { colors, pressedStyle } from '../theme/mobile-theme'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { ConfirmModal } from '../components/sheets/ConfirmModal'

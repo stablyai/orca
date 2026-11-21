@@ -1,7 +1,7 @@
 // The bot's Settings › Sharing on the phone: the row, and the page it opens, from which Share bot,
 // Stop sharing and Manage links go. The desktop's BotSharingGroup and BotSharingPage.
 import { useState, type ReactNode } from 'react'
-import { Link, Link2, Share2 } from 'lucide-react-native'
+import { Link, Link2, Share2 } from '../../components/icons/app-icons'
 import type { BotOwnedShare } from '../../../../src/shared/bots/bot-share-status'
 import { LoadingSpinner } from '../../components/feedback/LoadingSpinner'
 import { ListRow } from '../../components/list/ListGroup'

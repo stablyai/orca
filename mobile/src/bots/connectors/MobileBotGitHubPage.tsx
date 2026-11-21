@@ -4,7 +4,7 @@
 import { saveRemovingMembers } from '../bot-sheet-operations'
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { useRef, useState, type ReactNode } from 'react'
-import { ArrowUpRight, BookMarked, Ellipsis, Plus, Unlink } from 'lucide-react-native'
+import { ArrowUpRight, BookMarked, Ellipsis, Plus, Unlink } from '../../components/icons/app-icons'
 import {
   botMemberSource,
   botMembersFrom,

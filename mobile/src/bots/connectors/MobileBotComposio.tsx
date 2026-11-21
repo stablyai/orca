@@ -3,7 +3,7 @@
 // host waits). Composio's pages are ordinary https pages.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ActivityIndicator, Image, Text, View } from 'react-native'
-import { ArrowUpRight, ExternalLink } from 'lucide-react-native'
+import { ArrowUpRight, ExternalLink } from '../../components/icons/app-icons'
 import { COMPOSIO_PAGES, composioLogoUrl } from '../../../../src/shared/composio/composio-apps'
 import { errorMessage } from '../../../../src/shared/errors/error-message'
 import { TextField } from '../../components/composer-input/TextField'

@@ -5,7 +5,7 @@ import { splitCommaList } from './mobile-tasks-reviewer-linear'
 import { View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { TextField } from '../../components/composer-input/TextField'
 import { colors, pressedStyle } from '../../theme/mobile-theme'
-import { Check } from 'lucide-react-native'
+import { Check } from '../../components/icons/app-icons'
 import { styles } from '../mobile-tasks-legacy-styles'
 import { SectionHeader } from '../../components/list/ListGroup'
 

@@ -8,7 +8,7 @@ import Animated, {
   useSharedValue
 } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
-import { Smartphone } from 'lucide-react-native'
+import { Smartphone } from '../src/components/icons/app-icons'
 import { colors, spacing } from '../src/theme/mobile-theme'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import type { Translate } from '../src/i18n/mobile-i18n'

@@ -1,6 +1,6 @@
 import { useState, type RefObject } from 'react'
 import type { TextInputInstance } from 'react-native'
-import { PencilRuler } from 'lucide-react-native'
+import { PencilRuler } from '../../../../components/icons/app-icons'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import type { MobileNativeChatSessionOptionsController } from '../../input/session-options/use-mobile-native-chat-session-options'
 import { MobileNativeChatComposerModeChip } from './MobileNativeChatComposerModeChip'

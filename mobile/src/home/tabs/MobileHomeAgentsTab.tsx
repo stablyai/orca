@@ -6,7 +6,7 @@ import {
   SquareTerminal,
   Trash2,
   WifiOff
-} from 'lucide-react-native'
+} from '../../components/icons/app-icons'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ActivityIndicator, ScrollView, Text, View, type HostInstance } from 'react-native'
 import {

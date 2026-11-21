@@ -3,7 +3,7 @@
 // the item where the screen can open one; the owner's comment is their own message under the item's chip.
 import { useContext, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ListTodo, MessageSquare } from 'lucide-react-native'
+import { ListTodo, MessageSquare } from '../../../../components/icons/app-icons'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { isNativeChatOrcaCard } from '../../../../../../src/shared/native-chat/native-chat-orca-card'
 import { stripSentImagePromptMarkers } from '../../../../../../src/shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'

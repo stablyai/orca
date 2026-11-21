@@ -1,6 +1,6 @@
 import type React from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { ChevronDown, ChevronRight, Lightbulb } from 'lucide-react-native'
+import { ChevronDown, ChevronRight, Lightbulb } from '../components/icons/app-icons'
 import { botGroupRowLine } from '../../../src/shared/bots/bot-sidebar-entries'
 import type { Worktree, WorktreeRowView } from '../worktree/workspace-list/workspace-list-types'
 import { formatTimeAgo } from '../worktree/agent-lineage/agent-row-display'

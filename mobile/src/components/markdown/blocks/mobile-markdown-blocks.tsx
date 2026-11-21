@@ -6,7 +6,7 @@ import {
 } from './mobile-markdown-image-placement'
 import type { Code, List, Nodes, RootContent, Table } from 'mdast'
 import { Fragment, type ReactNode } from 'react'
-import { Square, SquareCheck } from 'lucide-react-native'
+import { SquareCheck, UncheckedBox } from '../../icons/app-icons'
 import {
   Pressable,
   ScrollView,
@@ -118,7 +118,11 @@ function renderList(node: List, key: number, ctx: MarkdownBlockContext, depth: n
               {item.checked ? (
                 <SquareCheck size={14 * ctx.textScale} color={colors.accentBlue} strokeWidth={2} />
               ) : (
-                <Square size={14 * ctx.textScale} color={colors.textSecondary} strokeWidth={2} />
+                <UncheckedBox
+                  size={14 * ctx.textScale}
+                  color={colors.textSecondary}
+                  strokeWidth={2}
+                />
               )}
             </View>
           )}

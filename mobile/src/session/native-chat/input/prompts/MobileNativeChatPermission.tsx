@@ -1,6 +1,6 @@
 import { memo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { ShieldQuestion } from 'lucide-react-native'
+import { ShieldQuestion } from '../../../../components/icons/app-icons'
 import { approvalDetailPreview } from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-approval-detail-preview'
 import { approvalBlockedPathToShow } from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-approval-blocked-path'
 import { MobileNativeChatCardHeaderAction } from './MobileNativeChatCardHeaderAction'

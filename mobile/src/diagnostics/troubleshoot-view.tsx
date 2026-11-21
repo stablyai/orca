@@ -16,7 +16,7 @@ import {
   ScrollText,
   XCircle,
   AlertTriangle
-} from 'lucide-react-native'
+} from '../components/icons/app-icons'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { troubleshootCommonIssues } from './troubleshoot-common-issues'

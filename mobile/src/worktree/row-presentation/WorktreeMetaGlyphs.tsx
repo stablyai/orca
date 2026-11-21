@@ -1,4 +1,10 @@
-import { CalendarClock, CircleDot, GitMerge, SquareTerminal, StickyNote } from 'lucide-react-native'
+import {
+  CalendarClock,
+  CircleDot,
+  GitMerge,
+  SquareTerminal,
+  StickyNote
+} from '../../components/icons/app-icons'
 import { Text, View } from 'react-native'
 import { colors } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'

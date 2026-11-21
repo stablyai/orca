@@ -1,5 +1,5 @@
 import { Pressable, Text, View } from 'react-native'
-import { Code, Eye } from 'lucide-react-native'
+import { Code, Eye } from '../../../components/icons/app-icons'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'

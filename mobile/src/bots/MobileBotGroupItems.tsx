@@ -3,7 +3,7 @@
 // (a page here, as the drawer takes no sheet over it) picks bots, a room or all their work.
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { ScrollView, Text, View } from 'react-native'
-import { Inbox, ListFilter } from 'lucide-react-native'
+import { Inbox, ListFilter } from '../components/icons/app-icons'
 import { BOT_ITEM_GROUP_IDS, type BotItemGroupId } from '../../../src/shared/bots/bot-item-groups'
 import type { BotItem } from '../../../src/shared/bots/bot-items'
 import { findBotGroupRoomOfSession } from '../../../src/shared/bots/bot-group'

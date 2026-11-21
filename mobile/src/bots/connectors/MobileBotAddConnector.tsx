@@ -3,7 +3,7 @@
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { useState, type ReactNode } from 'react'
 import { ScrollView, View } from 'react-native'
-import { Webhook } from 'lucide-react-native'
+import { Webhook } from '../../components/icons/app-icons'
 import { MobileSearchField } from '../../components/controls/MobileSearchField'
 import { MobileNoMatchState } from '../../components/feedback/MobileStateView'
 import {

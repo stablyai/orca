@@ -3,7 +3,7 @@
 // desktop's GoogleHostChoiceDialog: Continue starts the setup in the bot's chat, where its cards carry
 // on. With an app but no sign-in, the setup starts at its sign-in card, which the computer finishes.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { FileUp } from 'lucide-react-native'
+import { FileUp } from '../../components/icons/app-icons'
 import {
   botAskerKeys,
   botOtherAskers,

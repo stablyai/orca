@@ -1,6 +1,12 @@
 import { useRef, useState, type ReactNode } from 'react'
 import type { HostInstance } from 'react-native'
-import { ChevronLeft, ExternalLink, MoreHorizontal, RefreshCw, X } from 'lucide-react-native'
+import {
+  ChevronLeft,
+  ExternalLink,
+  MoreHorizontal,
+  RefreshCw,
+  X
+} from '../../components/icons/app-icons'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { NavBar } from '../../components/nav-bar/NavBar'

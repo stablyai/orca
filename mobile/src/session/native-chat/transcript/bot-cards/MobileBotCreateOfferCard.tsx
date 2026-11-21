@@ -2,7 +2,7 @@
 // the owner presses Create bot (or creates from Edit); the card then reads Created, from the bots there are.
 import { useEffect, useState } from 'react'
 import { Text, View } from 'react-native'
-import { Check, ChevronDown, ChevronUp } from 'lucide-react-native'
+import { Check, ChevronDown, ChevronUp } from '../../../../components/icons/app-icons'
 import { isBotMascotId } from '../../../../../../src/shared/bot-avatar'
 import { isBotAgent } from '../../../../../../src/shared/bot-types'
 import {

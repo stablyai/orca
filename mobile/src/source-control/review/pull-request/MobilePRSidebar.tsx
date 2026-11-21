@@ -17,8 +17,8 @@ import {
   MessageCircle,
   MoreHorizontal,
   RotateCw,
-  type LucideIcon
-} from 'lucide-react-native'
+  type AppIcon
+} from '../../../components/icons/app-icons'
 import { MobileLoadErrorState, MobileStateView } from '../../../components/feedback/MobileStateView'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
@@ -267,7 +267,7 @@ function PrTabHeader({ data }: { data: PrSidebarData }) {
   )
 }
 
-const GATE_ICON: Record<Exclude<PrGateTone, 'loading'>, LucideIcon> = {
+const GATE_ICON: Record<Exclude<PrGateTone, 'loading'>, AppIcon> = {
   passed: CircleCheck,
   blocking: CircleX,
   waiting: CircleDashed,

@@ -10,7 +10,7 @@ import {
   type NativeSyntheticEvent,
   type ScrollViewInstance
 } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { Check } from '../../../../components/icons/app-icons'
 import { useWorkingPulse } from '../../../../components/motion/use-working-motion'
 import { MobileNativeChatReplyRevealsContext } from './mobile-native-chat-reply-reveals'
 import {

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { View, Text, Pressable } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Copy, Check, Send } from 'lucide-react-native'
+import { Copy, Check, Send } from '../components/icons/app-icons'
 import { colors, pressedStyle, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { ConnectionLog } from '../components/host-connection/ConnectionLog'

@@ -3,7 +3,7 @@
 // the phone's allowlist), and the card's menu and Remove.
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Ellipsis, ExternalLink, Plus, RefreshCw } from 'lucide-react-native'
+import { Ellipsis, ExternalLink, Plus, RefreshCw } from '../../components/icons/app-icons'
 import { botMembersFrom, slackMembersOf, type BotMember } from '../../../../src/shared/bot-types'
 import { ListRow } from '../../components/list/ListGroup'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'

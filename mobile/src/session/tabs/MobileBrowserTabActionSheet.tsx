@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, RefreshCw, UserRound } from 'lucide-react-native'
+import { ChevronLeft, ChevronRight, RefreshCw, UserRound } from '../../components/icons/app-icons'
 import type { MobileSessionTab } from './mobile-session-tabs'
 import { ActionSheetModal, type ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { getMobileSessionTabTitle } from './mobile-terminal-tab-agent'

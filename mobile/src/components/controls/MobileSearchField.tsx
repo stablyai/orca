@@ -7,7 +7,7 @@ import {
   type ViewStyle,
   type TextInputInstance
 } from 'react-native'
-import { Search, X } from 'lucide-react-native'
+import { Search, X } from '../icons/app-icons'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'

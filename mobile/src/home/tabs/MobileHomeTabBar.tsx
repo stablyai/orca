@@ -4,8 +4,8 @@ import {
   Gauge,
   LayoutList,
   SquareTerminal,
-  type LucideIcon
-} from 'lucide-react-native'
+  type AppIcon
+} from '../../components/icons/app-icons'
 import { useEffect, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import Animated, {
@@ -21,7 +21,7 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { HOME_EASE_OUT, type HomeTabId } from './home-tabs'
 
-const TAB_ICONS: Record<HomeTabId, LucideIcon> = {
+const TAB_ICONS: Record<HomeTabId, AppIcon> = {
   feed: LayoutList,
   bots: Bot,
   agents: SquareTerminal,
@@ -76,7 +76,7 @@ export function MobileHomeTabBar(props: {
 }
 
 function TabButton(props: {
-  icon: LucideIcon
+  icon: AppIcon
   label: string
   selected: boolean
   badge: number

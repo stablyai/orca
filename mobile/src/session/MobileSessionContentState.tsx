@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CircleAlert, SquareTerminal } from 'lucide-react-native'
+import { CircleAlert, SquareTerminal } from '../components/icons/app-icons'
 import { MobileOfflineState, MobileStateView } from '../components/feedback/MobileStateView'
 import { describeLoadError } from '../components/feedback/load-error-description'
 import { formatOfflineAsOfTime } from '../components/host-connection/offline-as-of-time'

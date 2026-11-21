@@ -1,5 +1,5 @@
 import { createElement, useState, type ReactNode } from 'react'
-import { Goal } from 'lucide-react-native'
+import { Goal } from '../../../../components/icons/app-icons'
 import type { NativeChatSendFollowUp } from '../../../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import { isBareStructuredAgentSessionGoalCommand } from '../../../../../../src/shared/agent-session/view/structured-agent-session-composer'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { AtSign } from 'lucide-react-native'
+import { AtSign } from '../components/icons/app-icons'
 import type { Bot } from '../../../src/shared/bot-types'
 import type { BotGroup } from '../../../src/shared/bots/bot-group'
 import {

@@ -2,7 +2,7 @@
 // The desktop's Settings › Shared links (BotSharedLinksList).
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { View, type HostInstance } from 'react-native'
-import { Copy, Ellipsis, Link2Off, RefreshCw } from 'lucide-react-native'
+import { Copy, Ellipsis, Link2Off, RefreshCw } from '../../components/icons/app-icons'
 import { botPackageName, type BotOwnedShare } from '../../../../src/shared/bots/bot-share-status'
 import { LoadingSpinner } from '../../components/feedback/LoadingSpinner'
 import { ListRow } from '../../components/list/ListGroup'

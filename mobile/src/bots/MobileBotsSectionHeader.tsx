@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { ChevronRight, Plus } from 'lucide-react-native'
+import { ChevronRight, Plus } from '../components/icons/app-icons'
 import {
   botPreviewCapacity,
   botPreviewSignal,

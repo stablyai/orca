@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { Platform, Pressable, Text, View, type ViewStyle } from 'react-native'
-import { MessageSquare } from 'lucide-react-native'
+import { MessageSquare } from '../../../components/icons/app-icons'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'

@@ -2,7 +2,7 @@
 // the new bot the folder it made on the bot's computer, and its reply if it wrote one. The desktop's ImportBotExportFields.
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { Check, Folder, FolderPlus, X } from 'lucide-react-native'
+import { Check, Folder, FolderPlus, X } from '../components/icons/app-icons'
 import { MessageBox } from '../components/composer-input/MessageBox'
 import { LIST_LEADING_INSET, ListGroup, ListRow } from '../components/list/ListGroup'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'

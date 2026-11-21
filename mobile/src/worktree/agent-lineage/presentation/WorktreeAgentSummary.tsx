@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, ChevronRight } from 'lucide-react-native'
+import { Bell, ChevronDown, ChevronRight } from '../../../components/icons/app-icons'
 import { Pressable, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import { colors, radii, spacing } from '../../../theme/mobile-theme'

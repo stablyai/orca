@@ -3,7 +3,7 @@
 import { saveRemovingMembers } from '../bot-sheet-operations'
 import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { useRef, useState, type ReactNode } from 'react'
-import { Ellipsis, Plus } from 'lucide-react-native'
+import { Ellipsis, Plus } from '../../components/icons/app-icons'
 import {
   botLinearWorkspaces,
   botMemberSource,

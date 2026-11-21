@@ -10,7 +10,7 @@ import {
   X,
   GitBranch,
   MoreHorizontal
-} from 'lucide-react-native'
+} from '../../components/icons/app-icons'
 import { colors } from '../../theme/mobile-theme'
 import { openExternalLink } from '../../platform/external-links/external-link'
 import { styles } from '../mobile-tasks-legacy-styles'

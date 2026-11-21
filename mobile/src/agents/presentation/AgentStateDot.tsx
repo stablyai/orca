@@ -1,4 +1,4 @@
-import { Activity } from 'lucide-react-native'
+import { Activity } from '../../components/icons/app-icons'
 import { Animated, View, type ViewStyle } from 'react-native'
 import type { AgentDotState } from '../../worktree/agent-lineage/agent-row-display'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'

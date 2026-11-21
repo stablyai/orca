@@ -1,4 +1,4 @@
-import { GitBranch } from 'lucide-react-native'
+import { GitBranch } from '../components/icons/app-icons'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { prStateIcon } from '../source-control/review/status/pr-state-token'
 import { prStateColor } from '../worktree/row-presentation/WorktreeMetaGlyphs'

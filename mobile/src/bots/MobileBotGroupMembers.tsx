@@ -1,7 +1,7 @@
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useState } from 'react'
 import { LayoutAnimation, Pressable, ScrollView, Text, View } from 'react-native'
-import { Users } from 'lucide-react-native'
+import { Users } from '../components/icons/app-icons'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { ListGroup, ListRow } from '../components/list/ListGroup'

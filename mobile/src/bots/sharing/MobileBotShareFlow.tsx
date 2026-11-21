@@ -2,7 +2,7 @@
 // Publish link, or its live link and what Update link would send. The desktop's BotShareFlow.
 import { useMemo, useState, type ReactNode } from 'react'
 import { Text, View } from 'react-native'
-import { CloudOff, Link2, ShieldAlert } from 'lucide-react-native'
+import { CloudOff, Link2, ShieldAlert } from '../../components/icons/app-icons'
 import { BOT_SHARE_ERRORS } from '../../../../src/shared/bots/bot-share-errors'
 import { botShareFlagSpot } from '../../../../src/shared/bots/bot-share-flag-spots'
 import { ListRow, SectionHeader } from '../../components/list/ListGroup'
