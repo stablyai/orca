@@ -259,8 +259,8 @@ export function NativeChatQueuedMessageCard({
           expanded ? 'scrollbar-sleek max-h-62 overflow-y-auto' : 'scrollbar-sleek overflow-hidden'
         )}
       >
-        {/* The 6-unit buttons end 6.5 units down. Keep line two below them even at small text sizes. */}
-        <div className="float-right mb-[calc(var(--queue-text-padding-top)_+_1lh_-_var(--spacing)_*_7)] ml-1 flex h-7 items-center text-sm">
+        {/* End the float before line two so fractional pixel rounding can't make that line wrap early. */}
+        <div className="float-right mb-[calc(var(--queue-text-padding-top)_+_1lh_-_var(--spacing)_*_7_-_1px)] ml-1 flex h-7 items-center text-sm">
           {card.images ? <QueuedMessageImageCount images={card.images} /> : null}
           {/* Nothing acts on a send still on its way: the host holds no card for it yet. */}
           {card.hold === 'sending' ? null : (
