@@ -9,6 +9,7 @@ import type {
 } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import type { WorkspaceCleanupPolicyChange } from '../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
 import type { WorkspaceCleanupPreview } from '../../../shared/workspace-cleanup/workspace-cleanup-run'
+import type * as CheckoutIdentityModule from '../removal/worktree-checkout-identity'
 
 const dirty = vi.hoisted(() => new Set<string>())
 
@@ -29,6 +30,12 @@ vi.mock('../../ipc/workspace-cleanup/workspace-cleanup-scan', () => ({
       git: { clean: !dirty.has(worktreeId), upstreamAhead: 0, upstreamBehind: 0, checkedAt: 1 }
     }))
   })
+}))
+
+// The listed checkouts are synthetic paths; the on-disk identity proof has its own tests.
+vi.mock('../removal/worktree-checkout-identity', async (importOriginal) => ({
+  ...(await importOriginal<typeof CheckoutIdentityModule>()),
+  captureWorktreeCheckoutIdentity: async () => undefined
 }))
 
 // This store's own identity, which a paired server's child names as its parent's store.
@@ -273,7 +280,10 @@ describe('folder workspace cleanup group', () => {
   })
 
   it('re-checks the folder as listed at removal time, not as the scan saw it', async () => {
-    const rows = [row('repo-a::/a1', { folder: 'F' }), row('repo-b::/b1', { folder: 'F' })]
+    const rows = [
+      row('repo-a::/a1', { folder: 'F', instance: 'instance-a1' }),
+      row('repo-b::/b1', { folder: 'F' })
+    ]
     const host = makeHost(rows)
     const scanned = await collectWorkspaceCleanupWorkspaces({ ...host, globalRules: RULES, now: 1 })
     // Created in F while the run was removing other workspaces.

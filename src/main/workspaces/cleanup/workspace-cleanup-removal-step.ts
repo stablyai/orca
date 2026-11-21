@@ -130,8 +130,8 @@ export async function removeWorkspaceForCleanup(args: {
     if (!fresh) {
       return { outcome: 'kept', keepCause: 'git-unknown', keptOnRecheck: true }
     }
-    // Another workspace now has this id: the scan judged a different one, so keep it this run.
-    if (workspace.ref.instanceId && fresh.ref.instanceId !== workspace.ref.instanceId) {
+    // Another workspace now has this id, or the scan could not tell which one it judged: keep it this run.
+    if (!workspace.ref.instanceId || fresh.ref.instanceId !== workspace.ref.instanceId) {
       return { outcome: 'kept', keepCause: 'identity-unverified', keptOnRecheck: true }
     }
     const [recheck] = await decideWorkspaceCleanups(runtime, [fresh, ...siblings], args.now())

@@ -180,6 +180,28 @@ describe('a removal route that cannot verify the checkout keeps it', () => {
     expect(admit).not.toHaveBeenCalled()
   })
 
+  it('keeps a workspace the scan judged before it had an instance id', async () => {
+    const stamped = wslWorkspace()
+    const { instanceId: _unstamped, ...ref } = stamped.ref
+    fresh.workspace = stamped
+    admit.mockClear()
+    const outcome = await removeWorkspaceForCleanup({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: admission and evidence are mocked.
+      runtime: {} as unknown as OrcaRuntimeService,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: admission and evidence are mocked.
+      store: {} as unknown as RuntimeStore,
+      globalRules: () => RULES,
+      workspace: { ...stamped, ref },
+      now: () => Date.UTC(2026, 10, 20)
+    })
+    expect(outcome).toEqual({
+      outcome: 'kept',
+      keepCause: 'identity-unverified',
+      keptOnRecheck: true
+    })
+    expect(admit).not.toHaveBeenCalled()
+  })
+
   it('leaves no half-done delete to finish when the route refused', async () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a refusal returns before reading the record.
     const record = { worktreePath: '/nonexistent' } as unknown as Parameters<

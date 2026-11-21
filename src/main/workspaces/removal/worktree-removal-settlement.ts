@@ -79,6 +79,20 @@ export function assertAcceptedBranchChoice(
   }
 }
 
+// A fast failure can clear the pending entry before the caller looks it up; the accepted reply keeps its own.
+const acceptedCompletions = new WeakMap<object, Promise<RemoveWorktreeResult>>()
+
+/** Ties an accepted `removing` reply to its removal's outcome without putting it on the wire. */
+export function withAcceptedCompletion<T extends RemoveWorktreeResult>(
+  accepted: T,
+  completion: Promise<RemoveWorktreeResult> | undefined
+): T {
+  if (completion) {
+    acceptedCompletions.set(accepted, completion)
+  }
+  return accepted
+}
+
 /** Await the delete while preserving the acceptance result fields. */
 export async function finishAcceptedWorktreeRemoval<T extends RemoveWorktreeResult>(
   accepted: T,
@@ -86,6 +100,8 @@ export async function finishAcceptedWorktreeRemoval<T extends RemoveWorktreeResu
   hostId?: ExecutionHostId
 ): Promise<Omit<T, 'removing'>> {
   const { removing, ...acceptance } = accepted
-  const pending = removing ? waitForPendingWorktreeRemoval(worktreeId, hostId) : undefined
+  const pending = removing
+    ? (acceptedCompletions.get(accepted) ?? waitForPendingWorktreeRemoval(worktreeId, hostId))
+    : undefined
   return pending ? { ...acceptance, ...(await pending) } : acceptance
 }

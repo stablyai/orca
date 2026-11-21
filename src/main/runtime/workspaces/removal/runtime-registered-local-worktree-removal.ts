@@ -40,6 +40,7 @@ import {
   waitForWorktreeRemovalAcceptance
 } from '../../../workspaces/removal/worktree-background-removal'
 import { runSerializedWorktreeRemovalAcceptance } from '../../../workspaces/removal/worktree-removal-acceptance-queue'
+import { withAcceptedCompletion } from '../../../workspaces/removal/worktree-removal-settlement'
 import type { WorktreeRemovalExpectation } from '../../../workspaces/removal/worktree-removal-expectation'
 
 /** Runs after the previous same-repo removal was accepted; see runSerializedWorktreeRemovalAcceptance. */
@@ -51,17 +52,16 @@ export function removeRuntimeRegisteredLocalWorktree(
     async (): Promise<RemoveWorktreeResult & { warning?: string }> => {
       args.expectation?.check()
       // Recheck after queue wait: another client may already have accepted this deletion.
-      if (
-        waitForPendingWorktreeRemoval(
-          args.target.id,
-          undefined,
-          args.requestedDeleteBranch,
-          args.expectation?.expected.instanceId
-        )
-      ) {
+      const pending = waitForPendingWorktreeRemoval(
+        args.target.id,
+        undefined,
+        args.requestedDeleteBranch,
+        args.expectation?.expected.instanceId
+      )
+      if (pending) {
         args.expectation?.joined()
         await waitForWorktreeRemovalAcceptance(args.target.id)
-        return { removing: true }
+        return withAcceptedCompletion({ removing: true }, pending)
       }
       return acceptRuntimeRegisteredLocalWorktreeRemoval(args)
     }
@@ -222,7 +222,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(
       return { ...result, ...acceptedFields }
     }
     // After all refusals, detach slow Git deletion so request timeout cannot cancel it; clients follow the removing marker.
-    void startBackgroundWorktreeRemoval({
+    const completion = startBackgroundWorktreeRemoval({
       removal: {
         worktreeId: args.target.id,
         repoId: repo.id,
@@ -247,7 +247,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(
       admissionFailed: () => gate.finish(false)
     })
     await waitForWorktreeRemovalAcceptance(args.target.id)
-    return { removing: true, ...acceptedFields }
+    return withAcceptedCompletion({ removing: true, ...acceptedFields }, completion)
   }
   return background ? worktreeRemovalLifetime.withPreparation(prepare) : prepare()
 }
