@@ -38,7 +38,7 @@ export type SessionMemory = UsageValues & {
   pid: number
 }
 
-/** A chat agent's whole process tree (its CLI and everything it started), in its workspace. */
+/** A chat agent's process tree (its CLI and the processes running under it), in its workspace. */
 export type ChatAgentMemory = UsageValues & {
   agentSessionId: string
   /** Agent id such as `claude`; clients name it. */
