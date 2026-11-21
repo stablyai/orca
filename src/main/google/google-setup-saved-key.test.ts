@@ -1,4 +1,12 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  utimesSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -28,7 +36,15 @@ const key = (project: string) =>
     }
   })
 
+// A fixed clock for file times and commits, so nothing here depends on when it runs.
+const T = 1_700_000_000_000
+
 let downloads = ''
+function writeKeyAt(name: string, project: string, mtimeMs: number): void {
+  const file = join(downloads, name)
+  writeFileSync(file, key(project))
+  utimesSync(file, mtimeMs / 1000, mtimeMs / 1000)
+}
 beforeEach(() => {
   mocks.home = mkdtempSync(join(tmpdir(), 'orca-saved-key-'))
   downloads = join(mocks.home, '.orca', 'browser-downloads')
@@ -42,8 +58,8 @@ beforeEach(() => {
     steps: {},
     answers: {},
     browserPageId: 'page-2',
-    startedAt: Date.now(),
-    updatedAt: Date.now(),
+    startedAt: T - 3_600_000,
+    updatedAt: T - 3_600_000,
     revision: 1
   }
 })
@@ -51,12 +67,12 @@ beforeEach(() => {
 describe('Import file on the agent’s host', () => {
   it("imports the file this host saw the setup's page download, and only then removes it", async () => {
     writeFileSync(join(downloads, 'client_secret_old.json'), key('old'))
-    writeFileSync(join(downloads, 'client_secret_new.json'), key('new'))
+    writeKeyAt('client_secret_new.json', 'new', T)
     recordClientDownloadCommit({
       workspaceId: 'folder:fw-ivy',
       browserPageId: 'page-2',
       workspaceRelativePath: '.orca/browser-downloads/client_secret_new.json',
-      committedAt: Date.now()
+      committedAt: T
     })
     const arrived = vi.fn(async () => {})
     expect(await importGoogleSetupKeySavedHere(BOT, arrived)).toEqual({ found: true })
@@ -68,19 +84,19 @@ describe('Import file on the agent’s host', () => {
 
   it('asks the owner to pick when the recorded file is gone or was replaced since', async () => {
     mocks.run = { ...mocks.run!, browserPageId: 'page-5' }
-    writeFileSync(join(downloads, 'client_secret_later.json'), key('later'))
+    writeKeyAt('client_secret_later.json', 'later', T)
     recordClientDownloadCommit({
       workspaceId: 'folder:fw-ivy',
       browserPageId: 'page-5',
       workspaceRelativePath: '.orca/browser-downloads/client_secret_later.json',
       // Committed well before the file now at that name was written.
-      committedAt: Date.now() - 60_000
+      committedAt: T - 60_000
     })
     recordClientDownloadCommit({
       workspaceId: 'folder:fw-ivy',
       browserPageId: 'page-6',
       workspaceRelativePath: '.orca/browser-downloads/client_secret_gone.json',
-      committedAt: Date.now()
+      committedAt: T
     })
     expect(await importGoogleSetupKeySavedHere(BOT, async () => {})).toMatchObject({
       found: false,
@@ -112,7 +128,8 @@ describe('Import file on the agent’s host', () => {
 
   it('brings back a key an interrupted import left hidden, so the owner can pick it', async () => {
     mocks.run = { ...mocks.run!, browserPageId: 'page-7' }
-    const crashedAt = Date.now() - 5 * 60_000
+    // Named for when its import began, long ago.
+    const crashedAt = 1_000
     writeFileSync(join(downloads, `.importing-${crashedAt}-dead`), key('stranded'))
     expect(await importGoogleSetupKeySavedHere(BOT, async () => {})).toMatchObject({
       found: false,

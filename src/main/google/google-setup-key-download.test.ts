@@ -44,7 +44,7 @@ const IVY_HOME = 'folder:ivy-home'
 
 function setup(runs: GoogleSetupRun[]) {
   const deps = {
-    runs: () => runs,
+    runs: vi.fn(() => runs),
     botWorkspace: (botId: string) => (botId === 'ivy' ? IVY_HOME : 'folder:other-home'),
     importKey: vi.fn(),
     keyArrived: vi.fn(async () => {}),
@@ -215,8 +215,10 @@ describe("a paired desktop's key download, claimed as it begins", () => {
       // Started over while the desktop was still downloading: the new run never gets this key.
       expect(beginClientDownload('t2', start)).toBe(true)
       runs[0] = run({ id: 'run-2', projectId: undefined })
+      const checks = deps.runs.mock.calls.length
       send('t2', desktopKey())
-      await new Promise((resolve) => setTimeout(resolve, 10))
+      // Its import checks the run once the bytes are in; nothing follows for a replaced run.
+      await vi.waitFor(() => expect(deps.runs.mock.calls.length).toBeGreaterThan(checks))
       expect(deps.importKey).toHaveBeenCalledOnce()
       expect(deps.keyArrived).toHaveBeenCalledOnce()
     } finally {
