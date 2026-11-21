@@ -15,6 +15,7 @@ import {
 import { notifyPeerMailQueued } from '../../../../orchestration/federation/peer-mail/peer-mail-waiters'
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
 import { botAnswerOf } from './bot-request-outcome'
+import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
 
 const NOTHING_SENT = { effectsApplied: false } as const
 
@@ -53,17 +54,21 @@ export async function replyOverPeerMail(args: {
   }
 
   if (conversation.role === 'peer') {
-    queuePeerMailReply(db, conversation.conversation_id, id, {
-      senderLabel,
-      fromAddress: replier,
-      subject,
-      body: params.body,
-      threadId,
-      sender: peerMailSender(runtime, replier),
-      // Refuses a second answer to a bot request, before the original is marked read.
-      ...botAnswerOf(db, original)
+    const sender = peerMailSender(runtime, replier)
+    // The answer's record and its queued reply commit together.
+    runLifecycleWriteTransaction(db.db, 'peer_reply_with_answer', () => {
+      queuePeerMailReply(db, conversation.conversation_id, id, {
+        senderLabel,
+        fromAddress: replier,
+        subject,
+        body: params.body,
+        threadId,
+        sender,
+        // Refuses a second answer to a bot request, before the original is marked read.
+        ...botAnswerOf(db, original)
+      })
+      db.markAsRead([original.id])
     })
-    db.markAsRead([original.id])
     return recordReceiptBeforeNudge(
       args.recordMutationReceipt,
       { message: { id, subject }, to: original.from_handle },
