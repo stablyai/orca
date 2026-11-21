@@ -1,5 +1,6 @@
 import { isMissingProviderExecutable } from '../../provider-process/provider-executable-missing'
 import { mergeCommandEnvironment } from '../../../shared/shell/launch/command-environment'
+import { guestOverrideEnv } from '../execution/wsl-guest-env-forwarding'
 import type { CommandTemplateBackslash } from '../../../shared/source-control/ai/generation/commit-message-prompt'
 import {
   getAgentModelProbeSpec,
@@ -14,7 +15,9 @@ import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { resolveCodexHomeProcessLockKeyForSpawnEnv } from '../../codex-cli/codex-home-process-lock'
 import {
   finalizeModelDiscoveryOutput,
+  logModelDiscoveryExit,
   planModelDiscovery,
+  safeProbeErrorLog,
   staticModelDiscoveryResult
 } from './commit-message-model-discovery-policy'
 import {
@@ -22,10 +25,7 @@ import {
   SOURCE_CONTROL_GENERATION_TIMEOUT_MS
 } from '../execution/source-control-generation-limits'
 import { runCodexProcessWithHomeLock } from '../execution/source-control-local-generation'
-import {
-  agentHostFailure,
-  formatAgentCliFailureMessage
-} from '../failures/source-control-agent-failure'
+import { agentHostFailure } from '../failures/source-control-agent-failure'
 import {
   settleCodexModelListing,
   startCodexModelListDiscovery,
@@ -42,6 +42,10 @@ import type {
 export type CommitMessageModelDiscoveryLocalOptions = {
   cwd?: string
   wslDistro?: string
+  /** Terminal `agentDefaultEnv`; hashed into the host cache and never spawned as its own field. */
+  launchEnv?: NodeJS.ProcessEnv
+  /** Account env patch. Hashed with the launch env so auth changes miss the host cache. */
+  accountPatch?: Record<string, string>
 }
 
 type DiscoverModelsLocalInput = {
@@ -123,6 +127,9 @@ async function discoverModelsOnce(
           args: plan.args,
           cwd: input.options.cwd,
           env: input.options.wslDistro ? input.env : env,
+          guestOverrides: input.options.wslDistro
+            ? guestOverrideEnv(input.options.launchEnv, input.options.accountPatch)
+            : undefined,
           commandEnv: plan.env,
           wslDistro: input.options.wslDistro,
           stdinMode: plan.stdinPayload === null && !appServer ? 'ignore' : 'pipe',
@@ -138,7 +145,7 @@ async function discoverModelsOnce(
         }
       } catch (error) {
         markProcessClosed()
-        console.error('[commit-message] Failed to spawn model discovery:', error)
+        console.error('[commit-message] Failed to spawn model discovery:', safeProbeErrorLog(error))
         resolve(startFailure(error))
         return
       }
@@ -213,7 +220,7 @@ async function discoverModelsOnce(
               : `${spec.label} model discovery failed to start. Check the agent CLI configuration and try again.`
         })
       }
-      const onClose = (code: number | null): void => {
+      const onClose = (code: number | null, signal?: NodeJS.Signals | null): void => {
         markClosedAfterTermination()
         listing?.fail(new Error(`${spec.label} app-server exited`))
         if (child.outcomeLost) {
@@ -227,21 +234,17 @@ async function discoverModelsOnce(
           outputLimitExceeded
             ? { success: false, error: `${spec.label} returned too much model data.` }
             : listing
-              ? listingFailure(code)
-              : finalizeModelDiscoveryOutput(spec, stdout, stderr, code)
+              ? listingFailure(code, signal)
+              : finalizeModelDiscoveryOutput(spec, stdout, stderr, code, signal)
         )
       }
-      const listingFailure = (code: number | null): DiscoverCommitMessageModelsResult => {
-        console.error('[commit-message] Model discovery failed:', {
-          label: spec.label,
-          exitCode: code,
-          stderr
-        })
-        return {
-          success: false,
-          error: formatAgentCliFailureMessage(spec.label, '', stderr, code)
-        }
-      }
+      const listingFailure = (
+        code: number | null,
+        signal?: string | null
+      ): DiscoverCommitMessageModelsResult => ({
+        success: false,
+        error: logModelDiscoveryExit(spec.label, code, signal)
+      })
       if (listing) {
         settleCodexModelListing({
           listing,

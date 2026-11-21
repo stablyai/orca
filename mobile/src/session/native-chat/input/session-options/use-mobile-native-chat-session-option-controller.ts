@@ -79,17 +79,20 @@ export function useMobileNativeChatSessionOptionController(args: {
   }, [activeSessionTabId, isTabChatView, toggleTabChatView])
 
   const client = args.client ?? null
-  const discoveredModels = useMobileNativeChatModelDiscovery({
+  const chatVisible = activeSessionTabId !== null && isTabChatView(activeSessionTabId)
+  const discovery = useMobileNativeChatModelDiscovery({
     client,
     agent,
     hostId,
     worktreeId,
-    // Phone-only limit: only lists that can retire a model are fetched; desktop also enriches seed lists, without per-visit CLI probes.
+    // Claude's probe replaces the alias seed, so the phone must fetch it to name custom routes.
+    // Other agents are fetched only when discovery can retire a seeded model.
+    // Leaving chat drops the catalog so a return cannot offer the previous probe while refreshing.
     enabled:
+      chatVisible &&
       !activeChatStructured &&
-      activeSessionTabId !== null &&
       agent !== null &&
-      isAuthoritativeListing(getAgentSessionOptionCatalog(agent))
+      (agent === 'claude' || isAuthoritativeListing(getAgentSessionOptionCatalog(agent)))
   })
   const writeSettings = useCallback(
     (mutation: NativeChatSessionOptionSettingsMutation) => {
@@ -100,7 +103,9 @@ export function useMobileNativeChatSessionOptionController(args: {
     [client]
   )
   const sessionOptions = useMobileNativeChatSessionOptions({
-    discoveredModels,
+    discoveredModels: discovery.models,
+    discoveryFailed: discovery.failed,
+    chatVisible,
     modelSwitchCommand: args.modelSwitchCommand,
     agent: activeChatStructured ? null : agent,
     scopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),

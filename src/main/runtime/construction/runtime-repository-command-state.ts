@@ -23,10 +23,19 @@ import {
 import { OrcaRuntimeWithFileCommands } from './runtime-file-command-state'
 import { readCreateSourceSetupHooks } from '../../workspace-hooks/create-source-setup-hooks'
 import { getWorktreeCreatePrefetchGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
+import { isFloatingWorkspaceSelector } from '../../../shared/workspace/identity/floating-workspace-worktree'
+import {
+  modelDiscoveryExecutionHost,
+  modelDiscoveryWorkspaceForHost
+} from '../integrations/git/model-discovery-execution-host'
+import { modelDiscoveryWslDistro } from '../integrations/git/model-discovery-workspace-runtime'
+import type { ModelDiscoveryWorkspace } from '../integrations/git/runtime-git-command-target'
 
 export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithFileCommands {
   protected readonly gitCommands = new RuntimeGitCommands({
     resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
+    resolveModelDiscoveryWorkspace: (selector) => this.modelDiscoveryWorkspace(selector),
     getRuntimeSettings: () => this.requireStore().getSettings(),
     getCommitMessageAgentEnvironment: () => this.accounts.getCommitMessageAgentEnvironment(),
     // Override the resolver's one-second linked-issue cache so template generation sees link/unlink immediately.
@@ -78,6 +87,29 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
   protected abstract getExistingTerminalHandlesForPtyId(ptyId: string): string[]
 
   abstract notifyBranchRenamed(repoId: string): void
+
+  /** Folder workspaces and SSH hosts use the terminal's scope, not the git-worktree catalog. */
+  private async modelDiscoveryWorkspace(selector: string): Promise<ModelDiscoveryWorkspace> {
+    const scope = await this.resolveTerminalWorkspaceLaunchScope(selector, undefined, {
+      readOnly: true
+    })
+    // A terminal scope's connectionId is null for `runtime:` git and is the nested SSH id for a
+    // `runtime:` folder. Keep the execution host and refuse anything this process cannot serve.
+    const executionHostId = modelDiscoveryExecutionHost({
+      folder: scope.folderWorkspace,
+      gitExecutionHostId: scope.folderWorkspace
+        ? null
+        : isFloatingWorkspaceSelector(selector)
+          ? LOCAL_EXECUTION_HOST_ID
+          : (await this.resolveRuntimeGitTarget(selector)).executionHostId
+    })
+    const hosted = modelDiscoveryWorkspaceForHost({ path: scope.path, executionHostId })
+    if (hosted.executionHostId !== LOCAL_EXECUTION_HOST_ID) {
+      return hosted
+    }
+    const wslDistro = modelDiscoveryWslDistro(this.requireStore(), scope)
+    return wslDistro ? { ...hosted, wslDistro } : hosted
+  }
 
   /** Remote views consume raw bytes even with a hidden desktop; resync daemon marks so those streams are never thinned. */
   onRemoteTerminalViewPresenceChanged: ((ptyId: string) => void) | null = null

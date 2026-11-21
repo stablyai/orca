@@ -1427,8 +1427,7 @@
 4 src/main/text-generation/execution/source-control-supervised-agent-spawn.ts
 1 src/main/text-generation/failures/kimi-generation-failure.ts
 4 src/main/text-generation/failures/source-control-agent-failure.ts
-1 src/main/text-generation/models/commit-message-model-discovery-policy.ts
-4 src/main/text-generation/models/commit-message-model-discovery.ts
+3 src/main/text-generation/models/commit-message-model-discovery.ts
 1 src/main/text-generation/policies/source-control-read-only-policy.ts
 1 src/main/text-generation/requests/jira-issue-summary-requests.ts
 1 src/main/tray/system-tray.ts
