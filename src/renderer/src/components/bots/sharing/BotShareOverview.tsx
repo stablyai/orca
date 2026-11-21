@@ -20,6 +20,8 @@ import { botShareCheckSummary } from './bot-share-flags'
 import {
   allMemory,
   pickedOf,
+  pickedSkills,
+  unpackableSkills,
   type BotShareContext,
   type BotShareList,
   type BotSharePage
@@ -143,10 +145,7 @@ export function BotShareOverview({ ctx }: { ctx: BotShareContext }): React.JSX.E
   const { candidate, selection } = ctx
   const { available, leftOut } = candidate
   const list = (name: BotShareList) => () => ctx.open({ kind: 'list', list: name })
-  const skills = pickedOf(
-    selection.skills,
-    available.skills.map((s) => s.name)
-  )
+  const skills = pickedSkills(selection, available.skills)
   const events = available.eventSuggestions.filter(
     (entry, index, all) => all.findIndex((e) => e.automationId === entry.automationId) === index
   )
@@ -158,6 +157,7 @@ export function BotShareOverview({ ctx }: { ctx: BotShareContext }): React.JSX.E
       .filter((e) => pickedOf(selection.eventSuggestions, [e.automationId]).length > 0)
       .map((e) => e.name)
   ]
+  const skillsLeftOut = unpackableSkills(leftOut).length
   const webhooks = leftOut.filter((entry) => entry.kind === 'automation').length
   const automations = available.schedules.length + events.length
   const tools = pickedOf(
@@ -195,8 +195,13 @@ export function BotShareOverview({ ctx }: { ctx: BotShareContext }): React.JSX.E
         <PartRow
           icon={<BookOpen />}
           title={t('bots.share.skills', 'Skills')}
-          empty={available.skills.length === 0}
-          value={partValue(skills, available.skills.length, t)}
+          // Opens to show skills that can't be shared, but only shareable ones count.
+          empty={available.skills.length + skillsLeftOut === 0}
+          value={
+            available.skills.length === 0
+              ? t('bots.share.none', 'None')
+              : partValue(skills, available.skills.length, t)
+          }
           onOpen={list('skills')}
         />
         <PartRow

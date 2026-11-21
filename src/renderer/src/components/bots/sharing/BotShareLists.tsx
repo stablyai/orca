@@ -6,17 +6,36 @@ import { describeAutomationSchedule } from '../../../../../shared/automations/sc
 import { automationEventKind } from '../../../../../shared/automation-event-triggers'
 import { formatUiAutomationScheduleDescriptor } from '../../automations/details/automation-schedule-label'
 import { eventLabel } from '../bot-automation-when'
-import { pickedOf, toggled, type BotShareContext, type BotShareList } from './bot-share-pages'
+import { toggledOutside } from '../../../../../shared/bots/bot-share-skill-picks'
+import {
+  pickedOf,
+  pickedSkills,
+  toggled,
+  unpackableSkills,
+  type BotShareContext,
+  type BotShareList
+} from './bot-share-pages'
 import { MemoryList, SafetyCheckList } from './BotShareFlagPages'
 import { Tick } from './BotShareTick'
 import { BotShareItem } from './BotShareRows'
 
 function notShared(why: string): string {
-  return why === 'webhook'
-    ? translate('bots.share.webhookNotShared', 'Webhook · not shared')
-    : why === 'command'
-      ? translate('bots.share.commandNotShared', 'Command · not shared')
-      : translate('bots.share.notShared', 'Not shared')
+  switch (why) {
+    case 'webhook':
+      return translate('bots.share.webhookNotShared', 'Webhook · not shared')
+    case 'command':
+      return translate('bots.share.commandNotShared', 'Command · not shared')
+    case 'link':
+      return translate('bots.share.fileLinkNotShared', 'Has a symlink or hard link · not shared')
+    case 'size':
+      return translate('bots.share.tooLargeNotShared', 'Too large · not shared')
+    case 'unreadable':
+      return translate('bots.share.unreadableNotShared', "Can't be read · not shared")
+    case 'limit':
+      return translate('bots.share.overLimitNotShared', 'Over the skill limit · not shared')
+    default:
+      return translate('bots.share.notShared', 'Not shared')
+  }
 }
 
 export function scheduleWhen(rrule: string): string {
@@ -35,10 +54,8 @@ function SkillsList({ ctx }: { ctx: BotShareContext }): React.JSX.Element {
   const duplicates = ctx.candidate.leftOut.filter(
     (entry) => entry.kind === 'skill' && entry.why === 'duplicate'
   )
-  const picked = pickedOf(
-    ctx.selection.skills,
-    all.map((skill) => skill.name)
-  )
+  const unpackable = unpackableSkills(ctx.candidate.leftOut)
+  const picked = pickedSkills(ctx.selection, all)
   return (
     <>
       {all.map((skill) => (
@@ -48,11 +65,35 @@ function SkillsList({ ctx }: { ctx: BotShareContext }): React.JSX.Element {
             <Tick
               checked={picked.includes(skill.name)}
               label={skill.name}
-              onChange={(on) => ctx.select({ skills: toggled(picked, skill.name, on) })}
+              onChange={(on) =>
+                ctx.select({
+                  skills: toggled(picked, skill.name, on),
+                  ...(skill.optInKey === undefined
+                    ? {}
+                    : {
+                        outsideSkills: toggledOutside(
+                          ctx.selection.outsideSkills ?? [],
+                          { name: skill.name, optInKey: skill.optInKey },
+                          on
+                        )
+                      })
+                })
+              }
             />
           }
           title={skill.name}
-          detail={skill.description}
+          detail={
+            skill.optInFrom !== undefined
+              ? skill.description
+                ? t('bots.share.outsideSkillWith', 'From outside {{project}} · {{description}}', {
+                    project: skill.optInFrom,
+                    description: skill.description
+                  })
+                : t('bots.share.outsideSkill', 'From outside {{project}}', {
+                    project: skill.optInFrom
+                  })
+              : skill.description
+          }
           onOpen={() =>
             ctx.open({
               kind: 'part',
@@ -72,6 +113,15 @@ function SkillsList({ ctx }: { ctx: BotShareContext }): React.JSX.Element {
           detail={t('bots.share.duplicateSkill', 'Same name, in {{folder}} · not shared', {
             folder: entry.from ?? ''
           })}
+        />
+      ))}
+      {unpackable.map((entry) => (
+        <BotShareItem
+          key={`unpackable:${entry.name}`}
+          off
+          lead={<Tick checked={false} label={entry.name} />}
+          title={entry.name}
+          detail={notShared(entry.why)}
         />
       ))}
     </>
