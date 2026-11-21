@@ -24,6 +24,10 @@ import { splitOpenCodeSqliteCandidate } from '../../../shared/agent-session/life
 import { parseJcodeSessionFile } from '../scanners/jcode/session-scanner-jcode-parser'
 import { parseKiroSessionFile } from '../scanners/kiro/session-scanner-kiro-parser'
 import {
+  isKiroV3SessionManifestPath,
+  parseKiroV3SessionFile
+} from '../scanners/kiro/session-scanner-kiro-v3-parser'
+import {
   captureOpenCodeSqliteSessionViaWorker,
   captureOpenCode2SqliteSessionViaWorker,
   captureZcodeSqliteSessionViaWorker,
@@ -165,6 +169,9 @@ export async function parseAgentSessionFile(
     case 'jcode':
       return parseJcodeSessionFile(candidate.file, platform, messages, signal)
     case 'kiro':
-      return parseKiroSessionFile(candidate.file, platform, messages, onSkippedRecords, signal)
+      // One agent, two stores: the V3 engine's manifest is told apart by its path shape.
+      return isKiroV3SessionManifestPath(candidate.file.path)
+        ? parseKiroV3SessionFile(candidate.file, platform, messages, onSkippedRecords, signal)
+        : parseKiroSessionFile(candidate.file, platform, messages, onSkippedRecords, signal)
   }
 }

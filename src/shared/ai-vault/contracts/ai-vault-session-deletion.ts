@@ -19,7 +19,7 @@ export type AiVaultDeleteSessionResult =
   | { outcome: 'failed'; agent: AiVaultAgent; error: string }
 
 // Allow only sessions whose complete unshared data is derivable from the scanned path.
-// Exclude Antigravity/Kimi registries (Antigravity lacks IDs), Codex indexes/hardlink aliases (one-sided deletion reappears), and SQLite rows (OpenCode 1.17.x, Hermes state.db).
+// Exclude Antigravity/Kimi/Kiro registries (Antigravity lacks IDs), Codex indexes/hardlink aliases (one-sided deletion reappears), and SQLite rows (OpenCode 1.17.x, Hermes state.db).
 export const AI_VAULT_DELETABLE_AGENTS = [
   'gemini',
   'copilot',
