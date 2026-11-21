@@ -13,9 +13,7 @@ import { ensurePRWatchTables } from '../../../github/pr-watch/pr-watch-tables'
 import { JournalUnreleasedSchemaError } from '../replay/journal-open-failure'
 import { readForgottenJournalChats } from '../journal-forgotten-chats'
 import {
-  JOURNAL_LEGACY_REVISIONS_KEPT,
-  JOURNAL_LEGACY_SOURCE_RECEIPT,
-  sameJournalLegacySource,
+  journalLegacySourceSettled,
   type JournalLegacySourceReceipt
 } from './journal-legacy-source-receipt'
 import { ensureQueuedMessagesTable } from '../queued-messages/queued-message-schema'
@@ -41,17 +39,12 @@ export function journalDatabaseHoldsAgentSessions(
   original?: () => JournalLegacySourceReceipt
 ): boolean {
   const db = new Database(dbPath, { readonly: true, fileMustExist: true })
-  // The reconcile's early return for a store without chats: copies due follow chats it holds.
-  const holdsOriginal = (current: JournalLegacySourceReceipt): boolean => {
+  const settled = (current: JournalLegacySourceReceipt): boolean => {
     const meta = db.prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
-    const value = (key: string): string | undefined => {
+    return journalLegacySourceSettled((key) => {
       const row = meta.get(key)
       return row === undefined ? undefined : String(row.value)
-    }
-    return (
-      value(JOURNAL_LEGACY_REVISIONS_KEPT) !== undefined &&
-      sameJournalLegacySource(value(JOURNAL_LEGACY_SOURCE_RECEIPT), current)
-    )
+    }, current)
   }
   try {
     const tables = new Set(
@@ -67,7 +60,7 @@ export function journalDatabaseHoldsAgentSessions(
       ) ||
       // Deleted chats whose rows are still being removed: opening the store finishes them.
       (tables.has('agent_session_store_meta') && readForgottenJournalChats(db, null).length > 0) ||
-      (original !== undefined && !holdsOriginal(original()))
+      (original !== undefined && !settled(original()))
     )
   } finally {
     db.close()

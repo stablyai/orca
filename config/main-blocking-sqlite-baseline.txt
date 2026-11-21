@@ -28,7 +28,7 @@
 7 src/main/managed-data-accounts/credential-capture.ts
 19 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 5 src/main/native-chat/agent-session-journal/database/journal-checkpoint-owner.ts
-24 src/main/native-chat/agent-session-journal/database/journal-database.ts # +2: launch probe reads two meta keys of an empty chat store on its existing read-only connection, startup/restore only
+24 src/main/native-chat/agent-session-journal/database/journal-database.ts # +2: launch probe: 3 stats + 3 meta reads, only for an empty chat store with the original present; at startup and each tab restore while no chat host is installed, about 0.15 ms
 7 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # worker-only: +1 is the reply outbox table migration, run on the journal SQL worker
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 5 src/main/native-chat/agent-session-journal/database/journal-retire-pending.ts # worker-only: retired-epoch pending table, triggers and settle, run on the journal SQL worker

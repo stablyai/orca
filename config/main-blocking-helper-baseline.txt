@@ -784,7 +784,7 @@
 12 src/main/native-chat/agent-session-journal/database/journal-database.ts
 5 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # tail table create at store open (one-shot startup); worker-only: +2 create the retired-epoch pending table in a transaction on the journal SQL worker
 3 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
-1 src/main/native-chat/agent-session-journal/database/journal-legacy-source-capture.ts # launch probe: an empty chat store opens only if an older Orca wrote the original since; 2 stats at startup/restore, not per event
+1 src/main/native-chat/agent-session-journal/database/journal-legacy-source-capture.ts # launch probe: 3 stats + 3 meta reads, only for an empty chat store with the original present; at startup and each tab restore while no chat host is installed, about 0.15 ms
 1 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
 3 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts # +1: Continue in Chat UI's pre-close folder check reuses validateAdoptedOpenCodeSource; its only sync step is the worker entry existsSync when the shared OpenCode SQLite worker first spawns
 1 src/main/native-chat/agent-session-journal/history-import/journal-hermes-import.ts
@@ -1150,7 +1150,7 @@
 1 src/main/runtime/agent-session/model-catalog/structured-agent-model-catalog-discovery.ts
 1 src/main/runtime/agent-session/ownership/agent-session-claim-identity.ts
 4 src/main/runtime/agent-session/ownership/agent-session-process-identity-probe.ts
-2 src/main/runtime/agent-session/records/agent-session-record-store-slot.ts # launch probe: an empty chat store opens only if an older Orca wrote the original since; 2 stats at startup/restore, not per event
+2 src/main/runtime/agent-session/records/agent-session-record-store-slot.ts # launch probe: 3 stats + 3 meta reads, only for an empty chat store with the original present; at startup and each tab restore while no chat host is installed, about 0.15 ms
 8 src/main/runtime/agent-session/records/agent-session-runtime-end-record.ts
 2 src/main/runtime/agent-session/records/agent-session-store-transactions.ts
 1 src/main/runtime/agent-session/records/local-agent-session-record-store-startup-open.ts

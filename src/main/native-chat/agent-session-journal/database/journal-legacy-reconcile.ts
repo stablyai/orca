@@ -47,13 +47,11 @@ import {
 } from './journal-legacy-reconcile-marks'
 import {
   JOURNAL_LEGACY_REVISIONS_KEPT,
+  JOURNAL_LEGACY_SOURCE_DAMAGED,
   JOURNAL_LEGACY_SOURCE_RECEIPT,
   sameJournalLegacySource
 } from './journal-legacy-source-receipt'
-import {
-  JOURNAL_LEGACY_SOURCE_DAMAGED,
-  openReconcilableJournalLegacySource
-} from './journal-legacy-source-damage'
+import { openReconcilableJournalLegacySource } from './journal-legacy-source-damage'
 import { captureJournalLegacySourceReceipt } from './journal-legacy-source-capture'
 
 /**

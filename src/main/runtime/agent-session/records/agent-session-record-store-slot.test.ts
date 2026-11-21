@@ -1,9 +1,10 @@
 /** Early launch admission and the later chat host must share one record-store writer. */
 
-import { mkdtemp, rm } from 'node:fs/promises'
+import { link, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import Database from '../../../sqlite/sync-database'
 import { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
 import { openJournalDatabase } from '../../../native-chat/agent-session-journal/database/journal-database'
 import {
@@ -102,6 +103,16 @@ it('opens an empty store beside the original only once an older Orca wrote to it
     old.close()
   }
   expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(true)
+  // Without an identity to tell a change by, launch doesn't wait on it; serving's open reads it.
+  await link(oldPath, `${oldPath}-link`)
+  expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(false)
+  await rm(`${oldPath}-link`)
+  // An original the open recorded as damaged is settled until it changes again.
+  const damaged = new Database(oldPath)
+  damaged.exec('DROP TABLE journal_sessions')
+  damaged.close()
+  await initializeJournalDomainDatabase(stateDirectory)
+  expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(false)
 })
 
 it('still opens the store when cleanup deleted the last chat before its rows were gone', () => {
