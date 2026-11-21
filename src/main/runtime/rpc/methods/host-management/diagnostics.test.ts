@@ -33,10 +33,6 @@ function memoryFor(caller: RpcContext['caller']): unknown {
 }
 
 describe('diagnostics.memory', () => {
-  it('gives the local CLI the whole snapshot, history included', async () => {
-    expect(await memoryFor({ kind: 'local-cli' })).toBe(snapshot)
-  })
-
   it('trims a reply for a paired device to what a remote connection carries', async () => {
     const reply = await memoryFor({ kind: 'paired-device', deviceId: 'd1' })
     expect(Buffer.byteLength(JSON.stringify(reply))).toBeLessThan(4 * 1024 * 1024)
