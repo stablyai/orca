@@ -96,6 +96,21 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   'environment stop': {
     yes: '--yes                  Confirm stopping the server and unlinking it from this machine'
   },
+  'worktree notes list': {
+    file: '--file <path>          Only notes on this file'
+  },
+  'worktree notes add': {
+    file: '--file <path>          File the note is on, relative to the workspace root',
+    line: '--line <n>             Last line of the note (1-based)',
+    'start-line': '--start-line <n>       First line, for a note on a range',
+    body: '--body <text>          Note text',
+    'body-file': '--body-file <path|->   Read the note text from a file or stdin'
+  },
+  'worktree notes clear': {
+    id: '--id <id>              Note id from orca worktree notes list; repeat for several',
+    file: '--file <path>          Delete every note on this file',
+    all: '--all                  Delete every note in the workspace'
+  },
   'file open': {
     line: '--line <n>             Cursor line (1-based)',
     column: '--column <n>           Cursor column (1-based; requires --line)',

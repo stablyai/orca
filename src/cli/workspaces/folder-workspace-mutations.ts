@@ -5,6 +5,7 @@ import type {
   RuntimeWorktreeSetResult
 } from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
+import type { DiffComment } from '../../shared/diff-comment-types'
 import {
   FOLDER_WORKSPACE_UNIQUE_ID_MUTATION_RUNTIME_CAPABILITY,
   PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY
@@ -123,6 +124,28 @@ async function setFolderWorkspace(
     throw folderGone(folderId)
   }
   return showFolderWorkspace(client, folderId)
+}
+
+/** Saves a folder workspace's review notes against the list read, and returns what the host kept. */
+export async function writeFolderWorkspaceDiffComments(
+  client: RuntimeClient,
+  folderId: string,
+  diffComments: DiffComment[],
+  diffCommentsBase: DiffComment[]
+): Promise<DiffComment[]> {
+  await assertUniqueIdMutationSupported(client)
+  const updated = await client.call<{ folderWorkspace: FolderWorkspace | null }>(
+    'folderWorkspace.update',
+    {
+      folderWorkspaceId: folderId,
+      requireUniqueId: true,
+      updates: { diffComments, diffCommentsBase }
+    }
+  )
+  if (!updated.result.folderWorkspace) {
+    throw folderGone(folderId)
+  }
+  return updated.result.folderWorkspace.diffComments ?? []
 }
 
 /** `worktree rm` on a folder workspace: Orca forgets it; the folder stays on disk. False for any other selector. */

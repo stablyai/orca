@@ -196,3 +196,30 @@ it('runs Archive with the saved folder identity and preserves the group director
     await rm(root, { recursive: true, force: true })
   }
 })
+
+describe('folder workspace review notes with a base', () => {
+  const note = (id: string) => ({
+    id,
+    worktreeId: 'folder:hub-a',
+    filePath: 'README.md',
+    source: 'diff' as const,
+    lineNumber: 1,
+    body: id,
+    createdAt: 1,
+    side: 'modified' as const
+  })
+
+  it('keeps a note saved after the writer read the list', async () => {
+    const read = [note('read')]
+    const { controller } = createController([folderRow({ diffComments: read })])
+    // Another writer saves a note between this writer's read and its write.
+    await controller.updateFolderWorkspace('hub-a', { diffComments: [...read, note('meanwhile')] })
+
+    const updated = await controller.updateFolderWorkspace('hub-a', {
+      diffComments: [],
+      diffCommentsBase: read
+    })
+
+    expect(updated?.diffComments?.map((entry) => entry.id)).toEqual(['meanwhile'])
+  })
+})

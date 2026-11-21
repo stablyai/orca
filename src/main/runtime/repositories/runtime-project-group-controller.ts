@@ -1,3 +1,4 @@
+import { mergeDiffCommentMutation } from '../../../shared/diff-comment-mutation'
 import type {
   RuntimeProjectGroupDependencies,
   FolderWorkspaceUpdates
@@ -270,7 +271,17 @@ export class RuntimeProjectGroupController {
       // The path check awaited; a twin added meanwhile must not receive this update.
       assertUniqueIdWhenRequired(store, folderWorkspaceId, options)
     }
-    const updated = store.updateFolderWorkspace(folderWorkspaceId, updates)
+    const { diffCommentsBase, ...storeUpdates } = updates
+    if (diffCommentsBase !== undefined && storeUpdates.diffComments !== undefined) {
+      // Re-read after the awaits above; apply only this writer's change so notes saved meanwhile survive.
+      const current = store.getFolderWorkspace?.(folderWorkspaceId)?.diffComments ?? []
+      storeUpdates.diffComments = mergeDiffCommentMutation(
+        diffCommentsBase,
+        current,
+        storeUpdates.diffComments
+      )
+    }
+    const updated = store.updateFolderWorkspace(folderWorkspaceId, storeUpdates)
     if (updated) {
       this.deps.notifyReposChanged()
     }

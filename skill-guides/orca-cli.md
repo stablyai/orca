@@ -238,6 +238,19 @@ ORCA orchestration send --to <terminal-from-find> --subject "Status" --body "Sta
 ORCA orchestration send --to <mailbox-from-find> --subject "Status" --body "Status?" --type question --json
 ```
 
+## Review Notes
+
+Review notes are the line notes a person leaves on a workspace's diff or Markdown files. To report review findings on specific lines, leave them as notes so the user can triage them and send them to an agent from Orca:
+
+```text
+ORCA worktree notes add --file src/auth.ts --line 42 --body "token can be null after logout" --json
+ORCA worktree notes add --file src/auth.ts --start-line 40 --line 48 --body-file - --json < finding.md
+ORCA worktree notes list --json
+ORCA worktree notes clear --id <note-id> --json
+```
+
+`--file` is relative to the workspace root and `--line` is 1-based on the current file. `add` keeps existing notes and returns the new `note.id`; `list` returns `notes[]` with `id`, `filePath`, `startLine`, `lineNumber`, `body`, `createdAt` and `sentAt` once sent to an agent. `clear` takes `--id` (repeatable), `--file` or `--all`; clear only notes you added unless the user asked. Without `--worktree`, these target the workspace that contains the current directory.
+
 ## Worktree Comments
 
 A worktree comment is the short status line on the workspace card. Update it at meaningful checkpoints:
