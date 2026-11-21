@@ -8,7 +8,6 @@ import { DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { isMac } from '@/app-shell/chrome/app-window-chrome'
 import { botSlackApps, type Bot } from '../../../../../shared/bot-types'
 import { signedOutHere } from '../bot-host-copy'
 import { BOT_SLACK_DESKTOP_ERRORS } from '../../../../../shared/connector-bot-slack-contract'
@@ -24,6 +23,8 @@ import {
 } from '../connector-connect-parts'
 import { SlackOpenAppButton } from './SlackOpenAppButton'
 import { SlackConfigTokenForm } from './SlackConfigTokenForm'
+import { SlackSetupPrepare } from './SlackSetupPrepare'
+import { SlackSetupProgress } from './SlackSetupProgress'
 import { SlackTeamName } from './SlackWorkspacesSettings'
 import { BotHostSignInButton } from '../BotHostSignInButton'
 import { ConnectorSetupDialog, useSetupStepAside } from '../connector-setup-surface'
@@ -62,6 +63,7 @@ function BotSlackSetupFlow({
   // mounts this flow anew, which checks again before it waits again: that is not an end.
   const settled =
     step.kind === 'installed' ||
+    step.kind === 'prepare' ||
     step.kind === 'uncertain' ||
     step.kind === 'failed' ||
     step.kind === 'token' ||
@@ -92,6 +94,8 @@ function BotSlackSetupFlow({
   const installed = step.kind === 'installed'
   // The setup hook follows the bot's Slack, so this read is current on every render.
   const view = readBotSlack(bot)
+  const workspaceState =
+    view.status === 'ready' && 'teamId' in step ? slackTeamState(view.slack, step.teamId) : null
   const installedState =
     installed && view.status === 'ready' ? slackTeamState(view.slack, step.teamId) : null
   // Progressive disclosure: until installed, the header names only the bot; how to ask waits for Done.
@@ -115,36 +119,28 @@ function BotSlackSetupFlow({
   const body = ((): React.JSX.Element => {
     switch (step.kind) {
       case 'checking':
-      case 'setting-up': {
-        const status = (
-          <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
-            {step.kind === 'checking'
-              ? t('bots.slack.setup.checking', 'Checking Slack…')
-              : t('bots.slack.setup.settingUp', 'Setting up your Slack app…')}
-          </p>
+      case 'setting-up':
+        return (
+          <SlackSetupProgress
+            checking={step.kind === 'checking'}
+            handOff={step.kind === 'setting-up' && step.handOff === true}
+            email={ownEmail}
+            hostName={hostName}
+          />
         )
-        return step.kind === 'setting-up' && step.handOff && ownEmail && hostName ? (
-          <div className="space-y-4">
-            <p className="text-sm">
-              {isMac
-                ? t(
-                    'bots.slack.handOff.confirmMac',
-                    'Orca on this Mac creates the Slack app with {{email}}’s token. {{host}} gets only this bot’s app.',
-                    { email: ownEmail, host: hostName }
-                  )
-                : t(
-                    'bots.slack.handOff.confirm',
-                    'Orca on this computer creates the Slack app with {{email}}’s token. {{host}} gets only this bot’s app.',
-                    { email: ownEmail, host: hostName }
-                  )}
-            </p>
-            {status}
-          </div>
-        ) : (
-          status
+      case 'prepare':
+        return (
+          <SlackSetupPrepare
+            update={step.update}
+            workspace={
+              workspaceState?.state === 'installed'
+                ? (workspaceState.teamName ?? step.teamId)
+                : step.teamId
+            }
+            onContinue={() => void setUp(step.teamId)}
+            onClose={onClose}
+          />
         )
-      }
       case 'pick':
         return (
           <ConnectorWorkspacePicker
@@ -368,7 +364,7 @@ function BotSlackSetupFlow({
   )
 }
 
-/** "Add connector → Slack" for one bot: the first bot in a workspace pastes a token, later ones are one click. */
+/** "Add connector → Slack" for one bot; later bots can reuse a workspace's saved grant. */
 export function BotSlackSetupDialog({
   bot,
   teamId,
@@ -383,7 +379,7 @@ export function BotSlackSetupDialog({
 }): React.JSX.Element {
   const t = useTranslate()
   const close = (): void => onOpenChange(false)
-  // A new open of the dialog is a fresh attempt, which opens Slack's page again.
+  // A new open checks state without continuing an earlier install attempt.
   useEffect(() => {
     if (!open) {
       forgetOpenedSlackPages(bot)

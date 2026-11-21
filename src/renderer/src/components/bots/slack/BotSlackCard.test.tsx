@@ -155,18 +155,26 @@ describe('BotSlackCard', () => {
     expect(screen.getByRole('button', { name: 'Add' })).toHaveProperty('disabled', true)
   })
 
-  it('removes an app that was never installed, so a dropped setup can be cleared', async () => {
-    renderCard({ state: 'grant_expired', teamId: 'T05' })
+  it.each([
+    { state: 'grant_expired', teamId: 'T05' } as const,
+    { state: 'uncertain', teamId: 'T05' } as const,
+    { state: 'created', teamId: 'T05', appId: 'A1' } as const,
+    { state: 'not_created' } as const
+  ])('removes the saved workspace when Slack reports %o', async (state) => {
+    renderCard(state)
     confirm.mockResolvedValueOnce(true)
-    await screen.findByRole('button', { name: 'Finish setup' })
+    await screen.findByRole('button', { name: /^(Finish setup|Add to Slack)$/ })
     openActions()
     expect(screen.queryByRole('menuitem', { name: 'Slack app settings' })).toBeNull()
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove from Slack…' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove from T05…' }))
     await waitFor(() => expect(api.remove).toHaveBeenCalledWith({ botId: 'bot-1', teamId: 'T05' }))
   })
 
   it('offers no Remove on the people-only row once the install is gone', async () => {
-    renderCard({ state: 'created', teamId: 'T05', appId: 'A1' }, { teamId: undefined })
+    renderCard(
+      { state: 'created', teamId: 'T05', appId: 'A1' },
+      { teamId: undefined, shown: { ...bot, slack: null } }
+    )
     expect(await screen.findByRole('button', { name: 'Finish setup' })).toBeDefined()
     expect(screen.queryByRole('button', { name: 'Slack actions' })).toBeNull()
   })

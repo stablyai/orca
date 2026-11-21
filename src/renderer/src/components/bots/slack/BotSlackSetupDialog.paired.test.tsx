@@ -188,6 +188,7 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     )
     openDialog()
 
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue setup' }))
     await screen.findByRole('button', { name: 'Approve in Slack' })
     expect(mocks.open).not.toHaveBeenCalled()
 
@@ -272,6 +273,7 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     )
     openDialog()
 
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue setup' }))
     await screen.findByText('The install link expired.')
     fireEvent.click(screen.getByRole('button', { name: 'Get a new link' }))
     await waitFor(() => expect(mocks.hosts[SERVER].setUpApp).toHaveBeenCalledTimes(2))

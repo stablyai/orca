@@ -69,6 +69,7 @@ export const BOT_CONNECTORS_METHOD = defineMethod({
         bot,
         {
           gh,
+          cloudFailure: capabilities && !capabilities.ok ? capabilities.message : undefined,
           linear: (await runtime.linearStatus()).connected,
           google: (await getGoogleConnect()?.accounts()) ?? [],
           googleApp: Boolean(await getGoogleConnect()?.client())

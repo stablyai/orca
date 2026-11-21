@@ -13,7 +13,7 @@ import {
 } from '@/lib/bot-slack-state'
 import { botSlackCalls } from '@/lib/bot-connector-host-calls'
 import { openBotHostPageOrSay } from '@/lib/bot-host-page'
-import type { Bot } from '../../../../../shared/bot-types'
+import { botSlackApps, type Bot } from '../../../../../shared/bot-types'
 import { connectorAddAccessLabel } from '../bot-connectors'
 import { useConnectorSetup } from '../ConnectorSetupDialogs'
 import { BotConnectorRow, type BotConnectorFix } from '../BotConnectorRow'
@@ -25,6 +25,8 @@ import { BotSlackSetupDialog } from './BotSlackSetupDialog'
 import { BotSlackSection } from './BotSlackSection'
 import { signedOutConnectorFace } from '../orca-cloud-sign-in'
 import { useSlackWhoCanAsk } from './use-slack-who-can-ask'
+import { useBotHostHas } from '@/lib/bot-host-status'
+import { BOTS_SLACK_SCOPED_REMOVE_RUNTIME_CAPABILITY } from '../../../../../shared/bot-runtime-capabilities'
 
 function slackAppSettingsUrl(appId: string): string {
   return `https://api.slack.com/apps/${encodeURIComponent(appId)}`
@@ -153,14 +155,18 @@ export function BotSlackCard({
   const people = useSlackWhoCanAsk(bot, teamId)
   const team = view.status === 'ready' ? slackTeamState(view.slack, teamId) : null
   const installed = team?.state === 'installed' ? team : null
+  const safeRemove = useBotHostHas(bot.hostId, BOTS_SLACK_SCOPED_REMOVE_RUNTIME_CAPABILITY)
   // A workspace's row can also remove an app that was never installed.
-  const removable = installed ?? (teamId !== undefined && team && 'teamId' in team ? team : null)
+  const legacyTeam = installed ?? (teamId !== undefined && team && 'teamId' in team ? team : null)
+  const removeTeamId = safeRemove
+    ? (teamId ?? installed?.teamId ?? botSlackApps(bot)[0]?.teamId)
+    : legacyTeam?.teamId
 
   const remove = async (): Promise<void> => {
     const confirmed = await confirm({
       title: t('bots.slack.connection.removeFromTitle', 'Remove {{name}} from {{place}}?', {
         name: bot.name,
-        place: face.workspace ?? 'Slack'
+        place: face.workspace ?? removeTeamId ?? 'Slack'
       }),
       description: t(
         'bots.slack.connection.removeNote',
@@ -173,10 +179,10 @@ export function BotSlackCard({
       return
     }
     setRemoving(true)
-    const result = await botSlackCalls(bot.hostId).remove({
-      botId: bot.id,
-      teamId: removable?.teamId
-    })
+    const result = await botSlackCalls(bot.hostId).remove(
+      { botId: bot.id, teamId: removeTeamId },
+      legacyTeam === null
+    )
     setRemoving(false)
     if (!result.ok) {
       toast.error(botSlackErrorMessage(result.error, hostName))
@@ -240,10 +246,10 @@ export function BotSlackCard({
           : null
       }
       remove={
-        removable
+        removeTeamId !== undefined
           ? {
               label: t('bots.connector.removeFrom', 'Remove from {{place}}…', {
-                place: face.workspace ?? 'Slack'
+                place: face.workspace ?? removeTeamId ?? 'Slack'
               }),
               onSelect: () => void remove(),
               disabled: removing

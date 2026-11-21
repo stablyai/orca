@@ -27179,7 +27179,9 @@
         "tryIt": "Try it in any channel or direct message",
         "connectAnother": "Connect another Slack workspace",
         "connect": "Connect Slack",
-        "openInSlack": "Message it in Slack"
+        "openInSlack": "Message it in Slack",
+        "prepare": "Continue to create or update this bot’s Slack app for {{workspace}}, then approve it in Slack.",
+        "continue": "Continue setup"
       },
       "connection": {
         "appSettings": "Slack app settings",
@@ -27201,7 +27203,7 @@
         "step1": "In Slack app settings, find “Your App Configuration Tokens” and choose Generate Token.",
         "step2": "Select the workspace for your bot.",
         "step3": "Copy the Refresh Token and paste it below.",
-        "kept": "Orca Cloud keeps this token encrypted, so your next bots in this workspace need one click.",
+        "kept": "Orca Cloud keeps this token encrypted, so your next bots in this workspace can reuse it.",
         "label": "Configuration refresh token",
         "accessPasted": "That is the Access Token. Copy the Refresh Token, the one next to it."
       },
