@@ -13,6 +13,7 @@ import { useActiveClientHostedBrowserRowId } from '@/runtime/browser/client-host
 import { useEditorGroupFileDropOwner } from '../editor/file-drop/use-editor-group-file-drop-owner'
 import { useBotForWorkspace, useBotGroupForWorkspace } from '../bots/bot-workspace'
 import { useTranslate } from '@/i18n/use-translate'
+import { useTabStripScrollMemory } from './strip/tab-strip-scroll-memory'
 
 function TabBarInner(props: TabBarProps): React.JSX.Element {
   const t = useTranslate()
@@ -118,6 +119,11 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     slotIds,
     worktreeId
   })
+  useTabStripScrollMemory(
+    groupId,
+    tabStripNavigation.tabStripRef,
+    itemProjection.activeVisibleTabId
+  )
   const attachFileDropOwner = useEditorGroupFileDropOwner({ worktreeId, groupId })
   const { clearPendingNewTabMenuFocusOnUnmount } = createMenu
   const surfaceRef = useCallback(
