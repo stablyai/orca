@@ -1,4 +1,5 @@
 import type { Dirent } from 'node:fs'
+import type { AntigravityTranscriptUsage } from '../../shared/agent-usage/analytics/antigravity-transcript-usage'
 import type {
   AiVaultAgent,
   AiVaultScanIssue,
@@ -163,6 +164,7 @@ export type SessionAccumulator = {
   // The earliest retained preview is no longer the opening turn.
   previewMessagesTruncated: boolean
   antigravityOpeningPrompt?: AiVaultSession['antigravityOpeningPrompt'] | null
+  antigravityUsageSteps?: Map<number, AntigravityTranscriptUsage>
   firstUserPrompt: string | null
   lastUserPrompt: string | null
   // Recoverable signal for a zero-turn transcript (see AiVaultSession).

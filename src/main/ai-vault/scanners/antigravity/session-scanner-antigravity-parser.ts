@@ -24,6 +24,7 @@ import type { TranscriptMessageSink } from '../../transcripts/session-transcript
 import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../parsing/session-json-object'
 import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
+import { readAntigravityTranscriptUsage } from '../../../../shared/agent-usage/analytics/antigravity-transcript-usage'
 
 type ParserSessionOptions = {
   executionHostId?: ExecutionHostId
@@ -67,7 +68,7 @@ export function createAntigravitySessionResumeState(
   messages?: TranscriptMessageSink
 ): ResumableSessionParseState {
   const sessionId = antigravityConversationIdFromTranscriptPath(file.path) ?? ''
-  // Transcripts lack cwd/model; enrich cwd conservatively from history rather than unstable binary stores.
+  // Enrich cwd conservatively from history rather than unstable binary stores.
   return accumulatorFoldResumeState(
     createAccumulator({ agent: 'antigravity', file, sessionId, messages }),
     consumeAntigravityRecordLine
@@ -98,6 +99,15 @@ function consumeAntigravityRecordLine(accumulator: SessionAccumulator, line: str
   }
 
   updateTimeline(accumulator, record.created_at)
+  const usage = readAntigravityTranscriptUsage(record)
+  if (usage) {
+    const steps = (accumulator.antigravityUsageSteps ??= new Map())
+    accumulator.totalTokens += usage.totalTokens - (steps.get(usage.step)?.totalTokens ?? 0)
+    steps.set(usage.step, usage)
+    if (usage.model) {
+      accumulator.model = usage.model
+    }
+  }
   const source = extractString(record.source)
   const type = extractString(record.type)
   const content = extractString(record.content)
