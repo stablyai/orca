@@ -16,6 +16,7 @@ import { DEFAULT_STATUS_BAR_ITEMS } from '../status-bar/status-bar-defaults'
 import type { VoiceSettings } from '../speech/speech-types'
 import { DICTATION_LANGUAGE_AUTO } from '../speech/models/dictation-language'
 import { DEFAULT_UNLOAD_MODEL_AFTER_MINUTES } from '../speech/models/voice-model-unload'
+import type { VoiceControlSettings } from '../voice-control-types'
 import { cloneDefaultWorkspaceStatuses } from '../workspace/status/workspace-statuses'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../worktree/row-display/card-properties'
 import { DEFAULT_BOT_SIDEBAR_VIEW } from '../bots/bot-sidebar-view'
@@ -67,6 +68,19 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
   })
 }
 
+export function getDefaultVoiceControlSettings(): VoiceControlSettings {
+  return {
+    enabled: false,
+    coordinatorVoice: 'marin',
+    agentVoiceMode: 'coordinator',
+    maxSessionMinutes: 30,
+    idleSuspendMinutes: 5,
+    voiceSpeed: 1,
+    voiceGating: true,
+    customInstructions: ''
+  }
+}
+
 export function getDefaultVoiceSettings(): VoiceSettings {
   return {
     enabled: false,
@@ -80,7 +94,8 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     openAiApiKeyConfigured: false,
     microphoneDeviceId: null,
     microphoneDeviceLabel: null,
-    unloadModelAfterMinutes: DEFAULT_UNLOAD_MODEL_AFTER_MINUTES
+    unloadModelAfterMinutes: DEFAULT_UNLOAD_MODEL_AFTER_MINUTES,
+    control: getDefaultVoiceControlSettings()
   }
 }
 

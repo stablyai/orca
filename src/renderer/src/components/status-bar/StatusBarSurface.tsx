@@ -12,6 +12,7 @@ import { NativeChatResumeStatusSegment } from './NativeChatResumeStatusSegment'
 import { CaffeinateStatusSegment } from './CaffeinateStatusSegment'
 import { PluginsStatusSegment } from './plugins/PluginsStatusSegment'
 import { PluginStatusBarItems } from './plugins/PluginStatusBarItems'
+import { VoiceControlStatusSegment } from '../voice-control/VoiceControlStatusSegment'
 import { RemoteServerUpdateStatusSegment } from './updates/RemoteServerUpdateStatusSegment'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/components/floating-terminal/workspace/floating-workspace-open-intent'
 import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/trigger/FloatingTerminalIconContextMenu'
@@ -107,6 +108,8 @@ export function StatusBarSurface({
         className="-mx-1 flex min-w-0 items-center self-stretch overflow-x-auto scrollbar-none"
       >
         <div className="flex w-max items-center gap-3 px-1">
+          {/* Why: main dropped the overflow icon-only collapse; always render the labeled segment. */}
+          <VoiceControlStatusSegment iconOnly={false} />
           {!isPairedWebClientWindow() ? (
             <>
               <PluginsStatusSegment />

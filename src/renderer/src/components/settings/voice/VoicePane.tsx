@@ -24,6 +24,7 @@ import { VoiceModelUnloadSetting } from './VoiceModelUnloadSetting'
 import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { VoiceSpeechGpuSetting } from './VoiceSpeechGpuSetting'
+import { VoiceControlSettingsSection } from './VoiceControlSettingsSection'
 import { useTranslate } from '@/i18n/use-translate'
 import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { useLanguageReadiness } from '@/i18n/language-readiness'
@@ -139,6 +140,7 @@ export function VoicePane({
   const compatibleConfigured =
     compatibleModel !== undefined &&
     modelStates.some((s) => s.id === compatibleModel.id && s.status === 'ready')
+  const showVoiceControlSection = voiceSettings.openAiApiKeyConfigured
 
   const openOpenAiDialog = (modelId: string | null = null): void => {
     setPendingCloudModelId(modelId)
@@ -360,6 +362,15 @@ export function VoicePane({
           onUpdateVoiceSettings={updateVoiceSettings}
         />
       </SettingsGroup>
+
+      {showVoiceControlSection && (
+        <SettingsGroup title={t('components.settings.voice.voiceControl.title', 'Voice Control')}>
+          <VoiceControlSettingsSection
+            voiceSettings={voiceSettings}
+            onUpdateVoiceSettings={updateVoiceSettings}
+          />
+        </SettingsGroup>
+      )}
 
       <OpenAiCompatibleProviderDialog
         open={compatibleDialogOpen}

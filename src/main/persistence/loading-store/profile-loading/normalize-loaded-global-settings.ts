@@ -1,6 +1,9 @@
 import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/settings/native-chat-providers'
 import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
-import { getDefaultVoiceSettings } from '../../../../shared/orca-profiles/constants'
+import {
+  getDefaultVoiceControlSettings,
+  getDefaultVoiceSettings
+} from '../../../../shared/orca-profiles/constants'
 import { normalizePRBotAuthorOverrides } from '../../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { normalizeNewTabMenuLayout } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
 import { normalizeTerminalQuickCommands } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
@@ -204,7 +207,14 @@ export function normalizeLoadedGlobalSettings(
       migratedSourceControlAi,
       parsed.settings?.commitMessageAi ?? defaults.settings.commitMessageAi
     ),
-    voice: { ...voice, sttModel: replaceRetiredSpeechModelId(voice.sttModel) },
+    voice: {
+      ...voice,
+      sttModel: replaceRetiredSpeechModelId(voice.sttModel),
+      control: {
+        ...getDefaultVoiceControlSettings(),
+        ...parsed.settings?.voice?.control
+      }
+    },
     voiceDictationModeDefaultedToAuto: true
   }
 }
