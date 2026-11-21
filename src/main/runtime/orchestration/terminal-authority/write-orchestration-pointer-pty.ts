@@ -96,8 +96,13 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
   ): RuntimeTerminalSummary {
     const worktree = worktreesById.get(leaf.worktreeId)
     const tab = this.tabs.get(leaf.tabId) ?? null
+    const handle = this.issueHandle(leaf)
+    // Agent Sleep's stopped process stands in for the idle agent it will resume.
+    const sleptAgent = this.sleptAgentHandle(handle)
+    const slept = sleptAgent ? (sleptAgent.pty ?? { lastOutputAt: null, preview: '' }) : null
 
-    const pty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
+    const pty =
+      (leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined) ?? sleptAgent?.pty ?? undefined
     const title = getLatestLeafTitle(this.getLeafDisplayRecord(leaf), tab?.title ?? null)
     const paneTitle = this.getSavedPaneTitle(leaf.worktreeId, leaf.tabId, leaf.leafId)
     // Demote only controller-proven local absence; remote inventory gaps are unknown, and hasPty rescues spawn/list races.
@@ -112,9 +117,9 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
       ? (startedMainTerminalSurfaces(this)?.paneOf(leaf.tabId, leaf.leafId) ?? null)
       : null
     return {
-      handle: this.issueHandle(leaf),
+      handle,
       ptyId: leaf.ptyId,
-      incarnationId: pty?.incarnationId ?? null,
+      incarnationId: slept ? null : (pty?.incarnationId ?? null),
       orphaned: false,
       worktreeId: leaf.worktreeId,
       worktreePath: worktree?.path ?? '',
@@ -123,14 +128,14 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
       leafId: leaf.leafId,
       title,
       ...(paneTitle ? { paneTitle } : {}),
-      connected: provenAbsent ? false : leaf.connected,
-      writable: provenAbsent ? false : leaf.writable,
+      connected: slept ? true : provenAbsent ? false : leaf.connected,
+      writable: slept ? true : provenAbsent ? false : leaf.writable,
       // A pane with a status is never connected; its verdict says what the host knows.
       ...(ORCA_LAYOUT_OWNER_IS_MAIN && mainPane?.hasStatus
         ? { connected: false, writable: false }
         : {}),
-      lastOutputAt: leaf.lastOutputAt,
-      preview: leaf.preview,
+      lastOutputAt: slept ? slept.lastOutputAt : leaf.lastOutputAt,
+      preview: slept ? slept.preview : leaf.preview,
       ...(leaf.lastExitCause ? { exitCause: leaf.lastExitCause } : {}),
       ...this.terminalExecutionHostField(leaf.ptyId, leaf.worktreeId),
       ...this.resolvePaneAgentIdentityField(

@@ -21,6 +21,7 @@ import {
   labelTerminalReadSource,
   readTerminalTail
 } from '../output/tail/terminal-tail-read'
+import { readSleptAgentTerminal } from './slept-agent-terminal-read'
 import { getTerminalState } from '../wait/terminal-wait-results'
 import { readStructuredWorkerTerminal } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-terminal-read'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
@@ -255,6 +256,13 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     if (structured) {
       // `screen` asks for a rendered grid; there is none, and the journal is the whole record.
       return { ...structured, source: opts.screen ? 'screen-unavailable' : 'stream' }
+    }
+    // A slept agent reads as idle, without waking.
+    const slept = this.sleptAgentHandle(handle)
+    if (slept) {
+      return readSleptAgentTerminal(handle, slept, opts, (pty) =>
+        this.readPtyTerminal(handle, pty, opts)
+      )
     }
     // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
     const starting = ORCA_LAYOUT_OWNER_IS_MAIN ? this.startRestoredHandlePane(handle) : null

@@ -72,10 +72,11 @@ function createWorld(): ObservedWorld {
         connectionId: null,
         payload: { state, prompt: `turn ${state}`, agentType: 'claude' }
       }),
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fleet observation reads only getOrchestrationFleetAgentStatusSnapshot from the runtime.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fleet observation reads only the status snapshot and slept panes from the runtime.
     runtime: {
       getOrchestrationFleetAgentStatusSnapshot: () =>
-        readOrchestrationFleetAgentStatusSnapshot(host)
+        readOrchestrationFleetAgentStatusSnapshot(host),
+      sleptAgentHandleForPane: () => null
     } as unknown as OrcaRuntimeService
   }
 }

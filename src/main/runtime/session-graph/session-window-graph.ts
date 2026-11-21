@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithAdmitWindowPublisher } from './session-window-publisher'
+import { OrcaRuntimeWithSleptLeafHandles } from './slept-leaf-handles'
 import type {
   RuntimeRendererSyncWindowGraph,
   RuntimeSyncWindowGraph,
@@ -14,7 +14,7 @@ import { assertBrowserPageInventoryFrames } from '../session-tabs/inventory/mobi
 
 type Graph = RuntimeSyncWindowGraph
 
-export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmitWindowPublisher {
+export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithSleptLeafHandles {
   /** Layout-owner builds: main's panes in place of the window's (session-tabs-inventory.ts). */
   protected abstract withMainSurfaces(windowId: number, graph: Graph): Graph
   declare protected terminalGroupGridSizes?: RuntimeSyncWindowGraph['terminalGroupGridSizes']
@@ -164,10 +164,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
       }
 
       if (existing && (existing.ptyId !== ptyId || existing.ptyGeneration !== ptyGeneration)) {
-        // Adopt the first PTY into the pending handle mobile already subscribed to.
-        const adoptedFirstPty =
-          existing.ptyId === null && this.adoptFirstPtyForLeafHandle(leafKey, ptyId, ptyGeneration)
-        if (!adoptedFirstPty) {
+        if (!this.retainLeafHandle(leaf, existing.ptyId, ptyId, ptyGeneration)) {
           this.invalidateLeafHandle(leafKey)
         }
       }
@@ -213,7 +210,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
           } else {
             this.invalidateLeafHandle(oldLeafKey)
           }
-        } else {
+        } else if (!this.carrySleptLeafHandle(oldLeafKey, nextLeaves)) {
           this.invalidateLeafHandle(oldLeafKey)
         }
       }
@@ -229,6 +226,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
     }
 
     this.terminalIdentity.replaceLeaves(nextLeaves)
+    this.pruneSleptLeafHandles()
     this.rebuildLeafPtyIndex()
     this.followExportedPaneKeys()
     this.reconcilePtyIncarnationHandles()
