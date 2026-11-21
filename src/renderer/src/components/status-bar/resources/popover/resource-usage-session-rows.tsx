@@ -262,10 +262,9 @@ export function WorktreeRow({
             key={chat.agentSessionId}
             chat={chat}
             onOpen={
-              // A paired machine's workspace this window doesn't list has no tab to open.
-              storeRecord !== null || worktree.hostLabel === undefined
-                ? (agentSessionId) => onOpenChat(worktree.worktreeId, agentSessionId)
-                : undefined
+              worktree.unplaced
+                ? undefined
+                : (agentSessionId) => onOpenChat(worktree.worktreeId, agentSessionId)
             }
           />
         ))}

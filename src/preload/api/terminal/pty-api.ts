@@ -204,6 +204,8 @@ export type PtyApi = {
     scope?: PtySessionListScope,
     admission?: ResourceViewAdmission
   ) => Promise<PtyListedSession[]>
+  /** The view dropped this listing's answer; main stops re-reading for it. */
+  retireListSessions?: (requestId: string) => void
   getAuthoritativeBufferSnapshotCapabilities?: (
     ids: string[]
   ) => Promise<{ id: string; authoritative: boolean | null }[]>
