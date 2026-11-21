@@ -227,7 +227,7 @@ export async function dropUnreadBotRequests(
         })
       }
     }
-    if (why === 'new-chat' && onlyTo && isOrcaSessionId(onlyTo)) {
+    if ((why === 'new-chat' || why === 'chat-deleted') && onlyTo && isOrcaSessionId(onlyTo)) {
       // Worker asks in the Runs the old Chat coordinated have no reader now either.
       for (const run of db.runsBoundToCoordinator({
         orcaSessionId: onlyTo,

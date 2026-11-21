@@ -13,7 +13,15 @@ export async function agentQuestionNotices(
   messageIds: readonly string[],
   readChat?: ChatStateReader
 ): Promise<QuestionNoticeWriter> {
-  const bot = await botQuestionNotices(runtime, taker, messageIds, readChat)
+  const db = runtime.getOrchestrationDb()
+  const botIds = db.db
+    .prepare(
+      `SELECT message_id FROM bot_requests WHERE message_id IN (${messageIds.map(() => '?').join(',')})`
+    )
+    .all(...messageIds)
+    .flatMap(({ message_id }) => (typeof message_id === 'string' ? [message_id] : []))
+  // A taker holding only worker asks skips the bot wording, which reads its chat.
+  const bot = botIds.length > 0 ? await botQuestionNotices(runtime, taker, botIds, readChat) : null
   const worker = workerAskNotices(runtime, taker)
-  return (notice) => (notice.kind === 'bot' ? bot(notice) : worker(notice))
+  return (notice) => (notice.kind === 'bot' ? (bot?.(notice) ?? 'unverified') : worker(notice))
 }

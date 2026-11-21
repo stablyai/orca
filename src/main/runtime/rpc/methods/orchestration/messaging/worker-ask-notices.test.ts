@@ -126,6 +126,25 @@ describe("a worker's question its coordinator stopped on", () => {
     expect(notice?.read).toBe(1)
   })
 
+  it('keeps a resumed wait waiting for a late answer once the notice was seen', async () => {
+    const reconciler = start()
+    const worker = workerIn(true)
+    const id = ask(worker)
+    db.markAsRead([id], { kind: 'session', sessionId: COORDINATOR })
+    await decided(reconciler)
+    const [notice] = db.getAllMessagesForHandle(`dispatch:${worker.dispatchId}`)
+    db.markAsRead([notice!.id], { kind: 'orca' })
+
+    const waited = await waitForQuestionAnswer({
+      runtime,
+      questionId: id,
+      readQuestion: () => db.getQuestion(id),
+      closedMessage: 'closed',
+      timeoutMs: 1
+    })
+    expect(waited).toMatchObject({ answer: null, timedOut: true })
+  })
+
   it('tells a worker on a paired computer by coordinator mail', async () => {
     const worker = workerIn(true)
     const id = ask(worker)

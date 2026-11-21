@@ -78,7 +78,7 @@ export async function waitForQuestionAnswer(args: {
     const current = args.readQuestion()
     if (args.signal?.aborted) {
       // A departed caller must not take the answer: leave it unread and wake the worker with it.
-      if (current?.status === 'answered') {
+      if (current?.status === 'answered' || (current && unreadNotice(args.runtime, current))) {
         args.runtime.notifyMessageArrived(`dispatch:${current.dispatch_id}`, 'status')
       }
       return { ...unanswered, timedOut: false, cancelled: true, connectionLost: true }
@@ -104,8 +104,19 @@ export async function waitForQuestionAnswer(args: {
         timeoutMs
       }
     }
-    if (current.told) {
-      return { ...unanswered, ...takeNotice(args.runtime, current), told: current.told }
+    // Told and not yet seen: this wait returns the notice. Once seen, a resumed wait keeps waiting
+    // for a late answer.
+    const notice = current.told ? unreadNotice(args.runtime, current) : undefined
+    if (current.told && notice) {
+      args.runtime.getOrchestrationDb().markAsReadAndDelivered([notice.id], { kind: 'orca' })
+      return {
+        ...unanswered,
+        notice: notice.body,
+        told: current.told,
+        timedOut: false,
+        cancelled: false,
+        connectionLost: false
+      }
     }
     const remainingMs = deadline - Date.now()
     if (remainingMs <= 0) {
@@ -118,21 +129,19 @@ export async function waitForQuestionAnswer(args: {
   }
 }
 
-/** A waiting ask told its question went unanswered takes the notice, so its mail isn't delivered again. */
-function takeNotice(
+/** The unread notice telling this question's worker it went unanswered. */
+function unreadNotice(
   runtime: Pick<OrcaRuntimeService, 'getOrchestrationDb'>,
   question: QuestionState
-): { notice: string | null; timedOut: false; cancelled: false; connectionLost: false } {
-  const db = runtime.getOrchestrationDb()
-  const row = db.db
-    .prepare(
-      `SELECT id, body FROM messages WHERE thread_id = ? AND to_handle = ? AND id <> ?
+): { id: string; body: string } | undefined {
+  const row = runtime
+    .getOrchestrationDb()
+    .db.prepare(
+      `SELECT id, body FROM messages WHERE thread_id = ? AND to_handle = ? AND id <> ? AND read = 0
        ORDER BY sequence DESC LIMIT 1`
     )
     .get(question.message_id, `dispatch:${question.dispatch_id}`, question.message_id)
-  if (typeof row?.id === 'string') {
-    db.markAsReadAndDelivered([row.id], { kind: 'orca' })
-  }
-  const notice = typeof row?.body === 'string' ? row.body : null
-  return { notice, timedOut: false, cancelled: false, connectionLost: false }
+  return typeof row?.id === 'string' && typeof row.body === 'string'
+    ? { id: row.id, body: row.body }
+    : undefined
 }
