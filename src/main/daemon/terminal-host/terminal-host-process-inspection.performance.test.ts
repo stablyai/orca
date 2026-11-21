@@ -88,7 +88,7 @@ function row(pid: number, ppid: number, pgid: number, command: string): ProcessT
 function pane(options: {
   root: number
   shellIsRootChild: boolean
-  foregroundGroup: number
+  foregroundGroup: number | undefined
   foreground?: string
 }): Session {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a steady POSIX poll reads only these members
@@ -456,6 +456,36 @@ it('keeps the table-fingerprint check while per-pid reads are unavailable', asyn
     root: SHELL,
     shellIsRootChild: false,
     foregroundGroup: AGENT,
+    foreground: 'claude'
+  })
+  for (let epoch = 0; epoch < 10; epoch++) {
+    const result = await settle(
+      inspectTerminalHostProcess({
+        sessionId: 'pane-1',
+        session,
+        steadyState: true,
+        authorityGeneration: 'generation-1',
+        nextObservationEpoch: () => epoch
+      })
+    )
+    expect(result.foregroundProcess).toBe('claude')
+    vi.advanceTimersByTime(15_000)
+  }
+  expect(tables.strict).toHaveBeenCalledTimes(1)
+})
+
+it('keeps the table-fingerprint check when the PTY cannot report its foreground group', async () => {
+  const AGENT = 5151
+  const rows: ProcessTableRow[] = [
+    { ...row(SHELL, 1, SHELL, '-zsh'), tpgid: AGENT, startTime: 'Mon Nov 20 10:00:00 2026' },
+    { ...row(AGENT, SHELL, AGENT, 'claude'), tpgid: AGENT, startTime: 'Mon Nov 20 10:01:00 2026' }
+  ]
+  tables.cheap.mockReset().mockResolvedValue(rows)
+  tables.strict.mockReset().mockResolvedValue({ rows, capturedAgeMs: 0 })
+  const session = pane({
+    root: SHELL,
+    shellIsRootChild: false,
+    foregroundGroup: undefined,
     foreground: 'claude'
   })
   for (let epoch = 0; epoch < 10; epoch++) {

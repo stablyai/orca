@@ -45,14 +45,16 @@ export async function rememberSteadyStateAnchor(
     return
   }
   const foregroundGroup = evidence.fence.foregroundPgid
-  if (session.readForegroundGroup() !== foregroundGroup) {
+  const liveGroup = session.readForegroundGroup()
+  if (typeof liveGroup === 'number' && liveGroup !== foregroundGroup) {
     return
   }
   const agentPid = evidence.fence.process.pid
-  const members = await readForegroundGroupMembers(
-    [...new Set([foregroundGroup, agentPid])],
-    foregroundGroup
-  )
+  // A PTY image that cannot report its foreground group (older node-pty) keeps the table fingerprint.
+  const members =
+    typeof liveGroup === 'number'
+      ? await readForegroundGroupMembers([...new Set([foregroundGroup, agentPid])], foregroundGroup)
+      : null
   const rawFallback = session.getForegroundProcess({ rawFallback: true })
   if (members === null) {
     const fingerprint = await buildPaneProcessFingerprint(rows, session.pid).catch(() => null)
