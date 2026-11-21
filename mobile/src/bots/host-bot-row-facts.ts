@@ -38,6 +38,8 @@ export type MobileBotRowFacts = {
   needsYou?: number
   /** What its line reads beside the home's agent rows: its Chat, its threads' links, its waits. */
   line: Omit<BotRowLineInput<never>, 'paused' | 'rows' | 'now' | 'startingSessionIds'>
+  /** The first person asking for access, whom the Needs you line names. */
+  askedForAccess?: string
   statusLine: string
   paused: boolean
   /** A server's bot: its computer, and that computer's word while it is down. */

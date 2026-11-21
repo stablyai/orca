@@ -152,7 +152,7 @@ const texts = (root: ReactTestInstance) =>
 describe('access requests in the bot sheet', () => {
   it('asks with the desktop’s confirm before Give access, and grants through the host', () => {
     const decide = vi.fn(async () => {})
-    const root = renderTab({ requests: [request], deciding: false, decide }).root
+    const root = renderTab({ requests: [request], reads: 1, deciding: false, decide }).root
 
     press(root, 'Review Dana Kim')
     expect(decide).not.toHaveBeenCalled()
@@ -163,7 +163,7 @@ describe('access requests in the bot sheet', () => {
 
   it('keeps an unverified route name out of the warning and grant confirmation', () => {
     const root = renderTab(
-      { requests: [request], deciding: false, decide: vi.fn(async () => {}) },
+      { requests: [request], reads: 1, deciding: false, decide: vi.fn(async () => {}) },
       { serverName: 'Atlas Server' }
     ).root
     expectNamedWarningAndConsent(root, 'the computer this agent runs on')
@@ -177,7 +177,7 @@ describe('access requests in the bot sheet', () => {
     }
     await readHostStatusReply(direct)
     const root = renderTab(
-      { requests: [request], deciding: false, decide: vi.fn(async () => {}) },
+      { requests: [request], reads: 1, deciding: false, decide: vi.fn(async () => {}) },
       { client: direct }
     ).root
     expectNamedWarningAndConsent(root, 'the computer this agent runs on')
@@ -192,7 +192,12 @@ describe('access requests in the bot sheet', () => {
       sendRequest: async () => machineStatus(generation === 1 ? 'Atlas Server' : 'Boreal Server')
     }
     await readHostStatusReply(direct)
-    const access = { requests: [request], deciding: false, decide: vi.fn(async () => {}) }
+    const access = {
+      requests: [request],
+      reads: 1,
+      deciding: false,
+      decide: vi.fn(async () => {})
+    }
     expectNamedWarningAndConsent(renderTab(access, { client: direct }).root, 'Atlas Server')
     generation = 2
     expectNamedWarningAndConsent(updateTab(access, direct), 'the computer this agent runs on')
@@ -214,7 +219,12 @@ describe('access requests in the bot sheet', () => {
         generation === 1 ? oldReply : Promise.resolve(machineStatus('Boreal Server'))
     }
     const oldRead = readHostStatusReply(direct)
-    const access = { requests: [request], deciding: false, decide: vi.fn(async () => {}) }
+    const access = {
+      requests: [request],
+      reads: 1,
+      deciding: false,
+      decide: vi.fn(async () => {})
+    }
     renderTab(access, { client: direct })
     generation = 2
     await readHostStatusReply(direct)
@@ -228,7 +238,7 @@ describe('access requests in the bot sheet', () => {
 
   it('declines without asking, as the desktop does', () => {
     const decide = vi.fn(async () => {})
-    const root = renderTab({ requests: [request], deciding: false, decide }).root
+    const root = renderTab({ requests: [request], reads: 1, deciding: false, decide }).root
 
     press(root, 'Decline Dana Kim')
 
