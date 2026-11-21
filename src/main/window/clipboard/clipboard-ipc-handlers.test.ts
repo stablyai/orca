@@ -766,6 +766,30 @@ describe('registerClipboardHandlers', () => {
     expect(fsWriteFileMock).toHaveBeenCalledWith(expect.any(String), fittedPng)
   })
 
+  it('saves a drawn notes PNG from its own bytes without reading the clipboard, and refuses other bytes', async () => {
+    // A 2x3 PNG header: signature, then the IHDR chunk's length, type, width and height.
+    const png = Uint8Array.from([
+      137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 2, 0, 0, 0, 3, 8, 6
+    ])
+    registerClipboardHandlers(authorizeLocalPath)
+    const save = getRegisteredHandlers().get('clipboard:saveImageAsTempFile')
+    // Only reads made by this save count.
+    clipboardAvailableFormatsMock.mockClear()
+    clipboardReadImageMock.mockClear()
+    clipboardReadBufferMock.mockClear()
+
+    await expect(save?.(makeClipboardEvent(), { png })).resolves.toMatch(/\.png$/)
+    expect(fsWriteFileMock).toHaveBeenCalledWith(expect.any(String), Buffer.from(png))
+    // Nothing on the clipboard is read for a notes image: neither its image nor its file formats.
+    expect(clipboardAvailableFormatsMock).not.toHaveBeenCalled()
+    expect(clipboardReadImageMock).not.toHaveBeenCalled()
+    expect(clipboardReadBufferMock).not.toHaveBeenCalled()
+
+    const notPng = Uint8Array.from({ length: 32 }, () => 7)
+    await expect(save?.(makeClipboardEvent(), { png: notPng })).rejects.toThrow()
+    expect(clipboardReadImageMock).not.toHaveBeenCalled()
+  })
+
   it('rejects oversized clipboard PNG bytes before SSH provider lookup', async () => {
     clipboardReadImageMock.mockReturnValue({
       getSize: () => ({ height: 1, width: 1 }),

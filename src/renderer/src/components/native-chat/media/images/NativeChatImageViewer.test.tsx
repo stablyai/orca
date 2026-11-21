@@ -25,18 +25,22 @@ function Viewer({ blocks = BLOCKS }: { blocks?: typeof BLOCKS }): React.JSX.Elem
   )
 }
 
-const shown = () => screen.getByRole('dialog').querySelector('img')?.getAttribute('alt')
+const shown = () => screen.getByRole('heading').textContent
 
 it("steps through a message's images by the toolbar arrows and the arrow keys", () => {
   render(<Viewer />)
   expect(shown()).toBe('before.png')
-  expect(screen.getByRole('button', { name: 'Previous image' }).hasAttribute('disabled')).toBe(true)
+  expect(screen.getByRole('button', { name: 'Previous image' }).getAttribute('aria-disabled')).toBe(
+    'true'
+  )
 
   fireEvent.click(screen.getByRole('button', { name: 'Next image' }))
   expect(shown()).toBe('after.png')
   fireEvent.keyDown(screen.getByRole('dialog'), { key: 'ArrowRight' })
   expect(shown()).toBe('diff.png')
-  expect(screen.getByRole('button', { name: 'Next image' }).hasAttribute('disabled')).toBe(true)
+  expect(screen.getByRole('button', { name: 'Next image' }).getAttribute('aria-disabled')).toBe(
+    'true'
+  )
   fireEvent.keyDown(screen.getByRole('dialog'), { key: 'ArrowLeft' })
   expect(shown()).toBe('after.png')
 

@@ -35,7 +35,8 @@ export function usePanZoomWheel(
     const onWheel = (event: WheelEvent): void => {
       event.preventDefault()
       const fitted = getFittedPanZoomView(geometry.content)
-      if (event.ctrlKey) {
+      // Pinch arrives as Ctrl+wheel; ⌘+wheel zooms too, as macOS image viewers do.
+      if (event.ctrlKey || event.metaKey) {
         const rect = canvas.getBoundingClientRect()
         const anchor = { x: event.clientX - rect.left, y: event.clientY - rect.top }
         setManualView((current) => {

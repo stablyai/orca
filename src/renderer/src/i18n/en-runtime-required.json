@@ -2317,6 +2317,23 @@
         "openMemory": "Open memory",
         "removed": "Removed"
       },
+      "notes": {
+        "addedToMessage": "{{count}} notes added to your message",
+        "addedToMessage_one": "{{count}} note added to your message",
+        "addedToMessage_other": "{{count}} notes added to your message",
+        "chipCount": "{{count}} notes",
+        "chipCount_one": "{{count}} note",
+        "chipCount_other": "{{count}} notes",
+        "notesRemoved_one": "{{count}} note removed",
+        "notesRemoved_other": "{{count}} notes removed",
+        "removed_one": "{{count}} removed",
+        "removed_other": "{{count}} removed",
+        "sendLabel": "Send {{count}} notes to this chat",
+        "sendLabel_one": "Send {{count}} note to this chat",
+        "sendLabel_other": "Send {{count}} notes to this chat",
+        "showNotes_one": "Show notes ({{count}})",
+        "showNotes_other": "Show notes ({{count}})"
+      },
       "notices": {
         "compaction": "Context compacted",
         "contextCleared": "Context cleared",

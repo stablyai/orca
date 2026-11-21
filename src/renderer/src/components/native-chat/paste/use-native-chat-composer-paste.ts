@@ -100,7 +100,8 @@ export function useNativeChatComposerPaste({
       pendingId: string | null,
       besideText: boolean,
       ready?: () => void,
-      eventImage?: Blob
+      eventImage?: Blob,
+      png?: Uint8Array
     ): Promise<boolean> => {
       const saved = await saveNativeChatPastedClipboardImage(owner, {
         pendingId,
@@ -108,7 +109,8 @@ export function useNativeChatComposerPaste({
         ready,
         eventImage,
         canNotify: canComplete,
-        setNotice
+        setNotice,
+        ...(png ? { png } : {})
       })
       if (keepStoreUploadAfterUnmount(pendingId, saved)) {
         return false
@@ -311,5 +313,5 @@ export function useNativeChatComposerPaste({
     setNotice
   ])
 
-  return { handlePaste, pasteFromClipboard }
+  return { handlePaste, pasteFromClipboard, startImageChip, saveClipboardImage, canPaste }
 }

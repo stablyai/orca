@@ -29,6 +29,8 @@ type ShortcutKeyComboProps = {
   keyCapClassName?: string
   /** `compact`: a small flat cap that sits inside a line of text or a button label. */
   size?: 'default' | 'compact'
+  /** On a filled button: a faint tint of the button's own text color instead of a secondary cap. */
+  onFill?: boolean
   renderKey?: (key: string) => React.ReactNode
   // Double taps use repeated labels/glyphs with a space instead of +.
   doubleTap?: boolean
@@ -40,6 +42,7 @@ export function ShortcutKeyCombo({
   separatorClassName,
   keyCapClassName,
   size = 'default',
+  onFill = false,
   renderKey,
   doubleTap = false
 }: ShortcutKeyComboProps): React.JSX.Element {
@@ -63,6 +66,7 @@ export function ShortcutKeyCombo({
             label={renderKey ? renderKey(key) : key}
             className={cn(
               size === 'compact' && 'min-w-0 px-1 py-0 text-2xs shadow-none',
+              onFill && 'border-0 bg-current/15 text-current',
               keyCapClassName
             )}
           />

@@ -4,6 +4,7 @@ import type {
   NativeChatComposerNoticeContent
 } from './native-chat-composer-notice'
 import type { NativeChatComposerErrorDetail } from './native-chat-composer-error-detail'
+import { useNativeChatNotesNotice } from '../../media/notes/native-chat-notes-notice'
 import type { NativeChatStructuredComposerTransport } from '../submit/native-chat-structured-composer-transport'
 import type { StructuredConversationCommandCauses } from '../../session/structured/writes/structured-conversation-command-send'
 
@@ -13,7 +14,9 @@ type ComposerErrorLine = NativeChatComposerNoticeContent &
 /** The composer's own paste and attachment notice, after the chat's notices and the input hold. */
 export function useNativeChatComposerNotice(
   chatNotices?: readonly NativeChatComposerNotice[],
-  holdNotice?: NativeChatComposerNotice | null
+  holdNotice?: NativeChatComposerNotice | null,
+  /** The draft scope, whose notes line (added, kept, removed) shows here too. */
+  scopeKey?: string
 ): {
   notices: readonly NativeChatComposerNotice[]
   setNotice: (text: string | null, errorText?: string) => void
@@ -24,10 +27,12 @@ export function useNativeChatComposerNotice(
       setNoticeContent(text === null ? null : { text, ...(errorText ? { errorText } : {}) }),
     []
   )
+  const notesNotice = useNativeChatNotesNotice(scopeKey)
   const notices = useMemo(
     () => [
       ...(chatNotices ?? []),
       ...(holdNotice ? [holdNotice] : []),
+      ...(notesNotice ? [notesNotice] : []),
       ...(notice
         ? [
             {
@@ -39,7 +44,7 @@ export function useNativeChatComposerNotice(
           ]
         : [])
     ],
-    [chatNotices, holdNotice, notice, setNotice]
+    [chatNotices, holdNotice, notesNotice, notice, setNotice]
   )
   return { notices, setNotice }
 }

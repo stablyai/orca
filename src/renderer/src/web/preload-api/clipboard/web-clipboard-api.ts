@@ -1,5 +1,5 @@
 import { holdBrowserAttachmentFiles } from '@/lib/files/drop/browser-attachment-files'
-import { decodeBase64Bytes } from '@/lib/base64-bytes'
+import { decodeBase64Bytes, encodeBase64Bytes } from '@/lib/base64-bytes'
 import {
   agentSessionPastedImageName,
   type AgentSessionAttachmentClipboardTarget
@@ -217,11 +217,14 @@ export async function saveWebClipboardImageAsTempFile(args?: {
   forNativeChatDraft?: boolean
   forStructuredChat?: boolean
   eventImage?: Blob
+  png?: Uint8Array
 }) {
   if (!requireActiveEnvironmentOrNull()) {
     return null
   }
-  const contentBase64 = await readClipboardImagePngBase64(args?.eventImage)
+  const contentBase64 = args?.png
+    ? encodeBase64Bytes(args.png)
+    : await readClipboardImagePngBase64(args?.eventImage)
   if (!contentBase64) {
     return null
   }

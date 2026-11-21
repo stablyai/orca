@@ -24,6 +24,8 @@ export type SaveClipboardImageAsTempFileArgs = {
   forNativeChatDraft?: boolean
   /** With forNativeChatDraft, sends claim local structured-chat pastes from the chat attachment store. */
   forStructuredChat?: boolean
+  /** A marked image Orca drew for chat notes, saved where a paste would be instead of reading the clipboard. */
+  png?: Uint8Array
 }
 
 // The path is typed into terminals, so keep no character a shell would expand.

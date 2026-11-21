@@ -1,4 +1,8 @@
 import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
+import {
+  clearNativeChatAttachmentNotes,
+  withNativeChatAttachmentNotes
+} from '../../media/notes/native-chat-attachment-notes'
 import { serializeNativeChatAgentReferences } from '../pickers/native-chat-agent-reference-send'
 import {
   admitNativeChatPastedText,
@@ -36,7 +40,7 @@ export function useNativeChatPtyComposerSend(args: {
   agent: AgentType
   draft: string
   draftScopeKey: string
-  imageAttachments: readonly { path: string }[]
+  imageAttachments: readonly { id?: string; path: string }[]
   disabled: boolean
   isDispatchingSessionOption: boolean
   launchDraft?: NativeChatLaunchDraft | null
@@ -87,6 +91,13 @@ export function useNativeChatPtyComposerSend(args: {
       text = retry
         ? resolveNativeChatPastedText(args.draftScopeKey, text)
         : serializeNativeChatAgentReferences(text, submitted.document, submitted.pastedTextFiles)
+      // A marked image's notes go with a message, once; never into a command's arguments, and a
+      // retry resends the text it already carried.
+      const notedIds =
+        retry || classification === 'command'
+          ? []
+          : args.imageAttachments.flatMap(({ id }) => (id ? [id] : []))
+      text = withNativeChatAttachmentNotes(text, args.draftScopeKey, notedIds)
       const { sendOptions: launchSendOptions } = resolveNativeChatLaunchDraftSend({
         launchDraft: args.launchDraft,
         launchDraftResolved: args.launchDraftResolved,
@@ -171,6 +182,7 @@ export function useNativeChatPtyComposerSend(args: {
         args.setCaret(0)
         args.clearSkillOrigin()
         args.clearImageAttachments()
+        clearNativeChatAttachmentNotes(args.draftScopeKey, notedIds)
         args.setNotice(null)
         useAppStore.getState().clearNativeChatLaunchDraft(args.terminalTabId)
       }

@@ -131,4 +131,9 @@ export type NativeChatComposerHandle = {
   contains: (node: Node | null) => boolean
   /** Sends the draft as Enter would, for a send control outside the composer. */
   submit?: () => void
+  /** Why notes can't go with the current draft now: this box is editing a queued message, or Enter
+   *  would run the draft as a command. Null when Enter would send it to the agent as a message. */
+  notesBlocked?: () => 'editing' | 'command' | null
+  /** Attaches an image Orca drew as a chip, like a paste; resolves its attachment id. */
+  attachGeneratedImage?: (image: Blob) => Promise<string | null>
 }

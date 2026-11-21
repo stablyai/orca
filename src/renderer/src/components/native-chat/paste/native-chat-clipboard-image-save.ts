@@ -66,6 +66,8 @@ export async function saveNativeChatClipboardImage(
     ready?: () => void
     /** The paste event's picture; saved instead of re-reading the clipboard. */
     eventImage?: Blob
+    /** Bytes Orca drew (a notes image), saved in place of any clipboard picture. */
+    png?: Uint8Array
   }
 ): Promise<{ status: 'saved'; tempPath: string } | { status: 'empty' | 'failed' }> {
   if (!ownerAcceptsClipboardImage(owner)) {
@@ -82,7 +84,11 @@ export async function saveNativeChatClipboardImage(
     // Electron IPC cannot clone a Blob; desktop reads the native clipboard instead.
     const eventImage = isWebClientLocation() ? report.eventImage : undefined
     const tempPath = await window.api.ui.saveClipboardImageAsTempFile(
-      eventImage ? { ...target.args, eventImage } : target.args
+      report.png
+        ? { ...target.args, png: report.png }
+        : eventImage
+          ? { ...target.args, eventImage }
+          : target.args
     )
     return tempPath ? { status: 'saved', tempPath } : { status: 'empty' }
   } catch (error) {
@@ -110,11 +116,13 @@ export async function saveNativeChatPastedClipboardImage(
     setNotice: (notice: string, errorText?: string) => void
     ready?: () => void
     eventImage?: Blob
+    png?: Uint8Array
   }
 ): ReturnType<typeof saveNativeChatClipboardImage> {
   const saved = await saveNativeChatClipboardImage(owner, {
     ready: paste.ready,
     eventImage: paste.eventImage,
+    ...(paste.png ? { png: paste.png } : {}),
     setNotice: (notice, cause, errorText) => {
       if ((cause === 'serverTooOld' && paste.besideText) || !paste.canNotify()) {
         return
