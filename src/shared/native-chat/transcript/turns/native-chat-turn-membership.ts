@@ -51,7 +51,7 @@ export type NativeChatTurnJournal = {
 export function structuredAgentTurnAnchors(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = [],
-  /** Anchored too while it runs with its record above the loaded rows; nothing loaded precedes it. */
+  /** Anchored too when its record is above the loaded rows; nothing loaded precedes it. */
   latestTurn?: AgentSessionLatestTurn | null
 ): ReadonlyMap<string, string> {
   const userItemIds = new Set(
@@ -159,8 +159,8 @@ export function structuredAgentTurnAnchors(
     anchors.set(item.itemId, anchor)
     inFlightSinceLastTurn = null
   }
-  // Only while running: an ended turn's tail would otherwise regroup when the next turn opens.
-  if (latestTurn?.turn.state === 'running' && !anchors.has(latestTurn.itemId)) {
+  // A long turn's tail can load without its record; anchor the newest turn running or settled.
+  if (latestTurn && !anchors.has(latestTurn.itemId)) {
     anchors.set(
       latestTurn.itemId,
       anchorOf(latestTurn.itemId, latestTurn.turn, userItemIds, aliases, steeredInto, null, null)
