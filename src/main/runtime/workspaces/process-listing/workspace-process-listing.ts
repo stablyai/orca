@@ -62,6 +62,7 @@ import { nativeChatIdleStopMs } from '../../../../shared/native-chat/settings/na
 import { prWatchWorkspaceSources } from '../../agent-session/lifecycle/pr-watch-workspace-sources'
 import { startPRWatchRuntime } from '../../agent-session/lifecycle/pr-watch-runtime'
 import { workerDockFailureSink } from '../../orchestration/dock/worker-dock-provider-failures'
+import { workerDockSourceOfSession } from '../../orchestration/dock/worker-dock-source'
 
 export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEvents {
   protected readonly workerAutoReleaseActivity = new WorkerAutoReleaseActivity(
@@ -279,7 +280,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       onRequestFailure: (failure) => this.onStructuredRequestFailureForErrorMail(failure),
       onIdleProviderDeath: (death) => this.onStructuredIdleProviderDeathForMail(death),
       readWorkerDockPresence: (sessionId) =>
-        this._orchestrationDb?.workerDockSources.read(sessionId),
+        this._orchestrationDb?.workerDockSources.read(workerDockSourceOfSession(sessionId)),
       // Structured chat has no CLI hooks; this projection drives first-work renaming.
       onSessionStatusChanged: (summary, options) => {
         this.crewChanges.notify(crewChatStatusChange(summary.sessionId))
