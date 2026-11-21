@@ -73,6 +73,7 @@ beforeEach(() => {
   Object.defineProperty(process, 'platform', { value: 'darwin' })
   vi.useFakeTimers()
   vi.setSystemTime(0)
+  tables.cheap.mockReset().mockResolvedValue([])
 })
 
 afterEach(() => {
@@ -137,6 +138,7 @@ async function pollQuietPane(
 it('re-proves an idle shell once a minute instead of capturing every poll', async () => {
   const session = pane({ root: SHELL, shellIsRootChild: false, foregroundGroup: SHELL })
   expect(await pollQuietPane(session, [row(SHELL, 1, SHELL, '-zsh')])).toBe(3)
+  expect(tables.cheap).toHaveBeenCalledTimes(0)
 })
 
 it('re-proves a login-wrapped idle shell without a per-pane read', async () => {
