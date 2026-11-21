@@ -14,7 +14,7 @@ import { readFleetCensus, SEED_SHAPE } from './fleet-gate-synthetic-seed.mjs'
 
 const CHAT_MEMORY_LOW = 10
 const CHAT_MEMORY_HIGH = 200
-// Main today reads 0.27-0.40 MB per live idle chat on the seed; a build keeping 1 MB more per chat reads ~1.3.
+// Main today reads 0.25-0.40 MB per live idle chat on the seed; a build keeping 1 MB more per chat reads 1.25-1.31.
 const MAX_MAIN_MB_PER_CHAT = 0.75
 const RELEASE_WAIT_MS = 60_000
 const SAMPLE_WINDOW_MS = 60_000
