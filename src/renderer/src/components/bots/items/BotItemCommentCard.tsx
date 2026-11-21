@@ -34,8 +34,9 @@ import {
 } from './use-bot-item-question-steps'
 
 /** The asking comment's question, ruled off across the card's full width, its words still on the body's
- *  edge: bleeds past the body's `pl-7` and the card's `px-2`, then pads back. */
-const QUESTION_RULE = '-ml-9 -mr-2 mt-2.5 border-t border-border pl-9 pr-2 pt-2.5'
+ *  edge: bleeds past the body's `pl-7` and the card's `px-2`, then pads back. It stops a pixel short of
+ *  each side, at the card's hairline, so the two translucent strokes never overlap into a brighter dot. */
+const QUESTION_RULE = '-ml-[35px] -mr-[7px] mt-2.5 border-t border-border pl-[35px] pr-[7px] pt-2.5'
 
 function NeedsYouTag(): React.JSX.Element {
   const t = useTranslate()
