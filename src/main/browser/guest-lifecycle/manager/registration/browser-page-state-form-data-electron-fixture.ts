@@ -19,8 +19,11 @@ const server = createServer((request, response) => {
   }
 })
 
+// The next committed document, once it has finished loading (not a late event of the last one).
 async function load(win: BrowserWindow, run: () => Promise<unknown>): Promise<string> {
-  const loaded = new Promise<void>((resolve) => win.webContents.once('did-stop-loading', resolve))
+  const loaded = new Promise<void>((resolve) =>
+    win.webContents.once('did-navigate', () => win.webContents.once('did-stop-loading', resolve))
+  )
   await run()
   await loaded
   // The raw header, so a format change is easy to read in the failure output.
