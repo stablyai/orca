@@ -780,6 +780,7 @@
       "attachmentsUnsupported": "在设定目标之前删除附件。",
       "pause": "暂停",
       "resume": "继续",
+      "checks_one": "{{count}} 次检查",
       "checks_other": "{{count}} 次检查",
       "last-check": "上次目标检查"
     },
@@ -1727,6 +1728,7 @@
     },
     "native-chat": {
       "turnDiff": {
+        "changedFiles_one": "{{count}} 个已更改的文件",
         "changedFiles_other": "{{count}} 个已更改的文件",
         "partial": "部分差异",
         "showMoreFiles": "再显示 {{count}} 个"
@@ -1758,6 +1760,7 @@
         "label": "{{name}}，来自 {{place}}",
         "open": "在 {{source}} 中打开",
         "noAccess": "无访问权限",
+        "earlierMessages_one": "话题中更早的 {{count}} 条消息",
         "earlierMessages_other": "话题中更早的 {{count}} 条消息",
         "via": "{{name}}（通过 {{bot}}）"
       },
@@ -2336,6 +2339,7 @@
       "sharedLinks": "分享链接"
     },
     "deleteConfirm": {
+      "changes_one": "{{count}} 项未提交的更改",
       "changes_other": "{{count}} 项未提交的更改",
       "changesAndIgnoredLost": "将丢失 {{what}}，以及 Git 忽略的文件",
       "lost": "将丢失 {{what}}",
@@ -4054,7 +4058,14 @@
       },
       "addConnector": "添加连接器",
       "connectors": "连接器",
-      "retry": "重试"
+      "retry": "重试",
+      "memoryHistory": {
+        "today": "今天",
+        "yesterday": "昨天",
+        "undoAction": "撤销",
+        "nothingToUndo": "没有可撤销的内容：这些行之后已被更改",
+        "empty": "还没有更改"
+      }
     },
     "sharedLinks": {
       "title": "分享链接",
@@ -5900,6 +5911,10 @@
       "whoCanAskName": "谁可以向 {{name}} 提问",
       "you": "你",
       "owner": "所有者",
+      "soulAndMemory": "灵魂与记忆",
+      "memoryFiles_one": "{{count}} 个文件",
+      "memoryFiles_other": "{{count}} 个文件",
+      "none": "无",
       "sameAsChatsDetail": "使用你的聊天权限设置",
       "notifications": "通知",
       "needsPermission": "需要权限",
@@ -5932,6 +5947,7 @@
       "start": "开始",
       "dismiss": "忽略",
       "dismissTitle": "忽略 {{title}}",
+      "showMore_one": "再显示 {{count}} 条",
       "showMore_other": "再显示 {{count}} 个",
       "empty": "上次巡视没有建议",
       "notYet": "{{name}} 还没有巡视过。可以在设置中立即巡视，它每天也会自行巡视几次",
@@ -6191,6 +6207,7 @@
         "done": "已完成",
         "canceled": "已取消"
       },
+      "needYouCount_one": "{{count}} 个事项需要你处理",
       "needYouCount_other": "{{count}} 个事项需要你处理",
       "homeChat": "主聊天",
       "chatFallback": "聊天",
@@ -6293,6 +6310,7 @@
       "pill": {
         "moveTo": "移至",
         "clear": "清除选择",
+        "moveCount_one": "将 {{count}} 个事项移至",
         "moveCount_other": "将 {{count}} 个事项移至"
       },
       "menu": {
@@ -6303,6 +6321,7 @@
         "cancelShort": "取消"
       },
       "stale": {
+        "confirm_one": "要取消 {{count}} 个长期无活动的事项吗？",
         "confirm_other": "要取消 {{count}} 个长期无活动的事项吗？",
         "confirmWhy": "发送给机器人的原因：“{{reason}}”。不会删除任何内容",
         "reason": "{{count}} 天没有活动",
@@ -6340,6 +6359,7 @@
         "movedOne": "已将 {{title}} 移至 {{status}}",
         "movedMany": "已将 {{count}} 个事项移至 {{status}}",
         "doneFailed": "无法标记为完成：{{why}}",
+        "moveFailed_one": "无法移动：{{why}}",
         "moveFailed_other": "无法移动 {{count}} 个事项：{{why}}",
         "snoozeFailed": "无法暂缓：{{why}}",
         "unsnoozedOne": "已取消暂缓 {{title}}",
@@ -7380,6 +7400,57 @@
     "settingsPage": {
       "off": "关闭"
     },
+    "memory": {
+      "source": "来自 {{source}}",
+      "title": "记忆",
+      "cancel": "取消",
+      "save": "保存",
+      "fact": "记忆",
+      "topicLines_one": "{{count}} 行",
+      "topicLines_other": "{{count}} 行",
+      "topicFiles": "主题文件",
+      "add": "添加记忆",
+      "addPlaceholder": "记住新的内容…",
+      "lines": "{{count}} / {{cap}} 行",
+      "empty": "还没有保存任何记忆",
+      "edit": "编辑",
+      "forget": "忘记",
+      "tabFacts": "它知道的事",
+      "tabHistory": "历史记录"
+    },
+    "homeFile": {
+      "offline": "{{host}} 恢复连接后即可打开 {{file}}",
+      "retry": "重试",
+      "reading": "正在读取 {{file}}…"
+    },
+    "soul": {
+      "title": "灵魂",
+      "stats": "{{lines}} 行 · {{words}} 个词",
+      "empty": "还没有指令",
+      "changeInChat": "在聊天中修改",
+      "changeDraft": "请修改你的 SOUL.md，让"
+    },
+    "skills": {
+      "count_one": "{{count}} 个技能",
+      "count_other": "{{count}} 个技能",
+      "showMore": "再显示 {{count}} 个",
+      "remote": "位于另一台主机。{{bot}} 运行在 {{host}} 上，因此暂时无法加载这些技能",
+      "missing": "此项目已不在 Orca 中",
+      "none": "此项目中还没有技能",
+      "own": "{{bot}} 自己的技能",
+      "title": "技能",
+      "listedTitle": "{{agent}} 无法直接加载这些技能",
+      "listedBody": "{{bot}} 会在其指令中获得这些技能的列表，并在合适时读取对应的技能。它们不会出现在其 / 菜单中",
+      "reading": "正在读取其技能…",
+      "nextChat": "技能会在 {{bot}} 的下一次聊天中加载",
+      "ownNone": "还没有自己的技能",
+      "link": "关联项目",
+      "notYet": "暂不可用",
+      "noneShort": "没有技能",
+      "back": "返回技能",
+      "search": "搜索项目",
+      "noMatch": "没有匹配搜索的项目"
+    },
     "saveFailed": "无法保存",
     "sheet": {
       "activity": "活动",
@@ -7470,7 +7541,9 @@
       "kindSide": "支线聊天",
       "replyingState": "正在回复",
       "showEightMoreWorkers": "再显示 8 个工作者",
+      "showMoreWorkers_one": "再显示 {{count}} 个工作者",
       "showMoreWorkers_other": "再显示 {{count}} 个工作者",
+      "moreMatches_one": "还有 {{count}} 个匹配结果。输入更完整的名称以缩小范围",
       "moreMatches_other": "还有 {{count}} 个匹配项。输入更完整的名称以缩小范围",
       "readFailedTitle": "无法加载聊天",
       "waitingCount": "{{count}} 个等待中",
@@ -7487,6 +7560,7 @@
       "waitingForUntil": "正在等待 {{label}} · 直到 {{time}}"
     },
     "panel": {
+      "needYou_one": "{{count}} 个需要你处理",
       "needYou_other": "{{count}} 项需要你处理",
       "working": "{{count}} 个工作中",
       "itemsNeedYou": "事项，{{count}} 个需要你处理",

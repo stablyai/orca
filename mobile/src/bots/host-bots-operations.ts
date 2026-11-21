@@ -33,6 +33,8 @@ export const phoneBotSchema = z.looseObject({
   google: BotSchema.shape.google,
   lookAround: BotSchema.shape.lookAround,
   tidyUp: BotSchema.shape.tidyUp,
+  // The projects whose skills it loads, for Settings › Skills.
+  skillProjects: salvagedOptional('skillProjects', z.array(z.string())),
   // When its items go stale, so Needs you counts and Stale group as the desktop's do.
   itemsStale: BotSchema.shape.itemsStale,
   // So a wait's row in its chats says it was cancelled.

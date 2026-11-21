@@ -39,7 +39,7 @@ import { MobileBotComputerPage } from './MobileBotComputerPage'
 import { MobileBotWhoCanAskPage } from './MobileBotWhoCanAskPage'
 import { ensureBotHomeChat } from './host-bots-read'
 import { useMobileBotConnectorSettings } from './connectors/MobileBotConnectors'
-import { MobileBotToolsPage, MobileBotToolsRow } from './tools/MobileBotToolsPage'
+import { useBotSoulMemorySkills } from './use-bot-soul-memory-skills'
 import { useMobileBotSharingSettings } from './sharing/MobileBotSharing'
 import { botSaveErrorMessage } from './mobile-bot-sheet-copy'
 
@@ -63,6 +63,7 @@ export function MobileBotSettingsTab(props: {
   home: BotSettingsHome
   /** Puts a draft in the bot's Home Chat, where hooks are made; null while no chat shows. */
   onAskInChat?: ((draft: string) => void) | null
+  onOpenFile?: (path: string) => void
 }) {
   const t = useMobileTranslation()
   const { bot, applyBot } = props.routeBot
@@ -120,6 +121,7 @@ export function MobileBotSettingsTab(props: {
     }
   }
   const connectors = useMobileBotConnectorSettings(props, offlineBanner, { accessBot, save })
+  const knows = useBotSoulMemorySkills(props, offlineBanner, page, setPage, save)
 
   const upload = async (png: string): Promise<boolean> => {
     if (!props.client) {
@@ -166,11 +168,9 @@ export function MobileBotSettingsTab(props: {
     }
   }
 
-  if (connectors.page) {
-    return connectors.page
-  }
-  if (sharing.page) {
-    return sharing.page
+  const hookPage = connectors.page ?? sharing.page ?? knows.page
+  if (hookPage) {
+    return hookPage
   }
 
   if (deleting) {
@@ -320,9 +320,6 @@ export function MobileBotSettingsTab(props: {
       />
     )
   }
-  if (page === 'tools') {
-    return <MobileBotToolsPage {...props} bot={bot} onBack={closePage} />
-  }
   if (page === 'who-can-ask') {
     return (
       <MobileBotWhoCanAskPage
@@ -396,6 +393,7 @@ export function MobileBotSettingsTab(props: {
           : null
       }
       accessRequests={access?.requests.length ?? 0}
+      memoryTopics={knows.memoryTopics}
       open={setPage}
       setActive={(active) => void save({ paused: !active })}
       setNotification={(key, on) =>
@@ -403,7 +401,7 @@ export function MobileBotSettingsTab(props: {
       }
       onDelete={() => setDeleting(true)}
       connectorsRow={connectors.row}
-      accessRows={<MobileBotToolsRow {...props} bot={bot} onOpen={() => setPage('tools')} />}
+      accessRows={knows.accessRows}
       sharing={sharing.row}
       header={
         <>

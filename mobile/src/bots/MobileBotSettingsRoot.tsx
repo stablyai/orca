@@ -1,5 +1,5 @@
 // The bot's Settings list in the desktop's order: its name and picture, then Agent, Schedule, Items,
-// Access and Notifications, then Delete. Each group is one list; a page of its own is one row here.
+// Soul and memory, Access and Notifications, then Delete. Each group is one list; a page is one row here.
 import type { ReactNode } from 'react'
 import { View } from 'react-native'
 import type { BotTidyUpView } from '../../../src/shared/bots/bot-tidy-up'
@@ -37,8 +37,11 @@ export type SettingsRootPage =
   | 'look-around'
   | 'tidy-up'
   | 'stale'
+  | 'soul'
+  | 'memory'
   | 'who-can-ask'
   | 'tools'
+  | 'skills'
 
 function staleLabel(t: ReturnType<typeof useMobileTranslation>, stale: BotItemsStale) {
   return stale === 'never'
@@ -96,6 +99,8 @@ export function MobileBotSettingsRoot(props: {
   /** Look around and Memory upkeep, for an agent that can run them; null otherwise. */
   schedule: { lastLookedAt: number | undefined; tidyView: BotTidyUpView | null } | null
   accessRequests: number
+  /** Topic files in memory/, null until listed; Memory counts them with MEMORY.md. */
+  memoryTopics: number | null
   open: (page: SettingsRootPage) => void
   setActive: (active: boolean) => void
   setNotification: (key: keyof BotNotifications, on: boolean) => void
@@ -197,6 +202,26 @@ export function MobileBotSettingsRoot(props: {
             label={t('bots.settings.staleTitle', 'Mark items stale after')}
             value={staleLabel(t, bot.itemsStale ?? BOT_ITEM_DEFAULT_STALE_DAYS)}
             onPress={() => props.open('stale')}
+          />
+        </Section>
+        <Section title={t('bots.settings.soulAndMemory', 'Soul and memory')}>
+          <ListRow
+            title={t('bots.soul.title', 'Soul')}
+            navigates
+            onPress={() => props.open('soul')}
+          />
+          <ListRow
+            title={t('bots.memory.title', 'Memory')}
+            value={
+              props.memoryTopics === null
+                ? undefined
+                : t('bots.settings.memoryFiles', '{{count}} files', {
+                    count: props.memoryTopics + 1,
+                    defaultValue_one: '{{count}} file'
+                  })
+            }
+            navigates
+            onPress={() => props.open('memory')}
           />
         </Section>
         <Section title={t('bots.settings.access', 'Access')}>
