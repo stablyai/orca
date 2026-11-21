@@ -2,9 +2,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as SecureStore from 'expo-secure-store'
 import { Platform } from 'react-native'
 
-// Why: WHEN_UNLOCKED_THIS_DEVICE_ONLY keeps pairing credentials off iCloud Keychain and backup restores.
+// Why: THIS_DEVICE_ONLY keeps credentials off iCloud Keychain and backups; AFTER_FIRST_UNLOCK lets
+// notification actions (Watch Yes/No/Reply) reach the host while the phone is locked.
 const BASE_OPTIONS: SecureStore.SecureStoreOptions = {
-  keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY
+  keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY
 }
 
 const GENERATION_STORAGE_KEY = 'orca:pairing-keychain-generation'
@@ -33,6 +34,7 @@ type PresenceChange = { storageKey: string; previousRaw: string | null }
 
 let cachedGeneration: GenerationState | null = null
 let keychainMutation: Promise<void> = Promise.resolve()
+const resavedKeys = new Set<string>()
 
 function parseGeneration(raw: string | null): LoadedGeneration {
   if (raw === null) {
@@ -151,6 +153,23 @@ async function setItemAtGeneration(key: string, value: string, generation: numbe
   }
 }
 
+// Items saved before AFTER_FIRST_UNLOCK keep WHEN_UNLOCKED until rewritten; expo's update applies
+// the requested accessibility in place, so resave each read item once per launch.
+function resaveWithCurrentAccessibility(key: string, generation: number): void {
+  if (Platform.OS !== 'ios' || resavedKeys.has(key)) {
+    return
+  }
+  resavedKeys.add(key)
+  void enqueueKeychainMutation(async () => {
+    const options = optionsForGeneration(generation)
+    // Why: reread inside the queue so a delete that ran after the read is not undone.
+    const value = await SecureStore.getItemAsync(key, options)
+    if (value !== null) {
+      await SecureStore.setItemAsync(key, value, options)
+    }
+  }).catch(() => resavedKeys.delete(key))
+}
+
 export async function readPairingKeychainItem(key: string): Promise<string | null> {
   await keychainMutation
   const presenceGeneration = await loadPresenceGeneration(key)
@@ -168,6 +187,7 @@ export async function readPairingKeychainItem(key: string): Promise<string | nul
   for (let candidate = firstCandidate; candidate >= 0; candidate -= 1) {
     const value = await SecureStore.getItemAsync(key, optionsForGeneration(candidate))
     if (value !== null) {
+      resaveWithCurrentAccessibility(key, candidate)
       return value
     }
   }
@@ -250,4 +270,5 @@ export function deletePairingKeychainItem(key: string): Promise<void> {
 export function resetPairingKeychainForTests(): void {
   cachedGeneration = null
   keychainMutation = Promise.resolve()
+  resavedKeys.clear()
 }

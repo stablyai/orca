@@ -16,7 +16,7 @@ import type { PairingOffer } from '../../../src/shared/remote-runtime/pairing/mo
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-crypto', () => ({ getRandomBytes: vi.fn() }))
-vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'WHEN_UNLOCKED' }))
+vi.mock('expo-secure-store', () => ({ AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 'AFTER_FIRST_UNLOCK' }))
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: {} }))
 
 const now = Date.UTC(2026, 6, 13)

@@ -9,7 +9,7 @@ import {
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
-vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'when-unlocked' }))
+vi.mock('expo-secure-store', () => ({ AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 'after-first-unlock' }))
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 
 // A network-change nudge abandons the stale LAN dial and redials at once.

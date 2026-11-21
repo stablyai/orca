@@ -1,7 +1,7 @@
 import { AESEncryptionKey, AESKeySize } from 'expo-crypto'
 import { withTimeoutResult } from '../../../src/shared/concurrency/promise-timeout-fallback'
 
-// Stored through the pairing keychain: WHEN_UNLOCKED_THIS_DEVICE_ONLY keeps it off iCloud and backups,
+// Stored through the pairing keychain: THIS_DEVICE_ONLY keeps it off iCloud and backups,
 // and its Android generation rotation recovers alias faults (#6600) that one fixed alias could hit forever.
 export const DEVICE_STORE_KEY_ITEM = 'orca.device-store-key.v1'
 
