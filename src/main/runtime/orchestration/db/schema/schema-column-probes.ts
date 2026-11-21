@@ -84,6 +84,12 @@ export function createMailboxDeliveryIndexesIfPossible(this: OrchestrationDb): v
   ) {
     return
   }
+  if (this.hasColumn('messages', 'pointer_enter_pending')) {
+    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_messages_mail_wake_candidate
+      ON messages(to_handle)
+      WHERE read = 0 AND delivered_at IS NULL AND pointer_enter_pending = 0
+        AND delivery_contract = 'current_delivery'`)
+  }
   this.db.exec(`
     CREATE INDEX IF NOT EXISTS idx_messages_undelivered_direct_run
       ON messages(run_id, to_handle, sequence)

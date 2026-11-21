@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { isWorkspaceSleepRecord } from '../../../../../../shared/workspace/lifecycle/workspace-sleep'
 import { getProviderSessionClaimKey } from '../../../../../../shared/agent-session/lifecycle/resume/sleeping-record-legacy-pane-key'
 import type { SleepingAgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentTurnEndedUncleanly } from '../../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
@@ -11,6 +12,11 @@ export function noteArmsHibernatedPaneWake(record: SleepingAgentSessionRecord): 
     record.origin !== 'quit' &&
     !(record.origin === 'live' && agentTurnEndedUncleanly(record))
   )
+}
+
+/** A pane's own Agent Sleep record: a targeted wake resumes it. Workspace Sleep waits for its tab. */
+export function resumesSleptAgentRecord(record: SleepingAgentSessionRecord): boolean {
+  return record.origin === 'worktree-sleep' && !isWorkspaceSleepRecord(record)
 }
 
 export function installHibernatedPaneWake(session: ConnectPanePtySession): void {
@@ -75,4 +81,64 @@ export function installHibernatedPaneWake(session: ConnectPanePtySession): void 
       })
     return claimKey
   }
+}
+
+/** Mobile and targeted wakes reach a pane hidden on the desktop: consume only a hibernation wake, never size or foreground reads. */
+export function wakeHibernatedPaneIfArmed(
+  session: ConnectPanePtySession,
+  claimedProviderSessions?: Set<string>,
+  paneKey?: string
+): string | null {
+  if (paneKey && paneKey !== session.cacheKey) {
+    return null
+  }
+  if (session.hibernatedWakeInFlightClaimKey) {
+    if (claimedProviderSessions?.has(session.hibernatedWakeInFlightClaimKey)) {
+      return null
+    }
+    claimedProviderSessions?.add(session.hibernatedWakeInFlightClaimKey)
+    return session.hibernatedWakeInFlightClaimKey
+  }
+  const consumedClaimKey = session.consumeHibernatedAgentWake(claimedProviderSessions)
+  if (consumedClaimKey) {
+    return consumedClaimKey
+  }
+  // Latch mid-kill mobile wakes only for the exact suppressed PTY, never unrelated stale/manual records.
+  const state = useAppStore.getState()
+  const recordEntry = session.getSleepingRecordForPane(state)
+  const currentPtyId = session.transport.getPtyId()
+  // A wake aimed at this mounted pane resumes it from its slept-agent record, whatever armed it:
+  // a remount or an earlier wake leaves no exit-time target, and no mount will come.
+  if (
+    paneKey === session.cacheKey &&
+    recordEntry &&
+    resumesSleptAgentRecord(recordEntry.record) &&
+    !session.transport.isConnected() &&
+    !session.disposed &&
+    session.wakeHibernatedAgentPane &&
+    session.hibernatedWakeTarget === null &&
+    session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport
+  ) {
+    session.hibernatedWakeTarget = { ptyId: currentPtyId ?? '', record: recordEntry.record }
+    return session.consumeHibernatedAgentWake(claimedProviderSessions)
+  }
+  if (
+    recordEntry &&
+    noteArmsHibernatedPaneWake(recordEntry.record) &&
+    currentPtyId !== null &&
+    state.suppressedPtyExitIds[currentPtyId] === true &&
+    !session.disposed &&
+    session.hibernatedWakeTarget === null &&
+    session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport &&
+    session.transport.getPtyId() === currentPtyId
+  ) {
+    const claimKey = getProviderSessionClaimKey(recordEntry.record)
+    if (claimedProviderSessions?.has(claimKey)) {
+      return null
+    }
+    claimedProviderSessions?.add(claimKey)
+    session.pendingHibernatedWakeTarget = { ptyId: currentPtyId, record: recordEntry.record }
+    return claimKey
+  }
+  return null
 }

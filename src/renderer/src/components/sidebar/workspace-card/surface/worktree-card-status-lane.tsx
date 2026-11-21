@@ -1,3 +1,4 @@
+import { useHasSleepingMail } from '@/attention/sleeping-mail-worktrees'
 import React from 'react'
 
 import { cn } from '@/lib/class-names'
@@ -17,6 +18,7 @@ export function WorktreeCardStatusLane({
   card: WorktreeCardController
   showUnreadAction: boolean
 }): React.JSX.Element {
+  const sleepingMail = useHasSleepingMail(card.worktree.id)
   const reviewStale = useWslHostOffForRepo(card.repo)
   // The dot also speaks for its agents and collapsed child workspaces.
   const rolledUpUnread = useWorktreeCardRolledUpUnread()
@@ -34,7 +36,7 @@ export function WorktreeCardStatusLane({
         worktreeId={card.worktree.id}
         showStatus={card.showStatus}
         showUnreadAction={showUnreadAction}
-        isUnread={card.worktree.isUnread || rolledUpUnread}
+        isUnread={card.worktree.isUnread || rolledUpUnread || sleepingMail}
         lineageStatus={lineageStatus}
         unreadTooltip={card.unreadTooltip}
         onPointerDown={card.stopQuickActionPointerPropagation}
