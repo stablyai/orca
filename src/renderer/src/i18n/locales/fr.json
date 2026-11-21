@@ -21711,6 +21711,10 @@
       "existingTitle": "Ajouter sur l’hôte {{distro}} (recommandé)",
       "existingWhy": "{{distro}} s’exécute déjà comme hôte : Git, les fichiers et les terminaux s’exécutent donc nativement sous Linux plutôt qu’à travers le partage de fichiers Windows.",
       "existingAccept": "Ajouter sur l’hôte"
+    },
+    "cardSlot": {
+      "needYouCount": "{{count}} à traiter",
+      "needsYou": "À traiter"
     }
   },
   "editor": {
@@ -24370,7 +24374,10 @@
       "title": "Activité"
     },
     "connectors": {
-      "tab": "Connecteurs"
+      "tab": "Connecteurs",
+      "needYou_many": "{{count}} à traiter",
+      "needYou_one": "{{count}} à traiter",
+      "needYou_other": "{{count}} à traiter"
     },
     "files": {
       "tab": "Fichiers"
@@ -24579,9 +24586,9 @@
       "worker": "Worker : {{name}}"
     },
     "panel": {
-      "needYou_many": "{{count}} ont besoin de vous",
-      "needYou_one": "{{count}} a besoin de vous",
-      "needYou_other": "{{count}} ont besoin de vous",
+      "needYou_many": "{{count}} à traiter",
+      "needYou_one": "{{count}} à traiter",
+      "needYou_other": "{{count}} à traiter",
       "working": "{{count}} en cours",
       "working_many": "{{count}} en cours",
       "working_one": "{{count}} en cours",

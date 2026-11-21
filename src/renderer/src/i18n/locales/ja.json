@@ -22131,9 +22131,9 @@
       "noWorkspace": "何も開いていません",
       "fullPageView": "このページにはサイドバーの行がありません",
       "archived": "アーカイブされたワークスペースはサイドバーに表示されません",
-      "botsOff": "ボットがオフのため、このボットは表示されません",
-      "botHidden": "このボットは一時停止中で、ボットのオプションにより非表示になっています",
-      "renameBotPage": "ボットやグループのページはワークツリーではありません。名前を変更するには、その行のメニューの「名前を変更」を使ってください。",
+      "botsOff": "Bots がオフのため、この bot は表示されません",
+      "botHidden": "この bot は一時停止中で、Bot のオプションにより非表示になっています",
+      "renameBotPage": "bot やグループのページはワークツリーではありません。名前を変更するには、その行のメニューの「名前を変更」を使ってください。",
       "renameUnlisted": "このワークスペースは現在サイドバーに表示されていないため、そこで名前を変更できません。"
     },
     "wslMoved": {
@@ -22290,6 +22290,10 @@
       "showOnHostAriaLabel": "{{host}} の {{name}} をサイドバーに表示",
       "keywordShow": "表示",
       "keywordUnhide": "再表示"
+    },
+    "cardSlot": {
+      "needYouCount": "要対応 {{count}} 件",
+      "needsYou": "要対応"
     }
   },
   "editor": {
@@ -25281,7 +25285,8 @@
       "title": "アクティビティ"
     },
     "connectors": {
-      "tab": "コネクター"
+      "tab": "コネクター",
+      "needYou_other": "要対応 {{count}} 件"
     },
     "files": {
       "tab": "ファイル"
@@ -25304,23 +25309,23 @@
       "needsSignIn": "サインインが必要です"
     },
     "palette": {
-      "placeholder": "ボット、チャット、ターミナル、ワークスペース、タスク、設定、操作を検索します…",
-      "description": "ボット、チャット、ターミナル、ワークスペース、タスク、設定、操作を検索します",
-      "scopedPlaceholder": "ボットを検索…",
-      "scopedLabel": "ボットを検索",
-      "scopeHint": "@ を入力するとボットだけを表示します",
-      "chip": "ボット",
-      "chipLabel": "ボット、すべて表示に戻す",
+      "placeholder": "bots、チャット、ターミナル、ワークスペース、タスク、設定、操作を検索します…",
+      "description": "bots、チャット、ターミナル、ワークスペース、タスク、設定、操作を検索します",
+      "scopedPlaceholder": "bots を検索…",
+      "scopedLabel": "bots を検索",
+      "scopeHint": "@ を入力すると bots だけを表示します",
+      "chip": "Bots",
+      "chipLabel": "Bots、すべて表示に戻す",
       "searchEverything": "「{{text}}」をすべての項目から検索",
-      "noMatch": "「{{text}}」に一致するボットはありません",
-      "noBotsYet": "ボットはまだありません",
-      "filtersPaused": "フィルターはワークスペースに適用され、ボットには適用されません",
+      "noMatch": "「{{text}}」に一致する bots はありません",
+      "noBotsYet": "bots はまだありません",
+      "filtersPaused": "フィルターはワークスペースに適用され、bots には適用されません",
       "showEverything": "すべて表示",
-      "footerBots": "ボット",
+      "footerBots": "Bots",
       "matchesPurpose": "目的が一致しています。",
-      "scopedStatus_other": "ボットのみ表示中。{{count}} 件の結果が見つかりました。",
-      "sidebarSearchLabel": "ボット、ワークスペース、ブラウザタブを検索する",
-      "section": "ボット"
+      "scopedStatus_other": "bots のみ表示中。{{count}} 件の結果が見つかりました。",
+      "sidebarSearchLabel": "bots、ワークスペース、ブラウザタブを検索する",
+      "section": "Bots"
     },
     "templates": {
       "browse": "テンプレートを見る",

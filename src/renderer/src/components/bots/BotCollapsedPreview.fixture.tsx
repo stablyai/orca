@@ -12,6 +12,8 @@ import { mascotAvatar, type BotMascotId } from '../../../../shared/bot-avatar'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { ConfirmationDialogProvider } from '../dismiss/confirmation/confirmation-dialog'
 import { SidebarBotsSection } from './SidebarBotsSection'
+import { setRendererUiLanguage } from '@/i18n/i18n'
+import type { SupportedUiLocale } from '../../../../shared/i18n/ui-locale'
 
 function bot(
   id: string,
@@ -91,6 +93,41 @@ export const foldedHeader = defineFixture({
     </ConfirmationDialogProvider>
   )
 })
+
+function localizedHeader(locale: SupportedUiLocale, width = 252) {
+  return defineFixture({
+    ...foldedHeader,
+    width,
+    store: {
+      ...foldedHeader.store,
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        BOTS.map((owner) => chat(owner, 'waiting')).map((entry) => [entry.paneKey, entry])
+      )
+    },
+    interact: async () => setRendererUiLanguage(locale)
+  })
+}
+
+export const chineseHeader = localizedHeader('zh')
+export const traditionalChineseHeader = localizedHeader('zh-Hant')
+export const germanHeader = localizedHeader('de')
+export const spanishHeader = localizedHeader('es')
+export const frenchHeader = localizedHeader('fr')
+export const japaneseHeader = localizedHeader('ja')
+export const koreanHeader = localizedHeader('ko')
+export const portugueseHeader = localizedHeader('pt')
+export const russianHeader = localizedHeader('ru')
+export const turkishHeader = localizedHeader('tr')
+export const chineseNormalHeader = localizedHeader('zh', 352)
+export const traditionalChineseNormalHeader = localizedHeader('zh-Hant', 352)
+export const germanNormalHeader = localizedHeader('de', 352)
+export const spanishNormalHeader = localizedHeader('es', 352)
+export const frenchNormalHeader = localizedHeader('fr', 352)
+export const japaneseNormalHeader = localizedHeader('ja', 352)
+export const koreanNormalHeader = localizedHeader('ko', 352)
+export const portugueseNormalHeader = localizedHeader('pt', 352)
+export const russianNormalHeader = localizedHeader('ru', 352)
+export const turkishNormalHeader = localizedHeader('tr', 352)
 
 const HOMES = (owners: readonly Pick<Bot, 'folderWorkspaceId' | 'name' | 'folder'>[]) =>
   owners.map((owner) =>

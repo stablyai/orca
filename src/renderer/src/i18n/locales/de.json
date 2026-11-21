@@ -260,6 +260,10 @@
       "existingTitle": "Auf dem {{distro}}-Host hinzufügen (empfohlen)",
       "existingWhy": "{{distro}} läuft bereits als Host, daher laufen Git, Dateien und Terminals nativ in Linux statt über die Windows-Dateifreigabe.",
       "existingAccept": "Auf Host hinzufügen"
+    },
+    "cardSlot": {
+      "needYouCount": "{{count}} brauchen dich",
+      "needsYou": "Braucht dich"
     }
   },
   "app": {
@@ -23787,7 +23791,9 @@
       "title": "Aktivität"
     },
     "connectors": {
-      "tab": "Konnektoren"
+      "tab": "Konnektoren",
+      "needYou_one": "{{count}} braucht dich",
+      "needYou_other": "{{count}} brauchen dich"
     },
     "files": {
       "tab": "Dateien"

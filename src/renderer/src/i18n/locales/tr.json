@@ -102,7 +102,7 @@
       "noWorkspace": "Açık bir şey yok",
       "fullPageView": "Bu sayfanın kenar çubuğunda satırı yok",
       "archived": "Arşivlenmiş çalışma alanları kenar çubuğunda listelenmez",
-      "botsOff": "Botlar kapalı, bu yüzden bu bot listelenmiyor",
+      "botsOff": "Bots kapalı, bu yüzden bu bot listelenmiyor",
       "botHidden": "Bu bot duraklatıldı ve Bot seçenekleriyle gizlendi",
       "renameBotPage": "Bir botun veya grubun sayfası bir worktree değildir. Yeniden adlandırmak için satırının menüsündeki Yeniden Adlandır’ı kullanın.",
       "renameUnlisted": "Bu çalışma alanı şu anda kenar çubuğunda listelenmiyor, bu yüzden orada yeniden adlandırılamaz."
@@ -260,6 +260,10 @@
       "existingTitle": "{{distro}} ana makinesine ekle (önerilir)",
       "existingWhy": "{{distro}} zaten ana makine olarak çalışıyor; Git, dosyalar ve terminaller Windows dosya paylaşımı yerine doğrudan Linux'ta çalışır.",
       "existingAccept": "Ana makineye ekle"
+    },
+    "cardSlot": {
+      "needYouCount": "{{count}} sizi bekliyor",
+      "needsYou": "Sizi bekliyor"
     }
   },
   "app": {
@@ -23929,7 +23933,9 @@
       "title": "Etkinlik"
     },
     "connectors": {
-      "tab": "Bağlayıcılar"
+      "tab": "Bağlayıcılar",
+      "needYou_one": "{{count}} sizi bekliyor",
+      "needYou_other": "{{count}} sizi bekliyor"
     },
     "files": {
       "tab": "Dosyalar"
@@ -23952,24 +23958,24 @@
       "twiceDaily": "günde iki kez"
     },
     "palette": {
-      "placeholder": "Botlarda, sohbetlerde, terminallerde, çalışma alanlarında, görevlerde, ayarlarda ve işlemlerde ara...",
-      "description": "Botlarda, sohbetlerde, terminallerde, çalışma alanlarında, görevlerde, ayarlarda ve işlemlerde ara",
-      "scopedPlaceholder": "Botlarda ara...",
-      "scopedLabel": "Botlarda ara",
-      "scopeHint": "Yalnızca botları göstermek için @ yazın",
-      "chip": "Botlar",
-      "chipLabel": "Botlar, her şeyi göster",
+      "placeholder": "Bots’ta, sohbetlerde, terminallerde, çalışma alanlarında, görevlerde, ayarlarda ve işlemlerde ara...",
+      "description": "Bots’ta, sohbetlerde, terminallerde, çalışma alanlarında, görevlerde, ayarlarda ve işlemlerde ara",
+      "scopedPlaceholder": "Bots’ta ara...",
+      "scopedLabel": "Bots’ta ara",
+      "scopeHint": "Yalnızca bots’u göstermek için @ yazın",
+      "chip": "Bots",
+      "chipLabel": "Bots, her şeyi göster",
       "searchEverything": "Her yerde \"{{text}}\" ara",
       "noMatch": "\"{{text}}\" ile eşleşen bot yok",
       "noBotsYet": "Henüz bot yok",
-      "filtersPaused": "Filtreler botlara değil çalışma alanlarına uygulanır",
+      "filtersPaused": "Filtreler bots’a değil çalışma alanlarına uygulanır",
       "showEverything": "Her şeyi göster",
-      "footerBots": "Botlar",
+      "footerBots": "Bots",
       "matchesPurpose": "Amacıyla eşleşiyor.",
-      "scopedStatus_one": "Yalnızca botlar gösteriliyor. {{count}} sonuç bulundu.",
-      "scopedStatus_other": "Yalnızca botlar gösteriliyor. {{count}} sonuç bulundu.",
-      "sidebarSearchLabel": "Botlarda, çalışma alanlarında ve tarayıcı sekmelerinde ara",
-      "section": "Botlar"
+      "scopedStatus_one": "Yalnızca bots gösteriliyor. {{count}} sonuç bulundu.",
+      "scopedStatus_other": "Yalnızca bots gösteriliyor. {{count}} sonuç bulundu.",
+      "sidebarSearchLabel": "Bots’ta, çalışma alanlarında ve tarayıcı sekmelerinde ara",
+      "section": "Bots"
     },
     "templates": {
       "browse": "Şablonlara göz at",
@@ -24129,8 +24135,8 @@
       "worker": "Çalışan: {{name}}"
     },
     "panel": {
-      "needYou_one": "Sizi bekleyen: {{count}}",
-      "needYou_other": "Sizi bekleyen: {{count}}",
+      "needYou_one": "{{count}} sizi bekliyor",
+      "needYou_other": "{{count}} sizi bekliyor",
       "working": "{{count}} çalışıyor",
       "working_one": "{{count}} çalışıyor",
       "working_other": "{{count}} çalışıyor",

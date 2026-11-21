@@ -102,9 +102,9 @@
       "noWorkspace": "沒有開啟任何項目",
       "fullPageView": "此頁面在側邊欄中沒有對應的列",
       "archived": "封存的工作區不會列在側邊欄中",
-      "botsOff": "機器人已關閉，因此不會列出此機器人",
-      "botHidden": "此機器人已暫停，並被機器人選項隱藏",
-      "renameBotPage": "機器人或群組的頁面不是工作樹。若要重新命名，請使用其列選單中的「重新命名」。",
+      "botsOff": "Bots 已關閉，因此不會列出此 bot",
+      "botHidden": "此 bot 已暫停，並被 Bot 選項隱藏",
+      "renameBotPage": "bot 或群組的頁面不是工作樹。若要重新命名，請使用其列選單中的「重新命名」。",
       "renameUnlisted": "此工作區目前未列在側邊欄中，因此無法在那裡重新命名。"
     },
     "startupWorktreeRefresh": {
@@ -234,6 +234,10 @@
       "existingTitle": "新增到 {{distro}} 主機（建議）",
       "existingWhy": "{{distro}} 已作為主機執行，因此 Git、檔案和終端機將在 Linux 中原生執行，而不是透過 Windows 檔案共用。",
       "existingAccept": "新增到主機"
+    },
+    "cardSlot": {
+      "needYouCount": "{{count}} 個需要你",
+      "needsYou": "需要你"
     }
   },
   "app": {
@@ -23451,7 +23455,8 @@
       "title": "活動"
     },
     "connectors": {
-      "tab": "連接器"
+      "tab": "連接器",
+      "needYou_other": "{{count}} 個需要你"
     },
     "files": {
       "tab": "檔案"
@@ -23474,23 +23479,23 @@
       "needsSignIn": "需要登入"
     },
     "palette": {
-      "placeholder": "搜尋機器人、聊天、終端機、工作區、任務、設定和操作...",
-      "description": "搜尋機器人、聊天、終端機、工作區、任務、設定和操作",
-      "scopedPlaceholder": "搜尋機器人...",
-      "scopedLabel": "搜尋機器人",
-      "scopeHint": "輸入 @ 只顯示機器人",
-      "chip": "機器人",
-      "chipLabel": "機器人，顯示全部",
+      "placeholder": "搜尋 bots、聊天、終端機、工作區、任務、設定和操作...",
+      "description": "搜尋 bots、聊天、終端機、工作區、任務、設定和操作",
+      "scopedPlaceholder": "搜尋 bots...",
+      "scopedLabel": "搜尋 bots",
+      "scopeHint": "輸入 @ 只顯示 bots",
+      "chip": "Bots",
+      "chipLabel": "Bots，顯示全部",
       "searchEverything": "在全部內容中搜尋「{{text}}」",
-      "noMatch": "沒有符合「{{text}}」的機器人",
-      "noBotsYet": "還沒有機器人",
-      "filtersPaused": "篩選僅適用於工作區，不適用於機器人",
+      "noMatch": "沒有符合「{{text}}」的 bots",
+      "noBotsYet": "還沒有 bots",
+      "filtersPaused": "篩選僅適用於工作區，不適用於 bots",
       "showEverything": "顯示全部",
-      "footerBots": "機器人",
+      "footerBots": "Bots",
       "matchesPurpose": "與用途相符。",
-      "scopedStatus_other": "僅顯示機器人。找到 {{count}} 個結果。",
-      "sidebarSearchLabel": "搜尋機器人、工作區和瀏覽器分頁",
-      "section": "機器人"
+      "scopedStatus_other": "僅顯示 bots。找到 {{count}} 個結果。",
+      "sidebarSearchLabel": "搜尋 bots、工作區和瀏覽器分頁",
+      "section": "Bots"
     },
     "templates": {
       "browse": "瀏覽範本",
@@ -23650,7 +23655,7 @@
       "worker": "工作者：{{name}}"
     },
     "panel": {
-      "needYou_other": "{{count}} 項需要你處理",
+      "needYou_other": "{{count}} 個需要你",
       "working": "{{count}} 項工作進行中",
       "working_other": "{{count}} 項工作進行中",
       "needYou_one": "{{count}} 項需要你處理",
