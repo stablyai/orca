@@ -169,9 +169,14 @@ export function DeleteWorktreeChangesSummary({
   // Secondary facts stay on the collapsed line so a failed check never hides a known loss.
   const note = [
     loss && changesFailed ? failedLabel : null,
-    ignoredUnchecked
+    localFilesState?.status === 'unsupported'
       ? t('components.workspace.delete.ignoredFiles.unavailable', 'Ignored files not checked')
-      : null
+      : ignoredUnchecked
+        ? t(
+            'components.workspace.delete.ignoredFilesUnchecked',
+            'Ignored files could not be fully checked'
+          )
+        : null
   ]
     .filter(Boolean)
     .join(' · ')
