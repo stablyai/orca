@@ -24,7 +24,7 @@ export function BotsTipPointer({
     node.style.opacity = '0'
     node.style.transform = `translate(${win.clientWidth * 0.62}px, ${win.clientHeight * 0.92}px)`
   }, [shown])
-  // Shown: follow the target's centre every frame, as the camera moves under it.
+  // Shown: on the target's centre at each render; between cues it rides the scaled window.
   useLayoutEffect(() => {
     const node = pointer.current
     const win = node?.parentElement

@@ -185,6 +185,17 @@
   border-radius: inherit;
   background: var(--foreground);
   transform-origin: 0 50%;
+  animation-name: bt-dot-fill;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+}
+@keyframes bt-dot-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
 }
 [data-feature-tip='bots'] .bt-arrow {
   display: inline-flex;

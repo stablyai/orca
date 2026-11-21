@@ -56,7 +56,7 @@ function handOff(from: string, to: string): BotGroupMessage {
 }
 
 /** Page 3: a group chat of bots split one goal and come back with one answer. */
-// Memoized: a page off screen keeps its frame and skips the 30 fps renders of the shown page.
+// Memoized: a page off screen keeps its frame and skips the shown page's cue renders.
 export const BotsTipGroupVisual = memo(function BotsTipGroupVisual({
   t: time
 }: {

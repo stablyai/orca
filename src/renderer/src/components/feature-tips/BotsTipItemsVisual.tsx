@@ -133,7 +133,7 @@ function GroupHead({ label, count }: { label: string; count: number }): JSX.Elem
 }
 
 /** Page 2: asked for three things, the bot tracks each as an item, works them and asks on one. */
-// Memoized: a page off screen keeps its frame and skips the 30 fps renders of the shown page.
+// Memoized: a page off screen keeps its frame and skips the shown page's cue renders.
 export const BotsTipItemsVisual = memo(function BotsTipItemsVisual({
   t: time
 }: {

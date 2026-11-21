@@ -44,7 +44,7 @@ function BotMessage({
 }
 
 /** Page 1: asked in a Slack thread, the bot runs agents, a reviewer bot checks, a pull request lands. */
-// Memoized: a page off screen keeps its frame and skips the 30 fps renders of the shown page.
+// Memoized: a page off screen keeps its frame and skips the shown page's cue renders.
 export const BotsTipSlackVisual = memo(function BotsTipSlackVisual({
   t: time
 }: {

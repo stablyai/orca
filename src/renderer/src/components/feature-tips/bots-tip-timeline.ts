@@ -97,31 +97,29 @@ export const ITEMS_PAGE = {
 export type ItemsPointer = (typeof ITEMS_PAGE.pointer)[number][1]
 
 /** Worker badges: csv and docs finish; safari waits on the question, then resumes and finishes. */
+const ITEMS_WORKER_DONE_AT = { csv: 5.3, docs: 6.7, safari: 14.7, 'follow-up': 14.7 } as const
+
 export function itemsWorkerBadge(
   t: number,
-  worker: 'csv' | 'safari' | 'docs' | 'follow-up'
+  worker: keyof typeof ITEMS_WORKER_DONE_AT
 ): ItemsWorkerBadge {
-  const doneAt = {
-    csv: 5.3,
-    docs: 6.7,
-    safari: 14.7,
-    'follow-up': 14.7
-  }[worker]
-  return t >= doneAt ? 'done' : 'run'
+  return t >= ITEMS_WORKER_DONE_AT[worker] ? 'done' : 'run'
 }
 
+const ITEMS_SUBTITLE_STEPS = [
+  [0, 'idle'],
+  [2, 'one'],
+  [2.8, 'two'],
+  [3.6, 'three'],
+  [5.6, 'two'],
+  [7, 'one'],
+  [8.4, 'needs'],
+  [13.1, 'one'],
+  [15, 'idle']
+] as const satisfies readonly (readonly [number, ItemsSubtitle])[]
+
 export function itemsSubtitle(t: number): ItemsSubtitle {
-  return cueStep<ItemsSubtitle>(t, [
-    [0, 'idle'],
-    [2, 'one'],
-    [2.8, 'two'],
-    [3.6, 'three'],
-    [5.6, 'two'],
-    [7, 'one'],
-    [8.4, 'needs'],
-    [13.1, 'one'],
-    [15, 'idle']
-  ])
+  return cueStep<ItemsSubtitle>(t, ITEMS_SUBTITLE_STEPS)
 }
 
 /** How many items each group of the Items list holds at `t`. */
@@ -151,3 +149,55 @@ export const GROUP_PAGE = {
   docs: 7.4,
   answer: 10.2
 } as const
+
+// ----- Playback: a page's frame changes only at these times, so the card renders only there. -----
+
+function collectTimes(value: unknown, out: number[]): void {
+  if (typeof value === 'number') {
+    out.push(value)
+  } else if (Array.isArray(value)) {
+    value.forEach((entry) => collectTimes(entry, out))
+  } else if (value && typeof value === 'object') {
+    Object.values(value).forEach((entry) => collectTimes(entry, out))
+  }
+}
+
+function cueTimes(...sources: unknown[]): readonly number[] {
+  const out: number[] = []
+  collectTimes(sources, out)
+  return [...new Set(out)].sort((a, b) => a - b)
+}
+
+// Every time any page's frame reads; an extra entry only costs one render.
+const PAGE_CUES = [
+  cueTimes(
+    SLACK_PAGE,
+    MASCOT_PAW_TAPS,
+    MASCOT_PAW_TAPS.map((at) => at + PAW_TAP_SECONDS)
+  ),
+  cueTimes(ITEMS_PAGE, ITEMS_WORKER_DONE_AT, ITEMS_SUBTITLE_STEPS),
+  cueTimes(GROUP_PAGE)
+] as const
+
+// Spans whose frame changes continuously (the typed answer), drawn at the frame rate.
+const PAGE_CONTINUOUS: readonly (readonly (readonly [number, number])[])[] = [
+  [],
+  [ITEMS_PAGE.answerTyping],
+  []
+]
+
+/** The next time after `t` at which the page's frame changes: a cue, then its end, then never. */
+export function nextBotsTipCue(page: number, t: number): number {
+  const end = BOTS_TIP_PAGE_END[page] ?? 0
+  for (const at of PAGE_CUES[page] ?? []) {
+    if (at > t && at < end) {
+      return at
+    }
+  }
+  return t < end ? end : Infinity
+}
+
+/** True while the page's frame changes every frame rather than at cues. */
+export function botsTipFrameIsContinuous(page: number, t: number): boolean {
+  return (PAGE_CONTINUOUS[page] ?? []).some(([from, to]) => t >= from && t < to)
+}
