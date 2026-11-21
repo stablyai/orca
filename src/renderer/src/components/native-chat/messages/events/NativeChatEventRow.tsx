@@ -123,18 +123,23 @@ function EventDetails({
 /** The row's words as pieces of its one line: a bare text run becomes its own piece, which cuts
  *  short with an ellipsis and shows whole on hover (a flex row can't shrink bare text). */
 function rowParts(children: React.ReactNode): React.ReactNode[] {
-  return Children.toArray(children).flatMap((child, index): React.ReactNode[] => {
+  const seen = new Map<string, number>()
+  return Children.toArray(children).flatMap((child): React.ReactNode[] => {
     if (typeof child !== 'string' && typeof child !== 'number') {
       return [child]
     }
     const text = String(child).trim()
-    return text
-      ? [
-          <span key={`text:${index}`} className="min-w-0 truncate" title={text}>
-            {text}
-          </span>
-        ]
-      : []
+    if (!text) {
+      return []
+    }
+    // Keyed by its words, so a row whose parts change keeps each text piece its own.
+    const repeat = seen.get(text) ?? 0
+    seen.set(text, repeat + 1)
+    return [
+      <span key={`text:${text}:${repeat}`} className="min-w-0 truncate" title={text}>
+        {text}
+      </span>
+    ]
   })
 }
 
