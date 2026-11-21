@@ -4,7 +4,6 @@ import { canRetryPaneWebglAfterContextLoss } from './pane-webgl-context-loss-pol
 import {
   setTerminalWebglAtlasRebuilder,
   takeCoveredDetachedPane,
-  terminalWebglAtlasTypingHoldMs,
   type DeferredReattachVerdict
 } from './terminal-webgl-atlas-memory-rebuild'
 import { isXtermInstanceDisposed } from '../terminal-output/xterm-instance-disposed'
@@ -99,15 +98,6 @@ function reattachAcrossFrames(
   }
   // The pane may have closed, been reattached by reveal or fit, or lost its DOM since the rebuild.
   if (!pane.webglAddon && pane.container.isConnected && !isXtermInstanceDisposed(pane.terminal)) {
-    // Typing resumed mid-chain: the rest keep the DOM renderer until it stops, so no context is created between keystrokes.
-    const typingHold = terminalWebglAtlasTypingHoldMs()
-    if (typingHold > 0) {
-      setTimeout(
-        () => requestAnimationFrame(() => reattachAcrossFrames(panes, verdictOf, waitedFrames)),
-        typingHold
-      )
-      return
-    }
     const verdict = verdictOf(pane)
     if (verdict === 'wait' && waitedFrames < MAX_SYNC_WAIT_FRAMES) {
       requestAnimationFrame(() => reattachAcrossFrames(panes, verdictOf, waitedFrames + 1))
@@ -127,12 +117,14 @@ function reattachAcrossFrames(
 
 setTerminalWebglAtlasRebuilder((panes, shouldReattach, verdictOnItsFrame) => {
   const reattach = detachPanesWebgl(panes, shouldReattach)
+  // An overdue rebuild can start while a pane is mid synchronized-output frame; only a pane outside one reattaches in this task.
+  const firstIndex = reattach.findIndex((pane) => !pane.terminal.modes.synchronizedOutputMode)
+  const first = firstIndex === -1 ? undefined : reattach[firstIndex]
+  const rest = reattach.filter((_, index) => index !== firstIndex)
   // Waiting panes show xterm's DOM renderer until their frame; paint it now so a synchronized-output frame can't hold it blank.
-  for (const pane of reattach.slice(1)) {
+  for (const pane of rest) {
     paintReplacementCanvasNow(pane.terminal)
   }
-  // The first pane was checked in this task; the rest are rechecked on their own frame.
-  const [first, ...rest] = reattach
   if (first) {
     reattachAcrossFrames([first], () => 'now')
   }

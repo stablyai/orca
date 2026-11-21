@@ -22,17 +22,19 @@ vi.mock('./pane-webgl-renderer', () => ({
   },
   clearTerminalWebglAttachBackoff: () => {}
 }))
-const typingHold = { ms: 0 }
 vi.mock('./terminal-webgl-atlas-memory-rebuild', () => ({
   setTerminalWebglAtlasRebuilder: (next: typeof rebuilder) => {
     rebuilder = next
   },
-  takeCoveredDetachedPane: () => undefined,
-  terminalWebglAtlasTypingHoldMs: () => typingHold.ms
+  takeCoveredDetachedPane: () => undefined
 }))
 vi.mock('./terminal-render-pause-release', () => ({ paintReplacementCanvasNow: () => {} }))
 
-type RawPane = { webglAddon: object | null; container: { isConnected: boolean } }
+type RawPane = {
+  webglAddon: object | null
+  container: { isConnected: boolean }
+  terminal: { modes: { synchronizedOutputMode: boolean } }
+}
 
 function fakePane(): { pane: ManagedPaneInternal; raw: RawPane } {
   const raw = {
@@ -40,7 +42,7 @@ function fakePane(): { pane: ManagedPaneInternal; raw: RawPane } {
     webglDisabledAfterContextLoss: false,
     webglAttachmentDeferred: false,
     container: { isConnected: true },
-    terminal: {}
+    terminal: { modes: { synchronizedOutputMode: false } }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rebuilder reads only the addon, deferral and context-loss flags, the container's connection and the terminal handle, all supplied here.
   const pane = raw as unknown as ManagedPaneInternal
@@ -52,7 +54,6 @@ describe('atlas-rebuild reattachment', () => {
     vi.useFakeTimers()
     vi.stubGlobal('requestAnimationFrame', (callback: () => void) => setTimeout(callback, 16))
     attaches.count = 0
-    typingHold.ms = 0
     vi.resetModules()
     await import('./pane-webgl-reattach')
   })
@@ -76,23 +77,23 @@ describe('atlas-rebuild reattachment', () => {
     expect(fakes.every((fake) => fake.raw.webglAddon)).toBe(true)
   })
 
-  it('creates no context while the user types mid-chain, then resumes', async () => {
-    const fakes = Array.from({ length: 3 }, fakePane)
+  it('reattaches a pane mid synchronized-output frame only once its frame closes', async () => {
+    const [framed, plain] = Array.from({ length: 2 }, fakePane)
+    const framedModes = framed.raw.terminal.modes
+    framedModes.synchronizedOutputMode = true
     rebuilder?.(
-      fakes.map((fake) => fake.pane),
+      [framed.pane, plain.pane],
       () => true,
-      () => 'now'
+      (pane) => (pane.terminal.modes.synchronizedOutputMode ? 'wait' : 'now')
     )
-    expect(attaches.count).toBe(1)
-    typingHold.ms = 2_000
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(attaches.count).toBe(1)
-    typingHold.ms = 0
-    // The hold ends 2 s after the frame that saw it (t = 16 ms), then waits one more frame.
-    await vi.advanceTimersByTimeAsync(1_040)
-    expect(attaches.count).toBe(2)
+    // The pane outside a frame goes first, in this task.
+    expect(plain.raw.webglAddon).toBeTruthy()
+    expect(framed.raw.webglAddon).toBeNull()
+    await vi.advanceTimersByTimeAsync(16 * 5)
+    expect(framed.raw.webglAddon).toBeNull()
+    framedModes.synchronizedOutputMode = false
     await vi.advanceTimersByTimeAsync(16)
-    expect(attaches.count).toBe(3)
+    expect(framed.raw.webglAddon).toBeTruthy()
   })
 
   it('skips a pane that closed or got its renderer back before its frame', async () => {

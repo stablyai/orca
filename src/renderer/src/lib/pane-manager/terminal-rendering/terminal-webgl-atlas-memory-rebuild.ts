@@ -12,8 +12,6 @@ const ATLAS_REBUILD_MIN_INTERVAL_MS = 60_000
 const ATLAS_REBUILD_QUIET_MS = 2_000
 // Output that never pauses would retain GPU memory without bound; past this, typing alone holds the rebuild.
 const ATLAS_REBUILD_MAX_QUIET_WAIT_MS = 60_000
-// A deferred atlas retries on its own this many times (one per interval), so a frame that closes without more output is still caught.
-const DEFERRED_REBUILD_MAX_RETRIES = 6
 // Only macOS was measured retaining it (desktop app and Mac browsers); elsewhere a mass context recreate risks the driver's context budget. Touch excludes iPadOS desktop-mode agents.
 const ATLAS_MEMORY_REBUILD_ENABLED =
   typeof navigator !== 'undefined' &&
@@ -39,7 +37,6 @@ let lastTypedAt = Number.NEGATIVE_INFINITY
 // Per atlas, so one atlas's output never re-arms another; weak so a retired atlas is never kept alive.
 const atlasesWithLargePage = new WeakSet<GlyphAtlas>()
 const atlasesWithOutput = new WeakSet<GlyphAtlas>()
-const deferredRetries = new WeakMap<GlyphAtlas, number>()
 const lastOutputAt = new WeakMap<GlyphAtlas, number>()
 const dueSince = new WeakMap<GlyphAtlas, number>()
 const attachedPanes = new Map<unknown, ManagedPaneInternal>()
@@ -123,7 +120,6 @@ function readyAt(atlas: GlyphAtlas): number {
 function forgetDue(atlas: GlyphAtlas): void {
   dueAtlases.delete(atlas)
   dueSince.delete(atlas)
-  deferredRetries.delete(atlas)
 }
 
 /** Wired by the reattach module, which owns detaching and reattaching pane renderers. */
@@ -173,16 +169,14 @@ function rebuildDueAtlases(): void {
       (pane) => attachedPanes.get(pane.terminal) === pane && atlasOf(pane) === atlas
     )
     // A new canvas paints straight from the buffer, so an on-screen pane mid synchronized-output (DEC 2026) frame would flash it half drawn; that atlas waits.
-    if (atlasPanes.some((pane) => onScreen(pane) && pane.terminal.modes.synchronizedOutputMode)) {
-      const retries = deferredRetries.get(atlas) ?? 0
-      if (retries < DEFERRED_REBUILD_MAX_RETRIES) {
-        deferredRetries.set(atlas, retries + 1)
-        retry = true
-      } else {
-        // Out of retries: the frame's closing output re-arms it.
-        forgetDue(atlas)
-        atlasesWithOutput.delete(atlas)
-      }
+    // Once overdue it goes ahead: such panes then wait for their frame to close one by one, so a TUI that keeps reopening frames can't hold the memory forever.
+    const overdue = now - (dueSince.get(atlas) ?? now) >= ATLAS_REBUILD_MAX_QUIET_WAIT_MS
+    if (
+      !overdue &&
+      atlasPanes.some((pane) => onScreen(pane) && pane.terminal.modes.synchronizedOutputMode)
+    ) {
+      // Stays due; the next attempt (at most the overdue one) catches a frame that closed without more output.
+      retry = true
       continue
     }
     // Normally retired by the rebuild; clearing also stops a surviving atlas from rebuilding again without new output.
@@ -287,11 +281,6 @@ export function noteTerminalWebglAtlasOutput(terminal: ForegroundTerminalOutputT
 /** User input sent to any terminal; holds atlas rebuilds so none lands between keystrokes. */
 export function noteTerminalWebglAtlasTyping(): void {
   lastTypedAt = performance.now()
-}
-
-/** How long a rebuild's remaining reattaches must still wait for typing to stop (0 when clear). */
-export function terminalWebglAtlasTypingHoldMs(): number {
-  return Math.max(0, lastTypedAt + ATLAS_REBUILD_QUIET_MS - performance.now())
 }
 
 /** Requests a rebuild of the grown atlas's renderers, at most every 60 s, only after PTY output into that atlas, once it pauses. */
