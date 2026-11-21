@@ -75,9 +75,17 @@ export async function checkGit(
       })
     ]
   }
-  const [fetch, head] = await Promise.all([
+  // Both network probes are round trips to the remote; the push needs only a HEAD, so they overlap.
+  const [fetch, push] = await Promise.all([
     git(['ls-remote', remote, 'HEAD'], NETWORK_TIMEOUT_MS),
-    git(['rev-parse', '--verify', '--quiet', 'HEAD'])
+    git(['rev-parse', '--verify', '--quiet', 'HEAD']).then((head) =>
+      head.code === 0
+        ? git(
+            ['push', '--dry-run', '--no-verify', '--porcelain', remote, `HEAD:${PUSH_PROBE_REF}`],
+            NETWORK_TIMEOUT_MS
+          )
+        : null
+    )
   ])
   if (fetch.code !== 0) {
     // A fetch failure already explains why a push would fail.
@@ -91,7 +99,7 @@ export async function checkGit(
     ]
   }
   const checks = [check('git', 'git.fetch', 'pass', `Remote "${remote}" is reachable.`)]
-  if (head.code !== 0) {
+  if (!push) {
     checks.push(
       check('git', 'git.push', 'warn', 'No commits yet, so push access was not checked.', {
         remediation: 'Commit once, then re-run the doctor.'
@@ -99,10 +107,6 @@ export async function checkGit(
     )
     return checks
   }
-  const push = await git(
-    ['push', '--dry-run', '--no-verify', '--porcelain', remote, `HEAD:${PUSH_PROBE_REF}`],
-    NETWORK_TIMEOUT_MS
-  )
   checks.push(
     push.code === 0
       ? check('git', 'git.push', 'pass', `Push to "${remote}" is authorized (dry run).`)
