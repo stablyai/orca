@@ -75,9 +75,9 @@ it('fails a public share the owner did not ask for, even with publishing on', ()
   expect(
     grade(
       'delivery-sharing-on-attaches',
-      outcome([share, posted('Read https://share.onorca.dev/a/eval-report')])
+      outcome([share, posted('Read https://share.onorca.dev/a/eval-report')], fallback)
     )
-  ).not.toEqual([])
+  ).toEqual(['published a public link nobody asked for'])
 })
 
 it('matches shared report bytes and the returned link to the recipient-visible reply', () => {
