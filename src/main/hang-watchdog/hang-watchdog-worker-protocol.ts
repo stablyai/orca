@@ -19,14 +19,16 @@ export type HangWatchdogWorkerData = {
 export type MainToHangWatchdogWorkerMessage =
   | { type: 'heartbeat' }
   | { type: 'shutdown' }
-  | { type: 'capture-drain-ack'; token: string }
   | { type: 'menu-bar-setting'; enabled: boolean }
   | { type: 'power-event'; event: HangPowerReceipt['event']; observedAt: number }
 import type { HangPowerReceipt } from './hang-observations'
 
-export type HangWatchdogToMainMessage =
-  | { type: 'capture-drain'; token: string }
-  | { type: 'stall-recovered'; tier: 'stall' | 'hang'; unresponsiveMs: number; endedAt: number }
+export type HangWatchdogToMainMessage = {
+  type: 'stall-recovered'
+  tier: 'stall' | 'hang'
+  unresponsiveMs: number
+  endedAt: number
+}
 
 export function isHangWatchdogWorkerData(value: unknown): value is HangWatchdogWorkerData {
   const data = value as Partial<HangWatchdogWorkerData> | null
