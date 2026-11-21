@@ -215,7 +215,9 @@ it('Esc while Send is still preparing starts no second hand-off, and a held-back
     await new Promise((resolve) => setTimeout(resolve, 0))
   })
   expect(attachGeneratedImage).toHaveBeenCalledTimes(1)
-  expect(notice.result.current?.text).toBe('1 note added to your message')
+  // The notice follows the composer's render after the held-back submit.
+  await vi.waitFor(() => expect(notice.result.current?.text).toBe('1 note added to your message'))
+  expect(attachGeneratedImage).toHaveBeenCalledTimes(1)
 })
 
 it('a note opened right after C keeps focus when the delayed media focus lands', () => {
