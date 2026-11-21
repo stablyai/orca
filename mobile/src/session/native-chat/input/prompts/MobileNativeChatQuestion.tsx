@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Check, CircleHelp } from 'lucide-react-native'
 import { MobileNativeChatCardHeaderAction } from './MobileNativeChatCardHeaderAction'
@@ -6,6 +6,7 @@ import { MobileNativeChatQuestionText } from '../../transcript/message-content/M
 import {
   colors,
   concentricRadius,
+  pressedStyle,
   radii,
   spacing,
   typography
@@ -14,6 +15,8 @@ import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { MessageBox } from '../../../../components/composer-input/MessageBox'
+import { MobilePendingButton } from '../../../../components/controls/MobilePendingButton'
+import { useMobilePendingControl } from '../../../../components/controls/use-mobile-pending-control'
 import { useMobileNativeChatReplyScroll } from './use-mobile-native-chat-reply-scroll'
 import {
   formatQuestionAnswerByIndexes,
@@ -42,8 +45,9 @@ export function MobileNativeChatQuestion({
   const { scrollRef, inputRef, revealReply, onViewportLayout } = useMobileNativeChatReplyScroll()
   const [selectedOptionIndexes, setSelectedOptionIndexes] = useState<number[]>([])
   const [freeText, setFreeText] = useState(() => question.freeTextInput?.initialValue ?? '')
-  const [sending, setSending] = useState(false)
-  const sendingRef = useRef(false)
+  // A single choice sends as `option:<index>`; Submit, the typed reply and the header's cancel by name.
+  const { pending, run } = useMobilePendingControl<string>()
+  const sending = pending !== null
   const allowOther = question.allowOther !== false
 
   const hasOptions = question.options.length > 0
@@ -57,23 +61,13 @@ export function MobileNativeChatQuestion({
     )
   }
 
-  const sendAnswer = async (text: string): Promise<boolean> => {
-    if (sendingRef.current) {
-      return false
-    }
-    sendingRef.current = true
-    setSending(true)
-    try {
-      return await onAnswer(text)
-    } finally {
-      sendingRef.current = false
-      setSending(false)
-    }
-  }
+  const sendAnswer = (control: string, text: string): Promise<boolean> =>
+    run(control, () => onAnswer(text))
 
   const answerSingle = async (optionIndex: number): Promise<void> => {
     const token = question.optionTokens[optionIndex]
     await sendAnswer(
+      `option:${optionIndex}`,
       token && token.length > 0 ? token : formatQuestionAnswerByIndexes(question, [optionIndex])
     )
   }
@@ -86,7 +80,7 @@ export function MobileNativeChatQuestion({
       question.freeTextToken && answerText.length > 0
         ? formatQuestionAnswerWithOtherByIndexes(question, selectedOptionIndexes, answerText)
         : formatQuestionAnswerByIndexes(question, selectedOptionIndexes)
-    if (await sendAnswer(answer)) {
+    if (await sendAnswer('submit', answer)) {
       setFreeText('')
     }
   }
@@ -99,7 +93,7 @@ export function MobileNativeChatQuestion({
       question.multiSelect && question.freeTextToken && selectedOptionIndexes.length > 0
         ? formatQuestionAnswerWithOtherByIndexes(question, selectedOptionIndexes, answerText)
         : formatQuestionFreeTextAnswer(question, answerText)
-    if (await sendAnswer(answer)) {
+    if (await sendAnswer('reply', answer)) {
       setFreeText('')
     }
   }
@@ -132,9 +126,10 @@ export function MobileNativeChatQuestion({
         <MobileNativeChatQuestionText title content={question.question} style={styles.question} />
         <MobileNativeChatCardHeaderAction
           prompt={question.prompt}
-          onCancel={onCancel}
+          onCancel={onCancel && (() => run('cancel', () => onCancel(question.prompt)))}
           onCollapse={onCollapse}
           disabled={sending}
+          cancelPending={pending === 'cancel'}
         />
       </View>
 
@@ -142,56 +137,73 @@ export function MobileNativeChatQuestion({
         <View style={styles.options}>
           {optionRows.map(({ label, description, key }, optIndex) => {
             const isSelected = selectedOptionIndexes.includes(optIndex)
-            return (
+            const body = (
+              <View style={styles.optionBody}>
+                <Text style={styles.optionText}>{label}</Text>
+                {description ? (
+                  <Text style={styles.optionDescription} numberOfLines={2}>
+                    {description}
+                  </Text>
+                ) : null}
+              </View>
+            )
+            // A multi-select row only toggles; a single choice is the answer and sends on tap.
+            return question.multiSelect ? (
               <Pressable
                 key={key}
-                accessibilityRole={question.multiSelect ? 'checkbox' : 'button'}
-                accessibilityState={question.multiSelect ? { checked: isSelected } : undefined}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: isSelected, disabled: sending }}
                 style={({ pressed }) => [
                   styles.option,
                   isSelected && styles.optionSelected,
-                  pressed && styles.pressed
+                  pressed && pressedStyle
                 ]}
-                onPress={() => (question.multiSelect ? toggle(optIndex) : answerSingle(optIndex))}
+                disabled={sending}
+                onPress={() => toggle(optIndex)}
               >
-                {question.multiSelect ? (
-                  <View style={[styles.checkbox, isSelected && styles.checkboxOn]}>
-                    {isSelected ? <Check size={13} color={colors.bgBase} strokeWidth={3} /> : null}
-                  </View>
-                ) : null}
-                <View style={styles.optionBody}>
-                  <Text style={styles.optionText}>{label}</Text>
-                  {description ? (
-                    <Text style={styles.optionDescription} numberOfLines={2}>
-                      {description}
-                    </Text>
-                  ) : null}
+                <View style={[styles.checkbox, isSelected && styles.checkboxOn]}>
+                  {isSelected ? <Check size={13} color={colors.bgBase} strokeWidth={3} /> : null}
                 </View>
+                {body}
               </Pressable>
+            ) : (
+              <MobilePendingButton
+                key={key}
+                label={label}
+                accessibilityHint={description || undefined}
+                style={styles.option}
+                contentStyle={styles.optionContent}
+                spinnerColor={colors.textPrimary}
+                pending={pending === `option:${optIndex}`}
+                disabled={sending}
+                onPress={() => void answerSingle(optIndex)}
+              >
+                {body}
+              </MobilePendingButton>
             )
           })}
         </View>
       ) : null}
 
       {question.multiSelect && hasOptions ? (
-        <Pressable
-          accessibilityLabel={t('chat.question.submitSelectedOptions', 'Submit selected options')}
-          style={({ pressed }) => [
-            styles.submit,
-            !canSubmitMulti && styles.submitDisabled,
-            pressed && canSubmitMulti && styles.pressed
-          ]}
-          onPress={submitMulti}
-          disabled={!canSubmitMulti}
-        >
-          <Text style={[styles.submitText, !canSubmitMulti && styles.submitTextDisabled]}>
-            {selectedOptionIndexes.length > 0
+        <MobilePendingButton
+          label={
+            selectedOptionIndexes.length > 0
               ? t('chat.question.submitCount', 'Submit ({{count}})', {
                   count: selectedOptionIndexes.length
                 })
-              : t('chat.question.submit', 'Submit')}
-          </Text>
-        </Pressable>
+              : t('chat.question.submit', 'Submit')
+          }
+          accessibilityLabel={t('chat.question.submitSelectedOptions', 'Submit selected options')}
+          style={styles.submit}
+          labelStyle={[styles.submitText, !canSubmitMulti && styles.submitTextDisabled]}
+          // Nothing picked is the button's own empty look, as on the composer's Send.
+          disabledStyle={styles.submitDisabled}
+          spinnerColor={colors.onMergeGreen}
+          pending={pending === 'submit'}
+          disabled={!canSubmitMulti}
+          onPress={() => void submitMulti()}
+        />
       ) : null}
 
       {allowOther ? (
@@ -212,6 +224,7 @@ export function MobileNativeChatQuestion({
           multiline={question.freeTextInput ? question.freeTextInput.multiline === true : true}
           onSend={submitFreeText}
           canSend={canSendFreeText}
+          sending={pending === 'reply'}
           sendAccessibilityLabel={t('chat.question.sendReply', 'Send reply')}
         />
       ) : null}
@@ -261,6 +274,11 @@ const styles = themedStyleSheet(() => ({
   optionSelected: {
     borderColor: colors.accentBlue
   },
+  optionContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
   optionBody: {
     flex: 1,
     gap: 2
@@ -304,8 +322,5 @@ const styles = themedStyleSheet(() => ({
   },
   submitTextDisabled: {
     color: colors.textMuted
-  },
-  pressed: {
-    opacity: 0.7
   }
 }))
