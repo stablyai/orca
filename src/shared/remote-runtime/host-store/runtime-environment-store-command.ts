@@ -29,6 +29,8 @@ export function executeEnvironmentStoreCommand(
       return { operation: command.operation, value: core0.parseRemotePairingCode(...command.args) }
     case 'removeEnvironment':
       return { operation: command.operation, value: core0.removeEnvironment(...command.args) }
+    case 'renameEnvironment':
+      return { operation: command.operation, value: core0.renameEnvironment(...command.args) }
     case 'updateEnvironmentFromPairingCode':
       return {
         operation: command.operation,

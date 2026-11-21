@@ -20,6 +20,7 @@ export type EnvironmentStoreCommand =
     }
   | { operation: 'parseRemotePairingCode'; args: Parameters<typeof core0.parseRemotePairingCode> }
   | { operation: 'removeEnvironment'; args: Parameters<typeof core0.removeEnvironment> }
+  | { operation: 'renameEnvironment'; args: Parameters<typeof core0.renameEnvironment> }
   | {
       operation: 'updateEnvironmentFromPairingCode'
       args: Parameters<typeof core0.updateEnvironmentFromPairingCode>
@@ -107,6 +108,7 @@ export type EnvironmentStoreSuccess =
     }
   | { operation: 'parseRemotePairingCode'; value: ReturnType<typeof core0.parseRemotePairingCode> }
   | { operation: 'removeEnvironment'; value: ReturnType<typeof core0.removeEnvironment> }
+  | { operation: 'renameEnvironment'; value: ReturnType<typeof core0.renameEnvironment> }
   | {
       operation: 'updateEnvironmentFromPairingCode'
       value: ReturnType<typeof core0.updateEnvironmentFromPairingCode>

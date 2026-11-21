@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Loader2, Trash2 } from 'lucide-react'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { useTranslate } from '@/i18n/use-translate'
@@ -10,6 +11,8 @@ import {
   DialogHeader,
   DialogTitle
 } from '../../../ui/dialog'
+import { Input } from '../../../ui/input'
+import { Label } from '../../../ui/label'
 
 export function RuntimeEnvironmentSwitchDialog({
   pendingSwitchValue,
@@ -63,6 +66,88 @@ export function RuntimeEnvironmentSwitchDialog({
             {t('auto.components.settings.RuntimeEnvironmentsPane.d2e00809e4', 'Switch')}
           </Button>
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export function RuntimeEnvironmentRenameDialog({
+  pendingRename,
+  renamingId,
+  renameError,
+  onOpenChange,
+  onCancel,
+  onSubmit
+}: {
+  pendingRename: PublicKnownRuntimeEnvironment | null
+  renamingId: string | null
+  renameError: string | null
+  onOpenChange: (open: boolean) => void
+  onCancel: () => void
+  onSubmit: (name: string) => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const [name, setName] = useState(pendingRename?.name ?? '')
+  // Seed the saved name on every open so a canceled draft cannot reappear.
+  const [seededFor, setSeededFor] = useState(pendingRename?.id ?? null)
+  if (pendingRename === null && seededFor !== null) {
+    setSeededFor(null)
+  }
+  if (pendingRename && seededFor !== pendingRename.id) {
+    setSeededFor(pendingRename.id)
+    setName(pendingRename.name)
+  }
+  const trimmedName = name.trim()
+  const busy = pendingRename !== null && renamingId === pendingRename.id
+  const canSubmit =
+    pendingRename !== null && trimmedName !== '' && trimmedName !== pendingRename.name && !busy
+  return (
+    <Dialog open={pendingRename !== null} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm sm:max-w-sm" showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle className="text-sm">
+            {t('auto.components.settings.RuntimeEnvironmentsPane.renameTitle', 'Rename Server')}
+          </DialogTitle>
+          <DialogDescription>
+            {t(
+              'auto.components.settings.RuntimeEnvironmentsPane.renameDescription',
+              'Only the display name changes. Pairing, connection details and projects stay as they are.'
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (canSubmit) {
+              onSubmit(trimmedName)
+            }
+          }}
+        >
+          <div className="space-y-2">
+            <Label htmlFor="runtime-server-rename">
+              {t('auto.components.settings.RuntimeEnvironmentsPane.renameNameLabel', 'Name')}
+            </Label>
+            <Input
+              id="runtime-server-rename"
+              autoFocus
+              value={name}
+              disabled={busy}
+              onChange={(event) => setName(event.target.value)}
+              onFocus={(event) => event.target.select()}
+            />
+          </div>
+          {renameError ? <p className="text-sm text-destructive">{renameError}</p> : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
+              {t('auto.components.settings.RuntimeEnvironmentsPane.af53761f31', 'Cancel')}
+            </Button>
+            <Button type="submit" disabled={!canSubmit}>
+              {busy ? <Loader2 className="animate-spin" /> : null}
+              {t('auto.components.settings.RuntimeEnvironmentsPane.renameConfirm', 'Rename')}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   )

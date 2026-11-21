@@ -57,6 +57,16 @@ export async function removeEnvironment(
   return reply.value
 }
 
+export async function renameEnvironment(
+  ...args: Parameters<typeof core.renameEnvironment>
+): Promise<ReturnType<typeof core.renameEnvironment>> {
+  const reply = await submitEnvironmentStoreCommand({ operation: 'renameEnvironment', args })
+  if (reply.operation !== 'renameEnvironment') {
+    throw new Error('Unexpected environment store response')
+  }
+  return reply.value
+}
+
 export async function updateEnvironmentFromPairingCode(
   ...args: Parameters<typeof core.updateEnvironmentFromPairingCode>
 ): Promise<ReturnType<typeof core.updateEnvironmentFromPairingCode>> {

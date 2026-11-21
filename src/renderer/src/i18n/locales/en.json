@@ -2125,7 +2125,8 @@
         "remotePairingUnreachable": "Cannot reach Orca at {{endpoint}}.",
         "remotePairingInvalidDetails": "This access link contains invalid connection details.",
         "remotePairingSaveFailed": "Orca verified the host but could not save it. Check browser storage and try again.",
-        "remotePairingRepairUnavailable": "Re-pairing is not available in the browser. Pair this browser with the server again."
+        "remotePairingRepairUnavailable": "Re-pairing is not available in the browser. Pair this browser with the server again.",
+        "runtimeEnvironmentNameRequired": "A server name is required."
       },
       "web": {
         "preload": {
@@ -10081,6 +10082,11 @@
           "connectedNewProjectsHint": "Connected to {{value0}}. To create new projects there by default, choose it under New projects open on.",
           "removeDefaultServerBlocked": "This server is the default host for new projects. Choose another one under New projects open on before removing it.",
           "serverReplaced": "{{value0}} is not the Orca server this computer paired with: Orca connects to the host as a different SSH user, or its server was reinstalled. Open the ⋯ menu here and choose Forget…, then connect the SSH host to pair with its current server.",
+          "renameTitle": "Rename Server",
+          "renameDescription": "Only the display name changes. Pairing, connection details and projects stay as they are.",
+          "renameNameLabel": "Name",
+          "renameConfirm": "Rename",
+          "serverRenamed": "Renamed to {{value0}}.",
           "6f303a89a3": "Switch server",
           "4ae8a4a381": "Remove server"
         },
@@ -14210,6 +14216,7 @@
           "sshAccessLinked": "SSH route…",
           "sshAccess": "Connect through SSH…",
           "remove": "Remove…",
+          "rename": "Rename…",
           "connecting": "Connecting…",
           "disconnecting": "Disconnecting…",
           "needsUpdate": "Needs update",
