@@ -15,7 +15,8 @@ import { feedback } from '../../theme/mobile-theme'
 /**
  * A button whose press sends something to the host and waits. The pending rule, shared by every
  * such control: the control that started the send shows `pending` (same size and colour, its
- * content swapped for a spinner, presses ignored) until the send settles; the send ticks
+ * content swapped for a spinner, presses ignored) until the send settles — a list row keeps its
+ * content and shows the spinner after it, as list rows show progress; the send ticks
  * `triggerSelection` as it starts (`useMobilePendingControl` does both), and a failure buzzes
  * through the chat's send-error reporter. Other controls the send locks pass `disabled` and take
  * the one disabled look.
@@ -59,7 +60,7 @@ export function MobilePendingButton({
   accessibilityLabel?: string
   accessibilityHint?: string
   testID?: string
-  /** Rich content (a choice row's label and description) in place of the icon and label. */
+  /** A list row's content (a choice's label and description) in place of the icon and label; it stays readable while the row's send is out. */
   children?: ReactNode
   contentStyle?: StyleProp<ViewStyle>
 }): React.JSX.Element {
@@ -83,22 +84,25 @@ export function MobilePendingButton({
         disabled && !pending && (disabledStyle ?? styles.disabled)
       ]}
     >
-      {/* The content keeps the button's size while it spins. */}
       {children ? (
-        <View style={[contentStyle, pending && styles.hidden]}>{children}</View>
+        <>
+          <View style={contentStyle}>{children}</View>
+          {pending ? <ActivityIndicator size="small" color={spinnerColor} /> : null}
+        </>
       ) : (
         <>
+          {/* The content keeps the button's size while it spins. */}
           {icon ? <View style={pending && styles.hidden}>{icon}</View> : null}
           {iconOnly ? null : (
             <Text style={[labelStyle, pending && styles.hidden]} numberOfLines={numberOfLines}>
               {label}
             </Text>
           )}
+          {pending ? (
+            <ActivityIndicator size="small" color={spinnerColor} style={styles.spinner} />
+          ) : null}
         </>
       )}
-      {pending ? (
-        <ActivityIndicator size="small" color={spinnerColor} style={styles.spinner} />
-      ) : null}
     </Pressable>
   )
 }

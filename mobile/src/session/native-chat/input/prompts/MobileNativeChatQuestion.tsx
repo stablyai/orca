@@ -171,7 +171,8 @@ export function MobileNativeChatQuestion({
                 key={key}
                 label={label}
                 accessibilityHint={description || undefined}
-                style={styles.option}
+                // The choice being sent reads as chosen, as on the Ask card.
+                style={[styles.option, pending === `option:${optIndex}` && styles.optionSelected]}
                 contentStyle={styles.optionContent}
                 spinnerColor={colors.textPrimary}
                 pending={pending === `option:${optIndex}`}
