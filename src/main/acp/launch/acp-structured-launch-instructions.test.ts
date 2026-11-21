@@ -45,7 +45,8 @@ const SPECS = {
   cursor: acpLaunchSpecFor('cursor')!,
   hermes: acpLaunchSpecFor('hermes')!,
   copilot: acpLaunchSpecFor('copilot')!,
-  kimi: acpLaunchSpecFor('kimi')!
+  kimi: acpLaunchSpecFor('kimi')!,
+  kiro: acpLaunchSpecFor('kiro')!
 }
 
 const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome']> = {
@@ -56,7 +57,8 @@ const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome'
   cursor: { variable: 'CURSOR_CONFIG_DIR', path: '/home/user/.cursor' },
   hermes: { variable: 'HERMES_HOME', path: '/home/user/.hermes' },
   copilot: { variable: 'COPILOT_HOME', path: '/home/user/.copilot' },
-  kimi: { variable: 'KIMI_CODE_HOME', path: '/home/user/.kimi-code' }
+  kimi: { variable: 'KIMI_CODE_HOME', path: '/home/user/.kimi-code' },
+  kiro: { variable: 'KIRO_HOME', path: '/home/user/.kiro' }
 }
 
 const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
@@ -64,7 +66,8 @@ const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
   cursor: '2026.11.19-f005e9d',
   hermes: '0.23.3',
   copilot: '1.0.114',
-  kimi: '2.7.2'
+  kimi: '2.7.2',
+  kiro: '3.1.0'
 }
 
 let dataDirectory = ''
@@ -127,6 +130,14 @@ describe('ACP launch: standing instructions', () => {
     expect(resolved.sessionMeta).toEqual({
       antigravity: { systemPrompt: { append: PREAMBLE } }
     })
+  })
+
+  it('gives Kiro them as an always-included steering document on its new session', async () => {
+    const resolved = await launch('kiro', { instructions: PREAMBLE })
+    expect(resolved.sessionMeta).toEqual({
+      kiro: { steering: [{ name: 'orca', inclusion: 'always', content: PREAMBLE }] }
+    })
+    expect(resolved.sessionMetaOnReopen).toBeUndefined()
   })
 
   it("adds them to OpenCode's inline instructions after the user's own, keeping their settings", async () => {

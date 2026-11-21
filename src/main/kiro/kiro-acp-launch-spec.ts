@@ -3,6 +3,7 @@ import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
 import { KIRO_ACP_DIALECT } from '../acp/acp-dialects/kiro-dialect'
 import { KIRO_MODEL_LISTING_ARGS, parseKiroModelListing } from './kiro-model-listing'
+import { deliverKiroInstructions } from '../acp/launch/acp-instructions'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import {
   resumeInvocationFromOptions,
@@ -46,6 +47,7 @@ export const KIRO_LAUNCH_SPEC: AcpLaunchSpec = {
     parse: parseKiroModelListing,
     listingNamesConfiguredModel: false
   },
+  instructions: deliverKiroInstructions,
   transcriptImport: null,
   sessionHistory: KIRO_SESSION_HISTORY
 }

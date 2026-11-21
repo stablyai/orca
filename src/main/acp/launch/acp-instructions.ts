@@ -105,6 +105,11 @@ export const deliverOmpInstructions: AcpInstructionsDelivery = async ({ file }) 
   args: [`--append-system-prompt=${await file()}`]
 })
 
+// Kiro keeps steering sent on `session/new` with the session, so a reopen keeps the preamble it began with.
+export const deliverKiroInstructions: AcpInstructionsDelivery = async ({ text }) => ({
+  sessionMeta: { kiro: { steering: [{ name: 'orca', inclusion: 'always', content: text }] } }
+})
+
 // Cursor reads its folder's rules once, when a session opens, and keeps them across reopens.
 export const deliverCursorInstructions: AcpInstructionsDelivery = async ({ text }) => ({
   aroundNewSession: (cwd) => placeCursorOpeningRule(cwd, text)
