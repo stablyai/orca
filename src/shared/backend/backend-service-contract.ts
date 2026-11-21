@@ -35,7 +35,8 @@ export const UsageProviderSchema = z.enum([
   'claudeUsage',
   'codexUsage',
   'openCodeUsage',
-  'museUsage'
+  'museUsage',
+  'mistralVibeUsage'
 ])
 export type UsageProviderKey = z.infer<typeof UsageProviderSchema>
 export const UsageActionSchema = z.enum([
