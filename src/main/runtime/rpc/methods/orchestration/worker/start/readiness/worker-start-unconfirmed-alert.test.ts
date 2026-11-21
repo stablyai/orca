@@ -72,7 +72,18 @@ describe('an unconfirmed worker start', () => {
     )
   }
 
-  function readinessRunsOut(): void {
+  /** A fresh launch whose readiness wait runs out; `inFront` is whether Claude itself is in front. */
+  function readinessRunsOut(inFront: boolean): void {
+    vi.spyOn(h.runtime, 'createTerminal').mockResolvedValue({
+      handle: 'term_worker',
+      worktreeId: 'repo::worktree',
+      title: 'worker',
+      ptyId: 'pty-worker',
+      incarnationId: 'inc-1'
+    } as never)
+    vi.spyOn(h.runtime, 'subscribeToTerminalData').mockReturnValue(() => {})
+    vi.spyOn(h.runtime, 'readRecentTerminalOutput').mockReturnValue('')
+    vi.spyOn(h.runtime, 'isExactAgentInFront').mockResolvedValue(inFront)
     vi.spyOn(h.runtime, 'waitForTerminal').mockRejectedValue(new Error('timeout'))
     vi.spyOn(h.runtime, 'waitForFreshWorkerComposer').mockRejectedValue(new Error('timeout'))
   }
@@ -88,7 +99,7 @@ describe('an unconfirmed worker start', () => {
 
   it('still hands a slow agent its brief when readiness runs out, and settles when it starts', async () => {
     h.setup()
-    readinessRunsOut()
+    readinessRunsOut(true)
     typedButNeverStarted()
     const { state, dispatchId } = await start('claude')
     await vi.waitFor(() => expect(alerts()).toHaveLength(1))
@@ -105,7 +116,7 @@ describe('an unconfirmed worker start', () => {
 
   it('alerts exactly once when a slow agent never starts', async () => {
     h.setup()
-    readinessRunsOut()
+    readinessRunsOut(true)
     typedButNeverStarted()
     const { dispatchId } = await start('claude')
     await vi.waitFor(() => expect(alerts()).toHaveLength(1))
@@ -116,23 +127,24 @@ describe('an unconfirmed worker start', () => {
     expect(lostAlerts()).toHaveLength(0)
   })
 
+  it('never types the brief when something other than the agent is in front', async () => {
+    h.setup()
+    readinessRunsOut(false)
+    const { state } = await start('claude')
+
+    expect(state).toBe('failed')
+    expect(h.runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+    expect(lostAlerts()).toHaveLength(1)
+  })
+
   it('still fails the start when the launched agent exited before it was ready', async () => {
     h.setup()
-    readinessRunsOut()
-    vi.spyOn(h.runtime, 'createTerminal').mockResolvedValue({
-      handle: 'term_worker',
-      worktreeId: 'repo::worktree',
-      title: 'worker',
-      ptyId: 'pty-worker',
-      incarnationId: 'inc-1'
-    } as never)
+    readinessRunsOut(true)
     vi.spyOn(h.runtime, 'getPtyLivenessVerdict').mockReturnValue({
       status: 'exited',
       incarnationId: 'inc-1'
     } as never)
     vi.spyOn(h.runtime, 'readExitedLaunchOutput').mockReturnValue('zsh: command not found: claude')
-    vi.spyOn(h.runtime, 'subscribeToTerminalData').mockReturnValue(() => {})
-    vi.spyOn(h.runtime, 'readRecentTerminalOutput').mockReturnValue('')
     const { state, dispatchId } = await start('claude')
 
     expect(state).toBe('failed')

@@ -84,6 +84,11 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
     return readAdoptedRootAgentForeground(this.ptyController, root.pid, ptyId, agent)
   }
 
+  /** Whether `agent` itself is in front: not a shell, wrapper or setup step; never provable on Windows hosts. */
+  async isExactAgentInFront(ptyId: string, agent: TuiAgent): Promise<boolean> {
+    return (await readExactAgentForeground(this, this.ptyController, ptyId, agent)) === 'agent'
+  }
+
   /** Whether the pane's execution host can find a launched agent in front: a Windows one cannot. */
   launchedAgentHostProvesAgent(ptyId: string): boolean {
     return !this.launchedAgentHost(ptyId).windows

@@ -44,7 +44,7 @@ export type TerminalReadinessCreation = Pick<
 >
 
 /** The PTY this creation spawned for `handle`; a reattached or adopted pane launched nothing new. */
-function freshLaunchPtyId(
+export function freshLaunchPtyId(
   handle: string,
   creation: TerminalReadinessCreation | undefined
 ): string | null {
@@ -237,11 +237,6 @@ export async function waitForWorkerAgentReady(
   } catch (error) {
     throw args.reusesTerminal ? error : readinessFailure(runtime, handle, args.creation, error)
   }
-}
-
-/** The wait ran out with nothing proving the launch failed: no exit, startup dialog or start failure. */
-export function isUnprovenReadinessTimeout(error: unknown): boolean {
-  return error instanceof Error && error.message === 'timeout' && !readTerminalStartFailure(error)
 }
 
 function requireFreshReadiness(
