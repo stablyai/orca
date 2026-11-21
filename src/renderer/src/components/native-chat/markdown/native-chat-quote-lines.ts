@@ -8,9 +8,9 @@ const blankLinesBetween = (previous: RootContent, node: RootContent): number =>
 
 /**
  * Shows the lines of a message as the composer shows them. The blank line after a quote belongs
- * to the quote: a quote or a paragraph right after it goes on the quote's line. The blank line
- * between text and a quote is a paragraph gap, as between two paragraphs. Each other blank line
- * next to a quote is an empty line the user typed.
+ * to the quote: a quote or a paragraph right after it goes on the quote's line. A quote line comes
+ * right after the line above it: the blank line between text and a quote shows no empty line.
+ * Each other blank line next to a quote is an empty line the user typed.
  */
 export function remarkNativeChatQuoteLines() {
   return (tree: Root): void => {
@@ -38,11 +38,10 @@ export function remarkNativeChatQuoteLines() {
         children.push(node)
         return
       }
-      const gap = previous !== undefined && previous.type !== 'blockquote' && blank > 0
       // A div, not a p: HTML closes a p at the blockquote of the quote.
       children.push({
         type: 'paragraph',
-        data: { hName: 'div', hProperties: gap ? { dataNativeChatQuoteGap: '' } : {} },
+        data: { hName: 'div', hProperties: { dataNativeChatQuoteLine: '' } },
         children: [inline(node)]
       })
     })

@@ -16,8 +16,8 @@ export function NativeChatQuotePill({ node, selected }: NodeViewProps): React.JS
         selected={selected}
         title={text}
         // As wide as the quote, to a fixed limit; a long quote ends in an ellipsis. The margin
-        // keeps the comment after the chip apart; the text has no space there.
-        className="me-1.5 max-w-[min(100%,24rem)]"
+        // is the one space before the comment; the text has no space there.
+        className="me-1 max-w-[min(100%,24rem)]"
       />
     </NodeViewWrapper>
   )
