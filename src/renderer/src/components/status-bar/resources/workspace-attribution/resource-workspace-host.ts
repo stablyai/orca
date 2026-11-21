@@ -1,4 +1,7 @@
-import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import {
+  canonicalExecutionHostId,
+  parseExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { MergeContext } from './resource-usage-merge-types'
@@ -38,4 +41,16 @@ export function resolveResourceWorkspaceHost(
         : null
       : (ctx.repoRuntimeHostIdById.get(repoId) ?? null)
   }
+}
+
+/** The paired host a worktree's own record names, which outranks where its repo is tracked. */
+export function stampedRuntimeHostId(
+  ctx: Pick<MergeContext, 'worktreeById' | 'ambiguousWorktreeIds'>,
+  worktreeId: string
+): string | null {
+  if (ctx.ambiguousWorktreeIds?.has(worktreeId)) {
+    return null
+  }
+  const hostId = canonicalExecutionHostId(ctx.worktreeById?.get(worktreeId)?.hostId)
+  return hostId?.startsWith('runtime:') ? hostId : null
 }

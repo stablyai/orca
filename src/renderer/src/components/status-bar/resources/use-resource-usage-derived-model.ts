@@ -9,7 +9,8 @@ import {
 import { mergeSnapshotAndSessions } from './workspace-attribution/merge-snapshot-and-sessions'
 import {
   resolveResourceFolderWorkspace,
-  resolveResourceWorkspaceHost
+  resolveResourceWorkspaceHost,
+  stampedRuntimeHostId
 } from './workspace-attribution/resource-workspace-host'
 import type { RuntimeHostResourceSample } from './workspace-attribution/resource-usage-merge-types'
 import type { PtyListedSession as DaemonSession } from '../../../../../shared/terminal/pty/lifecycle/pty-listed-session'
@@ -179,7 +180,10 @@ export function useResourceUsageDerivedModel({
     return sharedAgentProcessUsage(resourceSnapshot, (worktree) => {
       const repoId =
         resolveResourceFolderWorkspace(hostCtx, worktree.worktreeId)?.repoId ?? worktree.repoId
-      return !resolveResourceWorkspaceHost(hostCtx, worktree.worktreeId, repoId).runtimeHostId
+      return (
+        !resolveResourceWorkspaceHost(hostCtx, worktree.worktreeId, repoId).runtimeHostId &&
+        !stampedRuntimeHostId(hostCtx, worktree.worktreeId)
+      )
     })
   }, [
     open,
