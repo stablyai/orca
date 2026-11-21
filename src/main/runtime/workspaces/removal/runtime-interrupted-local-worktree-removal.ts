@@ -24,9 +24,7 @@ import {
   finishUnregisteredWorktreeRemoval,
   removeWorktree
 } from '../../../git/worktrees/removal/worktree-removal'
-import { getErrorCode } from '../../../git/worktrees/worktree-operation-options'
 import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
-import { removeUnregisteredHostCheckout } from '../../../filesystem/host-tree-removal'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import {
   findRegisteredDeletableWorktree,
@@ -41,15 +39,10 @@ import {
   isRecordedCheckout,
   differentCheckoutAtPathError
 } from '../../../workspaces/removal/worktree-removal-leftover'
-import {
-  CLIENT_REMOVAL_HOME,
-  getPathOps
-} from '../../../workspaces/removal/worktree-removal-home-guard'
+import { CLIENT_REMOVAL_HOME } from '../../../workspaces/removal/worktree-removal-home-guard'
+import { isCheckoutMissingGitLink } from '../../../workspaces/removal/worktree-removal-gitdir-identity'
 import { removeStaleLocalWorktreeRegistration } from '../../../workspaces/removal/local-worktree-removal-recovery'
-import {
-  getLocalWorktreePathAccess,
-  type LocalWorktreeFilesystemOptions
-} from '../../../workspaces/removal/local-worktree-filesystem'
+import { removeLocalWorktreePath } from '../../../workspaces/removal/local-worktree-filesystem'
 import type { WorktreeRemovalRecord } from '../../../workspaces/removal/worktree-removal-records'
 import {
   cleanupRemovedWorktreePushTarget,
@@ -177,19 +170,22 @@ async function finishInterruptedLocalWorktreeRemoval(
     throw differentCheckoutAtPathError(record.worktreePath)
   }
   const native = usesNativeWindowsRemoval(record.worktreePath, localOptions)
+  const checkNotReplaced = () => assertCheckoutNotReplaced(record, localOptions)
+  const markerOpts = { expectedMarker: record.gitdir }
   // Branch and head match a checkout moved and recreated at this path; only its marker tells them apart.
   if (deletable || native) {
-    await assertCheckoutNotReplaced(record, localOptions)
+    await checkNotReplaced()
   }
   const removalOptions = {
     ...localOptions,
+    ...markerOpts,
     deleteBranch: false,
     knownRemovedWorktree: {
       branch: record.branch ? `refs/heads/${record.branch}` : '',
       head: record.head
     },
     checkoutDeleteSignal: args.stopSignal,
-    beforeCheckoutDelete: () => assertCheckoutNotReplaced(record, localOptions)
+    beforeCheckoutDelete: checkNotReplaced
   }
   if (
     !native &&
@@ -238,7 +234,7 @@ async function finishInterruptedLocalWorktreeRemoval(
     throwIfSignalAborted(args.stopSignal)
     // Teardown awaited: the folder may have been swapped for another checkout since the first check.
     if (deletable || native) {
-      await assertCheckoutNotReplaced(record, localOptions)
+      await checkNotReplaced()
     }
   } catch (error) {
     await gate.finish(false)
@@ -250,8 +246,8 @@ async function finishInterruptedLocalWorktreeRemoval(
       deletable,
       gate,
       args.stopSignal,
-      () => assertCheckoutNotReplaced(record, localOptions),
-      record.gitdir
+      checkNotReplaced,
+      markerOpts
     )
   }
   let result: RemoveWorktreeResult
@@ -276,7 +272,10 @@ async function finishInterruptedLocalWorktreeRemoval(
         leftover &&
         (await isLeftoverStillRemovable(repo.path, record, localOptions, args.stopSignal))
       ) {
-        await removeUnregisteredHostCheckout(record.worktreePath, args.stopSignal, record.gitdir)
+        await removeLocalWorktreePath(record.worktreePath, localOptions, args.stopSignal, {
+          markerLast: true,
+          ...markerOpts
+        })
       }
       result = await finishUnregisteredWorktreeRemoval(
         repo.path,
@@ -296,26 +295,6 @@ async function finishInterruptedLocalWorktreeRemoval(
   // after the purge — and the Codex pretrust deletion inside it — landed.
   await args.finishRemoval(result, true, record.head)
   return result
-}
-
-/** A checkout folder still on disk whose `.git` link is gone. */
-async function isCheckoutMissingGitLink(
-  checkoutPath: string,
-  options: LocalWorktreeFilesystemOptions
-): Promise<boolean> {
-  const { statPath: stat } = getLocalWorktreePathAccess(options)
-  try {
-    await stat(checkoutPath)
-  } catch {
-    // Git removes a registration whose folder is gone; other errors are Git's to report.
-    return false
-  }
-  try {
-    await stat(getPathOps(checkoutPath).join(checkoutPath, '.git'))
-    return false
-  } catch (error) {
-    return getErrorCode(error) === 'ENOENT'
-  }
 }
 
 function localRemovalRepo(store: RuntimeStore, repoId: string) {

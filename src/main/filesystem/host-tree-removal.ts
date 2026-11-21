@@ -91,9 +91,24 @@ export async function removeHostCheckout(
     })
   } catch (error) {
     if (markerGone && getErrorCode(error) === 'ENOTEMPTY') {
+      if (await hasAnyCheckoutMarkerEntry(join(root, '.git'))) {
+        throw differentCheckoutAtPathError(targetPath)
+      }
       throw unregisteredFolderRefusal(targetPath)
     }
     throw describeRemovalFailure(error)
+  }
+}
+
+async function hasAnyCheckoutMarkerEntry(markerPath: string): Promise<boolean> {
+  try {
+    await lstat(markerPath)
+    return true
+  } catch (error) {
+    if (getErrorCode(error) === 'ENOENT' || getErrorCode(error) === 'ENOTDIR') {
+      return false
+    }
+    throw error
   }
 }
 
@@ -154,8 +169,9 @@ async function inspectHostCheckoutMarker(
 export async function removeUnregisteredHostCheckout(
   targetPath: string,
   signal?: AbortSignal,
-  expectedMarkerIdentity?: string
+  markerOptions: { expectedMarker?: string; forbidAnyMarker?: boolean } = {}
 ): Promise<void> {
+  const { expectedMarker: expectedMarkerIdentity, forbidAnyMarker = false } = markerOptions
   const root = toHostRemovalPath(targetPath)
   let entry
   try {
@@ -174,33 +190,26 @@ export async function removeUnregisteredHostCheckout(
 
   const markerPath = join(root, '.git')
   const initial = await inspectHostCheckoutMarker(markerPath, targetPath)
-  if (initial && expectedMarkerIdentity !== undefined && initial.identity !== expectedMarkerIdentity) {
+  if (
+    initial &&
+    (forbidAnyMarker ||
+      (expectedMarkerIdentity !== undefined && initial.identity !== expectedMarkerIdentity))
+  ) {
     throw differentCheckoutAtPathError(targetPath)
   }
   if (initial) {
     await removeHostCheckout(
       targetPath,
-      async (beforeSweep) => {
-        if (beforeSweep) {
-          const current = await inspectHostCheckoutMarker(markerPath, targetPath)
-          if (!current) {
-            return false
-          }
-          if (current.dev !== initial.dev || current.ino !== initial.ino) {
-            throw differentCheckoutAtPathError(targetPath)
-          }
-          return true
+      async () => {
+        const current = await inspectHostCheckoutMarker(markerPath, targetPath)
+        if (!current) {
+          return false
         }
-        let stat
-        try {
-          stat = await lstatBigInt(markerPath)
-        } catch (error) {
-          if (getErrorCode(error) === 'ENOENT' || getErrorCode(error) === 'ENOTDIR') {
-            return false
-          }
-          throw error
-        }
-        if (!stat.isFile() || stat.dev !== initial.dev || stat.ino !== initial.ino) {
+        if (
+          current.dev !== initial.dev ||
+          current.ino !== initial.ino ||
+          current.identity !== initial.identity
+        ) {
           throw differentCheckoutAtPathError(targetPath)
         }
         return true
@@ -215,14 +224,14 @@ export async function removeUnregisteredHostCheckout(
     await removeTree(root, {
       signal,
       rm: async () => {
-        if ((await inspectHostCheckoutMarker(markerPath, targetPath)) !== null) {
+        if (await hasAnyCheckoutMarkerEntry(markerPath)) {
           throw differentCheckoutAtPathError(targetPath)
         }
         if (!swept) {
           const names = (await readdir(root)).filter((name) => name.toLowerCase() !== '.git')
           await deleteHostChildren(root, names)
           swept = true
-          if ((await inspectHostCheckoutMarker(markerPath, targetPath)) !== null) {
+          if (await hasAnyCheckoutMarkerEntry(markerPath)) {
             throw differentCheckoutAtPathError(targetPath)
           }
         }
@@ -231,6 +240,9 @@ export async function removeUnregisteredHostCheckout(
     })
   } catch (error) {
     if (swept && getErrorCode(error) === 'ENOTEMPTY') {
+      if (await hasAnyCheckoutMarkerEntry(markerPath)) {
+        throw differentCheckoutAtPathError(targetPath)
+      }
       throw unregisteredFolderRefusal(targetPath)
     }
     throw describeRemovalFailure(error)

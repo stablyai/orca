@@ -196,7 +196,7 @@ export async function isLeftoverStillRemovable(
     current
   )
   if (removable) {
-    await assertLeftoverIsRecordedCheckout(record)
+    await assertLeftoverIsRecordedCheckout(record, localOptions)
   }
   return removable
 }
@@ -224,8 +224,8 @@ export async function retryFailedRemovalUnlessRegistered(
       ))
     try {
       await (native
-        ? assertCheckoutNotReplaced(failed)
-        : leftover && assertLeftoverIsRecordedCheckout(failed))
+        ? assertCheckoutNotReplaced(failed, localOptions)
+        : leftover && assertLeftoverIsRecordedCheckout(failed, localOptions))
     } catch (error) {
       // The recorded intent no longer describes this folder; the next delete starts fresh instead of looping on the refusal.
       if (failed.gitdir && failedWorktreeRemovals.delete(worktreeId)) {

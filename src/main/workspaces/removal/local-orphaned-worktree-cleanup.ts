@@ -1,9 +1,11 @@
+import { CheckoutIdentityRefusal } from '../../../shared/worktree/removal/removal'
 import type { LocalWorktreeFilesystemOptions } from './local-worktree-filesystem'
 import {
   getLocalWorktreePathAccess,
   removeLocalWorktreePath,
   toLocalWorktreeRuntimePaths
 } from './local-worktree-filesystem'
+import { readCheckoutMarkerIdentity } from './worktree-removal-gitdir-identity'
 import {
   canSafelyRemoveOrphanedWorktreeDirectory,
   isWorktreePathMissing,
@@ -20,7 +22,7 @@ export async function cleanupLocalOrphanedWorktreeDirectory(
   signal?: AbortSignal
 ): Promise<void> {
   throwIfSignalAborted(signal)
-  const access = getLocalWorktreePathAccess(options)
+  const access = getLocalWorktreePathAccess(options, path)
   const [runtimePath, runtimeRepoPath] = await toLocalWorktreeRuntimePaths(
     [path, repoPath],
     options,
@@ -34,10 +36,17 @@ export async function cleanupLocalOrphanedWorktreeDirectory(
   )
   throwIfSignalAborted(signal)
   if (safe) {
+    const expectedMarker = await readCheckoutMarkerIdentity(path, options)
     await closeWatchers(path)
     throwIfSignalAborted(signal)
-    await removeLocalWorktreePath(path, options, signal).catch(() => {
+    await removeLocalWorktreePath(path, options, signal, {
+      markerLast: true,
+      ...(expectedMarker !== undefined ? { expectedMarker } : {})
+    }).catch((error: unknown) => {
       throwIfSignalAborted(signal)
+      if (error instanceof CheckoutIdentityRefusal) {
+        throw error
+      }
     })
   } else {
     console.warn(`[worktrees] Refusing recursive cleanup for unproven worktree directory: ${path}`)

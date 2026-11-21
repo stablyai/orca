@@ -38,7 +38,11 @@ vi.mock('node:fs/promises', () => ({
   rm: rmMock
 }))
 
-import { getLocalWorktreePathAccess, removeLocalWorktreePath } from './local-worktree-filesystem'
+import {
+  getLocalWorktreePathAccess,
+  readWslCheckoutMarkerState,
+  removeLocalWorktreePath
+} from './local-worktree-filesystem'
 import '../../filesystem/host-tree-removal'
 import { isWorktreePathMissing } from './worktree-removal-safety'
 
@@ -181,17 +185,21 @@ describe.skipIf(process.platform === 'win32')(
             'if [ "$1" = "-L" ]; then follow="-L"; shift; fi',
             'if [ "$1" = "-c" ]; then fmt="$2"; shift 2; [ "$1" = "--" ] && shift; target="$1"',
             '  /usr/bin/stat $follow "$target" >/dev/null || exit $?',
-            '  if [ "$fmt" = "%F" ]; then',
-            '    if [ -z "$follow" ] && [ -L "$target" ]; then echo "symbolic link"',
-            '    elif [ -d "$target" ]; then echo "directory"',
-            '    elif [ -f "$target" ]; then echo "regular file"',
-            '    else echo "other"; fi',
-            '    exit 0',
-            '  fi',
+            '  case "$fmt" in',
+            '    %F*)',
+            '      if [ -z "$follow" ] && [ -L "$target" ]; then kind="symbolic link"',
+            '      elif [ -d "$target" ]; then kind="directory"',
+            '      elif [ -f "$target" ]; then kind="regular file"',
+            '      else kind="other"; fi',
+            '      rest="${fmt#%F}"',
+            '      if [ -z "$rest" ]; then printf "%s\\n" "$kind"; exit 0; fi',
+            '      exec /usr/bin/stat $follow -f "${kind}${rest}" "$target"',
+            '      ;;',
+            '  esac',
             '  exec /usr/bin/stat $follow -f "$fmt" "$target"',
             'fi',
             'exec /usr/bin/stat $follow "$@"'
-          ].join('\n') + '\n'
+          ].join('\n')
         )
         chmodSync(bsdStatShim, 0o755)
       }
@@ -220,8 +228,10 @@ describe.skipIf(process.platform === 'win32')(
           return {
             code: isObj && 'code' in error && typeof error.code === 'number' ? error.code : 1,
             signal: null,
-            stdout: isObj && 'stdout' in error && typeof error.stdout === 'string' ? error.stdout : '',
-            stderr: isObj && 'stderr' in error && typeof error.stderr === 'string' ? error.stderr : '',
+            stdout:
+              isObj && 'stdout' in error && typeof error.stdout === 'string' ? error.stdout : '',
+            stderr:
+              isObj && 'stderr' in error && typeof error.stderr === 'string' ? error.stderr : '',
             timedOut: false
           }
         }
@@ -248,7 +258,7 @@ describe.skipIf(process.platform === 'win32')(
           '  esac',
           'done',
           'exit "$status"'
-        ].join('\n') + '\n'
+        ].join('\n')
       )
       chmodSync(rmShim, 0o755)
       wireGuestShell({
@@ -320,6 +330,55 @@ describe.skipIf(process.platform === 'win32')(
       expect(readFileSync(join(checkoutPath, '.git'), 'utf8')).toBe(
         'gitdir: /other/.git/worktrees/replaced\n'
       )
+    })
+
+    it('does not treat EACCES on a parent or checkout directory as absent or removed', async () => {
+      if (process.geteuid?.() === 0) {
+        return
+      }
+      const parentPath = join(scratchDir, 'locked-parent')
+      const checkoutPath = join(parentPath, 'checkout')
+      mkdirSync(checkoutPath, { recursive: true })
+      writeFileSync(join(checkoutPath, '.git'), 'gitdir: /repo/.git/worktrees/accepted\n')
+      wireGuestShell()
+      chmodSync(parentPath, 0o000)
+      try {
+        await withPlatform('win32', async () => {
+          await expect(
+            readWslCheckoutMarkerState(checkoutPath, { wslDistro: 'Ubuntu' })
+          ).rejects.toThrow('Permission denied')
+          await expect(
+            removeLocalWorktreePath(checkoutPath, { wslDistro: 'Ubuntu' }, undefined, {
+              markerLast: true
+            })
+          ).rejects.toThrow('Permission denied')
+        })
+      } finally {
+        chmodSync(parentPath, 0o755)
+      }
+      expect(existsSync(join(checkoutPath, '.git'))).toBe(true)
+    })
+
+    it('routes \\\\wsl.localhost UNC checkouts into the WSL guest even when wslDistro is unset', async () => {
+      const checkoutPath = join(scratchDir, 'unc-checkout')
+      mkdirSync(checkoutPath)
+      writeFileSync(join(checkoutPath, '.git'), 'gitdir: /repo/.git/worktrees/accepted\n')
+      writeFileSync(join(checkoutPath, 'leftover.txt'), 'stale\n')
+      const uncPath = `\\\\wsl.localhost\\Ubuntu${checkoutPath.replaceAll('/', '\\')}`
+      wireGuestShell()
+
+      await withPlatform('win32', async () => {
+        const state = await readWslCheckoutMarkerState(uncPath, {})
+        expect(state?.kind).toBe('file')
+        await expect(
+          removeLocalWorktreePath(uncPath, {}, undefined, {
+            markerLast: true,
+            expectedMarker: state?.kind === 'file' ? state.identity : undefined
+          })
+        ).resolves.toBeUndefined()
+      })
+
+      expect(existsSync(checkoutPath)).toBe(false)
     })
 
     it('removes the checkout when expectedMarker matches', async () => {

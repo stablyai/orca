@@ -7,8 +7,10 @@ import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 import { CLIENT_REMOVAL_HOME } from '../../../workspaces/removal/worktree-removal-home-guard'
 import {
   assertWorktreeUnlockedForRemoval,
+  differentCheckoutAtPathError,
   unregisteredFolderRefusal
 } from '../../../../shared/worktree/removal/removal'
+import { readCheckoutMarkerState } from '../../../workspaces/removal/worktree-removal-gitdir-identity'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
   canSafelyRemoveOrphanedWorktreeDirectory,
@@ -49,9 +51,30 @@ export async function removeWindowsCheckout(
   force: boolean,
   options: RemoveWorktreeOptions
 ): Promise<void> {
+  let pinnedMarker = options.expectedMarker
+  let forbidMarker = options.forbidAnyMarker ?? false
   await removeHostCheckout(
     root,
-    (checkClean) => authorizeWindowsCheckout(repo, root, force, options, false, checkClean),
+    async (checkClean) => {
+      if (pinnedMarker === undefined && !forbidMarker) {
+        const initial = await readCheckoutMarkerState(root, options)
+        if (initial.kind === 'file') {
+          pinnedMarker = initial.identity
+        }
+      }
+      return authorizeWindowsCheckout(
+        repo,
+        root,
+        force,
+        {
+          ...options,
+          ...(pinnedMarker !== undefined ? { expectedMarker: pinnedMarker } : {}),
+          ...(forbidMarker ? { forbidAnyMarker: true } : {})
+        },
+        false,
+        checkClean
+      )
+    },
     options.checkoutDeleteSignal
   )
 }
@@ -166,6 +189,16 @@ async function authorizeWindowsCheckoutReads(
       }
     }
     return false
+  }
+  if (options.forbidAnyMarker) {
+    throw differentCheckoutAtPathError(root)
+  }
+  if (options.expectedMarker !== undefined) {
+    const markerState = await readCheckoutMarkerState(root, options)
+    checkStopped()
+    if (markerState.kind !== 'file' || markerState.identity !== options.expectedMarker) {
+      throw differentCheckoutAtPathError(root)
+    }
   }
   const safe = await canSafelyRemoveOrphanedWorktreeDirectory(root, repo, CLIENT_REMOVAL_HOME)
   checkStopped()

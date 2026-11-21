@@ -1,14 +1,23 @@
 import { lstat, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parseGitdirMarkerPayload } from '../../../shared/git/metadata/gitdir-marker-payload'
+import { differentCheckoutAtPathError } from '../../../shared/worktree/removal/removal'
 import { getErrorCode } from '../../git/worktrees/worktree-operation-options'
 import {
+  getLocalWorktreePathAccess,
   readWslCheckoutMarkerState,
   type CheckoutMarkerState,
   type LocalWorktreeFilesystemOptions
 } from './local-worktree-filesystem'
+import { getPathOps } from './worktree-removal-home-guard'
 
 export type { CheckoutMarkerState }
+
+export type AcceptedCheckoutGuard = {
+  gitdir: string | undefined
+  markerOptions: { expectedMarker?: string; forbidAnyMarker?: boolean }
+  verify: () => Promise<void>
+}
 
 function isAbsentMarkerError(error: unknown): boolean {
   const code = getErrorCode(error)
@@ -60,5 +69,53 @@ export async function readCheckoutMarkerIdentity(
     return state.kind === 'file' ? state.identity : undefined
   } catch {
     return undefined
+  }
+}
+
+export async function captureAcceptedCheckoutGuard(
+  worktreePath: string,
+  options: LocalWorktreeFilesystemOptions = {}
+): Promise<AcceptedCheckoutGuard> {
+  const initial = await readCheckoutMarkerState(worktreePath, options)
+  const gitdir = initial.kind === 'file' ? initial.identity : undefined
+  const forbidAnyMarker = initial.kind === 'absent'
+  return {
+    gitdir,
+    markerOptions: {
+      ...(gitdir !== undefined ? { expectedMarker: gitdir } : {}),
+      ...(forbidAnyMarker ? { forbidAnyMarker: true } : {})
+    },
+    verify: async () => {
+      if (initial.kind === 'other') {
+        return
+      }
+      const current = await readCheckoutMarkerState(worktreePath, options)
+      if (current.kind === 'absent') {
+        return
+      }
+      if (forbidAnyMarker || current.kind !== 'file' || current.identity !== gitdir) {
+        throw differentCheckoutAtPathError(worktreePath)
+      }
+    }
+  }
+}
+
+/** A checkout folder still on disk whose `.git` link is gone. */
+export async function isCheckoutMissingGitLink(
+  checkoutPath: string,
+  options: LocalWorktreeFilesystemOptions
+): Promise<boolean> {
+  const { statPath: stat } = getLocalWorktreePathAccess(options, checkoutPath)
+  try {
+    await stat(checkoutPath)
+  } catch {
+    // Git removes a registration whose folder is gone; other errors are Git's to report.
+    return false
+  }
+  try {
+    await stat(getPathOps(checkoutPath).join(checkoutPath, '.git'))
+    return false
+  } catch (error) {
+    return getErrorCode(error) === 'ENOENT'
   }
 }

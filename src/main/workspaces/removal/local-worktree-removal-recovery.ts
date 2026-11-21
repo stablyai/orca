@@ -44,11 +44,18 @@ type LocalPartialRemovalRecoveryArgs = {
   /** Rechecks the folder is still the accepted checkout immediately before its files are deleted. */
   beforeLeftoverDelete?: () => Promise<void>
   expectedMarker?: string
+  forbidAnyMarker?: boolean
 }
 
 type StaleLocalWorktreeRegistrationArgs = Omit<
   LocalPartialRemovalRecoveryArgs,
-  'error' | 'force' | 'closeWatcher' | 'signal' | 'beforeLeftoverDelete' | 'expectedMarker'
+  | 'error'
+  | 'force'
+  | 'closeWatcher'
+  | 'signal'
+  | 'beforeLeftoverDelete'
+  | 'expectedMarker'
+  | 'forbidAnyMarker'
 >
 
 function preservedBranchResult(
@@ -142,15 +149,17 @@ export async function recoverPartialLocalWorktreeRemoval(
   await args.closeWatcher(args.canonicalWorktreePath)
   throwIfSignalAborted(args.signal)
   await args.beforeLeftoverDelete?.()
-  if (!args.beforeLeftoverDelete && args.expectedMarker === undefined) {
-    await assertRemainingMarkerBelongsToRepoWorktree(args)
-  }
+  await assertRemainingMarkerBelongsToRepoWorktree(args)
   try {
     await removeLocalWorktreePath(
       args.canonicalWorktreePath,
       args.localWorktreeGitOptions,
       args.signal,
-      { markerLast: true, expectedMarker: args.expectedMarker }
+      {
+        markerLast: true,
+        expectedMarker: args.expectedMarker,
+        forbidAnyMarker: args.forbidAnyMarker
+      }
     )
   } catch (error) {
     throwIfSignalAborted(args.signal)
@@ -172,7 +181,10 @@ export async function recoverPartialLocalWorktreeRemoval(
 async function assertRemainingMarkerBelongsToRepoWorktree(
   args: LocalPartialRemovalRecoveryArgs
 ): Promise<void> {
-  const access = getLocalWorktreePathAccess(args.localWorktreeGitOptions)
+  const access = getLocalWorktreePathAccess(
+    args.localWorktreeGitOptions,
+    args.canonicalWorktreePath
+  )
   const [runtimePath, runtimeRepoPath] = await toLocalWorktreeRuntimePaths(
     [args.canonicalWorktreePath, args.repoPath],
     args.localWorktreeGitOptions,

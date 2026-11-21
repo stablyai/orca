@@ -2,6 +2,7 @@ import { posix } from 'node:path'
 import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 import { runProcess } from '@orca/process-host'
 import { lstat, stat, readFile, realpath } from 'node:fs/promises'
+import { wslDistroForCommand } from '../../../shared/file-access/wsl-paths'
 import { parseGitdirMarkerPayload } from '../../../shared/git/metadata/gitdir-marker-payload'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
@@ -15,7 +16,7 @@ import {
   resolveWslGuestPaths,
   wslGuestShellPaths
 } from '../../wsl/filesystem/wsl-guest-drive-path'
-import { resolveWslInteropSpawnCwd } from '../../wsl/execution/wsl-interop-spawn-directory'
+import { resolveWslInteropSpawnCwdAsync } from '../../wsl/execution/wsl-interop-spawn-directory'
 import { describeWslProcessFailure } from '../../wsl/execution/wsl-process-failure'
 import type { WorktreeProofAccess } from './worktree-orphan-gitdir-proof'
 
@@ -23,10 +24,24 @@ export type LocalWorktreeFilesystemOptions = {
   wslDistro?: string
 }
 
+export type CheckoutMarkerState =
+  | { kind: 'absent' }
+  | { kind: 'file'; identity: string }
+  | { kind: 'other' }
+
+export type RemoveLocalWorktreeMarkerOptions = {
+  markerLast?: boolean
+  expectedMarker?: string
+  forbidAnyMarker?: boolean
+}
+
 const WSL_FILE_OPERATION_TIMEOUT_MS = 30_000
 
-function shouldUseWslFilesystem(options: LocalWorktreeFilesystemOptions): boolean {
-  return process.platform === 'win32' && !!options.wslDistro?.trim()
+function resolveTargetWslDistro(
+  targetPath: string | undefined,
+  options: LocalWorktreeFilesystemOptions
+): string | null {
+  return wslDistroForCommand(targetPath, options.wslDistro?.trim() || undefined)
 }
 
 // Coreutils need no login shell; rc/motd output would corrupt parsed stdout.
@@ -35,7 +50,7 @@ async function runWslCommand(distro: string, command: string): Promise<string> {
     program: 'wsl.exe',
     args: buildWslExecArgs(distro, ['sh', '-c', command]),
     // An inherited cwd may be the worktree currently being deleted (#16463).
-    cwd: resolveWslInteropSpawnCwd(),
+    cwd: await resolveWslInteropSpawnCwdAsync(),
     timeoutMs: WSL_FILE_OPERATION_TIMEOUT_MS
   })
   if (result.timedOut) {
@@ -61,16 +76,23 @@ function isWslMissingPathError(error: unknown): boolean {
   return error.exitCode === 1 && WSL_MISSING_PATH_STDERR.test(stderr)
 }
 
+function isWslExitCode(error: unknown, exitCode: number): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'exitCode' in error &&
+    error.exitCode === exitCode
+  )
+}
+
 /** Paths as the filesystem that owns them spells them; drive paths ask their distro for the mount. */
 export async function toLocalWorktreeRuntimePaths(
   targetPaths: readonly string[],
   options: LocalWorktreeFilesystemOptions = {},
   signal?: AbortSignal
 ): Promise<string[]> {
-  const distro = options.wslDistro?.trim()
-  return shouldUseWslFilesystem(options) && distro
-    ? resolveWslGuestPaths(distro, targetPaths, signal)
-    : [...targetPaths]
+  const distro = resolveTargetWslDistro(targetPaths[0], options)
+  return distro ? resolveWslGuestPaths(distro, targetPaths, signal) : [...targetPaths]
 }
 
 // Exit 2 keeps an unreadable drive mount apart from coreutils' missing-path exit 1.
@@ -80,18 +102,35 @@ function guestCommand(path: string, command: (target: string) => string): string
 }
 
 export function getLocalWorktreePathAccess(
-  options: LocalWorktreeFilesystemOptions = {}
+  options: LocalWorktreeFilesystemOptions = {},
+  targetPathHint?: string
 ): WorktreeProofAccess {
-  const distro = options.wslDistro?.trim()
-  if (!shouldUseWslFilesystem(options) || !distro) {
+  const fallbackDistro = resolveTargetWslDistro(targetPathHint, options)
+  const distroFor = (path: string) => resolveTargetWslDistro(path, options) ?? fallbackDistro
+  if (process.platform !== 'win32' || (!fallbackDistro && !options.wslDistro?.trim())) {
     return {
-      statPath: lstat,
-      layoutStatPath: stat,
-      readPath: (path) => readFile(path, 'utf8'),
-      realPath: realpath
+      statPath: (path) => {
+        const distro = distroFor(path)
+        return distro ? createWslProofAccess(distro).statPath(path) : lstat(path)
+      },
+      layoutStatPath: (path) => {
+        const distro = distroFor(path)
+        return distro ? createWslProofAccess(distro).layoutStatPath(path) : stat(path)
+      },
+      readPath: (path) => {
+        const distro = distroFor(path)
+        return distro ? createWslProofAccess(distro).readPath(path) : readFile(path, 'utf8')
+      },
+      realPath: (path) => {
+        const distro = distroFor(path)
+        return distro ? createWslProofAccess(distro).realPath(path) : realpath(path)
+      }
     }
   }
+  return createWslProofAccess(fallbackDistro!)
+}
 
+function createWslProofAccess(distro: string): WorktreeProofAccess {
   const inspect = (path: string, command: string) =>
     runWslCommand(distro, command).catch((error: unknown) => {
       if (isWslMissingPathError(error)) {
@@ -140,21 +179,12 @@ export function getLocalWorktreePathAccess(
   }
 }
 
-export type CheckoutMarkerState =
-  | { kind: 'absent' }
-  | { kind: 'file'; identity: string }
-  | { kind: 'other' }
-
-function isWslExitCode(error: unknown, exitCode: number): boolean {
-  return typeof error === 'object' && error !== null && 'exitCode' in error && error.exitCode === exitCode
-}
-
 export async function readWslCheckoutMarkerState(
   targetPath: string,
   options: LocalWorktreeFilesystemOptions = {}
 ): Promise<CheckoutMarkerState | null> {
-  const distro = options.wslDistro?.trim()
-  if (!shouldUseWslFilesystem(options) || !distro) {
+  const distro = resolveTargetWslDistro(targetPath, options)
+  if (!distro) {
     return null
   }
   const stdout = await runWslCommand(
@@ -162,7 +192,7 @@ export async function readWslCheckoutMarkerState(
     guestCommand(
       targetPath,
       (target) =>
-        `orca_git=${target}/.git; if [ ! -e "$orca_git" ] && [ ! -L "$orca_git" ]; then printf 'absent\\n'; elif [ -L "$orca_git" ] || [ ! -f "$orca_git" ]; then printf 'other\\n'; else LC_ALL=C stat -c 'file:%i' -- "$orca_git" && { IFS= read -r orca_line < "$orca_git" || [ -n "$orca_line" ] || orca_line=""; printf '%s\\n' "$orca_line"; }; fi`
+        `orca_git=${target}/.git; orca_meta=$(LC_ALL=C stat -c '%F#%i' -- "$orca_git") && case "$orca_meta" in 'regular file#'*|'regular empty file#'*) printf 'file:%s\\n' "\${orca_meta#*#}" && LC_ALL=C head -n 1 "$orca_git" ;; *) printf 'other\\n' ;; esac`
     )
   ).catch((error: unknown) => {
     if (isWslMissingPathError(error)) {
@@ -184,37 +214,49 @@ export async function readWslCheckoutMarkerState(
   return ino && gitdir ? { kind: 'file', identity: `${gitdir}#${ino}` } : { kind: 'other' }
 }
 
-function buildWslMarkerLastScript(target: string, expectedMarker?: string): string {
-  const expectedClause =
-    expectedMarker !== undefined
+const PARSE_ORCA_GITDIR_LINE =
+  'orca_line=$(LC_ALL=C head -n 1 "$orca_target/.git") && ' +
+  'orca_line="${orca_line%"${orca_line##*[![:space:]]}"}" && ' +
+  'case "$orca_line" in [Gg][Ii][Tt][Dd][Ii][Rr]:*) orca_gitdir=${orca_line#*:}; orca_gitdir="${orca_gitdir#"${orca_gitdir%%[![:space:]]*}"}" ;; *) orca_gitdir="" ;; esac'
+
+function buildWslMarkerLastScript(
+  target: string,
+  { expectedMarker, forbidAnyMarker = false }: RemoveLocalWorktreeMarkerOptions
+): string {
+  const expectedClause = forbidAnyMarker
+    ? ' || true'
+    : expectedMarker !== undefined
       ? ` || [ "$orca_gitdir#$orca_marker_ino" != ${quotePosixShell(expectedMarker)} ]`
       : ''
-  // Sweep children once, recheck the marker's dev:ino before unlinking it, and never re-sweep before rmdir.
+  // stat distinguishes ENOENT from EACCES; re-verify dev:ino and gitdir before rm -f .git, and never re-sweep before rmdir.
   return (
     `orca_target=${target}; ` +
-    'if [ ! -e "$orca_target" ] && [ ! -L "$orca_target" ]; then exit 0; fi; ' +
-    'if [ -L "$orca_target" ] || [ ! -d "$orca_target" ]; then echo "Refusing to delete non-directory worktree path" >&2; exit 3; fi; ' +
-    'if [ -e "$orca_target/.git" ] || [ -L "$orca_target/.git" ]; then ' +
-    'if [ -L "$orca_target/.git" ] || [ ! -f "$orca_target/.git" ]; then exit 4; fi && ' +
-    'orca_stat=$(LC_ALL=C stat -c \'%d:%i#%i\' -- "$orca_target/.git") && ' +
-    'orca_marker_id=${orca_stat%#*} && ' +
-    'orca_marker_ino=${orca_stat#*#} && ' +
-    '{ IFS= read -r orca_line < "$orca_target/.git" || [ -n "$orca_line" ] || orca_line=""; } && ' +
-    'orca_line="${orca_line%"${orca_line##*[![:space:]]}"}" && ' +
-    'case "$orca_line" in [Gg][Ii][Tt][Dd][Ii][Rr]:*) orca_gitdir=${orca_line#*:}; orca_gitdir="${orca_gitdir#"${orca_gitdir%%[![:space:]]*}"}" ;; *) orca_gitdir="" ;; esac && ' +
+    'orca_root_kind=$(LC_ALL=C stat -c \'%F\' -- "$orca_target") || exit $?; ' +
+    'if [ "$orca_root_kind" != \'directory\' ]; then echo "Refusing to delete non-directory worktree path" >&2; exit 3; fi; ' +
+    'if orca_meta=$(LC_ALL=C stat -c \'%F#%d:%i#%i\' -- "$orca_target/.git" 2>&1); then orca_has_git=1; ' +
+    "else case \"$orca_meta\" in *': No such file or directory'|*': Not a directory') orca_has_git=0 ;; *) printf '%s\\n' \"$orca_meta\" >&2; exit 1 ;; esac; fi; " +
+    'if [ "$orca_has_git" = 1 ]; then ' +
+    "case \"$orca_meta\" in 'regular file#'*|'regular empty file#'*) ;; *) exit 4 ;; esac && " +
+    'orca_rest=${orca_meta#*#} && orca_marker_id=${orca_rest%#*} && orca_marker_ino=${orca_rest#*#} && ' +
+    `${PARSE_ORCA_GITDIR_LINE} && ` +
     `if [ -z "$orca_gitdir" ]${expectedClause}; then exit 4; fi && ` +
+    'orca_saved_gitdir=$orca_gitdir && ' +
     'LC_ALL=C find "$orca_target" -mindepth 1 -maxdepth 1 ! -samefile "$orca_target/.git" -exec rm -rf -- {} + && ' +
-    'if [ -e "$orca_target/.git" ] || [ -L "$orca_target/.git" ]; then ' +
-    'if [ -L "$orca_target/.git" ] || [ ! -f "$orca_target/.git" ] || [ "$(LC_ALL=C stat -c \'%d:%i\' -- "$orca_target/.git" 2>/dev/null)" != "$orca_marker_id" ]; then exit 4; fi && ' +
+    'if orca_after=$(LC_ALL=C stat -c \'%F#%d:%i\' -- "$orca_target/.git" 2>&1); then ' +
+    "case \"$orca_after\" in 'regular file#'*|'regular empty file#'*) ;; *) exit 4 ;; esac && " +
+    'if [ "${orca_after#*#}" != "$orca_marker_id" ]; then exit 4; fi && ' +
+    `${PARSE_ORCA_GITDIR_LINE} && ` +
+    'if [ "$orca_gitdir" != "$orca_saved_gitdir" ]; then exit 4; fi && ' +
     'LC_ALL=C rm -f -- "$orca_target/.git"; ' +
-    'fi; ' +
+    "else case \"$orca_after\" in *': No such file or directory'|*': Not a directory') ;; *) printf '%s\\n' \"$orca_after\" >&2; exit 1 ;; esac; fi; " +
     'else ' +
     'LC_ALL=C find "$orca_target" -mindepth 1 -maxdepth 1 ! -iname .git -exec rm -rf -- {} + && ' +
-    'if [ -e "$orca_target/.git" ] || [ -L "$orca_target/.git" ]; then exit 4; fi; ' +
+    'if orca_after=$(LC_ALL=C stat -c \'%F\' -- "$orca_target/.git" 2>&1); then exit 4; ' +
+    "else case \"$orca_after\" in *': No such file or directory'|*': Not a directory') ;; *) printf '%s\\n' \"$orca_after\" >&2; exit 1 ;; esac; fi; " +
     'fi && ' +
     'if ! LC_ALL=C rmdir -- "$orca_target"; then ' +
-    'if [ -e "$orca_target/.git" ] || [ -L "$orca_target/.git" ]; then exit 4; fi; ' +
-    'if [ -d "$orca_target" ] && [ -n "$(LC_ALL=C ls -A -- "$orca_target" 2>/dev/null)" ]; then exit 5; fi; ' +
+    'if LC_ALL=C stat -c \'%F\' -- "$orca_target/.git" >/dev/null 2>&1; then exit 4; fi; ' +
+    'if [ -n "$(LC_ALL=C ls -A -- "$orca_target" 2>/dev/null)" ]; then exit 5; fi; ' +
     'exit 1; ' +
     'fi'
   )
@@ -225,13 +267,14 @@ export async function removeLocalWorktreePath(
   targetPath: string,
   options: LocalWorktreeFilesystemOptions = {},
   signal?: AbortSignal,
-  { markerLast = false, expectedMarker }: { markerLast?: boolean; expectedMarker?: string } = {}
+  markerOptions: RemoveLocalWorktreeMarkerOptions = {}
 ): Promise<void> {
-  const distro = options.wslDistro?.trim()
-  if (!shouldUseWslFilesystem(options) || !distro) {
+  const { markerLast = false } = markerOptions
+  const distro = resolveTargetWslDistro(targetPath, options)
+  if (!distro) {
     throwIfSignalAborted(signal)
     await (markerLast
-      ? removeUnregisteredHostCheckout(targetPath, signal, expectedMarker)
+      ? removeUnregisteredHostCheckout(targetPath, signal, markerOptions)
       : removeHostTree(targetPath, { signal }))
     return
   }
@@ -241,7 +284,7 @@ export async function removeLocalWorktreePath(
     runWslCommand(distro, guestCommand(targetPath, script))
   try {
     await inGuest((target) =>
-      markerLast ? buildWslMarkerLastScript(target, expectedMarker) : `rm -rf -- ${target}`
+      markerLast ? buildWslMarkerLastScript(target, markerOptions) : `rm -rf -- ${target}`
     )
   } catch (error) {
     if (markerLast && isWslExitCode(error, 4)) {
