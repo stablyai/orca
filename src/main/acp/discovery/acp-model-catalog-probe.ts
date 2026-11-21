@@ -30,7 +30,7 @@ import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
 import { checkAcpLaunchVersion } from '../launch/acp-launch-version'
 import { prepareAcpListingAccount } from './acp-listing-account'
 import { acpLaunchSpecForAccount } from '../launch/acp-launch-command'
-import { agentSessionAccountHomePath } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import { discardAcpListingSessions } from './acp-listing-session-discard'
 import {
   resolveAcpLaunchInvocation,
   type AcpLaunchInvocationDeps
@@ -221,19 +221,15 @@ export function createAcpModelCatalogProbe(
               )
             } finally {
               // The session's process has exited, so its files are no longer written.
-              const accountHomePath = agentSessionAccountHomePath(accountHome)
-              if (accountHomePath) {
-                for (const sessionId of started) {
-                  await listing
-                    .discardSession?.({ sessionId, cwd: sessionCwd, accountHomePath })
-                    .catch((error: unknown) => {
-                      console.warn(
-                        `[acp-model-catalog] ${spec.agent} kept a listing session:`,
-                        error
-                      )
-                    })
-                }
-              }
+              await discardAcpListingSessions(spec.agent, listing, started, {
+                cwd: sessionCwd,
+                launchCwd: cwd,
+                accountHome,
+                command,
+                prefixArgs,
+                env,
+                envToDelete
+              })
               await folder?.remove()
             }
           }

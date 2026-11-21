@@ -179,6 +179,8 @@ export async function selectAcpHostAccountHome(
   return input && spec.hostBackend ? spec.hostBackend.select(input) : null
 }
 
+export { acpPermissionModeConfigId } from './acp-launch-permission-modes'
+
 /** Whether new chats would start on a host program that is here now. */
 export async function acpHostProgramTakesNewChats(
   spec: AcpLaunchSpec,

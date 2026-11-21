@@ -1,6 +1,7 @@
 import { acpEffortOption, acpInteractionModeValue, acpSelectChoices } from './acp-select-choices'
 import { acpModelMenuModels, withFastModeOption } from './acp-model-menu'
 import { acpInitializeForkSupport } from '../capabilities/acp-fork-support'
+import { AcpPermissionModeState } from './acp-permission-mode-state'
 import { acpSessionSlashCommand } from './acp-session-slash-command'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session/agent-session-wire'
 
@@ -32,22 +33,13 @@ function isSelect(option: SessionConfigOption): option is SelectOption {
 
 export class AcpStructuredOptions {
   constructor(
-    private readonly dialect: Pick<
-      AcpDialect,
-      | 'modelEfforts'
-      | 'familyEfforts'
-      | 'withheldCommands'
-      | 'chatModelIds'
-      | 'effortChangesModel'
-      | 'clampsUnlistedEffort'
-      | 'builtinCommands'
-      | 'skillDescription'
-      | 'fastConfigId'
-      | 'thinkingConfigId'
-      | 'interactionModes'
-    > = {}
-  ) {}
+    private readonly dialect: AcpDialect = {},
+    permissionConfigId?: string
+  ) {
+    this.permission = new AcpPermissionModeState(permissionConfigId)
+  }
 
+  private readonly permission: AcpPermissionModeState
   private forkSupport: AgentSessionOptionsResult['forkSupport'] = 'unknown'
   /** As the agent last reported them; replace through `adoptConfigOptions`. */
   configOptions: SessionConfigOption[] = []
@@ -109,16 +101,13 @@ export class AcpStructuredOptions {
     }
   }
 
-  /** The session state a new, load or resume response reported. */
   adoptSession(
-    response: {
-      configOptions?: SessionConfigOption[] | null
-      models?: SessionModelState | null
-    },
+    response: { configOptions?: SessionConfigOption[] | null; models?: SessionModelState | null },
     origin: 'new' | 'loaded' = 'loaded'
   ): void {
     this.configOptions = response.configOptions ?? []
     this.models = response.models ?? null
+    this.permission.reset(this.configOptions)
     this.resolvesConfig = origin === 'new'
     this.appliedInput.clear()
     this.unobservedCurrent.clear()
@@ -161,11 +150,12 @@ export class AcpStructuredOptions {
       return
     }
     this.configOptions = configOptions
+    this.permission.noteOptions(this.configOptions)
     if (this.writing === 0 && this.unsettled.size === 0) {
       if (this.select('model')) {
         this.unobservedCurrent.delete('model')
       }
-      if (this.effortOption()) {
+      if (acpEffortOption(this.configOptions)) {
         this.unobservedCurrent.delete('effort')
       }
     }
@@ -212,7 +202,7 @@ export class AcpStructuredOptions {
   }
 
   offersEffort(value: string): boolean {
-    const option = this.effortOption()
+    const option = acpEffortOption(this.configOptions)
     return !!(
       option &&
       (this.dialect.clampsUnlistedEffort ||
@@ -236,7 +226,7 @@ export class AcpStructuredOptions {
       return this.models ? { method: 'model', modelId: model } : null
     }
     if (key === 'effort') {
-      const option = this.effortOption()
+      const option = acpEffortOption(this.configOptions)
       return option ? { method: 'config', configId: option.id, value } : null
     }
     if (key === 'interactionMode') {
@@ -262,7 +252,7 @@ export class AcpStructuredOptions {
     'models' | 'current' | 'forkSupport' | 'fastModeSupport'
   > {
     const modelOption = this.select('model')
-    const effortOption = this.effortOption()
+    const effortOption = acpEffortOption(this.configOptions)
     const currentModel = (modelOption?.currentValue ?? this.models?.currentModelId) || undefined
     const models = acpModelMenuModels({
       dialect: this.dialect,
@@ -311,33 +301,47 @@ export class AcpStructuredOptions {
     return { ...this.read().current, reportedPermissionMode: this.reportedPermissionMode(values) }
   }
 
+  hasModeSelect(configId?: string): boolean {
+    return this.permission.hasSelect(this.configOptions, configId)
+  }
+
+  adoptConfirmedPermissionValue(value: string | null): void {
+    this.permission.confirm(value)
+  }
+
+  /** A mode the agent switched to itself. A mismatch forgets a confirmed full-access value. */
+  adoptCurrentMode(modeId: string): void {
+    this.configOptions = this.permission.withCurrentMode(this.configOptions, modeId)
+  }
+
+  /** Drop only the permission select so an empty unconfirmed reply cannot keep its mode. */
+  clearPermissionMode(): void {
+    this.configOptions = this.permission.withoutSelect(this.configOptions)
+  }
+
   reportedPermissionMode(
-    values: Readonly<Partial<Record<string, string>>> | undefined
+    values: Readonly<Partial<Record<string, string>>> | undefined,
+    configId?: string
   ): string | null {
-    if (!values) {
-      return this.applied.get('permissionMode') ?? null
-    }
-    const current = this.select('mode')?.currentValue
-    return current
-      ? (Object.entries(values).find(([, value]) => value === current)?.[0] ?? null)
-      : null
+    return this.permission.reported(
+      this.applied.get('permissionMode'),
+      this.configOptions,
+      values,
+      configId
+    )
   }
 
   // Match the mode category rather than assuming an agent's config ID.
-  modeConfigId(): string {
-    return this.select('mode')?.id ?? 'mode'
+  modeConfigId(fallback?: string): string {
+    return this.permission.configIdFor(this.configOptions, fallback)
   }
 
   // Only the running values, so config notifications don't project the whole catalog again.
   private currentValues(): Readonly<Record<string, string | undefined>> {
     return {
       model: (this.select('model')?.currentValue ?? this.models?.currentModelId) || undefined,
-      effort: this.effortOption()?.currentValue
+      effort: acpEffortOption(this.configOptions)?.currentValue
     }
-  }
-
-  private effortOption(): SelectOption | null {
-    return acpEffortOption(this.configOptions)
   }
 
   private idSelect(id: string | undefined): SelectOption | null {
@@ -346,9 +350,9 @@ export class AcpStructuredOptions {
   }
 
   private select(category: string): SelectOption | null {
-    const option = this.configOptions.find(
-      (entry) => entry.category === category || (category === 'model' && entry.id === 'model')
+    const opt = this.configOptions.find(
+      (e) => e.category === category || (category === 'model' && e.id === 'model')
     )
-    return option && isSelect(option) ? option : null
+    return opt && isSelect(opt) ? opt : null
   }
 }
