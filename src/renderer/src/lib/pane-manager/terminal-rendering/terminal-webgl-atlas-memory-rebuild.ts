@@ -7,7 +7,11 @@ import { paneIsCoveredByNativeChat } from '@/components/terminal-pane/chat/nativ
 
 // A 4096² merged page means the shared atlas reached ~64 MiB; on Apple GPUs each context keeps its upload memory until the context is destroyed (GiBs across panes).
 const ATLAS_REBUILD_PAGE_SIZE = 4096
-const ATLAS_REBUILD_MIN_INTERVAL_MS = 10_000
+const ATLAS_REBUILD_MIN_INTERVAL_MS = 60_000
+// A rebuild recreates every context in its atlas over ~0.5-2 s, so it waits for output into that atlas to pause and for typing to stop.
+const ATLAS_REBUILD_QUIET_MS = 2_000
+// Output that never pauses would retain GPU memory without bound; past this, typing alone holds the rebuild.
+const ATLAS_REBUILD_MAX_QUIET_WAIT_MS = 60_000
 // A deferred atlas retries on its own this many times (one per interval), so a frame that closes without more output is still caught.
 const DEFERRED_REBUILD_MAX_RETRIES = 6
 // Only macOS was measured retaining it (desktop app and Mac browsers); elsewhere a mass context recreate risks the driver's context budget. Touch excludes iPadOS desktop-mode agents.
@@ -31,10 +35,13 @@ let rebuildPanes: AtlasRebuilder | null = null
 let rebuildTimer: ReturnType<typeof setTimeout> | null = null
 // Successful or deferred, attempts stay an interval apart so per-chunk output can't drive repeated scans.
 let lastAttemptAt = Number.NEGATIVE_INFINITY
+let lastTypedAt = Number.NEGATIVE_INFINITY
 // Per atlas, so one atlas's output never re-arms another; weak so a retired atlas is never kept alive.
 const atlasesWithLargePage = new WeakSet<GlyphAtlas>()
 const atlasesWithOutput = new WeakSet<GlyphAtlas>()
 const deferredRetries = new WeakMap<GlyphAtlas, number>()
+const lastOutputAt = new WeakMap<GlyphAtlas, number>()
+const dueSince = new WeakMap<GlyphAtlas, number>()
 const attachedPanes = new Map<unknown, ManagedPaneInternal>()
 // Owners indexed per atlas, so an attempt visits only the due atlases' panes, never every terminal.
 const atlasOwners = new WeakMap<GlyphAtlas, Set<ManagedPaneInternal>>()
@@ -71,7 +78,7 @@ function forgetOwner(pane: ManagedPaneInternal): void {
   const owners = atlasOwners.get(previous)
   owners?.delete(pane)
   if (!owners?.size) {
-    dueAtlases.delete(previous)
+    forgetDue(previous)
   }
 }
 
@@ -97,9 +104,26 @@ function indexOwner(pane: ManagedPaneInternal): GlyphAtlas | undefined {
 
 function markIfDue(atlas: GlyphAtlas): void {
   if (atlasesWithLargePage.has(atlas) && atlasesWithOutput.has(atlas)) {
+    if (!dueAtlases.has(atlas)) {
+      dueSince.set(atlas, performance.now())
+    }
     dueAtlases.add(atlas)
     scheduleRebuild()
   }
+}
+
+/** When the atlas may rebuild: its output paused and typing stopped (or, once overdue, typing stopped). */
+function readyAt(atlas: GlyphAtlas): number {
+  const typingClear = lastTypedAt + ATLAS_REBUILD_QUIET_MS
+  const quiet = (lastOutputAt.get(atlas) ?? Number.NEGATIVE_INFINITY) + ATLAS_REBUILD_QUIET_MS
+  const overdue = (dueSince.get(atlas) ?? 0) + ATLAS_REBUILD_MAX_QUIET_WAIT_MS
+  return Math.max(typingClear, Math.min(quiet, overdue))
+}
+
+function forgetDue(atlas: GlyphAtlas): void {
+  dueAtlases.delete(atlas)
+  dueSince.delete(atlas)
+  deferredRetries.delete(atlas)
 }
 
 /** Wired by the reattach module, which owns detaching and reattaching pane renderers. */
@@ -133,12 +157,18 @@ function rebuildDueAtlases(): void {
   if (dueAtlases.size === 0) {
     return
   }
-  lastAttemptAt = Date.now()
+  const now = performance.now()
+  const ready = [...dueAtlases].filter((atlas) => readyAt(atlas) <= now)
+  if (ready.length === 0) {
+    scheduleRebuild()
+    return
+  }
+  lastAttemptAt = now
   const shown = shownPaneFilter()
   const onScreen: PaneFilter = (pane) => shown(pane) && !paneIsCoveredByNativeChat(pane)
   const panes: ManagedPaneInternal[] = []
   let retry = false
-  for (const atlas of dueAtlases) {
+  for (const atlas of ready) {
     const atlasPanes = [...(atlasOwners.get(atlas) ?? [])].filter(
       (pane) => attachedPanes.get(pane.terminal) === pane && atlasOf(pane) === atlas
     )
@@ -150,20 +180,18 @@ function rebuildDueAtlases(): void {
         retry = true
       } else {
         // Out of retries: the frame's closing output re-arms it.
-        dueAtlases.delete(atlas)
+        forgetDue(atlas)
         atlasesWithOutput.delete(atlas)
-        deferredRetries.delete(atlas)
       }
       continue
     }
     // Normally retired by the rebuild; clearing also stops a surviving atlas from rebuilding again without new output.
-    dueAtlases.delete(atlas)
+    forgetDue(atlas)
     atlasesWithLargePage.delete(atlas)
     atlasesWithOutput.delete(atlas)
-    deferredRetries.delete(atlas)
     panes.push(...atlasPanes)
   }
-  if (retry) {
+  if (retry || dueAtlases.size > 0) {
     scheduleRebuild()
   }
   if (panes.length === 0) {
@@ -196,8 +224,17 @@ function scheduleRebuild(): void {
   if (rebuildTimer !== null) {
     return
   }
+  // One timer, set to the earliest due atlas; output arriving later just moves that atlas's time, checked when the timer fires.
+  let at = Number.POSITIVE_INFINITY
+  for (const atlas of dueAtlases) {
+    at = Math.min(at, readyAt(atlas))
+  }
   // Also leaves xterm's atlas callback first; the rebuild disposes renderers mid-render.
-  const delay = Math.max(0, lastAttemptAt + ATLAS_REBUILD_MIN_INTERVAL_MS - Date.now())
+  const delay = Math.max(
+    0,
+    lastAttemptAt + ATLAS_REBUILD_MIN_INTERVAL_MS - performance.now(),
+    at - performance.now()
+  )
   rebuildTimer = setTimeout(rebuildDueAtlases, delay)
 }
 
@@ -243,10 +280,16 @@ export function noteTerminalWebglAtlasOutput(terminal: ForegroundTerminalOutputT
     return
   }
   atlasesWithOutput.add(atlas)
+  lastOutputAt.set(atlas, performance.now())
   markIfDue(atlas)
 }
 
-/** Requests a rebuild of the grown atlas's renderers, at most every 10 s and only after PTY output into that atlas. */
+/** User input sent to any terminal; holds atlas rebuilds so none lands between keystrokes. */
+export function noteTerminalWebglAtlasTyping(): void {
+  lastTypedAt = performance.now()
+}
+
+/** Requests a rebuild of the grown atlas's renderers, at most every 60 s, only after PTY output into that atlas, once it pauses. */
 export function handleTerminalWebglAtlasPage(
   page: { width: number },
   pane: ManagedPaneInternal
