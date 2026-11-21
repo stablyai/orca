@@ -4,6 +4,7 @@ import type {
   RendererStatusPublication,
   RendererStatusAck
 } from '../../../shared/agent-status/renderer-status-publication'
+import { DesktopSessionFocus } from './desktop-session-focus'
 import { OrcaRuntimeWithAttachWindow } from './session-graph-promotion'
 import type {
   RuntimeRendererSyncWindowGraph,
@@ -12,6 +13,20 @@ import type {
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 export abstract class OrcaRuntimeWithAdmitWindowPublisher extends OrcaRuntimeWithAttachWindow {
+  protected readonly desktopSessionFocus = new DesktopSessionFocus()
+
+  readActiveSessionId(worktreeId: string): string | null | undefined {
+    return this.desktopSessionFocus.read(worktreeId, {
+      ready: this.graphStatus === 'ready',
+      windowId: this.authoritativeWindowId,
+      generation: this.rendererGeneration
+    })
+  }
+
+  onActiveSessionChanged(listener: () => void): () => void {
+    return this.desktopSessionFocus.subscribe(listener)
+  }
+
   syncRendererAgentStatus(windowId: number, batch: RendererStatusPublication): RendererStatusAck {
     if (windowId !== this.authoritativeWindowId || this.rendererGeneration !== batch.epoch) {
       return { accepted: false, reason: 'superseded' }
@@ -128,6 +143,17 @@ export abstract class OrcaRuntimeWithAdmitWindowPublisher extends OrcaRuntimeWit
       }
       changedMobileWorktrees.add(worktreeId)
     }
+  }
+
+  protected commitRendererFocus(
+    windowId: number,
+    generation: string | null | undefined,
+    graph: RuntimeSyncWindowGraph
+  ): void {
+    if (generation !== undefined) {
+      this.rendererGeneration = generation
+    }
+    this.desktopSessionFocus.publish(windowId, generation, graph.activeSessionIdsByWorkspace)
   }
 
   protected admitWindowPublisher(

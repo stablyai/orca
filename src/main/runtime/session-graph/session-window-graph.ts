@@ -263,9 +263,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
         this.sessionTabsInventoryPublicationEpoch = null
       }
     }
-    if (rendererGeneration !== undefined) {
-      this.rendererGeneration = rendererGeneration
-    }
+    this.commitRendererFocus(windowId, rendererGeneration, rendererGraph)
     if (typeof rendererGeneration === 'string') {
       this.reconcileRendererStatusMembership(
         rendererGeneration,
