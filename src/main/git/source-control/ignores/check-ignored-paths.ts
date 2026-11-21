@@ -10,7 +10,7 @@ import {
   parseGitCheckIgnorePaths,
   splitGitCheckIgnorePathsByStdinBytes
 } from '../../../../shared/git/paths/git-check-ignore-stdio'
-import { findContainingSubmodule, listIndexedSubmodulePaths } from '../submodules/submodule-paths'
+import { withoutPathsInsideSubmodules } from '../submodules/submodule-paths'
 
 type GitExecError = Error & { stdout?: string; code?: number | string }
 
@@ -35,6 +35,20 @@ async function runCheckIgnoredPaths(
   }
 }
 
+async function runCheckIgnoredPathChunks(
+  worktreePath: string,
+  relativePaths: string[],
+  options: GitRuntimeOptions
+): Promise<string[]> {
+  const ignored = new Set<string>()
+  for (const chunk of splitGitCheckIgnorePathsByStdinBytes(relativePaths)) {
+    for (const ignoredPath of await runCheckIgnoredPaths(worktreePath, chunk, options)) {
+      ignored.add(ignoredPath)
+    }
+  }
+  return Array.from(ignored)
+}
+
 export async function checkIgnoredPaths(
   worktreePath: string,
   relativePaths: string[],
@@ -43,21 +57,18 @@ export async function checkIgnoredPaths(
   if (relativePaths.length === 0) {
     return []
   }
-  // Git refuses any pathspec under a submodule ("is in submodule"), which would fail the whole
-  // caller. Such a path is never one `add --all` would stage here, so only the rest is checked.
-  const submodulePaths = await listIndexedSubmodulePaths(worktreePath, relativePaths, options)
-  const checkedPaths =
-    submodulePaths.length === 0
-      ? relativePaths
-      : relativePaths.filter((path) => findContainingSubmodule(submodulePaths, path) === null)
-  if (checkedPaths.length === 0) {
-    return []
-  }
-  const ignored = new Set<string>()
-  for (const chunk of splitGitCheckIgnorePathsByStdinBytes(checkedPaths)) {
-    for (const ignoredPath of await runCheckIgnoredPaths(worktreePath, chunk, options)) {
-      ignored.add(ignoredPath)
+  try {
+    return await runCheckIgnoredPathChunks(worktreePath, relativePaths, options)
+  } catch (error) {
+    // Git rejects the whole batch for one path inside a submodule; look those up only after a failure.
+    const checkable = await withoutPathsInsideSubmodules(
+      worktreePath,
+      relativePaths,
+      options
+    ).catch(() => relativePaths)
+    if (checkable.length === relativePaths.length) {
+      throw error
     }
+    return runCheckIgnoredPathChunks(worktreePath, checkable, options)
   }
-  return Array.from(ignored)
 }

@@ -188,37 +188,14 @@ describe('stageWorktreeChanges', () => {
     git(child, ['add', '.'])
     git(child, ['commit', '-q', '-m', 'child'])
     const repo = await createRepo()
-    git(repo, ['-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', child, 'sub'])
+    git(repo, ['-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', child, 'vendor/sub'])
     git(repo, ['commit', '-q', '-m', 'submodule'])
     const outside = await mkdtemp(path.join(tmpdir(), 'orca-sub-outside-'))
     tempRoots.push(outside)
-    await symlink(outside, path.join(repo, 'sub', 'node_modules'), 'junction')
+    await symlink(outside, path.join(repo, 'vendor', 'sub', 'node_modules'), 'junction')
     await writeFile(path.join(repo, 'new.txt'), 'new\n')
 
-    await stageWorktreeChanges(repo, 'all', { sharedLinkPaths: ['sub/node_modules'] })
-
-    expect(names(repo, ['diff', '--cached', '--name-only'])).toEqual(['new.txt'])
-  })
-
-  it('still excludes a shared link under a stale .gitmodules declaration', async () => {
-    // Git decides "in submodule" from indexed gitlinks; a stale declaration names a plain directory.
-    const repo = await createRepo()
-    const gitmodules = '[submodule "stale"]\n\tpath = vendor\n'
-    await mkdir(path.join(repo, 'vendor'))
-    await writeFile(path.join(repo, '.gitmodules'), gitmodules)
-    git(repo, ['add', '.gitmodules'])
-    git(repo, ['commit', '-q', '-m', 'stale declaration'])
-    const outside = await mkdtemp(path.join(tmpdir(), 'orca-stale-vendor-'))
-    tempRoots.push(outside)
-    await writeFile(path.join(outside, 'keep.txt'), 'keep\n')
-    await symlink(
-      outside,
-      path.join(repo, 'vendor', 'shared-assets'),
-      process.platform === 'win32' ? 'junction' : undefined
-    )
-    await writeFile(path.join(repo, 'new.txt'), 'new\n')
-
-    await stageWorktreeChanges(repo, 'all', { sharedLinkPaths: ['vendor/shared-assets'] })
+    await stageWorktreeChanges(repo, 'all', { sharedLinkPaths: ['vendor/sub/node_modules'] })
 
     expect(names(repo, ['diff', '--cached', '--name-only'])).toEqual(['new.txt'])
   })

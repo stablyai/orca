@@ -8,6 +8,7 @@ import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { gitOptionalLocksDisabledEnv } from '../../command-runner/git-environment/git-process-env'
 import { gitRuntimeOptionsKey } from '../git-runtime-options-cache-key'
 import { iterateNulDelimitedFields } from '../../../../shared/git/commands/nul-delimited-fields'
+import { bulkPathspecCommands, gitReportedPath } from '../git-pathspec'
 
 const SUBMODULE_PATHS_CACHE_TTL_MS = 5_000
 export const MAX_SUBMODULE_PATHS_CACHE_ENTRIES = 512
@@ -127,51 +128,53 @@ export async function listSubmodulePaths(
   return paths
 }
 
-/**
- * Submodule paths Git's index records among `relativePaths` and their ancestors. Git rejects a
- * pathspec as "in submodule" only for an indexed gitlink (mode 160000), while `.gitmodules` can
- * still declare a path that is an ordinary directory again, so declarations must not decide this.
- */
-export async function listIndexedSubmodulePaths(
+// The trailing `*` matches the directory's own entry (and same-level names), never its subtree.
+function directoryEntryPathspec(directory: string): string {
+  return `:(glob)${directory.replace(/[*?[\\]/g, '\\$&')}*`
+}
+
+/** Drop paths under an indexed gitlink: Git refuses them as pathspecs, and they are the submodule's. */
+export async function withoutPathsInsideSubmodules(
   worktreePath: string,
   relativePaths: readonly string[],
   options: GitRuntimeOptions = {}
 ): Promise<string[]> {
-  const candidates = new Set<string>()
-  for (const rawPath of relativePaths) {
-    const segments = rawPath
-      .replace(/\\/g, '/')
-      .split('/')
-      .filter((segment) => segment !== '' && segment !== '.')
-    let candidate = ''
-    for (const segment of segments) {
-      candidate = candidate ? `${candidate}/${segment}` : segment
-      candidates.add(candidate)
+  const gitPaths = relativePaths.map((relativePath) =>
+    gitReportedPath(relativePath, worktreePath, options).replace(/\/+$/, '')
+  )
+  const parentDirectories = new Set<string>()
+  for (const gitPath of gitPaths) {
+    for (let slash = gitPath.indexOf('/'); slash > 0; slash = gitPath.indexOf('/', slash + 1)) {
+      parentDirectories.add(gitPath.slice(0, slash))
     }
   }
-  if (candidates.size === 0) {
-    return []
+  if (parentDirectories.size === 0) {
+    return [...relativePaths]
   }
-  try {
-    const { stdout } = await gitExecFileAsync(['ls-files', '--stage', '-z', '--', ...candidates], {
+  const gitlinks: string[] = []
+  for (const args of bulkPathspecCommands(
+    ['ls-files', '--stage', '-z', '--'],
+    [...parentDirectories],
+    worktreePath,
+    options,
+    directoryEntryPathspec
+  )) {
+    const { stdout } = await gitExecFileAsync(args, {
       ...gitOptionsForWorktree(worktreePath, options),
       env: gitOptionalLocksDisabledEnv()
     })
-    const paths = new Set<string>()
     for (const record of iterateNulDelimitedFields(stdout)) {
-      const metadataEnd = record.indexOf('\t')
-      if (metadataEnd === -1 || record.slice(0, metadataEnd).split(' ')[0] !== '160000') {
-        continue
-      }
-      const submodulePath = record.slice(metadataEnd + 1).replace(/\/+$/, '')
-      if (submodulePath) {
-        paths.add(submodulePath)
+      const entryPath = record.slice(record.indexOf('\t') + 1)
+      if (record.startsWith('160000 ') && parentDirectories.has(entryPath)) {
+        gitlinks.push(entryPath)
       }
     }
-    return [...paths]
-  } catch {
-    return []
   }
+  return gitlinks.length === 0
+    ? [...relativePaths]
+    : relativePaths.filter(
+        (_, index) => !gitlinks.some((gitlink) => gitPaths[index].startsWith(`${gitlink}/`))
+      )
 }
 
 export function findContainingSubmodule(submodulePaths: string[], filePath: string): string | null {
