@@ -118,7 +118,8 @@ function scheduleRemovalCheck(guest: Electron.WebContents): void {
     }
     const frames = trackedFrames.get(guest)
     const demanding = getBrowserGuestFrameUserAgentDemand(guest.id)
-    for (const id of [...demanding]) {
+    // Deleting the current entry while iterating a Set is safe.
+    for (const id of demanding) {
       if (frameGone(frames?.get(id))) {
         setBrowserGuestFrameUserAgentDemand(guest.session, guest.id, id, false)
       }

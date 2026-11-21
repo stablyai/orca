@@ -367,7 +367,11 @@ it("keeps protecting the page a form POST redirects to when the redirect's metho
 
 it('lets a form POST that redirects to a GET page be discarded, listening only until it commits', () => {
   let url = 'https://example.test/login'
-  let listener: ((details: object, callback: (response: object) => void) => void) | null = null
+  type BeforeRequest = (
+    details: Partial<Electron.OnBeforeRequestListenerDetails>,
+    callback: (response: Electron.CallbackResponse) => void
+  ) => void
+  let listener: BeforeRequest | null = null
   const session = {
     webRequest: {
       onBeforeRequest: (next: typeof listener) => {

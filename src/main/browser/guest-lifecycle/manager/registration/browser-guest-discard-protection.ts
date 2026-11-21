@@ -8,9 +8,8 @@ export {
   registerBrowserSessionNotificationGrant
 } from './browser-guest-idle-protection'
 import { randomUUID } from 'node:crypto'
-import { observeBrowserGuestRequests } from '../../../sessions/requests/browser-session-web-request-observer'
-import { holdBrowserSessionRequestGate } from '../../../sessions/requests/browser-session-request-gate'
 import { createFormPostNavigationTracker } from './browser-guest-form-post-navigation'
+import { watchBrowserGuestNavigationMethods } from './browser-guest-form-post-methods'
 import {
   BROWSER_GUEST_PROTECTION_CHALLENGE,
   BROWSER_GUEST_PROTECTION_REPORT,
@@ -216,38 +215,13 @@ export function installBrowserGuestDiscardProtection(
     publish()
   }
   // Only the current document protects; restored back/forward entries reload on demand.
-  // The method comes from request observers when a session listens, else from the form the
-  // preload saw submitted for this exact navigation. A navigation expected to POST keeps the
-  // session listening until a hop proves GET or it commits; an unseen method stays protected.
-  let pendingMethod: string | null = null
-  let releaseMethods: (() => void) | null = null
-  const stopWatchingMethods = (): void => {
-    releaseMethods?.()
-    releaseMethods = null
-  }
   const formPost = createFormPostNavigationTracker()
-  const stopRequests = observeBrowserGuestRequests(guest.id, (session, event, details) => {
-    if (
-      event === 'onBeforeRequest' &&
-      details.resourceType === 'mainFrame' &&
-      session === guest.session
-    ) {
-      pendingMethod = details.method
-      // A redirect can't turn a GET back into a POST.
-      if (details.method === 'GET') {
-        stopWatchingMethods()
-      }
-    }
-  })
+  const methods = watchBrowserGuestNavigationMethods(guest, formPost)
   const navigation = (
     details: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>
   ): void => {
     if (details.isMainFrame && !details.isSameDocument) {
-      pendingMethod = null
-      stopWatchingMethods()
-      if (formPost.started(details.url)) {
-        releaseMethods = holdBrowserSessionRequestGate(guest.session)
-      }
+      methods.started(details.url)
       owner.navigating = true
       invalidate()
     } else if (!details.isMainFrame) {
@@ -256,8 +230,7 @@ export function installBrowserGuestDiscardProtection(
   }
   const committed = (): void => {
     owner.currentEdited = false
-    stopWatchingMethods()
-    owner.currentPost = formPost.committed(guest.getURL(), pendingMethod)
+    owner.currentPost = methods.committed()
     owner.mediaGranted = false
     publish()
   }
@@ -267,27 +240,12 @@ export function installBrowserGuestDiscardProtection(
     snapshot()
   }
   const loadStopped = (): void => {
-    // A failed, stopped or replaced navigation commits nothing.
-    stopWatchingMethods()
     const needsSnapshot = owner.navigating || owner.generation === null
     owner.navigating = false
     if (needsSnapshot) {
       snapshot()
     } else {
       publish()
-    }
-  }
-  // An error ends the navigation without a commit; a 204 or a download aborts silently and is
-  // released at did-stop-loading.
-  const failed = (
-    _event: Electron.Event,
-    _code: number,
-    _description: string,
-    _url: string,
-    isMainFrame: boolean
-  ): void => {
-    if (isMainFrame) {
-      stopWatchingMethods()
     }
   }
   const unresponsive = (): void => {
@@ -314,11 +272,9 @@ export function installBrowserGuestDiscardProtection(
   guest.on('frame-created', frameCreated)
   guest.on('did-start-navigation', navigation)
   guest.on('did-navigate', committed)
-  guest.on('did-fail-load', failed)
   guest.on('did-navigate-in-page', inPageNavigation)
   return () => {
-    stopRequests()
-    stopWatchingMethods()
+    methods.dispose()
     stopIdleProtection()
     if (owners.get(guest) === owner) {
       owners.delete(guest)
@@ -326,7 +282,6 @@ export function installBrowserGuestDiscardProtection(
     guest.off('ipc-message', report)
     guest.off('dom-ready', settled)
     guest.off('did-stop-loading', loadStopped)
-    guest.off('did-fail-load', failed)
     guest.off('responsive', responsive)
     guest.off('unresponsive', unresponsive)
     guest.off('render-process-gone', unresponsive)
