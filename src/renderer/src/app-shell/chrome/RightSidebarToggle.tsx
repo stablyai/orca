@@ -27,6 +27,8 @@ export function RightSidebarToggle(): React.JSX.Element {
       <TooltipTrigger asChild>
         <button
           className="sidebar-toggle relative mr-2"
+          data-right-sidebar-toggle
+          onMouseDown={(event) => event.preventDefault()}
           onClick={toggleRightSidebar}
           aria-label={needsYouLabel ?? t('auto.App.9e0b441a91', 'Toggle right sidebar')}
         >

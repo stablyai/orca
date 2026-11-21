@@ -37,10 +37,12 @@ import {
 import { useRightSidebarActivityItems } from './activity-bar/use-right-sidebar-activity-items'
 import { useRightSidebarTabRouting } from './activity-bar/use-right-sidebar-tab-routing'
 import { useWindowWidth } from './layout/use-window-width'
+import { useRightSidebarReturnFocus } from './use-right-sidebar-return-focus'
 import { useBotPanelMemory } from '../bots/use-bot-panel-memory'
 import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-capture'
 import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
 
+/** Stays mounted while closed so the return-focus hook can remember pane focus before the sidebar opens. */
 function RightSidebarInner(): React.JSX.Element {
   const t = useTranslate()
   const contextPlugin = useActivityBarContextPlugin()
@@ -143,6 +145,7 @@ function RightSidebarInner(): React.JSX.Element {
     setWidth: setRightSidebarWidth
   })
   const topActivityStripRef = useMeasuredWidth(setTopActivityStripWidth)
+  useRightSidebarReturnFocus(rightSidebarOpen, containerRef)
 
   const panelContent = rightSidebarOpen ? (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden scrollbar-sleek-parent">
@@ -196,6 +199,8 @@ function RightSidebarInner(): React.JSX.Element {
         <button
           type="button"
           className="sidebar-toggle mr-1"
+          data-right-sidebar-toggle
+          onMouseDown={(event) => event.preventDefault()}
           onClick={toggleRightSidebar}
           aria-label={t('auto.components.right.sidebar.index.e8e2e4ce74', 'Toggle right sidebar')}
         >

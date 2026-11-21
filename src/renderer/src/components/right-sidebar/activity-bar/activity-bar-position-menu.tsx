@@ -69,7 +69,7 @@ export function ActivityBarPositionMenu({
   const t = useTranslate()
   const [disabling, setDisabling] = useState(false)
   return (
-    <ContextMenuContent>
+    <ContextMenuContent data-right-sidebar-menu>
       {pluginKey && typeof window.api?.plugins?.setEnabled === 'function' && (
         <>
           <ContextMenuItem
