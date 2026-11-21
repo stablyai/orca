@@ -82,6 +82,8 @@ async function continueRebaseUnlocked(
   try {
     const { stdout, stderr } = await gitExecFileAsync(['rebase', '--continue'], {
       ...gitOptionsForWorktree(worktreePath, options),
+      // A cancelled Continue must not release the worktree lock while Git still writes rebase state.
+      terminationBarrier: true,
       env
     })
     output = joinGitOutput(stdout, stderr)
