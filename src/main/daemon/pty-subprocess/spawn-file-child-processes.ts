@@ -28,8 +28,10 @@ export function inspectSpawnFileChildProcessesFromRows(
   rows: readonly ProcessTableRow[],
   rootPid: number,
   shellName: string | null,
-  includeTerminalGroups = false,
-  onIdleShellChain?: (pids: ReadonlySet<number>) => void
+  teardown?: {
+    shellIsRootChild: boolean
+    onIdleShellChain?: (pids: ReadonlySet<number>) => void
+  }
 ): PtyChildProcessVerdict {
   const index = getProcessTableIndex(rows)
   const root = index.byPid.get(rootPid)
@@ -53,8 +55,12 @@ export function inspectSpawnFileChildProcessesFromRows(
   if (tree.some((row) => !launchChain.has(row.pid) && !row.stat.includes('Z'))) {
     return 'children'
   }
-  if (!includeTerminalGroups) {
+  if (!teardown) {
     return 'no-children'
+  }
+  // Only the shell and its optional login root are known launch plumbing.
+  if (launchChain.size > (teardown.shellIsRootChild ? 2 : 1)) {
+    return 'unverifiable'
   }
 
   // Teardown reaches every group on this terminal, including reparented and group-only members.
@@ -75,7 +81,7 @@ export function inspectSpawnFileChildProcessesFromRows(
       return 'children'
     }
   }
-  onIdleShellChain?.(launchChain)
+  teardown.onIdleShellChain?.(launchChain)
   return 'no-children'
 }
 

@@ -15,6 +15,7 @@ import {
 } from '../../protocol/daemon-protocol-version'
 import { TerminalSessionOwnerUnverifiedError } from '../../protocol/daemon-errors'
 import { createProcessTableSnapshotReader } from '../../../../shared/process-observation/tables/process-snapshot-cache'
+import { inspectSpawnFileChildProcessesFromRows } from '../../pty-subprocess/spawn-file-child-processes'
 
 let harness: Awaited<ReturnType<typeof startDaemonAdapterHarness>> | undefined
 afterEach(async () => {
@@ -119,6 +120,25 @@ describe('fenced daemon kill protocol', () => {
     })
     expect(handle.forceKill).not.toHaveBeenCalled()
     await expect(harness.adapter.killFenced(request)).resolves.toEqual({ outcome: 'ended' })
+  })
+
+  it('requires confirmation for extra processes in an otherwise idle shell launch chain', () => {
+    const terminal = { tty: 'ttys001', tpgid: 103, stat: 'S' }
+    const login = { ...terminal, pid: 101, ppid: 1, pgid: 101, command: 'login' }
+    const wrapper = { ...terminal, pid: 102, ppid: 101, pgid: 102, command: 'wrapper' }
+    const shell = { ...terminal, pid: 103, ppid: 101, pgid: 103, command: '-zsh' }
+    const teardown = { shellIsRootChild: true }
+    expect(inspectSpawnFileChildProcessesFromRows([login, shell], 101, 'zsh', teardown)).toBe(
+      'no-children'
+    )
+    expect(
+      inspectSpawnFileChildProcessesFromRows(
+        [login, wrapper, { ...shell, ppid: 102 }],
+        101,
+        'zsh',
+        teardown
+      )
+    ).toBe('unverifiable')
   })
 
   it('drops an abandoned process inspection before it can start a new capture', async () => {

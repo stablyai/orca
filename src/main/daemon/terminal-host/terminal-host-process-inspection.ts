@@ -180,8 +180,12 @@ export async function inspectTerminalHostProcess(args: {
           snapshot.rows,
           session.pid,
           session.getForegroundProcess({ rawFallback: true }),
-          decidingRunningWork,
-          args.onIdleShellChain
+          decidingRunningWork
+            ? {
+                shellIsRootChild: session.shellIsRootChild,
+                onIdleShellChain: args.onIdleShellChain
+              }
+            : undefined
         )
         if (observed.available && observed.processName && !isShellProcess(observed.processName)) {
           childProcessEvidence = 'children'
