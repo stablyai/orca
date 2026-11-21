@@ -2,7 +2,7 @@ import { foldAutomationRunCards } from '../../../../../../src/shared/native-chat
 import { formatAgentTypeLabel } from '../../../../../../src/shared/agent-status/presentation/agent-type-label'
 import { describeLoadError } from '../../../../components/feedback/load-error-description'
 import type { NativeChatEmptyStateCopy } from '../../../../../../src/shared/native-chat/native-chat-empty-state'
-import { isRootAgentJournalItem } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-producer'
+import { agentJournalItemSubagentId } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-producer'
 import { stripNoiseMessages } from '../../../../../../src/shared/native-chat/transcript/messages/native-chat-noise'
 import { nativeChatStreamingMessage } from '../../../../../../src/shared/native-chat/transcript/streaming/native-chat-streaming'
 import { isWordlessProviderFrameMessage } from '../../../../../../src/shared/native-chat/transcript/notices/native-chat-provider-frame-summary'
@@ -98,29 +98,38 @@ export type MobileNativeChatPendingItem = {
   pendingSend?: NativeChatMessage['pendingSend']
 }
 
+/** `producer` names whose rows to draw: null for the chat's own agent, else one subagent's id. */
 export function foldMobileNativeChatMessages(
   messages: readonly NativeChatMessage[],
-  agent: AgentType
+  agent: AgentType,
+  producer: string | null = null
 ): NativeChatMessage[] {
   return foldAutomationRunCards(
     finishMobileNativeChatMessages(
-      foldToolMessages(foldSubagentItems(prepareMobileNativeChatMessages(messages, agent)))
+      foldToolMessages(
+        foldSubagentItems(prepareMobileNativeChatMessages(messages, agent, undefined, producer))
+      )
     )
   )
 }
 
+function drawsFor(message: NativeChatMessage, producer: string | null): boolean {
+  return agentJournalItemSubagentId(message) === producer && !isUndrawnProviderFrameMessage(message)
+}
+
 export function isMobileNativeChatSource(message: NativeChatMessage): boolean {
-  return isRootAgentJournalItem(message) && !isUndrawnProviderFrameMessage(message)
+  return drawsFor(message, null)
 }
 
 export function prepareMobileNativeChatMessages(
   messages: readonly NativeChatMessage[],
   agent: AgentType,
-  recordSource?: (message: NativeChatMessage, visible: boolean) => void
+  recordSource?: (message: NativeChatMessage, visible: boolean) => void,
+  producer: string | null = null
 ): NativeChatMessage[] {
   return prepareNativeChatMessages(
     messages.filter((message) => {
-      const visible = isMobileNativeChatSource(message)
+      const visible = drawsFor(message, producer)
       recordSource?.(message, visible)
       return visible
     }),

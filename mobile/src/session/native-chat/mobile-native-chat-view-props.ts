@@ -93,4 +93,6 @@ export type MobileNativeChatViewProps = MobileNativeChatSendProps &
     promptKey?: string | null
     onOpenFile?: (relativePath: string) => void
     keyboardInset?: number
+    /** A subagent's view covers the chat: still mounted at its place, hidden from assistive tech. */
+    covered?: boolean
   }

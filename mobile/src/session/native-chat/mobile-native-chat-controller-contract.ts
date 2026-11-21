@@ -29,6 +29,7 @@ import type { MobileNativeChatCommandRefusalCauses } from './composer/delivery/u
 import type { MobileStructuredQueuedMessageControls } from './input/queued-messages/use-mobile-structured-queued-message-controls'
 import type { MobileStructuredThreadGoal } from './input/tasks/use-mobile-structured-thread-goal'
 import type { MobileStructuredBackgroundTasks } from './input/tasks/use-mobile-structured-background-tasks'
+import type { MobileNativeChatSubagentSource } from './subagents/mobile-native-chat-subagent-view'
 import type { MobileStructuredInterruptedContinue } from './composer/delivery/use-mobile-structured-interrupted-continue'
 import type { MobileNativeChatPendingMessage } from './transcript/sending/mobile-native-chat-pending-echo'
 import type { useMobileNativeChatSession } from './conversation/use-mobile-native-chat-session'
@@ -69,6 +70,8 @@ export type MobileNativeChatController = {
   nativeChatWorkingStartedAt: number | null
   nativeChatSettledTurns: NativeChatSettledTurns | null
   nativeChatTurnJournal: NativeChatTurnJournal | null
+  /** A structured chat's journal and named subagents; absent for a terminal chat. */
+  nativeChatSubagents?: MobileNativeChatSubagentSource
   nativeChatReceipts: ReadonlyMap<string, NativeChatResolvedPrompt> | null
   nativeChatActionablePromptIds: readonly string[] | undefined
   nativeChatCommandRefusalCauses: MobileNativeChatCommandRefusalCauses

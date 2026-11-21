@@ -1,6 +1,6 @@
-import { useMemo } from 'react'
-import { Text, View } from 'react-native'
-import { Bot } from 'lucide-react-native'
+import { useContext, useMemo } from 'react'
+import { Pressable, Text, View } from 'react-native'
+import { ArrowUpRight, Bot } from 'lucide-react-native'
 import {
   formatSubagentTokens,
   nativeChatSubagentGroupHeader
@@ -21,11 +21,12 @@ import type {
 import { formatNativeChatDuration } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import { useNow } from '../../../../hooks/use-now'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, spacing, typography } from '../../../../theme/mobile-theme'
+import { colors, pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatEventName, MobileNativeChatEventRow } from './MobileNativeChatEventRow'
 import { scaledType } from './mobile-native-chat-message-styles'
+import { MobileNativeChatRowOverlaysContext } from '../message-actions/mobile-native-chat-row-overlays'
 
 /** What it is doing or said, then its role, where it runs and its tokens; null when it has none. */
 function subagentDetails(agent: NativeChatSubagentEntry): { text: string; facts: string } | null {
@@ -63,7 +64,8 @@ function Elapsed({
 }
 
 /** One subagent as a status row: the agent mark with a spinner while it works and a red ✕ when it
- *  failed, then its name. Opens to what it is doing or its result. */
+ *  failed, its name, then its open icon where the chat can show its own view. Opens to what it is
+ *  doing or its result. */
 function SubagentRow({
   agent,
   groupId,
@@ -73,6 +75,8 @@ function SubagentRow({
   groupId: string
   fontScale: number
 }): React.JSX.Element {
+  const t = useMobileTranslation()
+  const { openSubagent } = useContext(MobileNativeChatRowOverlaysContext)
   const state = normalizeSubagentState(agent.state)
   const details = subagentDetails(agent)
   const type = scaledType(typography.bodySize, fontScale)
@@ -82,6 +86,21 @@ function SubagentRow({
       icon={<Bot size={14} color={colors.textMuted} strokeWidth={2} />}
       badge={state === 'working' ? 'running' : state === 'failed' ? 'failed' : null}
       label={agent.label}
+      action={
+        openSubagent ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('chat.subagentGroup.openAgent', 'Open {{value0}}', {
+              value0: agent.label
+            })}
+            hitSlop={12}
+            onPress={() => openSubagent(agent.id)}
+            style={({ pressed }) => pressed && pressedStyle}
+          >
+            <ArrowUpRight size={14} color={colors.textMuted} />
+          </Pressable>
+        ) : null
+      }
       timestamp={agent.startedAt ?? null}
       disclosureKey={`subagent:${groupId}:${agent.id}`}
       fontScale={fontScale}
