@@ -174,14 +174,31 @@ export function useBotItemsClosedPages(
         const copy = since.get(item.uid)
         return copy && isClosed(copy) && !inNow.has(item.uid) ? [copy] : []
       })
+      // A named item newly Closed within this page's span that the page didn't hold joins it too.
+      const pageEnd = botItemCursorPlace(next.nextClosedCursor)
+      const paged = new Set(fresh.map((item) => item.uid))
+      const joining = [...(since ?? [])].flatMap(([uid, copy]) =>
+        copy &&
+        isClosed(copy) &&
+        !inNow.has(uid) &&
+        !paged.has(uid) &&
+        (!pageEnd || botItemReaches(copy, pageEnd))
+          ? [copy]
+          : []
+      )
       setPages((prev) => {
         // Still the pages this one continues (a named read since kept them): it joins them.
         const same = prev !== null && prev.chats === chats && prev.cursor === cursor
+        const held = new Set(same ? prev.items.map((item) => item.uid) : [])
         return {
           base: same ? prev.base : read,
           chats,
           depth: (same ? prev.depth : 0) + 1,
-          items: [...(same ? prev.items : []), ...fresh],
+          items: [
+            ...(same ? prev.items : []),
+            ...fresh,
+            ...joining.filter((item) => !held.has(item.uid))
+          ],
           cursor: next.nextClosedCursor ?? null
         }
       })
