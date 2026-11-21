@@ -14495,7 +14495,7 @@
           "copy": "Copiar"
         },
         "SkillUpdateRow": {
-          "replaceWithOrca": "Substituir pela cópia do Orca (mantém um backup)"
+          "replaceWithOrca": "Substituir pela cópia desta versão do Orca (mantém um backup)"
         },
         "SkillCard": {
           "d25a1b8ae6": "Compartilhar skill",

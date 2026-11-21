@@ -5515,7 +5515,7 @@
           "updateAction_other": "{{count}} Skills aktualisieren"
         },
         "SkillUpdateRow": {
-          "replaceWithOrca": "Durch die Kopie von Orca ersetzen (Sicherungskopie wird beibehalten)"
+          "replaceWithOrca": "Durch die Kopie dieser Orca-Version ersetzen (Sicherungskopie wird beibehalten)"
         },
         "SkillFreshnessStatusPill": {
           "updateAvailable": "Aktualisierung verfügbar",

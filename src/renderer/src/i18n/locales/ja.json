@@ -5547,7 +5547,7 @@
           "connectHost": "SSH ホストに接続してください"
         },
         "SkillUpdateRow": {
-          "replaceWithOrca": "Orca のコピーに置き換える（バックアップを保持）"
+          "replaceWithOrca": "このバージョンの Orca のコピーに置き換える（バックアップを保持）"
         },
         "host": {
           "local": "このマシン",

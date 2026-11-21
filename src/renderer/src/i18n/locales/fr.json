@@ -5329,7 +5329,7 @@
           "updateAction_many": "Mettre à jour {{count}} skills"
         },
         "SkillUpdateRow": {
-          "replaceWithOrca": "Remplacer par la copie d’Orca (conserve une sauvegarde)"
+          "replaceWithOrca": "Remplacer par la copie de cette version d’Orca (conserve une sauvegarde)"
         },
         "SkillFreshnessStatusPill": {
           "updateAvailable": "Mise à jour disponible",
