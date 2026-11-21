@@ -1,3 +1,5 @@
+import { dirname } from 'node:path'
+
 const PACKAGE_BUILD_PLUGIN_NAME = 'orca-one-package-build'
 
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -23,8 +25,28 @@ const PACKAGE_BUILD_REDIRECTS = [
     from: 'entities',
     to: 'entities/lib/decode.js',
     importer: /[\\/]markdown-it[\\/]/
+  },
+  {
+    // react-native-web pins an older color parser than expo-router's; every importer takes expo-router's,
+    // the one react-native ships the phone app, so both parse a color alike.
+    from: '@react-native/normalize-colors',
+    to: '@react-native/normalize-colors',
+    via: 'expo-router'
   }
 ]
+
+// Resolve from inside the package, so a bare import finds the copy that package itself resolves.
+async function packageDir(build, name, args) {
+  const { path, errors } = await build.resolve(name, {
+    kind: args.kind,
+    importer: args.importer,
+    resolveDir: args.resolveDir
+  })
+  if (errors.length > 0) {
+    throw new Error(`${PACKAGE_BUILD_PLUGIN_NAME}: ${name} no longer resolves`)
+  }
+  return dirname(path)
+}
 
 export const packageBuildPlugin = {
   name: PACKAGE_BUILD_PLUGIN_NAME,
@@ -33,6 +55,10 @@ export const packageBuildPlugin = {
       `^(?:${PACKAGE_BUILD_REDIRECTS.map(({ from }) => escapeRegExp(from)).join('|')})$`
     )
     build.onResolve({ filter }, async (args) => {
+      // A redirect to its own specifier comes back through here; let esbuild resolve that one.
+      if (args.pluginData?.[PACKAGE_BUILD_PLUGIN_NAME]) {
+        return undefined
+      }
       const redirect = PACKAGE_BUILD_REDIRECTS.find(
         ({ from, importer }) => from === args.path && (!importer || importer.test(args.importer))
       )
@@ -42,7 +68,8 @@ export const packageBuildPlugin = {
       const { path, namespace, sideEffects, errors } = await build.resolve(redirect.to, {
         kind: args.kind,
         importer: args.importer,
-        resolveDir: args.resolveDir
+        resolveDir: redirect.via ? await packageDir(build, redirect.via, args) : args.resolveDir,
+        pluginData: { [PACKAGE_BUILD_PLUGIN_NAME]: true }
       })
       // An upgrade that moves the target fails the build instead of shipping both copies again.
       if (errors.length > 0) {
