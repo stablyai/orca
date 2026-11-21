@@ -11,10 +11,12 @@ import {
   type PanelMessageBudget
 } from '../../../shared/plugins/frames/plugin-panel-message-budget'
 import {
+  PLUGIN_PANEL_BYTES_RESULT_MAX_BYTES,
   PLUGIN_PANEL_POST_MAX_BYTES,
   PLUGIN_PANEL_POST_RATE_LIMIT,
   PLUGIN_PANEL_REQUEST_DEFAULT_TIMEOUT_MS,
   PLUGIN_PANEL_RESULT_MAX_BYTES,
+  pluginPanelBytesTooLarge,
   type PluginDataArea,
   type PluginPanelCaller,
   type PluginPanelPush,
@@ -147,30 +149,7 @@ export class PluginPanelBridge {
   }
 
   async request(request: PluginPanelRequest): Promise<PluginJsonValue> {
-    const plugin = this.deps.findApprovedPlugin(request.pluginKey)
-    if (!plugin?.manifest.main) {
-      throw new PluginHostCallError('unavailable', 'this plugin has no worker to answer requests')
-    }
-    let worker: PluginWorkerHandle
-    try {
-      worker = await this.deps.ensureWorker(plugin)
-    } catch (error) {
-      throw new PluginHostCallError('unavailable', errorText(error))
-    }
-    let output: unknown
-    try {
-      output = await worker.requestFromPanel({
-        name: request.name,
-        input: request.input,
-        panel: request.caller,
-        timeoutMs: request.timeoutMs ?? PLUGIN_PANEL_REQUEST_DEFAULT_TIMEOUT_MS,
-        signal: request.signal ?? this.lifetime(request.caller.id).signal
-      })
-    } catch (error) {
-      const code =
-        typeof error === 'object' && error !== null && 'code' in error ? error.code : null
-      throw new PluginHostCallError(normalizePluginErrorCode(code), errorText(error))
-    }
+    const output = await this.askWorker(request)
     if (
       structuredCloneMessageBytes(output ?? null, PLUGIN_PANEL_RESULT_MAX_BYTES) >
       PLUGIN_PANEL_RESULT_MAX_BYTES
@@ -185,6 +164,48 @@ export class PluginPanelBridge {
       )
     }
     return json.data
+  }
+
+  /** `plugin.requestBytes`: the answer is one ArrayBuffer of at most 2 MiB. */
+  async requestBytes(request: PluginPanelRequest): Promise<ArrayBuffer> {
+    const output = await this.askWorker(request)
+    if (!(output instanceof ArrayBuffer)) {
+      throw new PluginHostCallError(
+        'action_failed',
+        `${request.name} answered with a value that is not binary data`
+      )
+    }
+    // The worker runtime already refuses this; main does not trust the worker process.
+    if (output.byteLength > PLUGIN_PANEL_BYTES_RESULT_MAX_BYTES) {
+      throw new PluginHostCallError('too_large', pluginPanelBytesTooLarge(request.name))
+    }
+    return output
+  }
+
+  private async askWorker(request: PluginPanelRequest): Promise<unknown> {
+    const plugin = this.deps.findApprovedPlugin(request.pluginKey)
+    if (!plugin?.manifest.main) {
+      throw new PluginHostCallError('unavailable', 'this plugin has no worker to answer requests')
+    }
+    let worker: PluginWorkerHandle
+    try {
+      worker = await this.deps.ensureWorker(plugin)
+    } catch (error) {
+      throw new PluginHostCallError('unavailable', errorText(error))
+    }
+    try {
+      return await worker.requestFromPanel({
+        name: request.name,
+        input: request.input,
+        panel: request.caller,
+        timeoutMs: request.timeoutMs ?? PLUGIN_PANEL_REQUEST_DEFAULT_TIMEOUT_MS,
+        signal: request.signal ?? this.lifetime(request.caller.id).signal
+      })
+    } catch (error) {
+      const code =
+        typeof error === 'object' && error !== null && 'code' in error ? error.code : null
+      throw new PluginHostCallError(normalizePluginErrorCode(code), errorText(error))
+    }
   }
 
   /** `orca.panels.post`: dropped (and logged) past the plugin's size and rate budget. */

@@ -19,6 +19,13 @@ export const PLUGIN_PANEL_RESULT_MAX_BYTES = 1024 * 1024
 export const PLUGIN_PANEL_POST_MAX_BYTES = 256 * 1024
 /** Posts per plugin, across its panels. */
 export const PLUGIN_PANEL_POST_RATE_LIMIT = { maxMessages: 200, perMs: 10_000 }
+/** One `plugin.requestBytes` answer. Why 2 MiB: copying one answer of this size stalls the Orca
+ *  window no longer than one `plugin.request` answer does (measured), and larger answers are
+ *  hardly faster. The count of a plugin's frame calls (PANEL_MESSAGE_RATE_LIMIT) bounds the volume. */
+export const PLUGIN_PANEL_BYTES_RESULT_MAX_BYTES = 2 * 1024 * 1024
+/** One text for the worker runtime, which refuses such an answer before it leaves, and for main. */
+export const pluginPanelBytesTooLarge = (name: string): string =>
+  `${name} answered with more than 2 MiB`
 
 /** Who asked: one open panel or editor of the plugin. `id` stays the same while it stays open. */
 export const pluginPanelCallerSchema = z.object({

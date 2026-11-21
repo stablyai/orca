@@ -254,6 +254,13 @@ plugin.on('todos.changed', ({ count }) => {})
   `conflict` and the other host error codes; anything else is `action_failed`).
 - Inputs and answers are JSON: an input up to 64 KiB, an answer up to 1 MiB. Posts are fire and
   forget, up to 256 KiB each and 200 per 10 seconds per plugin.
+- Binary answers (host API 1.11):
+  `orca.host.call('plugin.requestBytes', { name, input })` asks the same handlers and resolves
+  with `{ bytes }`, an `ArrayBuffer`, never base64. The handler returns an `ArrayBuffer` or a typed
+  array (only the array's own range is sent). An answer is at most 2 MiB (`too_large` past it),
+  so get a larger buffer in parts. Each call counts toward the same frame call budget as
+  `plugin.request` (`rate_limited` past it). Desktop app only; any other client gets
+  `not_permitted`, so keep a JSON path for it.
 - Only the same plugin's panels and worker can reach each other.
 
 Storage, settings and secrets are the plugin's own, shared by every surface:
