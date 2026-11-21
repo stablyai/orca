@@ -17,6 +17,7 @@ import { useCallback, useMemo, useState } from 'react'
 import type { TaskItem } from '../mobile-tasks-project-workspace-types'
 import { buildPartialRepositoryNotice } from '../repositories/mobile-tasks-repository-presentation'
 import { linearAccountConnect } from './mobile-task-list-operations'
+import { linearAccountClient } from './linear-account-host'
 
 function hasRepoWithFullPage(
   page: readonly Extract<TaskItem, { provider: 'github' }>[],
@@ -44,6 +45,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     githubPaginationLoading,
     githubCountedTotalPages,
     hostId,
+    linearAccountBindingRef,
     linearApiKeyDraft,
     linearConnectState,
     loadGenerationRef,
@@ -82,7 +84,8 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     setLinearConnectState('connecting')
     setLinearConnectError('')
     try {
-      const reply = await linearAccountConnect.request(client, { apiKey })
+      const target = await linearAccountClient(linearAccountBindingRef.current, client)
+      const reply = await linearAccountConnect.request(target, { apiKey })
       const result = linearAccountConnect.interpret(reply)
       if (result.ok === false) {
         throw new Error(result.error ?? 'Failed to connect Linear')

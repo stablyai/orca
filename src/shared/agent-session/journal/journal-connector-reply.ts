@@ -31,6 +31,8 @@ export type JournalConnectorReplyFill = JournalConnectorReplyKey & {
   prose?: string
   failure?: ConnectorFailure
   links?: ConnectorWorkLink[]
+  /** How long the answered turn ran, on the machine's own clock. */
+  tookMs?: number
 }
 
 /** An outbox row not yet accepted by the cloud. */

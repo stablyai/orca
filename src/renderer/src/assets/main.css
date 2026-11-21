@@ -212,6 +212,9 @@
 
 :root {
   --workspace-tab-row-height: 32px;
+  /* How far a split divider's invisible grab area reaches past its visible line. */
+  --divider-grab-reach: 7px;
+  --divider-hover-delay: 200ms;
   --app-header-height: 36px;
   --app-font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-sans: var(--app-font-family);
@@ -1156,9 +1159,7 @@ body[data-modal-overlay-open]
   mask-image: linear-gradient(to right, transparent, #000 1.5rem, #000 100%);
 }
 
-/* Why: the status bar's usage cluster reuses the end fade so a clipped cluster never cuts a glyph. */
-.terminal-tab-strip--fade-end:not(.terminal-tab-strip--fade-start),
-.status-bar-usage-cluster[data-overflowing='true'] {
+.terminal-tab-strip--fade-end:not(.terminal-tab-strip--fade-start) {
   -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
   mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
 }
@@ -1337,57 +1338,62 @@ html.native-shell .app-layout {
   transform: translateY(-50%);
 }
 
-/* Wide (in-flow) seams paint the editor surface so panes don't read as floating cards, in every window mode. */
-.tab-group-split-resize-handle.is-wide,
-:root:is([data-window-material], [data-theme-background]) .tab-group-split-resize-handle.is-wide {
-  background-color: var(--editor-surface);
+/* Thin seams: a 1px in-flow line, with invisible grab segments reaching into one neighbor. The reach
+   avoids the first pane's vertical scrollbar (right of a vertical line) and the second group's tab strip
+   (above a horizontal line); segments leave gaps at attached tab rows. Retained pane hosts sit at z 10
+   over group bodies, so the seam stacks above them. */
+.tab-group-split-resize-handle.is-thin {
+  z-index: 11;
 }
 
-/* Beside attached tab strips the gap continues the strip fill and its 1px bottom border. */
-.tab-group-split-resize-handle.is-wide.has-tab-band {
-  /* The border layer sits over the strip fill, as the strip's own translucent border does. */
-  background-image:
-    linear-gradient(
-      to bottom,
-      transparent calc(var(--workspace-tab-row-height) - 1px),
-      var(--border) calc(var(--workspace-tab-row-height) - 1px) var(--workspace-tab-row-height),
-      transparent var(--workspace-tab-row-height)
-    ),
-    linear-gradient(
-      to bottom,
-      var(--tab-bar, var(--card)) 0 var(--workspace-tab-row-height),
-      transparent var(--workspace-tab-row-height)
-    );
+.tab-group-split-resize-handle.is-thin.is-vertical {
+  width: 1px;
 }
 
-/* Fractional pane edges can leave a 1px row unpainted next to the gap; fill it beneath the panes. */
-.tab-group-split-resize-handle.is-wide::before {
-  content: '';
+.tab-group-split-resize-handle.is-thin.is-horizontal {
+  height: 1px;
+}
+
+.tab-group-split-grab {
   position: absolute;
-  inset: -1px;
-  z-index: -1;
+}
+
+.is-vertical > .tab-group-split-grab {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: calc(-1 * var(--divider-grab-reach));
+}
+
+.is-horizontal > .tab-group-split-grab {
+  left: 0;
+  right: 0;
+  top: calc(-1 * var(--divider-grab-reach));
+  bottom: 0;
+}
+
+.tab-group-split-resize-handle.is-thin::after {
+  inset: 0;
+  width: auto;
+  height: auto;
+  transform: none;
+  border-radius: 0;
   pointer-events: none;
-  background: var(--editor-surface);
-}
-
-/* Wide (in-flow) seams extend the line into a perpendicular parent gap; the parent owns that hit area. */
-.tab-group-split-resize-handle.is-wide::after {
-  pointer-events: none;
-}
-
-.tab-group-split-resize-handle.is-wide.is-vertical::after {
-  top: calc(-1 * var(--divider-extension, 0px));
-  bottom: calc(-1 * var(--divider-extension, 0px));
-}
-
-.tab-group-split-resize-handle.is-wide.is-horizontal::after {
-  left: calc(-1 * var(--divider-extension, 0px));
-  right: calc(-1 * var(--divider-extension, 0px));
 }
 
 .tab-group-split-resize-handle:hover::after,
 .tab-group-split-resize-handle.is-dragging::after {
   background: var(--split-divider-hover);
+}
+
+/* Crossing a thin seam should not flash it; the highlight waits for a resting pointer, but a drag shows it at once. */
+.tab-group-split-resize-handle.is-thin:hover::after {
+  transition-delay: var(--divider-hover-delay);
+}
+
+.tab-group-split-resize-handle.is-thin.is-dragging::after {
+  /* Dropping the transition also cancels a hover delay still pending from a quick grab. */
+  transition: none;
 }
 
 /* Electron drag hit-testing ignores z-index; every overlapping Radix portal needs explicit no-drag. */
@@ -2226,18 +2232,28 @@ html.native-shell .app-layout {
   animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
 }
 
-/* Offscreen subtrees pause their loops; the agent ring drops its animation instead so reveal re-anchors phase. */
+/* The rings' cadence and clock: a smooth spin made the GPU present every refresh; these steps land on the rings' frames. */
+.loading-spinner {
+  animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
+}
+
+/* Offscreen subtrees pause their loops; spinners drop their animation instead so reveal re-anchors phase. */
 [data-animation-offscreen],
 [data-animation-offscreen] * {
   animation-play-state: paused;
 }
 
-.agent-working-spinner[data-animation-offscreen] {
+.agent-working-spinner[data-animation-offscreen],
+.loading-spinner[data-animation-offscreen] {
   animation: none;
 }
 
+/* Generic spinners and pulses hold still under reduced motion even where a caller forgot motion-reduce:. */
 @media (prefers-reduced-motion: reduce) {
-  .agent-working-spinner {
+  .agent-working-spinner,
+  .loading-spinner,
+  .animate-spin,
+  .animate-pulse {
     animation: none;
   }
 }

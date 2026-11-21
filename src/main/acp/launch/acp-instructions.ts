@@ -10,7 +10,7 @@ import type { AcpLaunchSpec } from './acp-launch-contract'
 import type { InitializeResponse } from '../generated/acp-protocol.generated'
 import { acpAgentName } from '../session/acp-structured-agent-definitions'
 import { placeCursorOpeningRule } from '../../cursor/cursor-opening-rule'
-import { writeHermesContextFile } from '../../hermes/hermes-context-file'
+import { writeFolderContextFile } from './acp-folder-context-file'
 import {
   openCodeSourceConfigDirectory,
   openCodeTakesConfigDirInstructions,
@@ -28,8 +28,12 @@ export type AcpInstructionsLaunch = {
   sessionMetaOnReopen?: true
   /** Whether the agent's `initialize` says it takes `sessionMeta`; a session it doesn't never opens. */
   takesSessionMeta?: (initialized: InitializeResponse) => boolean
+  /** An agent that doesn't take `sessionMeta` starts without it instead of refusing to start. */
+  sessionMetaOptional?: true
   /** Runs around `session/new` (never a reopen) in the session's folder; returns what undoes it. */
   aroundNewSession?: (cwd: string) => Promise<() => Promise<void>>
+  /** Removes what this launch wrote once its child has exited or the launch is abandoned. */
+  release?: () => Promise<void>
 }
 
 export type AcpInstructionsDelivery = (input: {
@@ -81,8 +85,16 @@ export const deliverOpenCodeInstructions: AcpInstructionsDelivery = async ({
 }): Promise<AcpInstructionsLaunch | null> => {
   if (openCodeTakesConfigDirInstructions(version)) {
     const configDir = await emptyFolder()
-    await writeOpenCodeInstructionsConfigDir(configDir, openCodeSourceConfigDirectory(env), text)
-    return { env: { OPENCODE_CONFIG_DIR: configDir } }
+    const release = () => removeTreeKeepingLinkTargets(configDir)
+    await writeOpenCodeInstructionsConfigDir(
+      configDir,
+      openCodeSourceConfigDirectory(env),
+      text
+    ).catch(async (error: unknown) => {
+      await release()
+      throw error
+    })
+    return { env: { OPENCODE_CONFIG_DIR: configDir }, release }
   }
   const content = withOpenCodeInstructionsFile(env.OPENCODE_CONFIG_CONTENT, await file())
   return content === null ? null : { env: { OPENCODE_CONFIG_CONTENT: content } }
@@ -93,15 +105,29 @@ export const deliverOmpInstructions: AcpInstructionsDelivery = async ({ file }) 
   args: [`--append-system-prompt=${await file()}`]
 })
 
+// Kiro keeps steering sent on `session/new` with the session, so a reopen keeps the preamble it began with.
+export const deliverKiroInstructions: AcpInstructionsDelivery = async ({ text }) => ({
+  sessionMeta: { kiro: { steering: [{ name: 'orca', inclusion: 'always', content: text }] } }
+})
+
 // Cursor reads its folder's rules once, when a session opens, and keeps them across reopens.
 export const deliverCursorInstructions: AcpInstructionsDelivery = async ({ text }) => ({
   aroundNewSession: (cwd) => placeCursorOpeningRule(cwd, text)
 })
 
 // Hermes builds its system prompt from the folder's `.hermes.md` at the first turn and again at
-// each compaction, so the file stays; every launch rewrites it with the current text.
+// each compaction, so the file stays; every launch rewrites it with the current text. Only Hermes
+// reads it, ahead of AGENTS.md.
 export const deliverHermesInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
-  await writeHermesContextFile(cwd, text)
+  await writeFolderContextFile(cwd, '.hermes.md', 'Hermes', text)
+  return {}
+}
+
+// Kimi builds its system prompt from the folder's AGENTS.md files at `session/new` and keeps it
+// across reopens and compactions. Only Kimi reads `.kimi-code/AGENTS.md`; it stays, because a
+// running Kimi treats a removed one as stale and stops following it.
+export const deliverKimiInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+  await writeFolderContextFile(cwd, join('.kimi-code', 'AGENTS.md'), 'Kimi', text)
   return {}
 }
 

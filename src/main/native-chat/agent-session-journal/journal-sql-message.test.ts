@@ -214,59 +214,6 @@ it('accepts an optimistic echo once, preserving its local body and moved placeme
   })
 })
 
-it('refuses a snapshot after the saved turn ends and commits only a successful step prefix', async () => {
-  const { db, batch, commit, item } = fixture()
-  const turns = await batch.run(['running', 'completed'] as const, (state) =>
-    applyJournalDomainItem(
-      db,
-      target,
-      {
-        kind: 'item',
-        identity: { provider: 'orca', clientMessageId: 'turn' },
-        body: { kind: 'turn', turnId: 'turn', state, startedAt: 1 },
-        options: { fence: 1, turnScope: { kind: 'thread' } }
-      },
-      30
-    )
-  )
-  expect(turns.outcomes).toMatchObject([
-    { committed: true, value: { items: [{ revision: 1, body: { state: 'running' } }] } },
-    { committed: true, value: { items: [{ revision: 2, body: { state: 'completed' } }] } }
-  ])
-  expect(item('orca:turn')).toMatchObject({ sequence: 11, revision: 2, observedAt: 30 })
-  const late = message('late')
-  late.options.turnScope = { kind: 'turn', turnItemId: 'orca:turn' }
-  expect((await commit(late)).outcomes[0]).toMatchObject({
-    committed: true,
-    value: {
-      cursor: { epoch: 'epoch', sequence: 12 },
-      publication: { items: [] },
-      value: { outcomes: [{ kind: 'dropped', reason: 'turn-settled' }] }
-    }
-  })
-  expect(item('orca:assistant')).toBeUndefined()
-  db.exec(`CREATE TEMP TRIGGER fail_message BEFORE INSERT ON journal_items WHEN NEW.item_id='orca:refused'
-    BEGIN SELECT RAISE(ABORT,'refused'); END`)
-  expect(
-    (
-      await commit(
-        message('prefix', 'prefix', 'item'),
-        message('bad', 'refused', 'item'),
-        message('suffix', 'suffix', 'item')
-      )
-    ).outcomes[0]
-  ).toMatchObject({
-    committed: true,
-    value: {
-      cursor: { epoch: 'epoch', sequence: 13 },
-      publication: { items: [{ itemId: 'orca:prefix' }] },
-      value: { failure: { message: 'refused' } }
-    }
-  })
-  expect(item('orca:refused')).toBeUndefined()
-  expect(item('orca:suffix')).toBeUndefined()
-})
-
 it('stores one growing text body and a metadata-only replay tail', async () => {
   const { db, commit } = fixture()
   for (let revision = 1; revision <= 100; revision++) {

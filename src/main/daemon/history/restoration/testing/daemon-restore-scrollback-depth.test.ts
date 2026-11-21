@@ -73,6 +73,26 @@ function simulateAdapterCrash(adapter: DaemonPtyAdapter): void {
   internals.client.disconnect()
 }
 
+// Runs `emit` inside the first snapshot-including takePendingOutput RPC, i.e. while an overlay drains.
+function emitDuringFirstOverlayDrain(adapter: DaemonPtyAdapter, emit: () => void): void {
+  const internals = adapter as unknown as {
+    client: { request: (method: string, params?: unknown) => Promise<unknown> }
+  }
+  const request = internals.client.request.bind(internals.client)
+  let injected = false
+  vi.spyOn(internals.client, 'request').mockImplementation(async (method, params) => {
+    if (
+      method === 'takePendingOutput' &&
+      (params as { includeSnapshot?: boolean } | undefined)?.includeSnapshot &&
+      !injected
+    ) {
+      injected = true
+      emit()
+    }
+    return request(method, params)
+  })
+}
+
 describe('STA-4091 previously recoverable restore depth', () => {
   describe('durable history', () => {
     let dir: string
@@ -421,22 +441,9 @@ describe('STA-4091 previously recoverable restore depth', () => {
       lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
       await adapter.getBufferSnapshot(id)
 
-      const internals = adapter as unknown as {
-        client: { request: (method: string, params?: unknown) => Promise<unknown> }
-      }
-      const request = internals.client.request.bind(internals.client)
-      let injected = false
-      vi.spyOn(internals.client, 'request').mockImplementation(async (method, params) => {
-        if (
-          method === 'takePendingOutput' &&
-          (params as { includeSnapshot?: boolean } | undefined)?.includeSnapshot &&
-          !injected
-        ) {
-          injected = true
-          lastSubprocess.emitData(`${FRESH_AFTER_CHECKPOINT}\r\n`)
-        }
-        return request(method, params)
-      })
+      emitDuringFirstOverlayDrain(adapter, () =>
+        lastSubprocess.emitData(`${FRESH_AFTER_CHECKPOINT}\r\n`)
+      )
 
       const overlaid = await adapter.getBufferSnapshot(id)
       const current = await adapter.getBufferSnapshot(id, { scrollbackRows: 24 })
@@ -444,6 +451,41 @@ describe('STA-4091 previously recoverable restore depth', () => {
         FRESH_AFTER_CHECKPOINT
       )
       expect(overlaid?.seq).toBe(current?.seq)
+    })
+
+    it('keeps the attach-time sequence when output arrives during the reattach overlay', async () => {
+      const beforeAttach = 'BEFORE_ATTACH\r\n'
+      const duringOverlay = `${FRESH_AFTER_CHECKPOINT}\r\n`
+      const { id } = await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'reattach-overlay-sequence',
+        cwd: '/tmp'
+      })
+      lastSubprocess.emitData(beforeAttach)
+      await vi.waitFor(async () => {
+        const snapshot = await adapter.getBufferSnapshot(id, { scrollbackRows: 24 })
+        expect(snapshot?.seq).toBe(beforeAttach.length)
+      })
+
+      let streamed = ''
+      const unsubscribe = adapter.onData(({ id: outputId, data }) => {
+        if (outputId === id) {
+          streamed += data
+        }
+      })
+      emitDuringFirstOverlayDrain(adapter, () => lastSubprocess.emitData(duringOverlay))
+
+      const reattach = await adapter.spawn({ cols: 80, rows: 24, sessionId: id, cwd: '/tmp' })
+      await vi.waitFor(() => expect(streamed).toContain(duringOverlay))
+      unsubscribe()
+
+      // The overlay frame already shows the bytes the live stream delivers; counting both is a false gap.
+      expect(reattach.snapshot).toContain(FRESH_AFTER_CHECKPOINT)
+      expect(reattach.providerSequence).toEqual({
+        value: beforeAttach.length,
+        generation: 'continued'
+      })
     })
   })
 })

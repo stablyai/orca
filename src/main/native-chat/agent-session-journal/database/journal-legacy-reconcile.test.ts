@@ -1,5 +1,8 @@
+import { reconcileJournalLegacySource } from './journal-legacy-reconcile'
+import { applyJournalWriterEffect } from '../journal-writer-effects'
+import { agentSessionAttachmentStoreRoot } from '../../agent-session-attachments/agent-session-attachment-references'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
@@ -508,5 +511,294 @@ it('leaves a copy whose history failed to convert to an open, not to every idle 
     db
       .prepare('SELECT 1 FROM agent_session_store_meta WHERE key=?')
       .get(`journal.legacy-failed:${copy}`)
+  ).toBeUndefined()
+})
+
+it.each(['ABORT', 'ROLLBACK'] as const)(
+  'isolates a %s claim refusal and retains recovery across launches',
+  async (mode) => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+    const { db: original } = openJournalDatabase(journalDatabasePath(root))
+    cleanup.push(() => original.close())
+    olderOrcaChat(original, 'existing', rows)
+    await (await upgrade(root)).close()
+    for (const id of ['before', 'rejected', 'after']) {
+      olderOrcaChat(original, id, [rows[0], turn(`${id}-turn`, 2)])
+      original
+        .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+        .run(`upload-${id}`, id, 100)
+    }
+    original
+      .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+      .run('upload-retained', 'rejected', 100)
+    mkdirSync(join(agentSessionAttachmentStoreRoot(root), 'upload-retained'), { recursive: true })
+    original.pragma('wal_checkpoint(TRUNCATE)')
+    const blocked = openJournalDomainDatabase(journalDomainDatabasePath(root)).db
+    blocked.exec(`CREATE TRIGGER refuse_claim BEFORE INSERT ON agent_session_attachment_claims
+    WHEN NEW.upload_id='upload-rejected' BEGIN SELECT RAISE(${mode},'upload unavailable'); END`)
+    blocked.close()
+
+    const kept = await upgrade(root)
+    expect(await kept.convert('after')).toBe('epoch')
+    expect(items(kept.db, 'after')).toEqual(['after-turn'])
+    expect(
+      kept.db
+        .prepare(
+          'SELECT upload_id,session_id FROM agent_session_attachment_claims ORDER BY upload_id'
+        )
+        .all()
+    ).toEqual([
+      { upload_id: 'upload-after', session_id: 'after' },
+      { upload_id: 'upload-before', session_id: 'before' },
+      { upload_id: 'upload-retained', session_id: 'rejected' }
+    ])
+    expect(
+      JSON.parse(
+        String(
+          kept.db
+            .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
+            .get('journal.legacy-failed:rejected')?.value
+        )
+      )
+    ).toMatchObject({ error: 'upload unavailable' })
+    runJournalTransaction(kept.db, () =>
+      applyJournalWriterEffect(kept.db, root, {
+        kind: 'sweep',
+        operation: {
+          kind: 'prune',
+          pairs: [{ uploadId: 'upload-retained', sessionId: 'rejected' }]
+        }
+      })
+    )
+    expect(
+      kept.db
+        .prepare('SELECT 1 FROM agent_session_attachment_claims WHERE upload_id=?')
+        .get('upload-retained')
+    ).toBeDefined()
+    kept.db.exec('DROP TRIGGER refuse_claim')
+    await kept.close()
+    olderOrcaChat(original, 'later', [rows[0], turn('later-turn', 2)])
+    original.pragma('wal_checkpoint(TRUNCATE)')
+
+    const again = await upgrade(root)
+    cleanup.push(again.close)
+    expect(
+      again.db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?').get('rejected')
+    ).toBeUndefined()
+    expect(
+      again.db.prepare('SELECT session_id FROM agent_session_records ORDER BY session_id').all()
+    ).toEqual([
+      { session_id: 'after' },
+      { session_id: 'before' },
+      { session_id: 'existing' },
+      { session_id: 'later' }
+    ])
+    again.db.exec(`CREATE TRIGGER refuse_claim BEFORE INSERT ON agent_session_attachment_claims
+    WHEN NEW.upload_id='upload-rejected' BEGIN SELECT RAISE(${mode},'upload unavailable'); END`)
+    await again.close()
+    cleanup.pop()
+    original
+      .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+      .run('upload-added-later', 'rejected', 200)
+    mkdirSync(join(agentSessionAttachmentStoreRoot(root), 'upload-added-later'), {
+      recursive: true
+    })
+    original.pragma('wal_checkpoint(TRUNCATE)')
+    const added = await upgrade(root)
+    expect(
+      added.db
+        .prepare(
+          'SELECT upload_id FROM agent_session_attachment_claims WHERE session_id=? ORDER BY upload_id'
+        )
+        .all('rejected')
+    ).toEqual([{ upload_id: 'upload-added-later' }, { upload_id: 'upload-retained' }])
+    expect(
+      added.db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?').get('rejected')
+    ).toBeUndefined()
+    await added.close()
+    original
+      .prepare('DELETE FROM agent_session_attachment_claims WHERE upload_id=?')
+      .run('upload-rejected')
+    original.pragma('wal_checkpoint(TRUNCATE)')
+    const recovered = await upgrade(root)
+    cleanup.push(recovered.close)
+    expect(
+      recovered.db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?').get('rejected')
+    ).toBeDefined()
+    expect(
+      recovered.db
+        .prepare('SELECT 1 FROM agent_session_store_meta WHERE key=?')
+        .get('journal.legacy-failed:rejected')
+    ).toBeUndefined()
+  }
+)
+
+it('keeps attachment-only claims even when the original history is unchanged', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: original } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => original.close())
+  olderOrcaChat(original, 'existing', rows)
+  await (await upgrade(root)).close()
+  original
+    .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+    .run('attached-without-history', 'existing', 100)
+  original.pragma('wal_checkpoint(TRUNCATE)')
+
+  for (let launch = 0; launch < 2; launch++) {
+    const opened = await upgrade(root)
+    try {
+      expect(
+        opened.db.prepare('SELECT upload_id,session_id FROM agent_session_attachment_claims').all()
+      ).toEqual([{ upload_id: 'attached-without-history', session_id: 'existing' }])
+    } finally {
+      await opened.close()
+    }
+  }
+})
+
+it('keeps the original upload custody when a forced copy cannot be adopted', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: original } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => original.close())
+  olderOrcaChat(original, 'converted', rows)
+  const first = await upgrade(root)
+  expect(await first.convert('converted')).toBe('epoch')
+  first.db
+    .prepare('INSERT INTO agent_session_store_meta VALUES(?,?)')
+    .run('journal.legacy-copy-due:converted', '1')
+  await first.close()
+  original
+    .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+    .run('original-upload', 'converted', 100)
+  original
+    .prepare('UPDATE agent_session_records SET record_json=? WHERE session_id=?')
+    .run('{', 'converted')
+  original.pragma('wal_checkpoint(TRUNCATE)')
+
+  const kept = await upgrade(root)
+  cleanup.push(kept.close)
+  expect(
+    kept.db.prepare('SELECT upload_id,session_id FROM agent_session_attachment_claims').all()
+  ).toEqual([{ upload_id: 'original-upload', session_id: 'converted' }])
+  expect(kept.db.prepare('SELECT session_id FROM agent_session_records').all()).toEqual([
+    { session_id: 'converted' }
+  ])
+  expect(
+    kept.db
+      .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
+      .get('journal.legacy-failed:converted')
+  ).toBeDefined()
+  await kept.close()
+  cleanup.pop()
+  original
+    .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+    .run('later-original-upload', 'converted', 200)
+  original.pragma('wal_checkpoint(TRUNCATE)')
+  const later = await upgrade(root)
+  cleanup.push(later.close)
+  expect(
+    later.db
+      .prepare('SELECT upload_id FROM agent_session_attachment_claims ORDER BY upload_id')
+      .all()
+  ).toEqual([{ upload_id: 'later-original-upload' }, { upload_id: 'original-upload' }])
+  expect(later.db.prepare('SELECT session_id FROM agent_session_records').all()).toEqual([
+    { session_id: 'converted' }
+  ])
+})
+
+it('queues a history compare even when the chat has a refused claim', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: original } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => original.close())
+  olderOrcaChat(original, 'converted', rows)
+  const first = await upgrade(root)
+  expect(await first.convert('converted')).toBe('epoch')
+  asOlderChatStore(first.db)
+  first.db.exec(`CREATE TRIGGER refuse_claim BEFORE INSERT ON agent_session_attachment_claims
+    BEGIN SELECT RAISE(ABORT,'upload unavailable'); END`)
+  await first.close()
+  insertJournalRow(original, 'converted', turn('older-turn', tip + 1))
+  original
+    .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+    .run('upload', 'converted', 100)
+  original.pragma('wal_checkpoint(TRUNCATE)')
+  const later = await upgrade(root)
+  cleanup.push(later.close)
+  const pending = readJournalSqlDatabase(later.db, { kind: 'legacy-compares', after: null })
+  expect(
+    pending.kind === 'legacy-compares' && pending.compares.map((chat) => chat.sessionId)
+  ).toEqual(['converted'])
+})
+
+it('records a failed chat even when the original changes during reconciliation', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: original } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => original.close())
+  olderOrcaChat(original, 'existing', rows)
+  await (await upgrade(root)).close()
+  olderOrcaChat(original, 'rejected', [rows[0], turn('rejected-turn', 2)])
+  olderOrcaChat(original, 'after', [rows[0], turn('after-turn', 2)])
+  original.pragma('wal_checkpoint(TRUNCATE)')
+  const { db } = openJournalDomainDatabase(journalDomainDatabasePath(root))
+  cleanup.push(() => db.close())
+  db.function('continue_original', () => {
+    original
+      .prepare('INSERT OR REPLACE INTO agent_session_store_meta VALUES(?,?)')
+      .run('source-written-during-pass', '1')
+    return 1
+  })
+  db.exec(`CREATE TRIGGER refused BEFORE INSERT ON agent_session_records
+    WHEN NEW.session_id='rejected' BEGIN
+      SELECT continue_original(); SELECT RAISE(ABORT,'record refused'); END`)
+  reconcileJournalLegacySource(root, db)
+  expect(
+    db
+      .prepare('SELECT 1 FROM agent_session_store_meta WHERE key=?')
+      .get('journal.legacy-failed:rejected')
+  ).toBeDefined()
+  expect(
+    db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?').get('after')
+  ).toBeDefined()
+  db.exec('DROP TRIGGER refused')
+  reconcileJournalLegacySource(root, db)
+  expect(
+    db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?').get('rejected')
+  ).toBeUndefined()
+})
+
+it('releases failed custody holds after the older store removes the chat', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: original } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => original.close())
+  olderOrcaChat(original, 'existing', rows)
+  await (await upgrade(root)).close()
+  olderOrcaChat(original, 'rejected', [rows[0], turn('rejected-turn', 2)])
+  original
+    .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+    .run('held-upload', 'rejected', 100)
+  const { db } = openJournalDomainDatabase(journalDomainDatabasePath(root))
+  cleanup.push(() => db.close())
+  db.exec(`CREATE TRIGGER refused BEFORE INSERT ON agent_session_records
+    WHEN NEW.session_id='rejected' BEGIN SELECT RAISE(ABORT,'record refused'); END`)
+  reconcileJournalLegacySource(root, db)
+  expect(
+    db
+      .prepare('SELECT 1 FROM agent_session_store_meta WHERE key=?')
+      .get('journal.legacy-failed:rejected')
+  ).toBeDefined()
+  original.prepare('DELETE FROM agent_session_records WHERE session_id=?').run('rejected')
+  original.prepare('DELETE FROM journal_sessions WHERE session_id=?').run('rejected')
+  original.prepare('DELETE FROM agent_session_attachment_claims WHERE session_id=?').run('rejected')
+  reconcileJournalLegacySource(root, db)
+  expect(
+    db
+      .prepare('SELECT 1 FROM agent_session_store_meta WHERE key=?')
+      .get('journal.legacy-failed:rejected')
   ).toBeUndefined()
 })

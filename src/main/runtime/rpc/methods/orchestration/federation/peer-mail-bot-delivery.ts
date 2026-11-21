@@ -15,7 +15,7 @@ export async function deliverPeerMailToBot(
   params: z.infer<typeof PeerMailDeliverParams>,
   peerFingerprint: string,
   senderSnapshot: string | undefined
-): Promise<'delivered' | { to: string }> {
+): Promise<'delivered' | { to: string; body?: string }> {
   const db = runtime.getOrchestrationDb()
   // The label is no party here, so the request reads as the owner's own.
   const sender = {
@@ -67,6 +67,7 @@ export async function deliverPeerMailToBot(
           chat: params.chat,
           item: params.item
         },
+        attachments: params.attachments,
         from: params.senderLabel,
         to: params.to,
         sender,

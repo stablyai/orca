@@ -42,6 +42,8 @@ export type NotificationDeliveryDependencies = {
   wasRead?: (request: NotificationDispatchRequest) => boolean
   /** Called for each actual desktop banner or mobile alert. */
   recordAnnounced?: (request: NotificationDispatchRequest) => void
+  /** Whether the chat behind a structured notification answers a Slack thread. */
+  repliesInSlack?: (sessionId: string) => boolean
 }
 
 export type NotificationDeliveryService = {
@@ -111,7 +113,13 @@ export function createNotificationDeliveryService(
         request.agentState
       )
 
-      const notificationOptions = buildNotificationOptions(request, translateMain)
+      const sessionId = request.structuredOrigin?.sessionId
+      const notificationOptions = buildNotificationOptions(
+        sessionId && deps.repliesInSlack?.(sessionId)
+          ? { ...request, agentRepliesInSlack: true }
+          : request,
+        translateMain
+      )
 
       // Desktop focus need not silence phones; execution hosts retire their own delivered alerts.
       if (

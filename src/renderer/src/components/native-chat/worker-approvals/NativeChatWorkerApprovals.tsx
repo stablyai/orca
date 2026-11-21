@@ -7,11 +7,11 @@ import { installWindowVisibilityInterval } from '@/lib/window-activity/window-vi
 import { openOrchestrationCrewAgent } from '@/lib/agent-session/open/open-agent-message-sender'
 import { NativeChatApprovalCard } from '../prompts/NativeChatApprovalCard'
 import { NativeChatApprovalRecord } from '../prompts/NativeChatApprovalRecord'
+import { workerApprovalTimeLeft } from '../../../../../shared/orchestration/approvals/worker-approval-time-left'
 import {
   isWorkerApprovalDecision,
   workerApprovalCard,
-  workerApprovalRecordLine,
-  workerApprovalTimeLeft
+  workerApprovalRecordLine
 } from './worker-approval-card-model'
 import {
   useNativeChatPinnedWorkerApprovals,

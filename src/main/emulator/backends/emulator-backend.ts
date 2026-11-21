@@ -72,6 +72,7 @@ export type EmulatorBackend = {
   type(deviceId: string, text: string, paste?: boolean): Promise<void>
   /** Points the device's hardware keyboard at the host's layout; true when physical keys now match it. */
   syncHardwareKeyboardLayout?(deviceId: string): Promise<boolean>
+  restoreHardwareKeyboardLayout?(deviceId: string): Promise<void>
   button(deviceId: string, name: string): Promise<void>
   rotate(deviceId: string, orientation: string): Promise<void>
   exec(deviceId: string, command: string): Promise<unknown>

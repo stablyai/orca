@@ -3,6 +3,12 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import type * as WslUncAccessGate from '../../../wsl/filesystem/wsl-unc-access-gate'
+
+vi.mock('../../../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslUncAccessGate>()),
+  blockedWslDistroForPath: async () => null
+}))
 
 import { MANAGED_HOOK_TIMEOUT_SECONDS } from '../../../agent-hooks/installation/configuration/hook-config-schema'
 import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from '../../../agent-hooks/installation/scripts/hook-stdin-contract'
@@ -21,10 +27,11 @@ type HooksConfig = {
 let tempRoots: string[] = []
 
 beforeEach(() => {
-  // Isolate the trust ledger from the running app's userData.
+  // Isolate the trust ledger from the running app's userData and avoid spawning host wsl.exe.
   const userData = mkdtempSync(join(tmpdir(), 'orca-codex-wsl-hooks-userdata-'))
   tempRoots.push(userData)
   vi.stubEnv('ORCA_USER_DATA_PATH', userData)
+  vi.stubEnv('ORCA_DISABLE_CODEX_TRUST_RPC', '1')
 })
 
 afterEach(() => {

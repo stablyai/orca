@@ -87,7 +87,7 @@ export function replyEventsOf(rows: readonly Filled[]): ConnectorReplyEvent[] {
     if (!first || !conversation) {
       continue
     }
-    const { answerDeliveryId, outcome, prose, failure, links } = first.fill
+    const { answerDeliveryId, outcome, prose, failure, links, tookMs } = first.fill
     // Each event names the answer's own delivery among its ids.
     const others = group.map((row) => row.deliveryId).filter((id) => id !== answerDeliveryId)
     const room = CONNECTOR_CLIENT_LIMITS.maxReplyDeliveryIds - 1
@@ -100,7 +100,8 @@ export function replyEventsOf(rows: readonly Filled[]): ConnectorReplyEvent[] {
         outcome,
         ...(outcome === 'answered' && prose ? { prose } : {}),
         ...(failure ? { failure } : {}),
-        ...(links?.length ? { links } : {})
+        ...(links?.length ? { links } : {}),
+        ...(outcome === 'answered' && tookMs ? { tookMs } : {})
       })
     }
   }

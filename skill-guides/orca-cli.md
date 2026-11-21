@@ -85,6 +85,10 @@ A chat keeps its ID across `/clear`; a terminal agent gets a new one, and its ol
 
 Send another agent a message with Orca mail, never by typing into its terminal:
 
+Write multiline text to a file with your file tool, then pass that file: --body-file, --spec-file, git commit -F, gh ... --body-file.
+Never use heredocs (<<) or here-strings (<<<); they can hang the shell.
+If send, reply or worker-start fails, do only what the CLI prints and keep that file unchanged. Never retry on your own or with a new ID.
+
 ```text
 ORCA orchestration send --to <terminal handle or orca_session_id:<chat id>> [--type question|dispatch|merge_ready|handoff] --subject "<topic>" --body "<message>" --json
 ```
