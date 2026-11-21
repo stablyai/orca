@@ -6,21 +6,9 @@ import { colors, feedback, radii } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 
-export type MobileSliderProps = {
-  value: number
-  min: number
-  max: number
-  step?: number
-  /** Each step the thumb crosses, so a preview can follow the drag. */
-  onValueChange: (value: number) => void
-  /** Once per drag, tap or accessibility step, for work that should not run every step. */
-  onSlidingComplete?: (value: number) => void
-  accessibilityLabel: string
-  /** Spoken in place of the bare number, e.g. "13 points". */
-  accessibilityValueText?: string
-  disabled?: boolean
-  testID?: string
-}
+import type { MobileSliderProps } from './mobile-control-props'
+
+export type { MobileSliderProps }
 
 const THUMB = 26
 const TRACK_HEIGHT = 4
@@ -28,7 +16,7 @@ const HEIGHT = 44
 const WEB = Platform.OS === 'web'
 
 /**
- * A stepped slider drawn like iOS's: a thin track filled blue up to a white thumb.
+ * The web slider, drawn like iOS's: a thin track filled blue up to a white thumb.
  * JS-thread gestures: the page bundle has no worklet plugin, and steps are coarse enough to rerender.
  */
 export function MobileSlider({
