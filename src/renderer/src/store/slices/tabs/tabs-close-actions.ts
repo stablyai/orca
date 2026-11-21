@@ -1,5 +1,6 @@
 import { editorTabRetirement } from '../editor/tabs/editor-tab-retirement'
 import { structuredAgentSessionAddressTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { retainClosedWorkspaceChat } from './retain-closed-workspace-chat'
 import {
   landsOnEmptiedWorktree,
   emptiedWorktreeLandingPatch,
@@ -73,6 +74,7 @@ export function createTabsCloseActions(
       const dedupedGroupOrder = dedupeTabOrder(groupOrder)
       const remainingOrder = dedupeTabOrder(dedupedGroupOrder.filter((id) => id !== tabId))
       const wasLastTab = remainingOrder.length === 0
+      let retainedChat = false
       const retainedChatView =
         opts?.preserveAgentSession &&
         (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
@@ -86,6 +88,7 @@ export function createTabsCloseActions(
         const provisional =
           shouldRetainStructuredAgentSessionLaunchTab(worktreeId, tab.entityId) ||
           hasStructuredAgentSessionLaunchCancellationTombstone(worktreeId, tab.entityId)
+        retainedChat = retainClosedWorkspaceChat(state, tab, provisional)
         const target = structuredAgentSessionTargetForTab(state, tab)
         if (!tab.executionHostId || !target) {
           retireStructuredAgentSessionReadOwner(tab.entityId, null, tab.executionHostId ?? '')
@@ -188,6 +191,7 @@ export function createTabsCloseActions(
             // Unwinding a failed create added no tab; preserve the original selection instead of landing on welcome.
             const shouldDeactivateWorktree =
               !opts?.preserveWorktreeSelection &&
+              !retainedChat &&
               landsOnEmptiedWorktree(current, worktreeId, nextTabs.length)
             return {
               unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
@@ -227,7 +231,9 @@ export function createTabsCloseActions(
             retireEditor()
           },
           // An editor close lands through closeFile, which owns its content.
-          ...(isEditorTabContentType(tab.contentType) || opts?.preserveWorktreeSelection
+          ...(isEditorTabContentType(tab.contentType) ||
+          opts?.preserveWorktreeSelection ||
+          retainedChat
             ? {}
             : { landIfEmptied: () => landOnEmptiedWorktree(set, get, worktreeId) }),
           // A chat tab owns its markers; nothing else retires them.

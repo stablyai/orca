@@ -12,6 +12,14 @@ function retirementKey(target: RuntimeClientTarget, worktreeId: string, sessionI
   return `${target.kind}:${target.kind === 'environment' ? target.environmentId : 'local'}:${worktreeId}:${sessionId}`
 }
 
+export async function waitForStructuredAgentSessionTabRetirement(
+  target: RuntimeClientTarget,
+  worktreeId: string,
+  sessionId: string
+): Promise<void> {
+  await inFlightRetirements.get(retirementKey(target, worktreeId, sessionId))
+}
+
 /**
  * Best-effort host cleanup; local removal must never wait for bookkeeping. Resolves false when the
  * host tab close failed, so the host may still list the chat.

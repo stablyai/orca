@@ -10,6 +10,7 @@ import type { WorktreeCardController } from '../controller/use-worktree-card-con
 import { DEFAULT_WORKSPACE_CARD_TEMPLATE } from '../template/default-workspace-card'
 import { renderWorkspaceCardTemplate } from '../template/render-workspace-card-template'
 import { WorktreeCardTitleStatusProvider } from './worktree-card-title-status'
+import { RetainedWorkspaceChats } from '../activity/retained-workspace-chats'
 
 /** Shape, inset and transitions every sidebar card row shares; inactive rows add `worktree-sidebar-card-hover`. */
 export const WORKTREE_CARD_SURFACE_CLASS_NAME =
@@ -128,6 +129,8 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
       ) : (
         parentCardContent
       )}
+
+      <RetainedWorkspaceChats worktreeId={worktree.id} executionHostId={worktree.hostId} />
 
       {lineageChildren ? (
         <div
