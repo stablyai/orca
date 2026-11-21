@@ -12,17 +12,26 @@ import { endedPresenceOf } from './agent-exit-evidence'
 import type { LaunchResumeIdentityEvent } from './launch-resume-identity-event'
 import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { agentPaneSleepStatus } from '../../../shared/agent-status/lifecycle/agent-pane-sleep-status'
+import { AGENT_STATUS_HYDRATE_MAX_AGE_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
 
 export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityFences {
   abstract dropStatusEntry(paneKey: string, options?: { preserveResumeIdentity?: boolean }): void
 
-  pruneUnplacedSleepingPanes(): void {
+  /** Drops rows only a pane's placement kept: a slept pane's, and an idle agent's past the TTL. */
+  pruneUnplacedPanes(): void {
+    const ttlCutoff = Date.now() - AGENT_STATUS_HYDRATE_MAX_AGE_MS
     for (const [paneKey, entry] of this.state.lastStatusByPaneKey) {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the server caches enriched accepted rows, while the listener contract exposes their base shape.
       const row = entry as EnrichedAgentHookEventPayload
-      if (row.paneSleep && this.terminalPaneLifecycle?.isPlaced(row) === false) {
+      // Unknown placement keeps a live row; an unsaved one is gone at the next restart anyway.
+      if (this.terminalPaneLifecycle?.isPlaced(row) !== false) {
+        continue
+      }
+      if (row.paneSleep) {
         this.retirePaneAuthority(paneKey)
         this.emitPaneStatusCleared({ paneKey })
+      } else if (row.receivedAt < ttlCutoff && !row.structuredHost) {
+        this.dropStatusEntry(paneKey, { preserveResumeIdentity: false })
       }
     }
   }

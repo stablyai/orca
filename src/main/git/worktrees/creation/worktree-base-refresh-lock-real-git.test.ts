@@ -238,36 +238,21 @@ describe('concurrent local base refreshes of one repo with real Git', () => {
 })
 
 describe('concurrent local base refreshes toward different remotes with real Git', () => {
-  it('moves local to a target a later create from another remote asked for', async () => {
+  it('coalesces matching queued targets and reports each remote’s own outcome', async () => {
     const { repoPath, upstreamOid } = await createForkRepo()
     const spy = spyOnFastForwards()
 
     const results = await Promise.all([
       refresh(repoPath, 'origin'),
       refresh(repoPath, 'upstream'),
+      refresh(repoPath, 'upstream'),
       refresh(repoPath, 'origin')
     ])
 
     expect(results[0]).toMatchObject({ baseRef: 'origin/main', status: 'updated' })
     expect(results[1]).toMatchObject({ baseRef: 'upstream/main', status: 'updated' })
-    expect(results[2]).toMatchObject({ baseRef: 'origin/main', status: 'skipped_not_fast_forward' })
-    expect(git(repoPath, ['rev-parse', 'main'])).toBe(upstreamOid)
-    expect(spy.maxConcurrent()).toBe(1)
-  })
-
-  it('never answers a create with the outcome of another remote target', async () => {
-    const { repoPath, upstreamOid } = await createForkRepo()
-    const spy = spyOnFastForwards()
-
-    const results = await Promise.all([
-      refresh(repoPath, 'upstream'),
-      refresh(repoPath, 'upstream'),
-      refresh(repoPath, 'origin')
-    ])
-
-    expect(results[0]).toMatchObject({ baseRef: 'upstream/main', status: 'updated' })
-    expect(results[1]).toBeUndefined()
-    expect(results[2]).toMatchObject({ baseRef: 'origin/main', status: 'skipped_not_fast_forward' })
+    expect(results[2]).toEqual(results[1])
+    expect(results[3]).toMatchObject({ baseRef: 'origin/main', status: 'skipped_not_fast_forward' })
     expect(git(repoPath, ['rev-parse', 'main'])).toBe(upstreamOid)
     expect(spy.maxConcurrent()).toBe(1)
   })

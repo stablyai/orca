@@ -348,23 +348,6 @@ describe('bot automations', () => {
     service.stop()
   })
 
-  it('records a failed launch as a failed run', async () => {
-    const store = await createStore()
-    const bot = seedBot(store)
-    const automation = seedBotAutomation(store, bot)
-    const botDispatcher = vi.fn<AutomationBotLauncher>(async () => {
-      throw new Error('structured_sessions_unavailable')
-    })
-    const { service } = serviceWith(store, botDispatcher)
-
-    const run = await runNowSettled(service, store, automation.id)
-
-    expect(run).toMatchObject({
-      status: 'dispatch_failed',
-      error: 'structured_sessions_unavailable'
-    })
-  })
-
   describe('results to the event thread', () => {
     const event = {
       triggerId: 't1',

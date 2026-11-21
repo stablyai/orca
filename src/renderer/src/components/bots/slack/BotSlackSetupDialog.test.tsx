@@ -81,7 +81,11 @@ function slackState(state: ConnectorBotSlackState): void {
 }
 
 function openDialog(subject = bot()): void {
-  render(<BotSlackSetupDialog bot={subject} open onOpenChange={() => {}} />)
+  render(
+    <TooltipProvider>
+      <BotSlackSetupDialog bot={subject} open onOpenChange={() => {}} />
+    </TooltipProvider>
+  )
 }
 
 beforeEach(() => {
@@ -278,6 +282,22 @@ describe('BotSlackSetupDialog', () => {
     expect(api.openUrl).toHaveBeenCalledOnce()
   })
 
+  it('updates an app that only predates optional permissions, and waits for them', async () => {
+    slackState({
+      state: 'installed',
+      teamId: 'T1',
+      appId: 'A1',
+      botUserId: 'UB',
+      installerUserId: 'U1',
+      updateAvailable: true
+    })
+    openDialog()
+
+    await screen.findByText('Waiting for Slack…')
+    expect(api.setUpApp).toHaveBeenCalledWith({ botId: 'bot-1', teamId: 'T1' })
+    expect(api.openUrl).toHaveBeenCalledOnce()
+  })
+
   it('opens Slack once per open while the bot is re-read and the update still waits', async () => {
     slackState({
       state: 'installed',
@@ -351,7 +371,7 @@ describe('BotSlackSetupDialog', () => {
     api.setUpApp.mockResolvedValue({ ok: false, error: 'grant_expired' })
     openDialog()
 
-    expect(await screen.findByRole('button', { name: 'Reconnect Slack workspace' })).toBeDefined()
+    expect(await screen.findByRole('button', { name: 'Reconnect' })).toBeDefined()
   })
 
   it.each([
@@ -366,7 +386,7 @@ describe('BotSlackSetupDialog', () => {
       } as const,
       'Done'
     ],
-    [{ state: 'grant_expired', teamId: 'T1' } as const, 'Reconnect Slack workspace']
+    [{ state: 'grant_expired', teamId: 'T1' } as const, 'Reconnect']
   ])('opens on the step for the cloud’s %o', async (state, button) => {
     slackState(state)
     openDialog()

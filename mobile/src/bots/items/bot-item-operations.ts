@@ -1,5 +1,6 @@
 // The owner's item calls from the phone: the host the route reaches (a paired server's too) reads and
-// changes the bot's items. Writes carry no request id in v1, so a dropped reply is never retried.
+// changes the bot's items. Only a comment carries a request id (where the host takes one), so only a
+// comment's Retry is safe after a dropped reply.
 import * as z from 'zod'
 import {
   BotItemShowReadSchema,
@@ -74,20 +75,30 @@ const itemsSnooze = bindDeferredRpcOperation(
   })
 )
 
+/** One chat goes as `chatId`, which hosts from before `chatIds` read too, as the desktop sends it. */
+function botItemsChatScope(
+  chatIds: readonly string[] | null
+): { chatId: string } | { chatIds: string[] } | Record<string, never> {
+  if (chatIds === null) {
+    return {}
+  }
+  return chatIds.length === 1 ? { chatId: chatIds[0]! } : { chatIds: [...chatIds] }
+}
+
 /** `message` says why a read failed: the host's refusal or the transport's error, when either gave one. */
 export type BotItemRead<T> =
   | { kind: 'read'; value: T }
   | { kind: 'failed'; notFound: boolean; message?: string }
 
-/** Every open item, closed ones a page at a time (`closedCursor` for the next), or one chat's. */
+/** Every open item, closed ones a page at a time (`closedCursor` for the next), or these chats'. */
 export async function readBotItems(
   client: RpcClient,
   botId: string,
-  page: { chatId?: string; closedCursor?: string } = {}
+  { chatIds, ...page }: { chatIds?: readonly string[] | null; closedCursor?: string } = {}
 ): Promise<BotItemRead<BotItemsListRead>> {
   try {
     const answer = readHostMethodReply(
-      await itemsList.request(client, { botId, ...page }),
+      await itemsList.request(client, { botId, ...page, ...botItemsChatScope(chatIds ?? null) }),
       itemsList.interpret
     )
     return answer.kind === 'answered'
@@ -129,7 +140,7 @@ export function markBotItemsOpened(client: RpcClient, botId: string): void {
 
 /** How an owner write went: `unknown` when the connection dropped after sending, so it may have landed. */
 export type BotItemWriteOutcome =
-  | { kind: 'done' }
+  | { kind: 'done'; result?: unknown }
   | { kind: 'refused'; message: string }
   | { kind: 'unknown' }
   | { kind: 'not-sent' }
@@ -141,23 +152,32 @@ async function write(send: () => Promise<unknown>): Promise<BotItemWriteOutcome>
   } catch (error) {
     return isRpcDeliveryUnknown(error) ? { kind: 'unknown' } : { kind: 'not-sent' }
   }
-  return reply instanceof Error ? { kind: 'refused', message: reply.message } : { kind: 'done' }
+  return reply instanceof Error
+    ? { kind: 'refused', message: reply.message }
+    : { kind: 'done', result: reply }
 }
 
+/** `images`: committed attachment store paths on the bot's host; `requestId` only to a host that
+ *  takes one. Done carries the host's answer, `{ eventId }`. */
 export function commentOnBotItem(
   client: RpcClient,
   uid: string,
-  text: string
+  text: string,
+  extra: { images?: readonly string[]; requestId?: string } = {}
 ): Promise<BotItemWriteOutcome> {
   return write(async () => {
     const reply = await itemComment.request(
       client,
-      { item: uid, text },
+      {
+        item: uid,
+        text,
+        ...(extra.images?.length ? { images: [...extra.images] } : {}),
+        ...(extra.requestId ? { requestId: extra.requestId } : {})
+      },
       { failWhenDisconnected: true }
     )
     try {
-      itemComment.interpret(reply)
-      return null
+      return itemComment.interpret(reply)
     } catch (error) {
       return error instanceof Error ? error : new Error(String(error))
     }

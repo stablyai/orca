@@ -111,8 +111,9 @@ function NativePromptEditor({
       // A disabled box still says why it is disabled, as the plain text box's placeholder does.
       Placeholder.configure({
         placeholder: ({ editor }) => {
+          // The live placeholder, not the aria-label: a caller may name the box apart from its hint.
           const attributes = editor.options.editorProps?.attributes
-          return typeof attributes === 'object' ? (attributes['aria-label'] ?? '') : ''
+          return typeof attributes === 'object' ? (attributes['data-placeholder-text'] ?? '') : ''
         },
         showOnlyWhenEditable: false
       })
@@ -125,6 +126,7 @@ function NativePromptEditor({
         role: 'textbox',
         'aria-multiline': 'true',
         'aria-label': placeholder,
+        'data-placeholder-text': placeholder,
         spellcheck: spellcheck ? 'true' : 'false',
         // Chromium on macOS still applies system text replacements under spellcheck=false; autocorrect=off stops them.
         ...(spellcheck ? {} : { autocorrect: 'off', autocapitalize: 'off' }),

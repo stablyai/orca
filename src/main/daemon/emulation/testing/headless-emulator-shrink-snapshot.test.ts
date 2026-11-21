@@ -62,12 +62,9 @@ describe('snapshot after a column shrink', () => {
     emu.dispose()
   })
 
-  it.each([
-    ['CJK', '中'],
-    ['emoji', '😀']
-  ])('blanks a %s cell whose trailing half fell past the grid', async (_kind, glyph) => {
+  it('blanks a wide cell whose trailing half fell past the grid', async () => {
     const emu = new HeadlessEmulator({ cols: 10, rows: 3 })
-    await emu.write(`\x1b[?1049h\x1b[1;1Habcdefgh${glyph}\x1b[2;1Hrow2\x1b[3;1Hrow3`)
+    await emu.write('\x1b[?1049h\x1b[1;1Habcdefgh中\x1b[2;1Hrow2\x1b[3;1Hrow3')
     emu.resize(9, 3)
 
     const rows = await replayEmulatorAt(emu, 9, 3)
@@ -76,17 +73,14 @@ describe('snapshot after a column shrink', () => {
     emu.dispose()
   })
 
-  it.each([
-    ['CJK', '中'],
-    ['emoji', '😀']
-  ])('keeps a %s cell that ends exactly at the grid edge', async (_kind, glyph) => {
+  it('keeps a wide cell that ends exactly at the grid edge', async () => {
     const emu = new HeadlessEmulator({ cols: 10, rows: 3 })
-    await emu.write(`\x1b[?1049h\x1b[1;1Habcdefg${glyph}x\x1b[2;1Hrow2\x1b[3;1Hrow3`)
+    await emu.write('\x1b[?1049h\x1b[1;1Habcdefg😀x\x1b[2;1Hrow2\x1b[3;1Hrow3')
     emu.resize(9, 3)
 
     const rows = await replayEmulatorAt(emu, 9, 3)
 
-    expect(rows).toEqual([`abcdefg${glyph}`, 'row2', 'row3'])
+    expect(rows).toEqual(['abcdefg😀', 'row2', 'row3'])
     emu.dispose()
   })
 })

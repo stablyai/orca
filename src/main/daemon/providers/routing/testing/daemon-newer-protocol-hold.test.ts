@@ -87,14 +87,11 @@ describe('reopenNewerDaemonTerminals', () => {
     expect(isHoldingForNewerProtocolDaemon()).toBe(true)
   })
 
-  it('never signals an owner it cannot identify while its endpoint answers', async () => {
+  it('waits for an unidentifiable owner’s endpoint to die without signalling it', async () => {
     probes.identity.mockResolvedValue('unknown')
     await expect(reopenNewerDaemonTerminals(runtimeDir)).resolves.toEqual({ reopened: false })
     expect(probes.kill).not.toHaveBeenCalled()
-  })
 
-  it('releases an unidentifiable owner whose endpoint is dead, without signalling', async () => {
-    probes.identity.mockResolvedValue('unknown')
     probes.endpoint.mockResolvedValue('refused')
     await expect(reopenNewerDaemonTerminals(runtimeDir)).resolves.toEqual({ reopened: true })
     expect(probes.kill).not.toHaveBeenCalled()

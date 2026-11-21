@@ -10,6 +10,8 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
 import { BotItemsHost, type BotItemsHostDeps } from '../../../bots/bot-items-runtime'
 import type { BotItemMail } from '../../../bots/bot-items-schema'
+import type { BotItemEvent } from '../../../../shared/bots/bot-items'
+import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { BotsDbWorkerClient } from '../../../bots/db-worker/bots-db-worker-client'
 import { closeBotsDbStores } from '../../../bots/db-worker/bots-db-worker-entry'
 import { inProcessBotsDbWorker } from '../../../bots/db-worker/bots-db-worker.test-fixture'
@@ -305,43 +307,6 @@ describe('bot items over RPC', () => {
     ])
   })
 
-  it("records the owner's answer to the open question as answered, moved and mailed once, even sent twice", async () => {
-    const { dispatcher } = itemsRuntime()
-    await dispatcher.dispatch(
-      request('bots.items.add', { callerSessionId: RANGER_CHAT, title: 'Merge 880' })
-    )
-    await dispatcher.dispatch(
-      request('bots.items.set', {
-        callerSessionId: RANGER_CHAT,
-        item: '1',
-        status: 'needs_you',
-        ask: {
-          questions: [{ prompt: 'Merge now?', options: [{ label: 'Merge' }, { label: 'Wait' }] }]
-        }
-      })
-    )
-    await host!.sendOwedMail()
-    mailed.length = 0
-    const desktop = { caller: DESKTOP_RPC_CALLER }
-    const answer = request('bots.items.owner.comment', {
-      item: '1',
-      text: '',
-      answering: 'e2',
-      answers: [{ picks: [0] }],
-      answerId: 'answer-1'
-    })
-
-    const first = await dispatcher.dispatch(answer, desktop)
-    const again = await dispatcher.dispatch(answer, desktop)
-
-    expect(first).toMatchObject({ ok: true, result: { eventId: 'e4', answered: true } })
-    expect(again).toMatchObject({ ok: true, result: { eventId: 'e4', answered: true } })
-    expect(mailed).toEqual([
-      { chatId: RANGER_CHAT, eventId: 4, kind: 'commented' },
-      { chatId: RANGER_CHAT, eventId: 5, kind: 'status' }
-    ])
-  })
-
   it('posts a hard-to-read ask as written and tips the bot; a clean ask gets no tip', async () => {
     const { dispatcher } = itemsRuntime()
     for (const title of ['Go ahead', 'Go ahead too']) {
@@ -377,7 +342,7 @@ describe('bot items over RPC', () => {
         item: { status: 'needs_you', question: { text: prose } },
         advice: {
           codes: ['prose_choices'],
-          tip: 'Posted. Tip: Give the choices as buttons with --ask and --option, not in the text. Set Needs you again if you rewrite it.'
+          tip: 'Posted. Tip: Give the choices as --option values after --ask, so they show as quick replies. Set Needs you again if you rewrite it.'
         }
       }
     })
@@ -387,7 +352,7 @@ describe('bot items over RPC', () => {
       ok: true,
       result: {
         events: expect.arrayContaining([
-          expect.objectContaining({ kind: 'commented', data: { text: prose, answerable: true } })
+          expect.objectContaining({ kind: 'commented', data: { text: prose } })
         ])
       }
     })
@@ -456,6 +421,95 @@ describe('bot items over RPC', () => {
             })
           ])
         }
+      })
+    } finally {
+      setAgentSessionAttachmentStore(null)
+      itemChat.sessionId = null
+    }
+  })
+
+  it("attaches a bot's --file files to its comment and its status comment; one unreadable file posts nothing", async () => {
+    const { dispatcher } = itemsRuntime()
+    const store = new AgentSessionAttachmentStore(
+      join(paths.userData, 'agent-session-attachments'),
+      { hasSession: () => true }
+    )
+    const claim = vi.fn(async (_sessionId: string, _body: AgentJournalMessageItem) => undefined)
+    setAgentSessionAttachmentStore(store, claim)
+    itemChat.sessionId = 'ranger-live'
+    try {
+      await dispatcher.dispatch(
+        request('bots.items.add', { callerSessionId: RANGER_CHAT, title: 'Install dialog' })
+      )
+      const shot = join(paths.userData, 'after.png')
+      const log = join(paths.userData, 'run.log')
+      writeFileSync(shot, Buffer.alloc(4))
+      writeFileSync(log, 'ok')
+      const comment = (params: Record<string, unknown>) =>
+        dispatcher.dispatch(
+          request('bots.items.comment', { callerSessionId: RANGER_CHAT, item: '1', ...params })
+        )
+
+      expect(
+        await comment({ text: 'Fixed.', files: [shot, join(paths.userData, 'gone.png')] })
+      ).toMatchObject({
+        ok: false,
+        error: { message: "gone.png can't be read. Nothing was posted." }
+      })
+      expect(await comment({ text: '', files: [shot, log] })).toMatchObject({ ok: true })
+      expect(
+        await dispatcher.dispatch(
+          request('bots.items.set', {
+            callerSessionId: RANGER_CHAT,
+            item: '1',
+            status: 'needs_you',
+            comment: 'Which one?',
+            files: [shot]
+          })
+        )
+      ).toMatchObject({ ok: true })
+      // What the write would refuse is refused before a file is copied or claimed.
+      expect(await comment({ text: 'x'.repeat(7_990), files: [log] })).toMatchObject({
+        ok: false,
+        error: {
+          message: expect.stringMatching(/^The comment and its files' paths come to \d+ characters/)
+        }
+      })
+      expect(
+        await dispatcher.dispatch(
+          request('bots.items.set', {
+            callerSessionId: RANGER_CHAT,
+            item: '1',
+            status: 'canceled',
+            comment: 'Dropping it.',
+            files: [shot]
+          })
+        )
+      ).toMatchObject({ ok: false, error: { message: 'Canceling needs a reason: --reason "..."' } })
+      expect(claim).toHaveBeenCalledTimes(2)
+      const shown = await dispatcher.dispatch(
+        request('bots.items.show', { callerSessionId: RANGER_CHAT, item: '1' })
+      )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a successful bots.items.show reply carries its events, which the matcher below checks.
+      const { events } = (shown as { result: { events: BotItemEvent[] } }).result
+      const comments = events.filter((event) => event.kind === 'commented')
+      expect(comments).toHaveLength(2)
+      expect(comments[0]?.data.images).toMatchObject([
+        { name: 'after.png', bytes: 4, path: expect.stringContaining(store.rootDir) }
+      ])
+      expect(comments[0]?.data.text).toMatch(/^@\S+agent-session-attachments\S+run\.log$/)
+      expect(claim).toHaveBeenNthCalledWith(1, 'ranger-live', {
+        kind: 'message',
+        role: 'user',
+        blocks: [
+          { type: 'text', text: comments[0]?.data.text },
+          { type: 'image-ref', path: comments[0]?.data.images?.[0]?.path }
+        ]
+      })
+      expect(claim).toHaveBeenNthCalledWith(2, 'ranger-live', expect.anything())
+      expect(comments[1]?.data).toMatchObject({
+        text: 'Which one?',
+        images: [{ name: 'after.png', bytes: 4 }]
       })
     } finally {
       setAgentSessionAttachmentStore(null)

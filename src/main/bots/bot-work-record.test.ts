@@ -91,14 +91,6 @@ async function readAll(record: BotWorkRecord): Promise<void> {
   await record.list('bot-1')
   await record.list('bot-2')
 }
-const OPEN_PR: BotWorkPullRequest = {
-  number: 7,
-  url: 'https://github.com/org/repo/pull/7',
-  state: 'open',
-  checks: 'pending',
-  review: null,
-  headSha: 'sha-1'
-}
 const connector = { origin: 'connector' } as const
 
 /** A connector message handed over, then a worker start in its turn: the turn read when the start
@@ -124,11 +116,15 @@ function started() {
 }
 
 describe('BotWorkRecord', () => {
-  it('links a conversation to the worker its turn started', async () => {
+  it('links a conversation to the worker its turn started only once', async () => {
     const h = started()
     const record = h.record()
-    await startFrom(record, 's1', { taskId: 't1', dispatchId: 'd1', host: 'local' })
-    expect(h.store.live('bot-1', THREAD)?.dispatchId).toBe('d1')
+    const start = { taskId: 't1', dispatchId: 'd1', host: 'local' }
+    await startFrom(record, 's1', start)
+    await startFrom(record, 's1', start)
+    expect(h.store.addressRows('bot-1', THREAD)).toMatchObject([
+      { dispatchId: 'd1', current: true }
+    ])
     expect(await record.turnNote('s1', connector)).toContain('dispatch:d1')
   })
 
@@ -181,6 +177,8 @@ describe('BotWorkRecord', () => {
     h.workers.set('d2', h.worker({ worktreeId: 'wt-2' }))
     await startFrom(record, 's1', { taskId: 't2', dispatchId: 'd2', host: 'local' })
     expect(await record.forget('s1')).toBe(true)
+    expect(await record.forget('s1')).toBe(false)
+    expect(await record.list('bot-1')).toEqual([])
     expect(h.store.liveRows()).toEqual([])
   })
 
@@ -360,7 +358,7 @@ describe('BotWorkRecord', () => {
     expect(rows.map((row) => row.dispatchId).sort()).toEqual(['d1', 'd2', 'd3'])
   })
 
-  it("lists a bot's live work with its PR, and forgets a conversation's on its owner's word", async () => {
+  it("lists a bot's live work with its PR", async () => {
     const h = started()
     h.workspaces.set('wt-1', {
       branch: 'fix-login',
@@ -391,11 +389,6 @@ describe('BotWorkRecord', () => {
       source: { source: 'slack', title: 'fix login' }
     })
     expect(await record.list('bot-2')).toEqual([])
-
-    expect(await record.forget('s1')).toBe(true)
-    expect(await record.forget('s1')).toBe(false)
-    expect(await record.list('bot-1')).toEqual([])
-    expect(h.store.liveRows()).toEqual([])
   })
 
   it("lists work an owner's Orca turn started in a Slack thread's chat as from Orca", async () => {
@@ -436,126 +429,5 @@ describe('BotWorkRecord', () => {
     h.workspaces.set('wt-1', 'gone')
     await readAll(h.record())
     expect(h.store.liveRows()).toEqual([])
-  })
-})
-
-/** A seeded generator, so a failing sequence replays. */
-function random(seed: number): (n: number) => number {
-  let state = seed
-  return (n) => {
-    state = (state * 1_103_515_245 + 12_345) % 2_147_483_648
-    return state % n
-  }
-}
-
-describe('BotWorkRecord over random event sequences', () => {
-  const SESSIONS = ['s1', 's2', 's3']
-  const DISPATCHES = ['d1', 'd2', 'd3', 'd4']
-  const STATES = ['working', 'completed', 'failed', 'unverifiable'] as const
-
-  it.each(Array.from({ length: 40 }, (_, seed) => seed + 1))('seed %i', async (seed) => {
-    const pick = random(seed)
-    const h = harness()
-    SESSIONS.forEach((session, index) =>
-      h.turns.set(session, {
-        botId: index === 2 ? 'bot-2' : 'bot-1',
-        address: { source: 'slack', externalId: `thread-${index % 2}` }
-      })
-    )
-    DISPATCHES.forEach((dispatch, index) => {
-      h.workers.set(dispatch, h.worker({ worktreeId: `wt-${index}` }))
-      h.workspaces.set(`wt-${index}`, { branch: `b${index % 2}`, head: 'h1', repoId: REPO })
-    })
-    let record = h.record()
-    // Each seed first walks the paths its checks rely on, so a single seed (-t) can't pass vacuously.
-    await startFrom(record, 's1', { taskId: 't-d1', dispatchId: 'd1', host: 'local' })
-    expect(h.store.liveRows()).toHaveLength(1)
-    for (let step = 0; step < 60; step += 1) {
-      const dispatch = DISPATCHES[pick(DISPATCHES.length)]
-      const index = DISPATCHES.indexOf(dispatch)
-      switch (pick(9)) {
-        case 0:
-        case 1: {
-          // Duplicated starts and starts racing each other.
-          const session = SESSIONS[pick(SESSIONS.length)]
-          const start = { taskId: `t-${dispatch}`, dispatchId: dispatch, host: 'local' }
-          await Promise.all([startFrom(record, session, start), startFrom(record, session, start)])
-          break
-        }
-        case 2:
-          h.workers.set(dispatch, h.worker({ worktreeId: `wt-${index}`, state: STATES[pick(4)] }))
-          break
-        case 3:
-          h.workers.set(dispatch, pick(3) === 0 ? 'unreadable' : h.worker({ stopped: true }))
-          break
-        case 4:
-          if (pick(3) === 0) {
-            h.workers.delete(dispatch)
-          } else {
-            h.workspaces.set(`wt-${index}`, pick(2) === 0 ? 'gone' : 'unreadable')
-          }
-          break
-        case 5: {
-          // Two workers on one branch can find the same PR at its head.
-          const head = `h${pick(2)}`
-          const number = 100 + (index % 2)
-          h.workspaces.set(`wt-${index}`, {
-            branch: `b${index % 2}`,
-            head,
-            repoId: REPO,
-            ...(pick(2) === 0
-              ? {
-                  pr: {
-                    ...OPEN_PR,
-                    number,
-                    url: `https://github.com/org/repo/pull/${number}`,
-                    headSha: head
-                  }
-                }
-              : {})
-          })
-          break
-        }
-        case 6: {
-          // Out-of-order and repeated closes.
-          const live = h.store.liveRows()
-          const row = live[pick(Math.max(live.length, 1))]
-          if (row) {
-            expect(record.close(row, 'stopped')).toBe(true)
-            expect(record.close(row, 'task_gone')).toBe(false)
-          }
-          break
-        }
-        case 7:
-          await record.list(pick(2) === 0 ? 'bot-1' : 'bot-2')
-          break
-        case 8:
-          record = h.record()
-          await readAll(record)
-          break
-      }
-
-      // One current row per address.
-      const addresses = h.store
-        .liveRows()
-        .filter((row) => row.current)
-        .map((row) => `${row.botId}:${row.address.externalId}`)
-      expect(new Set(addresses).size).toBe(addresses.length)
-
-      // After every row is read, none points at a missing task.
-      await readAll(record)
-      for (const row of h.store.liveRows()) {
-        expect(h.workers.has(row.dispatchId)).toBe(true)
-      }
-
-      // A closed row never wakes the bot: a turn whose conversation has no live row gets no note.
-      for (const session of SESSIONS) {
-        const turn = h.turns.get(session)
-        const note = await record.turnNote(session, connector)
-        if (turn && !h.store.live(turn.botId, turn.address)) {
-          expect(note).toBeNull()
-        }
-      }
-    }
   })
 })

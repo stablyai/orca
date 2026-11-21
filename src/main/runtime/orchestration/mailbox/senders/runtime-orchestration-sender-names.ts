@@ -13,8 +13,8 @@ import type { TerminalTab } from '../../../../../shared/workspace-layout/termina
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import {
   liveSenderAgent,
+  liveSenderName,
   observeOrchestrationSender,
-  orchestrationSenderName,
   structuredChatNaming,
   captureMirroredTabs,
   type MirroredTabs,
@@ -25,12 +25,14 @@ import {
   type TerminalSenderNaming
 } from './orchestration-sender-name'
 import { agentMessageSender, observeSenderSnapshot } from './agent-message-sender'
+import { workerIdentity, type WorkerIdentity } from '../../workers/identity/worker-identity'
 import {
   type AgentSessionRecordReader,
   readAgentSessionRecordStore
 } from '../../addressing/session-lineage/structured-session-lineage'
 import { terminalHostConnectionMatches } from '../../workers/transcripts/worker-provider-session'
 import type { RuntimeWorktreeAgentSource } from '../../../workspaces/process-listing/runtime-worktree-agent-source'
+import type { CrewNamingAssignment } from '../../crew/crew-read-dependencies'
 
 type RuntimeSenderNameDeps = {
   getDb: () => OrchestrationDb | null
@@ -76,23 +78,8 @@ export class RuntimeOrchestrationSenderNames {
     return agentMessageSender(
       address,
       this.deps.getDb(),
-      (party, reported) => this.snapshotOf(party, reported),
+      (party, reported, recorded) => this.snapshotOf(party, reported, recorded),
       reportedDispatchId
-    )
-  }
-
-  nameOf(
-    party: AgentMessageSender['party'],
-    reportedDispatchId?: string,
-    taskName?: string | null,
-    records: AgentSessionRecordReader | null = readAgentSessionRecordStore()
-  ): string | null {
-    return orchestrationSenderName(
-      party,
-      this.namingSources(records),
-      reportedDispatchId,
-      undefined,
-      taskName
     )
   }
 
@@ -102,17 +89,22 @@ export class RuntimeOrchestrationSenderNames {
   }
 
   /** Name and agent share one current chat or terminal observation. */
-  snapshotOf(party: AgentMessageSender['party'], reportedDispatchId?: string) {
-    return observeSenderSnapshot(party, this.namingSources(), reportedDispatchId)
+  snapshotOf(
+    party: AgentMessageSender['party'],
+    reportedDispatchId?: string,
+    recorded?: WorkerIdentity | null
+  ) {
+    return observeSenderSnapshot(party, this.namingSources(), reportedDispatchId, recorded)
   }
 
   snapshotReader(): typeof this.snapshotOf {
     const readLaunch = senderDispatchLaunchReader(this.deps.getDb, this.launchInstallation)
-    return (party, reportedDispatchId) =>
+    return (party, reportedDispatchId, recorded) =>
       observeSenderSnapshot(
         party,
         this.namingSources(readAgentSessionRecordStore(), readLaunch()),
-        reportedDispatchId
+        reportedDispatchId,
+        recorded
       )
   }
 
@@ -173,6 +165,7 @@ export class RuntimeOrchestrationSenderNames {
     }
   }
 
+  /** Names each crew row as its sender card would, by the Dispatch the row shows. */
   captureCrewInputs() {
     const generatedTitlesEnabled = readGeneratedTitlesEnabled(this.deps.getStore())
     const db = this.deps.getDb()
@@ -197,37 +190,40 @@ export class RuntimeOrchestrationSenderNames {
     const terminals = new Map<string, TerminalSenderNaming | null>()
     return (
       party: AgentMessageSender['party'],
-      taskName: string | null,
+      assignment: CrewNamingAssignment | undefined,
       records: AgentSessionRecordReader | null,
       readPane = this.deps.getTerminalPaneKey
-    ) =>
-      orchestrationSenderName(
-        party,
-        {
-          db,
-          records,
-          generatedTitlesEnabled,
-          chatTab: tabs.chatTab,
-          store: this.deps.getStore(),
-          terminal: (handle) => {
-            if (!terminals.has(handle)) {
-              const naming = this.terminalNaming(
-                handle,
-                tabs.session,
-                tabs.terminalTab,
-                allStatuses ? (pane) => statuses.get(pane) ?? [] : this.statusRowsForPane,
-                readPane,
-                tabs.layout
-              )
-              terminals.set(handle, naming ? structuredClone(naming) : null)
-            }
-            return terminals.get(handle) ?? null
+    ) => {
+      const sources: SenderNamingSources = {
+        db,
+        records,
+        generatedTitlesEnabled,
+        chatTab: tabs.chatTab,
+        store: this.deps.getStore(),
+        terminal: (handle) => {
+          if (!terminals.has(handle)) {
+            const naming = this.terminalNaming(
+              handle,
+              tabs.session,
+              tabs.terminalTab,
+              allStatuses ? (pane) => statuses.get(pane) ?? [] : this.statusRowsForPane,
+              readPane,
+              tabs.layout
+            )
+            terminals.set(handle, naming ? structuredClone(naming) : null)
           }
-        },
-        undefined,
-        undefined,
-        taskName
-      )
+          return terminals.get(handle) ?? null
+        }
+      }
+      if (assignment?.taskTitle) {
+        return (
+          liveSenderName(observeOrchestrationSender(party, sources), sources) ??
+          assignment.taskTitle
+        )
+      }
+      const worker = db && assignment ? workerIdentity(db, assignment.dispatchId) : null
+      return observeSenderSnapshot(party, sources, undefined, worker).name
+    }
   }
 
   private chatSources(

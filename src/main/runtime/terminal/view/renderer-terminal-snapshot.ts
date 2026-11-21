@@ -1,6 +1,7 @@
 import { OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals } from '../../session-tabs/restoration/renderer-session-terminal-rescue'
 import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
 import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
+import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 
 export abstract class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals {
   protected abstract issueHandle(leaf: RuntimeLeafRecord): string
@@ -78,15 +79,18 @@ export abstract class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRes
     if (!tabId && !ptyId) {
       return false
     }
+    const windowId = this.getAvailableAuthoritativeWindowId()
+    // No authoritative window, or a send that throws in teardown: subscribe keeps its empty-snapshot fallback.
     try {
-      this.getAuthoritativeWindow().webContents.send('terminal:requestTabMount', {
-        worktreeId: record.worktreeId,
-        ...(tabId ? { tabId } : {}),
-        ...(ptyId ? { ptyId } : {})
-      })
-      return true
+      return (
+        windowId !== null &&
+        getRuntimeDesktopSurface().sendToWindow(windowId, 'terminal:requestTabMount', {
+          worktreeId: record.worktreeId,
+          ...(tabId ? { tabId } : {}),
+          ...(ptyId ? { ptyId } : {})
+        })
+      )
     } catch {
-      // No authoritative window (shutdown/headless): subscribe keeps its empty-snapshot fallback.
       return false
     }
   }

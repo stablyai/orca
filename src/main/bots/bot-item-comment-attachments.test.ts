@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -53,7 +53,7 @@ it("claims the comment's images and store files for the item's live chat, sized 
   const log = await stored(UPLOAD_B, 'build.log')
   const text = `See @"${log}"`
 
-  const images = await admitBotItemCommentAttachments(deps(), text, [shot])
+  const { images } = await admitBotItemCommentAttachments(deps(), text, [shot])
 
   expect(images).toEqual([{ path: shot, name: 'shot.png', bytes: 7 }])
   expect(claims).toEqual([
@@ -75,7 +75,7 @@ it('leaves the journal alone for text naming no upload', async () => {
   const claim = vi.fn()
   await expect(
     admitBotItemCommentAttachments(deps({ claim }), 'See @src/app.ts', [])
-  ).resolves.toEqual([])
+  ).resolves.toEqual({ text: 'See @src/app.ts', images: [] })
   expect(claim).not.toHaveBeenCalled()
 })
 
@@ -110,7 +110,9 @@ it("copies this host's own dropped image into the store before claiming it", asy
   const dropped = join(dir, 'Screen Shot.png')
   await writeFile(dropped, Buffer.alloc(5))
 
-  const [image] = await admitBotItemCommentAttachments(deps({ local: true }), '', [dropped])
+  const {
+    images: [image]
+  } = await admitBotItemCommentAttachments(deps({ local: true }), '', [dropped])
 
   expect(image?.path.startsWith(store.rootDir)).toBe(true)
   expect(image?.name).toBe('Screen Shot.png')
@@ -128,6 +130,17 @@ it("holds comments to chat's 20-image and 64 MB limits", async () => {
   await expect(admitBotItemCommentAttachments(deps(), '', big)).rejects.toThrow(
     'These images add up to 66 MB. A comment takes up to 64 MB.'
   )
+})
+
+it('counts a stored image with an outside one before copying the outside one in', async () => {
+  const inStore = await stored(UPLOAD_A, 'a.png', 40 * 1024 * 1024)
+  const dropped = join(dir, 'drop.png')
+  await writeFile(dropped, Buffer.alloc(30 * 1024 * 1024))
+
+  await expect(
+    admitBotItemCommentAttachments(deps({ local: true }), '', [inStore, inStore, dropped])
+  ).rejects.toThrow('These images add up to 70 MB. A comment takes up to 64 MB.')
+  expect(await readdir(store.rootDir)).toEqual([UPLOAD_A])
 })
 
 it("says which upload expired, and refuses attachments once the item's chat is gone", async () => {
@@ -153,6 +166,30 @@ it("refuses a comment naming an upload while this host's store is unavailable, a
   await expect(admitBotItemCommentAttachments(down, `See ${log}`, [])).rejects.toThrow(
     "This computer can't take attachments right now. Comment again in a moment."
   )
-  await expect(admitBotItemCommentAttachments(down, 'Ship it', [])).resolves.toEqual([])
+  await expect(admitBotItemCommentAttachments(down, 'Ship it', [])).resolves.toEqual({
+    text: 'Ship it',
+    images: []
+  })
   expect(chat).not.toHaveBeenCalled()
+})
+
+it('refuses more than 10 files besides images', async () => {
+  const many = Array.from({ length: 11 }, (_, n) => join(dir, `${n}.log`))
+  await expect(admitBotItemCommentAttachments(deps({ local: true }), '', [], many)).rejects.toThrow(
+    'Comments take up to 10 files besides images.'
+  )
+  expect(claims).toEqual([])
+})
+
+it('refuses more than 20 local images before copying any into the store', async () => {
+  const many: string[] = []
+  for (let n = 0; n < 21; n++) {
+    const path = join(dir, `${n}.png`)
+    await writeFile(path, Buffer.alloc(3))
+    many.push(path)
+  }
+  await expect(admitBotItemCommentAttachments(deps({ local: true }), '', [], many)).rejects.toThrow(
+    'Comments take up to 20 images.'
+  )
+  expect(await readdir(store.rootDir).catch(() => [])).toEqual([])
 })

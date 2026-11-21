@@ -15,7 +15,10 @@ export type SshLeaseStoreMock = {
   removeSshRemotePtyLeases: Mock
 }
 
-export type MockBrowserWindow = { isDestroyed: () => boolean; webContents: { send: Mock } }
+export type MockBrowserWindow = {
+  isDestroyed: () => boolean
+  webContents: { send: Mock; isDestroyed: () => boolean }
+}
 
 export type SshIpcHarness = {
   handlers: Map<string, (_event: unknown, args: unknown) => unknown>
@@ -52,11 +55,11 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
   }
   const mockWindow = {
     isDestroyed: () => false,
-    webContents: { send: vi.fn() }
+    webContents: { send: vi.fn(), isDestroyed: () => false }
   }
   const createMockWindow = () => ({
     isDestroyed: () => false,
-    webContents: { send: vi.fn() }
+    webContents: { send: vi.fn(), isDestroyed: () => false }
   })
   const createConnectionManagerMock = () => ({
     connect: vi.fn(),

@@ -181,7 +181,11 @@ export function createStructuredSessionSelectionController(
           settle(previous, { kind: 'superseded' })
         }
       }
-      const reply = Promise.withResolvers<SelectionOutcome>()
+      // Not Promise.withResolvers: the phone's WebKit before iOS 17.4 lacks it.
+      let resolve: (outcome: SelectionOutcome) => void = () => {}
+      const result = new Promise<SelectionOutcome>((resolveResult) => {
+        resolve = resolveResult
+      })
       const operation: SelectionOperation = {
         identity: ++sequence,
         key,
@@ -189,8 +193,8 @@ export function createStructuredSessionSelectionController(
         model: key === 'model' ? value : model,
         ...(adoptsModel === false && key !== 'model' ? { adoptsModel } : {}),
         transmitted: false,
-        result: reply.promise,
-        resolve: reply.resolve
+        result,
+        resolve
       }
       operation.previousPending = pendingTail
       if (pendingTail) {

@@ -80,6 +80,21 @@ export function hasStructuredMailSend(this: OrchestrationDb, mailboxHandle: stri
   )
 }
 
+/** Whether the lane still holds an attempt under this id, by the session index. */
+export function holdsStructuredMailSendOperation(
+  this: OrchestrationDb,
+  sessionId: string,
+  operationId: string
+): boolean {
+  return (
+    this.db
+      .prepare(
+        'SELECT 1 AS held FROM structured_mail_sends WHERE session_id = ? AND operation_id = ? LIMIT 1'
+      )
+      .get(sessionId, operationId) !== undefined
+  )
+}
+
 /** The mailboxes whose mail one session holds, by the session index: what its release can touch. */
 export function getStructuredMailSendMailboxesForSession(
   this: OrchestrationDb,
@@ -201,6 +216,7 @@ export type StructuredMailSendStoreMethods = {
   getStructuredMailSend: typeof getStructuredMailSend
   getStructuredMailSendMailboxes: typeof getStructuredMailSendMailboxes
   hasStructuredMailSend: typeof hasStructuredMailSend
+  holdsStructuredMailSendOperation: typeof holdsStructuredMailSendOperation
   getStructuredMailSendMailboxesForSession: typeof getStructuredMailSendMailboxesForSession
   reserveStructuredMailSend: typeof reserveStructuredMailSend
   releaseStructuredMailSend: typeof releaseStructuredMailSend
@@ -214,6 +230,7 @@ export function attachStructuredMailSendStore(ctor: { prototype: object }): void
     getStructuredMailSend,
     getStructuredMailSendMailboxes,
     hasStructuredMailSend,
+    holdsStructuredMailSendOperation,
     getStructuredMailSendMailboxesForSession,
     reserveStructuredMailSend,
     releaseStructuredMailSend,

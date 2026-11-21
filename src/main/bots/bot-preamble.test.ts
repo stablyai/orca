@@ -199,7 +199,7 @@ describe('bot item instructions', () => {
     const preamble = await preambleWithItemsUi(true)
     expect(preamble).toContain(`${SESSION_CLI} bot item add --title`)
     expect(preamble).toContain(`${SESSION_CLI} bot item set <n> --status needs-you`)
-    expect(preamble).toContain("put the question on the item it's about, or add one")
+    expect(preamble).toContain("put it on the item it's about, or add one")
     expect(preamble).toContain('put them on the item, and reply in chat only if')
     expect(preamble).not.toContain('--link')
     expect(preamble.split('\n')).not.toContain(OLD_WORKER_RESULTS_RULE)

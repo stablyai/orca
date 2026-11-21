@@ -147,3 +147,18 @@ export function getPanZoomViewOffset(
     y: viewport.height / 2 - view.center.y * scale
   }
 }
+
+/** Whether a viewport point lands on the content drawn at this offset and scale. */
+export function isPointOnPanZoomContent(
+  point: PanZoomPoint,
+  offset: PanZoomPoint,
+  content: PanZoomSize,
+  scale: number
+): boolean {
+  return (
+    point.x >= offset.x &&
+    point.x <= offset.x + content.width * scale &&
+    point.y >= offset.y &&
+    point.y <= offset.y + content.height * scale
+  )
+}

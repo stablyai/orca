@@ -117,25 +117,9 @@ describe('a write cannot bring back a tab its partition recorded as closed (#124
     }
   )
 
-  it('drops the closed tab from a unified-tabs-only patch', async () => {
+  it('drops a closed tab from a late unified-tab patch and reports its workspace', async () => {
     const { store, runtime } = createPersistedStore()
     const before = advanceTerminalTopologyRevision(sessionFor(WORKTREE_ID), WORKTREE_ID)
-    store.setWorkspaceSession(before)
-    await runtime.closeTerminalSurfaceFromRenderer({
-      worktreeId: WORKTREE_ID,
-      target: { kind: 'tab', tabId: TAB_ID }
-    })
-
-    store.patchWorkspaceSession({ unifiedTabs: before.unifiedTabs })
-
-    expect(store.getWorkspaceSession().unifiedTabs?.[WORKTREE_ID]?.map((tab) => tab.id)).toEqual([
-      OTHER_TAB_ID
-    ])
-  })
-
-  it('adds the workspace it drops a closed tab from to a write that named another', async () => {
-    const { store, runtime } = createPersistedStore()
-    const before = sessionFor(WORKTREE_ID)
     store.setWorkspaceSession(before)
     await runtime.closeTerminalSurfaceFromRenderer({
       worktreeId: WORKTREE_ID,
@@ -148,6 +132,9 @@ describe('a write cannot bring back a tab its partition recorded as closed (#124
       workspaces: new Set(['repo-2::/other'])
     })
 
+    expect(store.getWorkspaceSession().unifiedTabs?.[WORKTREE_ID]?.map((tab) => tab.id)).toEqual([
+      OTHER_TAB_ID
+    ])
     expect(reported).toEqual([new Set(['repo-2::/other', WORKTREE_ID])])
   })
 

@@ -1,6 +1,6 @@
-import React from 'react'
+import React, { useContext } from 'react'
 import { cn } from '@/lib/class-names'
-import { brandTileClass, composioLogo } from '../apps/BotAppRow'
+import { BareComposioLogo, BotLogoBare, brandTileClass, composioLogo } from '../apps/BotAppRow'
 
 /** An app's own logo from Composio (no key needed) on its brand's tile; a full-square logo fills it. */
 export function ComposioAppLogo({
@@ -13,7 +13,12 @@ export function ComposioAppLogo({
   /** sm: a chip in a list of names; md: a catalog row; lg: a card's avatar. */
   size?: 'sm' | 'md' | 'lg'
 }): React.JSX.Element {
-  const { src, fill: tile } = composioLogo(slug, logo)
+  const bare = useContext(BotLogoBare)
+  const image = composioLogo(slug, logo)
+  const { src, fill: tile } = image
+  if (bare) {
+    return <BareComposioLogo {...image} />
+  }
   return (
     <span
       data-size={size}

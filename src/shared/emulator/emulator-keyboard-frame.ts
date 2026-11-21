@@ -168,19 +168,14 @@ export function buildServeSimKeyboardFramesForKey(
     : buildKeyUsageFrames({ shift: false, usage: namedUsage }, modifiers)
 }
 
-export function buildServeSimKeyboardFramesForText(text: string): ServeSimKeyboardFrame[] | null {
-  const frames: ServeSimKeyboardFrame[] = []
+/** Whether every character has a US keyboard key, so typing it as key events loses nothing. */
+export function isUSKeyboardText(text: string): boolean {
   for (const char of text) {
-    if (char === '\r') {
-      continue
+    if (char !== '\r' && !Object.hasOwn(ASCII_KEY_USAGES, char)) {
+      return false
     }
-    const charFrames = buildServeSimKeyboardFramesForKey(char)
-    if (!charFrames) {
-      return null
-    }
-    frames.push(...charFrames)
   }
-  return frames
+  return true
 }
 
 export function encodeServeSimKeyboardFrame(key: ServeSimKeyboardFrame): Uint8Array<ArrayBuffer> {

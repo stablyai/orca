@@ -60,7 +60,12 @@ export const agentKindSchema = z.enum(AGENT_KIND_VALUES)
 export type AgentKind = z.infer<typeof agentKindSchema>
 
 // Only launch failures are observable; provider auth/rate-limit/network errors remain inside the CLI subprocess.
-export const errorClassSchema = z.enum(['binary_not_found', 'paste_readiness_timeout', 'unknown'])
+export const errorClassSchema = z.enum([
+  'binary_not_found',
+  'paste_readiness_timeout',
+  'paste_agent_exited',
+  'unknown'
+])
 export type ErrorClass = z.infer<typeof errorClassSchema>
 
 export const repoMethodSchema = z.enum(['folder_picker', 'clone_url', 'drag_drop'])

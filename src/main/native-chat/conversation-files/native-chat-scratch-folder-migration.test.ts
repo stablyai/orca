@@ -188,10 +188,10 @@ describe('moving pre-rename chat visuals folders', () => {
     mkdirSync(elsewhere)
     legacyFor(state, 'chat-linked', { 'chart.html': '<p>chart</p>' })
     mkdirSync(nativeChatScratchRootFor(state))
-    symlinkSync(elsewhere, nativeChatScratchFolderFor(state, 'chat-linked'))
+    symlinkSync(elsewhere, nativeChatScratchFolderFor(state, 'chat-linked'), 'junction')
     const linkedRoot = stateDirectory()
     legacyFor(linkedRoot, 'chat-any', { 'chart.html': '<p>chart</p>' })
-    symlinkSync(elsewhere, nativeChatScratchRootFor(linkedRoot))
+    symlinkSync(elsewhere, nativeChatScratchRootFor(linkedRoot), 'junction')
 
     const log = logger()
     await migrateLegacyNativeChatVisualsFolders(state, log)

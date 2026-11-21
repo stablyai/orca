@@ -12,6 +12,11 @@ import {
 } from '../../../browser/agent-browser/testing/agent-browser-bridge-test-harness'
 import { closeBrowserMemoryPage } from '../../../browser/guest-lifecycle/browser-page-memory'
 import { RuntimeBrowserPageRegistry } from '../client-pages/runtime-browser-page-registry'
+import { setRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
+import {
+  rendererWindowSurfaceForTest,
+  TEST_RENDERER_WINDOW_ID
+} from '../../construction/renderer-window-surface-test-double'
 
 const { native, waitRegistration, waitWorktreeRegistration, ipcListeners, managerWorktree } =
   vi.hoisted(() => ({
@@ -113,7 +118,13 @@ function fixture(pages: [string, string][]) {
   const clientPages = new RuntimeBrowserPageRegistry()
   const send = vi.fn()
   managerWorktree.mockImplementation((pageId) => worktrees.get(pageId))
-  const win = { webContents: { send } }
+  const renderer = { send }
+  setRuntimeDesktopSurface(
+    rendererWindowSurfaceForTest(renderer, {
+      on: (channel, listener) => ipcListeners.set(channel, listener as never),
+      removeListener: (channel) => ipcListeners.delete(channel)
+    })
+  )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the command seam uses only these host surfaces.
   const host = {
     getAgentBrowserBridge: () => bridge,
@@ -121,8 +132,8 @@ function fixture(pages: [string, string][]) {
     resolveBrowserWorkspace: async (id: string) => ({ id }),
     getRuntimeBrowserPageRegistry: () => clientPages,
     readBrowserTabBar: () => catalog,
-    getAuthoritativeWindow: () => win,
-    getAvailableAuthoritativeWindow: () => win
+    getAuthoritativeWindowId: () => TEST_RENDERER_WINDOW_ID,
+    getAvailableAuthoritativeWindowId: () => TEST_RENDERER_WINDOW_ID
   } as unknown as RuntimeBrowserCommandHost
   return {
     commands: new RuntimeBrowserCommands(host),
@@ -131,6 +142,7 @@ function fixture(pages: [string, string][]) {
     worktrees,
     catalog,
     send,
+    renderer,
     register,
     popups
   }
@@ -236,7 +248,10 @@ it('lists and closes the selected cold Y while leaving live sibling X alone', as
   f.send.mockImplementation((channel, payload) => {
     expect(channel).toBe('browser:requestTabClose')
     expect(payload.tabId).toBe('Y')
-    ipcListeners.get('browser:tabCloseReply')?.({}, { requestId: payload.requestId })
+    ipcListeners.get('browser:tabCloseReply')?.(
+      { sender: f.renderer },
+      { requestId: payload.requestId }
+    )
   })
   await expect(f.commands.browserTabClose({ worktree: 'W' })).resolves.toEqual({ closed: true })
   expect(f.tabs.has('X')).toBe(true)

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { closeProviderTimelineRigs } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { openAcpAdapterRig } from './testing/acp-structured-adapter.test-support'
+import { GROK, openAcpAdapterRig } from './testing/acp-structured-adapter.test-support'
 import { antigravityTakesSystemPrompt } from '../launch/acp-instructions'
 
 afterEach(async () => {
@@ -85,5 +85,67 @@ describe('ACP standing instructions on the session', () => {
     await refuses.acquire()
     expect(String(refuses.openFailure())).toMatch(/cannot take this chat's standing instructions/)
     expect(refuses.sent('session/new')).toEqual([])
+  })
+
+  it('opens a session without optional ones the agent does not take', async () => {
+    const rig = await openAcpAdapterRig({
+      launch: {
+        sessionMeta: APPEND,
+        takesSessionMeta: antigravityTakesSystemPrompt,
+        sessionMetaOptional: true
+      }
+    })
+    await rig.acquire()
+    expect(rig.openFailure()).toBeUndefined()
+    expect(rig.sent('session/new')[0]?.params).not.toHaveProperty('_meta')
+  })
+
+  it('keeps folder instructions in place only while a new session opens, never for a reopen', async () => {
+    const events: string[] = []
+    let sentNew = (): number => 0
+    const aroundNewSession = async (cwd: string) => {
+      events.push(`placed in ${cwd} before ${sentNew()} new`)
+      return async () => {
+        events.push(`removed after ${sentNew()} new`)
+      }
+    }
+    const fresh = await openAcpAdapterRig({ launch: { aroundNewSession } })
+    sentNew = () => fresh.sent('session/new').length
+    await fresh.acquire()
+    expect(events).toEqual(['placed in /workspace/project before 0 new', 'removed after 1 new'])
+
+    events.length = 0
+    const reopened = await openAcpAdapterRig({ launch: { aroundNewSession, resume: REOPEN } })
+    sentNew = () => reopened.sent('session/new').length
+    await reopened.acquire({ fence: 2 })
+    expect(events).toEqual([])
+  })
+
+  it('sends them alongside the agent spec and workspace rule metadata, new and reopened', async () => {
+    const spec = {
+      ...GROK,
+      sessionMeta: { antigravity: { disabledTools: ['run_workflow'] } },
+      resolveSessionMeta: async () => ({
+        antigravity: { systemPrompt: { append: 'Workspace rules.' } }
+      })
+    }
+    const launch = { sessionMeta: APPEND, sessionMetaOnReopen: true as const }
+    const merged = {
+      antigravity: {
+        disabledTools: ['run_workflow'],
+        systemPrompt: { append: `Workspace rules.\n\n${APPEND.antigravity.systemPrompt.append}` }
+      }
+    }
+    const fresh = await openAcpAdapterRig({ spec, launch, initialize: ADVERTISES_APPEND })
+    await fresh.acquire()
+    expect(fresh.sent('session/new')[0]?.params).toHaveProperty('_meta', merged)
+
+    const reopened = await openAcpAdapterRig({
+      spec,
+      launch: { ...launch, resume: REOPEN },
+      initialize: ADVERTISES_APPEND
+    })
+    await reopened.acquire({ fence: 2 })
+    expect(reopened.sent('session/load')[0]?.params).toHaveProperty('_meta', merged)
   })
 })

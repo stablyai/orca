@@ -1,5 +1,9 @@
 import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
-import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
+import {
+  getStructuredAgentSessionTabsByPaneKey,
+  structuredTabsByPaneKey,
+  type StructuredTab
+} from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { parseAgentStatusPaneIdentity } from '../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import { tabHasLivePty } from '../../../../../shared/workspace-layout/terminal-surfaces/tab-has-live-pty'
 import { activityLiveAgentState } from './activity-event-state'
@@ -41,6 +45,8 @@ export type BuildActivityEventsArgs = {
   tabsByWorktree: Record<string, TerminalTab[]>
   ptyIdsByTabId?: Record<string, string[]>
   unifiedTabsByWorktree?: Record<string, Tab[]>
+  /** Chats from the store's own tab map; reading them from a projected map rebuilds the shared list. */
+  structuredTabs?: readonly StructuredTab[]
   worktreeMap: Map<string, Worktree>
   repoMap: Map<string, Repo>
   repos?: readonly Repo[]
@@ -62,6 +68,7 @@ function paneBuildInputs(args: BuildActivityEventsArgs, t: Translate | undefined
     args.tabsByWorktree,
     args.ptyIdsByTabId,
     args.unifiedTabsByWorktree,
+    args.structuredTabs,
     args.worktreeMap,
     args.repoMap,
     args.repos,
@@ -121,14 +128,18 @@ export function buildActivityEvents(
   const buildLivePane = (paneKey: string, entry: AgentStatusEntry): PaneBuild | null => {
     const parsed = parseAgentStatusPaneIdentity(
       paneKey,
-      args.unifiedTabsByWorktree
-        ? getStructuredAgentSessionTabsByPaneKey(args.unifiedTabsByWorktree).get(paneKey)
-        : undefined
+      (args.structuredTabs
+        ? structuredTabsByPaneKey(args.structuredTabs)
+        : getStructuredAgentSessionTabsByPaneKey(args.unifiedTabsByWorktree)
+      ).get(paneKey)
     )
     if (!parsed) {
       return null
     }
-    const context = tabContext.get(parsed.tabId) ?? attributedActivityTabContext(entry)
+    // A tabless pane is listed only where workspace cards list it: finished local panes whose tab closed drop out.
+    const context =
+      tabContext.get(parsed.tabId) ??
+      (statuses.projection.rowWorktree(paneKey) ? attributedActivityTabContext(entry) : null)
     if (!context) {
       return null
     }

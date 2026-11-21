@@ -77,19 +77,16 @@ function notesIn(messages: Awaited<ReturnType<typeof transcript>>) {
 }
 
 describe('automation result notes ride with the next message, once', () => {
-  it('carries unread notes oldest first ahead of the words, marks them read, and never again', async () => {
+  it('carries unread notes oldest first and only once', async () => {
     rig = await createQueuedMessageTestRig()
     await note('run-2', 2_000, 'second result')
     await note('run-1', 1_000, 'first result')
     const carrier = await nextSend('what happened?')
     await rig.settleAccepted(carrier, 'ok')
-    await nextSend('after')
-
-    const [first, second] = dispatched()
+    const [first] = dispatched()
     expect(first).toMatch(/^\[Since your last message: 2 automation results/)
     expect(first.indexOf('first result')).toBeLessThan(first.indexOf('second result'))
     expect(first.endsWith(']\n\nwhat happened?')).toBe(true)
-    expect(second).toBe('after')
 
     const messages = await transcript()
     expect(notesIn(messages).map((entry) => entry.readWith)).toEqual([carrier, carrier])
@@ -97,20 +94,13 @@ describe('automation result notes ride with the next message, once', () => {
     expect(sent?.automationResultsCarried).toBe(2)
     // The person's own row keeps their words; only the agent saw the preamble.
     expect(sent?.blocks).toEqual([{ type: 'text', text: 'what happened?' }])
-  })
-
-  it('carries only results that arrived since the last carrier', async () => {
-    rig = await createQueuedMessageTestRig()
-    await note('run-1', 1_000, 'old result')
-    const carrier = await nextSend('one')
-    await rig.settleAccepted(carrier, 'ok')
-    await note('run-2', 2_000, 'new result')
-    await nextSend('two')
-
+    await note('run-3', 3_000, 'new result')
+    await nextSend('after')
     const second = dispatched()[1]
-    expect(second).toMatch(/^\[Since your last message: 1 automation result arrived/)
     expect(second).toContain('new result')
-    expect(second).not.toContain('old result')
+    expect(second).not.toContain('first result')
+    expect(second).not.toContain('second result')
+    expect(second.endsWith(']\n\nafter')).toBe(true)
   })
 
   it('a send refused before any write leaves its notes for the next message', async () => {

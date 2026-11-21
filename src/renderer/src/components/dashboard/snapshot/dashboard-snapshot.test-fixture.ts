@@ -10,9 +10,10 @@ import { buildDashboardBucketCounts } from '../bucket-counts/build-dashboard-buc
 function projectState(state: DashboardSnapshotState, now: number) {
   const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
   try {
+    const { runtimeStatusByEnvironmentId, ...appState } = state
     const store = createTestStore()
-    store.setState(state)
-    return store.getState()
+    store.setState(appState)
+    return { ...store.getState(), runtimeStatusByEnvironmentId }
   } finally {
     clock.mockRestore()
   }

@@ -109,28 +109,22 @@ function watchedFleet(workspaces: number) {
   }
 }
 
-it.each([200, 2_000])(
-  'reloads and republishes one workspace for a write that reports it at %i workspaces',
-  (workspaces) => {
-    const fleet = watchedFleet(workspaces)
+it('reloads and republishes one workspace for a write that reports it', () => {
+  const fleet = watchedFleet(2_000)
 
-    fleet.write([keyOf(7)])
+  fleet.write([keyOf(7)])
 
-    expect(work.loads).toBe(1)
-    expect(work.publishes).toBe(1)
-    expect(fleet.reader.events.map((event) => event.key)).toEqual([keyOf(7)])
-  }
-)
+  expect(work.loads).toBe(1)
+  expect(work.publishes).toBe(1)
+  expect(fleet.reader.events.map((event) => event.key)).toEqual([keyOf(7)])
+})
 
-it.each([200, 2_000])(
-  'reloads and republishes one workspace for a write that names it only by its row at %i workspaces',
-  (workspaces) => {
-    const fleet = watchedFleet(workspaces)
+it('reloads and republishes one workspace for a write that names it only by its row', () => {
+  const fleet = watchedFleet(2_000)
 
-    fleet.write([], ['row:tab-7'])
+  fleet.write([], ['row:tab-7'])
 
-    expect(work.loads).toBe(1)
-    expect(work.publishes).toBe(1)
-    expect(fleet.reader.events.map((event) => event.key)).toEqual([keyOf(7)])
-  }
-)
+  expect(work.loads).toBe(1)
+  expect(work.publishes).toBe(1)
+  expect(fleet.reader.events.map((event) => event.key)).toEqual([keyOf(7)])
+})

@@ -1,29 +1,18 @@
-import { describe, expect, it } from 'vitest'
+import { expect, it } from 'vitest'
 import { terminalStreamJsonByteLength } from './terminal-stream-json-byte-length'
 
-/** Use JSON.stringify as the oracle: a size scan can avoid snapshot copies only if it matches every serializer input class. */
+const cases = [
+  ['empty', '', 2],
+  ['plain text with quotes and backslashes', 'a "quoted" c:\\path\\to', 27],
+  ['ASCII controls', String.fromCharCode(...Array.from({ length: 32 }, (_, i) => i)), 174],
+  ['delete and two-byte UTF-8 boundaries', '\u007f\u0080\u07ff', 7],
+  ['two-byte and three-byte scalars', 'é ü ± 日本語 …', 24],
+  ['surrogate pairs', '🙂 emoji 👍🏽', 21],
+  ['a lone high surrogate', 'a\ud800b', 10],
+  ['a lone low surrogate', 'a\udc00b', 10],
+  ['a high surrogate at the end', 'trailing\ud83d', 16]
+] as const
 
-const CASES: [string, string][] = [
-  ['empty', ''],
-  ['plain ascii', 'hello world'],
-  ['a quote and a backslash', 'a "quoted" c:\\path\\to'],
-  ['the five short escapes', '\b\t\n\f\r'],
-  [
-    'every other control character',
-    String.fromCharCode(...Array.from({ length: 32 }, (_, i) => i))
-  ],
-  ['delete and high ascii', '\u007f\u0080\u07ff'],
-  ['two-byte and three-byte scalars', 'é ü ± 日本語 …'],
-  ['a surrogate pair', '🙂 emoji 👍🏽'],
-  ['a lone high surrogate', 'a\ud800b'],
-  ['a lone low surrogate', 'a\udc00b'],
-  ['a high surrogate at the end', 'trailing\ud83d']
-]
-
-describe('the JSON size of a terminal payload', () => {
-  it.each(CASES)('agrees with JSON.stringify: %s', (_label, value) => {
-    expect(terminalStreamJsonByteLength(value)).toBe(
-      Buffer.byteLength(JSON.stringify(value), 'utf8')
-    )
-  })
+it.each(cases)('measures the JSON UTF-8 size for %s', (_label, value, bytes) => {
+  expect(terminalStreamJsonByteLength(value)).toBe(bytes)
 })

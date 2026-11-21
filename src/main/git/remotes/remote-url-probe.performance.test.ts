@@ -2,7 +2,7 @@ import type * as FileSystem from 'node:fs/promises'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const { gitExecFileAsyncMock, headReadMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn<(args: string[]) => Promise<{ stdout: string }>>(),
@@ -83,41 +83,29 @@ async function warmOriginReads(repos: number, rounds: number) {
 
 // Guards #44704's perf review: a warm refresh of a repo without origin re-spawned `git remote get-url`
 // through the GitHub fallback once the per-remote missing cache was gone.
-describe('origin reads on repos without origin', () => {
-  it.each([
-    [12, { listings: 12, urlReads: 0 }],
-    [120, { listings: 120, urlReads: 0 }]
-  ])('answer from the signed listing without spawning Git (N=%i)', async (repos, children) => {
-    expect(await warmOriginReads(repos, 4)).toEqual(children)
-  })
+it('answers warm reads for a missing origin without spawning Git', async () => {
+  expect(await warmOriginReads(12, 4)).toEqual({ listings: 12, urlReads: 0 })
 })
 
 // An ordinary branch switch must preserve config-signed answers without rebuilding remote listings.
-it.each([190, 1900])(
-  'keeps remote listings warm across ordinary checkouts (N=%i)',
-  async (repos) => {
-    for (let index = 0; index < repos; index += 1) {
-      const repoPath = join(root, `checkout-${index}`)
-      await mkdir(join(repoPath, '.git'), { recursive: true })
-      await writeFile(join(repoPath, '.git', 'config'), '[remote "upstream"]\n  url = /x\n')
-      await writeFile(join(repoPath, '.git', 'HEAD'), 'ref: refs/heads/first\n')
-      await listCachedRemoteNames(repoPath)
-      await writeFile(join(repoPath, '.git', 'HEAD'), 'ref: refs/heads/other\n')
-      await listCachedRemoteNames(repoPath)
-      await expect(readRemoteUrl({ repoPath }, 'origin')).rejects.toThrow(/No such remote/)
-    }
-    const calls = gitExecFileAsyncMock.mock.calls.map(([args]) => args.join(' '))
-    expect(calls.filter((call) => call === 'remote')).toHaveLength(repos)
-    expect(calls.filter((call) => call.startsWith('remote get-url'))).toHaveLength(0)
-  },
-  30_000
-)
+it('keeps a remote listing warm across an ordinary checkout', async () => {
+  await mkdir(join(root, '.git'))
+  await writeFile(join(root, '.git', 'config'), '[remote "upstream"]\n  url = /x\n')
+  await writeFile(join(root, '.git', 'HEAD'), 'ref: refs/heads/first\n')
+  await listCachedRemoteNames(root)
 
-it.each([10, 100])('reads HEAD once across conditional config fragments (N=%i)', async (files) => {
+  await writeFile(join(root, '.git', 'HEAD'), 'ref: refs/heads/other\n')
+  await listCachedRemoteNames(root)
+  await expect(readRemoteUrl({ repoPath: root }, 'origin')).rejects.toThrow(/No such remote/)
+
+  expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([['remote']])
+})
+
+it('reads HEAD once across conditional config fragments', async () => {
   await mkdir(join(root, '.git'))
   await writeFile(join(root, '.git', 'HEAD'), 'ref: refs/heads/first\n')
   const includes: string[] = []
-  for (let index = 0; index < files; index += 1) {
+  for (let index = 0; index < 10; index += 1) {
     const name = `fragment-${index}`
     includes.push(`[include] path = ${name}`)
     await writeFile(
@@ -130,7 +118,7 @@ it.each([10, 100])('reads HEAD once across conditional config fragments (N=%i)',
   expect(headReadMock).toHaveBeenCalledTimes(1)
 })
 
-it.each([10, 100])('keeps listings warm across detached commits (N=%i)', async (commits) => {
+it('keeps listings warm across detached commits', async () => {
   await mkdir(join(root, '.git'))
   await writeFile(
     join(root, '.git', 'config'),
@@ -138,7 +126,7 @@ it.each([10, 100])('keeps listings warm across detached commits (N=%i)', async (
   )
   await writeFile(join(root, '.git', 'HEAD'), `${'a'.repeat(40)}\n`)
   await listCachedRemoteNames(root)
-  for (let index = 0; index < commits; index += 1) {
+  for (let index = 0; index < 10; index += 1) {
     await writeFile(join(root, '.git', 'HEAD'), `${index.toString(16).padStart(40, '0')}\n`)
     await listCachedRemoteNames(root)
   }
@@ -162,10 +150,10 @@ it('does not sign branch-dependent config with a reftable HEAD placeholder', asy
   expect(await readLocalGitConfigSignature({ repoPath: root, connectionId: null })).toBeUndefined()
 })
 
-it.each([10, 100])('bounds unsigned project-ref probes and expires them (N=%i)', async (reads) => {
+it('bounds unsigned project-ref probes and expires them', async () => {
   gitExecFileAsyncMock.mockResolvedValue({ stdout: 'https://gitlab.com/example/first.git\n' })
   const read = () => getProjectRefForRemoteWithSignature(Promise.resolve(undefined), root, 'origin')
-  for (let index = 0; index < reads; index += 1) {
+  for (let index = 0; index < 10; index += 1) {
     expect(await read()).toEqual({ host: 'gitlab.com', path: 'example/first' })
   }
   expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)

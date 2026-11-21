@@ -280,6 +280,7 @@ describe('legacy question takeover compatibility', () => {
         legacyCompatibility: { acknowledged: true }
       }
     })
+    expect(harness.db.getMessageById(acknowledgement.answerMessageId)?.read).toBe(1)
     await expect(acknowledge('ack-answer-repeat')).resolves.toMatchObject({
       ok: true,
       result: {
