@@ -56,10 +56,13 @@ async function writeRegistry(
   await writePluginFileAtomically(filePath, JSON.stringify({ version: 1, sessions }))
 }
 
-/** Saves off the main thread, one write at a time; a change during a write is saved right after it. */
+/** Saves off the main thread, one write at a time; changes during a write coalesce into one more,
+ *  and memory is copied once per write, not once per change. */
 export class ClaudeAgentViewRegistryFile {
   private writing?: Promise<void>
-  private latest?: readonly RegisteredClaudeAgentView[]
+  private dirty = false
+  // Fixed at close (memory is about to be cleared) or for a failed write's retry after close.
+  private frozen?: readonly RegisteredClaudeAgentView[]
   private failed = false
   private failedWrites = 0
   private restoring = false
@@ -115,6 +118,9 @@ export class ClaudeAgentViewRegistryFile {
 
   /** Stop: a write already queued still lands; nothing new is written. */
   close(): void {
+    if (this.dirty) {
+      this.frozen = this.current()
+    }
     this.closed = true
   }
 
@@ -126,7 +132,7 @@ export class ClaudeAgentViewRegistryFile {
       this.savedDuringRestore = true
       return Promise.resolve()
     }
-    this.latest = this.current()
+    this.dirty = true
     this.writing ??= this.drain().finally(() => {
       this.writing = undefined
     })
@@ -134,9 +140,10 @@ export class ClaudeAgentViewRegistryFile {
   }
 
   private async drain(): Promise<void> {
-    while (this.latest) {
-      const sessions = this.latest
-      this.latest = undefined
+    while (this.dirty) {
+      this.dirty = false
+      const sessions = this.frozen ?? this.current()
+      this.frozen = undefined
       try {
         await writeRegistry(this.filePath, sessions)
         this.failed = false
@@ -148,7 +155,10 @@ export class ClaudeAgentViewRegistryFile {
         this.failed = true
         // Idle mods will not register again, so retry (2 s doubling, five times); a later change retries too.
         if (++this.failedWrites <= 5) {
-          this.latest ??= sessions
+          if (!this.dirty && this.closed) {
+            this.frozen = sessions
+          }
+          this.dirty = true
           await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** this.failedWrites))
         }
       }
