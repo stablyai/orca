@@ -94,7 +94,7 @@ export function useNativeChatNavigation({
   sessionId?: string | null
   ready?: boolean
   isVisible: boolean
-  loadEarlier: () => Promise<NativeChatOlderPageResult>
+  loadEarlier: (pageSize?: number) => Promise<NativeChatOlderPageResult>
   /** Keeps paged history loaded while the reader stays at the end. */
   holdHistory: () => void
   releaseHistory: () => void
@@ -130,6 +130,18 @@ export function useNativeChatNavigation({
       }
       if (target.kind === 'rail') {
         return nativeChatRailJumpStep(rail.items, target.id, requestRailJump)
+      }
+      if (target.kind === 'find') {
+        if (nativeChatSlotIndexOf(slots, target.id) >= 0) {
+          issue({ kind: 'rail', messageId: target.id, requestId: nextRequestId(), fromLink: true })
+          return 'landed'
+        }
+        // Loaded but drawn by no row: paging further cannot reach it.
+        if (conversation.some((message) => message.id === target.id)) {
+          return 'stop'
+        }
+        holdHistory()
+        return 'page'
       }
       const step = nativeChatSubagentHistoryStep({
         agentId: target.agentId,
@@ -207,6 +219,14 @@ export function useNativeChatNavigation({
     releaseHistory,
     scrollToBottom
   ])
+  const revealFindEntry = useCallback(
+    (entryId: string) => {
+      beginNavigation()
+      readerLeavesEnd()
+      startHistoryJump({ kind: 'find', id: entryId })
+    },
+    [beginNavigation, readerLeavesEnd, startHistoryJump]
+  )
   const jumpToLatest = useCallback(() => {
     beginNavigation()
     scrollToBottom()
@@ -224,6 +244,7 @@ export function useNativeChatNavigation({
     beginNavigation,
     selectRailItem,
     revealDiff,
+    revealFindEntry,
     jumpToLatest,
     pendingRailId: historyJump.pending?.kind === 'rail' ? historyJump.pending.id : null
   }

@@ -5,10 +5,8 @@ import type {
 import { transcriptFallbackId } from '../transcript-streaming/transcript-fallback-id'
 import { extendTranscriptBoundary } from './transcript-file-version'
 import { inTranscriptFileOrder } from '../transcript-streaming/transcript-file-order'
-import {
-  MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
-  type NativeChatLineDecoder
-} from '../transcript-tail-reader'
+import { MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES } from '../transcript-decoding/transcript-record-limit'
+import type { NativeChatLineDecoder } from '../transcript-decoding/native-chat-line-decoder'
 import {
   openTranscriptReadStream,
   transcriptFileStat

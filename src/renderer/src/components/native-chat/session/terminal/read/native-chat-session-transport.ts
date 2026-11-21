@@ -13,9 +13,13 @@ import {
   runtimeNativeChatReadError
 } from './native-chat-runtime-contract'
 import { translate } from '@/i18n/i18n'
+import type { NativeChatFindOutcome } from '../../../../../../../shared/native-chat/find/native-chat-session-find'
 
 /** Match local IPC so session consumers can read local or runtime-owned transcripts. */
-export type NativeChatSessionTransport = Pick<NativeChatApi, 'readSession' | 'subscribe'> & {
+export type NativeChatSessionTransport = Pick<
+  NativeChatApi,
+  'readSession' | 'subscribe' | 'find'
+> & {
   /** Older pages read by row cursor; other routes keep the full reread and its existing depth limits. */
   pagesByCursor?: true
 }
@@ -44,7 +48,9 @@ export function toRuntimeNativeChatErrorMessage(err: unknown): string {
 const localNativeChatTransport: NativeChatSessionTransport = {
   readSession: (agent, sessionId, limit, transcriptPath, options) =>
     window.api.nativeChat.readSession(agent, sessionId, limit, transcriptPath, options),
-  subscribe: (args, onFrame) => window.api.nativeChat.subscribe(args, onFrame)
+  subscribe: (args, onFrame) => window.api.nativeChat.subscribe(args, onFrame),
+  find: (args) =>
+    window.api.nativeChat.find?.(args) ?? Promise.resolve({ unsupported: true as const })
 }
 
 const desktopNativeChatTransport: NativeChatSessionTransport = {
@@ -67,6 +73,21 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
         return parseRuntimeNativeChatReadSessionResult(result)
       } catch (err) {
         return { error: toRuntimeNativeChatErrorMessage(err) }
+      }
+    },
+    find: async (args) => {
+      try {
+        return (
+          (await callRuntimeRpc<NativeChatFindOutcome>(target, 'nativeChat.find', args, {
+            timeoutMs: 60_000
+          })) ?? { unsupported: true }
+        )
+      } catch (err) {
+        // A host from before whole-chat find: the bar searches what is drawn, as it did there.
+        return (err instanceof RuntimeRpcCallError && err.code === 'method_not_found') ||
+          isRuntimeCompatBlockError(err)
+          ? { unsupported: true }
+          : { error: toRuntimeNativeChatErrorMessage(err) }
       }
     },
     subscribe: (args, onFrame) => {

@@ -31,7 +31,7 @@ export type NativeChatLiveSession = NativeChatSession & {
   /** Reset paging failures when source/snapshot replacement starts a new generation. */
   olderHistoryGeneration: number
   /** Resolve after page publication; concurrent calls share the in-flight read. */
-  loadEarlier: () => Promise<NativeChatOlderPageResult>
+  loadEarlier: (pageSize?: number) => Promise<NativeChatOlderPageResult>
   /** A parked view keeps shared history until it returns or unmounts. */
   /** Shared source initial autofill ends after a deliberate return; browsing stays per view. */
   initialHistoryAutoLoad?: boolean

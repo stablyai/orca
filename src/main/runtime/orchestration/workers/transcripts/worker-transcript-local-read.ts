@@ -1,10 +1,8 @@
 import { open } from 'node:fs/promises'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
-import {
-  MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
-  readNativeChatTranscriptTailFile,
-  type NativeChatLineDecoder
-} from '../../../../native-chat/transcript-tail-reader'
+import { readNativeChatTranscriptTailFile } from '../../../../native-chat/transcript-tail-reader'
+import { MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES } from '../../../../native-chat/transcript-decoding/transcript-record-limit'
+import type { NativeChatLineDecoder } from '../../../../native-chat/transcript-decoding/native-chat-line-decoder'
 import { TAIL_CHUNK_BYTES } from '../../../../native-chat/transcript-watching/transcript-tail-boundary'
 import type {
   nativeChatTurnEvidenceObserverForAgent,

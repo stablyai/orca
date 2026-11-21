@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
+import { nativeChatLineDecoderForAgent } from './transcript-decoding/native-chat-line-decoder'
 
 describe('Claude chat transcript with a background task hand-back', () => {
   it('keeps the tool result a notification delivers to a waiting call', () => {

@@ -21,6 +21,7 @@ import { useNativeChatLinkActions } from './links/actions/use-native-chat-link-a
 import { useNativeChatPasteBridge } from './paste/use-native-chat-paste-bridge'
 import { useNativeChatRootInputRouting } from './composer/focus/use-native-chat-root-input-routing'
 import { useNativeChatFind } from './viewport/find/use-native-chat-find'
+import type { NativeChatFindSearch } from './viewport/find/use-native-chat-host-find'
 import { useNativeChatFontSize } from './appearance/use-native-chat-font-size'
 import { useNativeChatStoreAppearanceStyle } from './appearance/use-native-chat-store-appearance-style'
 import {
@@ -30,7 +31,7 @@ import {
 import type { NativeChatFileLinkContext } from './links/actions/native-chat-file-link-context'
 
 export type NativeChatSurfaceTranscript = Pick<NativeChatMessageListHandle, 'revealFindMatch'> &
-  Partial<Pick<NativeChatMessageListHandle, 'messageCopyText'>>
+  Partial<Pick<NativeChatMessageListHandle, 'messageCopyText' | 'revealFindEntry'>>
 
 /** A screen's own context-menu rows; the surface supplies find, paste, and the transcript targets. */
 export type NativeChatSurfaceMenu = Omit<
@@ -67,6 +68,8 @@ export type NativeChatSurfaceArgs = {
   onKeyDown?: (event: ReactKeyboardEvent<HTMLDivElement>) => void
   /** What the composer's `/resume` opens; a conversation's own history by default. */
   sessionHistory?: NativeChatSessionHistoryScope
+  /** Finds in the whole chat on its host; without it find searches the drawn rows. */
+  findSearch?: NativeChatFindSearch
 }
 
 /** Everything a chat screen's root owns, identical for every chat: find, links, context menu,
@@ -87,7 +90,8 @@ export function useNativeChatSurface({
   onSplit,
   onPointerDownCapture: screenPointerDownCapture,
   onKeyDown,
-  sessionHistory = 'conversation'
+  sessionHistory = 'conversation',
+  findSearch
 }: NativeChatSurfaceArgs) {
   const rootRef = useRef<HTMLDivElement>(null)
   const noAnswerInputRef = useRef<HTMLInputElement>(null)
@@ -96,7 +100,7 @@ export function useNativeChatSurface({
   const keybindings = useAppStore((state) => state.keybindings)
   const appearance = useNativeChatStoreAppearanceStyle()
   useNativeChatFontSize(conversationShown && active, rootRef)
-  const find = useNativeChatFind(active, rootRef, composerRef, transcriptRef)
+  const find = useNativeChatFind(active, rootRef, composerRef, transcriptRef, findSearch)
   const { onLinkClick, linkActionRequest, requestLinkActions, closeLinkActions } =
     useNativeChatLinkActions(fileLinkContext, rootRef, { sessionId, isVisible })
   const rootInput = useNativeChatRootInputRouting({

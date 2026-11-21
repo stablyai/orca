@@ -6,7 +6,7 @@ import { resolveSessionFilePath } from '../../../../native-chat/session-file-res
 import {
   nativeChatLineDecoderForAgent,
   type NativeChatLineDecoder
-} from '../../../../native-chat/transcript-tail-reader'
+} from '../../../../native-chat/transcript-decoding/native-chat-line-decoder'
 import { decodeClaudeTranscriptLine } from '../../../../native-chat/transcript-decoding/transcript-line-decoders-claude'
 import {
   boundWorkerTranscriptMessages,

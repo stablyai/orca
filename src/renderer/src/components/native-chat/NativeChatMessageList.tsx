@@ -341,7 +341,7 @@ export function NativeChatMessageList({
   })
   useNativeChatMessageListHandle(ref, {
     readerAtEnd,
-    beginNavigation,
+    navigation,
     scrollToBottom,
     onSent: newRows.dismiss,
     revealFindMatch: readerInput.revealFindMatch,

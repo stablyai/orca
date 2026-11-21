@@ -1,6 +1,6 @@
 import { stat } from 'node:fs/promises'
 import type { WorkerTranscriptReadResult } from './worker-transcript-read'
-import type { NativeChatLineDecoder } from '../../../../native-chat/transcript-tail-reader'
+import type { NativeChatLineDecoder } from '../../../../native-chat/transcript-decoding/native-chat-line-decoder'
 
 type Settled = { path: string; stamp: string; json: Buffer; charge: number }
 

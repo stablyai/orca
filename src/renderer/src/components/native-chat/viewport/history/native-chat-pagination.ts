@@ -13,10 +13,6 @@ export type NativeChatOlderPageResult =
   | 'failed'
   | 'superseded'
 
-export function nextNativeChatLimit(currentLimit: number): number {
-  return currentLimit + NATIVE_CHAT_PAGE
-}
-
 /** A full window may have older rows; a short read proves exhaustion. */
 export function hasMoreNativeChatHistory(returnedCount: number, requestedLimit: number): boolean {
   return returnedCount >= requestedLimit

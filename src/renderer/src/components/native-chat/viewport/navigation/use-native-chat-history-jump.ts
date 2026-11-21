@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react'
 import type { NativeChatRailItem } from '../rail/native-chat-message-rail-items'
-import type { NativeChatOlderPageResult } from '../history/native-chat-pagination'
+import { NATIVE_CHAT_PAGE, type NativeChatOlderPageResult } from '../history/native-chat-pagination'
 
 /** Bound runaway paging beyond any expected session size. */
 export const NATIVE_CHAT_HISTORY_JUMP_MAX_PAGES = 1000
@@ -11,6 +11,8 @@ export const NATIVE_CHAT_HISTORY_JUMP_MAX_PAGES = 1000
 export type NativeChatHistoryJumpTarget =
   | { kind: 'rail'; id: string }
   | { kind: 'item'; id: string }
+  /** A find match's message: pages are read twice as wide to reach it sooner. */
+  | { kind: 'find'; id: string }
   | { kind: 'subagent'; agentId: string }
 
 /** What the committed transcript can do for a target now: it landed, it needs older history, or it cannot be reached. */
@@ -48,7 +50,7 @@ export function useNativeChatHistoryJump({
   sessionKey: string
   /** Hiding the pane abandons the jump too: a hidden lane stops reading, so a page never lands. */
   isVisible: boolean
-  loadEarlier: () => Promise<NativeChatOlderPageResult>
+  loadEarlier: (pageSize?: number) => Promise<NativeChatOlderPageResult>
 }): {
   pending: NativeChatHistoryJumpTarget | null
   start: (
@@ -103,7 +105,9 @@ export function useNativeChatHistoryJump({
         if (next === 'stop' || pages >= NATIVE_CHAT_HISTORY_JUMP_MAX_PAGES) {
           return 'missing'
         }
-        const result = await committedRef.current.loadEarlier()
+        const result = await committedRef.current.loadEarlier(
+          target.kind === 'find' ? NATIVE_CHAT_PAGE * 2 : undefined
+        )
         if (signal.aborted || result === 'superseded') {
           return 'aborted'
         }

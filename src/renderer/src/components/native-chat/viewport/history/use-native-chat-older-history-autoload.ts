@@ -14,7 +14,7 @@ export type NativeChatOlderHistoryAutoload = {
   /** Manual load: clears a failure so auto-load resumes if it succeeds. */
   loadEarlierManually: () => void
   /** The lane's load, recording a failure so any caller's (a history jump's) shows the error. */
-  loadEarlier: () => Promise<NativeChatOlderPageResult>
+  loadEarlier: (pageSize?: number) => Promise<NativeChatOlderPageResult>
 }
 
 export function useNativeChatOlderHistoryAutoload({
@@ -36,7 +36,7 @@ export function useNativeChatOlderHistoryAutoload({
   onManualLoad?: () => void
   loadingEarlier: boolean
   /** Joins the page already in flight, if any. */
-  loadEarlier: () => Promise<NativeChatOlderPageResult>
+  loadEarlier: (pageSize?: number) => Promise<NativeChatOlderPageResult>
 }): NativeChatOlderHistoryAutoload {
   const [sentinel, setSentinel] = useState<HTMLElement | null>(null)
   // A swapped transcript must not inherit another history’s failure.
@@ -61,11 +61,11 @@ export function useNativeChatOlderHistoryAutoload({
   const shouldObserve = isAutoLoadEnabled && isVisible && hasMore && !loadingEarlier
 
   // Let the lane own in-flight state so abandoned reads cannot strand a latch; stop on no progress to prevent endless observer reloads.
-  const loadRecorded = (): Promise<NativeChatOlderPageResult> => {
+  const loadRecorded = (pageSize?: number): Promise<NativeChatOlderPageResult> => {
     const key = historyKey
     // Cleared now too: a read can settle before the render that commits its loading state.
     setReadFailedHistoryKey(null)
-    return loadEarlier().then((result) => {
+    return loadEarlier(pageSize).then((result) => {
       // Any caller's failure stops auto-load too, so the row shows the error instead of retrying.
       if (key === currentKey.current && (result === 'failed' || result === 'unchanged')) {
         setFailedHistoryKey(key)

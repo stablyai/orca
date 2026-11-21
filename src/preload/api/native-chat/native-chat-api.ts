@@ -4,6 +4,10 @@ import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../../shared/native-chat/native-chat-types'
+import type {
+  NativeChatFindArgs,
+  NativeChatFindOutcome
+} from '../../../shared/native-chat/find/native-chat-session-find'
 
 // notFound marks a not-yet-on-disk miss (retry-worthy) vs a real read/parse error (#8401).
 export type NativeChatReadSessionResult =
@@ -76,6 +80,8 @@ export type NativeChatApi = {
     /** The user opened or paged this chat: may start its stopped local WSL distro (E9). */
     options?: NativeChatReadSessionOptions
   ) => Promise<NativeChatReadSessionResult>
+  /** Searches the chat's whole transcript on its host; a newer search of the same chat replaces it. */
+  find?: (args: NativeChatFindArgs) => Promise<NativeChatFindOutcome>
   /** First frame is a bounded snapshot; later frames contain only appended messages. */
   subscribe: (
     args: NativeChatSubscribeArgs,

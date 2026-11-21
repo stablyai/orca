@@ -58,6 +58,8 @@ export type NativeChatMessageListHandle = {
   readerAtEnd: () => boolean
   /** Bring a find match into view, clear of the find bar; the reader stops following the latest. */
   revealFindMatch: (match: Range, bar: DOMRectReadOnly | null) => void
+  /** Draw and scroll to a find match's message, reading older history until it is loaded. */
+  revealFindEntry: (entryId: string) => void
   /** What the row drawing this message copies from its Copy button; null when none draws it. */
   messageCopyText: (messageId: string) => string | null
 }
@@ -91,13 +93,13 @@ export function useNativeChatMessageListHandle(
   ref: React.Ref<NativeChatMessageListHandle> | undefined,
   {
     readerAtEnd,
-    beginNavigation,
+    navigation: { beginNavigation, revealFindEntry },
     scrollToBottom,
     onSent,
     revealFindMatch,
     slots
   }: Pick<NativeChatMessageListHandle, 'readerAtEnd' | 'revealFindMatch'> & {
-    beginNavigation: () => void
+    navigation: { beginNavigation: () => void; revealFindEntry: (entryId: string) => void }
     scrollToBottom: (reason: 'send') => void
     /** The reader answered, whether or not the view moves. */
     onSent: () => void
@@ -121,8 +123,9 @@ export function useNativeChatMessageListHandle(
       revealLatest,
       readerAtEnd,
       revealFindMatch,
+      revealFindEntry,
       messageCopyText: (messageId) => nativeChatSlotCopyText(slots, messageId)
     }),
-    [readerAtEnd, revealLatest, revealFindMatch, slots]
+    [readerAtEnd, revealLatest, revealFindMatch, revealFindEntry, slots]
   )
 }

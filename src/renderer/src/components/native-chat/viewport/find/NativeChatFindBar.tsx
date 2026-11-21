@@ -6,6 +6,8 @@ import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import { useTranslate } from '@/i18n/use-translate'
 import type { NativeChatFind } from './use-native-chat-find'
 import { useNativeChatFindMatches } from './use-native-chat-find-matches'
+import { nativeChatFindStartOnScreen } from './native-chat-find-target'
+import { useNativeChatHostFind } from './use-native-chat-host-find'
 
 export function NativeChatFindBar({
   find,
@@ -15,14 +17,26 @@ export function NativeChatFindBar({
   isVisible: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const { query, setQuery, close, rootRef, barRef, inputRef, revealMatch } = find
-  const { matchCount, activeIndex, step } = useNativeChatFindMatches({
+  const { query, setQuery, close, rootRef, barRef, inputRef, revealMatch, revealEntry } = find
+  const host = useNativeChatHostFind({
+    search: find.search,
+    query,
+    isVisible,
+    readStart: () => nativeChatFindStartOnScreen(rootRef.current)
+  })
+  const page = useNativeChatFindMatches({
     rootRef,
     barRef,
     query,
     isVisible,
-    revealMatch
+    revealMatch,
+    ...(host.mode === 'host' ? { target: host.target, revealEntry } : {})
   })
+  const { matchCount, activeIndex, step } =
+    host.mode === 'host'
+      ? { matchCount: host.totalMatches, activeIndex: host.activeIndex, step: host.step }
+      : page
+  const pending = host.mode === 'host' && host.pending
 
   const opened = useRef(false)
   useEffect(() => {
@@ -34,8 +48,9 @@ export function NativeChatFindBar({
     inputRef.current?.select()
   }, [inputRef])
 
-  const status =
-    query && matchCount === 0
+  const status = pending
+    ? ''
+    : query && matchCount === 0
       ? t('components.native-chat.find.noResults', 'No results')
       : `${activeIndex + 1}/${matchCount}`
   const previousLabel = t('components.native-chat.find.previousMatch', 'Previous match')
