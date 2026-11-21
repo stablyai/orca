@@ -13,6 +13,7 @@ import {
 } from '../../sdk-transport/claude-agent-sdk-control-requests'
 import {
   claudeAllowedPermissionMode,
+  claudeAutoRefused,
   claudeAutoRetryDue,
   claudeBypassRefused,
   claudeOwesFullAccessFallback,
@@ -99,6 +100,15 @@ function claudePermissionModeLadder(
   session: ClaudeBypassFacts,
   mode: PermissionMode
 ): PermissionMode[] {
+  if (mode === 'auto' && session.launchIntent?.permissionMode === 'auto') {
+    if (claudeAutoRefused(session)) {
+      return ['default']
+    }
+    if (session.autoUnsettled !== undefined) {
+      return claudeAutoRetryDue(session) ? ['default', 'auto'] : ['default']
+    }
+    return ['auto']
+  }
   if (mode !== 'bypassPermissions') {
     return [mode]
   }
@@ -173,11 +183,13 @@ export async function setClaudeAllowedPermissionMode(
         session.bypassRefusal = undefined
       } else if (step === 'auto') {
         session.autoDisabled = false
+        session.autoAccepted = true
         session.autoUnsettled = undefined
       }
       continue
     }
-    const fallbackAuto = step === 'auto' && mode === 'bypassPermissions'
+    // Auto behind Ask is a fallback's step, so its refusal leaves the chat in Ask.
+    const fallbackAuto = step === 'auto' && index > 0
     // An answer Orca doesn't know refuses the fallback's auto for now; no answer leaves the mode
     // unknown, so the caller records no fallback and auto is asked again shortly.
     const unanswered = claudeLeftUnanswered(write.reason)
@@ -238,19 +250,27 @@ export async function setClaudeAllowedPermissionMode(
 
 /** Records Claude's first root init on the live session. A turn that shows a Full access chat
  *  running outside Full access with no fallback settled switches to it now, so its tools run in
- *  the fallback rather than in Ask. */
+ *  the fallback rather than in Ask. An Approve for me chat Claude runs in Ask records Ask, which
+ *  Claude already runs, so nothing is written. */
 export function observeClaudeRootInit(
   session:
     | (Parameters<typeof setClaudeAllowedPermissionMode>[0] &
         Parameters<typeof claudeOwesFullAccessFallback>[0])
     | null
     | undefined,
-  firstRootInit: ClaudeSession['firstRootInit']
+  firstRootInit: ClaudeSession['firstRootInit'],
+  running?: string | null
 ): void {
   if (!session) {
     return
   }
   session.firstRootInit ??= firstRootInit
+  if (claudeAutoRefused(session)) {
+    if (running === 'default' && claudeOwesFullAccessFallback(session)) {
+      session.appliedInputOptions.set('buildPermissionMode', 'default')
+    }
+    return
+  }
   if (!claudeBypassRefused(session) || !claudeOwesFullAccessFallback(session)) {
     return
   }

@@ -1,5 +1,6 @@
 // Claude runs a Full access launch in another mode when its settings turn bypass off
-// (`permissions.disableBypassPermissionsMode`), and refuses any later switch to bypass.
+// (`permissions.disableBypassPermissionsMode`), and refuses any later switch to bypass; it runs an
+// Approve for me launch in Ask when its settings turn auto off (`disableAutoMode`).
 
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import type {
@@ -16,6 +17,7 @@ export type ClaudeBypassFacts = Partial<
     | 'bypassAccepted'
     | 'bypassRefusal'
     | 'autoDisabled'
+    | 'autoAccepted'
     | 'autoUnsettled'
     | 'appliedInputOptions'
     | 'permissionModeRequests'
@@ -65,6 +67,38 @@ export function claudeBypassRefused(session: ClaudeBypassFacts): boolean {
   )
 }
 
+/** An Approve for me launch Claude runs in Ask for good: its settings turn auto off, or it opened
+ *  outside auto and Plan without accepting auto since. A refusal only for now is not one. */
+export function claudeAutoRefused(session: ClaudeBypassFacts): boolean {
+  if (session.launchIntent?.permissionMode !== 'auto') {
+    return false
+  }
+  if (session.autoDisabled === true) {
+    return true
+  }
+  const opened = session.firstRootInit?.permissionMode
+  return (
+    session.autoAccepted !== true &&
+    session.autoUnsettled === undefined &&
+    typeof opened === 'string' &&
+    opened !== 'auto' &&
+    opened !== 'plan'
+  )
+}
+
+/** An Approve for me launch Claude runs in Ask, for good or only for now. */
+export function claudeAutoFallsBack(session: ClaudeBypassFacts): boolean {
+  return (
+    claudeAutoRefused(session) ||
+    (session.launchIntent?.permissionMode === 'auto' && session.autoUnsettled !== undefined)
+  )
+}
+
+/** Claude runs the chat's Full access or Approve for me in another mode. */
+export function claudeLaunchModeRefused(session: ClaudeBypassFacts): boolean {
+  return claudeBypassRefused(session) || claudeAutoFallsBack(session)
+}
+
 /** Claude's own refusal, else its settings read, else only that it started outside Full access. */
 export function claudeFullAccessRefusalReason(
   session: ClaudeBypassFacts
@@ -83,12 +117,16 @@ export function claudeBypassUnknown(session: ClaudeBypassFacts): boolean {
   )
 }
 
-/** Where Claude refuses Full access, Approve for me, or Ask where its settings turn that off too.
- *  Any other mode is asked for as chosen, so Claude's refusal of it fails the send. */
+/** Where Claude refuses Full access, Approve for me, or Ask where its settings turn that off too;
+ *  where Claude refuses an Approve for me launch's auto, Ask. Any other mode is asked for as
+ *  chosen, so Claude's refusal of it fails the send. */
 export function claudeAllowedPermissionMode(
   session: ClaudeBypassFacts,
   mode: PermissionMode
 ): PermissionMode {
+  if (mode === 'auto') {
+    return claudeAutoFallsBack(session) ? 'default' : 'auto'
+  }
   if (mode !== 'bypassPermissions' || !claudeBypassRefused(session)) {
     return mode
   }
@@ -131,14 +169,22 @@ function claudeRunsAsk(session: ClaudeModeFacts): boolean {
 
 /** A Full access chat outside Plan whose mode the next input should settle: nothing has said
  *  whether Claude allows bypass, or Claude refuses it and no fallback is applied, Claude has
- *  left the Approve for me it applied, or a refusal of auto may have passed. */
+ *  left the Approve for me it applied, or a refusal of auto may have passed. An Approve for me
+ *  chat Claude runs in Ask owes it until Ask is applied, or once a refusal of auto may have passed. */
 export function claudeOwesFullAccessFallback(
   session: ClaudeBypassFacts & ClaudeModeFacts
 ): boolean {
-  if (session.launchIntent?.permissionMode !== 'bypassPermissions' || claudeInPlan(session)) {
+  const intent = session.launchIntent?.permissionMode
+  if ((intent !== 'bypassPermissions' && intent !== 'auto') || claudeInPlan(session)) {
     return false
   }
   const build = session.appliedInputOptions.get('buildPermissionMode')
+  if (intent === 'auto') {
+    if (!claudeAutoFallsBack(session)) {
+      return false
+    }
+    return claudeAutoRefused(session) ? build === undefined : claudeAutoRetryDue(session)
+  }
   if (!claudeBypassRefused(session)) {
     return claudeBypassUnknown(session) && build === undefined
   }

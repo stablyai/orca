@@ -1,7 +1,7 @@
 import type { PermissionMode, PermissionResult } from '@anthropic-ai/claude-agent-sdk'
 import type { ClaudePendingPrompt } from './claude-prompt-registry'
 import type { ClaudeSession } from '../claude-structured-session-state'
-import { claudeBypassRefused } from './claude-full-access-refusal'
+import { claudeLaunchModeRefused } from './claude-full-access-refusal'
 import {
   ClaudePermissionModeUnsettled,
   setClaudeAllowedPermissionMode
@@ -26,13 +26,13 @@ export function claudePlanApprovalMode(
 }
 
 /** Keep a provider's startup restriction until an approved plan successfully restores the requested
- *  policy. A refused Full access chat asks for Full access each time, so Claude's answer picks the
- *  fallback rather than an earlier one that was only for now. */
+ *  policy. A refused Full access or Approve for me chat asks for its choice each time, so Claude's
+ *  answer picks the fallback rather than an earlier one that was only for now. */
 export function claudeBuildPermissionMode(
   session: Pick<ClaudeSession, 'launchIntent' | 'firstRootInit' | 'appliedInputOptions'> &
-    Partial<Pick<ClaudeSession, 'bypassDisabled'>>
+    Partial<Pick<ClaudeSession, 'bypassDisabled' | 'autoDisabled' | 'autoUnsettled'>>
 ): PermissionMode {
-  if (claudeBypassRefused(session)) {
+  if (claudeLaunchModeRefused(session)) {
     return claudePlanApprovalMode(session)
   }
   const opened = session.firstRootInit?.permissionMode

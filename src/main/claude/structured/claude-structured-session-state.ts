@@ -177,6 +177,8 @@ export type ClaudeSession = {
   startupSettings?: Promise<void>
   /** Claude's settings turn auto mode off for this process (startup `get_settings`, or a refusal). */
   autoDisabled?: boolean
+  /** Claude accepted an auto switch in this process, which overrules a start outside it. */
+  autoAccepted?: boolean
   /** Claude last refused auto for a reason that can pass (availability, model, Fast mode), or
    *  left the switch unanswered; says when asking again can get a different answer. */
   autoUnsettled?: ClaudeAutoUnsettled

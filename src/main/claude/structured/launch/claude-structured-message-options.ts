@@ -2,8 +2,8 @@ import { setTimeout as delay } from 'node:timers/promises'
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import { claudeBuildPermissionMode } from '../permissions/claude-plan-approval-mode'
 import {
-  claudeBypassRefused,
   claudeInPlan,
+  claudeLaunchModeRefused,
   claudeOwesFullAccessFallback
 } from '../permissions/claude-full-access-refusal'
 import {
@@ -89,8 +89,8 @@ export async function applyClaudeMessageOptions(
     } else {
       await waitForClaudeStartupSettings(session, signal)
       const leavingPlan = claudeInPlan(session)
-      const refused = claudeBypassRefused(session)
-      // A refused Full access chat already running its fallback needs no write.
+      const refused = claudeLaunchModeRefused(session)
+      // A refused chat already running its fallback needs no write.
       const mode =
         !leavingPlan && refused && !claudeOwesFullAccessFallback(session)
           ? null
