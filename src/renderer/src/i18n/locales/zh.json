@@ -20750,7 +20750,6 @@
         "copyFailed": "复制失败",
         "copyIdentity": "复制 {{value0}}",
         "detachedCommit": "提交 {{head}}（非分支）",
-        "folder": "文件夹",
         "mainCheckout": "主工作副本",
         "turnWorking": "此聊天的智能体正在工作。请在其回合结束后再切换分支。",
         "worktree": "工作树"

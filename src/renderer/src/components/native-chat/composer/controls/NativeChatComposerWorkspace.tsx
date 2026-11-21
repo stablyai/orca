@@ -80,9 +80,11 @@ export function NativeChatComposerWorkspace({
       toast.error(t('components.native-chat.composerWorkspace.copyFailed', 'Failed to copy'))
     }
   }
+  // Why: for a plain folder the folder icon is literally the kind, so "· Folder" only repeats it.
+  // Worktrees and main checkouts reuse that icon, so they keep a suffix to tell them apart.
   const kindLabel =
     kind === 'folder'
-      ? t('components.native-chat.composerWorkspace.folder', 'Folder')
+      ? null
       : kind === 'main'
         ? t('components.native-chat.composerWorkspace.mainCheckout', 'Main checkout')
         : t('components.native-chat.composerWorkspace.worktree', 'Worktree')
@@ -158,11 +160,13 @@ export function NativeChatComposerWorkspace({
             >
               <Folder className="size-3" aria-hidden />
               <span className={FOOTER_TEXT}>{checkout}</span>
-              <span
-                className={`${FOOTER_TEXT} max-w-[max(0px,calc(100%_-_var(--spacing)*5))] shrink-0 font-normal text-chat-foreground-faint`}
-              >
-                · {kindLabel}
-              </span>
+              {kindLabel && (
+                <span
+                  className={`${FOOTER_TEXT} max-w-[max(0px,calc(100%_-_var(--spacing)*5))] shrink-0 font-normal text-chat-foreground-faint`}
+                >
+                  · {kindLabel}
+                </span>
+              )}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>

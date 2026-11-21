@@ -19392,7 +19392,6 @@
         "copyFailed": "복사하지 못했습니다",
         "copyIdentity": "{{value0}} 복사",
         "detachedCommit": "커밋 {{head}} (브랜치 아님)",
-        "folder": "폴더",
         "mainCheckout": "기본 체크아웃",
         "turnWorking": "이 채팅의 에이전트가 작업 중입니다. 턴이 끝난 후 브랜치를 전환하세요.",
         "worktree": "작업 트리"

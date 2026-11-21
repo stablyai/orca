@@ -19823,7 +19823,6 @@
         "copyFailed": "複製失敗",
         "copyIdentity": "複製 {{value0}}",
         "detachedCommit": "提交 {{head}}（非分支）",
-        "folder": "資料夾",
         "mainCheckout": "主要工作副本",
         "turnWorking": "此聊天的代理正在工作。請在其回合結束後再切換分支。",
         "worktree": "工作樹"
