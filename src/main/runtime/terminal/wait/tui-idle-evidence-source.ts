@@ -46,6 +46,8 @@ export type TuiIdleEvidenceSource = {
   readRuledScreen?(ptyId: string | null | undefined): RuledScreen | null
   /** The PTY's quiet clock: its last output, else when main began receiving its silent stream. */
   getOutputClockAt?(ptyId: string | null | undefined): number | null
+  /** When input last reached the PTY, typed or sent. */
+  getLastInputAt?(ptyId: string | null | undefined): number | null
   /** Whether mail delivery would type into this pane now (drafts, prompts and overlays hold it). */
   isSettledForDelivery?(ptyId: string): boolean
   /** The foreground process a poll read during the pane's current quiet stretch; absent before any
@@ -187,6 +189,7 @@ export function ptyTuiIdleEvidence(
         ? { ...fullRecord, lastOscTitle: null, lastAgentStatus: null }
         : { ...fullRecord, lastOscTitle: null }
   const firstPartyStatus = source.getFirstPartyAgentStatus(pty.ptyId)
+  const lastInputAt = source.getLastInputAt?.(pty.ptyId) ?? null
   // Why per agent: Claude's corroboration is its own composer marker, which no shell hook can print.
   const readCommandPainted = () =>
     hasTerminalAgentPainted(
@@ -216,7 +219,13 @@ export function ptyTuiIdleEvidence(
     titleObservedAtEpochMs: pty.lastOscTitleEpochMs,
     agent,
     firstPartyStatus:
-      firstPartyStatus && isCurrentFirstPartyReport(pty, firstPartyStatus)
+      firstPartyStatus &&
+      isCurrentFirstPartyReport(pty, firstPartyStatus) &&
+      !(
+        firstPartyStatus.restoredAtRest === true &&
+        lastInputAt !== null &&
+        lastInputAt >= firstPartyStatus.updatedAt
+      )
         ? firstPartyStatus
         : null,
     readHookTurn: hookTurnReader(source, agent, pty.ptyId),

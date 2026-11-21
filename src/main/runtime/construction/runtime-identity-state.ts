@@ -354,6 +354,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
     readScreenLines: (ptyId) => this.readLiveTerminalScreenLines(ptyId),
     readRuledScreen: (ptyId) => this.readRuledScreen(ptyId),
     getOutputClockAt: (ptyId) => this.readOutputClockAt(ptyId),
+    getLastInputAt: (ptyId) => (ptyId ? this.terminalRunFacts.readLastInputAt(ptyId) : null),
     isSettledForDelivery: (ptyId) => this.isAgentSettledForDelivery(ptyId)
   }
 
