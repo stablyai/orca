@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
@@ -7,22 +6,17 @@ import type {
   AgentHookInstallStatus
 } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import {
+  buildManagedCommandHook,
+  MANAGED_HOOK_TIMEOUT_MILLISECONDS,
+  type HookDefinition
+} from '../agent-hooks/installation/configuration/hook-config-schema'
+import {
   createManagedCommandMatcher,
   removeManagedCommands
 } from '../agent-hooks/installation/commands/managed-hook-command-matching'
-import { buildInstalledGeminiHooks, GEMINI_EVENTS, type GeminiEvent } from './gemini-hooks-config'
 import { buildWindowsAgentHookPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
 import { getSharedManagedScriptPath } from '../agent-hooks/installation/scripts/managed-hook-script-path'
-import {
-  isPlainObject,
-  parseHooksJsonText,
-  readHooksJson
-} from '../agent-hooks/installation/configuration/hooks-json-read'
-import type { HooksConfig } from '../agent-hooks/installation/configuration/hook-config-schema'
-import {
-  findOutdatedManagedEvents,
-  type OutdatedManagedEvents
-} from '../agent-hooks/installation/configuration/managed-hooks-json-outdated-events'
+import { readHooksJson } from '../agent-hooks/installation/configuration/hooks-json-read'
 import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
 import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
 import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
@@ -39,6 +33,10 @@ import {
   buildWindowsHookEnvironmentGuardLines
 } from '../agent-hooks/installation/scripts/hook-stdin-contract'
 import { posixCurlCommand } from '../agent-hooks/installation/scripts/hook-post-command'
+
+// Gemini has no permission-prompt hook, so approvals cannot produce an Orca waiting state.
+// Gemini uses BeforeTool; remove stale Claude-style PreToolUse registrations below.
+const GEMINI_EVENTS = ['BeforeAgent', 'AfterAgent', 'AfterTool', 'BeforeTool'] as const
 
 function getConfigPath(): string {
   return join(homedir(), '.gemini', 'settings.json')
@@ -110,38 +108,9 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   ].join('\n')
 }
 
-function readDisabledGeminiHooks(config: HooksConfig | null): Set<unknown> {
-  const disabled = isPlainObject(config?.hooksConfig) ? config.hooksConfig.disabled : undefined
-  return new Set(Array.isArray(disabled) ? disabled : [])
-}
-
-async function scanManagedEntries(scriptPath: string): Promise<OutdatedManagedEvents<GeminiEvent>> {
-  // A missing or unreadable file has no Orca entries to repair.
-  const raw = await readFile(getConfigPath(), 'utf8').catch(() => null)
-  const config = raw === null ? null : parseHooksJsonText(raw)
-  const command = getManagedCommand(scriptPath)
-  // Gemini keys disabled hooks by name or command; a new command would re-enable what the user turned off.
-  const disabled = readDisabledGeminiHooks(config)
-  return findOutdatedManagedEvents(
-    config?.hooks ?? {},
-    GEMINI_EVENTS,
-    (event) => event,
-    createManagedCommandMatcher(getManagedScriptFileName()),
-    (definition) =>
-      (definition.hooks ?? []).some(
-        (hook) => hook.command === command || disabled.has(hook.name || hook.command)
-      )
-  )
-}
-
 export class GeminiHookService {
   async refreshManagedScripts(): Promise<void> {
     await refreshManagedScriptIfPresent(getManagedScriptPath(), getManagedScript())
-    // Gemini runs these entries without the CLI that gates install(); update only what Orca owns.
-    const scan = await scanManagedEntries(getManagedScriptPath())
-    if (scan.outdated) {
-      this.install(scan.events, { onlyOwnedEvents: true })
-    }
   }
 
   getStatus(): AgentHookInstallStatus {
@@ -188,10 +157,7 @@ export class GeminiHookService {
     return { agent: 'gemini', state, configPath, managedHooksPresent, detail }
   }
 
-  install(
-    events: readonly GeminiEvent[] = GEMINI_EVENTS,
-    options: { onlyOwnedEvents?: boolean } = {}
-  ): AgentHookInstallStatus {
+  install(): AgentHookInstallStatus {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
     const config = readHooksJson(configPath)
@@ -205,13 +171,40 @@ export class GeminiHookService {
       }
     }
 
+    const command = getManagedCommand(scriptPath)
+    const nextHooks = { ...config.hooks }
+
     // Match filenames so moved scripts replace stale registrations rather than duplicating them.
-    buildInstalledGeminiHooks(
-      config,
-      getManagedCommand(scriptPath),
-      createManagedCommandMatcher(getManagedScriptFileName()),
-      { events, onlyOwnedEvents: options.onlyOwnedEvents }
-    )
+    const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
+
+    const managedEvents = new Set<string>(GEMINI_EVENTS)
+
+    for (const [eventName, definitions] of Object.entries(nextHooks)) {
+      if (managedEvents.has(eventName)) {
+        continue
+      }
+      if (!Array.isArray(definitions)) {
+        continue
+      }
+      const cleaned = removeManagedCommands(definitions, isManagedCommand)
+      if (cleaned.length === 0) {
+        delete nextHooks[eventName]
+      } else {
+        nextHooks[eventName] = cleaned
+      }
+    }
+
+    for (const eventName of GEMINI_EVENTS) {
+      const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
+      const cleaned = removeManagedCommands(current, isManagedCommand)
+      const definition: HookDefinition = {
+        // Gemini hook timeouts use milliseconds.
+        hooks: [buildManagedCommandHook(command, MANAGED_HOOK_TIMEOUT_MILLISECONDS)]
+      }
+      nextHooks[eventName] = [...cleaned, definition]
+    }
+
+    config.hooks = nextHooks
     writeManagedScript(scriptPath, getManagedScript())
     writeHooksJson(configPath, config)
     return this.getStatus()
@@ -233,11 +226,36 @@ export class GeminiHookService {
         }
       }
 
-      buildInstalledGeminiHooks(
-        config,
-        getPosixManagedCommand(remoteScriptPath),
-        createManagedCommandMatcher('gemini-hook.sh')
-      )
+      const command = getPosixManagedCommand(remoteScriptPath)
+      const nextHooks = { ...config.hooks }
+      const isManagedCommand = createManagedCommandMatcher('gemini-hook.sh')
+      const managedEvents = new Set<string>(GEMINI_EVENTS)
+
+      for (const [eventName, definitions] of Object.entries(nextHooks)) {
+        if (managedEvents.has(eventName)) {
+          continue
+        }
+        if (!Array.isArray(definitions)) {
+          continue
+        }
+        const cleaned = removeManagedCommands(definitions, isManagedCommand)
+        if (cleaned.length === 0) {
+          delete nextHooks[eventName]
+        } else {
+          nextHooks[eventName] = cleaned
+        }
+      }
+
+      for (const eventName of GEMINI_EVENTS) {
+        const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
+        const cleaned = removeManagedCommands(current, isManagedCommand)
+        const definition: HookDefinition = {
+          // Gemini hook timeouts use milliseconds.
+          hooks: [buildManagedCommandHook(command, MANAGED_HOOK_TIMEOUT_MILLISECONDS)]
+        }
+        nextHooks[eventName] = [...cleaned, definition]
+      }
+      config.hooks = nextHooks
 
       // Publish scripts before config so interrupted installs cannot reference missing files.
       // Remote hook syntax is POSIX regardless of the client platform.
