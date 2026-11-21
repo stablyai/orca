@@ -28,6 +28,17 @@ const SOURCE_LABELS = {
   calendar: 'calendar'
 } as const satisfies Record<AutomationRunMessageEvent['source'], AutomationRunCopyKey>
 
+function isLabeledSource(source: string): source is keyof typeof SOURCE_LABELS {
+  return Object.hasOwn(SOURCE_LABELS, source)
+}
+
+/** An event run's trigger: its source, or Event when this build can't name it. */
+export function automationRunEventSourceKey(
+  event: { source: string } | null | undefined
+): AutomationRunCopyKey {
+  return event && isLabeledSource(event.source) ? SOURCE_LABELS[event.source] : 'what.other'
+}
+
 /** What fired: Wait over, Scheduled, Run now, or the event's source. */
 export function automationRunLabel(run: AutomationRunMessage, say: SayAutomationRun): string {
   if (run.wait) {
@@ -36,10 +47,7 @@ export function automationRunLabel(run: AutomationRunMessage, say: SayAutomation
   if (run.trigger === 'manual') {
     return say('runNow')
   }
-  if (run.trigger === 'scheduled' || !run.event) {
-    return say('scheduled')
-  }
-  return say(SOURCE_LABELS[run.event.source] ?? 'what.other')
+  return run.trigger === 'event' ? say(automationRunEventSourceKey(run.event)) : say('scheduled')
 }
 
 function whatKey(event: AutomationRunMessageEvent): string {
