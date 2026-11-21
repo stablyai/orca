@@ -243,6 +243,14 @@ export function BotItemRowsWindow({
         setSizes(read)
       }
     }
+    // An unchanged range over the same rows (most scroll frames) builds nothing.
+    if (
+      next.start === windowRange.start &&
+      next.end === windowRange.end &&
+      windowRange.band.every((pick) => items[pick.at]?.uid === pick.uid)
+    ) {
+      return
+    }
     const band = bandOf(items, next.start, next.end)
     setRange((prev) =>
       prev.start === next.start && prev.end === next.end && sameBand(prev.band, band)

@@ -13,10 +13,11 @@ export const BotItemFaceReadsContext = createContext<BotItemFaceReads | null>(nu
 /** A long group's reads for its faces; `enabled` while it windows rows that show faces. */
 export function useBotItemFaceReads(enabled: boolean): BotItemFaceReads {
   const [failures] = useState((): BotAvatarFailures => new Map())
-  const liveHosts = useLiveBotHostIds(enabled)
+  // By content: the listing can rebuild the same hosts, which must not reach every face.
+  const liveKey = useLiveBotHostIds(enabled).join('\n')
   const reads = useMemo(
-    (): BotItemFaceReads => ({ failures, live: new Set(liveHosts) }),
-    [failures, liveHosts]
+    (): BotItemFaceReads => ({ failures, live: new Set(liveKey ? liveKey.split('\n') : []) }),
+    [failures, liveKey]
   )
   // A host going away lets its bots' failed reads go, so coming back reads them again (at most 64).
   useEffect(() => {

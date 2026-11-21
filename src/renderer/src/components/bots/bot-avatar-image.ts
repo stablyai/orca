@@ -12,6 +12,9 @@ type Upload = {
   read?: string | null
   /** Faces waiting on the read in flight; each leaves as it unmounts. `failed`: the read failed. */
   waiting: Set<(src: string | null, failed: boolean) => void>
+  /** The long groups whose rows asked for this read: a failure is noted there even after the rows
+   *  scrolled away, so the next row scrolled in doesn't read it again. Let go as the read settles. */
+  noted: Set<BotAvatarFailures>
 }
 
 /** The latest failed read's version per bot (by botRefKey), at most MAX_FAILURES, oldest let go first. */
@@ -44,17 +47,25 @@ function uploadOf(key: string, version: string): Upload | undefined {
 }
 
 function startUpload(bot: BotRef, key: string, version: string): Upload {
-  const started: Upload = { version, waiting: new Set() }
+  const started: Upload = { version, waiting: new Set(), noted: new Set() }
   uploads.set(key, started)
   void readBotAvatarPng(bot).then(
     (png) => {
       started.read = png ? `data:image/png;base64,${png}` : null
+      started.noted.forEach((failures) => {
+        if (failures.get(key) === version) {
+          failures.delete(key)
+        }
+      })
+      started.noted.clear()
       settle(started, started.read, false)
     },
     () => {
       if (uploads.get(key) === started) {
         uploads.delete(key)
       }
+      started.noted.forEach((failures) => noteFailure(failures, key, version))
+      started.noted.clear()
       settle(started, null, true)
     }
   )
@@ -70,10 +81,14 @@ function settle(entry: Upload, src: string | null, failed: boolean): void {
 function readUpload(
   bot: BotRef,
   version: string,
+  failures: BotAvatarFailures | null,
   onRead: (src: string | null, failed: boolean) => void
 ): () => void {
   const key = botRefKey(bot)
   const entry = uploadOf(key, version) ?? startUpload(bot, key, version)
+  if (failures && entry.read === undefined) {
+    entry.noted.add(failures)
+  }
   if (entry.read !== undefined) {
     const read = entry.read
     let live = true
@@ -117,12 +132,7 @@ export function useBotAvatarSrc(
     if (!uploadKey || paused || failures?.get(key) === uploadKey) {
       return
     }
-    return readUpload({ hostId, id }, uploadKey, (src, failed) => {
-      if (failures && failed) {
-        noteFailure(failures, key, uploadKey)
-      } else if (failures?.get(key) === uploadKey) {
-        failures.delete(key)
-      }
+    return readUpload({ hostId, id }, uploadKey, failures, (src) => {
       setUpload((shown) =>
         shown?.key === uploadKey && shown.src === src ? shown : { key: uploadKey, src }
       )
