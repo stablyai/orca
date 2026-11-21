@@ -18,6 +18,7 @@ import { pluginConfirmationCopy } from '../../consent/plugin-confirmation-copy'
 import type { Store } from '../../../persistence/loading-store/store'
 import { translateMain } from '../../../i18n/main-i18n'
 import { blockedPluginSaveAsExtension } from '../../../../shared/plugins/frames/plugin-save-as-extensions'
+import { showSingleFlightOpenDialog } from '../../../ipc/dialogs/single-flight-open-dialog'
 
 /** Backstop behind the frame host's one-call-per-gesture check: a few dialogs or tabs at most. */
 const DESKTOP_FRAME_RATE_LIMIT = {
@@ -138,6 +139,17 @@ export function installPluginDesktopFrameServices(
       scope.assertActive()
       await shell.openExternal(url)
       return { opened: true }
+    },
+    async pickFile(pluginId, scope) {
+      const window = confirmationWindow(scope)
+      if (!canConfirmInWindow(window)) {
+        throw new PluginHostCallError('unavailable', 'no Orca window is showing')
+      }
+      admit(window, pluginId)
+      const { filePaths } = await showSingleFlightOpenDialog({ properties: ['openFile'] }, window)
+      // The dialog may have stayed open while the plugin was disabled or removed.
+      scope.assertActive()
+      return filePaths[0] ?? null
     },
     async saveFile(pluginId, input, scope) {
       const parent = callingWindow(scope)

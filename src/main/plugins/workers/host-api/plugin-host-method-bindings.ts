@@ -65,6 +65,8 @@ export type PluginDesktopFrameServices = {
     url: string,
     scope: PluginHostCallScope
   ): Promise<{ opened: boolean; reason?: 'cancelled' | 'consent-unavailable' }>
+  /** For workers: the path of the file the person chose; null when they cancelled. */
+  pickFile(pluginId: string, scope: PluginHostCallScope): Promise<string | null>
   /** False when the person cancelled the dialog. */
   saveFile(
     pluginId: string,
@@ -270,6 +272,12 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
   'files.saveAs': bind(api['files.saveAs'], async (params, { pluginId, services, scope }) => {
     const saved = await requireDesktop(services).saveFile(pluginId, params, scope)
     return { status: saved ? ('saved' as const) : ('cancelled' as const) }
+  }),
+  'files.pick': bind(api['files.pick'], async (_params, { pluginId, services, scope }) => {
+    if (!services.desktop) {
+      throw new PluginHostCallError('unavailable', 'only the Orca desktop app can do this')
+    }
+    return { path: await services.desktop.pickFile(pluginId, scope) }
   }),
   ...PLUGIN_PANEL_BRIDGE_HANDLERS,
   ...PLUGIN_STATUS_BAR_HANDLERS,
