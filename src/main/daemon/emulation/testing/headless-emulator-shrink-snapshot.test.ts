@@ -3,10 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { HeadlessEmulator } from '../headless-emulator'
-import {
-  projectTerminalTailLines,
-  projectTerminalVisibleLines
-} from '../terminal-screen-projection'
+import { projectTerminalTailLines } from '../terminal-screen-projection'
+import { SessionOutputPlane } from '../../sessions/session-output-plane'
 import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal/appearance/terminal-unicode-provider'
 
 const WIDE = 135
@@ -51,13 +49,14 @@ async function paintShrinkRepaint(target: Writable, prefix: string): Promise<voi
 
 describe('snapshot after a column shrink', () => {
   it('projects only cells within the applied alternate-screen width', async () => {
-    const emu = new HeadlessEmulator({ cols: 10, rows: 4 })
+    const output = new SessionOutputPlane({ cols: 10, rows: 4 })
     try {
-      await emu.write('\x1b[?1049habcdefghij')
-      await emu.write('\x1b[2;1Habcdefgh中abcdefg😀x\x1b[4;1Habc \x1b[4;10Hx')
-      emu.resize(9, 4)
+      const data = '\x1b[?1049habcdefghij\x1b[2;1Habcdefgh中abcdefg😀x\x1b[4;1Habc \x1b[4;10Hx'
+      output.emit({ data, rawStartSeq: 0, rawEndSeq: data.length, transformed: false })
+      await output.flushParsedWrites()
+      output.resize(9, 4)
 
-      expect(projectTerminalVisibleLines(emu)).toMatchObject({
+      expect(output.getVisibleProjection()?.visibleProjection).toMatchObject({
         lines: ['abcdefghi', 'abcdefgh', 'abcdefg😀', 'abc'],
         tailRows: [
           { wrapped: false, trailingSpaces: 0 },
@@ -67,19 +66,21 @@ describe('snapshot after a column shrink', () => {
         ]
       })
     } finally {
-      emu.dispose()
+      output.disposeEmulator()
     }
   })
 
   it('projects only the visible composer draft after a shrink', async () => {
-    const emu = new HeadlessEmulator({ cols: 10, rows: 4 })
+    const output = new SessionOutputPlane({ cols: 10, rows: 4 })
     try {
-      await emu.write('\x1b[?1049h──────────\r\n❯ abcdefgh\x1b[2;5H')
-      emu.resize(9, 4)
+      const data = '\x1b[?1049h──────────\r\n❯ abcdefgh\x1b[2;5H'
+      output.emit({ data, rawStartSeq: 0, rawEndSeq: data.length, transformed: false })
+      await output.flushParsedWrites()
+      output.resize(9, 4)
 
-      expect(projectTerminalVisibleLines(emu).draft).toBe('abcdefg')
+      expect(output.getVisibleProjection()?.visibleProjection.draft).toBe('abcdefg')
     } finally {
-      emu.dispose()
+      output.disposeEmulator()
     }
   })
 

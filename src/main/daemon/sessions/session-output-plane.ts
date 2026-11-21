@@ -177,7 +177,7 @@ export class SessionOutputPlane {
     const terminalOwner = this.readTerminalOwner?.()
     return {
       ...this.emulator.getSnapshotMetadata(),
-      visibleProjection: projectTerminalVisibleLines(this.emulator),
+      visibleProjection: projectTerminalVisibleLines(this.emulator, { clipToGrid: true }),
       ...(terminalOwner ? { terminalOwner } : {}),
       outputSequence: this._outputSequence
     }

@@ -1,7 +1,8 @@
 import type { Terminal } from '@xterm/headless'
 import {
   getClippedTerminalLineColumns,
-  translateClippedTerminalLine
+  translateClippedTerminalLine,
+  type TerminalGridReadOptions
 } from '../../../shared/terminal/viewport/terminal-line-applied-columns'
 import type { RuntimeTerminalRowMetadata } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 
@@ -30,15 +31,38 @@ export function readHeadlessTerminalLines(terminal: Terminal, limit?: number): s
 
 export function readHeadlessTerminalRows(
   terminal: Terminal,
-  limit?: number
+  limit?: number,
+  options?: TerminalGridReadOptions
 ): HeadlessTerminalRow[] {
+  if (options?.clipToGrid && limit === undefined) {
+    return readHeadlessTerminalGridRows(terminal)
+  }
   const { buffer, start, end } = terminalRowRange(terminal, limit)
+  const rows: HeadlessTerminalRow[] = []
+  for (let row = start; row < end; row += 1) {
+    const line = buffer.getLine(row)
+    const text = line?.translateToString(true) ?? ''
+    rows.push({
+      text,
+      metadata: {
+        wrapped: line?.isWrapped ?? false,
+        trailingSpaces: buffer.getLine(row + 1)?.isWrapped
+          ? (line?.translateToString(false).length ?? text.length) - text.length
+          : 0
+      }
+    })
+  }
+  return rows
+}
+
+function readHeadlessTerminalGridRows(terminal: Terminal): HeadlessTerminalRow[] {
+  const { buffer, start, end } = terminalRowRange(terminal)
   const rows: HeadlessTerminalRow[] = []
   let reusableCell: ReturnType<typeof buffer.getNullCell> | undefined
   for (let row = start; row < end; row += 1) {
     const line = buffer.getLine(row)
     const clipped =
-      limit === undefined && line && line.length > terminal.cols
+      line && line.length > terminal.cols
         ? getClippedTerminalLineColumns(
             line,
             terminal.cols,

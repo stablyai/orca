@@ -9,6 +9,10 @@ type TerminalLine<Cell extends TerminalLineCell> = {
   translateToString(trimRight?: boolean, startColumn?: number, endColumn?: number): string
 }
 
+export type TerminalGridReadOptions = {
+  clipToGrid?: boolean
+}
+
 export type ClippedTerminalLineColumns = {
   textEnd: number
   splitWideCell: boolean

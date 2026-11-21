@@ -25,8 +25,8 @@ import {
 import { installDeviceAttributesResponder } from './startup-device-attributes-responder'
 import type { TerminalSnapshot } from '../protocol/terminal-snapshot'
 import type { TerminalOscLinkRange } from '../../../shared/terminal/links/terminal-osc-link-ranges'
-import type { TerminalCursorContext } from '../../../shared/terminal/input/terminal-composer-draft'
 import { readTerminalCursorLineContext } from '../../../shared/terminal/input/terminal-cursor-line-context'
+import type { TerminalGridReadOptions } from '../../../shared/terminal/viewport/terminal-line-applied-columns'
 import {
   readHeadlessTerminalRows,
   readHeadlessTerminalLines,
@@ -304,8 +304,8 @@ export class HeadlessEmulator {
     return readHeadlessTerminalLines(this.terminal)
   }
 
-  getVisibleRows(): HeadlessTerminalRow[] {
-    return readHeadlessTerminalRows(this.terminal)
+  getVisibleRows(options?: TerminalGridReadOptions): HeadlessTerminalRow[] {
+    return readHeadlessTerminalRows(this.terminal, undefined, options)
   }
 
   getBufferTailRows(limit: number): HeadlessTerminalRow[] {
@@ -326,8 +326,8 @@ export class HeadlessEmulator {
     }
   }
 
-  getCursorLineContext(rowsAbove = this.terminal.rows): TerminalCursorContext | null {
-    return readTerminalCursorLineContext(this.terminal, rowsAbove)
+  getCursorLineContext(rowsAbove = this.terminal.rows, options?: TerminalGridReadOptions) {
+    return readTerminalCursorLineContext(this.terminal, rowsAbove, options)
   }
 
   getBufferTailLines(limit: number): string[] {
