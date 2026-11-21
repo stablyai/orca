@@ -238,13 +238,12 @@ const WorktreeList = React.memo(function WorktreeList({
   )
   const handleCreateFolderWorkspace = useCallback(
     (projectGroup: ProjectGroup) => {
-      if (!projectGroup.parentPath) {
-        return
+      if (projectGroup.parentPath) {
+        openModal('new-workspace-composer', {
+          initialProjectGroupId: projectGroup.id,
+          telemetrySource: 'sidebar'
+        })
       }
-      openModal('new-workspace-composer', {
-        initialProjectGroupId: projectGroup.id,
-        telemetrySource: 'sidebar'
-      })
     },
     [openModal]
   )
@@ -291,7 +290,6 @@ const WorktreeList = React.memo(function WorktreeList({
   if (rowModel.rows.length === 0 || filtersHideAllRows) {
     return <SidebarWorktreeListEmptyState hasFilters={hasFilters} onClearFilters={clearFilters} />
   }
-
   return (
     <>
       {projectsCollapseTarget && projectCollapseKeys.length > 0
@@ -413,5 +411,4 @@ const WorktreeList = React.memo(function WorktreeList({
     </>
   )
 })
-
 export default WorktreeList
