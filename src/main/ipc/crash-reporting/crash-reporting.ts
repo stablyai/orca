@@ -97,7 +97,7 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
         ? formatCrashReportText(report, args?.notes)
         : buildUncapturedCrashReportText(args?.notes)
       try {
-        clipboard.writeText(
+        await clipboard.writeText(
           assertClipboardTextWriteWithinLimit(
             formatCrashReportCopyText(baseText, args?.submissionFailure)
           )
