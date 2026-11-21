@@ -10,6 +10,7 @@ import {
   type PullRequestDraftContext
 } from '../../../shared/source-control/ai/generation/pull-request-generation'
 import {
+  branchNameSourceText,
   buildBranchNamePrompt,
   sanitizeBranchSlug,
   type BranchNameWorkContext
@@ -219,7 +220,7 @@ export async function generateBranchName(input: {
     params.commandInputTemplate !== undefined
       ? renderSourceControlActionCommandTemplate(params.commandInputTemplate, {
           basePrompt,
-          firstPrompt: context.firstPrompt,
+          firstPrompt: branchNameSourceText(context),
           assistantMessage: context.assistantMessage ?? ''
         })
       : buildBranchNamePrompt(context, params.customPrompt ?? '')

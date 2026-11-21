@@ -1,6 +1,6 @@
 // Harness machinery uses user-role turns and fires prompt hooks, but must not become prompt-derived UI.
 // Match only observed tags: custom elements and Grok user_query are real input; false positives hide transcripts/titles or leave interrupted agents marked done.
-const LEADING_TAG_NAME = /^<([a-z][a-z0-9-]*)(?:[\s>]|$)/
+const LEADING_TAG_NAME = /^<([a-z][a-z0-9_-]*)(?:[\s>]|$)/i
 
 const KNOWN_HARNESS_TAG_NAMES = new Set([
   'agent-message',
@@ -12,6 +12,7 @@ const KNOWN_HARNESS_TAG_NAMES = new Set([
   'command-name',
   'cross-session-message',
   'fork-boilerplate',
+  'hook_result',
   'local-command-caveat',
   'local-command-stderr',
   'local-command-stdout',
@@ -51,6 +52,52 @@ export function isKnownHarnessInjectedUserTurnText(text: string): boolean {
     return true
   }
   return HARNESS_INJECTED_TURN_PREFIXES.some((prefix) => normalized.startsWith(prefix))
+}
+
+// Nested same-tag content needs depth tracking; self-closing tags open nothing.
+function findMatchingCloseTagEnd(remaining: string, tagName: string): number | null {
+  const tagRe = new RegExp(`<(?:(/)${tagName}>|${tagName}(?=[\\s/>]|$)(?:[^<>]*(/)>)?)`, 'gi')
+  let depth = 0
+  let match: RegExpExecArray | null
+  while ((match = tagRe.exec(remaining))) {
+    if (!match[2]) {
+      depth += match[1] ? -1 : 1
+    }
+    if (depth === 0) {
+      return tagRe.lastIndex
+    }
+  }
+  return null
+}
+
+/** Remove leading known harness XML wrappers while preserving the real prompt after them. */
+export function stripKnownHarnessEnvelope(text: string): string {
+  let remaining = text.trim()
+  while (remaining) {
+    const tagName = LEADING_TAG_NAME.exec(remaining)?.[1]?.toLowerCase()
+    if (
+      !tagName ||
+      (!KNOWN_HARNESS_TAG_NAMES.has(tagName) &&
+        !(tagName === 'channel' && /^<channel source=/i.test(remaining)))
+    ) {
+      break
+    }
+    const closeTagEnd = findMatchingCloseTagEnd(remaining, tagName)
+    if (closeTagEnd === null) {
+      return ''
+    }
+    remaining = remaining.slice(closeTagEnd).trim()
+  }
+  return remaining
+}
+
+/** User task left after leading harness envelopes; '' when the turn holds only harness content. */
+export function userTaskTextAfterHarnessEnvelope(text: string): string {
+  if (!isKnownHarnessInjectedUserTurnText(text)) {
+    return text
+  }
+  const task = stripKnownHarnessEnvelope(text)
+  return isKnownHarnessInjectedUserTurnText(task) ? '' : task
 }
 
 /** True only for the observed post-compaction continuation prompt. */

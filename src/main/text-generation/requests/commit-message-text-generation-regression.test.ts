@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { generateCommitMessageFromContext } from '../commit-message-text-generation'
+import {
+  generateBranchNameFromContext,
+  generateCommitMessageFromContext
+} from '../commit-message-text-generation'
 
 function runFailedGeneration(
   params: Parameters<typeof generateCommitMessageFromContext>[1],
@@ -70,5 +73,30 @@ describe('commit-message generation regressions', () => {
       error:
         'Pi CLI command failed with code 1: 401: {"remedy":"https://x.test/help/keys","message":"Invalid key from [path]","windows":"[path]","field":"credential_path=[path]","list":"candidate a,[path]","slot":"slot 1:[path]"}'
     })
+  })
+
+  it('fills the {{firstPrompt}} branch-name template with the task after harness envelopes', async () => {
+    const plans: string[] = []
+    await generateBranchNameFromContext(
+      { firstPrompt: '<hook_result hook_event="UserPromptSubmit">{}</hook_result>\nFix CI config' },
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent',
+        commandInputTemplate: '{{firstPrompt}}'
+      },
+      {
+        kind: 'remote',
+        cwd: '/remote/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async (plan) => {
+          plans.push(JSON.stringify(plan))
+          return { stdout: 'fix-ci-config', stderr: '', exitCode: 0, timedOut: false }
+        }
+      }
+    )
+
+    expect(plans.join('\n')).toContain('Fix CI config')
+    expect(plans.join('\n')).not.toContain('hook_result')
   })
 })
