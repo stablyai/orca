@@ -369,27 +369,30 @@ export function createServerSession({
     return true
   }
 
-  // Recorded once sent (a stop before the answer still withdraws them) and dropped again if the client refuses.
+  // Recorded once sent (a stop before the answer still withdraws them) and dropped again if the client refuses;
+  // a refused re-registration leaves the client holding the one it had accepted before.
   const onRegister = (message) => {
-    const added = (message.params?.registrations ?? []).map(({ id, method }) => [id, { method }])
+    const added = (message.params?.registrations ?? []).map(({ id, method }) => [
+      id,
+      { method, accepted: false }
+    ])
     const replaced = new Map()
     const sent = relayToClient(message, (answer) => {
-      if (answer.error) {
-        // A refused re-registration leaves the client holding the one it already had.
-        for (const [id, entry] of added) {
-          if (clientRegistrations.get(id) === entry) {
-            if (replaced.has(id)) {
-              clientRegistrations.set(id, replaced.get(id))
-            } else {
-              clientRegistrations.delete(id)
-            }
+      for (const [id, entry] of added) {
+        entry.accepted = !answer.error
+        if (answer.error && clientRegistrations.get(id) === entry) {
+          const previous = replaced.get(id)
+          if (previous?.accepted) {
+            clientRegistrations.set(id, previous)
+          } else {
+            clientRegistrations.delete(id)
           }
         }
       }
     })
     if (sent) {
       for (const [id, entry] of added) {
-        if (clientRegistrations.has(id)) {
+        if (clientRegistrations.has(id) && !replaced.has(id)) {
           replaced.set(id, clientRegistrations.get(id))
         }
         clientRegistrations.set(id, entry)
