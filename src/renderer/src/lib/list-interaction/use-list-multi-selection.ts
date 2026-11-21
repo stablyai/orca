@@ -32,6 +32,7 @@ export function useListMultiSelection<T>({
   getKey,
   getScope,
   getRetainedItem,
+  canSelectKey,
   additiveRange = false
 }: {
   items: readonly T[]
@@ -40,6 +41,8 @@ export function useListMultiSelection<T>({
   getScope: () => Element | null
   /** Keeps already selected items when folded away. Ranges still use visible order. */
   getRetainedItem?: (key: string) => T | undefined
+  /** Prunes temporarily unavailable keys without rebuilding the ordered list. */
+  canSelectKey?: (key: string) => boolean
   additiveRange?: boolean
 }): ListMultiSelection<T> {
   // Reuse equal ordered-ID arrays so gesture callbacks stay stable and row memoization survives epoch bumps.
@@ -64,7 +67,8 @@ export function useListMultiSelection<T>({
     selectedKeys,
     selectionAnchorKey,
     visibleKeySet,
-    getRetainedItem ? (key) => getRetainedItem(key) !== undefined : undefined
+    getRetainedItem ? (key) => getRetainedItem(key) !== undefined : undefined,
+    canSelectKey
   )
   // Why: filters/grouping can hide selected rows; prune during render so nothing sees stale ids for unrendered items.
   if (!areSelectionsEqual(selectedKeys, prunedSelection.selectedIds)) {

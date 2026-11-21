@@ -1,3 +1,4 @@
+import { inspectProcessOptions } from '../protocol/daemon-foreground-process-protocol'
 import { parseDaemonLaunchNoteChange } from '../protocol/daemon-launch-note-protocol'
 import { handleDaemonTerminalKill } from './daemon-terminal-kill'
 import { handleDaemonFencedTermination } from './daemon-fenced-termination'
@@ -109,6 +110,7 @@ export class DaemonRequestRouter {
         if (
           request.payload.expectedIncarnationId !== undefined ||
           request.payload.requireNoAgentOwner !== undefined ||
+          request.payload.requireIdle !== undefined ||
           request.payload.requireUnattached !== undefined
         ) {
           return handleDaemonFencedTermination(request.payload, this.options)
@@ -128,16 +130,7 @@ export class DaemonRequestRouter {
           foregroundProcess: this.options.host.getForegroundProcess(request.payload.sessionId)
         }
       case 'inspectProcess': {
-        const options = {
-          ...(request.payload.foregroundOnly === true ? { foregroundOnly: true } : {}),
-          ...(request.payload.scanChildProcesses === true ? { scanChildProcesses: true } : {}),
-          ...(request.payload.expectedIncarnationId
-            ? { expectedIncarnationId: request.payload.expectedIncarnationId }
-            : {}),
-          ...(request.payload.steadyState === true ? { steadyState: true } : {}),
-          ...(request.payload.jobMembershipOnly === true ? { jobMembershipOnly: true } : {}),
-          ...(request.payload.ignoreDetached === true ? { ignoreDetached: true } : {})
-        }
+        const options = inspectProcessOptions(request.payload)
         return Object.keys(options).length > 0
           ? this.options.host.inspectProcess(request.payload.sessionId, options)
           : this.options.host.inspectProcess(request.payload.sessionId)

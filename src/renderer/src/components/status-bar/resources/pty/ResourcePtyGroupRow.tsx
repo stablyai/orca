@@ -4,29 +4,36 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import { resourcePtyRowLabel, type ResourcePtyGroup } from './resource-pty-view-model'
+import type { ResourcePtyGroup, ResourcePtyRow } from './resource-pty-view-model'
 import { ResourcePtyProcessIcon } from './ResourcePtyProcessIcon'
+import {
+  useResourcePtyGroupCanEnd,
+  type useResourcePtyEndableGroups
+} from './use-resource-pty-endable-groups'
 
 const STRIP_LIMIT = 6
 
 export const ResourcePtyGroupRow = memo(function ResourcePtyGroupRow({
   group,
   open,
-  canEndAll,
+  allowEndAll,
+  endableGroups,
   checking,
-  runtimePaneTitlesByTabId,
+  labelForRow,
   onToggle,
   onEndAll
 }: {
   group: ResourcePtyGroup
   open: boolean
-  canEndAll: boolean
+  allowEndAll: boolean
+  endableGroups: ReturnType<typeof useResourcePtyEndableGroups>
   checking: boolean
-  runtimePaneTitlesByTabId: Record<string, Record<number, string>>
+  labelForRow: (row: ResourcePtyRow) => string
   onToggle: (key: string) => void
   onEndAll: (group: ResourcePtyGroup, source: Element) => void
 }) {
   const t = useTranslate()
+  const canEndAll = useResourcePtyGroupCanEnd(endableGroups, group.key)
   const name =
     group.kind === 'unbound'
       ? t('resourceManager.pty.notInTab', 'Not in a tab')
@@ -39,6 +46,7 @@ export const ResourcePtyGroupRow = memo(function ResourcePtyGroupRow({
     >
       <button
         type="button"
+        title={name}
         aria-expanded={open}
         onClick={() => onToggle(group.key)}
         className="flex h-full min-w-0 flex-1 items-center gap-1.5 pl-3 text-left text-xs outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
@@ -59,7 +67,7 @@ export const ResourcePtyGroupRow = memo(function ResourcePtyGroupRow({
         </span>
         <span aria-hidden className="ml-auto flex shrink-0 items-center gap-1">
           {group.rows.slice(0, STRIP_LIMIT).map((row) => {
-            const title = resourcePtyRowLabel(row, runtimePaneTitlesByTabId)
+            const title = labelForRow(row)
             const process = row.session.foregroundProcess?.trim()
             return (
               <Tooltip key={row.identity}>
@@ -87,7 +95,7 @@ export const ResourcePtyGroupRow = memo(function ResourcePtyGroupRow({
       <Button
         variant="ghost"
         size="xs"
-        disabled={!canEndAll}
+        disabled={!allowEndAll || !canEndAll}
         hidden={checking}
         onClick={(event) => onEndAll(group, event.currentTarget)}
         aria-label={t('resourceManager.pty.endAllNamed', 'End all PTYs in {{group}}', {

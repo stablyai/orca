@@ -71,12 +71,16 @@ export function pruneSelection(
   selectedIds: ReadonlySet<string>,
   anchorId: string | null,
   visibleIds: readonly string[] | ReadonlySet<string>,
-  hasRetainedId?: (id: string) => boolean
+  hasRetainedId?: (id: string) => boolean,
+  canSelectId?: (id: string) => boolean
 ): { selectedIds: Set<string>; anchorId: string | null } {
   const visible = 'has' in visibleIds ? visibleIds : new Set(visibleIds)
   const next = new Set<string>()
   let firstVisible: string | null = null
   for (const id of selectedIds) {
+    if (canSelectId?.(id) === false) {
+      continue
+    }
     if (visible.has(id)) {
       firstVisible ??= id
       next.add(id)
@@ -86,7 +90,10 @@ export function pruneSelection(
   }
   return {
     selectedIds: next,
-    anchorId: anchorId && visible.has(anchorId) ? anchorId : firstVisible
+    anchorId:
+      anchorId && visible.has(anchorId) && canSelectId?.(anchorId) !== false
+        ? anchorId
+        : firstVisible
   }
 }
 

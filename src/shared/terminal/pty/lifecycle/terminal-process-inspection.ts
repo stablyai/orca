@@ -3,6 +3,7 @@ import type { RemoteForegroundEvidence } from '../foreground/foreground-process-
 
 /** Keep unverifiable distinct from no-children; legacy booleans collapsed failed inspection and Windows relay defaults into false, bypassing close guards. */
 export type PtyChildProcessVerdict = 'children' | 'no-children' | 'unverifiable'
+export type PtyRunningWorkObservation = 'running' | 'idle' | 'unverifiable'
 
 /** Reasons the renderer could not observe the execution host. */
 export type ClientOnlyUnverifiableReason =
@@ -20,6 +21,7 @@ export type ClientOnlyUnverifiableInspection = {
   foregroundObservation?: never
   foregroundProcessEvidence?: never
   childProcessEvidence?: never
+  runningWork?: never
   authorityGeneration?: never
   observationEpoch?: never
   capturedAgeMs?: never
@@ -36,6 +38,8 @@ export type HostProcessInspection = {
   foregroundProcessEvidence?: RemoteForegroundEvidence
   /** Absent on hosts that predate the member, and on answers the host did not pay to observe. */
   childProcessEvidence?: PtyChildProcessVerdict
+  /** Decision-time evidence for the exact incarnation. Older hosts may omit it. */
+  runningWork?: PtyRunningWorkObservation
   verdict?: never
   reason?: never
 }

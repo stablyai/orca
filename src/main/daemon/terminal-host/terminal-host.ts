@@ -234,10 +234,7 @@ export class TerminalHost {
   // A vanished pane has no agent icon to display.
   getForegroundProcess(sessionId: string): string | null {
     const session = this.sessions.get(sessionId)
-    if (!session || !session.isAlive) {
-      return null
-    }
-    return session.getForegroundProcess()
+    return session?.isAlive ? session.getForegroundProcess() : null
   }
 
   inspectProcess(
@@ -250,7 +247,8 @@ export class TerminalHost {
       sessionId,
       options,
       this.authorityGeneration,
-      () => ++this.observationEpoch
+      () => ++this.observationEpoch,
+      this.agentSessionOwners
     )
   }
 

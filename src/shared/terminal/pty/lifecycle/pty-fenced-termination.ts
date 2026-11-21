@@ -3,6 +3,7 @@ export type PtyFencedTerminationRequest = {
   expectedIncarnationId: string
   requireNoAgentOwner: boolean
   requireUnattached: boolean
+  requireIdle?: true
   switchCondition?: {
     token: string
     remainingMs: number
@@ -15,7 +16,7 @@ export type PtyFencedTerminationOutcome =
   | { outcome: 'ended' | 'already_exited' }
   | {
       outcome: 'refused'
-      reason: 'replaced' | 'claimed' | 'attached' | 'unsupported' | 'unverifiable'
+      reason: 'replaced' | 'claimed' | 'attached' | 'unsupported' | 'unverifiable' | 'running_work'
     }
 
 export function isPtyFencedTerminationOutcome(
@@ -34,6 +35,7 @@ export function isPtyFencedTerminationOutcome(
       value.reason === 'claimed' ||
       value.reason === 'attached' ||
       value.reason === 'unsupported' ||
+      value.reason === 'running_work' ||
       value.reason === 'unverifiable')
   )
 }

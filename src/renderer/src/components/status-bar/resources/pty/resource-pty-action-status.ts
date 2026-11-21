@@ -1,0 +1,96 @@
+import type { PtyFencedTerminationOutcome } from '../../../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
+import {
+  ptySessionIdentity,
+  type PtyListedSession
+} from '../../../../../../shared/terminal/pty/lifecycle/pty-listed-session'
+
+export type ResourcePtyEndError =
+  | Extract<PtyFencedTerminationOutcome, { outcome: 'refused' }>['reason']
+  | 'agent_running'
+
+type EndingListener = (identities: readonly string[], ending: boolean) => void
+export type ResourcePtyEndingSource = {
+  getKeys: () => ReadonlySet<string>
+  subscribe: (listener: EndingListener) => () => void
+}
+
+/** Publish individual status changes so a completion never copies the whole queue or error history. */
+export class ResourcePtyActionStatus implements ResourcePtyEndingSource {
+  private readonly ending = new Set<string>()
+  private readonly errors = new Map<string, ResourcePtyEndError>()
+  private readonly listeners = new Set<EndingListener>()
+  private readonly rowListeners = new Map<string, Set<() => void>>()
+  getKeys = (): ReadonlySet<string> => this.ending
+  isSelectable = (identity: string): boolean => !this.ending.has(identity)
+  private selectionCheck = this.isSelectable
+  getSelectionCheck = (): ((identity: string) => boolean) => this.selectionCheck
+
+  getStatus(identity: string): 'ending' | ResourcePtyEndError | undefined {
+    return this.ending.has(identity) ? 'ending' : this.errors.get(identity)
+  }
+
+  subscribe = (listener: EndingListener): (() => void) => {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
+  }
+
+  subscribeRow(identity: string, listener: () => void): () => void {
+    const listeners = this.rowListeners.get(identity) ?? new Set()
+    listeners.add(listener)
+    this.rowListeners.set(identity, listeners)
+    return () => {
+      listeners.delete(listener)
+      if (listeners.size === 0) {
+        this.rowListeners.delete(identity)
+      }
+    }
+  }
+
+  start(identities: readonly string[]): void {
+    for (const identity of identities) {
+      this.ending.add(identity)
+      this.errors.delete(identity)
+    }
+    this.publish(identities, true)
+  }
+
+  complete(completions: readonly { identity: string; error?: ResourcePtyEndError }[]): void {
+    for (const { identity, error } of completions) {
+      this.ending.delete(identity)
+      if (error) {
+        this.errors.set(identity, error)
+      }
+    }
+    this.publish(
+      completions.map(({ identity }) => identity),
+      false
+    )
+  }
+
+  retireErrors(sessions: readonly PtyListedSession[]): void {
+    if (this.errors.size === 0) {
+      return
+    }
+    const present = new Set(sessions.map(ptySessionIdentity))
+    for (const identity of this.errors.keys()) {
+      if (!present.has(identity)) {
+        this.errors.delete(identity)
+        this.publishRow(identity)
+      }
+    }
+  }
+
+  private publish(identities: readonly string[], ending: boolean): void {
+    this.selectionCheck = (identity) => this.isSelectable(identity)
+    for (const listener of this.listeners) {
+      listener(identities, ending)
+    }
+    for (const identity of identities) {
+      this.publishRow(identity)
+    }
+  }
+
+  private publishRow(identity: string): void {
+    this.rowListeners.get(identity)?.forEach((listener) => listener())
+  }
+}

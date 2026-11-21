@@ -16,7 +16,8 @@ export type SubprocessHandle = {
   inspectChildProcesses?(
     fresh?: boolean,
     ignoreDetached?: boolean,
-    jobMembershipOnly?: boolean
+    jobMembershipOnly?: boolean,
+    afterMs?: number
   ): ChildProcessVerdictRead
   /** cachedOnly must neither query the process nor schedule inspection. */
   getForegroundProcess(options?: { rawFallback?: boolean; cachedOnly?: boolean }): string | null

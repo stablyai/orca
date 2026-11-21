@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type React from 'react'
 import { AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -6,9 +6,11 @@ import { useLatestHandler } from '@/lib/use-latest-handler'
 import { useListMultiSelection } from '@/lib/list-interaction/use-list-multi-selection'
 import { getSelectionIntent } from '@/lib/list-interaction/list-multi-selection'
 import { useTranslate } from '@/i18n/use-translate'
+import type { PtyRunningWorkObservation } from '../../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import {
   buildResourcePtyRows,
   groupResourcePtyRows,
+  resourcePtyRowLabel,
   type ResourcePtyGroup,
   type ResourcePtyRow
 } from './resource-pty-view-model'
@@ -16,12 +18,10 @@ import { ResourcePtyList, type ResourcePtyListItem } from './ResourcePtyList'
 import type { useResourceSessionInventory } from '../inventory/use-resource-session-inventory'
 import { canEndResourcePty, type useResourcePtyActions } from './use-resource-pty-actions'
 import { useResourcePtyEndableGroups } from './use-resource-pty-endable-groups'
-import {
-  checkResourcePtysRunningWork,
-  type ResourcePtyRunningWork
-} from './resource-pty-running-work'
+import { useResourcePtyWorkspaceCheck } from './resource-pty-running-work'
 
 const EMPTY_PTY_ROWS: ReturnType<typeof buildResourcePtyRows> = []
+const subscribeInactive = (): (() => void) => () => {}
 const ptyRowKey = (row: ResourcePtyRow): string => row.identity
 
 export type ResourcePtyEndAllConfirmation = {
@@ -33,6 +33,7 @@ export type ResourcePtyEndAllConfirmation = {
 type Props = Omit<Parameters<typeof buildResourcePtyRows>[0], 'sessions'> & {
   active: boolean
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
+  liveTabs: Parameters<typeof resourcePtyRowLabel>[2]
   inventory: ReturnType<typeof useResourceSessionInventory>
   actions: ReturnType<typeof useResourcePtyActions>
   onNavigate: (tabId: string, paneKey: string | null) => void
@@ -49,14 +50,15 @@ export function ResourcePtyPanel({
   worktrees,
   repos,
   projectGroups,
-  runtimePaneTitlesByTabId
+  runtimePaneTitlesByTabId,
+  liveTabs
 }: Props) {
   const t = useTranslate()
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const getScope = useCallback(() => panelRef.current, [])
   const { sessions } = inventory.sessionInventory
-  const { end: endPty, endMany, ending, endingSource } = actions
+  const { end: endPty, endMany, status } = actions
   const { sessionsError } = inventory
   const rows = useMemo(
     () =>
@@ -72,7 +74,12 @@ export function ResourcePtyPanel({
     [active, sessions, bindings, worktrees, repos, projectGroups]
   )
   const groups = useMemo(() => groupResourcePtyRows(rows), [rows])
-  const endableGroups = useResourcePtyEndableGroups(groups, endingSource)
+  const labelForRow = useCallback(
+    (row: ResourcePtyRow) =>
+      resourcePtyRowLabel(row, runtimePaneTitlesByTabId, liveTabs, bindings.terminalLayoutsByTabId),
+    [bindings.terminalLayoutsByTabId, liveTabs, runtimePaneTitlesByTabId]
+  )
+  const endableGroups = useResourcePtyEndableGroups(groups, status)
   const [openGroups, setOpenGroups] = useState<ReadonlySet<string>>(() => new Set())
   const [openDetails, setOpenDetails] = useState<ReadonlySet<string>>(() => new Set())
   const [previousGroups, setPreviousGroups] = useState(groups)
@@ -118,13 +125,17 @@ export function ResourcePtyPanel({
     }
     const selectable: ResourcePtyRow[] = []
     for (const item of items) {
-      if (item.kind === 'session' && canEndResourcePty(item.row) && !ending.has(item.key)) {
+      if (item.kind === 'session' && canEndResourcePty(item.row)) {
         selectable.push(item.row)
       }
     }
     return selectable
-  }, [items, sessionsError, ending])
-  const findFoldedRow = useMemo(() => {
+  }, [items, sessionsError])
+  const canSelectKey = useSyncExternalStore(
+    active ? status.subscribe : subscribeInactive,
+    status.getSelectionCheck
+  )
+  const findRow = useMemo(() => {
     let rowsByKey: Map<string, ResourcePtyRow> | undefined
     return (key: string) => {
       rowsByKey ??= new Map(rows.map((row) => [row.identity, row]))
@@ -133,19 +144,20 @@ export function ResourcePtyPanel({
   }, [rows])
   const getRetainedItem = useCallback(
     (key: string) => {
-      if (sessionsError || ending.has(key)) {
+      if (sessionsError) {
         return undefined
       }
-      const row = findFoldedRow(key)
+      const row = findRow(key)
       return row && canEndResourcePty(row) ? row : undefined
     },
-    [ending, findFoldedRow, sessionsError]
+    [findRow, sessionsError]
   )
   const selection = useListMultiSelection({
     items: selectableRows,
     getKey: ptyRowKey,
     getScope,
     getRetainedItem,
+    canSelectKey,
     additiveRange: true
   })
   const { clearSelection, updateSelectionForGesture } = selection
@@ -216,23 +228,18 @@ export function ResourcePtyPanel({
     },
     [endPty, focusBody]
   )
-  const [checkingGroup, setCheckingGroup] = useState<string | null>(null)
-  const check = useRef<AbortController | null>(null)
-  useLayoutEffect(() => {
-    if (active) {
-      return () => check.current?.abort()
-    }
-  }, [active])
   const finishWorkspaceCheck = useLatestHandler(
     (
       targets: readonly ResourcePtyRow[],
-      observations: ReadonlyMap<string, ResourcePtyRunningWork>
+      observations: ReadonlyMap<string, PtyRunningWorkObservation>
     ) => {
       if (!active || sessionsError) {
         return
       }
-      const pending = endingSource.getKeys()
-      const rows = targets.filter((row) => !pending.has(row.identity))
+      const rows = targets.filter((row) => {
+        const current = findRow(row.identity)
+        return !!current && canEndResourcePty(current) && status.isSelectable(row.identity)
+      })
       let runningCount = 0
       let unverifiableCount = 0
       for (const row of rows) {
@@ -246,12 +253,13 @@ export function ResourcePtyPanel({
       if (runningCount > 0 || unverifiableCount > 0) {
         onConfirmEndAll({ rows, runningCount, unverifiableCount })
       } else {
-        void endMany(rows)
+        void endMany(rows, 'idle')
       }
     }
   )
+  const { checkingGroup, start } = useResourcePtyWorkspaceCheck(active, finishWorkspaceCheck)
   const endAll = useLatestHandler((group: ResourcePtyGroup, source: Element) => {
-    if (!active || sessionsError || (group.kind === 'workspace' && check.current)) {
+    if (!active || sessionsError || (group.kind === 'workspace' && checkingGroup !== null)) {
       return
     }
     focusBody(source.closest('[data-resource-pty-group]'))
@@ -259,24 +267,13 @@ export function ResourcePtyPanel({
       previous.has(group.key) ? previous : new Set([...previous, group.key])
     )
     if (group.kind === 'unbound') {
-      void endMany(group.rows, true)
+      void endMany(group.rows, 'agent')
       return
     }
-    const pending = endingSource.getKeys()
-    const targets = group.rows.filter((row) => canEndResourcePty(row) && !pending.has(row.identity))
-    if (targets.length === 0) {
-      return
-    }
-    const controller = new AbortController()
-    check.current = controller
-    setCheckingGroup(group.key)
-    void checkResourcePtysRunningWork(targets, controller.signal).then((observations) => {
-      check.current = null
-      setCheckingGroup(null)
-      if (!controller.signal.aborted) {
-        finishWorkspaceCheck(targets, observations)
-      }
-    })
+    const targets = group.rows.filter(
+      (row) => canEndResourcePty(row) && status.isSelectable(row.identity)
+    )
+    start(group.key, targets)
   })
   return (
     <div ref={panelRef} className="flex h-full min-h-0 flex-col">
@@ -323,11 +320,10 @@ export function ResourcePtyPanel({
           scrollElement={scrollElement}
           observedAt={inventory.observedAt}
           unverifiable={inventory.sessionsError}
-          ending={actions.ending}
+          status={status}
           endableGroups={endableGroups}
           checkingGroup={checkingGroup}
-          runtimePaneTitlesByTabId={runtimePaneTitlesByTabId}
-          errors={actions.errors}
+          labelForRow={labelForRow}
           selected={selection.selectedKeys}
           openDetails={openDetails}
           onToggleGroup={toggleGroup}

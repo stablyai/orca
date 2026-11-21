@@ -214,11 +214,12 @@ export function ResourceUsageStatusSegment(): React.JSX.Element {
               active={controller.ptyViewActive}
               inventory={controller.localPtyInventory}
               actions={controller.ptyActions}
-              bindings={controller.resourceSessionBindings}
+              bindings={controller.ptySessionBindings}
               worktrees={controller.allWorktrees}
               repos={controller.repos}
               projectGroups={controller.projectGroups}
               runtimePaneTitlesByTabId={controller.runtimePaneTitlesByTabId}
+              liveTabs={controller.resourceSessionBindings.tabsByWorktree}
               onNavigate={navigateToTab}
               onConfirmEndAll={setEndAllConfirmation}
             />

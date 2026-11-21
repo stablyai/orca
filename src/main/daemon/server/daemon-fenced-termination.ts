@@ -36,6 +36,7 @@ export async function handleDaemonFencedTermination(
     expectedIncarnationId?: string
     requireNoAgentOwner?: boolean
     requireUnattached?: boolean
+    requireIdle?: true
   },
   deps: {
     host: TerminalHost
@@ -46,10 +47,26 @@ export async function handleDaemonFencedTermination(
   if (!payload.expectedIncarnationId) {
     return { outcome: 'refused', reason: 'unsupported' }
   }
+  if (payload.requireIdle) {
+    try {
+      const inspection = await deps.host.inspectProcess(payload.sessionId, {
+        expectedIncarnationId: payload.expectedIncarnationId,
+        runningWorkSinceMs: Date.now()
+      })
+      if (inspection.runningWork !== 'idle') {
+        return {
+          outcome: 'refused',
+          reason: inspection.runningWork === 'running' ? 'running_work' : 'unverifiable'
+        }
+      }
+    } catch {
+      return { outcome: 'refused', reason: 'unverifiable' }
+    }
+  }
   const termination = deps.host.beginFencedTermination({
     id: payload.sessionId,
     expectedIncarnationId: payload.expectedIncarnationId,
-    requireNoAgentOwner: payload.requireNoAgentOwner === true,
+    requireNoAgentOwner: payload.requireIdle === true || payload.requireNoAgentOwner === true,
     requireUnattached: payload.requireUnattached === true
   })
   if (!termination.accepted) {

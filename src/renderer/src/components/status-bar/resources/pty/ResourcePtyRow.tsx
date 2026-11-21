@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useCallback, useSyncExternalStore } from 'react'
 import type React from 'react'
 import { AlertCircle, ArrowUpRight, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,8 @@ import {
 } from './resource-pty-view-model'
 import { ResourcePtyDetails } from './ResourcePtyDetails'
 import { ResourcePtyProcessIcon } from './ResourcePtyProcessIcon'
-import { ptyTerminationReason, type ResourcePtyEndError } from './use-resource-pty-actions'
+import { ptyTerminationReason } from './use-resource-pty-actions'
+import type { ResourcePtyActionStatus } from './resource-pty-action-status'
 
 // An unbound PTY's title is often just its process name, which the icon already shows.
 function titleRepeatsProcess(title: string, foreground: string | undefined): boolean {
@@ -26,8 +27,7 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
   showWorkspace,
   observedAt,
   unverifiable,
-  ending,
-  error,
+  status,
   selected,
   detailsOpen,
   onActivate,
@@ -39,8 +39,7 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
   showWorkspace: boolean
   observedAt: number | null
   unverifiable: boolean
-  ending: boolean
-  error?: ResourcePtyEndError
+  status: ResourcePtyActionStatus
   selected: boolean
   detailsOpen: boolean
   onActivate: (row: PtyRow, event: React.MouseEvent, canSelect: boolean) => void
@@ -49,6 +48,14 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
 }) {
   const t = useTranslate()
   useUiLanguageRevision()
+  const subscribe = useCallback(
+    (listener: () => void) => status.subscribeRow(row.identity, listener),
+    [row.identity, status]
+  )
+  const getStatus = useCallback(() => status.getStatus(row.identity), [row.identity, status])
+  const action = useSyncExternalStore(subscribe, getStatus)
+  const ending = !!row.session.exiting || action === 'ending'
+  const error = action === 'ending' ? undefined : action
   const endUnavailable = unverifiable
     ? t('resourceManager.pty.refreshBeforeEnd', 'End is unavailable until PTYs are refreshed.')
     : !row.session.incarnationId || !row.session.fencedTermination

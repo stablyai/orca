@@ -36,10 +36,11 @@ export abstract class SessionProcessInspection {
   inspectChildProcesses(
     fresh?: boolean,
     ignoreDetached?: boolean,
-    jobMembershipOnly?: boolean
+    jobMembershipOnly?: boolean,
+    afterMs?: number
   ): ChildProcessVerdictRead {
     return (
-      this.subprocess.inspectChildProcesses?.(fresh, ignoreDetached, jobMembershipOnly) ??
+      this.subprocess.inspectChildProcesses?.(fresh, ignoreDetached, jobMembershipOnly, afterMs) ??
       'unverifiable'
     )
   }

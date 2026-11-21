@@ -19,7 +19,8 @@
 // v43 dropped it with the revert); v41 stages long startup commands as sourced scripts; v40 rolled
 // the #25130/#24636 shell-wrapper changes and the wider agent list into a fresh daemon; older owners
 // stay attachable.
-export const PROTOCOL_VERSION = 61
+export const PROTOCOL_VERSION = 62
+export const IDLE_FENCED_TERMINATION_PROTOCOL_VERSION = 62
 export const REPAINT_REQUEST_PROTOCOL_VERSION = 60
 export const FOCUS_LOSS_REPORT_PROTOCOL_VERSION = 56
 export const PTY_FOREGROUND_OBSERVATION_PROTOCOL_VERSION = 55

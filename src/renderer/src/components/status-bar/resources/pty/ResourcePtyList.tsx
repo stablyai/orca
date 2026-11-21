@@ -1,13 +1,10 @@
 import type React from 'react'
 import { VirtualizedList } from '@/components/ui/virtualized-list'
-import {
-  resourcePtyRowLabel,
-  type ResourcePtyGroup,
-  type ResourcePtyRow as PtyRow
-} from './resource-pty-view-model'
+import type { ResourcePtyGroup, ResourcePtyRow as PtyRow } from './resource-pty-view-model'
 import { ResourcePtyGroupRow } from './ResourcePtyGroupRow'
 import { ResourcePtyRow } from './ResourcePtyRow'
-import type { ResourcePtyEndError } from './use-resource-pty-actions'
+import type { ResourcePtyActionStatus } from './resource-pty-action-status'
+import type { useResourcePtyEndableGroups } from './use-resource-pty-endable-groups'
 
 export type ResourcePtyListItem =
   | { kind: 'group'; key: string; group: ResourcePtyGroup; open: boolean }
@@ -20,11 +17,10 @@ export function ResourcePtyList({
   scrollElement,
   observedAt,
   unverifiable,
-  ending,
+  status,
   endableGroups,
   checkingGroup,
-  runtimePaneTitlesByTabId,
-  errors,
+  labelForRow,
   selected,
   openDetails,
   onToggleGroup,
@@ -37,11 +33,10 @@ export function ResourcePtyList({
   scrollElement: HTMLDivElement | null
   observedAt: number | null
   unverifiable: boolean
-  ending: ReadonlySet<string>
-  endableGroups: ReadonlySet<string>
+  status: ResourcePtyActionStatus
+  endableGroups: ReturnType<typeof useResourcePtyEndableGroups>
   checkingGroup: string | null
-  runtimePaneTitlesByTabId: Record<string, Record<number, string>>
-  errors: ReadonlyMap<string, ResourcePtyEndError>
+  labelForRow: (row: PtyRow) => string
   selected: ReadonlySet<string>
   openDetails: ReadonlySet<string>
   onToggleGroup: (key: string) => void
@@ -63,13 +58,10 @@ export function ResourcePtyList({
             key={item.key}
             group={item.group}
             open={item.open}
-            canEndAll={
-              !unverifiable &&
-              (checkingGroup === null || item.group.kind === 'unbound') &&
-              endableGroups.has(item.key)
-            }
+            allowEndAll={!unverifiable && (checkingGroup === null || item.group.kind === 'unbound')}
+            endableGroups={endableGroups}
             checking={checkingGroup === item.key}
-            runtimePaneTitlesByTabId={runtimePaneTitlesByTabId}
+            labelForRow={labelForRow}
             onToggle={onToggleGroup}
             onEndAll={onEndAll}
           />
@@ -77,12 +69,11 @@ export function ResourcePtyList({
           <ResourcePtyRow
             key={item.key}
             row={item.row}
-            title={resourcePtyRowLabel(item.row, runtimePaneTitlesByTabId)}
+            title={labelForRow(item.row)}
             showWorkspace={item.showWorkspace}
             observedAt={observedAt}
             unverifiable={unverifiable}
-            ending={!!item.row.session.exiting || ending.has(item.row.identity)}
-            error={errors.get(item.row.identity)}
+            status={status}
             selected={selected.has(item.row.identity)}
             detailsOpen={openDetails.has(item.row.identity)}
             onActivate={onActivate}

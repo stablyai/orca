@@ -25902,6 +25902,7 @@
       "endShort": "End",
       "endHint": "End this terminal and its child processes.",
       "agentRunning": "Agent running",
+      "workStarted": "Work started. Use End all again to review.",
       "claimed": "An agent now owns this terminal. Refresh before trying again.",
       "attached": "A client is now attached to this terminal. Refresh before trying again.",
       "unverifiableEnd": "Unverifiable: the host could not confirm the result. The terminal may still be running.",

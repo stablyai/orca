@@ -16,6 +16,7 @@ export const ptyStreamAndSerializationApi = {
     options?: {
       expectedIncarnationId?: string
       scanChildProcesses?: boolean
+      runningWorkSinceMs?: number
       steadyState?: boolean
       jobMembershipOnly?: boolean
     }

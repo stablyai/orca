@@ -52,20 +52,24 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
         hasChildProcesses: this.hasChildProcessesFromForeground(foregroundProcess)
       }
     }
-    return this.client.request<PtyProcessInspection>('inspectProcess', {
-      sessionId: id,
-      ...(options?.expectedIncarnationId
-        ? { expectedIncarnationId: options.expectedIncarnationId }
-        : {}),
-      ...(options?.foregroundOnly === true ? { foregroundOnly: true } : {}),
-      ...(options?.scanChildProcesses === true && options.expectedIncarnationId
-        ? { scanChildProcesses: true }
-        : {}),
-      // Additive: an older daemon ignores it and pays for the full capture.
-      ...(options?.steadyState === true ? { steadyState: true } : {}),
-      ...(options?.jobMembershipOnly === true ? { jobMembershipOnly: true } : {}),
-      ...(options?.ignoreDetached === true ? { ignoreDetached: true } : {})
-    })
+    return this.client.request<PtyProcessInspection>(
+      'inspectProcess',
+      {
+        sessionId: id,
+        ...(options?.expectedIncarnationId
+          ? { expectedIncarnationId: options.expectedIncarnationId }
+          : {}),
+        ...(options?.foregroundOnly === true ? { foregroundOnly: true } : {}),
+        ...(options?.runningWorkSinceMs !== undefined && options.expectedIncarnationId
+          ? { runningWorkSinceMs: options.runningWorkSinceMs }
+          : {}),
+        // Additive: an older daemon ignores it and pays for the full capture.
+        ...(options?.steadyState === true ? { steadyState: true } : {}),
+        ...(options?.jobMembershipOnly === true ? { jobMembershipOnly: true } : {}),
+        ...(options?.ignoreDetached === true ? { ignoreDetached: true } : {})
+      },
+      options?.runningWorkSinceMs === undefined ? undefined : 1_500
+    )
   }
 
   async getForegroundProcess(id: string): Promise<string | null> {

@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type {
-  PtyFencedTerminationOutcome,
-  PtyFencedTerminationRequest
-} from '../../../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
+import type { PtyFencedTerminationRequest } from '../../../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { ResourcePtyRow } from './resource-pty-view-model'
 import type { useResourceSessionInventory } from '../inventory/use-resource-session-inventory'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import { ResourcePtyActionStatus, type ResourcePtyEndError } from './resource-pty-action-status'
 
 const COMPLETION_FLUSH_MS = 50
 const MAX_CONCURRENT_TERMINATIONS = 4
@@ -16,15 +14,6 @@ type TerminationTarget = { identity: string; request: PtyFencedTerminationReques
 type TerminationBatch = { pending: number; unpublished: number; resolve: () => void }
 type QueuedTermination = TerminationTarget & { batch: TerminationBatch; protectAgent: boolean }
 type TerminationCompletion = QueuedTermination & { remove: boolean; error?: ResourcePtyEndError }
-type EndingListener = (identities: readonly string[], ending: boolean) => void
-export type ResourcePtyEndError =
-  | Extract<PtyFencedTerminationOutcome, { outcome: 'refused' }>['reason']
-  | 'agent_running'
-
-export type ResourcePtyEndingSource = {
-  getKeys: () => ReadonlySet<string>
-  subscribe: (listener: EndingListener) => () => void
-}
 
 export function ptyTerminationReason(
   reason: ResourcePtyEndError,
@@ -33,6 +22,8 @@ export function ptyTerminationReason(
   switch (reason) {
     case 'agent_running':
       return t('resourceManager.pty.agentRunning', 'Agent running')
+    case 'running_work':
+      return t('resourceManager.pty.workStarted', 'Work started. Use End all again to review.')
     case 'claimed':
       return t(
         'resourceManager.pty.claimed',
@@ -57,18 +48,7 @@ export function ptyTerminationReason(
 }
 
 export function useResourcePtyActions(inventory: ReturnType<typeof useResourceSessionInventory>) {
-  const [ending, setEnding] = useState<ReadonlySet<string>>(new Set())
-  const endingRef = useRef(new Set<string>())
-  const [endingListeners] = useState(() => new Set<EndingListener>())
-  const [endingSource] = useState<ResourcePtyEndingSource>(() => ({
-    getKeys: () => endingRef.current,
-    subscribe: (listener) => {
-      endingListeners.add(listener)
-      return () => endingListeners.delete(listener)
-    }
-  }))
-  const [errors, setErrors] = useState<ReadonlyMap<string, ResourcePtyEndError>>(new Map())
-  const errorsRef = useRef(new Map<string, ResourcePtyEndError>())
+  const [status] = useState(() => new ResourcePtyActionStatus())
   const completions = useRef<TerminationCompletion[]>([])
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const queue = useRef<{ items: QueuedTermination[]; head: number; active: number }>({
@@ -78,6 +58,8 @@ export function useResourcePtyActions(inventory: ReturnType<typeof useResourceSe
   })
   const mounted = useMountedRef()
   const { removeSessions, invalidate, sessionsError } = inventory
+  const { sessions } = inventory.sessionInventory
+  useEffect(() => status.retireErrors(sessions), [sessions, status])
   const flushCompletions = useCallback(() => {
     if (flushTimer.current !== null) {
       clearTimeout(flushTimer.current)
@@ -89,42 +71,25 @@ export function useResourcePtyActions(inventory: ReturnType<typeof useResourceSe
     }
     completions.current = []
     const removed: { id: string; incarnationId: string }[] = []
-    let errorsChanged = false
     for (const completion of completed) {
-      endingRef.current.delete(completion.identity)
       if (completion.remove) {
         removed.push({
           id: completion.request.id,
           incarnationId: completion.request.expectedIncarnationId
         })
       }
-      if (completion.error) {
-        errorsRef.current.set(completion.identity, completion.error)
-        errorsChanged = true
-      }
     }
     if (removed.length > 0) {
       removeSessions(removed)
     }
-    if (mounted.current) {
-      if (endingListeners.size > 0) {
-        const keys = completed.map(({ identity }) => identity)
-        for (const listener of endingListeners) {
-          listener(keys, false)
-        }
-      }
-      setEnding(new Set(endingRef.current))
-      if (errorsChanged) {
-        setErrors(new Map(errorsRef.current))
-      }
-    }
+    status.complete(completed)
     for (const completion of completed) {
       completion.batch.unpublished -= 1
       if (completion.batch.unpublished === 0) {
         completion.batch.resolve()
       }
     }
-  }, [endingListeners, mounted, removeSessions])
+  }, [removeSessions, status])
   useEffect(() => () => flushCompletions(), [flushCompletions])
 
   const terminate = useCallback(
@@ -186,47 +151,37 @@ export function useResourcePtyActions(inventory: ReturnType<typeof useResourceSe
     [flushCompletions, invalidate, terminate]
   )
   const endMany = useCallback(
-    async (rows: readonly ResourcePtyRow[], protectAgent = false): Promise<void> => {
+    async (rows: readonly ResourcePtyRow[], guard?: 'agent' | 'idle'): Promise<void> => {
       if (sessionsError || !mounted.current) {
         return
       }
       const targets: TerminationTarget[] = []
+      const identities = new Set<string>()
       for (const row of rows) {
         if (
           !canEndResourcePty(row) ||
           !row.session.incarnationId ||
-          endingRef.current.has(row.identity)
+          !status.isSelectable(row.identity) ||
+          identities.has(row.identity)
         ) {
           continue
         }
-        endingRef.current.add(row.identity)
+        identities.add(row.identity)
         targets.push({
           identity: row.identity,
           request: {
             id: row.session.id,
             expectedIncarnationId: row.session.incarnationId,
-            requireNoAgentOwner: protectAgent || row.session.agentOwnership === 'absent',
-            requireUnattached: row.binding === 'unbound'
+            requireNoAgentOwner: guard === 'agent' || row.session.agentOwnership === 'absent',
+            requireUnattached: row.binding === 'unbound',
+            ...(guard === 'idle' ? { requireIdle: true } : {})
           }
         })
       }
       if (targets.length === 0) {
         return
       }
-      if (endingListeners.size > 0) {
-        const keys = targets.map(({ identity }) => identity)
-        for (const listener of endingListeners) {
-          listener(keys, true)
-        }
-      }
-      setEnding(new Set(endingRef.current))
-      let errorsChanged = false
-      for (const target of targets) {
-        errorsChanged = errorsRef.current.delete(target.identity) || errorsChanged
-      }
-      if (errorsChanged) {
-        setErrors(new Map(errorsRef.current))
-      }
+      status.start([...identities])
       await new Promise<void>((resolve) => {
         const batch: TerminationBatch = {
           pending: targets.length,
@@ -234,15 +189,15 @@ export function useResourcePtyActions(inventory: ReturnType<typeof useResourceSe
           resolve
         }
         for (const target of targets) {
-          queue.current.items.push({ ...target, batch, protectAgent })
+          queue.current.items.push({ ...target, batch, protectAgent: guard === 'agent' })
         }
         drain()
       })
     },
-    [drain, endingListeners, mounted, sessionsError]
+    [drain, mounted, sessionsError, status]
   )
   const end = useCallback((row: ResourcePtyRow): void => void endMany([row]), [endMany])
-  return { ending, endingSource, errors, end, endMany }
+  return { status, end, endMany }
 }
 
 export function canEndResourcePty(row: ResourcePtyRow): boolean {

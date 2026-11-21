@@ -3,8 +3,11 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
 import type { ResourcePtyGroup, ResourcePtyRow } from './resource-pty-view-model'
-import type { ResourcePtyEndingSource } from './use-resource-pty-actions'
-import { useResourcePtyEndableGroups } from './use-resource-pty-endable-groups'
+import { ResourcePtyActionStatus } from './resource-pty-action-status'
+import {
+  useResourcePtyEndableGroups,
+  useResourcePtyGroupCanEnd
+} from './use-resource-pty-endable-groups'
 
 afterEach(cleanup)
 
@@ -29,42 +32,30 @@ it.each([300, 3_000])('updates a group with %i PTYs without revisiting its rows'
     lastActivityAt: 0,
     workspace: 'Workspace',
     workspaceId: 'workspace',
+    workspacePath: '/workspace',
     project: null,
     tabId: null,
     paneKey: null,
     binding: 'bound'
   }))
   const groups: ResourcePtyGroup[] = [{ kind: 'workspace', key: 'workspace', name: null, rows }]
-  const keys = new Set<string>()
-  const listeners = new Set<Parameters<ResourcePtyEndingSource['subscribe']>[0]>()
-  const ending: ResourcePtyEndingSource = {
-    getKeys: () => keys,
-    subscribe: (listener) => {
-      listeners.add(listener)
-      return () => listeners.delete(listener)
-    }
-  }
-  const { result, rerender } = renderHook(() => useResourcePtyEndableGroups(groups, ending))
-  expect(result.current.has('workspace')).toBe(true)
+  const ending = new ResourcePtyActionStatus()
+  const { result, rerender } = renderHook(() => {
+    const endability = useResourcePtyEndableGroups(groups, ending)
+    return useResourcePtyGroupCanEnd(endability, 'workspace')
+  })
+  expect(result.current).toBe(true)
   expect(eligibilityReads).toBe(count)
   eligibilityReads = 0
   const identities = rows.map(({ identity }) => identity)
   act(() => {
-    for (const identity of identities) {
-      keys.add(identity)
-    }
-    for (const listener of listeners) {
-      listener(identities, true)
-    }
+    ending.start(identities)
   })
-  expect(result.current.has('workspace')).toBe(false)
+  expect(result.current).toBe(false)
   rerender()
   act(() => {
-    keys.delete('pty-0')
-    for (const listener of listeners) {
-      listener(['pty-0'], false)
-    }
+    ending.complete([{ identity: 'pty-0', error: 'agent_running' }])
   })
-  expect(result.current.has('workspace')).toBe(true)
+  expect(result.current).toBe(true)
   expect(eligibilityReads).toBe(0)
 })

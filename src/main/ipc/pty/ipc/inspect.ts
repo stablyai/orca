@@ -13,6 +13,11 @@ import {
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
+import {
+  beforeDeadline,
+  DEADLINE_PASSED,
+  monotonicNow
+} from '../../../../shared/concurrency/deadline-settle-notifier'
 import { installPtySessionListingIpcHandler } from './session-listing'
 import { ptySizes } from '../delivery/visibility-state'
 import { isValidPaneKey } from '../pane/key-state'
@@ -144,6 +149,7 @@ export function installPtyInspectIpcHandlers(deps: {
         id: string
         expectedIncarnationId?: string
         scanChildProcesses?: boolean
+        runningWorkSinceMs?: number
         steadyState?: boolean
         jobMembershipOnly?: boolean
       }
@@ -152,18 +158,29 @@ export function installPtyInspectIpcHandlers(deps: {
       if (typeof args?.id !== 'string' || !args.id || isRemoteRuntimePtyId(args.id)) {
         return clientOnlyUnverifiableInspection('terminal_gone')
       }
-      // Completion-sensitive inspection must wait for the provider that owns restored daemon sessions.
-      await awaitSwapWindow(args.id)
-      if (!hasPtyProviderForInspection(args.id)) {
-        return clientOnlyUnverifiableInspection('terminal_gone')
-      }
       const options = {
         ...(args.expectedIncarnationId
           ? { expectedIncarnationId: args.expectedIncarnationId }
           : {}),
         ...(args.scanChildProcesses === true ? { scanChildProcesses: true } : {}),
+        ...(args.expectedIncarnationId &&
+        typeof args.runningWorkSinceMs === 'number' &&
+        Number.isSafeInteger(args.runningWorkSinceMs) &&
+        resolvePtyExecutionHost(args.id) === LOCAL_EXECUTION_HOST_ID
+          ? { runningWorkSinceMs: args.runningWorkSinceMs }
+          : {}),
         ...(args.steadyState === true ? { steadyState: true } : {}),
         ...(args.jobMembershipOnly === true ? { jobMembershipOnly: true } : {})
+      }
+      // Completion-sensitive inspection must wait for the provider that owns restored daemon sessions.
+      const startup = awaitSwapWindow(args.id)
+      if (options.runningWorkSinceMs === undefined) {
+        await startup
+      } else if ((await beforeDeadline(startup, monotonicNow() + 750)) === DEADLINE_PASSED) {
+        return clientOnlyUnverifiableInspection('timeout')
+      }
+      if (!hasPtyProviderForInspection(args.id)) {
+        return clientOnlyUnverifiableInspection('terminal_gone')
       }
       return Object.keys(options).length > 0
         ? inspectPtyProviderProcessForRenderer(getProviderForPty(args.id), args.id, options)

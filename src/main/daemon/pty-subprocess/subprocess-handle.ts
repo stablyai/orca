@@ -142,14 +142,16 @@ export function createDaemonPtySubprocessHandle(args: {
           inspectChildProcesses: (
             fresh?: boolean,
             ignoreDetached?: boolean,
-            jobMembershipOnly?: boolean
+            jobMembershipOnly?: boolean,
+            afterMs?: number
           ) =>
             inspectSpawnFileWindowsChildProcesses(
               proc,
               shellPath,
               fresh,
               ignoreDetached,
-              jobMembershipOnly
+              jobMembershipOnly,
+              afterMs
             )
         }
       : {}),

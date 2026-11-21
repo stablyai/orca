@@ -129,6 +129,7 @@ export type KillRequest = {
     expectedIncarnationId?: string
     requireNoAgentOwner?: boolean
     requireUnattached?: boolean
+    requireIdle?: true
   }
 }
 

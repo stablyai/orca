@@ -12,8 +12,11 @@ import {
 import { projectGroupIdFromRepoId } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import {
   makePaneKey,
-  isTerminalLeafId
+  isTerminalLeafId,
+  parsePaneKey
 } from '../../../../../../shared/workspace-layout/stable-pane-id'
+import { findRegisteredTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
+import { getTerminalTab } from '@/store/terminals/ownership/terminal-tab-owner-index'
 import { recentStamp } from '../../../../../../shared/sidebar-list/sorting/stamp-order'
 import {
   buildResourceSessionBindingIndex,
@@ -34,6 +37,7 @@ export type ResourcePtyRow = {
   workspace: string | null
   project: string | null
   workspaceId: string | null
+  workspacePath: string | null
   tabId: string | null
   paneKey: string | null
   binding: 'bound' | 'unbound' | 'pending'
@@ -60,10 +64,28 @@ export function resourcePtyProcessBaseName(process: string | undefined): string 
 
 export function resourcePtyRowLabel(
   row: ResourcePtyRow,
-  runtimePaneTitlesByTabId: Record<string, Record<number, string>>
+  runtimePaneTitlesByTabId: Record<string, Record<number, string>>,
+  liveTabs: ResourceSessionBindingInputs['tabsByWorktree'],
+  layouts: ResourceSessionBindingInputs['terminalLayoutsByTabId']
 ): string {
-  const titles = row.usesRuntimeTitle && row.tabId ? runtimePaneTitlesByTabId[row.tabId] : null
-  return (titles && Object.values(titles).find((title) => title?.trim())) || row.label
+  if (!row.usesRuntimeTitle || !row.tabId) {
+    return row.label
+  }
+  const leafId = row.paneKey ? parsePaneKey(row.paneKey)?.leafId : undefined
+  if (leafId) {
+    const mounted = findRegisteredTerminalTab(row.tabId, row.workspaceId ?? undefined)?.tab
+    const paneId = mounted?.getManager()?.getNumericIdForLeaf(leafId)
+    const title =
+      paneId != null && mounted?.getPtyIdForPane(paneId) === row.session.id
+        ? runtimePaneTitlesByTabId[row.tabId]?.[paneId]
+        : undefined
+    const paneTitle = title?.trim() || layouts?.[row.tabId]?.titlesByLeafId?.[leafId]?.trim()
+    if (paneTitle) {
+      return paneTitle
+    }
+  }
+  const tab = getTerminalTab(liveTabs, row.tabId)
+  return tab?.defaultTitle?.trim() || tab?.title?.trim() || row.label
 }
 
 export function buildResourcePtyRows(args: {
@@ -184,6 +206,7 @@ export function buildResourcePtyRows(args: {
       lastActivityAt: recentStamp(workspace ?? {}),
       workspace: workspaceName,
       workspaceId: workspace?.id ?? null,
+      workspacePath: workspace?.path ?? null,
       project: project ?? null,
       tabId,
       paneKey: tabId ? (paneKeys.get(session.id) ?? null) : null,
@@ -245,10 +268,36 @@ export function groupResourcePtyRows(rows: readonly ResourcePtyRow[]): ResourceP
   for (const group of groups) {
     group.rows.sort(byName)
   }
+  const nameCounts = new Map<string, number>()
+  const projectNameCounts = new Map<string, number>()
+  for (const group of groups) {
+    if (group.name) {
+      nameCounts.set(group.name, (nameCounts.get(group.name) ?? 0) + 1)
+      const projectName = workspaceProjectName(group)
+      if (projectName) {
+        projectNameCounts.set(projectName, (projectNameCounts.get(projectName) ?? 0) + 1)
+      }
+    }
+  }
+  for (const group of groups) {
+    if (group.name && (nameCounts.get(group.name) ?? 0) > 1) {
+      const projectName = workspaceProjectName(group)
+      if (projectName && projectNameCounts.get(projectName) === 1) {
+        group.name = projectName
+      } else if (group.rows[0]?.workspacePath) {
+        group.name = `${group.name} · ${group.rows[0].workspacePath}`
+      }
+    }
+  }
   if (unbound.rows.length > 0) {
     unbound.rows.sort(byName)
     // Why first: PTYs no tab owns are the cleanup target, so they stay one click away.
     groups.unshift(unbound)
   }
   return groups
+}
+
+function workspaceProjectName(group: ResourcePtyGroup): string | null {
+  const project = group.rows[0]?.project
+  return project ? `${group.name} · ${project}` : null
 }

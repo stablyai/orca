@@ -72,6 +72,32 @@ describe('fenced daemon kill protocol', () => {
     ).resolves.toEqual({ outcome: 'ended' })
   })
 
+  it('keeps the terminal open if work starts before an automatic workspace end', async () => {
+    const handle = createMockSubprocess()
+    harness = await startDaemonAdapterHarness(() => handle)
+    const created = await harness.adapter.spawn({ sessionId: 'pty', cols: 80, rows: 24 })
+    if (!created.incarnationId) {
+      throw new Error('Expected incarnation')
+    }
+    vi.spyOn(harness.server.host, 'inspectProcess').mockResolvedValue({
+      foregroundProcess: 'sleep',
+      hasChildProcesses: true,
+      runningWork: 'running'
+    })
+    const request = {
+      id: 'pty',
+      expectedIncarnationId: created.incarnationId,
+      requireNoAgentOwner: true,
+      requireUnattached: false
+    }
+    await expect(harness.adapter.killFenced({ ...request, requireIdle: true })).resolves.toEqual({
+      outcome: 'refused',
+      reason: 'running_work'
+    })
+    expect(handle.forceKill).not.toHaveBeenCalled()
+    await expect(harness.adapter.killFenced(request)).resolves.toEqual({ outcome: 'ended' })
+  })
+
   it('checks a newly spawned owner after a replaced request populated the inventory cache', async () => {
     harness = await startDaemonAdapterHarness(() => createMockSubprocess())
     const router = new DaemonPtyRouter({ current: harness.adapter, legacy: [] })
