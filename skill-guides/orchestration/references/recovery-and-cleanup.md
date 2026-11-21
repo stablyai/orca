@@ -1,5 +1,13 @@
 # Recovery and cleanup
 
+## Recover a completion or question after a runtime outage
+
+`worker_done` retries an unavailable runtime for up to two minutes while the CLI command is running. `ask` has no equivalent outage retry window. Neither command leaves a local outbox to send the request after it exits. A transport failure can mean the host never received the request, or that it committed the request and its reply was lost.
+
+Keep the original command and any recovery request ID. When Orca returns, follow the error's recovery instructions from the same worker on the same host. Use `orchestration request-show` to inspect a reported ID, and replay the exact command with its `--retry-request` only as directed. For an accepted question with a message ID, `ask --resume <message_id>` waits on the existing question. A wait timeout does not cancel it.
+
+As coordinator, distinguish a successful `check --wait` timeout from a failed check. After reconnecting, inspect the exact Dispatch with `worker-show`, and use `worker-read` where available to see what the worker did. If evidence shows it finished but the Task is still unsettled, ask the original worker to recover its completion before starting replacement work.
+
 Act only on proof. `worker-list --run <run_id> --include-remote` gives
 each worker's liveness and `next`; follow it.
 
@@ -53,6 +61,8 @@ identity, custody, and Keep open refusals; never close or reuse an unknown or
 user-owned process. Claim cancellation only on a confirmed stopped result. On
 `stop_unknown`, inspect `worker-show` and the receipt, then report the unresolved
 blocker; do not blindly repeat stop, retry, or start fresh.
+
+If the user explicitly cancels one isolated lane and asks to discard its draft, match the execution host, workspace and canonical checkout, branch, owning Task, and Dispatch to that lane. Confirm that the worker and any helpers have actually exited and that the resources belong exclusively to the cancelled lane. Preserve peers, shared resources, user-retained terminals, and anything with uncertain exit or ownership. Recheck before any authorized removal and stop if new ownership appears. Keep the Task and Dispatch history and record what stopped, what was discarded, and what was preserved. Resume or replace the cancelled work only with renewed user authorization.
 
 For explicit intentional abandonment, use
 `ORCA orchestration worker-abandon --dispatch <dispatch_id>` to fence and
