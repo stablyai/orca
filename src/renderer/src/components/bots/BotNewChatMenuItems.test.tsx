@@ -224,7 +224,7 @@ describe('botAgentChoices', () => {
   const model = settled([
     { kind: 'chat', agent: 'codex' },
     { kind: 'chat', agent: 'opencode' },
-    { kind: 'chat', agent: 'kimi' }
+    { kind: 'chat', agent: 'gemini' }
   ])
 
   it('keeps the bot’s current agent even when this computer lacks it', () => {

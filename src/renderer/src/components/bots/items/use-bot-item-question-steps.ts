@@ -21,7 +21,7 @@ import {
   botItemWaitingAsk,
   botItemWaitingLine
 } from '../../../../../shared/bots/bot-item-question-answers'
-import type { BotItemPendingComment } from './use-bot-item-pending-comments'
+import type { BotItemPendingComment } from '../../../../../shared/bots/bot-item-pending-comments'
 import { useNativeChatDraft } from '../../native-chat/drafts/use-native-chat-draft'
 
 const NOT_COMPOSING = (): boolean => false
@@ -78,7 +78,8 @@ export function useBotItemQuestionSteps(
   bot: Bot,
   item: BotItem,
   events: readonly BotItemEvent[],
-  send: (text: string, paths?: readonly string[]) => void,
+  /** `questionId`: the ask the text answers, so a reply that lands after a new question is refused. */
+  send: (text: string, paths?: readonly string[], questionId?: string) => void,
   pending: readonly BotItemPendingComment[]
 ): {
   steps: BotItemQuestionSteps | null
@@ -110,7 +111,7 @@ export function useBotItemQuestionSteps(
   const post = (answers: (string | null)[], text: string, paths: readonly string[]): void => {
     hold([])
     setSent({ askId, text, answers })
-    send(text, paths)
+    send(text, paths, askId)
   }
   const answer = useLatestHandler((index: number, words: string, paths: readonly string[] = []) => {
     const next = kept.map((held_, at) => (at === index ? words : held_))
@@ -147,7 +148,7 @@ export function useBotItemQuestionSteps(
       const answers = own.decisions.map((_, index) => botItemAnswerWords(own, index, { text }))
       setSent({ askId: asked.askId, text, answers })
     }
-    send(text)
+    send(text, [], asked?.askId)
   })
   const stepLine = steps?.shape.decisions[steps.current]
   return {

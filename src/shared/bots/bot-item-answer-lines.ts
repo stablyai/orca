@@ -5,33 +5,29 @@ import {
   botItemPickedReplies,
   botItemQuestionLine,
   botItemQuickReplyText,
-  type BotItemDecision,
   type BotItemQuestionShape
 } from './bot-item-ask'
 import { botItemCommentImages } from './bot-items'
 import { stripSentImagePromptMarkers } from '../native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 
-/** The words after a line's "Question →", or null where `line` names another question. */
-function answerOn(decision: BotItemDecision, line: string): string | null {
-  const head = `${botItemQuestionLine(decision.question)} →`
-  return line.startsWith(head) ? line.slice(head.length).trim() : null
-}
-
-/** Per question line, the answer a comment names for it ("Question → answer"), else null. */
+/** Per question line, the answer a comment names for it ("Question → answer"), else null. A line
+ *  belongs to the question with the longest matching lead, as one question's words may lead another's. */
 export function botItemNamedAnswers(shape: BotItemQuestionShape, text: string): (string | null)[] {
-  const lines = text
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-  return shape.decisions.map((decision) => {
-    for (const line of lines) {
-      const words = answerOn(decision, line)
-      if (words) {
-        return words
+  const heads = shape.decisions.map((decision) => `${botItemQuestionLine(decision.question)} →`)
+  const answers: (string | null)[] = shape.decisions.map(() => null)
+  for (const line of text.split('\n').map((l) => l.trim())) {
+    let best = -1
+    heads.forEach((head, index) => {
+      if (line.startsWith(head) && (best === -1 || head.length > heads[best].length)) {
+        best = index
       }
+    })
+    const words = best === -1 ? '' : line.slice(heads[best].length).trim()
+    if (words && answers[best] === null) {
+      answers[best] = words
     }
-    return null
-  })
+  }
+  return answers
 }
 
 /** One comment for a set of answers: a line per answered question, in the ask's order; a picked quick

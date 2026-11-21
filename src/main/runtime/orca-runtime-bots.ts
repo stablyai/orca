@@ -75,14 +75,13 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
       if (catalogChanged) {
         this.notifyReposChanged()
       }
-      for (const listener of this.botWriteListeners) {
-        listener()
-      }
+      this.botWriteListeners.forEach((listener) => listener())
       this.botChangeNotices.changed({ kinds: ['bot'] })
     },
     createFolderWorkspace: async (input) =>
       (await this.projectGroups.createFolderWorkspace(input)).folderWorkspace,
-    deleteFolderWorkspace: (id) => this.projectGroups.deleteFolderWorkspace(id),
+    deleteFolderWorkspace: (id) =>
+      this.projectGroups.deleteFolderWorkspace(id, { discardUnsavedDrafts: true }),
     deleteBotAutomations: (botId) =>
       deleteAutomationsOfBot(this.store?.listAutomations?.() ?? [], botId, (id) =>
         this.deleteAutomation(id)
@@ -275,7 +274,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
         chats: botChatJournal(),
         work: this.botWork,
         lookAround: this.lookAround,
-        requestTurnEnded: (sessionId, ended) => this.botSessions.turnEnded(sessionId, ended),
+        requestTurnEnded: (sessionId, turnId, ended) =>
+          this.botSessions.turnEnded(sessionId, turnId, ended),
         recentChats: (botId, sessionId, message) =>
           this.botSessions.recentChats(botId, sessionId, message),
         unansweredQuestionNote: (sessionId) => this.botSessions.unansweredQuestionNote(sessionId),

@@ -111,7 +111,7 @@ export function bindTerminalPaneStatusLifecycle(
       )
     }
   })
-  agentHookServer.pruneUnplacedSleepingPanes()
+  agentHookServer.pruneUnplacedPanes()
 }
 
 /** A local pane's shell alone holds its PTY, and the pane still runs that PTY afterwards; null on
