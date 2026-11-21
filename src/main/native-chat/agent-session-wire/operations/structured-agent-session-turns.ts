@@ -54,6 +54,8 @@ export type AgentSessionTurnContext = {
   agent: string
   logger: StructuredAgentSessionLogger
   persistedOptions?: Readonly<Record<string, string>>
+  /** The chat follows the agent's default model; `persistedOptions` holds what it resolved to. */
+  modelDefault?: boolean
   persistOptions: (options: Readonly<Record<string, string>>) => Promise<void>
   resolvedBy: string
   /** Publish non-journal state; appends publish themselves. */
@@ -211,7 +213,7 @@ async function requireSubmission(
 
 export type AgentSessionReplayContext = Pick<
   AgentSessionTurnContext,
-  'sessionId' | 'fence' | 'currentWork' | 'agent' | 'persistedOptions' | 'now'
+  'sessionId' | 'fence' | 'currentWork' | 'agent' | 'persistedOptions' | 'modelDefault' | 'now'
 > & {
   journal: Pick<AgentSessionJournal, 'cursor' | 'reads'> & {
     queuedMessages: Pick<AgentSessionJournal['queuedMessages'], 'get'>

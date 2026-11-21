@@ -41,6 +41,8 @@ export type AgentSessionOptionsResult = {
   /** This session takes image attachments. Absent = unknown (an older host). */
   acceptsImages?: boolean
   models: AgentSessionModelOption[]
+  /** Original host/workspace configuration, or the saved Default baseline; never a recommendation. */
+  defaultModel?: { id: string; label: string; description?: string }
   /** False means inventory is unknown; retain existing rows. Absent keeps older hosts' authoritative-list behavior. */
   modelsKnown?: false
   /** The `models` ids the agent's own finished listing names, excluding host-added rows and
@@ -52,6 +54,8 @@ export type AgentSessionOptionsResult = {
     /** Accepted input origins; an empty map excludes all display-only observations. */
     acceptedInputSources?: AgentSessionAcceptedInputSources
     model?: string
+    /** The chat follows the agent's default model, which `model` names once known. Absent from older hosts. */
+    modelDefault?: boolean
     /** Legacy hosts may include an answer model; clients ignore it when presenting selection. */
     reportedModel?: string
     /** The current child runs this provider fallback in place of `model`; display only, never sent. */

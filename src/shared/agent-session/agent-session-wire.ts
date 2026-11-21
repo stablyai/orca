@@ -224,7 +224,9 @@ export type AgentSessionStatusSummary = {
   latestPrompt: string
   /** Provider model in force for the next turn; absent until the host has read the options. */
   model?: string
-  /** Legacy host execution report; clients use the saved model for option invalidation. */
+  /** The chat follows the agent's default model, which `model` names once known. Absent from older hosts. */
+  modelDefault?: boolean
+  /** Current child's reported execution model, independent of the next-turn selection. */
   reportedModel?: string
   /** The current child's provider fallback model; moving it makes clients re-read options. */
   fallbackModel?: string
@@ -382,7 +384,9 @@ export type AgentSessionPromptResult = {
 
 export type AgentSessionOptionResult = {
   key: string
-  value: string
+  /** Null when the model went back to the agent's default. */
+  value: string | null
+  modelDefault?: boolean
   /** Full effective next-turn values when the provider reconciled related options. */
   options?: Record<string, string>
 }
@@ -426,6 +430,8 @@ export type AgentSessionModelCatalogResult = {
       /** The listed default is the model a new chat here launches with: the agent's listing names
        *  its configured model and no workspace config can replace it. Absent from an older host. */
       listingNamesConfiguredModel?: boolean
+      /** Original executable/configuration evidence, including an unlisted configured model. */
+      defaultModelOptions?: { model: string; effort?: string }
       /** The named default holds in every workspace: the agent reads no project config for its
        *  model, so an answer naming no workspace serves any new chat. Absent from an older host. */
       defaultHoldsInEveryWorkspace?: true

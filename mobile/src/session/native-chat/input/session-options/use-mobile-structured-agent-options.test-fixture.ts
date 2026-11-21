@@ -131,6 +131,7 @@ type ProbeProps = {
   fence: number | null
   mutate: StructuredAgentSessionMutate
   optionStamp?: string
+  supportsDefault?: boolean
   turnId?: string | null
   sendSelection?: boolean
   coherentCatalog?: boolean
@@ -154,6 +155,7 @@ function Probe(props: ProbeProps): null {
     ...(props.optionStamp ? { optionStamp: props.optionStamp } : {}),
     hostSupport: {
       permissionModes: true,
+      defaultModel: props.supportsDefault,
       permissionOwn: props.permissionOwn,
       sendOptions: false,
       statusFeed: false,

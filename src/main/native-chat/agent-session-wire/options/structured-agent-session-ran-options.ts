@@ -28,6 +28,7 @@ const childRuns = new WeakMap<
   StructuredAgentSessionProviderChild,
   {
     reported?: RanOptions
+    reportedModel?: string
     owed?: StructuredAgentSessionHandedOptions
     permission?: string | null
     fallbackModel?: string
@@ -37,6 +38,12 @@ const childRuns = new WeakMap<
 function currentChild(context: RanOptionsContext, sessionId: string, fence: number) {
   const child = context.sessions.get(sessionId)?.child
   return child?.fence === fence ? child : null
+}
+
+export function structuredAgentSessionRuntimeModel(
+  child: StructuredAgentSessionProviderChild
+): string | undefined {
+  return child.phase === 'ready' ? childRuns.get(child)?.reportedModel : undefined
 }
 
 /** Moves the option stamp; the options read decides whether the fallback still outranks the selection. */
@@ -172,7 +179,11 @@ export async function recordStructuredAgentSessionRanOptions(
   // A report only completes an agent's own evidence of the dispatch, never stands in for it.
   const newerModel = checkpoint && reported !== checkpoint.reported ? reported?.model : undefined
   const model = executed ? (executed.model ?? newerModel) : message?.model
-  childRuns.set(child, { ...childRuns.get(child), owed: executed && !model ? handed : undefined })
+  childRuns.set(child, {
+    ...childRuns.get(child),
+    ...(executed && model ? { reportedModel: model } : {}),
+    owed: executed && !model ? handed : undefined
+  })
   if (!model) {
     return
   }

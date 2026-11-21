@@ -21213,6 +21213,8 @@
         "chooseInAgentPicker": "Choose in agent picker…",
         "searchModels": "Search models…",
         "noModelsMatch": "No models match your search.",
+        "defaultModel": "Default",
+        "defaultModelDescription": "Use the agent's configured model",
         "toggleOption": "Toggle {{value0}}",
         "pillAccessibleName": "{{value0}} {{value1}}",
         "sentNotConfirmed": "Sent to the agent — not confirmed",
@@ -21285,7 +21287,8 @@
         "retryChats": "Retry",
         "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}",
         "modelAndEffortValue": "{{model}} · {{effort}}",
-        "modelAndEffort": "Model and effort"
+        "modelAndEffort": "Model and effort",
+        "futureOptionsRequireUpdate": "Update Orca on this host to change future-turn choices while the agent works."
       },
       "tool": {
         "exitCode": "exit {{value0}}",

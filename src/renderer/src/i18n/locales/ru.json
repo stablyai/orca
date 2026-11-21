@@ -20068,6 +20068,8 @@
         "chooseInAgentPicker": "Выбрать в списке агентов…",
         "searchModels": "Найти модель…",
         "noModelsMatch": "Подходящих моделей нет.",
+        "defaultModel": "По умолчанию",
+        "defaultModelDescription": "Модель, настроенная в агенте",
         "toggleOption": "Переключить {{value0}}",
         "pillAccessibleName": "{{value0}} {{value1}}",
         "sentNotConfirmed": "Отправлено агенту — получение не подтверждено",
@@ -20120,6 +20122,7 @@
           "xhigh": "Очень выс."
         },
         "imageUnavailable": "Предпросмотр недоступен",
+        "futureOptionsRequireUpdate": "Обновите Orca на этом сервере, чтобы менять параметры следующих ответов во время работы агента.",
         "exitPlanMode": "Выйти из режима планирования",
         "moreControls": "Другие элементы управления чатом",
         "botFor": "Для: {{detail}}",

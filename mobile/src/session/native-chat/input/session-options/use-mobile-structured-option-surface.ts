@@ -9,6 +9,7 @@ export function useMobileStructuredOptionSurface(args: {
   admits: NonNullable<SessionOptionsSurface['admits']>
   demandModelCatalog: () => void
   optionSnapshot: SessionOptionDescriptor[]
+  resetOption?: SessionOptionsSurface['resetOption']
   setStructuredOption: (id: string, value: SessionOptionValue) => Promise<boolean>
   readOptionSnapshot: () => SessionOptionDescriptor[]
 }) {
@@ -44,6 +45,7 @@ export function useMobileStructuredOptionSurface(args: {
 
   const optionSurface = useMemo<SessionOptionsSurface>(
     () => ({
+      ...(args.resetOption ? { resetOption: args.resetOption } : {}),
       getSnapshot: () => optionSnapshot,
       admits,
       demandModelCatalog,
@@ -51,7 +53,7 @@ export function useMobileStructuredOptionSurface(args: {
       invokeAction: async () => ({ snapshot: optionSnapshot }),
       subscribe: () => () => {}
     }),
-    [optionSnapshot, setOption, demandModelCatalog, admits]
+    [optionSnapshot, setOption, demandModelCatalog, admits, args.resetOption]
   )
 
   return { optionPickerRequest, invokeStructuredOption, optionSurface }

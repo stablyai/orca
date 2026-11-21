@@ -122,6 +122,8 @@ export type AgentSessionRecord = {
   launchDirectory?: string
   /** Provider options the user chose, replayed whenever a new owner starts the session. */
   options?: Record<string, string>
+  /** Set while the chat follows the agent's default model: what it resolved to, under `options`. */
+  defaultModelOptions?: Record<string, string>
   /** The permission mode the user chose; Orca's, so a provider's options answer never replaces it. */
   permissionMode?: string
   usageLimitContinueCancel?: { turnItemId: string; resetsAt: number }
@@ -317,6 +319,8 @@ export function isPersistedAgentSessionObservationRecord(
       (record.launchDirectory === undefined ||
         isBoundedString(record.launchDirectory, MAX_PATH_LENGTH)) &&
       (record.options === undefined || isAgentSessionOptions(record.options)) &&
+      (record.defaultModelOptions === undefined ||
+        isAgentSessionOptions(record.defaultModelOptions)) &&
       (record.permissionMode === undefined ||
         isBoundedString(record.permissionMode, MAX_ID_LENGTH)) &&
       isOptionalUsageLimitContinueCancel(record.usageLimitContinueCancel) &&

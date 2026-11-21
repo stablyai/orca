@@ -1,7 +1,8 @@
 import { isAgentSessionInteractionMode } from '../../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 import {
   structuredAgentSessionRuntimeFallbackModel,
-  structuredAgentSessionRuntimePermission
+  structuredAgentSessionRuntimePermission,
+  structuredAgentSessionRuntimeModel
 } from '../options/structured-agent-session-ran-options'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
@@ -25,6 +26,7 @@ import type {
 import { structuredStatusSummariesEqual } from './structured-agent-session-status-summary-equality'
 import { structuredAgentRuntimeMetadata } from '../../../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import { structuredAgentSessionAwaitsAnswer } from '../../../../shared/agent-session/view/structured-agent-session-async-questions'
+import { effectiveAgentSessionOptions } from '../../../runtime/agent-session/records/agent-session-record-options'
 
 export function structuredAgentSessionStatusSummary({
   sessionId,
@@ -64,7 +66,10 @@ export function structuredAgentSessionStatusSummary({
   const skippedThrough = record?.asyncQuestionsSkippedThrough
   const providerSession = structuredAgentSessionProviderSessionMetadata(record)
   // Acknowledged record options remain authoritative across model switches.
-  const model = normalizeOptionalField(record?.options?.model, AGENT_MODEL_MAX_LENGTH)
+  const model = normalizeOptionalField(
+    record && effectiveAgentSessionOptions(record)?.model,
+    AGENT_MODEL_MAX_LENGTH
+  )
   const permissionMode = record?.permissionMode
   // Published so another device's pick moves the client's option stamp.
   const effort = record?.options?.effort
@@ -99,6 +104,12 @@ export function structuredAgentSessionStatusSummary({
       ? { rewindBlockedReason: 'outcome-unknown' as const }
       : {}),
     ...(model ? { model } : {}),
+    ...(record?.defaultModelOptions !== undefined ? { modelDefault: true } : {}),
+    ...(record?.defaultModelOptions !== undefined &&
+    session.params.provider === 'claude' &&
+    session.child
+      ? { reportedModel: structuredAgentSessionRuntimeModel(session.child) }
+      : {}),
     ...(fallbackModel ? { fallbackModel } : {}),
     ...(isAgentChatPermissionMode(permissionMode) ? { permissionMode } : {}),
     ...(session.child?.permissionMode

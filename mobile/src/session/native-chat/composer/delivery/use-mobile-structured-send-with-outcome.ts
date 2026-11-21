@@ -80,6 +80,7 @@ export function useMobileStructuredSendWithOutcome(args: {
   /** The chat's own model and effort each send carries; absent for an older host, which takes neither. */
   sendSelection?: () => Pick<StructuredAgentSessionSendControl, 'options' | 'selection'>
   sendOptions?: () => Readonly<Record<string, string>> | undefined
+  isModelWritePending?: () => boolean
   // An older host refuses a send body carrying `skills`; there the `$name` text stands alone.
   takesSkills?: boolean
 }): (
@@ -101,6 +102,7 @@ export function useMobileStructuredSendWithOutcome(args: {
     enabled,
     onClearSent,
     reject,
+    isModelWritePending,
     holdUnconfirmed,
     onSendError,
     queueCapable,
@@ -200,6 +202,10 @@ export function useMobileStructuredSendWithOutcome(args: {
       if (commandOutcome !== null) {
         return commandOutcome
       }
+      if (isModelWritePending?.()) {
+        onSendError('Message not sent (model selection is still updating)')
+        return 'rejected'
+      }
       const imageAttachments: StructuredAgentSessionAttachment[] = []
       const files: { path: string }[] = []
       for (const attachment of sendAttachments) {
@@ -279,6 +285,7 @@ export function useMobileStructuredSendWithOutcome(args: {
       enabled,
       onClearSent,
       reject,
+      isModelWritePending,
       holdUnconfirmed,
       onSendError,
       queueCapable,

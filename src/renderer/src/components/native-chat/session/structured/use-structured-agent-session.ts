@@ -2,7 +2,10 @@ import { useQueuedMessageEditTransport } from '../../queue/editing/use-queued-me
 import type { StructuredAgentSessionViewArgs } from './structured-agent-session-view-contract'
 import { useStructuredAgentSessionCommandMenu } from '../../composer/pickers/structured-agent-session-command-refresh'
 import { useMemo, useRef } from 'react'
-import { useStructuredAgentSessionSendOptions } from './delivery/use-structured-agent-session-send-options'
+import {
+  useStructuredAgentSessionModelWritePending,
+  useStructuredAgentSessionSendOptions
+} from './delivery/use-structured-agent-session-send-options'
 import { useStructuredAgentSessionSends } from './delivery/use-structured-agent-session-sends'
 import { useStructuredAgentSessionCommandWrite } from './writes/use-structured-agent-session-command-write'
 import { structuredAgentSessionSendQueues } from '../../queue/structured-agent-session-queue-request'
@@ -18,10 +21,7 @@ import {
 } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { structuredAgentSessionStopControl } from '../../../../../../shared/agent-session/view/structured-agent-session-stop-control'
 import type { AgentSessionPromptResponse } from '../../../../../../shared/agent-session/requests/prompts/agent-session-question-answer'
-import {
-  respondToStructuredAgentSessionPrompt,
-  cancelStructuredAgentSessionPrompt
-} from '../../prompts/structured-agent-session-prompt-response'
+import * as promptResponse from '../../prompts/structured-agent-session-prompt-response'
 import {
   pendingStructuredSessionPrompts,
   type StructuredPromptItem
@@ -110,6 +110,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     isVisible: args.isVisible,
     providerVisible,
     providerStarting,
+    isWorking: transportState.isWorking,
     ...(args.providerRunning ? { providerRunning: true } : {}),
     ...(args.hostOptionStamp ? { hostOptionStamp: args.hostOptionStamp } : {}),
     fence: state.fence,
@@ -121,6 +122,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     ...(launch ? { launch } : {})
   })
   const sendOptions = useStructuredAgentSessionSendOptions(sessionId, launch, sendSource)
+  const isModelWritePending = useStructuredAgentSessionModelWritePending(sendSource)
   // Only a capable host may see `delivery`; a card any host publishes shows, with its actions.
   const queueCapability = useStructuredAgentSessionHostQueuesMessagesState(target)
   const queuedMessageIds = useMemo(
@@ -152,7 +154,8 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     historyLoaded: transportEnabled && state.status === 'ready',
     isWorking: transportState.isWorking,
     stopping: stopControl.stopping,
-    sendSelection: sendOptions
+    sendSelection: sendOptions,
+    isModelWritePending
   })
 
   const usage = useStructuredAgentSessionContextUsage(journalItems, usageSupport, state.epoch)
@@ -302,11 +305,11 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     /** What a plain send does now, and whether its alternate would send any differently. */
     sendFollowUp: nativeChatSendFollowUp((alt) => structuredAgentSessionSendQueues(queue, alt)),
     cancel: (turnId: string | undefined, prompt?: { itemId: string; expectedRevision: number }) =>
-      cancelStructuredAgentSessionPrompt(admit(), turnId, prompt),
+      promptResponse.cancelStructuredAgentSessionPrompt(admit(), turnId, prompt),
     stopBackgroundTask: (taskId?: string) =>
       stopStructuredAgentSessionBackgroundTask(mutate, taskId),
     respond: (item: StructuredPromptItem, response: AgentSessionPromptResponse) =>
-      respondToStructuredAgentSessionPrompt({ item, response, action: admit() }),
+      promptResponse.respondToStructuredAgentSessionPrompt({ item, response, action: admit() }),
     optionSnapshot,
     optionSurface,
     sessionCommands: transportEnabled ? (state.commands ?? undefined) : undefined,

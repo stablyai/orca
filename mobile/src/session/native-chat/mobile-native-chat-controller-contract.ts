@@ -1,3 +1,8 @@
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../../transport/connection/connection-state'
+import type { MobileNativeChatTab } from './conversation/mobile-native-chat-eligibility'
+import type { StructuredAgentSessionHostSupport } from './agent-session/mobile-structured-agent-session-host-support'
+import type { useMobileNativeChatSessionLane } from './conversation/use-mobile-native-chat-session-lane'
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../src/shared/native-chat/input/composer/native-chat-picker-items'
 import type { AgentSessionRewindSurface } from '../../../../src/shared/agent-session/lifecycle/rewind/agent-session-rewind-request'
 import type { NativeChatSendFollowUp } from '../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
@@ -142,4 +147,26 @@ export type MobileNativeChatController = {
   nativeChatUsageLimit: MobileNativeChatUsageLimit | null
   /** Rows whose failure no later successful turn resolved. */
   nativeChatUnresolvedFailureRows: ReadonlySet<string>
+}
+
+export type MobileNativeChatControllerArgs = {
+  itemLink?: Parameters<typeof useMobileNativeChatSessionLane>[0]['itemLink']
+  client: RpcClient | null
+  /** The route's paired host; differs from `client` only when a server executes the workspace. */
+  pairedHostClient: RpcClient | null
+  hostId: string
+  worktreeId: string
+  activeSessionTab: MobileNativeChatTab | null
+  activeSessionTabId: string | null
+  activeHandleRef: MutableRefObject<string | null>
+  deviceTokenRef: MutableRefObject<string | null>
+  nativeChatTranscriptIsLocalReadable: boolean
+  nativeChatInputLeaseReady: boolean
+  /** Live socket state; the lease collapses on disconnect but one render later. */
+  connState: ConnectionState
+  agentSessionHostSupport?: StructuredAgentSessionHostSupport | null
+  onSendError: Parameters<typeof useMobileNativeChatSessionLane>[0]['onSendError']
+  // Any accepted chat write clears the held failure banner, including answers and permission replies.
+  onQueuedEditNotice?: (message: string) => void
+  onSendResolved: () => void
 }
