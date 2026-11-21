@@ -17,7 +17,7 @@ function list(
 ): BotItemsShownList {
   return {
     read: null,
-    chatRead: { read: null, failed: false, retry: () => {} },
+    chatRead: { read: null, failed: false, retry: () => {}, readMore: async () => null },
     items: [],
     shown: [],
     groups: {

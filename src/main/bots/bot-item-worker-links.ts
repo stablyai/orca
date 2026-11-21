@@ -5,7 +5,7 @@
 // continues; a linked worker's change makes its item re-read. A change no item links reads one
 // Dispatch row and calls no bots DB worker.
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
-import { dispatchItemUid, lineageAncestors } from './bot-item-dispatch-facts'
+import { dispatchItemUid, lineageAncestors, workerContinues } from './bot-item-dispatch-facts'
 import type { BotItemLinkView } from '../../shared/bots/bot-items'
 import { noteBotItemWrite } from './bot-item-chat-notes'
 import type { BotItemsRemote } from './bot-items-ops'
@@ -80,7 +80,9 @@ export class BotItemWorkerLinks {
     const refs =
       linkedRefs.size === 0
         ? []
-        : [...new Set(ids.flatMap(lineageOf))].filter((ref) => linkedRefs.has(ref))
+        : [...new Set(ids.flatMap((id) => workerContinues(db, id)))].filter((ref) =>
+            linkedRefs.has(ref)
+          )
     const linked = refs.length > 0 ? await store.remote.linksTo('dispatch', refs) : []
     await this.tell(store.remote, touched, false)
     const linkedUids = linked.map((link) => link.itemUid).filter((uid) => !touched.includes(uid))
