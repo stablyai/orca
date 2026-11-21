@@ -48,3 +48,9 @@ it('preserves headless filtering and interpreter recognition for launch intent',
   ).toBe('claude')
   expect(recognizeAgentLaunchCommand('sleep 30 && node /usr/local/bin/codex')?.agent).toBe('codex')
 })
+
+it("recognizes a PowerShell launch of a quoted program path, such as Orca's own copy", () => {
+  expect(
+    recognizeAgentLaunchCommand("& 'C:\\Users\\a b\\orca\\claude.exe' --resume 'x'")?.agent
+  ).toBe('claude')
+})

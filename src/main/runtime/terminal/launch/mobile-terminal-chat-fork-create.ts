@@ -1,3 +1,4 @@
+import { readHostManagedAgentCommands } from '../../rpc/methods/host-management/managed-copy-detection'
 import {
   OrcaRuntimeWithCreateMobileSessionTerminal,
   type MobileTerminalCreateOptions,
@@ -101,7 +102,8 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
           buildMobileTerminalChatFork({
             prepared,
             settings,
-            runtime: launchRuntime
+            runtime: launchRuntime,
+            managedAgentCommands: await readHostManagedAgentCommands(settings)
           }),
           opts.terminalImageViewerSupported
         )

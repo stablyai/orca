@@ -9,6 +9,12 @@ export {
 } from './runtime-agent-detection-request'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import {
+  forgetManagedAgentCommands,
+  readAgentDetectionReply,
+  runtimeManagedAgentInventoryKey,
+  type AgentDetectionReply
+} from './managed-agent-launch-commands'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
@@ -102,6 +108,7 @@ export const createRuntimeDetectedAgentsSlice: (
       }
     }
     ;[...latestOutcome.keys()].filter(dropKey).forEach((key) => latestOutcome.delete(key))
+    forgetManagedAgentCommands('runtime:', (key) => dropKey(key.slice('runtime:'.length)))
     set((s) => {
       const runtimeDetectedAgentIds = withoutKeys(s.runtimeDetectedAgentIds, dropKey)
       const isDetectingRuntimeAgents = withoutKeys(s.isDetectingRuntimeAgents, dropKey)
@@ -185,7 +192,13 @@ export const createRuntimeDetectedAgentsSlice: (
       const pending = callRuntimeAgentDetection(
         environmentId,
         worktreeId,
-        (params) => callRuntimeRpc<TuiAgent[]>(target, 'preflight.detectAgents', params, fence),
+        (params) =>
+          callRuntimeRpc<AgentDetectionReply>(
+            target,
+            'preflight.detectAgents',
+            { ...params, withManagedAgentCommands: true },
+            fence
+          ).then((reply) => readAgentDetectionReply(reply, runtimeManagedAgentInventoryKey(key))),
         nestedSshDetection(target, worktreeId, fence)
       )
         .then((typed) => {
@@ -245,13 +258,15 @@ export const createRuntimeDetectedAgentsSlice: (
           environmentId,
           worktreeId,
           (params) =>
-            callRuntimeRpc<{ agents: TuiAgent[] }>(
+            callRuntimeRpc<{ agents: string[]; managedAgentCommands?: Record<string, string> }>(
               target,
               'preflight.refreshAgents',
               options.userInitiated ? { ...params, userInitiated: true } : params,
               fence
             )
-              .then((result) => result.agents)
+              .then((result) =>
+                readAgentDetectionReply(result, runtimeManagedAgentInventoryKey(key))
+              )
               .catch((error) => {
                 if (!isRuntimeMethodNotFoundError(error)) {
                   throw error

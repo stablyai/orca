@@ -18,6 +18,15 @@ import {
   parseExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import type { ManagedAgentCommands } from '../../../../../../shared/agent-launch/startup/managed-agent-launch-program'
+import {
+  localManagedAgentInventoryKey,
+  readManagedAgentCommands,
+  runtimeManagedAgentInventoryKey
+} from '@/store/slices/agent-inventory/managed-agent-launch-commands'
+import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
+import { localAgentInventoryContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
+import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
 
 type DetectionReadState = Pick<
   AppState,
@@ -189,4 +198,45 @@ export function readAgentInventoryForWorktree(state: AppState, worktreeId: strin
   return target
     ? readAgentInventoryForTarget(state, target)
     : { ids: null, state: 'unresolved' as const }
+}
+
+/** Full paths to Orca's copies the workspace's host reported, for the launch builders. */
+export function readManagedAgentCommandsForWorktree(
+  state: AppState,
+  worktreeId: string | null | undefined
+): ManagedAgentCommands | undefined {
+  const target = detectionTargetForWorktree(state, worktreeId ?? null)
+  if (!target || target.kind === 'ssh') {
+    return undefined
+  }
+  if (target.kind === 'runtime') {
+    return readManagedAgentCommands(
+      runtimeManagedAgentInventoryKey(
+        getRuntimeAgentInventoryKey(target.environmentId, target.worktreeId)
+      )
+    )
+  }
+  const contextKey =
+    target.contextKey?.split('\u0000')[0] ??
+    localAgentInventoryContextKey(
+      getLocalAgentPreflightContext(state, undefined, undefined, target.worktreeId)
+    )
+  return readManagedAgentCommands(localManagedAgentInventoryKey(contextKey))
+}
+
+/** Orca's copy paths on a project's host before its workspace exists; a local project running
+ *  under WSL (a launch platform other than this computer's) has none. */
+export function readManagedAgentCommandsForRepo(
+  repo: RepoHostFields,
+  launchPlatform: NodeJS.Platform | null | undefined
+): ManagedAgentCommands | undefined {
+  const host = parseExecutionHostId(getRepoExecutionHostId(repo))
+  if (host?.kind === 'runtime') {
+    return readManagedAgentCommands(
+      runtimeManagedAgentInventoryKey(getRuntimeAgentInventoryKey(host.environmentId))
+    )
+  }
+  return host?.kind === 'ssh' || launchPlatform !== getRendererAppPlatform()
+    ? undefined
+    : readManagedAgentCommands(localManagedAgentInventoryKey('host'))
 }

@@ -17,6 +17,7 @@ import { inlineAgentDraftFitsPlatform } from './agent-draft-platform-limit'
 import type { TuiAgent } from '../catalog/tui-agent'
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
+import type { ManagedAgentCommands } from './managed-agent-launch-program'
 import { appliedSessionOptionProps, buildFlagPromptStartupPlan } from './flag-prompt-startup'
 
 export type AgentStartupPlan = {
@@ -48,6 +49,7 @@ export function buildAgentStartupPlan(args: {
   isRemote?: boolean
   /** Orca types into this launch after start, so a startup update prompt would take that input. */
   suppressStartupUpdatePrompt?: boolean
+  managedAgentCommands?: ManagedAgentCommands | null
 }): AgentStartupPlan | null {
   const { agent, prompt, cmdOverrides, platform, allowEmptyPromptLaunch = false } = args
   const shell = resolveStartupShell(platform, args.shell)
@@ -63,7 +65,8 @@ export function buildAgentStartupPlan(args: {
     sessionOptions: args.sessionOptions,
     sessionOptionsOverrideAgentArgs: args.sessionOptionsOverrideAgentArgs,
     isRemote: args.isRemote,
-    suppressStartupUpdatePrompt: args.suppressStartupUpdatePrompt
+    suppressStartupUpdatePrompt: args.suppressStartupUpdatePrompt,
+    managedAgentCommands: args.managedAgentCommands
   })
   if (!baseCommand.ok) {
     return null
@@ -224,6 +227,7 @@ export function buildAgentDraftLaunchPlan(args: {
   sessionOptions?: Record<string, SessionOptionValue>
   sessionOptionsOverrideAgentArgs?: boolean
   isRemote?: boolean
+  managedAgentCommands?: ManagedAgentCommands | null
 }): AgentDraftLaunchPlan | null {
   const { agent, draft, cmdOverrides, platform } = args
   const shell = resolveStartupShell(platform, args.shell)
@@ -240,7 +244,8 @@ export function buildAgentDraftLaunchPlan(args: {
     agentArgs: args.agentArgs,
     sessionOptions: args.sessionOptions,
     sessionOptionsOverrideAgentArgs: args.sessionOptionsOverrideAgentArgs,
-    isRemote: args.isRemote
+    isRemote: args.isRemote,
+    managedAgentCommands: args.managedAgentCommands
   })
   if (!baseCommand.ok) {
     return null

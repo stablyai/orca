@@ -1,3 +1,5 @@
+import { withManagedAgentProgram } from '../../../shared/agent-launch/startup/managed-agent-launch-program'
+import { resolveStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { AgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import {
   buildAgentDraftLaunchPlan,
@@ -47,6 +49,11 @@ export async function resolveOpenCodeModelLaunchRoute(
   const command =
     inputs.cmdOverrides.opencode ||
     getTuiAgentLaunchCommand(TUI_AGENT_CONFIG.opencode, inputs.platform)
+  // Probes run the program the launch will; records keep the stock name.
+  const program = withManagedAgentProgram(command, {
+    ...inputs,
+    shell: resolveStartupShell(inputs.platform, inputs.shell)
+  })
   const env: Record<string, string> = {}
   for (const [key, value] of Object.entries({ ...process.env, ...inputs.agentEnv })) {
     if (value !== undefined) {
@@ -55,7 +62,7 @@ export async function resolveOpenCodeModelLaunchRoute(
   }
   applyManagedDataAccountEnvironment(env, { launchAgent: 'opencode' })
   const capabilities = await probeOpenCodeLaunchCapabilities({
-    command,
+    command: program,
     agent: 'opencode',
     cwd: options.cwd,
     env,
@@ -65,7 +72,7 @@ export async function resolveOpenCodeModelLaunchRoute(
   if (!legacy && !isVerifiedOpenCodeConfigModelVersion(capabilities?.version)) {
     refuseModel(OPENCODE_MODEL_VERSION_REFUSAL)
   }
-  return { command, env, legacy }
+  return { command, program, env, legacy }
 }
 
 export async function prepareOpenCodeModelStartupInputs(
@@ -93,7 +100,7 @@ export async function prepareOpenCodeModelStartupInputs(
   ) {
     refuseModel()
   }
-  const { command, env, legacy } = await resolveOpenCodeModelLaunchRoute(options)
+  const { command, program, env, legacy } = await resolveOpenCodeModelLaunchRoute(options)
   if (legacy) {
     return { inputs }
   }
@@ -101,7 +108,7 @@ export async function prepareOpenCodeModelStartupInputs(
     refuseModel()
   }
   const executable = await resolveOpenCodeDirectModelExecutable({
-    command,
+    command: program,
     cwd: options.cwd,
     env
   }).catch(() => null)

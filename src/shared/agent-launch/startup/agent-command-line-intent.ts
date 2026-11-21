@@ -11,6 +11,8 @@ import {
 const SLEEP_PREFIX =
   /^[ \t]*(?:sleep|\/bin\/sleep|\/usr\/bin\/sleep)[ \t]+(?:\d+(?:\.\d+)?|\.\d+)[smhd]?[ \t]*&&[ \t]*/
 
+const POWERSHELL_CALL_PREFIX = /^[ \t]*&[ \t]+(?=["'])/
+
 /** Launch preparation hint only; the shell still receives the complete command. */
 export function extractAgentLaunchCommand(command: string): string {
   const prefix = command.slice(0, COMMAND_TOKEN_SCAN_MAX_CHARS)
@@ -22,7 +24,9 @@ export function extractAgentLaunchCommand(command: string): string {
     }
     offset += match[0].length
   }
-  return command.slice(offset)
+  // PowerShell runs a quoted program path, such as Orca's own copy, through its call operator.
+  const call = POWERSHELL_CALL_PREFIX.exec(command.slice(offset))
+  return command.slice(offset + (call?.[0].length ?? 0))
 }
 
 export function getAgentLaunchCommandToken(command: string | null | undefined): string {

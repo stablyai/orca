@@ -20,6 +20,10 @@ import {
 } from '../../agent-launch/choices/tui-agent-launch-defaults'
 import { buildAgentResumeStartupPlan } from '../../agent-launch/startup/tui-agent-resume-startup'
 import {
+  withManagedAgentProgram,
+  type ManagedAgentCommands
+} from '../../agent-launch/startup/managed-agent-launch-program'
+import {
   resolveStartupShell,
   tokenizeStartupCommand,
   type AgentStartupShell
@@ -69,6 +73,8 @@ type AiVaultResumeStartupArgs = {
   host: AiVaultResumeHostShell
   settings: AiVaultResumeLaunchSettings | null | undefined
   commandOverride?: string | null
+  /** Full paths to Orca's copies on the resume's host. */
+  managedAgentCommands?: ManagedAgentCommands
 }
 
 export function getAiVaultAgentProviderSession(
@@ -104,6 +110,28 @@ function resumeCommandOverrides(
   }
 }
 
+/** OMP's resume line is rebuilt from its recorded command, so Orca's copy goes in there. */
+function ompResumeProgram(
+  recorded: string | undefined,
+  args: AiVaultResumeStartupArgs,
+  platform: NodeJS.Platform,
+  shell: AgentStartupShell | undefined
+): string | undefined {
+  if (!args.managedAgentCommands?.omp) {
+    return recorded
+  }
+  return withManagedAgentProgram(
+    recorded ?? getTuiAgentLaunchCommand(TUI_AGENT_CONFIG.omp, platform),
+    {
+      agent: 'omp',
+      cmdOverrides: resumeCommandOverrides(args),
+      managedAgentCommands: args.managedAgentCommands,
+      platform,
+      shell: resolveStartupShell(platform, shell)
+    }
+  )
+}
+
 /** A resume run on the host itself: no prebuilt remote command. */
 export function buildAiVaultLocalResumeStartup(
   args: AiVaultResumeStartupArgs & {
@@ -131,7 +159,8 @@ export function buildAiVaultLocalResumeStartup(
       platform,
       shell: liveShell,
       commandOverride: args.commandOverride,
-      settings
+      settings,
+      managedAgentCommands: args.managedAgentCommands
     })
     if (reference) {
       return { ...reference, ...startupCwd }
@@ -158,7 +187,8 @@ export function buildAiVaultLocalResumeStartup(
         ...managedDataAccountResumeEnv(session)
       },
       resumeInLaunchCwd: true,
-      ...(session.agent === 'omp' && resumeFilePath ? { ompResumeFilePath: resumeFilePath } : {})
+      ...(session.agent === 'omp' && resumeFilePath ? { ompResumeFilePath: resumeFilePath } : {}),
+      managedAgentCommands: args.managedAgentCommands
     })
     if (startupPlan) {
       return {
@@ -170,7 +200,12 @@ export function buildAiVaultLocalResumeStartup(
                 resumeFilePath,
                 cwd,
                 platform,
-                commandOverride: startupPlan.launchConfig.agentCommand,
+                commandOverride: ompResumeProgram(
+                  startupPlan.launchConfig.agentCommand,
+                  args,
+                  platform,
+                  liveShell
+                ),
                 codexHome,
                 shell: liveShell,
                 clearEnvNames
@@ -239,7 +274,8 @@ export function buildAiVaultForkStartup(
     ),
     agentEnv: resolveTuiAgentLaunchEnv(session.agent, settings, platform),
     resumeInLaunchCwd: true,
-    fork: true
+    fork: true,
+    managedAgentCommands: args.managedAgentCommands
   })
   if (!plan) {
     return null

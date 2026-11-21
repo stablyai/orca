@@ -17,6 +17,16 @@ import { callRuntimeResult, getRemoteRuntimeStatus } from '../../runtime/client/
 import { requireActiveEnvironmentOrNull } from '../../runtime/client/web-runtime-session'
 import { getBrowserPlatform } from '../web-storage'
 
+async function detectRuntimeAgents(args?: {
+  withManagedAgentCommands?: boolean
+}): Promise<unknown> {
+  if (!requireActiveEnvironmentOrNull()) {
+    return []
+  }
+  const params = args?.withManagedAgentCommands ? { withManagedAgentCommands: true } : undefined
+  return callRuntimeResult<unknown>('preflight.detectAgents', params).catch(() => [])
+}
+
 export function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
   const fallbackStatus: PreflightStatus = {
     git: { installed: false },
@@ -68,12 +78,8 @@ export function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight
     },
     // The zcode probe spawns a host CLI; web must not decide the host’s install state.
     zcodeInteractiveCapability: async () => 'unknown' as const,
-    detectAgents: async () => {
-      if (!requireActiveEnvironmentOrNull()) {
-        return []
-      }
-      return callRuntimeResult<string[]>('preflight.detectAgents').catch(() => [])
-    },
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host answers the inventory exactly when withManagedAgentCommands is set, as the overloads say.
+    detectAgents: detectRuntimeAgents as PreloadApi['preflight']['detectAgents'],
     refreshAgents: (args) =>
       requireActiveEnvironmentOrNull()
         ? callRuntimeResult('preflight.refreshAgents', args)

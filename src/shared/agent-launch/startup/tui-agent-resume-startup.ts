@@ -6,6 +6,7 @@ import type {
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 import { buildSleepingAgentLaunchConfig } from '../../agent-session/lifecycle/resume/sleeping-agent-launch-config'
 import { resolveAgentLaunchCommand, withAgentTerminalInputArgs } from './tui-agent-launch-command'
+import { withManagedAgentProgram, type ManagedAgentCommands } from './managed-agent-launch-program'
 import type { AgentStartupPlan } from './tui-agent-startup'
 import { resolveStartupShell, type AgentStartupShell } from './tui-agent-startup-shell'
 import { TUI_AGENT_CONFIG } from '../catalog/tui-agent-config'
@@ -37,6 +38,7 @@ export function buildAgentResumeStartupPlan(args: {
   fork?: boolean
   /** OS that runs the agent when `platform` only picks quoting; null when unreported. */
   agentHostPlatform?: NodeJS.Platform | null
+  managedAgentCommands?: ManagedAgentCommands | null
 }): AgentStartupPlan | null {
   const resumeArgv = args.fork
     ? getAgentForkArgv(args.agent, args.providerSession)
@@ -61,7 +63,7 @@ export function buildAgentResumeStartupPlan(args: {
     ? ({
         ok: true,
         command: withAgentTerminalInputArgs(
-          resolvedAgentCommand,
+          withManagedAgentProgram(resolvedAgentCommand, { ...args, shell }),
           args.agent,
           args.agentHostPlatform === undefined ? args.platform : args.agentHostPlatform,
           shell
@@ -78,7 +80,8 @@ export function buildAgentResumeStartupPlan(args: {
         sessionOptions: args.sessionOptions,
         sessionOptionsOverrideAgentArgs: args.sessionOptionsOverrideAgentArgs,
         isRemote: args.isRemote,
-        agentHostPlatform: args.agentHostPlatform
+        agentHostPlatform: args.agentHostPlatform,
+        managedAgentCommands: args.managedAgentCommands
       })
   if (!baseCommand.ok) {
     return null

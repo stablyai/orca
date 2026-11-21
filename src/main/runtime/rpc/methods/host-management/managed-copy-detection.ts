@@ -4,6 +4,8 @@ import { acpLaunchSpecFor } from '../../../../acp/launch/acp-launch-registry'
 import type { ManagedCopySettings } from '../../../../acp/launch/acp-launch-contract'
 import {
   installedManagedAgentCommand,
+  isManagedAgentCli,
+  isManagedAgentCopyPath,
   MANAGED_AGENT_CLI_IDS,
   managedAgentCli,
   managedAgentStandsInFor,
@@ -13,6 +15,14 @@ import { runtimeReleaseMayBePublished } from '../../../../node-runtime/managed-r
 import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storage-paths'
 import { provideInstalledManagedAgents } from '../../../../preflight/managed-agent-detection'
 import { notifyAgentsRefreshedOnHost } from '../../../../preflight/agents-refreshed-on-host'
+import { resolveCliCommandAsync } from '../../../../../shared/shell/command-resolution/node-cli-command-async-resolution'
+import {
+  getTuiAgentLaunchCommand,
+  isTuiAgent,
+  TUI_AGENT_CONFIG
+} from '../../../../../shared/agent-launch/catalog/tui-agent-config'
+import type { ManagedAgentCommands } from '../../../../../shared/agent-launch/startup/managed-agent-launch-program'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 
 /** ACP agents name their own program and search their installers' folders after PATH, as launches
  *  do; an agent with a host program is looked for as that program. */
@@ -45,6 +55,10 @@ function rememberedManagedAgents(runtime: ManagedCopySettingsSource): ManagedAge
   )
 }
 
+function managedAgentCommandIfInstalled(agent: string): string | null {
+  return isManagedAgentCli(agent) ? installedManagedAgentCommand(agent) : null
+}
+
 /** An installed copy that may run is an installed agent to menus and Settings. Until launch reclaim
  *  has read Orca's releases, detection looks for them itself, so no reader waits for that read. */
 export function provideManagedAgentDetection(runtime: ManagedCopySettingsSource): void {
@@ -69,11 +83,11 @@ export function provideManagedAgentDetection(runtime: ManagedCopySettingsSource)
       console.warn('[managed-runtime] Orca-installed agents left out of detection:', error)
       return []
     }
-  })
+  }, managedAgentCommandIfInstalled)
 }
 
-/** Launch reclaim has read Orca's releases: detection answers from them from now on, and a copy the
- *  disk check counted that the read found unusable (damaged, another platform's) is announced. */
+/** Launch reclaim has read Orca's releases: detection answers from them from now on, and lists read
+ *  from the disk check before it are announced stale. */
 export function noteManagedReleasesRead(): void {
   releasesRead = true
   const counted = countedOnDisk
@@ -81,13 +95,59 @@ export function noteManagedReleasesRead(): void {
   if (counted.length === 0 || !detectionSettings) {
     return
   }
+  // Lists read before this carry no paths for those copies, so launches need them read again.
+  notifyAgentsRefreshedOnHost()
+}
+
+type ManagedCopyCandidate = { agent: ManagedAgentCliId & TuiAgent; path: string; program: string }
+
+function managedCopyCandidates(settings: ManagedCopySettings): ManagedCopyCandidate[] {
   try {
-    const remembered = rememberedManagedAgents(detectionSettings)
-    if (counted.some((agent) => !remembered.includes(agent))) {
-      notifyAgentsRefreshedOnHost()
-    }
+    return MANAGED_AGENT_CLI_IDS.flatMap((agent) => {
+      const path = isTuiAgent(agent) ? installedManagedAgentCommand(agent) : null
+      if (
+        !path ||
+        !isTuiAgent(agent) ||
+        standInSpec(agent)?.managedCopyAllowed?.(settings) === false
+      ) {
+        return []
+      }
+      const [program] = getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[agent], process.platform).split(
+        ' '
+      )
+      return managedAgentStandsInFor(agent, program) ? [{ agent, path, program }] : []
+    })
   } catch (error) {
-    // Startup goes on; at worst a list keeps a copy until it is next read.
-    console.warn('[managed-runtime] could not compare Orca-installed agents:', error)
+    console.warn('[managed-runtime] Orca-installed agents left out of launches:', error)
+    return []
   }
+}
+
+function managedCommandsWithoutOwn(
+  candidates: readonly ManagedCopyCandidate[],
+  own: readonly string[]
+): ManagedAgentCommands {
+  const commands: ManagedAgentCommands = {}
+  candidates.forEach(({ agent, path, program }, index) => {
+    // A program found on PATH or in its installer's folder is the user's, unless it is Orca's.
+    if (own[index] === program || isManagedAgentCopyPath(agent, own[index])) {
+      commands[agent] = path
+    }
+  })
+  return commands
+}
+
+/** Full paths to Orca's copies this host launches: installed, allowed to run, and standing in for a
+ *  CLI the user doesn't have. Hosts without Orca's copies look nothing up. */
+export async function readHostManagedAgentCommands(
+  settings: ManagedCopySettings
+): Promise<ManagedAgentCommands> {
+  const candidates = managedCopyCandidates(settings)
+  if (candidates.length === 0) {
+    return {}
+  }
+  const own = await Promise.all(
+    candidates.map(({ program }) => resolveCliCommandAsync(program).catch(() => program))
+  )
+  return managedCommandsWithoutOwn(candidates, own)
 }

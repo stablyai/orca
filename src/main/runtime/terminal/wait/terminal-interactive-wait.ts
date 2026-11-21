@@ -39,6 +39,7 @@ import { resolveConfiguredWorkerAgent } from '../../orchestration/workers/launch
 import { resolveAgentLaunchRuntime } from '../launch/agent-launch-scope-runtime'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
+import { readHostManagedAgentCommands } from '../../rpc/methods/host-management/managed-copy-detection'
 import { resolveOpenCodeModelLaunchRoute } from '../../../opencode/model-launch/opencode-model-startup-plan'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
@@ -296,7 +297,8 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
         platform: launchRuntime.platform,
         isRemote: false,
         shell: undefined,
-        sessionOptions: { model: target.model }
+        sessionOptions: { model: target.model },
+        managedAgentCommands: await readHostManagedAgentCommands(store.getSettings())
       }),
       cwd: path,
       hostIdentity: this.getRuntimeId()

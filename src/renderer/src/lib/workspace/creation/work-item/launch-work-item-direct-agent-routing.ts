@@ -1,3 +1,4 @@
+import type { ManagedAgentCommands } from '../../../../../../shared/agent-launch/startup/managed-agent-launch-program'
 import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'
 import { readAgentLaunchPreferencesForWorkspace } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
@@ -45,6 +46,7 @@ export function buildDirectWorkItemStartup(args: {
   /** This client's Windows shell, which only shapes a local launch. */
   terminalWindowsShell: string | null | undefined
   launchConnectionId: string | null
+  managedAgentCommands?: ManagedAgentCommands
 }): ReturnType<typeof buildDirectWorkItemAgentStartupPlan> {
   const shell = resolveExecutionHostAgentStartupShell(args.launchHost, args.terminalWindowsShell)
   return buildDirectWorkItemAgentStartupPlan({
@@ -58,7 +60,8 @@ export function buildDirectWorkItemStartup(args: {
     launchPlatform: args.launchHost.platform,
     ...(shell ? { shell } : {}),
     // Why: SSH hosts run the plain `orca` shim, so the Linux-only `orca-ide` rename is not applied.
-    isRemote: typeof args.launchConnectionId === 'string'
+    isRemote: typeof args.launchConnectionId === 'string',
+    managedAgentCommands: args.managedAgentCommands
   })
 }
 

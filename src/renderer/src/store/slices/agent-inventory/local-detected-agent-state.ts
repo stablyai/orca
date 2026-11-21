@@ -1,5 +1,4 @@
 import { haveSameDisabledTuiAgents } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { localAgentInventoryContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
@@ -8,6 +7,11 @@ import { getLegacyLoadingPatch } from './local-agent-legacy-loading'
 import { markLocalAgentRefusal, refreshLocalAgentInventory } from './local-agent-inventory-refresh'
 import type { LocalAgentInventoryLifecycle } from './local-agent-inventory-refresh'
 import { createEmptyLocalDetectedAgentState } from './local-detected-agent-store-state'
+import {
+  forgetManagedAgentCommands,
+  localManagedAgentInventoryKey,
+  readAgentDetectionReply
+} from './managed-agent-launch-commands'
 import type {
   LocalAgentRefreshOptions,
   LocalDetectedAgentState
@@ -149,9 +153,16 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
       }))
       const detectArgs = includeDisabled ? context : { ...context, enabledOnly: true }
       const pending = window.api.preflight
-        .detectAgents(wake ? { ...detectArgs, wakeWslDistro: true } : detectArgs)
-        .then((ids) => {
-          const typed = ids.filter(isTuiAgent)
+        .detectAgents({
+          ...detectArgs,
+          ...(wake ? { wakeWslDistro: true } : {}),
+          withManagedAgentCommands: true
+        })
+        .then((reply) => {
+          const typed = readAgentDetectionReply(
+            reply,
+            localManagedAgentInventoryKey(localAgentInventoryContextKey(context))
+          )
           if (
             requestGeneration === lifecycle.localDetectionGeneration &&
             lifecycle.detectPromises.get(contextKey) === pending
@@ -261,6 +272,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
       lifecycle.detectedContextKey = null
       lifecycle.legacyDetectContextKey = null
       lifecycle.legacyRefreshContextKey = null
+      forgetManagedAgentCommands('local:')
       set(createEmptyLocalDetectedAgentState())
     }
   }

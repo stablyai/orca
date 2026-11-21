@@ -12,7 +12,6 @@ import { wslHookRelayManager } from '../../../agent-hooks/wsl-relay/wsl-hook-rel
 import { wslInteropHealthMonitor } from '../../../wsl/execution/wsl-interop-health'
 import { piTitlebarExtensionService } from '../../../pi/managed-extensions/titlebar-extension-service'
 import { prependOrcaCliDirToChildPath } from '../../../cli/launchers/orca-cli-child-path'
-import { appendManagedAgentDirsToChildPath } from '../../../managed-agent-cli/managed-agent-cli-registry'
 import { resolveTerminalBrowserCommand } from './terminal-browser-command'
 import { getManagedWslCliDir, getWslCliCommandName } from '../../../cli/wsl/wsl-managed-cli'
 import { stripLegacyTerminalShimEnv } from '../../../pty/shell-startup/legacy-terminal-shim-dir'
@@ -296,7 +295,6 @@ export function buildPtyHostEnv(
     userDataPath: opts.userDataPath,
     resourcesPath: opts.resourcesPath
   })
-  appendManagedAgentDirsToChildPath(baseEnv)
 
   if (
     opts.routeBrowserOpensToClient === true &&

@@ -39,6 +39,7 @@ import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui
 import { resolveWslSessionContext } from '../../../daemon/pty-subprocess/wsl-session-context'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { resolveWslHostAgentLaunchInputs } from './wsl-host-agent-terminal-launch'
+import { readHostManagedAgentCommands } from '../../rpc/methods/host-management/managed-copy-detection'
 
 /** No launch command could be built for a requested `startupAgent`. */
 export class AgentLaunchUnbuildableError extends Error {}
@@ -188,7 +189,11 @@ async function buildRuntimeAgentTerminalStartupOptions(
         ...(opts.extraAgentArgs !== undefined ? { extraAgentArgs: opts.extraAgentArgs } : {}),
         shell: agentLaunchQuotingShell(runtime),
         sessionOptions: sessionOptions ?? host.toSessionOptions(opts.launchPreferences),
-        ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {})
+        ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
+        // Orca's copies live on this host, so launches over SSH or inside WSL never run them.
+        ...(!isRemote && runtime.platform === process.platform
+          ? { managedAgentCommands: await readHostManagedAgentCommands(settings) }
+          : {})
       }),
       opts.env?.PATH
     ),
