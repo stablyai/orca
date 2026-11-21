@@ -210,7 +210,11 @@ describe('dashboard incremental snapshot contract', () => {
         ...after,
         cards: [
           ...completed,
-          { ...working, subagents: [{ ...child, name: 'Renamed helper' }], statusUpdatedAt: NOW + 1 }
+          {
+            ...working,
+            subagents: [{ ...child, name: 'Renamed helper' }],
+            statusUpdatedAt: NOW + 1
+          }
         ]
       })
       checkLayouts(renamed, [])
