@@ -10,9 +10,12 @@ import { AntigravityChatAuthSettingRow } from './AntigravityChatAuthSettingRow'
  *  installed for it), or Orca's built-in browser sign-in on Orca's server. Absent on hosts too old
  *  to honor the choice. */
 export function AntigravityGoogleSignInChoice({
-  owner
+  owner,
+  standalone = false
 }: {
   owner: RuntimeClientTarget
+  /** A row of its own in the Chat group, rather than one of the sign-in form's fields. */
+  standalone?: boolean
 }): React.JSX.Element | null {
   const t = useTranslate()
   const id = useId()
@@ -31,41 +34,43 @@ export function AntigravityGoogleSignInChoice({
   if (setting.state !== 'ready') {
     return null
   }
-  return (
-    <div data-settings-row="" className="py-3">
-      <AntigravityChatAuthSettingRow
-        htmlFor={id}
-        label={t('accounts.antigravity.googleSignIn', 'Google account sign-in')}
+  const row = (
+    <AntigravityChatAuthSettingRow
+      htmlFor={id}
+      label={t('accounts.antigravity.googleSignIn', 'Google account sign-in')}
+    >
+      <Select
+        value={setting.value}
+        onValueChange={(value) => void update(value === 'orca' ? 'orca' : 'agy')}
       >
-        <Select
-          value={setting.value}
-          onValueChange={(value) => void update(value === 'orca' ? 'orca' : 'agy')}
-        >
-          <SelectTrigger id={id} className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem
-              value="agy"
-              description={t(
-                'accounts.antigravity.googleSignInAgyOption',
-                'Sign in by running agy'
-              )}
-            >
-              {t('accounts.antigravity.googleSignInAgy', "agy's own sign-in")}
-            </SelectItem>
-            <SelectItem
-              value="orca"
-              description={t(
-                'accounts.antigravity.googleSignInOrcaOption',
-                'Sign in through your browser here; no agy needed'
-              )}
-            >
-              {t('accounts.antigravity.googleSignInOrca', "Orca's built-in sign-in")}
-            </SelectItem>
-          </SelectContent>
-        </Select>
-      </AntigravityChatAuthSettingRow>
+        <SelectTrigger id={id} className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem
+            value="agy"
+            description={t('accounts.antigravity.googleSignInAgyOption', 'Sign in by running agy')}
+          >
+            {t('accounts.antigravity.googleSignInAgy', "agy's own sign-in")}
+          </SelectItem>
+          <SelectItem
+            value="orca"
+            description={t(
+              'accounts.antigravity.googleSignInOrcaOption',
+              'Sign in through your browser here; no agy needed'
+            )}
+          >
+            {t('accounts.antigravity.googleSignInOrca', "Orca's built-in sign-in")}
+          </SelectItem>
+        </SelectContent>
+      </Select>
+    </AntigravityChatAuthSettingRow>
+  )
+  return standalone ? (
+    <div data-settings-row="" className="py-3">
+      {row}
     </div>
+  ) : (
+    row
   )
 }

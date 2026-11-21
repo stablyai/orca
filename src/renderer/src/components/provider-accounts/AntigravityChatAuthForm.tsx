@@ -19,6 +19,7 @@ import {
   type AntigravityChatAuthConfig
 } from '../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { AntigravityChatAuthSettingRow } from './AntigravityChatAuthSettingRow'
+import { AntigravityGoogleSignInChoice } from './AntigravityGoogleSignInChoice'
 import { AntigravityChatApiKeyField } from './AntigravityChatApiKeyField'
 import { AntigravityChatGcpFields } from './AntigravityChatGcpFields'
 import type { AntigravityChatApiKeyStatus } from '../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
@@ -352,6 +353,7 @@ function AuthForm({
                 </SelectContent>
               </Select>
             </AntigravityChatAuthSettingRow>
+            {method === 'oauth-personal' && <AntigravityGoogleSignInChoice owner={owner} />}
             {usesGcp && (
               <AntigravityChatGcpFields
                 id={id}
