@@ -127,7 +127,7 @@ export class ClaudeAgentViewBridge {
         return { unbound: true }
       }
       if (!current && this.sessions.size >= MAX_CLAUDE_AGENT_VIEW_SESSIONS) {
-        this.evictOldest()
+        return {} // full: an idle pane can't re-register, so refuse the newcomer; it retries
       }
       if (current?.instanceId === message.instanceId && current.sessionId === message.sessionId) {
         current.seenAt = Date.now()
@@ -280,17 +280,5 @@ export class ClaudeAgentViewBridge {
     this.sessions.delete(paneKey)
     this.publish()
     this.save()
-  }
-
-  private evictOldest(): void {
-    let oldest: ViewSession | undefined
-    for (const session of this.sessions.values()) {
-      if (!oldest || session.seenAt < oldest.seenAt) {
-        oldest = session
-      }
-    }
-    if (oldest) {
-      this.forget(oldest.paneKey)
-    }
   }
 }

@@ -99,10 +99,15 @@ export class ClaudeAgentViewRegistryFile {
       saved = await readRegistry(this.filePath)
     }
     this.restoring = false
+    if (saved === undefined) {
+      // Still locked: never overwrite entries this run could not read. Without saves nothing is
+      // durable, so every mod keeps its 5 s check-in instead of going quiet.
+      this.closed = true
+    }
     if (this.closed) {
       return
     }
-    const changed = merge(saved ?? [])
+    const changed = merge(saved)
     if (changed || this.savedDuringRestore) {
       void this.save()
     }
