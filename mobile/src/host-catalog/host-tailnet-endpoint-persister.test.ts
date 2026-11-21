@@ -4,36 +4,46 @@ import { createTailnetEndpointPersister } from './host-tailnet-endpoint-persiste
 const A = 'ws://100.64.0.1:6768/'
 const B = 'ws://100.64.0.2:6768/'
 
+async function settle(): Promise<void> {
+  for (let i = 0; i < 10; i += 1) {
+    await Promise.resolve()
+  }
+}
+
 describe('tailnet endpoint persister', () => {
-  it('retries the same endpoint after a failed write', async () => {
+  it('retries the same endpoint after a failed write, then stops once it lands', async () => {
     const write = vi.fn().mockRejectedValueOnce(new Error('disk')).mockResolvedValue(undefined)
     const record = createTailnetEndpointPersister(undefined, write)
     record(A)
-    await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(1))
-    await Promise.resolve()
+    await settle()
     record(A)
-    await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(2))
+    await settle()
     record(A)
-    await Promise.resolve()
-    expect(write).toHaveBeenCalledTimes(2)
+    await settle()
+    expect(write.mock.calls).toEqual([[A], [A]])
   })
 
-  it('writes A, B, A in order and ends on the latest endpoint', async () => {
-    const written: string[] = []
-    let release: () => void = () => undefined
-    const write = vi.fn(async (endpoint: string) => {
-      if (endpoint === B) {
-        await new Promise<void>((resolve) => {
-          release = resolve
+  it('never overlaps writes and ends on the latest endpoint', async () => {
+    const releases: (() => void)[] = []
+    const write = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          releases.push(resolve)
         })
-      }
-      written.push(endpoint)
-    })
-    const record = createTailnetEndpointPersister(A, write)
-    record(B)
+    )
+    const record = createTailnetEndpointPersister(undefined, write)
     record(A)
-    await vi.waitFor(() => expect(write).toHaveBeenCalledWith(B))
-    release()
-    await vi.waitFor(() => expect(written).toEqual([B, A]))
+    record(B)
+    await settle()
+    expect(write.mock.calls).toEqual([[A]])
+
+    releases[0]!()
+    await settle()
+    expect(write.mock.calls).toEqual([[A], [B]])
+    releases[1]!()
+    await settle()
+    record(B)
+    await settle()
+    expect(write).toHaveBeenCalledTimes(2)
   })
 })
