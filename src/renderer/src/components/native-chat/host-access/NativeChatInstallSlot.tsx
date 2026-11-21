@@ -20,7 +20,13 @@ import {
   antigravityChatSignInPrompt,
   antigravityOrcaRuntimeSignsIn
 } from '@/components/provider-accounts/antigravity-chat-runtime-sign-in-policy'
-import { useStructuredAgentSessionHostProgram } from '../session/status/structured-agent-session-status-hooks'
+import {
+  useStructuredAgentSessionAgentCopy,
+  useStructuredAgentSessionHostProgram
+} from '../session/status/structured-agent-session-status-hooks'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
+import { findAgentCopy } from '../../../../../shared/agent-launch/catalog/agent-copies'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { NativeChatStructuredViewProps } from '../native-chat-view-types'
 import type { NativeChatAntigravityAuthTarget } from '../antigravity-auth/native-chat-antigravity-auth'
 
@@ -57,7 +63,12 @@ export function useNativeChatInstallSlot(
   const hostProgram = useStructuredAgentSessionHostProgram(props.sessionId, props.target)
   // Chats on the host program follow it too: Orca's copy of agy may be what they need installed.
   const observation = useManagedRuntimeInstall(props.target, props.agent, props.isVisible)
-  const slot = nativeChatInstallSlotState(observation, layout, hostProgram)
+  const ownCommand = useAgentCopyOwnCommand(
+    props.agent,
+    useStructuredAgentSessionAgentCopy(props.sessionId, props.target),
+    props.target
+  )
+  const slot = ownCommand ? NONE : nativeChatInstallSlotState(observation, layout, hostProgram)
   // Once Orca's own runtime is ready, chats still need its sign-in; the host's agy signs itself in.
   const signsIn =
     props.agent === 'antigravity' &&
@@ -103,6 +114,20 @@ export function useNativeChatInstallSlot(
           }
         : null
   }
+}
+
+/** Whether this computer's chat runs as an agent copy with a Command of its own, which the host
+ *  starts as it does an agent's own Command, so Orca's runtime is not needed. */
+export function useAgentCopyOwnCommand(
+  agent: string,
+  copyId: string | null,
+  target: RuntimeClientTarget
+): boolean {
+  return useAppStateValue((state) => {
+    const copy =
+      copyId && target.kind === 'local' ? findAgentCopy(state.settings, copyId) : undefined
+    return Boolean(copy?.command && copy.agent === agent)
+  })
 }
 
 /** Orca's installed agy is the one a chat on the host program runs; the person's own wins. */
