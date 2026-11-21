@@ -15,6 +15,8 @@ export type ListMultiSelection<T> = {
   getItemForKey: (key: string) => T | undefined
   toggleSelection: (item: T) => void
   setAllSelected: (selected: boolean) => void
+  /** Empties the selection; a given item becomes the anchor for a following Shift-click. */
+  clearSelection: (anchor?: T) => void
   /** Returns true for selection-only gestures (Cmd/Ctrl/Shift), which must not navigate. */
   updateSelectionForGesture: (
     event: Pick<React.MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey'>,
@@ -166,6 +168,15 @@ export function useListMultiSelection<T>({
     [visibleKeys]
   )
 
+  // Stable across visibleKeys changes so memoized rows can hold it.
+  const clearSelection = useCallback(
+    (anchor?: T): void => {
+      setSelectedKeys((previous) => (previous.size === 0 ? previous : new Set()))
+      setSelectionAnchorKey(anchor === undefined ? null : getKey(anchor))
+    },
+    [getKey]
+  )
+
   return {
     visibleKeys,
     selectedKeys,
@@ -173,6 +184,7 @@ export function useListMultiSelection<T>({
     getItemForKey,
     toggleSelection,
     setAllSelected,
+    clearSelection,
     updateSelectionForGesture,
     selectForContextMenu
   }
