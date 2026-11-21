@@ -2018,18 +2018,19 @@
     "customRelay": {
       "title": "Custom relay server",
       "description": "Choose the cloud auth and relay servers used by this desktop. Sign in after applying a change.",
-      "enabled": "Use custom server",
       "authUrl": "Auth server URL",
+      "authUrlPlaceholder": "https://login.example.com",
       "authUrlHint": "The Orca sign-in service (relay-auth), not your identity provider. Usually the same origin as the relay.",
       "clientId": "Client ID",
       "clientIdHint": "Must match the sign-in service's ORCA_AUTH_CLIENT_ID (orca-desktop unless changed).",
       "relayUrl": "Relay director URL",
+      "relayUrlPlaceholder": "https://relay.example.com",
       "validation": "Use HTTPS URLs and a nonempty client ID. Both URLs must be origins without a path. URLs cannot contain credentials, queries, or fragments. HTTP is allowed only on localhost, 127.0.0.1, or [::1] in unpackaged builds.",
       "environment": "Environment variables override saved settings. Test connection checks the URLs entered here.",
       "testing": "Testing connection…",
       "test": "Test connection",
       "apply": "Apply changes",
-      "reset": "Reset to default",
+      "useServer": "Use this server",
       "authSuccess": "Auth server: connected",
       "authFailure": "Auth server: no Orca sign-in service found at this URL",
       "relaySuccess": "Relay director: connected",
@@ -2040,7 +2041,9 @@
       "confirmDescription": "This signs you out and disconnects existing mobile relay pairings. Pair those devices again after signing in to the selected server. Local-only pairings are preserved.",
       "cancel": "Cancel",
       "saving": "Switching servers…",
-      "confirm": "Switch servers"
+      "confirm": "Switch servers",
+      "searchOwnRelay": "Your own relay",
+      "searchSelfHosted": "Self-hosted"
     },
     "cloudConsole": {
       "manageInBrowser": "Manage in browser",
@@ -13238,7 +13241,15 @@
           "localDescription": "Phone must be on this Wi‑Fi or connected through Tailscale. No account needed.",
           "retrying": "Retrying",
           "relayCell": "Relay cell",
-          "relaySignInDetail": "Signs this desktop in to Orca and routes the phone through Orca’s servers. LAN does not need an account."
+          "relaySignInDetail": "Signs this desktop in to Orca and routes the phone through Orca’s servers. LAN does not need an account.",
+          "ownRelayTitle": "Your own relay",
+          "ownRelayDescription": "Use a relay and sign-in service you run. Phone can be on cellular or any Wi‑Fi.",
+          "ownRelaySetup": "Set up a relay and sign-in service you run in Settings.",
+          "ownRelayUnavailable": "The saved server settings are invalid. Update them below.",
+          "ownRelayTeamDisabled": "Relays are turned off by your team. Use LAN.",
+          "ownRelaySignInDetail": "Signs this desktop in to your server and routes the phone through your relay. LAN does not need an account.",
+          "ownRelayServer": "Server",
+          "ownRelayServerSettings": "Server settings"
         },
         "MobilePairingSetupSection": {
           "title": "Pair a phone",

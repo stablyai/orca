@@ -595,7 +595,6 @@
     "customRelay": {
       "title": "Servidor de retransmisión personalizado",
       "description": "Elige los servidores de autenticación y retransmisión de este equipo. Inicia sesión tras aplicar un cambio.",
-      "enabled": "Usar servidor personalizado",
       "authUrl": "URL del servidor de autenticación",
       "clientId": "ID de cliente",
       "relayUrl": "URL del director de retransmisión",
@@ -604,7 +603,6 @@
       "testing": "Probando conexión…",
       "test": "Probar conexión",
       "apply": "Aplicar cambios",
-      "reset": "Restablecer valores predeterminados",
       "authSuccess": "Servidor de autenticación: conectado",
       "authFailure": "Servidor de autenticación: error de conexión",
       "relaySuccess": "Director de retransmisión: conectado",

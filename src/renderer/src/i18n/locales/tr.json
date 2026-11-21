@@ -1977,7 +1977,6 @@
     "customRelay": {
       "title": "Özel aktarım sunucusu",
       "description": "Bu bilgisayarın bulut kimlik doğrulama ve aktarım sunucularını seçin. Değişikliği uyguladıktan sonra oturum açın.",
-      "enabled": "Özel sunucu kullan",
       "authUrl": "Kimlik doğrulama sunucusu URL’si",
       "clientId": "İstemci kimliği",
       "relayUrl": "Aktarım yöneticisi URL’si",
@@ -1986,7 +1985,6 @@
       "testing": "Bağlantı sınanıyor…",
       "test": "Bağlantıyı sına",
       "apply": "Değişiklikleri uygula",
-      "reset": "Varsayılana sıfırla",
       "authSuccess": "Kimlik doğrulama sunucusu: bağlı",
       "authFailure": "Kimlik doğrulama sunucusu: bağlantı başarısız",
       "relaySuccess": "Aktarım yöneticisi: bağlı",

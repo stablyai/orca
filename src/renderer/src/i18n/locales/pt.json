@@ -2234,7 +2234,6 @@
     "customRelay": {
       "title": "Servidor de retransmissão personalizado",
       "description": "Escolha os servidores de autenticação e retransmissão deste computador. Entre na conta após aplicar uma alteração.",
-      "enabled": "Usar servidor personalizado",
       "authUrl": "URL do servidor de autenticação",
       "clientId": "ID do cliente",
       "relayUrl": "URL do diretor de retransmissão",
@@ -2243,7 +2242,6 @@
       "testing": "Testando conexão…",
       "test": "Testar conexão",
       "apply": "Aplicar alterações",
-      "reset": "Restaurar padrão",
       "authSuccess": "Servidor de autenticação: conectado",
       "authFailure": "Servidor de autenticação: falha na conexão",
       "relaySuccess": "Diretor de retransmissão: conectado",

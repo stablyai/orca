@@ -1328,7 +1328,6 @@
     "customRelay": {
       "title": "自定义中继服务器",
       "description": "选择此桌面端使用的云端认证和中继服务器。应用更改后请登录。",
-      "enabled": "使用自定义服务器",
       "authUrl": "认证服务器 URL",
       "clientId": "客户端 ID",
       "relayUrl": "中继调度器 URL",
@@ -1337,7 +1336,6 @@
       "testing": "正在测试连接…",
       "test": "测试连接",
       "apply": "应用更改",
-      "reset": "恢复默认设置",
       "authSuccess": "认证服务器：已连接",
       "authFailure": "认证服务器：连接失败",
       "relaySuccess": "中继调度器：已连接",
