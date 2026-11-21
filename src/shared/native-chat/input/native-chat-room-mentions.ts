@@ -1,10 +1,22 @@
+// Spaces and punctuation don't count, so `@eng-rev` or `@eng - rev` finds "Eng - Reviewer".
+const fold = (text: string): string => text.toLocaleLowerCase().replace(/[\s\p{P}]+/gu, '')
+
+/** Whether a room member's name holds an `@` query, ignoring case, spaces and punctuation. */
+export function nativeChatRoomNameMatches(name: string, query: string): boolean {
+  return fold(name).includes(fold(query))
+}
+
+export function nativeChatRoomNameEquals(name: string, query: string): boolean {
+  return fold(name) === fold(query)
+}
+
 /** Room member names for an `@` query: names starting with it first, then any containing it. */
 export function rankNativeChatRoomMentions(names: readonly string[], query: string): string[] {
-  const needle = query.toLocaleLowerCase()
-  const starts = names.filter((name) => name.toLocaleLowerCase().startsWith(needle))
+  const needle = fold(query)
+  const starts = names.filter((name) => fold(name).startsWith(needle))
   return [
     ...starts,
-    ...names.filter((name) => !starts.includes(name) && name.toLocaleLowerCase().includes(needle))
+    ...names.filter((name) => !starts.includes(name) && nativeChatRoomNameMatches(name, query))
   ]
 }
 
@@ -17,8 +29,10 @@ export function rankNativeChatRoomMembers(
 ): string[] {
   const needle = query.toLocaleLowerCase()
   const has = (text: string | undefined) => text?.toLocaleLowerCase().includes(needle) === true
-  const starts = members.filter((member) => member.name.toLocaleLowerCase().startsWith(needle))
-  const named = members.filter((member) => !starts.includes(member) && has(member.name))
+  const starts = members.filter((member) => fold(member.name).startsWith(fold(query)))
+  const named = members.filter(
+    (member) => !starts.includes(member) && nativeChatRoomNameMatches(member.name, query)
+  )
   const described = members.filter(
     (member) => !starts.includes(member) && !named.includes(member) && has(member.detail)
   )

@@ -5,6 +5,7 @@ import { NodeFileReadTooLargeError } from '../../../../shared/file-content/node-
 import { join } from 'node:path'
 import { readAgentStateFileSync, readAgentStateJsonFileSync } from '../agent-state-file-reader'
 import { observeFilePublication } from '../../../filesystem/file-content-observation'
+import { assertGuardedFileCurrent } from '../../../filesystem/concurrent-file-edit-guard'
 
 const SETTINGS_BASELINE_FILE = '.orca-config-settings-baseline.json'
 
@@ -159,6 +160,7 @@ export function writeCodexSettingsBaseline(
   if (existing === serialized) {
     return
   }
+  assertGuardedFileCurrent(baselinePath)
   writeFileSync(baselinePath, serialized, { encoding: 'utf-8', mode: 0o600 })
   observeFilePublication(baselinePath, serialized)
 }

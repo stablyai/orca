@@ -57,6 +57,8 @@ export type SessionOptionDescriptor = {
   activeValue?: string
   /** A model row that returns to the agent's own default, apart from the listed model ids. */
   defaultChoice?: { selected: boolean }
+  /** Model-pill display only: a provider fallback runs in place of currentValue, which stays the selection. */
+  fallbackModel?: string
   /** Picker-only/flip-only PTY commands need action rows rather than invented absolute control states. */
   action?: { type: 'agent-picker' | 'toggle-command' }
 }

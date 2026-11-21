@@ -3,6 +3,7 @@ import { FEATURE_TIPS } from '../../../../shared/feature-education/feature-tips'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { BotsTeammateTipDialog } from './BotsTeammateTipDialog'
 import { BotsTipGroupVisual } from './BotsTipGroupVisual'
+import { BotsTipItemsVisual } from './BotsTipItemsVisual'
 import { BotsTipSlackVisual } from './BotsTipSlackVisual'
 import { BOTS_TIP_PAGE_END } from './bots-tip-timeline'
 import './bots-tip.css'
@@ -32,7 +33,17 @@ export const slackEnd = defineFixture({
   render: () => frozen(<BotsTipSlackVisual t={BOTS_TIP_PAGE_END[0]} />)
 })
 
-// The group page's last frame: the release bot's answer with the pull request.
+// Page 2 with the item view open on the question, the answer half typed.
+export const itemsAnswering = defineFixture({
+  render: () => frozen(<BotsTipItemsVisual t={12.2} />)
+})
+
+// Page 2's last frame: every item closed.
+export const itemsEnd = defineFixture({
+  render: () => frozen(<BotsTipItemsVisual t={BOTS_TIP_PAGE_END[1]} />)
+})
+
+// Page 3's last frame: the release bot's answer with the pull request.
 export const groupEnd = defineFixture({
-  render: () => frozen(<BotsTipGroupVisual t={BOTS_TIP_PAGE_END[1]} />)
+  render: () => frozen(<BotsTipGroupVisual t={BOTS_TIP_PAGE_END[2]} />)
 })

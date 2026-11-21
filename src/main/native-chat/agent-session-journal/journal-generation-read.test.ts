@@ -12,7 +12,7 @@ const cleanup: (() => void)[] = []
 afterEach(() => cleanup.splice(0).forEach((close) => close()))
 
 // A settled turn is no generation row, so only the teardown anchor can name its opener.
-it("anchors a teardown on the latest turn's Claude opener, kept under its echo's alias", async () => {
+it('resolves the Claude opener through its echo alias for teardown and rewind', async () => {
   const f = domainLifecycleFixture(cleanup)
   const claude = { provider: 'claude' as const, sessionId: 'provider', uuid: 'asked' }
   const message = (text: string) => ({
@@ -22,7 +22,22 @@ it("anchors a teardown on the latest turn's Claude opener, kept under its echo's
   })
   await f.run({
     kind: 'submission',
-    input: { clientMessageId: 'asked', fence: 1, body: message('asked'), payloadFingerprint: 'a' }
+    input: {
+      clientMessageId: 'asked',
+      fence: 1,
+      body: message('asked'),
+      payloadFingerprint: 'a',
+      handoverRecorded: true
+    }
+  })
+  await f.run({
+    kind: 'dispatch',
+    input: {
+      clientMessageId: 'asked',
+      fence: 1,
+      state: 'pending',
+      turnScope: { kind: 'turn', turnItemId: 'orca:asked-turn' }
+    }
   })
   await f.run({
     kind: 'dispatch',
@@ -51,4 +66,5 @@ it("anchors a teardown on the latest turn's Claude opener, kept under its echo's
   )
   const { items } = await reads.generation({ teardownAnchors: true })
   expect(items.map((item) => item.itemId)).toContain('orca:asked')
+  expect(await reads.rewindTarget('orca:asked')).toMatchObject({ eligible: true })
 })

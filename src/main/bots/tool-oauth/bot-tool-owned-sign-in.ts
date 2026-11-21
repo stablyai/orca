@@ -9,7 +9,7 @@ import {
 } from '../../../shared/bot-tool-sign-in'
 import { newBotToolCredentialId, readBotToolOAuth } from '../bot-tool-credentials'
 import { botOwnTool, readBotToolServers, type BotToolNewCredential } from '../bot-tools-file'
-import { addBotTool, type BotToolsCli } from '../bot-tools-host'
+import { addBotTool, type BotToolsHome } from '../bot-tools-host'
 import type { RpcCallerIdentity } from '../../runtime/rpc/callers/rpc-caller-identity'
 import { discoverBotToolAuth } from './bot-tool-oauth-discovery'
 import { BotToolSignInError, discoveryOptions, type BotToolOAuthKey } from './bot-tool-oauth'
@@ -44,7 +44,7 @@ async function classifyAddedBotTool(
 
 /** Adds `given` to the bot, as Orca's own sign-in tool when its address needs a sign-in. */
 export async function addSortedBotTool(
-  cli: BotToolsCli,
+  cli: BotToolsHome,
   given: BotToolServer,
   signal?: AbortSignal
 ): Promise<BotOwnTool> {

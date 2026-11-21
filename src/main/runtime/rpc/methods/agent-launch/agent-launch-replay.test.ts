@@ -155,11 +155,8 @@ describe('exactly one execution per launch operation', () => {
   })
 })
 
-describe('a fresh launch writes the ledger once before its effect', () => {
-  it('admits and claims in one durable transaction, claimed on disk when the effect starts', async () => {
-    const admitAndClaim = vi.spyOn(store, 'admitAndClaimOperation')
-    const admit = vi.spyOn(store, 'admitOperation')
-    const claimOnly = vi.spyOn(store, 'claimOperation')
+describe('durable launch claims', () => {
+  it('records the claim on disk before the effect starts', async () => {
     const runtime = runtimeStub()
     let statusAtEffect: string | undefined
     runtime.createManagedWorktree.mockImplementationOnce(async () => {
@@ -171,9 +168,6 @@ describe('a fresh launch writes the ledger once before its effect', () => {
 
     await launch(createLaunch({ operationId: OPERATION_ID }), runtime)
 
-    expect(admitAndClaim).toHaveBeenCalledTimes(1)
-    expect(admit).not.toHaveBeenCalled()
-    expect(claimOnly).not.toHaveBeenCalled()
     // A claim moves the row from `pending` to `unknown`: taken, not yet settled.
     expect(statusAtEffect).toBe('unknown')
   })

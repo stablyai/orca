@@ -69,11 +69,11 @@ export const pluginsApi = {
   resolveGitSource: (args) => ipcRenderer.invoke('plugins:resolveGitSource', args),
   install: (source: PluginHostInstallSource): Promise<PluginHostInstallResult> =>
     ipcRenderer.invoke('plugins:install', source),
-  listMarketplaces: () => ipcRenderer.invoke('plugins:listMarketplaces'),
+  listMarketplaces: (args) => ipcRenderer.invoke('plugins:listMarketplaces', args),
   addMarketplace: (source) => ipcRenderer.invoke('plugins:addMarketplace', source),
   removeMarketplace: (args) => ipcRenderer.invoke('plugins:removeMarketplace', args),
   refreshMarketplaces: (args = {}) => ipcRenderer.invoke('plugins:refreshMarketplaces', args),
-  listMarketplacePlugins: () => ipcRenderer.invoke('plugins:listMarketplacePlugins'),
+  listMarketplacePlugins: (args) => ipcRenderer.invoke('plugins:listMarketplacePlugins', args),
   suggestForFileType: (fileType, purpose) =>
     ipcRenderer.invoke('plugins:suggestForFileType', fileType, purpose),
   previewMarketplacePlugin: (args) => ipcRenderer.invoke('plugins:previewMarketplacePlugin', args),

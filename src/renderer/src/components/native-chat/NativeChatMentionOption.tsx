@@ -18,31 +18,39 @@ export function NativeChatMentionOption({
 }): React.JSX.Element {
   const t = useTranslate()
   if (member) {
+    const purpose =
+      member.note ??
+      (member.detail
+        ? t('components.native-chat.composer.botFor', 'For: {{detail}}', {
+            detail: member.detail
+          })
+        : null)
+    // One line: name, its computer's pill, then what it is for, cut short (its title has it all).
     return (
       <>
         {member.icon}
         <span
-          className={cn('min-w-0 flex-1', (member.unavailable || member.dimmed) && 'opacity-50')}
+          className={cn(
+            'flex min-w-0 flex-1 items-baseline gap-1.5',
+            (member.unavailable || member.dimmed) && 'opacity-50'
+          )}
         >
-          <span className="block truncate">{member.name}</span>
-          {member.note || member.detail || member.host ? (
-            <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-              {member.host}
-              {member.note || member.detail ? (
-                <span className="min-w-0 truncate">
-                  {member.note ??
-                    t('components.native-chat.composer.botFor', 'For: {{detail}}', {
-                      detail: member.detail
-                    })}
-                </span>
-              ) : null}
+          {/* Name and pill shrink too, so a narrow row never pushes them past its text area. */}
+          <span className="max-w-[60%] min-w-0 truncate">{member.name}</span>
+          {member.host ? (
+            <span className="flex min-w-0 self-center overflow-hidden">{member.host}</span>
+          ) : null}
+          {member.noteIcon ? (
+            <span className="flex shrink-0 self-center">{member.noteIcon}</span>
+          ) : null}
+          {purpose ? (
+            <span title={purpose} className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+              {purpose}
             </span>
           ) : null}
         </span>
         {member.unavailable ? (
-          <span className="shrink-0 pt-0.5 text-2xs text-muted-foreground">
-            {member.unavailable}
-          </span>
+          <span className="shrink-0 text-2xs text-muted-foreground">{member.unavailable}</span>
         ) : null}
       </>
     )
@@ -70,7 +78,7 @@ export function NativeChatUnavailableMentions({
         <div
           key={value}
           aria-disabled
-          className="flex w-full items-start gap-2 px-2 py-1.5 text-sm"
+          className="flex w-full items-center gap-2 px-2 py-1.5 text-sm"
         >
           <NativeChatMentionOption
             value={value}

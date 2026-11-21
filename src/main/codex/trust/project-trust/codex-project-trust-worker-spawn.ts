@@ -11,6 +11,10 @@ export function spawnCodexProjectTrustWorker(): WorkerRequestTransport {
   // A missing entry fails the spawned worker, which the queue reports as unavailable.
   return spawnWorkerThread(
     resolveWorkerThreadEntryPath(currentWorkerEntryLayout(__dirname), WORKER_ENTRY_FILENAME),
-    { name: 'orca-codex-project-trust' }
+    {
+      name: 'orca-codex-project-trust',
+      // Hook commands on Windows resolve a bundled binary from main's resources folder.
+      workerData: { resourcesPath: 'resourcesPath' in process ? process.resourcesPath : undefined }
+    }
   )
 }

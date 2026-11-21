@@ -123,6 +123,6 @@ export type ListProjectViewsArgs = WakeWslDistroArg & {
 }
 
 export type ListAccessibleProjectsArgs = WakeWslDistroArg & {
-  /** GitHub host (e.g. GHES); absent means github.com. */
+  /** GitHub host (e.g. GHES); absent means gh's own default host. */
   host?: string
 }

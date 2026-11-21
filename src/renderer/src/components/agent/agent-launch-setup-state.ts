@@ -126,7 +126,7 @@ export function usePickedAgentModel(
   )
 }
 
-/** "Claude Opus 5.5 · Med · Fast": the model, level and speed a launch with this draft uses. */
+/** "Opus 5.5 · Med · Fast": the model, level and speed a launch with this draft uses. */
 export function agentLaunchSetupSummary(
   entry: AgentPickerEntry,
   draft: AgentPickerDraft,

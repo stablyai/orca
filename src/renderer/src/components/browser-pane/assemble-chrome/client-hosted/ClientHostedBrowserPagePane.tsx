@@ -19,7 +19,7 @@ import { useBrowserClientHostedPermissionNotices } from '../../navigate/browser-
 import { useClientHostedBrowserIntroTour } from './use-client-hosted-browser-intro-tour'
 import { ClientHostedBrowserUnavailableNotice } from './client-hosted-browser-unavailable-notice'
 import { watchBrowserClientPageGuestLoss } from '../../host-guest/recovery/browser-client-page-guest-loss'
-import { useClientHostedBrowserMarkup } from '../../annotate/capture/use-client-hosted-browser-markup'
+import { useClientHostedBrowserAnnotate } from '../../annotate/use-client-hosted-browser-annotate'
 import { ClientHostedBrowserPageOverlays } from './client-hosted-browser-page-overlays'
 import { ClientHostedBrowserPageToolbar } from './client-hosted-browser-page-toolbar'
 import { bindBrowserClientPageChromeListeners } from './browser-client-page-chrome-listeners'
@@ -146,6 +146,15 @@ export function ClientHostedBrowserPagePane(props: Props) {
   const getAgentCursorHost = useCallback(() => webviewRef.current?.parentElement ?? null, [])
   useBrowserAgentCursor(browserTab.id, webviewRef, getAgentCursorHost)
   const fileDrop = useClientPageWorkspaceFileDrop(browserTab.id, worktreeId, pageBox.contentRef)
+
+  const annotate = useClientHostedBrowserAnnotate(
+    props,
+    initialization,
+    webviewRef,
+    pageBox.contentRef,
+    viewportPresetId ? paneRoot : null
+  )
+  const bindAnnotationGuest = annotate.bindGuest
 
   useLayoutEffect(() => {
     const viewport = pageBox.contentRef.current
@@ -274,6 +283,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
       dismissAddressBarSuggestions: () => dismissAddressBarSuggestionsRef.current?.(),
       applyViewportPreset: pageBox.applyOverride
     })
+    const unbindAnnotationDocument = bindAnnotationGuest(webview)
     const onFailLoad = createBrowserClientPageLoadFailureHandler(webview, (loadError) => {
       loadFailureRef.current = loadError
       updatePageStateFromGuest(browserTab.id, { loading: false, loadError })
@@ -285,6 +295,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
       webview.removeEventListener('did-fail-load', onFailLoad)
       webview.removeEventListener('did-navigate', onNavigate)
       unbindChrome()
+      unbindAnnotationDocument()
       guestLoss.dispose()
       publisher.dispose()
       forgetBrowserClientPageMetadataReports(browserTab.id)
@@ -309,19 +320,9 @@ export function ClientHostedBrowserPagePane(props: Props) {
     browserHostGeneration,
     pageHostGeneration,
     runtimeEnvironmentId,
-    setAddressBarValueFromPage
+    setAddressBarValueFromPage,
+    bindAnnotationGuest
   ])
-
-  const markup = useClientHostedBrowserMarkup({
-    webviewRef,
-    browserPageId: browserTab.id,
-    runtimeEnvironmentId,
-    placement,
-    isActive,
-    unavailable: initialization.unavailable,
-    showFailureOverlay: initialization.showFailureOverlay,
-    controlsContainer: viewportPresetId ? paneRoot : null
-  })
 
   return (
     <div
@@ -353,10 +354,11 @@ export function ClientHostedBrowserPagePane(props: Props) {
           addressBarInputRef={addressBarInputRef}
           dismissAddressBarSuggestionsRef={dismissAddressBarSuggestionsRef}
           navigateToUrl={navigateToUrl}
-          markup={markup.tool}
+          annotateTools={annotate.tools}
           onOpenFind={() => setFindOpen(true)}
         />
       </div>
+      {annotate.banner}
       <div className={BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME}>
         <div
           ref={viewportContainerRef}
@@ -368,7 +370,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
             scrollerRef={pageBox.scrollerRef}
             contentRef={pageBox.contentRef}
           >
-            {markup.overlay}
+            {annotate.overlays}
           </ClientHostedBrowserPageBox>
           <ClientHostedBrowserPageOverlays
             browserPageId={browserTab.id}

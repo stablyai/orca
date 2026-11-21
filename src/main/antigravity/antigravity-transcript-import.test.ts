@@ -1,16 +1,23 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
+import type * as OsModule from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { prepareLegacyTranscriptImport } from '../native-chat/agent-session-journal/history-import/journal-legacy-import'
 import { ANTIGRAVITY_TRANSCRIPT_IMPORT } from './antigravity-transcript-import'
 import { ANTIGRAVITY_LAUNCH_SPEC } from './antigravity-acp-launch-spec'
 import { adoptsCliConversations } from '../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import { conversationFamily } from '../native-chat/conversation-adoption/structured-conversation-key'
 
+vi.mock('node:os', async (importOriginal) => {
+  const actual = await importOriginal<typeof OsModule>()
+  return { ...actual, homedir: vi.fn(actual.homedir) }
+})
+
 let root: string | null = null
 
 afterEach(() => {
+  vi.mocked(homedir).mockReset()
   if (root) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -120,6 +127,8 @@ it('offers agy terminal conversations to chats, except from an agy set up with a
   expect(conversationFamily('antigravity')).toBe('antigravity')
 
   root = mkdtempSync(join(tmpdir(), 'orca-agy-key-'))
+  const fallbackHome = join(root, 'fallback')
+  vi.mocked(homedir).mockReturnValue(fallbackHome)
   const agyHome = { variable: 'GEMINI_HOME', path: join(root, '.gemini') }
   mkdirSync(join(agyHome.path, 'antigravity-cli'), { recursive: true })
   const candidates = () =>
@@ -132,5 +141,13 @@ it('offers agy terminal conversations to chats, except from an agy set up with a
     join(agyHome.path, 'antigravity-cli', 'settings.json'),
     '{"modelProvider":"gemini-api-key"}'
   )
-  expect(await candidates()).not.toContainEqual(agyHome)
+  expect(await candidates()).toEqual([
+    { variable: 'GEMINI_HOME', path: join(fallbackHome, '.gemini') }
+  ])
+  const fallbackStore = join(fallbackHome, '.gemini', 'antigravity-cli')
+  mkdirSync(fallbackStore, { recursive: true })
+  writeFileSync(join(fallbackStore, 'settings.json'), '{"modelProvider":"gemini-api-key"}')
+  await expect(Promise.resolve(candidates())).rejects.toMatchObject({
+    refusal: { code: 'structured_agent_session_unsupported' }
+  })
 })

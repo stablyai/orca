@@ -18,7 +18,7 @@ import {
   isSshHostKeptForBridgedTerminals,
   setSshHostServerStatus
 } from '../../ssh/host-server/ssh-host-server-status'
-import { connectionManager, getCurrentMainWindow } from './ssh-ipc-context'
+import { connectionManager } from './ssh-ipc-context'
 import { broadcastSshState, getPublicSshState } from './ssh-renderer-broadcast'
 import { isAuthError } from '../../ssh/connection/reconnect/ssh-reconnect-error-classification'
 import { isSshSessionStartFailure } from '../../ssh/connection/ssh-session-start-failure'
@@ -63,7 +63,7 @@ export function recheckWhenManagedFenceClears(target: SshTarget, environmentId: 
 export function publishHostServerDecisionFailure(targetId: string, error: unknown): void {
   const failure = error instanceof Error ? error : new Error(String(error))
   clearSshHostServerStatus(targetId)
-  broadcastSshState(getCurrentMainWindow, targetId, {
+  broadcastSshState(targetId, {
     targetId,
     status: isAuthError(failure) ? 'auth-failed' : 'error',
     error: isSshSessionStartFailure(failure) ? describeSshConnectFailure(failure) : failure.message,
@@ -95,7 +95,7 @@ export function publishManagedServerConnect(
     error: null,
     managedServer
   }
-  broadcastSshState(getCurrentMainWindow, targetId, state)
+  broadcastSshState(targetId, state)
   return getPublicSshState(targetId) ?? state
 }
 
@@ -129,7 +129,7 @@ export function restoreKeptHostServer(targetId: string): SshConnectionState {
   if (state.status === 'connected') {
     return publishKeptHostServer(targetId, status)
   }
-  broadcastSshState(getCurrentMainWindow, targetId, { ...state, managedServer: status })
+  broadcastSshState(targetId, { ...state, managedServer: status })
   return getPublicSshState(targetId) ?? state
 }
 
@@ -146,7 +146,7 @@ export function publishKeptHostServer(
     error: null,
     managedServer
   }
-  broadcastSshState(getCurrentMainWindow, targetId, state)
+  broadcastSshState(targetId, state)
   return getPublicSshState(targetId) ?? state
 }
 
@@ -158,7 +158,7 @@ export function publishUnservedHostServer(
   const managedServer = unservedServerStatus(decision)
   setSshHostServerStatus(target.id, managedServer)
   const failure = new Error(unservedHostServerMessage(decision))
-  broadcastSshState(getCurrentMainWindow, target.id, {
+  broadcastSshState(target.id, {
     targetId: target.id,
     status: 'error',
     error: failure.message,

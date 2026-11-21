@@ -238,6 +238,8 @@ export type NativeChatBlock =
 
 /** Structured rows preserve journal producer linkage; terminal-backed rows omit it. */
 export type NativeChatMessage = AgentJournalProducerLinkage & {
+  /** Client projection: this answer preceded a goal check grouped into its goal row. */
+  goalCheckAnswer?: true
   /** Stable dedup/list identity across re-reads and appends. */
   id: string
   role: NativeChatRole

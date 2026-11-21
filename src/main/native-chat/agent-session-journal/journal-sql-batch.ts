@@ -38,7 +38,10 @@ export class JournalSqlBatch {
 
   constructor(
     private readonly db: Database.Database,
-    private readonly checkpoint?: { beforeWrite(): Promise<void>; afterCommit(): void }
+    private readonly checkpoint?: {
+      beforeWrite(urgent?: boolean): Promise<void>
+      afterCommit(): void
+    }
   ) {}
 
   get fault(): unknown {
@@ -49,7 +52,8 @@ export class JournalSqlBatch {
   async run<Command, Value>(
     commands: readonly Command[],
     apply: (command: Command) => Value | Promise<Value>,
-    durability: 'normal' | 'full' | 'retirement' = 'normal'
+    durability: 'normal' | 'full' | 'retirement' = 'normal',
+    urgent = false
   ): Promise<JournalSqlBatchResult<Value>> {
     if (this.failure) {
       throw new JournalSqlBatchError('not-dispatched', this.failure)
@@ -69,7 +73,7 @@ export class JournalSqlBatch {
     let committing = false
     let failed: JournalSqlBatchError | undefined
     try {
-      await this.checkpoint?.beforeWrite()
+      await this.checkpoint?.beforeWrite(urgent)
       if (durability !== 'normal') {
         this.db.pragma('synchronous=FULL')
         if (durability === 'retirement') {

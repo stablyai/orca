@@ -33,6 +33,7 @@ async function fixture() {
   await git(repo, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
   await git(repo, ['config', 'user.name', 'Test'])
   await git(repo, ['config', 'user.email', 'test@example.com'])
+  await git(repo, ['config', 'core.autocrlf', 'false'])
   await writeFile(join(repo, 'version.txt'), 'original\n')
   await git(repo, ['add', 'version.txt'])
   await git(repo, ['commit', '--quiet', '-m', 'initial'])

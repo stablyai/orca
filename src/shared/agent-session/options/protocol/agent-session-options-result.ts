@@ -56,6 +56,8 @@ export type AgentSessionOptionsResult = {
     modelDefault?: boolean
     /** Legacy hosts may include an answer model; clients ignore it when presenting selection. */
     reportedModel?: string
+    /** The current child runs this provider fallback in place of `model`; display only, never sent. */
+    fallbackModel?: string
     effort?: string
     /** Child-scoped actual for display only; effort remains accepted raw input. */
     reportedEffort?: string

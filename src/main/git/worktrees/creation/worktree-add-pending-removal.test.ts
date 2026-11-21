@@ -69,16 +69,11 @@ describe('addWorktree while Orca deletes a checkout in the background', () => {
     await removeTree(directory)
   })
 
-  it('refuses the same path with a clear message and runs no git', async () => {
+  it('refuses a pending removal’s path and branch before running Git', async () => {
     await startDeleting()
     await expect(addWorktree('/repo', '/repo-feature', 'other-branch')).rejects.toThrow(
       'Orca is still deleting the workspace at /repo-feature. Cleanup is pending; try again shortly.'
     )
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('refuses the same branch, which the delete removes when it finishes', async () => {
-    await startDeleting()
     await expect(
       addWorktree('/repo', '/repo-elsewhere', 'feature/test', undefined, false, false, {
         checkoutExistingBranch: true
