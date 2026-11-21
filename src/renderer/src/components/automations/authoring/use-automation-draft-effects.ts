@@ -153,6 +153,10 @@ export function useAutomationDraftEffects({
             }
           : {}),
         missedRunGraceMinutes: template.missedRunGraceMinutes ?? current.missedRunGraceMinutes,
+        // Same rule as the workspace toggle: only an existing workspace can reuse its session.
+        ...(template.workspaceMode && template.workspaceMode !== current.workspaceMode
+          ? { workspaceMode: template.workspaceMode, reuseSession: false }
+          : {}),
         scheduleWarning: null
       }))
     },

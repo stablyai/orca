@@ -14818,6 +14818,13 @@
               "category": "Manutenção",
               "name": "Verificação horária de manutenção",
               "prompt": "Verifique trabalho parado, arquivos gerados obsoletos, falhas de validação e qualquer coisa que precise de atenção humana. Relate apenas problemas acionáveis."
+            },
+            "docsRefresh": {
+              "category": "Documentação",
+              "label": "Atualização semanal da documentação",
+              "description": "Atualiza o README e a documentação que os commits da última semana deixaram desatualizados, para revisão.",
+              "name": "Atualização semanal da documentação",
+              "prompt": "Revise os commits dos últimos 7 dias e encontre a documentação que eles deixaram desatualizada: o README, os arquivos em docs/ e as instruções de configuração ou uso. Atualize só o que essas mudanças exigem, mantenha o tom e a estrutura existentes e não documente comportamentos que o código não tem. Faça commit das edições neste branch e resuma o que mudou e por quê, para que uma pessoa possa revisar. Se nada precisar de atualização, diga isso e não faça alterações."
             }
           },
           "list": {

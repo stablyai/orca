@@ -17516,6 +17516,13 @@
               "category": "Mantenimiento",
               "name": "Control de mantenimiento cada hora",
               "prompt": "Compruebe si hay trabajos atascados, archivos generados obsoletos, validación fallida y cualquier cosa que necesite atención humana. Informe solo problemas procesables."
+            },
+            "docsRefresh": {
+              "category": "Documentación",
+              "label": "Actualización semanal de la documentación",
+              "description": "Actualiza el README y la documentación que los commits de la última semana dejaron desactualizados, para revisión.",
+              "name": "Actualización semanal de la documentación",
+              "prompt": "Revisa los commits de los últimos 7 días y encuentra la documentación que dejaron desactualizada: el README, los archivos de docs/ y las instrucciones de configuración o uso. Actualiza solo lo que esos cambios requieren, mantén el tono y la estructura existentes y no documentes comportamientos que el código no tiene. Haz commit de los cambios en esta rama y resume qué cambió y por qué para que una persona pueda revisarlo. Si no hay nada que actualizar, dilo y no hagas cambios."
             }
           },
           "schedule": {

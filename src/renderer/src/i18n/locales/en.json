@@ -19270,6 +19270,13 @@
               "category": "Maintenance",
               "name": "Hourly maintenance check",
               "prompt": "Check for stuck work, stale generated files, failing validation, and anything that needs human attention. Report only actionable issues."
+            },
+            "docsRefresh": {
+              "category": "Documentation",
+              "label": "Weekly docs refresh",
+              "description": "Update the README and docs that last week's commits made outdated, for review.",
+              "name": "Weekly docs refresh",
+              "prompt": "Review the commits from the last 7 days and find the documentation they made outdated: the README, files under docs/, and setup or usage instructions. Update only what those changes require, keep the existing tone and structure, and do not document behavior the code does not have. Commit the edits on this branch and summarize what changed and why so a human can review it. If nothing needs updating, say so and make no changes."
             }
           },
           "list": {

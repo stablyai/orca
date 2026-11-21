@@ -17776,6 +17776,13 @@
               "category": "Wartung",
               "name": "Stündliche Wartungsprüfung",
               "prompt": "Nach festgefahrenen Aufgaben, veralteten generierten Dateien, fehlschlagenden Validierungen und allem suchen, was menschliche Aufmerksamkeit erfordert. Nur Probleme melden, die konkrete Maßnahmen erfordern."
+            },
+            "docsRefresh": {
+              "category": "Dokumentation",
+              "label": "Wöchentliche Doku-Aktualisierung",
+              "description": "Aktualisiert README und Doku, die durch die Commits der letzten Woche veraltet sind, zur Prüfung.",
+              "name": "Wöchentliche Doku-Aktualisierung",
+              "prompt": "Prüfe die Commits der letzten 7 Tage und finde die Dokumentation, die dadurch veraltet ist: das README, Dateien unter docs/ und Einrichtungs- oder Nutzungsanleitungen. Aktualisiere nur, was diese Änderungen erfordern, behalte Ton und Struktur bei und dokumentiere kein Verhalten, das der Code nicht hat. Committe die Änderungen auf diesem Branch und fasse zusammen, was sich geändert hat und warum, damit ein Mensch es prüfen kann. Wenn nichts aktualisiert werden muss, sag das und ändere nichts."
             }
           },
           "list": {

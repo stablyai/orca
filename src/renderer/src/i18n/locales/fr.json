@@ -17762,6 +17762,13 @@
               "category": "Maintenance",
               "name": "Vérification de maintenance horaire",
               "prompt": "Rechercher les travaux bloqués, les fichiers générés obsolètes, les validations en échec et tout ce qui requiert une attention humaine. Ne signaler que les problèmes actionnables."
+            },
+            "docsRefresh": {
+              "category": "Documentation",
+              "label": "Mise à jour hebdomadaire de la documentation",
+              "description": "Met à jour le README et la documentation rendus obsolètes par les commits de la semaine passée, pour relecture.",
+              "name": "Mise à jour hebdomadaire de la documentation",
+              "prompt": "Passe en revue les commits des 7 derniers jours et trouve la documentation qu'ils ont rendue obsolète : le README, les fichiers de docs/ et les instructions d'installation ou d'utilisation. Mets à jour uniquement ce que ces changements exigent, conserve le ton et la structure existants et ne documente pas de comportement que le code n'a pas. Commite les modifications sur cette branche et résume ce qui a changé et pourquoi, pour qu'une personne puisse les relire. Si rien n'est à mettre à jour, dis-le et ne modifie rien."
             }
           },
           "list": {

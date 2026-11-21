@@ -17925,6 +17925,13 @@
               "category": "Bakım",
               "name": "Saatlik bakım kontrolü",
               "prompt": "Takılı kalmış işleri, eskimiş oluşturulmuş dosyaları, başarısız doğrulamaları ve insan müdahalesi gerektiren her şeyi kontrol edin. Yalnızca uygulanabilir sorunları raporlayın."
+            },
+            "docsRefresh": {
+              "category": "Dokümantasyon",
+              "label": "Haftalık doküman güncellemesi",
+              "description": "Geçen haftanın commit'lerinin eskittiği README ve dokümanları inceleme için günceller.",
+              "name": "Haftalık doküman güncellemesi",
+              "prompt": "Son 7 günün commit'lerini incele ve bunların eskittiği dokümantasyonu bul: README, docs/ altındaki dosyalar ve kurulum ya da kullanım talimatları. Yalnızca bu değişikliklerin gerektirdiği yerleri güncelle, mevcut üslubu ve yapıyı koru ve kodda olmayan davranışları belgeleme. Düzenlemeleri bu dalda commit et ve bir insanın inceleyebilmesi için neyin neden değiştiğini özetle. Güncellenecek bir şey yoksa bunu söyle ve hiçbir değişiklik yapma."
             }
           },
           "list": {
