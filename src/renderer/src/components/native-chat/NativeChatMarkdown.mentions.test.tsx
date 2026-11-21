@@ -132,6 +132,7 @@ describe("Slack mention tokens in an agent's reply", () => {
             identityKeys: [],
             referenceRepo: { owner: 'o', repo: 'r' }
           },
+          projectGitHubRepos: [],
           githubRoutingAuthorityKey: null,
           webPreviews: null
         }}

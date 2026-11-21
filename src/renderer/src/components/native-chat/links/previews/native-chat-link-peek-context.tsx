@@ -3,6 +3,8 @@ import { useAppStore } from '@/store'
 import { resolveOwnerOrLocal } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { NativeChatFileLinkContext } from '../actions/native-chat-file-link-context'
 import { useNativeChatGitHubRepo, type NativeChatGitHubRepo } from './native-chat-github-repo'
+import { useProjectGitHubRepos } from './native-chat-project-github-repos'
+import type { GitHubRepoReference } from '../../../../../../shared/github/markdown/github-reference-links'
 import {
   authorityKey,
   type HostAuthorityKey
@@ -10,6 +12,8 @@ import {
 
 export type NativeChatLinkPeek = {
   githubRepo: NativeChatGitHubRepo | null
+  /** The other projects' repos, which `name#123` can name. */
+  projectGitHubRepos: readonly GitHubRepoReference[]
   /** The chat's host, where GitHub links off `githubRepo`'s hosts find a repo to answer them; null
    *  leaves those links to the web preview. */
   githubRoutingAuthorityKey: HostAuthorityKey | null
@@ -19,6 +23,7 @@ export type NativeChatLinkPeek = {
 
 export const NativeChatLinkPeekContext = createContext<NativeChatLinkPeek>({
   githubRepo: null,
+  projectGitHubRepos: [],
   githubRoutingAuthorityKey: null,
   webPreviews: null
 })
@@ -32,6 +37,7 @@ export function NativeChatLinkPeekProvider({
   children: ReactNode
 }): React.JSX.Element {
   const githubRepo = useNativeChatGitHubRepo(fileLinkContext?.worktreeId)
+  const projectGitHubRepos = useProjectGitHubRepos()
   const webPreviewsEnabled = useAppStore(
     (state) => state.settings?.nativeChatLinkPreviews !== false
   )
@@ -45,10 +51,17 @@ export function NativeChatLinkPeekProvider({
   const value = useMemo(
     () => ({
       githubRepo,
+      projectGitHubRepos,
       githubRoutingAuthorityKey,
       webPreviews: webPreviewsEnabled ? { runtimeEnvironmentId } : null
     }),
-    [githubRepo, githubRoutingAuthorityKey, runtimeEnvironmentId, webPreviewsEnabled]
+    [
+      githubRepo,
+      projectGitHubRepos,
+      githubRoutingAuthorityKey,
+      runtimeEnvironmentId,
+      webPreviewsEnabled
+    ]
   )
   return (
     <NativeChatLinkPeekContext.Provider value={value}>

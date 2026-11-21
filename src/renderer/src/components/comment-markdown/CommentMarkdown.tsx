@@ -60,9 +60,10 @@ function remarkNativeChatFileLinks(
 }
 
 export function remarkGitHubReferences(
-  defaultRepo: GitHubRepoReference
+  defaultRepo: GitHubRepoReference | null,
+  projectRepos?: readonly GitHubRepoReference[]
 ): () => (tree: Parameters<typeof linkGitHubReferences>[0]) => void {
-  return () => (tree) => linkGitHubReferences(tree, defaultRepo)
+  return () => (tree) => linkGitHubReferences(tree, defaultRepo, projectRepos)
 }
 
 // Escape HTML before remark-breaks so newlines inside it still break.
@@ -101,6 +102,8 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   math?: boolean
   variant?: 'compact' | 'document'
   githubRepo?: GitHubRepoReference | null
+  /** Repos `name#123` can name besides `githubRepo`; they link even without `githubRepo`. */
+  projectGitHubRepos?: readonly GitHubRepoReference[]
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   /** Turns detected file paths into links, keeping only those this confirms exist. */
@@ -134,6 +137,7 @@ const CommentMarkdown = React.memo(
       className,
       variant = 'compact',
       githubRepo,
+      projectGitHubRepos,
       onLinkClick,
       allowFileUriLinks = false,
       fileLinkExists,
@@ -183,8 +187,18 @@ const CommentMarkdown = React.memo(
         : basePlugins
       const withMath: RemarkPlugins = math ? [...plugins, remarkChatMath] : plugins
       const withExtension = extension ? [...withMath, ...extension.remarkPlugins] : withMath
-      return githubRepo ? [...withExtension, remarkGitHubReferences(githubRepo)] : withExtension
-    }, [extension, fileLinkExists, githubRepo, math, singleTildeStrikethrough, unknownHtmlAsText])
+      return githubRepo || projectGitHubRepos?.length
+        ? [...withExtension, remarkGitHubReferences(githubRepo ?? null, projectGitHubRepos)]
+        : withExtension
+    }, [
+      extension,
+      fileLinkExists,
+      githubRepo,
+      math,
+      projectGitHubRepos,
+      singleTildeStrikethrough,
+      unknownHtmlAsText
+    ])
     const blocks = useMarkdownBlocks(
       content,
       growing,
