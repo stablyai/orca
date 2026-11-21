@@ -6,6 +6,7 @@ import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/
 import { isWslUncPath } from '../../../../../shared/file-access/wsl-paths'
 import { isWindowsAbsolutePathLike } from '../../../../../shared/file-access/cross-platform-path'
 import { resolveHostAgentStartupShell } from '../../../../../shared/shell/launch/windows-terminal-shell'
+import { getProbedLocalGitBashAvailability } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import type { AppState } from '@/store/types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
 import type { AgentStartupShell } from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
@@ -165,7 +166,8 @@ export function resolveAgentResumeLaunchTarget(
         ? args.connectionId
           ? null
           : args.runtimeHostTerminalWindowsShell
-        : args.terminalWindowsShell
+        : args.terminalWindowsShell,
+      gitBashAvailable: isRemote ? undefined : getProbedLocalGitBashAvailability()
     })
   }
 }

@@ -19,6 +19,7 @@ import {
   type LaunchScopeRuntimeStore
 } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import { resolveLocalPtyOptions } from '../../../workspaces/execution-host/local-project-runtime-pty-options'
+import { isConfiguredGitBashAvailable } from '../../../pty/shell-startup/git-bash'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import {
@@ -86,9 +87,14 @@ export function resolveAgentLaunchRuntime(
       agentLaunchRepairRefusal(projectRuntime.repair)
     )
   }
+  const platform = executionRuntimePlatform(projectRuntime, scope.path, process.platform)
+  const pty = resolveLocalPtyOptions(store.getSettings(), projectRuntime, requestedShellOverride)
+  const gitBashAvailable =
+    platform === 'win32' ? isConfiguredGitBashAvailable(pty.shellOverride) : undefined
   return {
-    platform: executionRuntimePlatform(projectRuntime, scope.path, process.platform),
-    pty: resolveLocalPtyOptions(store.getSettings(), projectRuntime, requestedShellOverride)
+    platform,
+    pty,
+    ...(gitBashAvailable !== undefined ? { gitBashAvailable } : {})
   }
 }
 
@@ -126,9 +132,14 @@ export function resolveStartupAgentLaunchRuntime(
       launchRuntime
     }
   } catch (error) {
+    const platform = agentLaunchPlatformForScope(store, scope)
+    const gitBashAvailable =
+      !scope.connectionId && platform === 'win32'
+        ? isConfiguredGitBashAvailable(store.getSettings()?.terminalWindowsShell)
+        : undefined
     return {
-      platform: agentLaunchPlatformForScope(store, scope),
-      shell: undefined,
+      platform,
+      shell: gitBashAvailable === false ? 'powershell' : undefined,
       launchRuntime: error instanceof Error ? error : new Error(String(error))
     }
   }

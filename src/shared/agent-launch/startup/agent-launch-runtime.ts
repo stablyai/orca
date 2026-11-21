@@ -11,6 +11,8 @@ export type AgentLaunchRuntime = {
   platform: NodeJS.Platform
   /** The spawn's own PTY options; empty for a remote host, which picks its own shell. */
   pty: LocalWindowsTerminalRuntimeOptions
+  /** Local host's probed Git Bash availability when configured; omit when unknown. */
+  gitBashAvailable?: boolean
 }
 
 export function agentLaunchQuotingShell(runtime: AgentLaunchRuntime): AgentStartupShell {
@@ -20,7 +22,8 @@ export function agentLaunchQuotingShell(runtime: AgentLaunchRuntime): AgentStart
       platform: runtime.platform,
       // A remote fact names no shell, which quotes for its platform's default.
       isRemote: false,
-      terminalWindowsShell: runtime.pty.shellOverride
+      terminalWindowsShell: runtime.pty.shellOverride,
+      gitBashAvailable: runtime.gitBashAvailable
     })
   )
 }

@@ -6,6 +6,10 @@ import { useAppStore } from '@/store/index'
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { signInToClaudeAccount } from '@/lib/provider-accounts/claude-account-sign-in'
 import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
+import {
+  signInShell,
+  useBashProbe
+} from '@/runtime/hosts/capabilities/windows-terminal-sign-in-shell'
 import { readAgentInventoryForTarget } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { runtimeHostPlatform } from '@/components/terminal-pane/pty-transport/host-ownership/pty-owner-machine-platform'
 import {
@@ -21,7 +25,6 @@ import {
 import type { AgentSessionAccountKind } from '../../../../../shared/agent-session/failures/agent-session-availability'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import { resolveHostAgentStartupShell } from '../../../../../shared/shell/launch/windows-terminal-shell'
 import {
   useNativeChatHostCommandTerminal,
   type NativeChatHostCommandTerminal
@@ -197,25 +200,21 @@ function useNativeChatSignIn(
     input.failure,
     input.startFailures.filter((fact) => isNativeChatSignInFailureKind(fact.kind)).length
   )
+  useBashProbe(input.target.kind === 'local')
   const shell = useAppStoreWithHostStatuses((s, statuses) => {
     const status =
       input.target.kind === 'environment'
         ? lastVerifiedRuntimeStatus(statuses.get(input.target.environmentId))
         : null
     const platform = input.target.kind === 'local' ? getRendererAppPlatform() : status?.hostPlatform
-    if (!platform) {
-      return null
-    }
-    return (
-      resolveHostAgentStartupShell({
-        platform,
-        isRemote: input.target.kind !== 'local',
-        hostTerminalWindowsShell:
-          input.target.kind === 'local'
-            ? s.settings?.terminalWindowsShell
-            : status?.terminalWindowsShell
-      }) ?? (platform === 'win32' ? null : 'posix')
-    )
+    return signInShell({
+      platform,
+      isRemote: input.target.kind !== 'local',
+      hostTerminalWindowsShell:
+        input.target.kind === 'local'
+          ? s.settings?.terminalWindowsShell
+          : status?.terminalWindowsShell
+    })
   })
   const command = agentSessionSignInCommand(input.agent, {
     account: input.account,

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { startWindowsTerminalCapabilityReprobe } from './windows-terminal-capability-reprobe'
 import { readWindowsTerminalCapabilities } from './windows-terminal-capability-read'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
@@ -25,7 +26,7 @@ const CAPABILITY_CACHE_TTL_MS = 30_000
 const CAPABILITY_OWNER_CACHE_MAX = 32
 const cachedCapabilitiesByOwnerKey = new Map<
   string,
-  { capabilities: WindowsTerminalCapabilities; loadedAt: number }
+  { capabilities: WindowsTerminalCapabilities; loadedAt: number; gitBashProbed: boolean }
 >()
 const pendingCapabilitiesByOwnerKey = new Map<string, Promise<WindowsTerminalCapabilities>>()
 let nextCapabilityRequestId = 0
@@ -72,10 +73,11 @@ export function getWindowsTerminalCapabilityOwnerKey(
 function publish(
   capabilities: WindowsTerminalCapabilities,
   ownerKey: string,
-  loadedAt = Date.now()
+  loadedAt = Date.now(),
+  gitBashProbed = false
 ): void {
   cachedCapabilitiesByOwnerKey.delete(ownerKey)
-  cachedCapabilitiesByOwnerKey.set(ownerKey, { capabilities, loadedAt })
+  cachedCapabilitiesByOwnerKey.set(ownerKey, { capabilities, loadedAt, gitBashProbed })
   trimCapabilityOwnerCaches()
   for (const subscriber of subscribersByOwnerKey.get(ownerKey) ?? []) {
     subscriber(capabilities)
@@ -118,6 +120,15 @@ export function hasCachedWindowsTerminalCapabilities(ownerKey = 'local'): boolea
   return cachedCapabilitiesByOwnerKey.has(ownerKey)
 }
 
+/** This machine's probed Git Bash availability for local launches; undefined when unknown. */
+export function getProbedLocalGitBashAvailability(): boolean | undefined {
+  if (isWebClientLocation()) {
+    return undefined
+  }
+  const cached = cachedCapabilitiesByOwnerKey.get('local')
+  return cached?.gitBashProbed ? cached.capabilities.gitBashAvailable : undefined
+}
+
 export function loadWindowsTerminalCapabilities(
   options: {
     force?: boolean
@@ -148,11 +159,12 @@ export function loadWindowsTerminalCapabilities(
   // Share one probe across Settings/status/web bars or shell choices can disagree.
   const requestId = ++nextCapabilityRequestId
   latestCapabilityRequestIdByOwnerKey.set(ownerKey, requestId)
+  const isLocalDesktopRead = target.kind === 'local' && !sshConnectionId
   const nextPendingCapabilities = readWindowsTerminalCapabilities(target, sshConnectionId)
-    .then((capabilities) => {
+    .then(({ capabilities, gitBashProbed }) => {
       if (requestId === latestCapabilityRequestIdByOwnerKey.get(ownerKey)) {
         pendingCapabilitiesByOwnerKey.delete(ownerKey)
-        publish(capabilities, ownerKey, now)
+        publish(capabilities, ownerKey, now, gitBashProbed && isLocalDesktopRead)
         return capabilities
       }
       return getCachedWindowsTerminalCapabilities(ownerKey)
@@ -160,7 +172,7 @@ export function loadWindowsTerminalCapabilities(
     .catch(() => {
       if (requestId === latestCapabilityRequestIdByOwnerKey.get(ownerKey)) {
         pendingCapabilitiesByOwnerKey.delete(ownerKey)
-        publish(UNAVAILABLE_CAPABILITIES, ownerKey, now)
+        publish(UNAVAILABLE_CAPABILITIES, ownerKey, now, false)
         return UNAVAILABLE_CAPABILITIES
       }
       return getCachedWindowsTerminalCapabilities(ownerKey)

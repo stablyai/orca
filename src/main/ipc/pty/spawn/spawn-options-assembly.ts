@@ -9,6 +9,7 @@ import { withCodexStartupImageCommand } from '../../../../shared/agent-launch/st
 import { getLegacyOpenCodeEnvKeysToDelete } from '../../../opencode/status-hooks/legacy-shared-config-dir'
 import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/shell-startup/legacy-terminal-shim-dir'
+import { isConfiguredGitBashAvailable } from '../../../pty/shell-startup/git-bash'
 import { PI_PROCESS_OWNER_ENV_KEYS } from '../../../pty/shell-startup/pi-process-owner-env'
 import { planCodexNoDaemonLaunch } from '../../../pty/shell-startup/codex-no-daemon-launch-command'
 import { applyAgentWorkspaceTrustToSpawn } from '../../../agent-launch/trust/agent-workspace-trust-spawn'
@@ -131,12 +132,15 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   const { args } = input
   const connectionId = args.connectionId ?? undefined
   const launchAgent = isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
+  const isRemote = Boolean(connectionId) || input.codexRuntime === 'wsl'
+  const terminalWindowsShell = input.shellOverride ?? input.getSettings?.()?.terminalWindowsShell
   const shell = resolveStartupShell(
     input.codexRuntime === 'wsl' ? 'linux' : process.platform,
     resolveLocalWindowsAgentStartupShell({
       platform: process.platform,
-      isRemote: Boolean(connectionId) || input.codexRuntime === 'wsl',
-      terminalWindowsShell: input.shellOverride ?? input.getSettings?.()?.terminalWindowsShell
+      isRemote,
+      terminalWindowsShell,
+      gitBashAvailable: isRemote ? undefined : isConfiguredGitBashAvailable(terminalWindowsShell)
     })
   )
   const openCodeLaunch = await prepareOpenCodePtyLaunch({

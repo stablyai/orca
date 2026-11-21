@@ -5,6 +5,7 @@ import { isTuiAgentEnabled } from '../../../../../shared/agent-launch/catalog/tu
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { translate } from '@/i18n/i18n'
 import { resolveLocalWindowsAgentStartupShell } from '../../../../../shared/shell/launch/windows-terminal-shell'
+import { getProbedLocalGitBashAvailability } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 
 /** Validate user-fixable agent/arguments/input; the host’s agent.launch owns prompt delivery, never predictions here. */
 export type SourceControlLaunchCheckResult = { ok: true } | { ok: false; error: string }
@@ -66,7 +67,8 @@ export function checkSourceControlAgentActionLaunch(args: {
     resolveLocalWindowsAgentStartupShell({
       platform,
       isRemote,
-      terminalWindowsShell: args.terminalWindowsShell
+      terminalWindowsShell: args.terminalWindowsShell,
+      gitBashAvailable: isRemote ? undefined : getProbedLocalGitBashAvailability()
     }) ?? (platform === 'win32' ? 'powershell' : 'posix')
   const plannedArgs = planAgentCliArgsSuffix(args.agentArgs, shell)
   if (!plannedArgs.ok) {

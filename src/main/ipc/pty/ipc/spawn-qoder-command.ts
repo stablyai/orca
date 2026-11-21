@@ -1,4 +1,5 @@
 import { resolveQoderTerminalCommand } from '../../../runtime/terminal/launch/qoder-terminal-command-resolution'
+import { isConfiguredGitBashAvailable } from '../../../pty/shell-startup/git-bash'
 import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/shell/launch/windows-terminal-shell'
 import type { PtyIpcSpawnState } from './spawn-state'
@@ -25,7 +26,11 @@ export async function preparePtyIpcQoderCommand(ctx: PtyIpcSpawnState): Promise<
         resolveLocalWindowsAgentStartupShell({
           platform,
           isRemote: Boolean(connectionId),
-          terminalWindowsShell: ctx.effectiveShellOverride
+          terminalWindowsShell: ctx.effectiveShellOverride,
+          gitBashAvailable:
+            !connectionId && platform === 'win32'
+              ? isConfiguredGitBashAvailable(ctx.effectiveShellOverride)
+              : undefined
         })
       )
     }

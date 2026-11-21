@@ -30,6 +30,7 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/shell/launch/windows-terminal-shell'
+import { isConfiguredGitBashAvailable } from '../../../pty/shell-startup/git-bash'
 import {
   resolveStartupShell,
   type AgentStartupShell
@@ -244,12 +245,17 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
       ? { repo, path: repo.path, connectionId: getRepoRoutingConnectionId(repo) }
       : await this.resolveTerminalWorkspaceLaunchScope(target.worktree!)
     const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
+    const terminalWindowsShell = this.store?.getSettings().terminalWindowsShell
     const shell = resolveStartupShell(
       platform,
       resolveLocalWindowsAgentStartupShell({
         platform,
         isRemote: Boolean(workspace.connectionId),
-        terminalWindowsShell: this.store?.getSettings().terminalWindowsShell
+        terminalWindowsShell,
+        gitBashAvailable:
+          !workspace.connectionId && platform === 'win32'
+            ? isConfiguredGitBashAvailable(terminalWindowsShell)
+            : undefined
       })
     )
     return this.resolveOrchestrationAgentLauncher(selector, platform, shell)
