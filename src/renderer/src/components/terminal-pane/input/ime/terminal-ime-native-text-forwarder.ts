@@ -101,6 +101,8 @@ export function installTerminalImeNativeTextForwarder(args: {
   sendInput: (data: string) => void
   /** Read negotiated flags once per commit; keydown ownership stays protocol-blind. Omission means no negotiating pane. */
   getKittyKeyboardFlags?: () => number
+  /** Bytes the terminal sends, so a jamo xterm sent itself can still be erased when rebuilt (#9738). */
+  subscribeToTerminalData?: (listener: (data: string) => void) => IDisposable
 }): TerminalImeNativeTextForwarder {
   if (!args.terminalElement) {
     return {
@@ -113,9 +115,10 @@ export function installTerminalImeNativeTextForwarder(args: {
   let pendingCommit: PendingCommit | null = null
   // Rollover and repeat leave multiple keys held; each needs its own release record.
   const claimedKeyRecords = new Map<string, ClaimedKeyRecord>()
+  // Installed before the input listener below so it observes commits the forwarder then swallows or skips.
   const retainedHangulCommit = installTerminalImeRetainedHangulCommit({
+    ...args,
     terminalElement,
-    sendInput: args.sendInput,
     getKittyKeyboardFlags: () => args.getKittyKeyboardFlags?.() ?? 0
   })
   const compositionTransaction = installTerminalImeCompositionTransaction({

@@ -15,8 +15,8 @@ type RetainedRange = {
 
 /**
  * macOS 2-Set can commit a lone jamo as plain text and then rebuild it in place (ㅇ + ㅏ → 아) by
- * replacing that committed range (#9738). The forwarder has already sent the jamo, so keep it in the
- * field for the replacement to land, and erase it from the PTY when the input method replaces it.
+ * replacing that committed range (#9738). The jamo has already been sent, so keep it in the field for
+ * the replacement to land, and erase it from the PTY when the input method replaces it.
  */
 export type TerminalImeRetainedHangulCommit = {
   /** Returns true when the commit stays in the field instead of being cleared. */
@@ -45,8 +45,26 @@ export function installTerminalImeRetainedHangulCommit(args: {
   terminalElement: HTMLElement
   sendInput: (data: string) => void
   getKittyKeyboardFlags: () => number
+  /** Without it, only commits the forwarder sends itself (via retain) can be erased. */
+  subscribeToTerminalData?: (listener: (data: string) => void) => { dispose: () => void }
 }): TerminalImeRetainedHangulCommit {
   let retained: RetainedRange | null = null
+  // Why a candidate: a backspace for text the PTY has not received yet would erase earlier text.
+  let candidate: RetainedRange | null = null
+
+  // Consecutive commits extend one range so a rebuild spanning both still erases both.
+  const extendRetained = (range: RetainedRange): void => {
+    const previous =
+      retained && retained.textarea === range.textarea && isIntact(retained) ? retained : null
+    // The forwarder's own sends also pass through the terminal data listener, which records them first.
+    if (previous && previous.end === range.end && previous.start <= range.start) {
+      return
+    }
+    retained =
+      previous && previous.end === range.start
+        ? { ...range, start: previous.start, text: previous.text + range.text }
+        : range
+  }
 
   const retain = (textarea: HTMLTextAreaElement, committedText: string): boolean => {
     if (!HANGUL_TEXT.test(committedText) || textarea.selectionStart !== textarea.selectionEnd) {
@@ -59,16 +77,51 @@ export function installTerminalImeRetainedHangulCommit(args: {
       retained = null
       return false
     }
-    // Consecutive commits extend one range so a rebuild spanning both still erases both.
-    retained =
-      retained && retained.textarea === textarea && retained.end === start && isIntact(retained)
-        ? { textarea, start: retained.start, end, text: retained.text + committedText }
-        : { textarea, start, end, text: committedText }
+    extendRetained({ textarea, start, end, text: committedText })
     return true
+  }
+
+  // Runs ahead of the forwarder so it also sees the commits the forwarder swallows or leaves to xterm.
+  const noteDeliveryCandidate = (event: Event): void => {
+    if (!(event instanceof InputEvent)) {
+      return
+    }
+    const textarea = event.target
+    const committedText = event.data
+    if (
+      event.inputType !== 'insertText' ||
+      !committedText ||
+      !(textarea instanceof HTMLTextAreaElement)
+    ) {
+      return
+    }
+    const end = textarea.selectionEnd
+    const start = end - committedText.length
+    candidate =
+      HANGUL_TEXT.test(committedText) &&
+      textarea.selectionStart === end &&
+      start >= 0 &&
+      textarea.value.slice(start, end) === committedText
+        ? { textarea, start, end, text: committedText }
+        : null
+  }
+
+  // xterm sends a pending composition and the text after it as one chunk, so the candidate must be its tail.
+  const observeTerminalData = (data: string): void => {
+    const range = candidate
+    if (!range || !data.endsWith(range.text) || !isIntact(range)) {
+      return
+    }
+    candidate = null
+    extendRetained(range)
   }
 
   // Capture runs before xterm or the forwarder sends the replacement, so the PTY erases it first.
   const eraseReplacedRange = (event: Event): void => {
+    // Text sent after this point may be the new composition's own, so it cannot confirm an older commit.
+    if (event.type === 'compositionstart') {
+      candidate = null
+    }
     const range = retained
     if (!range || event.target !== range.textarea) {
       return
@@ -99,13 +152,11 @@ export function installTerminalImeRetainedHangulCommit(args: {
   const dropOnNonTextKeydown = (event: KeyboardEvent): void => {
     const range = retained
     const isPlainText = event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey
-    if (
-      !range ||
-      isPlainText ||
-      event.keyCode === 229 ||
-      event.isComposing ||
-      MODIFIER_KEYS.has(event.key)
-    ) {
+    if (isPlainText || event.keyCode === 229 || event.isComposing || MODIFIER_KEYS.has(event.key)) {
+      return
+    }
+    candidate = null
+    if (!range) {
       return
     }
     retained = null
@@ -118,8 +169,11 @@ export function installTerminalImeRetainedHangulCommit(args: {
   // xterm empties the field on blur.
   const drop = (): void => {
     retained = null
+    candidate = null
   }
 
+  const terminalData = args.subscribeToTerminalData?.(observeTerminalData)
+  args.terminalElement.addEventListener('input', noteDeliveryCandidate, true)
   args.terminalElement.addEventListener('compositionstart', eraseReplacedRange, true)
   args.terminalElement.addEventListener('beforeinput', eraseReplacedRange, true)
   args.terminalElement.addEventListener('keydown', dropOnNonTextKeydown, true)
@@ -129,6 +183,9 @@ export function installTerminalImeRetainedHangulCommit(args: {
     retain,
     dispose: () => {
       retained = null
+      candidate = null
+      terminalData?.dispose()
+      args.terminalElement.removeEventListener('input', noteDeliveryCandidate, true)
       args.terminalElement.removeEventListener('keydown', dropOnNonTextKeydown, true)
       args.terminalElement.removeEventListener('blur', drop, true)
       args.terminalElement.removeEventListener('compositionstart', eraseReplacedRange, true)
