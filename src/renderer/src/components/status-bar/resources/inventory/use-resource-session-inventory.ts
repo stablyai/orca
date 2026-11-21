@@ -7,13 +7,14 @@ export function useResourceSessionInventory(ready: boolean, active = false, loca
   const [cache] = useState(
     () =>
       new ResourceSessionInventoryCache(
-        (requestId) =>
+        () =>
           window.api.pty.listSessions(
             localOnly ? { connectionId: null, includeUnrouted: true } : undefined,
-            { resourceManagerView: true, requestId }
+            {
+              resourceManagerView: true
+            }
           ),
-        localOnly,
-        (requestId) => window.api.pty.retireListSessions?.(requestId)
+        localOnly
       )
   )
   const state = useSyncExternalStore(cache.subscribe, cache.getSnapshot)

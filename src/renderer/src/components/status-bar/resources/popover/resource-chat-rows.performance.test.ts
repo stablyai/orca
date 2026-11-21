@@ -57,4 +57,21 @@ describe('terminal-only Resource Manager samples pay nothing for chats', () => {
       expect(worktrees.filter((worktree) => worktree.chats !== undefined)).toHaveLength(0)
     }
   )
+
+  it('never parses a paired reply that arrives after the view closed', async () => {
+    const parsedRows = vi.fn()
+    const result = await readRuntimeHostResources(
+      'env',
+      async () => ({
+        get worktrees() {
+          parsedRows()
+          return terminalOnlyWorktrees(300)
+        }
+      }),
+      () => false
+    )
+
+    expect(result).toBeNull()
+    expect(parsedRows).not.toHaveBeenCalled()
+  })
 })
