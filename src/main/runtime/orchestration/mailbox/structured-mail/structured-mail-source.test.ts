@@ -5,7 +5,11 @@ import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { expect, it } from 'vitest'
 import { readAgentMessageSource } from '../../../../../shared/agent-session/journal/agent-session-message-source'
-import { structuredMailMessage, structuredMailSource } from './structured-mail-source'
+import {
+  structuredMailMessage,
+  structuredMailSource,
+  type MailSourceMessage
+} from './structured-mail-source'
 import { settleStructuredMailAttempt } from './structured-mail-custody'
 import { AgentSessionAttachmentStore } from '../../../../native-chat/agent-session-attachments/agent-session-attachment-store'
 import { setAgentSessionAttachmentStore } from '../../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
@@ -55,46 +59,49 @@ it("calls a federated worker of the Run its worker, and an unrelated chat's Run 
   }
 })
 
-it("marks a worker's mail for the conversation only when a connector-woken turn started it", () => {
+it("sends a local worker's results the thread's turn started back to the thread, and keeps its asks in Orca", () => {
   const db = new OrchestrationDb(':memory:')
   try {
     const run = db.createRun({
-      objective: 'threads',
+      objective: 'thread',
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: null
     })
-    const assign = (handle: string, turnSource?: 'connector') =>
+    const assign = (creatorHandle: string) =>
       db.createDispatchContext({
-        taskId: db.createTask({ runId: run.id, spec: handle }).id,
-        assigneeHandle: handle,
-        creator: { kind: 'terminal', handle: 'term_coord', ...(turnSource ? { turnSource } : {}) },
+        taskId: db.createTask({ runId: run.id, spec: creatorHandle }).id,
+        assigneeHandle: `term_worker_${creatorHandle}`,
+        creator: { kind: 'terminal', handle: creatorHandle, turnSource: 'connector' },
         maxDepth: 8
       })
-    assign('term_asked', 'connector')
-    assign('term_typed')
-    const mail = (address: string) =>
+    const started = assign('term_coord')
+    const foreign = assign('term_other')
+    // Orca mails as the dispatch itself: a failed start or lost worker (escalation), its question,
+    // its setup status.
+    const mail = (dispatchId: string, type: MailSourceMessage['type']) =>
       structuredMailSource({
         db,
-        mailboxHandle: 'term_coord',
+        mailboxHandle: `run:${run.id}`,
         dispatchId: null,
-        senderSnapshot: () => ({ name: 'Sender', agent: null }),
+        senderSnapshot: () => ({ name: 'Worker', agent: null }),
         batch: [
           {
-            id: 'm1',
-            from_handle: address,
+            id: `m-${dispatchId}-${type}`,
+            from_handle: `dispatch:${dispatchId}`,
             run_id: run.id,
-            type: 'status',
+            type,
             payload: null,
             created_at: '2026-01-01T00:00:00.000Z'
           }
         ]
-      })
-    const reloaded = (address: string) =>
-      readAgentMessageSource(JSON.parse(JSON.stringify(mail(address))))!.senders[0]
-
-    expect(reloaded('term_asked')).toMatchObject({ relation: 'worker', toConversation: true })
-    expect(reloaded('term_typed')).toMatchObject({ relation: 'worker' })
-    expect(reloaded('term_typed')).not.toHaveProperty('toConversation')
+      }).senders[0]
+    expect(mail(started.id, 'escalation')).toMatchObject({
+      relation: 'worker',
+      toConversation: true
+    })
+    expect(mail(started.id, 'question')).not.toHaveProperty('toConversation')
+    expect(mail(started.id, 'status')).not.toHaveProperty('toConversation')
+    expect(mail(foreign.id, 'escalation')).not.toHaveProperty('toConversation')
   } finally {
     db.close()
   }
@@ -117,7 +124,7 @@ it("tells a thread chat its answer lands there only on its thread's workers' rep
       })
     assign('term_asked', 'connector')
     assign('term_typed')
-    const text = (from: string) => {
+    const report = (from: string) => {
       const { body } = structuredMailMessage({
         db,
         mailboxHandle: `run:${run.id}`,
@@ -125,6 +132,7 @@ it("tells a thread chat its answer lands there only on its thread's workers' rep
         message: db.insertMessage({
           runId: run.id,
           from,
+          ...(from === 'orca:items' ? { orcaAuthored: 'item-mail' as const } : {}),
           to: `run:${run.id}`,
           subject: 'Done',
           type: 'status'
@@ -143,17 +151,25 @@ it("tells a thread chat its answer lands there only on its thread's workers' rep
           })
         })
       })
-      return body.blocks.map((block) => ('text' in block ? block.text : '')).join('')
+      return {
+        text: body.blocks.map((block) => ('text' in block ? block.text : '')).join(''),
+        sender: readAgentMessageSource(JSON.parse(JSON.stringify(body.from)))?.senders[0]
+      }
     }
 
-    expect(text('term_asked')).toContain(
+    const asked = report('term_asked')
+    expect(asked.sender).toMatchObject({ relation: 'worker', toConversation: true })
+    expect(asked.text).toContain(
       '[Orca: your final message and `orca bot reply` (with any files) go to the Slack thread in #eng.]'
     )
     // A worker an Orca-raised turn started, or another bot, has no thread origin: it stays in Orca.
     const stays =
       '[Orca: this mail did not come from the Slack thread in #eng, so your final message stays in Orca.]'
-    expect(text('term_typed')).toContain(stays)
-    expect(text('term_peer')).toContain(stays)
+    const typed = report('term_typed')
+    expect(typed.sender).toMatchObject({ relation: 'worker' })
+    expect(typed.sender).not.toHaveProperty('toConversation')
+    expect(typed.text).toContain(stays)
+    expect(report('term_peer').text).toContain(stays)
   } finally {
     db.close()
   }
@@ -239,7 +255,7 @@ it("sends another bot's answer to a thread ask back to that thread, and only to 
   }
 })
 
-it("gives a chat the owner's item comment images as image blocks, and only Orca's item mail", () => {
+it("gives a chat the images of item mail and of a bot request about an item as image blocks, and only Orca's payloads", () => {
   const root = '/srv/orca/agent-session-attachments'
   const shot = `${root}/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c01/shot.png`
   setAgentSessionAttachmentStore(new AgentSessionAttachmentStore(root, { hasSession: () => true }))
@@ -250,7 +266,7 @@ it("gives a chat the owner's item comment images as image blocks, and only Orca'
       coordinatorHandle: 'term_bot',
       coordinatorPaneKey: null
     })
-    const blocks = (from: string, images: string[]) =>
+    const blocks = (from: string, images: string[], kind = 'botItems') =>
       structuredMailMessage({
         db,
         mailboxHandle: 'term_bot',
@@ -258,10 +274,12 @@ it("gives a chat the owner's item comment images as image blocks, and only Orca'
         message: db.insertMessage({
           runId: run.id,
           from,
+          ...(from === 'orca:items' ? { orcaAuthored: 'item-mail' as const } : {}),
+          ...(kind === 'botRequest' ? { orcaAuthored: 'bot-request' as const } : {}),
           to: 'term_bot',
           subject: 'Your owner commented',
           type: 'status',
-          payload: JSON.stringify({ botItems: [], images })
+          payload: JSON.stringify({ [kind]: kind === 'botItems' ? [] : {}, images })
         }),
         cliCommand: 'orca',
         senderSnapshot: () => ({ name: 'Sender', agent: null }),
@@ -272,6 +290,8 @@ it("gives a chat the owner's item comment images as image blocks, and only Orca'
       { type: 'image-ref', path: shot }
     ])
     expect(blocks('term_worker', [shot])).toEqual([])
+    expect(blocks('term_worker', [shot], 'botRequest')).toEqual([{ type: 'image-ref', path: shot }])
+    expect(blocks('term_worker', [shot], 'task')).toEqual([])
   } finally {
     db.close()
     setAgentSessionAttachmentStore(null)
@@ -288,6 +308,7 @@ it('reads accepted item mail sent whole with its images, and not once an image w
       const message = db.insertMessage({
         id,
         from: 'orca:items',
+        orcaAuthored: 'item-mail',
         to: 'term_bot',
         subject: 'Your owner commented',
         body: 'see the screenshot',

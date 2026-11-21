@@ -1,3 +1,4 @@
+import { reconsiderCreatorRest } from '../../orchestration/workers/turn-stops/worker-presence-report'
 import { OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory } from './pty-controller-inventory-refresh'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import { indexFloatingSnapshotPtyBindings } from './floating-snapshot-pty-bindings'
@@ -6,6 +7,7 @@ import type {
   RuntimePtyWorktreeRecord
 } from '../records/runtime-terminal-state-records'
 
+import { botGroupOfRoomMailAddress } from '../../../../shared/bots/bot-group-room-mail'
 import { questionAnswerWaitPrefix } from '../../orchestration/mailbox/questions/question-answer-delivery'
 const DISCONNECTED_PTY_RECORD_MAX = 128
 
@@ -125,6 +127,7 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     this.ptyOutputSequenceById.delete(ptyId)
     this.providerSequenceInitializedPtys.delete(ptyId)
     this.providerSequenceOffsetByPtyId.delete(ptyId)
+    this.reattachedProviderSequenceByPtyId.delete(ptyId)
     this.providerSnapshotPreferredPtys.delete(ptyId)
     this.providerModeTrackersByPtyId.delete(ptyId)
     this.providerModeSnapshotScansByPtyId.delete(ptyId)
@@ -179,6 +182,9 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     return this.leavesByPtyId.get(ptyId) ?? []
   }
 
+  /** Mail for a bot group's room arrived; the runtime copies it into the room. */
+  protected botGroupRoomMailArrived(_groupId: string): void {}
+
   // Keep the notification hook on the runtime as well as on the installed
   // command surface: exit escalation can wake an in-flight --wait directly.
   notifyMessageArrived(handle: string, messageType?: string): void {
@@ -186,11 +192,19 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     if (messageType === 'heartbeat') {
       return
     }
+    // A bot on another computer answered a group's question: it goes to that room, never a mailbox.
+    const roomGroupId = botGroupOfRoomMailAddress(handle)
+    if (roomGroupId !== null) {
+      this.botGroupRoomMailArrived(roomGroupId)
+      return
+    }
     if (!handle.startsWith('dispatch:')) {
       this.mailPointerRepointScheduler.schedule(handle)
     } else {
       // A waiting ask rechecks its question, which a settled Dispatch has closed.
       this.messageWaiters.notifyPrefix(questionAnswerWaitPrefix(handle.slice('dispatch:'.length)))
+      // A helper that settled may have been all that held back its creator's report.
+      reconsiderCreatorRest(handle, this.workerTurnStopReportDeps)
     }
     this.orchestrationMailboxNotifications.notifyMessageArrived(handle, messageType)
   }

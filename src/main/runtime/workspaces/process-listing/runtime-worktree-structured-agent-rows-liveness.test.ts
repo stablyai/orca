@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { StructuredAgentSessionStatusFeed } from '../../../native-chat/agent-session-wire/observations/structured-agent-session-status-feed'
 import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
+import type { StatusFeedSession } from '../../../native-chat/agent-session-wire/observations/structured-agent-session-status-feed-deps'
 import type { RuntimeWorktreePsSummary } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import { AgentHookServer, _internals } from '../../../agent-hooks/server/agent-hook-server'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
@@ -42,7 +42,7 @@ afterEach(async () => {
 })
 
 /** A session parked on an approval nobody answered — the state a deliberate close leaves behind. */
-async function awaitingApproval(rowRetired = () => false) {
+async function awaitingApproval() {
   const journal = await journals.open({
     identity: {
       sessionId: SESSION,
@@ -69,42 +69,33 @@ async function awaitingApproval(rowRetired = () => false) {
     },
     { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
-  const sessions = new Map([
-    [
-      SESSION,
-      {
-        journal,
-        child: { phase: 'ready' as const, generation: 'child-1', fence: 1 },
-        params: {
-          location: {
-            executionHostId: 'local' as const,
-            wslDistro: null,
-            workspaceId: WORKTREE_ID,
-            workspaceKind: 'git-worktree' as const
-          },
-          provider: 'codex' as const
-        }
-      }
-    ]
-  ])
+  const session: StatusFeedSession = {
+    journal,
+    child: { phase: 'ready', generation: 'child-1', fence: 1 },
+    params: {
+      location: {
+        executionHostId: 'local',
+        wslDistro: null,
+        workspaceId: WORKTREE_ID,
+        workspaceKind: 'git-worktree'
+      },
+      provider: 'codex'
+    }
+  }
   const store = new AgentHookServer()
-  const published: AgentSessionStatusSummary[] = []
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
-    sessions,
+    sessions: new Map([[SESSION, session]]),
     getConversation: () => null,
-    rowRetired,
+    rowRetired: () => !session.child,
     now: () => Date.now(),
     statusSink: () => ({
-      publish: (summary, subject) => {
-        published.push(summary)
-        store.ingestStructuredStatus(summary, subject)
-      },
+      publish: (summary, subject) => store.ingestStructuredStatus(summary, subject),
       forget: (sessionId) => store.dropStructuredStatus(sessionId)
     })
   })
-  feed.publish(SESSION, journal)
-  return { feed, sessions, store, published }
+  await feed.publish(SESSION, journal)
+  return { feed, session, store }
 }
 
 function worktreeFor(store: AgentHookServer): RuntimeWorktreePsSummary {
@@ -134,25 +125,15 @@ function worktreeFor(store: AgentHookServer): RuntimeWorktreePsSummary {
 }
 
 describe('worktree ps and a closed structured chat', () => {
-  it('stops reporting it once close forgets the session', async () => {
-    const { feed, sessions, store } = await awaitingApproval()
-    // What the host does after eviction: the feed keeps its projection, the store drops the row.
-    sessions.delete(SESSION)
+  it('drops the closed chat and keeps it out after journal replay', async () => {
+    const { feed, session, store } = await awaitingApproval()
+    expect(worktreeFor(store).agents).toHaveLength(1)
+
+    session.child = null
     feed.close(SESSION)
+    expect(worktreeFor(store)).toMatchObject({ agents: [], status: 'inactive' })
 
-    const row = worktreeFor(store)
-    expect(row.agents).toHaveLength(0)
-    expect(row.status).toBe('inactive')
-  })
-
-  it('does not bring it back when its journal is read again', async () => {
-    let closed = false
-    const { feed, store } = await awaitingApproval(() => closed)
-    closed = true
-    feed.close(SESSION)
-
-    feed.publish(SESSION, undefined, { replay: true })
-
-    expect(worktreeFor(store).agents).toHaveLength(0)
+    await feed.publish(SESSION, undefined, { replay: true })
+    expect(worktreeFor(store)).toMatchObject({ agents: [], status: 'inactive' })
   })
 })

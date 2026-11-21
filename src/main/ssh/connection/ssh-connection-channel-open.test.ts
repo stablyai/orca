@@ -78,32 +78,7 @@ describe('SshConnection', () => {
     }
   })
 
-  it('bounds an aborted exec to the close grace when ssh2 never invokes the open callback', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-    ssh2Mock.execBehavior = 'pending'
-    const controller = new AbortController()
-
-    vi.useFakeTimers()
-    try {
-      const outcomePromise = conn
-        .exec('printf ready', { signal: controller.signal })
-        .catch((error: Error) => error)
-
-      controller.abort()
-      // Abort must settle at5s grace, not wait out the30s hung connect.
-      await vi.advanceTimersByTimeAsync(5_000)
-
-      await expect(outcomePromise).resolves.toMatchObject({
-        name: 'AbortError',
-        sshChannelCloseConfirmed: false
-      })
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('drains an exec channel that opens after the abort grace has settled', async () => {
+  it('settles at abort grace and drains the exec channel if it opens later', async () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()
     ssh2Mock.execBehavior = 'pending'

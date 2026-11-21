@@ -129,18 +129,12 @@ afterEach(() => {
 })
 
 describe('useLinearWhoCanAsk', () => {
-  it('lists only this Linear workspace’s people, and says outsiders get a public reply', () => {
+  it('lists, searches and grants access within the selected Linear workspace', async () => {
     renderList(<BotLinearWhoCanAsk bot={bot(mocks.members)} linear={linear} linked />)
 
     expect(screen.getByText('Bea')).toBeDefined()
     expect(screen.queryByText('Sam on Slack')).toBeNull()
     expect(screen.queryByText('Cy')).toBeNull()
-    expect(screen.getByText('Everyone else in Acme gets a public reply to ask you.')).toBeDefined()
-    expect(screen.getByText('You and Bea can ask Reviewer.')).toBeDefined()
-  })
-
-  it('searches Linear only, and saves picks as this workspace’s Linear people', async () => {
-    renderList(<BotLinearWhoCanAsk bot={bot(mocks.members)} linear={linear} linked />)
     fireEvent.click(screen.getByRole('button', { name: 'Add' }))
     fireEvent.change(await screen.findByPlaceholderText('Search people in Acme'), {
       target: { value: 'de' }

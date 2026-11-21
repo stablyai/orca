@@ -1,10 +1,11 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ORCHESTRATION_CONTRACT_VERSION,
-  ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY
+  ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY,
+  ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY
 } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { RuntimeRpcResponse } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { readAnswerSenderSnapshot } from '../../../../../../shared/agent-session/journal/answer-sender-snapshot'
@@ -221,6 +222,23 @@ describe('mail to a bot on a paired server', () => {
     await expect(botReply(request!.id, 'again')).rejects.toThrow('already answered')
   })
 
+  it("refuses an --on miss as today, without the server's own --on hint", async () => {
+    const server = { name: 'Laptop', on: 'Laptop' }
+    const entry = {
+      id: 'doc',
+      name: 'Doc',
+      agent: 'codex' as const,
+      paused: false,
+      specialty: null,
+      linked: [],
+      server
+    }
+    b.runtime.pairedBotRosters.remember([{ environmentId: 'env_c', server, bots: [entry] }])
+    await expect(send({ type: 'question', to: 'bot:Doc' })).rejects.toThrow(
+      /^There is no bot named Doc on this computer \(its bots: bot:Docs\), so pick one of those or do the work yourself\.$/
+    )
+  })
+
   it('hands work to a bot with no Home Chat yet, and refuses to answer status', async () => {
     await send({ type: 'handoff', subject: 'Take the docs task' })
     await send({ type: 'status', subject: 'FYI: docs merged' })
@@ -398,5 +416,24 @@ describe('mail to a bot on a paired server', () => {
       code: 'server_mail_unsupported'
     })
     expect(b.db.getInbox(10)).toEqual([])
+  })
+
+  it('sends the words without the files to a server too old to take them, and says so', async () => {
+    bCapabilities = (capabilities) =>
+      capabilities.filter(
+        (capability) => capability !== ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY
+      )
+    const shot = join(dir, 'shot.png')
+    writeFileSync(shot, Buffer.alloc(4))
+
+    await expect(send({ type: 'question', files: [shot] })).resolves.toMatchObject({
+      warnings: [
+        {
+          code: 'files_not_sent',
+          message: "devB's Orca needs an update to receive files, so the message went without them."
+        }
+      ]
+    })
+    expect(b.db.getUnreadMessages(DOCS_HOME)).toMatchObject([{ type: 'question' }])
   })
 })

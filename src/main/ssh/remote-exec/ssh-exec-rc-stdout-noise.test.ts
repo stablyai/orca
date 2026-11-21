@@ -42,12 +42,6 @@ function hostWithStartupOutput(startupScript: string, env: Record<string, string
   return { commands, usesSystemSshTransport: () => false, exec }
 }
 
-const STARTUP_NOISE: [string, string][] = [
-  ['an rc echo', 'echo FISH-RC-BANNER stdout noise'],
-  ['a bare terminal-title escape', String.raw`printf '\033]0;t\007'`],
-  ['a banner with no trailing newline', "printf 'motd-without-newline'"]
-]
-
 describe.skipIf(process.platform === 'win32')('SSH exec under noisy startup files', () => {
   it('keeps token probes exact and the exit code intact', async () => {
     const conn = hostWithStartupOutput('echo OK')
@@ -65,36 +59,34 @@ describe.skipIf(process.platform === 'win32')('SSH exec under noisy startup file
 describe.skipIf(process.platform === 'win32' || !existsSync('/bin/bash'))(
   'login-shell Node probe under noisy startup files',
   () => {
-    it.each(STARTUP_NOISE)(
-      'finds a Node only the profile puts on PATH despite %s',
-      async (_name, startup) => {
-        const home = await mkdtemp(join(tmpdir(), 'orca-login-shell-node-'))
-        try {
-          const nodePath = join(home, 'custom-node', 'bin', 'node')
-          await mkdir(join(home, 'custom-node', 'bin'), { recursive: true })
-          await writeFile(nodePath, '#!/bin/sh\necho v22.0.0\n')
-          await chmod(nodePath, 0o755)
-          // sshd's shell and the nested `bash -l` both print before the probe runs.
-          await writeFile(
-            join(home, '.bash_profile'),
-            `${startup}\nexport PATH='${join(home, 'custom-node', 'bin')}':"$PATH"\n`
-          )
-          const host = hostWithStartupOutput(startup, { HOME: home, SHELL: '/bin/bash' })
-          const checked: string[] = []
-          const found = await tryResolveViaLoginShell(
-            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: execCommand only uses exec and usesSystemSshTransport.
-            host as unknown as SshConnection,
-            async (candidate) => {
-              checked.push(candidate)
-              return candidate === nodePath ? true : null
-            }
-          )
-          expect(checked).toEqual([nodePath])
-          expect(found?.nodePath).toBe(nodePath)
-        } finally {
-          await rm(home, { recursive: true, force: true })
-        }
+    it('finds a Node only the profile puts on PATH despite noisy startup output', async () => {
+      const startup = String.raw`echo FISH-RC-BANNER stdout noise; printf '\033]0;t\007motd-without-newline'`
+      const home = await mkdtemp(join(tmpdir(), 'orca-login-shell-node-'))
+      try {
+        const nodePath = join(home, 'custom-node', 'bin', 'node')
+        await mkdir(join(home, 'custom-node', 'bin'), { recursive: true })
+        await writeFile(nodePath, '#!/bin/sh\necho v22.0.0\n')
+        await chmod(nodePath, 0o755)
+        // sshd's shell and the nested `bash -l` both print before the probe runs.
+        await writeFile(
+          join(home, '.bash_profile'),
+          `${startup}\nexport PATH='${join(home, 'custom-node', 'bin')}':"$PATH"\n`
+        )
+        const host = hostWithStartupOutput(startup, { HOME: home, SHELL: '/bin/bash' })
+        const checked: string[] = []
+        const found = await tryResolveViaLoginShell(
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: execCommand only uses exec and usesSystemSshTransport.
+          host as unknown as SshConnection,
+          async (candidate) => {
+            checked.push(candidate)
+            return candidate === nodePath ? true : null
+          }
+        )
+        expect(checked).toEqual([nodePath])
+        expect(found?.nodePath).toBe(nodePath)
+      } finally {
+        await rm(home, { recursive: true, force: true })
       }
-    )
+    })
   }
 )

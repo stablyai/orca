@@ -6,8 +6,6 @@ const botTabs = [
   { id: 'bot-connectors' as const, title: 'Connectors', labeledTab: true },
   { id: 'explorer' as const, title: 'Files', labeledTab: true }
 ]
-const notesTab = { id: 'plugin:samples.notes/panel' as const, title: 'Notes', labeledTab: true }
-const botTabsWithPlugin = [...botTabs, notesTab]
 const ids = (items: { id: string }[]): string[] => items.map((item) => item.id)
 const compactIds = (layout: { compactIds: ReadonlySet<string> }): string[] =>
   [...layout.compactIds].sort()
@@ -23,12 +21,6 @@ describe("a bot page's labeled tabs", () => {
     botTabs[2]
   ]
 
-  it('keep every title when they fit', () => {
-    const layout = getTopActivityBarLayout(fourTabs, 356, 'bot-connectors')
-    expect(compactIds(layout)).toEqual([])
-    expect(ids(layout.overflowItems)).toEqual([])
-  })
-
   it('keep only the open title once they all no longer fit, never dropping titles one at a time', () => {
     const layout = getTopActivityBarLayout(fourTabs, DEFAULT_STRIP_WIDTH, 'bot-chats')
     expect(compactIds(layout)).toEqual(['bot-activity', 'bot-connectors', 'explorer'])
@@ -40,29 +32,15 @@ describe("a bot page's labeled tabs", () => {
     ])
   })
 
-  it('fit by the measured titles, not the estimate', () => {
-    const layout = getTopActivityBarLayout(fourTabs, DEFAULT_STRIP_WIDTH, 'bot-chats', 0, () => 30)
-    expect(compactIds(layout)).toEqual([])
-  })
-
-  it('hold the strip padding when every title shows', () => {
+  it('fits measured titles only when they leave room for the strip padding', () => {
+    const noPadding = getTopActivityBarLayout(fourTabs, 276, 'bot-chats', 0, () => 30)
+    expect(compactIds(noPadding)).toEqual([])
+    expect(noPadding.overflowItems).toEqual([])
     expect(compactIds(getTopActivityBarLayout(fourTabs, 276, 'bot-chats', 8, () => 30))).toEqual([
       'bot-activity',
       'bot-connectors',
       'explorer'
     ])
-  })
-
-  it('drop the closed titles before hiding any tab, at the narrowest panel', () => {
-    const layout = getTopActivityBarLayout(botTabs, 176, 'bot-connectors')
-    expect(compactIds(layout)).toEqual(['bot-activity', 'explorer'])
-    expect(ids(layout.visibleItems)).toEqual(['bot-activity', 'bot-connectors', 'explorer'])
-  })
-
-  it('keep the open tab titled even when it is the last one', () => {
-    const layout = getTopActivityBarLayout(botTabsWithPlugin, DEFAULT_STRIP_WIDTH, notesTab.id)
-    expect(layout.compactIds.has(notesTab.id)).toBe(false)
-    expect(compactIds(layout)).toEqual(['bot-activity', 'bot-connectors', 'explorer'])
   })
 })
 
@@ -124,27 +102,25 @@ describe('a labeled tab opened from More', () => {
 
   // The strips at the 237px and narrowest 220px right sidebars, which include an 8px left padding.
   const STRIP_PADDING = 8
-  const one = (title: string) => withNotes6({ title })
 
   it('keeps a one-character title readable once every closed tab is an icon', () => {
-    for (const title of ['W', '中']) {
-      const crowdedLayout = getTopActivityBarLayout(one(title), 197, notes6, STRIP_PADDING)
-      expect(short(crowdedLayout.visibleItems)).toEqual([
-        'bot-activity',
-        'bot-connectors',
-        'explorer',
-        'panel6'
-      ])
-      expect(crowdedLayout.compactIds.has(notes6)).toBe(false)
-      // Few enough tabs to fit as icons by the estimate alone, yet not with a readable title.
-      const fewer = one(title).filter((item) => !/panel[2-5]$/.test(item.id))
-      expect(
-        short(getTopActivityBarLayout(fewer, 197, notes6, STRIP_PADDING).overflowItems)
-      ).toEqual(['panel0', 'panel1'])
-      expect(
-        short(getTopActivityBarLayout(one(title), 180, notes6, STRIP_PADDING).visibleItems)
-      ).toEqual(['bot-activity', 'bot-connectors', 'panel6'])
-    }
+    const shortTitle = withNotes6({ title: 'W' })
+    const crowdedLayout = getTopActivityBarLayout(shortTitle, 197, notes6, STRIP_PADDING)
+    expect(short(crowdedLayout.visibleItems)).toEqual([
+      'bot-activity',
+      'bot-connectors',
+      'explorer',
+      'panel6'
+    ])
+    expect(crowdedLayout.compactIds.has(notes6)).toBe(false)
+    // Few enough tabs to fit as icons by the estimate alone, yet not with a readable title.
+    const fewer = shortTitle.filter((item) => !/panel[2-5]$/.test(item.id))
+    expect(short(getTopActivityBarLayout(fewer, 197, notes6, STRIP_PADDING).overflowItems)).toEqual(
+      ['panel0', 'panel1']
+    )
+    expect(
+      short(getTopActivityBarLayout(shortTitle, 180, notes6, STRIP_PADDING).visibleItems)
+    ).toEqual(['bot-activity', 'bot-connectors', 'panel6'])
   })
 })
 

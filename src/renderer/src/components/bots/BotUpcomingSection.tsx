@@ -1,5 +1,6 @@
 // Automations in a bot's Activity panel: Tidy memory, Look around, automations and waits, failed first,
-// then running, then soonest; paused ones last. Five show, then "All N automations".
+// then running, then soonest; paused ones last. Five show, then "All N automations". Folded, the rows
+// in trouble stay listed under the header.
 import { ChevronRight, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -8,7 +9,8 @@ import { openBotHomeTab } from '@/lib/bot-catalog'
 import { useAppStore } from '@/store'
 import type { Bot } from '../../../../shared/bot-types'
 import type { UpNextState } from '../../../../shared/bots/bot-look-around'
-import { BotPanelCard } from './BotPanelCard'
+import { BotPanelSection } from './BotPanelSection'
+import { useBotPanelFold } from './use-bot-panel-fold'
 import {
   AUTOMATION_CARD_CAP,
   botAutomationCardView,
@@ -16,7 +18,6 @@ import {
   type BotAutomationCardRow
 } from './bot-automation-card'
 import { UpcomingItem } from './BotUpcomingRows'
-import { useBotPanelFold } from './use-bot-panel-fold'
 
 export function BotUpcomingSection({
   bot,
@@ -40,59 +41,50 @@ export function BotUpcomingSection({
   const { shown, listed, listedPaused } = botAutomationCardView(useAutomationCardOrder(rows))
   const newLabel = t('bots.automations.new', 'New automation')
   const fold = useBotPanelFold(bot.id, 'automations')
-  // A failure shows only on its row, so the folded heading says so.
-  const foldedFailure = !fold.open && rows.some((row) => row.failed)
+  const item = (row: BotAutomationCardRow, folded: boolean): React.JSX.Element => (
+    <UpcomingItem
+      key={row.key}
+      bot={bot}
+      row={row}
+      upNext={upNext}
+      signInStops={signInStops}
+      now={now}
+      folded={folded}
+    />
+  )
   return (
-    <BotPanelCard
+    <BotPanelSection
       title={t('bots.automations.title', 'Automations')}
-      // Only beside "All N automations", which it repeats: above every row it would count built-ins
-      // the page doesn't list.
-      count={listed > AUTOMATION_CARD_CAP ? listed : undefined}
       fold={fold}
-      action={
-        <>
-          {foldedFailure ? (
-            <span className="text-2xs font-medium text-destructive">
-              {t('bots.automations.failed', 'Failed')}
-            </span>
-          ) : null}
-          {/* Icon-only, like the Bots header's "+": the tooltip and accessible name carry the label. */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={newLabel}
-                onClick={() =>
-                  void openBotHomeTab(bot, {
-                    draft: t('bots.automations.newDraft', 'Set up an automation that ')
-                  })
-                }
-              >
-                <Plus />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
-              {newLabel}
-            </TooltipContent>
-          </Tooltip>
-        </>
+      folded={shown.map((row) => item(row, true))}
+      actions={
+        // Icon-only, like the Bots header's "+": the tooltip and accessible name carry the label.
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={newLabel}
+              onClick={() =>
+                void openBotHomeTab(bot, {
+                  draft: t('bots.automations.newDraft', 'Set up an automation that ')
+                })
+              }
+            >
+              <Plus />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>
+            {newLabel}
+          </TooltipContent>
+        </Tooltip>
       }
     >
-      {shown.map((row) => (
-        <UpcomingItem
-          key={row.key}
-          bot={bot}
-          row={row}
-          upNext={upNext}
-          signInStops={signInStops}
-          now={now}
-        />
-      ))}
+      {shown.map((row) => item(row, false))}
       {listed > AUTOMATION_CARD_CAP ? (
         <button
           type="button"
-          className="flex min-h-7 w-full items-center justify-between gap-2 rounded-sm px-2 text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="flex min-h-7 w-full items-center justify-between gap-2 rounded-sm pr-2 pl-8 text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           onClick={() => useAppStore.getState().openAutomationsPage()}
         >
           <span className="min-w-0 truncate">
@@ -105,7 +97,7 @@ export function BotUpcomingSection({
         </button>
       ) : null}
       {hasAutomations ? null : (
-        <p className="px-2 py-1.5 text-2xs text-muted-foreground">
+        <p className="py-1 pr-2 pl-8 text-xs text-muted-foreground">
           {t(
             'bots.upcoming.empty',
             'Ask {{name}} in chat to run something on a schedule or when something happens.',
@@ -113,6 +105,6 @@ export function BotUpcomingSection({
           )}
         </p>
       )}
-    </BotPanelCard>
+    </BotPanelSection>
   )
 }

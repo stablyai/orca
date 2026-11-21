@@ -70,30 +70,23 @@ describe('repo worktree catalog owner', () => {
     vi.useRealTimers()
   })
 
-  it('serves the sidebar and the runtime from one observation within each reader’s accepted age', async () => {
-    const plan = scanner([rows('/repos/app'), rows('/repos/app', '/repos/app-feature')])
+  it('shares a fresh observation and withdraws its authority when the sidebar replaces it', async () => {
+    const firstRows = rows('/repos/app', '/repos/app-old')
+    const nextRows = rows('/repos/app', '/repos/app-feature')
+    const plan = scanner([firstRows, nextRows])
 
-    await readWorktreeCatalog(repo, 'local:default', desktop, plan)
+    const first = await readWorktreeCatalog(repo, 'local:default', desktop, plan)
     vi.advanceTimersByTime(4_000)
     const runtimeRead = await readWorktreeCatalog(repo, 'local:default', runtime, plan)
     expect(plan.calls).toBe(1)
-    expect(runtimeRead.observation?.outcome).toEqual(rows('/repos/app'))
+    expect(runtimeRead.observation?.outcome).toEqual(firstRows)
 
     vi.advanceTimersByTime(2_000)
     const sidebarRead = await readWorktreeCatalog(repo, 'local:default', desktop, plan)
     expect(plan.calls).toBe(2)
-    expect(sidebarRead.observation?.outcome).toEqual(rows('/repos/app', '/repos/app-feature'))
-  })
-
-  it('withdraws destructive authority from rows a newer listing replaced', async () => {
-    const plan = scanner([rows('/repos/app', '/repos/app-old'), rows('/repos/app')])
-    const first = await readWorktreeCatalog(repo, 'local:default', desktop, plan)
-    vi.advanceTimersByTime(6_000)
-
-    const second = await readWorktreeCatalog(repo, 'local:default', desktop, plan)
-
+    expect(sidebarRead.observation?.outcome).toEqual(nextRows)
     expect(isCurrentWorktreeCatalogObservation(first.observation!)).toBe(false)
-    expect(isCurrentWorktreeCatalogObservation(second.observation!)).toBe(true)
+    expect(isCurrentWorktreeCatalogObservation(sidebarRead.observation!)).toBe(true)
   })
 
   it('does not let a runtime verification stretch the sidebar past its 5 seconds', async () => {

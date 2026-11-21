@@ -34,7 +34,7 @@ import {
   rememberPreservedBranchCleanupTarget
 } from './preserved-branch-cleanup'
 import {
-  removeWorktreeMetadataAndTransientState,
+  removeDeletedCheckoutMetadataAndTransientState,
   stopPtysForDestructiveWorktreeRemoval
 } from './worktree-removal-ownership'
 import { preservedBranchCleanupScopeKey } from '../../../../shared/git/branches/preserved-branch-cleanup'
@@ -162,6 +162,7 @@ export async function removeRegisteredLocalWorktree(
         repoId,
         repoPath: repo.path,
         worktree: refreshedRegisteredWorktree,
+        gitdir: await backgroundRemoval.markerIdentity(refreshedRegisteredWorktree.path),
         deleteBranch,
         force: args.force ?? false
       },
@@ -176,8 +177,7 @@ export async function removeRegisteredLocalWorktree(
         return result
       },
       publish: () => context.runtime.publishWorktreeRemovalChange(repoId),
-      admissionFailed: () => removalGate.finish(false),
-      cleanupPushTargetRemote: cleanupPushTarget
+      admissionFailed: () => removalGate.finish(false)
     })
     await backgroundRemoval.waitForWorktreeRemovalAcceptance(args.worktreeId)
     return { removing: true }
@@ -265,7 +265,7 @@ async function finishLocalWorktreeRemoval({
         await pruneGitWorktrees({ cwd: repo.path, ...localWorktreeGitOptions }).catch(() => {})
         await cleanupPushTarget()
         context.runtime.clearOptimisticReconcileToken(args.worktreeId)
-        removeWorktreeMetadataAndTransientState(
+        await removeDeletedCheckoutMetadataAndTransientState(
           context,
           args.worktreeId,
           removalHostId,
@@ -301,7 +301,7 @@ async function finishLocalWorktreeRemoval({
   )
   context.runtime.clearOptimisticReconcileToken(args.worktreeId)
   await withWorktreeRemoveStageSpan('metadata_purge', 'local', async () => {
-    removeWorktreeMetadataAndTransientState(
+    await removeDeletedCheckoutMetadataAndTransientState(
       context,
       args.worktreeId,
       removalHostId,

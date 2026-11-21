@@ -153,7 +153,8 @@ export function useMobileBotChatLabel(chat: LeadingChat, title: string): string 
 }
 
 const styles = themedStyleSheet(() => ({
-  leading: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  // One width whichever icon follows the lane, so chat titles line up.
+  leading: { flexDirection: 'row', alignItems: 'center', gap: 6, width: 10 + 6 + LUCIDE_SIZE },
   lane: { width: 10, alignItems: 'center' },
   badgeRing: {
     position: 'absolute',

@@ -6,11 +6,6 @@ import { quietRichMarkdownEditorHost } from '../document/rich-markdown-editor-ho
 import type { MobileRichMarkdownEditorMessage } from '../mobile-rich-markdown-editor-contract'
 
 const stopDocuments: (() => void)[] = []
-const lists = [
-  ['bullet', '- First\n- Next\n\nOutside', 'li > p'],
-  ['task', '- [ ] First\n- [x] Next\n\nOutside', 'li > div > p']
-] as const
-
 function surface(source: string) {
   document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
   const messages: MobileRichMarkdownEditorMessage[] = []
@@ -28,25 +23,33 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
-for (const [kind, source, selector] of lists) {
-  it.each([
-    ['<strong>First<br>Second</strong>', '**First<br />Second**'],
-    ['<code>First</code><br><code>Second</code>', '`First`<br />`Second`']
-  ])(`keeps ${kind} item soft break inside its list through host save: %s`, (html, text) => {
-    const { editorDocument, editor, messages } = surface(source)
-    editor.querySelector(selector)!.innerHTML = html
-    editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertLineBreak' }))
-    const markdown = source.replace('First', text)
+it.each([
+  [
+    '- First\n- Next\n\nOutside',
+    'li > p',
+    '<strong>First<br>Second</strong>',
+    '**First<br />Second**'
+  ],
+  [
+    '- [ ] First\n- [x] Next\n\nOutside',
+    'li > div > p',
+    '<code>First</code><br><code>Second</code>',
+    '`First`<br />`Second`'
+  ]
+])('keeps a soft break inside its list through host save: %s', (source, selector, html, text) => {
+  const { editorDocument, editor, messages } = surface(source)
+  editor.querySelector(selector)!.innerHTML = html
+  editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertLineBreak' }))
+  const markdown = source.replace('First', text)
 
-    expect(messages.filter((message) => message.type === 'change')).toEqual([
-      { type: 'change', generation: 7, markdown }
-    ])
-    editorDocument.send.setMarkdown(markdown, 8)
-    expect(editor.querySelector(selector)?.innerHTML).toBe(html)
-    expect(editor.querySelector(':scope > p')?.textContent).toBe('Outside')
-    expect(editorDocument.send.currentMarkdown()).toBe(markdown)
-  })
-}
+  expect(messages.filter((message) => message.type === 'change')).toEqual([
+    { type: 'change', generation: 7, markdown }
+  ])
+  editorDocument.send.setMarkdown(markdown, 8)
+  expect(editor.querySelector(selector)?.innerHTML).toBe(html)
+  expect(editor.querySelector(':scope > p')?.textContent).toBe('Outside')
+  expect(editorDocument.send.currentMarkdown()).toBe(markdown)
+})
 
 it.each([
   ['- First\n- Next', 'li > p', '<br>'],

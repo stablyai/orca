@@ -16,6 +16,8 @@ import {
 import { GeneralRemoteServerUpdates } from './GeneralRemoteServerUpdates'
 import { ReleaseChannelSection } from './ReleaseChannelSection'
 import { UpdateDelaySetting } from './UpdateDelaySetting'
+import { AutomaticUpdatesSetting } from './AutomaticUpdatesSetting'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { formatUpdateDelayDate } from './update-delay-copy'
 import { useNow } from '@/lib/window-activity/use-now'
 import { isDelayedUpdatePending } from '../../../../../shared/updater/update-delay'
@@ -101,7 +103,13 @@ export function GeneralUpdateSettingsSection({
             // Modifier clicks are one-off update actions, not saved toggles.
             onClick={(event) => window.api.updater.check(getUpdateCheckClickOptions(event))}
             title={updateCheckHint}
-            disabled={updateStatus.state === 'checking' || updateStatus.state === 'downloading'}
+            disabled={
+              updateStatus.state === 'checking' ||
+              updateStatus.state === 'downloading' ||
+              (updateStatus.state === 'error' &&
+                updateStatus.messageCode === 'macStagingTimeout') ||
+              (updateStatus.state === 'downloaded' && updateStatus.installing)
+            }
             className="gap-2"
           >
             {updateStatus.state === 'checking' ? (
@@ -148,7 +156,8 @@ export function GeneralUpdateSettingsSection({
               <RefreshCw className="size-3.5" />
               {t('auto.components.UpdateCard.b3b02a9d84', 'Try again')}
             </Button>
-          ) : updateStatus.state === 'downloaded' ? (
+          ) : updateStatus.state === 'downloaded' &&
+            !(updateStatus.automaticDownload && updateStatus.installing) ? (
             <Button
               variant="default"
               size="sm"
@@ -188,7 +197,7 @@ export function GeneralUpdateSettingsSection({
                   )
                 : t(
                     'auto.components.settings.GeneralUpdateSettingsSection.8311da27ba',
-                    'is available. Click "Download Update" to download it.'
+                    'is available.'
                   )}{' '}
               {updateStatus.source !== 'local' && (
                 <a
@@ -248,10 +257,12 @@ export function GeneralUpdateSettingsSection({
             <>
               {t('auto.components.settings.GeneralUpdateSettingsSection.a6b37929dc', 'Version')}{' '}
               {updateStatus.version}{' '}
-              {t(
-                'auto.components.settings.GeneralUpdateSettingsSection.d89806cc89',
-                'is ready to install.'
-              )}{' '}
+              {updateStatus.installing
+                ? t('settings.automaticUpdates.installingStatus', 'is being installed.')
+                : t(
+                    'auto.components.settings.GeneralUpdateSettingsSection.d89806cc89',
+                    'is ready to install.'
+                  )}{' '}
               {updateStatus.source !== 'local' && (
                 <a
                   href={
@@ -288,6 +299,7 @@ export function GeneralUpdateSettingsSection({
                     ))}
         </p>
       </SearchableSetting>
+      {isWebClientLocation() ? null : <AutomaticUpdatesSetting />}
       <UpdateDelaySetting />
       {channelSwitcherRevealed ? <ReleaseChannelSection /> : null}
       <GeneralRemoteServerUpdates />

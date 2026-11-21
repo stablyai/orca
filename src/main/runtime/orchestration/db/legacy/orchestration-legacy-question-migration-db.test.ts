@@ -20,7 +20,7 @@ describe('OrchestrationDb legacy question migration', () => {
     }
   })
 
-  it('backfills a pre-question-thread ask and its accepted answer', () => {
+  it('backfills legacy asks and accepts only answers from the same Run and the coordinator', () => {
     const created = createLegacyStorageCutoverFixture()
     tempDir = created.tempDir
     db = new OrchestrationDb(created.fixture.dbPath)
@@ -34,12 +34,13 @@ describe('OrchestrationDb legacy question migration', () => {
       INSERT INTO messages (
         id, run_id, delivery_contract, from_handle, to_handle,
         subject, body, type, thread_id, payload
-      ) VALUES (
-        'msg_cutover', '${adoptedRunId}', 'legacy_direct',
+      )
+      SELECT
+        id, '${adoptedRunId}', 'legacy_direct',
         'term_legacy_worker', 'term_legacy_coord', 'Question',
-        'Continue?', 'decision_gate', 'msg_cutover',
+        'Continue?', 'decision_gate', id,
         '{"taskId":"${created.fixture.legacyTaskId}","dispatchId":"${created.fixture.legacyDispatchId}"}'
-      );
+      FROM (SELECT 'msg_cutover' AS id UNION ALL SELECT 'msg_pending_cutover');
       INSERT INTO messages (
         id, run_id, delivery_contract, from_handle, to_handle,
         subject, body, thread_id
@@ -58,46 +59,7 @@ describe('OrchestrationDb legacy question migration', () => {
           'msg_cutover_answer', '${adoptedRunId}', 'legacy_direct',
           'term_legacy_coord', 'term_legacy_worker',
           'Re: Question', 'yes', 'msg_cutover'
-        );
-    `)
-    raw.pragma('user_version = 19')
-    raw.close()
-
-    db = new OrchestrationDb(created.fixture.dbPath)
-    expect(db.getQuestion('msg_cutover')).toMatchObject({
-      run_id: adoptedRunId,
-      dispatch_id: created.fixture.legacyDispatchId,
-      asker_handle: 'term_legacy_worker',
-      status: 'answered',
-      answer_message_id: 'msg_cutover_answer',
-      answer_body: 'yes'
-    })
-  })
-
-  it('leaves a question pending when only cross-run and self-sent decoys exist', () => {
-    const created = createLegacyStorageCutoverFixture()
-    tempDir = created.tempDir
-    db = new OrchestrationDb(created.fixture.dbPath)
-    const adoptedRunId = db.getLegacyAdoption()?.adopted_run_id as string
-    db.close()
-    db = undefined
-
-    const raw = new Database(created.fixture.dbPath)
-    raw.exec(`
-      DROP TABLE question_threads;
-      INSERT INTO messages (
-        id, run_id, delivery_contract, from_handle, to_handle,
-        subject, body, type, thread_id, payload
-      ) VALUES (
-        'msg_pending_cutover', '${adoptedRunId}', 'legacy_direct',
-        'term_legacy_worker', 'term_legacy_coord', 'Question',
-        'Continue?', 'decision_gate', 'msg_pending_cutover',
-        '{"taskId":"${created.fixture.legacyTaskId}","dispatchId":"${created.fixture.legacyDispatchId}"}'
-      );
-      INSERT INTO messages (
-        id, run_id, delivery_contract, from_handle, to_handle,
-        subject, body, thread_id
-      ) VALUES
+        ),
         (
           'msg_pending_cross_run_decoy', 'run_decoy', 'legacy_direct',
           'term_legacy_coord', 'term_legacy_worker',
@@ -113,6 +75,14 @@ describe('OrchestrationDb legacy question migration', () => {
     raw.close()
 
     db = new OrchestrationDb(created.fixture.dbPath)
+    expect(db.getQuestion('msg_cutover')).toMatchObject({
+      run_id: adoptedRunId,
+      dispatch_id: created.fixture.legacyDispatchId,
+      asker_handle: 'term_legacy_worker',
+      status: 'answered',
+      answer_message_id: 'msg_cutover_answer',
+      answer_body: 'yes'
+    })
     expect(db.getQuestion('msg_pending_cutover')).toMatchObject({
       run_id: adoptedRunId,
       dispatch_id: created.fixture.legacyDispatchId,

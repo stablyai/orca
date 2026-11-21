@@ -75,10 +75,11 @@ function eventsWith(
   const key = { project: P }
   const events = new ComposioEvents(
     {
-      keyState: () => 'ok',
-      project: () => key.project,
+      keyState: async () => 'ok',
+      project: async () => key.project,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements every method ComposioEvents calls.
-      withKey: (call) => call(api as unknown as ComposioApi)
+      withKey: (call) =>
+        call(api as unknown as ComposioApi, { key: 'test-key', project: key.project })
     },
     host,
     store
@@ -217,11 +218,11 @@ describe('Composio events, one address per project', () => {
       { automations: [composioRule('b1', 'T')] }
     )
     store.write(P, signed('ingress-gone'))
-    expect(events.eventsPlace()).toBeNull()
+    expect(await events.eventsPlace()).toBeNull()
     await events.reconcile(['b1'])
     expect(host.createIngress).not.toHaveBeenCalled()
     expect(api.sendEventsTo).not.toHaveBeenCalled()
-    expect(events.eventsPlace()).toEqual({ project: P, here: false, elsewhere: true })
+    expect(await events.eventsPlace()).toEqual({ project: P, here: false, elsewhere: true })
   })
 })
 

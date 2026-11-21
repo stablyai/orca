@@ -6,10 +6,7 @@ import { nativeChatAutomationTurnKeys } from '../../../../../../src/shared/nativ
 import { nativeChatActingTurnKeys } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-acting-turns'
 import { useMobileNativeChatScopedOpenKeys } from './use-mobile-native-chat-scoped-open-keys'
 import { foldBotItemNotes } from '../../../../../../src/shared/bots/bot-item-note-runs'
-import {
-  isSubagentGroupBlock,
-  type NativeChatMessage
-} from '../../../../../../src/shared/native-chat/native-chat-types'
+import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { nativeChatReasoningDisclosureKey } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-reasoning-row'
 import {
   nativeChatLiveLine,
@@ -53,7 +50,8 @@ export function useMobileNativeChatTurnDisclosure({
   stopping = false,
   lineYields = false,
   receipts,
-  scopeKey
+  scopeKey,
+  showsTurnDiffs = true
 }: {
   messages: readonly NativeChatMessage[]
   enabled: boolean
@@ -67,6 +65,8 @@ export function useMobileNativeChatTurnDisclosure({
   lineYields?: boolean
   receipts?: ReadonlyMap<string, NativeChatResolvedPrompt> | null
   scopeKey: string
+  /** Off in a bot's chat, whose own edits are scratch files: its workers do the code work. */
+  showsTurnDiffs?: boolean
 }): {
   active: NativeChatTurnStatus | null
   presentation: MobileNativeChatRunPresentation
@@ -123,7 +123,13 @@ export function useMobileNativeChatTurnDisclosure({
     turnKeys,
     completedByTurn
   )
-  const summaries = useMobileNativeChatTurnDiffs(rows, enabled, turnKeys, partialTurnKey)
+  const summaries = useMobileNativeChatTurnDiffs(
+    rows,
+    enabled,
+    showsTurnDiffs,
+    turnKeys,
+    partialTurnKey
+  )
   const quiet = useMemo(
     () => (enabled ? mobileNativeChatQuietTurns(rows, turnKeys, completedByTurn, summaries) : null),
     [completedByTurn, enabled, rows, summaries, turnKeys]
@@ -142,14 +148,14 @@ export function useMobileNativeChatTurnDisclosure({
       return { listMessages: rows, waitingRows: [], indexById: null }
     }
     return {
-      listMessages: rows.filter((message) => !ids?.has(message.id) && !quiet?.ids.has(message.id)),
+      // Rows merged into a later one are among the quiet ids, and draw inside it.
+      listMessages: (quiet?.shown ?? rows).filter((m) => !ids?.has(m.id) && !quiet?.ids.has(m.id)),
       waitingRows: rows.flatMap((item, index) => (ids?.has(item.id) ? [{ item, index }] : [])),
       indexById: new Map(rows.map((message, index) => [message.id, index]))
     }
   }, [enabled, quiet, rows, stopping, turnJournal])
   const [expandedTurnIds, toggleExpandedTurn] = useMobileNativeChatScopedOpenKeys(scopeKey)
   const [expandedReasoning, toggleReasoning] = useMobileNativeChatScopedOpenKeys(scopeKey)
-  const [openSubagentGroups, toggleSubagentGroup] = useMobileNativeChatScopedOpenKeys(scopeKey)
   const [openUserMessages, toggleUserMessage] = useMobileNativeChatScopedOpenKeys(scopeKey)
   const bars = useMemo(() => nativeChatTurnBarRows(rows, turnKeys), [rows, turnKeys])
   const automationTurns = useMemo(
@@ -254,10 +260,6 @@ export function useMobileNativeChatTurnDisclosure({
           message.role === 'reasoning' &&
           expandedReasoning.has(nativeChatReasoningDisclosureKey(message.id)),
         onToggleReasoning: toggleReasoning,
-        ...(message.blocks.some(isSubagentGroupBlock)
-          ? { subagentGroupsOpen: openSubagentGroups }
-          : {}),
-        onToggleSubagentGroup: toggleSubagentGroup,
         userMessageOpen: message.role === 'user' && openUserMessages.has(message.id),
         onToggleUserMessage: toggleUserMessage
       }
@@ -286,8 +288,6 @@ export function useMobileNativeChatTurnDisclosure({
       liveReasoningId,
       expandedReasoning,
       toggleReasoning,
-      openSubagentGroups,
-      toggleSubagentGroup,
       isWorking,
       openUserMessages,
       toggleUserMessage

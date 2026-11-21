@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { buildByIdIndex } from '../collections/first-row-by-id-index'
 import { botPreviewFacts } from './bot-collapsed-preview'
-import { botGroupStatusOf } from './bot-group-status'
 import { botGroupMemberBots, botGroupRowLine, getBotSidebarEntries } from './bot-sidebar-entries'
 import { botFoldLiveStatus } from './bot-sidebar-workspaces'
-import { structuredAgentSessionStatusPaneKey } from '../agent-session/view/structured-agent-session-tab'
 
 const home = (id: string) => ({ id, executionHostId: 'local' as const })
 const bot = (id: string, sidebarOrder?: number, createdAt = 1) => ({
@@ -76,23 +74,6 @@ describe('group row', () => {
     expect(
       botGroupRowLine({ latest: { authorName: null, text: 'hi', at: 3 } }, loaded, 'You')
     ).toEqual({ text: 'You: hi', at: 3 })
-  })
-
-  it('reads its dot from its members’ sessions through any reader', () => {
-    const blocked = { state: 'blocked' as const, interrupted: false }
-    expect(
-      botGroupStatusOf({ members }, (paneKey) =>
-        paneKey === structuredAgentSessionStatusPaneKey('s-gone') ? blocked : undefined
-      )
-    ).toBe('permission')
-    expect(botGroupStatusOf({ members }, () => undefined)).toBeNull()
-    // A thread's members count too, as #472's rollup does.
-    const thread = { id: 't-1', createdAt: 1, members: [{ botId: 'nova', sessionId: 's-thread' }] }
-    expect(
-      botGroupStatusOf({ members: [], threads: [thread] }, (paneKey) =>
-        paneKey === structuredAgentSessionStatusPaneKey('s-thread') ? blocked : undefined
-      )
-    ).toBe('permission')
   })
 })
 

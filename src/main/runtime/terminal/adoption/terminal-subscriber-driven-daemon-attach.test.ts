@@ -289,37 +289,7 @@ function snapshotText(harness: ReturnType<typeof startMultiplex>): string {
 }
 
 describe('subscriber-driven daemon attach (never-activated tab)', () => {
-  it('attaches on first desktop multiplex subscribe and streams bytes (snapshot-null daemon)', async () => {
-    const { runtime, model, handle, mountSpy } = setupNeverAttachedDaemonSession({
-      snapshotCapable: false
-    })
-    const harness = startMultiplex(runtime)
-    await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
-
-    // Baseline: nothing has attached and the daemon refuses to emit.
-    expect(model.emitData(PTY_ID, 'pre-subscribe bytes')).toBe(false)
-
-    sendSubscribe(harness, 1, handle)
-    await waitForSubscribed(harness, 1)
-
-    // Main attached the session — once — without any renderer involvement.
-    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
-    // Capability matrix: snapshot-null daemon paints blank before live bytes.
-    expect(snapshotText(harness)).toBe('')
-
-    // Now daemon bytes flow: into the stream and into the host model.
-    expect(model.emitData(PTY_ID, 'hello from daemon\r\n')).toBe(true)
-    await vi.waitFor(() => expect(outputText(harness)).toContain('hello from daemon'))
-    expect(internals(runtime).headlessTerminals.has(PTY_ID)).toBe(true)
-    const read = await runtime.readTerminal(handle)
-    expect(read.tail.join('\n')).toContain('hello from daemon')
-
-    // No resize, no renderer mount/focus/navigation, no window required.
-    expect(model.resizeCalls).toEqual([])
-    expect(mountSpy).not.toHaveBeenCalled()
-  })
-
-  it('paints the provider snapshot first for a snapshot-capable daemon, then goes live', async () => {
+  it('paints the provider snapshot first for a snapshot-capable daemon, then reads live output from the host model', async () => {
     const { runtime, model, handle } = setupNeverAttachedDaemonSession({
       snapshotCapable: true,
       screen: 'agent frozen screen\r\n'
@@ -333,16 +303,22 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
     await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
     expect(snapshotText(harness)).toContain('agent frozen screen')
 
+    model.sessions.get(PTY_ID)!.screen = 'stale provider frame\r\n'
     expect(model.emitData(PTY_ID, 'now live\r\n')).toBe(true)
     await vi.waitFor(() => expect(outputText(harness)).toContain('now live'))
+    const read = await runtime.readTerminal(handle)
+    expect(read.tail.join('\n')).toContain('now live')
+    expect(read.tail.join('\n')).not.toContain('stale provider frame')
   })
 
   it('attaches once across concurrent subscribers and keeps ingesting after one releases', async () => {
-    const { runtime, model, handle } = setupNeverAttachedDaemonSession({
+    const { runtime, model, handle, mountSpy } = setupNeverAttachedDaemonSession({
       snapshotCapable: false
     })
     const harness = startMultiplex(runtime)
     await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
+
+    expect(model.emitData(PTY_ID, 'pre-subscribe bytes')).toBe(false)
 
     sendSubscribe(harness, 1, handle, 'client-a')
     sendSubscribe(harness, 2, handle, 'client-b')
@@ -351,9 +327,12 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
 
     await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
 
+    expect(snapshotText(harness)).toBe('')
+
     sendUnsubscribe(harness, 1)
     // Ingestion continues after a release: no detach, model still fed.
     expect(model.emitData(PTY_ID, 'still ingesting\r\n')).toBe(true)
+    await vi.waitFor(() => expect(outputText(harness)).toContain('still ingesting'))
     const read = await runtime.readTerminal(handle)
     expect(read.tail.join('\n')).toContain('still ingesting')
 
@@ -361,6 +340,8 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
     sendSubscribe(harness, 3, handle, 'client-c')
     await waitForSubscribed(harness, 3)
     expect(model.attachCalls).toEqual([PTY_ID])
+    expect(model.resizeCalls).toEqual([])
+    expect(mountSpy).not.toHaveBeenCalled()
   })
 
   it('retries an existing subscriber when provider inventory becomes ready', async () => {
@@ -449,20 +430,6 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
     expect(model.attachCalls).toEqual([])
     const read = await runtime.readTerminal(handle)
     expect(read.tail).toEqual([])
-  })
-
-  it('terminal read keeps preferring the ingested model over provider state once attached', async () => {
-    const { runtime, model, handle } = setupNeverAttachedDaemonSession({
-      snapshotCapable: true,
-      screen: 'stale provider frame\r\n'
-    })
-    model.sessions.get(PTY_ID)!.attached = true
-    model.emitData(PTY_ID, 'live model line\r\n')
-
-    const read = await runtime.readTerminal(handle)
-
-    expect(read.tail.join('\n')).toContain('live model line')
-    expect(read.tail.join('\n')).not.toContain('stale provider frame')
   })
 })
 

@@ -4,6 +4,9 @@ import type { AppState } from '../../types'
 
 const remote = vi.hoisted(() => ({ call: vi.fn() }))
 vi.mock('../../../runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: remote.call }))
+vi.mock('../../../runtime/rpc/compatibility/runtime-capability-proof', () => ({
+  runtimeEnvironmentSupportsCapability: async () => true
+}))
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -90,4 +93,22 @@ it('starts fresh when the view returns to a host whose old read never finished',
   store.getState().setStatsHost({ kind: 'local' })
   await store.getState().fetchClaudeUsage()
   expect(store.getState().claudeUsageSummary).toEqual({ sessions: 3, hasAnyClaudeData: true })
+})
+
+it('stops reading a host once the view moves on', async () => {
+  const scanState = deferred<ReturnType<typeof snapshot>['scanState']>()
+  remote.call.mockImplementation(async (_target, _method, params: { method: string }) =>
+    params.method === 'claudeUsage:getScanState' ? scanState.promise : snapshot(7)
+  )
+  vi.stubGlobal('window', { api: { claudeUsage: { getScanState: () => new Promise(() => {}) } } })
+  const store = await createUsageStore()
+
+  store.getState().setStatsHost({ kind: 'environment', environmentId: 'devbox' })
+  const devboxRead = store.getState().fetchClaudeUsage()
+  await vi.waitFor(() => expect(remote.call).toHaveBeenCalledTimes(1))
+  store.getState().setStatsHost({ kind: 'local' })
+  scanState.resolve(snapshot(7).scanState)
+  await devboxRead
+  // Without the view check devbox would still be asked for its snapshot and a refresh.
+  expect(remote.call).toHaveBeenCalledTimes(1)
 })

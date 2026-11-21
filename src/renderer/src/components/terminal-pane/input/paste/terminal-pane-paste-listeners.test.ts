@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalPaneCloseController } from '../../layout/close/use-terminal-pane-close-actions'
 import { APP_MENU_PASTE_EVENT } from '@/lib/clipboard/menu/app-menu-paste'
+import { getRecentTerminalImages } from '../recent-terminal-images'
 import { createTerminalPanePasteExecution } from './terminal-pane-paste-execution'
 import { registerTerminalPanePasteListeners } from './terminal-pane-paste-listeners'
 
@@ -50,14 +51,17 @@ describe('registerTerminalPanePasteListeners app-menu paste', () => {
     document.body.replaceChildren()
   })
 
-  it('pastes into the focused pane when the manager active pane is stale (#41352)', async () => {
+  function registerPaste(
+    text: string,
+    saveClipboardImageAsTempFile = async (): Promise<string | null> => null
+  ) {
     Object.assign(window, {
       api: {
         ui: {
-          readClipboardText: vi.fn(async () => 'echo hi'),
+          readClipboardText: async () => text,
           readClipboardFilePaths: vi.fn(async () => []),
           clipboardHasImage: vi.fn(async () => false),
-          saveClipboardImageAsTempFile: vi.fn()
+          saveClipboardImageAsTempFile
         }
       }
     })
@@ -98,7 +102,11 @@ describe('registerTerminalPanePasteListeners app-menu paste', () => {
       isMac: true,
       shortcutPlatform: 'darwin'
     })
+    return { paneA, paneB, setTerminalError, controller }
+  }
 
+  it('pastes into the focused pane when the manager active pane is stale (#41352)', async () => {
+    const { paneA, paneB, setTerminalError } = registerPaste('echo hi')
     // A file drop focuses the drop pane's xterm without a pointerdown, leaving pane A active.
     paneB.textarea.focus()
     window.dispatchEvent(new CustomEvent(APP_MENU_PASTE_EVENT, { cancelable: true }))
@@ -106,5 +114,21 @@ describe('registerTerminalPanePasteListeners app-menu paste', () => {
     await vi.waitFor(() => expect(paneB.terminal.paste).toHaveBeenCalledWith('echo hi'))
     expect(paneA.terminal.paste).not.toHaveBeenCalled()
     expect(setTerminalError).not.toHaveBeenCalled()
+  })
+
+  it('does not record an image when the app-menu paste loses its terminal target', async () => {
+    const savedImage = Promise.withResolvers<string>()
+    const saveImage = vi.fn(() => savedImage.promise)
+    const { paneA, paneB, setTerminalError, controller } = registerPaste('', saveImage)
+    const [sourcePane] = controller.managerRef.current!.getPanes()
+
+    paneA.textarea.focus()
+    window.dispatchEvent(new CustomEvent(APP_MENU_PASTE_EVENT, { cancelable: true }))
+    await vi.waitFor(() => expect(saveImage).toHaveBeenCalled())
+    paneB.textarea.focus()
+    savedImage.resolve('/tmp/rejected-image.png')
+
+    await vi.waitFor(() => expect(setTerminalError).toHaveBeenCalled())
+    expect(getRecentTerminalImages(sourcePane.terminal)).toEqual([])
   })
 })

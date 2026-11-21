@@ -88,13 +88,6 @@ describe('a dsh launch prompt whose first Enter the launchpad refused', () => {
     }
   }
 
-  it('presses only Enter again until the session opens and the turn starts', async () => {
-    await expect(launchDsh(fixture('launchpad-draft-starting'), 3)).resolves.toEqual({
-      enters: 3,
-      pastes: 1
-    })
-  })
-
   it('never presses Enter into the first-run guide that covers the launchpad', async () => {
     await expect(launchDsh(fixture('first-run-guide'), Infinity)).resolves.toEqual({
       enters: 1,

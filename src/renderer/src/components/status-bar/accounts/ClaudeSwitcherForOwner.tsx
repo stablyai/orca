@@ -1,5 +1,7 @@
 import { useClaudeSwitcherState } from './use-claude-switcher-state'
 import type { ClaudeSwitcherMenuProps } from './ClaudeSwitcherMenu'
+import type { ChatAccountAction } from './ProviderAccountChatButton'
+import type { OwnerUsageRateLimits } from '../usage/use-owner-usage-rate-limits'
 import { useProviderAccountList } from './use-provider-account-list'
 import { providerChatAccountControl } from './ProviderAccountChatButton'
 import React, { useCallback, useRef, useState } from 'react'
@@ -44,6 +46,7 @@ import { AccountSwitchSection, AccountSwitchSignedOutHeading } from './AccountSw
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { ProviderDetailsMenu } from '../usage/ProviderDetailsMenu'
 import { signInToClaudeAccount } from '@/lib/provider-accounts/claude-account-sign-in'
+import { claudeInactiveUsageId } from '../../../../../shared/agent-accounts/claude/claude-system-default-usage'
 import { getOwnerAccountRows } from './owner-account-rows'
 
 const EMPTY_CLAUDE_ACCOUNTS = emptyClaudeAccountsState()
@@ -51,14 +54,18 @@ const EMPTY_CLAUDE_ACCOUNTS = emptyClaudeAccountsState()
 // Retain account switch/reset drill-in even though the footer now opens UsageRosterPanel.
 export function ClaudeSwitcherForOwner({
   claude,
-  compact,
   iconOnly,
   asSubmenu = false,
   triggerContent,
   chatAction,
   ownerUsage,
   owner
-}: ClaudeSwitcherMenuProps & { owner: AccountOwner }): React.JSX.Element | null {
+}: Omit<ClaudeSwitcherMenuProps, 'chatAction' | 'ownerUsage'> & {
+  chatAction?: ChatAccountAction
+  /** Rows, roster and readings all come from this owner's observation. */
+  ownerUsage: OwnerUsageRateLimits
+  owner: AccountOwner
+}): React.JSX.Element | null {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [isSwitching, setIsSwitching] = useState(false)
@@ -74,13 +81,10 @@ export function ClaudeSwitcherForOwner({
   const wslHostDistro = chatAction ? null : owner.wslHostDistro
   const activeRuntimeEnvironmentId = runtimeTargetEnvironmentId(runtimeTarget)
   const hasActiveRuntimeEnvironment = activeRuntimeEnvironmentId !== null
-  const {
-    chatInactiveClaudeAccounts,
-    settings,
-    ownHostName,
-    accountSettings,
-    claudeAccountSyncKey
-  } = useClaudeSwitcherState(chatAction, activeRuntimeEnvironmentId)
+  const { settings, ownHostName, accountSettings, claudeAccountSyncKey } = useClaudeSwitcherState(
+    chatAction,
+    activeRuntimeEnvironmentId
+  )
   const providerAccountHostLabel = hasActiveRuntimeEnvironment
     ? (ownHostName ?? t('auto.components.status.bar.StatusBar.remoteServerLabel', 'Remote server'))
     : undefined
@@ -96,15 +100,16 @@ export function ClaudeSwitcherForOwner({
       runtimeTarget,
       claudeAccountSyncKey,
       EMPTY_CLAUDE_ACCOUNTS,
-      !!chatAction,
-      !ownerUsage?.remoteOwner
+      !ownerUsage.remoteOwner
     )
-  const ownerRows = ownerUsage
-    ? getOwnerAccountRows('claude', ownerUsage, accounts, EMPTY_CLAUDE_ACCOUNTS)
-    : null
-  const roster = ownerRows?.roster ?? accounts
-  const inactiveClaudeAccounts = ownerRows?.inactiveAccounts ?? chatInactiveClaudeAccounts
-  const claudeTarget = ownerRows?.usageTarget
+  const {
+    roster,
+    rosterKnown,
+    inactiveAccounts: inactiveClaudeAccounts,
+    usageTarget: claudeTarget
+  } = getOwnerAccountRows('claude', ownerUsage, accounts, EMPTY_CLAUDE_ACCOUNTS)
+  // Why: a chat's local list loads on its own; a remote roster rides the owner's stream.
+  const rosterLoaded = ownerUsage.remoteOwner ? rosterKnown : accountsLoaded
   const accountState = resolveClaudeStatusAccountState(
     accountSettings,
     roster,
@@ -241,7 +246,7 @@ export function ClaudeSwitcherForOwner({
   const accountControl = providerChatAccountControl(
     'claude',
     chatAction,
-    accountsLoaded,
+    rosterLoaded,
     signedInClaudeAccountCount(roster),
     isSwitching
   )
@@ -255,7 +260,9 @@ export function ClaudeSwitcherForOwner({
       hasActiveRuntimeEnvironment && target.id === null && target.runtimeTarget.runtime === 'wsl'
         ? { ...target, disabled: true }
         : target,
-    inactiveUsage: target.id ? inactiveClaudeAccounts.find((a) => a.accountId === target.id) : null,
+    inactiveUsage: inactiveClaudeAccounts.find(
+      (a) => a.accountId === claudeInactiveUsageId(target)
+    ),
     // Why local only: the hidden sign-in runs on this device, not a remote server.
     signInId: target.needsSignIn && !hasActiveRuntimeEnvironment ? target.id : null
   }))
@@ -267,7 +274,7 @@ export function ClaudeSwitcherForOwner({
   )
   // Why: `claude` and the rows come from the same owner snapshot, so its active row is the reading's account.
   const liveActiveUsage = chatAction ? null : claude
-  const panelShowsActiveAccount = ownerUsage !== undefined || !hasActiveRuntimeEnvironment
+  const panelShowsActiveAccount = !chatAction || !hasActiveRuntimeEnvironment
   const rowUsage = (
     target: (typeof rows)[number]['target'],
     inactiveUsage: (typeof rows)[number]['inactiveUsage']
@@ -292,7 +299,7 @@ export function ClaudeSwitcherForOwner({
       )
     }
     // Why local only: an older host publishes no per-account readings, so "not checked" could be false.
-    return target.id && !target.active && !hasActiveRuntimeEnvironment ? (
+    return claudeInactiveUsageId(target) && !hasActiveRuntimeEnvironment ? (
       <AccountUsageNotChecked />
     ) : null
   }
@@ -308,8 +315,7 @@ export function ClaudeSwitcherForOwner({
       key={`${selectedGroup?.key}:${target.id ?? 'system'}`}
       aria-description={
         !signInId &&
-        !target.active &&
-        target.id &&
+        claudeInactiveUsageId(target) &&
         !hasActiveRuntimeEnvironment &&
         !inactiveUsage?.isFetching &&
         isClaudeAccountNotChecked(inactiveUsage?.rateLimits)
@@ -347,7 +353,6 @@ export function ClaudeSwitcherForOwner({
   return (
     <ProviderDetailsMenu
       provider={claude}
-      compact={compact}
       iconOnly={iconOnly}
       asSubmenu={asSubmenu}
       triggerContent={triggerContent}
@@ -358,7 +363,7 @@ export function ClaudeSwitcherForOwner({
       )}
       variant="account"
       accountLabel={
-        panelShowsActiveAccount
+        panelShowsActiveAccount && rosterKnown
           ? (selectedGroup?.targets.find((target) => target.active)?.label ??
             t('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
           : undefined
@@ -377,30 +382,33 @@ export function ClaudeSwitcherForOwner({
       open={open}
       onOpenChange={handleOpenChange}
     >
-      <AccountSwitchSection
-        heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
-        targets={selectedGroup?.targets ?? []}
-        panelShowsActiveAccount={panelShowsActiveAccount}
-        onOpenSettings={() => {
-          openSettingsTarget({
-            pane: 'accounts',
-            repoId: null,
-            sectionId: 'accounts-claude',
-            // Why: without a scope Settings opens on the default host, not the one these rows belong to.
-            hostScope: runtimeTarget,
-            ...(chatAction ? { intent: 'native-accounts' } : {})
-          })
-          openSettingsPage()
-        }}
-      >
-        {rows.filter((row) => !row.signInId).map(renderRow)}
-        {signedOutRows.length > 0 ? (
-          <>
-            <AccountSwitchSignedOutHeading />
-            {signedOutRows.map(renderRow)}
-          </>
-        ) : null}
-      </AccountSwitchSection>
+      {/* Why: until the host lists its accounts, the empty roster's only row would claim "System default". */}
+      {rosterKnown ? (
+        <AccountSwitchSection
+          heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
+          targets={selectedGroup?.targets ?? []}
+          panelShowsActiveAccount={panelShowsActiveAccount}
+          onOpenSettings={() => {
+            openSettingsTarget({
+              pane: 'accounts',
+              repoId: null,
+              sectionId: 'accounts-claude',
+              // Why: without a scope Settings opens on the default host, not the one these rows belong to.
+              hostScope: runtimeTarget,
+              ...(chatAction ? { intent: 'native-accounts' } : {})
+            })
+            openSettingsPage()
+          }}
+        >
+          {rows.filter((row) => !row.signInId).map(renderRow)}
+          {signedOutRows.length > 0 ? (
+            <>
+              <AccountSwitchSignedOutHeading />
+              {signedOutRows.map(renderRow)}
+            </>
+          ) : null}
+        </AccountSwitchSection>
+      ) : null}
     </ProviderDetailsMenu>
   )
 }

@@ -36,7 +36,7 @@ vi.mock('../../ipc/browser/browser-passwords-ipc', () => ({
   registerBrowserPasswordsHandlers: vi.fn()
 }))
 vi.mock('electron', () => ({
-  app: { getPath: () => mocks.root },
+  app: { getPath: () => mocks.root, commandLine: { hasSwitch: () => false } },
   BrowserWindow: { fromWebContents: () => null },
   session: { fromPartition: (partition: string) => mocks.sessions.get(partition) },
   ipcMain: {

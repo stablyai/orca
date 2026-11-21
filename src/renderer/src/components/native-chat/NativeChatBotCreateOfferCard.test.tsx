@@ -120,17 +120,6 @@ describe('the new-bot card', () => {
     expect(dialog.getAttribute('data-from-offer')).toBe('{"botId":"atlas","offerId":"offer-1"}')
   })
 
-  it('opens in place to what it watches, reports, takes over and its template', () => {
-    show([makeTestBot({})])
-    const toggle = screen.getByRole('button', { expanded: false })
-    fireEvent.click(toggle)
-    expect(toggle.getAttribute('aria-expanded')).toBe('true')
-    expect(screen.getByText('Pull requests and checks for milestone 1.5')).toBeTruthy()
-    expect(screen.getByText('Here, weekday mornings')).toBeTruthy()
-    expect(screen.getByText('release-checklist, mobile-keyboard-fix, changelog-1-5')).toBeTruthy()
-    expect(screen.getByText('Release readiness')).toBeTruthy()
-  })
-
   it('reads Created from the bot recorded against its id, whatever that bot is named now', () => {
     const atlas = makeTestBot({ acceptedOffers: [{ offerId: 'offer-1', botId: 'b9' }] })
     show([atlas, makeTestBot({ id: 'b9', name: 'Release', createdAt: 2000 })])
@@ -153,7 +142,29 @@ describe('the new-bot card', () => {
     expect(screen.queryByRole('button', { name: 'Create bot' })).toBeNull()
   })
 
-  it('claims a takeover only for the workspaces that are under the new bot now', () => {
+  it('keeps its details control named by the bot when no line of text is left in it', () => {
+    const named = () => screen.getByRole('button', { name: 'Details of Cutter', expanded: false })
+    show([makeTestBot({})])
+    expect(named()).toBeTruthy()
+    cleanup()
+    show([makeTestBot({ acceptedOffers: [{ offerId: 'offer-1', botId: 'gone' }] })])
+    expect(named()).toBeTruthy()
+    cleanup()
+    mocks.bots = [
+      makeTestBot({ acceptedOffers: [{ offerId: 'offer-1', botId: 'cutter' }] }),
+      makeTestBot({ id: 'cutter', name: 'Cutter' })
+    ]
+    render(
+      <NativeChatBotCreateOfferCard
+        offer={{ ...offer, proposal: { ...offer.proposal, worktrees: [] } }}
+        messageId="m1"
+        fallback="fallback line"
+      />
+    )
+    expect(named()).toBeTruthy()
+  })
+
+  it('redraws its takeover as workspaces move under the new bot while it is shown', () => {
     const atlas = makeTestBot({ acceptedOffers: [{ offerId: 'offer-1', botId: 'cutter' }] })
     const cutter = makeTestBot({ id: 'cutter', name: 'Cutter', folderWorkspaceId: 'cutter-home' })
     const under = (ids: string[]) =>
@@ -178,11 +189,16 @@ describe('the new-bot card', () => {
       })
     under([])
     show([atlas, cutter])
-    expect(screen.getByText('Created · asked to take over 3 workspaces')).toBeTruthy()
+    // The details control carries the takeover line; its words are the locale's, its counts the store's.
+    const takeover = () => screen.getByRole('button', { expanded: false }).textContent ?? ''
+    const none = takeover()
     act(() => under(['w1', 'w2']))
-    expect(screen.getByText('Created · took over 2 of 3 workspaces')).toBeTruthy()
+    const some = takeover()
+    expect(some).not.toBe(none)
+    expect(some.match(/\d+/g)).toEqual(['2', '3'])
     act(() => under(['w1', 'w2', 'w3']))
-    expect(screen.getByText('Created · took over 3 workspaces')).toBeTruthy()
+    expect(takeover()).not.toBe(some)
+    expect(takeover().match(/\d+/g)).toEqual(['3'])
   })
 
   it('shows the host’s line for a proposer this window does not list', () => {

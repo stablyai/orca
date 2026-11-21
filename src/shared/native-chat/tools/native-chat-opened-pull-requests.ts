@@ -353,6 +353,17 @@ function commandOutputText(output: string): string {
   }
 }
 
+/** Whether a row ran a host's create command, before its output (maybe clipped) says what opened. */
+export function nativeChatRowRunsPullRequestCreate(message: NativeChatMessage): boolean {
+  return message.blocks.some((block) => {
+    if (block.type !== 'tool-call' || block.state === 'running') {
+      return false
+    }
+    const script = nativeChatToolCallScript(block.name, block.input)
+    return !!script && isPullRequestCreateScript(script) && createCount(shellCode(script)) > 0
+  })
+}
+
 function isPullRequestCreateScript(script: string): boolean {
   return CREATE_COMMANDS.some(({ command }) => command.test(script))
 }

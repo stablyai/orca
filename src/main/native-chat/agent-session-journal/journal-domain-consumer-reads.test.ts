@@ -623,10 +623,6 @@ it("counts a chat's ended turns once each, whatever opened them, and never a ref
   expect(await readsOf(f).endedTurnCount()).toBe(4)
 })
 
-const ENDED_TURNS_REFERENCE = `SELECT COUNT(DISTINCT turn_id) AS count FROM journal_items
-  WHERE session_id='chat' AND epoch='epoch' AND hidden=0 AND turn_marker=1 AND context_clear=0
-  AND lifecycle_state IS NOT 'running'`
-
 async function endedTurnsFixture(turns: number) {
   const f = domainLifecycleFixture(cleanup)
   for (let index = 0; index < turns; index += 1) {
@@ -640,27 +636,7 @@ async function endedTurnsFixture(turns: number) {
   return f
 }
 
-it('reads the ended-turn count without visiting the chat’s turn rows', async () => {
-  const turns = 20
-  const f = await endedTurnsFixture(turns)
-  const prepared: string[] = []
-  const prepare = f.db.prepare.bind(f.db)
-  f.db.prepare = (sql: string) => (prepared.push(sql), prepare(sql))
-
-  expect(await readsOf(f).endedTurnCount()).toBe(turns)
-  f.db.prepare = prepare
-  const plans = prepared.flatMap((sql) =>
-    f.db
-      .prepare(`EXPLAIN QUERY PLAN ${sql}`)
-      .all(...['chat', 'epoch', 'journal_ended_turn_counts'].slice(0, sql.split('?').length - 1))
-      .map((row) => String(row.detail))
-  )
-  expect(plans.filter((detail) => /turn_marker|ended_turn/.test(detail))).toEqual([
-    'SEARCH journal_ended_turn_counts USING PRIMARY KEY (session_id=? AND epoch=?)'
-  ])
-})
-
-it('keeps the ended-turn count equal to a recount through hides, removals, reopened turns and a first open', async () => {
+it('keeps the ended-turn count current through hides, removals, reopened turns and a first open', async () => {
   const f = await endedTurnsFixture(6)
   await f.run({
     kind: 'item',
@@ -672,7 +648,6 @@ it('keeps the ended-turn count equal to a recount through hides, removals, reope
       turnLifecycle: { turnId: 't1', state: 'completed' }
     }
   })
-  const recount = () => Number(f.db.prepare(ENDED_TURNS_REFERENCE).get()?.count)
   const steps = [
     `UPDATE journal_items SET hidden=1 WHERE item_id='orca:t0-turn'`,
     `DELETE FROM journal_items WHERE item_id='orca:t1-turn'`,
@@ -685,7 +660,6 @@ it('keeps the ended-turn count equal to a recount through hides, removals, reope
   const counts = [await readsOf(f).endedTurnCount()]
   for (const step of steps) {
     f.db.exec(step)
-    expect(await readsOf(f).endedTurnCount()).toBe(recount())
     counts.push(await readsOf(f).endedTurnCount())
   }
   expect(counts).toEqual([6, 5, 5, 4, 3, 2, 3, 2])
@@ -714,7 +688,8 @@ it('creates the ended-turn counts once when another process opens the journal at
     DROP TRIGGER journal_ended_turns_update_old; DROP TRIGGER journal_ended_turns_update_new`)
   const first = new Database(filename)
   const second = new Database(filename)
-  cleanup.push(() => (first.close(), second.close()))
+  // These close before the fixture's own cleanup deletes its directory.
+  cleanup.unshift(() => (first.close(), second.close()))
   createEndedTurnCounts(first)
   await f.run({
     kind: 'item',

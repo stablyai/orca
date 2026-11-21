@@ -9,7 +9,7 @@ import { readHostMethodReply } from '../host-screen/sidebar-feed/host-sidebar-fe
 import { rpcClientForExecutionHost } from '../worktree/execution-hosts/execution-host-scoped-rpc-client'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../transport/connection/connection-state'
-import { shownHostBotListings, type HostBotListing, type NewBotRefusal } from './host-bot-listing'
+import { newBotRefusal, shownHostBotListings, type HostBotListing } from './host-bot-listing'
 import { readBotAvatarUploads } from './bot-avatar-uploads'
 import {
   botHomeLinksRead,
@@ -17,8 +17,9 @@ import {
   botUpNextUnseenRead,
   workspaceLineageRead
 } from './host-bots-operations'
-import { hostBotsKey, readHostBots, type HostBotsRead } from './host-bots-read'
+import { hostBotsKey, readHostBots } from './host-bots-read'
 import { groupList } from './bot-group-operations'
+import { readHostAccessRequests } from './bot-access-request-operations'
 import { HOST_REFRESH_FALLBACK_MS } from '../worktree/execution-hosts/host-worktree-refresh'
 import { useKeptServerBotListings } from './use-kept-server-bot-listings'
 import { createHostCountTimers } from './host-bot-count-timers'
@@ -33,19 +34,6 @@ export type ListingTarget = {
   /** The route reaches the host's bots.create: false through a paired desktop too old to relay it. */
   relaysCreate: boolean
   installationId?: string
-}
-
-function newBotRefusal(
-  bots: Extract<HostBotsRead, { kind: 'bots' }>,
-  target: ListingTarget
-): NewBotRefusal | undefined {
-  if (!bots.enabled) {
-    return 'bots-off'
-  }
-  if (!bots.takesCreate) {
-    return 'update'
-  }
-  return target.relaysCreate ? undefined : 'update-desktop'
 }
 
 /** A host's bots with their workers' lineage; a server older than the page gets a line instead. */
@@ -72,10 +60,12 @@ export async function readHostBotListing(
     return null
   }
   const links = lineage.value
-  const [unseenReply, linksReply, ownChatsReply] = await Promise.all([
+  const [unseenReply, linksReply, ownChatsReply, accessRequests] = await Promise.all([
     botUpNextUnseenRead.request(target.client).catch(() => null),
     threads ? botHomeLinksRead.request(target.client).catch(() => null) : null,
-    threads ? botOwnChatsRead.request(target.client).catch(() => null) : null
+    threads ? botOwnChatsRead.request(target.client).catch(() => null) : null,
+    // Off, the host lists no bots and its list would ask the cloud for nothing it shows.
+    bots.enabled && bots.bots.length > 0 ? readHostAccessRequests(target.client) : null
   ])
   const ownChats = ownChatsReply && readHostMethodReply(ownChatsReply, botOwnChatsRead.interpret)
   const threadLinks = linksReply && readHostMethodReply(linksReply, botHomeLinksRead.interpret)
@@ -84,12 +74,13 @@ export async function readHostBotListing(
     .then((reply) => groupList.interpret(reply).groups)
     .catch(() => null)
   const unseen = unseenReply && readHostMethodReply(unseenReply, botUpNextUnseenRead.interpret)
-  const createRefusal = newBotRefusal(bots, target)
+  const createRefusal = newBotRefusal(bots, target.relaysCreate)
   return {
     kind: 'listed',
     ...(unseen?.kind === 'answered' ? { unseen: unseen.value.unseen } : {}),
     ...(threadLinks?.kind === 'answered' ? { links: threadLinks.value } : {}),
     ...(ownChats?.kind === 'answered' ? { ownChats: ownChats.value.chats } : {}),
+    ...(accessRequests ? { accessRequests } : {}),
     waits: bots.waits,
     needsYou: bots.needsYou,
     needsYouChangeInMs: bots.needsYouChangeInMs,

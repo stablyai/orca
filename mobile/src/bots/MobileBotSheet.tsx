@@ -9,11 +9,10 @@ import { hostScreenStyles as styles } from '../host-screen/host-screen-styles'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { MobileBotActivityTab } from './MobileBotActivityTab'
 import { MobileBotAutomationsTab } from './MobileBotAutomationsTab'
-import { MobileBotSettingsTab } from './MobileBotSettingsTab'
+import { MobileBotSettingsTab, type BotSettingsHome } from './MobileBotSettingsTab'
 import { botAgentLabel } from './mobile-bot-sheet-copy'
 import type { BotAccessRequests } from './use-bot-access-requests'
 import { useBotUpNext } from './use-bot-up-next'
-import { lookAroundSupported } from '../../../src/shared/bots/bot-look-around'
 import type { RouteBot } from './use-route-bot'
 import type { BotChatTreeActions } from './MobileBotChatTree'
 import { usePhoneBotChatTree } from './use-phone-bot-chat-tree'
@@ -29,6 +28,9 @@ export function MobileBotSheet(props: {
   showToast: (message: string, durationMs?: number) => void
   /** Drafts into the Home Chat, where automations are made; absent while no chat shows. */
   onNewAutomation: (() => void) | null
+  /** Drafts a message in the Home Chat (Edit in chat); null while no chat shows. */
+  onAskInChat: ((draft: string) => void) | null
+  onViewRuns: ((automationId: string) => void) | null
   /** Access requests, listed above who can ask. */
   accessRequests: BotAccessRequests | null
   /** Puts an Up next request in the Home Chat's message box; null while no chat shows. */
@@ -39,6 +41,7 @@ export function MobileBotSheet(props: {
   treeActions: BotChatTreeActions
   online: boolean
   hostName: string
+  home: BotSettingsHome
 }) {
   const t = useMobileTranslation()
   const [tab, setTab] = useState<BotSheetTab>('activity')
@@ -49,7 +52,8 @@ export function MobileBotSheet(props: {
     showing: props.visible && tab === 'activity',
     showToast: props.showToast,
     onStart: props.onStartSuggestion,
-    refresh: props.routeBot.refresh
+    refresh: props.routeBot.refresh,
+    online: props.online
   })
   const tree = usePhoneBotChatTree({
     client: props.client,
@@ -107,7 +111,7 @@ export function MobileBotSheet(props: {
           bot={bot}
           hostKey={props.hostKey}
           activity={null}
-          tree={{ kind: 'none' }}
+          tree={{ kind: 'loading' }}
           treeActions={props.treeActions}
           upNextActions={upNext}
           loading={props.routeBot.activityLoading}
@@ -121,18 +125,28 @@ export function MobileBotSheet(props: {
           client={props.client}
           bot={bot}
           rows={props.routeBot.activity?.automations ?? null}
+          waits={props.routeBot.activity?.waits}
           showToast={props.showToast}
           onNewAutomation={props.onNewAutomation}
+          actions={{
+            onEdit: null,
+            onAskInChat: props.onAskInChat,
+            onViewRuns: props.onViewRuns,
+            present: null
+          }}
+          online={props.online}
         />
       ) : (
         <MobileBotSettingsTab
           routeBot={props.routeBot}
           client={props.client}
           showToast={props.showToast}
+          online={props.online}
+          hostName={props.hostName}
+          home={props.home}
           accessRequests={props.accessRequests}
-          lookAround={
-            lookAroundSupported(bot.agent) ? { onLookNow: upNext.lookNow, busy: upNext.busy } : null
-          }
+          onAskInChat={props.onStartSuggestion}
+          upNext={upNext}
         />
       )}
     </BottomDrawer>

@@ -4,7 +4,8 @@ description: >-
   Operate Orca-managed worktrees, folder contexts, terminals, repos, automations, worktree
   comments, and Orca's embedded browser through the `orca` CLI. Use when the user says
   "$orca-cli", "Orca worktree", "child worktree", "spawn codex/claude in a worktree",
-  "read/wait/send Orca terminal", "handoff" / "handover" / "give this to another agent", or
+  "read/wait/send Orca terminal", "handoff" / "handover" / "give this to another agent",
+  "ask/tell/message another agent" (including an agent on a paired Orca server), or
   "Orca browser". Also use for opening, testing, screenshotting, or checking how a local or
   external web page renders while working in Orca, unless the user or project names another
   browser tool; plain HTTP or API calls (curl, fetch) do not need it. Prefer it over raw git
@@ -84,10 +85,15 @@ A chat keeps its ID across `/clear`; a terminal agent gets a new one, and its ol
 
 Send another agent a message with Orca mail, never by typing into its terminal:
 
+Write multiline text to a file with your file tool, then pass that file: --body-file, --spec-file, git commit -F, gh ... --body-file.
+Never use heredocs (<<) or here-strings (<<<); they can hang the shell.
+If send, reply or worker-start fails, do only what the CLI prints and keep that file unchanged. Never retry on your own or with a new ID.
+
 ```text
-ORCA orchestration send --to <terminal handle or orca_session_id:<chat id>> --subject "<topic>" --body "<message>" --json
+ORCA orchestration send --to <terminal handle or orca_session_id:<chat id>> [--type question|dispatch|merge_ready|handoff] --subject "<topic>" --body "<message>" --json
 ```
 
+- Set `--type` for what you need: `question` when you want an answer (the receiver gets a reply hint), `dispatch` to give it a task, `merge_ready` when your branch is ready to merge, `handoff` to pass work on. Without `--type` the mail is `status`, an update that needs no answer.
 - Address a terminal agent by its terminal handle (`launch.outcome.handle`, or from `terminal list`); its Orca session ID is refused for sending today. Address a chat by `orca_session_id:<id>`.
 - To find a terminal agent by its tab's name, match that name to a tab `title` in `terminal list --include-visual-layouts --json` and use the handle of the terminal in that tab. A terminal's own `title` is the agent's running title, and an agent may put the task's words in it, so it can repeat the name you are looking for. Chat tabs are not in that list; find a chat by its `title` in `agent list --json`. If no tab or several terminals match, ask the user. In a terminal, `ORCA_TERMINAL_HANDLE`, when set, is your own handle; never send to it.
 - A one-way message needs no Task or Run. For a terminal, the warning that it "is a live terminal-only mailbox" and delivery "is not durable after that terminal closes" is expected; it only means the mail is lost if that terminal closes.
@@ -96,7 +102,7 @@ ORCA orchestration send --to <terminal handle or orca_session_id:<chat id>> --su
 - In a terminal, Orca types that note only once the agent's live status shows it takes input (idle or working). Until then the mail waits unread, and the send receipt says so in a `recipient_delivery_held` warning; the warning stays true whether the status is late or never comes. The command it names is for the agent in that terminal to run in its own terminal; don't run it yourself, because it would read that agent's mail. If the receipt says that terminal won't read the mail, do what it says instead (message that terminal's handle or its coordinator); its own check can't read that message. An agent already waiting in `check --wait` (with no `--types`, or with types that include this message's) gets the mail without a note or warning. For a Run, the receipt reports its current coordinator. Start agents with `agent launch` or `worktree create --agent`, and put the first task in `--prompt`.
 - On Windows, send and reply with `orca` or `orca.exe`; `orca.cmd` refuses `orchestration send` and `reply` because cmd.exe can't pass a message body safely.
 - A terminal opened through Orca's older SSH relay can read mail only while it works a Task or coordinates a Run; otherwise its `orchestration check` is refused, so tell the user instead of messaging it.
-- As an agent, reach an agent on a paired server with `orchestration send --on <server>`, not `--environment` (see the `orchestration` skill).
+- As an agent, reach an agent on a paired server with `orchestration send --on <server>`, not `--environment`. Set `--type` as you would locally: `question`, `dispatch`, `merge_ready`, `handoff`, or no type for `status` (see the `orchestration` skill).
 - Mail comes from you, not the user. An agent waiting for its user's answer may still ask the user before acting on it; when it does, tell the user to answer that agent themselves.
 - If mail is refused, follow the refusal or tell the user. Never fall back to `terminal send`.
 
@@ -314,8 +320,9 @@ Terminal rules:
 ## Artifacts
 
 Artifacts publish HTML or Markdown files as public links through the signed-in Orca account.
-Use them only when the user explicitly asks to publish through Orca. A generic request for a
-public link, page, or URL does not select Orca, and a provider the user names always wins.
+Use them only when the user explicitly asks to publish through Orca, or your Orca session rules
+say to. A generic request for a public link, page, or URL does not select Orca, and a provider
+the user names always wins.
 
 **Only a human can turn publishing on or off.** `share` and `update` need the device-wide
 setting under Settings → Artifacts ("Allow publishing public artifact links"), which is on
@@ -324,11 +331,12 @@ stay auditable and revocable.
 
 A denied share fails with `artifact_sharing_disabled` before any upload. Do not retry. Tell
 the user publishing is off; mention the setting only if they asked for Orca by name, and
-otherwise deliver the file locally or through the provider they chose.
+otherwise deliver the file as your Orca session rules say, locally, or through the provider they
+chose.
 
 On a headless Orca server, artifact commands fail with `sharing_unavailable_on_host`: no
-Orca cloud sign-in exists there. Do not retry or ask the user to change settings; tell them
-to share from the Orca desktop app instead.
+Orca cloud sign-in exists there. Do not retry or ask the user to change settings; deliver the
+file as your Orca session rules say, or tell them to share from the Orca desktop app.
 
 The `artifacts` commands are in `references/artifacts.md`. Load it before publishing.
 

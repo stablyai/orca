@@ -26,7 +26,7 @@ async function commitOrcaYaml(cwd: string, setupLine: string, eol = '\n'): Promi
 }
 
 // A project checkout left on old setup commands while origin/main moved on.
-async function staleCheckout(): Promise<{ repo: Repo; upstream: string }> {
+async function staleCheckout(): Promise<Repo> {
   const root = await mkdtemp(join(tmpdir(), 'orca-create-source-hooks-'))
   roots.push(root)
   const upstream = join(root, 'upstream')
@@ -36,14 +36,13 @@ async function staleCheckout(): Promise<{ repo: Repo; upstream: string }> {
   await commitOrcaYaml(upstream, 'node old-setup.mjs')
   await git(root, 'clone', upstream, checkout)
   await commitOrcaYaml(upstream, 'node new-setup.mjs', '\r\n')
-  const repo: Repo = {
+  return {
     id: 'repo-1',
     path: checkout,
     displayName: 'repo',
     badgeColor: '#000000',
     addedAt: 0
   }
-  return { repo, upstream }
 }
 
 function read(repo: Repo, source: Parameters<typeof readCreateSourceSetupHooks>[0]['source']) {
@@ -55,16 +54,8 @@ function read(repo: Repo, source: Parameters<typeof readCreateSourceSetupHooks>[
   })
 }
 
-it('reads the refreshed base instead of the stale project checkout', async () => {
-  const { repo } = await staleCheckout()
-
-  const result = await read(repo, { kind: 'base', baseBranch: 'origin/main' })
-
-  expect(result?.hooks?.scripts.setup).toBe('node new-setup.mjs')
-})
-
-it('reads an explicitly reused local branch, and the base when that branch is absent', async () => {
-  const { repo } = await staleCheckout()
+it('reads an explicitly reused local branch, and refreshes the base when that branch is absent', async () => {
+  const repo = await staleCheckout()
   await git(repo.path, 'branch', 'feature', 'main')
 
   const reused = await read(repo, { kind: 'branch', ref: 'feature', baseBranch: 'origin/main' })

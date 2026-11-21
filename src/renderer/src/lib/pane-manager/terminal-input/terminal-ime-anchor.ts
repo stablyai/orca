@@ -17,12 +17,19 @@ export function resolveCursorAgentImeAnchor(args: {
   cursorX: number
   cursorY: number
   knownCursorAgent?: boolean
+  /** A previously resolved prompt row, checked in one row read before rescanning the screen. */
+  promptRow?: number
 }): TerminalImeAnchor | null {
   const cursorLine = getVisibleLine(args.buffer, args.cursorY)
   if (args.cursorX !== 0 || !isBlankLine(cursorLine)) {
     return null
   }
-  return findCursorAgentScreenInputAnchor(args)
+  // A cached row was resolved as Cursor Agent, so typed input is allowed like knownCursorAgent.
+  const cachedAnchor =
+    args.promptRow === undefined
+      ? null
+      : resolveRowInputAnchor(args.buffer, args.promptRow, args.cols, true)
+  return cachedAnchor ?? findCursorAgentScreenInputAnchor(args)
 }
 
 function findCursorAgentScreenInputAnchor(args: {
@@ -31,21 +38,30 @@ function findCursorAgentScreenInputAnchor(args: {
   cols: number
   knownCursorAgent?: boolean
 }): TerminalImeAnchor | null {
-  const allowTypedInput = args.knownCursorAgent || hasCursorAgentHeader(args.buffer, args.rows)
+  const allowTypedInput = Boolean(
+    args.knownCursorAgent || hasCursorAgentHeader(args.buffer, args.rows)
+  )
 
   // Find the bottom-most prompt; transcript arrows (e.g. rename diffs) must not become the input anchor.
   for (let row = args.rows - 1; row >= 0; row--) {
-    const line = getVisibleLine(args.buffer, row)
-    if (!line) {
-      continue
-    }
-    const column = resolveCursorAgentInputColumn(line, args.cols, Boolean(allowTypedInput))
-    if (column !== null) {
-      return { row, column: Math.min(column, Math.max(args.cols - 1, 0)) }
+    const anchor = resolveRowInputAnchor(args.buffer, row, args.cols, allowTypedInput)
+    if (anchor) {
+      return anchor
     }
   }
 
   return null
+}
+
+function resolveRowInputAnchor(
+  buffer: IBuffer,
+  row: number,
+  cols: number,
+  allowTypedInput: boolean
+): TerminalImeAnchor | null {
+  const line = getVisibleLine(buffer, row)
+  const column = line ? resolveCursorAgentInputColumn(line, cols, allowTypedInput) : null
+  return column === null ? null : { row, column: Math.min(column, Math.max(cols - 1, 0)) }
 }
 
 function getVisibleLine(buffer: IBuffer, row: number): IBufferLine | undefined {

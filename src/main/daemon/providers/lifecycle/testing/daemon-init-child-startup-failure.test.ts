@@ -261,9 +261,8 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       ) => Promise<{ shutdown(): Promise<void> }>
 
       const launch = launcher('/fake/socket', '/fake/token')
-      await Promise.resolve()
-      await Promise.resolve()
       const rejection = expect(launch).rejects.toThrow('startup and child cleanup both failed')
+      await vi.waitFor(() => expect(kill).toHaveBeenCalledWith(12345, 'SIGTERM'))
       await vi.advanceTimersByTimeAsync(6_000)
       await rejection
 

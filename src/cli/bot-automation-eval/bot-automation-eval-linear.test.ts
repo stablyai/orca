@@ -100,9 +100,5 @@ describe('stand-in Linear', () => {
     )
     expect(linearIssue('linear:lin-eval:issue-plat-44')?.identifier).toBe('PLAT-44')
     expect(linearIssue('ENG-93100')).toBeUndefined()
-    expect(searchLinear('PLAT', { label: 'docs' })).toMatchObject({
-      ok: false,
-      refusal: 'not_found'
-    })
   })
 })

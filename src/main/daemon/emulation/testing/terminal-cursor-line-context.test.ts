@@ -123,10 +123,17 @@ describe('readTerminalCursorLineContext', () => {
     { typed: '', caret: 'f', dim: 'ix the login bug', draft: 'fix the login bug', typedText: '' },
     { typed: '', caret: 'a', dim: ' quick fix', draft: 'a quick fix', typedText: '' },
     { typed: '/mo', caret: 'd', dim: 'el', draft: '/model', typedText: '/mo' },
-    { typed: '/commi', caret: 't', dim: ' [message]', draft: '/commit', typedText: '/commit' }
+    {
+      typed: '/commi',
+      caret: 't',
+      dim: ' [message]',
+      draft: '/commit',
+      typedText: '/commit',
+      masked: false
+    }
   ])(
     "reads Claude's caret glyph $caret after '$typed' before dim '$dim'",
-    ({ typed, caret, dim, draft, typedText }) => {
+    ({ typed, caret, dim, draft, typedText, masked }) => {
       const cols = 80
       const terminal = new Terminal({ cols, rows: 8, allowProposedApi: true })
       try {
@@ -138,11 +145,38 @@ describe('readTerminalCursorLineContext', () => {
         expect(context).toMatchObject({ cursorHidden: true, cursorInverse: true })
         expect(detectTerminalComposerDraft(context)?.text ?? null).toBe(draft)
         expect(readTerminalComposerTypedText(context)).toBe(typedText)
+        // The IME overlay may hide the cursor-row tail only when the caret glyph is not typed.
+        expect(hasTerminalComposerPlaceholder(context)).toBe(masked ?? true)
       } finally {
         terminal.dispose()
       }
     }
   )
+
+  it.each([
+    { name: 'a dim suggestion', typed: '', tail: '\x1b[2mrun the tests again', masked: true },
+    { name: 'a dim argument hint', typed: '/review ', tail: '\x1b[2m[pr-number]', masked: true },
+    { name: 'undimmed text', typed: '', tail: 'run the tests again', masked: false },
+    {
+      name: 'typed text before a dim hint',
+      typed: 'hello ',
+      tail: 'world \x1b[2mhint',
+      masked: false
+    }
+  ])('lets the IME overlay hide $name right of a native cursor', ({ typed, tail, masked }) => {
+    const cols = 40
+    const terminal = new Terminal({ cols, rows: 6, allowProposedApi: true })
+    try {
+      writeSync(
+        terminal,
+        `${'─'.repeat(cols)}\r\n❯ ${typed}\x1b7${tail}\x1b[22m\r\n${'─'.repeat(cols)}\x1b8`
+      )
+      const context = readTerminalCursorLineContext(terminal, terminal.rows)
+      expect(hasTerminalComposerPlaceholder(context)).toBe(masked)
+    } finally {
+      terminal.dispose()
+    }
+  })
 
   it.each([
     { cols: 19, cursorRowTail: 'proceed with the ', continuation: 'release' },

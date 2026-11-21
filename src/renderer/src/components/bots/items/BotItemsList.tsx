@@ -1,5 +1,5 @@
-// A bot's items in groups: Needs you (led by Orca's asks), In progress and Closed open; Planned, Snoozed
-// and Stale folded. Each shows five rows, then Show N more. Checked rows get the floating pill; Stale's header
+// A bot's items in groups: Needs you (led by Orca's asks) and In progress open; Planned, Snoozed, Stale
+// and Closed folded. Each shows five rows, then Show N more. Checked rows get the floating pill; Stale's header
 // cancels them all. Asks have no checkbox, so selection and ranges never reach them.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -21,8 +21,8 @@ import {
   type BotItemGroups
 } from '../../../../../shared/bots/bot-item-groups'
 import { botErrorMessage } from '../bot-presentation'
+import { BotPanelSectionHeader } from '../BotPanelSection'
 import { useBotPanelFold, type BotPanelFoldId } from '../use-bot-panel-fold'
-import { BotFoldChevron } from '../BotFoldChevron'
 import { BotNeedsYouSection, type BotNeedsYouAsks } from '../BotNeedsYouSection'
 import { botNeedsYouCount } from '../../../../../shared/bots/bot-now'
 import { BotItemRow, type BotItemRowAction } from './BotItemRow'
@@ -33,9 +33,7 @@ import { botItemsByBot, setBotItemsStatus } from './use-bot-items'
 import type { BotNeedView } from '../use-bot-now'
 import { useBotItemSnoozing, type BotItemSnoozing } from './BotItemSnooze'
 
-// Closed's old flag meant "opened" under its old folded default; its own id keeps that from folding it.
-const foldId = (id: BotItemGroupId): BotPanelFoldId =>
-  id === 'closed' ? 'items-closed-folded' : `items-${id}`
+const foldId = (id: BotItemGroupId): BotPanelFoldId => `items-${id}`
 
 /** A group's members' items in one list: each row acts on its own bot and shows its face. */
 export type BotItemsListMembers = {
@@ -309,30 +307,31 @@ function BotItemGroup({
   }
   return (
     <section ref={section} className="flex flex-col gap-0.5">
-      <div className="flex min-h-6 items-center gap-2 pr-1">
-        <button
-          type="button"
-          aria-expanded={open}
-          className="group/fold flex min-w-0 items-center gap-1 rounded-sm px-1 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          onClick={() => setOpen(!open)}
-        >
-          <BotFoldChevron open={open} className="size-3 group-hover/fold:text-foreground" />
-          {botItemGroupName(id, t)}
-          {/* A group's list keeps its headers to the name: the rows say how many. */}
-          {owner.faces ? null : <span className="tabular-nums">{count}</span>}
-        </button>
-        {fresh.length > 0 && !open ? (
-          <span className="ml-auto flex items-center gap-1 text-2xs text-foreground">
-            <span aria-hidden className="size-1.5 rounded-full bg-foreground" />
-            {t('bots.items.group.new', '{{count}} new', { count: fresh.length })}
-          </span>
-        ) : null}
-        {onCancelAll && items.length > 0 ? (
-          <Button variant="ghost" size="xs" className="ml-auto" onClick={() => setConfirming(true)}>
-            {t('bots.items.stale.cancelAll', 'Cancel all')}
-          </Button>
-        ) : null}
-      </div>
+      <BotPanelSectionHeader
+        title={botItemGroupName(id, t)}
+        fold={{ open, onOpenChange: setOpen }}
+        // Open, the rows count themselves; folded, nothing else says what it hides.
+        summary={
+          open ? null : (
+            <>
+              {count}
+              {fresh.length > 0 ? (
+                <span className="text-foreground">
+                  {' · '}
+                  {t('bots.items.group.new', '{{count}} new', { count: fresh.length })}
+                </span>
+              ) : null}
+            </>
+          )
+        }
+        actions={
+          onCancelAll && items.length > 0 ? (
+            <Button variant="ghost" size="xs" className="h-6" onClick={() => setConfirming(true)}>
+              {t('bots.items.stale.cancelAll', 'Cancel all')}
+            </Button>
+          ) : null
+        }
+      />
       {confirming && onCancelAll ? (
         <div className="mx-1 my-1 flex flex-col gap-2 rounded-md border border-border bg-popover p-2.5 text-xs">
           <span className="font-medium text-foreground">

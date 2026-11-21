@@ -1,5 +1,4 @@
 import { EventEmitter } from 'node:events'
-import { PassThrough } from 'node:stream'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resetSshConnectionMocks } from './testing/ssh-connection-test-harness'
 import { createCallbacks, createTarget } from './testing/ssh-connection-test-fixtures'
@@ -60,45 +59,20 @@ describe('pending real loopback route startup ownership', () => {
     startForwardMock.mockReset()
     waitForwardMock.mockReset()
   })
-  it('disconnect stops the already spawned forward before startup completes', async () => {
-    resetSshConnectionMocks()
-    const dispose = vi.fn()
-    const process = Object.assign(new EventEmitter(), {
-      pid: undefined,
-      exitCode: null,
-      signalCode: null,
-      stderr: new PassThrough()
-    })
-    startForwardMock.mockResolvedValue({ process, localPort: 50001, dispose })
-    let failStartup = (_error: Error): void => {}
-    waitForwardMock.mockImplementation(
-      () =>
-        new Promise((_resolve, reject) => {
-          failStartup = reject
-        })
-    )
-    const conn = new SshConnection(
-      createTarget({ proxyCommand: 'ssh -W %h:%p bastion.example.com' }),
-      createCallbacks()
-    )
-    await conn.connect()
-    await vi.waitFor(() => expect(waitForwardMock).toHaveBeenCalled())
-    await conn.disconnect()
-    const stoppedAtDisconnect = dispose.mock.calls.length
-    failStartup(new Error('review cleanup: interrupted slow handshake'))
-    await vi.waitFor(() => expect(dispose).toHaveBeenCalled())
-    expect(stoppedAtDisconnect).toBeGreaterThan(0)
-  })
-  it('cancels the superseded forward while keeping the new startup owned', async () => {
+  it('cancels the superseded forward and disposes the replacement on disconnect', async () => {
     const createForward = () => ({
       process: Object.assign(new EventEmitter(), {
         pid: undefined,
         exitCode: null,
-        signalCode: null
+        signalCode: null,
+        kill: vi.fn(() => true)
       }),
       localPort: 50001,
       dispose: vi.fn()
     })
+    // Windows stops a forward through a process-tree kill instead of dispose.
+    const stopped = (forward: ReturnType<typeof createForward>) =>
+      process.platform === 'win32' ? forward.process.kill : forward.dispose
     const stale = createForward()
     const current = createForward()
     startForwardMock.mockResolvedValueOnce(stale).mockResolvedValueOnce(current)
@@ -114,13 +88,13 @@ describe('pending real loopback route startup ownership', () => {
     await vi.waitFor(() => expect(waitForwardMock).toHaveBeenCalledTimes(1))
     await conn.reconnect()
     await vi.waitFor(() => expect(waitForwardMock).toHaveBeenCalledTimes(2))
-    expect(stale.dispose).toHaveBeenCalledTimes(1)
-    expect(current.dispose).not.toHaveBeenCalled()
+    expect(stopped(stale)).toHaveBeenCalledTimes(1)
+    expect(stopped(current)).not.toHaveBeenCalled()
     failures[0]?.(new Error('superseded handshake'))
     await Promise.resolve()
     await Promise.resolve()
     await conn.disconnect()
-    expect(current.dispose).toHaveBeenCalledTimes(1)
+    expect(stopped(current)).toHaveBeenCalledTimes(1)
     failures[1]?.(new Error('disconnected handshake'))
     await Promise.resolve()
     expect(conn.getSystemSshBuildArgsOptions().loopbackRoute).toBeUndefined()

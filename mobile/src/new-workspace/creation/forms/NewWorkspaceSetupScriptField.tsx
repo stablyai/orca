@@ -31,83 +31,72 @@ export function NewWorkspaceSetupScriptField({
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const runSetupLabel = t(
-    'components.newWorkspaceSetupScriptField.runSetupCommand',
-    'Run setup command'
-  )
+  const runLabel = t('components.newWorkspaceSetupScriptField.runSetup', 'Run setup')
   const waitLabel = t(
-    'components.newWorkspaceSetupScriptField.waitForSetup',
-    'Wait for setup to complete before starting agent'
+    'components.newWorkspaceSetupScriptField.startAgentAfterSetup',
+    'Start agent after setup'
   )
-  // As desktop: the choice only matters when setup runs, so it stays visible but inert otherwise.
   const setupRuns = runPolicy === 'ask' ? decision === 'run' : runSetup
   return (
-    <View style={styles.setupStack}>
+    <View>
       <View style={styles.setupHeader}>
         <Text style={styles.setupLabel}>
           {t('components.newWorkspaceSetupScriptField.label', 'Setup script')}
         </Text>
-        {source ? (
-          <View style={styles.sourceBadge}>
-            <Text style={styles.sourceBadgeText}>
-              {source === 'orca.yaml'
-                ? 'ORCA.YAML'
-                : t('components.newWorkspaceSetupScriptField.hooks', 'HOOKS')}
-            </Text>
-          </View>
-        ) : null}
+        {source === 'orca.yaml' ? <Text style={styles.setupSource}>orca.yaml</Text> : null}
       </View>
-      {runPolicy === 'ask' ? (
-        <ListGroup>
-          <ListRow
-            key="run"
-            title={t('components.newWorkspaceSetupScriptField.run', 'Run')}
-            selected={decision === 'run'}
-            onPress={() => onDecisionChange('run')}
-          />
-          <ListRow
-            key="skip"
-            title={t('components.newWorkspaceSetupScriptField.skip', 'Skip')}
-            selected={decision === 'skip'}
-            onPress={() => onDecisionChange('skip')}
-          />
-        </ListGroup>
-      ) : (
-        <ListGroup>
+      <ListGroup>
+        {runPolicy === 'ask' ? (
+          [
+            <ListRow
+              key="run"
+              title={runLabel}
+              subtitle={command}
+              subtitleMono
+              subtitleLines={0}
+              selected={decision === 'run'}
+              onPress={() => onDecisionChange('run')}
+              accessibilityLabel={`${runLabel}, ${command}`}
+            />,
+            <ListRow
+              key="skip"
+              title={t('components.newWorkspaceSetupScriptField.skip', 'Skip')}
+              selected={decision === 'skip'}
+              onPress={() => onDecisionChange('skip')}
+            />
+          ]
+        ) : (
           <ListRow
             key="runSetup"
-            title={runSetupLabel}
+            title={runLabel}
+            subtitle={command}
+            subtitleMono
+            subtitleLines={0}
             accessory={
               <MobileSwitch
                 value={runSetup}
                 onValueChange={onRunSetupChange}
-                accessibilityLabel={runSetupLabel}
+                accessibilityLabel={runLabel}
               />
             }
           />
-        </ListGroup>
-      )}
-      {waitForSetup !== null ? (
-        <ListGroup>
+        )}
+        {/* Waiting only means something when setup runs. */}
+        {waitForSetup !== null && setupRuns ? (
           <ListRow
             key="waitForSetup"
             title={waitLabel}
             wrapTitle
-            disabled={!setupRuns}
             accessory={
               <MobileSwitch
                 value={waitForSetup}
                 onValueChange={onWaitForSetupChange}
-                disabled={!setupRuns}
                 accessibilityLabel={waitLabel}
               />
             }
           />
-        </ListGroup>
-      ) : null}
-      <View style={styles.codeBlock}>
-        <Text style={styles.code}>{command}</Text>
-      </View>
+        ) : null}
+      </ListGroup>
     </View>
   )
 }

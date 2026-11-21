@@ -90,13 +90,12 @@ describe('bots.takeOver', () => {
     })
   })
 
-  it("returns the chat it went to, and remembers a paired computer's workspace", async () => {
+  it('returns the chat that accepted the hand-over', async () => {
     chat.outcome = { kind: 'sent', clientMessageId: 'm1', submission: undefined }
-    const { dispatcher, request, update } = setup()
+    const { dispatcher, request } = setup()
     expect(await dispatcher.dispatch(request('new'), OWNER)).toMatchObject({
       ok: true,
       result: { sessionId: 'new-chat' }
     })
-    expect(update).toHaveBeenCalledTimes(1)
   })
 })

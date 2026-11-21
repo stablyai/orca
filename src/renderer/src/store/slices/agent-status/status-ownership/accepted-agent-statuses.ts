@@ -10,6 +10,8 @@ export type AgentStatusReplacement = readonly [string, AgentStatusEntry | null]
 export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEntry> {
   readonly [Symbol.toStringTag] = 'AcceptedAgentStatuses'
   titleRevision = 0
+  /** Like titleRevision, but over every agent's session identity (the saved terminal names read it). */
+  sessionRevision = 0
   private pending: Map<string, AgentStatusEntry | null> | null = null
   private operations: AgentStatusReplacement[] = []
   private moved = new Set<string>()
@@ -57,6 +59,7 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
       ? this
       : new AcceptedAgentStatuses(this.rows, this.projection, this.sleepingCount)
     draft.titleRevision = this.titleRevision
+    draft.sessionRevision = this.sessionRevision
     draft.pending ??= new Map()
     for (const [key, value] of replacements) {
       const prior = draft.get(key)
@@ -84,6 +87,7 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
       ? this
       : new AcceptedAgentStatuses(this.rows, this.projection, this.sleepingCount)
     draft.titleRevision = this.titleRevision
+    draft.sessionRevision = this.sessionRevision
     draft.pending ??= new Map()
     draft.refreshes = keys
     return draft
@@ -140,20 +144,25 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
 
   /** Materialize fallible facts before either owner or presentation is published. */
   prepare(): () => void {
-    const fact = (entry: AgentStatusEntry | undefined) =>
-      entry && isAiVaultTitleAgent(entry.agentType) && entry.providerSession?.id
+    const sessionFact = (entry: AgentStatusEntry | undefined) =>
+      entry?.providerSession?.id
         ? [entry.agentType, entry.paneKey, entry.tabId, entry.worktreeId, entry.providerSession]
         : undefined
+    const fact = (entry: AgentStatusEntry | undefined) =>
+      entry && isAiVaultTitleAgent(entry.agentType) ? sessionFact(entry) : undefined
     const changes = this.changes()
     // A moved key changes iteration order, which picks between equal-priority panes of one tab.
-    const titleChanged = changes.some(
-      (change) =>
-        !equal(fact(change.previous), fact(change.current)) ||
-        (this.moved.has(change.paneKey) && fact(change.current) !== undefined)
-    )
-    const titleRevision = this.titleRevision + Number(titleChanged)
+    const changedBy = (read: typeof fact) =>
+      changes.some(
+        (change) =>
+          !equal(read(change.previous), read(change.current)) ||
+          (this.moved.has(change.paneKey) && read(change.current) !== undefined)
+      )
+    const titleRevision = this.titleRevision + Number(changedBy(fact))
+    const sessionRevision = this.sessionRevision + Number(changedBy(sessionFact))
     return () => {
       this.titleRevision = titleRevision
+      this.sessionRevision = sessionRevision
       for (const [key, value] of this.operations) {
         if (value === null) {
           this.rows.delete(key)
@@ -175,6 +184,7 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
       this.sleepingCount
     )
     captured.titleRevision = this.titleRevision
+    captured.sessionRevision = this.sessionRevision
     return captured
   }
 

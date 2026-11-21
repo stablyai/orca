@@ -4,6 +4,7 @@ import type {
   NativeChatMessage
 } from '../../../../../shared/native-chat/native-chat-types'
 import { boundSubagentEntryId } from '../../../../native-chat/subagent-entry-id-bounds'
+import { sliceAtCodeUnitLimit } from '../../../../../shared/text/surrogate-safe-text-slice'
 import { boundWorkerTranscriptActivityBlock } from './worker-transcript-activity-block-bounds'
 import { replaceDispatchCapabilities } from '../../terminal-authority/views/worker-terminal-redaction'
 
@@ -202,7 +203,7 @@ function clipMetadata(value: string, state: TranscriptBoundState): string {
     return redacted
   }
   markClipped(state, 'Oversized transcript metadata was clipped.')
-  return redacted.slice(0, MAX_WORKER_TRANSCRIPT_METADATA_CHARS)
+  return sliceAtCodeUnitLimit(redacted, MAX_WORKER_TRANSCRIPT_METADATA_CHARS)
 }
 
 function clipText(value: string, state: TranscriptBoundState): string {
@@ -211,7 +212,7 @@ function clipText(value: string, state: TranscriptBoundState): string {
     return redacted
   }
   markClipped(state, 'Oversized transcript text was clipped.')
-  return `${redacted.slice(0, MAX_WORKER_TRANSCRIPT_BLOCK_CHARS)}${TRUNCATION_MARKER}`
+  return `${sliceAtCodeUnitLimit(redacted, MAX_WORKER_TRANSCRIPT_BLOCK_CHARS)}${TRUNCATION_MARKER}`
 }
 
 function boundToolInput(
@@ -231,7 +232,7 @@ function boundToolInput(
     budget.remaining -= length
     if (length < redacted.length) {
       markClipped(state, 'Oversized tool input was clipped.')
-      return `${redacted.slice(0, length)}… (truncated)`
+      return `${sliceAtCodeUnitLimit(redacted, length)}… (truncated)`
     }
     return redacted
   }
@@ -261,7 +262,7 @@ function boundToolInput(
       break
     }
     const redactedKey = redactSensitiveText(rawKey, state.warnings)
-    const key = redactedKey.slice(0, Math.min(redactedKey.length, budget.remaining, 128))
+    const key = sliceAtCodeUnitLimit(redactedKey, Math.min(budget.remaining, 128))
     if (key.length < redactedKey.length) {
       markClipped(state, 'Oversized tool input was clipped.')
     }

@@ -14,7 +14,13 @@ import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 import { TerminalWorkerTurnStops } from './terminal-worker-turn-stops'
-import { reportWorkerTurnStop } from './worker-turn-stop-report'
+import { stopReportId } from './worker-turn-stop-report'
+import {
+  observeWorker,
+  reconsiderCreatorRest,
+  reconsiderWorkerRest
+} from './worker-presence-report'
+import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
 const PANE = makePaneKey('tab-worker', '11111111-1111-4111-8111-111111111111')
 const HANDLE = 'term_worker'
@@ -72,7 +78,11 @@ function terminal(
   overrides: Partial<
     Pick<
       ConstructorParameters<typeof TerminalWorkerTurnStops>[0],
-      'takeOpenApproval' | 'markApprovalReported' | 'setTimer' | 'readScreen'
+      | 'takeOpenApproval'
+      | 'markApprovalReported'
+      | 'setTimer'
+      | 'readScreen'
+      | 'getProcessIncarnation'
     >
   > = {}
 ) {
@@ -132,18 +142,50 @@ describe('terminal worker turn stops', () => {
     expect(ctx.mail()).toHaveLength(0)
   })
 
+  it("reports a finish's reply that its transcript read adds within the quiet window", async () => {
+    const ctx = setup()
+    const current = { row: hookRow({ state: 'working' }) }
+    const quiet: (() => void)[] = []
+    const stops = terminal(ctx, current, {
+      setTimer: (run) => {
+        quiet.push(run)
+        return { cancel: () => {} }
+      }
+    })
+    stops.observe({
+      kind: 'observed',
+      paneKey: PANE,
+      workspace: { worktreeId: 'repo::/tmp/wt', sshHostId: null },
+      phase: 'working',
+      at: 1
+    })
+    current.row = hookRow({})
+    stops.observe(moved('working', 'done'))
+    current.row = hookRow({ lastAssistantMessage: 'All tests pass.' })
+    for (const run of quiet.splice(0)) {
+      run()
+    }
+    await settle()
+    expect(ctx.mail().map((m) => m.body)).toEqual([expect.stringContaining('All tests pass.')])
+  })
+
   it('never mails a capability or credential carried in why a worker went away', () => {
     const ctx = setup()
     const capability = 'dcap_0123456789abcdefghijKLMN'
-    reportWorkerTurnStop(
+    observeWorker(
       ctx.db,
       { kind: 'local', dispatch: ctx.dispatch },
       {
-        from: HANDLE,
-        reason: 'lost',
-        lastOutput: undefined,
-        cause: `it never started: refused ${capability} at https://user:hunter2@git.example.com/repo`,
-        leftover: `workspace ${capability}`
+        presence: 'gone',
+        fence: 'start',
+        legacyStopKey: 'gone',
+        gone: {
+          from: HANDLE,
+          reason: 'lost',
+          lastOutput: undefined,
+          cause: `it never started: refused ${capability} at https://user:hunter2@git.example.com/repo`,
+          leftover: `workspace ${capability}`
+        }
       },
       ctx.deps
     )
@@ -176,10 +218,15 @@ describe('terminal worker turn stops', () => {
       ctx.db.convertLifecycleMessageToRejection(sent.id, 'worker_identity_changed', 'not the owner')
     }
     const stop = (stopKey: string, turnStartedAt: number) =>
-      reportWorkerTurnStop(
+      observeWorker(
         ctx.db,
         { kind: 'local', dispatch: ctx.dispatch },
-        { from: HANDLE, stopKey, reason: 'finished', lastOutput: undefined, turnStartedAt },
+        {
+          presence: 'at-rest',
+          fence: stopKey,
+          legacyStopKey: stopKey,
+          rest: { from: HANDLE, reason: 'finished', lastOutput: undefined, turnStartedAt }
+        },
         ctx.deps
       )
     // The rejection is stored on the real clock: after 1970, before 2100.
@@ -270,6 +317,145 @@ describe('terminal worker turn stops', () => {
     stops.observe(moved('working', 'needs-you'))
     await vi.waitFor(() => expect(ctx.mail()).toHaveLength(1))
     expect(ctx.mail()[0].body).toContain('Do you want to proceed?')
+  })
+
+  it('does not page at startup for a turn its user stopped, or a session boundary', async () => {
+    const ctx = setup()
+    const current = { row: hookRow({ interrupted: true }) }
+    const stops = terminal(ctx, current)
+    await stops.reportRestingPane(PANE)
+    current.row = hookRow({ sessionBoundary: true, stateStartedAt: 300 })
+    await stops.reportRestingPane(PANE)
+    expect(ctx.mail()).toHaveLength(0)
+    current.row = hookRow({ stateStartedAt: 400 })
+    await stops.reportRestingPane(PANE)
+    expect(ctx.mail()).toHaveLength(1)
+  })
+
+  it("drops a stop whose agent was relaunched while its screen was read, since the new one's turn is its own", async () => {
+    const ctx = setup()
+    const current = { row: hookRow({ stateStartedAt: 300 }) }
+    const incarnations = ['proc-1', 'proc-2']
+    const stops = terminal(ctx, current, {
+      getProcessIncarnation: () => incarnations.shift() ?? 'proc-2'
+    })
+    await stops.reportRestingPane(PANE)
+    expect(ctx.mail()).toHaveLength(0)
+  })
+
+  it('keeps the words before trailing blank output in the report', async () => {
+    const ctx = setup()
+    const current = {
+      row: hookRow({ stateStartedAt: 300, lastAssistantMessage: `Tests pass.${' '.repeat(2_500)}` })
+    }
+    await terminal(ctx, current).reportRestingPane(PANE)
+    expect(ctx.mail()[0]?.body).toContain('Tests pass.')
+  })
+
+  it('reports an approval seen on a prompt already reported without one', async () => {
+    const ctx = setup()
+    const current = { row: hookRow({ state: 'waiting', stateStartedAt: 300 }) }
+    let open: WorkerApprovalPayload | null = null
+    const reported: string[] = []
+    const stops = terminal(ctx, current, {
+      takeOpenApproval: async () => open,
+      markApprovalReported: (approvalId) => reported.push(approvalId)
+    })
+    await stops.reportRestingPane(PANE)
+    expect(ctx.mail()).toHaveLength(1)
+    open = {
+      v: 1,
+      approvalId: 'apr_open',
+      state: 'open',
+      worker: { handle: HANDLE, dispatchId: ctx.dispatch.id, taskId: ctx.dispatch.task_id },
+      summary: { title: 'Allow Bash?', detail: null, reason: null },
+      allowedActions: ['allow', 'deny']
+    }
+    await stops.reportRestingPane(PANE)
+    await stops.reportRestingPane(PANE)
+    expect(ctx.mail().map((message) => message.subject)).toEqual([
+      'Worker is waiting on a prompt',
+      'Worker is waiting for permission'
+    ])
+    expect(reported).toEqual(['apr_open', 'apr_open'])
+  })
+})
+
+describe('terminal worker turn failures', () => {
+  const failed = (message: string, error?: string) =>
+    hookRow({
+      agentType: 'claude',
+      stateStartedAt: 300,
+      mainAgent: {
+        state: 'done',
+        outcome: 'failure',
+        stateStartedAt: 300,
+        ...(error ? { failure: { error, message } } : {})
+      }
+    })
+  // Claude's menu after a usage limit is a numbered dialog, painted after its StopFailure.
+  const menu = screen([
+    "You've hit your session limit · resets 3pm (America/New_York)",
+    ' What do you want to do?',
+    ' ❯ 1. Stop and wait for limit to reset',
+    '   2. Upgrade your plan',
+    ' Enter to select · Esc to cancel'
+  ])
+
+  it('reports a usage limit in the words chat workers use, not the menu Claude opens after it', async () => {
+    const ctx = setup()
+    const current = {
+      row: failed("You've hit your session limit · resets 3pm (America/New_York)", 'rate_limit')
+    }
+    await terminal(ctx, current, { readScreen: async () => menu }).reportRestingPane(PANE)
+    const [report] = ctx.mail()
+    expect(report?.subject).toBe('Worker hit its usage limit')
+    expect(report?.body).toContain('Error: Claude hit its session limit.')
+    expect(report?.body).toContain(
+      "Details from the agent: You've hit your session limit · resets 3pm (America/New_York)"
+    )
+    expect(report?.body).toContain(
+      `orchestration worker-start --task ${ctx.dispatch.task_id} --retry-of ${ctx.dispatch.id} --agent <other>`
+    )
+    expect(report?.body).not.toContain('What do you want to do?')
+    expect(report?.body).not.toContain('needs a person')
+  })
+
+  it('holds back a usage limit while the worker waits for mail, as any terminal rest', async () => {
+    const ctx = setup()
+    ctx.waiting.add(`dispatch:${ctx.dispatch.id}`)
+    const current = {
+      row: failed("You've hit your session limit · resets 3pm (America/New_York)", 'rate_limit')
+    }
+    await terminal(ctx, current).reportRestingPane(PANE)
+    expect(ctx.mail()).toHaveLength(0)
+  })
+
+  it('reports a rate limit with no limit line as a failed response', async () => {
+    const ctx = setup()
+    const current = {
+      row: failed('API Error: Request rejected (429) · Please try again later.', 'rate_limit')
+    }
+    await terminal(ctx, current).reportRestingPane(PANE)
+    const [report] = ctx.mail()
+    expect(report?.subject).toBe('Worker stopped on an error without reporting')
+    expect(report?.body).toContain(
+      "Error: Claude couldn't finish this response: API Error: Request rejected (429) · Please try again later."
+    )
+    expect(report?.body).not.toContain('--retry-of')
+    expect(report?.body).not.toContain('Details from the agent')
+  })
+
+  it('keeps the screen report for a failure that names no error', async () => {
+    const ctx = setup()
+    const current = { row: failed("You've hit your session limit · resets 3pm") }
+    await terminal(ctx, current).reportRestingPane(PANE)
+    const [report] = ctx.mail()
+    expect(report?.subject).toBe('Worker stopped on an error without reporting')
+    expect(report?.body).toContain(
+      `Worker ${HANDLE} ended its turn on an error without sending worker_done`
+    )
+    expect(report?.body).toContain('Selected model is at capacity')
   })
 })
 
@@ -371,55 +557,166 @@ describe('chat worker turn stops', () => {
     )
   })
 
-  it('retiring the owner suppresses pending reports and permits a fresh owner to report', async () => {
+  it('does not report again a rest that an earlier build already reported, after an upgrade', () => {
     const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
-    let finishRead!: (value: null) => void
-    const queued: (() => void)[] = []
-    const owner = chatWorkerTurnStopReporter(
-      ctx.deps,
-      (run) => {
-        queued.push(run)
-      },
-      () =>
-        new Promise((resolve) => {
-          finishRead = resolve
-        })
-    )
-    const edge = completion('success')
-    if (edge.type !== 'completion') {
-      throw new Error('Expected completion')
-    }
-    owner.onTurnAttention(edge, () => ({ status: 'idle' }))
-    owner.onTurnAttention(
-      {
-        type: 'prompt',
-        prompt: {
-          scope: edge.completion.scope,
-          sessionId: CHAT_SESSION,
-          promptId: 'approval-retired',
-          raisedAt: 1
-        }
-      },
-      () => ({ status: 'attention' })
-    )
-    owner.stop()
-    finishRead(null)
-    for (const run of queued) {
-      run()
-    }
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(ctx.mail()).toEqual([])
-    expect(ctx.notify).not.toHaveBeenCalled()
-
-    const live = chatWorkerTurnStopReporter(ctx.deps, (run) => {
-      queued.push(run)
+    writeAndTake(ctx)
+    // The earlier build keyed an idle finish by the coordinator mail the worker had taken.
+    ctx.db.insertMessage({
+      id: stopReportId(ctx.dispatch.id, 'finished:1'),
+      from: formatOrcaSessionAddress(CHAT_SESSION),
+      to: `run:${ctx.run.id}`,
+      subject: 'Worker stopped without reporting',
+      type: 'escalation',
+      runId: ctx.run.id
     })
-    live.onTurnAttention(completion('success', 'fresh-turn'), () => ({ status: 'idle' }))
-    for (const run of queued.splice(0)) {
-      run()
+    const chat = chatWithTimers(ctx)
+    chat.finish('turn-1')
+    chat.runTimers()
+    expect(ctx.mail()).toHaveLength(1)
+    writeAndTake(ctx)
+    chat.finish('turn-2')
+    chat.runTimers()
+    expect(ctx.mail()).toHaveLength(2)
+  })
+})
+
+describe('worker exits', () => {
+  const exit = (ctx: ReturnType<typeof setup>) => ({
+    presence: 'gone' as const,
+    fence: 'proc-1',
+    legacyStopKey: 'gone',
+    gone: { from: HANDLE, reason: 'exited' as const, lastOutput: undefined },
+    settle: () => {
+      const status = ctx.db.failDispatch(ctx.dispatch.id, 'process exited')?.status
+      return status === 'failed' || status === 'circuit_broken' ? status : undefined
     }
-    expect(ctx.mail()).toMatchObject([{ subject: 'Worker stopped without reporting' }])
-    live.stop()
+  })
+  const target = (ctx: ReturnType<typeof setup>) => ({
+    kind: 'local' as const,
+    dispatch: ctx.dispatch
+  })
+
+  it('keeps an exit report and its settlement when waking the coordinator fails', () => {
+    const ctx = setup()
+    ctx.notify.mockImplementation(() => {
+      throw new Error('wake failed')
+    })
+    expect(() => observeWorker(ctx.db, target(ctx), exit(ctx), ctx.deps)).toThrow('wake failed')
+    expect(ctx.mail()).toHaveLength(1)
+    expect(ctx.db.getDispatchContextById(ctx.dispatch.id)?.status).toBe('failed')
+  })
+
+  it('sends an exit report whose mail failed when it is looked at again', () => {
+    const ctx = setup()
+    vi.spyOn(ctx.db, 'insertMessage').mockImplementationOnce(() => {
+      throw new Error('disk full')
+    })
+    observeWorker(ctx.db, target(ctx), exit(ctx), ctx.deps)
+    expect(ctx.mail()).toHaveLength(0)
+    expect(ctx.db.getDispatchContextById(ctx.dispatch.id)?.status).toBe('failed')
+    expect(reconsiderWorkerRest(ctx.db, ctx.dispatch.id, ctx.deps)).toBe(true)
+    expect(reconsiderWorkerRest(ctx.db, ctx.dispatch.id, ctx.deps)).toBe(false)
+    expect(ctx.mail().map((message) => message.subject)).toEqual([
+      'Worker exited without reporting'
+    ])
+  })
+})
+
+describe('worker rests', () => {
+  const rest = (ctx: ReturnType<typeof setup>, fence: string) =>
+    observeWorker(
+      ctx.db,
+      { kind: 'local', dispatch: ctx.dispatch },
+      {
+        presence: 'at-rest',
+        fence,
+        legacyStopKey: fence,
+        rest: { from: HANDLE, reason: 'finished', lastOutput: 'Done.' }
+      },
+      ctx.deps
+    )
+
+  it('counts a committed report as sent though waking the coordinator failed', () => {
+    const ctx = setup()
+    ctx.notify.mockImplementation(() => {
+      throw new Error('wake failed')
+    })
+    expect(rest(ctx, 'proc:1')).toBe(true)
+    // Another idle turn with no new coordinator mail repeats what the coordinator was told.
+    rest(ctx, 'proc:2')
+    expect(ctx.mail()).toHaveLength(1)
+  })
+
+  it("decides a creator's held-back finish again once its last helper settles", () => {
+    const ctx = setup()
+    const task = ctx.db.createTask({ spec: 'help', runId: ctx.run.id })
+    const helper = createRootDispatch(ctx.db, task.id, 'term_helper')
+    ctx.db.db
+      .prepare('UPDATE dispatch_contexts SET creator_dispatch_id = ? WHERE id = ?')
+      .run(ctx.dispatch.id, helper.id)
+    rest(ctx, 'proc:1')
+    expect(ctx.mail()).toHaveLength(0)
+    ctx.db.completeDispatch(helper.id)
+    reconsiderCreatorRest(`dispatch:${helper.id}`, ctx.deps)
+    expect(ctx.mail()).toHaveLength(1)
+  })
+
+  it('does not report a rest whose stop the coordinator asked for while its screen was read', async () => {
+    const ctx = setup()
+    const current = { row: hookRow({ stateStartedAt: 300 }) }
+    const stops = terminal(ctx, current, {
+      readScreen: async () => {
+        ctx.db.getWorkerDispatch = () =>
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reporter reads only the state.
+          ({ state: 'stopping' }) as ReturnType<typeof ctx.db.getWorkerDispatch>
+        return screen(['$'])
+      }
+    })
+    current.row = hookRow({ state: 'waiting', stateStartedAt: 300 })
+    await stops.reportRestingPane(PANE)
+    expect(ctx.mail()).toHaveLength(0)
+  })
+})
+
+describe('remote worker presence', () => {
+  function attachment() {
+    const db = new OrchestrationDb(':memory:')
+    db.createRemoteDispatchAttachment({
+      runId: 'run-home',
+      dispatchId: 'ctx_remote',
+      taskId: 'task_remote',
+      homePeerFingerprint: 'home_peer',
+      protocolVersion: 1,
+      runtimeEpoch: 'worker_epoch',
+      mutationReceipt: {
+        callerFingerprint: 'home_peer',
+        requestId: 'attach_remote',
+        method: 'orchestration.federationAttachStart',
+        payloadHash: 'attach_hash'
+      }
+    })
+    const relayed = () =>
+      db.db
+        .prepare("SELECT message_id FROM federation_relay_items WHERE direction = 'to_home'")
+        .all()
+    const deps = { getDb: () => db, isWaitingForMail: () => false, notify: vi.fn() }
+    const target = {
+      kind: 'remote' as const,
+      attachment: { dispatch_id: 'ctx_remote', task_id: 'task_remote' }
+    }
+    return { db, relayed, deps, target }
+  }
+
+  it('relays an exit to the Run home once, however often it is seen', () => {
+    const { db, relayed, deps, target } = attachment()
+    const gone = {
+      presence: 'gone' as const,
+      fence: 'proc-1',
+      legacyStopKey: 'gone',
+      gone: { from: HANDLE, reason: 'exited' as const, lastOutput: undefined }
+    }
+    expect(observeWorker(db, target, gone, deps)).toBe(true)
+    observeWorker(db, target, gone, deps)
+    expect(relayed()).toHaveLength(1)
   })
 })

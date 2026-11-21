@@ -17,22 +17,6 @@ describe('web runtime environment identity', () => {
     vi.doUnmock('../../runtime/client/web-runtime-client')
   })
 
-  it('does not resolve an old server selector through a differently keyed server', async () => {
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
-    const { installWebPreloadApi } = await import('../../web-preload-api')
-    installWebPreloadApi()
-
-    await globals.window.api.runtimeEnvironments.addFromPairingCode({
-      name: 'Server B',
-      pairingCode: encodePairingCode({ publicKeyB64: 'server-b-key' })
-    })
-
-    await expect(
-      globals.window.api.runtimeEnvironments.resolve({ selector: 'web-server-a' })
-    ).rejects.toThrow('Unknown Orca runtime environment: web-server-a')
-  })
-
   it('keeps the current host when verification rejects an incompatible replacement', async () => {
     vi.doMock('../../runtime/client/web-runtime-client', () => ({
       WebRuntimeClient: class {

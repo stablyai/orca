@@ -236,22 +236,10 @@ export async function createRuntimeFolderWorktree(args: {
       console.warn(`[worktree-create] ${warning}`)
     }
   }
-  if (shouldActivate) {
-    deps.activate(
-      repo.id,
-      worktree.id,
-      undefined,
-      // Main retains failed startup presentation; the window must not take it over.
-      ORCA_LAYOUT_OWNER_IS_MAIN
-        ? undefined
-        : args.startup && !didSpawnStartup
-          ? args.startup
-          : undefined,
-      ...(args.promisedAgentChat && !args.startup ? ([true] as const) : [])
-    )
-  }
   if (
-    (!shouldActivate || deps.terminals.provisionInBackground?.() === true) &&
+    (!shouldActivate ||
+      (!args.startup && request.terminalImageViewerSupported !== undefined) ||
+      deps.terminals.provisionInBackground?.() === true) &&
     deps.terminals.canSpawn &&
     shouldSeedWorktreePrimaryTerminal({
       // Failed agents retain their panes; do not seed a shell beside them.
@@ -273,6 +261,20 @@ export async function createRuntimeFolderWorktree(args: {
         : initialWarning
       console.warn(`[worktree-create] ${warning}`)
     }
+  }
+  if (shouldActivate) {
+    deps.activate(
+      repo.id,
+      worktree.id,
+      undefined,
+      // Main retains failed startup presentation; the window must not take it over.
+      ORCA_LAYOUT_OWNER_IS_MAIN
+        ? undefined
+        : args.startup && !didSpawnStartup
+          ? args.startup
+          : undefined,
+      ...(args.promisedAgentChat && !args.startup ? ([true] as const) : [])
+    )
   }
   return {
     worktree: folderCreateResultWorktree(worktree),

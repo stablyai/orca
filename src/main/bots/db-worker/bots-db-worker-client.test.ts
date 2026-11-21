@@ -43,18 +43,7 @@ async function codeOf(call: Promise<unknown>): Promise<string | undefined> {
 }
 
 describe('bots DB worker client', () => {
-  it('answers store calls and carries a store refusal back with its code', async () => {
-    const worker = inProcessBotsDbWorker()
-    client = new BotsDbWorkerClient(worker.factory)
-    const items = client.items(join(dir, 'bot-items.sqlite'))
-
-    const { uid } = await items.add(input(), owner)
-
-    expect((await items.get(uid))?.title).toBe('Share dialog')
-    expect(await codeOf(items.set(uid, { status: 'needs_you' }, owner))).toBe('invalid_argument')
-  })
-
-  it('keeps concurrent writes from two callers serialized: each item its own number', async () => {
+  it('serializes concurrent writes and returns a refusal with its code', async () => {
     client = new BotsDbWorkerClient(inProcessBotsDbWorker().factory)
     const path = join(dir, 'bot-items.sqlite')
     const first = client.items(path)
@@ -65,8 +54,9 @@ describe('bots DB worker client', () => {
       second.add(input({ title: 'Share dialog v2' }), owner)
     ])
 
-    expect((await first.get(a.uid))?.number).toBe(1)
-    expect((await first.get(b.uid))?.number).toBe(2)
+    expect(await first.get(a.uid)).toMatchObject({ number: 1, title: 'Share dialog' })
+    expect(await first.get(b.uid)).toMatchObject({ number: 2, title: 'Share dialog v2' })
+    expect(await codeOf(first.set(a.uid, { status: 'canceled' }, owner))).toBe('invalid_argument')
   })
 
   it('fails every call caught in a crash visibly, then restarts on the next call', async () => {

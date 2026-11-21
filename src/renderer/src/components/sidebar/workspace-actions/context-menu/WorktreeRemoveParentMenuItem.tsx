@@ -1,10 +1,10 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import React from 'react'
 import { FolderInput, Unlink } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { botOfFolders, selectFolderAncestors } from '@/components/bots/use-worktree-bot'
 import { useTranslate } from '@/i18n/use-translate'
 import { useBots, useBotsEnabled } from '@/lib/bot-catalog'
-import { useAppStore } from '@/store'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 
@@ -23,8 +23,8 @@ export function WorktreeRemoveParentMenuItem({
   const t = useTranslate()
   // With bots off, the home is an ordinary folder and the workspace already shows in its project.
   const botsEnabled = useBotsEnabled()
-  const folders = useAppStore((s) =>
-    botsEnabled ? selectFolderAncestors(s, worktree) : NO_FOLDERS
+  const folders = useAppStoreWithHostStatuses((s, statuses) =>
+    botsEnabled ? selectFolderAncestors(s, statuses, worktree) : NO_FOLDERS
   )
   const bot = botOfFolders(folders, useBots(folders.length > 0))
   if (bot) {

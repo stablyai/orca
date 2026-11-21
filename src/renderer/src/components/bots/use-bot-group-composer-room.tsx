@@ -31,8 +31,21 @@ export function useBotGroupComposerRoom(
   const recipientId = useSyncExternalStore(subscribeDraft, () =>
     group ? botGroupSingleRecipient(readNativeChatDraftCache(draftScope), group, bots) : null
   )
+  // This computer's members, then bots on paired computers as the room saved them.
   const memberBots = useMemo(
-    () => bots.filter((bot) => group?.members.some((member) => member.botId === bot.id)),
+    () => [
+      ...bots.filter(
+        (bot) =>
+          bot.hostId === group?.hostId && group.members.some((member) => member.botId === bot.id)
+      ),
+      ...(group?.remoteMembers ?? []).map((member) => ({
+        id: member.botId,
+        hostId: `runtime:${member.environmentId}` as const,
+        name: member.name,
+        avatar: member.avatar,
+        avatarColor: member.avatarColor
+      }))
+    ],
     [bots, group]
   )
   // Keyed by the names so transcript markdown keeps its extension across transcript polls.
@@ -52,7 +65,7 @@ export function useBotGroupComposerRoom(
           })),
           {
             name: 'everyone',
-            icon: <Users className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+            icon: <Users className="size-4 shrink-0 text-muted-foreground" />
           }
         ],
         placeholder: t('bots.groups.composerPlaceholder', 'Message the group, @ to mention a bot')

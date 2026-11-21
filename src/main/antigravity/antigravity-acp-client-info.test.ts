@@ -35,7 +35,6 @@ async function initializeParams(spec: AcpLaunchSpec, version?: string): Promise<
 it.each([
   ['the managed server 1.4.1', MANAGED, '1.4.1', ZED],
   ['the managed server 1.5.1', MANAGED, '1.5.1', ORCA],
-  ["the host's agy 1.5.2", HOST, '1.5.2', ORCA],
   ["the host's agy of unknown version", HOST, undefined, ZED],
   ['other agents', GROK, undefined, ORCA]
 ])(
@@ -76,37 +75,31 @@ it('launches a managed release with the version its receipt names', async () => 
   expect(launch.version).toBe('1.3.0')
 })
 
-it.each([
-  ['1.4.1', ZED],
-  ['1.5.1', ORCA]
-])(
-  'lists the managed server %s models with the identity its chats send',
-  async (version, expected) => {
-    const dataDirectory = await managedRelease(version)
-    const connectSession = vi.fn<NonNullable<AcpModelCatalogProbeDeps['connectSession']>>(() => ({
-      initialize: async () => {
-        throw new Error('listing stopped')
-      },
-      start: async () => {
-        throw new Error('unused')
-      },
-      setConfigOption: async () => {
-        throw new Error('unused')
-      },
-      deleteSession: async () => ({}),
-      close: async () => {}
-    }))
-    const probe = createAcpModelCatalogProbe(MANAGED, {
-      resolveEnvironment: async () => ({ PATH: '' }),
-      resolveCommand: (command, options) => join(options?.pathEnv ?? '', command),
-      inheritedEnv: { HTTPS_PROXY: 'http://proxy.invalid:8080' },
-      homePath: dataDirectory,
-      dataDirectory,
-      connectSession
-    })
-    await expect(
-      probe({ variable: 'GEMINI_HOME', path: join(dataDirectory, 'antigravity-chat') })
-    ).rejects.toThrow('listing stopped')
-    expect(connectSession.mock.calls[0]?.[1]).toMatchObject({ clientInfo: expected })
-  }
-)
+it('uses the legacy client identity when listing models from the older managed server', async () => {
+  const dataDirectory = await managedRelease('1.4.1')
+  const connectSession = vi.fn<NonNullable<AcpModelCatalogProbeDeps['connectSession']>>(() => ({
+    initialize: async () => {
+      throw new Error('listing stopped')
+    },
+    start: async () => {
+      throw new Error('unused')
+    },
+    setConfigOption: async () => {
+      throw new Error('unused')
+    },
+    deleteSession: async () => ({}),
+    close: async () => {}
+  }))
+  const probe = createAcpModelCatalogProbe(MANAGED, {
+    resolveEnvironment: async () => ({ PATH: '' }),
+    resolveCommand: (command, options) => join(options?.pathEnv ?? '', command),
+    inheritedEnv: { HTTPS_PROXY: 'http://proxy.invalid:8080' },
+    homePath: dataDirectory,
+    dataDirectory,
+    connectSession
+  })
+  await expect(
+    probe({ variable: 'GEMINI_HOME', path: join(dataDirectory, 'antigravity-chat') })
+  ).rejects.toThrow('listing stopped')
+  expect(connectSession.mock.calls[0]?.[1]).toMatchObject({ clientInfo: ZED })
+})

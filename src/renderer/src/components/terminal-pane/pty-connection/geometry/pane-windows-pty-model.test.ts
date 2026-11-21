@@ -4,6 +4,7 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host/ex
 import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { SshConnectionState } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { PtyOwnerMachineState } from '../../pty-transport/host-ownership/pty-owner-machine-platform'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import {
   createPaneWindowsPtyModel,
   type PaneWindowsPtyModelContext
@@ -34,7 +35,9 @@ function serverStatus(platform: NodeJS.Platform) {
   return { status: { hostPlatform: platform } as RuntimeStatus, checkedAt: 1 }
 }
 
-function fakeStore(initial: PtyOwnerMachineState) {
+type FakeOwnerState = PtyOwnerMachineState & { runtimeStatusByEnvironmentId: RuntimeStatuses }
+
+function fakeStore(initial: FakeOwnerState) {
   let state = initial
   const listeners = new Set<() => void>()
   return {
@@ -43,7 +46,7 @@ function fakeStore(initial: PtyOwnerMachineState) {
       listeners.add(listener)
       return () => listeners.delete(listener)
     },
-    set(next: Partial<PtyOwnerMachineState>) {
+    set(next: Partial<FakeOwnerState>) {
       state = { ...state, ...next }
       listeners.forEach((listener) => listener())
     },
@@ -51,7 +54,7 @@ function fakeStore(initial: PtyOwnerMachineState) {
   }
 }
 
-const EMPTY: PtyOwnerMachineState = {
+const EMPTY: FakeOwnerState = {
   sshConnectionStates: new Map(),
   sshStateByEnvironment: new Map(),
   runtimeStatusByEnvironmentId: new Map()

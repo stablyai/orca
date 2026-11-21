@@ -17,7 +17,11 @@ import type { BotItemViewRead } from './use-bot-item-view'
 const read = vi.hoisted((): { current: BotItemViewRead | null } => ({ current: null }))
 const sent = vi.hoisted(() => vi.fn(() => Promise.resolve()))
 vi.mock('./use-bot-item-view', () => ({ useBotItemView: () => read.current }))
-vi.mock('./use-bot-items', () => ({ commentOnBotItem: sent, setBotItemsStatus: vi.fn() }))
+const statusSet = vi.hoisted(() => vi.fn())
+vi.mock('./use-bot-items', () => ({
+  commentOnBotItem: sent,
+  setBotItemsStatus: statusSet
+}))
 const fileContextOwners = vi.hoisted(() => vi.fn((..._args: unknown[]) => new Map()))
 vi.mock('../BotGroupTranscriptOwner', () => ({ useBotGroupFileContexts: fileContextOwners }))
 const openAppHttpLink = vi.hoisted(() => vi.fn())
@@ -26,11 +30,39 @@ vi.mock(import('@/lib/browser/navigation/app-http-link-open'), async (importOrig
   openAppHttpLink
 }))
 vi.mock('./BotItemActivityList', () => ({
-  BotItemActivityList: ({ events }: { events: BotItemEvent[] }) => (
+  BotItemActivityList: ({
+    events,
+    quickReplies
+  }: {
+    events: BotItemEvent[]
+    quickReplies?: {
+      send: (text: string) => void
+      edit: (text: string) => void
+      steps?: { current: number; answer: (index: number, words: string) => void } | null
+    }
+  }) => (
     <ol>
       {events.map((event) => (
         <li key={event.id}>{event.id}</li>
       ))}
+      {quickReplies ? (
+        <>
+          <button type="button" onClick={() => quickReplies.send('Go ahead')}>
+            Quick reply
+          </button>
+          <button type="button" onClick={() => quickReplies.edit('Go ahead')}>
+            Edit quick reply
+          </button>
+          {quickReplies.steps ? (
+            <button
+              type="button"
+              onClick={() => quickReplies.steps?.answer(quickReplies.steps.current, 'Yes')}
+            >
+              Answer this step
+            </button>
+          ) : null}
+        </>
+      ) : null}
     </ol>
   )
 }))
@@ -114,7 +146,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
-  sent.mockClear()
+  sent.mockReset()
+  statusSet.mockReset()
   openAppHttpLink.mockClear()
   fileContextOwners.mockReturnValue(new Map())
 })
@@ -154,7 +187,15 @@ it('scrolls to the end after a comment is sent', async () => {
     fireEvent.keyDown(box, { key: 'Enter' })
   })
 
-  expect(sent).toHaveBeenCalledWith(BOT, 'uid-6', 'Ship it', [], expect.any(String))
+  expect(sent).toHaveBeenCalledWith(
+    BOT,
+    'uid-6',
+    'Ship it',
+    [],
+    expect.any(String),
+    undefined,
+    false
+  )
   expect(scroller().scrollTop).toBe(CONTENT)
 })
 
@@ -162,7 +203,7 @@ it('focuses the comment box from its card and preserves focus outside it when su
   show(3, makeTestBotItem(6, { question: { eventId: 'e3', text: 'Which flow?' } }))
   render(<BotItemView bot={BOT} uid="uid-6" />)
 
-  fireEvent.click(screen.getByText('Which flow?'))
+  fireEvent.click(document.querySelector('[data-native-chat-composer-scope]')!)
 
   const box = screen.getByRole('textbox', { name: 'Comment' })
   expect(document.activeElement).toBe(box)
@@ -177,7 +218,9 @@ it('focuses the comment box from its card and preserves focus outside it when su
     'uid-6',
     'Use the proposed flow',
     [],
-    expect.any(String)
+    expect.any(String),
+    undefined,
+    false
   )
   expect(box.contains(document.activeElement)).toBe(false)
 })
@@ -255,4 +298,106 @@ it('sends a plain click the link setting leaves alone to the system browser, as 
   } finally {
     useAppStore.setState(initial, true)
   }
+})
+
+const WAITING = makeTestBotItem(6, {
+  status: 'needs_you',
+  question: { eventId: 'e3', text: 'Which flow should ship?' }
+})
+
+it("keeps the comment box while the question waits, and posts a quick reply as the owner's comment", async () => {
+  show(3, WAITING)
+  render(<BotItemView bot={BOT} uid="uid-6" />)
+
+  expect(screen.getByRole('textbox', { name: 'Comment' })).toBeTruthy()
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Quick reply' })))
+
+  expect(sent).toHaveBeenCalledExactlyOnceWith(
+    BOT,
+    'uid-6',
+    'Go ahead',
+    [],
+    expect.any(String),
+    undefined,
+    false
+  )
+  expect(screen.getByRole('textbox', { name: 'Comment' })).toBeTruthy()
+})
+
+it('holds the answers to an ask of several questions and posts them as one comment at the last', async () => {
+  const ask = {
+    questions: [
+      { prompt: 'Ship it?', options: [{ label: 'Yes' }] },
+      { prompt: 'Tell the team?', options: [{ label: 'Yes' }] }
+    ]
+  }
+  const asker = { kind: 'bot', botId: 'bot-a', chatId: 'chat-home' } as const
+  read.current = {
+    item: makeTestBotItem(6, { status: 'needs_you', question: { eventId: 'e1', text: 'copy' } }),
+    events: [
+      { id: 'e1', kind: 'commented', actor: asker, data: { text: 'copy', ask }, at: 1 },
+      { id: 'e2', kind: 'status', actor: asker, data: { from: 'working', to: 'needs_you' }, at: 1 }
+    ],
+    eventsRead: true,
+    hasEarlier: false,
+    failed: false,
+    deleted: false,
+    loadEarlier: vi.fn(),
+    retry: vi.fn()
+  }
+  render(<BotItemView bot={BOT} uid="uid-6" />)
+
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Answer this step' })))
+  expect(sent).not.toHaveBeenCalled()
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Answer this step' })))
+
+  expect(sent).toHaveBeenCalledExactlyOnceWith(
+    BOT,
+    'uid-6',
+    'Ship it? → Yes\nTell the team? → Yes',
+    [],
+    expect.any(String),
+    'e1',
+    false
+  )
+})
+
+it("puts a quick reply's words in the comment box to add to, without sending", () => {
+  show(3, WAITING)
+  render(<BotItemView bot={BOT} uid="uid-6" />)
+
+  fireEvent.click(screen.getByRole('button', { name: 'Edit quick reply' }))
+
+  const box = screen.getByRole('textbox', { name: 'Comment' })
+  expect(box.textContent).toBe('Go ahead ')
+  expect(document.activeElement).toBe(box)
+  expect(sent).not.toHaveBeenCalled()
+})
+
+it('keeps focus in the item, with its arrows, when it is deleted while its comment box has focus', () => {
+  const nothingFocused = (): boolean =>
+    document.activeElement === null || document.activeElement === document.body
+  const nav = <button type="button">Next item</button>
+  show(3)
+  const view = render(<BotItemView bot={BOT} uid="uid-6" takeFocus={nothingFocused} nav={nav} />)
+  const box = screen.getByRole('textbox', { name: 'Comment' })
+  box.focus()
+  expect(document.activeElement).toBe(box)
+
+  read.current = { ...read.current!, deleted: true }
+  view.rerender(<BotItemView bot={BOT} uid="uid-6" takeFocus={nothingFocused} nav={nav} />)
+  expect(screen.queryByRole('textbox', { name: 'Comment' })).toBeNull()
+  expect(document.activeElement).toBe(document.querySelector('[data-bot-item-focus-home]'))
+  expect(screen.getByRole('button', { name: 'Next item' })).toBeTruthy()
+})
+
+it('reads earlier pages until the waiting question shows, so its words and quick replies are there', () => {
+  show(
+    3,
+    makeTestBotItem(6, { status: 'needs_you', question: { eventId: 'e0', text: 'Ship it?' } })
+  )
+  read.current = { ...read.current!, hasEarlier: true }
+  render(<BotItemView bot={BOT} uid="uid-6" />)
+
+  expect(read.current.loadEarlier).toHaveBeenCalledOnce()
 })

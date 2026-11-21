@@ -294,18 +294,24 @@ describe("the bot's notes in one turn: one row, each item at its final state", (
     ])
   })
 
-  it('marks done after a link, drops a round trip to its comment, and leaves owner runs as they are', () => {
+  it('renders net bot changes and keeps the owner run separate', () => {
     expect(
       drawn([
         bot('t1', linked('tok', 'working', 'pr:acme/app#812')),
         bot('t1', moved('tok', 'working', 'done'), moved('onb', 'planned', 'working')),
-        bot('t1', moved('onb', 'working', 'planned'), commented('onb', 'planned')),
+        bot(
+          't1',
+          moved('onb', 'working', 'planned'),
+          commented('onb', 'planned'),
+          moved('rel', 'planned', 'working'),
+          moved('rel', 'working', 'planned')
+        ),
         note('owner', 't1', moved('dlg', 'planned', 'working')),
         note('owner', 't1', moved('dlg', 'working', 'needs_you')),
         note('owner', 't1', moved('dlg', 'needs_you', 'done'))
       ])
     ).toEqual([
-      'Marked <Token refresh fix> done / Commented on <Onboarding copy>',
+      'Marked <Token refresh fix> done / Commented on <Onboarding copy> / Updated <Release notes>',
       'You changed <Share dialog> Planned → Done · 3 changes'
     ])
   })

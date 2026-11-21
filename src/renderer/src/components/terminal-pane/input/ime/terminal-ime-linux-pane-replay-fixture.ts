@@ -14,6 +14,7 @@ export type RecordedDomEvent = {
   code?: string
   keyCode?: number
   charCode?: number
+  shiftKey?: boolean
   isComposing?: boolean
   inputType?: string
   data?: string
@@ -55,7 +56,7 @@ export function useLinuxPaneTestEnvironment(): void {
   })
 }
 
-function nextEventLoop(): Promise<void> {
+export function nextEventLoop(): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, 0))
 }
 
@@ -64,6 +65,7 @@ export function buildRecordedDomEvent(recorded: RecordedDomEvent): Event {
     const keyboard = new KeyboardEvent(recorded.type, {
       key: recorded.key,
       code: recorded.code,
+      shiftKey: recorded.shiftKey,
       isComposing: recorded.isComposing,
       bubbles: true,
       cancelable: true
@@ -90,14 +92,19 @@ export function buildRecordedDomEvent(recorded: RecordedDomEvent): Event {
   return composition
 }
 
+export type LinuxPaneReplaySession = {
+  /** Dispatches one event on the helper textarea and reports whether the pane cancelled it. */
+  emit: (recorded: RecordedDomEvent) => boolean
+  emitted: () => string
+}
+
 /**
- * Replays recorded events through a real xterm wired with the pane's full keyboard stack.
+ * Opens a real xterm wired with the pane's full keyboard stack, for tests that place macrotasks themselves.
  * `kittyPush` is written as PTY output first, the way a TUI negotiates the protocol.
  */
-export async function replayThroughLinuxPane(
-  events: readonly RecordedDomEvent[],
+export async function openLinuxPaneReplaySession(
   kittyPush: string | null = null
-): Promise<LinuxPaneReplayResult> {
+): Promise<LinuxPaneReplaySession> {
   const container = document.createElement('div')
   document.body.appendChild(container)
   // Matches the pane defaults that advertise kitty support (pane-terminal-options.ts).
@@ -120,6 +127,25 @@ export async function replayThroughLinuxPane(
   const emitted: string[] = []
   disposables.push(terminal.onData((data) => emitted.push(data)))
   const textarea = terminal.textarea!
+  return {
+    emit: (recorded) => {
+      if (recorded.value !== undefined) {
+        textarea.value = recorded.value
+      }
+      const dispatched = buildRecordedDomEvent(recorded)
+      textarea.dispatchEvent(dispatched)
+      return dispatched.defaultPrevented
+    },
+    emitted: () => emitted.join('')
+  }
+}
+
+/** Replays recorded events through `openLinuxPaneReplaySession`. */
+export async function replayThroughLinuxPane(
+  events: readonly RecordedDomEvent[],
+  kittyPush: string | null = null
+): Promise<LinuxPaneReplayResult> {
+  const session = await openLinuxPaneReplaySession(kittyPush)
   const preventedKeydownCodes: string[] = []
   let keystrokeCancelled = false
   for (const recorded of events) {
@@ -133,14 +159,10 @@ export async function replayThroughLinuxPane(
     ) {
       continue
     }
-    if (recorded.value !== undefined) {
-      textarea.value = recorded.value
-    }
-    const dispatched = buildRecordedDomEvent(recorded)
-    textarea.dispatchEvent(dispatched)
+    const defaultPrevented = session.emit(recorded)
     if (recorded.type === 'keydown') {
-      keystrokeCancelled = dispatched.defaultPrevented
-      if (dispatched.defaultPrevented) {
+      keystrokeCancelled = defaultPrevented
+      if (defaultPrevented) {
         preventedKeydownCodes.push(recorded.code ?? '')
       }
     } else if (recorded.type === 'keyup') {
@@ -149,5 +171,5 @@ export async function replayThroughLinuxPane(
   }
   await nextEventLoop()
   await nextEventLoop()
-  return { emitted: emitted.join(''), preventedKeydownCodes }
+  return { emitted: session.emitted(), preventedKeydownCodes }
 }

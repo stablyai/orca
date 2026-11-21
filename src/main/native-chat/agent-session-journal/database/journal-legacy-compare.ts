@@ -93,6 +93,7 @@ export function settleJournalLegacyCompare(
   }
   deleteMeta(db, key)
   if ('error' in compare) {
+    console.warn('[agent-session-journal] keeping an older Orca chat failed', compare.error)
     recordJournalLegacyFailure(db, {
       sessionId: compare.sessionId,
       revision: compare.revision,

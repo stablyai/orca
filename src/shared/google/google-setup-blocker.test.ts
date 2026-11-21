@@ -5,7 +5,6 @@ import {
   googleSetupActionsLine,
   type GoogleSetupBlocker,
   googleSetupBlocker,
-  googleSetupBlockerLine,
   googleSetupDoneRefusal,
   GOOGLE_SETUP_PAUSED_AFTER_MS
 } from './google-setup-blocker'
@@ -157,10 +156,11 @@ describe('where a Google setup is stuck', () => {
 
   it('shows a stopped setup with Continue and Start over', () => {
     const stuck = blocker(run({ state: 'failed', lastError: 'No room for another project' }), null)
-    expect(stuck && googleSetupBlockerLine(stuck)).toBe(
-      'Setup stopped: No room for another project'
-    )
-    expect(actions(stuck)).toBe('Continue · Start over')
+    expect(stuck).toMatchObject({
+      kind: 'stopped',
+      reason: 'No room for another project',
+      actions: [{ id: 'continue' }, { id: 'start-over' }]
+    })
   })
 
   it('pauses a bot step only once its turn has ended for a while', () => {

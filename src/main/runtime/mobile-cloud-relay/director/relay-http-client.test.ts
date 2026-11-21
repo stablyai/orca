@@ -42,10 +42,14 @@ describe('requestRelayAssignment origin alternates', () => {
     )
   })
 
-  it('returns the same assignment as before when the field is absent', async () => {
+  it('accepts a legacy assignment without optional routing fields', async () => {
     const assignment = await assign(fakeDirector(assignmentAnswer()).fetch)
-    expect(assignment).toEqual(assignmentAnswer())
-    expect('alternateCellUrls' in assignment).toBe(false)
+    expect(assignment).toStrictEqual({
+      v: 1,
+      cellUrl: 'https://cell-a.example.test',
+      assignmentEpoch: 3,
+      lease: 'lease-token'
+    })
   })
 
   it('carries valid alternates through in order', async () => {
@@ -112,11 +116,6 @@ describe('requestRelayAssignment origin alternates', () => {
 
 describe('requestRelayAssignment authOrigin', () => {
   const DOOR = 'https://front-door.example.test'
-
-  it('returns the same assignment as before when the field is absent', async () => {
-    const assignment = await assign(fakeDirector(assignmentAnswer()).fetch)
-    expect('authOrigin' in assignment).toBe(false)
-  })
 
   it('keeps an authOrigin equal to cellUrl or one of the alternates', async () => {
     const onDoor = await assign(

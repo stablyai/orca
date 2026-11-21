@@ -13,15 +13,23 @@ import {
   type BotShareCandidateSummary
 } from '../../../shared/bots/bot-package'
 import { botPackageName } from '../../../shared/bots/bot-share-status'
+import {
+  pickedSkillNames,
+  type BotShareOutsidePick
+} from '../../../shared/bots/bot-share-skill-picks'
 import { writeBotPackageArchive } from './bot-package-archive'
 import { scanBotText } from '../../../shared/bots/bot-text-scan'
 import {
   buildBotPackageContent,
   withoutHiddenCharacters,
-  type BotPackageContent,
-  type BotPackageRawFile
+  type BotPackageContent
 } from './bot-package-content'
-import { sharerRawFiles, writeContentFolder } from './bot-package-content-files'
+import {
+  rewrittenPaths,
+  sharerRawFiles,
+  withoutRefusedSkills,
+  writeContentFolder
+} from './bot-package-content-files'
 import { BOT_DISPLAY_NAME_MAX, isLandingText, landingLine } from './bot-package-transport'
 import { availableParts, picked, sharedAutomationIds } from './bot-share-available'
 import { deriveConnectors, type BotShareable } from './bot-share-sources'
@@ -33,6 +41,8 @@ export type BotShareSelection = {
   schedules?: readonly string[]
   eventSuggestions?: readonly string[]
   memory?: readonly string[]
+  /** The owner's ticks on skills linked into a project from outside it. */
+  outsideSkills?: readonly BotShareOutsidePick[]
   purpose?: string
 }
 
@@ -55,9 +65,11 @@ export function botPackageFor(
     ...(shareable.avatar ? { avatar: shareable.avatar } : {}),
     purpose: landingLine(selection.purpose ?? shareable.purpose, BOT_PACKAGE_PURPOSE_MAX),
     agentHint: bot.agent,
-    skills: picked(shareable.skills, selection.skills, (entry) => entry.name).map(({ name }) => ({
-      name
-    })),
+    skills: picked(
+      shareable.skills,
+      pickedSkillNames(selection.skills, shareable.skills, selection.outsideSkills),
+      (entry) => entry.name
+    ).map(({ name }) => ({ name })),
     tools: picked(shareable.tools, selection.tools, (entry) => entry.name),
     connectors: deriveConnectors(bot, { schedules, eventSuggestions }).map((kind) => ({ kind })),
     schedules: schedules.map(strip),
@@ -66,17 +78,6 @@ export function botPackageFor(
       ({ topic }) => ({ topic })
     )
   })
-}
-
-/** Files whose shared text isn't the home's (a SKILL.md rebuilt from its frontmatter): their line
- *  numbers aren't the home file's, so the dialog doesn't offer to open the home file at a line. */
-function rewrittenPaths(content: BotPackageContent, raw: readonly BotPackageRawFile[]): string[] {
-  return content.files
-    .filter((file) => {
-      const source = raw.find((entry) => entry.path === file.path)
-      return !source || Buffer.from(source.bytes).toString('utf8') !== file.text
-    })
-    .map((file) => file.path)
 }
 
 /** The note as a link carries it. */
@@ -140,9 +141,16 @@ export class BotShareCandidates {
       )
     }
     const setupNote = cleanNote(input.setupNote ?? '')
-    const plain = botPackageFor(input.bot, input.shareable, input.selection)
-    const declared = setupNote ? BotPackageV1Schema.parse({ ...plain, setupNote }) : plain
-    const raw = await sharerRawFiles(input.shareable, declared)
+    const withNote = (bot: BotPackageV1) =>
+      setupNote ? BotPackageV1Schema.parse({ ...bot, setupNote }) : bot
+    const { files: raw, refused } = await sharerRawFiles(
+      input.shareable,
+      withNote(botPackageFor(input.bot, input.shareable, input.selection))
+    )
+    // A picked skill that couldn't be read goes out of the manifest and the choices, with why; the
+    // candidate keeps the bot's own view of its parts for opening them.
+    const packed = withoutRefusedSkills(input.shareable, refused)
+    const declared = withNote(botPackageFor(input.bot, packed, input.selection))
     const content = buildBotPackageContent({ bot: declared, files: raw })
     if (this.candidates.size >= MAX_CANDIDATES) {
       throw new Error('bot-share-candidate-limit')
@@ -159,10 +167,10 @@ export class BotShareCandidates {
       },
       content,
       {
-        leftOut: input.shareable.leftOut,
+        leftOut: packed.leftOut,
         notIncluded: [...content.notIncluded],
         rewritten: rewrittenPaths(content, raw),
-        available: await availableParts(input.shareable, content),
+        available: await availableParts(packed, content),
         automationIds: sharedAutomationIds(input.shareable, input.selection)
       }
     )

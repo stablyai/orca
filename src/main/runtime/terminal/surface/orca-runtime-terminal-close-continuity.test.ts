@@ -35,7 +35,7 @@ describe('terminal close and handle incarnation continuity', () => {
     expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toHaveLength(1)
   })
 
-  it('keeps a handle through an intermediate empty reload graph', async () => {
+  it('keeps a handle through reload until the PTY incarnation changes', async () => {
     const harness = await createHarness()
     const [before] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
     harness.runtime.onPtyData(PTY_ID, '\x1b]0;\u280b Working on task\x07output\n', 100)
@@ -60,20 +60,14 @@ describe('terminal close and handle incarnation continuity', () => {
       handle: before.handle,
       status: 'running'
     })
-  })
-
-  it('stales the old handle when the same PTY id names a new incarnation', async () => {
-    const harness = await createHarness()
-    const [before] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
-
     harness.runtime.markRendererReloading(1)
     harness.replaceIncarnation('33333333-3333-4333-8333-333333333333')
     harness.replacePersistedIncarnation('33333333-3333-4333-8333-333333333333')
     await harness.syncFixtureGraph()
 
-    const [after] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
-    expect(after.handle).not.toBe(before.handle)
-    expect(after.incarnationId).toBe('33333333-3333-4333-8333-333333333333')
+    const [replacement] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
+    expect(replacement.handle).not.toBe(before.handle)
+    expect(replacement.incarnationId).toBe('33333333-3333-4333-8333-333333333333')
     await expect(harness.runtime.readTerminal(before.handle)).rejects.toThrow(
       'terminal_handle_stale'
     )

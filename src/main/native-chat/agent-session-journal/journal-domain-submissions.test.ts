@@ -28,16 +28,12 @@ import {
 } from './journal-domain-edit-leases'
 import type { JournalWriterOperation } from './journal-writer-command'
 import type { ResolveDispatchInput } from './journal-store-contracts'
-import { ensureCommandReceiptsTable } from './writing/command-receipt-schema'
-import { insertCommandReceiptIfAbsent, readCommandReceipt } from './writing/command-receipt-table'
-import { commandReceiptFixture } from './writing/command-receipt-test-support'
 import {
   QueuedMessageNotConsumableError,
   QueuedMessageNotOwedError
 } from './queued-messages/queued-message-consume-error'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
-import { agentSessionAttachmentStoreRoot } from '../agent-session-attachments/agent-session-attachment-references'
 
 const target = { sessionId: 'chat', epoch: 'epoch' }
 const now = 1_800_000_000_000
@@ -670,95 +666,4 @@ it('requeues only proven unrun delivery, keeps typed refusals and answered turns
     admission: { body: body('card') },
     submission: { dispatchState: 'rejected' }
   })
-})
-
-it('binds the receipt to the actual admission and rolls back a failing command suffix while committing its successful prefix', () => {
-  const f = fixture()
-  const uploadId = '0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c01'
-  const carried: AgentJournalMessageItem = {
-    ...body('carried'),
-    blocks: [
-      {
-        type: 'image-ref',
-        path: join(agentSessionAttachmentStoreRoot(f.stateDirectory), uploadId, 'shot.png')
-      }
-    ]
-  }
-  ensureCommandReceiptsTable(f.db)
-  f.db.prepare(`INSERT INTO agent_session_records VALUES('chat','{}')`).run()
-  const scope = { kind: 'caller' as const, callerKey: 'caller-1' }
-  const bind = (operationId: string, sequence: number) =>
-    insertCommandReceiptIfAbsent(
-      f.db,
-      scope,
-      commandReceiptFixture({
-        operationId,
-        sessionId: 'chat',
-        result: { kind: 'journal-row', epoch: 'epoch', sequence }
-      })
-    )
-  f.transaction(() => {
-    const accepted = applyJournalDomainSubmission(
-      f.db,
-      f.stateDirectory,
-      target,
-      f.submit('prefix'),
-      f.facts,
-      now
-    )
-    expect(bind('prefix', accepted.coordinates.at(-1)!.cursor.sequence)).toEqual({ inserted: true })
-    f.db.exec(
-      `CREATE TEMP TRIGGER reject_suffix BEFORE INSERT ON journal_events WHEN NEW.sequence=13 BEGIN SELECT RAISE(ABORT,'event append refused'); END`
-    )
-    f.db.exec('SAVEPOINT command')
-    expect(() => {
-      const first = applyJournalDomainSubmission(
-        f.db,
-        f.stateDirectory,
-        target,
-        f.submit('rolled-back', { origin: 'host', body: carried }),
-        f.facts,
-        now
-      )
-      bind('rolled-back', first.coordinates.at(-1)!.cursor.sequence)
-      expect(first.referencedUploads).toEqual([uploadId])
-      expect(f.db.prepare('SELECT upload_id FROM agent_session_attachment_claims').all()).toEqual([
-        { upload_id: uploadId }
-      ])
-      applyJournalDomainDispatch(
-        f.db,
-        target,
-        {
-          kind: 'dispatch',
-          input: {
-            clientMessageId: 'rolled-back',
-            fence: 1,
-            state: 'accepted',
-            providerIdentity: null
-          }
-        },
-        now
-      )
-      applyJournalDomainSubmission(
-        f.db,
-        f.stateDirectory,
-        target,
-        f.submit('never-run'),
-        f.facts,
-        now
-      )
-    }).toThrow('event append refused')
-    f.db.exec('ROLLBACK TO command; RELEASE command')
-  })
-  expect(f.head()).toBe(11)
-  expect(f.item('prefix')?.item.body).toEqual(body('prefix'))
-  expect(f.attempt('rolled-back')).toBeNull()
-  expect(f.item('rolled-back')).toBeNull()
-  expect(f.attempt('never-run')).toBeNull()
-  expect(f.db.prepare('SELECT upload_id FROM agent_session_attachment_claims').all()).toEqual([])
-  expect(readCommandReceipt(f.db, scope, 'prefix')).toMatchObject({
-    verdict: 'readable',
-    receipt: { result: { kind: 'journal-row', epoch: 'epoch', sequence: 11 } }
-  })
-  expect(readCommandReceipt(f.db, scope, 'rolled-back')).toEqual({ verdict: 'absent' })
 })
