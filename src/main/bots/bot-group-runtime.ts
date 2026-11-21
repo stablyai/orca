@@ -153,7 +153,11 @@ export class BotGroupRuntime {
     assertGroupQueuedMessageAllowed(this, sessionId, operationId)
   peerScope = (sessionId: string, targetBotId: string, rootItemId: string | null) =>
     groupPeerScope(this, sessionId, targetBotId, rootItemId)
-  assertPeerScope = (scope: GroupPeerScope) => assertGroupPeerScope(this, scope)
+  assertPeerScope = (scope: GroupPeerScope | null | undefined) => {
+    if (scope) {
+      assertGroupPeerScope(this, scope)
+    }
+  }
   reserveMailTurn = (input: Parameters<StructuredMailboxPointerHost['send']>[0]) =>
     reserveGroupMailTurn(this, input)
   narrowMailBatch = <T extends Pick<MessageRow, 'id' | 'thread_id' | 'from_handle'>>(

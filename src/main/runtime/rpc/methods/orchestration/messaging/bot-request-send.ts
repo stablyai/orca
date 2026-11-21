@@ -262,9 +262,7 @@ async function admitBotRequestMail(
     }
     // The bot may have been paused or removed while the Chat was found.
     check()
-    if (groupScope) {
-      runtimeBotGroups(runtime).assertPeerScope(groupScope)
-    }
+    runtimeBotGroups(runtime).assertPeerScope(groupScope)
     const mail = {
       id: messageId,
       from: args.from,
