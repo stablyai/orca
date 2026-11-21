@@ -1,5 +1,6 @@
 import { Host, Switch } from '@expo/ui/jetpack-compose'
 import { semantics, testID as testIDModifier } from '@expo/ui/jetpack-compose/modifiers'
+import { materialSeedColor } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { MobileSwitchProps } from './mobile-control-props'
 
@@ -15,7 +16,7 @@ export function MobileSwitch({
 }: MobileSwitchProps) {
   const scheme = useMobileColorScheme()
   return (
-    <Host matchContents colorScheme={scheme} style={HOST_STYLE}>
+    <Host matchContents colorScheme={scheme} seedColor={materialSeedColor} style={HOST_STYLE}>
       <Switch
         value={value}
         onCheckedChange={onValueChange}

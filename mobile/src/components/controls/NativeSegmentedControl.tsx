@@ -1,5 +1,6 @@
 import { SegmentedControl } from '@expo/ui/community/segmented-control'
-import { StyleSheet, type ViewStyle } from 'react-native'
+import { Platform, StyleSheet, type ViewStyle } from 'react-native'
+import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { MobileSegmentedControlProps } from './DrawnSegmentedControl'
 
@@ -48,6 +49,8 @@ export function NativeSegmentedControl<Value extends string>(
       }}
       enabled={props.disabled !== true}
       appearance={scheme}
+      // Compose's baseline picks a lavender segment; iOS keeps the system look.
+      tintColor={Platform.OS === 'android' ? colors.translucentFill : undefined}
       style={layout}
       testID={props.testIDPrefix}
     />
