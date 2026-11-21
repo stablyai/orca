@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => {
     refresh: vi.fn(),
     signInState,
     answer: vi.fn(),
+    importApp: vi.fn(),
+    findDownloadedKey: vi.fn(),
     connect: vi.fn(),
     turnOn: vi.fn(),
     share: vi.fn()
@@ -51,7 +53,7 @@ vi.mock('../use-google-sign-in', () => ({
 vi.mock('../use-turn-on-bot-google', () => ({ useTurnOnBotGoogle: () => mocks.turnOn }))
 vi.mock('../google-connect-client', () => ({
   useGoogleHost: () => mocks.host.current,
-  importGoogleApp: vi.fn(),
+  importGoogleApp: mocks.importApp,
   openInMyBrowser: mocks.open,
   refreshGoogle: mocks.refresh,
   shareGoogleApp: mocks.share
@@ -88,6 +90,9 @@ beforeEach(() => {
   mocks.host.current = { status: 'loading' }
   mocks.sources[0] = []
   mocks.answer.mockReset().mockResolvedValue(undefined)
+  mocks.importApp.mockReset().mockResolvedValue(undefined)
+  mocks.findDownloadedKey.mockReset().mockResolvedValue(null)
+  Object.assign(window, { api: { googleSetup: { findDownloadedKey: mocks.findDownloadedKey } } })
   mocks.blocker.current = null
   mocks.pick.mockReset()
   mocks.open.mockReset()
@@ -250,6 +255,39 @@ describe('a Google setup card in the chat', () => {
     show('step', 'apis')
     expect(screen.getByText('✓ Ivy takes over from here')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Done' }).hasAttribute('disabled')).toBe(true)
+  })
+
+  it('saves a key already in Downloads when Done is pressed on the key step', async () => {
+    const keyStep = (answers: GoogleSetupRun['answers']) => {
+      mocks.run.current = run({
+        mode: 'guide-browser',
+        projectId: 'orca-ivy',
+        startedAt: 100,
+        steps: { client: { status: 'active', at: 2 } },
+        answers
+      })
+      show('step', 'client')
+      fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    }
+    mocks.findDownloadedKey.mockResolvedValue({ name: 'k.json', text: 'key', modifiedAt: 200 })
+    keyStep({})
+    await waitFor(() =>
+      expect(mocks.answer).toHaveBeenCalledWith(expect.objectContaining({ id: 'ivy' }), 'step', [
+        'done',
+        'client'
+      ])
+    )
+    expect(mocks.importApp).toHaveBeenCalledWith(expect.anything(), 'key')
+    expect(mocks.findDownloadedKey).toHaveBeenCalledWith({ since: 100, projectId: 'orca-ivy' })
+    cleanup()
+    // After Make a new key, the key from before it doesn't count.
+    keyStep({ step: { values: ['redo', 'client'], at: 300 } })
+    await waitFor(() =>
+      expect(mocks.findDownloadedKey).toHaveBeenLastCalledWith({
+        since: 300,
+        projectId: 'orca-ivy'
+      })
+    )
   })
 
   it('shows the three links on the links step only, and no Take over on the policy box', () => {

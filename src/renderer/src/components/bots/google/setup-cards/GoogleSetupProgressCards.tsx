@@ -51,6 +51,20 @@ async function saveKey(bot: BotRef, text: string): Promise<void> {
   await answerGoogleSetup(bot, 'step', ['done', 'client'])
 }
 
+async function answerStepCard(bot: BotRef, run: GoogleSetupRun, values: string[]): Promise<void> {
+  const redo = run.answers.step
+  // After Make a new key, a key downloaded before it is the old one.
+  const since = redo?.values[0] === 'redo' && redo.values[1] === 'client' ? redo.at : run.startedAt
+  // The watch lives on the progress card, which the chat unmounts once it scrolls away.
+  const key =
+    values[0] === 'done' && values[1] === 'client' && keySource(run, true)
+      ? await window.api.googleSetup
+          .findDownloadedKey({ since, projectId: run.projectId })
+          .catch(() => null)
+      : null
+  await (key ? saveKey(bot, key.text) : answerGoogleSetup(bot, 'step', values))
+}
+
 /** Saves the app key the moment it lands in Downloads, from the person's own browser. */
 function useSetupKeyCapture(
   bot: BotRef,
@@ -291,7 +305,7 @@ export function GoogleSetupStepCard({
   const notes = step === 'account' || step === 'connect' ? [] : googleStepNotes(step, run.kind)
   const send = (values: string[]): void => {
     setBusy(true)
-    void answerGoogleSetup(bot, 'step', values)
+    void answerStepCard(bot, run, values)
       .catch((error: unknown) =>
         toast.error(error instanceof Error ? error.message : String(error))
       )
