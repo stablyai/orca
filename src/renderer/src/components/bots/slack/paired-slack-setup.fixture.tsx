@@ -7,11 +7,11 @@ import type { ConnectorBotSlackState } from '../../../../../shared/connector-bot
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { BotSlackSetupDialog } from './BotSlackSetupDialog'
 
-// A bot on m4 air (its own Orca account), set up from a desktop signed in as alice@example.com,
+// A bot on build-box (its own Orca account), set up from a desktop signed in as alex@example.com,
 // whose own Release bot is already in Acme.
 const base: Bot = {
   id: 'bot-release',
-  name: 'Bot-Release-Manager',
+  name: 'Release Helper',
   hostId: 'local',
   folder: 'release',
   folderWorkspaceId: 'fw-release',
@@ -27,7 +27,7 @@ const base: Bot = {
   createdAt: 1,
   updatedAt: 1
 }
-const serverBot = stampBotHost('runtime:m4', base)
+const serverBot = stampBotHost('runtime:build-box', base)
 const mine: Bot = { ...base, id: 'bot-mine', name: 'Scout', slack: { appId: 'A0', teamId: 'T1' } }
 const mineInLabs: Bot = { ...mine, id: 'bot-labs', slack: { appId: 'A2', teamId: 'T2' } }
 
@@ -35,15 +35,15 @@ const AUTHORIZE = 'https://slack.com/oauth/v2/authorize?client_id=1&state=s'
 const ok = (value: unknown) => ({ ok: true, result: { ok: true, value } })
 const answered = (result: unknown) => ({ ok: true, result })
 
-const m4: PublicKnownRuntimeEnvironment = {
-  id: 'm4',
-  name: 'm4 air',
+const buildBox: PublicKnownRuntimeEnvironment = {
+  id: 'build-box',
+  name: 'build-box',
   createdAt: 1,
   updatedAt: 1,
   lastUsedAt: null,
   runtimeId: null,
   endpoints: [],
-  preferredEndpointId: 'm4'
+  preferredEndpointId: 'build-box'
 }
 
 type Scene = {
@@ -59,9 +59,9 @@ type Scene = {
 }
 
 const LONG_EMAIL = 'alexandra.konstantinopoulou-whitfield@engineering.example.com'
-const longBot = stampBotHost('runtime:m4', {
+const longBot = stampBotHost('runtime:build-box', {
   ...base,
-  name: 'Quarterly Planning Assistant for the Northwest Regional Team'
+  name: 'Release Helper with a Very Long Made-Up Example Name'
 })
 
 // The web preload's namespace, kept apart from the methods a scene answers.
@@ -96,11 +96,11 @@ function stub(scene: Scene): void {
     call: async ({ method }: { method: string }) => {
       switch (method) {
         case 'status.get':
-          return createCompatibleRuntimeStatusResponse('m4')
+          return createCompatibleRuntimeStatusResponse('build-box')
         case 'bots.list':
           return answered({ bots: [scene.long ? longBot : base] })
         case 'orcaAccount.status':
-          return answered({ state: 'signed-in', email: scene.serverEmail ?? 'm4air@example.com' })
+          return answered({ state: 'signed-in', email: scene.serverEmail ?? 'builder@example.com' })
         case 'bots.slack.state':
           return ok(scene.server)
         case 'bots.slack.setUpApp':
@@ -128,9 +128,12 @@ function stub(scene: Scene): void {
 }
 
 const store = {
-  runtimeEnvironments: [m4],
+  runtimeEnvironments: [buildBox],
   runtimeStatusByEnvironmentId: new Map([
-    ['m4', { status: createCompatibleRuntimeStatusResponse('m4').result, checkedAt: 1 }]
+    [
+      'build-box',
+      { status: createCompatibleRuntimeStatusResponse('build-box').result, checkedAt: 1 }
+    ]
   ]),
   orcaProfileAuthStatus: {
     activeProfileId: 'p1',
@@ -140,7 +143,7 @@ const store = {
     cloud: {
       cloudProfileId: 'c1',
       userId: 'u1',
-      email: 'alice@example.com',
+      email: 'alex@example.com',
       linkedAt: 1
     }
   }
@@ -166,7 +169,7 @@ async function whenShown(text: string, click?: string): Promise<void> {
 
 const longStore = {
   ...store,
-  runtimeEnvironments: [{ ...m4, name: 'studio-mac-mini-build-machine-second-floor' }],
+  runtimeEnvironments: [{ ...buildBox, name: 'build-box-with-a-very-long-made-up-example-name' }],
   orcaProfileAuthStatus: {
     ...store.orcaProfileAuthStatus,
     cloud: { ...store.orcaProfileAuthStatus.cloud, email: LONG_EMAIL }
@@ -213,7 +216,7 @@ async function openWhy(): Promise<void> {
 
 // Today's dialog, unchanged: the server is on this desktop's own account.
 export const sameAccount = scene(
-  { server: { state: 'not_created' }, serverEmail: 'alice@example.com' },
+  { server: { state: 'not_created' }, serverEmail: 'alex@example.com' },
   () => whenShown('Configuration refresh token')
 )
 
@@ -266,7 +269,7 @@ export const otherUser = scene(
 const lapsed: Scene = { server: { state: 'grant_expired', teamId: 'T1' } }
 const lapsedLong: Scene = { ...lapsed, long: true }
 // No working token anywhere: the server is on this desktop's own account, so nothing is offered.
-const lapsedNone: Scene = { ...lapsed, serverEmail: 'alice@example.com' }
+const lapsedNone: Scene = { ...lapsed, serverEmail: 'alex@example.com' }
 const lapsedNoneLong: Scene = { ...lapsedNone, long: true, serverEmail: LONG_EMAIL }
 
 export const reconnectUse = scene(lapsed, () => whenShown('Use it'), 480)
