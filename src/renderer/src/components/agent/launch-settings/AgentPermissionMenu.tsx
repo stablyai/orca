@@ -103,7 +103,8 @@ export function AgentPermissionMenu({
             { mode: nativeChatPermissionModeLabel(permission.chatChoice, t) }
           )}
         </span>
-      ) : permission.terminalChoice &&
+      ) : !permission.argsSetPermission &&
+        permission.terminalChoice &&
         permission.terminalChoice !== 'own' &&
         permission.chatChoice &&
         permission.terminalChoice !== permission.chatChoice ? (

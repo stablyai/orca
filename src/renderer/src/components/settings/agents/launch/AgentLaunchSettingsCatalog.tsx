@@ -8,7 +8,6 @@ import { savedChatPermissionMode } from '../../../../../../shared/agent-launch/p
 import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { useMemo } from 'react'
 import { recomputeOn } from '@/lib/recompute-on'
-import { toast } from 'sonner'
 import type {
   AgentLaunchSettings,
   AgentLaunchSettingsMutation
@@ -26,7 +25,7 @@ import {
 } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { agentArgsSetPermission } from '../../../../../../shared/agent-launch/permissions/agent-permission-args'
 import { liftAgentPermissionArgs } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-lift'
-import { agentPermissionChoiceLabel } from '../../../agent/launch-settings/agent-permission-choice-label'
+import { toastLiftedAgentPermission } from './agent-permission-lift-toast'
 import { AllAgentsPermissionSetting } from '../permissions/AllAgentsPermissionSetting'
 import type { AgentPermissionChoiceRow } from '../../../agent/launch-settings/agent-permission-choice-row'
 import type { AgentPermissionsSettingProps } from '@/components/settings/agents/permissions/AgentPermissionsSetting'
@@ -212,21 +211,13 @@ export function AgentLaunchSettingsCatalog({
     const lifted = liftAgentPermissionArgs(agent, value)
     await mutate({ type: 'user-arguments', agent, value })
     if (lifted.choice) {
-      const chatSupported = nativeChatPermissionsSupported && agentChatPermissionModes(agent)
-      const values = { agent: label, mode: agentPermissionChoiceLabel(lifted.choice, label) }
-      toast.success(
-        chatSupported
-          ? t(
-              'settings.agents.permissionFromArgs',
-              '{{agent}} set to {{mode}} in terminals and new chats.',
-              values
-            )
-          : t(
-              'settings.agents.permissionFromArgsTerminals',
-              '{{agent}} set to {{mode}} in terminals.',
-              values
-            )
-      )
+      toastLiftedAgentPermission({
+        agent,
+        label,
+        choice: lifted.choice,
+        chatPermissionsSupported: nativeChatPermissionsSupported,
+        t
+      })
     }
   }
   const permissions = buildAgentRowPermissions({
