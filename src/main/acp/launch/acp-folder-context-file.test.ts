@@ -9,10 +9,14 @@ const writeHermesContextFile = (cwd: string, text: string) =>
   writeFolderContextFile(cwd, HERMES_CONTEXT_FILE, 'Hermes', text)
 
 let dir = ''
+let previousUmask = 0
 beforeEach(async () => {
+  // A permissive umask, as a login shell often has, so a kept 0644 mode would show.
+  previousUmask = process.umask(0o022)
   dir = await mkdtemp(join(tmpdir(), 'hermes-context-'))
 })
 afterEach(async () => {
+  process.umask(previousUmask)
   await rm(dir, { recursive: true, force: true })
 })
 

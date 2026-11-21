@@ -32,7 +32,7 @@ function withOrcaText(existing: string | null, rawText: string, agentName: strin
 /** Writes Orca's text into `cwd`'s `path` whole, so the agent never reads a half-written file.
  *  A symlink on the way, or a file that cannot be read, stays untouched. The result is readable
  *  only by this host's user, a file the user wrote included, since it now carries the bot's
- *  instructions. */
+ *  instructions. An inheritable ACL the user set on the folder still applies on top of that. */
 export async function writeFolderContextFile(
   cwd: string,
   path: string,
