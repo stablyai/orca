@@ -10,8 +10,10 @@ import type { Bot } from '../../../../shared/bot-types'
 import {
   isBotHomeTab,
   isBotSideChatTab,
-  selectLocalBotHomeTabs
+  selectLocalBotHomeTabs,
+  type HostlessChatsAreLocal
 } from '../../../../shared/bots/bot-home-tab'
+import { hostlessChatsAreLocal } from '@/lib/workspace/ownership/recorded-workspace-owner'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { collectTabGroupLayoutGroupIds } from '../../../../shared/workspace-layout/tab-groups/tab-group-moves'
@@ -29,12 +31,13 @@ export type BotHomeTabMove =
 export function botHomeTabMove(
   state: TabPlacementState,
   worktreeId: string,
-  bot: Pick<Bot, 'chatSessionId' | 'hostId' | 'folderWorkspaceId'>
+  bot: Pick<Bot, 'chatSessionId' | 'hostId' | 'folderWorkspaceId'>,
+  hostlessAreLocal?: HostlessChatsAreLocal
 ): BotHomeTabMove | null {
   const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
   const home =
     bot.hostId === LOCAL_EXECUTION_HOST_ID
-      ? selectLocalBotHomeTabs(tabs, bot)?.home
+      ? selectLocalBotHomeTabs(tabs, bot, hostlessAreLocal)?.home
       : tabs.find((tab) => isBotHomeTab(tab, bot))
   const groups = state.groupsByWorktree[worktreeId] ?? []
   if (!home) {
@@ -76,13 +79,15 @@ function placeBotHomeTabsOnce(store: StoreApi<AppState>): void {
     }
     // A focused duplicate hands focus to Home only after Home's final move, which keeps the destination's selection.
     let focusHomeId: string | null = null
+    // Tab moves leave the workspace records alone, so one answer serves the whole pass.
+    const hostlessAreLocal = hostlessChatsAreLocal(store.getState(), worktreeId)
     if (bot.hostId === LOCAL_EXECUTION_HOST_ID) {
       const state = store.getState()
       if (!state.workspaceSessionReady) {
         continue
       }
       const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
-      const selection = selectLocalBotHomeTabs(tabs, bot)
+      const selection = selectLocalBotHomeTabs(tabs, bot, hostlessAreLocal)
       if (!selection) {
         continue
       }
@@ -103,7 +108,7 @@ function placeBotHomeTabsOnce(store: StoreApi<AppState>): void {
         })
       }
       for (const tab of tabs) {
-        if (tab.isPinned && isBotSideChatTab(tab, bot)) {
+        if (tab.isPinned && isBotSideChatTab(tab, bot, hostlessAreLocal)) {
           store.getState().unpinTab(tab.id, { recordInteraction: false })
         }
       }
@@ -111,7 +116,7 @@ function placeBotHomeTabsOnce(store: StoreApi<AppState>): void {
         store.getState().pinTab(home.id, { recordInteraction: false })
       }
     }
-    const move = botHomeTabMove(store.getState(), worktreeId, bot)
+    const move = botHomeTabMove(store.getState(), worktreeId, bot, hostlessAreLocal)
     if (move?.kind === 'group') {
       store
         .getState()

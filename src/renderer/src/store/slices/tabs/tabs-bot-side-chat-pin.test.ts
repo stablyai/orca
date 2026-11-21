@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
 import { createTestStore } from '../../testing/app-store-test-fixture'
 import { pairedHostStatuses } from '@/lib/bot-host-capability.test-fixture'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -75,5 +76,21 @@ describe('pinning on a bot page', () => {
     expect(pinned(store, 'old-server')).toBe(true)
     expect(pinned(store, 'ssh')).toBe(true)
     expect(pinned(store, 'unknown-owner')).toBe(true)
+  })
+
+  it("refuses a side chat restored without a host only in this app's own bot workspace", () => {
+    const store = createTestStore()
+    store.getState().createUnifiedTab(BOT_PAGE, 'agent-session', {
+      id: 'hostless',
+      entityId: 'side-session',
+      label: 'Side'
+    })
+    store.getState().pinTab('hostless')
+    expect(pinned(store, 'hostless')).toBe(true)
+
+    store.getState().unpinTab('hostless')
+    store.setState({ folderWorkspaces: [makeFolderWorkspace({ id: 'bot-home' })] })
+    store.getState().pinTab('hostless')
+    expect(pinned(store, 'hostless')).toBe(false)
   })
 })
