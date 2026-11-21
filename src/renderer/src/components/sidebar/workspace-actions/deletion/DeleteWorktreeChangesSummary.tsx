@@ -72,7 +72,12 @@ type StatusTone = 'checking' | 'clean' | 'warning'
 const GAP_PX = 6
 const NOTE_PAD_PX = 6
 
-/** The laid-out width of an element's text, even where its box clips it. */
+/** An element's untransformed, fractional layout width. */
+function layoutWidth(el: Element): number {
+  return parseFloat(getComputedStyle(el).width) || 0
+}
+
+/** The on-screen width of an element's text, even where its box clips it. */
 function naturalWidth(el: HTMLElement): number {
   const range = document.createRange()
   range.selectNodeContents(el)
@@ -116,8 +121,12 @@ export function DeleteWorktreeChangesSummary({
       return
     }
     const note = noteRef.current
-    // Fractional widths: whole-pixel scrollWidth can round a sentence that overflows by a hair into "fits".
-    const need = naturalWidth(text) + (note ? naturalWidth(note) + NOTE_PAD_PX : 0)
+    // Fractional layout widths: whole pixels can round a hair of overflow into "fits", and rects
+    // are scaled while the dialog's open animation runs, so divide the transform back out.
+    const rowWidth = layoutWidth(row)
+    const scale = row.getBoundingClientRect().width / rowWidth || 1
+    const need =
+      (naturalWidth(text) + (note ? naturalWidth(note) : 0)) / scale + (note ? NOTE_PAD_PX : 0)
     let fixed = 0
     let items = 0
     for (const child of line.children) {
@@ -126,12 +135,12 @@ export function DeleteWorktreeChangesSummary({
       }
       items += 1
       if (child !== text && !child.contains(note)) {
-        fixed += child.getBoundingClientRect().width
+        fixed += layoutWidth(child)
       }
     }
     // The note cancels its own gap with a negative margin.
     const gaps = (items - 1 - (note ? 1 : 0)) * GAP_PX
-    const room = row.getBoundingClientRect().width - fixed - gaps
+    const room = rowWidth - fixed - gaps
     setFit((current) => (current.need === need && current.room === room ? current : { need, room }))
   }, [])
   // Text changes don't fire ResizeObserver, so remeasure after every render too.
