@@ -230,10 +230,20 @@ export function isRepoOnCatalogHost(repo: {
   connectionId?: string | null
   executionHostId?: string | null
 }): boolean {
-  const executionHostId = normalizeHostPart(repo.executionHostId)
+  return isOriginalRepoOnCatalogHost({
+    executionHostId: normalizeHostPart(repo.executionHostId),
+    connectionId: normalizeHostPart(repo.connectionId)
+  })
+}
+
+/** Catalog evidence accepts legacy absent metadata, but never repairs an explicit host spelling. */
+export function isOriginalRepoOnCatalogHost(repo: {
+  connectionId?: string | null
+  executionHostId?: string | null
+}): boolean {
   return (
-    (executionHostId === null || executionHostId === LOCAL_EXECUTION_HOST_ID) &&
-    normalizeHostPart(repo.connectionId) === null
+    (repo.executionHostId == null || repo.executionHostId === LOCAL_EXECUTION_HOST_ID) &&
+    !repo.connectionId
   )
 }
 

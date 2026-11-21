@@ -1,3 +1,4 @@
+import { watchRuntimeEnvironmentRegistry } from '../catalog/runtime-environment-preference'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { getPreferredPairedRuntimeConnection } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
@@ -14,6 +15,8 @@ export function createOrchestrationEnvironmentTransport(): OrchestrationEnvironm
   // Read per call: the desktop settles userData casing only after app.setName.
   const registryRoot = (): string => getAppEnvironment().getPath('userData')
   return {
+    onCatalogChanged: (listener) =>
+      watchRuntimeEnvironmentRegistry(registryRoot(), listener, 'Worker placement catalogs'),
     resolve: async (selector) => {
       const environment = await resolveEnvironment(registryRoot(), selector)
       const connection = getPreferredPairedRuntimeConnection(environment)

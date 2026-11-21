@@ -45,6 +45,7 @@ export type OrchestrationEnvironmentTransport = {
     expectedEnvironmentPairingRevision?: number,
     send?: OrchestrationEnvironmentSendOptions
   ): Promise<RuntimeRpcResponse<unknown>>
+  onCatalogChanged?(listener: () => void): () => void
   /** Fires when a server's status turns verified, so backed-off relays retry at once. */
   onEnvironmentVerified?(listener: (environmentId: string) => void): () => void
 }
