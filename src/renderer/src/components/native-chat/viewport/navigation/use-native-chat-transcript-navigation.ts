@@ -27,7 +27,7 @@ import {
   useNativeChatMessageRevealAnswer,
   type NativeChatRevealMessage
 } from '../../composer/reply/native-chat-reply-context'
-import { nativeChatReplyOriginalId } from '../../composer/reply/native-chat-reply-original'
+import { nativeChatReplyRevealId } from '../../composer/reply/native-chat-reply-original'
 import type { NativeChatAlignEdge } from '../virtualization/use-native-chat-viewport-align'
 
 type NavigationRequest =
@@ -220,14 +220,11 @@ export function useNativeChatNavigation({
   // A known id that isn't loaded is unavailable; only a reply restored from sent text matches by words.
   const revealMessage = useCallback(
     (message: NativeChatRevealMessage, probe: boolean): string | null => {
-      const found = message.messageId
-        ? nativeChatSlotIndexOf(slots, message.messageId) >= 0
-          ? message.messageId
-          : null
-        : nativeChatReplyOriginalId(
-            slots.flatMap((slot) => (slot.kind === 'message' ? [slot.message] : [])),
-            message
-          )
+      const found = nativeChatReplyRevealId(
+        message,
+        (messageId) => nativeChatSlotIndexOf(slots, messageId) >= 0,
+        () => slots.flatMap((slot) => (slot.kind === 'message' ? [slot.message] : []))
+      )
       if (!found) {
         return null
       }

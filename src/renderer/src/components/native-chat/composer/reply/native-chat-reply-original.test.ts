@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import { nativeChatMessageRowBlocks } from '../../messages/rows/native-chat-message-row-words'
-import { nativeChatReplyOriginalId } from './native-chat-reply-original'
+import { nativeChatReplyOriginalId, nativeChatReplyRevealId } from './native-chat-reply-original'
 import { nativeChatReplyExcerpt, withNativeChatReplyContext } from './native-chat-reply-quote'
 import type * as Quote from './native-chat-reply-quote'
 import {
@@ -126,4 +126,43 @@ it('opening and closing a queued edit’s reply writes nothing to storage', () =
     releaseNativeChatReplyScope('queued-edit:card')
   }
   expect(localStorage.getItem(KEY)).toBe('unchanged')
+})
+
+it('saving a chat’s reply while a queued edit is open stores only the chat’s', () => {
+  setNativeChatReplyTarget('queued-edit:card', reply('edit'), { ephemeral: true })
+  setNativeChatReplyTarget('chat-a', reply('a'))
+  const stored: unknown = JSON.parse(
+    localStorage.getItem('orca.nativeChat.replyTargets.v1') ?? '[]'
+  )
+  const keys = Array.isArray(stored)
+    ? stored.map((entry: unknown) => (Array.isArray(entry) ? entry[0] : null))
+    : null
+  expect(keys).toEqual(['chat-a'])
+})
+
+it('a reply naming an original that isn’t loaded is unavailable, even when other words match', () => {
+  const other = message('m-other', 'assistant', [text('Done.')])
+  const target = { messageId: 'm-gone', author: 'agent' as const, excerpt: 'Done.' }
+  expect(
+    nativeChatReplyRevealId(
+      target,
+      () => false,
+      () => [other]
+    )
+  ).toBeNull()
+  expect(
+    nativeChatReplyRevealId(
+      target,
+      (id) => id === 'm-gone',
+      () => [other]
+    )
+  ).toBe('m-gone')
+  // Naming none, it is found by its words.
+  expect(
+    nativeChatReplyRevealId(
+      { ...target, messageId: '' },
+      () => false,
+      () => [other]
+    )
+  ).toBe('m-other')
 })

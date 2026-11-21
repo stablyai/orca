@@ -16,6 +16,7 @@ import { useNativeChatPtyComposerSend } from './use-native-chat-pty-composer-sen
 import type { NativeChatResolvedTarget } from './native-chat-composer-target'
 import {
   cancelNativeChatReplyTarget,
+  nativeChatReplyTargetFromSentText,
   readNativeChatReplyTarget,
   resetNativeChatReplyTargetsForTests,
   setNativeChatReplyTarget
@@ -238,7 +239,8 @@ describe('replying to a message from a terminal chat', () => {
     draft: string,
     classification: 'chat' | 'command' | 'unknown-token' = 'chat',
     imagePaths: string[] = [],
-    inputLine = ''
+    inputLine = '',
+    onOptimisticSend?: () => string | undefined
   ) {
     const hook = renderHook(() =>
       useNativeChatPtyComposerSend({
@@ -251,6 +253,7 @@ describe('replying to a message from a terminal chat', () => {
         launchDraftResolved: true,
         resolveTarget: (): NativeChatResolvedTarget => ({ ptyId: 'pty-1' }),
         readTerminalDraft: () => inputLine,
+        onOptimisticSend,
         classifySend: () => classification,
         sessionOptionsSurface: null,
         terminalTabId: 'tab-1',
@@ -319,6 +322,25 @@ describe('replying to a message from a terminal chat', () => {
         withNativeChatReplyContext('/Users/me/shot.png looks off', target, 'Codex')
       )
     ).toBeUndefined()
+  })
+
+  it('a terminal reply shown as not sent keeps its exact original for Edit', async () => {
+    setNativeChatReplyTarget(ptyScope, target)
+    let settle: (outcome: 'not-submitted') => void = () => {}
+    runtimeSend.sendWithImages.mockReturnValueOnce({
+      outcome: new Promise((resolve) => {
+        settle = resolve
+      })
+    })
+    // The message shows in the chat, so a rejected write comes back as "not sent → Edit".
+    const send = ptySend('Why is it blue?', 'chat', ['/tmp/shot.png'], '', () => 'pending-1')
+    act(() => {
+      send()
+    })
+    await act(async () => settle('not-submitted'))
+    expect(readNativeChatReplyTarget(ptyScope)).toBeNull()
+    const sent = withNativeChatReplyContext('Why is it blue?', target, 'Codex')
+    expect(nativeChatReplyTargetFromSentText(sent).target?.messageId).toBe(target.messageId)
   })
 
   it('remembers the original of a terminal reply once the terminal takes the write', async () => {

@@ -54,3 +54,16 @@ export function nativeChatReplyOriginalId(
   }
   return found
 }
+
+/** The message a reply's strip shows: a known original only while it is loaded, never another
+ *  message with the same words; a reply that names none is found by its words. */
+export function nativeChatReplyRevealId(
+  target: { messageId: string; author: 'agent' | 'user'; excerpt: string },
+  isLoaded: (messageId: string) => boolean,
+  loadedMessages: () => readonly Pick<NativeChatMessage, 'id' | 'role' | 'blocks'>[]
+): string | null {
+  if (target.messageId) {
+    return isLoaded(target.messageId) ? target.messageId : null
+  }
+  return nativeChatReplyOriginalId(loadedMessages(), target)
+}

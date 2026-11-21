@@ -196,8 +196,9 @@ export function useNativeChatPtyComposerSend(args: {
       args.onSubmitted?.()
       if (!retry) {
         if (reply) {
-          // Only a write the terminal took answers that message; a rejected one is no reply to it.
-          const outcome = pendingHandle?.outcome
+          // A shown message that isn't sent comes back as "not sent → Edit", rebuilt from this text,
+          // so it keeps its exact original. Otherwise only a write the terminal took answers it.
+          const outcome = pendingId ? undefined : pendingHandle?.outcome
           if (outcome) {
             void outcome.then((result) => {
               if (result !== 'not-submitted') {
