@@ -179,7 +179,10 @@ it('still continues the other chats when one chat cannot be read', async () => {
 })
 
 it('says a chat’s continue may have ended once the chat closes, loaded or not', async () => {
-  const open = { tabs: ['chat-a', 'chat-b'], background: [] as string[] }
+  const open: { tabs: string[]; background: string[] } = {
+    tabs: ['chat-a', 'chat-b'],
+    background: []
+  }
   const sweep = sweepOver(open, [], { loaded: false })
   const told: (string | undefined)[] = []
   sweep.onDispositionChange((id) => told.push(id))
