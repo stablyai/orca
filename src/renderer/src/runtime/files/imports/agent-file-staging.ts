@@ -11,6 +11,7 @@ import { resolveExactWorktreeRoute } from '@/lib/workspace/ownership/worktree-ow
 import { isTerminalDropWindowsPathLike } from '../../../../../shared/terminal/input/image-path-paste'
 import { runtimeTargetForOwnerEnvironment } from '../../rpc/targets/runtime-client-target'
 import { importExternalPathsToRuntime } from './runtime-file-import-client'
+import type { RuntimeImportProgressHandlers } from './runtime-upload-progress-tracker'
 
 export function resolveAgentStagingWorktreePath(
   worktreeId: string,
@@ -63,7 +64,8 @@ export type AgentFileStagingResult = {
 export async function stageClientFilesForAgent(
   target: AgentFileStagingTarget,
   sourcePaths: string[],
-  assertCurrent?: () => void
+  assertCurrent?: () => void,
+  progress?: RuntimeImportProgressHandlers
 ): Promise<AgentFileStagingResult> {
   const { worktreePath } = target
   const windowsHost = isTerminalDropWindowsPathLike(worktreePath)
@@ -79,7 +81,7 @@ export async function stageClientFilesForAgent(
     },
     sourcePaths,
     windowsHost ? dropDir.replace(/\//g, '\\') : dropDir,
-    { assertCurrent, nameExtensionlessImages: true }
+    { assertCurrent, nameExtensionlessImages: true, progress }
   )
   const staged: AgentFileStagingResult = { staged: [], skipped: [], failed: [] }
   for (const result of results) {
@@ -90,7 +92,8 @@ export async function stageClientFilesForAgent(
       })
     } else if (result.status === 'skipped') {
       staged.skipped.push({ sourcePath: result.sourcePath, reason: result.reason })
-    } else {
+    } else if (result.cancelled !== true) {
+      // Why: a cancel is the user's own decision, not a failure to report back.
       staged.failed.push({ sourcePath: result.sourcePath, reason: result.reason })
     }
   }

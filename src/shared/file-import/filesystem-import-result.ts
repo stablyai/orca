@@ -23,4 +23,6 @@ export type ImportItemResult =
       sourcePath: string
       status: 'failed'
       reason: string
+      /** The user cancelled this source, so it is not a failure to report back. */
+      cancelled?: boolean
     }
