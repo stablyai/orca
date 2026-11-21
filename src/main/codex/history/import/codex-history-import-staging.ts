@@ -99,7 +99,9 @@ function sameSource(before: BigIntStats, after: BigIntStats): boolean {
     before.dev === after.dev &&
     before.ino === after.ino &&
     before.size === after.size &&
-    before.mtimeNs === after.mtimeNs
+    before.mtimeNs === after.mtimeNs &&
+    // The copy took whatever mode the source had when copied; a changed one may have skipped the chmod.
+    before.mode === after.mode
   )
 }
 
