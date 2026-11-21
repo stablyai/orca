@@ -114,6 +114,61 @@ describe('a bundled skill folder holding a file Orca does not ship', () => {
     expect(await snapshot(formerPath)).not.toMatch(/^dir/u)
     expect(await readFile(join(home.shared, 'SKILL.md'), 'utf8')).toBe(NEW_TEXT)
     expect(await readFile(join(home.shared, SIDECAR), 'utf8')).toBe(SIDECAR_TEXT)
+    // Orca's own forward link at the former name is settled, not a different skill using it.
+    for (const installedOnly of [true, false]) {
+      const again = await previewBundledSkillInstall({
+        ...serviceInput(home, { agents: [], installedOnly }),
+        sources: [RENAMED]
+      })
+      expect(again.skills[0].ops.map((op) => [op.path, op.kind])).toEqual([[home.shared, 'keep']])
+      expect(summarizeBundledSkillPlan(again).skills[0].upToDate).toBe(true)
+    }
+  })
+
+  it.each([
+    ['only SKILL.md', false],
+    ['a sidecar', true]
+  ])(
+    'reports a retirement done when a former-name sibling is recovered after it (%s)',
+    async (_, sidecar) => {
+      const home = await makeSkillHome()
+      await writeCopy(home.shared, NEW_TEXT)
+      if (sidecar) {
+        await addSidecar(home.shared)
+      }
+      await writeCopy(formerOf(home), FORMER_TEXT)
+      const sibling = join(dirname(home.shared), `.${FORMER_NAME}.orca-old-interrupted`)
+      await writeCopy(sibling, FORMER_TEXT)
+      const input = { ...serviceInput(home, { agents: [] }), sources: [RENAMED] }
+
+      const plan = await previewBundledSkillInstall(input)
+      const result = await installBundledSkills(input, plan.planDigest)
+
+      expect(result.skills[0].ops.map((op) => op.status)).toEqual(
+        result.skills[0].ops.map(() => 'done')
+      )
+      expect(await snapshot(formerOf(home))).not.toMatch(/^dir/u)
+      expect(await snapshot(sibling)).toBe('missing')
+    }
+  )
+
+  it('does not flag a current copy with a sidecar for an unrelated folder at the former name', async () => {
+    const home = await makeSkillHome()
+    await writeCopy(home.shared, NEW_TEXT)
+    await addSidecar(home.shared)
+    const unrelated = '---\nname: my-own-tool\ndescription: Mine\n---\n\nMine\n'
+    await writeCopy(formerOf(home), unrelated)
+
+    for (const installedOnly of [true, false]) {
+      const plan = await previewBundledSkillInstall({
+        ...serviceInput(home, { agents: [], installedOnly }),
+        sources: [RENAMED]
+      })
+      expect(plan.skills[0].ops.map((op) => [op.path, op.kind])).toEqual([[home.shared, 'keep']])
+      expect(summarizeBundledSkillPlan(plan).skills[0].upToDate).toBe(true)
+      expect(bundledSkillNudgeEntries(plan)).toEqual([])
+    }
+    expect(await readFile(join(formerOf(home), 'SKILL.md'), 'utf8')).toBe(unrelated)
   })
 
   it('re-checks the current copy before retiring a former-name copy into it', async () => {
@@ -180,14 +235,21 @@ describe('a bundled skill folder holding a file Orca does not ship', () => {
   })
 
   it.each([
-    ['installed-only', true],
-    ['explicit', false]
-  ])(
-    "keeps asking about an agent's former-name copy beside a link into a shared copy with a sidecar (%s plan)",
-    async (_, installedOnly) => {
+    ['installed-only', 'current', true],
+    ['explicit', 'current', false],
+    ['installed-only', 'other-build', true],
+    ['explicit', 'other-build', false]
+  ] as const)(
+    "keeps asking about an agent's former-name copy beside a link into a shared copy with a sidecar (%s plan, %s shared)",
+    async (_, shared, installedOnly) => {
       const home = await makeSkillHome()
-      await writeCopy(home.shared, NEW_TEXT)
+      const sharedText = shared === 'current' ? NEW_TEXT : `${NEW_TEXT}another build\n`
+      await writeCopy(home.shared, sharedText)
       await addSidecar(home.shared)
+      if (shared === 'other-build') {
+        const marker = join(home.home, '.agents', '.orca-skill-digests', NAME, digest(sharedText))
+        await mkdir(marker, { recursive: true })
+      }
       await mkdir(dirname(home.claude), { recursive: true })
       await linkDirectory(home.shared, home.claude)
       const formerAgentCopy = join(dirname(home.claude), FORMER_NAME)
@@ -199,7 +261,9 @@ describe('a bundled skill folder holding a file Orca does not ship', () => {
         sources: [RENAMED]
       })
       expect(plan.skills[0].ops.map((op) => [op.path, op.kind, op.reason])).toEqual([
-        [home.shared, 'keep', undefined],
+        shared === 'current'
+          ? [home.shared, 'keep', undefined]
+          : [home.shared, 'leave', 'other-build'],
         [home.claude, 'keep', undefined],
         [formerAgentCopy, 'leave', 'edited']
       ])

@@ -21,7 +21,7 @@ import {
 import type { BundledSkillFilesystem } from './bundled-skill-filesystem'
 import { recoverySiblings } from './bundled-skill-swap-recovery'
 import { findBundledSkillSource } from './bundled-skill-source-selection'
-import { planFormerSkillPlacements } from './renamed-skill-placement'
+import { formerLeavesBesideKeep, planFormerSkillPlacements } from './renamed-skill-placement'
 import { isOtherBuildCopy } from './bundled-skill-written-digests'
 import {
   bundledSkillPathKey,
@@ -211,11 +211,9 @@ async function planTarget(
             : {})
         }
       : decided
-  // Beside a current copy, a former-name folder Orca doesn't own is the user's own skill, not a blocker.
-  // Beside a copy holding an agent's files, they stay listed so the user decides on them.
   const leaves =
-    op.kind === 'keep' && !keptBesideAgentFiles(op, shared?.besideAgentFiles)
-      ? former.leaves.filter((stale) => stale.reason !== 'edited' && stale.reason !== 'other')
+    op.kind === 'keep'
+      ? formerLeavesBesideKeep(former.leaves, keptBesideAgentFiles(op, shared?.besideAgentFiles))
       : former.leaves
   const result = { holdsOrcaCopy, formerInstalled: former.installed, leaves }
   const writes = op.kind !== 'keep' && op.kind !== 'leave'

@@ -143,3 +143,16 @@ export async function planFormerSkillPlacements(
   }
   return { installed, previous, leaves }
 }
+
+/**
+ * Beside a kept copy, a former-name folder that is not this skill is the user's own, not a blocker.
+ * Beside a copy holding an agent's files, a stale former copy stays listed so the user decides on it.
+ */
+export function formerLeavesBesideKeep(
+  leaves: BundledSkillOp[],
+  besideAgentFiles: boolean
+): BundledSkillOp[] {
+  return leaves.filter(
+    (stale) => stale.reason !== 'other' && (besideAgentFiles || stale.reason !== 'edited')
+  )
+}
