@@ -141,6 +141,48 @@ describe('OrchestrationDb worker Dispatch state', () => {
     expect(d.getTask(task.id)?.status).toBe('completed')
   })
 
+  it('names the live Dispatch when a report for the superseded one is rejected', () => {
+    const d = createDb()
+    const task = d.createTask({ runId: 'run_legacy_local', spec: 'stale report' })
+    const first = d.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: {}
+    })
+    d.failWorkerStart(first.dispatch.id, 'agent_readiness', 'first failed')
+    const second = d.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      retryOf: first.dispatch.id,
+      startOptions: {}
+    })
+    d.prepareStartingWorkerAuthority({
+      dispatchId: second.dispatch.id,
+      handle: 'term_replacement',
+      paneKey: 'tab_replacement:leaf_replacement',
+      processIncarnation: 'runtime:pty:2',
+      worktreeId: 'repo::worktree',
+      setupState: 'not_applicable',
+      effects: []
+    })
+    d.markWorkerDispatchReady(second.dispatch.id)
+
+    const settlement = d.settleWorkerReport({
+      taskId: task.id,
+      dispatchId: first.dispatch.id,
+      outcome: 'succeeded',
+      result: '{}'
+    })
+    expect(settlement).toMatchObject({ action: 'rejected' })
+    expect(settlement.action === 'rejected' ? settlement.reason : '').toContain(
+      `The current dispatch is ${second.dispatch.id}.`
+    )
+    expect(d.getTask(task.id)?.status).toBe('dispatched')
+    expect(d.getWorkerDispatch(second.dispatch.id)?.state).toBe('ready')
+  })
+
   it('lets the stop fence win before a late worker completion', () => {
     const d = createDb()
     const task = d.createTask({ runId: 'run_legacy_local', spec: 'race' })
