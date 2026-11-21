@@ -68,8 +68,16 @@ export function deleteWorktreeLossLine(
 
 type StatusTone = 'checking' | 'clean' | 'warning'
 
-// gap-1.5 between the line's items.
+// gap-1.5 between the line's items; the note's pl-1.5 matches it.
 const GAP_PX = 6
+const NOTE_PAD_PX = 6
+
+/** The laid-out width of an element's text, even where its box clips it. */
+function naturalWidth(el: HTMLElement): number {
+  const range = document.createRange()
+  range.selectNodeContents(el)
+  return range.getBoundingClientRect().width
+}
 // size-3.5 chevron plus the trigger's gap-1.5.
 const CHEVRON_ROOM_PX = 20
 
@@ -108,7 +116,8 @@ export function DeleteWorktreeChangesSummary({
       return
     }
     const note = noteRef.current
-    const need = text.scrollWidth + (note?.scrollWidth ?? 0)
+    // Fractional widths: whole-pixel scrollWidth can round a sentence that overflows by a hair into "fits".
+    const need = naturalWidth(text) + (note ? naturalWidth(note) + NOTE_PAD_PX : 0)
     let fixed = 0
     let items = 0
     for (const child of line.children) {
@@ -122,7 +131,7 @@ export function DeleteWorktreeChangesSummary({
     }
     // The note cancels its own gap with a negative margin.
     const gaps = (items - 1 - (note ? 1 : 0)) * GAP_PX
-    const room = Math.floor(row.clientWidth - fixed - gaps)
+    const room = row.getBoundingClientRect().width - fixed - gaps
     setFit((current) => (current.need === need && current.room === room ? current : { need, room }))
   }, [])
   // Text changes don't fire ResizeObserver, so remeasure after every render too.
