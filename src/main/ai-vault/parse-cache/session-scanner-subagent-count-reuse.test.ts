@@ -75,6 +75,36 @@ async function writePiParentWithMessages(root: string): Promise<string> {
   return parentPath
 }
 
+/** A Pi parent with no turns: the case the zero-message recount used to cover. */
+async function writePiParentWithoutMessages(root: string): Promise<string> {
+  const parentPath = join(root, `${PARENT_STEM}.jsonl`)
+  await writeFile(
+    parentPath,
+    JSON.stringify({
+      type: 'session',
+      version: 3,
+      id: 'cccccccc-dddd-4eee-8fff-000000000000',
+      cwd: '/repo/app'
+    })
+  )
+  return parentPath
+}
+
+/** A Claude parent without turns plus one subagent transcript beside it. */
+async function writeClaudeParentWithoutMessages(root: string): Promise<string> {
+  const projectDir = join(root, 'claude-projects', 'project')
+  const transcriptPath = join(projectDir, 'aaaaaaaa-bbbb-4ccc-8ddd-000000000000.jsonl')
+  await mkdir(join(projectDir, 'aaaaaaaa-bbbb-4ccc-8ddd-000000000000', 'subagents'), {
+    recursive: true
+  })
+  await writeFile(transcriptPath, '')
+  await writeFile(
+    join(projectDir, 'aaaaaaaa-bbbb-4ccc-8ddd-000000000000', 'subagents', 'agent-1.jsonl'),
+    ''
+  )
+  return transcriptPath
+}
+
 /** pi-subagents writes `<stem>/<agent>/run-N/session.jsonl`. */
 async function writePiChild(
   root: string,
@@ -94,22 +124,30 @@ async function writePiChild(
   return filePath
 }
 
-async function candidateFor(path: string): Promise<SessionFileCandidate> {
+async function parseSession(
+  agent: SessionFileCandidate['agent'],
+  path: string,
+  stats = createSessionParseStats()
+) {
   const fileStat = await stat(path)
-  return {
-    agent: 'pi',
-    file: {
-      path,
-      mtimeMs: fileStat.mtimeMs,
-      modifiedAt: fileStat.mtime.toISOString(),
-      sizeBytes: fileStat.size
+  return parseAgentSessionFileCached(
+    {
+      agent,
+      file: {
+        path,
+        mtimeMs: fileStat.mtimeMs,
+        modifiedAt: fileStat.mtime.toISOString(),
+        sizeBytes: fileStat.size
+      },
+      codexHome: null
     },
-    codexHome: null
-  }
+    process.platform,
+    stats
+  )
 }
 
-async function parsePi(path: string, stats = createSessionParseStats()) {
-  return parseAgentSessionFileCached(await candidateFor(path), process.platform, stats)
+function parsePi(path: string, stats = createSessionParseStats()) {
+  return parseSession('pi', path, stats)
 }
 
 describe('reused Pi subagent counts', () => {
@@ -183,6 +221,26 @@ describe('reused Pi subagent counts', () => {
     expect((await parsePi(parentPath, stats))?.subagentTranscriptCount).toBe(1)
   })
 
+  it('reuses a zero-message parent without walking once its directories are stamped', async () => {
+    const root = await makeTempDir()
+    const parentPath = await writePiParentWithoutMessages(root)
+    await writePiChild(root, AGENT_DIR, 'run-0', 'child-1')
+    const stats = createSessionParseStats()
+
+    const seeded = await parsePi(parentPath, stats)
+    expect(seeded?.messageCount).toBe(0)
+    expect(seeded?.subagentTranscriptCount).toBe(1)
+    // The first reuse stamps the directories it walked.
+    expect((await parsePi(parentPath, stats))?.subagentTranscriptCount).toBe(1)
+    const walksAfterStamping = filesystem.readdir.mock.calls.length
+    const stamps = filesystem.stat.mock.calls.length
+
+    expect((await parsePi(parentPath, stats))?.subagentTranscriptCount).toBe(1)
+
+    expect(filesystem.readdir.mock.calls.length).toBe(walksAfterStamping)
+    expect(filesystem.stat.mock.calls.length - stamps).toBe(3)
+  })
+
   it('walks again when a child directory cannot be stamped, and never zeroes a failed read', async () => {
     const root = await makeTempDir()
     const parentPath = await writePiParentWithMessages(root)
@@ -207,5 +265,28 @@ describe('reused Pi subagent counts', () => {
       Promise.reject(Object.assign(new Error('EIO'), { code: 'EIO' }))
     )
     expect((await parsePi(parentPath, stats))?.subagentTranscriptCount).toBe(2)
+  })
+})
+
+describe('reused Claude subagent counts', () => {
+  it('still recounts a zero-message parent on every reuse', async () => {
+    const root = await makeTempDir()
+    const transcriptPath = await writeClaudeParentWithoutMessages(root)
+    const stats = createSessionParseStats()
+
+    const seeded = await parseSession('claude', transcriptPath, stats)
+    expect(seeded?.agent).toBe('claude')
+    expect(seeded?.messageCount).toBe(0)
+    expect(seeded?.subagentTranscriptCount).toBe(1)
+
+    // Claude has no signature, so each reuse reads the sibling transcript directory again.
+    const walksBeforeFirstReuse = filesystem.readdir.mock.calls.length
+    expect((await parseSession('claude', transcriptPath, stats))?.subagentTranscriptCount).toBe(1)
+    const walksBeforeSecondReuse = filesystem.readdir.mock.calls.length
+    expect(walksBeforeSecondReuse).toBeGreaterThan(walksBeforeFirstReuse)
+
+    expect((await parseSession('claude', transcriptPath, stats))?.subagentTranscriptCount).toBe(1)
+    expect(filesystem.readdir.mock.calls.length).toBeGreaterThan(walksBeforeSecondReuse)
+    expect(stats.reused).toBe(2)
   })
 })

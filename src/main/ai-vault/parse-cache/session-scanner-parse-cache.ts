@@ -16,7 +16,6 @@ import { createCopilotSessionResumeState } from '../scanners/copilot/session-sca
 import { createCursorSessionResumeState } from '../scanners/cursor/session-scanner-cursor-parser'
 import { countSubagentTranscripts } from '../scanners/claude/session-scanner-subagent-transcripts'
 import { countOmpSubagentTranscripts } from '../scanners/omp/session-scanner-omp-subagent-transcripts'
-import { countPiSubagentTranscripts } from '../scanners/pi/session-scanner-pi-subagent-transcripts'
 import { refreshReusedPiSubagentCount } from './session-scanner-pi-subagent-reuse'
 import type { ResumableSessionParseState, SessionFileCandidate } from '../session-scanner-types'
 import { refreshCachedCodexTitle } from '../scanners/codex/session-scanner-codex-cached-title'
@@ -228,7 +227,9 @@ async function parseCachedInLane(
       // Preserve transcript work while refused sidecars stay unknown for a metadata-only retry.
       sidecar: enriched.refused ? 'unknown' : file.sidecar,
       foldSession: read.session,
-      resume: read.resume
+      resume: read.resume,
+      // Stamps stay valid across a reparse: reuse re-stats them, so a moved directory still forces a walk.
+      piSubagentDirs: entry?.piSubagentDirs
     })
     return enriched.session
   }
@@ -271,24 +272,8 @@ async function reuseCachedSession(
   }
   let session = entry.session
   let piSubagentDirs = entry.piSubagentDirs
-  // Zero-turn parents may never change again; recount late subagent transcripts outside the cached file signature.
-  if (session && session.messageCount === 0) {
-    const subagentTranscriptCount =
-      session.agent === 'claude'
-        ? await countSubagentTranscripts(candidate.file.path, signal)
-        : session.agent === 'omp'
-          ? await countOmpSubagentTranscripts(candidate.file.path, signal)
-          : session.agent === 'pi'
-            ? await countPiSubagentTranscripts(candidate.file.path, signal)
-            : null
-    if (
-      subagentTranscriptCount !== null &&
-      subagentTranscriptCount !== session.subagentTranscriptCount
-    ) {
-      session = { ...session, subagentTranscriptCount }
-    }
-  } else if (session?.agent === 'pi') {
-    // Pi children sit beside the parent file; their own directory mtimes decide whether to walk again.
+  // Pi children sit beside the parent file; their own directory mtimes decide whether to walk again.
+  if (session?.agent === 'pi') {
     const refreshed = await refreshReusedPiSubagentCount(
       candidate.file.path,
       session,
@@ -297,6 +282,20 @@ async function reuseCachedSession(
     )
     session = refreshed.session
     piSubagentDirs = refreshed.piSubagentDirs
+  } else if (session && session.messageCount === 0) {
+    // Zero-turn parents may never change again; recount late subagent transcripts outside the cached file signature.
+    const subagentTranscriptCount =
+      session.agent === 'claude'
+        ? await countSubagentTranscripts(candidate.file.path, signal)
+        : session.agent === 'omp'
+          ? await countOmpSubagentTranscripts(candidate.file.path, signal)
+          : null
+    if (
+      subagentTranscriptCount !== null &&
+      subagentTranscriptCount !== session.subagentTranscriptCount
+    ) {
+      session = { ...session, subagentTranscriptCount }
+    }
   }
   // Index titles can change independently of the transcript signature.
   if (session && candidate.agent === 'codex') {
